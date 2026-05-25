@@ -5,6 +5,7 @@ const COMBAT_ROOM_SCENE := preload("res://scenes/rooms/combat_room_01.tscn")
 const MAIN_SCENE := preload("res://scenes/main.tscn")
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
+const CursePoolScript := preload("res://scripts/curses/curse_pool.gd")
 
 var _failed := false
 
@@ -87,6 +88,36 @@ func _run() -> void:
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("frozen_burst"), "reward pool includes frozen burst starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("accelerated_combo"), "reward pool includes combo starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("tempo_barrage"), "reward pool includes barrage starter")
+
+	var first_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
+	var second_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
+	_assert_true(_reward_ids(first_curse_roll) == _reward_ids(second_curse_roll), "curse roll is deterministic")
+	_assert_true(CursePoolScript.CURSES.size() >= 6, "curse pool includes first risk set")
+
+	player.apply_curse({
+		"id": "test_curse",
+		"effects": {
+			"attack_multiplier": 1.25,
+			"max_hp_multiplier": 0.8,
+			"time_energy_regen_multiplier": 0.5,
+			"time_stop_self_damage": 12.0,
+			"rewind_self_damage": 18.0,
+			"healing_multiplier": 0.5,
+		},
+	})
+	_assert_true(GameState.current_run.get("active_curses", []).has("test_curse"), "run records active curse")
+	_assert_close(sword.base_attack, 56.25, "curse applies attack upside")
+	_assert_close(health.max_hp, 176.0, "curse applies max hp risk")
+	_assert_close(time_manager.energy_regen, 1.625, "curse applies time regen risk")
+	_assert_close(time_manager.time_stop_self_damage, 12.0, "curse applies time stop hp cost")
+	_assert_close(time_manager.rewind_self_damage, 18.0, "curse applies rewind hp cost")
+	health.current_hp = 100.0
+	health.heal(20.0)
+	_assert_close(health.current_hp, 110.0, "curse modifies healing rules")
+	health.invulnerable = true
+	health.lose_health(10.0, self)
+	health.invulnerable = false
+	_assert_close(health.current_hp, 100.0, "curse hp costs bypass invulnerability")
 
 	player.queue_free()
 	await _run_hit_feedback_check()

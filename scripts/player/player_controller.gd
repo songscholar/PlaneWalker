@@ -94,26 +94,46 @@ func _start_dash() -> void:
 
 func apply_reward(reward_data: Dictionary) -> void:
 	var effects: Dictionary = reward_data.get("effects", {})
+	_apply_effects(effects)
+
+
+func apply_curse(curse_data: Dictionary) -> void:
+	var effects: Dictionary = curse_data.get("effects", {})
+	_apply_effects(effects)
+	GameState.add_run_curse(curse_data)
+	EventBus.curse_selected.emit(curse_data)
+	EventBus.publish(EventBus.CURSE_SELECTED, {"curse": curse_data})
+
+
+func _apply_effects(effects: Dictionary) -> void:
 	if effects.has("attack_multiplier"):
 		stats.attack *= float(effects["attack_multiplier"])
 	if effects.has("attack_speed_multiplier"):
 		stats.attack_speed *= float(effects["attack_speed_multiplier"])
 	if effects.has("max_hp_bonus"):
 		stats.max_hp += float(effects["max_hp_bonus"])
+	if effects.has("max_hp_multiplier"):
+		stats.max_hp *= float(effects["max_hp_multiplier"])
 	if effects.has("defense_bonus"):
 		stats.defense += float(effects["defense_bonus"])
 	if effects.has("time_energy_max_bonus"):
 		stats.time_energy_max += float(effects["time_energy_max_bonus"])
 	if effects.has("time_energy_regen_bonus"):
 		stats.time_energy_regen += float(effects["time_energy_regen_bonus"])
+	if effects.has("time_energy_regen_multiplier"):
+		stats.time_energy_regen *= float(effects["time_energy_regen_multiplier"])
 	if effects.has("time_stop_duration_bonus"):
 		time_manager.time_stop_duration_bonus += float(effects["time_stop_duration_bonus"])
 	if effects.has("time_stop_cost_multiplier"):
 		time_manager.time_stop_cost_multiplier *= float(effects["time_stop_cost_multiplier"])
+	if effects.has("time_stop_self_damage"):
+		time_manager.time_stop_self_damage += float(effects["time_stop_self_damage"])
 	if effects.has("rewind_cost_multiplier"):
 		time_manager.rewind_cost_multiplier *= float(effects["rewind_cost_multiplier"])
 	if effects.has("rewind_heal"):
 		time_manager.rewind_heal += float(effects["rewind_heal"])
+	if effects.has("rewind_self_damage"):
+		time_manager.rewind_self_damage += float(effects["rewind_self_damage"])
 	if effects.has("combo_finisher_multiplier_bonus"):
 		sword_weapon.combo_finisher_multiplier_bonus += float(effects["combo_finisher_multiplier_bonus"])
 	if effects.has("heavy_damage_multiplier_bonus"):
@@ -122,6 +142,8 @@ func apply_reward(reward_data: Dictionary) -> void:
 		sword_weapon.low_hp_damage_multiplier_bonus += float(effects["low_hp_damage_multiplier_bonus"])
 	if effects.has("dash_invulnerable_bonus"):
 		_dash_invulnerable_bonus += float(effects["dash_invulnerable_bonus"])
+	if effects.has("healing_multiplier"):
+		health.healing_multiplier *= float(effects["healing_multiplier"])
 
 	_apply_stats_to_components(false)
 

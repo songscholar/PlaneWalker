@@ -1,0 +1,71 @@
+class_name CursePool
+extends RefCounted
+
+const CURSES: Array[Dictionary] = [
+	{
+		"id": "glass_tempo",
+		"name": "Glass Tempo",
+		"risk": "survival",
+		"description": "Attack 25% faster, but maximum HP is reduced by 22%.",
+		"effects": {"attack_speed_multiplier": 1.25, "max_hp_multiplier": 0.78},
+	},
+	{
+		"id": "blood_rewind",
+		"name": "Blood Rewind",
+		"risk": "time_skill",
+		"description": "Rewind heals 45 HP, but each Rewind also costs 18 HP.",
+		"effects": {"rewind_heal": 45.0, "rewind_self_damage": 18.0},
+	},
+	{
+		"id": "starving_clock",
+		"name": "Starving Clock",
+		"risk": "economy",
+		"description": "Gain 40 maximum time energy, but time energy regenerates 50% slower.",
+		"effects": {"time_energy_max_bonus": 40.0, "time_energy_regen_multiplier": 0.5},
+	},
+	{
+		"id": "overclocked_stasis",
+		"name": "Overclocked Stasis",
+		"risk": "time_skill",
+		"description": "Time Stop lasts 1.2 seconds longer, but each use costs 12 HP.",
+		"effects": {"time_stop_duration_bonus": 1.2, "time_stop_self_damage": 12.0},
+	},
+	{
+		"id": "brittle_vitality",
+		"name": "Brittle Vitality",
+		"risk": "healing",
+		"description": "Sword attacks deal 25% more damage, but healing is halved.",
+		"effects": {"attack_multiplier": 1.25, "healing_multiplier": 0.5},
+	},
+	{
+		"id": "narrow_escape",
+		"name": "Narrow Escape",
+		"risk": "positioning",
+		"description": "Dash invulnerability lasts 0.15 seconds longer, but defense drops by 2.",
+		"effects": {"dash_invulnerable_bonus": 0.15, "defense_bonus": -2.0},
+	},
+]
+
+
+static func roll_options(count: int, seed_value: int, room_index: int, owned_ids: Array = []) -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("curse:%s:%s" % [seed_value, room_index])
+	var candidates := CURSES.duplicate(true)
+	_shuffle_with_rng(candidates, rng)
+
+	var options: Array[Dictionary] = []
+	for curse: Dictionary in candidates:
+		if owned_ids.has(curse.get("id", "")):
+			continue
+		options.append(curse.duplicate(true))
+		if options.size() >= count:
+			break
+	return options
+
+
+static func _shuffle_with_rng(values: Array, rng: RandomNumberGenerator) -> void:
+	for index: int in range(values.size() - 1, 0, -1):
+		var swap_index := rng.randi_range(0, index)
+		var previous: Variant = values[index]
+		values[index] = values[swap_index]
+		values[swap_index] = previous

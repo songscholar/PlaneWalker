@@ -91,6 +91,7 @@ func fail_run(killer: Variant = null) -> void:
 		"run_time": run_timer,
 		"killer": killer,
 		"rewards": current_run.get("rewards", []),
+		"curses": current_run.get("curses", []),
 	}
 	last_run_result = result.duplicate(false)
 	set_phase(GamePhase.DEATH)
@@ -109,6 +110,18 @@ func add_run_reward(reward_data: Dictionary) -> void:
 	rewards.append(reward_data.duplicate(true))
 	current_run["rewards"] = rewards
 	_record_reward_archetype(reward_data)
+
+
+func add_run_curse(curse_data: Dictionary) -> void:
+	if current_run.is_empty():
+		return
+	var active_curses: Array = current_run.get("active_curses", [])
+	active_curses.append(curse_data.get("id", ""))
+	current_run["active_curses"] = active_curses
+
+	var curses: Array = current_run.get("curses", [])
+	curses.append(curse_data.duplicate(true))
+	current_run["curses"] = curses
 
 
 func get_dominant_archetype() -> String:

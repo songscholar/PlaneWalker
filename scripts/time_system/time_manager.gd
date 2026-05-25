@@ -17,6 +17,8 @@ var time_stop_duration_bonus: float = 0.0
 var time_stop_cost_multiplier: float = 1.0
 var rewind_cost_multiplier: float = 1.0
 var rewind_heal: float = 0.0
+var time_stop_self_damage: float = 0.0
+var rewind_self_damage: float = 0.0
 var _cooldowns: Dictionary = {
 	&"time_stop": 0.0,
 	&"time_rewind": 0.0,
@@ -49,6 +51,7 @@ func try_time_stop() -> void:
 	if not _can_pay(&"time_stop", effective_cost):
 		return
 	_pay_cost(&"time_stop", effective_cost, time_stop_cooldown)
+	_take_self_damage(time_stop_self_damage, &"curse:time_stop")
 	EventBus.time_skill_started.emit(&"time_stop")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_stop"})
 	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
@@ -66,6 +69,7 @@ func try_rewind(recorder: Node) -> void:
 	if not _can_pay(&"time_rewind", effective_cost):
 		return
 	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
+	_take_self_damage(rewind_self_damage, &"curse:rewind")
 	EventBus.time_skill_started.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rewind"})
 	recorder.rewind_to_oldest_snapshot()
@@ -111,3 +115,14 @@ func _pay_cost(skill_id: StringName, cost: float, cooldown: float) -> void:
 	_cooldowns[skill_id] = cooldown
 	energy_changed.emit(energy, max_energy)
 	cooldown_changed.emit(skill_id, cooldown)
+
+
+func _take_self_damage(amount: float, source_tag: StringName) -> void:
+	if amount <= 0.0:
+		return
+	var owner_entity := get_parent()
+	var health_component := owner_entity.get_node_or_null("HealthComponent")
+	if health_component == null:
+		return
+	if health_component.has_method("lose_health"):
+		health_component.lose_health(amount, source_tag)

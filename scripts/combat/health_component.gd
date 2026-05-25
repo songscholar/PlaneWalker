@@ -14,6 +14,7 @@ signal died(killer: Variant)
 var current_hp: float = 0.0
 var invulnerable: bool = false
 var dead: bool = false
+var healing_multiplier: float = 1.0
 
 
 func _ready() -> void:
@@ -85,11 +86,22 @@ func heal(amount: float) -> float:
 	if dead:
 		return 0.0
 	var previous_hp := current_hp
-	current_hp = minf(max_hp, current_hp + amount)
+	current_hp = minf(max_hp, current_hp + amount * healing_multiplier)
 	var healed_amount := current_hp - previous_hp
 	if healed_amount > 0.0:
 		healed.emit(healed_amount, current_hp)
 	return healed_amount
+
+
+func lose_health(amount: float, source: Variant = null) -> float:
+	if dead or amount <= 0.0:
+		return 0.0
+	var final_amount := minf(current_hp, amount)
+	current_hp = maxf(0.0, current_hp - final_amount)
+	damaged.emit(final_amount, current_hp)
+	if current_hp <= 0.0:
+		_die(source)
+	return final_amount
 
 
 func apply_invulnerability(duration: float) -> void:

@@ -7,6 +7,7 @@ signal entity_died(entity: Node, killer: Variant)
 signal room_started(room_id: StringName)
 signal room_cleared(room_id: StringName)
 signal reward_selected(reward_data: Dictionary)
+signal curse_selected(curse_data: Dictionary)
 signal time_skill_started(skill_id: StringName)
 signal time_skill_ended(skill_id: StringName)
 signal player_dashed()
@@ -22,6 +23,7 @@ const ENTITY_DIED := &"entity_died"
 const ROOM_STARTED := &"room_started"
 const ROOM_CLEARED := &"room_cleared"
 const REWARD_SELECTED := &"reward_selected"
+const CURSE_SELECTED := &"curse_selected"
 const TIME_SKILL_STARTED := &"time_skill_started"
 const TIME_SKILL_ENDED := &"time_skill_ended"
 const PLAYER_DASHED := &"player_dashed"

@@ -121,6 +121,7 @@ func _on_reward_selected(_reward_data: Dictionary) -> void:
 			"rooms_cleared": GameState.current_room,
 			"run_time": GameState.run_timer,
 			"rewards": GameState.current_run.get("rewards", []),
+			"curses": GameState.current_run.get("curses", []),
 		})
 		return
 	GameState.current_room += 1
