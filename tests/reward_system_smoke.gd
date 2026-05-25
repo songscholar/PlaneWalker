@@ -74,7 +74,7 @@ func _run_room_progression_check() -> void:
 		await get_tree().process_frame
 		_assert_true(GameState.current_room == expected_room, "reward advances to room %d" % expected_room)
 
-	var enemies: Array = room.get_node("Enemies").get_children()
+	var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
 	_assert_true(GameState.phase == GameState.GamePhase.BOSS_FIGHT, "fifth room enters boss phase")
 	_assert_true(enemies.size() == 1, "boss room spawns one enemy")
 	_assert_true(enemies[0].is_in_group("bosses"), "fifth room enemy is boss")
@@ -109,3 +109,11 @@ func _reward_ids(rewards: Array[Dictionary]) -> Array[String]:
 	for reward: Dictionary in rewards:
 		ids.append(str(reward.get("id", "")))
 	return ids
+
+
+func _nodes_in_group(nodes: Array, group_name: StringName) -> Array:
+	var matches: Array = []
+	for node: Node in nodes:
+		if node.is_in_group(group_name):
+			matches.append(node)
+	return matches
