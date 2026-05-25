@@ -47,6 +47,26 @@ func _run() -> void:
 	_assert_close(time_manager.max_energy, 125.0, "reward max time energy")
 	_assert_close(time_manager.energy_regen, 3.25, "reward time regen")
 
+	player.apply_reward({
+		"id": "test_build_starter",
+		"effects": {
+			"time_stop_duration_bonus": 0.75,
+			"time_stop_cost_multiplier": 0.9,
+			"rewind_heal": 28.0,
+			"combo_finisher_multiplier_bonus": 0.35,
+			"heavy_damage_multiplier_bonus": 0.4,
+			"low_hp_damage_multiplier_bonus": 0.45,
+			"dash_invulnerable_bonus": 0.08,
+		},
+	})
+	_assert_close(time_manager.time_stop_duration_bonus, 0.75, "time stop duration starter")
+	_assert_close(time_manager.time_stop_cost_multiplier, 0.9, "time stop cost starter")
+	_assert_close(time_manager.rewind_heal, 28.0, "rewind heal starter")
+	_assert_close(sword.combo_finisher_multiplier_bonus, 0.35, "combo finisher starter")
+	_assert_close(sword.heavy_damage_multiplier_bonus, 0.4, "heavy damage starter")
+	_assert_close(sword.low_hp_damage_multiplier_bonus, 0.45, "low hp damage starter")
+	_assert_close(player._dash_invulnerable_bonus, 0.08, "dash invulnerability starter")
+
 	GameState.start_run({"seed": 123})
 	GameState.add_run_reward({"id": "test_power", "effects": {}})
 	_assert_true(GameState.current_run.get("inventory", []).has("test_power"), "run inventory records reward")
@@ -55,6 +75,10 @@ func _run() -> void:
 	var first_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	var second_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	_assert_true(_reward_ids(first_roll) == _reward_ids(second_roll), "reward roll is deterministic")
+	_assert_true(RewardPoolScript.REWARDS.size() >= 14, "reward pool includes build starters")
+	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("frozen_burst"), "reward pool includes frozen burst starter")
+	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("accelerated_combo"), "reward pool includes combo starter")
+	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("tempo_barrage"), "reward pool includes barrage starter")
 
 	player.queue_free()
 	await _run_hit_feedback_check()

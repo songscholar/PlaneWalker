@@ -13,6 +13,10 @@ signal cooldown_changed(skill_id: StringName, remaining: float)
 @export var rewind_cooldown: float = 15.0
 
 var energy: float = 100.0
+var time_stop_duration_bonus: float = 0.0
+var time_stop_cost_multiplier: float = 1.0
+var rewind_cost_multiplier: float = 1.0
+var rewind_heal: float = 0.0
 var _cooldowns: Dictionary = {
 	&"time_stop": 0.0,
 	&"time_rewind": 0.0,
@@ -40,15 +44,17 @@ func configure_from_stats(stats: Resource) -> void:
 
 
 func try_time_stop() -> void:
-	if not _can_pay(&"time_stop", time_stop_cost):
+	var effective_cost := time_stop_cost * time_stop_cost_multiplier
+	var effective_duration := time_stop_duration + time_stop_duration_bonus
+	if not _can_pay(&"time_stop", effective_cost):
 		return
-	_pay_cost(&"time_stop", time_stop_cost, time_stop_cooldown)
+	_pay_cost(&"time_stop", effective_cost, time_stop_cooldown)
 	EventBus.time_skill_started.emit(&"time_stop")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_stop"})
 	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
 		if node.has_method("apply_time_stop"):
-			node.apply_time_stop(time_stop_duration)
-	await get_tree().create_timer(time_stop_duration).timeout
+			node.apply_time_stop(effective_duration)
+	await get_tree().create_timer(effective_duration).timeout
 	EventBus.time_skill_ended.emit(&"time_stop")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_stop"})
 
@@ -56,12 +62,17 @@ func try_time_stop() -> void:
 func try_rewind(recorder: Node) -> void:
 	if recorder == null or not recorder.has_snapshot():
 		return
-	if not _can_pay(&"time_rewind", rewind_cost):
+	var effective_cost := rewind_cost * rewind_cost_multiplier
+	if not _can_pay(&"time_rewind", effective_cost):
 		return
-	_pay_cost(&"time_rewind", rewind_cost, rewind_cooldown)
+	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
 	EventBus.time_skill_started.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rewind"})
 	recorder.rewind_to_oldest_snapshot()
+	if rewind_heal > 0.0:
+		var health_component := get_parent().get_node_or_null("HealthComponent")
+		if health_component != null and health_component.has_method("heal"):
+			health_component.heal(rewind_heal)
 	EventBus.time_skill_ended.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_rewind"})
 
