@@ -18,6 +18,10 @@ signal cooldown_changed(skill_id: StringName, remaining: float)
 @export var time_rift_duration: float = 4.0
 @export var time_rift_radius: float = 92.0
 @export var time_rift_slow_multiplier: float = 0.45
+@export var time_accelerate_cost: float = 35.0
+@export var time_accelerate_cooldown: float = 14.0
+@export var time_accelerate_duration: float = 3.0
+@export var time_accelerate_multiplier: float = 1.35
 
 var energy: float = 100.0
 var time_stop_duration_bonus: float = 0.0
@@ -30,6 +34,7 @@ var _cooldowns: Dictionary = {
 	&"time_stop": 0.0,
 	&"time_rewind": 0.0,
 	&"time_rift": 0.0,
+	&"time_accelerate": 0.0,
 }
 
 
@@ -103,6 +108,24 @@ func try_time_rift(rift_position: Vector2) -> bool:
 	EventBus.time_skill_started.emit(&"time_rift")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rift", "position": rift_position})
 	return true
+
+
+func try_time_accelerate() -> bool:
+	if not _can_pay(&"time_accelerate", time_accelerate_cost):
+		return false
+	_pay_cost(&"time_accelerate", time_accelerate_cost, time_accelerate_cooldown)
+	var owner_entity := get_parent()
+	if owner_entity.has_method("apply_time_acceleration"):
+		owner_entity.apply_time_acceleration(time_accelerate_multiplier, time_accelerate_duration)
+	EventBus.time_skill_started.emit(&"time_accelerate")
+	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_accelerate"})
+	get_tree().create_timer(time_accelerate_duration).timeout.connect(_end_time_accelerate)
+	return true
+
+
+func _end_time_accelerate() -> void:
+	EventBus.time_skill_ended.emit(&"time_accelerate")
+	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_accelerate"})
 
 
 func restore_energy(amount: float) -> void:

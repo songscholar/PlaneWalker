@@ -17,6 +17,8 @@ var _dash_velocity: Vector2 = Vector2.ZERO
 var _knockback_velocity: Vector2 = Vector2.ZERO
 var _last_move_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
+var _time_acceleration_multiplier: float = 1.0
+var _time_acceleration_token: int = 0
 
 const DASH_DURATION := 0.28
 const DASH_COOLDOWN := 0.45
@@ -68,6 +70,8 @@ func _handle_time_input() -> void:
 		time_manager.try_rewind(rewind_recorder)
 	if Input.is_action_just_pressed("time_rift"):
 		time_manager.try_time_rift(get_global_mouse_position())
+	if Input.is_action_just_pressed("time_accelerate"):
+		time_manager.try_time_accelerate()
 
 
 func _handle_movement(_delta: float) -> void:
@@ -81,7 +85,7 @@ func _handle_movement(_delta: float) -> void:
 	if _dash_time_remaining > 0.0:
 		velocity = _dash_velocity + _knockback_velocity
 	else:
-		velocity = input_vector * stats.move_speed + _knockback_velocity
+		velocity = input_vector * stats.move_speed * _time_acceleration_multiplier + _knockback_velocity
 	move_and_slide()
 
 
@@ -161,6 +165,27 @@ func apply_knockback(knockback: Vector2) -> void:
 	_knockback_velocity += knockback
 
 
+func apply_time_acceleration(multiplier: float, duration: float) -> void:
+	if duration <= 0.0:
+		return
+	_time_acceleration_token += 1
+	var token := _time_acceleration_token
+	_time_acceleration_multiplier = maxf(1.0, multiplier)
+	_apply_stats_to_components(false)
+	get_tree().create_timer(duration).timeout.connect(_clear_time_acceleration.bind(token))
+
+
+func _clear_time_acceleration(token: int) -> void:
+	if token != _time_acceleration_token:
+		return
+	_time_acceleration_multiplier = 1.0
+	_apply_stats_to_components(false)
+
+
+func is_time_accelerated() -> bool:
+	return _time_acceleration_multiplier > 1.0
+
+
 func _on_damaged(_amount: float, _current_hp: float) -> void:
 	visual.color = Color(1.0, 0.95, 0.85)
 	var tween := create_tween()
@@ -174,4 +199,4 @@ func _apply_stats_to_components(reset_health: bool) -> void:
 		health.apply_stat_totals(stats)
 	time_manager.configure_from_stats(stats)
 	sword_weapon.base_attack = stats.attack
-	sword_weapon.attack_speed = stats.attack_speed
+	sword_weapon.attack_speed = stats.attack_speed * _time_acceleration_multiplier

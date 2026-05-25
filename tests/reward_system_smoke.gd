@@ -122,6 +122,7 @@ func _run() -> void:
 	player.queue_free()
 	await _run_hit_feedback_check()
 	await _run_time_rift_check()
+	await _run_time_accelerate_check()
 	await _run_death_check()
 	await _run_curse_selection_check()
 	await _run_room_progression_check()
@@ -185,6 +186,39 @@ func _run_time_rift_check() -> void:
 	await get_tree().create_timer(0.12).timeout
 	await get_tree().process_frame
 	_assert_close(enemy._rift_slow_multiplier, 1.0, "time rift clears slow on expire")
+
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_time_accelerate_check() -> void:
+	GameState.start_run({"seed": 247})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var room_player: Node = room.get_node("Player")
+	var time_manager: Node = room_player.get_node("TimeManager")
+	var sword: Node = room_player.get_node("SwordWeapon")
+	time_manager.time_accelerate_duration = 0.08
+	var base_attack_speed: float = sword.attack_speed
+	var energy_before: float = time_manager.energy
+	var accelerated: bool = time_manager.try_time_accelerate()
+	await get_tree().process_frame
+
+	_assert_true(accelerated, "time accelerate can be cast")
+	_assert_true(time_manager.energy <= energy_before - time_manager.time_accelerate_cost + 0.1, "time accelerate spends energy")
+	_assert_true(time_manager.get_cooldown(&"time_accelerate") > 0.0, "time accelerate starts cooldown")
+	_assert_true(room_player.is_time_accelerated(), "player enters accelerated state")
+	_assert_close(sword.attack_speed, base_attack_speed * time_manager.time_accelerate_multiplier, "time accelerate boosts attack speed")
+	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
+	_assert_true(hud_label.text.contains("Accel"), "combat hud shows accelerate cooldown")
+
+	await get_tree().create_timer(0.12).timeout
+	await get_tree().process_frame
+	_assert_true(not room_player.is_time_accelerated(), "time accelerate expires")
+	_assert_close(sword.attack_speed, base_attack_speed, "time accelerate restores attack speed")
 
 	room.queue_free()
 	await get_tree().process_frame
