@@ -1,5 +1,7 @@
 extends Node
 
+const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
+
 enum GamePhase {
 	BOOT,
 	HUB,
@@ -24,10 +26,12 @@ var current_run: Dictionary = {}
 var last_run_result: Dictionary = {}
 var save_path: String = "user://plane_walker_save.json"
 var persistent: Dictionary = {}
+var build_state: RefCounted
 
 
 func _ready() -> void:
 	phase = GamePhase.BOOT
+	build_state = RunBuildStateScript.new()
 	load_persistent()
 
 
@@ -37,6 +41,9 @@ func _process(delta: float) -> void:
 
 
 func start_run(run_config: Dictionary = {}) -> void:
+	if build_state == null:
+		build_state = RunBuildStateScript.new()
+	build_state.reset()
 	current_floor = 1
 	current_room = 0
 	run_timer = 0.0
@@ -101,6 +108,7 @@ func fail_run(killer: Variant = null) -> void:
 func add_run_reward(reward_data: Dictionary) -> void:
 	if current_run.is_empty():
 		return
+	build_state.record_item(reward_data)
 	var inventory: Array = current_run.get("inventory", [])
 	inventory.append(reward_data.get("id", ""))
 	current_run["inventory"] = inventory
@@ -109,11 +117,13 @@ func add_run_reward(reward_data: Dictionary) -> void:
 	rewards.append(reward_data.duplicate(true))
 	current_run["rewards"] = rewards
 	_record_reward_archetype(reward_data)
+	_sync_build_state_to_run()
 
 
 func add_run_curse(curse_data: Dictionary) -> void:
 	if current_run.is_empty():
 		return
+	build_state.record_curse(curse_data)
 	var active_curses: Array = current_run.get("active_curses", [])
 	active_curses.append(curse_data.get("id", ""))
 	current_run["active_curses"] = active_curses
@@ -121,11 +131,13 @@ func add_run_curse(curse_data: Dictionary) -> void:
 	var curses: Array = current_run.get("curses", [])
 	curses.append(curse_data.duplicate(true))
 	current_run["curses"] = curses
+	_sync_build_state_to_run()
 
 
 func add_run_blessing(blessing_data: Dictionary) -> void:
 	if current_run.is_empty():
 		return
+	build_state.record_blessing(blessing_data)
 	var active_blessings: Array = current_run.get("active_blessings", [])
 	active_blessings.append(blessing_data.get("id", ""))
 	current_run["active_blessings"] = active_blessings
@@ -134,11 +146,13 @@ func add_run_blessing(blessing_data: Dictionary) -> void:
 	blessings.append(blessing_data.duplicate(true))
 	current_run["blessings"] = blessings
 	_record_reward_archetype(blessing_data)
+	_sync_build_state_to_run()
 
 
 func add_run_talent(talent_data: Dictionary) -> void:
 	if current_run.is_empty():
 		return
+	build_state.record_talent(talent_data)
 	var talents: Array = current_run.get("talents", [])
 	talents.append(talent_data.get("id", ""))
 	current_run["talents"] = talents
@@ -147,6 +161,7 @@ func add_run_talent(talent_data: Dictionary) -> void:
 	talent_choices.append(talent_data.duplicate(true))
 	current_run["talent_choices"] = talent_choices
 	_record_reward_archetype(talent_data)
+	_sync_build_state_to_run()
 
 
 func add_run_event(event_data: Dictionary) -> void:
@@ -179,6 +194,12 @@ func get_current_room_type() -> String:
 
 func get_dominant_archetype() -> String:
 	return str(current_run.get("dominant_archetype", ""))
+
+
+func get_build_state_snapshot() -> Dictionary:
+	if build_state == null:
+		return {}
+	return build_state.to_dictionary()
 
 
 func set_setting(setting_id: String, value: Variant) -> void:
@@ -247,6 +268,12 @@ func _record_reward_archetype(reward_data: Dictionary) -> void:
 	archetypes[archetype] = int(archetypes.get(archetype, 0)) + 1
 	current_run["archetypes"] = archetypes
 	current_run["dominant_archetype"] = _find_dominant_archetype(archetypes)
+
+
+func _sync_build_state_to_run() -> void:
+	if build_state == null:
+		return
+	current_run["build_state"] = build_state.to_dictionary()
 
 
 func _find_dominant_archetype(archetypes: Dictionary) -> String:

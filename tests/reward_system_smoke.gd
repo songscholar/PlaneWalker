@@ -8,6 +8,7 @@ const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 const CursePoolScript := preload("res://scripts/curses/curse_pool.gd")
 const BlessingPoolScript := preload("res://scripts/rewards/blessing_pool.gd")
 const TalentPoolScript := preload("res://scripts/rewards/talent_pool.gd")
+const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
 
 var _failed := false
 var _original_save_path := ""
@@ -122,9 +123,22 @@ func _run() -> void:
 		"effects": {},
 	})
 	_assert_true(GameState.current_run.get("inventory", []).has("test_power"), "run inventory records reward")
+	_assert_true(GameState.get_build_state_snapshot().get("items", []).has("test_power"), "build state records reward")
 	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "run records reward archetype")
 	_assert_true(GameState.get_dominant_archetype() == "accelerated_combo", "run tracks dominant archetype")
+	_assert_true(GameState.get_build_state_snapshot().get("dominant_archetype", "") == "accelerated_combo", "build state tracks dominant archetype")
 	_assert_true(GameState.current_room == 0, "run starts before first room")
+
+	var rebuilt_state := RunBuildStateScript.from_run({
+		"rewards": GameState.current_run.get("rewards", []),
+		"blessings": [{"id": "test_blessing"}],
+		"curses": [{"id": "test_curse"}],
+		"talent_choices": [{"id": "test_talent"}],
+	})
+	_assert_true(rebuilt_state.items.has("test_power"), "build state can rebuild item ids")
+	_assert_true(rebuilt_state.blessings.has("test_blessing"), "build state can rebuild blessing ids")
+	_assert_true(rebuilt_state.curses.has("test_curse"), "build state can rebuild curse ids")
+	_assert_true(rebuilt_state.talents.has("test_talent"), "build state can rebuild talent ids")
 
 	var first_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	var second_roll := RewardPoolScript.roll_options(3, 123, 1, [])
@@ -178,6 +192,7 @@ func _run() -> void:
 		},
 	})
 	_assert_true(GameState.current_run.get("active_curses", []).has("test_curse"), "run records active curse")
+	_assert_true(GameState.get_build_state_snapshot().get("curses", []).has("test_curse"), "build state records active curse")
 	_assert_close(sword.base_attack, 56.25, "curse applies attack upside")
 	_assert_close(health.max_hp, 176.0, "curse applies max hp risk")
 	_assert_close(time_manager.energy_regen, 1.625, "curse applies time regen risk")

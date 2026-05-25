@@ -2,6 +2,7 @@ class_name PlayerController
 extends CharacterBody2D
 
 const StatsResource := preload("res://scripts/core/stats.gd")
+const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 
 @export var stats: Resource
 
@@ -118,85 +119,7 @@ func apply_curse(curse_data: Dictionary) -> void:
 
 
 func _apply_effects(effects: Dictionary) -> void:
-	if effects.has("attack_multiplier"):
-		stats.attack *= float(effects["attack_multiplier"])
-	if effects.has("attack_speed_multiplier"):
-		stats.attack_speed *= float(effects["attack_speed_multiplier"])
-	if effects.has("max_hp_bonus"):
-		stats.max_hp += float(effects["max_hp_bonus"])
-	if effects.has("max_hp_multiplier"):
-		stats.max_hp *= float(effects["max_hp_multiplier"])
-	if effects.has("defense_bonus"):
-		stats.defense += float(effects["defense_bonus"])
-	if effects.has("time_energy_max_bonus"):
-		stats.time_energy_max += float(effects["time_energy_max_bonus"])
-	if effects.has("time_energy_regen_bonus"):
-		stats.time_energy_regen += float(effects["time_energy_regen_bonus"])
-	if effects.has("time_energy_regen_multiplier"):
-		stats.time_energy_regen *= float(effects["time_energy_regen_multiplier"])
-	if effects.has("time_stop_duration_bonus"):
-		time_manager.time_stop_duration_bonus += float(effects["time_stop_duration_bonus"])
-	if effects.has("time_stop_cost_multiplier"):
-		time_manager.time_stop_cost_multiplier *= float(effects["time_stop_cost_multiplier"])
-	if effects.has("time_stop_weakpoint_damage_bonus"):
-		time_manager.time_stop_weakpoint_damage_bonus += float(effects["time_stop_weakpoint_damage_bonus"])
-	if effects.has("time_stop_weakpoint_duration"):
-		time_manager.time_stop_weakpoint_duration = maxf(time_manager.time_stop_weakpoint_duration, float(effects["time_stop_weakpoint_duration"]))
-	if effects.has("time_stop_self_damage"):
-		time_manager.time_stop_self_damage += float(effects["time_stop_self_damage"])
-	if effects.has("rewind_cost_multiplier"):
-		time_manager.rewind_cost_multiplier *= float(effects["rewind_cost_multiplier"])
-	if effects.has("rewind_heal"):
-		time_manager.rewind_heal += float(effects["rewind_heal"])
-	if effects.has("rewind_self_damage"):
-		time_manager.rewind_self_damage += float(effects["rewind_self_damage"])
-	if effects.has("time_rift_cost_multiplier"):
-		time_manager.time_rift_cost_multiplier *= float(effects["time_rift_cost_multiplier"])
-	if effects.has("time_rift_duration_bonus"):
-		time_manager.time_rift_duration_bonus += float(effects["time_rift_duration_bonus"])
-	if effects.has("time_rift_radius_bonus"):
-		time_manager.time_rift_radius_bonus += float(effects["time_rift_radius_bonus"])
-	if effects.has("time_rift_slow_bonus"):
-		time_manager.time_rift_slow_bonus += float(effects["time_rift_slow_bonus"])
-	if effects.has("time_accelerate_cost_multiplier"):
-		time_manager.time_accelerate_cost_multiplier *= float(effects["time_accelerate_cost_multiplier"])
-	if effects.has("time_accelerate_duration_bonus"):
-		time_manager.time_accelerate_duration_bonus += float(effects["time_accelerate_duration_bonus"])
-	if effects.has("time_accelerate_multiplier_bonus"):
-		time_manager.time_accelerate_multiplier_bonus += float(effects["time_accelerate_multiplier_bonus"])
-	if effects.has("low_energy_regen_multiplier"):
-		time_manager.low_energy_regen_multiplier = maxf(time_manager.low_energy_regen_multiplier, float(effects["low_energy_regen_multiplier"]))
-	if effects.has("low_energy_threshold"):
-		time_manager.low_energy_threshold = maxf(time_manager.low_energy_threshold, float(effects["low_energy_threshold"]))
-	if effects.has("combo_finisher_multiplier_bonus"):
-		sword_weapon.combo_finisher_multiplier_bonus += float(effects["combo_finisher_multiplier_bonus"])
-	if effects.has("heavy_damage_multiplier_bonus"):
-		sword_weapon.heavy_damage_multiplier_bonus += float(effects["heavy_damage_multiplier_bonus"])
-	if effects.has("heavy_execute_multiplier_bonus"):
-		sword_weapon.heavy_execute_multiplier_bonus += float(effects["heavy_execute_multiplier_bonus"])
-	if effects.has("heavy_execute_threshold"):
-		sword_weapon.heavy_execute_threshold = float(effects["heavy_execute_threshold"])
-	if effects.has("low_hp_damage_multiplier_bonus"):
-		sword_weapon.low_hp_damage_multiplier_bonus += float(effects["low_hp_damage_multiplier_bonus"])
-	if effects.has("bow_charge_rate_bonus"):
-		bow_weapon.charge_rate_bonus += float(effects["bow_charge_rate_bonus"])
-	if effects.has("bow_full_charge_damage_multiplier_bonus"):
-		bow_weapon.full_charge_damage_multiplier_bonus += float(effects["bow_full_charge_damage_multiplier_bonus"])
-	if effects.has("bow_pierce_bonus"):
-		bow_weapon.pierce_bonus += int(effects["bow_pierce_bonus"])
-	if effects.has("dash_invulnerable_bonus"):
-		_dash_invulnerable_bonus += float(effects["dash_invulnerable_bonus"])
-	if effects.has("healing_multiplier"):
-		health.healing_multiplier *= float(effects["healing_multiplier"])
-
-	_apply_stats_to_components(false)
-
-	if effects.has("heal"):
-		health.heal(float(effects["heal"]))
-	if effects.has("time_energy_restore"):
-		time_manager.restore_energy(float(effects["time_energy_restore"]))
-	if effects.has("invulnerable_duration"):
-		health.apply_invulnerability(float(effects["invulnerable_duration"]))
+	ItemEffectScript.apply_to_player(self, effects)
 
 
 func apply_knockback(knockback: Vector2) -> void:
