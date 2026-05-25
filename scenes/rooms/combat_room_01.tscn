@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room_controller"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/boss_chrono_warden.tscn" id="8_boss"]
 [ext_resource type="Script" path="res://scripts/ui/floating_text_layer.gd" id="9_floating_text"]
 [ext_resource type="PackedScene" path="res://scenes/fx/spawn_warning.tscn" id="10_spawn_warning"]
+[ext_resource type="Script" path="res://scripts/ui/curse_selection.gd" id="11_curse_selection"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_horizontal"]
 size = Vector2(980, 36)
@@ -226,3 +227,42 @@ horizontal_alignment = 1
 [node name="Options" type="VBoxContainer" parent="RewardSelection/Panel/Margin/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 12
+
+[node name="CurseSelection" type="CanvasLayer" parent="."]
+script = ExtResource("11_curse_selection")
+player_path = NodePath("../Player")
+
+[node name="Panel" type="PanelContainer" parent="CurseSelection"]
+offset_left = 390.0
+offset_top = 115.0
+offset_right = 890.0
+offset_bottom = 565.0
+
+[node name="Margin" type="MarginContainer" parent="CurseSelection/Panel"]
+offset_right = 500.0
+offset_bottom = 450.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="CurseSelection/Panel/Margin"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 476.0
+offset_bottom = 430.0
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="CurseSelection/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Risk altar"
+horizontal_alignment = 1
+
+[node name="Options" type="VBoxContainer" parent="CurseSelection/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SkipButton" type="Button" parent="CurseSelection/Panel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(420, 48)
+text = "Skip curse"

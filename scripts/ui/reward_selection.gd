@@ -18,9 +18,22 @@ func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	EventBus.room_cleared.connect(_on_room_cleared)
+	EventBus.curse_offer_resolved.connect(_on_curse_offer_resolved)
 
 
 func _on_room_cleared(_room_id: StringName) -> void:
+	if GameState.is_curse_offer_pending():
+		return
+	_show_reward_options()
+
+
+func _on_curse_offer_resolved() -> void:
+	if GameState.phase == GameState.GamePhase.DEATH or GameState.phase == GameState.GamePhase.RUN_END:
+		return
+	_show_reward_options()
+
+
+func _show_reward_options() -> void:
 	GameState.set_phase(GameState.GamePhase.SELECTION)
 	_current_options = RewardPoolScript.roll_options(
 		option_count,

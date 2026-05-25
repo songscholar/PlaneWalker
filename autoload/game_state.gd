@@ -64,6 +64,7 @@ func start_run(run_config: Dictionary = {}) -> void:
 		"stats": {},
 		"archetypes": {},
 		"dominant_archetype": "",
+		"curse_offer_pending": false,
 	}
 	set_phase(GamePhase.DUNGEON)
 	EventBus.run_started.emit(current_run)
@@ -122,6 +123,16 @@ func add_run_curse(curse_data: Dictionary) -> void:
 	var curses: Array = current_run.get("curses", [])
 	curses.append(curse_data.duplicate(true))
 	current_run["curses"] = curses
+
+
+func set_curse_offer_pending(pending: bool) -> void:
+	if current_run.is_empty():
+		return
+	current_run["curse_offer_pending"] = pending
+
+
+func is_curse_offer_pending() -> bool:
+	return bool(current_run.get("curse_offer_pending", false))
 
 
 func get_dominant_archetype() -> String:

@@ -122,6 +122,7 @@ func _run() -> void:
 	player.queue_free()
 	await _run_hit_feedback_check()
 	await _run_death_check()
+	await _run_curse_selection_check()
 	await _run_room_progression_check()
 	await _run_reward_ui_build_check()
 	await _run_death_overlay_check()
@@ -210,6 +211,7 @@ func _run_room_progression_check() -> void:
 
 	for expected_room: int in range(2, 6):
 		room._clear_room()
+		_resolve_curse_offer_if_visible(room, false)
 		var reward_title: Label = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
 		_assert_true(reward_title.text.contains("Room %d" % GameState.current_room), "reward title includes cleared room")
 		room.get_node("RewardSelection")._select_reward(0)
@@ -238,9 +240,39 @@ func _run_room_progression_check() -> void:
 	_assert_close(enemies[0].health.defense, 0.0, "time stop exposes boss")
 
 	room._clear_room()
+	_resolve_curse_offer_if_visible(room, false)
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
 	_assert_true(GameState.phase == GameState.GamePhase.RUN_END, "final room ends run")
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_curse_selection_check() -> void:
+	GameState.start_run({"seed": 987})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	var forced_curse_rooms: Array[int] = [1]
+	room.curse_offer_rooms = forced_curse_rooms
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
+
+	room._clear_room()
+	await get_tree().process_frame
+	var curse_selection: CanvasLayer = room.get_node("CurseSelection")
+	var reward_selection: CanvasLayer = room.get_node("RewardSelection")
+	_assert_true(curse_selection.visible, "curse offer appears before reward")
+	_assert_true(not reward_selection.visible, "reward waits for curse offer resolution")
+	var curse_button: Button = room.get_node("CurseSelection/Panel/Margin/VBox/Options").get_child(0)
+	_assert_true(curse_button.text.contains("Risk:"), "curse option shows risk label")
+
+	curse_selection._select_curse(0)
+	await get_tree().process_frame
+	_assert_true(not curse_selection.visible, "curse offer closes after selection")
+	_assert_true(reward_selection.visible, "reward opens after curse selection")
+	_assert_true(GameState.current_run.get("active_curses", []).size() == 1, "curse selection records active curse")
+
 	room.queue_free()
 	await get_tree().process_frame
 
@@ -275,6 +307,16 @@ func _run_reward_ui_build_check() -> void:
 
 	room.queue_free()
 	await get_tree().process_frame
+
+
+func _resolve_curse_offer_if_visible(room: Node, accept: bool) -> void:
+	var curse_selection: CanvasLayer = room.get_node("CurseSelection")
+	if not curse_selection.visible:
+		return
+	if accept:
+		curse_selection._select_curse(0)
+	else:
+		curse_selection._skip_curse()
 
 
 func _assert_true(value: bool, label: String) -> void:

@@ -8,6 +8,7 @@ extends Node2D
 @export var reward_marker_path: NodePath
 @export var rooms_per_floor: int = 5
 @export var spawn_warning_duration: float = 0.45
+@export var curse_offer_rooms: Array[int] = [2, 4]
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint
@@ -106,6 +107,7 @@ func _clear_room() -> void:
 	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
 	if reward_marker != null:
 		reward_marker.visible = true
+	GameState.set_curse_offer_pending(_should_offer_curse())
 	var active_room_id := _active_room_id()
 	EventBus.room_cleared.emit(active_room_id)
 	EventBus.publish(EventBus.ROOM_CLEARED, {"room_id": active_room_id})
@@ -139,6 +141,10 @@ func _active_room_id() -> StringName:
 
 func _is_boss_room() -> bool:
 	return GameState.current_room >= rooms_per_floor
+
+
+func _should_offer_curse() -> bool:
+	return GameState.current_room < rooms_per_floor and curse_offer_rooms.has(GameState.current_room)
 
 
 func _on_player_died(killer: Variant) -> void:
