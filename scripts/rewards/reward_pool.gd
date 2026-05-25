@@ -117,6 +117,24 @@ const REWARDS: Array[Dictionary] = [
 		"effects": {"attack_speed_multiplier": 1.1, "time_energy_max_bonus": 15.0},
 	},
 	{
+		"id": "piercing_draw",
+		"name": "Piercing Draw",
+		"kind": "weapon",
+		"archetype": "piercing_draw",
+		"role": "starter",
+		"description": "Bow charges 25% faster and arrows pierce one additional enemy.",
+		"effects": {"bow_charge_rate_bonus": 0.25, "bow_pierce_bonus": 1},
+	},
+	{
+		"id": "focused_draw",
+		"name": "Focused Draw",
+		"kind": "weapon",
+		"archetype": "piercing_draw",
+		"role": "payoff",
+		"description": "Bow charges 15% faster and full-charge arrows deal 35% more damage.",
+		"effects": {"bow_charge_rate_bonus": 0.15, "bow_full_charge_damage_multiplier_bonus": 0.35},
+	},
+	{
 		"id": "rift_snare",
 		"name": "Rift Snare",
 		"kind": "time",
@@ -170,6 +188,7 @@ const ARCHETYPE_LABELS := {
 	"low_hp_void": "Low HP Void",
 	"evasive_guard": "Evasive Guard",
 	"barrage_tempo": "Barrage Tempo",
+	"piercing_draw": "Piercing Draw",
 }
 
 const ROLE_LABELS := {

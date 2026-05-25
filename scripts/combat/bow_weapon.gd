@@ -15,12 +15,15 @@ const ArrowScene := preload("res://scenes/combat/player_arrow.tscn")
 var _charging: bool = false
 var _charge_time: float = 0.0
 var _cooldown_remaining: float = 0.0
+var charge_rate_bonus: float = 0.0
+var full_charge_damage_multiplier_bonus: float = 0.0
+var pierce_bonus: int = 0
 
 
 func _process(delta: float) -> void:
 	_cooldown_remaining = maxf(0.0, _cooldown_remaining - delta)
 	if _charging:
-		_charge_time += delta * maxf(0.2, attack_speed)
+		_charge_time += delta * maxf(0.2, attack_speed) * (1.0 + charge_rate_bonus)
 
 
 func start_charge() -> bool:
@@ -62,9 +65,10 @@ func _fire_arrow(direction: Vector2, charge_ratio: float) -> void:
 	var arrow := ArrowScene.instantiate()
 	arrow.global_position = global_position + shot_direction * 28.0
 	arrow.direction = shot_direction
-	arrow.damage = base_attack * lerpf(0.75, 1.75, charge_ratio)
+	var full_charge_multiplier := 1.0 + full_charge_damage_multiplier_bonus if charge_ratio >= 0.98 else 1.0
+	arrow.damage = base_attack * lerpf(0.75, 1.75, charge_ratio) * full_charge_multiplier
 	arrow.speed = lerpf(440.0, 680.0, charge_ratio)
-	arrow.pierce = 1 if charge_ratio >= 0.98 else 0
+	arrow.pierce = (1 if charge_ratio >= 0.98 else 0) + pierce_bonus
 	arrow.source = self
 	arrow.owner_entity = owner_player
 	get_tree().current_scene.add_child(arrow)

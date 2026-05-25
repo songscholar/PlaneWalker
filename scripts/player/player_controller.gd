@@ -166,6 +166,12 @@ func _apply_effects(effects: Dictionary) -> void:
 		sword_weapon.heavy_damage_multiplier_bonus += float(effects["heavy_damage_multiplier_bonus"])
 	if effects.has("low_hp_damage_multiplier_bonus"):
 		sword_weapon.low_hp_damage_multiplier_bonus += float(effects["low_hp_damage_multiplier_bonus"])
+	if effects.has("bow_charge_rate_bonus"):
+		bow_weapon.charge_rate_bonus += float(effects["bow_charge_rate_bonus"])
+	if effects.has("bow_full_charge_damage_multiplier_bonus"):
+		bow_weapon.full_charge_damage_multiplier_bonus += float(effects["bow_full_charge_damage_multiplier_bonus"])
+	if effects.has("bow_pierce_bonus"):
+		bow_weapon.pierce_bonus += int(effects["bow_pierce_bonus"])
 	if effects.has("dash_invulnerable_bonus"):
 		_dash_invulnerable_bonus += float(effects["dash_invulnerable_bonus"])
 	if effects.has("healing_multiplier"):

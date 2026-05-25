@@ -91,7 +91,7 @@ func _apply_event_option(option: Dictionary) -> void:
 		player.apply_reward({"id": option.get("id", "event"), "effects": option.get("effects", {})})
 
 	if option.get("grant_reward", false):
-		_pay_hp_cost(float(option.get("hp_cost", 0.0)))
+		option["hp_paid"] = _pay_hp_cost(float(option.get("hp_cost", 0.0)))
 		if GameState.phase == GameState.GamePhase.DEATH:
 			return
 		var rewards := RewardPoolScript.roll_options(
@@ -108,9 +108,10 @@ func _apply_event_option(option: Dictionary) -> void:
 			option["granted_reward_id"] = reward.get("id", "")
 
 
-func _pay_hp_cost(amount: float) -> void:
+func _pay_hp_cost(amount: float) -> float:
 	if amount <= 0.0 or player == null:
-		return
+		return 0.0
 	var health: Node = player.get_node_or_null("HealthComponent")
 	if health != null and health.has_method("lose_health"):
-		health.lose_health(amount, &"event:fractured_cache")
+		return health.lose_health(amount, &"event:fractured_cache")
+	return 0.0

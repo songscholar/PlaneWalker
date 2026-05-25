@@ -69,6 +69,9 @@ func _run() -> void:
 			"time_accelerate_cost_multiplier": 0.85,
 			"time_accelerate_duration_bonus": 0.8,
 			"time_accelerate_multiplier_bonus": 0.2,
+			"bow_charge_rate_bonus": 0.25,
+			"bow_full_charge_damage_multiplier_bonus": 0.35,
+			"bow_pierce_bonus": 1,
 		},
 	})
 	_assert_close(time_manager.time_stop_duration_bonus, 0.75, "time stop duration starter")
@@ -85,6 +88,9 @@ func _run() -> void:
 	_assert_close(time_manager.time_accelerate_cost_multiplier, 0.85, "accelerate cost payoff")
 	_assert_close(time_manager.time_accelerate_duration_bonus, 0.8, "accelerate duration payoff")
 	_assert_close(time_manager.time_accelerate_multiplier_bonus, 0.2, "accelerate multiplier payoff")
+	_assert_close(bow.charge_rate_bonus, 0.25, "bow charge rate starter")
+	_assert_close(bow.full_charge_damage_multiplier_bonus, 0.35, "bow full charge damage payoff")
+	_assert_true(bow.pierce_bonus == 1, "bow pierce starter")
 
 	GameState.start_run({"seed": 123})
 	GameState.add_run_reward({"id": "test_power", "effects": {}})
@@ -106,11 +112,17 @@ func _run() -> void:
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("frozen_burst"), "reward pool includes frozen burst starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("accelerated_combo"), "reward pool includes combo starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("tempo_barrage"), "reward pool includes barrage starter")
+	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("piercing_draw"), "reward pool includes bow starter")
+	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("focused_draw"), "reward pool includes bow payoff")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("rift_snare"), "reward pool includes rift payoff")
 	_assert_true(RewardPoolScript.get_reward_route_label({
 		"archetype": "rift_control",
 		"role": "payoff",
 	}).contains("Payoff - Rift Control"), "reward route labels payoff")
+	_assert_true(RewardPoolScript.get_reward_route_label({
+		"archetype": "piercing_draw",
+		"role": "starter",
+	}).contains("Starter - Piercing Draw"), "reward route labels bow starter")
 
 	var first_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	var second_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
@@ -205,6 +217,9 @@ func _run_bow_weapon_check() -> void:
 	_assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "bow short charge spawns no arrow")
 
 	bow._cooldown_remaining = 0.0
+	bow.charge_rate_bonus = 0.25
+	bow.full_charge_damage_multiplier_bonus = 0.35
+	bow.pierce_bonus = 1
 	_assert_true(bow.start_charge(), "bow starts full charge")
 	bow._charge_time = bow.full_charge_time
 	var fired: bool = bow.release_charge(room_player.global_position.direction_to(enemy.global_position))
@@ -213,8 +228,8 @@ func _run_bow_weapon_check() -> void:
 	_assert_true(fired, "bow full charge fires")
 	_assert_true(not arrows.is_empty(), "bow full charge spawns arrow")
 	if not arrows.is_empty():
-		_assert_close(arrows[0].pierce, 1.0, "bow full charge gains pierce")
-		_assert_true(arrows[0].damage > bow.base_attack, "bow full charge increases damage")
+		_assert_close(arrows[0].pierce, 2.0, "bow reward increases pierce")
+		_assert_true(arrows[0].damage > bow.base_attack * 2.0, "bow reward increases full charge damage")
 
 	await _wait_for_health_below(enemy_health, enemy_health.max_hp)
 	_assert_true(enemy_health.current_hp < enemy_health.max_hp, "bow arrow damages enemy")
@@ -492,7 +507,7 @@ func _run_event_selection_risk_check() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	_assert_close(health.current_hp, 95.0, "fractured cache pays hp cost")
+	_assert_close(GameState.current_run.get("events", [])[0].get("hp_paid", 0.0), 25.0, "fractured cache pays hp cost")
 	_assert_true(GameState.current_run.get("inventory", []).size() == 1, "fractured cache grants a reward")
 	_assert_true(GameState.current_run.get("events", [])[0].get("granted_reward_id", "") != "", "event records granted reward")
 	_assert_true(GameState.current_room == 2, "event selection advances run")
