@@ -118,15 +118,22 @@ func _run_room_progression_check() -> void:
 
 	for expected_room: int in range(2, 6):
 		room._clear_room()
+		var reward_title: Label = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
+		_assert_true(reward_title.text.contains("Room %d" % GameState.current_room), "reward title includes cleared room")
 		room.get_node("RewardSelection")._select_reward(0)
 		await get_tree().process_frame
 		await get_tree().process_frame
 		_assert_true(GameState.current_room == expected_room, "reward advances to room %d" % expected_room)
 
 	var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
+	var boss_panel: PanelContainer = room.get_node("CombatHUD/BossPanel")
+	var boss_hp_bar: ProgressBar = room.get_node("CombatHUD/BossPanel/VBox/BossHPBar")
 	_assert_true(GameState.phase == GameState.GamePhase.BOSS_FIGHT, "fifth room enters boss phase")
 	_assert_true(enemies.size() == 1, "boss room spawns one enemy")
 	_assert_true(enemies[0].is_in_group("bosses"), "fifth room enemy is boss")
+	await get_tree().process_frame
+	_assert_true(boss_panel.visible, "boss room shows boss panel")
+	_assert_close(boss_hp_bar.max_value, enemies[0].health.max_hp, "boss hp max binds to health")
 	enemies[0].apply_time_stop(0.1)
 	await get_tree().process_frame
 	_assert_close(enemies[0].health.defense, 0.0, "time stop exposes boss")

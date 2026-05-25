@@ -33,7 +33,7 @@ func _on_room_cleared(_room_id: StringName) -> void:
 
 
 func _render_options() -> void:
-	title_label.text = "Choose a reward"
+	title_label.text = "Choose a reward - Room %d cleared" % GameState.current_room
 	for child: Node in option_box.get_children():
 		child.queue_free()
 

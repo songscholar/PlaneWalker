@@ -16,8 +16,9 @@ func _ready() -> void:
 func _on_run_ended(result: Dictionary) -> void:
 	var outcome := str(result.get("result", ""))
 	var title := "Run Complete" if outcome == "floor_cleared" else "Run Failed"
-	result_label.text = "%s\nRooms cleared: %s\nRewards: %s" % [
+	result_label.text = "%s\nRoom reached: %s\nRooms cleared: %s\nRewards: %s" % [
 		title,
+		result.get("current_room", result.get("rooms_cleared", 0)),
 		result.get("rooms_cleared", 0),
 		GameState.current_run.get("inventory", []),
 	]

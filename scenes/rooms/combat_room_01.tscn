@@ -55,10 +55,67 @@ player_path = NodePath("../Player")
 
 [node name="StatusLabel" type="Label" parent="CombatHUD"]
 offset_left = 24.0
-offset_top = 650.0
+offset_top = 628.0
 offset_right = 760.0
-offset_bottom = 700.0
+offset_bottom = 678.0
 text = "HP / Time"
+
+[node name="PlayerPanel" type="PanelContainer" parent="CombatHUD"]
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 344.0
+offset_bottom = 118.0
+
+[node name="VBox" type="VBoxContainer" parent="CombatHUD/PlayerPanel"]
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 320.0
+offset_bottom = 94.0
+theme_override_constants/separation = 8
+
+[node name="HPBar" type="ProgressBar" parent="CombatHUD/PlayerPanel/VBox"]
+layout_mode = 2
+max_value = 200.0
+value = 200.0
+show_percentage = false
+
+[node name="TimeBar" type="ProgressBar" parent="CombatHUD/PlayerPanel/VBox"]
+layout_mode = 2
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="RoomBanner" type="Label" parent="CombatHUD"]
+visible = false
+offset_left = 480.0
+offset_top = 42.0
+offset_right = 800.0
+offset_bottom = 82.0
+text = "Room"
+horizontal_alignment = 1
+
+[node name="BossPanel" type="PanelContainer" parent="CombatHUD"]
+visible = false
+offset_left = 360.0
+offset_top = 604.0
+offset_right = 920.0
+offset_bottom = 684.0
+
+[node name="VBox" type="VBoxContainer" parent="CombatHUD/BossPanel"]
+offset_right = 560.0
+offset_bottom = 80.0
+theme_override_constants/separation = 8
+
+[node name="BossName" type="Label" parent="CombatHUD/BossPanel/VBox"]
+layout_mode = 2
+text = "Chrono Warden"
+horizontal_alignment = 1
+
+[node name="BossHPBar" type="ProgressBar" parent="CombatHUD/BossPanel/VBox"]
+layout_mode = 2
+max_value = 420.0
+value = 420.0
+show_percentage = false
 
 [node name="RewardSelection" type="CanvasLayer" parent="."]
 script = ExtResource("7_reward_selection")
