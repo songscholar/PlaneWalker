@@ -31,7 +31,9 @@ func _on_hit_confirmed(damage_info: Variant, target: Node, final_amount: float) 
 
 func _format_damage(final_amount: float, damage_info: Variant) -> String:
 	var prefix := ""
-	if damage_info != null and damage_info.tags.has("attack:heavy"):
+	if damage_info != null and damage_info.tags.has("attack:full_charge"):
+		prefix = ">>"
+	elif damage_info != null and damage_info.tags.has("attack:heavy"):
 		prefix = "!"
 	return "%s%d" % [prefix, roundi(final_amount)]
 
@@ -41,6 +43,8 @@ func _damage_color(damage_info: Variant) -> Color:
 		return Color(1.0, 0.35, 0.3)
 	if damage_info != null and damage_info.tags.has("enemy:projectile"):
 		return Color(1.0, 0.72, 0.28)
+	if damage_info != null and damage_info.tags.has("attack:full_charge"):
+		return Color(0.55, 1.0, 0.72)
 	if damage_info != null and damage_info.tags.has("attack:heavy"):
 		return Color(0.45, 0.9, 1.0)
 	return Color(1.0, 1.0, 0.86)

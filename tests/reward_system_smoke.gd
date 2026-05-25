@@ -205,8 +205,10 @@ func _run_bow_weapon_check() -> void:
 
 	var room_player: Node = room.get_node("Player")
 	var bow: Node = room_player.get_node("BowWeapon")
+	var time_manager: Node = room_player.get_node("TimeManager")
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var enemy_health: Node = enemy.get_node("HealthComponent")
+	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
 	var weapon_label: Label = room.get_node("CombatHUD/WeaponPanel/VBox/WeaponLabel")
 	var bow_charge_bar: ProgressBar = room.get_node("CombatHUD/WeaponPanel/VBox/BowChargeBar")
 
@@ -225,6 +227,8 @@ func _run_bow_weapon_check() -> void:
 	bow.charge_rate_bonus = 0.25
 	bow.full_charge_damage_multiplier_bonus = 0.35
 	bow.pierce_bonus = 1
+	time_manager.energy = 40.0
+	var energy_before_arrow: float = time_manager.energy
 	_assert_true(bow.start_charge(), "bow starts full charge")
 	bow._charge_time = bow.full_charge_time
 	var fired: bool = bow.release_charge(room_player.global_position.direction_to(enemy.global_position))
@@ -235,9 +239,14 @@ func _run_bow_weapon_check() -> void:
 	if not arrows.is_empty():
 		_assert_close(arrows[0].pierce, 2.0, "bow reward increases pierce")
 		_assert_true(arrows[0].damage > bow.base_attack * 2.0, "bow reward increases full charge damage")
+		_assert_true(arrows[0].full_charge, "bow full charge marks arrow")
 
 	await _wait_for_health_below(enemy_health, enemy_health.max_hp)
 	_assert_true(enemy_health.current_hp < enemy_health.max_hp, "bow arrow damages enemy")
+	_assert_true(time_manager.energy > energy_before_arrow, "bow full charge hit restores time energy")
+	_assert_true(floating_layer.get_child_count() > 0, "bow full charge spawns floating text")
+	var floating_text: Label = floating_layer.get_child(0)
+	_assert_true(floating_text.text.begins_with(">>"), "bow full charge uses special damage prefix")
 	await get_tree().process_frame
 	_assert_true(weapon_label.text.contains("Cooldown"), "combat hud shows bow cooldown")
 

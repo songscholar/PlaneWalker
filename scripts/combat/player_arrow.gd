@@ -7,6 +7,8 @@ const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 @export var lifetime: float = 1.5
 @export var damage: float = 24.0
 @export var pierce: int = 0
+@export var full_charge: bool = false
+@export var time_energy_restore: float = 0.0
 
 @onready var visual: Polygon2D = $Visual
 
@@ -40,7 +42,18 @@ func _on_area_entered(area: Area2D) -> void:
 	_hit_areas.append(area)
 	var damage_info := DamageInfoScript.new(damage, DamageInfoScript.DamageType.PHYSICAL, source, owner_entity)
 	damage_info.tags = ["weapon:bow"]
+	if full_charge:
+		damage_info.tags.append("attack:full_charge")
 	damage_info.knockback = direction.normalized() * 90.0
 	area.receive_hit(damage_info)
+	_restore_time_energy()
 	if _hit_areas.size() > pierce:
 		queue_free()
+
+
+func _restore_time_energy() -> void:
+	if not full_charge or time_energy_restore <= 0.0 or owner_entity == null:
+		return
+	var time_manager := owner_entity.get_node_or_null("TimeManager")
+	if time_manager != null and time_manager.has_method("restore_energy"):
+		time_manager.restore_energy(time_energy_restore)
