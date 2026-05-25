@@ -42,7 +42,7 @@ func _update_player_status() -> void:
 	hp_bar.value = health.current_hp
 	time_bar.max_value = time_manager.max_energy
 	time_bar.value = time_manager.energy
-	label.text = "Room %d/5 | HP %.0f/%.0f | Time %.0f/%.0f | Stop %.1f | Rewind %.1f" % [
+	label.text = "Room %d/5 | HP %.0f/%.0f | Time %.0f/%.0f | Stop %.1f | Rewind %.1f | Rift %.1f" % [
 		GameState.current_room,
 		health.current_hp,
 		health.max_hp,
@@ -50,6 +50,7 @@ func _update_player_status() -> void:
 		time_manager.max_energy,
 		time_manager.get_cooldown(&"time_stop"),
 		time_manager.get_cooldown(&"time_rewind"),
+		time_manager.get_cooldown(&"time_rift"),
 	]
 	_update_build_label()
 

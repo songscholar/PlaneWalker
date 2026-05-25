@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/time_system/time_rift.gd" id="1_time_rift"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_rift"]
+radius = 92.0
+
+[node name="TimeRift" type="Area2D"]
+script = ExtResource("1_time_rift")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_rift")
+
+[node name="Visual" type="Polygon2D" parent="."]
+color = Color(0.25, 0.75, 1, 0.22)
+polygon = PackedVector2Array(92, 0, 87.4318, 28.4276, 74.4318, 54.0761, 54.0761, 74.4318, 28.4276, 87.4318, 0, 92, -28.4276, 87.4318, -54.0761, 74.4318, -74.4318, 54.0761, -87.4318, 28.4276, -92, 0, -87.4318, -28.4276, -74.4318, -54.0761, -54.0761, -74.4318, -28.4276, -87.4318)

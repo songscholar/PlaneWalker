@@ -121,6 +121,7 @@ func _run() -> void:
 
 	player.queue_free()
 	await _run_hit_feedback_check()
+	await _run_time_rift_check()
 	await _run_death_check()
 	await _run_curse_selection_check()
 	await _run_room_progression_check()
@@ -151,6 +152,39 @@ func _run_hit_feedback_check() -> void:
 	_assert_true(Engine.time_scale < 1.0, "weapon hit requests hit pause")
 	await get_tree().create_timer(0.08, true, false, true).timeout
 	_assert_close(Engine.time_scale, 1.0, "hit pause restores time scale")
+
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_time_rift_check() -> void:
+	GameState.start_run({"seed": 246})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
+
+	var room_player: Node = room.get_node("Player")
+	var time_manager: Node = room_player.get_node("TimeManager")
+	time_manager.time_rift_duration = 0.08
+	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
+	var energy_before: float = time_manager.energy
+	var created: bool = time_manager.try_time_rift(enemy.global_position)
+	await get_tree().physics_frame
+	await get_tree().process_frame
+
+	_assert_true(created, "time rift can be cast")
+	_assert_true(time_manager.energy <= energy_before - time_manager.time_rift_cost + 0.1, "time rift spends energy")
+	_assert_true(time_manager.get_cooldown(&"time_rift") > 0.0, "time rift starts cooldown")
+	_assert_true(get_tree().get_nodes_in_group("time_rifts").size() > 0, "time rift spawns area")
+	_assert_close(enemy._rift_slow_multiplier, time_manager.time_rift_slow_multiplier, "time rift slows enemy")
+	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
+	_assert_true(hud_label.text.contains("Rift"), "combat hud shows rift cooldown")
+
+	await get_tree().create_timer(0.12).timeout
+	await get_tree().process_frame
+	_assert_close(enemy._rift_slow_multiplier, 1.0, "time rift clears slow on expire")
 
 	room.queue_free()
 	await get_tree().process_frame

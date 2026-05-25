@@ -66,6 +66,8 @@ func _handle_time_input() -> void:
 		time_manager.try_time_stop()
 	if Input.is_action_just_pressed("time_rewind"):
 		time_manager.try_rewind(rewind_recorder)
+	if Input.is_action_just_pressed("time_rift"):
+		time_manager.try_time_rift(get_global_mouse_position())
 
 
 func _handle_movement(_delta: float) -> void:

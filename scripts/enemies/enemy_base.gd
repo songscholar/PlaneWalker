@@ -17,6 +17,8 @@ var target: Node2D
 var _attack_cooldown_remaining: float = 0.0
 var _time_stopped: bool = false
 var _knockback_velocity: Vector2 = Vector2.ZERO
+var _rift_slow_multiplier: float = 1.0
+var _rift_slow_sources: int = 0
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -54,8 +56,12 @@ func _tick_ai(_delta: float) -> void:
 
 func _move_toward_target(speed_multiplier: float = 1.0) -> void:
 	var direction := global_position.direction_to(target.global_position)
-	velocity = direction * move_speed * speed_multiplier + _knockback_velocity
+	velocity = direction * _current_move_speed() * speed_multiplier + _knockback_velocity
 	move_and_slide()
+
+
+func _current_move_speed() -> float:
+	return move_speed * _rift_slow_multiplier
 
 
 func _try_melee_attack() -> void:
@@ -102,3 +108,14 @@ func apply_time_stop(duration: float) -> void:
 	_time_stopped = true
 	await get_tree().create_timer(duration).timeout
 	_time_stopped = false
+
+
+func apply_time_rift(slow_multiplier: float) -> void:
+	_rift_slow_sources += 1
+	_rift_slow_multiplier = minf(_rift_slow_multiplier, clampf(slow_multiplier, 0.1, 1.0))
+
+
+func clear_time_rift() -> void:
+	_rift_slow_sources = maxi(0, _rift_slow_sources - 1)
+	if _rift_slow_sources == 0:
+		_rift_slow_multiplier = 1.0

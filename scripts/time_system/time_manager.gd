@@ -1,6 +1,8 @@
 class_name TimeManager
 extends Node
 
+const TimeRiftScene := preload("res://scenes/time/time_rift.tscn")
+
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
 
@@ -11,6 +13,11 @@ signal cooldown_changed(skill_id: StringName, remaining: float)
 @export var time_stop_duration: float = 3.0
 @export var rewind_cost: float = 45.0
 @export var rewind_cooldown: float = 15.0
+@export var time_rift_cost: float = 30.0
+@export var time_rift_cooldown: float = 10.0
+@export var time_rift_duration: float = 4.0
+@export var time_rift_radius: float = 92.0
+@export var time_rift_slow_multiplier: float = 0.45
 
 var energy: float = 100.0
 var time_stop_duration_bonus: float = 0.0
@@ -22,6 +29,7 @@ var rewind_self_damage: float = 0.0
 var _cooldowns: Dictionary = {
 	&"time_stop": 0.0,
 	&"time_rewind": 0.0,
+	&"time_rift": 0.0,
 }
 
 
@@ -79,6 +87,22 @@ func try_rewind(recorder: Node) -> void:
 			health_component.heal(rewind_heal)
 	EventBus.time_skill_ended.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_rewind"})
+
+
+func try_time_rift(rift_position: Vector2) -> bool:
+	if not _can_pay(&"time_rift", time_rift_cost):
+		return false
+	_pay_cost(&"time_rift", time_rift_cost, time_rift_cooldown)
+	var rift := TimeRiftScene.instantiate()
+	rift.duration = time_rift_duration
+	rift.radius = time_rift_radius
+	rift.slow_multiplier = time_rift_slow_multiplier
+	var parent := get_parent().get_parent()
+	parent.add_child(rift)
+	rift.global_position = rift_position
+	EventBus.time_skill_started.emit(&"time_rift")
+	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rift", "position": rift_position})
+	return true
 
 
 func restore_energy(amount: float) -> void:
