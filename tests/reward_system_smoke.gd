@@ -57,11 +57,37 @@ func _run() -> void:
 	_assert_true(_reward_ids(first_roll) == _reward_ids(second_roll), "reward roll is deterministic")
 
 	player.queue_free()
+	await _run_hit_feedback_check()
 	await _run_death_check()
 	await _run_room_progression_check()
 	await _run_death_overlay_check()
 	await get_tree().process_frame
 	get_tree().quit(1 if _failed else 0)
+
+
+func _run_hit_feedback_check() -> void:
+	GameState.start_run({"seed": 654})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
+	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
+	var damage_info := DamageInfoScript.new(12.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	damage_info.tags = ["weapon:sword", "attack:heavy"]
+	damage_info.knockback = Vector2.RIGHT * 80.0
+	enemy.get_node("HealthComponent").take_damage(damage_info)
+	await get_tree().process_frame
+
+	_assert_true(floating_layer.get_child_count() > 0, "hit feedback spawns floating damage text")
+	_assert_true(enemy._knockback_velocity.length() > 0.0, "hit feedback applies knockback")
+	_assert_true(Engine.time_scale < 1.0, "weapon hit requests hit pause")
+	await get_tree().create_timer(0.08, true, false, true).timeout
+	_assert_close(Engine.time_scale, 1.0, "hit pause restores time scale")
+
+	room.queue_free()
+	await get_tree().process_frame
 
 
 func _run_death_check() -> void:

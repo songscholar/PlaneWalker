@@ -18,12 +18,12 @@ func _tick_ai(_delta: float) -> void:
 	var distance := global_position.distance_to(target.global_position)
 	if distance < preferred_distance * 0.75:
 		var away := target.global_position.direction_to(global_position)
-		velocity = away * move_speed
+		velocity = away * move_speed + _knockback_velocity
 		move_and_slide()
 	elif distance > preferred_distance * 1.25:
 		_move_toward_target(0.75)
 	else:
-		velocity = Vector2.ZERO
+		velocity = _knockback_velocity
 		move_and_slide()
 	_try_shoot()
 

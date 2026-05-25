@@ -9,16 +9,20 @@ const StatsResource := preload("res://scripts/core/stats.gd")
 @onready var sword_weapon: Node = $SwordWeapon
 @onready var time_manager: Node = $TimeManager
 @onready var rewind_recorder: Node = $RewindRecorder
+@onready var visual: Polygon2D = $Visual
 
 var _dash_time_remaining: float = 0.0
 var _dash_cooldown_remaining: float = 0.0
 var _dash_velocity: Vector2 = Vector2.ZERO
+var _knockback_velocity: Vector2 = Vector2.ZERO
 var _last_move_direction: Vector2 = Vector2.RIGHT
 
 const DASH_DURATION := 0.28
 const DASH_COOLDOWN := 0.45
 const DASH_SPEED := 520.0
 const DASH_INVULNERABLE_TIME := 0.20
+const KNOCKBACK_DECAY := 12.0
+const BASE_COLOR := Color(0.2, 0.85, 0.95)
 
 
 func _ready() -> void:
@@ -26,6 +30,7 @@ func _ready() -> void:
 	if stats == null:
 		stats = StatsResource.new()
 	_apply_stats_to_components(true)
+	health.damaged.connect(_on_damaged)
 
 
 func _physics_process(delta: float) -> void:
@@ -39,6 +44,7 @@ func _physics_process(delta: float) -> void:
 func _update_timers(delta: float) -> void:
 	_dash_time_remaining = maxf(0.0, _dash_time_remaining - delta)
 	_dash_cooldown_remaining = maxf(0.0, _dash_cooldown_remaining - delta)
+	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
 
 
 func _update_weapon_aim() -> void:
@@ -70,9 +76,9 @@ func _handle_movement(_delta: float) -> void:
 		_start_dash()
 
 	if _dash_time_remaining > 0.0:
-		velocity = _dash_velocity
+		velocity = _dash_velocity + _knockback_velocity
 	else:
-		velocity = input_vector * stats.move_speed
+		velocity = input_vector * stats.move_speed + _knockback_velocity
 	move_and_slide()
 
 
@@ -108,6 +114,16 @@ func apply_reward(reward_data: Dictionary) -> void:
 		time_manager.restore_energy(float(effects["time_energy_restore"]))
 	if effects.has("invulnerable_duration"):
 		health.apply_invulnerability(float(effects["invulnerable_duration"]))
+
+
+func apply_knockback(knockback: Vector2) -> void:
+	_knockback_velocity += knockback
+
+
+func _on_damaged(_amount: float, _current_hp: float) -> void:
+	visual.color = Color(1.0, 0.95, 0.85)
+	var tween := create_tween()
+	tween.tween_property(visual, "color", BASE_COLOR, 0.12)
 
 
 func _apply_stats_to_components(reset_health: bool) -> void:

@@ -2,6 +2,7 @@ extends Node
 
 signal damage_about_to_apply(damage_info: Variant, target: Node)
 signal damage_applied(damage_info: Variant, target: Node, final_amount: float)
+signal hit_confirmed(damage_info: Variant, target: Node, final_amount: float)
 signal entity_died(entity: Node, killer: Variant)
 signal room_started(room_id: StringName)
 signal room_cleared(room_id: StringName)
@@ -16,6 +17,7 @@ signal run_ended(result: Dictionary)
 
 const DAMAGE_ABOUT_TO_APPLY := &"damage_about_to_apply"
 const DAMAGE_APPLIED := &"damage_applied"
+const HIT_CONFIRMED := &"hit_confirmed"
 const ENTITY_DIED := &"entity_died"
 const ROOM_STARTED := &"room_started"
 const ROOM_CLEARED := &"room_cleared"

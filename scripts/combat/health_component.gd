@@ -53,6 +53,8 @@ func take_damage(damage_info: RefCounted) -> float:
 	var final_amount: float = DamageCalculatorScript.calculate(damage_info, defense)
 	current_hp = maxf(0.0, current_hp - final_amount)
 	damaged.emit(final_amount, current_hp)
+	if final_amount > 0.0:
+		_apply_hit_reaction(damage_info, final_amount)
 	EventBus.damage_applied.emit(damage_info, owner_entity, final_amount)
 	EventBus.publish(EventBus.DAMAGE_APPLIED, {
 		"damage_info": damage_info,
@@ -63,6 +65,20 @@ func take_damage(damage_info: RefCounted) -> float:
 	if current_hp <= 0.0:
 		_die(damage_info.attacker)
 	return final_amount
+
+
+func _apply_hit_reaction(damage_info: RefCounted, final_amount: float) -> void:
+	var owner_entity := get_parent()
+	EventBus.hit_confirmed.emit(damage_info, owner_entity, final_amount)
+	EventBus.publish(EventBus.HIT_CONFIRMED, {
+		"damage_info": damage_info,
+		"target": owner_entity,
+		"final_amount": final_amount,
+	})
+	if damage_info.knockback.length_squared() > 0.0 and owner_entity.has_method("apply_knockback"):
+		owner_entity.apply_knockback(damage_info.knockback)
+	if damage_info.tags.has("weapon:sword"):
+		CombatFeedback.request_hit_pause()
 
 
 func heal(amount: float) -> float:

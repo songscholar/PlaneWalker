@@ -27,7 +27,7 @@ func _tick_ai(delta: float) -> void:
 	if global_position.distance_to(target.global_position) > attack_range:
 		_move_toward_target(0.7)
 	else:
-		velocity = Vector2.ZERO
+		velocity = _knockback_velocity
 		move_and_slide()
 		_try_melee_attack()
 	if _pattern_timer <= 0.0:

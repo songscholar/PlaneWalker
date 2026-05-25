@@ -16,6 +16,9 @@ const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 var target: Node2D
 var _attack_cooldown_remaining: float = 0.0
 var _time_stopped: bool = false
+var _knockback_velocity: Vector2 = Vector2.ZERO
+
+const KNOCKBACK_DECAY := 10.0
 
 
 func _ready() -> void:
@@ -36,6 +39,7 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
+	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
 	_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
 	if target == null or not is_instance_valid(target):
 		target = get_tree().get_first_node_in_group("player") as Node2D
@@ -50,7 +54,7 @@ func _tick_ai(_delta: float) -> void:
 
 func _move_toward_target(speed_multiplier: float = 1.0) -> void:
 	var direction := global_position.direction_to(target.global_position)
-	velocity = direction * move_speed * speed_multiplier
+	velocity = direction * move_speed * speed_multiplier + _knockback_velocity
 	move_and_slide()
 
 
@@ -65,6 +69,7 @@ func _try_melee_attack() -> void:
 	_attack_cooldown_remaining = attack_cooldown
 	var damage_info := DamageInfoScript.new(attack, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	damage_info.tags = ["enemy:melee"]
+	damage_info.knockback = global_position.direction_to(target.global_position) * 180.0
 	target.get_node("HealthComponent").take_damage(damage_info)
 
 
@@ -85,6 +90,10 @@ func _on_died(_killer: Variant) -> void:
 
 func _restore_visual_color() -> void:
 	visual.color = Color(0.9, 0.35, 0.3)
+
+
+func apply_knockback(knockback: Vector2) -> void:
+	_knockback_velocity += knockback
 
 
 func apply_time_stop(duration: float) -> void:
