@@ -22,23 +22,13 @@ var death_count: int = 0
 
 var current_run: Dictionary = {}
 var last_run_result: Dictionary = {}
-var persistent: Dictionary = {
-	"chronos_shards": 0,
-	"existential_imprints": 0,
-	"unlocked_nodes": [],
-	"discovered_items": [],
-	"unlocked_characters": [],
-	"unlocked_weapons": [],
-	"weapon_proficiency": {},
-	"npc_affinity": {},
-	"unlocked_achievements": [],
-	"cosmetics": {},
-	"settings": {},
-}
+var save_path: String = "user://plane_walker_save.json"
+var persistent: Dictionary = {}
 
 
 func _ready() -> void:
 	phase = GamePhase.BOOT
+	load_persistent()
 
 
 func _process(delta: float) -> void:
@@ -77,6 +67,8 @@ func end_run(result: Dictionary) -> void:
 	if phase == GamePhase.RUN_END or phase == GamePhase.DEATH:
 		return
 	last_run_result = result.duplicate(true)
+	_record_run_summary(result)
+	save_persistent()
 	set_phase(GamePhase.RUN_END)
 	EventBus.run_ended.emit(result)
 	EventBus.publish(EventBus.RUN_ENDED, result)
@@ -97,6 +89,8 @@ func fail_run(killer: Variant = null) -> void:
 		"curses": current_run.get("curses", []),
 	}
 	last_run_result = result.duplicate(false)
+	_record_run_summary(result)
+	save_persistent()
 	set_phase(GamePhase.DEATH)
 	EventBus.run_ended.emit(result)
 	EventBus.publish(EventBus.RUN_ENDED, result)
@@ -163,10 +157,58 @@ func set_setting(setting_id: String, value: Variant) -> void:
 	var settings: Dictionary = persistent.get("settings", {})
 	settings[setting_id] = value
 	persistent["settings"] = settings
+	save_persistent()
 
 
 func get_setting(setting_id: String, default_value: Variant = null) -> Variant:
 	return persistent.get("settings", {}).get(setting_id, default_value)
+
+
+func load_persistent() -> bool:
+	if not FileAccess.file_exists(save_path):
+		persistent = _default_persistent_data()
+		return false
+
+	var file := FileAccess.open(save_path, FileAccess.READ)
+	if file == null:
+		push_warning("Could not open save file: %s" % save_path)
+		persistent = _default_persistent_data()
+		return false
+
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_warning("Save file is not valid JSON data: %s" % save_path)
+		persistent = _default_persistent_data()
+		return false
+
+	var payload: Dictionary = parsed
+	var loaded_persistent: Variant = payload.get("persistent", payload)
+	if typeof(loaded_persistent) != TYPE_DICTIONARY:
+		persistent = _default_persistent_data()
+		return false
+
+	persistent = _merge_persistent_defaults(_default_persistent_data(), loaded_persistent)
+	return true
+
+
+func save_persistent() -> bool:
+	var file := FileAccess.open(save_path, FileAccess.WRITE)
+	if file == null:
+		push_warning("Could not write save file: %s" % save_path)
+		return false
+
+	var payload := {
+		"version": 1,
+		"persistent": persistent,
+	}
+	file.store_string(JSON.stringify(payload, "\t"))
+	return true
+
+
+func reset_persistent_data(delete_file: bool = false) -> void:
+	persistent = _default_persistent_data()
+	if delete_file and FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 
 
 func _record_reward_archetype(reward_data: Dictionary) -> void:
@@ -192,3 +234,50 @@ func _find_dominant_archetype(archetypes: Dictionary) -> String:
 
 func set_phase(next_phase: GamePhase) -> void:
 	phase = next_phase
+
+
+func _record_run_summary(result: Dictionary) -> void:
+	var rooms_cleared := int(result.get("rooms_cleared", 0))
+	persistent["runs_completed"] = int(persistent.get("runs_completed", 0)) + 1
+	persistent["best_rooms_cleared"] = maxi(int(persistent.get("best_rooms_cleared", 0)), rooms_cleared)
+	if str(result.get("result", "")) == "floor_cleared":
+		persistent["victories"] = int(persistent.get("victories", 0)) + 1
+	persistent["last_run_summary"] = {
+		"result": result.get("result", ""),
+		"floor": result.get("floor", current_floor),
+		"rooms_cleared": rooms_cleared,
+		"current_room": result.get("current_room", current_room),
+		"run_time": result.get("run_time", run_timer),
+		"rewards": result.get("rewards", []),
+		"curses": result.get("curses", []),
+	}
+
+
+func _default_persistent_data() -> Dictionary:
+	return {
+		"chronos_shards": 0,
+		"existential_imprints": 0,
+		"unlocked_nodes": [],
+		"discovered_items": [],
+		"unlocked_characters": [],
+		"unlocked_weapons": [],
+		"weapon_proficiency": {},
+		"npc_affinity": {},
+		"unlocked_achievements": [],
+		"cosmetics": {},
+		"settings": {},
+		"runs_completed": 0,
+		"victories": 0,
+		"best_rooms_cleared": 0,
+		"last_run_summary": {},
+	}
+
+
+func _merge_persistent_defaults(defaults: Dictionary, loaded: Dictionary) -> Dictionary:
+	var merged := defaults.duplicate(true)
+	for key: Variant in loaded.keys():
+		if typeof(loaded[key]) == TYPE_DICTIONARY and typeof(merged.get(key)) == TYPE_DICTIONARY:
+			merged[key] = _merge_persistent_defaults(merged[key], loaded[key])
+		else:
+			merged[key] = loaded[key]
+	return merged

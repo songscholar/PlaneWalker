@@ -8,6 +8,7 @@ const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 const CursePoolScript := preload("res://scripts/curses/curse_pool.gd")
 
 var _failed := false
+var _original_save_path := ""
 
 
 func _ready() -> void:
@@ -15,6 +16,10 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	_original_save_path = GameState.save_path
+	GameState.save_path = "user://plane_walker_smoke_test_save.json"
+	GameState.reset_persistent_data(true)
+
 	var player := PLAYER_SCENE.instantiate()
 	add_child(player)
 	await get_tree().process_frame
@@ -165,8 +170,12 @@ func _run() -> void:
 	await _run_room_progression_check()
 	await _run_reward_ui_build_check()
 	await _run_pause_menu_check()
+	await _run_persistence_check()
 	await _run_death_overlay_check()
 	await get_tree().process_frame
+	GameState.reset_persistent_data(true)
+	GameState.save_path = _original_save_path
+	GameState.load_persistent()
 	get_tree().quit(1 if _failed else 0)
 
 
@@ -408,6 +417,33 @@ func _run_pause_menu_check() -> void:
 
 	main.queue_free()
 	await get_tree().process_frame
+
+
+func _run_persistence_check() -> void:
+	GameState.reset_persistent_data(true)
+	GameState.set_setting("master_volume", 0.4)
+	GameState.set_setting("master_muted", true)
+	GameState.start_run({"seed": 991})
+	GameState.current_room = 5
+	GameState.end_run({
+		"result": "floor_cleared",
+		"floor": 1,
+		"rooms_cleared": 5,
+		"run_time": 123.0,
+		"rewards": [{"id": "test_reward"}],
+		"curses": [{"id": "test_curse"}],
+	})
+
+	_assert_true(GameState.persistent.get("runs_completed", 0) == 1, "run persistence increments completion count")
+	_assert_true(GameState.persistent.get("victories", 0) == 1, "run persistence increments victory count")
+	_assert_true(GameState.persistent.get("best_rooms_cleared", 0) == 5, "run persistence stores best room count")
+
+	GameState.persistent = {}
+	_assert_true(GameState.load_persistent(), "persistent save can be loaded")
+	_assert_close(float(GameState.get_setting("master_volume", 0.0)), 0.4, "persistent save restores master volume")
+	_assert_true(bool(GameState.get_setting("master_muted", false)), "persistent save restores mute setting")
+	_assert_true(GameState.persistent.get("runs_completed", 0) == 1, "persistent save restores run count")
+	_assert_true(GameState.persistent.get("last_run_summary", {}).get("result", "") == "floor_cleared", "persistent save restores last run result")
 
 
 func _run_room_progression_check() -> void:
