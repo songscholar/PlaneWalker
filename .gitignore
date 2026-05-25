@@ -1,0 +1,17 @@
+# Godot generated/cache files
+.godot/
+.import/
+*.import
+
+# Godot export files
+export.cfg
+export_presets.cfg
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+tmp/
+.temp/
