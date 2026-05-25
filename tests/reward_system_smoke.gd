@@ -382,11 +382,19 @@ func _run_pause_menu_check() -> void:
 
 	var pause_menu: CanvasLayer = main.get_node("PauseMenu")
 	var resume_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/ResumeButton")
+	var volume_label: Label = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeLabel")
+	var volume_slider: HSlider = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeSlider")
+	var mute_toggle: CheckButton = main.get_node("PauseMenu/Panel/Margin/VBox/MuteToggle")
 	_assert_true(not pause_menu.visible, "pause menu starts hidden")
 	main._pause_run()
 	_assert_true(get_tree().paused, "pause freezes scene tree")
 	_assert_true(GameState.phase == GameState.GamePhase.PAUSED, "pause sets paused phase")
 	_assert_true(pause_menu.visible, "pause menu becomes visible")
+	volume_slider.value = 0.5
+	_assert_close(GameState.get_setting("master_volume", 0.0), 0.5, "pause menu stores master volume")
+	_assert_true(volume_label.text.contains("50%"), "pause menu updates volume label")
+	mute_toggle.button_pressed = true
+	_assert_true(bool(GameState.get_setting("master_muted", false)), "pause menu stores mute setting")
 
 	resume_button.pressed.emit()
 	_assert_true(not get_tree().paused, "resume unfreezes scene tree")

@@ -159,6 +159,16 @@ func get_dominant_archetype() -> String:
 	return str(current_run.get("dominant_archetype", ""))
 
 
+func set_setting(setting_id: String, value: Variant) -> void:
+	var settings: Dictionary = persistent.get("settings", {})
+	settings[setting_id] = value
+	persistent["settings"] = settings
+
+
+func get_setting(setting_id: String, default_value: Variant = null) -> Variant:
+	return persistent.get("settings", {}).get(setting_id, default_value)
+
+
 func _record_reward_archetype(reward_data: Dictionary) -> void:
 	var archetype := str(reward_data.get("archetype", ""))
 	if archetype.is_empty():
