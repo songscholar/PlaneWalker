@@ -369,6 +369,11 @@ func _run_death_overlay_check() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	_assert_true(main.get_node("StartMenu").visible, "main scene opens on start menu")
+	main._start_new_run()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
 	var room_player: Node = main.get_node("CombatRoom01/Player")
 	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	room_player.get_node("HealthComponent").take_damage(fatal_damage)
@@ -389,11 +394,20 @@ func _run_pause_menu_check() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	var start_menu: CanvasLayer = main.get_node("StartMenu")
 	var pause_menu: CanvasLayer = main.get_node("PauseMenu")
 	var resume_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/ResumeButton")
 	var volume_label: Label = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeLabel")
 	var volume_slider: HSlider = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeSlider")
 	var mute_toggle: CheckButton = main.get_node("PauseMenu/Panel/Margin/VBox/MuteToggle")
+	_assert_true(start_menu.visible, "pause check starts on start menu")
+	_assert_true(GameState.phase == GameState.GamePhase.HUB, "main scene starts in hub phase")
+	main._pause_run()
+	_assert_true(not get_tree().paused, "hub phase cannot open pause")
+	main._start_new_run()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert_true(not start_menu.visible, "quick start hides start menu")
 	_assert_true(not pause_menu.visible, "pause menu starts hidden")
 	main._pause_run()
 	_assert_true(get_tree().paused, "pause freezes scene tree")

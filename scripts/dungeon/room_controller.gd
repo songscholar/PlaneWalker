@@ -11,6 +11,7 @@ extends Node2D
 @export var curse_offer_rooms: Array[int] = [4]
 @export var elite_rooms: Array[int] = [3]
 @export var event_rooms: Array[int] = [2]
+@export var auto_start: bool = true
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint
@@ -24,10 +25,11 @@ var _cleared: bool = false
 func _ready() -> void:
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.reward_selected.connect(_on_reward_selected)
-	call_deferred("_start_initial_room")
+	if auto_start:
+		call_deferred("begin_run")
 
 
-func _start_initial_room() -> void:
+func begin_run() -> void:
 	if GameState.current_room <= 0:
 		GameState.current_room = 1
 	start_room()

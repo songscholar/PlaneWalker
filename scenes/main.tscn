@@ -18,6 +18,50 @@ offset_bottom = 360.0
 text = "Plane Walker MVP booting..."
 
 [node name="CombatRoom01" parent="." instance=ExtResource("2_combat_room")]
+auto_start = false
+
+[node name="StartMenu" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="StartMenu"]
+offset_left = 410.0
+offset_top = 180.0
+offset_right = 870.0
+offset_bottom = 480.0
+
+[node name="Margin" type="MarginContainer" parent="StartMenu/Panel"]
+offset_right = 460.0
+offset_bottom = 300.0
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="StartMenu/Panel/Margin"]
+offset_left = 28.0
+offset_top = 24.0
+offset_right = 432.0
+offset_bottom = 276.0
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="StartMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Plane Walker"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="StartMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "MVP Vertical Slice"
+horizontal_alignment = 1
+
+[node name="LastRunLabel" type="Label" parent="StartMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "No runs recorded"
+horizontal_alignment = 1
+
+[node name="StartButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(360, 56)
+text = "Quick Start"
 
 [node name="RunEndOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("3_run_end_overlay")
