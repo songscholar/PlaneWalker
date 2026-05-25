@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
 [ext_resource type="Script" path="res://scripts/ui/run_end_overlay.gd" id="3_run_end_overlay"]
+[ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="4_pause_menu"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -50,3 +51,36 @@ horizontal_alignment = 1
 [node name="RestartButton" type="Button" parent="RunEndOverlay/Panel/Margin/VBox"]
 layout_mode = 2
 text = "Restart Run"
+
+[node name="PauseMenu" type="CanvasLayer" parent="."]
+script = ExtResource("4_pause_menu")
+
+[node name="Panel" type="PanelContainer" parent="PauseMenu"]
+offset_left = 460.0
+offset_top = 220.0
+offset_right = 820.0
+offset_bottom = 400.0
+
+[node name="Margin" type="MarginContainer" parent="PauseMenu/Panel"]
+offset_right = 360.0
+offset_bottom = 180.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="PauseMenu/Panel/Margin"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 336.0
+offset_bottom = 160.0
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="PauseMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Paused"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Resume"

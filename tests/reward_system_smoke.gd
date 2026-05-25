@@ -164,6 +164,7 @@ func _run() -> void:
 	await _run_event_selection_risk_check()
 	await _run_room_progression_check()
 	await _run_reward_ui_build_check()
+	await _run_pause_menu_check()
 	await _run_death_overlay_check()
 	await get_tree().process_frame
 	get_tree().quit(1 if _failed else 0)
@@ -368,6 +369,34 @@ func _run_death_overlay_check() -> void:
 	var label: Label = main.get_node("RunEndOverlay/Panel/Margin/VBox/ResultLabel")
 	_assert_true(overlay.visible, "death shows run end overlay")
 	_assert_true(label.text.contains("Run Failed"), "death overlay shows failed result")
+
+	main.queue_free()
+	await get_tree().process_frame
+
+
+func _run_pause_menu_check() -> void:
+	var main := MAIN_SCENE.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var pause_menu: CanvasLayer = main.get_node("PauseMenu")
+	var resume_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/ResumeButton")
+	_assert_true(not pause_menu.visible, "pause menu starts hidden")
+	main._pause_run()
+	_assert_true(get_tree().paused, "pause freezes scene tree")
+	_assert_true(GameState.phase == GameState.GamePhase.PAUSED, "pause sets paused phase")
+	_assert_true(pause_menu.visible, "pause menu becomes visible")
+
+	resume_button.pressed.emit()
+	_assert_true(not get_tree().paused, "resume unfreezes scene tree")
+	_assert_true(GameState.phase == GameState.GamePhase.DUNGEON, "resume restores previous phase")
+	_assert_true(not pause_menu.visible, "resume hides pause menu")
+
+	GameState.set_phase(GameState.GamePhase.DEATH)
+	main._pause_run()
+	_assert_true(not get_tree().paused, "death phase cannot open pause")
+	_assert_true(not pause_menu.visible, "pause stays hidden during death")
 
 	main.queue_free()
 	await get_tree().process_frame

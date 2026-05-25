@@ -1,11 +1,16 @@
 extends Node
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
+@onready var pause_menu: CanvasLayer = $PauseMenu
+
+var _phase_before_pause: GameState.GamePhase = GameState.GamePhase.DUNGEON
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	EventBus.run_started.connect(_on_run_started)
 	EventBus.run_ended.connect(_on_run_ended)
+	pause_menu.resume_requested.connect(_resume_run)
 	_print_input_map()
 	GameState.start_run({
 		"character_id": "wanderer",
@@ -16,8 +21,10 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
-		_print_input_map()
+		_toggle_pause()
+		return
 	if event.is_action_pressed("interact") and GameState.phase == GameState.GamePhase.DEATH:
+		get_tree().paused = false
 		get_tree().reload_current_scene()
 		return
 	if event.is_action_pressed("interact"):
@@ -42,12 +49,39 @@ func _on_run_started(run_data: Dictionary) -> void:
 
 
 func _on_run_ended(result: Dictionary) -> void:
+	get_tree().paused = false
+	pause_menu.hide_pause()
 	status_label.text = "Run ended\nResult: %s\nRooms cleared: %s\nRewards: %s" % [
 		result.get("result", ""),
 		result.get("rooms_cleared", 0),
 		GameState.current_run.get("inventory", []),
 	]
 	print("Run ended: ", result)
+
+
+func _toggle_pause() -> void:
+	if get_tree().paused:
+		_resume_run()
+	else:
+		_pause_run()
+
+
+func _pause_run() -> void:
+	if GameState.phase == GameState.GamePhase.DEATH or GameState.phase == GameState.GamePhase.RUN_END:
+		return
+	_phase_before_pause = GameState.phase
+	GameState.set_phase(GameState.GamePhase.PAUSED)
+	get_tree().paused = true
+	pause_menu.show_pause()
+
+
+func _resume_run() -> void:
+	if not get_tree().paused and GameState.phase != GameState.GamePhase.PAUSED:
+		return
+	get_tree().paused = false
+	pause_menu.hide_pause()
+	if GameState.phase == GameState.GamePhase.PAUSED:
+		GameState.set_phase(_phase_before_pause)
 
 
 func _print_input_map() -> void:
