@@ -29,7 +29,7 @@ func _process(delta: float) -> void:
 	_tick_cooldowns(delta)
 
 
-func configure_from_stats(stats: Stats) -> void:
+func configure_from_stats(stats: Resource) -> void:
 	max_energy = stats.time_energy_max
 	energy_regen = stats.time_energy_regen
 	energy = max_energy
@@ -50,7 +50,7 @@ func try_time_stop() -> void:
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_stop"})
 
 
-func try_rewind(recorder: RewindRecorder) -> void:
+func try_rewind(recorder: Node) -> void:
 	if recorder == null or not recorder.has_snapshot():
 		return
 	if not _can_pay(&"time_rewind", rewind_cost):

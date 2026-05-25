@@ -1,12 +1,14 @@
 class_name PlayerController
 extends CharacterBody2D
 
-@export var stats: Stats
+const StatsResource := preload("res://scripts/core/stats.gd")
 
-@onready var health: HealthComponent = $HealthComponent
-@onready var sword_weapon: SwordWeapon = $SwordWeapon
-@onready var time_manager: TimeManager = $TimeManager
-@onready var rewind_recorder: RewindRecorder = $RewindRecorder
+@export var stats: Resource
+
+@onready var health: Node = $HealthComponent
+@onready var sword_weapon: Node = $SwordWeapon
+@onready var time_manager: Node = $TimeManager
+@onready var rewind_recorder: Node = $RewindRecorder
 
 var _dash_time_remaining: float = 0.0
 var _dash_cooldown_remaining: float = 0.0
@@ -22,7 +24,7 @@ const DASH_INVULNERABLE_TIME := 0.20
 func _ready() -> void:
 	add_to_group("player")
 	if stats == null:
-		stats = Stats.new()
+		stats = StatsResource.new()
 	health.configure_from_stats(stats)
 	time_manager.configure_from_stats(stats)
 	sword_weapon.base_attack = stats.attack

@@ -1,5 +1,5 @@
+extends "res://scripts/enemies/enemy_base.gd"
 class_name EnemyShooter
-extends EnemyBase
 
 @export var projectile_scene: PackedScene
 @export var preferred_distance: float = 220.0

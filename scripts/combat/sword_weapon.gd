@@ -1,10 +1,12 @@
 class_name SwordWeapon
 extends Node2D
 
+const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+
 @export var owner_path: NodePath
 @export var base_attack: float = 30.0
 
-@onready var hitbox: Hitbox = $Hitbox
+@onready var hitbox: Node = $Hitbox
 @onready var owner_player: Node = get_node(owner_path)
 
 var _combo_index: int = 0
@@ -46,7 +48,7 @@ func _start_attack(multiplier: float, windup: float, active: float, recovery: fl
 	_attacking = true
 	await get_tree().create_timer(windup).timeout
 
-	var damage_info := DamageInfo.new(base_attack * multiplier, DamageInfo.DamageType.PHYSICAL, self, owner_player)
+	var damage_info := DamageInfoScript.new(base_attack * multiplier, DamageInfoScript.DamageType.PHYSICAL, self, owner_player)
 	damage_info.tags = ["weapon:sword"]
 	if heavy:
 		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 260.0

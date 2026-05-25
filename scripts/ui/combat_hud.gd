@@ -2,9 +2,9 @@ extends CanvasLayer
 
 @export var player_path: NodePath
 
-@onready var player: PlayerController = get_node(player_path)
-@onready var health: HealthComponent = player.get_node("HealthComponent")
-@onready var time_manager: TimeManager = player.get_node("TimeManager")
+@onready var player: Node = get_node(player_path)
+@onready var health: Node = player.get_node("HealthComponent")
+@onready var time_manager: Node = player.get_node("TimeManager")
 @onready var label: Label = $StatusLabel
 
 

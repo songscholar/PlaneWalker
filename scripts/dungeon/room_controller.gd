@@ -7,7 +7,7 @@ extends Node2D
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var enemies_root: Node2D = $Enemies
-@onready var reward_marker: Node2D = get_node_or_null(reward_marker_path)
+@onready var reward_marker: Node = get_node_or_null(reward_marker_path)
 
 var _alive_enemies: int = 0
 var _cleared: bool = false

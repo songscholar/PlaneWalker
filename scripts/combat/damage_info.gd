@@ -26,8 +26,8 @@ func _init(
 	attacker = p_attacker
 
 
-func copy_for_source(new_source: Node) -> DamageInfo:
-	var copied := DamageInfo.new(amount, damage_type, new_source, attacker)
+func copy_for_source(new_source: Node) -> RefCounted:
+	var copied: RefCounted = get_script().new(amount, damage_type, new_source, attacker)
 	copied.can_crit = can_crit
 	copied.crit_chance = crit_chance
 	copied.crit_multiplier = crit_multiplier

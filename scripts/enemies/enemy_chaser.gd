@@ -1,5 +1,5 @@
+extends "res://scripts/enemies/enemy_base.gd"
 class_name EnemyChaser
-extends EnemyBase
 
 
 func _tick_ai(_delta: float) -> void:

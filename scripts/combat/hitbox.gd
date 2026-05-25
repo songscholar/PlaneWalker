@@ -1,7 +1,7 @@
 class_name Hitbox
 extends Area2D
 
-var _active_damage_info: DamageInfo
+var _active_damage_info: RefCounted
 var _hit_areas: Array[Area2D] = []
 
 
@@ -10,7 +10,7 @@ func _ready() -> void:
 	area_entered.connect(_on_area_entered)
 
 
-func activate(damage_info: DamageInfo, duration: float) -> void:
+func activate(damage_info: RefCounted, duration: float) -> void:
 	_active_damage_info = damage_info
 	_hit_areas.clear()
 	monitoring = true

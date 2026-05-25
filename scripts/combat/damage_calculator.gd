@@ -2,8 +2,8 @@ class_name DamageCalculator
 extends RefCounted
 
 
-static func calculate(damage_info: DamageInfo, defense: float = 0.0) -> float:
-	var final_amount := damage_info.amount
+static func calculate(damage_info: RefCounted, defense: float = 0.0) -> float:
+	var final_amount := float(damage_info.amount)
 	if damage_info.can_crit and damage_info.crit_chance > 0.0 and randf() < damage_info.crit_chance:
 		final_amount *= damage_info.crit_multiplier
 	final_amount -= defense

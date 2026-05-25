@@ -1,6 +1,8 @@
 class_name HealthComponent
 extends Node
 
+const DamageCalculatorScript := preload("res://scripts/combat/damage_calculator.gd")
+
 signal damaged(amount: float, current_hp: float)
 signal healed(amount: float, current_hp: float)
 signal died(killer: Variant)
@@ -21,14 +23,14 @@ func _ready() -> void:
 		current_hp = clampf(current_hp, 0.0, max_hp)
 
 
-func configure_from_stats(stats: Stats) -> void:
+func configure_from_stats(stats: Resource) -> void:
 	max_hp = stats.max_hp
 	defense = stats.defense
 	current_hp = max_hp
 	dead = false
 
 
-func take_damage(damage_info: DamageInfo) -> float:
+func take_damage(damage_info: RefCounted) -> float:
 	if dead or invulnerable:
 		return 0.0
 
@@ -39,7 +41,7 @@ func take_damage(damage_info: DamageInfo) -> float:
 		"target": owner_entity,
 	})
 
-	var final_amount := DamageCalculator.calculate(damage_info, defense)
+	var final_amount: float = DamageCalculatorScript.calculate(damage_info, defense)
 	current_hp = maxf(0.0, current_hp - final_amount)
 	damaged.emit(final_amount, current_hp)
 	EventBus.damage_applied.emit(damage_info, owner_entity, final_amount)

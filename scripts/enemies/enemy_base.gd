@@ -1,6 +1,8 @@
 class_name EnemyBase
 extends CharacterBody2D
 
+const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+
 @export var max_hp: float = 60.0
 @export var attack: float = 10.0
 @export var defense: float = 0.0
@@ -8,7 +10,7 @@ extends CharacterBody2D
 @export var attack_range: float = 36.0
 @export var attack_cooldown: float = 1.0
 
-@onready var health: HealthComponent = $HealthComponent
+@onready var health: Node = $HealthComponent
 @onready var visual: Polygon2D = $Visual
 
 var target: Node2D
@@ -61,7 +63,7 @@ func _try_melee_attack() -> void:
 		return
 
 	_attack_cooldown_remaining = attack_cooldown
-	var damage_info := DamageInfo.new(attack, DamageInfo.DamageType.PHYSICAL, self, self)
+	var damage_info := DamageInfoScript.new(attack, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	damage_info.tags = ["enemy:melee"]
 	target.get_node("HealthComponent").take_damage(damage_info)
 

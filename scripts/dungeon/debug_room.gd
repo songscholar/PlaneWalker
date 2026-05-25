@@ -1,8 +1,8 @@
 extends Node2D
 
-@onready var dummy_health: HealthComponent = $TestDummy/HealthComponent
-@onready var player_health: HealthComponent = $Player/HealthComponent
-@onready var player_time: TimeManager = $Player/TimeManager
+@onready var dummy_health: Node = $TestDummy/HealthComponent
+@onready var player_health: Node = $Player/HealthComponent
+@onready var player_time: Node = $Player/TimeManager
 @onready var debug_label: Label = $CanvasLayer/DebugLabel
 
 

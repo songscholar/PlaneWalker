@@ -8,8 +8,8 @@ extends Node
 @export var samples_per_second: float = 10.0
 
 @onready var target: Node2D = get_node(target_path)
-@onready var health_component: HealthComponent = get_node(health_component_path)
-@onready var time_manager: TimeManager = get_node(time_manager_path)
+@onready var health_component: Node = get_node(health_component_path)
+@onready var time_manager: Node = get_node(time_manager_path)
 
 var _snapshots: Array[Dictionary] = []
 var _sample_timer: float = 0.0

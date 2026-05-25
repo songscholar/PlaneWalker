@@ -1,5 +1,5 @@
+extends "res://scripts/enemies/enemy_base.gd"
 class_name EnemyTank
-extends EnemyBase
 
 
 func _ready() -> void:
