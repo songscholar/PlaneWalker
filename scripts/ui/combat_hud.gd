@@ -7,8 +7,11 @@ const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 @onready var player: Node = get_node(player_path)
 @onready var health: Node = player.get_node("HealthComponent")
 @onready var time_manager: Node = player.get_node("TimeManager")
+@onready var bow_weapon: Node = player.get_node("BowWeapon")
 @onready var label: Label = $StatusLabel
 @onready var build_label: Label = $BuildLabel
+@onready var weapon_label: Label = $WeaponPanel/VBox/WeaponLabel
+@onready var bow_charge_bar: ProgressBar = $WeaponPanel/VBox/BowChargeBar
 @onready var hp_bar: ProgressBar = $PlayerPanel/VBox/HPBar
 @onready var time_bar: ProgressBar = $PlayerPanel/VBox/TimeBar
 @onready var room_banner: Label = $RoomBanner
@@ -33,6 +36,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_player_status()
+	_update_weapon_status()
 	_update_boss_status()
 	_update_banner(delta)
 
@@ -56,6 +60,17 @@ func _update_player_status() -> void:
 		time_manager.get_cooldown(&"time_accelerate"),
 	]
 	_update_build_label()
+
+
+func _update_weapon_status() -> void:
+	bow_charge_bar.max_value = 1.0
+	bow_charge_bar.value = bow_weapon.get_charge_ratio()
+	var bow_state := "Ready"
+	if bow_weapon.is_charging():
+		bow_state = "Charging"
+	elif bow_weapon.get_cooldown_remaining() > 0.0:
+		bow_state = "Cooldown %.1f" % bow_weapon.get_cooldown_remaining()
+	weapon_label.text = "Sword | Bow %s" % bow_state
 
 
 func _update_build_label() -> void:

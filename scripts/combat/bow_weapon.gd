@@ -54,6 +54,10 @@ func is_charging() -> bool:
 	return _charging
 
 
+func get_cooldown_remaining() -> float:
+	return _cooldown_remaining
+
+
 func get_charge_ratio() -> float:
 	return clampf(_charge_time / full_charge_time, 0.0, 1.0)
 

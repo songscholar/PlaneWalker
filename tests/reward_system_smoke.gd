@@ -207,9 +207,14 @@ func _run_bow_weapon_check() -> void:
 	var bow: Node = room_player.get_node("BowWeapon")
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var enemy_health: Node = enemy.get_node("HealthComponent")
+	var weapon_label: Label = room.get_node("CombatHUD/WeaponPanel/VBox/WeaponLabel")
+	var bow_charge_bar: ProgressBar = room.get_node("CombatHUD/WeaponPanel/VBox/BowChargeBar")
 
 	var short_started: bool = bow.start_charge()
 	bow._charge_time = bow.min_charge_time * 0.5
+	await get_tree().process_frame
+	_assert_true(weapon_label.text.contains("Charging"), "combat hud shows bow charging")
+	_assert_true(bow_charge_bar.value > 0.0, "combat hud shows bow charge progress")
 	var short_released: bool = bow.release_charge(Vector2.RIGHT)
 	await get_tree().process_frame
 	_assert_true(short_started, "bow starts charging")
@@ -233,6 +238,8 @@ func _run_bow_weapon_check() -> void:
 
 	await _wait_for_health_below(enemy_health, enemy_health.max_hp)
 	_assert_true(enemy_health.current_hp < enemy_health.max_hp, "bow arrow damages enemy")
+	await get_tree().process_frame
+	_assert_true(weapon_label.text.contains("Cooldown"), "combat hud shows bow cooldown")
 
 	room.queue_free()
 	await get_tree().process_frame
