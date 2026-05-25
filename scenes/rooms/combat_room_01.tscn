@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room_controller"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -7,10 +7,12 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/enemy_tank.tscn" id="5_tank"]
 [ext_resource type="Script" path="res://scripts/ui/combat_hud.gd" id="6_combat_hud"]
 [ext_resource type="Script" path="res://scripts/ui/reward_selection.gd" id="7_reward_selection"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/boss_chrono_warden.tscn" id="8_boss"]
 
 [node name="CombatRoom01" type="Node2D"]
 script = ExtResource("1_room_controller")
 enemy_scenes = [ExtResource("3_chaser"), ExtResource("4_shooter"), ExtResource("5_tank")]
+boss_scene = ExtResource("8_boss")
 reward_marker_path = NodePath("RewardMarker")
 
 [node name="Floor" type="ColorRect" parent="."]
@@ -33,6 +35,9 @@ position = Vector2(900, 440)
 
 [node name="SpawnPoint3" type="Marker2D" parent="SpawnPoints"]
 position = Vector2(1030, 360)
+
+[node name="BossSpawnPoint" type="Marker2D" parent="."]
+position = Vector2(940, 360)
 
 [node name="Enemies" type="Node2D" parent="."]
 

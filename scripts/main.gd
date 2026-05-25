@@ -33,7 +33,7 @@ func _on_run_started(run_data: Dictionary) -> void:
 	text += "WASD/Arrows move actions registered\n"
 	text += "Mouse Left attack, Mouse Right heavy_attack\n"
 	text += "Space dash, Q time_stop, E time_rewind\n"
-	text += "F interact emits room_started, Esc prints input map"
+	text += "Room 5 spawns the Chrono Warden boss"
 	status_label.text = text
 	print("Run started: ", run_data)
 

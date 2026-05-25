@@ -74,6 +74,14 @@ func _run_room_progression_check() -> void:
 		await get_tree().process_frame
 		_assert_true(GameState.current_room == expected_room, "reward advances to room %d" % expected_room)
 
+	var enemies: Array = room.get_node("Enemies").get_children()
+	_assert_true(GameState.phase == GameState.GamePhase.BOSS_FIGHT, "fifth room enters boss phase")
+	_assert_true(enemies.size() == 1, "boss room spawns one enemy")
+	_assert_true(enemies[0].is_in_group("bosses"), "fifth room enemy is boss")
+	enemies[0].apply_time_stop(0.1)
+	await get_tree().process_frame
+	_assert_close(enemies[0].health.defense, 0.0, "time stop exposes boss")
+
 	room._clear_room()
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame

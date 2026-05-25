@@ -3,10 +3,12 @@ extends Node2D
 
 @export var room_id: StringName = &"combat_room_01"
 @export var enemy_scenes: Array[PackedScene] = []
+@export var boss_scene: PackedScene
 @export var reward_marker_path: NodePath
 @export var rooms_per_floor: int = 5
 
 @onready var spawn_points: Node2D = $SpawnPoints
+@onready var boss_spawn_point: Marker2D = $BossSpawnPoint
 @onready var enemies_root: Node2D = $Enemies
 @onready var reward_marker: Node = get_node_or_null(reward_marker_path)
 
@@ -36,6 +38,10 @@ func start_room() -> void:
 
 func _spawn_enemies() -> void:
 	_alive_enemies = 0
+	if _is_boss_room() and boss_scene != null:
+		_spawn_boss()
+		return
+
 	var points := spawn_points.get_children()
 	var spawn_count := mini(mini(points.size(), enemy_scenes.size()), maxi(1, GameState.current_room))
 	for index: int in range(spawn_count):
@@ -46,6 +52,16 @@ func _spawn_enemies() -> void:
 		_alive_enemies += 1
 		EventBus.enemy_spawned.emit(enemy)
 		EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy})
+
+
+func _spawn_boss() -> void:
+	GameState.set_phase(GameState.GamePhase.BOSS_FIGHT)
+	var boss := boss_scene.instantiate()
+	enemies_root.add_child(boss)
+	boss.global_position = boss_spawn_point.global_position
+	_alive_enemies = 1
+	EventBus.enemy_spawned.emit(boss)
+	EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": boss, "boss": true})
 
 
 func _on_entity_died(entity: Node, _killer: Variant) -> void:
@@ -89,3 +105,7 @@ func _clear_enemy_nodes() -> void:
 
 func _active_room_id() -> StringName:
 	return StringName("%s_%02d" % [room_id, GameState.current_room])
+
+
+func _is_boss_room() -> bool:
+	return GameState.current_room >= rooms_per_floor
