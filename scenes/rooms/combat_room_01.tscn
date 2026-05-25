@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room_controller"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/ui/floating_text_layer.gd" id="9_floating_text"]
 [ext_resource type="PackedScene" path="res://scenes/fx/spawn_warning.tscn" id="10_spawn_warning"]
 [ext_resource type="Script" path="res://scripts/ui/curse_selection.gd" id="11_curse_selection"]
+[ext_resource type="Script" path="res://scripts/ui/event_selection.gd" id="12_event_selection"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_horizontal"]
 size = Vector2(980, 36)
@@ -266,3 +267,37 @@ theme_override_constants/separation = 12
 layout_mode = 2
 custom_minimum_size = Vector2(420, 48)
 text = "Skip curse"
+
+[node name="EventSelection" type="CanvasLayer" parent="."]
+script = ExtResource("12_event_selection")
+player_path = NodePath("../Player")
+
+[node name="Panel" type="PanelContainer" parent="EventSelection"]
+offset_left = 390.0
+offset_top = 135.0
+offset_right = 890.0
+offset_bottom = 515.0
+
+[node name="Margin" type="MarginContainer" parent="EventSelection/Panel"]
+offset_right = 500.0
+offset_bottom = 380.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="EventSelection/Panel/Margin"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 476.0
+offset_bottom = 360.0
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="EventSelection/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Temporal event"
+horizontal_alignment = 1
+
+[node name="Options" type="VBoxContainer" parent="EventSelection/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12

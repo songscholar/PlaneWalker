@@ -99,6 +99,8 @@ func _on_room_started(room_id: StringName) -> void:
 	var room_type := GameState.get_current_room_type()
 	if room_type == "boss":
 		_show_banner("Boss Room")
+	elif room_type == "event":
+		_show_banner("Temporal Event")
 	elif room_type == "elite":
 		_show_banner("Elite Room")
 	else:

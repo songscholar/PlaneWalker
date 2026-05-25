@@ -144,6 +144,7 @@ func _run() -> void:
 	await _run_time_accelerate_check()
 	await _run_death_check()
 	await _run_curse_selection_check()
+	await _run_event_selection_risk_check()
 	await _run_room_progression_check()
 	await _run_reward_ui_build_check()
 	await _run_death_overlay_check()
@@ -306,28 +307,60 @@ func _run_room_progression_check() -> void:
 	_assert_true(GameState.current_room == 1, "first combat room starts at one")
 	_assert_true(GameState.get_current_room_type() == "combat", "first room is combat type")
 
-	for expected_room: int in range(2, 6):
-		room._clear_room()
-		_resolve_curse_offer_if_visible(room, false)
-		var reward_title: Label = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
-		_assert_true(reward_title.text.contains("Room %d" % GameState.current_room), "reward title includes cleared room")
-		if GameState.current_room == 3:
-			var reward_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
-			_assert_true(reward_title.text.contains("elite reward"), "elite room shows elite reward title")
-			_assert_true(reward_options.get_child_count() == 4, "elite room offers an extra reward option")
-		room.get_node("RewardSelection")._select_reward(0)
-		await get_tree().process_frame
-		await get_tree().process_frame
-		var expected_enemies := 1 if expected_room >= 5 else mini(expected_room, 3)
-		await _wait_for_enemy_count(room, expected_enemies)
-		_assert_true(GameState.current_room == expected_room, "reward advances to room %d" % expected_room)
-		if expected_room == 3:
-			var elite_enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "elite_enemies")
-			var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
-			_assert_true(GameState.get_current_room_type() == "elite", "third room is elite type")
-			_assert_true(elite_enemies.size() == 1, "elite room upgrades one enemy")
-			_assert_true(elite_enemies[0].health.max_hp > elite_enemies[0].max_hp / 1.8, "elite enemy has upgraded health")
-			_assert_true(hud_label.text.contains("Elite"), "combat hud shows elite room type")
+	room._clear_room()
+	var reward_title: Label = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
+	_assert_true(reward_title.text.contains("Room 1"), "reward title includes first cleared room")
+	room.get_node("RewardSelection")._select_reward(0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var event_selection: CanvasLayer = room.get_node("EventSelection")
+	var event_title: Label = room.get_node("EventSelection/Panel/Margin/VBox/Title")
+	var event_options: VBoxContainer = room.get_node("EventSelection/Panel/Margin/VBox/Options")
+	var event_health: Node = room.get_node("Player/HealthComponent")
+	event_health.current_hp = 100.0
+	_assert_true(GameState.current_room == 2, "reward advances to event room")
+	_assert_true(GameState.get_current_room_type() == "event", "second room is event type")
+	_assert_true(event_selection.visible, "event room opens event selection")
+	_assert_true(event_title.text.contains("Room 2"), "event title includes room index")
+	_assert_true(event_options.get_child_count() == 3, "event room offers three choices")
+	event_selection._select_option(0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert_true(GameState.current_run.get("events", []).size() == 1, "event choice is recorded")
+	_assert_true(event_health.current_hp > 100.0, "event choice applies healing")
+
+	await _wait_for_enemy_count(room, 3)
+	_assert_true(GameState.current_room == 3, "event advances to elite room")
+	var elite_enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "elite_enemies")
+	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
+	_assert_true(GameState.get_current_room_type() == "elite", "third room is elite type")
+	_assert_true(elite_enemies.size() == 1, "elite room upgrades one enemy")
+	_assert_true(elite_enemies[0].health.max_hp > elite_enemies[0].max_hp / 1.8, "elite enemy has upgraded health")
+	_assert_true(hud_label.text.contains("Elite"), "combat hud shows elite room type")
+
+	room._clear_room()
+	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
+	var reward_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
+	_assert_true(reward_title.text.contains("elite reward"), "elite room shows elite reward title")
+	_assert_true(reward_options.get_child_count() == 4, "elite room offers an extra reward option")
+	room.get_node("RewardSelection")._select_reward(0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	await _wait_for_enemy_count(room, 3)
+	_assert_true(GameState.current_room == 4, "elite reward advances to fourth room")
+	_assert_true(GameState.get_current_room_type() == "combat", "fourth room is combat type")
+
+	room._clear_room()
+	_resolve_curse_offer_if_visible(room, false)
+	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
+	_assert_true(reward_title.text.contains("Room 4"), "fourth room reward title includes room index")
+	room.get_node("RewardSelection")._select_reward(0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
+	_assert_true(GameState.current_room == 5, "fourth reward advances to boss room")
 
 	var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
 	var boss_panel: PanelContainer = room.get_node("CombatHUD/BossPanel")
@@ -390,6 +423,34 @@ func _run_curse_selection_check() -> void:
 	_assert_true(not curse_selection.visible, "curse offer closes after selection")
 	_assert_true(reward_selection.visible, "reward opens after curse selection")
 	_assert_true(GameState.current_run.get("active_curses", []).size() == 1, "curse selection records active curse")
+
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_event_selection_risk_check() -> void:
+	GameState.start_run({"seed": 988})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	var forced_event_rooms: Array[int] = [1]
+	room.event_rooms = forced_event_rooms
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var event_selection: CanvasLayer = room.get_node("EventSelection")
+	var health: Node = room.get_node("Player/HealthComponent")
+	health.current_hp = 120.0
+	_assert_true(event_selection.visible, "forced event room opens event selection")
+	_assert_true(GameState.get_current_room_type() == "event", "forced first room is event type")
+
+	event_selection._select_option(2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	_assert_close(health.current_hp, 95.0, "fractured cache pays hp cost")
+	_assert_true(GameState.current_run.get("inventory", []).size() == 1, "fractured cache grants a reward")
+	_assert_true(GameState.current_run.get("events", [])[0].get("granted_reward_id", "") != "", "event records granted reward")
+	_assert_true(GameState.current_room == 2, "event selection advances run")
 
 	room.queue_free()
 	await get_tree().process_frame

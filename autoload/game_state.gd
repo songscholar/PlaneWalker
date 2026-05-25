@@ -61,6 +61,7 @@ func start_run(run_config: Dictionary = {}) -> void:
 		"active_curses": [],
 		"talents": [],
 		"currencies": {},
+		"events": [],
 		"stats": {},
 		"archetypes": {},
 		"dominant_archetype": "",
@@ -124,6 +125,14 @@ func add_run_curse(curse_data: Dictionary) -> void:
 	var curses: Array = current_run.get("curses", [])
 	curses.append(curse_data.duplicate(true))
 	current_run["curses"] = curses
+
+
+func add_run_event(event_data: Dictionary) -> void:
+	if current_run.is_empty():
+		return
+	var events: Array = current_run.get("events", [])
+	events.append(event_data.duplicate(true))
+	current_run["events"] = events
 
 
 func set_curse_offer_pending(pending: bool) -> void:

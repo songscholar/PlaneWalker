@@ -8,8 +8,9 @@ extends Node2D
 @export var reward_marker_path: NodePath
 @export var rooms_per_floor: int = 5
 @export var spawn_warning_duration: float = 0.45
-@export var curse_offer_rooms: Array[int] = [2, 4]
+@export var curse_offer_rooms: Array[int] = [4]
 @export var elite_rooms: Array[int] = [3]
+@export var event_rooms: Array[int] = [2]
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint
@@ -47,6 +48,10 @@ func start_room() -> void:
 
 func _spawn_enemies() -> void:
 	_alive_enemies = 0
+	if _is_event_room():
+		_cleared = true
+		GameState.set_phase(GameState.GamePhase.SELECTION)
+		return
 	if _is_boss_room() and boss_scene != null:
 		_show_spawn_warning(boss_spawn_point.global_position, 44.0)
 		await get_tree().create_timer(spawn_warning_duration).timeout
@@ -151,9 +156,15 @@ func _is_elite_room() -> bool:
 	return GameState.current_room < rooms_per_floor and elite_rooms.has(GameState.current_room)
 
 
+func _is_event_room() -> bool:
+	return GameState.current_room < rooms_per_floor and event_rooms.has(GameState.current_room)
+
+
 func _current_room_type() -> StringName:
 	if _is_boss_room():
 		return &"boss"
+	if _is_event_room():
+		return &"event"
 	if _is_elite_room():
 		return &"elite"
 	return &"combat"
