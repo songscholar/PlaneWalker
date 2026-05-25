@@ -1,6 +1,9 @@
 class_name TalentPool
 extends RefCounted
 
+const DataLoader := preload("res://scripts/rewards/reward_data_loader.gd")
+const DATA_PATH := "res://data/talents/mvp_talents.json"
+
 const TALENTS: Array[Dictionary] = [
 	{
 		"id": "tal_ruin_execute",
@@ -38,7 +41,7 @@ const TALENTS: Array[Dictionary] = [
 static func roll_options(count: int, seed_value: int, room_index: int, owned_ids: Array = []) -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("talent:%s:%s" % [seed_value, room_index])
-	var candidates := TALENTS.duplicate(true)
+	var candidates := all_talents()
 	_shuffle_with_rng(candidates, rng)
 
 	var options: Array[Dictionary] = []
@@ -49,6 +52,10 @@ static func roll_options(count: int, seed_value: int, room_index: int, owned_ids
 		if options.size() >= count:
 			break
 	return options
+
+
+static func all_talents() -> Array[Dictionary]:
+	return DataLoader.load_array(DATA_PATH, TALENTS)
 
 
 static func _shuffle_with_rng(values: Array, rng: RandomNumberGenerator) -> void:

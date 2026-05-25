@@ -1,0 +1,32 @@
+[
+	{
+		"id": "tal_ruin_execute",
+		"name": "Ruin Execute",
+		"category": "talent",
+		"kind": "ruin",
+		"archetype": "heavy_cleave",
+		"role": "route",
+		"description": "Heavy sword attacks deal 50% more damage to enemies below 30% HP.",
+		"effects": {"heavy_execute_multiplier_bonus": 0.5, "heavy_execute_threshold": 0.3}
+	},
+	{
+		"id": "tal_steel_recover",
+		"name": "Steel Recovery",
+		"category": "talent",
+		"kind": "steel",
+		"archetype": "evasive_guard",
+		"role": "route",
+		"description": "Gain 20 maximum HP and heal 20 immediately.",
+		"effects": {"max_hp_bonus": 20.0, "heal": 20.0}
+	},
+	{
+		"id": "tal_eternity_reserve",
+		"name": "Eternity Reserve",
+		"category": "talent",
+		"kind": "eternity",
+		"archetype": "rift_control",
+		"role": "route",
+		"description": "When time energy is below 30, regeneration is doubled.",
+		"effects": {"low_energy_regen_multiplier": 2.0, "low_energy_threshold": 30.0}
+	}
+]

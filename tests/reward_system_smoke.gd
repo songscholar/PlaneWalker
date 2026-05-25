@@ -129,6 +129,7 @@ func _run() -> void:
 	var first_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	var second_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	_assert_true(_reward_ids(first_roll) == _reward_ids(second_roll), "reward roll is deterministic")
+	_assert_true(RewardPoolScript.all_rewards().size() >= RewardPoolScript.REWARDS.size(), "item rewards load from data")
 	_assert_true(RewardPoolScript.REWARDS.size() >= 14, "reward pool includes build starters")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("frozen_burst"), "reward pool includes frozen burst starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("accelerated_combo"), "reward pool includes combo starter")
@@ -148,17 +149,20 @@ func _run() -> void:
 	var first_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	var second_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	_assert_true(_reward_ids(first_curse_roll) == _reward_ids(second_curse_roll), "curse roll is deterministic")
+	_assert_true(CursePoolScript.all_curses().size() >= CursePoolScript.CURSES.size(), "curses load from data")
 	_assert_true(CursePoolScript.CURSES.size() >= 6, "curse pool includes first risk set")
 
 	var first_blessing_roll := BlessingPoolScript.roll_options(2, 123, 4, [])
 	var second_blessing_roll := BlessingPoolScript.roll_options(2, 123, 4, [])
 	_assert_true(_reward_ids(first_blessing_roll) == _reward_ids(second_blessing_roll), "blessing roll is deterministic")
+	_assert_true(BlessingPoolScript.all_blessings().size() >= BlessingPoolScript.BLESSINGS.size(), "blessings load from data")
 	_assert_true(BlessingPoolScript.BLESSINGS.size() >= 4, "blessing pool includes MVP blessings")
 	_assert_true(_reward_ids(BlessingPoolScript.BLESSINGS).has("bls_stop_weakpoint"), "blessing pool includes stop weakpoint")
 
 	var first_talent_roll := TalentPoolScript.roll_options(3, 123, 3, [])
 	var second_talent_roll := TalentPoolScript.roll_options(3, 123, 3, [])
 	_assert_true(_reward_ids(first_talent_roll) == _reward_ids(second_talent_roll), "talent roll is deterministic")
+	_assert_true(TalentPoolScript.all_talents().size() >= TalentPoolScript.TALENTS.size(), "talents load from data")
 	_assert_true(TalentPoolScript.TALENTS.size() >= 3, "talent pool includes MVP talents")
 	_assert_true(_reward_ids(TalentPoolScript.TALENTS).has("tal_ruin_execute"), "talent pool includes ruin execute")
 

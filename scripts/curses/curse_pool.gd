@@ -1,6 +1,9 @@
 class_name CursePool
 extends RefCounted
 
+const DataLoader := preload("res://scripts/rewards/reward_data_loader.gd")
+const DATA_PATH := "res://data/curses/mvp_curses.json"
+
 const CURSES: Array[Dictionary] = [
 	{
 		"id": "glass_tempo",
@@ -50,7 +53,7 @@ const CURSES: Array[Dictionary] = [
 static func roll_options(count: int, seed_value: int, room_index: int, owned_ids: Array = []) -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("curse:%s:%s" % [seed_value, room_index])
-	var candidates := CURSES.duplicate(true)
+	var candidates := all_curses()
 	_shuffle_with_rng(candidates, rng)
 
 	var options: Array[Dictionary] = []
@@ -61,6 +64,10 @@ static func roll_options(count: int, seed_value: int, room_index: int, owned_ids
 		if options.size() >= count:
 			break
 	return options
+
+
+static func all_curses() -> Array[Dictionary]:
+	return DataLoader.load_array(DATA_PATH, CURSES)
 
 
 static func _shuffle_with_rng(values: Array, rng: RandomNumberGenerator) -> void:
