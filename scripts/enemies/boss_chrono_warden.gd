@@ -10,6 +10,7 @@ var _pattern_timer: float = 0.0
 var _exposed: bool = false
 var _phase: int = 1
 var _aimed_burst_next: bool = false
+var _exposure_sources: Dictionary = {}
 
 
 func _ready() -> void:
@@ -111,10 +112,42 @@ func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	_time_stopped = true
-	_set_exposed(true)
+	_add_exposure_source(&"time_stop")
 	await get_tree().create_timer(duration).timeout
 	_time_stopped = false
-	_set_exposed(false)
+	_remove_exposure_source(&"time_stop")
+
+
+func apply_time_rift(slow_multiplier: float) -> void:
+	super.apply_time_rift(slow_multiplier)
+	_add_exposure_source(&"time_rift")
+	_pattern_timer = maxf(_pattern_timer, 1.2)
+
+
+func clear_time_rift() -> void:
+	super.clear_time_rift()
+	if _rift_slow_sources == 0:
+		_remove_exposure_source(&"time_rift")
+
+
+func _add_exposure_source(source_id: StringName) -> void:
+	_exposure_sources[source_id] = int(_exposure_sources.get(source_id, 0)) + 1
+	_refresh_exposed_state()
+
+
+func _remove_exposure_source(source_id: StringName) -> void:
+	if not _exposure_sources.has(source_id):
+		return
+	var remaining := int(_exposure_sources[source_id]) - 1
+	if remaining <= 0:
+		_exposure_sources.erase(source_id)
+	else:
+		_exposure_sources[source_id] = remaining
+	_refresh_exposed_state()
+
+
+func _refresh_exposed_state() -> void:
+	_set_exposed(not _exposure_sources.is_empty())
 
 
 func _set_exposed(value: bool) -> void:

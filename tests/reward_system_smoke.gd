@@ -346,6 +346,16 @@ func _run_room_progression_check() -> void:
 	enemies[0].apply_time_stop(0.1)
 	await get_tree().process_frame
 	_assert_close(enemies[0].health.defense, 0.0, "time stop exposes boss")
+	await get_tree().create_timer(0.12).timeout
+	await get_tree().process_frame
+	_assert_close(enemies[0].health.defense, enemies[0]._base_defense, "boss recovers after time stop exposure")
+	enemies[0].apply_time_rift(0.4)
+	await get_tree().process_frame
+	_assert_close(enemies[0].health.defense, 0.0, "time rift exposes boss")
+	_assert_true(enemies[0]._pattern_timer >= 1.2, "time rift delays boss pattern")
+	enemies[0].clear_time_rift()
+	await get_tree().process_frame
+	_assert_close(enemies[0].health.defense, enemies[0]._base_defense, "boss recovers after rift exposure")
 
 	room._clear_room()
 	_resolve_curse_offer_if_visible(room, false)
