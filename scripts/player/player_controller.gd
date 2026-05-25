@@ -18,6 +18,7 @@ const DASH_INVULNERABLE_TIME := 0.20
 
 
 func _ready() -> void:
+	add_to_group("player")
 	if stats == null:
 		stats = Stats.new()
 	health.configure_from_stats(stats)
