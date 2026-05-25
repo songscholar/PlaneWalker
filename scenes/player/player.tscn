@@ -1,10 +1,12 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player_controller"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health_component"]
 [ext_resource type="Script" path="res://scripts/combat/sword_weapon.gd" id="3_sword_weapon"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
+[ext_resource type="Script" path="res://scripts/time_system/time_manager.gd" id="6_time_manager"]
+[ext_resource type="Script" path="res://scripts/time_system/rewind_recorder.gd" id="7_rewind_recorder"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 14.0
@@ -25,6 +27,15 @@ shape = SubResource("CircleShape2D_body")
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("2_health_component")
 max_hp = 200.0
+
+[node name="TimeManager" type="Node" parent="."]
+script = ExtResource("6_time_manager")
+
+[node name="RewindRecorder" type="Node" parent="."]
+script = ExtResource("7_rewind_recorder")
+target_path = NodePath("..")
+health_component_path = NodePath("../HealthComponent")
+time_manager_path = NodePath("../TimeManager")
 
 [node name="Hurtbox" type="Area2D" parent="."]
 script = ExtResource("5_hurtbox")

@@ -13,10 +13,12 @@ extends CharacterBody2D
 
 var target: Node2D
 var _attack_cooldown_remaining: float = 0.0
+var _time_stopped: bool = false
 
 
 func _ready() -> void:
 	add_to_group("enemies")
+	add_to_group("time_stoppable")
 	health.max_hp = max_hp
 	health.defense = defense
 	health.current_hp = max_hp
@@ -27,6 +29,10 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if not health.is_alive():
+		return
+	if _time_stopped:
+		velocity = Vector2.ZERO
+		move_and_slide()
 		return
 	_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
 	if target == null or not is_instance_valid(target):
@@ -77,3 +83,11 @@ func _on_died(_killer: Variant) -> void:
 
 func _restore_visual_color() -> void:
 	visual.color = Color(0.9, 0.35, 0.3)
+
+
+func apply_time_stop(duration: float) -> void:
+	if duration <= 0.0:
+		return
+	_time_stopped = true
+	await get_tree().create_timer(duration).timeout
+	_time_stopped = false

@@ -6,9 +6,11 @@ extends Area2D
 @export var damage: float = 8.0
 
 var direction: Vector2 = Vector2.RIGHT
+var _time_stopped: bool = false
 
 
 func _ready() -> void:
+	add_to_group("time_stoppable")
 	area_entered.connect(_on_area_entered)
 	body_entered.connect(_on_body_entered)
 	await get_tree().create_timer(lifetime).timeout
@@ -17,6 +19,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _time_stopped:
+		return
 	global_position += direction.normalized() * speed * delta
 
 
@@ -34,3 +38,11 @@ func _on_body_entered(body: Node2D) -> void:
 		damage_info.tags = ["enemy:projectile"]
 		body.get_node("HealthComponent").take_damage(damage_info)
 		queue_free()
+
+
+func apply_time_stop(duration: float) -> void:
+	if duration <= 0.0:
+		return
+	_time_stopped = true
+	await get_tree().create_timer(duration).timeout
+	_time_stopped = false

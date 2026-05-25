@@ -1,6 +1,8 @@
 extends Node2D
 
 @onready var dummy_health: HealthComponent = $TestDummy/HealthComponent
+@onready var player_health: HealthComponent = $Player/HealthComponent
+@onready var player_time: TimeManager = $Player/TimeManager
 @onready var debug_label: Label = $CanvasLayer/DebugLabel
 
 
@@ -21,6 +23,10 @@ func _refresh_debug_label() -> void:
 	debug_label.text = "Phase 1 Training Room\n"
 	debug_label.text += "Move: WASD / Arrows | Dash: Space\n"
 	debug_label.text += "Attack: Left Mouse | Heavy: Right Mouse\n"
+	debug_label.text += "Time: Q stop / E rewind | HP %.0f | Energy %.0f\n" % [
+		player_health.current_hp,
+		player_time.energy,
+	]
 	debug_label.text += "Dummy HP: %.0f\n" % dummy_hp
 	debug_label.text += "Kill the dummy to validate entity_died."
 

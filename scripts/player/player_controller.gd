@@ -5,6 +5,8 @@ extends CharacterBody2D
 
 @onready var health: HealthComponent = $HealthComponent
 @onready var sword_weapon: SwordWeapon = $SwordWeapon
+@onready var time_manager: TimeManager = $TimeManager
+@onready var rewind_recorder: RewindRecorder = $RewindRecorder
 
 var _dash_time_remaining: float = 0.0
 var _dash_cooldown_remaining: float = 0.0
@@ -22,6 +24,7 @@ func _ready() -> void:
 	if stats == null:
 		stats = Stats.new()
 	health.configure_from_stats(stats)
+	time_manager.configure_from_stats(stats)
 	sword_weapon.base_attack = stats.attack
 
 
@@ -29,6 +32,7 @@ func _physics_process(delta: float) -> void:
 	_update_timers(delta)
 	_update_weapon_aim()
 	_handle_attack_input()
+	_handle_time_input()
 	_handle_movement(delta)
 
 
@@ -48,6 +52,13 @@ func _handle_attack_input() -> void:
 		sword_weapon.try_attack(false)
 	if Input.is_action_just_pressed("heavy_attack"):
 		sword_weapon.try_attack(true)
+
+
+func _handle_time_input() -> void:
+	if Input.is_action_just_pressed("time_stop"):
+		time_manager.try_time_stop()
+	if Input.is_action_just_pressed("time_rewind"):
+		time_manager.try_rewind(rewind_recorder)
 
 
 func _handle_movement(_delta: float) -> void:
