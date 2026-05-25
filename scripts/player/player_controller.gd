@@ -25,9 +25,7 @@ func _ready() -> void:
 	add_to_group("player")
 	if stats == null:
 		stats = StatsResource.new()
-	health.configure_from_stats(stats)
-	time_manager.configure_from_stats(stats)
-	sword_weapon.base_attack = stats.attack
+	_apply_stats_to_components(true)
 
 
 func _physics_process(delta: float) -> void:
@@ -85,3 +83,38 @@ func _start_dash() -> void:
 	health.apply_invulnerability(DASH_INVULNERABLE_TIME)
 	EventBus.player_dashed.emit()
 	EventBus.publish(EventBus.PLAYER_DASHED)
+
+
+func apply_reward(reward_data: Dictionary) -> void:
+	var effects: Dictionary = reward_data.get("effects", {})
+	if effects.has("attack_multiplier"):
+		stats.attack *= float(effects["attack_multiplier"])
+	if effects.has("attack_speed_multiplier"):
+		stats.attack_speed *= float(effects["attack_speed_multiplier"])
+	if effects.has("max_hp_bonus"):
+		stats.max_hp += float(effects["max_hp_bonus"])
+	if effects.has("defense_bonus"):
+		stats.defense += float(effects["defense_bonus"])
+	if effects.has("time_energy_max_bonus"):
+		stats.time_energy_max += float(effects["time_energy_max_bonus"])
+	if effects.has("time_energy_regen_bonus"):
+		stats.time_energy_regen += float(effects["time_energy_regen_bonus"])
+
+	_apply_stats_to_components(false)
+
+	if effects.has("heal"):
+		health.heal(float(effects["heal"]))
+	if effects.has("time_energy_restore"):
+		time_manager.restore_energy(float(effects["time_energy_restore"]))
+	if effects.has("invulnerable_duration"):
+		health.apply_invulnerability(float(effects["invulnerable_duration"]))
+
+
+func _apply_stats_to_components(reset_health: bool) -> void:
+	if reset_health:
+		health.configure_from_stats(stats)
+	else:
+		health.apply_stat_totals(stats)
+	time_manager.configure_from_stats(stats)
+	sword_weapon.base_attack = stats.attack
+	sword_weapon.attack_speed = stats.attack_speed

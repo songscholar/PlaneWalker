@@ -5,6 +5,7 @@ const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 
 @export var owner_path: NodePath
 @export var base_attack: float = 30.0
+@export var attack_speed: float = 1.0
 
 @onready var hitbox: Node = $Hitbox
 @onready var owner_player: Node = get_node(owner_path)
@@ -46,7 +47,8 @@ func is_attacking() -> bool:
 
 func _start_attack(multiplier: float, windup: float, active: float, recovery: float, heavy: bool) -> void:
 	_attacking = true
-	await get_tree().create_timer(windup).timeout
+	var timing_scale := 1.0 / maxf(0.2, attack_speed)
+	await get_tree().create_timer(windup * timing_scale).timeout
 
 	var damage_info := DamageInfoScript.new(base_attack * multiplier, DamageInfoScript.DamageType.PHYSICAL, self, owner_player)
 	damage_info.tags = ["weapon:sword"]
@@ -57,7 +59,7 @@ func _start_attack(multiplier: float, windup: float, active: float, recovery: fl
 		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 120.0
 	EventBus.player_attacked.emit(&"sword")
 	EventBus.publish(EventBus.PLAYER_ATTACKED, {"weapon_id": "sword"})
-	hitbox.activate(damage_info, active)
+	hitbox.activate(damage_info, active * timing_scale)
 
-	await get_tree().create_timer(active + recovery).timeout
+	await get_tree().create_timer((active + recovery) * timing_scale).timeout
 	_attacking = false

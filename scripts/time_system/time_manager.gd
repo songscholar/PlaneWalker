@@ -30,9 +30,12 @@ func _process(delta: float) -> void:
 
 
 func configure_from_stats(stats: Resource) -> void:
+	var previous_max_energy := max_energy
 	max_energy = stats.time_energy_max
 	energy_regen = stats.time_energy_regen
-	energy = max_energy
+	if max_energy > previous_max_energy:
+		energy += max_energy - previous_max_energy
+	energy = clampf(energy, 0.0, max_energy)
 	energy_changed.emit(energy, max_energy)
 
 

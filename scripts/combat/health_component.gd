@@ -30,6 +30,15 @@ func configure_from_stats(stats: Resource) -> void:
 	dead = false
 
 
+func apply_stat_totals(stats: Resource) -> void:
+	var previous_max_hp := max_hp
+	max_hp = stats.max_hp
+	defense = stats.defense
+	if max_hp > previous_max_hp:
+		current_hp += max_hp - previous_max_hp
+	current_hp = clampf(current_hp, 0.0, max_hp)
+
+
 func take_damage(damage_info: RefCounted) -> float:
 	if dead or invulnerable:
 		return 0.0

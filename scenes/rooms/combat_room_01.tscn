@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room_controller"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/enemy_shooter.tscn" id="4_shooter"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/enemy_tank.tscn" id="5_tank"]
 [ext_resource type="Script" path="res://scripts/ui/combat_hud.gd" id="6_combat_hud"]
+[ext_resource type="Script" path="res://scripts/ui/reward_selection.gd" id="7_reward_selection"]
 
 [node name="CombatRoom01" type="Node2D"]
 script = ExtResource("1_room_controller")
@@ -53,3 +54,37 @@ offset_top = 650.0
 offset_right = 760.0
 offset_bottom = 700.0
 text = "HP / Time"
+
+[node name="RewardSelection" type="CanvasLayer" parent="."]
+script = ExtResource("7_reward_selection")
+player_path = NodePath("../Player")
+
+[node name="Panel" type="PanelContainer" parent="RewardSelection"]
+offset_left = 390.0
+offset_top = 135.0
+offset_right = 890.0
+offset_bottom = 515.0
+
+[node name="Margin" type="MarginContainer" parent="RewardSelection/Panel"]
+offset_right = 500.0
+offset_bottom = 380.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="RewardSelection/Panel/Margin"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 476.0
+offset_bottom = 360.0
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="RewardSelection/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Choose a reward"
+horizontal_alignment = 1
+
+[node name="Options" type="VBoxContainer" parent="RewardSelection/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12

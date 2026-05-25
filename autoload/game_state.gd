@@ -72,5 +72,17 @@ func end_run(result: Dictionary) -> void:
 	EventBus.publish(EventBus.RUN_ENDED, result)
 
 
+func add_run_reward(reward_data: Dictionary) -> void:
+	if current_run.is_empty():
+		return
+	var inventory: Array = current_run.get("inventory", [])
+	inventory.append(reward_data.get("id", ""))
+	current_run["inventory"] = inventory
+
+	var rewards: Array = current_run.get("rewards", [])
+	rewards.append(reward_data.duplicate(true))
+	current_run["rewards"] = rewards
+
+
 func set_phase(next_phase: GamePhase) -> void:
 	phase = next_phase
