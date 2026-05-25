@@ -17,6 +17,9 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		_print_input_map()
+	if event.is_action_pressed("interact") and GameState.phase == GameState.GamePhase.DEATH:
+		get_tree().reload_current_scene()
+		return
 	if event.is_action_pressed("interact"):
 		EventBus.room_started.emit(&"debug_room_01")
 		EventBus.publish(EventBus.ROOM_STARTED, {"room_id": "debug_room_01"})

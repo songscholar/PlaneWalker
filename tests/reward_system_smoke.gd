@@ -2,6 +2,8 @@ extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const COMBAT_ROOM_SCENE := preload("res://scenes/rooms/combat_room_01.tscn")
+const MAIN_SCENE := preload("res://scenes/main.tscn")
+const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 
 var _failed := false
@@ -55,15 +57,62 @@ func _run() -> void:
 	_assert_true(_reward_ids(first_roll) == _reward_ids(second_roll), "reward roll is deterministic")
 
 	player.queue_free()
+	await _run_death_check()
 	await _run_room_progression_check()
+	await _run_death_overlay_check()
 	await get_tree().process_frame
 	get_tree().quit(1 if _failed else 0)
+
+
+func _run_death_check() -> void:
+	var deaths_before := GameState.death_count
+	GameState.start_run({"seed": 321})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var room_player: Node = room.get_node("Player")
+	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	room_player.get_node("HealthComponent").take_damage(fatal_damage)
+	await get_tree().process_frame
+
+	_assert_true(GameState.phase == GameState.GamePhase.DEATH, "player death enters death phase")
+	_assert_true(GameState.last_run_result.get("result", "") == "death", "death records run result")
+	_assert_true(GameState.last_run_result.get("rooms_cleared", -1) == 0, "death records cleared rooms")
+	_assert_true(GameState.last_run_result.get("current_room", -1) == 1, "death records current room")
+	_assert_true(GameState.death_count == deaths_before + 1, "death count increments")
+	_assert_true(room.get_node("RewardMarker").visible == false, "death hides reward marker")
+
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_death_overlay_check() -> void:
+	var main := MAIN_SCENE.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var room_player: Node = main.get_node("CombatRoom01/Player")
+	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	room_player.get_node("HealthComponent").take_damage(fatal_damage)
+	await get_tree().process_frame
+
+	var overlay: CanvasLayer = main.get_node("RunEndOverlay")
+	var label: Label = main.get_node("RunEndOverlay/Panel/Margin/VBox/ResultLabel")
+	_assert_true(overlay.visible, "death shows run end overlay")
+	_assert_true(label.text.contains("Run Failed"), "death overlay shows failed result")
+
+	main.queue_free()
+	await get_tree().process_frame
 
 
 func _run_room_progression_check() -> void:
 	GameState.start_run({"seed": 456})
 	var room := COMBAT_ROOM_SCENE.instantiate()
 	add_child(room)
+	await get_tree().process_frame
 	await get_tree().process_frame
 	_assert_true(GameState.current_room == 1, "first combat room starts at one")
 

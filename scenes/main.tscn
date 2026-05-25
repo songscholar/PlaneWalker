@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
+[ext_resource type="Script" path="res://scripts/ui/run_end_overlay.gd" id="3_run_end_overlay"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -16,3 +17,36 @@ offset_bottom = 360.0
 text = "Plane Walker MVP booting..."
 
 [node name="CombatRoom01" parent="." instance=ExtResource("2_combat_room")]
+
+[node name="RunEndOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("3_run_end_overlay")
+
+[node name="Panel" type="PanelContainer" parent="RunEndOverlay"]
+offset_left = 440.0
+offset_top = 210.0
+offset_right = 840.0
+offset_bottom = 430.0
+
+[node name="Margin" type="MarginContainer" parent="RunEndOverlay/Panel"]
+offset_right = 400.0
+offset_bottom = 220.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="RunEndOverlay/Panel/Margin"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 376.0
+offset_bottom = 200.0
+theme_override_constants/separation = 18
+
+[node name="ResultLabel" type="Label" parent="RunEndOverlay/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Run result"
+horizontal_alignment = 1
+
+[node name="RestartButton" type="Button" parent="RunEndOverlay/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Restart Run"

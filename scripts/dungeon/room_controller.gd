@@ -19,6 +19,10 @@ var _cleared: bool = false
 func _ready() -> void:
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.reward_selected.connect(_on_reward_selected)
+	call_deferred("_start_initial_room")
+
+
+func _start_initial_room() -> void:
 	if GameState.current_room <= 0:
 		GameState.current_room = 1
 	start_room()
@@ -65,7 +69,10 @@ func _spawn_boss() -> void:
 
 
 func _on_entity_died(entity: Node, _killer: Variant) -> void:
-	if _cleared or not entity.is_in_group("enemies"):
+	if entity.is_in_group("player"):
+		_on_player_died(_killer)
+		return
+	if _cleared or GameState.phase == GameState.GamePhase.DEATH or not entity.is_in_group("enemies"):
 		return
 	_alive_enemies = max(0, _alive_enemies - 1)
 	if _alive_enemies == 0:
@@ -73,6 +80,8 @@ func _on_entity_died(entity: Node, _killer: Variant) -> void:
 
 
 func _clear_room() -> void:
+	if GameState.phase == GameState.GamePhase.DEATH:
+		return
 	_cleared = true
 	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
 	if reward_marker != null:
@@ -83,7 +92,7 @@ func _clear_room() -> void:
 
 
 func _on_reward_selected(_reward_data: Dictionary) -> void:
-	if not _cleared:
+	if not _cleared or GameState.phase == GameState.GamePhase.DEATH:
 		return
 	if GameState.current_room >= rooms_per_floor:
 		GameState.end_run({
@@ -109,3 +118,10 @@ func _active_room_id() -> StringName:
 
 func _is_boss_room() -> bool:
 	return GameState.current_room >= rooms_per_floor
+
+
+func _on_player_died(killer: Variant) -> void:
+	_clear_enemy_nodes()
+	if reward_marker != null:
+		reward_marker.visible = false
+	GameState.fail_run(killer)

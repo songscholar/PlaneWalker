@@ -21,6 +21,7 @@ var run_timer: float = 0.0
 var death_count: int = 0
 
 var current_run: Dictionary = {}
+var last_run_result: Dictionary = {}
 var persistent: Dictionary = {
 	"chronos_shards": 0,
 	"existential_imprints": 0,
@@ -49,6 +50,7 @@ func start_run(run_config: Dictionary = {}) -> void:
 	current_floor = 1
 	current_room = 0
 	run_timer = 0.0
+	last_run_result = {}
 	run_seed = int(run_config.get("seed", Time.get_unix_time_from_system()))
 	current_run = {
 		"character_id": run_config.get("character_id", "wanderer"),
@@ -67,7 +69,29 @@ func start_run(run_config: Dictionary = {}) -> void:
 
 
 func end_run(result: Dictionary) -> void:
+	if phase == GamePhase.RUN_END or phase == GamePhase.DEATH:
+		return
+	last_run_result = result.duplicate(true)
 	set_phase(GamePhase.RUN_END)
+	EventBus.run_ended.emit(result)
+	EventBus.publish(EventBus.RUN_ENDED, result)
+
+
+func fail_run(killer: Variant = null) -> void:
+	if phase == GamePhase.RUN_END or phase == GamePhase.DEATH:
+		return
+	death_count += 1
+	var result := {
+		"result": "death",
+		"floor": current_floor,
+		"rooms_cleared": max(0, current_room - 1),
+		"current_room": current_room,
+		"run_time": run_timer,
+		"killer": killer,
+		"rewards": current_run.get("rewards", []),
+	}
+	last_run_result = result.duplicate(false)
+	set_phase(GamePhase.DEATH)
 	EventBus.run_ended.emit(result)
 	EventBus.publish(EventBus.RUN_ENDED, result)
 
