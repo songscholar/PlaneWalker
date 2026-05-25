@@ -1,6 +1,7 @@
 extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
+const COMBAT_ROOM_SCENE := preload("res://scenes/rooms/combat_room_01.tscn")
 const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 
 var _failed := false
@@ -47,13 +48,38 @@ func _run() -> void:
 	GameState.start_run({"seed": 123})
 	GameState.add_run_reward({"id": "test_power", "effects": {}})
 	_assert_true(GameState.current_run.get("inventory", []).has("test_power"), "run inventory records reward")
+	_assert_true(GameState.current_room == 0, "run starts before first room")
 
 	var first_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	var second_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	_assert_true(_reward_ids(first_roll) == _reward_ids(second_roll), "reward roll is deterministic")
 
 	player.queue_free()
+	await _run_room_progression_check()
+	await get_tree().process_frame
 	get_tree().quit(1 if _failed else 0)
+
+
+func _run_room_progression_check() -> void:
+	GameState.start_run({"seed": 456})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	_assert_true(GameState.current_room == 1, "first combat room starts at one")
+
+	for expected_room: int in range(2, 6):
+		room._clear_room()
+		room.get_node("RewardSelection")._select_reward(0)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_assert_true(GameState.current_room == expected_room, "reward advances to room %d" % expected_room)
+
+	room._clear_room()
+	room.get_node("RewardSelection")._select_reward(0)
+	await get_tree().process_frame
+	_assert_true(GameState.phase == GameState.GamePhase.RUN_END, "final room ends run")
+	room.queue_free()
+	await get_tree().process_frame
 
 
 func _assert_true(value: bool, label: String) -> void:

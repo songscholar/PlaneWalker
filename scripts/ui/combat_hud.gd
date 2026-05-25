@@ -9,7 +9,8 @@ extends CanvasLayer
 
 
 func _process(_delta: float) -> void:
-	label.text = "HP %.0f/%.0f | Time %.0f/%.0f | Stop CD %.1f | Rewind CD %.1f" % [
+	label.text = "Room %d/5 | HP %.0f/%.0f | Time %.0f/%.0f | Stop CD %.1f | Rewind CD %.1f" % [
+		GameState.current_room,
 		health.current_hp,
 		health.max_hp,
 		time_manager.energy,

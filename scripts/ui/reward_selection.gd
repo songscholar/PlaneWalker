@@ -57,4 +57,5 @@ func _select_reward(index: int) -> void:
 	EventBus.reward_selected.emit(reward)
 	EventBus.publish(EventBus.REWARD_SELECTED, {"reward": reward})
 	visible = false
-	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
+	if GameState.phase != GameState.GamePhase.RUN_END:
+		GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)

@@ -5,6 +5,7 @@ extends Node
 
 func _ready() -> void:
 	EventBus.run_started.connect(_on_run_started)
+	EventBus.run_ended.connect(_on_run_ended)
 	_print_input_map()
 	GameState.start_run({
 		"character_id": "wanderer",
@@ -35,6 +36,15 @@ func _on_run_started(run_data: Dictionary) -> void:
 	text += "F interact emits room_started, Esc prints input map"
 	status_label.text = text
 	print("Run started: ", run_data)
+
+
+func _on_run_ended(result: Dictionary) -> void:
+	status_label.text = "Run ended\nResult: %s\nRooms cleared: %s\nRewards: %s" % [
+		result.get("result", ""),
+		result.get("rooms_cleared", 0),
+		GameState.current_run.get("inventory", []),
+	]
+	print("Run ended: ", result)
 
 
 func _print_input_map() -> void:

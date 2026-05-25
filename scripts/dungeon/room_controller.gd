@@ -4,6 +4,7 @@ extends Node2D
 @export var room_id: StringName = &"combat_room_01"
 @export var enemy_scenes: Array[PackedScene] = []
 @export var reward_marker_path: NodePath
+@export var rooms_per_floor: int = 5
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var enemies_root: Node2D = $Enemies
@@ -15,21 +16,31 @@ var _cleared: bool = false
 
 func _ready() -> void:
 	EventBus.entity_died.connect(_on_entity_died)
+	EventBus.reward_selected.connect(_on_reward_selected)
+	if GameState.current_room <= 0:
+		GameState.current_room = 1
 	start_room()
 
 
 func start_room() -> void:
+	GameState.set_phase(GameState.GamePhase.DUNGEON)
 	_cleared = false
+	if reward_marker != null:
+		reward_marker.visible = false
+	_clear_enemy_nodes()
 	_spawn_enemies()
-	EventBus.room_started.emit(room_id)
-	EventBus.publish(EventBus.ROOM_STARTED, {"room_id": room_id})
+	var active_room_id := _active_room_id()
+	EventBus.room_started.emit(active_room_id)
+	EventBus.publish(EventBus.ROOM_STARTED, {"room_id": active_room_id})
 
 
 func _spawn_enemies() -> void:
 	_alive_enemies = 0
 	var points := spawn_points.get_children()
-	for index: int in range(mini(points.size(), enemy_scenes.size())):
-		var enemy := enemy_scenes[index].instantiate()
+	var spawn_count := mini(mini(points.size(), enemy_scenes.size()), maxi(1, GameState.current_room))
+	for index: int in range(spawn_count):
+		var scene_index := mini(index, enemy_scenes.size() - 1)
+		var enemy := enemy_scenes[scene_index].instantiate()
 		enemies_root.add_child(enemy)
 		enemy.global_position = points[index].global_position
 		_alive_enemies += 1
@@ -47,7 +58,34 @@ func _on_entity_died(entity: Node, _killer: Variant) -> void:
 
 func _clear_room() -> void:
 	_cleared = true
+	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
 	if reward_marker != null:
 		reward_marker.visible = true
-	EventBus.room_cleared.emit(room_id)
-	EventBus.publish(EventBus.ROOM_CLEARED, {"room_id": room_id})
+	var active_room_id := _active_room_id()
+	EventBus.room_cleared.emit(active_room_id)
+	EventBus.publish(EventBus.ROOM_CLEARED, {"room_id": active_room_id})
+
+
+func _on_reward_selected(_reward_data: Dictionary) -> void:
+	if not _cleared:
+		return
+	if GameState.current_room >= rooms_per_floor:
+		GameState.end_run({
+			"result": "floor_cleared",
+			"floor": GameState.current_floor,
+			"rooms_cleared": GameState.current_room,
+			"run_time": GameState.run_timer,
+			"rewards": GameState.current_run.get("rewards", []),
+		})
+		return
+	GameState.current_room += 1
+	call_deferred("start_room")
+
+
+func _clear_enemy_nodes() -> void:
+	for enemy: Node in enemies_root.get_children():
+		enemy.queue_free()
+
+
+func _active_room_id() -> StringName:
+	return StringName("%s_%02d" % [room_id, GameState.current_room])
