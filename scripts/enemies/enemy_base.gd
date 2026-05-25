@@ -19,6 +19,7 @@ var _time_stopped: bool = false
 var _knockback_velocity: Vector2 = Vector2.ZERO
 var _rift_slow_multiplier: float = 1.0
 var _rift_slow_sources: int = 0
+var _is_elite: bool = false
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -119,3 +120,17 @@ func clear_time_rift() -> void:
 	_rift_slow_sources = maxi(0, _rift_slow_sources - 1)
 	if _rift_slow_sources == 0:
 		_rift_slow_multiplier = 1.0
+
+
+func apply_elite_modifier(hp_multiplier: float = 1.8, attack_multiplier: float = 1.25, speed_multiplier: float = 1.08) -> void:
+	if _is_elite:
+		return
+	_is_elite = true
+	add_to_group("elite_enemies")
+	max_hp *= hp_multiplier
+	attack *= attack_multiplier
+	move_speed *= speed_multiplier
+	health.max_hp = max_hp
+	health.current_hp = max_hp
+	visual.scale *= 1.15
+	_restore_visual_color()

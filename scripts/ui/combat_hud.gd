@@ -42,8 +42,10 @@ func _update_player_status() -> void:
 	hp_bar.value = health.current_hp
 	time_bar.max_value = time_manager.max_energy
 	time_bar.value = time_manager.energy
-	label.text = "Room %d/5 | HP %.0f/%.0f | Time %.0f/%.0f | Stop %.1f | Rewind %.1f | Rift %.1f | Accel %.1f" % [
+	var room_type := GameState.get_current_room_type().capitalize()
+	label.text = "Room %d/5 %s | HP %.0f/%.0f | Time %.0f/%.0f | Stop %.1f | Rewind %.1f | Rift %.1f | Accel %.1f" % [
 		GameState.current_room,
+		room_type,
 		health.current_hp,
 		health.max_hp,
 		time_manager.energy,
@@ -94,8 +96,11 @@ func _show_banner(text: String, duration: float = 1.6) -> void:
 func _on_room_started(room_id: StringName) -> void:
 	_boss = null
 	boss_panel.visible = false
-	if GameState.current_room >= 5:
+	var room_type := GameState.get_current_room_type()
+	if room_type == "boss":
 		_show_banner("Boss Room")
+	elif room_type == "elite":
+		_show_banner("Elite Room")
 	else:
 		_show_banner("Room %d" % GameState.current_room)
 

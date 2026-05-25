@@ -35,8 +35,11 @@ func _on_curse_offer_resolved() -> void:
 
 func _show_reward_options() -> void:
 	GameState.set_phase(GameState.GamePhase.SELECTION)
+	var reward_option_count := option_count
+	if GameState.get_current_room_type() == "elite":
+		reward_option_count += 1
 	_current_options = RewardPoolScript.roll_options(
-		option_count,
+		reward_option_count,
 		GameState.run_seed,
 		GameState.current_room,
 		GameState.current_run.get("inventory", [])
@@ -46,8 +49,12 @@ func _show_reward_options() -> void:
 
 
 func _render_options() -> void:
-	title_label.text = "Choose a reward - Room %d cleared" % GameState.current_room
+	var title_prefix := "Choose a reward"
+	if GameState.get_current_room_type() == "elite":
+		title_prefix = "Choose an elite reward"
+	title_label.text = "%s - Room %d cleared" % [title_prefix, GameState.current_room]
 	for child: Node in option_box.get_children():
+		option_box.remove_child(child)
 		child.queue_free()
 
 	for index: int in range(_current_options.size()):

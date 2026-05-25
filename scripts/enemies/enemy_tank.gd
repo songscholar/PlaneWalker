@@ -18,4 +18,7 @@ func _tick_ai(_delta: float) -> void:
 
 
 func _restore_visual_color() -> void:
+	if _is_elite:
+		visual.color = Color(1.0, 0.86, 0.22)
+		return
 	visual.color = Color(0.75, 0.35, 0.95)

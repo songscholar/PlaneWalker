@@ -65,6 +65,7 @@ func start_run(run_config: Dictionary = {}) -> void:
 		"archetypes": {},
 		"dominant_archetype": "",
 		"curse_offer_pending": false,
+		"current_room_type": "combat",
 	}
 	set_phase(GamePhase.DUNGEON)
 	EventBus.run_started.emit(current_run)
@@ -133,6 +134,16 @@ func set_curse_offer_pending(pending: bool) -> void:
 
 func is_curse_offer_pending() -> bool:
 	return bool(current_run.get("curse_offer_pending", false))
+
+
+func set_current_room_type(room_type: StringName) -> void:
+	if current_run.is_empty():
+		return
+	current_run["current_room_type"] = str(room_type)
+
+
+func get_current_room_type() -> String:
+	return str(current_run.get("current_room_type", "combat"))
 
 
 func get_dominant_archetype() -> String:

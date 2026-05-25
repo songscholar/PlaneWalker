@@ -9,6 +9,7 @@ extends Node2D
 @export var rooms_per_floor: int = 5
 @export var spawn_warning_duration: float = 0.45
 @export var curse_offer_rooms: Array[int] = [2, 4]
+@export var elite_rooms: Array[int] = [3]
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint
@@ -37,9 +38,10 @@ func start_room() -> void:
 	if reward_marker != null:
 		reward_marker.visible = false
 	_clear_enemy_nodes()
+	GameState.set_current_room_type(_current_room_type())
 	var active_room_id := _active_room_id()
 	EventBus.room_started.emit(active_room_id)
-	EventBus.publish(EventBus.ROOM_STARTED, {"room_id": active_room_id})
+	EventBus.publish(EventBus.ROOM_STARTED, {"room_id": active_room_id, "room_type": GameState.get_current_room_type()})
 	await _spawn_enemies()
 
 
@@ -65,6 +67,8 @@ func _spawn_enemies() -> void:
 		var enemy := enemy_scenes[scene_index].instantiate()
 		enemies_root.add_child(enemy)
 		enemy.global_position = points[index].global_position
+		if _is_elite_room() and index == spawn_count - 1 and enemy.has_method("apply_elite_modifier"):
+			enemy.apply_elite_modifier()
 		_alive_enemies += 1
 		EventBus.enemy_spawned.emit(enemy)
 		EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy})
@@ -141,6 +145,18 @@ func _active_room_id() -> StringName:
 
 func _is_boss_room() -> bool:
 	return GameState.current_room >= rooms_per_floor
+
+
+func _is_elite_room() -> bool:
+	return GameState.current_room < rooms_per_floor and elite_rooms.has(GameState.current_room)
+
+
+func _current_room_type() -> StringName:
+	if _is_boss_room():
+		return &"boss"
+	if _is_elite_room():
+		return &"elite"
+	return &"combat"
 
 
 func _should_offer_curse() -> bool:
