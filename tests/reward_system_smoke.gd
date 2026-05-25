@@ -69,7 +69,15 @@ func _run() -> void:
 
 	GameState.start_run({"seed": 123})
 	GameState.add_run_reward({"id": "test_power", "effects": {}})
+	GameState.add_run_reward({
+		"id": "test_archetype",
+		"archetype": "accelerated_combo",
+		"role": "starter",
+		"effects": {},
+	})
 	_assert_true(GameState.current_run.get("inventory", []).has("test_power"), "run inventory records reward")
+	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "run records reward archetype")
+	_assert_true(GameState.get_dominant_archetype() == "accelerated_combo", "run tracks dominant archetype")
 	_assert_true(GameState.current_room == 0, "run starts before first room")
 
 	var first_roll := RewardPoolScript.roll_options(3, 123, 1, [])
@@ -84,6 +92,7 @@ func _run() -> void:
 	await _run_hit_feedback_check()
 	await _run_death_check()
 	await _run_room_progression_check()
+	await _run_reward_ui_build_check()
 	await _run_death_overlay_check()
 	await get_tree().process_frame
 	get_tree().quit(1 if _failed else 0)
@@ -201,6 +210,38 @@ func _run_room_progression_check() -> void:
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
 	_assert_true(GameState.phase == GameState.GamePhase.RUN_END, "final room ends run")
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_reward_ui_build_check() -> void:
+	GameState.start_run({"seed": 789})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var reward_selection := room.get_node("RewardSelection")
+	var forced_options: Array[Dictionary] = [{
+		"id": "accelerated_combo",
+		"name": "Accelerated Combo",
+		"kind": "weapon",
+		"archetype": "accelerated_combo",
+		"role": "starter",
+		"description": "Sword attacks are faster and combo finishers hit harder.",
+		"effects": {"combo_finisher_multiplier_bonus": 0.35},
+	}]
+	reward_selection._current_options = forced_options
+	reward_selection._render_options()
+	var reward_button: Button = room.get_node("RewardSelection/Panel/Margin/VBox/Options").get_child(0)
+	_assert_true(reward_button.text.contains("Starter - Accelerated Combo"), "reward option shows build route")
+
+	reward_selection._select_reward(0)
+	await get_tree().process_frame
+	var build_label: Label = room.get_node("CombatHUD/BuildLabel")
+	_assert_true(build_label.text.contains("Accelerated Combo"), "combat hud shows dominant build")
+	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "selected reward records archetype")
+
 	room.queue_free()
 	await get_tree().process_frame
 

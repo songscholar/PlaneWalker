@@ -126,6 +126,13 @@ offset_right = 760.0
 offset_bottom = 678.0
 text = "HP / Time"
 
+[node name="BuildLabel" type="Label" parent="CombatHUD"]
+offset_left = 24.0
+offset_top = 122.0
+offset_right = 344.0
+offset_bottom = 150.0
+text = "Build: Unformed"
+
 [node name="PlayerPanel" type="PanelContainer" parent="CombatHUD"]
 offset_left = 24.0
 offset_top = 24.0

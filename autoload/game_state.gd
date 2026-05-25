@@ -62,6 +62,8 @@ func start_run(run_config: Dictionary = {}) -> void:
 		"talents": [],
 		"currencies": {},
 		"stats": {},
+		"archetypes": {},
+		"dominant_archetype": "",
 	}
 	set_phase(GamePhase.DUNGEON)
 	EventBus.run_started.emit(current_run)
@@ -106,6 +108,32 @@ func add_run_reward(reward_data: Dictionary) -> void:
 	var rewards: Array = current_run.get("rewards", [])
 	rewards.append(reward_data.duplicate(true))
 	current_run["rewards"] = rewards
+	_record_reward_archetype(reward_data)
+
+
+func get_dominant_archetype() -> String:
+	return str(current_run.get("dominant_archetype", ""))
+
+
+func _record_reward_archetype(reward_data: Dictionary) -> void:
+	var archetype := str(reward_data.get("archetype", ""))
+	if archetype.is_empty():
+		return
+	var archetypes: Dictionary = current_run.get("archetypes", {})
+	archetypes[archetype] = int(archetypes.get(archetype, 0)) + 1
+	current_run["archetypes"] = archetypes
+	current_run["dominant_archetype"] = _find_dominant_archetype(archetypes)
+
+
+func _find_dominant_archetype(archetypes: Dictionary) -> String:
+	var best_id := ""
+	var best_count := -1
+	for archetype: String in archetypes.keys():
+		var count := int(archetypes[archetype])
+		if count > best_count:
+			best_id = archetype
+			best_count = count
+	return best_id
 
 
 func set_phase(next_phase: GamePhase) -> void:

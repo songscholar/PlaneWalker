@@ -41,7 +41,11 @@ func _render_options() -> void:
 		var reward := _current_options[index]
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(420.0, 72.0)
-		button.text = "%s\n%s" % [reward.get("name", "Reward"), reward.get("description", "")]
+		button.text = "%s\n%s\n%s" % [
+			reward.get("name", "Reward"),
+			RewardPoolScript.get_reward_route_label(reward),
+			reward.get("description", ""),
+		]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.pressed.connect(_select_reward.bind(index))
 		option_box.add_child(button)

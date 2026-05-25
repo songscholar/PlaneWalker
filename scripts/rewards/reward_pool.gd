@@ -118,6 +118,23 @@ const REWARDS: Array[Dictionary] = [
 	},
 ]
 
+const ARCHETYPE_LABELS := {
+	"time_stop_burst": "Time Stop Burst",
+	"rewind_echo": "Rewind Echo",
+	"accelerated_combo": "Accelerated Combo",
+	"heavy_cleave": "Heavy Cleave",
+	"rift_control": "Rift Control",
+	"low_hp_void": "Low HP Void",
+	"evasive_guard": "Evasive Guard",
+	"barrage_tempo": "Barrage Tempo",
+}
+
+const ROLE_LABELS := {
+	"starter": "Starter",
+	"payoff": "Payoff",
+	"risk": "Risk",
+}
+
 
 static func roll_options(count: int, seed_value: int, room_index: int, owned_ids: Array = []) -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()
@@ -147,3 +164,23 @@ static func _shuffle_with_rng(values: Array, rng: RandomNumberGenerator) -> void
 		var previous: Variant = values[index]
 		values[index] = values[swap_index]
 		values[swap_index] = previous
+
+
+static func get_archetype_label(archetype: String) -> String:
+	return str(ARCHETYPE_LABELS.get(archetype, archetype.capitalize()))
+
+
+static func get_role_label(role: String) -> String:
+	return str(ROLE_LABELS.get(role, role.capitalize()))
+
+
+static func get_reward_route_label(reward_data: Dictionary) -> String:
+	var archetype := str(reward_data.get("archetype", ""))
+	var role := str(reward_data.get("role", ""))
+	if archetype.is_empty() and role.is_empty():
+		return str(reward_data.get("kind", "reward")).capitalize()
+	if role.is_empty():
+		return get_archetype_label(archetype)
+	if archetype.is_empty():
+		return get_role_label(role)
+	return "%s - %s" % [get_role_label(role), get_archetype_label(archetype)]

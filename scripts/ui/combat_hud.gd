@@ -1,11 +1,14 @@
 extends CanvasLayer
 
+const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
+
 @export var player_path: NodePath
 
 @onready var player: Node = get_node(player_path)
 @onready var health: Node = player.get_node("HealthComponent")
 @onready var time_manager: Node = player.get_node("TimeManager")
 @onready var label: Label = $StatusLabel
+@onready var build_label: Label = $BuildLabel
 @onready var hp_bar: ProgressBar = $PlayerPanel/VBox/HPBar
 @onready var time_bar: ProgressBar = $PlayerPanel/VBox/TimeBar
 @onready var room_banner: Label = $RoomBanner
@@ -23,7 +26,9 @@ func _ready() -> void:
 	EventBus.room_started.connect(_on_room_started)
 	EventBus.room_cleared.connect(_on_room_cleared)
 	EventBus.enemy_spawned.connect(_on_enemy_spawned)
+	EventBus.reward_selected.connect(_on_reward_selected)
 	EventBus.run_ended.connect(_on_run_ended)
+	_update_build_label()
 
 
 func _process(delta: float) -> void:
@@ -46,6 +51,15 @@ func _update_player_status() -> void:
 		time_manager.get_cooldown(&"time_stop"),
 		time_manager.get_cooldown(&"time_rewind"),
 	]
+	_update_build_label()
+
+
+func _update_build_label() -> void:
+	var archetype := GameState.get_dominant_archetype()
+	if archetype.is_empty():
+		build_label.text = "Build: Unformed"
+	else:
+		build_label.text = "Build: %s" % RewardPoolScript.get_archetype_label(archetype)
 
 
 func _update_boss_status() -> void:
@@ -90,6 +104,10 @@ func _on_room_cleared(_room_id: StringName) -> void:
 
 func _on_enemy_spawned(enemy: Node) -> void:
 	call_deferred("_try_track_boss", enemy)
+
+
+func _on_reward_selected(_reward: Dictionary) -> void:
+	_update_build_label()
 
 
 func _try_track_boss(enemy: Node) -> void:
