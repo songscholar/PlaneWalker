@@ -2,7 +2,7 @@ extends Node
 
 signal damage_about_to_apply(damage_info: Variant, target: Node)
 signal damage_applied(damage_info: Variant, target: Node, final_amount: float)
-signal entity_died(entity: Node, killer: Node)
+signal entity_died(entity: Node, killer: Variant)
 signal room_started(room_id: StringName)
 signal room_cleared(room_id: StringName)
 signal reward_selected(reward_data: Dictionary)

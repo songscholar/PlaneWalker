@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://plane_walker_main"]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/rooms/debug_training_room.tscn" id="2_debug_training_room"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -13,3 +14,5 @@ offset_top = 24.0
 offset_right = 820.0
 offset_bottom = 360.0
 text = "Plane Walker MVP booting..."
+
+[node name="DebugTrainingRoom" parent="." instance=ExtResource("2_debug_training_room")]

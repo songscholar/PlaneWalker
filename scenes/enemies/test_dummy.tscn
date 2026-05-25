@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/test_dummy.gd" id="1_test_dummy"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health_component"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dummy"]
+size = Vector2(46, 46)
+
+[node name="TestDummy" type="Node2D"]
+script = ExtResource("1_test_dummy")
+
+[node name="Visual" type="Polygon2D" parent="."]
+color = Color(0.75, 0.82, 0.92, 1)
+polygon = PackedVector2Array(-22, -22, 22, -22, 22, 22, -22, 22)
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health_component")
+max_hp = 120.0
+
+[node name="Hurtbox" type="Area2D" parent="."]
+script = ExtResource("3_hurtbox")
+health_component_path = NodePath("../HealthComponent")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("RectangleShape2D_dummy")
