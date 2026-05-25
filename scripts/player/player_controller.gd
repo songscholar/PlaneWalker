@@ -140,6 +140,20 @@ func _apply_effects(effects: Dictionary) -> void:
 		time_manager.rewind_heal += float(effects["rewind_heal"])
 	if effects.has("rewind_self_damage"):
 		time_manager.rewind_self_damage += float(effects["rewind_self_damage"])
+	if effects.has("time_rift_cost_multiplier"):
+		time_manager.time_rift_cost_multiplier *= float(effects["time_rift_cost_multiplier"])
+	if effects.has("time_rift_duration_bonus"):
+		time_manager.time_rift_duration_bonus += float(effects["time_rift_duration_bonus"])
+	if effects.has("time_rift_radius_bonus"):
+		time_manager.time_rift_radius_bonus += float(effects["time_rift_radius_bonus"])
+	if effects.has("time_rift_slow_bonus"):
+		time_manager.time_rift_slow_bonus += float(effects["time_rift_slow_bonus"])
+	if effects.has("time_accelerate_cost_multiplier"):
+		time_manager.time_accelerate_cost_multiplier *= float(effects["time_accelerate_cost_multiplier"])
+	if effects.has("time_accelerate_duration_bonus"):
+		time_manager.time_accelerate_duration_bonus += float(effects["time_accelerate_duration_bonus"])
+	if effects.has("time_accelerate_multiplier_bonus"):
+		time_manager.time_accelerate_multiplier_bonus += float(effects["time_accelerate_multiplier_bonus"])
 	if effects.has("combo_finisher_multiplier_bonus"):
 		sword_weapon.combo_finisher_multiplier_bonus += float(effects["combo_finisher_multiplier_bonus"])
 	if effects.has("heavy_damage_multiplier_bonus"):

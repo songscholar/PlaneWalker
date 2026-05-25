@@ -58,6 +58,13 @@ func _run() -> void:
 			"heavy_damage_multiplier_bonus": 0.4,
 			"low_hp_damage_multiplier_bonus": 0.45,
 			"dash_invulnerable_bonus": 0.08,
+			"time_rift_cost_multiplier": 0.85,
+			"time_rift_duration_bonus": 1.0,
+			"time_rift_radius_bonus": 22.0,
+			"time_rift_slow_bonus": 0.12,
+			"time_accelerate_cost_multiplier": 0.85,
+			"time_accelerate_duration_bonus": 0.8,
+			"time_accelerate_multiplier_bonus": 0.2,
 		},
 	})
 	_assert_close(time_manager.time_stop_duration_bonus, 0.75, "time stop duration starter")
@@ -67,6 +74,13 @@ func _run() -> void:
 	_assert_close(sword.heavy_damage_multiplier_bonus, 0.4, "heavy damage starter")
 	_assert_close(sword.low_hp_damage_multiplier_bonus, 0.45, "low hp damage starter")
 	_assert_close(player._dash_invulnerable_bonus, 0.08, "dash invulnerability starter")
+	_assert_close(time_manager.time_rift_cost_multiplier, 0.85, "rift cost payoff")
+	_assert_close(time_manager.time_rift_duration_bonus, 1.0, "rift duration payoff")
+	_assert_close(time_manager.time_rift_radius_bonus, 22.0, "rift radius payoff")
+	_assert_close(time_manager.time_rift_slow_bonus, 0.12, "rift slow payoff")
+	_assert_close(time_manager.time_accelerate_cost_multiplier, 0.85, "accelerate cost payoff")
+	_assert_close(time_manager.time_accelerate_duration_bonus, 0.8, "accelerate duration payoff")
+	_assert_close(time_manager.time_accelerate_multiplier_bonus, 0.2, "accelerate multiplier payoff")
 
 	GameState.start_run({"seed": 123})
 	GameState.add_run_reward({"id": "test_power", "effects": {}})
@@ -88,6 +102,11 @@ func _run() -> void:
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("frozen_burst"), "reward pool includes frozen burst starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("accelerated_combo"), "reward pool includes combo starter")
 	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("tempo_barrage"), "reward pool includes barrage starter")
+	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("rift_snare"), "reward pool includes rift payoff")
+	_assert_true(RewardPoolScript.get_reward_route_label({
+		"archetype": "rift_control",
+		"role": "payoff",
+	}).contains("Payoff - Rift Control"), "reward route labels payoff")
 
 	var first_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	var second_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
@@ -168,7 +187,11 @@ func _run_time_rift_check() -> void:
 
 	var room_player: Node = room.get_node("Player")
 	var time_manager: Node = room_player.get_node("TimeManager")
+	time_manager.time_rift_cost_multiplier = 0.8
 	time_manager.time_rift_duration = 0.08
+	time_manager.time_rift_duration_bonus = 0.02
+	time_manager.time_rift_radius_bonus = 10.0
+	time_manager.time_rift_slow_bonus = 0.1
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var energy_before: float = time_manager.energy
 	var created: bool = time_manager.try_time_rift(enemy.global_position)
@@ -176,10 +199,12 @@ func _run_time_rift_check() -> void:
 	await get_tree().process_frame
 
 	_assert_true(created, "time rift can be cast")
-	_assert_true(time_manager.energy <= energy_before - time_manager.time_rift_cost + 0.1, "time rift spends energy")
+	_assert_true(time_manager.energy <= energy_before - time_manager.time_rift_cost * time_manager.time_rift_cost_multiplier + 0.1, "time rift spends adjusted energy")
 	_assert_true(time_manager.get_cooldown(&"time_rift") > 0.0, "time rift starts cooldown")
 	_assert_true(get_tree().get_nodes_in_group("time_rifts").size() > 0, "time rift spawns area")
-	_assert_close(enemy._rift_slow_multiplier, time_manager.time_rift_slow_multiplier, "time rift slows enemy")
+	var rift: Node = get_tree().get_nodes_in_group("time_rifts")[0]
+	_assert_close(rift.radius, time_manager.time_rift_radius + time_manager.time_rift_radius_bonus, "time rift uses adjusted radius")
+	_assert_close(enemy._rift_slow_multiplier, time_manager.time_rift_slow_multiplier - time_manager.time_rift_slow_bonus, "time rift slows enemy")
 	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
 	_assert_true(hud_label.text.contains("Rift"), "combat hud shows rift cooldown")
 
@@ -201,17 +226,20 @@ func _run_time_accelerate_check() -> void:
 	var room_player: Node = room.get_node("Player")
 	var time_manager: Node = room_player.get_node("TimeManager")
 	var sword: Node = room_player.get_node("SwordWeapon")
+	time_manager.time_accelerate_cost_multiplier = 0.8
 	time_manager.time_accelerate_duration = 0.08
+	time_manager.time_accelerate_duration_bonus = 0.02
+	time_manager.time_accelerate_multiplier_bonus = 0.2
 	var base_attack_speed: float = sword.attack_speed
 	var energy_before: float = time_manager.energy
 	var accelerated: bool = time_manager.try_time_accelerate()
 	await get_tree().process_frame
 
 	_assert_true(accelerated, "time accelerate can be cast")
-	_assert_true(time_manager.energy <= energy_before - time_manager.time_accelerate_cost + 0.1, "time accelerate spends energy")
+	_assert_true(time_manager.energy <= energy_before - time_manager.time_accelerate_cost * time_manager.time_accelerate_cost_multiplier + 0.1, "time accelerate spends adjusted energy")
 	_assert_true(time_manager.get_cooldown(&"time_accelerate") > 0.0, "time accelerate starts cooldown")
 	_assert_true(room_player.is_time_accelerated(), "player enters accelerated state")
-	_assert_close(sword.attack_speed, base_attack_speed * time_manager.time_accelerate_multiplier, "time accelerate boosts attack speed")
+	_assert_close(sword.attack_speed, base_attack_speed * (time_manager.time_accelerate_multiplier + time_manager.time_accelerate_multiplier_bonus), "time accelerate boosts attack speed")
 	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
 	_assert_true(hud_label.text.contains("Accel"), "combat hud shows accelerate cooldown")
 

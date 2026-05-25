@@ -28,6 +28,13 @@ var time_stop_duration_bonus: float = 0.0
 var time_stop_cost_multiplier: float = 1.0
 var rewind_cost_multiplier: float = 1.0
 var rewind_heal: float = 0.0
+var time_rift_cost_multiplier: float = 1.0
+var time_rift_duration_bonus: float = 0.0
+var time_rift_radius_bonus: float = 0.0
+var time_rift_slow_bonus: float = 0.0
+var time_accelerate_cost_multiplier: float = 1.0
+var time_accelerate_duration_bonus: float = 0.0
+var time_accelerate_multiplier_bonus: float = 0.0
 var time_stop_self_damage: float = 0.0
 var rewind_self_damage: float = 0.0
 var _cooldowns: Dictionary = {
@@ -95,13 +102,14 @@ func try_rewind(recorder: Node) -> void:
 
 
 func try_time_rift(rift_position: Vector2) -> bool:
-	if not _can_pay(&"time_rift", time_rift_cost):
+	var effective_cost := time_rift_cost * time_rift_cost_multiplier
+	if not _can_pay(&"time_rift", effective_cost):
 		return false
-	_pay_cost(&"time_rift", time_rift_cost, time_rift_cooldown)
+	_pay_cost(&"time_rift", effective_cost, time_rift_cooldown)
 	var rift := TimeRiftScene.instantiate()
-	rift.duration = time_rift_duration
-	rift.radius = time_rift_radius
-	rift.slow_multiplier = time_rift_slow_multiplier
+	rift.duration = time_rift_duration + time_rift_duration_bonus
+	rift.radius = time_rift_radius + time_rift_radius_bonus
+	rift.slow_multiplier = clampf(time_rift_slow_multiplier - time_rift_slow_bonus, 0.1, 1.0)
 	var parent := get_parent().get_parent()
 	parent.add_child(rift)
 	rift.global_position = rift_position
@@ -111,15 +119,18 @@ func try_time_rift(rift_position: Vector2) -> bool:
 
 
 func try_time_accelerate() -> bool:
-	if not _can_pay(&"time_accelerate", time_accelerate_cost):
+	var effective_cost := time_accelerate_cost * time_accelerate_cost_multiplier
+	var effective_duration := time_accelerate_duration + time_accelerate_duration_bonus
+	var effective_multiplier := time_accelerate_multiplier + time_accelerate_multiplier_bonus
+	if not _can_pay(&"time_accelerate", effective_cost):
 		return false
-	_pay_cost(&"time_accelerate", time_accelerate_cost, time_accelerate_cooldown)
+	_pay_cost(&"time_accelerate", effective_cost, time_accelerate_cooldown)
 	var owner_entity := get_parent()
 	if owner_entity.has_method("apply_time_acceleration"):
-		owner_entity.apply_time_acceleration(time_accelerate_multiplier, time_accelerate_duration)
+		owner_entity.apply_time_acceleration(effective_multiplier, effective_duration)
 	EventBus.time_skill_started.emit(&"time_accelerate")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_accelerate"})
-	get_tree().create_timer(time_accelerate_duration).timeout.connect(_end_time_accelerate)
+	get_tree().create_timer(effective_duration).timeout.connect(_end_time_accelerate)
 	return true
 
 

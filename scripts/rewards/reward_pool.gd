@@ -116,6 +116,49 @@ const REWARDS: Array[Dictionary] = [
 		"description": "Sword attacks are 10% faster and gain 15 maximum time energy.",
 		"effects": {"attack_speed_multiplier": 1.1, "time_energy_max_bonus": 15.0},
 	},
+	{
+		"id": "rift_snare",
+		"name": "Rift Snare",
+		"kind": "time",
+		"archetype": "rift_control",
+		"role": "payoff",
+		"description": "Time Rift lasts 1 second longer, covers more ground, and slows harder.",
+		"effects": {
+			"time_rift_duration_bonus": 1.0,
+			"time_rift_radius_bonus": 22.0,
+			"time_rift_slow_bonus": 0.12,
+		},
+	},
+	{
+		"id": "rift_conductor",
+		"name": "Rift Conductor",
+		"kind": "time",
+		"archetype": "rift_control",
+		"role": "payoff",
+		"description": "Time Rift costs 15% less energy and grants 0.6 more time energy regeneration.",
+		"effects": {"time_rift_cost_multiplier": 0.85, "time_energy_regen_bonus": 0.6},
+	},
+	{
+		"id": "accelerant_window",
+		"name": "Accelerant Window",
+		"kind": "time",
+		"archetype": "accelerated_combo",
+		"role": "payoff",
+		"description": "Time Accelerate lasts 0.8 seconds longer and hits a higher speed ceiling.",
+		"effects": {
+			"time_accelerate_duration_bonus": 0.8,
+			"time_accelerate_multiplier_bonus": 0.2,
+		},
+	},
+	{
+		"id": "efficient_overdrive",
+		"name": "Efficient Overdrive",
+		"kind": "time",
+		"archetype": "accelerated_combo",
+		"role": "payoff",
+		"description": "Time Accelerate costs 15% less energy and sword attacks are 6% faster.",
+		"effects": {"time_accelerate_cost_multiplier": 0.85, "attack_speed_multiplier": 1.06},
+	},
 ]
 
 const ARCHETYPE_LABELS := {
