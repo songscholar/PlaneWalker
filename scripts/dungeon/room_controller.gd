@@ -4,8 +4,10 @@ extends Node2D
 @export var room_id: StringName = &"combat_room_01"
 @export var enemy_scenes: Array[PackedScene] = []
 @export var boss_scene: PackedScene
+@export var spawn_warning_scene: PackedScene
 @export var reward_marker_path: NodePath
 @export var rooms_per_floor: int = 5
+@export var spawn_warning_duration: float = 0.45
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint
@@ -34,20 +36,29 @@ func start_room() -> void:
 	if reward_marker != null:
 		reward_marker.visible = false
 	_clear_enemy_nodes()
-	_spawn_enemies()
 	var active_room_id := _active_room_id()
 	EventBus.room_started.emit(active_room_id)
 	EventBus.publish(EventBus.ROOM_STARTED, {"room_id": active_room_id})
+	await _spawn_enemies()
 
 
 func _spawn_enemies() -> void:
 	_alive_enemies = 0
 	if _is_boss_room() and boss_scene != null:
+		_show_spawn_warning(boss_spawn_point.global_position, 44.0)
+		await get_tree().create_timer(spawn_warning_duration).timeout
+		if GameState.phase == GameState.GamePhase.DEATH:
+			return
 		_spawn_boss()
 		return
 
 	var points := spawn_points.get_children()
 	var spawn_count := mini(mini(points.size(), enemy_scenes.size()), maxi(1, GameState.current_room))
+	for index: int in range(spawn_count):
+		_show_spawn_warning(points[index].global_position, 24.0)
+	await get_tree().create_timer(spawn_warning_duration).timeout
+	if GameState.phase == GameState.GamePhase.DEATH:
+		return
 	for index: int in range(spawn_count):
 		var scene_index := mini(index, enemy_scenes.size() - 1)
 		var enemy := enemy_scenes[scene_index].instantiate()
@@ -56,6 +67,15 @@ func _spawn_enemies() -> void:
 		_alive_enemies += 1
 		EventBus.enemy_spawned.emit(enemy)
 		EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy})
+
+
+func _show_spawn_warning(spawn_position: Vector2, radius: float) -> void:
+	if spawn_warning_scene != null:
+		var warning := spawn_warning_scene.instantiate()
+		warning.radius = radius
+		warning.duration = spawn_warning_duration
+		add_child(warning)
+		warning.global_position = spawn_position
 
 
 func _spawn_boss() -> void:

@@ -71,6 +71,7 @@ func _run_hit_feedback_check() -> void:
 	add_child(room)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
 
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
@@ -140,6 +141,7 @@ func _run_room_progression_check() -> void:
 	add_child(room)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
 	_assert_true(GameState.current_room == 1, "first combat room starts at one")
 
 	for expected_room: int in range(2, 6):
@@ -149,6 +151,8 @@ func _run_room_progression_check() -> void:
 		room.get_node("RewardSelection")._select_reward(0)
 		await get_tree().process_frame
 		await get_tree().process_frame
+		var expected_enemies := 1 if expected_room >= 5 else mini(expected_room, 3)
+		await _wait_for_enemy_count(room, expected_enemies)
 		_assert_true(GameState.current_room == expected_room, "reward advances to room %d" % expected_room)
 
 	var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
@@ -157,6 +161,11 @@ func _run_room_progression_check() -> void:
 	_assert_true(GameState.phase == GameState.GamePhase.BOSS_FIGHT, "fifth room enters boss phase")
 	_assert_true(enemies.size() == 1, "boss room spawns one enemy")
 	_assert_true(enemies[0].is_in_group("bosses"), "fifth room enemy is boss")
+	var boss_health: Node = enemies[0].get_node("HealthComponent")
+	var phase_damage := DamageInfoScript.new(boss_health.max_hp * 0.5, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	boss_health.take_damage(phase_damage)
+	await get_tree().process_frame
+	_assert_true(enemies[0]._phase >= 2, "boss enters later phase after health threshold")
 	await get_tree().process_frame
 	_assert_true(boss_panel.visible, "boss room shows boss panel")
 	_assert_close(boss_hp_bar.max_value, enemies[0].health.max_hp, "boss hp max binds to health")
@@ -199,3 +208,14 @@ func _nodes_in_group(nodes: Array, group_name: StringName) -> Array:
 		if node.is_in_group(group_name):
 			matches.append(node)
 	return matches
+
+
+func _wait_for_enemy_count(room: Node, expected_count: int, timeout: float = 1.2) -> void:
+	var elapsed := 0.0
+	while elapsed < timeout:
+		var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
+		if enemies.size() >= expected_count:
+			return
+		await get_tree().process_frame
+		elapsed += get_process_delta_time()
+	_assert_true(false, "room spawned %d enemies before timeout" % expected_count)
