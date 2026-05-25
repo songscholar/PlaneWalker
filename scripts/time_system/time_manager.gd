@@ -26,6 +26,8 @@ signal cooldown_changed(skill_id: StringName, remaining: float)
 var energy: float = 100.0
 var time_stop_duration_bonus: float = 0.0
 var time_stop_cost_multiplier: float = 1.0
+var time_stop_weakpoint_damage_bonus: float = 0.0
+var time_stop_weakpoint_duration: float = 0.0
 var rewind_cost_multiplier: float = 1.0
 var rewind_heal: float = 0.0
 var time_rift_cost_multiplier: float = 1.0
@@ -35,6 +37,8 @@ var time_rift_slow_bonus: float = 0.0
 var time_accelerate_cost_multiplier: float = 1.0
 var time_accelerate_duration_bonus: float = 0.0
 var time_accelerate_multiplier_bonus: float = 0.0
+var low_energy_regen_multiplier: float = 1.0
+var low_energy_threshold: float = 30.0
 var time_stop_self_damage: float = 0.0
 var rewind_self_damage: float = 0.0
 var _cooldowns: Dictionary = {
@@ -77,6 +81,8 @@ func try_time_stop() -> void:
 	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
 		if node.has_method("apply_time_stop"):
 			node.apply_time_stop(effective_duration)
+		if node.has_method("apply_weakpoint"):
+			node.apply_weakpoint(time_stop_weakpoint_duration, time_stop_weakpoint_damage_bonus)
 	await get_tree().create_timer(effective_duration).timeout
 	EventBus.time_skill_ended.emit(&"time_stop")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_stop"})
@@ -151,7 +157,8 @@ func get_cooldown(skill_id: StringName) -> float:
 func _regen_energy(delta: float) -> void:
 	if energy >= max_energy:
 		return
-	energy = minf(max_energy, energy + energy_regen * delta)
+	var regen_multiplier := low_energy_regen_multiplier if energy < low_energy_threshold else 1.0
+	energy = minf(max_energy, energy + energy_regen * regen_multiplier * delta)
 	energy_changed.emit(energy, max_energy)
 
 

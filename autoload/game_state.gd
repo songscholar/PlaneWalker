@@ -86,6 +86,8 @@ func fail_run(killer: Variant = null) -> void:
 		"run_time": run_timer,
 		"killer": killer,
 		"rewards": current_run.get("rewards", []),
+		"blessings": current_run.get("blessings", []),
+		"talent_choices": current_run.get("talent_choices", []),
 		"curses": current_run.get("curses", []),
 	}
 	last_run_result = result.duplicate(false)
@@ -119,6 +121,32 @@ func add_run_curse(curse_data: Dictionary) -> void:
 	var curses: Array = current_run.get("curses", [])
 	curses.append(curse_data.duplicate(true))
 	current_run["curses"] = curses
+
+
+func add_run_blessing(blessing_data: Dictionary) -> void:
+	if current_run.is_empty():
+		return
+	var active_blessings: Array = current_run.get("active_blessings", [])
+	active_blessings.append(blessing_data.get("id", ""))
+	current_run["active_blessings"] = active_blessings
+
+	var blessings: Array = current_run.get("blessings", [])
+	blessings.append(blessing_data.duplicate(true))
+	current_run["blessings"] = blessings
+	_record_reward_archetype(blessing_data)
+
+
+func add_run_talent(talent_data: Dictionary) -> void:
+	if current_run.is_empty():
+		return
+	var talents: Array = current_run.get("talents", [])
+	talents.append(talent_data.get("id", ""))
+	current_run["talents"] = talents
+
+	var talent_choices: Array = current_run.get("talent_choices", [])
+	talent_choices.append(talent_data.duplicate(true))
+	current_run["talent_choices"] = talent_choices
+	_record_reward_archetype(talent_data)
 
 
 func add_run_event(event_data: Dictionary) -> void:
@@ -249,6 +277,8 @@ func _record_run_summary(result: Dictionary) -> void:
 		"current_room": result.get("current_room", current_room),
 		"run_time": result.get("run_time", run_timer),
 		"rewards": result.get("rewards", []),
+		"blessings": result.get("blessings", []),
+		"talent_choices": result.get("talent_choices", []),
 		"curses": result.get("curses", []),
 	}
 

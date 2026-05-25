@@ -12,6 +12,8 @@ const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 
 var combo_finisher_multiplier_bonus: float = 0.0
 var heavy_damage_multiplier_bonus: float = 0.0
+var heavy_execute_multiplier_bonus: float = 0.0
+var heavy_execute_threshold: float = 0.3
 var low_hp_damage_multiplier_bonus: float = 0.0
 var low_hp_threshold: float = 0.35
 var _combo_index: int = 0
@@ -67,6 +69,8 @@ func _start_attack(multiplier: float, windup: float, active: float, recovery: fl
 	if heavy:
 		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 260.0
 		damage_info.tags.append("attack:heavy")
+		if heavy_execute_multiplier_bonus > 0.0:
+			damage_info.tags.append("talent:ruin_execute")
 	else:
 		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 120.0
 		if finisher:

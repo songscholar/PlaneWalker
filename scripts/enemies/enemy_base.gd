@@ -20,6 +20,8 @@ var _knockback_velocity: Vector2 = Vector2.ZERO
 var _rift_slow_multiplier: float = 1.0
 var _rift_slow_sources: int = 0
 var _is_elite: bool = false
+var _weakpoint_damage_bonus: float = 0.0
+var _weakpoint_token: int = 0
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -109,6 +111,25 @@ func apply_time_stop(duration: float) -> void:
 	_time_stopped = true
 	await get_tree().create_timer(duration).timeout
 	_time_stopped = false
+
+
+func apply_weakpoint(duration: float, damage_bonus: float) -> void:
+	if duration <= 0.0 or damage_bonus <= 0.0:
+		return
+	_weakpoint_token += 1
+	var token := _weakpoint_token
+	_weakpoint_damage_bonus = maxf(_weakpoint_damage_bonus, damage_bonus)
+	await get_tree().create_timer(duration).timeout
+	if token == _weakpoint_token:
+		_weakpoint_damage_bonus = 0.0
+
+
+func get_weakpoint_damage_bonus(damage_info: RefCounted) -> float:
+	if _weakpoint_damage_bonus <= 0.0:
+		return 0.0
+	if damage_info.tags.has("attack:heavy") or damage_info.tags.has("attack:finisher"):
+		return _weakpoint_damage_bonus
+	return 0.0
 
 
 func apply_time_rift(slow_multiplier: float) -> void:

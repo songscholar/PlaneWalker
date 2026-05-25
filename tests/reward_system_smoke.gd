@@ -6,6 +6,8 @@ const MAIN_SCENE := preload("res://scenes/main.tscn")
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 const CursePoolScript := preload("res://scripts/curses/curse_pool.gd")
+const BlessingPoolScript := preload("res://scripts/rewards/blessing_pool.gd")
+const TalentPoolScript := preload("res://scripts/rewards/talent_pool.gd")
 
 var _failed := false
 var _original_save_path := ""
@@ -62,9 +64,14 @@ func _run() -> void:
 		"effects": {
 			"time_stop_duration_bonus": 0.75,
 			"time_stop_cost_multiplier": 0.9,
+			"time_stop_weakpoint_damage_bonus": 0.35,
+			"time_stop_weakpoint_duration": 3.0,
 			"rewind_heal": 28.0,
+			"rewind_cost_multiplier": 0.9,
 			"combo_finisher_multiplier_bonus": 0.35,
 			"heavy_damage_multiplier_bonus": 0.4,
+			"heavy_execute_multiplier_bonus": 0.5,
+			"heavy_execute_threshold": 0.3,
 			"low_hp_damage_multiplier_bonus": 0.45,
 			"dash_invulnerable_bonus": 0.08,
 			"time_rift_cost_multiplier": 0.85,
@@ -74,6 +81,8 @@ func _run() -> void:
 			"time_accelerate_cost_multiplier": 0.85,
 			"time_accelerate_duration_bonus": 0.8,
 			"time_accelerate_multiplier_bonus": 0.2,
+			"low_energy_regen_multiplier": 2.0,
+			"low_energy_threshold": 30.0,
 			"bow_charge_rate_bonus": 0.25,
 			"bow_full_charge_damage_multiplier_bonus": 0.35,
 			"bow_pierce_bonus": 1,
@@ -81,9 +90,14 @@ func _run() -> void:
 	})
 	_assert_close(time_manager.time_stop_duration_bonus, 0.75, "time stop duration starter")
 	_assert_close(time_manager.time_stop_cost_multiplier, 0.9, "time stop cost starter")
+	_assert_close(time_manager.time_stop_weakpoint_damage_bonus, 0.35, "time stop weakpoint blessing")
+	_assert_close(time_manager.time_stop_weakpoint_duration, 3.0, "time stop weakpoint duration")
 	_assert_close(time_manager.rewind_heal, 28.0, "rewind heal starter")
+	_assert_close(time_manager.rewind_cost_multiplier, 0.9, "rewind cost blessing")
 	_assert_close(sword.combo_finisher_multiplier_bonus, 0.35, "combo finisher starter")
 	_assert_close(sword.heavy_damage_multiplier_bonus, 0.4, "heavy damage starter")
+	_assert_close(sword.heavy_execute_multiplier_bonus, 0.5, "heavy execute talent")
+	_assert_close(sword.heavy_execute_threshold, 0.3, "heavy execute threshold")
 	_assert_close(sword.low_hp_damage_multiplier_bonus, 0.45, "low hp damage starter")
 	_assert_close(player._dash_invulnerable_bonus, 0.08, "dash invulnerability starter")
 	_assert_close(time_manager.time_rift_cost_multiplier, 0.85, "rift cost payoff")
@@ -93,6 +107,8 @@ func _run() -> void:
 	_assert_close(time_manager.time_accelerate_cost_multiplier, 0.85, "accelerate cost payoff")
 	_assert_close(time_manager.time_accelerate_duration_bonus, 0.8, "accelerate duration payoff")
 	_assert_close(time_manager.time_accelerate_multiplier_bonus, 0.2, "accelerate multiplier payoff")
+	_assert_close(time_manager.low_energy_regen_multiplier, 2.0, "low energy regen talent")
+	_assert_close(time_manager.low_energy_threshold, 30.0, "low energy threshold talent")
 	_assert_close(bow.charge_rate_bonus, 0.25, "bow charge rate starter")
 	_assert_close(bow.full_charge_damage_multiplier_bonus, 0.35, "bow full charge damage payoff")
 	_assert_true(bow.pierce_bonus == 1, "bow pierce starter")
@@ -134,6 +150,18 @@ func _run() -> void:
 	_assert_true(_reward_ids(first_curse_roll) == _reward_ids(second_curse_roll), "curse roll is deterministic")
 	_assert_true(CursePoolScript.CURSES.size() >= 6, "curse pool includes first risk set")
 
+	var first_blessing_roll := BlessingPoolScript.roll_options(2, 123, 4, [])
+	var second_blessing_roll := BlessingPoolScript.roll_options(2, 123, 4, [])
+	_assert_true(_reward_ids(first_blessing_roll) == _reward_ids(second_blessing_roll), "blessing roll is deterministic")
+	_assert_true(BlessingPoolScript.BLESSINGS.size() >= 4, "blessing pool includes MVP blessings")
+	_assert_true(_reward_ids(BlessingPoolScript.BLESSINGS).has("bls_stop_weakpoint"), "blessing pool includes stop weakpoint")
+
+	var first_talent_roll := TalentPoolScript.roll_options(3, 123, 3, [])
+	var second_talent_roll := TalentPoolScript.roll_options(3, 123, 3, [])
+	_assert_true(_reward_ids(first_talent_roll) == _reward_ids(second_talent_roll), "talent roll is deterministic")
+	_assert_true(TalentPoolScript.TALENTS.size() >= 3, "talent pool includes MVP talents")
+	_assert_true(_reward_ids(TalentPoolScript.TALENTS).has("tal_ruin_execute"), "talent pool includes ruin execute")
+
 	player.apply_curse({
 		"id": "test_curse",
 		"effects": {
@@ -161,6 +189,7 @@ func _run() -> void:
 
 	player.queue_free()
 	await _run_hit_feedback_check()
+	await _run_blessing_talent_damage_check()
 	await _run_bow_weapon_check()
 	await _run_time_rift_check()
 	await _run_time_accelerate_check()
@@ -200,6 +229,41 @@ func _run_hit_feedback_check() -> void:
 	_assert_true(Engine.time_scale < 1.0, "weapon hit requests hit pause")
 	await get_tree().create_timer(0.08, true, false, true).timeout
 	_assert_close(Engine.time_scale, 1.0, "hit pause restores time scale")
+
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_blessing_talent_damage_check() -> void:
+	GameState.start_run({"seed": 656})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
+
+	var room_player: Node = room.get_node("Player")
+	var sword: Node = room_player.get_node("SwordWeapon")
+	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
+	var enemy_health: Node = enemy.get_node("HealthComponent")
+	enemy_health.max_hp = 100.0
+	enemy_health.current_hp = 100.0
+	enemy_health.defense = 0.0
+
+	enemy.apply_weakpoint(0.2, 0.35)
+	var weakpoint_hit := DamageInfoScript.new(10.0, DamageInfoScript.DamageType.PHYSICAL, sword, room_player)
+	weakpoint_hit.tags = ["weapon:sword", "attack:heavy"]
+	var weakpoint_damage: float = enemy_health.take_damage(weakpoint_hit)
+	_assert_close(weakpoint_damage, 13.5, "time stop weakpoint increases heavy damage")
+	await get_tree().create_timer(0.22).timeout
+
+	sword.heavy_execute_multiplier_bonus = 0.5
+	sword.heavy_execute_threshold = 0.3
+	enemy_health.current_hp = 20.0
+	var execute_hit := DamageInfoScript.new(10.0, DamageInfoScript.DamageType.PHYSICAL, sword, room_player)
+	execute_hit.tags = ["weapon:sword", "attack:heavy", "talent:ruin_execute"]
+	var execute_damage: float = enemy_health.take_damage(execute_hit)
+	_assert_close(execute_damage, 15.0, "ruin talent increases heavy damage against low hp enemies")
 
 	room.queue_free()
 	await get_tree().process_frame
@@ -445,6 +509,8 @@ func _run_persistence_check() -> void:
 		"rooms_cleared": 5,
 		"run_time": 123.0,
 		"rewards": [{"id": "test_reward"}],
+		"blessings": [{"id": "test_blessing"}],
+		"talent_choices": [{"id": "test_talent"}],
 		"curses": [{"id": "test_curse"}],
 	})
 
@@ -458,6 +524,8 @@ func _run_persistence_check() -> void:
 	_assert_true(bool(GameState.get_setting("master_muted", false)), "persistent save restores mute setting")
 	_assert_true(GameState.persistent.get("runs_completed", 0) == 1, "persistent save restores run count")
 	_assert_true(GameState.persistent.get("last_run_summary", {}).get("result", "") == "floor_cleared", "persistent save restores last run result")
+	_assert_true(GameState.persistent.get("last_run_summary", {}).get("blessings", []).size() == 1, "persistent save stores blessings")
+	_assert_true(GameState.persistent.get("last_run_summary", {}).get("talent_choices", []).size() == 1, "persistent save stores talents")
 
 
 func _run_room_progression_check() -> void:
@@ -505,11 +573,12 @@ func _run_room_progression_check() -> void:
 	room._clear_room()
 	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
 	var reward_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
-	_assert_true(reward_title.text.contains("elite reward"), "elite room shows elite reward title")
-	_assert_true(reward_options.get_child_count() == 4, "elite room offers an extra reward option")
+	_assert_true(reward_title.text.contains("talent"), "third room shows talent title")
+	_assert_true(reward_options.get_child_count() == 3, "third room offers three talents")
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	_assert_true(GameState.current_run.get("talents", []).size() == 1, "talent selection is recorded")
 
 	await _wait_for_enemy_count(room, 3)
 	_assert_true(GameState.current_room == 4, "elite reward advances to fourth room")
@@ -518,10 +587,13 @@ func _run_room_progression_check() -> void:
 	room._clear_room()
 	_resolve_curse_offer_if_visible(room, false)
 	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
-	_assert_true(reward_title.text.contains("Room 4"), "fourth room reward title includes room index")
+	var blessing_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
+	_assert_true(reward_title.text.contains("blessing"), "fourth room shows blessing title")
+	_assert_true(blessing_options.get_child_count() == 2, "fourth room offers two blessings")
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	_assert_true(GameState.current_run.get("active_blessings", []).size() == 1, "blessing selection is recorded")
 	await _wait_for_enemy_count(room, 1)
 	_assert_true(GameState.current_room == 5, "fourth reward advances to boss room")
 

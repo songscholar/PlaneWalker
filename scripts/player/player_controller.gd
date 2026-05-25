@@ -138,6 +138,10 @@ func _apply_effects(effects: Dictionary) -> void:
 		time_manager.time_stop_duration_bonus += float(effects["time_stop_duration_bonus"])
 	if effects.has("time_stop_cost_multiplier"):
 		time_manager.time_stop_cost_multiplier *= float(effects["time_stop_cost_multiplier"])
+	if effects.has("time_stop_weakpoint_damage_bonus"):
+		time_manager.time_stop_weakpoint_damage_bonus += float(effects["time_stop_weakpoint_damage_bonus"])
+	if effects.has("time_stop_weakpoint_duration"):
+		time_manager.time_stop_weakpoint_duration = maxf(time_manager.time_stop_weakpoint_duration, float(effects["time_stop_weakpoint_duration"]))
 	if effects.has("time_stop_self_damage"):
 		time_manager.time_stop_self_damage += float(effects["time_stop_self_damage"])
 	if effects.has("rewind_cost_multiplier"):
@@ -160,10 +164,18 @@ func _apply_effects(effects: Dictionary) -> void:
 		time_manager.time_accelerate_duration_bonus += float(effects["time_accelerate_duration_bonus"])
 	if effects.has("time_accelerate_multiplier_bonus"):
 		time_manager.time_accelerate_multiplier_bonus += float(effects["time_accelerate_multiplier_bonus"])
+	if effects.has("low_energy_regen_multiplier"):
+		time_manager.low_energy_regen_multiplier = maxf(time_manager.low_energy_regen_multiplier, float(effects["low_energy_regen_multiplier"]))
+	if effects.has("low_energy_threshold"):
+		time_manager.low_energy_threshold = maxf(time_manager.low_energy_threshold, float(effects["low_energy_threshold"]))
 	if effects.has("combo_finisher_multiplier_bonus"):
 		sword_weapon.combo_finisher_multiplier_bonus += float(effects["combo_finisher_multiplier_bonus"])
 	if effects.has("heavy_damage_multiplier_bonus"):
 		sword_weapon.heavy_damage_multiplier_bonus += float(effects["heavy_damage_multiplier_bonus"])
+	if effects.has("heavy_execute_multiplier_bonus"):
+		sword_weapon.heavy_execute_multiplier_bonus += float(effects["heavy_execute_multiplier_bonus"])
+	if effects.has("heavy_execute_threshold"):
+		sword_weapon.heavy_execute_threshold = float(effects["heavy_execute_threshold"])
 	if effects.has("low_hp_damage_multiplier_bonus"):
 		sword_weapon.low_hp_damage_multiplier_bonus += float(effects["low_hp_damage_multiplier_bonus"])
 	if effects.has("bow_charge_rate_bonus"):

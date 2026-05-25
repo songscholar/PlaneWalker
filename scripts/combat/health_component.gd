@@ -51,7 +51,10 @@ func take_damage(damage_info: RefCounted) -> float:
 		"target": owner_entity,
 	})
 
+	var original_amount: float = damage_info.amount
+	damage_info.amount = _apply_target_damage_modifiers(damage_info)
 	var final_amount: float = DamageCalculatorScript.calculate(damage_info, defense)
+	damage_info.amount = original_amount
 	current_hp = maxf(0.0, current_hp - final_amount)
 	damaged.emit(final_amount, current_hp)
 	if final_amount > 0.0:
@@ -102,6 +105,34 @@ func lose_health(amount: float, source: Variant = null) -> float:
 	if current_hp <= 0.0:
 		_die(source)
 	return final_amount
+
+
+func _apply_target_damage_modifiers(damage_info: RefCounted) -> float:
+	var amount: float = damage_info.amount
+	var owner_entity := get_parent()
+	if owner_entity.has_method("get_weakpoint_damage_bonus"):
+		var weakpoint_bonus: float = owner_entity.get_weakpoint_damage_bonus(damage_info)
+		if weakpoint_bonus > 0.0:
+			amount *= 1.0 + weakpoint_bonus
+	if damage_info.tags.has("talent:ruin_execute") and _hp_ratio() <= _heavy_execute_threshold(damage_info):
+		amount *= 1.0 + _heavy_execute_bonus(damage_info)
+	return amount
+
+
+func _hp_ratio() -> float:
+	return current_hp / maxf(1.0, max_hp)
+
+
+func _heavy_execute_bonus(damage_info: RefCounted) -> float:
+	if damage_info.source != null:
+		return float(damage_info.source.get("heavy_execute_multiplier_bonus"))
+	return 0.0
+
+
+func _heavy_execute_threshold(damage_info: RefCounted) -> float:
+	if damage_info.source != null:
+		return float(damage_info.source.get("heavy_execute_threshold"))
+	return 0.3
 
 
 func apply_invulnerability(duration: float) -> void:
