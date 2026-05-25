@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player_controller"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health_component"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 [ext_resource type="Script" path="res://scripts/time_system/time_manager.gd" id="6_time_manager"]
 [ext_resource type="Script" path="res://scripts/time_system/rewind_recorder.gd" id="7_rewind_recorder"]
+[ext_resource type="Script" path="res://scripts/combat/bow_weapon.gd" id="8_bow_weapon"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 14.0
@@ -54,3 +55,7 @@ script = ExtResource("4_hitbox")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="SwordWeapon/Hitbox"]
 shape = SubResource("RectangleShape2D_sword")
+
+[node name="BowWeapon" type="Node2D" parent="."]
+script = ExtResource("8_bow_weapon")
+owner_path = NodePath("..")

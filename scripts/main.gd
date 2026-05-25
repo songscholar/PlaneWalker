@@ -35,7 +35,7 @@ func _on_run_started(run_data: Dictionary) -> void:
 	text += "Input smoke test:\n"
 	text += "WASD/Arrows move actions registered\n"
 	text += "Mouse Left attack, Mouse Right heavy_attack\n"
-	text += "Space dash, Q time_stop, E time_rewind, R time_rift, C time_accelerate\n"
+	text += "X ranged_attack, Space dash, Q time_stop, E time_rewind, R time_rift, C time_accelerate\n"
 	text += "Room 5 spawns the Chrono Warden boss"
 	status_label.text = text
 	print("Run started: ", run_data)
@@ -58,6 +58,7 @@ func _print_input_map() -> void:
 		"move_right",
 		"attack",
 		"heavy_attack",
+		"ranged_attack",
 		"dash",
 		"time_stop",
 		"time_rewind",

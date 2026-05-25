@@ -7,6 +7,7 @@ const StatsResource := preload("res://scripts/core/stats.gd")
 
 @onready var health: Node = $HealthComponent
 @onready var sword_weapon: Node = $SwordWeapon
+@onready var bow_weapon: Node = $BowWeapon
 @onready var time_manager: Node = $TimeManager
 @onready var rewind_recorder: Node = $RewindRecorder
 @onready var visual: Polygon2D = $Visual
@@ -54,6 +55,7 @@ func _update_weapon_aim() -> void:
 	var aim_direction := global_position.direction_to(get_global_mouse_position())
 	if aim_direction.length_squared() > 0.001:
 		sword_weapon.rotation = aim_direction.angle()
+		bow_weapon.rotation = aim_direction.angle()
 
 
 func _handle_attack_input() -> void:
@@ -61,6 +63,10 @@ func _handle_attack_input() -> void:
 		sword_weapon.try_attack(false)
 	if Input.is_action_just_pressed("heavy_attack"):
 		sword_weapon.try_attack(true)
+	if Input.is_action_just_pressed("ranged_attack"):
+		bow_weapon.start_charge()
+	if Input.is_action_just_released("ranged_attack"):
+		bow_weapon.release_charge(global_position.direction_to(get_global_mouse_position()))
 
 
 func _handle_time_input() -> void:
@@ -214,3 +220,5 @@ func _apply_stats_to_components(reset_health: bool) -> void:
 	time_manager.configure_from_stats(stats)
 	sword_weapon.base_attack = stats.attack
 	sword_weapon.attack_speed = stats.attack_speed * _time_acceleration_multiplier
+	bow_weapon.base_attack = stats.attack
+	bow_weapon.attack_speed = stats.attack_speed * _time_acceleration_multiplier

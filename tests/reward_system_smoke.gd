@@ -22,9 +22,11 @@ func _run() -> void:
 	var health: Node = player.get_node("HealthComponent")
 	var time_manager: Node = player.get_node("TimeManager")
 	var sword: Node = player.get_node("SwordWeapon")
+	var bow: Node = player.get_node("BowWeapon")
 
 	_assert_close(player.stats.attack, 30.0, "base attack")
 	_assert_close(sword.base_attack, 30.0, "base sword attack")
+	_assert_close(bow.base_attack, 30.0, "base bow attack")
 
 	player.apply_reward({
 		"id": "test_power",
@@ -42,7 +44,9 @@ func _run() -> void:
 
 	_assert_close(player.stats.attack, 45.0, "reward attack")
 	_assert_close(sword.base_attack, 45.0, "reward sword attack")
+	_assert_close(bow.base_attack, 45.0, "reward bow attack")
 	_assert_close(sword.attack_speed, 1.2, "reward sword speed")
+	_assert_close(bow.attack_speed, 1.2, "reward bow speed")
 	_assert_close(health.max_hp, 220.0, "reward max hp")
 	_assert_close(health.defense, 2.0, "reward defense")
 	_assert_close(time_manager.max_energy, 125.0, "reward max time energy")
@@ -140,6 +144,7 @@ func _run() -> void:
 
 	player.queue_free()
 	await _run_hit_feedback_check()
+	await _run_bow_weapon_check()
 	await _run_time_rift_check()
 	await _run_time_accelerate_check()
 	await _run_death_check()
@@ -173,6 +178,46 @@ func _run_hit_feedback_check() -> void:
 	_assert_true(Engine.time_scale < 1.0, "weapon hit requests hit pause")
 	await get_tree().create_timer(0.08, true, false, true).timeout
 	_assert_close(Engine.time_scale, 1.0, "hit pause restores time scale")
+
+	room.queue_free()
+	await get_tree().process_frame
+
+
+func _run_bow_weapon_check() -> void:
+	GameState.start_run({"seed": 655})
+	var room := COMBAT_ROOM_SCENE.instantiate()
+	add_child(room)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
+
+	var room_player: Node = room.get_node("Player")
+	var bow: Node = room_player.get_node("BowWeapon")
+	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
+	var enemy_health: Node = enemy.get_node("HealthComponent")
+
+	var short_started: bool = bow.start_charge()
+	bow._charge_time = bow.min_charge_time * 0.5
+	var short_released: bool = bow.release_charge(Vector2.RIGHT)
+	await get_tree().process_frame
+	_assert_true(short_started, "bow starts charging")
+	_assert_true(not short_released, "bow short charge does not fire")
+	_assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "bow short charge spawns no arrow")
+
+	bow._cooldown_remaining = 0.0
+	_assert_true(bow.start_charge(), "bow starts full charge")
+	bow._charge_time = bow.full_charge_time
+	var fired: bool = bow.release_charge(room_player.global_position.direction_to(enemy.global_position))
+	await get_tree().process_frame
+	var arrows := get_tree().get_nodes_in_group("player_arrows")
+	_assert_true(fired, "bow full charge fires")
+	_assert_true(not arrows.is_empty(), "bow full charge spawns arrow")
+	if not arrows.is_empty():
+		_assert_close(arrows[0].pierce, 1.0, "bow full charge gains pierce")
+		_assert_true(arrows[0].damage > bow.base_attack, "bow full charge increases damage")
+
+	await _wait_for_health_below(enemy_health, enemy_health.max_hp)
+	_assert_true(enemy_health.current_hp < enemy_health.max_hp, "bow arrow damages enemy")
 
 	room.queue_free()
 	await get_tree().process_frame
@@ -536,3 +581,13 @@ func _wait_for_enemy_count(room: Node, expected_count: int, timeout: float = 1.2
 		await get_tree().process_frame
 		elapsed += get_process_delta_time()
 	_assert_true(false, "room spawned %d enemies before timeout" % expected_count)
+
+
+func _wait_for_health_below(health: Node, threshold: float, timeout: float = 1.2) -> void:
+	var elapsed := 0.0
+	while elapsed < timeout:
+		if health.current_hp < threshold:
+			return
+		await get_tree().physics_frame
+		elapsed += get_physics_process_delta_time()
+	_assert_true(false, "health dropped below %.1f before timeout" % threshold)
