@@ -25,6 +25,7 @@ var _cleared: bool = false
 func _ready() -> void:
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.reward_selected.connect(_on_reward_selected)
+	EventBus.enemy_spawned.connect(_on_enemy_spawned)
 	if auto_start:
 		call_deferred("begin_run")
 
@@ -77,6 +78,7 @@ func _spawn_enemies() -> void:
 		if _is_elite_room() and index == spawn_count - 1 and enemy.has_method("apply_elite_modifier"):
 			enemy.apply_elite_modifier()
 		_alive_enemies += 1
+		enemy.set_meta("room_counted", true)
 		EventBus.enemy_spawned.emit(enemy)
 		EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy})
 
@@ -96,8 +98,20 @@ func _spawn_boss() -> void:
 	enemies_root.add_child(boss)
 	boss.global_position = boss_spawn_point.global_position
 	_alive_enemies = 1
+	boss.set_meta("room_counted", true)
 	EventBus.enemy_spawned.emit(boss)
 	EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": boss, "boss": true})
+
+
+func _on_enemy_spawned(enemy: Node) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	if enemy.get_parent() != enemies_root:
+		return
+	if bool(enemy.get_meta("room_counted", false)):
+		return
+	enemy.set_meta("room_counted", true)
+	_alive_enemies += 1
 
 
 func _on_entity_died(entity: Node, _killer: Variant) -> void:

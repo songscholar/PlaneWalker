@@ -633,6 +633,7 @@ func _run_room_progression_check() -> void:
 	enemies[0].apply_time_stop(0.1)
 	await get_tree().process_frame
 	_assert_close(enemies[0].health.defense, 0.0, "time stop exposes boss")
+	_assert_true(not enemies[0]._time_stopped, "boss resists full time stop hard control")
 	await get_tree().create_timer(0.12).timeout
 	await get_tree().process_frame
 	_assert_close(enemies[0].health.defense, enemies[0]._base_defense, "boss recovers after time stop exposure")
@@ -643,6 +644,38 @@ func _run_room_progression_check() -> void:
 	enemies[0].clear_time_rift()
 	await get_tree().process_frame
 	_assert_close(enemies[0].health.defense, enemies[0]._base_defense, "boss recovers after rift exposure")
+
+	enemies[0].force_slam_for_test()
+	await get_tree().process_frame
+	_assert_true(enemies[0]._slam_timer > 0.0, "boss slam enters windup")
+	var slam_timer_before_stop: float = enemies[0]._slam_timer
+	enemies[0].apply_time_stop(0.1)
+	await get_tree().process_frame
+	_assert_true(enemies[0]._slam_timer > slam_timer_before_stop, "time stop delays boss slam windup")
+	await get_tree().create_timer(enemies[0]._slam_timer + 0.02).timeout
+	await get_tree().process_frame
+	_assert_true(enemies[0]._slam_recovery_timer > 0.0, "boss slam creates recovery window")
+	_assert_close(enemies[0].health.defense, 0.0, "boss slam recovery exposes boss")
+
+	var alive_before_summon: int = room._alive_enemies
+	enemies[0].force_summon_fragments_for_test()
+	await get_tree().process_frame
+	var summoned_enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
+	_assert_true(summoned_enemies.size() >= 3, "boss summons fragment enemies")
+	_assert_true(room._alive_enemies == alive_before_summon + 2, "room counts boss summoned fragments")
+
+	var crack: Node = enemies[0].force_time_crack_for_test()
+	await get_tree().process_frame
+	_assert_true(crack != null and crack.is_in_group("boss_hazards"), "boss creates time crack hazard")
+	var crack_time_before_stop: float = crack.remaining_time()
+	crack.apply_time_stop(0.08)
+	await get_tree().process_frame
+	_assert_close(crack.remaining_time(), crack_time_before_stop, "time stop freezes time crack countdown")
+
+	for spawned: Node in summoned_enemies:
+		if spawned != enemies[0] and is_instance_valid(spawned):
+			spawned.get_node("HealthComponent").take_damage(DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self))
+	await get_tree().process_frame
 
 	room._clear_room()
 	_resolve_curse_offer_if_visible(room, false)
