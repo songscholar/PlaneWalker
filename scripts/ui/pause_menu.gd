@@ -7,12 +7,16 @@ signal resume_requested()
 @onready var volume_label: Label = $Panel/Margin/VBox/VolumeLabel
 @onready var volume_slider: HSlider = $Panel/Margin/VBox/VolumeSlider
 @onready var mute_toggle: CheckButton = $Panel/Margin/VBox/MuteToggle
+@onready var restart_button: Button = $Panel/Margin/VBox/RestartButton
+@onready var quit_button: Button = $Panel/Margin/VBox/QuitButton
 
 
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	resume_button.pressed.connect(_on_resume_pressed)
+	restart_button.pressed.connect(_on_restart_pressed)
+	quit_button.pressed.connect(_on_quit_pressed)
 	volume_slider.value_changed.connect(_on_volume_changed)
 	mute_toggle.toggled.connect(_on_mute_toggled)
 	_load_settings()
@@ -29,6 +33,15 @@ func hide_pause() -> void:
 
 func _on_resume_pressed() -> void:
 	resume_requested.emit()
+
+
+func _on_restart_pressed() -> void:
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+
+func _on_quit_pressed() -> void:
+	get_tree().quit()
 
 
 func _load_settings() -> void:

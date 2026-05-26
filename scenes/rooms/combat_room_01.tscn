@@ -135,11 +135,18 @@ offset_right = 344.0
 offset_bottom = 150.0
 text = "Build: Unformed"
 
+[node name="BuildSlotsLabel" type="Label" parent="CombatHUD"]
+offset_left = 24.0
+offset_top = 150.0
+offset_right = 420.0
+offset_bottom = 178.0
+text = "Items 0 | Blessings 0 | Curses 0 | Talents 0"
+
 [node name="WeaponPanel" type="PanelContainer" parent="CombatHUD"]
 offset_left = 24.0
-offset_top = 154.0
+offset_top = 184.0
 offset_right = 344.0
-offset_bottom = 224.0
+offset_bottom = 254.0
 
 [node name="VBox" type="VBoxContainer" parent="CombatHUD/WeaponPanel"]
 offset_right = 320.0

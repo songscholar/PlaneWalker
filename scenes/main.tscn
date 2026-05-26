@@ -67,14 +67,14 @@ text = "Quick Start"
 script = ExtResource("3_run_end_overlay")
 
 [node name="Panel" type="PanelContainer" parent="RunEndOverlay"]
-offset_left = 440.0
-offset_top = 210.0
-offset_right = 840.0
-offset_bottom = 430.0
+offset_left = 390.0
+offset_top = 150.0
+offset_right = 890.0
+offset_bottom = 570.0
 
 [node name="Margin" type="MarginContainer" parent="RunEndOverlay/Panel"]
-offset_right = 400.0
-offset_bottom = 220.0
+offset_right = 500.0
+offset_bottom = 420.0
 theme_override_constants/margin_left = 24
 theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 24
@@ -83,8 +83,8 @@ theme_override_constants/margin_bottom = 20
 [node name="VBox" type="VBoxContainer" parent="RunEndOverlay/Panel/Margin"]
 offset_left = 24.0
 offset_top = 20.0
-offset_right = 376.0
-offset_bottom = 200.0
+offset_right = 476.0
+offset_bottom = 400.0
 theme_override_constants/separation = 18
 
 [node name="ResultLabel" type="Label" parent="RunEndOverlay/Panel/Margin/VBox"]
@@ -103,11 +103,11 @@ script = ExtResource("4_pause_menu")
 offset_left = 460.0
 offset_top = 190.0
 offset_right = 820.0
-offset_bottom = 470.0
+offset_bottom = 550.0
 
 [node name="Margin" type="MarginContainer" parent="PauseMenu/Panel"]
 offset_right = 360.0
-offset_bottom = 280.0
+offset_bottom = 360.0
 theme_override_constants/margin_left = 24
 theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 24
@@ -117,7 +117,7 @@ theme_override_constants/margin_bottom = 20
 offset_left = 24.0
 offset_top = 20.0
 offset_right = 336.0
-offset_bottom = 260.0
+offset_bottom = 340.0
 theme_override_constants/separation = 18
 
 [node name="Title" type="Label" parent="PauseMenu/Panel/Margin/VBox"]
@@ -143,3 +143,11 @@ text = "Mute"
 [node name="ResumeButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
 layout_mode = 2
 text = "Resume"
+
+[node name="RestartButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Restart Run"
+
+[node name="QuitButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Quit"

@@ -466,6 +466,8 @@ func _run_death_overlay_check() -> void:
 	var label: Label = main.get_node("RunEndOverlay/Panel/Margin/VBox/ResultLabel")
 	_assert_true(overlay.visible, "death shows run end overlay")
 	_assert_true(label.text.contains("Run Failed"), "death overlay shows failed result")
+	_assert_true(label.text.contains("Time:"), "death overlay shows run time")
+	_assert_true(label.text.contains("Items:"), "death overlay shows item list")
 
 	main.queue_free()
 	await get_tree().process_frame
@@ -483,8 +485,12 @@ func _run_pause_menu_check() -> void:
 	var volume_label: Label = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeLabel")
 	var volume_slider: HSlider = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeSlider")
 	var mute_toggle: CheckButton = main.get_node("PauseMenu/Panel/Margin/VBox/MuteToggle")
+	var restart_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/RestartButton")
+	var quit_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton")
 	_assert_true(start_menu.visible, "pause check starts on start menu")
 	_assert_true(GameState.phase == GameState.GamePhase.HUB, "main scene starts in hub phase")
+	_assert_true(restart_button.text == "Restart Run", "pause menu exposes restart")
+	_assert_true(quit_button.text == "Quit", "pause menu exposes quit")
 	main._pause_run()
 	_assert_true(not get_tree().paused, "hub phase cannot open pause")
 	main._start_new_run()
@@ -768,7 +774,9 @@ func _run_reward_ui_build_check() -> void:
 	reward_selection._select_reward(0)
 	await get_tree().process_frame
 	var build_label: Label = room.get_node("CombatHUD/BuildLabel")
+	var build_slots_label: Label = room.get_node("CombatHUD/BuildSlotsLabel")
 	_assert_true(build_label.text.contains("Accelerated Combo"), "combat hud shows dominant build")
+	_assert_true(build_slots_label.text.contains("Items 1"), "combat hud shows item slot count")
 	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "selected reward records archetype")
 
 	room.queue_free()

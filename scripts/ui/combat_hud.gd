@@ -10,6 +10,7 @@ const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
 @onready var bow_weapon: Node = player.get_node("BowWeapon")
 @onready var label: Label = $StatusLabel
 @onready var build_label: Label = $BuildLabel
+@onready var build_slots_label: Label = $BuildSlotsLabel
 @onready var weapon_label: Label = $WeaponPanel/VBox/WeaponLabel
 @onready var bow_charge_bar: ProgressBar = $WeaponPanel/VBox/BowChargeBar
 @onready var hp_bar: ProgressBar = $PlayerPanel/VBox/HPBar
@@ -79,6 +80,13 @@ func _update_build_label() -> void:
 		build_label.text = "Build: Unformed"
 	else:
 		build_label.text = "Build: %s" % RewardPoolScript.get_archetype_label(archetype)
+	var snapshot := GameState.get_build_state_snapshot()
+	build_slots_label.text = "Items %d | Blessings %d | Curses %d | Talents %d" % [
+		snapshot.get("items", []).size(),
+		snapshot.get("blessings", []).size(),
+		snapshot.get("curses", []).size(),
+		snapshot.get("talents", []).size(),
+	]
 
 
 func _update_boss_status() -> void:
