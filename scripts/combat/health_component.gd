@@ -151,9 +151,9 @@ func _die(killer: Variant) -> void:
 	if dead:
 		return
 	dead = true
-	died.emit(killer)
 	EventBus.entity_died.emit(get_parent(), killer)
 	EventBus.publish(EventBus.ENTITY_DIED, {
 		"entity": get_parent(),
 		"killer": killer,
 	})
+	died.emit(killer)

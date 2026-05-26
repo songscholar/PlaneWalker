@@ -32,6 +32,7 @@ var build_state: RefCounted
 func _ready() -> void:
 	phase = GamePhase.BOOT
 	build_state = RunBuildStateScript.new()
+	EventBus.entity_died.connect(_on_entity_died)
 	load_persistent()
 
 
@@ -59,7 +60,7 @@ func start_run(run_config: Dictionary = {}) -> void:
 		"talents": [],
 		"currencies": {},
 		"events": [],
-		"stats": {},
+		"stats": {"kills": 0},
 		"archetypes": {},
 		"dominant_archetype": "",
 		"curse_offer_pending": false,
@@ -73,19 +74,20 @@ func start_run(run_config: Dictionary = {}) -> void:
 func end_run(result: Dictionary) -> void:
 	if phase == GamePhase.RUN_END or phase == GamePhase.DEATH:
 		return
-	last_run_result = result.duplicate(true)
-	_record_run_summary(result)
+	var enriched_result := _enrich_run_result(result)
+	last_run_result = enriched_result.duplicate(true)
+	_record_run_summary(enriched_result)
 	save_persistent()
 	set_phase(GamePhase.RUN_END)
-	EventBus.run_ended.emit(result)
-	EventBus.publish(EventBus.RUN_ENDED, result)
+	EventBus.run_ended.emit(enriched_result)
+	EventBus.publish(EventBus.RUN_ENDED, enriched_result)
 
 
 func fail_run(killer: Variant = null) -> void:
 	if phase == GamePhase.RUN_END or phase == GamePhase.DEATH:
 		return
 	death_count += 1
-	var result := {
+	var result := _enrich_run_result({
 		"result": "death",
 		"floor": current_floor,
 		"rooms_cleared": max(0, current_room - 1),
@@ -96,7 +98,7 @@ func fail_run(killer: Variant = null) -> void:
 		"blessings": current_run.get("blessings", []),
 		"talent_choices": current_run.get("talent_choices", []),
 		"curses": current_run.get("curses", []),
-	}
+	})
 	last_run_result = result.duplicate(false)
 	_record_run_summary(result)
 	save_persistent()
@@ -202,6 +204,10 @@ func get_build_state_snapshot() -> Dictionary:
 	return build_state.to_dictionary()
 
 
+func get_run_kill_count() -> int:
+	return int(current_run.get("stats", {}).get("kills", 0))
+
+
 func set_setting(setting_id: String, value: Variant) -> void:
 	var settings: Dictionary = persistent.get("settings", {})
 	settings[setting_id] = value
@@ -276,6 +282,25 @@ func _sync_build_state_to_run() -> void:
 	current_run["build_state"] = build_state.to_dictionary()
 
 
+func _on_entity_died(entity: Node, _killer: Variant) -> void:
+	if current_run.is_empty() or entity == null:
+		return
+	if not entity.is_in_group("enemies") and not entity.is_in_group("bosses"):
+		return
+	var stats: Dictionary = current_run.get("stats", {})
+	stats["kills"] = int(stats.get("kills", 0)) + 1
+	current_run["stats"] = stats
+
+
+func _enrich_run_result(result: Dictionary) -> Dictionary:
+	var enriched := result.duplicate(true)
+	enriched["kills"] = int(enriched.get("kills", get_run_kill_count()))
+	var stats: Dictionary = current_run.get("stats", {}).duplicate(true)
+	stats["kills"] = int(enriched["kills"])
+	enriched["stats"] = stats
+	return enriched
+
+
 func _find_dominant_archetype(archetypes: Dictionary) -> String:
 	var best_id := ""
 	var best_count := -1
@@ -303,6 +328,7 @@ func _record_run_summary(result: Dictionary) -> void:
 		"rooms_cleared": rooms_cleared,
 		"current_room": result.get("current_room", current_room),
 		"run_time": result.get("run_time", run_timer),
+		"kills": result.get("kills", 0),
 		"rewards": result.get("rewards", []),
 		"blessings": result.get("blessings", []),
 		"talent_choices": result.get("talent_choices", []),

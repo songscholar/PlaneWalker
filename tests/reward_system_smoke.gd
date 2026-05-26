@@ -9,6 +9,7 @@ const CursePoolScript := preload("res://scripts/curses/curse_pool.gd")
 const BlessingPoolScript := preload("res://scripts/rewards/blessing_pool.gd")
 const TalentPoolScript := preload("res://scripts/rewards/talent_pool.gd")
 const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
+const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 
 var _failed := false
 var _original_save_path := ""
@@ -429,8 +430,13 @@ func _run_death_check() -> void:
 	add_child(room)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	await _wait_for_enemy_count(room, 1)
 
 	var room_player: Node = room.get_node("Player")
+	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
+	enemy.get_node("HealthComponent").take_damage(DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self))
+	await get_tree().process_frame
+	_assert_true(GameState.get_run_kill_count() == 1, "enemy death increments run kill count")
 	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	room_player.get_node("HealthComponent").take_damage(fatal_damage)
 	await get_tree().process_frame
@@ -439,6 +445,7 @@ func _run_death_check() -> void:
 	_assert_true(GameState.last_run_result.get("result", "") == "death", "death records run result")
 	_assert_true(GameState.last_run_result.get("rooms_cleared", -1) == 0, "death records cleared rooms")
 	_assert_true(GameState.last_run_result.get("current_room", -1) == 1, "death records current room")
+	_assert_true(GameState.last_run_result.get("kills", -1) == 1, "death records kill count")
 	_assert_true(GameState.death_count == deaths_before + 1, "death count increments")
 	_assert_true(room.get_node("RewardMarker").visible == false, "death hides reward marker")
 
@@ -467,6 +474,7 @@ func _run_death_overlay_check() -> void:
 	_assert_true(overlay.visible, "death shows run end overlay")
 	_assert_true(label.text.contains("Run Failed"), "death overlay shows failed result")
 	_assert_true(label.text.contains("Time:"), "death overlay shows run time")
+	_assert_true(label.text.contains("Kills:"), "death overlay shows kill count")
 	_assert_true(label.text.contains("Items:"), "death overlay shows item list")
 
 	main.queue_free()
@@ -533,6 +541,7 @@ func _run_persistence_check() -> void:
 		"floor": 1,
 		"rooms_cleared": 5,
 		"run_time": 123.0,
+		"kills": 7,
 		"rewards": [{"id": "test_reward"}],
 		"blessings": [{"id": "test_blessing"}],
 		"talent_choices": [{"id": "test_talent"}],
@@ -542,6 +551,7 @@ func _run_persistence_check() -> void:
 	_assert_true(GameState.persistent.get("runs_completed", 0) == 1, "run persistence increments completion count")
 	_assert_true(GameState.persistent.get("victories", 0) == 1, "run persistence increments victory count")
 	_assert_true(GameState.persistent.get("best_rooms_cleared", 0) == 5, "run persistence stores best room count")
+	_assert_true(GameState.persistent.get("last_run_summary", {}).get("kills", 0) == 7, "run persistence stores kill count")
 
 	GameState.persistent = {}
 	_assert_true(GameState.load_persistent(), "persistent save can be loaded")
@@ -554,6 +564,15 @@ func _run_persistence_check() -> void:
 
 
 func _run_room_progression_check() -> void:
+	var director := RunDirectorScript.new()
+	director.configure_fixed_sequence(5, [2], [3], [4])
+	_assert_true(director.room_type_for(1) == "combat", "run director starts with combat room")
+	_assert_true(director.room_type_for(2) == "event", "run director marks event room")
+	_assert_true(director.room_type_for(3) == "elite", "run director marks elite room")
+	_assert_true(director.room_type_for(5) == "boss", "run director marks boss room")
+	_assert_true(director.should_offer_curse(4), "run director marks curse offer room")
+	director.free()
+
 	GameState.start_run({"seed": 456})
 	var room := COMBAT_ROOM_SCENE.instantiate()
 	add_child(room)

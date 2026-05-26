@@ -1,11 +1,14 @@
 class_name RoomController
 extends Node2D
 
+const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
+
 @export var room_id: StringName = &"combat_room_01"
 @export var enemy_scenes: Array[PackedScene] = []
 @export var boss_scene: PackedScene
 @export var spawn_warning_scene: PackedScene
 @export var reward_marker_path: NodePath
+@export var run_director_path: NodePath
 @export var rooms_per_floor: int = 5
 @export var spawn_warning_duration: float = 0.45
 @export var curse_offer_rooms: Array[int] = [4]
@@ -20,9 +23,15 @@ extends Node2D
 
 var _alive_enemies: int = 0
 var _cleared: bool = false
+var _run_director: RunDirector
 
 
 func _ready() -> void:
+	_run_director = get_node_or_null(run_director_path) as RunDirector
+	if _run_director == null:
+		_run_director = RunDirectorScript.new()
+		add_child(_run_director)
+	_run_director.configure_fixed_sequence(rooms_per_floor, event_rooms, elite_rooms, curse_offer_rooms)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.reward_selected.connect(_on_reward_selected)
 	EventBus.enemy_spawned.connect(_on_enemy_spawned)
@@ -64,7 +73,7 @@ func _spawn_enemies() -> void:
 		return
 
 	var points := spawn_points.get_children()
-	var spawn_count := mini(mini(points.size(), enemy_scenes.size()), maxi(1, GameState.current_room))
+	var spawn_count := _run_director.spawn_count_for(GameState.current_room, points.size(), enemy_scenes.size())
 	for index: int in range(spawn_count):
 		_show_spawn_warning(points[index].global_position, 24.0)
 	await get_tree().create_timer(spawn_warning_duration).timeout
@@ -167,29 +176,23 @@ func _active_room_id() -> StringName:
 
 
 func _is_boss_room() -> bool:
-	return GameState.current_room >= rooms_per_floor
+	return _current_room_type() == &"boss"
 
 
 func _is_elite_room() -> bool:
-	return GameState.current_room < rooms_per_floor and elite_rooms.has(GameState.current_room)
+	return _current_room_type() == &"elite"
 
 
 func _is_event_room() -> bool:
-	return GameState.current_room < rooms_per_floor and event_rooms.has(GameState.current_room)
+	return _current_room_type() == &"event"
 
 
 func _current_room_type() -> StringName:
-	if _is_boss_room():
-		return &"boss"
-	if _is_event_room():
-		return &"event"
-	if _is_elite_room():
-		return &"elite"
-	return &"combat"
+	return StringName(_run_director.room_type_for(GameState.current_room))
 
 
 func _should_offer_curse() -> bool:
-	return GameState.current_room < rooms_per_floor and curse_offer_rooms.has(GameState.current_room)
+	return _run_director.should_offer_curse(GameState.current_room)
 
 
 func _on_player_died(killer: Variant) -> void:

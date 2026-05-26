@@ -16,10 +16,11 @@ func _ready() -> void:
 func _on_run_ended(result: Dictionary) -> void:
 	var outcome := str(result.get("result", ""))
 	var title := "Run Complete" if outcome == "floor_cleared" else "Run Failed"
-	result_label.text = "%s\nRoom reached: %s\nRooms cleared: %s\nTime: %s\nItems: %s\nBlessings: %s\nTalents: %s\nCurses: %s" % [
+	result_label.text = "%s\nRoom reached: %s\nRooms cleared: %s\nKills: %s\nTime: %s\nItems: %s\nBlessings: %s\nTalents: %s\nCurses: %s" % [
 		title,
 		result.get("current_room", result.get("rooms_cleared", 0)),
 		result.get("rooms_cleared", 0),
+		result.get("kills", 0),
 		_format_time(float(result.get("run_time", 0.0))),
 		_names_for(result.get("rewards", [])),
 		_names_for(result.get("blessings", [])),
