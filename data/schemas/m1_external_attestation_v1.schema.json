@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/m1-external-attestation/1.0.0",
+  "title": "Plane Walker M1 External Evidence Attestation",
+  "description": "Independent approval manifest for an exact anonymous M1 human cohort. This file is separate from self-declared session evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attestation_id",
+    "cohort",
+    "attestor",
+    "approval",
+    "session_ids"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "attestation_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_][a-z0-9_.-]*$"
+    },
+    "cohort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["build_version", "commit", "content_version"],
+      "properties": {
+        "build_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "content_version": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    },
+    "attestor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "independent_from_development"],
+      "properties": {
+        "role": {"const": "external_playtest_coordinator"},
+        "independent_from_development": {"const": true}
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "statement", "approved_at_utc"],
+      "properties": {
+        "status": {"const": "approved"},
+        "statement": {"const": "authentic_human_evidence_verified"},
+        "approved_at_utc": {"type": "string", "format": "date-time"}
+      }
+    },
+    "session_ids": {
+      "type": "array",
+      "minItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^pws_[0-9a-f]{32}$"
+      }
+    }
+  }
+}

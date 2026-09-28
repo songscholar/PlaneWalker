@@ -5,6 +5,7 @@
 - Evidence Minimum: 20 valid human sessions from one exact build/content cohort
 - Privacy: anonymous identifiers only; no names, email, platform ID, IP, device name, notes, recordings, or free text in release evidence
 - Synthetic Policy: synthetic and automated evidence is always excluded from the human gate
+- Attestation Policy: session/observation 自声明不能单独形成 Go；必须由独立外部试玩协调员提交 exact-cohort approval manifest
 
 ## 1. 目的与不可替代边界
 
@@ -24,6 +25,8 @@
 
 Seed Matrix、20 局会话和观察表必须完全匹配同一 cohort。修复 P0/P1 或任何会改变玩法、内容、输入、UI 理解的改动后，必须重新构建并开启新 cohort；不得把旧 cohort 的真人局拼进新版本。
 
+正式 Seed Matrix 还必须记录并校验：`evidence_origin=godot_authoritative_probe`、探针版本、Godot 版本、干净工作树、HEAD commit、Git tree digest、探针 SHA-256、Encounter Catalog SHA-256 与 catalog `plan_id`。`cohort.commit` 必须等于运行时 HEAD，`cohort.content_version` 必须等于 catalog `plan_id`。`--raw-results` 永远标为 `non_release_synthetic`；脏工作树上的真实 Godot 探针若显式使用 `--allow-dirty-candidate`，也只能生成 `non_release_candidate`。
+
 ## 3. 每局执行流程
 
 1. 观察员创建随机匿名 `session_id`，格式为 `pws_` 加 32 位小写十六进制；不要从姓名、邮箱或平台 ID 派生。
@@ -31,6 +34,7 @@ Seed Matrix、20 局会话和观察表必须完全匹配同一 cohort。修复 P
 3. 完整记录会话事件：Seed、输入设备、开始/结束时间、房间进入/完成、伤害、失败代码、构筑选择和终局。
 4. 局后立即完成结构化观察，不加入自由文本。问题通过稳定 `issue.code`、严重度、系统和房间索引记录。
 5. 同一 `session_id` 必须同时出现在 session JSONL 与 observation JSONL 中。
+6. 每次构筑选择后必须记录递增 revision 与规范化 build snapshot；正式 30 Seed 矩阵每局必须恰好包含五房、五个非空 encounter、每房至少一个非空 spawn wave、四次非空 offer、四次 choice、四个 post-choice snapshot、正 duration、空 failure code 与 victory。
 
 ## 4. 结构化观察定义
 
@@ -74,6 +78,10 @@ python3 tools/playtest/evidence_gate.py \
 
 任一校验错误都必须修复来源记录；不得删除失败行后假装 cohort 完整。不得提交匿名化 salt、原始身份映射、录屏路径或私人招募信息。
 
+导入统计必须分别报告 invalid records 与 violations。一个 JSONL 行即使同时违反多个字段，也只计一个 invalid record；每条字段错误仍单独计入 violations，方便修复但不得虚增损坏记录数。
+
+独立外部试玩协调员复核 exact cohort 后，复制 `docs/current/templates/m1_external_attestation.template.json` 创建仓库外 manifest。其 `session_ids` 必须与最终 joined human cohort 精确一致且至少 20 个；attestor 必须确认 `independent_from_development=true`。未提供、未批准、cohort 不匹配或 ID 覆盖不完整时，最高状态只能是 Candidate。
+
 ## 6. 30 Seed 与正式报告命令
 
 ```bash
@@ -90,27 +98,33 @@ python3 tools/m1/generate_release_report.py \
   --seed-report /tmp/planewalker-m1-seeds.json \
   --sessions /tmp/planewalker-m1-human/sessions.jsonl \
   --observations /tmp/planewalker-m1-human/observations.jsonl \
+  --attestation /tmp/planewalker-m1-human/external-attestation.json \
   --output docs/current/2026-09-28-m1-release-report.md \
   --json-output /tmp/planewalker-m1-decision.json \
-  --tuning-output /tmp/planewalker-m1-tuning-input.json
+  --tuning-output /tmp/planewalker-m1-tuning-input.json \
+  --require-go
 ```
 
-如果真人数据尚未提供，省略 `--sessions` 与 `--observations`；生成器必须输出 `M1 Candidate — External Validation Pending`，不能手改成 Go。
+如果真人数据尚未提供，省略 `--sessions`、`--observations` 与 `--attestation`；生成器必须输出 `M1 Candidate — External Validation Pending`，不能手改成 Go。CI/放行流程必须使用 `--require-go`，非 Go 时退出码为 2；诊断性报告可以省略该开关，但 JSON 摘要仍明确输出 `release_ready=false`。
 
 ## 7. M1 自动决策规则
 
 `M1 Go` 需要同时满足：
 
 - 0–29 共 30 个 Seed 全部到达 victory；无失败代码、脚本错误、泄漏或 digest 漂移。
+- Seed Matrix 来自干净 HEAD 的 `godot_authoritative_probe`，所有执行指纹与当前 cohort/catalog 一致；任何未列入 allowlist 的 `ERROR:` 都阻断。唯一环境 allowlist 是带预期 macOS `get_system_ca_certificates` 调用点的 CA sandbox 签名。
 - 至少 20 个唯一、有效、真实 human session 匹配 cohort。
 - 至少 20 个有效 human observation 与这些 session 一一匹配。
+- 独立外部试玩协调员的 approval manifest 精确覆盖上述 joined session IDs。
+- 全体 human completion rate 至少 80%，即 20 局中至少 16 局 completed；因此少数成功局不能掩盖大量 death。
 - 成功局 8–12 分钟占比至少 80%。
 - Time Stop 使用率和 Time Rewind 使用率分别至少 80%。
 - 构筑可描述率、至少两项 Boss 时间交互识别率、4/5 以上响应性占比分别至少 80%。
 - 无法解释的关键受伤/死亡低于 10%。
 - 主动重开或明确愿意再玩的比例至少 60%。
+- 任意 `p0`、`p1` 或 `blocks_release=true` issue 都立即强制 `M1 No-Go`。
 
-仓库 Gate 或完整真人 cohort 的阈值失败为 `M1 No-Go`。真人 session/observation 数量不足且仓库 Gate 通过时为 `M1 Candidate — External Validation Pending`。
+Seed 结构/运行失败、证据完整性失败、阻断 Issue 或完整真人 cohort 的玩法阈值失败为 `M1 No-Go`。正式 provenance、真人 session/observation 或独立证明不足时为 `M1 Candidate — External Validation Pending`；raw/dirty evidence 永远不能把正式仓库 Gate 标为 PASS。
 
 ## 8. 调参审计
 

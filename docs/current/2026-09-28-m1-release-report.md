@@ -1,17 +1,20 @@
 # Plane Walker M1 放行报告
 
 - Status: M1 Candidate — External Validation Pending
-- Evidence Schema: M1 seed matrix `1.0.0` / playtest session `1.0.0` / observation `1.0.0`
+- Evidence Schema: M1 seed matrix `2.0.0` / playtest session `1.0.0` / observation `1.0.0` / external attestation `1.0.0`
 - Build Version: `0.4.0-dev`
 - Commit: `52953720365a16fc8a6f0208d12ffad0fce27b0e`
 - Content Version: `m1.encounters.v1`
-- Evidence Classification: Current integrated-worktree candidate; clean final cohort regeneration required
+- Evidence Classification: `non_release_candidate`; clean final cohort regeneration required
+- Evidence Origin: `godot_authoritative_probe`
+- Probe Version: legacy pre-`2.0.0` candidate (must regenerate)
+- Formal Repository Gate: **NOT EVALUATED / NON-RELEASE**
 
 ## 正式结论
 
 **M1 Candidate — External Validation Pending**
 
-30 Seed 当前集成工作树门禁：**PASS**；真实外部试玩：**0 / 20**；匹配结构化观察：**0 / 20**。
+30 Seed 当前集成工作树诊断：**30 / 30 victory，但不构成正式 PASS**；真实外部试玩：**0 / 20**；匹配结构化观察：**0 / 20**；独立外部证明：**未提供**。
 
 Synthetic 数据只用于验证工具、稳定性和确定性，永久不计入真实玩家门禁。当前证据不足时，不得据此声称手感、公平性或重玩意愿已验证。
 
@@ -22,7 +25,8 @@ Synthetic 数据只用于验证工具、稳定性和确定性，永久不计入�
 - Matrix digest: `44cd5152b48085105e90c383792e15cd5d69e592202aa81bddfb1705017541c8`
 - Seed records: 30
 - Failed seeds: 0
-- Gate: PASS
+- Diagnostic result: PASS
+- Formal Gate: NON-RELEASE（脏工作树、旧 evidence schema、无完整执行指纹）
 
 执行命令：
 
@@ -46,14 +50,15 @@ python3 tools/m1/compare_seed_reports.py \
 
 | 指标 | 实测 | 门槛 | 结果 |
 |---|---:|---:|---|
-| `successful_run_duration_8_12_rate` | 0.0% | >= 80.0% | PENDING/FAIL |
-| `time_stop_usage_rate` | 0.0% | >= 80.0% | PENDING/FAIL |
-| `time_rewind_usage_rate` | 0.0% | >= 80.0% | PENDING/FAIL |
-| `build_comprehension_rate` | 0.0% | >= 80.0% | PENDING/FAIL |
-| `boss_time_interactions_rate` | 0.0% | >= 80.0% | PENDING/FAIL |
-| `unexplained_harm_rate` | 0.0% | < 10.0% | PENDING/FAIL |
-| `responsiveness_4plus_rate` | 0.0% | >= 80.0% | PENDING/FAIL |
-| `replay_intent_rate` | 0.0% | >= 60.0% | PENDING/FAIL |
+| `human_completion_rate` | 0.0% | >= 80.0% | PENDING |
+| `successful_run_duration_8_12_rate` | 0.0% | >= 80.0% | PENDING |
+| `time_stop_usage_rate` | 0.0% | >= 80.0% | PENDING |
+| `time_rewind_usage_rate` | 0.0% | >= 80.0% | PENDING |
+| `build_comprehension_rate` | 0.0% | >= 80.0% | PENDING |
+| `boss_time_interactions_rate` | 0.0% | >= 80.0% | PENDING |
+| `unexplained_harm_rate` | 0.0% | < 10.0% | PENDING |
+| `responsiveness_4plus_rate` | 0.0% | >= 80.0% | PENDING |
+| `replay_intent_rate` | 0.0% | >= 60.0% | PENDING |
 
 ## 调参输入契约
 
@@ -76,13 +81,14 @@ python3 tools/m1/compare_seed_reports.py \
 
 - requires 20 valid authentic human sessions; found 0
 - requires 20 matching structured observations; found 0
+- independent external attestation manifest is required for M1 Go
 
 因此当前没有依据执行体验型数值调优，也不能从 Bow、Time Rift 或 Time Accelerate 中提升新的 Current。只有真实 cohort 导入并达到全部阈值后，才能生成 `M1 Go` 和数据驱动的 post-M1 ADR。
 
 ## 验证记录
 
 ```text
-PASS  python3 -m unittest tests.contract.m1.test_m1_gate          (11 tests)
+PASS  python3 -m unittest tests.contract.m1.test_m1_gate          (20 tests)
 PASS  python3 -m unittest tests.contract.playtest.test_playtest_data (13 tests)
 PASS  python3 -m py_compile tools/m1/*.py
 PASS  30 Seed first run:  30 victory / 0 failure
@@ -106,7 +112,7 @@ python3 tools/m1/generate_release_report.py \
 - 报告由机器可读 Seed Matrix、已校验会话 JSONL 和已校验观察 JSONL 生成。
 - 自由文本、未校验表格和 synthetic fixture 不进入放行计算。
 - 数值改动必须引用本报告调参输入中的指标或失败签名，并记录旧值、新值、预期影响和回归测试。
-- 在真实 20 局同 cohort 证据完整前，状态保持 `M1 Candidate — External Validation Pending`；这不妨碍继续完成已授权的仓库内工作。
+- 状态保持 `M1 Candidate — External Validation Pending`，直到正式干净 Seed Matrix、真实 20 局和独立外部证明全部齐备；Candidate 不等于放行。
 - Wave 4D 工具链回滚点：`5295372` 的父提交；只回滚该精确 commit，不回滚 Wave 4B/4C 的独立提交。
 - Wave 4C 音频生命周期修复是 30 Seed 清洁退出的依赖，由 Wave 4C lane 独立提交；最终集成报告必须记录其确切 commit。
 - 最终干净 cohort 生成后，本报告中的候选 commit 与 matrix digest 需要整体替换，不得把候选 digest 当成外部试玩构建指纹。

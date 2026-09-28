@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "attestation_id": "m1_external_replace_with_cohort_sequence",
+  "cohort": {
+    "build_version": "REPLACE",
+    "commit": "REPLACE_WITH_EXACT_HEAD_COMMIT",
+    "content_version": "REPLACE_WITH_CATALOG_PLAN_ID"
+  },
+  "attestor": {
+    "role": "external_playtest_coordinator",
+    "independent_from_development": true
+  },
+  "approval": {
+    "status": "approved",
+    "statement": "authentic_human_evidence_verified",
+    "approved_at_utc": "REPLACE_WITH_UTC_TIMESTAMP"
+  },
+  "session_ids": [
+    "pws_REPLACE_WITH_EACH_APPROVED_ANONYMOUS_SESSION_ID"
+  ]
+}

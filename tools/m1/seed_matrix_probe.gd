@@ -5,6 +5,7 @@ const MainScene := preload("res://scenes/main.tscn")
 
 const CHOICE_DURATION_PROXY_MS := 8000
 const MAX_WAIT_FRAMES := 180
+const PROBE_VERSION := "2.0.0"
 
 var _original_save_path: String
 var _original_persistent: Dictionary
@@ -37,7 +38,7 @@ func _run() -> void:
 		push_error("M1 seed probe could not open output path: %s" % output_path)
 		get_tree().quit(3)
 		return
-	file.store_string(JSON.stringify({"runs": runs}, "  ", false) + "\n")
+	file.store_string(JSON.stringify({"probe_version": PROBE_VERSION, "runs": runs}, "  ", false) + "\n")
 	file.close()
 	get_tree().quit(0)
 
@@ -52,6 +53,7 @@ func _run_seed(seed_value: int) -> Dictionary:
 		"spawn_sequences": [],
 		"reward_offers": [],
 		"selected_choices": [],
+		"choice_snapshots": [],
 		"failure_codes": [],
 		"duration_proxy_ms": 0,
 	}
@@ -123,6 +125,12 @@ func _run_seed(seed_value: int) -> Dictionary:
 		buttons[0].pressed.emit()
 		result["duration_proxy_ms"] += CHOICE_DURATION_PROXY_MS
 		await get_tree().process_frame
+		var post_choice_snapshot: Dictionary = facade.call("snapshot")
+		result["choice_snapshots"].append({
+			"choice_id": option_ids[0],
+			"revision": int(post_choice_snapshot.get("revision", -1)),
+			"build": (post_choice_snapshot.get("build", {}) as Dictionary).duplicate(true),
+		})
 
 	if result["failure_codes"].is_empty():
 		if not await _wait_for_phase(facade, RunPhaseScript.Value.BOSS_ACTIVE):

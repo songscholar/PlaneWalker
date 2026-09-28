@@ -13,6 +13,7 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS_ROOT / "playtest"))
 
 from m1_gate import (  # noqa: E402
+    M1_GO,
     evaluate_m1,
     load_observations_jsonl,
     render_release_report,
@@ -25,20 +26,28 @@ def main() -> int:
     parser.add_argument("--seed-report", required=True)
     parser.add_argument("--sessions", help="validated playtest session JSONL; omit while external evidence is pending")
     parser.add_argument("--observations", help="structured M1 observation JSONL joined by anonymous session_id")
+    parser.add_argument("--attestation", help="independent external approval manifest for the joined human cohort")
     parser.add_argument("--output", required=True, help="Markdown decision report")
     parser.add_argument("--json-output", help="machine-readable decision output")
     parser.add_argument("--tuning-output", help="machine-readable tuning input contract")
+    parser.add_argument(
+        "--require-go",
+        action="store_true",
+        help="exit non-zero unless the generated decision is exactly M1 Go",
+    )
     args = parser.parse_args()
 
     seed_report = _load_json(Path(args.seed_report))
     sessions = load_jsonl(args.sessions) if args.sessions else ImportResult([], [])
     observations = load_observations_jsonl(args.observations) if args.observations else None
+    attestation = _load_json(Path(args.attestation)) if args.attestation else None
     decision = evaluate_m1(
         seed_report,
         sessions.sessions,
         session_violations=sessions.violations,
         observations=observations.observations if observations else [],
         observation_violations=observations.violations if observations else [],
+        attestation=attestation,
     )
     _write_text_atomic(Path(args.output), render_release_report(decision))
     if args.json_output:
@@ -52,13 +61,15 @@ def main() -> int:
                 "seed_gate": decision.repository_gate["passed"],
                 "human_sessions": decision.external_gate["human_sessions"],
                 "joined_observations": decision.external_gate["joined_observations"],
+                "attestation_approved": decision.external_gate["attestation"]["approved"],
+                "release_ready": decision.state == M1_GO,
                 "output": args.output,
             },
             ensure_ascii=False,
             sort_keys=True,
         )
     )
-    return 0
+    return 0 if not args.require_go or decision.state == M1_GO else 2
 
 
 def _load_json(path: Path) -> dict:
