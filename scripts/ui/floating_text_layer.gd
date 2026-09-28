@@ -43,11 +43,12 @@ func _on_hit_confirmed(damage_info: Variant, target: Node, final_amount: float) 
 	if not target is Node2D:
 		return
 	var target_2d := target as Node2D
+	var screen_position := target_2d.get_viewport().get_canvas_transform() * target_2d.global_position
 	var label := Label.new()
 	label.text = _format_damage(final_amount, damage_info)
 	label.position = Vector2(
-		roundf(target_2d.global_position.x - 18.0),
-		roundf(target_2d.global_position.y - 42.0)
+		roundf(screen_position.x - 18.0),
+		roundf(screen_position.y - 42.0)
 	)
 	label.modulate = _damage_color(damage_info)
 	label.add_theme_color_override("font_outline_color", Color(0.015, 0.02, 0.035, 0.95))
@@ -103,6 +104,7 @@ func get_active_text_snapshots_for_test() -> Array[Dictionary]:
 		result.append({
 			"text": label.text,
 			"position": label.position,
+			"start": entry.get("start", label.position),
 			"pixel_snapped": is_equal_approx(label.position.x, roundf(label.position.x))
 				and is_equal_approx(label.position.y, roundf(label.position.y)),
 			"font_size": label.get_theme_font_size("font_size"),

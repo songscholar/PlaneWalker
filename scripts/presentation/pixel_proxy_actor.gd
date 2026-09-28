@@ -5,6 +5,7 @@ signal cue_requested(cue_id: StringName, world_position: Vector2, intensity: flo
 
 const AfterimageScript := preload("res://scripts/presentation/pixel_proxy_afterimage.gd")
 const PIXEL_UNIT := 2
+const SCREEN_PIXEL_UNIT := 2.0
 
 const PALETTES := {
 	"player": {
@@ -86,6 +87,21 @@ var _bound: bool = false
 var _last_boss_action: String = "NONE"
 var _last_boss_phase: String = "IDLE"
 var _afterimage_count: int = 0
+var _facing := Vector2.RIGHT
+var _attack_direction := Vector2.RIGHT
+var _screen_action_offset := Vector2.ZERO
+var _action_scale := Vector2.ONE
+var _hit_flash_enabled: bool = true
+var _reduced_motion: bool = false
+var _boss_phase: int = 1
+var _boss_exposed: bool = false
+var _boss_time_stopped: bool = false
+var _boss_core_shape: String = "sealed"
+var _boss_texture_pattern: String = "flowing_ticks"
+var _boss_luminance: float = 1.0
+var _has_committed_facing_property: bool = false
+var _has_velocity_property: bool = false
+var _has_exposure_sources_property: bool = false
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -103,6 +119,9 @@ func bind_actor(actor: Node2D) -> bool:
 	_role = _resolve_role(actor)
 	_palette = (PALETTES.get(_role, PALETTES["generic"]) as Dictionary).duplicate(true)
 	_footprint = FOOTPRINTS.get(_role, FOOTPRINTS["generic"])
+	_has_committed_facing_property = _has_property(actor, &"_committed_attack_direction")
+	_has_velocity_property = _has_property(actor, &"velocity")
+	_has_exposure_sources_property = _has_property(actor, &"_exposure_sources")
 	_source_visual.visible = false
 	z_index = 4
 	_bound = true
@@ -117,6 +136,9 @@ func bind_actor(actor: Node2D) -> bool:
 			health.died.connect(_on_died)
 	if actor.has_signal("attack_phase_changed") and not actor.attack_phase_changed.is_connected(_on_attack_phase_changed):
 		actor.attack_phase_changed.connect(_on_attack_phase_changed)
+	_update_presentation_facing()
+	_update_boss_presentation_state()
+	_apply_pixel_transform()
 	queue_redraw()
 	return true
 
@@ -133,13 +155,13 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 	elif _state != &"death":
 		_state = normalized
 		_action_remaining = float(ACTION_DURATIONS.get(normalized, 0.2)) if duration <= 0.0 else duration
-	if normalized == &"hit":
+	if normalized == &"hit" and _hit_flash_enabled:
 		_flash_remaining = maxf(_flash_remaining, 0.10)
 	queue_redraw()
 
 
 func spawn_afterimage(world_position: Vector2, lifetime: float = 0.22) -> Node2D:
-	if _actor == null or not is_instance_valid(_actor) or _actor.get_parent() == null:
+	if _reduced_motion or _actor == null or not is_instance_valid(_actor) or _actor.get_parent() == null:
 		return null
 	var afterimage := AfterimageScript.new()
 	_actor.get_parent().add_child(afterimage)
@@ -160,17 +182,40 @@ func advance_animation_for_test(delta: float) -> void:
 	_advance_animation(maxf(0.0, delta))
 
 
+func set_feedback_options(hit_flash_enabled: bool, reduced_motion: bool) -> void:
+	_hit_flash_enabled = hit_flash_enabled
+	_reduced_motion = reduced_motion
+	if not _hit_flash_enabled:
+		_flash_remaining = 0.0
+	queue_redraw()
+
+
 func get_snapshot_for_test() -> Dictionary:
+	var canvas_scale := _canvas_scale()
+	var world_pixel_unit := SCREEN_PIXEL_UNIT / canvas_scale.x
 	return {
 		"role": _role,
 		"palette_id": str(_palette.get("id", "")),
 		"pixel_unit": PIXEL_UNIT,
+		"screen_pixel_unit": SCREEN_PIXEL_UNIT,
+		"world_pixel_unit": world_pixel_unit,
 		"texture_filter": texture_filter,
 		"footprint": _footprint,
 		"state": str(_state),
 		"position": position,
-		"pixel_snapped": is_equal_approx(fmod(absf(position.x), PIXEL_UNIT), 0.0)
-			and is_equal_approx(fmod(absf(position.y), PIXEL_UNIT), 0.0),
+		"pixel_snapped": is_equal_approx(fmod(absf(position.x), SCREEN_PIXEL_UNIT / canvas_scale.x), 0.0)
+			and is_equal_approx(fmod(absf(position.y), SCREEN_PIXEL_UNIT / canvas_scale.y), 0.0),
+		"screen_footprint": Vector2(_footprint) * scale * canvas_scale,
+		"facing": _facing,
+		"attack_direction": _attack_direction,
+		"screen_action_offset": _screen_action_offset,
+		"action_scale": _action_scale,
+		"flash_active": _flash_remaining > 0.0,
+		"reduced_motion": _reduced_motion,
+		"boss_phase_marks": _boss_phase,
+		"boss_core_shape": _boss_core_shape,
+		"boss_texture_pattern": _boss_texture_pattern,
+		"boss_luminance": _boss_luminance,
 		"afterimage_count": _afterimage_count,
 	}
 
@@ -182,12 +227,14 @@ func _process(delta: float) -> void:
 
 
 func _advance_animation(delta: float) -> void:
-	_phase_clock += delta
+	if not _reduced_motion:
+		_phase_clock += delta
 	_flash_remaining = maxf(0.0, _flash_remaining - delta)
 	if _action_remaining > 0.0:
 		_action_remaining = maxf(0.0, _action_remaining - delta)
 	elif _state != &"death":
 		_derive_state_from_actor()
+	_update_presentation_facing()
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
 	queue_redraw()
@@ -220,12 +267,60 @@ func _derive_state_from_actor() -> void:
 		_state = &"idle"
 
 
+func _update_presentation_facing() -> void:
+	if _actor == null or not is_instance_valid(_actor):
+		return
+	var direction := _facing
+	if _role == "player":
+		if _state == &"attack":
+			var weapon := _actor.get_node_or_null("SwordWeapon") as Node2D
+			if weapon != null:
+				direction = Vector2.RIGHT.rotated(weapon.rotation)
+		elif _actor.has_method("get_rewind_facing"):
+			direction = _actor.get_rewind_facing()
+	elif _has_committed_facing_property:
+		var committed: Variant = _actor.get("_committed_attack_direction")
+		if committed is Vector2:
+			direction = committed
+	elif _has_velocity_property:
+		var actor_velocity: Variant = _actor.get("velocity")
+		if actor_velocity is Vector2 and (actor_velocity as Vector2).length_squared() > 0.001:
+			direction = actor_velocity
+	if direction.length_squared() <= 0.001:
+		return
+	_facing = _cardinal_direction(direction)
+	if _state == &"attack":
+		_attack_direction = _facing
+
+
+func _cardinal_direction(direction: Vector2) -> Vector2:
+	if absf(direction.x) >= absf(direction.y):
+		return Vector2(1.0 if direction.x >= 0.0 else -1.0, 0.0)
+	return Vector2(0.0, 1.0 if direction.y >= 0.0 else -1.0)
+
+
 func _update_boss_presentation_state() -> void:
 	if _role != "boss" or _actor == null or not _actor.has_method("get_boss_ui_snapshot"):
 		return
 	var snapshot: Dictionary = _actor.get_boss_ui_snapshot()
 	var action := str(snapshot.get("action", "NONE"))
 	var phase := str(snapshot.get("phase", "IDLE"))
+	_boss_phase = clampi(int(snapshot.get("boss_phase", 1)), 1, 3)
+	_boss_exposed = bool(snapshot.get("exposed", false))
+	_boss_time_stopped = false
+	if _actor.has_method("is_time_stopped"):
+		_boss_time_stopped = bool(_actor.is_time_stopped())
+	if _has_exposure_sources_property:
+		var sources: Variant = _actor.get("_exposure_sources")
+		if sources is Dictionary:
+			_boss_time_stopped = _boss_time_stopped or (sources as Dictionary).has(&"time_stop")
+	_boss_core_shape = "split" if _boss_exposed else "sealed"
+	_boss_texture_pattern = "frozen_grid" if _boss_time_stopped else "flowing_ticks"
+	_boss_luminance = 1.0 + float(_boss_phase - 1) * 0.12
+	if _boss_exposed:
+		_boss_luminance += 0.16
+	if _boss_time_stopped:
+		_boss_luminance += 0.12
 	if phase == _last_boss_phase and action == _last_boss_action:
 		return
 	_last_boss_phase = phase
@@ -242,16 +337,19 @@ func _apply_pixel_transform() -> void:
 	var target_scale := Vector2.ONE
 	match _state:
 		&"idle":
-			offset.y = sin(_phase_clock * 5.0) * 1.4
+			if not _reduced_motion:
+				offset.y = sin(_phase_clock * 5.0) * 1.4
 		&"move":
-			offset.y = -absf(sin(_phase_clock * 12.0)) * 2.0
-			target_scale = Vector2(1.04, 0.96)
+			if not _reduced_motion:
+				offset.y = -absf(sin(_phase_clock * 12.0)) * 2.0
+				target_scale = Vector2(1.04, 0.96)
 		&"attack":
-			offset.x = 2.0
-			target_scale = Vector2(1.08, 0.94)
+			offset = _facing * 2.0
+			target_scale = Vector2(1.08, 0.94) if absf(_facing.x) > 0.0 else Vector2(0.94, 1.08)
 		&"dash":
-			offset.x = 4.0
-			target_scale = Vector2(1.16, 0.86)
+			offset = _facing * (2.0 if _reduced_motion else 4.0)
+			if not _reduced_motion:
+				target_scale = Vector2(1.16, 0.86) if absf(_facing.x) > 0.0 else Vector2(0.86, 1.16)
 		&"cast", &"time_stop", &"time_rewind":
 			offset.y = -2.0
 			target_scale = Vector2(0.96, 1.08)
@@ -265,8 +363,15 @@ func _apply_pixel_transform() -> void:
 		&"death":
 			offset.y = 4.0
 			target_scale = Vector2(1.08, 0.72)
-	position = Vector2(snappedf(offset.x, PIXEL_UNIT), snappedf(offset.y, PIXEL_UNIT))
-	scale = target_scale
+	_screen_action_offset = Vector2(snappedf(offset.x, SCREEN_PIXEL_UNIT), snappedf(offset.y, SCREEN_PIXEL_UNIT))
+	_action_scale = target_scale
+	var canvas_scale := _canvas_scale()
+	var world_pixel := Vector2(SCREEN_PIXEL_UNIT / canvas_scale.x, SCREEN_PIXEL_UNIT / canvas_scale.y)
+	position = Vector2(
+		snappedf(_screen_action_offset.x / canvas_scale.x, world_pixel.x),
+		snappedf(_screen_action_offset.y / canvas_scale.y, world_pixel.y)
+	)
+	scale = target_scale * Vector2(1.0 / canvas_scale.x, 1.0 / canvas_scale.y)
 
 
 func _draw() -> void:
@@ -275,6 +380,9 @@ func _draw() -> void:
 	var primary: Color = _palette["primary"]
 	var secondary: Color = _palette["secondary"]
 	var accent: Color = _palette["accent"]
+	if _role == "boss" and _boss_luminance > 1.0:
+		primary = primary.lightened(clampf((_boss_luminance - 1.0) * 0.55, 0.0, 0.35))
+		accent = accent.lightened(clampf((_boss_luminance - 1.0) * 0.35, 0.0, 0.25))
 	if _flash_remaining > 0.0:
 		primary = Color.WHITE
 		accent = Color(1.0, 0.92, 0.62)
@@ -310,11 +418,13 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 	draw_rect(Rect2(-4, -12, 8, 6), accent, true)
 	draw_rect(Rect2(-12, 0, 4, 12), primary.darkened(0.2), true)
 	draw_rect(Rect2(8, 0, 4, 12), primary.darkened(0.2), true)
+	draw_set_transform(Vector2.ZERO, _facing.angle(), Vector2.ONE)
 	if _state == &"attack":
 		draw_rect(Rect2(10, -4, 18, 4), accent, true)
 		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
 	else:
 		draw_rect(Rect2(10, 2, 14, 4), accent.darkened(0.15), true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_chaser(primary: Color, secondary: Color, accent: Color) -> void:
@@ -347,11 +457,27 @@ func _draw_boss(primary: Color, secondary: Color, accent: Color) -> void:
 	draw_rect(Rect2(-20, -24, 40, 46), primary, true)
 	draw_rect(Rect2(-14, -18, 28, 28), secondary, true)
 	draw_rect(Rect2(-10, -14, 20, 20), primary.lightened(0.1), true)
-	draw_rect(Rect2(-2, -12, 4, 12), accent, true)
-	draw_rect(Rect2(0, -2, 10, 4), accent, true)
+	if _boss_core_shape == "split":
+		draw_rect(Rect2(-8, -12, 6, 16), accent, true)
+		draw_rect(Rect2(2, -12, 6, 16), accent, true)
+		draw_rect(Rect2(-2, -8, 4, 4), secondary, true)
+		draw_rect(Rect2(-2, 0, 4, 4), secondary, true)
+	else:
+		draw_rect(Rect2(-2, -12, 4, 12), accent, true)
+		draw_rect(Rect2(0, -2, 10, 4), accent, true)
 	draw_rect(Rect2(-28, -12, 6, 30), primary.darkened(0.1), true)
 	draw_rect(Rect2(22, -12, 6, 30), primary.darkened(0.1), true)
 	draw_rect(Rect2(-8, 22, 16, 8), accent.darkened(0.3), true)
+	for index: int in range(_boss_phase):
+		draw_rect(Rect2(-10.0 + float(index) * 8.0, -36.0, 4.0, 6.0), accent, true)
+	if _boss_texture_pattern == "frozen_grid":
+		for y: float in [-18.0, -6.0, 6.0, 18.0]:
+			draw_rect(Rect2(-24.0, y, 48.0, 2.0), accent, true)
+		draw_rect(Rect2(-16.0, -28.0, 2.0, 54.0), accent, true)
+		draw_rect(Rect2(14.0, -28.0, 2.0, 54.0), accent, true)
+	else:
+		var tick_offset := float(int(_phase_clock * 8.0) % 3) * 4.0
+		draw_rect(Rect2(-24.0 + tick_offset, 12.0, 8.0, 2.0), accent, true)
 
 
 func _draw_generic(primary: Color, secondary: Color, accent: Color) -> void:
@@ -433,6 +559,16 @@ func _resolve_role(actor: Node) -> String:
 
 func _is_elite_actor() -> bool:
 	return _actor != null and is_instance_valid(_actor) and bool(_actor.get("_is_elite"))
+
+
+func _canvas_scale() -> Vector2:
+	if not is_inside_tree():
+		return Vector2.ONE
+	var canvas_transform := get_viewport().get_canvas_transform()
+	return Vector2(
+		maxf(0.001, canvas_transform.x.length()),
+		maxf(0.001, canvas_transform.y.length())
+	)
 
 
 func _has_property(object: Object, property_name: StringName) -> bool:

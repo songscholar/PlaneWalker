@@ -6,7 +6,8 @@ const OverlayScript := preload("res://scripts/presentation/combat_feedback_overl
 
 var _restore_scale: float = 1.0
 var _pause_token: int = 0
-var _pause_frames_remaining: int = 0
+var _pause_started_usec: int = 0
+var _pause_deadline_usec: int = 0
 var _scan_remaining: float = 0.0
 var _audio: Node
 var _overlay: Control
@@ -16,6 +17,9 @@ var _camera_base_offset := Vector2.ZERO
 var _camera_trauma: float = 0.0
 var _camera_clock: float = 0.0
 var _had_combat_actor: bool = false
+var _camera_shake_enabled: bool = true
+var _hit_flash_enabled: bool = true
+var _reduced_motion: bool = false
 
 
 const HIT_PROFILES := {
@@ -72,7 +76,6 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	_update_hit_pause()
 	_scan_remaining = maxf(0.0, _scan_remaining - delta)
 	if _scan_remaining <= 0.0:
 		_scan_remaining = 0.25
@@ -81,26 +84,48 @@ func _process(delta: float) -> void:
 	_update_camera_feedback(delta)
 
 
+func _physics_process(_delta: float) -> void:
+	_update_hit_pause()
+
+
 func request_hit_pause(duration: float = 0.045, scale: float = 0.12) -> void:
 	if duration <= 0.0:
 		return
-	var requested_frames := maxi(1, ceili(duration * Engine.physics_ticks_per_second))
-	var was_inactive := _pause_frames_remaining <= 0
-	_pause_frames_remaining = maxi(_pause_frames_remaining, requested_frames)
+	var now_usec := Time.get_ticks_usec()
+	if _pause_deadline_usec > 0 and now_usec >= _pause_deadline_usec:
+		_update_hit_pause(now_usec)
+	var requested_deadline := now_usec + maxi(1, ceili(duration * 1000000.0))
+	var was_inactive := _pause_deadline_usec <= now_usec
+	_pause_deadline_usec = maxi(_pause_deadline_usec, requested_deadline)
 	_pause_token += 1
-	if was_inactive and Engine.time_scale > 0.2:
+	if was_inactive:
+		_pause_started_usec = now_usec
 		_restore_scale = Engine.time_scale
 	Engine.time_scale = minf(Engine.time_scale, scale)
 
 
-func _update_hit_pause() -> void:
-	if _pause_frames_remaining <= 0:
+func _update_hit_pause(now_usec: int = -1) -> void:
+	if _pause_deadline_usec <= 0:
 		return
-	_pause_frames_remaining -= 1
-	if _pause_frames_remaining > 0:
+	var current_usec := Time.get_ticks_usec() if now_usec < 0 else now_usec
+	if current_usec < _pause_deadline_usec:
 		return
 	Engine.time_scale = _restore_scale
 	_restore_scale = 1.0
+	_pause_started_usec = 0
+	_pause_deadline_usec = 0
+
+
+func get_hit_pause_snapshot_for_test() -> Dictionary:
+	return {
+		"active": _pause_deadline_usec > 0,
+		"started_usec": _pause_started_usec,
+		"deadline_usec": _pause_deadline_usec,
+	}
+
+
+func update_hit_pause_for_test(now_usec: int) -> void:
+	_update_hit_pause(now_usec)
 
 
 func ensure_actor_proxy_for_test(actor: Node2D) -> Node:
@@ -124,8 +149,32 @@ func preview_time_feedback_for_test(skill_id: StringName) -> void:
 		_overlay.show_time_skill(skill_id)
 
 
+func preview_hit_feedback_for_test(target_is_player: bool) -> void:
+	if _overlay != null and _hit_flash_enabled:
+		_overlay.show_hit(target_is_player)
+
+
 func get_overlay_snapshot_for_test() -> Dictionary:
 	return _overlay.get_snapshot_for_test() if _overlay != null else {}
+
+
+func get_camera_feedback_snapshot_for_test() -> Dictionary:
+	return {"trauma": _camera_trauma}
+
+
+func set_feedback_options(options: Dictionary) -> void:
+	if options.has("camera_shake_enabled"):
+		_camera_shake_enabled = bool(options["camera_shake_enabled"])
+	if options.has("hit_flash_enabled"):
+		_hit_flash_enabled = bool(options["hit_flash_enabled"])
+	if options.has("reduced_motion"):
+		_reduced_motion = bool(options["reduced_motion"])
+	if not _camera_shake_enabled or _reduced_motion:
+		_camera_trauma = 0.0
+		_restore_camera_offset()
+	if _overlay != null and _overlay.has_method("set_feedback_options"):
+		_overlay.set_feedback_options(_hit_flash_enabled, _reduced_motion)
+	_configure_existing_proxies()
 
 
 func reset_feedback_for_test() -> void:
@@ -184,6 +233,7 @@ func _ensure_actor_proxy(actor: Node2D) -> Node:
 	if not proxy.bind_actor(actor):
 		proxy.queue_free()
 		return null
+	_configure_proxy(proxy)
 	proxy.cue_requested.connect(_on_proxy_cue_requested)
 	var time_manager := actor.get_node_or_null("TimeManager")
 	if time_manager != null and time_manager.has_signal("rewind_committed"):
@@ -202,7 +252,7 @@ func _on_hit_confirmed(damage_info: Variant, target: Node, final_amount: float) 
 	add_camera_trauma(float(profile["camera_trauma"]))
 	if _audio != null:
 		_audio.play_cue(profile["audio_cue"])
-	if _overlay != null:
+	if _overlay != null and _hit_flash_enabled:
 		_overlay.show_hit(target_is_player, float(profile["flash_duration"]))
 	if target is Node2D:
 		var proxy := _ensure_actor_proxy(target as Node2D)
@@ -316,11 +366,17 @@ func _cleanup_if_no_combat_actors() -> void:
 
 
 func add_camera_trauma(amount: float) -> void:
+	if not _camera_shake_enabled or _reduced_motion:
+		return
 	_camera_trauma = maxf(_camera_trauma, maxf(0.0, amount))
 
 
 func _update_camera_feedback(delta: float) -> void:
 	_camera_clock += delta
+	if not _camera_shake_enabled or _reduced_motion:
+		_camera_trauma = 0.0
+		_restore_camera_offset()
+		return
 	var active_camera := get_viewport().get_camera_2d()
 	if active_camera != _camera:
 		_restore_camera_offset()
@@ -361,7 +417,8 @@ func _first_player() -> Node2D:
 
 func _reset_feedback() -> void:
 	_pause_token += 1
-	_pause_frames_remaining = 0
+	_pause_started_usec = 0
+	_pause_deadline_usec = 0
 	if Engine.time_scale < 1.0 or _restore_scale != 1.0:
 		Engine.time_scale = _restore_scale
 	_restore_scale = 1.0
@@ -375,7 +432,8 @@ func _reset_feedback() -> void:
 
 func _exit_tree() -> void:
 	_pause_token += 1
-	_pause_frames_remaining = 0
+	_pause_started_usec = 0
+	_pause_deadline_usec = 0
 	Engine.time_scale = _restore_scale
 	_restore_scale = 1.0
 	_restore_camera_offset()
@@ -395,3 +453,17 @@ func _has_property(object: Object, property_name: StringName) -> bool:
 		if StringName(property.get("name", "")) == property_name:
 			return true
 	return false
+
+
+func _configure_existing_proxies() -> void:
+	if not is_inside_tree():
+		return
+	for actor: Node in get_tree().get_nodes_in_group("player") + get_tree().get_nodes_in_group("enemies"):
+		var proxy := actor.get_node_or_null("PixelProxyActor")
+		if proxy != null:
+			_configure_proxy(proxy)
+
+
+func _configure_proxy(proxy: Node) -> void:
+	if proxy != null and proxy.has_method("set_feedback_options"):
+		proxy.set_feedback_options(_hit_flash_enabled, _reduced_motion)

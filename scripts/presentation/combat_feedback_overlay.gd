@@ -15,6 +15,8 @@ var _hit_duration: float = 0.0
 var _hit_is_player: bool = false
 var _low_health_ratio: float = 1.0
 var _clock: float = 0.0
+var _hit_flash_enabled: bool = true
+var _reduced_motion: bool = false
 
 
 func _ready() -> void:
@@ -38,6 +40,8 @@ func _process(delta: float) -> void:
 
 
 func show_hit(target_is_player: bool, duration: float = 0.16) -> void:
+	if not _hit_flash_enabled:
+		return
 	_hit_is_player = target_is_player
 	_hit_duration = maxf(0.05, duration)
 	_hit_remaining = _hit_duration
@@ -88,6 +92,15 @@ func clear_feedback() -> void:
 	queue_redraw()
 
 
+func set_feedback_options(hit_flash_enabled: bool, reduced_motion: bool) -> void:
+	_hit_flash_enabled = hit_flash_enabled
+	_reduced_motion = reduced_motion
+	if not _hit_flash_enabled:
+		_hit_remaining = 0.0
+		_hit_duration = 0.0
+	queue_redraw()
+
+
 func get_snapshot_for_test() -> Dictionary:
 	return {
 		"mode": _mode,
@@ -118,7 +131,7 @@ func _draw() -> void:
 
 
 func _draw_low_health_border(viewport_size: Vector2) -> void:
-	var pulse := 0.08 + (sin(_clock * 10.0) * 0.5 + 0.5) * 0.07
+	var pulse := 0.11 if _reduced_motion else 0.08 + (sin(_clock * 10.0) * 0.5 + 0.5) * 0.07
 	var color := Color(DANGER_ACCENT.r, DANGER_ACCENT.g, DANGER_ACCENT.b, pulse)
 	_draw_hard_border(viewport_size, color, 10.0)
 
@@ -132,7 +145,7 @@ func _draw_hit_border(viewport_size: Vector2) -> void:
 
 func _draw_stop_pattern(viewport_size: Vector2, alpha: float) -> void:
 	draw_rect(Rect2(Vector2.ZERO, viewport_size), Color(0.04, 0.22, 0.28, alpha * 0.08), true)
-	var band_offset := int(_clock * 24.0) % 16
+	var band_offset := 0 if _reduced_motion else int(_clock * 24.0) % 16
 	for y: int in range(-16 + band_offset, int(viewport_size.y) + 16, 16):
 		draw_rect(Rect2(0, y, viewport_size.x, 2), Color(STOP_ACCENT.r, STOP_ACCENT.g, STOP_ACCENT.b, alpha * 0.15), true)
 	_draw_hard_border(viewport_size, Color(STOP_ACCENT.r, STOP_ACCENT.g, STOP_ACCENT.b, alpha * 0.25), 4.0)

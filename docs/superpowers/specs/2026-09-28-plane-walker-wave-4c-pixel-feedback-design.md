@@ -7,7 +7,7 @@
 - Owner: UI and pixel presentation lane
 - Depends On: `AGENTS.md`, full-product completion design, staged M1 combat-feel and pixel-canvas gates
 - Supersedes: Temporary Polygon-only greybox presentation for M1 actors
-- Last Verified: 2026-09-28
+- Last Verified: 2026-09-29
 - Completion Gate: focused presentation tests plus `./tools/validate_project.sh`
 
 ## Outcome
@@ -38,6 +38,9 @@ The gameplay actor remains authoritative. `PixelProxyActor` reads presentation-s
 - Chrono Warden: magenta 48-pixel clock silhouette with cyan temporal core.
 - Every role has a distinct silhouette even when rendered in monochrome.
 - Animation transforms and effect anchors snap to integer logical pixels.
+- Actor footprints and two-pixel units are defined in screen space, so the combat camera's `0.5` zoom does not halve their intended 640×360 readability.
+- Attack blade direction and lunge offset read the weapon angle; dash displacement and stretch read the actor's facing. The proxy never writes either source.
+- Boss phase, exposure, and Time Stop each have shape, luminance, or texture cues in addition to palette changes.
 - Time Stop uses cyan horizontal scan bands; Rewind uses indigo chevrons and reverse trails; danger uses amber/red concentric pulses.
 
 ## Combat-feel profiles
@@ -54,6 +57,9 @@ The gameplay actor remains authoritative. `PixelProxyActor` reads presentation-s
 | Rewind | none | 3 px | descending reverse chirp, indigo path trail |
 
 Overlapping hit pauses extend the active deadline and never shorten an existing pause. Presentation reset restores camera offset and engine time scale on run end or explicit test cleanup.
+The deadline uses Godot's monotonic real-time clock, so the requested duration is independent of rendered FPS and scaled gameplay time.
+
+Camera shake, hit flash, and reduced-motion behavior are runtime-configurable through `CombatFeedback.set_feedback_options()`. Reduced motion disables shake and afterimages, freezes continuous overlay motion, and preserves static action readability.
 
 ## Audio policy
 
@@ -78,6 +84,8 @@ M1 audio is generated at runtime into mono 16-bit PCM `AudioStreamWAV` resources
 7. Damage text is readable, pixel-snapped, tag-colored, and lifetime-bounded.
 8. Focused headless tests pass without script errors, ObjectDB leaks, or RID leaks.
 9. Full project validation passes, with no new classified warning.
+10. Real `Camera2D` position/zoom coverage proves floating text and proxy screen size remain correct.
+11. Simulated 30, 60, and 144 FPS schedules restore hit pause at one real-time deadline.
 
 ## Self-review
 
