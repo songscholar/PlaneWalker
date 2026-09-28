@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "toolchains": [
+    {
+      "id": "godot_4_6_1_macos_arm64_official",
+      "platform": "darwin-arm64",
+      "version": "4.6.1.stable.official.14d19694e",
+      "sha256": "ad304ee206ac9a0ab8407365e767ec33fe78d9455ff9dcace207c053e2651667"
+    }
+  ]
+}

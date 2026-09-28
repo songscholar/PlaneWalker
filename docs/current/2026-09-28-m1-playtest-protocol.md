@@ -25,7 +25,9 @@
 
 Seed Matrix、20 局会话和观察表必须完全匹配同一 cohort。修复 P0/P1 或任何会改变玩法、内容、输入、UI 理解的改动后，必须重新构建并开启新 cohort；不得把旧 cohort 的真人局拼进新版本。
 
-正式 Seed Matrix 还必须记录并校验：`evidence_origin=godot_authoritative_probe`、探针版本、Godot 版本、干净工作树、HEAD commit、Git tree digest、探针 SHA-256、Encounter Catalog SHA-256 与 catalog `plan_id`。`cohort.commit` 必须等于运行时 HEAD，`cohort.content_version` 必须等于 catalog `plan_id`。`--raw-results` 永远标为 `non_release_synthetic`；脏工作树上的真实 Godot 探针若显式使用 `--allow-dirty-candidate`，也只能生成 `non_release_candidate`。
+正式 Seed Matrix 还必须记录并校验：`evidence_origin=godot_authoritative_probe`、探针版本、Godot 版本、平台、Godot 可执行文件 SHA-256、受信工具链 ID、干净工作树、HEAD commit、Git tree digest、探针 SHA-256、Encounter Catalog SHA-256 与 catalog `plan_id`。`cohort.commit` 必须等于运行时 HEAD，`cohort.content_version` 必须等于 catalog `plan_id`，Godot 指纹必须存在于该 commit 的 `data/toolchain/m1_godot_toolchains.json`。`--raw-results` 永远标为 `non_release_synthetic`；脏工作树上的真实 Godot 探针若显式使用 `--allow-dirty-candidate`，或未知 Godot 指纹显式使用 `--allow-untrusted-toolchain-candidate`，都只能生成 non-release candidate。
+
+外部协调员签名密钥必须在冻结 cohort 前完成登记：公钥文件与 `data/trust/m1_external_attestors.json` 的 active key 条目必须已经进入 `cohort.commit`。正式 Gate 从该 commit 的 Git blob 读取信任库和公钥，不读取未提交的工作树覆盖，也不接受仓库外绝对路径。当前信任库为空表示真实协调员尚未登记，因此任何自签或测试签名都不能把 Candidate 升为 Go。
 
 ## 3. 每局执行流程
 
@@ -34,7 +36,7 @@ Seed Matrix、20 局会话和观察表必须完全匹配同一 cohort。修复 P
 3. 完整记录会话事件：Seed、输入设备、开始/结束时间、房间进入/完成、伤害、失败代码、构筑选择和终局。
 4. 局后立即完成结构化观察，不加入自由文本。问题通过稳定 `issue.code`、严重度、系统和房间索引记录。
 5. 同一 `session_id` 必须同时出现在 session JSONL 与 observation JSONL 中。
-6. 每次构筑选择后必须记录递增 revision 与规范化 build snapshot；正式 30 Seed 矩阵每局必须恰好包含五房、五个非空 encounter、每房至少一个非空 spawn wave、四次非空 offer、四次 choice、四个 post-choice snapshot、正 duration、空 failure code 与 victory。
+6. 每次构筑选择后必须记录递增 revision 与规范化 build snapshot；每个 offer 必须包含三个唯一 ID，choice 必须来自对应 offer 且不能重复已拥有奖励。已应用选择只能向 history 和匹配 category 的 typed 列表追加该 choice，archetype/dominant 必须按运行时规则精确派生；`decline_contract` 必须保持完整 build snapshot 不变。正式 30 Seed 矩阵每局必须恰好包含五房、五个唯一非空 encounter、每房至少一个非空 spawn wave、四次 offer、四次 choice、四个 post-choice snapshot、正 duration、空 failure code 与 victory。
 
 ## 4. 结构化观察定义
 
@@ -80,11 +82,17 @@ python3 tools/playtest/evidence_gate.py \
 
 导入统计必须分别报告 invalid records 与 violations。一个 JSONL 行即使同时违反多个字段，也只计一个 invalid record；每条字段错误仍单独计入 violations，方便修复但不得虚增损坏记录数。
 
-独立外部试玩协调员复核 exact cohort 后，复制 `docs/current/templates/m1_external_attestation.template.json` 创建仓库外 manifest。其 `session_ids` 必须与最终 joined human cohort 精确一致且至少 20 个；attestor 必须确认 `independent_from_development=true`。未提供、未批准、cohort 不匹配或 ID 覆盖不完整时，最高状态只能是 Candidate。
+独立外部试玩协调员复核 exact cohort 后，复制 `docs/current/templates/m1_external_attestation.template.json` 创建仓库外 manifest。其 `session_ids` 必须与最终 joined human cohort 精确一致且至少 20 个；attestor 必须确认 `independent_from_development=true`。`evidence` 必须绑定 Seed Matrix digest、规范化 sessions digest、规范化 observations digest 和排序后 session ID digest。
+
+签名流程固定为：移除顶层 `signature` 字段，对剩余 JSON 使用 UTF-8、递归 key 排序、无额外空白的 canonical JSON 编码，然后使用已登记私钥执行 RSA-SHA256 签名；最后把 Base64 签名写回 `signature.value_base64`。Gate 会用 `cohort.commit` 中的受信公钥验签。未提供、未批准、摘要不匹配、签名无效、cohort 不匹配或 ID 覆盖不完整时，最高状态只能是 Candidate。
 
 ## 6. 30 Seed 与正式报告命令
 
+正式 Seed 前必须先在同一干净 checkout 上执行统一验证入口。该命令会完成 Godot bootstrap import、第二次 clean import、契约测试和场景测试；不能跳过 import 后直接运行 Seed 探针，否则干净 clone 可能缺少 Godot class cache：
+
 ```bash
+./tools/validate_project.sh
+
 python3 tools/m1/run_seed_matrix.py \
   --seed-start 0 --seed-count 30 \
   --output /tmp/planewalker-m1-seeds.json
@@ -107,12 +115,14 @@ python3 tools/m1/generate_release_report.py \
 
 如果真人数据尚未提供，省略 `--sessions`、`--observations` 与 `--attestation`；生成器必须输出 `M1 Candidate — External Validation Pending`，不能手改成 Go。CI/放行流程必须使用 `--require-go`，非 Go 时退出码为 2；诊断性报告可以省略该开关，但 JSON 摘要仍明确输出 `release_ready=false`。
 
+Seed Matrix JSON 本身不是执行证明。对任何声明为 release 的权威矩阵，`generate_release_report.py` 会在当前干净 HEAD 上亲自再次运行受信 Godot 探针，并要求新矩阵与输入矩阵逐 Seed digest 及总 matrix digest 完全一致。无法执行、commit 不等于当前 HEAD、结果漂移或仅手工构造 JSON 时，正式仓库 Gate 均保持 NON-RELEASE。
+
 ## 7. M1 自动决策规则
 
 `M1 Go` 需要同时满足：
 
 - 0–29 共 30 个 Seed 全部到达 victory；无失败代码、脚本错误、泄漏或 digest 漂移。
-- Seed Matrix 来自干净 HEAD 的 `godot_authoritative_probe`，所有执行指纹与当前 cohort/catalog 一致；任何未列入 allowlist 的 `ERROR:` 都阻断。唯一环境 allowlist 是带预期 macOS `get_system_ca_certificates` 调用点的 CA sandbox 签名。
+- Seed Matrix 来自干净 HEAD 的 `godot_authoritative_probe`，所有执行指纹与当前 cohort/catalog 一致，并由正式报告流程现场重跑受信 Godot 后逐 digest 匹配；任何未列入 allowlist 的 `ERROR:` 都阻断。唯一环境 allowlist 是带预期 macOS `get_system_ca_certificates` 调用点的 CA sandbox 签名。
 - 至少 20 个唯一、有效、真实 human session 匹配 cohort。
 - 至少 20 个有效 human observation 与这些 session 一一匹配。
 - 独立外部试玩协调员的 approval manifest 精确覆盖上述 joined session IDs。

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ from m1_gate import PROBE_VERSION, make_seed_matrix, validate_seed_matrix
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUILD_VERSION = "0.4.0-dev"
+TRUSTED_TOOLCHAINS_PATH = PROJECT_ROOT / "data" / "toolchain" / "m1_godot_toolchains.json"
 FAILURE_MARKERS = (
     "SCRIPT ERROR:",
     "Parse Error:",
@@ -42,6 +44,11 @@ def main() -> int:
         "--allow-dirty-candidate",
         action="store_true",
         help="allow a real Godot probe on a dirty tree, always classified non-release",
+    )
+    parser.add_argument(
+        "--allow-untrusted-toolchain-candidate",
+        action="store_true",
+        help="allow an unknown Godot binary only for non-release diagnostics",
     )
     parser.add_argument(
         "--raw-results",
@@ -81,8 +88,21 @@ def main() -> int:
                 "official Godot seed evidence requires a clean worktree; "
                 "use --allow-dirty-candidate only for non-release diagnostics"
             )
-        executable = _resolve_executable(args.godot_bin)
+        executable = str(Path(_resolve_executable(args.godot_bin)).resolve())
         godot_version = _godot_version(executable)
+        godot_binary_digest = _sha256_file(Path(executable))
+        platform_id = f"{platform.system().lower()}-{platform.machine().lower()}"
+        trusted_toolchain = _trusted_toolchain(
+            TRUSTED_TOOLCHAINS_PATH,
+            platform_id=platform_id,
+            version=godot_version,
+            binary_digest=godot_binary_digest,
+        )
+        if trusted_toolchain is None and not args.allow_untrusted_toolchain_candidate:
+            raise SystemExit(
+                "official Godot seed evidence requires a binary in the tracked toolchain allowlist; "
+                "use --allow-untrusted-toolchain-candidate only for non-release diagnostics"
+            )
         raw = _run_godot_probe(
             executable,
             seed_start=args.seed_start,
@@ -94,7 +114,11 @@ def main() -> int:
                 f"Godot probe version mismatch: expected {PROBE_VERSION}, got {raw.get('probe_version')!r}"
             )
         evidence_origin = "godot_authoritative_probe"
-        classification = "release" if worktree_clean else "non_release_candidate"
+        classification = (
+            "release"
+            if worktree_clean and trusted_toolchain is not None
+            else "non_release_candidate"
+        )
     runs = raw.get("runs") if isinstance(raw, dict) else None
     if not isinstance(runs, list):
         raise SystemExit("raw seed probe did not produce a runs array")
@@ -112,11 +136,25 @@ def main() -> int:
             "tree_digest": tree_digest,
             "probe_digest": _sha256_file(PROJECT_ROOT / "tools" / "m1" / "seed_matrix_probe.gd"),
             "godot_version": godot_version,
+            "godot_platform": platform_id if not args.raw_results else "not_executed",
+            "godot_binary_digest": godot_binary_digest if not args.raw_results else "0" * 64,
+            "godot_toolchain_id": (
+                str(trusted_toolchain["id"])
+                if not args.raw_results and trusted_toolchain is not None
+                else "untrusted_or_not_executed"
+            ),
             "content_digest": _sha256_file(catalog_path),
             "catalog_content_version": catalog_content_version,
         },
     )
-    validation = validate_seed_matrix(report)
+    validation = validate_seed_matrix(
+        report,
+        trusted_runtime_matrix_digest=(
+            str(report["matrix_digest"])
+            if evidence_origin == "godot_authoritative_probe" and classification == "release"
+            else None
+        ),
+    )
     _write_json_atomic(Path(args.output), report)
     failed_runs = [
         run
@@ -244,6 +282,29 @@ def _godot_version(executable: str) -> str:
     if completed.returncode != 0 or not version:
         raise SystemExit("could not resolve the Godot runtime version")
     return version[0].strip()
+
+
+def _trusted_toolchain(
+    path: Path,
+    *,
+    platform_id: str,
+    version: str,
+    binary_digest: str,
+) -> dict | None:
+    manifest = _load_json(path)
+    entries = manifest.get("toolchains") if isinstance(manifest, dict) else None
+    if not isinstance(entries, list):
+        raise SystemExit("trusted Godot toolchain manifest must contain a toolchains array")
+    for raw_entry in entries:
+        if not isinstance(raw_entry, dict):
+            continue
+        if (
+            raw_entry.get("platform") == platform_id
+            and raw_entry.get("version") == version
+            and raw_entry.get("sha256") == binary_digest
+        ):
+            return raw_entry
+    return None
 
 
 def _sha256_file(path: Path) -> str:

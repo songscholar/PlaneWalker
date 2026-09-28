@@ -5,15 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = TOOLS_ROOT.parent
+M1_TOOLS = TOOLS_ROOT / "m1"
 sys.path.insert(0, str(TOOLS_ROOT / "playtest"))
 
 from m1_gate import (  # noqa: E402
     M1_GO,
+    compare_seed_matrices,
     evaluate_m1,
     load_observations_jsonl,
     render_release_report,
@@ -41,6 +46,7 @@ def main() -> int:
     sessions = load_jsonl(args.sessions) if args.sessions else ImportResult([], [])
     observations = load_observations_jsonl(args.observations) if args.observations else None
     attestation = _load_json(Path(args.attestation)) if args.attestation else None
+    trusted_runtime_matrix_digest = _run_trusted_live_seed_verification(seed_report)
     decision = evaluate_m1(
         seed_report,
         sessions.sessions,
@@ -48,6 +54,7 @@ def main() -> int:
         observations=observations.observations if observations else [],
         observation_violations=observations.violations if observations else [],
         attestation=attestation,
+        trusted_runtime_matrix_digest=trusted_runtime_matrix_digest,
     )
     _write_text_atomic(Path(args.output), render_release_report(decision))
     if args.json_output:
@@ -80,6 +87,67 @@ def _load_json(path: Path) -> dict:
     if not isinstance(value, dict):
         raise SystemExit(f"expected a JSON object in {path}")
     return value
+
+
+def _run_trusted_live_seed_verification(seed_report: dict) -> str | None:
+    evidence = seed_report.get("evidence")
+    if not isinstance(evidence, dict):
+        return None
+    if (
+        evidence.get("evidence_origin") != "godot_authoritative_probe"
+        or evidence.get("classification") != "release"
+    ):
+        return None
+    cohort = seed_report.get("cohort")
+    if not isinstance(cohort, dict):
+        return None
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if head.returncode != 0 or cohort.get("commit") != head.stdout.strip().lower():
+        return None
+    build_version = cohort.get("build_version")
+    if not isinstance(build_version, str) or not build_version.strip():
+        return None
+    with tempfile.TemporaryDirectory(prefix="planewalker-m1-live-verify-") as temp_dir:
+        live_path = Path(temp_dir) / "seed-matrix.json"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(M1_TOOLS / "run_seed_matrix.py"),
+                "--seed-start",
+                "0",
+                "--seed-count",
+                "30",
+                "--build-version",
+                build_version,
+                "--output",
+                str(live_path),
+            ],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if completed.returncode != 0 or not live_path.is_file():
+            diagnostic = (completed.stderr or completed.stdout).strip()
+            if diagnostic:
+                print(f"trusted live seed verification failed: {diagnostic}", file=sys.stderr)
+            return None
+        live_report = _load_json(live_path)
+    comparison = compare_seed_matrices(seed_report, live_report)
+    if not comparison.matched:
+        print(
+            "trusted live seed verification mismatch: " + "; ".join(comparison.reasons),
+            file=sys.stderr,
+        )
+        return None
+    matrix_digest = live_report.get("matrix_digest")
+    return matrix_digest if isinstance(matrix_digest, str) else None
 
 
 def _write_text_atomic(path: Path, value: str) -> None:

@@ -126,10 +126,12 @@ func _run_seed(seed_value: int) -> Dictionary:
 		result["duration_proxy_ms"] += CHOICE_DURATION_PROXY_MS
 		await get_tree().process_frame
 		var post_choice_snapshot: Dictionary = facade.call("snapshot")
+		var post_choice_build: Dictionary = (post_choice_snapshot.get("build", {}) as Dictionary).duplicate(true)
 		result["choice_snapshots"].append({
 			"choice_id": option_ids[0],
 			"revision": int(post_choice_snapshot.get("revision", -1)),
-			"build": (post_choice_snapshot.get("build", {}) as Dictionary).duplicate(true),
+			"outcome": "no_state_change" if option_ids[0] == "decline_contract" else "applied",
+			"build": post_choice_build,
 		})
 
 	if result["failure_codes"].is_empty():

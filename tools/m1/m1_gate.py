@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
+import subprocess
+import tempfile
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -18,8 +21,10 @@ M1_CANDIDATE = "M1 Candidate — External Validation Pending"
 SEED_MATRIX_SCHEMA = "2.0.0"
 OBSERVATION_SCHEMA = "1.0.0"
 TUNING_INPUT_SCHEMA = "1.0.0"
-EXTERNAL_ATTESTATION_SCHEMA = "1.0.0"
+EXTERNAL_ATTESTATION_SCHEMA = "2.0.0"
 PROBE_VERSION = "2.0.0"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ATTESTOR_TRUST_PATH = PROJECT_ROOT / "data" / "trust" / "m1_external_attestors.json"
 CANONICAL_SEED_START = 0
 CANONICAL_SEED_COUNT = 30
 MINIMUM_HUMAN_SESSIONS = 20
@@ -112,6 +117,14 @@ def canonical_digest(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def canonical_records_digest(records: Sequence[Mapping[str, object]]) -> str:
+    normalized = sorted(
+        (_deep_copy(record) for record in records),
+        key=lambda item: str(item.get("session_id", "")) if isinstance(item, dict) else "",
+    )
+    return canonical_digest(normalized)
+
+
 def make_seed_matrix(
     raw_runs: Sequence[Mapping[str, object]],
     *,
@@ -150,6 +163,8 @@ def validate_seed_matrix(
     *,
     expected_start: int = CANONICAL_SEED_START,
     expected_count: int = CANONICAL_SEED_COUNT,
+    verify_repository_artifacts: bool = True,
+    trusted_runtime_matrix_digest: str | None = None,
 ) -> SeedMatrixValidation:
     reasons: list[str] = []
     release_reasons: list[str] = []
@@ -170,7 +185,9 @@ def validate_seed_matrix(
         reasons.append(f"seed_count must be {expected_count}")
     reasons.extend(_validate_cohort(report.get("cohort")))
     evidence_reasons, release_reasons = _validate_matrix_evidence(
-        report.get("evidence"), report.get("cohort")
+        report.get("evidence"),
+        report.get("cohort"),
+        verify_repository_artifacts=verify_repository_artifacts,
     )
     reasons.extend(evidence_reasons)
 
@@ -235,8 +252,18 @@ def validate_seed_matrix(
             if isinstance(run, dict)
         ],
     }
-    if report.get("matrix_digest") != canonical_digest(matrix_core):
+    matrix_digest = report.get("matrix_digest")
+    if matrix_digest != canonical_digest(matrix_core):
         reasons.append("matrix_digest does not match the report cohort and run digests")
+    evidence = _mapping(report.get("evidence"))
+    if (
+        evidence.get("evidence_origin") == "godot_authoritative_probe"
+        and evidence.get("classification") == "release"
+    ):
+        if trusted_runtime_matrix_digest is None:
+            release_reasons.append("release seed matrix requires trusted live Godot verification")
+        elif trusted_runtime_matrix_digest != matrix_digest:
+            release_reasons.append("trusted live Godot matrix digest does not match the supplied report")
     return SeedMatrixValidation(
         passed=not reasons,
         release_eligible=not reasons and not release_reasons,
@@ -339,12 +366,19 @@ def evaluate_m1(
     observation_violations: Sequence[object] = (),
     attestation: object = None,
     minimum_human_sessions: int = MINIMUM_HUMAN_SESSIONS,
+    verify_repository_artifacts: bool = True,
+    attestation_trust: Mapping[str, object] | None = None,
+    trusted_runtime_matrix_digest: str | None = None,
 ) -> M1Decision:
     from playtest_data import validate_session
 
     if minimum_human_sessions <= 0:
         raise ValueError("minimum_human_sessions must be positive")
-    matrix_validation = validate_seed_matrix(seed_report)
+    matrix_validation = validate_seed_matrix(
+        seed_report,
+        verify_repository_artifacts=verify_repository_artifacts,
+        trusted_runtime_matrix_digest=trusted_runtime_matrix_digest,
+    )
     report = seed_report if isinstance(seed_report, dict) else {}
     cohort = dict(report.get("cohort", {})) if isinstance(report.get("cohort"), dict) else {}
     repository_reasons = list(matrix_validation.reasons) + list(matrix_validation.release_reasons)
@@ -368,6 +402,10 @@ def evaluate_m1(
         "passed": matrix_validation.release_eligible and not failed_seeds,
         "matrix_valid": matrix_validation.passed,
         "release_eligible": matrix_validation.release_eligible,
+        "live_runtime_verified": (
+            isinstance(report.get("matrix_digest"), str)
+            and trusted_runtime_matrix_digest == report.get("matrix_digest")
+        ),
         "seed_count": matrix_validation.seed_count,
         "matrix_digest": report.get("matrix_digest", ""),
         "evidence": _deep_copy(report.get("evidence", {})),
@@ -446,6 +484,10 @@ def evaluate_m1(
         cohort=cohort,
         joined_session_ids=joined_session_ids,
         minimum_human_sessions=minimum_human_sessions,
+        matrix_digest=str(report.get("matrix_digest", "")),
+        sessions_digest=canonical_records_digest([session for session, _ in joined]),
+        observations_digest=canonical_records_digest([observation for _, observation in joined]),
+        trust_store=attestation_trust,
     )
     integrity_failures = (
         invalid_session_count
@@ -613,6 +655,7 @@ Synthetic 数据只用于验证工具、稳定性和确定性，永久不计入�
 - Matrix digest: `{repository['matrix_digest']}`
 - Seed records: {repository['seed_count']}
 - Failed seeds: {len(repository['failed_seeds'])}
+- Live Godot verification: {str(repository['live_runtime_verified']).lower()}
 - Gate: {repository_status}
 - Release eligible: {str(repository['release_eligible']).lower()}
 
@@ -858,6 +901,8 @@ def _validate_issues(value: object, errors: list[ObservationViolation]) -> None:
 def _validate_matrix_evidence(
     value: object,
     cohort_value: object,
+    *,
+    verify_repository_artifacts: bool,
 ) -> tuple[list[str], list[str]]:
     if not isinstance(value, dict):
         return ["evidence must be an object"], ["matrix evidence is not release eligible"]
@@ -872,6 +917,9 @@ def _validate_matrix_evidence(
         "tree_digest",
         "probe_digest",
         "godot_version",
+        "godot_platform",
+        "godot_binary_digest",
+        "godot_toolchain_id",
         "content_digest",
         "catalog_content_version",
     }
@@ -897,12 +945,15 @@ def _validate_matrix_evidence(
     tree_digest = value.get("tree_digest")
     if not isinstance(tree_digest, str) or TREE_DIGEST_RE.fullmatch(tree_digest) is None:
         reasons.append("evidence.tree_digest must be a 40-64 character lowercase hex digest")
-    for field in ("probe_digest", "content_digest"):
+    for field in ("probe_digest", "content_digest", "godot_binary_digest"):
         digest = value.get(field)
         if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
             reasons.append(f"evidence.{field} must be a lowercase SHA-256 digest")
     if not isinstance(value.get("godot_version"), str) or not str(value.get("godot_version")).strip():
         reasons.append("evidence.godot_version must be a non-blank string")
+    for field in ("godot_platform", "godot_toolchain_id"):
+        if not isinstance(value.get(field), str) or not str(value.get(field)).strip():
+            reasons.append(f"evidence.{field} must be a non-blank string")
     if not isinstance(value.get("catalog_content_version"), str) or not str(value.get("catalog_content_version")).strip():
         reasons.append("evidence.catalog_content_version must be a non-blank string")
     if origin == "raw_results_adapter" and classification != "non_release_synthetic":
@@ -921,7 +972,89 @@ def _validate_matrix_evidence(
         release_reasons.append("evidence head_commit must equal cohort.commit")
     if value.get("catalog_content_version") != cohort.get("content_version"):
         release_reasons.append("catalog content version must equal cohort.content_version")
+    if (
+        verify_repository_artifacts
+        and origin == "godot_authoritative_probe"
+        and classification == "release"
+    ):
+        release_reasons.extend(_verify_repository_evidence(value, cohort))
     return reasons, release_reasons
+
+
+def _verify_repository_evidence(
+    evidence: Mapping[str, object],
+    cohort: Mapping[str, object],
+) -> list[str]:
+    reasons: list[str] = []
+    commit = str(cohort.get("commit", ""))
+    tree = _git_text("rev-parse", f"{commit}^{{tree}}")
+    if tree is None:
+        return ["cohort commit is not available in the repository"]
+    if evidence.get("tree_digest") != tree:
+        reasons.append("evidence tree_digest does not match cohort.commit")
+
+    probe_bytes = _git_blob(commit, "tools/m1/seed_matrix_probe.gd")
+    catalog_bytes = _git_blob(commit, "data/encounters/m1_encounters.json")
+    toolchain_bytes = _git_blob(commit, "data/toolchain/m1_godot_toolchains.json")
+    if probe_bytes is None:
+        reasons.append("cohort commit does not contain the M1 seed probe")
+    elif evidence.get("probe_digest") != hashlib.sha256(probe_bytes).hexdigest():
+        reasons.append("evidence probe_digest does not match cohort.commit")
+    if catalog_bytes is None:
+        reasons.append("cohort commit does not contain the encounter catalog")
+    else:
+        if evidence.get("content_digest") != hashlib.sha256(catalog_bytes).hexdigest():
+            reasons.append("evidence content_digest does not match cohort.commit")
+        try:
+            catalog = json.loads(catalog_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            reasons.append("cohort encounter catalog is not valid UTF-8 JSON")
+        else:
+            if catalog.get("plan_id") != cohort.get("content_version"):
+                reasons.append("cohort content_version does not match the committed catalog plan_id")
+
+    if toolchain_bytes is None:
+        reasons.append("cohort commit does not contain the trusted Godot toolchain manifest")
+    else:
+        try:
+            manifest = json.loads(toolchain_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            reasons.append("trusted Godot toolchain manifest is invalid")
+        else:
+            entries = manifest.get("toolchains", []) if isinstance(manifest, dict) else []
+            matched = any(
+                isinstance(entry, dict)
+                and entry.get("id") == evidence.get("godot_toolchain_id")
+                and entry.get("platform") == evidence.get("godot_platform")
+                and entry.get("version") == evidence.get("godot_version")
+                and entry.get("sha256") == evidence.get("godot_binary_digest")
+                for entry in entries
+            )
+            if not matched:
+                reasons.append("Godot binary fingerprint is not trusted by cohort.commit")
+    return reasons
+
+
+def _git_text(*arguments: str) -> str | None:
+    completed = subprocess.run(
+        ["git", *arguments],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    value = completed.stdout.strip().lower()
+    return value if completed.returncode == 0 and value else None
+
+
+def _git_blob(commit: str, relative_path: str) -> bytes | None:
+    completed = subprocess.run(
+        ["git", "show", f"{commit}:{relative_path}"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        check=False,
+    )
+    return completed.stdout if completed.returncode == 0 else None
 
 
 def _validate_run_shape(run: Mapping[str, object], path: str, reasons: list[str]) -> None:
@@ -933,6 +1066,8 @@ def _validate_run_shape(run: Mapping[str, object], path: str, reasons: list[str]
         reasons.append(f"{path}.encounter_ids must contain exactly five entries")
     elif any(not isinstance(value, str) or not value.strip() for value in encounters):
         reasons.append(f"{path}.encounter_ids entries must be non-blank strings")
+    elif len(set(encounters)) != 5:
+        reasons.append(f"{path}.encounter_ids must be unique across the five rooms")
 
     spawns = run.get("spawn_sequences")
     if not isinstance(spawns, list) or len(spawns) != 5:
@@ -955,11 +1090,12 @@ def _validate_run_shape(run: Mapping[str, object], path: str, reasons: list[str]
         reasons.append(f"{path}.reward_offers must contain exactly four offers")
     elif any(
         not isinstance(offer, list)
-        or not offer
+        or len(offer) != 3
         or any(not isinstance(option, str) or not option.strip() for option in offer)
+        or len(set(offer)) != 3
         for offer in offers
     ):
-        reasons.append(f"{path}.reward_offers must contain non-empty option id arrays")
+        reasons.append(f"{path}.reward_offers must contain exactly three unique option ids")
 
     choices = run.get("selected_choices")
     if not isinstance(choices, list) or len(choices) != 4:
@@ -967,9 +1103,35 @@ def _validate_run_shape(run: Mapping[str, object], path: str, reasons: list[str]
         choices = []
     elif any(not isinstance(choice, str) or not choice.strip() for choice in choices):
         reasons.append(f"{path}.selected_choices entries must be non-blank strings")
+    if isinstance(offers, list) and len(offers) == 4 and len(choices) == 4:
+        for choice_index, choice in enumerate(choices):
+            offer = offers[choice_index]
+            if isinstance(offer, list) and choice not in offer:
+                reasons.append(
+                    f"{path}.selected_choices[{choice_index}] must belong to reward_offers[{choice_index}]"
+                )
 
     snapshots = run.get("choice_snapshots")
     revisions: list[int] = []
+    previous_history_size = 0
+    previous_build: dict = {
+        "items": [],
+        "blessings": [],
+        "curses": [],
+        "talents": [],
+        "reward_history": [],
+        "archetypes": {},
+        "dominant_archetype": "",
+    }
+    build_fields = {
+        "items",
+        "blessings",
+        "curses",
+        "talents",
+        "reward_history",
+        "archetypes",
+        "dominant_archetype",
+    }
     if not isinstance(snapshots, list) or len(snapshots) != 4:
         reasons.append(f"{path}.choice_snapshots must contain exactly four post-choice snapshots")
     else:
@@ -978,8 +1140,8 @@ def _validate_run_shape(run: Mapping[str, object], path: str, reasons: list[str]
             if not isinstance(snapshot, dict):
                 reasons.append(f"{snapshot_path} must be an object")
                 continue
-            if set(snapshot) != {"choice_id", "revision", "build"}:
-                reasons.append(f"{snapshot_path} must contain only choice_id, revision, and build")
+            if set(snapshot) != {"choice_id", "revision", "outcome", "build"}:
+                reasons.append(f"{snapshot_path} must contain only choice_id, revision, outcome, and build")
             if snapshot_index < len(choices) and snapshot.get("choice_id") != choices[snapshot_index]:
                 reasons.append(f"{snapshot_path}.choice_id must match selected_choices")
             revision = snapshot.get("revision")
@@ -987,8 +1149,113 @@ def _validate_run_shape(run: Mapping[str, object], path: str, reasons: list[str]
                 reasons.append(f"{snapshot_path}.revision must be a non-negative integer")
             else:
                 revisions.append(revision)
-            if not isinstance(snapshot.get("build"), dict):
+            outcome = snapshot.get("outcome")
+            if outcome not in ("applied", "no_state_change"):
+                reasons.append(f"{snapshot_path}.outcome must be applied or no_state_change")
+            build = snapshot.get("build")
+            if not isinstance(build, dict):
                 reasons.append(f"{snapshot_path}.build must be a normalized object")
+                continue
+            if set(build) != build_fields:
+                reasons.append(f"{snapshot_path}.build must contain the normalized RunBuildState fields")
+                continue
+            for field in ("items", "blessings", "curses", "talents", "reward_history"):
+                if not isinstance(build.get(field), list):
+                    reasons.append(f"{snapshot_path}.build.{field} must be an array")
+            archetypes = build.get("archetypes")
+            if not isinstance(archetypes, dict):
+                reasons.append(f"{snapshot_path}.build.archetypes must be an object")
+            elif any(
+                not isinstance(key, str)
+                or not key
+                or isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+                for key, value in archetypes.items()
+            ):
+                reasons.append(f"{snapshot_path}.build.archetypes must contain non-negative integer counts")
+            if not isinstance(build.get("dominant_archetype"), str):
+                reasons.append(f"{snapshot_path}.build.dominant_archetype must be a string")
+            history = build.get("reward_history")
+            if not isinstance(history, list):
+                continue
+            if outcome == "no_state_change":
+                if snapshot.get("choice_id") != "decline_contract":
+                    reasons.append(f"{snapshot_path}.no_state_change is only valid for decline_contract")
+                if build != previous_build:
+                    reasons.append(f"{snapshot_path}.no_state_change must preserve the complete build snapshot")
+            else:
+                if len(history) != previous_history_size + 1:
+                    reasons.append(f"{snapshot_path}.applied must append exactly one reward history entry")
+                elif not isinstance(history[-1], dict) or history[-1].get("id") != snapshot.get("choice_id"):
+                    reasons.append(f"{snapshot_path}.reward_history must end with the selected choice id")
+                previous_history = previous_build["reward_history"]
+                if history[:len(previous_history)] != previous_history:
+                    reasons.append(f"{snapshot_path}.reward_history must preserve all prior entries")
+                category_fields = {
+                    "item": "items",
+                    "blessing": "blessings",
+                    "curse": "curses",
+                    "talent": "talents",
+                }
+                selected_entry = history[-1] if isinstance(history[-1], dict) else {}
+                selected_category = selected_entry.get("category")
+                selected_field = category_fields.get(selected_category)
+                if selected_field is None:
+                    reasons.append(f"{snapshot_path}.reward_history must declare a supported category")
+                previously_owned = {
+                    str(content_id)
+                    for field in ("items", "blessings", "curses", "talents")
+                    for content_id in previous_build[field]
+                }
+                if snapshot.get("choice_id") in previously_owned:
+                    reasons.append(f"{snapshot_path}.selected choice must not already be owned")
+                current_owned: list[str] = []
+                for field in ("items", "blessings", "curses", "talents"):
+                    values = build.get(field)
+                    if isinstance(values, list):
+                        current_owned.extend(str(content_id) for content_id in values)
+                        previous_values = previous_build[field]
+                        expected_values = list(previous_values)
+                        if field == selected_field:
+                            expected_values.append(snapshot.get("choice_id"))
+                        if values != expected_values:
+                            reasons.append(
+                                f"{snapshot_path}.build.{field} must equal the exact recorded reward transition"
+                            )
+                if len(current_owned) != len(set(current_owned)):
+                    reasons.append(f"{snapshot_path}.typed build ids must remain globally unique")
+                if isinstance(archetypes, dict):
+                    expected_archetypes = dict(previous_build["archetypes"])
+                    selected_archetype = selected_entry.get("archetype", "")
+                    if not isinstance(selected_archetype, str):
+                        reasons.append(f"{snapshot_path}.reward_history archetype must be a string")
+                    elif selected_category != "curse" and selected_archetype:
+                        expected_archetypes[selected_archetype] = int(
+                            expected_archetypes.get(selected_archetype, 0)
+                        ) + 1
+                    if archetypes != expected_archetypes:
+                        reasons.append(
+                            f"{snapshot_path}.build.archetypes must equal the exact recorded reward transition"
+                        )
+                    dominant = build.get("dominant_archetype")
+                    if expected_archetypes:
+                        expected_dominant = ""
+                        best_count = -1
+                        for archetype_id, count in expected_archetypes.items():
+                            if count > best_count:
+                                expected_dominant = archetype_id
+                                best_count = count
+                        if dominant != expected_dominant:
+                            reasons.append(
+                                f"{snapshot_path}.build.dominant_archetype must match the runtime tie-break"
+                            )
+                    elif dominant != "":
+                        reasons.append(
+                            f"{snapshot_path}.build.dominant_archetype must be empty without archetype counts"
+                        )
+            previous_history_size = len(history)
+            previous_build = _deep_copy(build)
         if len(revisions) == 4 and any(later <= earlier for earlier, later in zip(revisions, revisions[1:])):
             reasons.append(f"{path}.choice_snapshots revisions must increase strictly")
 
@@ -1044,19 +1311,34 @@ def _evaluate_attestation(
     cohort: Mapping[str, object],
     joined_session_ids: Sequence[str],
     minimum_human_sessions: int,
+    matrix_digest: str,
+    sessions_digest: str,
+    observations_digest: str,
+    trust_store: Mapping[str, object] | None,
 ) -> dict:
     if value is None:
         return {
             "approved": False,
             "attestation_id": "",
+            "key_id": "",
+            "signature_verified": False,
             "attested_sessions": 0,
-            "reasons": ["independent external attestation manifest is required for M1 Go"],
+            "reasons": ["signed independent external attestation is required for M1 Go"],
         }
     reasons: list[str] = []
     if not isinstance(value, dict):
         reasons.append("external attestation must be an object")
         value = {}
-    fields = {"schema_version", "attestation_id", "cohort", "attestor", "approval", "session_ids"}
+    fields = {
+        "schema_version",
+        "attestation_id",
+        "cohort",
+        "attestor",
+        "approval",
+        "evidence",
+        "session_ids",
+        "signature",
+    }
     for field in sorted(fields - value.keys()):
         reasons.append(f"attestation.{field} is required")
     for field in sorted(value.keys() - fields):
@@ -1069,8 +1351,11 @@ def _evaluate_attestation(
     if value.get("cohort") != dict(cohort):
         reasons.append("attestation.cohort must exactly match the seed matrix cohort")
     attestor = _mapping(value.get("attestor"))
-    if set(attestor) != {"role", "independent_from_development"}:
-        reasons.append("attestation.attestor must contain role and independent_from_development")
+    if set(attestor) != {"key_id", "role", "independent_from_development"}:
+        reasons.append("attestation.attestor must contain key_id, role, and independent_from_development")
+    key_id = attestor.get("key_id")
+    if not isinstance(key_id, str) or IDENTIFIER_RE.fullmatch(key_id) is None:
+        reasons.append("attestation.attestor.key_id must be a lowercase identifier")
     if attestor.get("role") != "external_playtest_coordinator":
         reasons.append("attestation.attestor.role must be external_playtest_coordinator")
     if attestor.get("independent_from_development") is not True:
@@ -1085,6 +1370,15 @@ def _evaluate_attestation(
     approved_at = approval.get("approved_at_utc")
     if not isinstance(approved_at, str) or UTC_TIMESTAMP_RE.fullmatch(approved_at) is None:
         reasons.append("attestation approved_at_utc must be a UTC timestamp")
+    evidence = _mapping(value.get("evidence"))
+    expected_evidence = {
+        "matrix_digest": matrix_digest,
+        "sessions_digest": sessions_digest,
+        "observations_digest": observations_digest,
+        "session_ids_digest": canonical_digest(sorted(joined_session_ids)),
+    }
+    if evidence != expected_evidence:
+        reasons.append("attestation.evidence must bind the exact matrix, sessions, observations, and session ids")
     session_ids = value.get("session_ids")
     normalized_ids: list[str] = []
     if not isinstance(session_ids, list):
@@ -1099,12 +1393,135 @@ def _evaluate_attestation(
             reasons.append("attestation.session_ids must exactly match the joined human cohort")
         if len(normalized_ids) < minimum_human_sessions:
             reasons.append(f"attestation must cover at least {minimum_human_sessions} joined sessions")
+    signature = _mapping(value.get("signature"))
+    if set(signature) != {"algorithm", "value_base64"}:
+        reasons.append("attestation.signature must contain algorithm and value_base64")
+    if signature.get("algorithm") != "rsa-sha256":
+        reasons.append("attestation.signature.algorithm must be rsa-sha256")
+    signature_verified = False
+    if not reasons:
+        signature_verified, signature_reason = _verify_attestation_signature(
+            value,
+            key_id=str(key_id),
+            cohort_commit=str(cohort.get("commit", "")),
+            trust_store=trust_store,
+        )
+        if not signature_verified:
+            reasons.append(signature_reason)
     return {
         "approved": not reasons,
         "attestation_id": attestation_id if isinstance(attestation_id, str) else "",
+        "key_id": key_id if isinstance(key_id, str) else "",
+        "signature_verified": signature_verified,
         "attested_sessions": len(set(normalized_ids)),
         "reasons": reasons,
     }
+
+
+def _verify_attestation_signature(
+    attestation: Mapping[str, object],
+    *,
+    key_id: str,
+    cohort_commit: str,
+    trust_store: Mapping[str, object] | None,
+) -> tuple[bool, str]:
+    injected_trust = trust_store is not None
+    store = trust_store if injected_trust else _load_attestor_trust_store(cohort_commit)
+    keys = store.get("keys") if isinstance(store, Mapping) else None
+    if not isinstance(keys, list):
+        return False, "external attestor trust store is invalid"
+    trusted_key: Mapping[str, object] | None = None
+    for raw_key in keys:
+        if (
+            isinstance(raw_key, Mapping)
+            and raw_key.get("key_id") == key_id
+            and raw_key.get("active") is True
+            and raw_key.get("algorithm") == "rsa-sha256"
+        ):
+            trusted_key = raw_key
+            break
+    if trusted_key is None:
+        return False, f"attestor key is not trusted: {key_id}"
+    public_key_value = trusted_key.get("public_key_path")
+    if not isinstance(public_key_value, str) or not public_key_value.strip():
+        return False, "trusted attestor public key path is missing"
+    public_key_bytes: bytes | None = None
+    public_key_path = Path(public_key_value)
+    if injected_trust:
+        if not public_key_path.is_absolute():
+            public_key_path = PROJECT_ROOT / public_key_path
+        if not public_key_path.is_file():
+            return False, f"trusted attestor public key is unavailable: {public_key_path}"
+    else:
+        if public_key_path.is_absolute() or ".." in public_key_path.parts:
+            return False, "tracked attestor public key path must be repository-relative"
+        public_key_bytes = _git_blob(cohort_commit, public_key_path.as_posix())
+        if public_key_bytes is None:
+            return False, "tracked attestor public key is unavailable in cohort.commit"
+
+    signature = _mapping(attestation.get("signature"))
+    encoded_signature = signature.get("value_base64")
+    if not isinstance(encoded_signature, str):
+        return False, "attestation signature is missing"
+    try:
+        signature_bytes = base64.b64decode(encoded_signature, validate=True)
+    except (ValueError, TypeError):
+        return False, "attestation signature is not valid base64"
+    payload = {
+        key: _deep_copy(value)
+        for key, value in attestation.items()
+        if key != "signature"
+    }
+    payload_bytes = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    with tempfile.TemporaryDirectory(prefix="planewalker-m1-attestation-") as temp_dir:
+        payload_path = Path(temp_dir) / "payload.json"
+        signature_path = Path(temp_dir) / "signature.bin"
+        verification_key_path = public_key_path
+        if public_key_bytes is not None:
+            verification_key_path = Path(temp_dir) / "attestor-public.pem"
+            verification_key_path.write_bytes(public_key_bytes)
+        payload_path.write_bytes(payload_bytes)
+        signature_path.write_bytes(signature_bytes)
+        try:
+            completed = subprocess.run(
+                [
+                    "openssl",
+                    "dgst",
+                    "-sha256",
+                    "-verify",
+                    str(verification_key_path),
+                    "-signature",
+                    str(signature_path),
+                    str(payload_path),
+                ],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        except OSError:
+            return False, "OpenSSL is unavailable for attestation verification"
+    if completed.returncode != 0:
+        return False, "attestation signature verification failed"
+    return True, ""
+
+
+def _load_attestor_trust_store(cohort_commit: str) -> Mapping[str, object]:
+    trust_bytes = _git_blob(
+        cohort_commit,
+        ATTESTOR_TRUST_PATH.relative_to(PROJECT_ROOT).as_posix(),
+    )
+    if trust_bytes is None:
+        return {"keys": []}
+    try:
+        value = json.loads(trust_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def _validate_cohort(value: object) -> list[str]:

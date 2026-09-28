@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "planewalker://schemas/m1-external-attestation/1.0.0",
+  "$id": "planewalker://schemas/m1-external-attestation/2.0.0",
   "title": "Plane Walker M1 External Evidence Attestation",
   "description": "Independent approval manifest for an exact anonymous M1 human cohort. This file is separate from self-declared session evidence.",
   "type": "object",
@@ -11,10 +11,12 @@
     "cohort",
     "attestor",
     "approval",
-    "session_ids"
+    "evidence",
+    "session_ids",
+    "signature"
   ],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "2.0.0"},
     "attestation_id": {
       "type": "string",
       "pattern": "^[a-z0-9_][a-z0-9_.-]*$"
@@ -32,10 +34,22 @@
     "attestor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["role", "independent_from_development"],
+      "required": ["key_id", "role", "independent_from_development"],
       "properties": {
+        "key_id": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"},
         "role": {"const": "external_playtest_coordinator"},
         "independent_from_development": {"const": true}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matrix_digest", "sessions_digest", "observations_digest", "session_ids_digest"],
+      "properties": {
+        "matrix_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sessions_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "observations_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "session_ids_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
     "approval": {
@@ -55,6 +69,15 @@
       "items": {
         "type": "string",
         "pattern": "^pws_[0-9a-f]{32}$"
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value_base64"],
+      "properties": {
+        "algorithm": {"const": "rsa-sha256"},
+        "value_base64": {"type": "string", "minLength": 1}
       }
     }
   }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "attestation_id": "m1_external_replace_with_cohort_sequence",
   "cohort": {
     "build_version": "REPLACE",
@@ -7,6 +7,7 @@
     "content_version": "REPLACE_WITH_CATALOG_PLAN_ID"
   },
   "attestor": {
+    "key_id": "REPLACE_WITH_TRACKED_TRUSTED_KEY_ID",
     "role": "external_playtest_coordinator",
     "independent_from_development": true
   },
@@ -15,7 +16,17 @@
     "statement": "authentic_human_evidence_verified",
     "approved_at_utc": "REPLACE_WITH_UTC_TIMESTAMP"
   },
+  "evidence": {
+    "matrix_digest": "REPLACE_WITH_64_HEX_MATRIX_DIGEST",
+    "sessions_digest": "REPLACE_WITH_64_HEX_CANONICAL_SESSIONS_DIGEST",
+    "observations_digest": "REPLACE_WITH_64_HEX_CANONICAL_OBSERVATIONS_DIGEST",
+    "session_ids_digest": "REPLACE_WITH_64_HEX_SORTED_SESSION_IDS_DIGEST"
+  },
   "session_ids": [
     "pws_REPLACE_WITH_EACH_APPROVED_ANONYMOUS_SESSION_ID"
-  ]
+  ],
+  "signature": {
+    "algorithm": "rsa-sha256",
+    "value_base64": "REPLACE_WITH_BASE64_SIGNATURE_OVER_CANONICAL_JSON_WITHOUT_SIGNATURE"
+  }
 }

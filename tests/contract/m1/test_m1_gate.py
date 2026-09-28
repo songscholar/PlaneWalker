@@ -70,7 +70,7 @@ def make_raw_run(seed: int) -> dict:
     history: list[dict] = []
     for revision, choice_id in enumerate(choice_ids, start=1):
         selected.append(choice_id)
-        history.append({"id": choice_id})
+        history.append({"id": choice_id, "category": "item"})
         snapshots.append({
             "choice_id": choice_id,
             "revision": revision,
@@ -245,11 +245,33 @@ def make_observation(index: int, *, source: str = "human") -> dict:
 
 class SeedMatrixContractTest(unittest.TestCase):
     def test_exact_canonical_seed_coverage_passes(self) -> None:
-        result = validate_seed_matrix(make_matrix())
+        matrix = make_matrix()
+        result = validate_seed_matrix(
+            matrix,
+            verify_repository_artifacts=False,
+            trusted_runtime_matrix_digest=matrix["matrix_digest"],
+        )
 
         self.assertTrue(result.passed, result.reasons)
+        self.assertTrue(result.release_eligible, result.release_reasons)
         self.assertEqual(result.seed_count, 30)
         self.assertEqual(result.seeds, tuple(range(30)))
+
+    def test_release_matrix_requires_trusted_live_runtime_digest(self) -> None:
+        matrix = make_matrix()
+
+        unverified = validate_seed_matrix(matrix, verify_repository_artifacts=False)
+        mismatched = validate_seed_matrix(
+            matrix,
+            verify_repository_artifacts=False,
+            trusted_runtime_matrix_digest="0" * 64,
+        )
+
+        self.assertTrue(unverified.passed, unverified.reasons)
+        self.assertFalse(unverified.release_eligible)
+        self.assertTrue(any("trusted live Godot" in reason for reason in unverified.release_reasons))
+        self.assertFalse(mismatched.release_eligible)
+        self.assertTrue(any("does not match" in reason for reason in mismatched.release_reasons))
 
     def test_missing_and_duplicate_seed_are_rejected(self) -> None:
         raw_runs = [make_raw_run(seed) for seed in range(29)]
@@ -321,9 +343,18 @@ class SeedMatrixContractTest(unittest.TestCase):
         cases = {
             "room": lambda run: run["room_sequence"].pop(),
             "encounter": lambda run: run["encounter_ids"].__setitem__(2, ""),
+            "duplicate_encounter": lambda run: run["encounter_ids"].__setitem__(2, run["encounter_ids"][1]),
             "spawn": lambda run: run["spawn_sequences"].__setitem__(1, []),
             "offer": lambda run: run["reward_offers"].pop(),
+            "offer_size": lambda run: run["reward_offers"][0].pop(),
+            "offer_duplicate": lambda run: run["reward_offers"][0].__setitem__(2, run["reward_offers"][0][1]),
             "choice": lambda run: run["selected_choices"].pop(),
+            "choice_not_offered": lambda run: (
+                run["selected_choices"].__setitem__(0, "not_offered"),
+                run["choice_snapshots"][0].__setitem__("choice_id", "not_offered"),
+                run["choice_snapshots"][0]["build"]["items"].__setitem__(0, "not_offered"),
+                run["choice_snapshots"][0]["build"]["reward_history"][0].__setitem__("id", "not_offered"),
+            ),
             "snapshot": lambda run: run["choice_snapshots"].pop(),
             "victory": lambda run: run.__setitem__("terminal_state", "death"),
             "duration": lambda run: run.__setitem__("duration_proxy_ms", 0),
@@ -341,6 +372,146 @@ class SeedMatrixContractTest(unittest.TestCase):
                 )
                 result = validate_seed_matrix(report)
                 self.assertFalse(result.passed, label)
+
+    def test_choice_snapshots_preserve_prior_build_state(self) -> None:
+        runs = [make_raw_run(seed) for seed in range(30)]
+        runs[0]["choice_snapshots"][1]["build"]["items"] = ["choice_2"]
+        report = make_seed_matrix(
+            runs,
+            cohort=COHORT,
+            seed_start=0,
+            seed_count=30,
+            evidence=make_evidence(),
+        )
+
+        result = validate_seed_matrix(report, verify_repository_artifacts=False)
+
+        self.assertFalse(result.passed)
+        self.assertTrue(any("exact recorded reward transition" in reason for reason in result.reasons))
+
+    def test_decline_contract_must_be_complete_no_op(self) -> None:
+        runs = [make_raw_run(seed) for seed in range(30)]
+        run = runs[0]
+        run["selected_choices"][3] = "decline_contract"
+        run["reward_offers"][3][0] = "decline_contract"
+        snapshot = run["choice_snapshots"][3]
+        snapshot["choice_id"] = "decline_contract"
+        snapshot["outcome"] = "no_state_change"
+        snapshot["build"]["reward_history"] = snapshot["build"]["reward_history"][:3]
+        snapshot["build"]["items"] = snapshot["build"]["items"][:3] + ["hidden_mutation"]
+        report = make_seed_matrix(
+            runs,
+            cohort=COHORT,
+            seed_start=0,
+            seed_count=30,
+            evidence=make_evidence(),
+        )
+
+        result = validate_seed_matrix(report, verify_repository_artifacts=False)
+
+        self.assertFalse(result.passed)
+        self.assertTrue(any("preserve the complete build snapshot" in reason for reason in result.reasons))
+
+    def test_reward_history_category_must_match_typed_collection(self) -> None:
+        runs = [make_raw_run(seed) for seed in range(30)]
+        runs[0]["choice_snapshots"][0]["build"]["reward_history"][0]["category"] = "blessing"
+        for snapshot in runs[0]["choice_snapshots"][1:]:
+            snapshot["build"]["reward_history"][0]["category"] = "blessing"
+        report = make_seed_matrix(
+            runs,
+            cohort=COHORT,
+            seed_start=0,
+            seed_count=30,
+            evidence=make_evidence(),
+        )
+
+        result = validate_seed_matrix(
+            report,
+            verify_repository_artifacts=False,
+            trusted_runtime_matrix_digest=report["matrix_digest"],
+        )
+
+        self.assertFalse(result.passed)
+        self.assertTrue(any("build.blessings" in reason for reason in result.reasons))
+
+    def test_applied_choice_rejects_unrecorded_typed_and_archetype_state(self) -> None:
+        cases = {
+            "typed": lambda snapshot: snapshot["build"]["blessings"].append("unrecorded_bonus"),
+            "archetype": lambda snapshot: snapshot["build"].update({
+                "archetypes": {"forged": 999},
+                "dominant_archetype": "forged",
+            }),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label):
+                runs = [make_raw_run(seed) for seed in range(30)]
+                for snapshot in runs[0]["choice_snapshots"][1:]:
+                    mutate(snapshot)
+                report = make_seed_matrix(
+                    runs,
+                    cohort=COHORT,
+                    seed_start=0,
+                    seed_count=30,
+                    evidence=make_evidence(),
+                )
+
+                result = validate_seed_matrix(
+                    report,
+                    verify_repository_artifacts=False,
+                    trusted_runtime_matrix_digest=report["matrix_digest"],
+                )
+
+                self.assertFalse(result.passed)
+                self.assertTrue(any("exact recorded reward transition" in reason for reason in result.reasons))
+
+    def test_dominant_archetype_uses_runtime_first_inserted_tie_break(self) -> None:
+        runs = [make_raw_run(seed) for seed in range(30)]
+        run = runs[0]
+        for snapshot_index, snapshot in enumerate(run["choice_snapshots"]):
+            history = snapshot["build"]["reward_history"]
+            history[0]["archetype"] = "alpha"
+            if snapshot_index >= 1:
+                history[1]["archetype"] = "beta"
+                snapshot["build"]["archetypes"] = {"alpha": 1, "beta": 1}
+                snapshot["build"]["dominant_archetype"] = "alpha"
+            else:
+                snapshot["build"]["archetypes"] = {"alpha": 1}
+                snapshot["build"]["dominant_archetype"] = "alpha"
+        run["choice_snapshots"][1]["build"]["dominant_archetype"] = "beta"
+        report = make_seed_matrix(
+            runs,
+            cohort=COHORT,
+            seed_start=0,
+            seed_count=30,
+            evidence=make_evidence(),
+        )
+
+        result = validate_seed_matrix(report, verify_repository_artifacts=False)
+
+        self.assertFalse(result.passed)
+        self.assertTrue(any("runtime tie-break" in reason for reason in result.reasons))
+
+    def test_selected_choice_cannot_repeat_an_owned_reward(self) -> None:
+        runs = [make_raw_run(seed) for seed in range(30)]
+        run = runs[0]
+        run["reward_offers"][1][0] = "choice_1"
+        run["selected_choices"][1] = "choice_1"
+        for snapshot in run["choice_snapshots"][1:]:
+            snapshot["choice_id"] = "choice_1" if snapshot["revision"] == 2 else snapshot["choice_id"]
+            snapshot["build"]["items"][1] = "choice_1"
+            snapshot["build"]["reward_history"][1]["id"] = "choice_1"
+        report = make_seed_matrix(
+            runs,
+            cohort=COHORT,
+            seed_start=0,
+            seed_count=30,
+            evidence=make_evidence(),
+        )
+
+        result = validate_seed_matrix(report, verify_repository_artifacts=False)
+
+        self.assertFalse(result.passed)
+        self.assertTrue(any("must not already be owned" in reason for reason in result.reasons))
 
 
 class ObservationAndDecisionContractTest(unittest.TestCase):
@@ -434,6 +605,7 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
             attestation=make_attestation(matrix, sessions, observations),
             verify_repository_artifacts=False,
             attestation_trust=TEST_ATTESTOR_TRUST,
+            trusted_runtime_matrix_digest=matrix["matrix_digest"],
         )
 
         self.assertEqual(decision.state, M1_GO)
@@ -458,6 +630,7 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
             attestation=make_attestation(matrix, sessions, observations),
             verify_repository_artifacts=False,
             attestation_trust=TEST_ATTESTOR_TRUST,
+            trusted_runtime_matrix_digest=matrix["matrix_digest"],
         )
 
         completion = decision.external_gate["thresholds"]["human_completion_rate"]
@@ -485,6 +658,7 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
                     attestation=make_attestation(matrix, sessions, observations),
                     verify_repository_artifacts=False,
                     attestation_trust=TEST_ATTESTOR_TRUST,
+                    trusted_runtime_matrix_digest=matrix["matrix_digest"],
                 )
                 self.assertEqual(decision.state, M1_NO_GO)
                 self.assertEqual(len(decision.external_gate["blocking_issues"]), 1)
