@@ -68,12 +68,16 @@ func open_selection(offer: Dictionary):
 	return _accept_phase(RunPhaseScript.Value.SELECTION_ACTIVE)
 
 
-func selection_resolved():
+func selection_resolved(definition: Dictionary = {}):
 	if state.phase != RunPhaseScript.Value.SELECTION_ACTIVE:
 		return _reject_phase()
+	var definition_validation = _validate_selected_definition(definition)
+	if not definition_validation.ok:
+		return definition_validation
 	var offer_id := str(state.open_offer.get("offer_id", ""))
 	if not state.mark_offer_consumed(offer_id):
 		return CommandResultScript.failure(&"ALREADY_CONSUMED", state.revision, {"offer_id": offer_id})
+	_record_selected_definition(definition)
 	state.open_offer = {}
 	return _accept_phase(RunPhaseScript.Value.ROOM_TRANSITION)
 
@@ -91,9 +95,13 @@ func player_died(context: Dictionary = {}):
 	if state.phase not in [
 		RunPhaseScript.Value.ROOM_ENTERING,
 		RunPhaseScript.Value.COMBAT_ACTIVE,
+		RunPhaseScript.Value.ROOM_RESOLVING,
+		RunPhaseScript.Value.SELECTION_ACTIVE,
+		RunPhaseScript.Value.ROOM_TRANSITION,
 		RunPhaseScript.Value.BOSS_ACTIVE,
 	]:
 		return _reject_phase()
+	state.open_offer = {}
 	state.result = context.duplicate(true)
 	return _accept_phase(RunPhaseScript.Value.DEFEAT)
 
@@ -133,6 +141,44 @@ func _accept_phase(next_phase: int):
 
 func _accept_without_phase_change():
 	return CommandResultScript.success(state.advance_revision())
+
+
+func _validate_selected_definition(definition: Dictionary):
+	if definition.is_empty():
+		return CommandResultScript.success(state.revision)
+	var content_id := str(definition.get("id", ""))
+	var category := str(definition.get("category", ""))
+	if content_id.is_empty():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			state.revision,
+			{"field": "definition.id"}
+		)
+	if category not in ["item", "blessing", "curse", "talent", "contract"]:
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			state.revision,
+			{"field": "definition.category"}
+		)
+	if category == "contract" and content_id != "decline_contract":
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			state.revision,
+			{"field": "definition.id"}
+		)
+	return CommandResultScript.success(state.revision)
+
+
+func _record_selected_definition(definition: Dictionary) -> void:
+	match str(definition.get("category", "")):
+		"item":
+			state.build_state.record_item(definition)
+		"blessing":
+			state.build_state.record_blessing(definition)
+		"curse":
+			state.build_state.record_curse(definition)
+		"talent":
+			state.build_state.record_talent(definition)
 
 
 func _reject_phase():

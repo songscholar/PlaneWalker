@@ -12,6 +12,9 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_legal_run_path(suite)
+	_test_selection_writeback(suite)
+	_test_invalid_selection_definitions(suite)
+	_test_death_closes_active_selection(suite)
 	_test_invalid_transitions(suite)
 	_test_pause_overlay(suite)
 	suite.finish(get_tree())
@@ -68,6 +71,125 @@ func _test_invalid_transitions(suite) -> void:
 	suite.assert_equal(orchestrator.state.revision, revision_before, "invalid command leaves revision unchanged")
 
 
+func _test_selection_writeback(suite) -> void:
+	var cases: Array[Dictionary] = [
+		{
+			"category": "item",
+			"id": "frozen_burst",
+			"field": "items",
+			"archetype": "time_stop_burst",
+		},
+		{
+			"category": "blessing",
+			"id": "bls_stop_weakpoint",
+			"field": "blessings",
+			"archetype": "time_stop_burst",
+		},
+		{
+			"category": "curse",
+			"id": "glass_tempo",
+			"field": "curses",
+			"archetype": "accelerated_combo",
+		},
+		{
+			"category": "talent",
+			"id": "tal_ruin_execute",
+			"field": "talents",
+			"archetype": "accelerated_combo",
+		},
+	]
+	for case: Dictionary in cases:
+		var offer_id := "run-writeback:%s" % str(case["category"])
+		var orchestrator = _orchestrator_with_open_offer(offer_id)
+		var definition := {
+			"id": case["id"],
+			"category": case["category"],
+			"archetype": case["archetype"],
+			"effects": {"test_effect": 1.0},
+		}
+		var result = orchestrator.selection_resolved(definition)
+		suite.assert_true(result.ok, "%s definition resolves" % str(case["category"]))
+		var recorded: Array = orchestrator.state.build_state.get(str(case["field"]))
+		suite.assert_true(recorded.has(str(case["id"])), "%s writes to authoritative build" % str(case["category"]))
+		suite.assert_equal(orchestrator.state.build_state.reward_history.size(), 1, "%s records one build history entry" % str(case["category"]))
+		if str(case["category"]) == "item":
+			suite.assert_equal(orchestrator.state.build_state.dominant_archetype, "time_stop_burst", "item updates dominant archetype")
+
+	var decline = _orchestrator_with_open_offer("run-writeback:decline")
+	var declined = decline.selection_resolved({
+		"id": "decline_contract",
+		"category": "contract",
+		"effects": {},
+	})
+	suite.assert_true(declined.ok, "decline contract resolves")
+	suite.assert_true(decline.state.build_state.curses.is_empty(), "decline contract records no curse")
+	suite.assert_true(decline.state.build_state.reward_history.is_empty(), "decline contract records no build history")
+
+	var compatibility = _orchestrator_with_open_offer("run-writeback:compatibility")
+	var compatibility_result = compatibility.selection_resolved()
+	suite.assert_true(compatibility_result.ok, "empty definition remains compatible")
+	suite.assert_true(compatibility.state.build_state.reward_history.is_empty(), "compatibility resolution does not invent build data")
+
+	var duplicate = _orchestrator_with_open_offer("run-writeback:duplicate")
+	var duplicate_definition := {
+		"id": "frozen_burst",
+		"category": "item",
+		"archetype": "time_stop_burst",
+		"effects": {},
+	}
+	suite.assert_true(duplicate.selection_resolved(duplicate_definition).ok, "first canonical selection resolves")
+	duplicate.transition_completed()
+	duplicate.room_entered(false)
+	duplicate.room_cleared()
+	var reopen = duplicate.open_selection(_offer(duplicate.state.revision, "run-writeback:duplicate"))
+	suite.assert_equal(reopen.code, &"ALREADY_CONSUMED", "consumed offer cannot resolve a second time")
+	suite.assert_equal(duplicate.state.build_state.reward_history.size(), 1, "duplicate resolution does not duplicate build history")
+
+
+func _test_invalid_selection_definitions(suite) -> void:
+	var invalid_definitions: Array[Dictionary] = [
+		{
+			"definition": {"category": "item", "effects": {}},
+			"field": "definition.id",
+			"label": "missing definition id",
+		},
+		{
+			"definition": {"id": "unknown", "category": "mystery", "effects": {}},
+			"field": "definition.category",
+			"label": "unknown definition category",
+		},
+		{
+			"definition": {"id": "risky_contract", "category": "contract", "effects": {}},
+			"field": "definition.id",
+			"label": "non-decline contract",
+		},
+	]
+	for case: Dictionary in invalid_definitions:
+		var offer_id := "run-invalid:%s" % str(case["label"]).replace(" ", "-")
+		var orchestrator = _orchestrator_with_open_offer(offer_id)
+		var phase_before: int = orchestrator.state.phase
+		var revision_before: int = orchestrator.state.revision
+		var offer_before: Dictionary = orchestrator.state.open_offer.duplicate(true)
+		var build_before: Dictionary = orchestrator.state.build_state.to_dictionary()
+		var result = orchestrator.selection_resolved(case["definition"])
+		suite.assert_equal(result.code, &"INVALID_ARGUMENT", "%s is rejected" % str(case["label"]))
+		suite.assert_equal(result.context.get("field", ""), case["field"], "%s reports the invalid field" % str(case["label"]))
+		suite.assert_equal(orchestrator.state.phase, phase_before, "%s leaves phase unchanged" % str(case["label"]))
+		suite.assert_equal(orchestrator.state.revision, revision_before, "%s leaves revision unchanged" % str(case["label"]))
+		suite.assert_equal(orchestrator.state.open_offer, offer_before, "%s leaves the offer open" % str(case["label"]))
+		suite.assert_true(not orchestrator.state.has_consumed_offer(offer_id), "%s does not consume the offer" % str(case["label"]))
+		suite.assert_equal(orchestrator.state.build_state.to_dictionary(), build_before, "%s leaves build unchanged" % str(case["label"]))
+
+
+func _test_death_closes_active_selection(suite) -> void:
+	var orchestrator = _orchestrator_with_open_offer("run-selection-death")
+	var result = orchestrator.player_died({"result": "death", "source": "selection"})
+	suite.assert_true(result.ok, "selection-phase death enters terminal defeat")
+	suite.assert_equal(orchestrator.state.phase, RunPhaseScript.Value.DEFEAT, "selection-phase death sets defeat")
+	suite.assert_true(orchestrator.state.open_offer.is_empty(), "selection-phase death closes the active offer")
+	suite.assert_true(not orchestrator.state.has_consumed_offer("run-selection-death"), "death does not consume the abandoned offer")
+
+
 func _test_pause_overlay(suite) -> void:
 	var orchestrator = RunOrchestratorScript.new()
 	orchestrator.enter_hub()
@@ -104,6 +226,17 @@ func _config() -> Dictionary:
 		"difficulty": "normal",
 		"seed": 123,
 	}
+
+
+func _orchestrator_with_open_offer(offer_id: String):
+	var orchestrator = RunOrchestratorScript.new()
+	orchestrator.enter_hub()
+	orchestrator.start_run(_config(), "run-selection")
+	orchestrator.preparation_completed()
+	orchestrator.room_entered(false)
+	orchestrator.room_cleared()
+	orchestrator.open_selection(_offer(orchestrator.state.revision, offer_id))
+	return orchestrator
 
 
 func _offer(revision: int, offer_id: String = "") -> Dictionary:
