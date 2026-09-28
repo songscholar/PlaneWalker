@@ -3,7 +3,7 @@
 - Status: Approved
 - Authority Level: Milestone design and cross-module contract
 - Applies To: M0 文档治理与 M1 五房垂直切片
-- Implementation Status: Wave 0/1 foundation, Wave 2 isolated systems, and Wave 3A runtime integration verified; Wave 3B combat/UI hardening pending
+- Implementation Status: Wave 0/1 foundation, Wave 2 isolated systems, Wave 3A runtime integration, and Wave 3B combat/UI hardening verified; Wave 4 tuning and external playtest pending
 - Owner: Project integration lead
 - Depends On: docs/0_深度收敛与系统职责设计.md
 - Supersedes: 现有文档中与 M1 范围、五房节奏、UI 契约、状态迁移相冲突的执行口径
