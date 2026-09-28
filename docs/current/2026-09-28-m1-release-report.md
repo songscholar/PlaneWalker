@@ -1,50 +1,35 @@
 # Plane Walker M1 放行报告
 
 - Status: M1 Candidate — External Validation Pending
-- Evidence Schema: M1 seed matrix `2.0.0` / playtest session `1.0.0` / observation `1.0.0` / external attestation `1.0.0`
+- Evidence Schema: M1 seed matrix `2.0.0` / playtest session `1.0.0` / observation `1.0.0` / external attestation `2.0.0`
 - Build Version: `0.4.0-dev`
-- Commit: `52953720365a16fc8a6f0208d12ffad0fce27b0e`
+- Commit: `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
 - Content Version: `m1.encounters.v1`
-- Evidence Classification: `non_release_candidate`; clean final cohort regeneration required
 - Evidence Origin: `godot_authoritative_probe`
-- Probe Version: legacy pre-`2.0.0` candidate (must regenerate)
-- Formal Repository Gate: **NOT EVALUATED / NON-RELEASE**
+- Evidence Classification: `release`
+- Probe Version: `2.0.0`
+- Worktree Clean: `true`
+- Tree Digest: `c331ac2309d11b8dda656447adb17167ed905cb6`
+- Probe Digest: `85a654b1f387d50b9074428673db66e37f75208b1efa54fce7859048c7a0a3c8`
+- Godot Version: `4.6.1.stable.official.14d19694e`
+- Content Digest: `237fb15accef5a23f805c6b63d217691a57cd1051df99acbd162820e15a860f6`
 
 ## 正式结论
 
 **M1 Candidate — External Validation Pending**
 
-30 Seed 当前集成工作树诊断：**30 / 30 victory，但不构成正式 PASS**；真实外部试玩：**0 / 20**；匹配结构化观察：**0 / 20**；独立外部证明：**未提供**。
+30 Seed 仓库门禁：**PASS**；真实外部试玩：**0 / 20**；匹配结构化观察：**0 / 20**。
 
 Synthetic 数据只用于验证工具、稳定性和确定性，永久不计入真实玩家门禁。当前证据不足时，不得据此声称手感、公平性或重玩意愿已验证。
 
-本报告生成时，Wave 4D 工具链已经提交为 `5295372`，但并行完成的 Wave 4B/4C 运行时代码尚未全部进入同一个干净 commit。下述两轮结果真实来自当前集成工作树，并非伪造或静态 JSON；它们是候选诊断证据。最终给外部测试者的构建完成并形成干净 commit 后，必须重新运行相同命令，以新的 exact cohort commit 和 digest 替换本节，旧结果不得与新 cohort 混用。
-
 ## 30 Seed 稳定性
 
-- Matrix digest: `44cd5152b48085105e90c383792e15cd5d69e592202aa81bddfb1705017541c8`
+- Matrix digest: `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`
 - Seed records: 30
 - Failed seeds: 0
-- Diagnostic result: PASS
-- Formal Gate: NON-RELEASE（脏工作树、旧 evidence schema、无完整执行指纹）
-
-执行命令：
-
-```bash
-python3 tools/m1/run_seed_matrix.py \
-  --seed-start 0 --seed-count 30 \
-  --output /tmp/planewalker-m1-seeds-5295372.json
-python3 tools/m1/run_seed_matrix.py \
-  --seed-start 0 --seed-count 30 \
-  --output /tmp/planewalker-m1-seeds-5295372-repeat.json
-python3 tools/m1/compare_seed_reports.py \
-  /tmp/planewalker-m1-seeds-5295372.json \
-  /tmp/planewalker-m1-seeds-5295372-repeat.json --json
-```
-
-第二轮同样得到 `44cd5152b48085105e90c383792e15cd5d69e592202aa81bddfb1705017541c8`，`changed_seeds=[]`。0–29 全部通过真实 `main.tscn`、Legacy Adapter、Run Runtime Facade、权威五房 plan、Encounter Catalog 与 Encounter Runner，记录房间、遭遇、spawn、offer、选择、终局和 duration proxy；30 局均为 `victory`，无 failure code。Godot stdout 与 engine log 未出现脚本错误、资源解析错误、ObjectDB leak 或 RID leak。
-
-首次矩阵运行暴露了 Wave 4C 合成音频快速退出时的真实生命周期缺陷：最终活跃 `AudioStreamPlaybackWAV` 持有 `AudioStreamWAV`。生产修复为 voice 结束/全停时清空 stream、Run 瞬态反馈重置、autoload/audio `_exit_tree` 兜底，并移除会残留的 hit-pause SceneTreeTimer。探针随后通过生产 `reset_transient_feedback()` 清理每局，不通过过滤日志或关闭音频掩盖问题；修复后的两轮日志均清洁。
+- Live Godot verification: true
+- Gate: PASS
+- Release eligible: true
 
 ## 外部试玩与玩法阈值
 
@@ -59,6 +44,8 @@ python3 tools/m1/compare_seed_reports.py \
 | `unexplained_harm_rate` | 0.0% | < 10.0% | PENDING |
 | `responsiveness_4plus_rate` | 0.0% | >= 80.0% | PENDING |
 | `replay_intent_rate` | 0.0% | >= 60.0% | PENDING |
+
+独立外部证明：**PENDING/INVALID**；证明 ID：``。
 
 ## 调参输入契约
 
@@ -81,31 +68,7 @@ python3 tools/m1/compare_seed_reports.py \
 
 - requires 20 valid authentic human sessions; found 0
 - requires 20 matching structured observations; found 0
-- independent external attestation manifest is required for M1 Go
-
-因此当前没有依据执行体验型数值调优，也不能从 Bow、Time Rift 或 Time Accelerate 中提升新的 Current。只有真实 cohort 导入并达到全部阈值后，才能生成 `M1 Go` 和数据驱动的 post-M1 ADR。
-
-## 验证记录
-
-```text
-PASS  python3 -m unittest tests.contract.m1.test_m1_gate          (20 tests)
-PASS  python3 -m unittest tests.contract.playtest.test_playtest_data (13 tests)
-PASS  python3 -m py_compile tools/m1/*.py
-PASS  30 Seed first run:  30 victory / 0 failure
-PASS  30 Seed repeat run: 30 victory / 0 failure
-PASS  deterministic compare: changed_seeds=[]
-PASS  Godot log scan: no script/resource errors and no ObjectDB/RID leak
-```
-
-报告生成命令：
-
-```bash
-python3 tools/m1/generate_release_report.py \
-  --seed-report /tmp/planewalker-m1-seeds-5295372.json \
-  --output docs/current/2026-09-28-m1-release-report.md \
-  --json-output /tmp/planewalker-m1-decision-5295372.json \
-  --tuning-output /tmp/planewalker-m1-tuning-5295372.json
-```
+- signed independent external attestation is required for M1 Go
 
 ## 保留/回滚说明
 
@@ -113,6 +76,3 @@ python3 tools/m1/generate_release_report.py \
 - 自由文本、未校验表格和 synthetic fixture 不进入放行计算。
 - 数值改动必须引用本报告调参输入中的指标或失败签名，并记录旧值、新值、预期影响和回归测试。
 - 状态保持 `M1 Candidate — External Validation Pending`，直到正式干净 Seed Matrix、真实 20 局和独立外部证明全部齐备；Candidate 不等于放行。
-- Wave 4D 工具链回滚点：`5295372` 的父提交；只回滚该精确 commit，不回滚 Wave 4B/4C 的独立提交。
-- Wave 4C 音频生命周期修复是 30 Seed 清洁退出的依赖，由 Wave 4C lane 独立提交；最终集成报告必须记录其确切 commit。
-- 最终干净 cohort 生成后，本报告中的候选 commit 与 matrix digest 需要整体替换，不得把候选 digest 当成外部试玩构建指纹。
