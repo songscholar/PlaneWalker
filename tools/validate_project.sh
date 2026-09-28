@@ -171,6 +171,9 @@ cd "${PROJECT_ROOT}"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
 PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_localization.py
 
+printf '\n== Playtest data contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.playtest.test_playtest_data
+
 printf '\n== Godot bootstrap import ==\n'
 run_import_phase bootstrap
 printf 'PASS: bootstrap import completed with only approved generated-resource/environment diagnostics\n'

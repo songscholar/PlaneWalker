@@ -148,6 +148,26 @@ class LocalizationContractTest(unittest.TestCase):
                 {"ARCHETYPE_FREEZE_BURST", "RISK_TIME_SKILL"},
             )
 
+    def test_ignores_schema_metadata_that_is_not_runtime_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            self._write_json(
+                root / "data" / "schemas" / "session.schema.json",
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "description": "Human-readable schema metadata, not a localization key.",
+                    "properties": {
+                        "description": {
+                            "description": "Another schema annotation.",
+                            "type": "string",
+                        }
+                    },
+                },
+            )
+
+            self.assertEqual(validate_localization(root), [])
+
     def test_reports_missing_fixed_room_and_result_domain_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

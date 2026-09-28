@@ -184,11 +184,14 @@ assert_file_contains .github/workflows/validate.yml 'python3 --version' "workflo
 assert_file_contains .github/workflows/validate.yml '\./tools/validate_project\.sh' "workflow validation entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.localization\.test_validate_localization' "localization unit contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 tools/validate_localization\.py' "localization validator entrypoint"
+assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.playtest\.test_playtest_data' "playtest data contract entrypoint"
 assert_file_contains tools/validate_project.sh 'validate_import_logs "\$\{phase\}" "\$\{stdout_log\}" "\$\{engine_log\}"' "each import scans stdout and engine logs"
 
 bootstrap_output="${TEMP_DIR}/bootstrap-expected.out"
-run_fake_validation bootstrap_expected "${bootstrap_output}" \
-	|| fail "the exact pair of generated translation misses must bootstrap successfully"
+if ! run_fake_validation bootstrap_expected "${bootstrap_output}"; then
+	cat "${bootstrap_output}" >&2 || true
+	fail "the exact pair of generated translation misses must bootstrap successfully"
+fi
 assert_contains "$(cat "${bootstrap_output}")" "generated translation resources were absent before bootstrap" "bootstrap translation classification"
 assert_contains "$(cat "${bootstrap_output}")" "cannot persist global Godot editor settings" "editor settings environment warning"
 

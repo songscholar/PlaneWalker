@@ -16,6 +16,7 @@ from typing import Iterable, Iterator
 CATALOG_COLUMNS = ("keys", "en", "zh_CN")
 RUNTIME_SOURCE_DIRS = ("autoload", "scripts")
 LOCALIZED_CONTENT_FIELDS = frozenset(("name", "description"))
+NON_CONTENT_JSON_ROOTS = frozenset(("schemas",))
 DERIVED_CONTENT_KEY_PREFIXES = {
     "archetype": "ARCHETYPE_",
     "risk": "RISK_",
@@ -246,6 +247,9 @@ def _validate_content_references(root: Path, catalog_keys: set[str]) -> list[Vio
         return violations
 
     for content_path in sorted(data_root.rglob("*.json")):
+        relative_parts = content_path.relative_to(data_root).parts
+        if relative_parts and relative_parts[0] in NON_CONTENT_JSON_ROOTS:
+            continue
         try:
             content = json.loads(content_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:

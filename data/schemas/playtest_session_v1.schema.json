@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/playtest-session/1.0.0",
+  "title": "Plane Walker Playtest Session",
+  "description": "Anonymous, versioned playtest evidence. Human and synthetic evidence are deliberately distinct.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "evidence",
+    "build",
+    "run",
+    "timing",
+    "rooms",
+    "damage",
+    "failures",
+    "build_choices",
+    "terminal_result"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "session_id": {"type": "string", "pattern": "^pws_[0-9a-f]{32}$"},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "synthetic", "collection_method"],
+      "properties": {
+        "source": {"enum": ["human", "synthetic"]},
+        "synthetic": {"type": "boolean"},
+        "collection_method": {
+          "enum": ["observed_playtest", "imported_observation", "automated_fixture", "simulation"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "human"}}},
+          "then": {
+            "properties": {
+              "synthetic": {"const": false},
+              "collection_method": {"enum": ["observed_playtest", "imported_observation"]}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"source": {"const": "synthetic"}}},
+          "then": {
+            "properties": {
+              "synthetic": {"const": true},
+              "collection_method": {"enum": ["automated_fixture", "simulation"]}
+            }
+          }
+        }
+      ]
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "commit", "content_version"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "content_version": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "input_device"],
+      "properties": {
+        "seed": {"type": "integer"},
+        "input_device": {"enum": ["keyboard_mouse", "controller", "mixed", "automation"]}
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at_utc", "ended_at_utc", "duration_ms"],
+      "properties": {
+        "started_at_utc": {"type": "string", "format": "date-time"},
+        "ended_at_utc": {"type": "string", "format": "date-time"},
+        "duration_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "rooms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["room_id", "room_type", "room_index", "entered_at_ms", "completed_at_ms", "duration_ms", "result"],
+        "properties": {
+          "room_id": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"},
+          "room_type": {"enum": ["combat", "elite", "boss", "event", "merchant", "rest"]},
+          "room_index": {"type": "integer", "minimum": 0},
+          "entered_at_ms": {"type": "integer", "minimum": 0},
+          "completed_at_ms": {"type": "integer", "minimum": 0},
+          "duration_ms": {"type": "integer", "minimum": 0},
+          "result": {"enum": ["cleared", "failed", "abandoned", "skipped"]}
+        }
+      }
+    },
+    "damage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dealt", "taken", "hits_dealt", "hits_taken"],
+      "properties": {
+        "dealt": {"type": "integer", "minimum": 0},
+        "taken": {"type": "integer", "minimum": 0},
+        "hits_dealt": {"type": "integer", "minimum": 0},
+        "hits_taken": {"type": "integer", "minimum": 0}
+      }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "phase", "room_index", "at_ms"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"},
+          "phase": {"enum": ["setup", "exploration", "combat", "choice", "boss", "result"]},
+          "room_index": {"type": "integer", "minimum": -1},
+          "at_ms": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "build_choices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["choice_type", "choice_id", "room_index", "at_ms"],
+        "properties": {
+          "choice_type": {"enum": ["item", "blessing", "curse", "talent", "weapon", "time_ability"]},
+          "choice_id": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"},
+          "room_index": {"type": "integer", "minimum": -1},
+          "at_ms": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "terminal_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "floor", "room_index", "duration_ms", "cause"],
+      "properties": {
+        "outcome": {"enum": ["completed", "death", "abandoned", "technical_failure"]},
+        "floor": {"type": "integer", "minimum": 0},
+        "room_index": {"type": "integer", "minimum": -1},
+        "duration_ms": {"type": "integer", "minimum": 0},
+        "cause": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"}
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    }
+  }
+}
