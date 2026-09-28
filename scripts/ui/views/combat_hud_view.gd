@@ -34,6 +34,11 @@ func _ready() -> void:
 	pause_indicator.visible = false
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSLATION_CHANGED and not _last_state.is_empty():
+		_render_state(_last_state)
+
+
 func render(view_state: Dictionary):
 	var validation = RunViewStateScript.validate(view_state)
 	if not validation.ok:
@@ -70,6 +75,7 @@ func _render_state(state: Dictionary) -> void:
 	room_label.text = "%d / %d" % [int(room["index"]), int(room["total"])]
 	run_time_label.text = _format_time(int(state["run_time_ms"]))
 	pause_indicator.visible = bool(state["suspended"]) or bool(flags["show_pause"])
+	pause_indicator.text = tr("UI_PAUSED")
 
 	var player := state["player"] as Dictionary
 	var hp := float(player["hp"])
@@ -81,16 +87,17 @@ func _render_state(state: Dictionary) -> void:
 	hp_label.text = "HP  %d / %d" % [roundi(hp), roundi(max_hp)]
 	energy_bar.max_value = max_energy
 	energy_bar.value = energy
-	energy_label.text = "TIME  %d / %d" % [roundi(energy), roundi(max_energy)]
+	energy_label.text = "%s  %d / %d" % [tr("UI_TIME"), roundi(energy), roundi(max_energy)]
 	low_hp_indicator.visible = hp / max_hp <= 0.3
+	low_hp_indicator.text = "!  HP < 30%  !"
 
 	var cooldowns := player["cooldowns"] as Dictionary
-	stop_label.text = _format_skill("STOP", float(cooldowns.get("time_stop", 0.0)))
-	rewind_label.text = _format_skill("REWIND", float(cooldowns.get("time_rewind", 0.0)))
+	stop_label.text = _format_skill("Q", float(cooldowns.get("time_stop", 0.0)))
+	rewind_label.text = _format_skill("E", float(cooldowns.get("time_rewind", 0.0)))
 
 	var build := state["build"] as Dictionary
 	var archetype := str(build["dominant_archetype"])
-	build_label.text = "BUILD  --" if archetype.is_empty() else "BUILD  %s" % tr("ARCHETYPE_" + archetype.to_upper())
+	build_label.text = tr("HUD_BUILD_UNFORMED") if archetype.is_empty() else tr("HUD_BUILD_FMT") % tr("ARCHETYPE_" + archetype.to_upper())
 
 	var boss: Variant = state["boss"]
 	boss_panel.visible = boss != null
@@ -100,13 +107,13 @@ func _render_state(state: Dictionary) -> void:
 	boss_name_label.text = tr(str(boss_state["name_key"]))
 	boss_hp_bar.max_value = float(boss_state["max_hp"])
 	boss_hp_bar.value = float(boss_state["hp"])
-	boss_phase_label.text = "PHASE  %d / %d" % [int(boss_state["phase_index"]), int(boss_state["phase_total"])]
+	boss_phase_label.text = tr("UI_STATUS_PHASE_FMT") % ("%d / %d" % [int(boss_state["phase_index"]), int(boss_state["phase_total"])])
 
 
 func _format_skill(label: String, cooldown: float) -> String:
 	if cooldown <= 0.0:
-		return "%s  READY" % label
-	return "%s  %.1fs" % [label, cooldown]
+		return "%s  %s" % [label, tr("HUD_WEAPON_READY")]
+	return "%s  %s" % [label, tr("HUD_WEAPON_COOLDOWN_FMT") % cooldown]
 
 
 func _format_time(run_time_ms: int) -> String:
