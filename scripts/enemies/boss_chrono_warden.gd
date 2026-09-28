@@ -4,6 +4,9 @@ class_name BossChronoWarden
 const FragmentScene := preload("res://scenes/enemies/enemy_chaser.tscn")
 const TimeCrackScript := preload("res://scripts/enemies/boss_time_crack.gd")
 
+enum BossAction { NONE, MELEE, SLAM, RADIAL, AIMED, SUMMON, TIME_CRACK }
+enum BossActionPhase { IDLE, WINDUP, RECOVERY }
+
 @export var projectile_scene: PackedScene
 @export var radial_projectile_count: int = 8
 @export var exposed_defense_penalty: float = 3.0
@@ -19,9 +22,21 @@ var _exposed: bool = false
 var _phase: int = 1
 var _aimed_burst_next: bool = false
 var _special_index: int = 0
-var _slam_timer: float = 0.0
-var _slam_recovery_timer: float = 0.0
+var _action: int = BossAction.NONE
+var _action_phase: int = BossActionPhase.IDLE
+var _action_time_remaining: float = 0.0
+var _pending_recovery_bonus: float = 0.0
 var _exposure_sources: Dictionary = {}
+var _slam_timer: float:
+	get:
+		if _action == BossAction.SLAM and _action_phase == BossActionPhase.WINDUP:
+			return _action_time_remaining
+		return 0.0
+var _slam_recovery_timer: float:
+	get:
+		if _action == BossAction.SLAM and _action_phase == BossActionPhase.RECOVERY:
+			return _action_time_remaining
+		return 0.0
 
 
 func _ready() -> void:
@@ -39,55 +54,152 @@ func _ready() -> void:
 
 func _tick_ai(delta: float) -> void:
 	_update_phase()
-	_tick_slam(delta)
 	_pattern_timer = maxf(0.0, _pattern_timer - delta)
+	if _tick_action(delta):
+		_hold_position()
+		return
+	if _pattern_timer <= 0.0 and _run_next_pattern():
+		_pattern_timer = _pattern_interval()
+		return
 	if global_position.distance_to(target.global_position) > attack_range:
 		_move_toward_target(0.7)
 	else:
-		velocity = _knockback_velocity
-		move_and_slide()
-		_try_melee_attack()
-	if _pattern_timer <= 0.0:
-		_pattern_timer = _pattern_interval()
-		_run_next_pattern()
+		_hold_position()
+		_try_start_action(BossAction.MELEE)
 
 
-func _tick_slam(delta: float) -> void:
-	if _slam_timer > 0.0:
-		_slam_timer = maxf(0.0, _slam_timer - delta)
-		if _slam_timer <= 0.0:
-			_resolve_slam()
-	if _slam_recovery_timer > 0.0:
-		_slam_recovery_timer = maxf(0.0, _slam_recovery_timer - delta)
-		if _slam_recovery_timer <= 0.0:
-			_remove_exposure_source(&"slam_recovery")
+func _hold_position() -> void:
+	velocity = _knockback_velocity
+	move_and_slide()
 
 
-func _run_next_pattern() -> void:
-	match _special_index % 4:
+func _run_next_pattern() -> bool:
+	var pattern_slot := _special_index % 4
+	var action := BossAction.NONE
+	var toggles_aimed_burst := false
+	match pattern_slot:
 		0:
-			_start_slam()
+			action = BossAction.SLAM
 		1:
-			if _phase >= 2:
-				_summon_fragments()
-			else:
-				_fire_radial_burst()
+			action = BossAction.SUMMON if _phase >= 2 else BossAction.RADIAL
 		2:
 			if _phase >= 2:
-				_create_time_crack()
+				action = BossAction.TIME_CRACK
 			else:
-				_fire_aimed_or_radial_burst()
+				action = _next_burst_action()
+				toggles_aimed_burst = true
 		_:
-			_fire_aimed_or_radial_burst()
+			action = _next_burst_action()
+			toggles_aimed_burst = true
+	if not _try_start_action(action):
+		return false
 	_special_index += 1
+	if toggles_aimed_burst:
+		_aimed_burst_next = not _aimed_burst_next
+	return true
 
 
-func _fire_aimed_or_radial_burst() -> void:
+func _next_burst_action() -> int:
 	if _phase >= 2 and _aimed_burst_next:
-		_fire_aimed_burst()
+		return BossAction.AIMED
+	return BossAction.RADIAL
+
+
+func _try_start_action(action: int) -> bool:
+	if _action != BossAction.NONE or not _can_start_action(action):
+		return false
+	_action = action
+	_action_phase = BossActionPhase.WINDUP
+	_action_time_remaining = _action_windup(action)
+	if action == BossAction.SLAM:
+		visual.scale = Vector2(1.18, 1.18)
+	_restore_visual_color()
+	return true
+
+
+func _can_start_action(action: int) -> bool:
+	match action:
+		BossAction.MELEE:
+			return (
+				_attack_cooldown_remaining <= 0.0
+				and target != null
+				and is_instance_valid(target)
+				and global_position.distance_to(target.global_position) <= attack_range
+				and target.has_node("HealthComponent")
+			)
+		BossAction.RADIAL, BossAction.AIMED:
+			return projectile_scene != null
+		BossAction.SUMMON, BossAction.TIME_CRACK:
+			return get_parent() != null
+		BossAction.SLAM:
+			return true
+	return false
+
+
+func _tick_action(delta: float) -> bool:
+	if _action == BossAction.NONE:
+		return false
+	_action_time_remaining = maxf(0.0, _action_time_remaining - delta)
+	match _action_phase:
+		BossActionPhase.WINDUP:
+			if _action_time_remaining <= 0.0:
+				_resolve_action()
+				_enter_action_recovery()
+		BossActionPhase.RECOVERY:
+			if _action_time_remaining <= 0.0:
+				_complete_action()
+	return true
+
+
+func _resolve_action() -> void:
+	match _action:
+		BossAction.MELEE:
+			_try_melee_attack()
+		BossAction.SLAM:
+			_resolve_slam()
+		BossAction.RADIAL:
+			_fire_radial_burst()
+		BossAction.AIMED:
+			_fire_aimed_burst()
+		BossAction.SUMMON:
+			_summon_fragments()
+		BossAction.TIME_CRACK:
+			_create_time_crack()
+
+
+func _enter_action_recovery() -> void:
+	_action_phase = BossActionPhase.RECOVERY
+	_action_time_remaining = _action_recovery(_action) + _pending_recovery_bonus
+	_pending_recovery_bonus = 0.0
+	if _action == BossAction.SLAM:
+		visual.scale = Vector2.ONE
+		_add_exposure_source(&"slam_recovery")
+	if _action_time_remaining <= 0.0:
+		_complete_action()
 	else:
-		_fire_radial_burst()
-	_aimed_burst_next = not _aimed_burst_next
+		_restore_visual_color()
+
+
+func _complete_action() -> void:
+	if _action == BossAction.SLAM:
+		_remove_exposure_source(&"slam_recovery")
+		visual.scale = Vector2.ONE
+	_action = BossAction.NONE
+	_action_phase = BossActionPhase.IDLE
+	_action_time_remaining = 0.0
+	_restore_visual_color()
+
+
+func _action_windup(action: int) -> float:
+	if action == BossAction.SLAM:
+		return slam_windup
+	return 0.0
+
+
+func _action_recovery(action: int) -> float:
+	if action == BossAction.SLAM:
+		return slam_recovery
+	return 0.0
 
 
 func _update_phase() -> void:
@@ -143,12 +255,8 @@ func _fire_aimed_burst() -> void:
 		get_parent().add_child(projectile)
 
 
-func _start_slam() -> void:
-	if _slam_timer > 0.0 or _slam_recovery_timer > 0.0:
-		return
-	_slam_timer = slam_windup
-	visual.scale = Vector2(1.18, 1.18)
-	visual.color = Color(1.0, 0.72, 0.18)
+func _start_slam() -> bool:
+	return _try_start_action(BossAction.SLAM)
 
 
 func _resolve_slam() -> void:
@@ -159,9 +267,6 @@ func _resolve_slam() -> void:
 			damage_info.tags = ["boss:slam", "enemy:melee"]
 			damage_info.knockback = global_position.direction_to(target.global_position) * 260.0
 			health_component.take_damage(damage_info)
-	_slam_recovery_timer = slam_recovery
-	_add_exposure_source(&"slam_recovery")
-	visual.scale = Vector2.ONE
 
 
 func _summon_fragments() -> void:
@@ -205,7 +310,9 @@ func force_time_crack_for_test() -> Node:
 
 
 func _restore_visual_color() -> void:
-	if _exposed:
+	if _action == BossAction.SLAM and _action_phase == BossActionPhase.WINDUP:
+		visual.color = Color(1.0, 0.72, 0.18)
+	elif _exposed:
 		visual.color = Color(0.3, 0.85, 1.0)
 	elif _phase == 3:
 		visual.color = Color(1.0, 0.1, 0.55)
@@ -219,12 +326,53 @@ func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	var resisted_delay := minf(duration * 0.35, 1.1)
-	_pattern_timer += resisted_delay
-	_slam_timer += resisted_delay
-	_slam_recovery_timer += resisted_delay
+	match _action_phase:
+		BossActionPhase.WINDUP:
+			_action_time_remaining += resisted_delay
+			_pending_recovery_bonus = maxf(_pending_recovery_bonus, 0.8)
+		BossActionPhase.RECOVERY:
+			_action_time_remaining += maxf(resisted_delay, 0.8)
+		_:
+			_pattern_timer += resisted_delay
+			_pending_recovery_bonus = maxf(_pending_recovery_bonus, 0.8)
 	_add_exposure_source(&"time_stop")
-	await get_tree().create_timer(duration).timeout
-	_remove_exposure_source(&"time_stop")
+	get_tree().create_timer(duration).timeout.connect(_remove_exposure_source.bind(&"time_stop"))
+
+
+func get_boss_ui_snapshot() -> Dictionary:
+	return {
+		"action": _action_name(_action),
+		"phase": _action_phase_name(_action_phase),
+		"remaining": _action_time_remaining,
+		"boss_phase": _phase,
+		"exposed": _exposed,
+	}
+
+
+func _action_name(action: int) -> String:
+	match action:
+		BossAction.MELEE:
+			return "MELEE"
+		BossAction.SLAM:
+			return "SLAM"
+		BossAction.RADIAL:
+			return "RADIAL"
+		BossAction.AIMED:
+			return "AIMED"
+		BossAction.SUMMON:
+			return "SUMMON"
+		BossAction.TIME_CRACK:
+			return "TIME_CRACK"
+	return "NONE"
+
+
+func _action_phase_name(action_phase: int) -> String:
+	match action_phase:
+		BossActionPhase.WINDUP:
+			return "WINDUP"
+		BossActionPhase.RECOVERY:
+			return "RECOVERY"
+	return "IDLE"
 
 
 func apply_time_rift(slow_multiplier: float) -> void:
