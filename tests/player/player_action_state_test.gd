@@ -18,8 +18,11 @@ func _run() -> void:
 	_test_invalid_inputs_are_rejected()
 	_test_free_actions()
 	_test_attack_phase_transitions()
+	_test_attack_phase_completion_is_owner_driven()
 	_test_attack_active_rejections()
 	_test_attack_recovery_cancel_window()
+	_test_safe_reset_clears_transient_state()
+	_test_clear_buffered_inputs()
 	_test_dash_rejects_attack()
 	_test_hitstun_blocks_actions_until_complete()
 	_test_priority_interrupts()
@@ -120,6 +123,40 @@ func _test_attack_phase_transitions() -> void:
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.ATTACK_RECOVERY), "active advances to recovery")
 
 
+func _test_attack_phase_completion_is_owner_driven() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_WINDUP, 2)
+	action_state.advance_frame()
+	action_state.advance_frame()
+	_suite.assert_true(action_state.is_state_complete(), "windup completion remains observable")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 2, "completed windup stops at its configured duration")
+	action_state.advance_frame()
+	_suite.assert_equal(action_state.elapsed_state_frames(), 2, "completed windup frame counter remains clamped")
+	_suite.assert_equal(
+		action_state.current_state,
+		PlayerActionStateScript.State.ATTACK_WINDUP,
+		"windup does not auto-return to free"
+	)
+	_suite.assert_true(
+		action_state.transition_to(PlayerActionStateScript.State.ATTACK_ACTIVE, 1),
+		"owner advances completed windup"
+	)
+	action_state.advance_frame()
+	_suite.assert_true(action_state.is_state_complete(), "active completion remains observable")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 1, "completed active frame counter stops at its configured duration")
+	action_state.advance_frame()
+	_suite.assert_equal(action_state.elapsed_state_frames(), 1, "completed active frame counter remains clamped")
+	_suite.assert_equal(
+		action_state.current_state,
+		PlayerActionStateScript.State.ATTACK_ACTIVE,
+		"active does not auto-return to free"
+	)
+	_suite.assert_true(
+		action_state.transition_to(PlayerActionStateScript.State.ATTACK_RECOVERY, 2, 1),
+		"owner advances completed active phase"
+	)
+
+
 func _test_attack_active_rejections() -> void:
 	var action_state = PlayerActionStateScript.new()
 	action_state.transition_to(PlayerActionStateScript.State.ATTACK_WINDUP, 3)
@@ -139,6 +176,42 @@ func _test_attack_recovery_cancel_window() -> void:
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.DASH), "recovery accepts dash at cancel frame")
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.TIME_CAST), "recovery accepts time cast at cancel frame")
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.ATTACK_WINDUP), "recovery accepts combo attack at cancel frame")
+
+
+func _test_safe_reset_clears_transient_state() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_WINDUP, 1)
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_ACTIVE, 1)
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_RECOVERY, 8, 2)
+	action_state.advance_frame()
+	action_state.advance_frame()
+	action_state.buffer_input(&"dash")
+	action_state.buffer_input(&"time_cast")
+	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.DASH), "setup opens recovery cancel window")
+	_suite.assert_true(action_state.force_safe_reset(), "non-terminal action state can reset safely")
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.FREE, "safe reset returns to free")
+	_suite.assert_true(not action_state.is_state_complete(), "free state is never complete")
+	_suite.assert_true(not action_state.has_buffered_input(&"dash"), "safe reset clears dash buffer")
+	_suite.assert_true(not action_state.has_buffered_input(&"time_cast"), "safe reset clears time-cast buffer")
+
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_WINDUP, 1)
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_ACTIVE, 1)
+	action_state.transition_to(PlayerActionStateScript.State.ATTACK_RECOVERY, 2)
+	_suite.assert_true(not action_state.can_transition_to(PlayerActionStateScript.State.DASH), "safe reset clears the prior recovery cancel window")
+
+	var dead_state = PlayerActionStateScript.new()
+	dead_state.transition_to(PlayerActionStateScript.State.DEAD, 0)
+	_suite.assert_true(not dead_state.force_safe_reset(), "dead state rejects safe reset")
+	_suite.assert_equal(dead_state.current_state, PlayerActionStateScript.State.DEAD, "safe reset does not revive dead state")
+
+
+func _test_clear_buffered_inputs() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.buffer_input(&"attack")
+	action_state.buffer_input(&"dash")
+	action_state.clear_buffered_inputs()
+	_suite.assert_true(not action_state.has_buffered_input(&"attack"), "explicit buffer clear removes attack")
+	_suite.assert_true(not action_state.has_buffered_input(&"dash"), "explicit buffer clear removes dash")
 
 
 func _test_dash_rejects_attack() -> void:

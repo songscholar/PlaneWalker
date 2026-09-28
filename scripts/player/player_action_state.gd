@@ -59,6 +59,10 @@ func consume_highest_priority_buffered_input() -> StringName:
 	return &""
 
 
+func clear_buffered_inputs() -> void:
+	_buffers.clear()
+
+
 func transition_to(next_state: State, duration_frames: int, cancel_from_frame: int = -1) -> bool:
 	if next_state != State.DEAD and duration_frames <= 0:
 		return false
@@ -102,8 +106,24 @@ func advance_frame() -> void:
 	_state_frame += 1
 	if current_state == State.DEAD:
 		return
-	if _state_frame >= _state_duration_frames:
-		_return_to_free()
+	if not is_state_complete():
+		return
+	if current_state in [State.ATTACK_WINDUP, State.ATTACK_ACTIVE]:
+		_state_frame = _state_duration_frames
+		return
+	_return_to_free()
+
+
+func is_state_complete() -> bool:
+	return current_state not in [State.FREE, State.DEAD] and _state_frame >= _state_duration_frames
+
+
+func force_safe_reset() -> bool:
+	if current_state == State.DEAD:
+		return false
+	clear_buffered_inputs()
+	_return_to_free()
+	return true
 
 
 func elapsed_state_frames() -> int:
