@@ -250,7 +250,12 @@ func _run_hit_feedback_check() -> void:
 	_assert_true(floating_layer.get_child_count() > 0, "hit feedback spawns floating damage text")
 	_assert_true(enemy._knockback_velocity.length() > 0.0, "hit feedback applies knockback")
 	_assert_true(Engine.time_scale < 1.0, "weapon hit requests hit pause")
-	await get_tree().create_timer(0.08, true, false, true).timeout
+	var pause_snapshot: Dictionary = CombatFeedback.get_hit_pause_snapshot_for_test()
+	var pause_duration := float(
+		int(pause_snapshot.get("deadline_usec", 0)) - int(pause_snapshot.get("started_usec", 0))
+	) / 1000000.0
+	await get_tree().create_timer(pause_duration + 0.02, true, false, true).timeout
+	await get_tree().process_frame
 	_assert_close(Engine.time_scale, 1.0, "hit pause restores time scale")
 
 	room.queue_free()

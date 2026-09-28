@@ -76,6 +76,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Poll the monotonic deadline from the always-processing render loop as well as
+	# physics. A low Engine.time_scale can delay physics ticks past the real-time
+	# deadline, while this check never derives duration from render frame counts.
+	_update_hit_pause()
 	_scan_remaining = maxf(0.0, _scan_remaining - delta)
 	if _scan_remaining <= 0.0:
 		_scan_remaining = 0.25
