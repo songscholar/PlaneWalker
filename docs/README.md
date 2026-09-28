@@ -17,7 +17,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 当前实施入口是：
 
 1. [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md)：定义最终范围、架构约束、内容数量和 Product Complete Gate。
-2. [P0 Foundation Baseline 实施计划](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md)：当前应执行的基线固化、本地化契约和可重现验证。
+2. [Wave 4B Encounter Mechanics 实施计划](superpowers/plans/2026-09-28-plane-walker-wave-4b-encounter-mechanics.md)：当前战斗与遭遇实现入口。
 3. `AGENTS.md`：定义持续授权、无需再确认的工作以及远程发布、真实付费和私密凭据等外部边界。
 
 ## 当前状态
@@ -28,9 +28,10 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Wave 2 | Completed / Historical | ContentRegistry、M1 房间计划、DraftService、PlayerActionState 和 ChoicePanel 已验证 |
 | Wave 3A | Completed / Historical | 真实运行时 Facade、旧流程桥接、选择幂等与五房流程已验证 |
 | Wave 3B | Completed / Historical | 敌人前摇、Boss 行为互斥、玩家单时钟、回溯取消、真实 HUD 与 640×360 画布已验证 |
-| P0 Foundation Baseline | Current | 固化当前本地化与 Godot 4.6 变更，建立本地化契约，证明清洁检出可重现 |
-| P1–P9 Foundation | Authorized / Planned | 测试 CI、原子存档、内容与效果运行时、单一状态、单一事件、手柄、导出和清洁认证 |
-| Wave 4A | In progress / Mandatory | 收口本地化与数据改动，建立干净构建、验证入口和试玩数据记录 |
+| P0 Foundation Baseline | Completed | 本地化与 Godot 4.6 基线已提交，干净克隆可生成翻译产物并通过验证 |
+| P1 Test/CI Foundation | Completed | 唯一验证入口、只读 CI、双阶段导入和日志分类已通过 |
+| P2–P9 Foundation | Authorized / Planned | 原子存档、内容与效果运行时、单一状态、单一事件、手柄、导出和最终清洁认证 |
+| Wave 4A | In progress / Mandatory | 本地化/数据与干净构建已完成；试玩数据记录、导入和报告工具链正在实现 |
 | Wave 4B | Authorized / Next | 完成回溯残影、Boss 全招前摇、精英主动机制和五房遭遇配置 |
 | Wave 4C | Authorized / Queued | 完成 Pixel Proxy、核心动画、音效与战斗反馈 |
 | Wave 4D | Authorized / Queued | 完成 30 Seed 稳定验证、20 局真实外部试玩、数值调整与 M1 放行报告 |
@@ -64,7 +65,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | 文档 | 用途 | 状态 |
 |---|---|---|
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
-| [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 本地化基线、脏工作区固化和清洁重现 | Approved / Current |
+| [Wave 4B Encounter Mechanics Plan](superpowers/plans/2026-09-28-plane-walker-wave-4b-encounter-mechanics.md) | 回溯残影、Boss 前摇、精英主动和五房遭遇 | Approved / Current |
+| [P0 Foundation Baseline Evidence](current/2026-09-28-foundation-baseline-evidence.md) | 本地化、验证入口和干净克隆认证证据 | Verified / Completed |
+| [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
 
 ### 核心产品设计

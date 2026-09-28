@@ -1,11 +1,11 @@
 # Plane Walker P0 Foundation Baseline Implementation Plan
 
-- Status: Approved
+- Status: Completed / Historical
 - Document Role: Current implementation plan
-- Implementation Status: Ready for execution
+- Implementation Status: Verified by `9faa1e2`, `bac5e74`, `d92b1ed`, and evidence record `docs/current/2026-09-28-foundation-baseline-evidence.md`
 - Approved On: 2026-09-28
 - Completion Gate: A clean detached checkout imports and passes the complete discovered test suite using only tracked sources
-- Next Automatic Phase: P1 Test and CI Foundation
+- Next Automatic Phase: Wave 4A playtest recording and Wave 4B encounter mechanics; P2–P9 continue as supporting foundation lanes
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -14,6 +14,8 @@
 **Architecture:** `data/localization/translations.csv` is the only tracked localization source; Godot-generated `.translation` binaries remain reproducible build artifacts. A headless contract test validates catalog structure, language completeness, placeholder compatibility, literal `tr()` references, and manifest-backed content keys. P0 does not refactor runtime ownership; it creates a clean, evidence-backed starting point for P1–P9 and the continuous Wave 4A–Expansion program.
 
 **Tech Stack:** Godot 4.6.1, GDScript 2.0, Godot CSV translation importer, native headless scene tests, Git detached worktrees.
+
+> **Execution record:** The approved implementation used `tools/validate_localization.py` plus `tests/contract/localization/test_validate_localization.py` instead of duplicating the catalog parser in GDScript. The Python contract covers static and derived runtime keys, JSON content references, placeholder compatibility, duplicate keys, and language completeness; it runs through the same `tools/validate_project.sh` entrypoint as Godot import and scene tests. The task steps below remain the original planning record; the evidence document is authoritative for the completed implementation.
 
 ## Global Constraints
 
