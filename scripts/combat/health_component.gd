@@ -15,6 +15,8 @@ var current_hp: float = 0.0
 var invulnerable: bool = false
 var dead: bool = false
 var healing_multiplier: float = 1.0
+var _invulnerability_token: int = 0
+var _active_invulnerability_tokens: Dictionary = {}
 
 
 func _ready() -> void:
@@ -138,9 +140,17 @@ func _heavy_execute_threshold(damage_info: RefCounted) -> float:
 func apply_invulnerability(duration: float) -> void:
 	if duration <= 0.0:
 		return
+	_invulnerability_token += 1
+	var token := _invulnerability_token
+	_active_invulnerability_tokens[token] = true
 	invulnerable = true
-	await get_tree().create_timer(duration).timeout
-	invulnerable = false
+	_expire_invulnerability(token, duration)
+
+
+func _expire_invulnerability(token: int, duration: float) -> void:
+	await get_tree().create_timer(duration, false).timeout
+	_active_invulnerability_tokens.erase(token)
+	invulnerable = not _active_invulnerability_tokens.is_empty()
 
 
 func is_alive() -> bool:

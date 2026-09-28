@@ -14,6 +14,7 @@ var direction: Vector2 = Vector2.RIGHT
 var _time_stopped: bool = false
 var _age: float = 0.0
 var _armed: bool = false
+var _resolved: bool = false
 
 
 func _ready() -> void:
@@ -22,15 +23,15 @@ func _ready() -> void:
 	area_entered.connect(_on_area_entered)
 	body_entered.connect(_on_body_entered)
 	visual.modulate = Color(1.0, 0.95, 0.35, 0.45)
-	await get_tree().create_timer(lifetime).timeout
-	if is_inside_tree():
-		queue_free()
 
 
 func _physics_process(delta: float) -> void:
 	if _time_stopped:
 		return
 	_age += delta
+	if _age >= lifetime:
+		queue_free()
+		return
 	if not _armed and _age >= arm_time:
 		_armed = true
 		monitoring = true
@@ -44,18 +45,28 @@ func _physics_process(delta: float) -> void:
 
 func _on_area_entered(area: Area2D) -> void:
 	if area.has_method("receive_hit") and area.get_parent().is_in_group("player"):
-		var damage_info := DamageInfoScript.new(damage, DamageInfoScript.DamageType.PHYSICAL, self, self)
-		damage_info.tags = ["enemy:projectile"]
-		area.receive_hit(damage_info)
-		queue_free()
+		_try_hit_player(area)
 
 
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player") and body.has_node("HealthComponent"):
-		var damage_info := DamageInfoScript.new(damage, DamageInfoScript.DamageType.PHYSICAL, self, self)
-		damage_info.tags = ["enemy:projectile"]
-		body.get_node("HealthComponent").take_damage(damage_info)
-		queue_free()
+		_try_hit_player(body)
+
+
+func _try_hit_player(target: Node) -> void:
+	if _resolved or target == null:
+		return
+	var damage_info := DamageInfoScript.new(damage, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	damage_info.tags = ["enemy:projectile"]
+	if target.has_method("receive_hit"):
+		_resolved = true
+		target.receive_hit(damage_info)
+	elif target.has_node("HealthComponent"):
+		_resolved = true
+		target.get_node("HealthComponent").take_damage(damage_info)
+	else:
+		return
+	queue_free()
 
 
 func apply_time_stop(duration: float) -> void:

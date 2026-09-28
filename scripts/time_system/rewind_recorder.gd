@@ -29,23 +29,91 @@ func has_snapshot() -> bool:
 
 
 func rewind_to_oldest_snapshot() -> void:
-	if _snapshots.is_empty():
+	var snapshot := consume_oldest_snapshot()
+	if snapshot.is_empty():
 		return
-	var snapshot: Dictionary = _snapshots.front()
+	if restore_player_state(snapshot):
+		clear_snapshots()
+
+
+func consume_oldest_snapshot() -> Dictionary:
+	if _snapshots.is_empty():
+		return {}
+	return _snapshots.pop_front().duplicate(true)
+
+
+func peek_oldest_snapshot() -> Dictionary:
+	if _snapshots.is_empty():
+		return {}
+	return _snapshots.front().duplicate(true)
+
+
+func restore_player_state(snapshot: Dictionary) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	if health_component == null or not is_instance_valid(health_component):
+		return false
+	if not snapshot.has("position") or not snapshot.has("hp"):
+		return false
 	target.global_position = snapshot["position"]
-	health_component.current_hp = minf(health_component.max_hp, snapshot["hp"])
-	time_manager.energy = minf(time_manager.max_energy, snapshot["energy"])
-	time_manager.energy_changed.emit(time_manager.energy, time_manager.max_energy)
+	if snapshot.has("velocity") and _has_property(target, &"velocity"):
+		target.set("velocity", snapshot["velocity"])
+	_restore_facing(snapshot.get("facing", Vector2.RIGHT))
+	_restore_safe_action(snapshot.get("safe_action", {}))
+	health_component.current_hp = minf(health_component.max_hp, float(snapshot["hp"]))
 	health_component.apply_invulnerability(0.5)
+	return true
+
+
+func clear_snapshots() -> void:
 	_snapshots.clear()
 
 
 func _record_snapshot() -> void:
 	_snapshots.append({
 		"position": target.global_position,
+		"facing": _capture_facing(),
+		"velocity": target.get("velocity") if _has_property(target, &"velocity") else Vector2.ZERO,
 		"hp": health_component.current_hp,
-		"energy": time_manager.energy,
+		"safe_action": _capture_safe_action(),
 	})
 	var max_samples := int(record_seconds * samples_per_second)
 	while _snapshots.size() > max_samples:
 		_snapshots.pop_front()
+
+
+func _capture_facing() -> Vector2:
+	if target.has_method("get_rewind_facing"):
+		return target.call("get_rewind_facing")
+	if _has_property(target, &"_last_move_direction"):
+		return target.get("_last_move_direction")
+	return Vector2.RIGHT
+
+
+func _restore_facing(facing: Variant) -> void:
+	if not facing is Vector2:
+		return
+	if target.has_method("restore_rewind_facing"):
+		target.call("restore_rewind_facing", facing)
+	elif _has_property(target, &"_last_move_direction"):
+		target.set("_last_move_direction", facing)
+
+
+func _capture_safe_action() -> Dictionary:
+	if target.has_method("get_rewind_safe_action_state"):
+		var state: Variant = target.call("get_rewind_safe_action_state")
+		if state is Dictionary:
+			return state.duplicate(true)
+	return {}
+
+
+func _restore_safe_action(state: Variant) -> void:
+	if state is Dictionary and target.has_method("restore_rewind_safe_action_state"):
+		target.call("restore_rewind_safe_action_state", state.duplicate(true))
+
+
+func _has_property(object: Object, property_name: StringName) -> bool:
+	for property: Dictionary in object.get_property_list():
+		if StringName(property.get("name", "")) == property_name:
+			return true
+	return false

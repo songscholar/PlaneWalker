@@ -88,23 +88,31 @@ func try_time_stop() -> void:
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_stop"})
 
 
-func try_rewind(recorder: Node) -> void:
-	if recorder == null or not recorder.has_snapshot():
-		return
+func try_rewind(recorder: Node) -> bool:
+	if recorder == null or not recorder.has_method("has_snapshot") or not recorder.has_snapshot():
+		return false
 	var effective_cost := rewind_cost * rewind_cost_multiplier
 	if not _can_pay(&"time_rewind", effective_cost):
-		return
-	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
-	_take_self_damage(rewind_self_damage, &"curse:rewind")
+		return false
+	if not recorder.has_method("peek_oldest_snapshot") or not recorder.has_method("consume_oldest_snapshot") or not recorder.has_method("restore_player_state"):
+		return false
+	var snapshot: Dictionary = recorder.peek_oldest_snapshot()
+	if snapshot.is_empty() or not recorder.restore_player_state(snapshot):
+		return false
+	recorder.consume_oldest_snapshot()
+	if recorder.has_method("clear_snapshots"):
+		recorder.clear_snapshots()
 	EventBus.time_skill_started.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rewind"})
-	recorder.rewind_to_oldest_snapshot()
+	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
+	_take_self_damage(rewind_self_damage, &"curse:rewind")
 	if rewind_heal > 0.0:
 		var health_component := get_parent().get_node_or_null("HealthComponent")
 		if health_component != null and health_component.has_method("heal"):
 			health_component.heal(rewind_heal)
 	EventBus.time_skill_ended.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_rewind"})
+	return true
 
 
 func try_time_rift(rift_position: Vector2) -> bool:
