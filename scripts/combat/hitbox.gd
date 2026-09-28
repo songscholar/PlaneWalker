@@ -10,13 +10,24 @@ func _ready() -> void:
 	area_entered.connect(_on_area_entered)
 
 
-func activate(damage_info: RefCounted, duration: float) -> void:
+func activate(damage_info: RefCounted) -> void:
 	_active_damage_info = damage_info
 	_hit_areas.clear()
 	monitoring = true
-	await get_tree().create_timer(duration).timeout
+
+
+func deactivate() -> void:
 	monitoring = false
 	_active_damage_info = null
+	_hit_areas.clear()
+
+
+func cancel() -> void:
+	deactivate()
+
+
+func is_active() -> bool:
+	return monitoring and _active_damage_info != null
 
 
 func _on_area_entered(area: Area2D) -> void:

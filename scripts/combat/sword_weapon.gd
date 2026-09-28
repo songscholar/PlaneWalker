@@ -17,46 +17,58 @@ var heavy_execute_threshold: float = 0.3
 var low_hp_damage_multiplier_bonus: float = 0.0
 var low_hp_threshold: float = 0.35
 var _combo_index: int = 0
-var _combo_reset_time: float = 0.0
 var _attacking: bool = false
+var _active: bool = false
+var _current_attack: Dictionary = {}
+
+const LIGHT_COMBO: Array[Dictionary] = [
+	{"multiplier": 0.8, "windup": 0.10, "active": 0.08, "recovery": 0.18, "finisher": false},
+	{"multiplier": 1.0, "windup": 0.12, "active": 0.08, "recovery": 0.20, "finisher": false},
+	{"multiplier": 1.3, "windup": 0.16, "active": 0.10, "recovery": 0.28, "finisher": true},
+]
 
 
-func _process(delta: float) -> void:
-	if _combo_reset_time > 0.0:
-		_combo_reset_time -= delta
-		if _combo_reset_time <= 0.0:
-			_combo_index = 0
-
-
-func try_attack(heavy: bool = false) -> bool:
-	if _attacking:
-		return false
+func attack_definition(heavy: bool = false) -> Dictionary:
+	var data: Dictionary
 	if heavy:
-		_start_attack(2.0, 0.35, 0.12, 0.45, true, false)
-		return true
+		data = {"multiplier": 2.0, "windup": 0.35, "active": 0.12, "recovery": 0.45, "finisher": false}
+	else:
+		data = LIGHT_COMBO[_combo_index]
+	return {
+		"heavy": heavy,
+		"finisher": bool(data["finisher"]),
+		"multiplier": float(data["multiplier"]),
+		"windup_frames": _seconds_to_frames(float(data["windup"])),
+		"active_frames": _seconds_to_frames(float(data["active"])),
+		"recovery_frames": _seconds_to_frames(float(data["recovery"])),
+		"recovery_cancel_frame": _seconds_to_frames(0.24 if heavy else 0.10),
+		"movement_multiplier": 0.2 if heavy else 0.55,
+		"combo_reset_frames": maxi(1, ceili(0.8 * Engine.physics_ticks_per_second)),
+	}
 
-	var combo_data := [
-		{"mult": 0.8, "windup": 0.10, "active": 0.08, "recovery": 0.18, "finisher": false},
-		{"mult": 1.0, "windup": 0.12, "active": 0.08, "recovery": 0.20, "finisher": false},
-		{"mult": 1.3, "windup": 0.16, "active": 0.10, "recovery": 0.28, "finisher": true},
-	]
-	var data: Dictionary = combo_data[_combo_index]
-	_combo_index = (_combo_index + 1) % combo_data.size()
-	_combo_reset_time = 0.8
-	_start_attack(data["mult"], data["windup"], data["active"], data["recovery"], false, data["finisher"])
-	return true
+
+func begin_attack(heavy: bool = false) -> Dictionary:
+	if _attacking:
+		return {}
+	_current_attack = attack_definition(heavy)
+	_attacking = true
+	_active = false
+	if not heavy:
+		_combo_index = (_combo_index + 1) % LIGHT_COMBO.size()
+	return _current_attack.duplicate(true)
 
 
 func is_attacking() -> bool:
 	return _attacking
 
 
-func _start_attack(multiplier: float, windup: float, active: float, recovery: float, heavy: bool, finisher: bool) -> void:
-	_attacking = true
-	var timing_scale := 1.0 / maxf(0.2, attack_speed)
-	await get_tree().create_timer(windup * timing_scale).timeout
-
-	var effective_multiplier := multiplier
+func enter_active_phase() -> bool:
+	if not _attacking or _active or _current_attack.is_empty():
+		return false
+	_active = true
+	var effective_multiplier := float(_current_attack["multiplier"])
+	var heavy := bool(_current_attack["heavy"])
+	var finisher := bool(_current_attack["finisher"])
 	if heavy:
 		effective_multiplier *= 1.0 + heavy_damage_multiplier_bonus
 	elif finisher:
@@ -77,10 +89,32 @@ func _start_attack(multiplier: float, windup: float, active: float, recovery: fl
 			damage_info.tags.append("attack:finisher")
 	EventBus.player_attacked.emit(&"sword")
 	EventBus.publish(EventBus.PLAYER_ATTACKED, {"weapon_id": "sword"})
-	hitbox.activate(damage_info, active * timing_scale)
+	hitbox.activate(damage_info)
+	return true
 
-	await get_tree().create_timer((active + recovery) * timing_scale).timeout
+
+func leave_active_phase() -> void:
+	_active = false
+	hitbox.deactivate()
+
+
+func finish_attack() -> void:
+	leave_active_phase()
 	_attacking = false
+	_current_attack.clear()
+
+
+func cancel_attack() -> void:
+	finish_attack()
+
+
+func reset_combo() -> void:
+	_combo_index = 0
+
+
+func _seconds_to_frames(seconds: float) -> int:
+	var timing_scale := 1.0 / maxf(0.2, attack_speed)
+	return maxi(1, ceili(seconds * timing_scale * Engine.physics_ticks_per_second))
 
 
 func _owner_hp_ratio() -> float:

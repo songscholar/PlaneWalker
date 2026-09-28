@@ -69,11 +69,16 @@ func configure_from_stats(stats: Resource) -> void:
 	energy_changed.emit(energy, max_energy)
 
 
-func try_time_stop() -> void:
+func can_time_stop() -> bool:
+	var effective_cost := time_stop_cost * time_stop_cost_multiplier
+	return _can_pay(&"time_stop", effective_cost)
+
+
+func try_time_stop() -> bool:
 	var effective_cost := time_stop_cost * time_stop_cost_multiplier
 	var effective_duration := time_stop_duration + time_stop_duration_bonus
-	if not _can_pay(&"time_stop", effective_cost):
-		return
+	if not can_time_stop():
+		return false
 	_pay_cost(&"time_stop", effective_cost, time_stop_cooldown)
 	_take_self_damage(time_stop_self_damage, &"curse:time_stop")
 	EventBus.time_skill_started.emit(&"time_stop")
@@ -83,18 +88,27 @@ func try_time_stop() -> void:
 			node.apply_time_stop(effective_duration)
 		if node.has_method("apply_weakpoint"):
 			node.apply_weakpoint(time_stop_weakpoint_duration, time_stop_weakpoint_damage_bonus)
-	await get_tree().create_timer(effective_duration).timeout
+	get_tree().create_timer(effective_duration).timeout.connect(_end_time_stop)
+	return true
+
+
+func _end_time_stop() -> void:
 	EventBus.time_skill_ended.emit(&"time_stop")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_stop"})
 
 
-func try_rewind(recorder: Node) -> bool:
+func can_rewind(recorder: Node) -> bool:
 	if recorder == null or not recorder.has_method("has_snapshot") or not recorder.has_snapshot():
 		return false
 	var effective_cost := rewind_cost * rewind_cost_multiplier
 	if not _can_pay(&"time_rewind", effective_cost):
 		return false
-	if not recorder.has_method("peek_oldest_snapshot") or not recorder.has_method("consume_oldest_snapshot") or not recorder.has_method("restore_player_state"):
+	return recorder.has_method("peek_oldest_snapshot") and recorder.has_method("consume_oldest_snapshot") and recorder.has_method("restore_player_state")
+
+
+func try_rewind(recorder: Node) -> bool:
+	var effective_cost := rewind_cost * rewind_cost_multiplier
+	if not can_rewind(recorder):
 		return false
 	var snapshot: Dictionary = recorder.peek_oldest_snapshot()
 	if snapshot.is_empty() or not recorder.restore_player_state(snapshot):
