@@ -47,6 +47,67 @@ make_fake_godot() {
 	chmod +x "${target}"
 }
 
+make_fake_import_godot() {
+	local target="$1"
+	local mode="$2"
+	printf '%s\n' \
+		'#!/usr/bin/env bash' \
+		'set -eu' \
+		'if [[ "${1:-}" == "--version" ]]; then printf "4.6.1.stable.test\\n"; exit 0; fi' \
+		'log_file=""' \
+		'is_import=false' \
+		'while (( $# > 0 )); do' \
+		'  if [[ "$1" == "--log-file" ]]; then log_file="$2"; shift 2; continue; fi' \
+		'  if [[ "$1" == "--import" ]]; then is_import=true; fi' \
+		'  shift' \
+		'done' \
+		'if [[ "${is_import}" == false ]]; then printf "PASS: all assertions succeeded\\n" | tee "${log_file}"; exit 0; fi' \
+		'state_file="'"${target}"'.state"' \
+		'import_count=0' \
+		'if [[ -f "${state_file}" ]]; then import_count="$(cat "${state_file}")"; fi' \
+		'import_count=$((import_count + 1))' \
+		'printf "%s\\n" "${import_count}" >"${state_file}"' \
+		'write_expected_translations() {' \
+		'  printf "%s\\n" \' \
+		'    "ERROR: Cannot open file '\''res://data/localization/translations.en.translation'\''." \' \
+		'    "ERROR: Failed loading resource: res://data/localization/translations.en.translation." \' \
+		'    "ERROR: Cannot open file '\''res://data/localization/translations.zh_CN.translation'\''." \' \
+		'    "ERROR: Failed loading resource: res://data/localization/translations.zh_CN.translation."' \
+		'}' \
+		'write_editor_warning() {' \
+		'  printf "%s\\n" \' \
+		'    "ERROR: Cannot save file '\''/Users/test/Library/Application Support/Godot/editor_settings-4.6.tres'\''." \' \
+		'    "ERROR: Error saving editor settings to /Users/test/Library/Application Support/Godot/editor_settings-4.6.tres"' \
+		'}' \
+		'{' \
+		'  case "'"${mode}"':${import_count}" in' \
+		'    bootstrap_expected:1) write_expected_translations; write_editor_warning ;;' \
+		'    bootstrap_expected:2) write_editor_warning ;;' \
+		'    bootstrap_partial:1) printf "%s\\n" "ERROR: Failed loading resource: res://data/localization/translations.en.translation." ;;' \
+		'    bootstrap_unexpected_resource:1) write_expected_translations; printf "%s\\n" "ERROR: Failed loading resource: res://scenes/missing_room.tscn." ;;' \
+		'    clean_resource_error:1) write_expected_translations ;;' \
+		'    clean_resource_error:2) printf "%s\\n" "ERROR: Failed loading resource: res://scenes/still_missing.tscn." ;;' \
+		'    editor_warning_only:*) write_editor_warning ;;' \
+		'    unrelated_error:1) printf "%s\\n" "ERROR: Synthetic unrelated engine failure." ;;' \
+		'  esac' \
+		'} >"${log_file}"' >"${target}"
+	chmod +x "${target}"
+}
+
+run_fake_validation() {
+	local mode="$1"
+	local output_path="$2"
+	local fake_godot="${TEMP_DIR}/godot-import-${mode}"
+	make_fake_import_godot "${fake_godot}" "${mode}"
+	SKIP_CI_CONTRACT=true \
+		GODOT_BIN="${fake_godot}" \
+		VALIDATION_LOG_DIR="${TEMP_DIR}/validation-${mode}" \
+		TEST_LOG_DIR="${TEMP_DIR}/validation-${mode}/scene-tests" \
+		tools/validate_project.sh >"${output_path}" 2>&1
+	local status=$?
+	return "${status}"
+}
+
 cd "${PROJECT_ROOT}"
 
 [[ -x tools/run_tests.sh ]] || fail "tools/run_tests.sh must exist and be executable"
@@ -123,6 +184,32 @@ assert_file_contains .github/workflows/validate.yml 'python3 --version' "workflo
 assert_file_contains .github/workflows/validate.yml '\./tools/validate_project\.sh' "workflow validation entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.localization\.test_validate_localization' "localization unit contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 tools/validate_localization\.py' "localization validator entrypoint"
-assert_file_contains tools/validate_project.sh '"\$\{import_stdout_log\}" "\$\{import_engine_log\}"' "import scans stdout and engine logs"
+assert_file_contains tools/validate_project.sh 'validate_import_logs "\$\{phase\}" "\$\{stdout_log\}" "\$\{engine_log\}"' "each import scans stdout and engine logs"
+
+bootstrap_output="${TEMP_DIR}/bootstrap-expected.out"
+run_fake_validation bootstrap_expected "${bootstrap_output}" \
+	|| fail "the exact pair of generated translation misses must bootstrap successfully"
+assert_contains "$(cat "${bootstrap_output}")" "generated translation resources were absent before bootstrap" "bootstrap translation classification"
+assert_contains "$(cat "${bootstrap_output}")" "cannot persist global Godot editor settings" "editor settings environment warning"
+
+set +e
+run_fake_validation bootstrap_partial "${TEMP_DIR}/bootstrap-partial.out"
+bootstrap_partial_status=$?
+run_fake_validation bootstrap_unexpected_resource "${TEMP_DIR}/bootstrap-unexpected.out"
+bootstrap_unexpected_status=$?
+run_fake_validation clean_resource_error "${TEMP_DIR}/clean-resource-error.out"
+clean_resource_error_status=$?
+run_fake_validation unrelated_error "${TEMP_DIR}/unrelated-error.out"
+unrelated_error_status=$?
+set -e
+[[ ${bootstrap_partial_status} -ne 0 ]] || fail "an incomplete generated-translation pair must fail"
+[[ ${bootstrap_unexpected_status} -ne 0 ]] || fail "an unrelated bootstrap resource error must fail"
+[[ ${clean_resource_error_status} -ne 0 ]] || fail "the clean second import must reject every resource error"
+[[ ${unrelated_error_status} -ne 0 ]] || fail "an unclassified ERROR line must fail"
+
+editor_warning_output="${TEMP_DIR}/editor-warning.out"
+run_fake_validation editor_warning_only "${editor_warning_output}" \
+	|| fail "editor settings write failures must remain an environment warning"
+assert_contains "$(cat "${editor_warning_output}")" "cannot persist global Godot editor settings" "editor settings warning classification"
 
 printf 'PASS: test and CI contract is satisfied (%d discovered scenes)\n' "${scene_count}"

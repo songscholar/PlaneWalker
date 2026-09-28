@@ -28,59 +28,156 @@ else
 fi
 validation_log_dir="$(cd "${validation_log_dir}" && pwd)"
 
-import_stdout_log="${validation_log_dir}/import.stdout.log"
-import_engine_log="${validation_log_dir}/import.godot.log"
+print_import_logs() {
+	local label="$1"
+	local stdout_log="$2"
+	local engine_log="$3"
+	printf '%s\n' "--- ${label} stdout/stderr log ---" >&2
+	tail -120 "${stdout_log}" >&2 || true
+	printf '%s\n' "--- ${label} Godot engine log ---" >&2
+	tail -120 "${engine_log}" >&2 || true
+}
+
+validate_import_logs() {
+	local phase="$1"
+	local stdout_log="$2"
+	local engine_log="$3"
+	local errors_file="${validation_log_dir}/${phase}-import.errors.txt"
+	local has_en_translation_miss=false
+	local has_zh_translation_miss=false
+	local has_editor_cannot_save=false
+	local has_editor_save_error=false
+	local has_macos_ca_error=false
+	local has_unclassified_error=false
+	local line=""
+
+	if grep -Eq \
+		-e 'SCRIPT ERROR:' \
+		-e 'Parse Error:' \
+		-e 'Failed to load script' \
+		-- "${stdout_log}" "${engine_log}"; then
+		printf 'ERROR: %s import contains a script failure\n' "${phase}" >&2
+		return 1
+	fi
+	if grep -Eq \
+		-e 'ObjectDB instances leaked at exit' \
+		-e 'RID allocations leaked at exit' \
+		-- "${stdout_log}" "${engine_log}"; then
+		printf 'ERROR: %s import contains an engine object leak\n' "${phase}" >&2
+		return 1
+	fi
+
+	grep -h '^ERROR:' "${stdout_log}" "${engine_log}" 2>/dev/null \
+		| LC_ALL=C sort -u >"${errors_file}" || true
+
+	while IFS= read -r line; do
+		case "${line}" in
+			"ERROR: Cannot open file 'res://data/localization/translations.en.translation'."|\
+			"ERROR: Failed loading resource: res://data/localization/translations.en.translation.")
+				if [[ "${phase}" == bootstrap ]]; then
+					has_en_translation_miss=true
+				else
+					has_unclassified_error=true
+					printf 'UNCLASSIFIED ERROR: %s\n' "${line}" >&2
+				fi
+				;;
+			"ERROR: Cannot open file 'res://data/localization/translations.zh_CN.translation'."|\
+			"ERROR: Failed loading resource: res://data/localization/translations.zh_CN.translation.")
+				if [[ "${phase}" == bootstrap ]]; then
+					has_zh_translation_miss=true
+				else
+					has_unclassified_error=true
+					printf 'UNCLASSIFIED ERROR: %s\n' "${line}" >&2
+				fi
+				;;
+			'ERROR: Condition "ret != noErr" is true. Returning: ""')
+				has_macos_ca_error=true
+				;;
+			*)
+				if [[ "${line}" =~ ^ERROR:\ Cannot\ save\ file\ \'.*/Godot/editor_settings-[0-9.]+\.tres\'\.$ ]]; then
+					has_editor_cannot_save=true
+				elif [[ "${line}" =~ ^ERROR:\ Error\ saving\ editor\ settings\ to\ .*/Godot/editor_settings-[0-9.]+\.tres$ ]]; then
+					has_editor_save_error=true
+				else
+					has_unclassified_error=true
+					printf 'UNCLASSIFIED ERROR: %s\n' "${line}" >&2
+				fi
+				;;
+		esac
+	done <"${errors_file}"
+
+	if [[ "${has_en_translation_miss}" != "${has_zh_translation_miss}" ]]; then
+		printf 'ERROR: bootstrap import must miss either both generated translations or neither\n' >&2
+		has_unclassified_error=true
+	fi
+	if [[ "${has_en_translation_miss}" == true ]]; then
+		printf 'WARNING: bootstrap import generated translation resources were absent before bootstrap; both expected CSV derivatives were regenerated.\n' >&2
+	fi
+
+	if [[ "${has_editor_cannot_save}" != "${has_editor_save_error}" ]]; then
+		printf 'ERROR: incomplete editor settings environment error signature\n' >&2
+		has_unclassified_error=true
+	fi
+	if [[ "${has_editor_cannot_save}" == true ]]; then
+		printf 'ENVIRONMENT WARNING: %s import cannot persist global Godot editor settings; project validation continues.\n' "${phase}" >&2
+	fi
+
+	if [[ "${has_macos_ca_error}" == true ]]; then
+		if grep -Eq 'at: get_system_ca_certificates \(platform/macos/os_macos\.mm:[0-9]+\)' "${stdout_log}" "${engine_log}"; then
+			printf 'ENVIRONMENT WARNING: %s import cannot read the macOS system CA store in this sandbox; project validation continues.\n' "${phase}" >&2
+		else
+			printf 'ERROR: macOS CA error signature is missing its expected call site\n' >&2
+			has_unclassified_error=true
+		fi
+	fi
+
+	[[ "${has_unclassified_error}" == false ]]
+}
+
+run_import_phase() {
+	local phase="$1"
+	local stdout_log="${validation_log_dir}/${phase}-import.stdout.log"
+	local engine_log="${validation_log_dir}/${phase}-import.godot.log"
+	local import_status=0
+
+	set +e
+	"${godot_bin}" \
+		--headless \
+		--editor \
+		--import \
+		--path "${PROJECT_ROOT}" \
+		--log-file "${engine_log}" >"${stdout_log}" 2>&1
+	import_status=$?
+	set -e
+
+	if (( import_status != 0 )); then
+		print_import_logs "${phase} import" "${stdout_log}" "${engine_log}"
+		fail "Godot ${phase} import failed with exit ${import_status}"
+	fi
+	if ! validate_import_logs "${phase}" "${stdout_log}" "${engine_log}"; then
+		print_import_logs "${phase} import" "${stdout_log}" "${engine_log}"
+		fail "Godot ${phase} import contains an unapproved error"
+	fi
+}
 
 printf 'Validation logs: %s\n' "${validation_log_dir}"
-printf '\n== Shell and CI contract ==\n'
-"${SCRIPT_DIR}/test_ci_contract.sh"
+if [[ "${SKIP_CI_CONTRACT:-false}" != true ]]; then
+	printf '\n== Shell and CI contract ==\n'
+	"${SCRIPT_DIR}/test_ci_contract.sh"
+fi
 
 printf '\n== Localization contracts ==\n'
 cd "${PROJECT_ROOT}"
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
 PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_localization.py
 
-printf '\n== Godot import ==\n'
-set +e
-"${godot_bin}" \
-	--headless \
-	--editor \
-	--import \
-	--path "${PROJECT_ROOT}" \
-	--log-file "${import_engine_log}" >"${import_stdout_log}" 2>&1
-import_status=$?
-set -e
+printf '\n== Godot bootstrap import ==\n'
+run_import_phase bootstrap
+printf 'PASS: bootstrap import completed with only approved generated-resource/environment diagnostics\n'
 
-if (( import_status != 0 )); then
-	tail -120 "${import_stdout_log}" >&2 || true
-	fail "Godot import failed with exit ${import_status}"
-fi
-
-if grep -Eq \
-	-e 'SCRIPT ERROR:' \
-	-e 'Parse Error:' \
-	-e 'Failed to load script' \
-	-e 'Failed loading resource' \
-	-e 'Cannot open file .*\.(gd|tscn|tres|json|csv)' \
-	-e 'Cannot load resource' \
-	-- "${import_stdout_log}" "${import_engine_log}"; then
-	printf '%s\n' "--- stdout/stderr log ---" >&2
-	tail -120 "${import_stdout_log}" >&2 || true
-	printf '%s\n' "--- Godot engine log ---" >&2
-	tail -120 "${import_engine_log}" >&2 || true
-	fail "Godot import log contains a script or resource failure"
-fi
-if grep -Eq \
-	-e 'ObjectDB instances leaked at exit' \
-	-e 'RID allocations leaked at exit' \
-	-- "${import_stdout_log}" "${import_engine_log}"; then
-	printf '%s\n' "--- stdout/stderr log ---" >&2
-	tail -120 "${import_stdout_log}" >&2 || true
-	printf '%s\n' "--- Godot engine log ---" >&2
-	tail -120 "${import_engine_log}" >&2 || true
-	fail "Godot import log contains an engine object leak"
-fi
-printf 'PASS: Godot import completed without script/resource failures\n'
+printf '\n== Godot clean second import ==\n'
+run_import_phase clean
+printf 'PASS: clean second import completed without project errors\n'
 
 printf '\n== Godot scene tests ==\n'
 TEST_LOG_DIR="${TEST_LOG_DIR:-${validation_log_dir}/scene-tests}" \
