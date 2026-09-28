@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "offer_id": "offer-item-room-1",
+  "category": "item",
+  "title_key": "CHOICE_TITLE_ITEM",
+  "revision": 7,
+  "can_skip": false,
+  "options": [
+    {
+      "option_id": "choose-frozen-burst",
+      "content_id": "frozen_burst",
+      "name_key": "FROZEN_BURST_NAME",
+      "description_key": "FROZEN_BURST_DESC",
+      "archetype_key": "ARCHETYPE_TIME_STOP_BURST",
+      "role_key": "ROLE_DAMAGE",
+      "rarity": "uncommon",
+      "icon_id": "icon_frozen_burst",
+      "effect_summary_keys": ["EFFECT_TIME_STOP_BURST"]
+    },
+    {
+      "option_id": "choose-rewind-echo",
+      "content_id": "rewind_echo",
+      "name_key": "REWIND_ECHO_NAME",
+      "description_key": "REWIND_ECHO_DESC",
+      "archetype_key": "ARCHETYPE_REWIND_SURVIVAL",
+      "role_key": "ROLE_SURVIVAL",
+      "rarity": "uncommon",
+      "icon_id": "icon_rewind_echo",
+      "effect_summary_keys": ["EFFECT_REWIND_ECHO"]
+    },
+    {
+      "option_id": "choose-chronal-battery",
+      "content_id": "chronal_battery",
+      "name_key": "CHRONAL_BATTERY_NAME",
+      "description_key": "CHRONAL_BATTERY_DESC",
+      "archetype_key": "ARCHETYPE_TIME_RESOURCE",
+      "role_key": "ROLE_RESOURCE",
+      "rarity": "common",
+      "icon_id": "icon_chronal_battery",
+      "effect_summary_keys": ["EFFECT_MAX_ENERGY", "EFFECT_ENERGY_RECOVERY"]
+    }
+  ]
+}

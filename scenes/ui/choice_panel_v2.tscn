@@ -1,0 +1,73 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/views/choice_panel_view.gd" id="1_view"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+content_margin_left = 16.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+bg_color = Color(0.025, 0.04, 0.06, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18, 0.55, 0.67, 0.95)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="ChoicePanelV2" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_view")
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Center" type="CenterContainer" parent="SafeArea"]
+layout_mode = 2
+
+[node name="PanelRoot" type="PanelContainer" parent="SafeArea/Center"]
+custom_minimum_size = Vector2(608, 300)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Content" type="VBoxContainer" parent="SafeArea/Center/PanelRoot"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="SafeArea/Center/PanelRoot/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "CHOICE_TITLE"
+horizontal_alignment = 1
+
+[node name="ErrorLabel" type="Label" parent="SafeArea/Center/PanelRoot/Content"]
+visible = false
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.34, 0.18, 1)
+text = "CHOICE_REJECTED"
+horizontal_alignment = 1
+
+[node name="OptionsContainer" type="HBoxContainer" parent="SafeArea/Center/PanelRoot/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12

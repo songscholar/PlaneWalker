@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "offer_id": "offer-contract-room-4",
+  "category": "contract",
+  "title_key": "CHOICE_TITLE_CONTRACT",
+  "revision": 2,
+  "can_skip": true,
+  "options": [
+    {
+      "option_id": "accept-glass-tempo",
+      "content_id": "glass_tempo",
+      "name_key": "GLASS_TEMPO_NAME",
+      "description_key": "GLASS_TEMPO_DESC",
+      "archetype_key": "ARCHETYPE_HIGH_RISK",
+      "role_key": "ROLE_RISK",
+      "rarity": "rare",
+      "icon_id": "icon_glass_tempo",
+      "effect_summary_keys": ["EFFECT_DAMAGE_UP", "EFFECT_MAX_HP_DOWN"]
+    },
+    {
+      "option_id": "accept-blood-rewind",
+      "content_id": "blood_rewind",
+      "name_key": "BLOOD_REWIND_NAME",
+      "description_key": "BLOOD_REWIND_DESC",
+      "archetype_key": "ARCHETYPE_REWIND_RISK",
+      "role_key": "ROLE_RISK",
+      "rarity": "rare",
+      "icon_id": "icon_blood_rewind",
+      "effect_summary_keys": ["EFFECT_REWIND_HEAL", "EFFECT_REWIND_SELF_DAMAGE"]
+    },
+    {
+      "option_id": "decline_contract",
+      "content_id": "decline_contract",
+      "name_key": "DECLINE_CONTRACT_NAME",
+      "description_key": "DECLINE_CONTRACT_DESC",
+      "archetype_key": "ARCHETYPE_NEUTRAL",
+      "role_key": "ROLE_SAFE",
+      "rarity": "common",
+      "icon_id": "icon_decline_contract",
+      "effect_summary_keys": ["EFFECT_NO_CHANGE"]
+    }
+  ]
+}
