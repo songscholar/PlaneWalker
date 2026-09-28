@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 import sys
@@ -19,6 +20,8 @@ from m1_gate import (  # noqa: E402
     M1_GO,
     M1_NO_GO,
     PROBE_VERSION,
+    canonical_digest,
+    canonical_records_digest,
     compare_seed_matrices,
     evaluate_m1,
     load_observations_jsonl,
@@ -52,12 +55,36 @@ def make_evidence(*, origin: str = "godot_authoritative_probe", clean: bool = Tr
         "tree_digest": "1" * 40,
         "probe_digest": "2" * 64,
         "godot_version": "4.6.stable",
+        "godot_platform": "test-platform",
+        "godot_binary_digest": "4" * 64,
+        "godot_toolchain_id": "test_toolchain",
         "content_digest": "3" * 64,
         "catalog_content_version": COHORT["content_version"],
     }
 
 
 def make_raw_run(seed: int) -> dict:
+    choice_ids = [f"choice_{index}" for index in range(1, 5)]
+    snapshots: list[dict] = []
+    selected: list[str] = []
+    history: list[dict] = []
+    for revision, choice_id in enumerate(choice_ids, start=1):
+        selected.append(choice_id)
+        history.append({"id": choice_id})
+        snapshots.append({
+            "choice_id": choice_id,
+            "revision": revision,
+            "outcome": "applied",
+            "build": {
+                "items": selected.copy(),
+                "blessings": [],
+                "curses": [],
+                "talents": [],
+                "reward_history": [dict(item) for item in history],
+                "archetypes": {},
+                "dominant_archetype": "",
+            },
+        })
     return {
         "seed": seed,
         "terminal_state": "victory",
@@ -76,16 +103,9 @@ def make_raw_run(seed: int) -> dict:
             [["tank"]],
             [["chrono_warden"]],
         ],
-        "reward_offers": [["a", "b", "c"]] * 4,
-        "selected_choices": ["a", "a", "a", "a"],
-        "choice_snapshots": [
-            {
-                "choice_id": "a",
-                "revision": revision,
-                "build": {"items": [f"item_{revision}"], "blessings": [], "curses": []},
-            }
-            for revision in range(1, 5)
-        ],
+        "reward_offers": [[choice_id, "b", "c"] for choice_id in choice_ids],
+        "selected_choices": choice_ids,
+        "choice_snapshots": snapshots,
         "failure_codes": [],
         "duration_proxy_ms": 500_000,
     }
@@ -101,12 +121,38 @@ def make_matrix() -> dict:
     )
 
 
-def make_attestation(session_ids: list[str]) -> dict:
-    return {
-        "schema_version": "1.0.0",
+_TEST_KEY_DIR = tempfile.TemporaryDirectory(prefix="planewalker-m1-test-key-")
+_TEST_PRIVATE_KEY = Path(_TEST_KEY_DIR.name) / "private.pem"
+_TEST_PUBLIC_KEY = Path(_TEST_KEY_DIR.name) / "public.pem"
+subprocess.run(
+    ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(_TEST_PRIVATE_KEY)],
+    capture_output=True,
+    check=True,
+)
+subprocess.run(
+    ["openssl", "pkey", "-in", str(_TEST_PRIVATE_KEY), "-pubout", "-out", str(_TEST_PUBLIC_KEY)],
+    capture_output=True,
+    check=True,
+)
+TEST_ATTESTOR_TRUST = {
+    "schema_version": "1.0.0",
+    "keys": [{
+        "key_id": "test_coordinator",
+        "algorithm": "rsa-sha256",
+        "public_key_path": str(_TEST_PUBLIC_KEY),
+        "active": True,
+    }],
+}
+
+
+def make_attestation(matrix: dict, sessions: list[dict], observations: list[dict]) -> dict:
+    session_ids = sorted(str(session["session_id"]) for session in sessions)
+    value = {
+        "schema_version": "2.0.0",
         "attestation_id": "m1_external_cohort_001",
         "cohort": dict(COHORT),
         "attestor": {
+            "key_id": "test_coordinator",
             "role": "external_playtest_coordinator",
             "independent_from_development": True,
         },
@@ -115,8 +161,27 @@ def make_attestation(session_ids: list[str]) -> dict:
             "statement": "authentic_human_evidence_verified",
             "approved_at_utc": "2026-09-28T12:00:00Z",
         },
+        "evidence": {
+            "matrix_digest": matrix["matrix_digest"],
+            "sessions_digest": canonical_records_digest(sessions),
+            "observations_digest": canonical_records_digest(observations),
+            "session_ids_digest": canonical_digest(session_ids),
+        },
         "session_ids": session_ids,
     }
+    payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        payload_path = Path(temp_dir) / "payload.json"
+        signature_path = Path(temp_dir) / "signature.bin"
+        payload_path.write_bytes(payload)
+        subprocess.run(
+            ["openssl", "dgst", "-sha256", "-sign", str(_TEST_PRIVATE_KEY), "-out", str(signature_path), str(payload_path)],
+            capture_output=True,
+            check=True,
+        )
+        signature = base64.b64encode(signature_path.read_bytes()).decode("ascii")
+    value["signature"] = {"algorithm": "rsa-sha256", "value_base64": signature}
+    return value
 
 
 def make_session(index: int, *, source: str = "human") -> dict:
@@ -286,7 +351,8 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(schema["$id"], "planewalker://schemas/m1-external-attestation/1.0.0")
+        self.assertEqual(schema["$id"], "planewalker://schemas/m1-external-attestation/2.0.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "2.0.0")
         self.assertEqual(schema["properties"]["attestor"]["properties"]["independent_from_development"]["const"], True)
         self.assertEqual(schema["properties"]["session_ids"]["minItems"], 20)
 
@@ -347,19 +413,27 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
         self.assertFalse(decision.external_gate["passed"])
 
     def test_twenty_complete_human_records_can_pass_m1(self) -> None:
+        matrix = make_matrix()
         sessions = [make_session(index) for index in range(1, 21)]
         observations = [make_observation(index) for index in range(1, 21)]
 
-        decision = evaluate_m1(make_matrix(), sessions, observations=observations)
+        decision = evaluate_m1(
+            matrix,
+            sessions,
+            observations=observations,
+            verify_repository_artifacts=False,
+        )
 
         self.assertEqual(decision.state, M1_CANDIDATE)
         self.assertFalse(decision.external_gate["attestation"]["approved"])
 
         decision = evaluate_m1(
-            make_matrix(),
+            matrix,
             sessions,
             observations=observations,
-            attestation=make_attestation([session["session_id"] for session in sessions]),
+            attestation=make_attestation(matrix, sessions, observations),
+            verify_repository_artifacts=False,
+            attestation_trust=TEST_ATTESTOR_TRUST,
         )
 
         self.assertEqual(decision.state, M1_GO)
@@ -371,16 +445,19 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
         self.assertNotIn("状态保持 `M1 Candidate", go_markdown)
 
     def test_nineteen_deaths_cannot_exploit_successful_duration_denominator(self) -> None:
+        matrix = make_matrix()
         sessions = [make_session(index) for index in range(1, 21)]
         observations = [make_observation(index) for index in range(1, 21)]
         for session in sessions[:19]:
             session["terminal_result"].update({"outcome": "death", "cause": "enemy_damage"})
 
         decision = evaluate_m1(
-            make_matrix(),
+            matrix,
             sessions,
             observations=observations,
-            attestation=make_attestation([session["session_id"] for session in sessions]),
+            attestation=make_attestation(matrix, sessions, observations),
+            verify_repository_artifacts=False,
+            attestation_trust=TEST_ATTESTOR_TRUST,
         )
 
         completion = decision.external_gate["thresholds"]["human_completion_rate"]
@@ -391,6 +468,7 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
     def test_p0_p1_or_explicit_blocker_forces_no_go(self) -> None:
         for severity, blocks_release in (("p0", False), ("p1", False), ("p2", True)):
             with self.subTest(severity=severity, blocks_release=blocks_release):
+                matrix = make_matrix()
                 sessions = [make_session(index) for index in range(1, 21)]
                 observations = [make_observation(index) for index in range(1, 21)]
                 observations[0]["issues"] = [{
@@ -401,10 +479,12 @@ class ObservationAndDecisionContractTest(unittest.TestCase):
                     "blocks_release": blocks_release,
                 }]
                 decision = evaluate_m1(
-                    make_matrix(),
+                    matrix,
                     sessions,
                     observations=observations,
-                    attestation=make_attestation([session["session_id"] for session in sessions]),
+                    attestation=make_attestation(matrix, sessions, observations),
+                    verify_repository_artifacts=False,
+                    attestation_trust=TEST_ATTESTOR_TRUST,
                 )
                 self.assertEqual(decision.state, M1_NO_GO)
                 self.assertEqual(len(decision.external_gate["blocking_issues"]), 1)
@@ -565,7 +645,7 @@ class M1CliContractTest(unittest.TestCase):
             self.assertNotEqual(mismatched_commit.returncode, 0)
             self.assertIn("must equal the current HEAD", mismatched_commit.stderr)
 
-    def test_require_go_accepts_only_attested_release_evidence(self) -> None:
+    def test_require_go_rejects_attestation_signed_by_untrusted_test_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             seed_path = temp / "release-seeds.json"
@@ -573,18 +653,20 @@ class M1CliContractTest(unittest.TestCase):
             observations_path = temp / "observations.jsonl"
             attestation_path = temp / "attestation.json"
             report_path = temp / "report.md"
+            matrix = make_matrix()
             sessions = [make_session(index) for index in range(1, 21)]
-            seed_path.write_text(json.dumps(make_matrix()), encoding="utf-8")
+            observations = [make_observation(index) for index in range(1, 21)]
+            seed_path.write_text(json.dumps(matrix), encoding="utf-8")
             sessions_path.write_text(
                 "\n".join(json.dumps(session) for session in sessions) + "\n",
                 encoding="utf-8",
             )
             observations_path.write_text(
-                "\n".join(json.dumps(make_observation(index)) for index in range(1, 21)) + "\n",
+                "\n".join(json.dumps(observation) for observation in observations) + "\n",
                 encoding="utf-8",
             )
             attestation_path.write_text(
-                json.dumps(make_attestation([session["session_id"] for session in sessions])),
+                json.dumps(make_attestation(matrix, sessions, observations)),
                 encoding="utf-8",
             )
 
@@ -598,9 +680,13 @@ class M1CliContractTest(unittest.TestCase):
                 "--require-go",
             )
 
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertTrue(json.loads(result.stdout)["release_ready"])
-            self.assertIn("状态为 `M1 Go`", report_path.read_text(encoding="utf-8"))
+            output = json.loads(result.stdout)
+            report = report_path.read_text(encoding="utf-8")
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(output["state"], M1_CANDIDATE)
+            self.assertFalse(output["attestation_approved"])
+            self.assertFalse(output["release_ready"])
+            self.assertIn("attestor key is not trusted: test_coordinator", report)
 
     @staticmethod
     def _run(script: str, *arguments: str) -> subprocess.CompletedProcess[str]:
