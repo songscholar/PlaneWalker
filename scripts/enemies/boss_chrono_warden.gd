@@ -7,14 +7,65 @@ const TimeCrackScript := preload("res://scripts/enemies/boss_time_crack.gd")
 enum BossAction { NONE, MELEE, SLAM, RADIAL, AIMED, SUMMON, TIME_CRACK }
 enum BossActionPhase { IDLE, WINDUP, RECOVERY }
 
+const ACTION_DEFINITIONS := {
+	BossAction.MELEE: {
+		"id": "MELEE",
+		"windup": 0.32,
+		"recovery": 0.38,
+		"shape": "cone",
+		"radius": 14.0,
+		"length": 54.0,
+	},
+	BossAction.SLAM: {
+		"id": "SLAM",
+		"windup": 0.75,
+		"recovery": 0.90,
+		"shape": "circle",
+		"radius": 72.0,
+		"length": 0.0,
+	},
+	BossAction.RADIAL: {
+		"id": "RADIAL",
+		"windup": 0.62,
+		"recovery": 0.52,
+		"shape": "ring",
+		"radius": 62.0,
+		"length": 0.0,
+	},
+	BossAction.AIMED: {
+		"id": "AIMED",
+		"windup": 0.72,
+		"recovery": 0.60,
+		"shape": "line",
+		"radius": 8.0,
+		"length": 260.0,
+	},
+	BossAction.SUMMON: {
+		"id": "SUMMON",
+		"windup": 0.85,
+		"recovery": 0.70,
+		"shape": "summon_slots",
+		"radius": 14.0,
+		"length": 0.0,
+	},
+	BossAction.TIME_CRACK: {
+		"id": "TIME_CRACK",
+		"windup": 0.95,
+		"recovery": 0.65,
+		"shape": "target_circle",
+		"radius": 50.0,
+		"length": 0.0,
+	},
+}
+
 @export var projectile_scene: PackedScene
 @export var radial_projectile_count: int = 8
 @export var exposed_defense_penalty: float = 3.0
-@export var slam_windup: float = 0.75
-@export var slam_recovery: float = 0.9
 @export var slam_radius: float = 72.0
 @export var fragment_count: int = 2
 @export var crack_arm_delay: float = 1.15
+
+@onready var combat_telegraph: Node2D = $CombatTelegraph2D
 
 var _base_defense: float = 0.0
 var _pattern_timer: float = 0.0
@@ -25,8 +76,18 @@ var _special_index: int = 0
 var _action: int = BossAction.NONE
 var _action_phase: int = BossActionPhase.IDLE
 var _action_time_remaining: float = 0.0
-var _pending_recovery_bonus: float = 0.0
+var _action_resolved: bool = false
+var _committed_aim_direction := Vector2.RIGHT
+var _committed_target_point := Vector2.ZERO
+var _committed_summon_slots: Array[Vector2] = []
+var _action_resolution_counts: Dictionary = {}
 var _exposure_sources: Dictionary = {}
+var slam_windup: float:
+	get:
+		return _action_windup(BossAction.SLAM)
+var slam_recovery: float:
+	get:
+		return _action_recovery(BossAction.SLAM)
 var _slam_timer: float:
 	get:
 		if _action == BossAction.SLAM and _action_phase == BossActionPhase.WINDUP:
@@ -71,6 +132,8 @@ func _tick_ai(delta: float) -> void:
 func _hold_position() -> void:
 	velocity = _knockback_velocity
 	move_and_slide()
+	if _action_phase == BossActionPhase.WINDUP:
+		combat_telegraph.update_origin_global(global_position)
 
 
 func _run_next_pattern() -> bool:
@@ -106,11 +169,14 @@ func _next_burst_action() -> int:
 
 
 func _try_start_action(action: int) -> bool:
-	if _action != BossAction.NONE or not _can_start_action(action):
+	if _action != BossAction.NONE or not ACTION_DEFINITIONS.has(action) or not _can_start_action(action):
 		return false
 	_action = action
 	_action_phase = BossActionPhase.WINDUP
 	_action_time_remaining = _action_windup(action)
+	_action_resolved = false
+	_capture_action_commitment()
+	_show_action_telegraph()
 	if action == BossAction.SLAM:
 		visual.scale = Vector2(1.18, 1.18)
 	_restore_visual_color()
@@ -142,8 +208,10 @@ func _tick_action(delta: float) -> bool:
 	_action_time_remaining = maxf(0.0, _action_time_remaining - delta)
 	match _action_phase:
 		BossActionPhase.WINDUP:
+			combat_telegraph.set_remaining_time(_action_time_remaining)
 			if _action_time_remaining <= 0.0:
-				_resolve_action()
+				_resolve_action_once()
+				combat_telegraph.clear_telegraph()
 				_enter_action_recovery()
 		BossActionPhase.RECOVERY:
 			if _action_time_remaining <= 0.0:
@@ -151,10 +219,19 @@ func _tick_action(delta: float) -> bool:
 	return true
 
 
+func _resolve_action_once() -> void:
+	if _action_resolved:
+		return
+	_action_resolved = true
+	var action_id := _action_name(_action)
+	_action_resolution_counts[action_id] = int(_action_resolution_counts.get(action_id, 0)) + 1
+	_resolve_action()
+
+
 func _resolve_action() -> void:
 	match _action:
 		BossAction.MELEE:
-			_try_melee_attack()
+			_resolve_melee()
 		BossAction.SLAM:
 			_resolve_slam()
 		BossAction.RADIAL:
@@ -169,8 +246,7 @@ func _resolve_action() -> void:
 
 func _enter_action_recovery() -> void:
 	_action_phase = BossActionPhase.RECOVERY
-	_action_time_remaining = _action_recovery(_action) + _pending_recovery_bonus
-	_pending_recovery_bonus = 0.0
+	_action_time_remaining = _action_recovery(_action)
 	if _action == BossAction.SLAM:
 		visual.scale = Vector2.ONE
 		_add_exposure_source(&"slam_recovery")
@@ -187,19 +263,61 @@ func _complete_action() -> void:
 	_action = BossAction.NONE
 	_action_phase = BossActionPhase.IDLE
 	_action_time_remaining = 0.0
+	_action_resolved = false
+	_committed_aim_direction = Vector2.RIGHT
+	_committed_target_point = global_position
+	_committed_summon_slots.clear()
+	combat_telegraph.clear_telegraph()
 	_restore_visual_color()
 
 
 func _action_windup(action: int) -> float:
-	if action == BossAction.SLAM:
-		return slam_windup
-	return 0.0
+	var definition: Dictionary = ACTION_DEFINITIONS.get(action, {})
+	return float(definition.get("windup", 0.0))
 
 
 func _action_recovery(action: int) -> float:
-	if action == BossAction.SLAM:
-		return slam_recovery
-	return 0.0
+	var definition: Dictionary = ACTION_DEFINITIONS.get(action, {})
+	return float(definition.get("recovery", 0.0))
+
+
+func _capture_action_commitment() -> void:
+	_committed_target_point = global_position
+	if target != null and is_instance_valid(target):
+		_committed_target_point = target.global_position
+		_committed_aim_direction = global_position.direction_to(_committed_target_point)
+	else:
+		_committed_aim_direction = Vector2.RIGHT
+	if _committed_aim_direction.is_zero_approx():
+		_committed_aim_direction = Vector2.RIGHT
+	_committed_summon_slots.clear()
+	if _action == BossAction.SUMMON:
+		for index: int in range(fragment_count):
+			var direction := Vector2.RIGHT.rotated(TAU * float(index) / maxf(1.0, float(fragment_count)))
+			_committed_summon_slots.append(global_position + direction * 86.0)
+
+
+func _show_action_telegraph() -> void:
+	var definition: Dictionary = ACTION_DEFINITIONS[_action]
+	var radius := float(definition.get("radius", 0.0))
+	var length := float(definition.get("length", 0.0))
+	if _action == BossAction.MELEE:
+		length = attack_range
+	elif _action == BossAction.SLAM:
+		radius = slam_radius
+	elif _action == BossAction.TIME_CRACK:
+		radius = 58.0 if _phase >= 3 else 50.0
+	combat_telegraph.show_telegraph(
+		str(definition["id"]),
+		str(definition["shape"]),
+		global_position,
+		_committed_aim_direction,
+		_committed_target_point,
+		_committed_summon_slots,
+		radius,
+		length,
+		_action_time_remaining
+	)
 
 
 func _update_phase() -> void:
@@ -240,9 +358,9 @@ func _fire_radial_burst() -> void:
 
 
 func _fire_aimed_burst() -> void:
-	if projectile_scene == null or target == null:
+	if projectile_scene == null:
 		return
-	var base_direction := global_position.direction_to(target.global_position)
+	var base_direction := _committed_aim_direction
 	var spread := 0.18 if _phase == 2 else 0.28
 	var shot_count := 3 if _phase == 2 else 5
 	for index: int in range(shot_count):
@@ -265,18 +383,38 @@ func _resolve_slam() -> void:
 		if health_component != null:
 			var damage_info := DamageInfoScript.new(attack * 1.6, DamageInfoScript.DamageType.PHYSICAL, self, self)
 			damage_info.tags = ["boss:slam", "enemy:melee"]
-			damage_info.knockback = global_position.direction_to(target.global_position) * 260.0
+			damage_info.knockback = _committed_aim_direction * 260.0
 			health_component.take_damage(damage_info)
+
+
+func _resolve_melee() -> void:
+	if target == null or not is_instance_valid(target):
+		return
+	if global_position.distance_to(target.global_position) > attack_range:
+		return
+	var health_component := target.get_node_or_null("HealthComponent")
+	if health_component == null:
+		return
+	_attack_cooldown_remaining = attack_cooldown
+	var damage_info := DamageInfoScript.new(attack, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	damage_info.tags = ["enemy:melee", "boss:melee"]
+	damage_info.knockback = _committed_aim_direction * 180.0
+	health_component.take_damage(damage_info)
 
 
 func _summon_fragments() -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	for index: int in range(fragment_count):
+	var summon_slots := _committed_summon_slots.duplicate()
+	if summon_slots.is_empty():
+		for index: int in range(fragment_count):
+			var direction := Vector2.RIGHT.rotated(TAU * float(index) / maxf(1.0, float(fragment_count)))
+			summon_slots.append(global_position + direction * 86.0)
+	for index: int in range(summon_slots.size()):
 		var fragment := FragmentScene.instantiate()
 		parent.add_child(fragment)
-		fragment.global_position = global_position + Vector2.RIGHT.rotated(TAU * float(index) / maxf(1.0, float(fragment_count))) * 86.0
+		fragment.global_position = summon_slots[index]
 		if fragment.has_method("apply_elite_modifier") and _phase >= 3:
 			fragment.apply_elite_modifier(1.25, 1.1, 1.0)
 		EventBus.enemy_spawned.emit(fragment)
@@ -292,7 +430,9 @@ func _create_time_crack() -> Node:
 	crack.radius = 58.0 if _phase >= 3 else 50.0
 	crack.damage = attack * 1.15
 	parent.add_child(crack)
-	var crack_position := target.global_position if target != null and is_instance_valid(target) else global_position
+	var crack_position := _committed_target_point
+	if _action != BossAction.TIME_CRACK:
+		crack_position = target.global_position if target != null and is_instance_valid(target) else global_position
 	crack.global_position = crack_position
 	return crack
 
@@ -307,6 +447,42 @@ func force_summon_fragments_for_test() -> void:
 
 func force_time_crack_for_test() -> Node:
 	return _create_time_crack()
+
+
+func force_action_for_test(action_name: String) -> bool:
+	var action := _action_from_name(action_name)
+	if action == BossAction.NONE:
+		return false
+	return _try_start_action(action)
+
+
+func advance_action_for_test(delta: float) -> bool:
+	return _tick_action(maxf(0.0, delta))
+
+
+func get_action_definitions_for_test() -> Dictionary:
+	var result := {}
+	for action: int in ACTION_DEFINITIONS.keys():
+		var definition: Dictionary = ACTION_DEFINITIONS[action]
+		result[str(definition["id"])] = definition.duplicate(true)
+	return result
+
+
+func get_active_telegraph_snapshot_for_test() -> Dictionary:
+	return combat_telegraph.get_snapshot()
+
+
+func get_committed_action_snapshot_for_test() -> Dictionary:
+	return {
+		"action_id": _action_name(_action),
+		"aim_direction": _committed_aim_direction,
+		"target_point": _committed_target_point,
+		"summon_slots": _committed_summon_slots.duplicate(),
+	}
+
+
+func get_action_resolution_count_for_test(action_name: String) -> int:
+	return int(_action_resolution_counts.get(action_name, 0))
 
 
 func _restore_visual_color() -> void:
@@ -329,12 +505,11 @@ func apply_time_stop(duration: float) -> void:
 	match _action_phase:
 		BossActionPhase.WINDUP:
 			_action_time_remaining += resisted_delay
-			_pending_recovery_bonus = maxf(_pending_recovery_bonus, 0.8)
+			combat_telegraph.set_remaining_time(_action_time_remaining)
 		BossActionPhase.RECOVERY:
 			_action_time_remaining += maxf(resisted_delay, 0.8)
 		_:
 			_pattern_timer += resisted_delay
-			_pending_recovery_bonus = maxf(_pending_recovery_bonus, 0.8)
 	_add_exposure_source(&"time_stop")
 	get_tree().create_timer(duration).timeout.connect(_remove_exposure_source.bind(&"time_stop"))
 
@@ -364,6 +539,13 @@ func _action_name(action: int) -> String:
 		BossAction.TIME_CRACK:
 			return "TIME_CRACK"
 	return "NONE"
+
+
+func _action_from_name(action_name: String) -> int:
+	for action: int in ACTION_DEFINITIONS.keys():
+		if str(ACTION_DEFINITIONS[action]["id"]) == action_name:
+			return action
+	return BossAction.NONE
 
 
 func _action_phase_name(action_phase: int) -> String:

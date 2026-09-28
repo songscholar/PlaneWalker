@@ -14,9 +14,10 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 	await _test_idle_time_stop_invents_no_slam()
-	await _test_windup_time_stop_delays_action_and_recovery()
+	await _test_windup_time_stop_delays_only_current_phase()
 	await _test_recovery_time_stop_extends_only_recovery()
 	await _test_slam_excludes_melee_and_special_patterns()
+	await _test_every_action_uses_one_exclusive_clock()
 	_suite.finish(get_tree())
 
 
@@ -38,7 +39,7 @@ func _test_idle_time_stop_invents_no_slam() -> void:
 	await _cleanup_subject(subject)
 
 
-func _test_windup_time_stop_delays_action_and_recovery() -> void:
+func _test_windup_time_stop_delays_only_current_phase() -> void:
 	var subject: Dictionary = await _spawn_subject()
 	var boss: Node = subject["boss"]
 	boss.force_slam_for_test()
@@ -55,7 +56,7 @@ func _test_windup_time_stop_delays_action_and_recovery() -> void:
 	var recovery: Dictionary = _boss_snapshot(boss)
 	_suite.assert_equal(recovery["action"], "SLAM", "slam remains the active action through recovery")
 	_suite.assert_equal(recovery["phase"], "RECOVERY", "slam enters one recovery phase")
-	_suite.assert_true(float(recovery["remaining"]) >= boss.slam_recovery + 0.68, "resisted time stop adds at least 0.8 seconds of recovery opportunity")
+	_suite.assert_true(float(recovery["remaining"]) <= boss.slam_recovery + 0.01, "windup time stop does not also extend future recovery")
 	await _cleanup_subject(subject)
 
 
@@ -109,6 +110,25 @@ func _test_slam_excludes_melee_and_special_patterns() -> void:
 	_suite.assert_equal(damage_count[0], 0, "slam windup blocks basic melee damage")
 	_suite.assert_equal(_hostile_projectile_count(boss), projectile_count_before, "slam windup blocks radial projectile patterns")
 	_suite.assert_equal(boss._special_index, 1, "blocked special pattern is not consumed")
+	await _cleanup_subject(subject)
+
+
+func _test_every_action_uses_one_exclusive_clock() -> void:
+	var subject: Dictionary = await _spawn_subject()
+	var boss: Node = subject["boss"]
+	var action_names: Array[String] = ["MELEE", "SLAM", "RADIAL", "AIMED", "SUMMON", "TIME_CRACK"]
+	if not boss.has_method("force_action_for_test"):
+		_suite.assert_true(false, "boss exposes deterministic action forcing for the shared action clock")
+		await _cleanup_subject(subject)
+		return
+
+	boss._attack_cooldown_remaining = 0.0
+	_suite.assert_true(boss.force_action_for_test(action_names[0]), "first boss action can enter the shared clock")
+	for index: int in range(1, action_names.size()):
+		_suite.assert_true(not boss.force_action_for_test(action_names[index]), "%s cannot replace an active %s action" % [action_names[index], action_names[0]])
+	var snapshot: Dictionary = _boss_snapshot(boss)
+	_suite.assert_equal(snapshot["action"], action_names[0], "mutual exclusion preserves the original committed action")
+	_suite.assert_equal(snapshot["phase"], "WINDUP", "mutual exclusion preserves the original committed phase")
 	await _cleanup_subject(subject)
 
 
