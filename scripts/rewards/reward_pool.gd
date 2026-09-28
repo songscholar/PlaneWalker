@@ -7,143 +7,143 @@ const DATA_PATH := "res://data/items/mvp_items.json"
 const REWARDS: Array[Dictionary] = [
 	{
 		"id": "sword_edge",
-		"name": "Sword Edge",
+		"name": "SWORD_EDGE_NAME",
 		"kind": "weapon",
-		"description": "Sword attacks deal 18% more damage.",
+		"description": "SWORD_EDGE_DESC",
 		"effects": {"attack_multiplier": 1.18},
 	},
 	{
 		"id": "quickened_blade",
-		"name": "Quickened Blade",
+		"name": "QUICKENED_BLADE_NAME",
 		"kind": "weapon",
-		"description": "Sword attack timings are 15% faster.",
+		"description": "QUICKENED_BLADE_DESC",
 		"effects": {"attack_speed_multiplier": 1.15},
 	},
 	{
 		"id": "chronal_battery",
-		"name": "Chronal Battery",
+		"name": "CHRONAL_BATTERY_NAME",
 		"kind": "time",
-		"description": "Gain 25 maximum time energy and refill that amount.",
+		"description": "CHRONAL_BATTERY_DESC",
 		"effects": {"time_energy_max_bonus": 25.0, "time_energy_restore": 25.0},
 	},
 	{
 		"id": "rift_current",
-		"name": "Rift Current",
+		"name": "RIFT_CURRENT_NAME",
 		"kind": "time",
-		"description": "Time energy regenerates 1.25 faster each second.",
+		"description": "RIFT_CURRENT_DESC",
 		"effects": {"time_energy_regen_bonus": 1.25},
 	},
 	{
 		"id": "rewind_salve",
-		"name": "Rewind Salve",
+		"name": "REWIND_SALVE_NAME",
 		"kind": "survival",
-		"description": "Heal 35 now and increase maximum HP by 20.",
+		"description": "REWIND_SALVE_DESC",
 		"effects": {"max_hp_bonus": 20.0, "heal": 35.0},
 	},
 	{
 		"id": "tempered_guard",
-		"name": "Tempered Guard",
+		"name": "TEMPERED_GUARD_NAME",
 		"kind": "survival",
-		"description": "Gain 2 defense and a short invulnerable window.",
+		"description": "TEMPERED_GUARD_DESC",
 		"effects": {"defense_bonus": 2.0, "invulnerable_duration": 1.0},
 	},
 	{
 		"id": "frozen_burst",
-		"name": "Frozen Burst",
+		"name": "FROZEN_BURST_NAME",
 		"kind": "time",
 		"archetype": "time_stop_burst",
 		"role": "starter",
-		"description": "Time Stop lasts 0.75 seconds longer and costs 10% less energy.",
+		"description": "FROZEN_BURST_DESC",
 		"effects": {"time_stop_duration_bonus": 0.75, "time_stop_cost_multiplier": 0.9},
 	},
 	{
 		"id": "rewind_echo",
-		"name": "Rewind Echo",
+		"name": "REWIND_ECHO_NAME",
 		"kind": "time",
 		"archetype": "rewind_echo",
 		"role": "starter",
-		"description": "Rewind heals 28 HP after returning to an older position.",
+		"description": "REWIND_ECHO_DESC",
 		"effects": {"rewind_heal": 28.0},
 	},
 	{
 		"id": "accelerated_combo",
-		"name": "Accelerated Combo",
+		"name": "ACCELERATED_COMBO_NAME",
 		"kind": "weapon",
 		"archetype": "accelerated_combo",
 		"role": "starter",
-		"description": "Sword attacks are 8% faster and combo finishers deal 35% more damage.",
+		"description": "ACCELERATED_COMBO_DESC",
 		"effects": {"attack_speed_multiplier": 1.08, "combo_finisher_multiplier_bonus": 0.35},
 	},
 	{
 		"id": "cleaving_moment",
-		"name": "Cleaving Moment",
+		"name": "CLEAVING_MOMENT_NAME",
 		"kind": "weapon",
 		"archetype": "heavy_cleave",
 		"role": "starter",
-		"description": "Heavy sword attacks deal 40% more damage.",
+		"description": "CLEAVING_MOMENT_DESC",
 		"effects": {"heavy_damage_multiplier_bonus": 0.4},
 	},
 	{
 		"id": "rift_engine",
-		"name": "Rift Engine",
+		"name": "RIFT_ENGINE_NAME",
 		"kind": "time",
 		"archetype": "rift_control",
 		"role": "starter",
-		"description": "Gain 20 maximum time energy and regenerate 0.8 more energy each second.",
+		"description": "RIFT_ENGINE_DESC",
 		"effects": {"time_energy_max_bonus": 20.0, "time_energy_regen_bonus": 0.8},
 	},
 	{
 		"id": "void_brink",
-		"name": "Void Brink",
+		"name": "VOID_BRINK_NAME",
 		"kind": "risk",
 		"archetype": "low_hp_void",
 		"role": "starter",
-		"description": "When below 35% HP, sword attacks deal 45% more damage.",
+		"description": "VOID_BRINK_DESC",
 		"effects": {"low_hp_damage_multiplier_bonus": 0.45},
 	},
 	{
 		"id": "evasive_guard_route",
-		"name": "Evasive Guard Route",
+		"name": "EVASIVE_GUARD_ROUTE_NAME",
 		"kind": "survival",
 		"archetype": "evasive_guard",
 		"role": "starter",
-		"description": "Gain 3 defense and extend dash invulnerability by 0.08 seconds.",
+		"description": "EVASIVE_GUARD_ROUTE_DESC",
 		"effects": {"defense_bonus": 3.0, "dash_invulnerable_bonus": 0.08},
 	},
 	{
 		"id": "tempo_barrage",
-		"name": "Tempo Barrage",
+		"name": "TEMPO_BARRAGE_NAME",
 		"kind": "weapon",
 		"archetype": "barrage_tempo",
 		"role": "starter",
-		"description": "Sword attacks are 10% faster and gain 15 maximum time energy.",
+		"description": "TEMPO_BARRAGE_DESC",
 		"effects": {"attack_speed_multiplier": 1.1, "time_energy_max_bonus": 15.0},
 	},
 	{
 		"id": "piercing_draw",
-		"name": "Piercing Draw",
+		"name": "PIERCING_DRAW_NAME",
 		"kind": "weapon",
 		"archetype": "piercing_draw",
 		"role": "starter",
-		"description": "Bow charges 25% faster and arrows pierce one additional enemy.",
+		"description": "PIERCING_DRAW_DESC",
 		"effects": {"bow_charge_rate_bonus": 0.25, "bow_pierce_bonus": 1},
 	},
 	{
 		"id": "focused_draw",
-		"name": "Focused Draw",
+		"name": "FOCUSED_DRAW_NAME",
 		"kind": "weapon",
 		"archetype": "piercing_draw",
 		"role": "payoff",
-		"description": "Bow charges 15% faster and full-charge arrows deal 35% more damage.",
+		"description": "FOCUSED_DRAW_DESC",
 		"effects": {"bow_charge_rate_bonus": 0.15, "bow_full_charge_damage_multiplier_bonus": 0.35},
 	},
 	{
 		"id": "rift_snare",
-		"name": "Rift Snare",
+		"name": "RIFT_SNARE_NAME",
 		"kind": "time",
 		"archetype": "rift_control",
 		"role": "payoff",
-		"description": "Time Rift lasts 1 second longer, covers more ground, and slows harder.",
+		"description": "RIFT_SNARE_DESC",
 		"effects": {
 			"time_rift_duration_bonus": 1.0,
 			"time_rift_radius_bonus": 22.0,
@@ -152,20 +152,20 @@ const REWARDS: Array[Dictionary] = [
 	},
 	{
 		"id": "rift_conductor",
-		"name": "Rift Conductor",
+		"name": "RIFT_CONDUCTOR_NAME",
 		"kind": "time",
 		"archetype": "rift_control",
 		"role": "payoff",
-		"description": "Time Rift costs 15% less energy and grants 0.6 more time energy regeneration.",
+		"description": "RIFT_CONDUCTOR_DESC",
 		"effects": {"time_rift_cost_multiplier": 0.85, "time_energy_regen_bonus": 0.6},
 	},
 	{
 		"id": "accelerant_window",
-		"name": "Accelerant Window",
+		"name": "ACCELERANT_WINDOW_NAME",
 		"kind": "time",
 		"archetype": "accelerated_combo",
 		"role": "payoff",
-		"description": "Time Accelerate lasts 0.8 seconds longer and hits a higher speed ceiling.",
+		"description": "ACCELERANT_WINDOW_DESC",
 		"effects": {
 			"time_accelerate_duration_bonus": 0.8,
 			"time_accelerate_multiplier_bonus": 0.2,
@@ -173,31 +173,31 @@ const REWARDS: Array[Dictionary] = [
 	},
 	{
 		"id": "efficient_overdrive",
-		"name": "Efficient Overdrive",
+		"name": "EFFICIENT_OVERDRIVE_NAME",
 		"kind": "time",
 		"archetype": "accelerated_combo",
 		"role": "payoff",
-		"description": "Time Accelerate costs 15% less energy and sword attacks are 6% faster.",
+		"description": "EFFICIENT_OVERDRIVE_DESC",
 		"effects": {"time_accelerate_cost_multiplier": 0.85, "attack_speed_multiplier": 1.06},
 	},
 ]
 
 const ARCHETYPE_LABELS := {
-	"time_stop_burst": "Time Stop Burst",
-	"rewind_echo": "Rewind Echo",
-	"accelerated_combo": "Accelerated Combo",
-	"heavy_cleave": "Heavy Cleave",
-	"rift_control": "Rift Control",
-	"low_hp_void": "Low HP Void",
-	"evasive_guard": "Evasive Guard",
-	"barrage_tempo": "Barrage Tempo",
-	"piercing_draw": "Piercing Draw",
+	"time_stop_burst": "ARCHETYPE_TIME_STOP_BURST",
+	"rewind_echo": "ARCHETYPE_REWIND_ECHO",
+	"accelerated_combo": "ARCHETYPE_ACCELERATED_COMBO",
+	"heavy_cleave": "ARCHETYPE_HEAVY_CLEAVE",
+	"rift_control": "ARCHETYPE_RIFT_CONTROL",
+	"low_hp_void": "ARCHETYPE_LOW_HP_VOID",
+	"evasive_guard": "ARCHETYPE_EVASIVE_GUARD",
+	"barrage_tempo": "ARCHETYPE_BARRAGE_TEMPO",
+	"piercing_draw": "ARCHETYPE_PIERCING_DRAW",
 }
 
 const ROLE_LABELS := {
-	"starter": "Starter",
-	"payoff": "Payoff",
-	"risk": "Risk",
+	"starter": "ROLE_STARTER",
+	"payoff": "ROLE_PAYOFF",
+	"risk": "ROLE_RISK",
 }
 
 
@@ -236,18 +236,23 @@ static func _shuffle_with_rng(values: Array, rng: RandomNumberGenerator) -> void
 
 
 static func get_archetype_label(archetype: String) -> String:
-	return str(ARCHETYPE_LABELS.get(archetype, archetype.capitalize()))
+	var key := str(ARCHETYPE_LABELS.get(archetype, "ARCHETYPE_" + archetype.to_upper()))
+	return TranslationServer.translate(key)
 
 
 static func get_role_label(role: String) -> String:
-	return str(ROLE_LABELS.get(role, role.capitalize()))
+	var key := str(ROLE_LABELS.get(role, "ROLE_" + role.to_upper()))
+	return TranslationServer.translate(key)
 
 
 static func get_reward_route_label(reward_data: Dictionary) -> String:
 	var archetype := str(reward_data.get("archetype", ""))
 	var role := str(reward_data.get("role", ""))
 	if archetype.is_empty() and role.is_empty():
-		return str(reward_data.get("kind", "reward")).capitalize()
+		var kind := str(reward_data.get("kind", ""))
+		if kind.is_empty():
+			return TranslationServer.translate("UI_FALLBACK_REWARD")
+		return TranslationServer.translate("KIND_" + kind.to_upper())
 	if role.is_empty():
 		return get_archetype_label(archetype)
 	if archetype.is_empty():

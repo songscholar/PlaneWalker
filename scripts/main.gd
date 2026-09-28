@@ -1,17 +1,23 @@
 extends Node
 
+const DEFAULT_LOCALE := "zh_CN"
+
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
 @onready var start_menu: CanvasLayer = $StartMenu
 @onready var start_button: Button = $StartMenu/Panel/Margin/VBox/StartButton
 @onready var last_run_label: Label = $StartMenu/Panel/Margin/VBox/LastRunLabel
+@onready var title_label: Label = $StartMenu/Panel/Margin/VBox/Title
+@onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
 @onready var pause_menu: CanvasLayer = $PauseMenu
 
 var _phase_before_pause: GameState.GamePhase = GameState.GamePhase.DUNGEON
+var _lang_button: Button
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_apply_locale()
 	EventBus.run_started.connect(_on_run_started)
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
@@ -20,8 +26,39 @@ func _ready() -> void:
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	status_label.visible = false
 	GameState.set_phase(GameState.GamePhase.HUB)
+	_setup_language_button()
+	_apply_localization()
 	_show_start_menu()
 	_print_input_map()
+
+
+func _apply_locale() -> void:
+	TranslationServer.set_locale(str(GameState.get_setting("locale", DEFAULT_LOCALE)))
+
+
+func _setup_language_button() -> void:
+	if _lang_button != null:
+		return
+	_lang_button = Button.new()
+	_lang_button.custom_minimum_size = Vector2(360, 40)
+	_lang_button.pressed.connect(_toggle_language)
+	start_button.get_parent().add_child(_lang_button)
+
+
+func _toggle_language() -> void:
+	var next_locale := "en" if str(TranslationServer.get_locale()) == "zh_CN" else "zh_CN"
+	GameState.set_setting("locale", next_locale)
+	TranslationServer.set_locale(next_locale)
+	_apply_localization()
+	_show_start_menu()
+
+
+func _apply_localization() -> void:
+	title_label.text = tr("UI_TITLE")
+	subtitle_label.text = tr("UI_SUBTITLE")
+	start_button.text = tr("UI_QUICK_START")
+	if _lang_button != null:
+		_lang_button.text = tr("UI_LANG_EN") if str(TranslationServer.get_locale()) == "zh_CN" else tr("UI_LANG_ZH")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -61,27 +98,31 @@ func _show_start_menu() -> void:
 	start_menu.visible = true
 	var summary: Dictionary = GameState.persistent.get("last_run_summary", {})
 	if summary.is_empty():
-		last_run_label.text = "No runs recorded"
+		last_run_label.text = tr("UI_NO_RUNS")
 		return
-	last_run_label.text = "Last: %s | Best rooms: %d | Runs: %d" % [
-		str(summary.get("result", "unknown")).capitalize(),
+	last_run_label.text = tr("UI_LAST_RUN_FMT") % [
+		_result_label(str(summary.get("result", "death"))),
 		int(GameState.persistent.get("best_rooms_cleared", 0)),
 		int(GameState.persistent.get("runs_completed", 0)),
 	]
 
 
+func _result_label(result: String) -> String:
+	return tr("RESULT_" + result.to_upper())
+
+
 func _on_run_started(run_data: Dictionary) -> void:
 	status_label.visible = true
-	var text := "Plane Walker MVP Phase 0\n"
-	text += "Phase: %s\n" % _phase_name(GameState.phase)
-	text += "Character: %s\n" % run_data.get("character_id", "")
-	text += "Weapon: %s\n" % run_data.get("weapon_id", "")
-	text += "Seed: %s\n\n" % GameState.run_seed
-	text += "Input smoke test:\n"
-	text += "WASD/Arrows move actions registered\n"
-	text += "Mouse Left attack, Mouse Right heavy_attack\n"
-	text += "X ranged_attack, Space dash, Q time_stop, E time_rewind, R time_rift, C time_accelerate\n"
-	text += "Room 5 spawns the Chrono Warden boss"
+	var text := tr("UI_STATUS_HEADER") + "\n"
+	text += tr("UI_STATUS_PHASE_FMT") % _phase_name(GameState.phase) + "\n"
+	text += tr("UI_STATUS_CHARACTER_FMT") % run_data.get("character_id", "") + "\n"
+	text += tr("UI_STATUS_WEAPON_FMT") % run_data.get("weapon_id", "") + "\n"
+	text += tr("UI_STATUS_SEED_FMT") % GameState.run_seed + "\n\n"
+	text += tr("UI_STATUS_INPUT_HEADER") + "\n"
+	text += tr("UI_STATUS_INPUT_MOVE") + "\n"
+	text += tr("UI_STATUS_INPUT_ATTACK") + "\n"
+	text += tr("UI_STATUS_INPUT_TIME") + "\n"
+	text += tr("UI_STATUS_BOSS_HINT")
 	status_label.text = text
 	print("Run started: ", run_data)
 
@@ -90,10 +131,11 @@ func _on_run_ended(result: Dictionary) -> void:
 	get_tree().paused = false
 	pause_menu.hide_pause()
 	status_label.visible = true
-	status_label.text = "Run ended\nResult: %s\nRooms cleared: %s\nRewards: %s" % [
-		result.get("result", ""),
-		result.get("rooms_cleared", 0),
-		GameState.current_run.get("inventory", []),
+	status_label.text = "%s\n%s: %s\n%s: %s\n%s: %s" % [
+		tr("UI_RUN_ENDED"),
+		tr("UI_RESULT"), _result_label(str(result.get("result", "death"))),
+		tr("UI_ROOMS_CLEARED"), str(result.get("rooms_cleared", 0)),
+		tr("UI_REWARDS"), str(GameState.current_run.get("inventory", [])),
 	]
 	print("Run ended: ", result)
 
@@ -147,24 +189,24 @@ func _print_input_map() -> void:
 func _phase_name(phase: int) -> String:
 	match phase:
 		GameState.GamePhase.BOOT:
-			return "BOOT"
+			return tr("PHASE_BOOT")
 		GameState.GamePhase.HUB:
-			return "HUB"
+			return tr("PHASE_HUB")
 		GameState.GamePhase.RUN_START:
-			return "RUN_START"
+			return tr("PHASE_RUN_START")
 		GameState.GamePhase.DUNGEON:
-			return "DUNGEON"
+			return tr("PHASE_DUNGEON")
 		GameState.GamePhase.ROOM_CLEAR:
-			return "ROOM_CLEAR"
+			return tr("PHASE_ROOM_CLEAR")
 		GameState.GamePhase.SELECTION:
-			return "SELECTION"
+			return tr("PHASE_SELECTION")
 		GameState.GamePhase.BOSS_FIGHT:
-			return "BOSS_FIGHT"
+			return tr("PHASE_BOSS_FIGHT")
 		GameState.GamePhase.DEATH:
-			return "DEATH"
+			return tr("PHASE_DEATH")
 		GameState.GamePhase.RUN_END:
-			return "RUN_END"
+			return tr("PHASE_RUN_END")
 		GameState.GamePhase.PAUSED:
-			return "PAUSED"
+			return tr("PHASE_PAUSED")
 		_:
 			return "UNKNOWN"

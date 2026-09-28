@@ -47,8 +47,8 @@ func _update_player_status() -> void:
 	hp_bar.value = health.current_hp
 	time_bar.max_value = time_manager.max_energy
 	time_bar.value = time_manager.energy
-	var room_type := GameState.get_current_room_type().capitalize()
-	label.text = "Room %d/5 %s | HP %.0f/%.0f | Time %.0f/%.0f | Stop %.1f | Rewind %.1f | Rift %.1f | Accel %.1f" % [
+	var room_type := tr("ROOM_TYPE_" + GameState.get_current_room_type().to_upper())
+	label.text = tr("HUD_STATUS_FMT") % [
 		GameState.current_room,
 		room_type,
 		health.current_hp,
@@ -66,22 +66,22 @@ func _update_player_status() -> void:
 func _update_weapon_status() -> void:
 	bow_charge_bar.max_value = 1.0
 	bow_charge_bar.value = bow_weapon.get_charge_ratio()
-	var bow_state := "Ready"
+	var bow_state := tr("HUD_WEAPON_READY")
 	if bow_weapon.is_charging():
-		bow_state = "Charging"
+		bow_state = tr("HUD_WEAPON_CHARGING")
 	elif bow_weapon.get_cooldown_remaining() > 0.0:
-		bow_state = "Cooldown %.1f" % bow_weapon.get_cooldown_remaining()
-	weapon_label.text = "Sword | Bow %s" % bow_state
+		bow_state = tr("HUD_WEAPON_COOLDOWN_FMT") % bow_weapon.get_cooldown_remaining()
+	weapon_label.text = tr("HUD_WEAPON_LABEL_FMT") % bow_state
 
 
 func _update_build_label() -> void:
 	var archetype := GameState.get_dominant_archetype()
 	if archetype.is_empty():
-		build_label.text = "Build: Unformed"
+		build_label.text = tr("HUD_BUILD_UNFORMED")
 	else:
-		build_label.text = "Build: %s" % RewardPoolScript.get_archetype_label(archetype)
+		build_label.text = tr("HUD_BUILD_FMT") % RewardPoolScript.get_archetype_label(archetype)
 	var snapshot := GameState.get_build_state_snapshot()
-	build_slots_label.text = "Items %d | Blessings %d | Curses %d | Talents %d" % [
+	build_slots_label.text = tr("HUD_BUILD_SLOTS_FMT") % [
 		snapshot.get("items", []).size(),
 		snapshot.get("blessings", []).size(),
 		snapshot.get("curses", []).size(),
@@ -121,17 +121,17 @@ func _on_room_started(room_id: StringName) -> void:
 	boss_panel.visible = false
 	var room_type := GameState.get_current_room_type()
 	if room_type == "boss":
-		_show_banner("Boss Room")
+		_show_banner(tr("BANNER_BOSS_ROOM"))
 	elif room_type == "event":
-		_show_banner("Temporal Event")
+		_show_banner(tr("BANNER_TEMPORAL_EVENT"))
 	elif room_type == "elite":
-		_show_banner("Elite Room")
+		_show_banner(tr("BANNER_ELITE_ROOM"))
 	else:
-		_show_banner("Room %d" % GameState.current_room)
+		_show_banner(tr("BANNER_ROOM_FMT") % GameState.current_room)
 
 
 func _on_room_cleared(_room_id: StringName) -> void:
-	_show_banner("Room Cleared")
+	_show_banner(tr("BANNER_ROOM_CLEARED"))
 
 
 func _on_enemy_spawned(enemy: Node) -> void:
@@ -147,12 +147,12 @@ func _try_track_boss(enemy: Node) -> void:
 		return
 	if enemy.is_in_group("bosses"):
 		_boss = enemy
-		boss_name_label.text = "Chrono Warden"
+		boss_name_label.text = tr("BOSS_NAME_CHRONO_WARDEN")
 		boss_panel.visible = true
-		_show_banner("Chrono Warden")
+		_show_banner(tr("BOSS_NAME_CHRONO_WARDEN"))
 
 
 func _on_run_ended(result: Dictionary) -> void:
 	boss_panel.visible = false
 	var outcome := str(result.get("result", ""))
-	_show_banner("Floor Cleared" if outcome == "floor_cleared" else "Run Failed", 3.0)
+	_show_banner(tr("BANNER_FLOOR_CLEARED") if outcome == "floor_cleared" else tr("UI_RUN_FAILED"), 3.0)

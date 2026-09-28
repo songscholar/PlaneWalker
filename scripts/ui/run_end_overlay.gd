@@ -9,23 +9,24 @@ extends CanvasLayer
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	restart_button.text = tr("UI_RESTART_RUN")
 	EventBus.run_ended.connect(_on_run_ended)
 	restart_button.pressed.connect(_restart_run)
 
 
 func _on_run_ended(result: Dictionary) -> void:
 	var outcome := str(result.get("result", ""))
-	var title := "Run Complete" if outcome == "floor_cleared" else "Run Failed"
-	result_label.text = "%s\nRoom reached: %s\nRooms cleared: %s\nKills: %s\nTime: %s\nItems: %s\nBlessings: %s\nTalents: %s\nCurses: %s" % [
+	var title := tr("UI_RUN_COMPLETE") if outcome == "floor_cleared" else tr("UI_RUN_FAILED")
+	result_label.text = "%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s" % [
 		title,
-		result.get("current_room", result.get("rooms_cleared", 0)),
-		result.get("rooms_cleared", 0),
-		result.get("kills", 0),
-		_format_time(float(result.get("run_time", 0.0))),
-		_names_for(result.get("rewards", [])),
-		_names_for(result.get("blessings", [])),
-		_names_for(result.get("talent_choices", [])),
-		_names_for(result.get("curses", [])),
+		tr("UI_ROOM_REACHED"), result.get("current_room", result.get("rooms_cleared", 0)),
+		tr("UI_ROOMS_CLEARED"), result.get("rooms_cleared", 0),
+		tr("UI_KILLS"), result.get("kills", 0),
+		tr("UI_TIME"), _format_time(float(result.get("run_time", 0.0))),
+		tr("UI_ITEMS"), _names_for(result.get("rewards", [])),
+		tr("UI_BLESSINGS"), _names_for(result.get("blessings", [])),
+		tr("UI_TALENTS"), _names_for(result.get("talent_choices", [])),
+		tr("UI_CURSES"), _names_for(result.get("curses", [])),
 	]
 	visible = true
 
@@ -45,7 +46,8 @@ func _names_for(entries: Array) -> String:
 	var names: Array[String] = []
 	for entry: Variant in entries:
 		if typeof(entry) == TYPE_DICTIONARY:
-			names.append(str((entry as Dictionary).get("name", (entry as Dictionary).get("id", "unknown"))))
+			var dict := entry as Dictionary
+			names.append(tr(str(dict.get("name", dict.get("id", "unknown")))))
 		else:
 			names.append(str(entry))
 	return ", ".join(names)

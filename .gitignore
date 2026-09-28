@@ -3,6 +3,11 @@
 .import/
 *.import
 *.uid
+*.translation
+
+# Python test/tool caches
+__pycache__/
+*.py[cod]
 
 # Godot export files
 export.cfg

@@ -17,6 +17,7 @@ var _current_options: Array[Dictionary] = []
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	skip_button.text = tr("UI_CURSE_SKIP")
 	skip_button.pressed.connect(_skip_curse)
 	EventBus.room_cleared.connect(_on_room_cleared)
 
@@ -36,7 +37,7 @@ func _on_room_cleared(_room_id: StringName) -> void:
 
 
 func _render_options() -> void:
-	title_label.text = "Risk altar - Room %d cleared" % GameState.current_room
+	title_label.text = tr("UI_CURSE_TITLE_FMT") % GameState.current_room
 	for child: Node in option_box.get_children():
 		child.queue_free()
 
@@ -44,10 +45,11 @@ func _render_options() -> void:
 		var curse := _current_options[index]
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(420.0, 84.0)
-		button.text = "%s\nRisk: %s\n%s" % [
-			curse.get("name", "Curse"),
-			str(curse.get("risk", "unknown")).capitalize(),
-			curse.get("description", ""),
+		button.text = "%s\n%s%s\n%s" % [
+			tr(str(curse.get("name", "UI_FALLBACK_CURSE"))),
+			tr("UI_RISK_LABEL"),
+			tr("RISK_" + str(curse.get("risk", "unknown")).to_upper()),
+			tr(str(curse.get("description", ""))),
 		]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.pressed.connect(_select_curse.bind(index))

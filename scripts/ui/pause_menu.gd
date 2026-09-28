@@ -3,6 +3,7 @@ extends CanvasLayer
 
 signal resume_requested()
 
+@onready var title_label: Label = $Panel/Margin/VBox/Title
 @onready var resume_button: Button = $Panel/Margin/VBox/ResumeButton
 @onready var volume_label: Label = $Panel/Margin/VBox/VolumeLabel
 @onready var volume_slider: HSlider = $Panel/Margin/VBox/VolumeSlider
@@ -14,6 +15,11 @@ signal resume_requested()
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	title_label.text = tr("UI_PAUSED")
+	resume_button.text = tr("UI_RESUME")
+	restart_button.text = tr("UI_RESTART_RUN")
+	quit_button.text = tr("UI_QUIT")
+	mute_toggle.text = tr("UI_MUTE")
 	resume_button.pressed.connect(_on_resume_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
@@ -62,7 +68,7 @@ func _on_mute_toggled(toggled_on: bool) -> void:
 
 
 func _update_volume_label() -> void:
-	volume_label.text = "Master Volume %d%%" % roundi(volume_slider.value * 100.0)
+	volume_label.text = tr("UI_MASTER_VOLUME_FMT") % roundi(volume_slider.value * 100.0)
 
 
 func _apply_audio_settings() -> void:

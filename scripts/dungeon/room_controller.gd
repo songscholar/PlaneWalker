@@ -32,6 +32,8 @@ func _ready() -> void:
 		_run_director = RunDirectorScript.new()
 		add_child(_run_director)
 	_run_director.configure_fixed_sequence(rooms_per_floor, event_rooms, elite_rooms, curse_offer_rooms)
+	if reward_marker != null and reward_marker is Label:
+		reward_marker.text = tr("UI_REWARD_MARKER")
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.reward_selected.connect(_on_reward_selected)
 	EventBus.enemy_spawned.connect(_on_enemy_spawned)

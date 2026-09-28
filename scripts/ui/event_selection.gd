@@ -32,20 +32,20 @@ func _build_options() -> Array[Dictionary]:
 	return [
 		{
 			"id": "chrono_spring",
-			"name": "Chrono Spring",
-			"description": "Heal 45 HP and restore 25 time energy.",
+			"name": "CHRONO_SPRING_NAME",
+			"description": "CHRONO_SPRING_DESC",
 			"effects": {"heal": 45.0, "time_energy_restore": 25.0},
 		},
 		{
 			"id": "stabilized_core",
-			"name": "Stabilized Core",
-			"description": "Gain 15 maximum time energy and refill it.",
+			"name": "STABILIZED_CORE_NAME",
+			"description": "STABILIZED_CORE_DESC",
 			"effects": {"time_energy_max_bonus": 15.0, "time_energy_restore": 15.0},
 		},
 		{
 			"id": "fractured_cache",
-			"name": "Fractured Cache",
-			"description": "Lose 25 HP to take one immediate build reward.",
+			"name": "FRACTURED_CACHE_NAME",
+			"description": "FRACTURED_CACHE_DESC",
 			"hp_cost": 25.0,
 			"grant_reward": true,
 		},
@@ -53,7 +53,7 @@ func _build_options() -> Array[Dictionary]:
 
 
 func _render_options() -> void:
-	title_label.text = "Temporal event - Room %d" % GameState.current_room
+	title_label.text = tr("UI_EVENT_TITLE_FMT") % GameState.current_room
 	for child: Node in option_box.get_children():
 		option_box.remove_child(child)
 		child.queue_free()
@@ -63,8 +63,8 @@ func _render_options() -> void:
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(420.0, 78.0)
 		button.text = "%s\n%s" % [
-			option.get("name", "Event"),
-			option.get("description", ""),
+			tr(str(option.get("name", "UI_FALLBACK_EVENT"))),
+			tr(str(option.get("description", ""))),
 		]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.pressed.connect(_select_option.bind(index))

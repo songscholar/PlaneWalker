@@ -46,7 +46,7 @@ func _show_reward_options() -> void:
 
 func _render_options() -> void:
 	var title_prefix := _title_for_current_category()
-	title_label.text = "%s - Room %d cleared" % [title_prefix, GameState.current_room]
+	title_label.text = tr("UI_REWARD_TITLE_FMT") % [title_prefix, GameState.current_room]
 	for child: Node in option_box.get_children():
 		option_box.remove_child(child)
 		child.queue_free()
@@ -56,9 +56,9 @@ func _render_options() -> void:
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(420.0, 72.0)
 		button.text = "%s\n%s\n%s" % [
-			reward.get("name", "Reward"),
+			tr(str(reward.get("name", "UI_FALLBACK_REWARD"))),
 			RewardPoolScript.get_reward_route_label(reward),
-			reward.get("description", ""),
+			tr(str(reward.get("description", ""))),
 		]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.pressed.connect(_select_reward.bind(index))
@@ -118,13 +118,13 @@ func _roll_current_options() -> Array[Dictionary]:
 func _title_for_current_category() -> String:
 	match _current_selection_category:
 		"talent":
-			return "Choose a talent"
+			return tr("UI_CHOOSE_TALENT")
 		"blessing":
-			return "Choose a blessing"
+			return tr("UI_CHOOSE_BLESSING")
 		_:
 			if GameState.get_current_room_type() == "elite":
-				return "Choose an elite reward"
-			return "Choose a reward"
+				return tr("UI_CHOOSE_ELITE_REWARD")
+			return tr("UI_CHOOSE_REWARD")
 
 
 func _record_selected_reward(reward: Dictionary) -> void:

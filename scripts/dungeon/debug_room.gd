@@ -20,15 +20,15 @@ func _refresh_debug_label() -> void:
 	var dummy_hp := 0.0
 	if is_instance_valid(dummy_health):
 		dummy_hp = dummy_health.current_hp
-	debug_label.text = "Phase 1 Training Room\n"
-	debug_label.text += "Move: WASD / Arrows | Dash: Space\n"
-	debug_label.text += "Attack: Left Mouse | Heavy: Right Mouse\n"
-	debug_label.text += "Time: Q stop / E rewind | HP %.0f | Energy %.0f\n" % [
+	debug_label.text = tr("DEBUG_TRAINING_ROOM") + "\n"
+	debug_label.text += tr("DEBUG_MOVE") + "\n"
+	debug_label.text += tr("DEBUG_ATTACK") + "\n"
+	debug_label.text += tr("DEBUG_TIME_FMT") % [
 		player_health.current_hp,
 		player_time.energy,
-	]
-	debug_label.text += "Dummy HP: %.0f\n" % dummy_hp
-	debug_label.text += "Kill the dummy to validate entity_died."
+	] + "\n"
+	debug_label.text += tr("DEBUG_DUMMY_HP_FMT") % dummy_hp + "\n"
+	debug_label.text += tr("DEBUG_KILL_DUMMY")
 
 
 func _on_entity_died(entity: Node, _killer: Variant) -> void:

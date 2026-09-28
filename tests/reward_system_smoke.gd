@@ -21,8 +21,11 @@ func _ready() -> void:
 
 func _run() -> void:
 	_original_save_path = GameState.save_path
-	GameState.save_path = "user://plane_walker_smoke_test_save.json"
+	GameState.save_path = OS.get_temp_dir().path_join(
+		"plane_walker_smoke_test_save_%d.json" % OS.get_process_id()
+	)
 	GameState.reset_persistent_data(true)
+	TranslationServer.set_locale("zh_CN")
 
 	var player := PLAYER_SCENE.instantiate()
 	add_child(player)
@@ -155,11 +158,11 @@ func _run() -> void:
 	_assert_true(RewardPoolScript.get_reward_route_label({
 		"archetype": "rift_control",
 		"role": "payoff",
-	}).contains("Payoff - Rift Control"), "reward route labels payoff")
+	}).contains("收益件 - 裂隙掌控"), "reward route labels payoff")
 	_assert_true(RewardPoolScript.get_reward_route_label({
 		"archetype": "piercing_draw",
 		"role": "starter",
-	}).contains("Starter - Piercing Draw"), "reward route labels bow starter")
+	}).contains("启动件 - 穿透射击"), "reward route labels bow starter")
 
 	var first_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	var second_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
@@ -309,7 +312,7 @@ func _run_bow_weapon_check() -> void:
 	var short_started: bool = bow.start_charge()
 	bow._charge_time = bow.min_charge_time * 0.5
 	await get_tree().process_frame
-	_assert_true(weapon_label.text.contains("Charging"), "combat hud shows bow charging")
+	_assert_true(weapon_label.text.contains("蓄力中"), "combat hud shows bow charging")
 	_assert_true(bow_charge_bar.value > 0.0, "combat hud shows bow charge progress")
 	var short_released: bool = bow.release_charge(Vector2.RIGHT)
 	await get_tree().process_frame
@@ -342,7 +345,7 @@ func _run_bow_weapon_check() -> void:
 	var floating_text: Label = floating_layer.get_child(0)
 	_assert_true(floating_text.text.begins_with(">>"), "bow full charge uses special damage prefix")
 	await get_tree().process_frame
-	_assert_true(weapon_label.text.contains("Cooldown"), "combat hud shows bow cooldown")
+	_assert_true(weapon_label.text.contains("冷却"), "combat hud shows bow cooldown")
 
 	room.queue_free()
 	await get_tree().process_frame
@@ -377,7 +380,7 @@ func _run_time_rift_check() -> void:
 	_assert_close(rift.radius, time_manager.time_rift_radius + time_manager.time_rift_radius_bonus, "time rift uses adjusted radius")
 	_assert_close(enemy._rift_slow_multiplier, time_manager.time_rift_slow_multiplier - time_manager.time_rift_slow_bonus, "time rift slows enemy")
 	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
-	_assert_true(hud_label.text.contains("Rift"), "combat hud shows rift cooldown")
+	_assert_true(hud_label.text.contains("裂隙"), "combat hud shows rift cooldown")
 
 	await get_tree().create_timer(0.12).timeout
 	await get_tree().process_frame
@@ -412,7 +415,7 @@ func _run_time_accelerate_check() -> void:
 	_assert_true(room_player.is_time_accelerated(), "player enters accelerated state")
 	_assert_close(sword.attack_speed, base_attack_speed * (time_manager.time_accelerate_multiplier + time_manager.time_accelerate_multiplier_bonus), "time accelerate boosts attack speed")
 	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
-	_assert_true(hud_label.text.contains("Accel"), "combat hud shows accelerate cooldown")
+	_assert_true(hud_label.text.contains("加速"), "combat hud shows accelerate cooldown")
 
 	await get_tree().create_timer(0.12).timeout
 	await get_tree().process_frame
@@ -472,10 +475,10 @@ func _run_death_overlay_check() -> void:
 	var overlay: CanvasLayer = main.get_node("RunEndOverlay")
 	var label: Label = main.get_node("RunEndOverlay/Panel/Margin/VBox/ResultLabel")
 	_assert_true(overlay.visible, "death shows run end overlay")
-	_assert_true(label.text.contains("Run Failed"), "death overlay shows failed result")
-	_assert_true(label.text.contains("Time:"), "death overlay shows run time")
-	_assert_true(label.text.contains("Kills:"), "death overlay shows kill count")
-	_assert_true(label.text.contains("Items:"), "death overlay shows item list")
+	_assert_true(label.text.contains("旅程失败"), "death overlay shows failed result")
+	_assert_true(label.text.contains("用时"), "death overlay shows run time")
+	_assert_true(label.text.contains("击杀"), "death overlay shows kill count")
+	_assert_true(label.text.contains("道具"), "death overlay shows item list")
 
 	main.queue_free()
 	await get_tree().process_frame
@@ -497,8 +500,8 @@ func _run_pause_menu_check() -> void:
 	var quit_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton")
 	_assert_true(start_menu.visible, "pause check starts on start menu")
 	_assert_true(GameState.phase == GameState.GamePhase.HUB, "main scene starts in hub phase")
-	_assert_true(restart_button.text == "Restart Run", "pause menu exposes restart")
-	_assert_true(quit_button.text == "Quit", "pause menu exposes quit")
+	_assert_true(restart_button.text == "重新开始", "pause menu exposes restart")
+	_assert_true(quit_button.text == "退出", "pause menu exposes quit")
 	main._pause_run()
 	_assert_true(not get_tree().paused, "hub phase cannot open pause")
 	main._start_new_run()
@@ -584,7 +587,7 @@ func _run_room_progression_check() -> void:
 
 	room._clear_room()
 	var reward_title: Label = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
-	_assert_true(reward_title.text.contains("Room 1"), "reward title includes first cleared room")
+	_assert_true(reward_title.text.contains("房间 1"), "reward title includes first cleared room")
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -597,7 +600,7 @@ func _run_room_progression_check() -> void:
 	_assert_true(GameState.current_room == 2, "reward advances to event room")
 	_assert_true(GameState.get_current_room_type() == "event", "second room is event type")
 	_assert_true(event_selection.visible, "event room opens event selection")
-	_assert_true(event_title.text.contains("Room 2"), "event title includes room index")
+	_assert_true(event_title.text.contains("房间 2"), "event title includes room index")
 	_assert_true(event_options.get_child_count() == 3, "event room offers three choices")
 	event_selection._select_option(0)
 	await get_tree().process_frame
@@ -612,12 +615,12 @@ func _run_room_progression_check() -> void:
 	_assert_true(GameState.get_current_room_type() == "elite", "third room is elite type")
 	_assert_true(elite_enemies.size() == 1, "elite room upgrades one enemy")
 	_assert_true(elite_enemies[0].health.max_hp > elite_enemies[0].max_hp / 1.8, "elite enemy has upgraded health")
-	_assert_true(hud_label.text.contains("Elite"), "combat hud shows elite room type")
+	_assert_true(hud_label.text.contains("精英"), "combat hud shows elite room type")
 
 	room._clear_room()
 	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
 	var reward_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
-	_assert_true(reward_title.text.contains("talent"), "third room shows talent title")
+	_assert_true(reward_title.text.contains("天赋"), "third room shows talent title")
 	_assert_true(reward_options.get_child_count() == 3, "third room offers three talents")
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
@@ -632,7 +635,7 @@ func _run_room_progression_check() -> void:
 	_resolve_curse_offer_if_visible(room, false)
 	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
 	var blessing_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
-	_assert_true(reward_title.text.contains("blessing"), "fourth room shows blessing title")
+	_assert_true(reward_title.text.contains("祝福"), "fourth room shows blessing title")
 	_assert_true(blessing_options.get_child_count() == 2, "fourth room offers two blessings")
 	room.get_node("RewardSelection")._select_reward(0)
 	await get_tree().process_frame
@@ -728,7 +731,7 @@ func _run_curse_selection_check() -> void:
 	_assert_true(curse_selection.visible, "curse offer appears before reward")
 	_assert_true(not reward_selection.visible, "reward waits for curse offer resolution")
 	var curse_button: Button = room.get_node("CurseSelection/Panel/Margin/VBox/Options").get_child(0)
-	_assert_true(curse_button.text.contains("Risk:"), "curse option shows risk label")
+	_assert_true(curse_button.text.contains("风险："), "curse option shows risk label")
 
 	curse_selection._select_curse(0)
 	await get_tree().process_frame
@@ -788,14 +791,14 @@ func _run_reward_ui_build_check() -> void:
 	reward_selection._current_options = forced_options
 	reward_selection._render_options()
 	var reward_button: Button = room.get_node("RewardSelection/Panel/Margin/VBox/Options").get_child(0)
-	_assert_true(reward_button.text.contains("Starter - Accelerated Combo"), "reward option shows build route")
+	_assert_true(reward_button.text.contains("启动件 - 加速连击"), "reward option shows build route")
 
 	reward_selection._select_reward(0)
 	await get_tree().process_frame
 	var build_label: Label = room.get_node("CombatHUD/BuildLabel")
 	var build_slots_label: Label = room.get_node("CombatHUD/BuildSlotsLabel")
-	_assert_true(build_label.text.contains("Accelerated Combo"), "combat hud shows dominant build")
-	_assert_true(build_slots_label.text.contains("Items 1"), "combat hud shows item slot count")
+	_assert_true(build_label.text.contains("加速连击"), "combat hud shows dominant build")
+	_assert_true(build_slots_label.text.contains("道具 1"), "combat hud shows item slot count")
 	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "selected reward records archetype")
 
 	room.queue_free()
