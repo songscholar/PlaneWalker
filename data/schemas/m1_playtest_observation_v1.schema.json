@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/m1-playtest-observation/1.0.0",
+  "title": "Plane Walker M1 Structured Playtest Observation",
+  "description": "Anonymous structured evidence for M1 experience gates. Free text and personal identifiers are deliberately excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "evidence",
+    "time_abilities",
+    "comprehension",
+    "experience",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "session_id": {"type": "string", "pattern": "^pws_[0-9a-f]{32}$"},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "synthetic", "collection_method"],
+      "properties": {
+        "source": {"enum": ["human", "synthetic"]},
+        "synthetic": {"type": "boolean"},
+        "collection_method": {
+          "enum": ["observed_playtest", "imported_observation", "automated_fixture", "simulation"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "human"}}},
+          "then": {
+            "properties": {
+              "synthetic": {"const": false},
+              "collection_method": {"enum": ["observed_playtest", "imported_observation"]}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"source": {"const": "synthetic"}}},
+          "then": {
+            "properties": {
+              "synthetic": {"const": true},
+              "collection_method": {"enum": ["automated_fixture", "simulation"]}
+            }
+          }
+        }
+      ]
+    },
+    "time_abilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["time_stop_used", "time_rewind_used"],
+      "properties": {
+        "time_stop_used": {"type": "boolean"},
+        "time_rewind_used": {"type": "boolean"}
+      }
+    },
+    "comprehension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["build_described", "boss_time_interactions_identified"],
+      "properties": {
+        "build_described": {"type": "boolean"},
+        "boss_time_interactions_identified": {"type": "integer", "minimum": 0, "maximum": 10}
+      }
+    },
+    "experience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unexplained_damage_or_death", "responsiveness_rating", "replay_intent"],
+      "properties": {
+        "unexplained_damage_or_death": {"type": "boolean"},
+        "responsiveness_rating": {"type": "integer", "minimum": 1, "maximum": 5},
+        "replay_intent": {"enum": ["restarted", "would_replay", "would_not_replay", "unknown"]}
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "system", "room_index", "blocks_release"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"},
+          "severity": {"enum": ["p0", "p1", "p2", "p3"]},
+          "system": {"type": "string", "pattern": "^[a-z0-9_][a-z0-9_.-]*$"},
+          "room_index": {"type": "integer", "minimum": -1, "maximum": 4},
+          "blocks_release": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "decision_id": "m1_tuning_replace_with_sequence",
+  "cohort": {
+    "build_version": "REPLACE",
+    "commit": "REPLACE_WITH_7_TO_40_LOWERCASE_HEX",
+    "content_version": "REPLACE"
+  },
+  "system": "replace_with_authoritative_system_id",
+  "authority_path": "replace/with/authoritative/file",
+  "metric_id": "replace_with_metric_or_failure_signature",
+  "evidence_refs": [
+    "seed_matrix_digest:REPLACE",
+    "m1_report_metric:REPLACE"
+  ],
+  "old_value": "REPLACE",
+  "new_value": "REPLACE",
+  "expected_effect": "REPLACE_WITH_FALSIFIABLE_EXPECTATION",
+  "regression_test": "REPLACE_WITH_EXACT_TEST_COMMAND_OR_TEST_ID",
+  "disposition": "retained",
+  "revert_reason": null,
+  "commit": null
+}

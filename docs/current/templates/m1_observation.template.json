@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "session_id": "pws_REPLACE_WITH_THE_MATCHING_ANONYMOUS_SESSION_ID",
+  "evidence": {
+    "source": "human",
+    "synthetic": false,
+    "collection_method": "observed_playtest"
+  },
+  "time_abilities": {
+    "time_stop_used": false,
+    "time_rewind_used": false
+  },
+  "comprehension": {
+    "build_described": false,
+    "boss_time_interactions_identified": 0
+  },
+  "experience": {
+    "unexplained_damage_or_death": false,
+    "responsiveness_rating": 1,
+    "replay_intent": "unknown"
+  },
+  "issues": [
+    {
+      "code": "replace_with_observed_issue_code",
+      "severity": "p2",
+      "system": "replace_with_system_id",
+      "room_index": -1,
+      "blocks_release": false
+    }
+  ]
+}
