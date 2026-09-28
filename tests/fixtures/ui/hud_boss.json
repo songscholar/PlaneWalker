@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "revision": 3,
+  "run_id": "fixture-run",
+  "phase": "BOSS_ACTIVE",
+  "suspended": false,
+  "run_time_ms": 360000,
+  "room": {
+    "index": 5,
+    "total": 5,
+    "type": "boss",
+    "title_key": "ROOM_M1_05"
+  },
+  "player": {
+    "hp": 118.0,
+    "max_hp": 220.0,
+    "energy": 91.0,
+    "max_energy": 115.0,
+    "action_state": "FREE",
+    "cooldowns": {
+      "time_stop": 0.0,
+      "time_rewind": 0.0
+    }
+  },
+  "build": {
+    "items": ["frozen_burst", "rewind_echo"],
+    "blessings": ["bls_stop_weakpoint"],
+    "curses": [],
+    "talents": ["tal_eternity_reserve"],
+    "dominant_archetype": "time_stop_burst",
+    "archetype_scores": {
+      "time_stop_burst": 3,
+      "rewind_echo": 1
+    }
+  },
+  "selection": null,
+  "boss": {
+    "boss_id": "chrono_warden",
+    "name_key": "BOSS_NAME_CHRONO_WARDEN",
+    "hp": 315.0,
+    "max_hp": 420.0,
+    "phase_index": 2,
+    "phase_total": 3
+  },
+  "result": null,
+  "ui_flags": {
+    "show_hud": true,
+    "accept_gameplay_input": true,
+    "show_pause": false
+  }
+}

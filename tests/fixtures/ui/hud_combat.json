@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "run_id": "fixture-run",
+  "phase": "COMBAT_ACTIVE",
+  "suspended": false,
+  "run_time_ms": 60000,
+  "room": {
+    "index": 1,
+    "total": 5,
+    "type": "combat",
+    "title_key": "ROOM_M1_01"
+  },
+  "player": {
+    "hp": 160.0,
+    "max_hp": 200.0,
+    "energy": 72.0,
+    "max_energy": 100.0,
+    "action_state": "FREE",
+    "cooldowns": {
+      "time_stop": 0.0,
+      "time_rewind": 4.5
+    }
+  },
+  "build": {
+    "items": [],
+    "blessings": [],
+    "curses": [],
+    "talents": [],
+    "dominant_archetype": "time_stop_burst",
+    "archetype_scores": {
+      "time_stop_burst": 1
+    }
+  },
+  "selection": null,
+  "boss": null,
+  "result": null,
+  "ui_flags": {
+    "show_hud": true,
+    "accept_gameplay_input": true,
+    "show_pause": false
+  }
+}

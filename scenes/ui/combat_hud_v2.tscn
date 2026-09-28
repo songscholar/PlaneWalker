@@ -1,0 +1,229 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/views/combat_hud_view.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.035, 0.055, 0.078, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18, 0.55, 0.67, 0.85)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleDangerPanel"]
+bg_color = Color(0.075, 0.035, 0.04, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.9, 0.22, 0.12, 0.9)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBarBackground"]
+bg_color = Color(0.015, 0.025, 0.04, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.16, 0.2, 0.25, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleHPFill"]
+bg_color = Color(0.72, 0.14, 0.1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleEnergyFill"]
+bg_color = Color(0.08, 0.72, 0.9, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBossFill"]
+bg_color = Color(0.9, 0.24, 0.11, 1)
+
+[node name="CombatHudV2" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="HudRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SafeArea" type="MarginContainer" parent="HudRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="HudLayout" type="Control" parent="HudRoot/SafeArea"]
+layout_mode = 2
+
+[node name="RoomPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
+layout_mode = 0
+offset_right = 160.0
+offset_bottom = 54.0
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="RoomContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/RoomPanel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="RoomLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/RoomPanel/RoomContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "1 / 5"
+horizontal_alignment = 1
+
+[node name="RunTimeLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/RoomPanel/RoomContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.72, 0.8, 1)
+text = "01:00"
+horizontal_alignment = 1
+
+[node name="PauseIndicator" type="Label" parent="HudRoot/SafeArea/HudLayout"]
+visible = false
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -80.0
+offset_right = 80.0
+offset_bottom = 36.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.72, 0.2, 1)
+theme_override_font_sizes/font_size = 18
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="BossPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
+visible = false
+layout_mode = 0
+anchor_left = 0.3
+anchor_right = 0.7
+offset_top = 4.0
+offset_bottom = 82.0
+theme_override_styles/panel = SubResource("StyleDangerPanel")
+
+[node name="BossContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/BossPanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BossNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/BossPanel/BossContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.5, 1)
+theme_override_font_sizes/font_size = 16
+text = "BOSS"
+horizontal_alignment = 1
+
+[node name="BossHPBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/BossPanel/BossContent"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+max_value = 100.0
+value = 75.0
+show_percentage = false
+theme_override_styles/background = SubResource("StyleBarBackground")
+theme_override_styles/fill = SubResource("StyleBossFill")
+
+[node name="BossPhaseLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/BossPanel/BossContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.5, 0.28, 1)
+text = "PHASE  1 / 3"
+horizontal_alignment = 1
+
+[node name="PlayerPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
+layout_mode = 0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -154.0
+offset_right = 300.0
+offset_bottom = 0.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="PlayerContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/PlayerPanel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="HPLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.72, 0.62, 1)
+text = "HP  160 / 200"
+
+[node name="HPBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
+custom_minimum_size = Vector2(276, 18)
+layout_mode = 2
+max_value = 200.0
+value = 160.0
+show_percentage = false
+theme_override_styles/background = SubResource("StyleBarBackground")
+theme_override_styles/fill = SubResource("StyleHPFill")
+
+[node name="EnergyLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
+text = "TIME  72 / 100"
+
+[node name="EnergyBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
+custom_minimum_size = Vector2(276, 14)
+layout_mode = 2
+max_value = 100.0
+value = 72.0
+show_percentage = false
+theme_override_styles/background = SubResource("StyleBarBackground")
+theme_override_styles/fill = SubResource("StyleEnergyFill")
+
+[node name="LowHPIndicator" type="Label" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.26, 0.12, 1)
+text = "!  CRITICAL VITALITY  !"
+horizontal_alignment = 1
+
+[node name="BuildLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.72, 0.78, 1)
+text = "BUILD  --"
+
+[node name="SkillPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -250.0
+offset_top = -98.0
+offset_right = 0.0
+offset_bottom = 0.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="SkillContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/SkillPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StopLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "STOP  READY"
+horizontal_alignment = 1
+
+[node name="RewindLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.72, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "REWIND  4.5s"
+horizontal_alignment = 1
