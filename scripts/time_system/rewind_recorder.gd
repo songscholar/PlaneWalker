@@ -55,11 +55,13 @@ func restore_player_state(snapshot: Dictionary) -> bool:
 		return false
 	if not snapshot.has("position") or not snapshot.has("hp"):
 		return false
+	_cancel_transient_actions()
+	if not _restore_safe_action(snapshot.get("safe_action", {})):
+		return false
 	target.global_position = snapshot["position"]
 	if snapshot.has("velocity") and _has_property(target, &"velocity"):
 		target.set("velocity", snapshot["velocity"])
 	_restore_facing(snapshot.get("facing", Vector2.RIGHT))
-	_restore_safe_action(snapshot.get("safe_action", {}))
 	health_component.current_hp = minf(health_component.max_hp, float(snapshot["hp"]))
 	health_component.apply_invulnerability(0.5)
 	return true
@@ -107,9 +109,16 @@ func _capture_safe_action() -> Dictionary:
 	return {}
 
 
-func _restore_safe_action(state: Variant) -> void:
-	if state is Dictionary and target.has_method("restore_rewind_safe_action_state"):
-		target.call("restore_rewind_safe_action_state", state.duplicate(true))
+func _restore_safe_action(state: Variant) -> bool:
+	if not state is Dictionary or not target.has_method("restore_rewind_safe_action_state"):
+		return true
+	var result: Variant = target.call("restore_rewind_safe_action_state", state.duplicate(true))
+	return bool(result) if result is bool else true
+
+
+func _cancel_transient_actions() -> void:
+	if target.has_method("cancel_transient_actions"):
+		target.call("cancel_transient_actions")
 
 
 func _has_property(object: Object, property_name: StringName) -> bool:

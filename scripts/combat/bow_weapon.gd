@@ -51,6 +51,11 @@ func release_charge(direction: Vector2) -> bool:
 	return true
 
 
+func cancel_charge() -> void:
+	_charging = false
+	_charge_time = 0.0
+
+
 func is_charging() -> bool:
 	return _charging
 
