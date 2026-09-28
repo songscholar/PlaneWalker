@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "path": "res://data/items/mvp_items.json",
+      "category": "item",
+      "default_availability": "NEXT",
+      "m1_ids": [
+        "sword_edge",
+        "quickened_blade",
+        "chronal_battery",
+        "rewind_salve",
+        "tempered_guard",
+        "frozen_burst",
+        "rewind_echo",
+        "accelerated_combo"
+      ]
+    },
+    {
+      "path": "res://data/blessings/mvp_blessings.json",
+      "category": "blessing",
+      "default_availability": "M1",
+      "m1_ids": []
+    },
+    {
+      "path": "res://data/talents/mvp_talents.json",
+      "category": "talent",
+      "default_availability": "NEXT",
+      "m1_ids": ["tal_ruin_execute", "tal_steel_recover", "tal_eternity_reserve"],
+      "overrides": {
+        "tal_eternity_reserve": {
+          "archetype": "",
+          "role": "utility"
+        }
+      }
+    },
+    {
+      "path": "res://data/curses/mvp_curses.json",
+      "category": "curse",
+      "default_availability": "NEXT",
+      "m1_ids": ["glass_tempo", "blood_rewind", "overclocked_stasis"]
+    }
+  ]
+}

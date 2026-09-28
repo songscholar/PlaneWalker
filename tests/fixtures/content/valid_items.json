@@ -1,0 +1,18 @@
+[
+  {
+    "id": "fixture_starter",
+    "name": "FIXTURE_STARTER_NAME",
+    "description": "FIXTURE_STARTER_DESC",
+    "kind": "time",
+    "archetype": "time_stop_burst",
+    "role": "starter",
+    "effects": {"time_stop_duration_bonus": 0.5}
+  },
+  {
+    "id": "fixture_utility",
+    "name": "FIXTURE_UTILITY_NAME",
+    "description": "FIXTURE_UTILITY_DESC",
+    "kind": "survival",
+    "effects": {"max_hp_bonus": 10.0}
+  }
+]

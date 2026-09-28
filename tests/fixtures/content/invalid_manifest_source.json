@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "path": "res://tests/fixtures/content/valid_items.json",
+      "category": 777,
+      "default_availability": false,
+      "m1_ids": ["fixture_starter", "fixture_starter"],
+      "overrides": {
+        "fixture_starter": {
+          "role": 99
+        }
+      }
+    }
+  ]
+}

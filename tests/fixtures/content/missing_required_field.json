@@ -1,0 +1,22 @@
+[
+  {
+    "name": "MISSING_ID_NAME",
+    "description": "MISSING_ID_DESC",
+    "effects": {}
+  },
+  {
+    "id": "missing_name",
+    "description": "MISSING_NAME_DESC",
+    "effects": {}
+  },
+  {
+    "id": "missing_description",
+    "name": "MISSING_DESCRIPTION_NAME",
+    "effects": {}
+  },
+  {
+    "id": "missing_effects",
+    "name": "MISSING_EFFECTS_NAME",
+    "description": "MISSING_EFFECTS_DESC"
+  }
+]

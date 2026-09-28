@@ -12,6 +12,11 @@ var room_sequence: Array[Dictionary] = [
 var current_room_index: int = 0
 
 
+func configure_from_definitions(definitions: Array[Dictionary]) -> void:
+	room_sequence = definitions.duplicate(true)
+	current_room_index = 0
+
+
 func configure_fixed_sequence(
 	room_count: int,
 	event_rooms: Array[int] = [],
@@ -65,4 +70,4 @@ func room_definition_for(room_number: int) -> Dictionary:
 		configure_fixed_sequence(maxi(1, room_number))
 	var index := clampi(room_number - 1, 0, room_sequence.size() - 1)
 	current_room_index = index
-	return room_sequence[index]
+	return room_sequence[index].duplicate(true)

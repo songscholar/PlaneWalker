@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "path": "res://tests/fixtures/content/valid_items.json",
+      "category": "item",
+      "default_availability": "NEXT",
+      "m1_ids": ["fixture_starter"]
+    }
+  ]
+}

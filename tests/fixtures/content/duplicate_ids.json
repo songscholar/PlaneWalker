@@ -1,0 +1,14 @@
+[
+  {
+    "id": "duplicate_entry",
+    "name": "DUPLICATE_ONE_NAME",
+    "description": "DUPLICATE_ONE_DESC",
+    "effects": {}
+  },
+  {
+    "id": "duplicate_entry",
+    "name": "DUPLICATE_TWO_NAME",
+    "description": "DUPLICATE_TWO_DESC",
+    "effects": {}
+  }
+]
