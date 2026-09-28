@@ -8,6 +8,16 @@
 
 ---
 
+- Status: Reference; Hub intent remains active, external and monetization implementations are superseded
+- Authority Level: Historical implementation design
+- Implementation Status: Requires Godot/data-driven rewrite under the full-product specification
+- Superseded By: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-28
+
+> **External execution boundary:** 存档、回放、本地排行、Build 码、挑战和 Hub 必须先有离线实现。Steam Cloud、好友、全球榜、Workshop 和分享只能通过可选 Provider 接入，真实账号配置与公开上传是外部执行。
+
+> **Commercial Decision Gate:** `GachaSystem` 章节只保留外观收集、预览、免费解锁和中性商品/权益接口意图。付费抽卡、真实货币、保底销售和限时池不得按旧伪代码启用。
+
 > **Godot迁移约束**：Hub区域、NPC、结算面板、抽卡和外观界面均使用 `.tscn` 场景；配置使用 Resource/JSON；区域加载使用 `ResourceLoader.load/preload`，音频触发使用 AudioStream 路径或 AudioBus 参数。
 
 ## 1. HubController — 枢纽9区域管理 + NPC交互触发
@@ -949,6 +959,8 @@ public enum UnlockType { MetaNode, Item, Character, Weapon, Achievement, Cosmeti
 ---
 
 ## 4. GachaSystem — 时空祈愿 + 保底 + 碎片兑换
+
+> **Historical/Decision Gate:** 本节不是当前实施契约。实现时只构建免费外观收集和离线 Fixture，禁用现金交易和概率销售入口。
 
 ### 4.1 概述
 
@@ -2113,6 +2125,8 @@ public struct BuildShareResult
 ---
 
 ## 8. ReplaySystem — 输入记录 + 确定性回放 + 播放器
+
+> **Superseding replay contract:** 本节的输入记录只是一个组成部分。实现还必须包含 RNG checkpoint、周期性 keyframe、状态 hash、版本/内容包指纹、首分歧诊断和不兼容拒绝。
 
 ### 8.1 概述
 

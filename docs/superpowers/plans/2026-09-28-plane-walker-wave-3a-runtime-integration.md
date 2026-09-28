@@ -1,5 +1,12 @@
 # Plane Walker Wave 3A Runtime Integration Implementation Plan
 
+- Status: Completed
+- Document Role: Historical implementation record
+- Implementation Status: Verified by `d161da2`, `573bf44`, `36aed4d`, and status checkpoint `1bff8dd`
+- Completed On: 2026-09-28
+- Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Preservation Rule: Runtime facade idempotency, safe legacy fallback, and five-room smoke behavior remain regression requirements.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the M1 five-room run, canonical reward drafting, and unified ChoicePanel operate in the real main scene through one authoritative application command path while preserving the user's current localization and legacy-runtime edits.

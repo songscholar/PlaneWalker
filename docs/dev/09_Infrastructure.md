@@ -8,6 +8,16 @@
 
 ---
 
+- Status: Reference; infrastructure intent remains useful but concrete APIs and platform operations are superseded
+- Authority Level: Historical implementation design
+- Implementation Status: Requires Godot 4.6, offline-provider, content-pack, and reproducible-export rewrite
+- Superseded By: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-28
+
+> **External execution boundary:** 仓库内实现离线 `PlatformProvider`、本地排行/回放/成就 Fixture、内容包与 Mod 校验、可重现导出和打包启动测试。Steamworks 真实 AppID、后台配置、Workshop 上传、全球排行、签名/公证和公开发布由外部执行，不得伪造成本地已验证。
+
+> **Safety and commercial boundary:** 首个支持的 Mod 模式是数据包；任意脚本不进入验证游戏。付费平台服务、DLC 定价、销售、证书和签名身份需要独立商业/外部决策。
+
 ## 1. 项目初始化 — Godot配置 + 像素导入预设 + Git + .gitignore
 
 ### 1.1 Godot项目配置
@@ -658,6 +668,8 @@ public class LocalizationSettingsData
 
 ## 7. Mod SDK — IMod接口 + ModLoader + Workshop
 
+> **Superseding safety rule:** 以版本化数据包和声明式效果目录取代任意代码 Mod。Workshop 只是可选发现/配送 Provider，本地导入、验证、兼容拒绝和存档隔离必须离线完整工作。
+
 ### 7.1 概述
 
 Mod SDK提供标准化的Mod开发接口，包含IMod生命周期接口、数据修改API、资源替换API、事件监听API。ModLoader负责发现/加载/校验Mod。Steam Workshop集成用于上传/下载/订阅。
@@ -1042,6 +1054,8 @@ public class ModValidator
 ---
 
 ## 8. Steamworks集成 — 成就/排行榜/云存档封装
+
+> **Provider boundary:** 本节只定义可选 Steam Provider 的能力意图。离线 Provider 是始终可用的默认实现；缺少 Steam 客户端、AppID、账号或网络时不得阻塞游戏、存档、回放、挑战或 Hub。
 
 ### 8.1 概述
 

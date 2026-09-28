@@ -1,5 +1,12 @@
 # Plane Walker Wave 3B Combat and UI Hardening Implementation Plan
 
+- Status: Completed
+- Document Role: Historical implementation record
+- Implementation Status: Verified by `c4b7e04`, `9cba692`, `f8145c3`, `c13ec9f`, `8f3594d`, `5e55bd4`, and status checkpoint `66da460`
+- Completed On: 2026-09-28
+- Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Preservation Rule: Combat clock ownership, telegraphing, rewind cancellation, live HUD projection, and 640×360 presentation remain regression requirements.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Connect the isolated action-state and HUD contracts to the real M1 run, add readable enemy/Boss commitment windows, and prepare a verified 640×360 integer-scaled pixel presentation without removing any future-facing content.
@@ -636,5 +643,5 @@ Only the previously known legacy `reward_system_smoke` ObjectDB warning may rema
 - [ ] Update the staged-development spec:
 
 ```text
-Implementation Status: Wave 0/1 foundation, Wave 2 isolated systems, Wave 3A runtime integration, and Wave 3B combat/UI hardening verified; Wave 4 tuning and external playtest pending
+Historical outcome: Wave 3B combat/UI hardening is verified. Wave 4A–4D, formal M1 decision, post-M1 promotion, and the remaining full-product program are governed by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`.
 ```

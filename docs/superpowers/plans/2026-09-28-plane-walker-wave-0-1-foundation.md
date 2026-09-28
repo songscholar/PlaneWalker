@@ -1,5 +1,12 @@
 # Plane Walker Wave 0/1 Foundation Implementation Plan
 
+- Status: Completed
+- Document Role: Historical implementation record
+- Implementation Status: Verified by `78efc69`, `60d362b`, `1e2e1e9`, and status checkpoint `1f7d4b3`
+- Completed On: 2026-09-28
+- Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Preservation Rule: The verified contracts and regression gates in this plan remain binding until an approved replacement passes equivalent tests.
+
 > **For agentic workers:** Execute each task with a red-green-refactor loop. Keep the existing `tests/reward_system_smoke.gd` intact as a regression gate. Work only in the file ownership assigned to the task.
 
 **Goal:** Establish the frozen M1 contracts, authoritative run state machine, deterministic seed service, first contract-driven HUD, and three P0 combat correctness fixes without overwriting the user's current localization and UI work.

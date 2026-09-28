@@ -1,0 +1,103 @@
+# Plane Walker 开发文档入口
+
+- Status: Approved
+- Authority Level: Documentation index and execution-status source
+- Applies To: 全仓库设计、开发、测试、构建和发布准备
+- Implementation Status: P0 foundation baseline is Current; Wave 0/1, Wave 2, Wave 3A, and Wave 3B are completed historical slices
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`
+- Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
+- Last Verified: 2026-09-28
+- Contract References: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+
+## 当前执行结论
+
+Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Current、Next、Launch 和 Expansion 作为可被删减的产品选项。范围通过实施顺序和质量 Gate 控制，不通过删除角色、武器、楼层、Boss、Hub、剧情、回放、排行、Mod 或 DLC 能力来降低范围。
+
+当前实施入口是：
+
+1. [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md)：定义最终范围、架构约束、内容数量和 Product Complete Gate。
+2. [P0 Foundation Baseline 实施计划](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md)：当前应执行的基线固化、本地化契约和可重现验证。
+3. `AGENTS.md`：定义持续授权、无需再确认的工作以及远程发布、真实付费和私密凭据等外部边界。
+
+## 当前状态
+
+| 范围 | 状态 | 结论 |
+|---|---|---|
+| Wave 0/1 | Completed / Historical | RunState、RunOrchestrator、SeedService、基础战斗不变式和契约 HUD 已验证 |
+| Wave 2 | Completed / Historical | ContentRegistry、M1 房间计划、DraftService、PlayerActionState 和 ChoicePanel 已验证 |
+| Wave 3A | Completed / Historical | 真实运行时 Facade、旧流程桥接、选择幂等与五房流程已验证 |
+| Wave 3B | Completed / Historical | 敌人前摇、Boss 行为互斥、玩家单时钟、回溯取消、真实 HUD 与 640×360 画布已验证 |
+| P0 Foundation Baseline | Current | 固化当前本地化与 Godot 4.6 变更，建立本地化契约，证明清洁检出可重现 |
+| P1–P9 Foundation | Authorized / Planned | 测试 CI、原子存档、内容与效果运行时、单一状态、单一事件、手柄、导出和清洁认证 |
+| Wave 4A | In progress / Mandatory | 收口本地化与数据改动，建立干净构建、验证入口和试玩数据记录 |
+| Wave 4B | Authorized / Next | 完成回溯残影、Boss 全招前摇、精英主动机制和五房遭遇配置 |
+| Wave 4C | Authorized / Queued | 完成 Pixel Proxy、核心动画、音效与战斗反馈 |
+| Wave 4D | Authorized / Queued | 完成 30 Seed 稳定验证、20 局真实外部试玩、数值调整与 M1 放行报告 |
+| Formal M1 | Required quality gate | 仓库内 Gate 全部完成；20 局真人外部试玩不得伪造，缺少真实数据时状态为 `M1 Candidate — External Validation Pending` |
+| Post-M1 Promotion | Authorized / Evidence-driven | 根据 M1 数据从弓或第三时间能力中只提升一个为首个新 Current |
+| Full Product Content | Authorized / Queued | 五角色、五武器、四时间能力、五层五 Boss、八流派和完整内容池 |
+| Launch / Expansion Systems | Authorized / Queued | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、回放、排行、Mod、外观和 DLC 内容包 |
+
+当前工作区含未提交的本地化、数据池、旧 UI、主流程和 Godot 设置变更。P0 要求先检查意图、测试并精确固化，禁止重置、覆盖或丢弃。
+
+P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expansion 是同一连续交付程序。M1 不是停工点；其中的外部真人试玩是诚信证据 Gate。仓库必须完成会话导入、匿名校验、报告生成、问卷/观察模板和修复跟踪，但自动化模拟不得冒充 20 局真实外部试玩。
+
+## 权威顺序
+
+规则冲突时按以下顺序执行：
+
+1. 仓库根目录 `AGENTS.md` 的授权和安全边界。
+2. 已批准 ADR。
+3. [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md)。
+4. 当前阶段的 Implementation Plan 和 contracts。
+5. `docs/dev/` 中已与 Godot 实现对齐的系统文档。
+6. [深度收敛与系统职责设计](0_%E6%B7%B1%E5%BA%A6%E6%94%B6%E6%95%9B%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%81%8C%E8%B4%A3%E8%AE%BE%E8%AE%A1.md)。
+7. 旧 GDD、运营设想、伪代码和 Historical 计划。
+
+已完成 Wave 计划是验证记录，不是新工作的任务队列。其已验证契约在有等价或更强替代经过测试前仍然是回归 Gate。
+
+## 文档地图
+
+### 当前规格与计划
+
+| 文档 | 用途 | 状态 |
+|---|---|---|
+| [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
+| [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 本地化基线、脏工作区固化和清洁重现 | Approved / Current |
+| [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
+
+### 核心产品设计
+
+| 领域 | 主要入口 |
+|---|---|
+| 产品收敛、八流派与成长边界 | [0_深度收敛与系统职责设计](0_%E6%B7%B1%E5%BA%A6%E6%94%B6%E6%95%9B%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%81%8C%E8%B4%A3%E8%AE%BE%E8%AE%A1.md) |
+| 世界观、剧情和结局 | [2_世界观与叙事进度设计](2_%E4%B8%96%E7%95%8C%E8%A7%82%E4%B8%8E%E5%8F%99%E4%BA%8B%E8%BF%9B%E5%BA%A6%E8%AE%BE%E8%AE%A1.md) |
+| 战斗和时间系统 | [3.1 战斗](3.1combat-system-design.md) / [3.2 时间](3.2_%E6%97%B6%E9%97%B4%E6%93%8D%E6%8E%A7%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1.md) |
+| 局内构筑 | [3.3 道具](3.3_%E9%81%93%E5%85%B7%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1.md) / [3.4 祝福与诅咒](3.4_%E7%A5%9D%E7%A6%8F%E4%B8%8E%E8%AF%85%E5%92%92%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1.md) |
+| 地牢、敌人和 Boss | [3.5 地牢](3.5_%E5%9C%B0%E7%89%A2%E7%94%9F%E6%88%90%E4%B8%8E%E5%85%B3%E5%8D%A1%E8%AE%BE%E8%AE%A1.md) / [3.6 敌人](3.6_%E6%95%8C%E4%BA%BA%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1.md) / [3.7 Boss](3.7_Boss%E8%AE%BE%E8%AE%A1.md) |
+| 角色和数值 | [4_角色与数值体系设计](4_%E8%A7%92%E8%89%B2%E4%B8%8E%E6%95%B0%E5%80%BC%E4%BD%93%E7%B3%BB%E8%AE%BE%E8%AE%A1.md) |
+| UI、像素美术和音频 | [5_6_UI美术音效技术设计](5_6_UI%E7%BE%8E%E6%9C%AF%E9%9F%B3%E6%95%88%E6%8A%80%E6%9C%AF%E8%AE%BE%E8%AE%A1.md) |
+| Hub、局外成长和教学 | [8.1 Hub](8.1_%E5%B1%80%E5%A4%96%E6%9E%A2%E7%BA%BD%E4%B8%8E%E6%AD%BB%E4%BA%A1%E7%BB%93%E7%AE%97%E8%AE%BE%E8%AE%A1.md) / [8.2 成长](8.2_%E8%B4%A7%E5%B8%81%E5%85%BB%E6%88%90%E4%B8%8E%E5%A4%A9%E8%B5%8B%E6%A0%91%E8%AE%BE%E8%AE%A1.md) / [8.4 教学](8.4_%E9%94%BB%E9%80%A0%E5%BC%BA%E5%8C%96%E4%B8%8E%E6%96%B0%E6%89%8B%E6%95%99%E5%AD%A6%E8%AE%BE%E8%AE%A1.md) |
+| 外观、运营与外部系统 | [8.3 选择与外观](8.3_%E5%B1%80%E5%86%85%E9%80%89%E6%8B%A9%E4%B8%8E%E6%8A%BD%E5%8D%A1%E5%A4%96%E8%A7%82%E8%AE%BE%E8%AE%A1.md) / [8.5 系统与运营](8.5_%E7%B3%BB%E7%BB%9F%E5%8A%9F%E8%83%BD%E4%B8%8E%E8%BF%90%E8%90%A5%E8%A7%84%E5%88%92%E8%AE%BE%E8%AE%A1.md) |
+
+### 工程文档
+
+`docs/dev/00_Architecture.md` 是工程总入口。`docs/dev/01`–`09` 包含各系统的历史实现设计，其中仍有 Unity/C# 伪代码和旧 1920×1080 坐标；它们可作为意图参考，不得覆盖当前 Godot 契约、640×360 像素画布和已验证运行时实现。
+
+## 外部执行边界与商业 Gate
+
+仓库内必须实现可测试的离线 Provider、数据契约、导出路径和 UI 降级流程。以下操作不是“代码完成”的前置条件，也不得阻塞开发：
+
+- Steam Cloud、Workshop、成就、好友、排行榜和 Activity Feed 的真实平台配置。
+- 公开上架、远程推送、商店页、公告、社交媒体发布、证书和平台签名。
+- 翻译、托管、分析、网络或商业服务的付费购买。
+
+付费抽卡、真实货币销售、DLC 定价、限时销售和商业运营日历处于 **Commercial Decision Gate**：未获得单独产品决策时，只实现免费外观收集、中性商品接口和内容包基础设施，不激活现金交易、付费概率池或购买入口。
+
+## 维护规则
+
+- 新的当前计划必须在本页状态表中有一项，完成后改为 Completed / Historical。
+- 每个实施阶段必须记录测试、日志扫描、已知限制和回滚点。
+- 不得把外部凭据、公开发布或真实玩家反馈写成仓库内自动化已完成事项。
+- 修改产品数量、核心角色、八流派、内容包格式或 Product Complete Gate 时，必须同步更新 Completion Spec。
