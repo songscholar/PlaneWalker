@@ -501,12 +501,22 @@ func _run_pause_menu_check() -> void:
 	var volume_label: Label = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeLabel")
 	var volume_slider: HSlider = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeSlider")
 	var mute_toggle: CheckButton = main.get_node("PauseMenu/Panel/Margin/VBox/MuteToggle")
+	var camera_shake_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/CameraShakeToggle") as CheckButton
+	var hit_flash_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/HitFlashToggle") as CheckButton
+	var reduced_motion_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/ReducedMotionToggle") as CheckButton
 	var restart_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/RestartButton")
 	var quit_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton")
 	_assert_true(start_menu.visible, "pause check starts on start menu")
 	_assert_true(GameState.phase == GameState.GamePhase.HUB, "main scene starts in hub phase")
 	_assert_true(restart_button.text == "重新开始", "pause menu exposes restart")
 	_assert_true(quit_button.text == "退出", "pause menu exposes quit")
+	_assert_true(camera_shake_toggle != null, "pause menu exposes camera shake accessibility")
+	_assert_true(hit_flash_toggle != null, "pause menu exposes hit flash accessibility")
+	_assert_true(reduced_motion_toggle != null, "pause menu exposes reduced motion accessibility")
+	if camera_shake_toggle != null and hit_flash_toggle != null and reduced_motion_toggle != null:
+		_assert_true(camera_shake_toggle.text == "镜头震动", "camera shake setting is localized")
+		_assert_true(hit_flash_toggle.text == "受击闪光", "hit flash setting is localized")
+		_assert_true(reduced_motion_toggle.text == "减少动态效果", "reduced motion setting is localized")
 	main._pause_run()
 	_assert_true(not get_tree().paused, "hub phase cannot open pause")
 	main._start_new_run()
@@ -523,6 +533,22 @@ func _run_pause_menu_check() -> void:
 	_assert_true(volume_label.text.contains("50%"), "pause menu updates volume label")
 	mute_toggle.button_pressed = true
 	_assert_true(bool(GameState.get_setting("master_muted", false)), "pause menu stores mute setting")
+	if camera_shake_toggle != null and hit_flash_toggle != null and reduced_motion_toggle != null:
+		_assert_true(camera_shake_toggle.button_pressed, "camera shake defaults on")
+		_assert_true(hit_flash_toggle.button_pressed, "hit flash defaults on")
+		_assert_true(not reduced_motion_toggle.button_pressed, "reduced motion defaults off")
+		camera_shake_toggle.button_pressed = false
+		hit_flash_toggle.button_pressed = false
+		reduced_motion_toggle.button_pressed = true
+		_assert_true(not bool(GameState.get_setting("camera_shake_enabled", true)), "pause menu persists camera shake")
+		_assert_true(not bool(GameState.get_setting("hit_flash_enabled", true)), "pause menu persists hit flash")
+		_assert_true(bool(GameState.get_setting("reduced_motion", false)), "pause menu persists reduced motion")
+		_assert_true(CombatFeedback.has_method("get_feedback_options_for_test"), "feedback exposes runtime option evidence")
+		if CombatFeedback.has_method("get_feedback_options_for_test"):
+			var feedback_options: Dictionary = CombatFeedback.get_feedback_options_for_test()
+			_assert_true(not bool(feedback_options.get("camera_shake_enabled", true)), "camera shake setting applies immediately")
+			_assert_true(not bool(feedback_options.get("hit_flash_enabled", true)), "hit flash setting applies immediately")
+			_assert_true(bool(feedback_options.get("reduced_motion", false)), "reduced motion setting applies immediately")
 
 	resume_button.pressed.emit()
 	_assert_true(not get_tree().paused, "resume unfreezes scene tree")
@@ -540,8 +566,24 @@ func _run_pause_menu_check() -> void:
 
 func _run_persistence_check() -> void:
 	GameState.reset_persistent_data(true)
+	GameState.persistent = {"settings": {"master_volume": 0.3}}
+	_assert_true(GameState.save_persistent(), "legacy settings fixture can be saved")
+	GameState.persistent = {}
+	_assert_true(GameState.load_persistent(), "legacy settings fixture can be loaded")
+	var migrated_settings: Dictionary = GameState.persistent.get("settings", {})
+	_assert_true(migrated_settings.has("camera_shake_enabled"), "old save gains camera shake default")
+	_assert_true(migrated_settings.has("hit_flash_enabled"), "old save gains hit flash default")
+	_assert_true(migrated_settings.has("reduced_motion"), "old save gains reduced motion default")
+	_assert_true(bool(migrated_settings.get("camera_shake_enabled", false)), "old save defaults camera shake on")
+	_assert_true(bool(migrated_settings.get("hit_flash_enabled", false)), "old save defaults hit flash on")
+	_assert_true(not bool(migrated_settings.get("reduced_motion", true)), "old save defaults reduced motion off")
+
+	GameState.reset_persistent_data(true)
 	GameState.set_setting("master_volume", 0.4)
 	GameState.set_setting("master_muted", true)
+	GameState.set_setting("camera_shake_enabled", false)
+	GameState.set_setting("hit_flash_enabled", false)
+	GameState.set_setting("reduced_motion", true)
 	GameState.start_run({"seed": 991})
 	GameState.current_room = 5
 	GameState.end_run({
@@ -565,6 +607,14 @@ func _run_persistence_check() -> void:
 	_assert_true(GameState.load_persistent(), "persistent save can be loaded")
 	_assert_close(float(GameState.get_setting("master_volume", 0.0)), 0.4, "persistent save restores master volume")
 	_assert_true(bool(GameState.get_setting("master_muted", false)), "persistent save restores mute setting")
+	_assert_true(not bool(GameState.get_setting("camera_shake_enabled", true)), "persistent save restores camera shake")
+	_assert_true(not bool(GameState.get_setting("hit_flash_enabled", true)), "persistent save restores hit flash")
+	_assert_true(bool(GameState.get_setting("reduced_motion", false)), "persistent save restores reduced motion")
+	CombatFeedback.reload_feedback_options_from_game_state()
+	var loaded_feedback: Dictionary = CombatFeedback.get_feedback_options_for_test()
+	_assert_true(not bool(loaded_feedback.get("camera_shake_enabled", true)), "loaded camera shake reaches feedback runtime")
+	_assert_true(not bool(loaded_feedback.get("hit_flash_enabled", true)), "loaded hit flash reaches feedback runtime")
+	_assert_true(bool(loaded_feedback.get("reduced_motion", false)), "loaded reduced motion reaches feedback runtime")
 	_assert_true(GameState.persistent.get("runs_completed", 0) == 1, "persistent save restores run count")
 	_assert_true(GameState.persistent.get("last_run_summary", {}).get("result", "") == "floor_cleared", "persistent save restores last run result")
 	_assert_true(GameState.persistent.get("last_run_summary", {}).get("blessings", []).size() == 1, "persistent save stores blessings")

@@ -119,9 +119,9 @@ func bind_actor(actor: Node2D) -> bool:
 	_role = _resolve_role(actor)
 	_palette = (PALETTES.get(_role, PALETTES["generic"]) as Dictionary).duplicate(true)
 	_footprint = FOOTPRINTS.get(_role, FOOTPRINTS["generic"])
-	_has_committed_facing_property = _has_property(actor, &"_committed_attack_direction")
-	_has_velocity_property = _has_property(actor, &"velocity")
-	_has_exposure_sources_property = _has_property(actor, &"_exposure_sources")
+	_has_committed_facing_property = actor is EnemyBase
+	_has_velocity_property = actor is CharacterBody2D
+	_has_exposure_sources_property = actor is BossChronoWarden
 	_source_visual.visible = false
 	z_index = 4
 	_bound = true
@@ -157,6 +157,8 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 		_action_remaining = float(ACTION_DURATIONS.get(normalized, 0.2)) if duration <= 0.0 else duration
 	if normalized == &"hit" and _hit_flash_enabled:
 		_flash_remaining = maxf(_flash_remaining, 0.10)
+	_update_presentation_facing()
+	_apply_pixel_transform()
 	queue_redraw()
 
 
@@ -165,13 +167,25 @@ func spawn_afterimage(world_position: Vector2, lifetime: float = 0.22) -> Node2D
 		return null
 	var afterimage := AfterimageScript.new()
 	_actor.get_parent().add_child(afterimage)
-	afterimage.global_position = Vector2(roundf(world_position.x), roundf(world_position.y))
+	var canvas_scale := _canvas_scale()
+	var canvas_inverse_scale := Vector2(1.0 / canvas_scale.x, 1.0 / canvas_scale.y)
+	var world_pixel_unit := Vector2(
+		SCREEN_PIXEL_UNIT / canvas_scale.x,
+		SCREEN_PIXEL_UNIT / canvas_scale.y
+	)
+	afterimage.global_position = Vector2(
+		snappedf(world_position.x, world_pixel_unit.x),
+		snappedf(world_position.y, world_pixel_unit.y)
+	)
 	afterimage.z_index = maxi(0, _actor.z_index - 1)
 	afterimage.configure(
 		_role,
 		_palette["primary"],
 		_palette["accent"],
 		_footprint,
+		_action_scale,
+		canvas_inverse_scale,
+		world_pixel_unit,
 		lifetime
 	)
 	_afterimage_count += 1
@@ -212,6 +226,7 @@ func get_snapshot_for_test() -> Dictionary:
 		"action_scale": _action_scale,
 		"flash_active": _flash_remaining > 0.0,
 		"reduced_motion": _reduced_motion,
+		"velocity_capability_cached": _has_velocity_property,
 		"boss_phase_marks": _boss_phase,
 		"boss_core_shape": _boss_core_shape,
 		"boss_texture_pattern": _boss_texture_pattern,
@@ -261,7 +276,7 @@ func _derive_state_from_actor() -> void:
 			"DEAD":
 				_state = &"death"
 				return
-	if _has_property(_actor, &"velocity") and (_actor.get("velocity") as Vector2).length_squared() > 64.0:
+	if _has_velocity_property and (_actor.get("velocity") as Vector2).length_squared() > 64.0:
 		_state = &"move"
 	else:
 		_state = &"idle"
@@ -569,10 +584,3 @@ func _canvas_scale() -> Vector2:
 		maxf(0.001, canvas_transform.x.length()),
 		maxf(0.001, canvas_transform.y.length())
 	)
-
-
-func _has_property(object: Object, property_name: StringName) -> bool:
-	for property: Dictionary in object.get_property_list():
-		if StringName(property.get("name", "")) == property_name:
-			return true
-	return false

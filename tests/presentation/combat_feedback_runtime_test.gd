@@ -92,12 +92,44 @@ func _assert_pixel_proxy_contract() -> void:
 	var screen_footprint: Vector2 = player_snapshot.get("screen_footprint", Vector2.ZERO)
 	_suite.assert_close(screen_footprint.x, 24.0, "camera zoom does not halve proxy screen width")
 	_suite.assert_close(screen_footprint.y, 32.0, "camera zoom does not halve proxy screen height")
+	player_proxy.play_action(&"dash")
+	var dash_spawn_snapshot: Dictionary = player_proxy.get_snapshot_for_test()
+	var afterimage: Node2D = player_proxy.spawn_afterimage(Vector2(103.3, 99.1), 1.0)
+	_suite.assert_true(afterimage != null, "dash presentation can spawn an afterimage")
+	if afterimage != null:
+		var afterimage_screen_footprint := Vector2(player_snapshot.get("footprint", Vector2i.ZERO)) * afterimage.scale * Vector2(0.5, 0.5)
+		_suite.assert_equal(
+			afterimage_screen_footprint,
+			dash_spawn_snapshot.get("screen_footprint"),
+			"afterimage inherits the active dash footprint at 0.5 zoom"
+		)
+		_suite.assert_true(
+			is_equal_approx(fmod(absf(afterimage.global_position.x), 4.0), 0.0)
+				and is_equal_approx(fmod(absf(afterimage.global_position.y), 4.0), 0.0),
+			"afterimage origin snaps to the two-screen-pixel world unit"
+		)
+		afterimage._process(0.6)
+		var drift_snapshot: Dictionary = afterimage.get_snapshot_for_test()
+		_suite.assert_true(bool(drift_snapshot.get("pixel_snapped", false)), "afterimage drift stays screen-pixel snapped")
+		_suite.assert_equal(
+			drift_snapshot.get("screen_footprint"),
+			dash_spawn_snapshot.get("screen_footprint"),
+			"afterimage keeps the dash footprint while drifting"
+		)
+		afterimage.queue_free()
 	_suite.assert_true(not (player.get_node("Visual") as CanvasItem).visible, "legacy player polygon is replaced")
 	_suite.assert_true(not (boss.get_node("Visual") as CanvasItem).visible, "legacy Boss polygon is replaced")
 	_suite.assert_true(
 		CombatFeedback.ensure_actor_proxy_for_test(player) == player_proxy,
 		"proxy installation is idempotent"
 	)
+	_suite.assert_true(
+		bool(player_snapshot.get("velocity_capability_cached", false)),
+		"proxy caches the actor velocity capability at bind time"
+	)
+	var actor_cache: Dictionary = CombatFeedback.get_actor_cache_snapshot_for_test()
+	_suite.assert_true(bool(actor_cache.get("player_cached", false)), "feedback coordinator caches the player reference")
+	_suite.assert_true(bool(actor_cache.get("health_cached", false)), "feedback coordinator caches the player health interface")
 
 	player_proxy.play_action(&"attack")
 	player_proxy.advance_animation_for_test(0.03)

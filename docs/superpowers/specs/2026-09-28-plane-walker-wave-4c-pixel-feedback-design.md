@@ -7,7 +7,7 @@
 - Owner: UI and pixel presentation lane
 - Depends On: `AGENTS.md`, full-product completion design, staged M1 combat-feel and pixel-canvas gates
 - Supersedes: Temporary Polygon-only greybox presentation for M1 actors
-- Last Verified: 2026-09-29
+- Last Verified: 2026-09-28
 - Completion Gate: focused presentation tests plus `./tools/validate_project.sh`
 
 ## Outcome
@@ -39,6 +39,7 @@ The gameplay actor remains authoritative. `PixelProxyActor` reads presentation-s
 - Every role has a distinct silhouette even when rendered in monochrome.
 - Animation transforms and effect anchors snap to integer logical pixels.
 - Actor footprints and two-pixel units are defined in screen space, so the combat camera's `0.5` zoom does not halve their intended 640×360 readability.
+- Afterimages inherit the source proxy's active action scale and camera inverse scale, and snap their world origin/drift to the same two-screen-pixel grid.
 - Attack blade direction and lunge offset read the weapon angle; dash displacement and stretch read the actor's facing. The proxy never writes either source.
 - Boss phase, exposure, and Time Stop each have shape, luminance, or texture cues in addition to palette changes.
 - Time Stop uses cyan horizontal scan bands; Rewind uses indigo chevrons and reverse trails; danger uses amber/red concentric pulses.
@@ -60,6 +61,9 @@ Overlapping hit pauses extend the active deadline and never shorten an existing 
 The deadline uses Godot's monotonic real-time clock, so the requested duration is independent of rendered FPS and scaled gameplay time.
 
 Camera shake, hit flash, and reduced-motion behavior are runtime-configurable through `CombatFeedback.set_feedback_options()`. Reduced motion disables shake and afterimages, freezes continuous overlay motion, and preserves static action readability.
+The three accessibility options are persisted in `GameState.settings`, merged into legacy saves with compatible defaults, and exposed through the existing pause/settings panel.
+
+Presentation hot paths use typed actor capabilities plus cached player and `HealthComponent` references. Property-list reflection is not performed during animation or low-health updates.
 
 ## Audio policy
 

@@ -6,7 +6,7 @@
 - Implementation Status: Wave 4C complete; repository-wide validation has one concurrent Wave 4A telemetry-path failure recorded below
 - Owner: UI and pixel presentation lane
 - Depends On: `AGENTS.md`, Wave 4C design and implementation plan
-- Last Verified: 2026-09-29
+- Last Verified: 2026-09-28
 - Rollback Point: focused Wave 4C commit recorded in Git history
 
 ## Outcome
@@ -38,14 +38,24 @@ Delivered presentation coverage:
 
 ## Independent review remediation
 
-The 2026-09-29 review found and closed four release-priority defects:
+The 2026-09-28 review found and closed four release-priority defects:
 
 1. Floating damage text now converts actor world coordinates through the active viewport canvas transform. A real `Camera2D` regression uses position `(640, 360)` and zoom `0.5`.
 2. Player attack blade/lunge and dash stretch/displacement now use read-only weapon angle and facing across right, down, left, and up. Tests prove the proxy does not change gameplay position, velocity, weapon angle, or Boss UI state.
 3. Hit pause now uses monotonic real time and is independent of render FPS.
 4. Boss phase, exposure, and Time Stop now change marks, core shape, luminance, and texture pattern rather than relying on color alone.
 
-The same pass also fixed proxy screen sizing at camera zoom `0.5`, added runtime camera-shake/hit-flash/reduced-motion gates, and cached bound-actor reflection capabilities outside the per-frame path.
+The same pass also fixed proxy screen sizing at camera zoom `0.5`, added runtime camera-shake/hit-flash/reduced-motion gates, and cached typed actor capabilities outside the per-frame path.
+
+The final P2 closure additionally proves:
+
+- dash/rewind afterimages inherit the source proxy's action scale and camera inverse scale, retain the same screen footprint at zoom `0.5`, and snap to the shared world-pixel unit;
+- camera shake, hit flash, and reduced motion have localized pause-menu controls and persist through `GameState` save/load;
+- legacy saves without the new keys merge to shake/flash enabled and reduced motion disabled;
+- `CombatFeedback` reloads persistent options at startup and receives subsequent setting changes immediately;
+- actor velocity capability, player, and player health references are cached, with no `get_property_list()` call remaining in the per-frame presentation paths.
+
+P2 verification additionally ran the pause-menu and persistence subchecks in `reward_system_smoke`, the M1 runtime smoke, and both localization validators. All assertions passed. Reward smoke retains only its previously classified ObjectDB exit warning; no new leak or runtime error was introduced.
 
 Focused verification:
 

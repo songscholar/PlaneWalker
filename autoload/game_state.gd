@@ -2,6 +2,8 @@ extends Node
 
 const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
 
+signal setting_changed(setting_id: StringName, value: Variant)
+
 enum GamePhase {
 	BOOT,
 	HUB,
@@ -213,6 +215,7 @@ func set_setting(setting_id: String, value: Variant) -> void:
 	settings[setting_id] = value
 	persistent["settings"] = settings
 	save_persistent()
+	setting_changed.emit(StringName(setting_id), value)
 
 
 func get_setting(setting_id: String, default_value: Variant = null) -> Variant:
@@ -348,7 +351,11 @@ func _default_persistent_data() -> Dictionary:
 		"npc_affinity": {},
 		"unlocked_achievements": [],
 		"cosmetics": {},
-		"settings": {},
+		"settings": {
+			"camera_shake_enabled": true,
+			"hit_flash_enabled": true,
+			"reduced_motion": false,
+		},
 		"runs_completed": 0,
 		"victories": 0,
 		"best_rooms_cleared": 0,

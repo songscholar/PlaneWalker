@@ -20,6 +20,8 @@ var _had_combat_actor: bool = false
 var _camera_shake_enabled: bool = true
 var _hit_flash_enabled: bool = true
 var _reduced_motion: bool = false
+var _cached_player: Node2D
+var _cached_player_health: HealthComponent
 
 
 const HIT_PROFILES := {
@@ -69,6 +71,9 @@ func _ready() -> void:
 	_overlay = OverlayScript.new()
 	_overlay.name = "CombatFeedbackOverlay"
 	_overlay_layer.add_child(_overlay)
+	reload_feedback_options_from_game_state()
+	if not GameState.setting_changed.is_connected(_on_game_setting_changed):
+		GameState.setting_changed.connect(_on_game_setting_changed)
 	_connect_event_bus()
 	if not get_tree().node_removed.is_connected(_on_tree_node_removed):
 		get_tree().node_removed.connect(_on_tree_node_removed)
@@ -166,6 +171,29 @@ func get_camera_feedback_snapshot_for_test() -> Dictionary:
 	return {"trauma": _camera_trauma}
 
 
+func get_feedback_options_for_test() -> Dictionary:
+	return {
+		"camera_shake_enabled": _camera_shake_enabled,
+		"hit_flash_enabled": _hit_flash_enabled,
+		"reduced_motion": _reduced_motion,
+	}
+
+
+func get_actor_cache_snapshot_for_test() -> Dictionary:
+	return {
+		"player_cached": _cached_player != null and is_instance_valid(_cached_player),
+		"health_cached": _cached_player_health != null and is_instance_valid(_cached_player_health),
+	}
+
+
+func reload_feedback_options_from_game_state() -> void:
+	set_feedback_options({
+		"camera_shake_enabled": bool(GameState.get_setting("camera_shake_enabled", true)),
+		"hit_flash_enabled": bool(GameState.get_setting("hit_flash_enabled", true)),
+		"reduced_motion": bool(GameState.get_setting("reduced_motion", false)),
+	})
+
+
 func set_feedback_options(options: Dictionary) -> void:
 	if options.has("camera_shake_enabled"):
 		_camera_shake_enabled = bool(options["camera_shake_enabled"])
@@ -179,6 +207,12 @@ func set_feedback_options(options: Dictionary) -> void:
 	if _overlay != null and _overlay.has_method("set_feedback_options"):
 		_overlay.set_feedback_options(_hit_flash_enabled, _reduced_motion)
 	_configure_existing_proxies()
+
+
+func _on_game_setting_changed(setting_id: StringName, value: Variant) -> void:
+	if setting_id not in [&"camera_shake_enabled", &"hit_flash_enabled", &"reduced_motion"]:
+		return
+	set_feedback_options({str(setting_id): value})
 
 
 func reset_feedback_for_test() -> void:
@@ -215,6 +249,7 @@ func _scan_for_actors() -> void:
 	for actor: Node in get_tree().get_nodes_in_group("player"):
 		if actor is Node2D:
 			found_actor = true
+			_cache_player(actor as Node2D)
 			_ensure_actor_proxy(actor as Node2D)
 	for actor: Node in get_tree().get_nodes_in_group("enemies"):
 		if actor is Node2D:
@@ -226,6 +261,8 @@ func _scan_for_actors() -> void:
 func _ensure_actor_proxy(actor: Node2D) -> Node:
 	if actor == null or not is_instance_valid(actor):
 		return null
+	if actor.is_in_group("player"):
+		_cache_player(actor)
 	var existing := actor.get_node_or_null("PixelProxyActor")
 	if existing != null:
 		return existing
@@ -267,7 +304,7 @@ func _on_hit_confirmed(damage_info: Variant, target: Node, final_amount: float) 
 func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 	if target_is_player:
 		return (HIT_PROFILES["player_hurt"] as Dictionary).duplicate(true)
-	var tags: Array = damage_info.tags if damage_info != null and _has_property(damage_info, &"tags") else []
+	var tags: Array = damage_info.tags if damage_info is DamageInfo else []
 	if tags.has("attack:heavy"):
 		return (HIT_PROFILES["heavy"] as Dictionary).duplicate(true)
 	if tags.has("attack:finisher"):
@@ -353,7 +390,10 @@ func _on_run_ended(_result: Dictionary) -> void:
 	_reset_feedback()
 
 
-func _on_tree_node_removed(_node: Node) -> void:
+func _on_tree_node_removed(node: Node) -> void:
+	if node == _cached_player or node == _cached_player_health:
+		_cached_player = null
+		_cached_player_health = null
 	if _had_combat_actor:
 		call_deferred("_cleanup_if_no_combat_actors")
 
@@ -366,6 +406,8 @@ func _cleanup_if_no_combat_actors() -> void:
 	if not get_tree().get_nodes_in_group("enemies").is_empty():
 		return
 	_had_combat_actor = false
+	_cached_player = null
+	_cached_player_health = null
 	_reset_feedback()
 
 
@@ -406,8 +448,8 @@ func _update_low_health_overlay() -> void:
 	if player == null:
 		_overlay.set_low_health_ratio(1.0)
 		return
-	var health := player.get_node_or_null("HealthComponent")
-	if health == null or not _has_property(health, &"current_hp") or not _has_property(health, &"max_hp"):
+	var health := _cached_player_health
+	if health == null or not is_instance_valid(health):
 		_overlay.set_low_health_ratio(1.0)
 		return
 	_overlay.set_low_health_ratio(float(health.current_hp) / maxf(1.0, float(health.max_hp)))
@@ -416,7 +458,12 @@ func _update_low_health_overlay() -> void:
 func _first_player() -> Node2D:
 	if not is_inside_tree():
 		return null
-	return get_tree().get_first_node_in_group("player") as Node2D
+	if _cached_player != null and is_instance_valid(_cached_player):
+		return _cached_player
+	var player := get_tree().get_first_node_in_group("player") as Node2D
+	if player != null:
+		_cache_player(player)
+	return player
 
 
 func _reset_feedback() -> void:
@@ -452,13 +499,6 @@ func _restore_camera_offset() -> void:
 	_camera_base_offset = Vector2.ZERO
 
 
-func _has_property(object: Object, property_name: StringName) -> bool:
-	for property: Dictionary in object.get_property_list():
-		if StringName(property.get("name", "")) == property_name:
-			return true
-	return false
-
-
 func _configure_existing_proxies() -> void:
 	if not is_inside_tree():
 		return
@@ -471,3 +511,10 @@ func _configure_existing_proxies() -> void:
 func _configure_proxy(proxy: Node) -> void:
 	if proxy != null and proxy.has_method("set_feedback_options"):
 		proxy.set_feedback_options(_hit_flash_enabled, _reduced_motion)
+
+
+func _cache_player(player: Node2D) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	_cached_player = player
+	_cached_player_health = player.get_node_or_null("HealthComponent") as HealthComponent

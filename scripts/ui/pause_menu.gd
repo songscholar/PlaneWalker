@@ -8,6 +8,9 @@ signal resume_requested()
 @onready var volume_label: Label = $Panel/Margin/VBox/VolumeLabel
 @onready var volume_slider: HSlider = $Panel/Margin/VBox/VolumeSlider
 @onready var mute_toggle: CheckButton = $Panel/Margin/VBox/MuteToggle
+@onready var camera_shake_toggle: CheckButton = $Panel/Margin/VBox/CameraShakeToggle
+@onready var hit_flash_toggle: CheckButton = $Panel/Margin/VBox/HitFlashToggle
+@onready var reduced_motion_toggle: CheckButton = $Panel/Margin/VBox/ReducedMotionToggle
 @onready var restart_button: Button = $Panel/Margin/VBox/RestartButton
 @onready var quit_button: Button = $Panel/Margin/VBox/QuitButton
 
@@ -20,11 +23,17 @@ func _ready() -> void:
 	restart_button.text = tr("UI_RESTART_RUN")
 	quit_button.text = tr("UI_QUIT")
 	mute_toggle.text = tr("UI_MUTE")
+	camera_shake_toggle.text = tr("UI_CAMERA_SHAKE")
+	hit_flash_toggle.text = tr("UI_HIT_FLASH")
+	reduced_motion_toggle.text = tr("UI_REDUCED_MOTION")
 	resume_button.pressed.connect(_on_resume_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	volume_slider.value_changed.connect(_on_volume_changed)
 	mute_toggle.toggled.connect(_on_mute_toggled)
+	camera_shake_toggle.toggled.connect(_on_camera_shake_toggled)
+	hit_flash_toggle.toggled.connect(_on_hit_flash_toggled)
+	reduced_motion_toggle.toggled.connect(_on_reduced_motion_toggled)
 	_load_settings()
 	_apply_audio_settings()
 
@@ -52,7 +61,10 @@ func _on_quit_pressed() -> void:
 
 func _load_settings() -> void:
 	volume_slider.value = float(GameState.get_setting("master_volume", 0.85))
-	mute_toggle.button_pressed = bool(GameState.get_setting("master_muted", false))
+	mute_toggle.set_pressed_no_signal(bool(GameState.get_setting("master_muted", false)))
+	camera_shake_toggle.set_pressed_no_signal(bool(GameState.get_setting("camera_shake_enabled", true)))
+	hit_flash_toggle.set_pressed_no_signal(bool(GameState.get_setting("hit_flash_enabled", true)))
+	reduced_motion_toggle.set_pressed_no_signal(bool(GameState.get_setting("reduced_motion", false)))
 	_update_volume_label()
 
 
@@ -65,6 +77,18 @@ func _on_volume_changed(value: float) -> void:
 func _on_mute_toggled(toggled_on: bool) -> void:
 	GameState.set_setting("master_muted", toggled_on)
 	_apply_audio_settings()
+
+
+func _on_camera_shake_toggled(toggled_on: bool) -> void:
+	GameState.set_setting("camera_shake_enabled", toggled_on)
+
+
+func _on_hit_flash_toggled(toggled_on: bool) -> void:
+	GameState.set_setting("hit_flash_enabled", toggled_on)
+
+
+func _on_reduced_motion_toggled(toggled_on: bool) -> void:
+	GameState.set_setting("reduced_motion", toggled_on)
 
 
 func _update_volume_label() -> void:
