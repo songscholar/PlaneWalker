@@ -35,9 +35,17 @@ func _test_boot_and_room_flow(suite) -> void:
 	var started = facade.start_run({"seed": FIXED_SEED}, "wave3a-run")
 	suite.assert_true(started.ok, "run starts")
 	suite.assert_equal(facade.snapshot()["phase"], RunPhaseScript.Value.ROOM_ENTERING, "start prepares room one")
+	suite.assert_equal(facade.room_plan().size(), 5, "facade exposes the shared five-room plan")
+	suite.assert_true(facade.encounter_catalog() != null, "facade exposes the shared encounter catalog")
 
 	var room_one: Dictionary = facade.current_room_definition()
 	suite.assert_equal(room_one["reward_kind"], "starter", "room one uses starter reward")
+	suite.assert_equal(room_one["encounter_id"], "m1_room_01", "room one references its authored encounter")
+	var encounter_one: Dictionary = facade.current_encounter_definition()
+	suite.assert_equal(encounter_one["id"], "m1_room_01", "facade resolves the current encounter from the shared catalog")
+	suite.assert_equal(encounter_one["waves"][0]["spawns"][0]["enemy_id"], "chaser", "room one resolves the authored enemy")
+	encounter_one["waves"][0]["spawns"][0]["enemy_id"] = "changed"
+	suite.assert_equal(facade.current_encounter_definition()["waves"][0]["spawns"][0]["enemy_id"], "chaser", "encounter definition is a deep copy")
 	room_one["reward_kind"] = "changed"
 	suite.assert_equal(facade.current_room_definition()["reward_kind"], "starter", "room definition is a deep copy")
 
@@ -122,6 +130,8 @@ func _test_boot_and_room_flow(suite) -> void:
 	var boss_room: Dictionary = facade.current_room_definition()
 	suite.assert_equal(boss_room["type"], "boss", "room five is boss")
 	suite.assert_equal(boss_room["reward_kind"], "none", "boss has no reward")
+	suite.assert_equal(boss_room["encounter_id"], "m1_room_05_boss", "room five references the boss encounter")
+	suite.assert_equal(facade.current_encounter_definition()["waves"][0]["spawns"][0]["enemy_id"], "chrono_warden", "boss encounter resolves Chrono Warden")
 	suite.assert_true(facade.enter_current_room().ok, "boss room enters")
 	suite.assert_equal(facade.snapshot()["phase"], RunPhaseScript.Value.BOSS_ACTIVE, "room five uses boss phase")
 	var invalid_boss_completion = facade.complete_current_room()

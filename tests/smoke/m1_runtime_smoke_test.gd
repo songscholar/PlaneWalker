@@ -59,7 +59,6 @@ func _run() -> void:
 	if camera != null:
 		suite.assert_equal(camera.position, Vector2(640.0, 360.0), "M1 runtime centers the 1280x720 greybox")
 		suite.assert_equal(camera.zoom, Vector2(0.5, 0.5), "M1 runtime renders the greybox at half zoom")
-	_assert_room_overrides(suite, room)
 
 	var panel := adapter.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control
 	suite.assert_true(panel != null, "runtime adapter creates the unified choice panel")
@@ -81,12 +80,20 @@ func _run() -> void:
 	})
 
 	var facade: RefCounted = adapter.get("_facade")
+	_assert_authored_runtime(suite, room, facade)
 	var started_snapshot: Dictionary = facade.call("snapshot")
 	suite.assert_equal(started_snapshot["phase"], RunPhaseScript.Value.ROOM_ENTERING, "fixed-seed run prepares room one")
 	suite.assert_equal(started_snapshot["run_seed"], FIXED_SEED, "authoritative runtime uses the fixed seed")
 	room.call("begin_run")
 
 	var expected_reward_kinds: Array[String] = ["starter", "reinforcement", "talent", "contract"]
+	var expected_encounter_ids: Array[String] = ["m1_room_01", "m1_room_02", "m1_room_03", "m1_room_04_elite"]
+	var expected_waves: Array = [
+		[["chaser"]],
+		[["chaser", "shooter"]],
+		[["chaser", "shooter"], ["tank"]],
+		[["tank"]],
+	]
 	for room_number: int in range(1, 5):
 		await _wait_for_room_phase(facade, RunPhaseScript.Value.COMBAT_ACTIVE)
 		suite.assert_equal(GameState.current_room, room_number, "room controller naturally enters room %d" % room_number)
@@ -96,12 +103,15 @@ func _run() -> void:
 			expected_reward_kinds[room_number - 1],
 			"room %d opens the expected reward kind" % room_number
 		)
+		suite.assert_equal(
+			str(room_definition.get("encounter_id", "")),
+			expected_encounter_ids[room_number - 1],
+			"room %d uses the authored encounter id" % room_number
+		)
 		var active_snapshot: Dictionary = facade.call("snapshot")
 		suite.assert_equal(active_snapshot["phase"], RunPhaseScript.Value.COMBAT_ACTIVE, "room %d enters combat" % room_number)
 
-		var spawned_enemies := await _wait_for_spawned_enemies(room)
-		suite.assert_true(not spawned_enemies.is_empty(), "room %d spawns combat enemies" % room_number)
-		await _defeat_spawned_enemies(spawned_enemies)
+		await _play_authored_waves(suite, room, expected_waves[room_number - 1], room_number)
 		var offer_snapshot: Dictionary = facade.call("snapshot")
 		var offer: Dictionary = offer_snapshot["open_offer"]
 		suite.assert_true(not offer.is_empty(), "room %d opens one offer" % room_number)
@@ -120,9 +130,12 @@ func _run() -> void:
 	var boss_snapshot: Dictionary = facade.call("snapshot")
 	suite.assert_equal(boss_snapshot["phase"], RunPhaseScript.Value.BOSS_ACTIVE, "room five enters boss phase")
 	suite.assert_true(boss_snapshot["open_offer"].is_empty(), "boss room starts without an offer")
+	suite.assert_equal(facade.call("current_room_definition")["encounter_id"], "m1_room_05_boss", "room five uses the boss encounter id")
 
 	var spawned_bosses := await _wait_for_spawned_enemies(room)
 	suite.assert_equal(spawned_bosses.size(), 1, "boss room spawns one boss actor")
+	if not spawned_bosses.is_empty():
+		suite.assert_equal(spawned_bosses[0].get_meta("encounter_enemy_id", ""), "chrono_warden", "boss spawn identity comes from the catalog")
 	await _defeat_spawned_enemies(spawned_bosses)
 	var final_snapshot: Dictionary = facade.call("snapshot")
 	suite.assert_equal(final_snapshot["phase"], RunPhaseScript.Value.VICTORY, "boss defeat enters victory")
@@ -138,13 +151,25 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
-func _assert_room_overrides(suite, room: Node) -> void:
-	var no_events: Array[int] = []
-	var room_four_elite: Array[int] = [4]
-	var no_curse_offers: Array[int] = []
-	suite.assert_equal(room.get("event_rooms"), no_events, "main scene disables legacy event rooms")
-	suite.assert_equal(room.get("elite_rooms"), room_four_elite, "main scene makes room four elite")
-	suite.assert_equal(room.get("curse_offer_rooms"), no_curse_offers, "main scene disables legacy curse offers")
+func _assert_authored_runtime(suite, room: Node, facade: RefCounted) -> void:
+	suite.assert_true(bool(room.get("_authored_runtime_enabled")), "M1 room controller enables authored encounters")
+	suite.assert_equal(room.get("_run_director").call("room_count"), 5, "room controller consumes the shared five-room plan")
+	suite.assert_true(room.get("_encounter_catalog") == facade.call("encounter_catalog"), "room controller and facade share one catalog instance")
+
+
+func _play_authored_waves(suite, room: Node, expected_waves: Array, room_number: int) -> void:
+	for wave_index: int in range(expected_waves.size()):
+		var spawned_enemies := await _wait_for_spawned_enemies(room)
+		var expected_ids: Array = expected_waves[wave_index]
+		suite.assert_equal(spawned_enemies.size(), expected_ids.size(), "room %d wave %d spawns the authored actor count" % [room_number, wave_index + 1])
+		var actual_ids: Array[String] = []
+		for enemy: Node in spawned_enemies:
+			actual_ids.append(str(enemy.get_meta("encounter_enemy_id", "")))
+		suite.assert_equal(actual_ids, expected_ids, "room %d wave %d spawns authored enemy identities" % [room_number, wave_index + 1])
+		if room_number == 4 and not spawned_enemies.is_empty():
+			suite.assert_equal(spawned_enemies[0].get_meta("encounter_mechanism_ids", []), ["overload_pulse"], "room four carries the overload pulse mechanism")
+			suite.assert_true(spawned_enemies[0].is_in_group("elite_enemies"), "room four activates the Tank elite runtime")
+		await _defeat_spawned_enemies(spawned_enemies)
 
 
 func _assert_build_counts_agree(suite, authoritative_build: Dictionary) -> void:

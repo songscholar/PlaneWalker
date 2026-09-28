@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "plan_id": "m1.encounters.v1",
+  "mechanism_ids": [
+    "overload_pulse"
+  ],
+  "enemy_definitions": [
+    {
+      "id": "chaser",
+      "scene": "res://scenes/enemies/enemy_chaser.tscn",
+      "allowed_mechanism_ids": []
+    },
+    {
+      "id": "shooter",
+      "scene": "res://scenes/enemies/enemy_shooter.tscn",
+      "allowed_mechanism_ids": []
+    },
+    {
+      "id": "tank",
+      "scene": "res://scenes/enemies/enemy_tank.tscn",
+      "allowed_mechanism_ids": [
+        "overload_pulse"
+      ]
+    },
+    {
+      "id": "chrono_warden",
+      "scene": "res://scenes/enemies/boss_chrono_warden.tscn",
+      "allowed_mechanism_ids": []
+    }
+  ],
+  "spawn_slots": [
+    {
+      "id": "north_east",
+      "node_path": "SpawnPoints/SpawnPoint1"
+    },
+    {
+      "id": "south_east",
+      "node_path": "SpawnPoints/SpawnPoint2"
+    },
+    {
+      "id": "east_center",
+      "node_path": "SpawnPoints/SpawnPoint3"
+    },
+    {
+      "id": "boss_center",
+      "node_path": "BossSpawnPoint"
+    }
+  ],
+  "rooms": [
+    {
+      "room_number": 1,
+      "type": "combat",
+      "reward_kind": "starter",
+      "encounter_id": "m1_room_01"
+    },
+    {
+      "room_number": 2,
+      "type": "combat",
+      "reward_kind": "reinforcement",
+      "encounter_id": "m1_room_02"
+    },
+    {
+      "room_number": 3,
+      "type": "combat",
+      "reward_kind": "talent",
+      "encounter_id": "m1_room_03"
+    },
+    {
+      "room_number": 4,
+      "type": "elite",
+      "reward_kind": "contract",
+      "encounter_id": "m1_room_04_elite"
+    },
+    {
+      "room_number": 5,
+      "type": "boss",
+      "reward_kind": "none",
+      "encounter_id": "m1_room_05_boss"
+    }
+  ],
+  "encounters": [
+    {
+      "id": "m1_room_01",
+      "target_seconds_min": 45,
+      "target_seconds_max": 70,
+      "waves": [
+        {
+          "id": "m1_room_01_wave_01",
+          "delay_seconds": 0.0,
+          "telegraph_seconds": 0.45,
+          "spawns": [
+            {
+              "id": "m1_room_01_spawn_01",
+              "enemy_id": "chaser",
+              "spawn_slot_id": "north_east",
+              "mechanism_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m1_room_02",
+      "target_seconds_min": 60,
+      "target_seconds_max": 85,
+      "waves": [
+        {
+          "id": "m1_room_02_wave_01",
+          "delay_seconds": 0.0,
+          "telegraph_seconds": 0.45,
+          "spawns": [
+            {
+              "id": "m1_room_02_spawn_01",
+              "enemy_id": "chaser",
+              "spawn_slot_id": "north_east",
+              "mechanism_ids": []
+            },
+            {
+              "id": "m1_room_02_spawn_02",
+              "enemy_id": "shooter",
+              "spawn_slot_id": "south_east",
+              "mechanism_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m1_room_03",
+      "target_seconds_min": 70,
+      "target_seconds_max": 100,
+      "waves": [
+        {
+          "id": "m1_room_03_wave_01",
+          "delay_seconds": 0.0,
+          "telegraph_seconds": 0.45,
+          "spawns": [
+            {
+              "id": "m1_room_03_spawn_01",
+              "enemy_id": "chaser",
+              "spawn_slot_id": "north_east",
+              "mechanism_ids": []
+            },
+            {
+              "id": "m1_room_03_spawn_02",
+              "enemy_id": "shooter",
+              "spawn_slot_id": "south_east",
+              "mechanism_ids": []
+            }
+          ]
+        },
+        {
+          "id": "m1_room_03_wave_02",
+          "delay_seconds": 0.35,
+          "telegraph_seconds": 0.45,
+          "spawns": [
+            {
+              "id": "m1_room_03_spawn_03",
+              "enemy_id": "tank",
+              "spawn_slot_id": "east_center",
+              "mechanism_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m1_room_04_elite",
+      "target_seconds_min": 90,
+      "target_seconds_max": 125,
+      "waves": [
+        {
+          "id": "m1_room_04_wave_01",
+          "delay_seconds": 0.0,
+          "telegraph_seconds": 0.6,
+          "spawns": [
+            {
+              "id": "m1_room_04_spawn_01",
+              "enemy_id": "tank",
+              "spawn_slot_id": "east_center",
+              "mechanism_ids": [
+                "overload_pulse"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m1_room_05_boss",
+      "target_seconds_min": 120,
+      "target_seconds_max": 170,
+      "waves": [
+        {
+          "id": "m1_room_05_wave_01",
+          "delay_seconds": 0.0,
+          "telegraph_seconds": 0.75,
+          "spawns": [
+            {
+              "id": "m1_room_05_spawn_01",
+              "enemy_id": "chrono_warden",
+              "spawn_slot_id": "boss_center",
+              "mechanism_ids": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

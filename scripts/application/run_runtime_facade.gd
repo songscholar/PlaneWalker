@@ -5,22 +5,29 @@ const CommandResultScript := preload("res://scripts/application/command_result.g
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
 
 const DEFAULT_MANIFEST_PATH := "res://data/content_manifest.json"
+const DEFAULT_ENCOUNTER_PATH := "res://data/encounters/m1_encounters.json"
 
 var _registry: RefCounted
+var _encounter_catalog: RefCounted
 var _draft: RefCounted
 var _orchestrator: RefCounted
 var _room_definitions: Array[Dictionary] = []
 var _booted: bool = false
 
 
-func boot(manifest_path: String = DEFAULT_MANIFEST_PATH):
+func boot(
+	manifest_path: String = DEFAULT_MANIFEST_PATH,
+	encounter_path: String = DEFAULT_ENCOUNTER_PATH
+):
 	_booted = false
 	_registry = ContentRegistryScript.new()
+	_encounter_catalog = EncounterCatalogScript.new()
 	_draft = DraftServiceScript.new()
 	_orchestrator = RunOrchestratorScript.new()
 	_room_definitions.clear()
@@ -32,10 +39,17 @@ func boot(manifest_path: String = DEFAULT_MANIFEST_PATH):
 			0,
 			{"errors": report.blocking_errors.duplicate(true)}
 		)
+	var encounter_report = _encounter_catalog.load_path(encounter_path)
+	if encounter_report.has_blocking_errors():
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			0,
+			{"errors": encounter_report.blocking_errors.duplicate(true)}
+		)
 
 	var director = RunDirectorScript.new()
-	director.configure_from_definitions(M1RoomPlanScript.definitions())
-	for room_number: int in range(1, 6):
+	director.configure_from_definitions(M1RoomPlanScript.definitions(_encounter_catalog, 0))
+	for room_number: int in range(1, director.room_count() + 1):
 		_room_definitions.append(director.room_definition_for(room_number))
 	director.free()
 	var hub_result = _orchestrator.enter_hub()
@@ -50,6 +64,7 @@ func start_run(config: Dictionary, run_id: String):
 	var started = _orchestrator.start_run(config, run_id)
 	if not started.ok:
 		return started
+	_room_definitions = M1RoomPlanScript.definitions(_encounter_catalog, int(_orchestrator.state.run_seed))
 	_draft.reset()
 	return _orchestrator.preparation_completed()
 
@@ -208,6 +223,27 @@ func current_room_definition() -> Dictionary:
 	if room_number <= 0 or room_number > _room_definitions.size():
 		return {}
 	return _room_definitions[room_number - 1].duplicate(true)
+
+
+func current_encounter_definition() -> Dictionary:
+	if not _booted or _encounter_catalog == null or _orchestrator == null:
+		return {}
+	var room := current_room_definition()
+	if room.is_empty():
+		return {}
+	return _encounter_catalog.encounter_definition(
+		str(room.get("encounter_id", "")),
+		int(_orchestrator.state.run_seed),
+		int(room.get("room_number", 0))
+	)
+
+
+func room_plan() -> Array[Dictionary]:
+	return _room_definitions.duplicate(true)
+
+
+func encounter_catalog() -> RefCounted:
+	return _encounter_catalog
 
 
 func _require_booted(operation: String):

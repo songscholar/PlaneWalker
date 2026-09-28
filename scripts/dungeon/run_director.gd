@@ -57,6 +57,14 @@ func should_offer_curse(room_number: int) -> bool:
 	return bool(room_definition_for(room_number).get("offer_curse", false))
 
 
+func encounter_id_for(room_number: int) -> String:
+	return str(room_definition_for(room_number).get("encounter_id", ""))
+
+
+func room_count() -> int:
+	return room_sequence.size()
+
+
 func spawn_count_for(room_number: int, spawn_point_count: int, enemy_scene_count: int) -> int:
 	if room_type_for(room_number) == ROOM_TYPE_EVENT:
 		return 0

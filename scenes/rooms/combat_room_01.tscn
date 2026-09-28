@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room_controller"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" path="res://scenes/fx/spawn_warning.tscn" id="10_spawn_warning"]
 [ext_resource type="Script" path="res://scripts/ui/curse_selection.gd" id="11_curse_selection"]
 [ext_resource type="Script" path="res://scripts/ui/event_selection.gd" id="12_event_selection"]
+[ext_resource type="Script" path="res://scripts/dungeon/encounter_runner.gd" id="13_encounter_runner"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_horizontal"]
 size = Vector2(980, 36)
@@ -112,6 +113,9 @@ position = Vector2(1030, 360)
 position = Vector2(940, 360)
 
 [node name="Enemies" type="Node2D" parent="."]
+
+[node name="EncounterRunner" type="Node" parent="."]
+script = ExtResource("13_encounter_runner")
 
 [node name="RewardMarker" type="Label" parent="."]
 visible = false

@@ -1,14 +1,14 @@
 class_name M1RoomPlan
 extends RefCounted
 
-const ROOM_DEFINITIONS: Array[Dictionary] = [
-	{"room_number": 1, "type": "combat", "reward_kind": "starter", "target_seconds_min": 45, "target_seconds_max": 70},
-	{"room_number": 2, "type": "combat", "reward_kind": "reinforcement", "target_seconds_min": 60, "target_seconds_max": 85},
-	{"room_number": 3, "type": "combat", "reward_kind": "talent", "target_seconds_min": 70, "target_seconds_max": 100},
-	{"room_number": 4, "type": "elite", "reward_kind": "contract", "target_seconds_min": 90, "target_seconds_max": 125},
-	{"room_number": 5, "type": "boss", "reward_kind": "none", "target_seconds_min": 120, "target_seconds_max": 170},
-]
+const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
 
 
-static func definitions() -> Array[Dictionary]:
-	return ROOM_DEFINITIONS.duplicate(true)
+static func definitions(catalog: RefCounted = null, run_seed: int = 0) -> Array[Dictionary]:
+	var active_catalog: RefCounted = catalog
+	if active_catalog == null:
+		active_catalog = EncounterCatalogScript.new()
+		var report = active_catalog.load_path()
+		if report.has_blocking_errors():
+			return []
+	return active_catalog.room_definitions(run_seed)

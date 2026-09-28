@@ -174,6 +174,15 @@ func _on_run_started(run_data: Dictionary) -> void:
 	var started = next_facade.start_run(config, run_id)
 	if not started.ok:
 		return
+	if _room_controller.has_method("configure_authored_runtime"):
+		var configured: bool = _room_controller.call(
+			"configure_authored_runtime",
+			next_facade.room_plan(),
+			next_facade.encounter_catalog(),
+			int(GameState.run_seed)
+		)
+		if not configured:
+			return
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
