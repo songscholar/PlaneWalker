@@ -11,6 +11,8 @@ var _time_stopped: bool = false
 var _timer: float = 0.0
 var _exploded: bool = false
 var _visual: Polygon2D
+var _time_stop_token_sequence: int = 0
+var _active_time_stop_tokens: Dictionary = {}
 
 
 func _ready() -> void:
@@ -34,9 +36,17 @@ func _process(delta: float) -> void:
 func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
+	_time_stop_token_sequence += 1
+	var token := _time_stop_token_sequence
+	_active_time_stop_tokens[token] = true
 	_time_stopped = true
 	await get_tree().create_timer(duration).timeout
-	_time_stopped = false
+	_active_time_stop_tokens.erase(token)
+	_time_stopped = not _active_time_stop_tokens.is_empty()
+
+
+func is_time_stopped() -> bool:
+	return _time_stopped
 
 
 func has_exploded() -> bool:

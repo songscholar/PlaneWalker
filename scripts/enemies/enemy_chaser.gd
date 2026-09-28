@@ -3,8 +3,10 @@ class_name EnemyChaser
 
 
 func _tick_ai(_delta: float) -> void:
+	if global_position.distance_to(target.global_position) <= attack_range:
+		_try_begin_primary_attack()
+		return
 	_move_toward_target()
-	_try_melee_attack()
 
 
 func _restore_visual_color() -> void:

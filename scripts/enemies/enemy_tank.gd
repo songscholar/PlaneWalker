@@ -2,6 +2,11 @@ extends "res://scripts/enemies/enemy_base.gd"
 class_name EnemyTank
 
 
+func _init() -> void:
+	attack_windup = 0.75
+	attack_recovery = 0.80
+
+
 func _ready() -> void:
 	max_hp = 150.0
 	attack = 18.0
@@ -13,8 +18,10 @@ func _ready() -> void:
 
 
 func _tick_ai(_delta: float) -> void:
+	if global_position.distance_to(target.global_position) <= attack_range:
+		_try_begin_primary_attack()
+		return
 	_move_toward_target()
-	_try_melee_attack()
 
 
 func _restore_visual_color() -> void:

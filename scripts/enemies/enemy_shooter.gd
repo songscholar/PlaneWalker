@@ -5,6 +5,11 @@ class_name EnemyShooter
 @export var preferred_distance: float = 220.0
 
 
+func _init() -> void:
+	attack_windup = 0.60
+	attack_recovery = 0.45
+
+
 func _ready() -> void:
 	max_hp = 45.0
 	attack = 8.0
@@ -29,14 +34,22 @@ func _tick_ai(_delta: float) -> void:
 
 
 func _try_shoot() -> void:
-	if _attack_cooldown_remaining > 0.0 or projectile_scene == null:
+	if projectile_scene == null:
 		return
-	_attack_cooldown_remaining = attack_cooldown
+	_try_begin_primary_attack()
+
+
+func _resolve_primary_attack() -> void:
+	if projectile_scene == null:
+		return
 	var projectile := projectile_scene.instantiate()
 	projectile.global_position = global_position
-	projectile.direction = global_position.direction_to(target.global_position)
+	projectile.direction = _committed_attack_direction
 	projectile.damage = attack
-	get_tree().current_scene.add_child(projectile)
+	var projectile_parent := get_tree().current_scene
+	if projectile_parent == null:
+		projectile_parent = get_parent()
+	projectile_parent.add_child(projectile)
 
 
 func _restore_visual_color() -> void:

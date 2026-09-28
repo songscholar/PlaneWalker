@@ -3,12 +3,23 @@ extends CharacterBody2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 
+enum AttackPhase {
+	READY,
+	WINDUP,
+	RECOVERY,
+}
+
+signal attack_phase_changed(phase: AttackPhase)
+
 @export var max_hp: float = 60.0
 @export var attack: float = 10.0
 @export var defense: float = 0.0
 @export var move_speed: float = 120.0
 @export var attack_range: float = 36.0
 @export var attack_cooldown: float = 1.0
+@export var attack_windup: float = 0.30
+@export var attack_recovery: float = 0.30
+@export_range(0.0, 1.0, 0.05) var elite_time_stop_multiplier: float = 0.5
 
 @onready var health: Node = $HealthComponent
 @onready var visual: Polygon2D = $Visual
@@ -22,6 +33,11 @@ var _rift_slow_sources: int = 0
 var _is_elite: bool = false
 var _weakpoint_damage_bonus: float = 0.0
 var _weakpoint_token: int = 0
+var _attack_phase: AttackPhase = AttackPhase.READY
+var _attack_phase_remaining: float = 0.0
+var _committed_attack_direction: Vector2 = Vector2.RIGHT
+var _time_stop_token_sequence: int = 0
+var _active_time_stop_tokens: Dictionary = {}
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -50,6 +66,11 @@ func _physics_process(delta: float) -> void:
 		target = get_tree().get_first_node_in_group("player") as Node2D
 	if target == null:
 		return
+	_tick_attack_phase(delta)
+	if is_attack_locked():
+		velocity = _knockback_velocity
+		move_and_slide()
+		return
 	_tick_ai(delta)
 
 
@@ -67,19 +88,93 @@ func _current_move_speed() -> float:
 	return move_speed * _rift_slow_multiplier
 
 
-func _try_melee_attack() -> void:
-	if _attack_cooldown_remaining > 0.0:
+func _try_begin_primary_attack() -> bool:
+	if _attack_phase != AttackPhase.READY or _attack_cooldown_remaining > 0.0:
+		return false
+	if target == null or not is_instance_valid(target):
+		return false
+	_committed_attack_direction = global_position.direction_to(target.global_position)
+	_set_attack_phase(AttackPhase.WINDUP, attack_windup)
+	velocity = Vector2.ZERO
+	return true
+
+
+func _tick_attack_phase(delta: float) -> void:
+	if _attack_phase == AttackPhase.READY:
+		return
+	_attack_phase_remaining = maxf(0.0, _attack_phase_remaining - delta)
+	if _attack_phase_remaining > 0.0:
+		return
+	if _attack_phase == AttackPhase.WINDUP:
+		_resolve_primary_attack()
+		_attack_cooldown_remaining = attack_cooldown
+		_set_attack_phase(AttackPhase.RECOVERY, attack_recovery)
+		return
+	_set_attack_phase(AttackPhase.READY)
+
+
+func _resolve_primary_attack() -> void:
+	_deal_melee_damage()
+
+
+func _deal_melee_damage() -> void:
+	if target == null or not is_instance_valid(target):
 		return
 	if global_position.distance_to(target.global_position) > attack_range:
 		return
 	if not target.has_node("HealthComponent"):
 		return
-
-	_attack_cooldown_remaining = attack_cooldown
 	var damage_info := DamageInfoScript.new(attack, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	damage_info.tags = ["enemy:melee"]
-	damage_info.knockback = global_position.direction_to(target.global_position) * 180.0
+	damage_info.knockback = _committed_attack_direction * 180.0
 	target.get_node("HealthComponent").take_damage(damage_info)
+
+
+func _try_melee_attack() -> void:
+	# Chrono Warden owns a separate Boss action clock. Preserve its legacy melee
+	# endpoint until that clock resolves the hit explicitly.
+	if is_in_group("bosses"):
+		if target == null or not is_instance_valid(target):
+			return
+		if _attack_cooldown_remaining > 0.0:
+			return
+		_committed_attack_direction = global_position.direction_to(target.global_position)
+		_attack_cooldown_remaining = attack_cooldown
+		_deal_melee_damage()
+		return
+	_try_begin_primary_attack()
+
+
+func attack_phase() -> AttackPhase:
+	return _attack_phase
+
+
+func is_attack_locked() -> bool:
+	return _attack_phase != AttackPhase.READY
+
+
+func _set_attack_phase(next_phase: AttackPhase, duration: float = 0.0) -> void:
+	if _attack_phase == next_phase:
+		return
+	_attack_phase = next_phase
+	_attack_phase_remaining = maxf(0.0, duration)
+	attack_phase_changed.emit(_attack_phase)
+	_refresh_control_visual()
+
+
+func _refresh_control_visual() -> void:
+	if visual == null:
+		return
+	if _time_stopped:
+		visual.modulate = Color(0.55, 0.9, 1.0, 1.0)
+		return
+	match _attack_phase:
+		AttackPhase.WINDUP:
+			visual.modulate = Color(1.0, 0.78, 0.36, 1.0)
+		AttackPhase.RECOVERY:
+			visual.modulate = Color(0.62, 0.66, 0.72, 1.0)
+		_:
+			visual.modulate = Color.WHITE
 
 
 func _on_damaged(_amount: float, _current_hp: float) -> void:
@@ -108,9 +203,20 @@ func apply_knockback(knockback: Vector2) -> void:
 func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
+	_time_stop_token_sequence += 1
+	var token := _time_stop_token_sequence
+	_active_time_stop_tokens[token] = true
 	_time_stopped = true
-	await get_tree().create_timer(duration).timeout
-	_time_stopped = false
+	_refresh_control_visual()
+	var effective_duration := duration * (elite_time_stop_multiplier if _is_elite else 1.0)
+	await get_tree().create_timer(effective_duration).timeout
+	_active_time_stop_tokens.erase(token)
+	_time_stopped = not _active_time_stop_tokens.is_empty()
+	_refresh_control_visual()
+
+
+func is_time_stopped() -> bool:
+	return _time_stopped
 
 
 func apply_weakpoint(duration: float, damage_bonus: float) -> void:
