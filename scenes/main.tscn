@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
 [ext_resource type="Script" path="res://scripts/ui/run_end_overlay.gd" id="3_run_end_overlay"]
 [ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="4_pause_menu"]
+[ext_resource type="Script" path="res://scripts/application/legacy_run_adapter.gd" id="5_runtime_adapter"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -19,6 +20,15 @@ text = "Plane Walker MVP booting..."
 
 [node name="CombatRoom01" parent="." instance=ExtResource("2_combat_room")]
 auto_start = false
+curse_offer_rooms = Array[int]([])
+elite_rooms = Array[int]([4])
+event_rooms = Array[int]([])
+
+[node name="RuntimeV2Adapter" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("5_runtime_adapter")
+enabled = true
+room_controller_path = NodePath("../CombatRoom01")
 
 [node name="StartMenu" type="CanvasLayer" parent="."]
 
