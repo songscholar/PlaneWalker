@@ -62,6 +62,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
 	_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
+	_tick_additional_action_timers(delta)
 	if target == null or not is_instance_valid(target):
 		target = get_tree().get_first_node_in_group("player") as Node2D
 	if target == null:
@@ -75,6 +76,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _tick_ai(_delta: float) -> void:
+	pass
+
+
+func _tick_additional_action_timers(_delta: float) -> void:
 	pass
 
 
@@ -103,14 +108,36 @@ func _tick_attack_phase(delta: float) -> void:
 	if _attack_phase == AttackPhase.READY:
 		return
 	_attack_phase_remaining = maxf(0.0, _attack_phase_remaining - delta)
+	_on_attack_phase_clock_updated()
 	if _attack_phase_remaining > 0.0:
 		return
 	if _attack_phase == AttackPhase.WINDUP:
 		_resolve_primary_attack()
 		_attack_cooldown_remaining = attack_cooldown
-		_set_attack_phase(AttackPhase.RECOVERY, attack_recovery)
+		_set_attack_phase(AttackPhase.RECOVERY, _active_attack_recovery_duration())
 		return
 	_set_attack_phase(AttackPhase.READY)
+	_on_attack_sequence_completed()
+
+
+func _active_attack_recovery_duration() -> float:
+	return attack_recovery
+
+
+func _on_attack_phase_clock_updated() -> void:
+	pass
+
+
+func _on_attack_sequence_completed() -> void:
+	pass
+
+
+func _on_attack_runtime_cancelled() -> void:
+	pass
+
+
+func _on_elite_modifier_applied() -> void:
+	pass
 
 
 func _resolve_primary_attack() -> void:
@@ -186,6 +213,7 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 
 func _on_died(_killer: Variant) -> void:
 	remove_from_group("enemies")
+	cancel_active_attack()
 	visual.color = Color(0.25, 0.25, 0.28)
 	set_physics_process(false)
 	await get_tree().create_timer(0.2).timeout
@@ -194,6 +222,12 @@ func _on_died(_killer: Variant) -> void:
 
 func _restore_visual_color() -> void:
 	visual.color = Color(0.9, 0.35, 0.3)
+
+
+func cancel_active_attack() -> void:
+	_attack_phase_remaining = 0.0
+	_set_attack_phase(AttackPhase.READY)
+	_on_attack_runtime_cancelled()
 
 
 func apply_knockback(knockback: Vector2) -> void:
@@ -261,3 +295,4 @@ func apply_elite_modifier(hp_multiplier: float = 1.8, attack_multiplier: float =
 	health.current_hp = max_hp
 	visual.scale *= 1.15
 	_restore_visual_color()
+	_on_elite_modifier_applied()

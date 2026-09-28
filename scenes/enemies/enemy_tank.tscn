@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_tank.gd" id="1_enemy_tank"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health_component"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
+[ext_resource type="PackedScene" path="res://scenes/fx/combat_telegraph_2d.tscn" id="4_telegraph"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 24.0
@@ -16,6 +17,8 @@ script = ExtResource("1_enemy_tank")
 [node name="Visual" type="Polygon2D" parent="."]
 color = Color(0.75, 0.35, 0.95, 1)
 polygon = PackedVector2Array(26, 0, 10, -22, -20, -18, -26, 0, -20, 18, 10, 22)
+
+[node name="CombatTelegraph2D" parent="." instance=ExtResource("4_telegraph")]
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_body")
