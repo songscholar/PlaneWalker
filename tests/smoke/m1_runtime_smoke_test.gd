@@ -54,6 +54,11 @@ func _run() -> void:
 	suite.assert_true(bool(adapter.get("_active")), "runtime adapter boots successfully")
 	suite.assert_true(adapter.get("_facade") != null, "runtime adapter owns an authoritative facade")
 	suite.assert_equal(_legacy_view_count(room), 0, "successful adapter boot removes legacy selections")
+	var camera := room.get_node_or_null("PixelCanvasCamera") as Camera2D
+	suite.assert_true(camera != null and camera.enabled, "M1 runtime keeps the pixel-canvas camera active")
+	if camera != null:
+		suite.assert_equal(camera.position, Vector2(640.0, 360.0), "M1 runtime centers the 1280x720 greybox")
+		suite.assert_equal(camera.zoom, Vector2(0.5, 0.5), "M1 runtime renders the greybox at half zoom")
 	_assert_room_overrides(suite, room)
 
 	var panel := adapter.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control

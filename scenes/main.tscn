@@ -31,12 +31,20 @@ enabled = true
 room_controller_path = NodePath("../CombatRoom01")
 
 [node name="StartMenu" type="CanvasLayer" parent="."]
+layer = 30
 
 [node name="Panel" type="PanelContainer" parent="StartMenu"]
-offset_left = 410.0
-offset_top = 180.0
-offset_right = 870.0
-offset_bottom = 480.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -150.0
+offset_right = 230.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="Margin" type="MarginContainer" parent="StartMenu/Panel"]
 offset_right = 460.0
@@ -74,13 +82,21 @@ custom_minimum_size = Vector2(360, 56)
 text = "Quick Start"
 
 [node name="RunEndOverlay" type="CanvasLayer" parent="."]
+layer = 30
 script = ExtResource("3_run_end_overlay")
 
 [node name="Panel" type="PanelContainer" parent="RunEndOverlay"]
-offset_left = 390.0
-offset_top = 150.0
-offset_right = 890.0
-offset_bottom = 570.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -170.0
+offset_right = 250.0
+offset_bottom = 170.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="Margin" type="MarginContainer" parent="RunEndOverlay/Panel"]
 offset_right = 500.0
@@ -107,13 +123,21 @@ layout_mode = 2
 text = "Restart Run"
 
 [node name="PauseMenu" type="CanvasLayer" parent="."]
+layer = 40
 script = ExtResource("4_pause_menu")
 
 [node name="Panel" type="PanelContainer" parent="PauseMenu"]
-offset_left = 460.0
-offset_top = 190.0
-offset_right = 820.0
-offset_bottom = 550.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -180.0
+offset_top = -170.0
+offset_right = 180.0
+offset_bottom = 170.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="Margin" type="MarginContainer" parent="PauseMenu/Panel"]
 offset_right = 360.0
