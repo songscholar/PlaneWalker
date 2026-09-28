@@ -4,7 +4,9 @@ extends Node
 signal wave_started(wave_index: int, wave_id: StringName)
 signal spawn_warning_requested(spawn_definition: Dictionary, duration: float)
 signal spawn_requested(spawn_definition: Dictionary)
+signal spawn_rejected(spawn_definition: Dictionary, reason: StringName)
 signal encounter_completed(encounter_id: StringName)
+signal encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary)
 
 var _enemies_root: Node
 var _encounter: Dictionary = {}
@@ -14,6 +16,7 @@ var _alive_instance_ids: Dictionary = {}
 var _pending_spawn_ids: Dictionary = {}
 var _active: bool = false
 var _advance_scheduled: bool = false
+var _last_failure: Dictionary = {}
 
 
 func _ready() -> void:
@@ -34,6 +37,7 @@ func start_encounter(encounter: Dictionary, _run_seed: int, _room_number: int) -
 	_wave_index = -1
 	_active = not _encounter.is_empty()
 	if not _active:
+		_fail_encounter(&"EMPTY_ENCOUNTER", {})
 		return
 	_schedule_advance(_generation)
 
@@ -46,6 +50,7 @@ func cancel() -> void:
 	_wave_index = -1
 	_alive_instance_ids.clear()
 	_pending_spawn_ids.clear()
+	_last_failure.clear()
 
 
 func register_spawned(entity: Node, spawn_definition: Dictionary = {}) -> bool:
@@ -62,6 +67,20 @@ func register_spawned(entity: Node, spawn_definition: Dictionary = {}) -> bool:
 	entity.set_meta("encounter_generation", _generation)
 	entity.set_meta("encounter_counted", true)
 	_alive_instance_ids[instance_id] = true
+	return true
+
+
+func reject_spawn(spawn_definition: Dictionary, reason: StringName) -> bool:
+	if not _active:
+		return false
+	var spawn_id := str(spawn_definition.get("id", ""))
+	if not spawn_id.is_empty():
+		_pending_spawn_ids.erase(spawn_id)
+	spawn_rejected.emit(spawn_definition.duplicate(true), reason)
+	_fail_encounter(&"SPAWN_REJECTED", {
+		"spawn_id": spawn_id,
+		"rejection_reason": str(reason),
+	})
 	return true
 
 
@@ -96,6 +115,7 @@ func snapshot() -> Dictionary:
 		"alive_count": alive_count(),
 		"pending_spawn_count": _pending_spawn_ids.size(),
 		"active": _active,
+		"failure": _last_failure.duplicate(true),
 	}
 
 
@@ -109,6 +129,8 @@ func _schedule_advance(token: int) -> void:
 func _start_next_wave(token: int) -> void:
 	_advance_scheduled = false
 	if not _active or token != _generation:
+		return
+	if alive_count() > 0 or not _pending_spawn_ids.is_empty():
 		return
 	var waves: Array = _encounter.get("waves", [])
 	_wave_index += 1
@@ -134,7 +156,14 @@ func _start_next_wave(token: int) -> void:
 		if not _active or token != _generation:
 			return
 	for spawn_value: Variant in spawns:
-		spawn_requested.emit((spawn_value as Dictionary).duplicate(true))
+		var spawn: Dictionary = spawn_value
+		spawn_requested.emit(spawn.duplicate(true))
+		if not _active or token != _generation:
+			return
+		var spawn_id := str(spawn.get("id", ""))
+		if _pending_spawn_ids.has(spawn_id):
+			reject_spawn(spawn, &"SPAWN_REQUEST_UNACKNOWLEDGED")
+			return
 	_check_wave_completion()
 
 
@@ -152,6 +181,21 @@ func _complete_encounter() -> void:
 	_advance_scheduled = false
 	_pending_spawn_ids.clear()
 	encounter_completed.emit(encounter_id)
+
+
+func _fail_encounter(reason: StringName, context: Dictionary) -> void:
+	var encounter_id := StringName(str(_encounter.get("id", "")))
+	_generation += 1
+	_active = false
+	_advance_scheduled = false
+	_pending_spawn_ids.clear()
+	_alive_instance_ids.clear()
+	_last_failure = {
+		"encounter_id": str(encounter_id),
+		"reason": str(reason),
+		"context": context.duplicate(true),
+	}
+	encounter_failed.emit(encounter_id, reason, context.duplicate(true))
 
 
 func _on_enemy_spawned(enemy: Node) -> void:

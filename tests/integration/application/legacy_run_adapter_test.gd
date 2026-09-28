@@ -44,6 +44,21 @@ class FakePlayer:
 		}
 
 
+class FakeRoomController:
+	extends Node
+
+	var configure_result: bool = true
+	var configure_calls: int = 0
+
+	func configure_authored_runtime(
+		_definitions: Array[Dictionary],
+		_catalog: RefCounted,
+		_run_seed: int
+	) -> bool:
+		configure_calls += 1
+		return configure_result
+
+
 class RewardSignalCounter:
 	extends RefCounted
 
@@ -94,6 +109,7 @@ func _run() -> void:
 	_original_save_path = GameState.save_path
 	GameState.save_path = TEST_SAVE_PATH
 	await _test_fail_safe_activation(suite)
+	await _test_authored_configuration_failure_is_terminal(suite)
 	await _test_full_selection_flow(suite)
 	await _test_accepted_contract_projection(suite)
 	await _test_transition_failure_has_no_legacy_side_effects(suite)
@@ -145,6 +161,29 @@ func _test_fail_safe_activation(suite) -> void:
 	suite.assert_true(_choice_panel(valid_adapter) != null, "valid manifest creates one choice panel")
 	suite.assert_equal(_legacy_view_count(valid_fixture["room"]), 0, "valid manifest frees all legacy selections")
 	await _destroy_fixture(valid_fixture)
+
+
+func _test_authored_configuration_failure_is_terminal(suite) -> void:
+	_reset_legacy_state()
+	var failed_fixture: Dictionary = await _create_fixture(true, VALID_MANIFEST, false, false)
+	var failed_adapter: Node = failed_fixture["adapter"]
+	var failed_room: FakeRoomController = failed_fixture["room"]
+	_start_legacy_run(20261007)
+	suite.assert_equal(failed_room.configure_calls, 1, "M1 run attempts authored room configuration once")
+	suite.assert_equal(GameState.phase, GameState.GamePhase.RUN_END, "authored configuration failure terminates the legacy run")
+	suite.assert_equal(GameState.last_run_result.get("result", ""), "runtime_error", "configuration failure records a diagnostic result")
+	suite.assert_equal(GameState.last_run_result.get("runtime_error_code", ""), "AUTHORED_RUNTIME_CONFIGURATION_FAILED", "configuration failure records a stable code")
+	suite.assert_equal(failed_adapter._facade.snapshot()["phase"], RunPhaseScript.Value.DEFEAT, "configuration failure terminates the authoritative run")
+	suite.assert_true(not _legacy_hud(failed_room).visible, "M1 configuration failure does not restore legacy HUD fallback")
+	await _destroy_fixture(failed_fixture)
+
+	_reset_legacy_state()
+	var legacy_fixture: Dictionary = await _create_fixture(true, VALID_MANIFEST, true, false)
+	var legacy_adapter: Node = legacy_fixture["adapter"]
+	_start_legacy_run(20261008)
+	suite.assert_equal(GameState.phase, GameState.GamePhase.DUNGEON, "explicit legacy runtime flag permits fallback")
+	suite.assert_true(not str(legacy_adapter._active_run_id).is_empty(), "explicit legacy fallback still owns an authoritative run id")
+	await _destroy_fixture(legacy_fixture)
 
 
 func _test_full_selection_flow(suite) -> void:
@@ -474,13 +513,19 @@ func _test_projection_failure_restores_legacy_hud(suite) -> void:
 	await _destroy_fixture(fixture)
 
 
-func _create_fixture(adapter_enabled: bool, adapter_manifest_path: String) -> Dictionary:
+func _create_fixture(
+	adapter_enabled: bool,
+	adapter_manifest_path: String,
+	allow_legacy_runtime_fallback: bool = true,
+	configure_result: bool = true
+) -> Dictionary:
 	var host := Node.new()
 	host.name = "Fixture"
 	add_child(host)
 
-	var room := Node.new()
+	var room := FakeRoomController.new()
 	room.name = "RoomController"
+	room.configure_result = configure_result
 	host.add_child(room)
 	var player := FakePlayer.new()
 	player.name = "Player"
@@ -498,6 +543,7 @@ func _create_fixture(adapter_enabled: bool, adapter_manifest_path: String) -> Di
 	adapter.enabled = adapter_enabled
 	adapter.room_controller_path = NodePath("../RoomController")
 	adapter.manifest_path = adapter_manifest_path
+	adapter.allow_legacy_runtime_fallback = allow_legacy_runtime_fallback
 	host.add_child(adapter)
 	await get_tree().process_frame
 	await get_tree().process_frame

@@ -18,6 +18,7 @@ const LEGACY_SELECTION_NAMES: Array[StringName] = [
 @export var enabled: bool = false
 @export var room_controller_path: NodePath
 @export_file("*.json") var manifest_path: String = "res://data/content_manifest.json"
+@export var allow_legacy_runtime_fallback: bool = false
 
 var _active: bool = false
 var _facade: RefCounted
@@ -174,15 +175,6 @@ func _on_run_started(run_data: Dictionary) -> void:
 	var started = next_facade.start_run(config, run_id)
 	if not started.ok:
 		return
-	if _room_controller.has_method("configure_authored_runtime"):
-		var configured: bool = _room_controller.call(
-			"configure_authored_runtime",
-			next_facade.room_plan(),
-			next_facade.encounter_catalog(),
-			int(GameState.run_seed)
-		)
-		if not configured:
-			return
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
@@ -190,6 +182,20 @@ func _on_run_started(run_data: Dictionary) -> void:
 	_active_run_id = run_id
 	_last_tree_paused = get_tree().paused
 	_hud_render_accumulator = 0.0
+	var configured := false
+	if _room_controller.has_method("configure_authored_runtime"):
+		configured = bool(_room_controller.call(
+			"configure_authored_runtime",
+			next_facade.room_plan(),
+			next_facade.encounter_catalog(),
+			int(GameState.run_seed)
+		))
+	if not configured and not allow_legacy_runtime_fallback:
+		_fail_active_run(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {
+			"room_controller_path": str(room_controller_path),
+			"supports_configuration": _room_controller.has_method("configure_authored_runtime"),
+		})
+		return
 
 
 func _on_room_started(_room_id: StringName) -> void:
@@ -296,10 +302,10 @@ func _on_run_ended(result: Dictionary) -> void:
 	if not _matches_active_run(state):
 		return
 	if not RunPhaseScript.is_terminal(int(state.get("phase", -1))):
-		if str(result.get("result", "")) == "death" or GameState.phase == GameState.GamePhase.DEATH:
-			_facade.player_died(result)
-		elif int(state.get("phase", -1)) == RunPhaseScript.Value.BOSS_ACTIVE:
+		if str(result.get("result", "")) == "floor_cleared" and int(state.get("phase", -1)) == RunPhaseScript.Value.BOSS_ACTIVE:
 			_facade.boss_defeated(result)
+		else:
+			_facade.player_died(result)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
@@ -463,6 +469,24 @@ func _can_handle_lifecycle() -> bool:
 
 func _matches_active_run(state: Dictionary) -> bool:
 	return not _active_run_id.is_empty() and str(state.get("run_id", "")) == _active_run_id
+
+
+func _fail_active_run(code: StringName, details: Dictionary) -> void:
+	var context := {
+		"result": "runtime_error",
+		"runtime_error_code": str(code),
+		"runtime_error_context": details.duplicate(true),
+		"floor": GameState.current_floor,
+		"rooms_cleared": max(0, GameState.current_room - 1),
+		"current_room": GameState.current_room,
+		"run_time": GameState.run_timer,
+	}
+	if _facade != null:
+		var state := _facade.snapshot() as Dictionary
+		if _matches_active_run(state) and not RunPhaseScript.is_terminal(int(state.get("phase", -1))):
+			_facade.player_died(context)
+	if GameState.phase != GameState.GamePhase.RUN_END and GameState.phase != GameState.GamePhase.DEATH:
+		GameState.end_run(context)
 
 
 func _rejection_message_key(result: RefCounted) -> String:

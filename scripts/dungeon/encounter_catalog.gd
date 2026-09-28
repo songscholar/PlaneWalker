@@ -5,6 +5,7 @@ const ValidationReportScript := preload("res://scripts/content/content_validatio
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 
 const DEFAULT_PATH := "res://data/encounters/m1_encounters.json"
+const AUTHORITATIVE_ROOM_SCENE := "res://scenes/rooms/combat_room_01.tscn"
 const EXPECTED_ROOM_TYPES: Array[String] = ["combat", "combat", "combat", "elite", "boss"]
 
 var _plan_id: String = ""
@@ -125,6 +126,16 @@ func _validate_enemy_definitions(value: Variant, source: String, report) -> void
 		if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
 			report.add_error("Enemy scene reference is invalid", {"source": source, "id": enemy_id, "scene": scene_path}, true)
 			continue
+		var scene_resource := ResourceLoader.load(scene_path)
+		if not scene_resource is PackedScene:
+			report.add_error("Enemy scene reference must be a PackedScene", {"source": source, "id": enemy_id, "scene": scene_path}, true)
+			continue
+		var scene_root := (scene_resource as PackedScene).instantiate()
+		if not scene_root is Node2D:
+			report.add_error("Enemy scene root must be a Node2D", {"source": source, "id": enemy_id, "scene": scene_path}, true)
+			scene_root.free()
+			continue
+		scene_root.free()
 		var allowed: Variant = entry.get("allowed_mechanism_ids", [])
 		if typeof(allowed) != TYPE_ARRAY or not _string_array_is_valid(allowed):
 			report.add_error("Enemy mechanism allowlist is invalid", {"source": source, "id": enemy_id}, true)
@@ -139,6 +150,15 @@ func _validate_spawn_slots(value: Variant, source: String, report) -> void:
 	if typeof(value) != TYPE_ARRAY:
 		report.add_error("Spawn slots must be an array", {"source": source}, true)
 		return
+	var room_scene_resource := ResourceLoader.load(AUTHORITATIVE_ROOM_SCENE)
+	var room_root: Node
+	if room_scene_resource is PackedScene:
+		room_root = (room_scene_resource as PackedScene).instantiate()
+	if not room_root is Node2D:
+		report.add_error("Authoritative room scene must instantiate a Node2D", {"source": source, "scene": AUTHORITATIVE_ROOM_SCENE}, true)
+		if room_root != null:
+			room_root.free()
+		room_root = null
 	for index: int in range(value.size()):
 		var entry_value: Variant = value[index]
 		if typeof(entry_value) != TYPE_DICTIONARY:
@@ -146,11 +166,16 @@ func _validate_spawn_slots(value: Variant, source: String, report) -> void:
 			continue
 		var entry: Dictionary = entry_value
 		var slot_id := str(entry.get("id", ""))
-		var node_path := str(entry.get("node_path", ""))
-		if slot_id.is_empty() or _spawn_slots.has(slot_id) or node_path.is_empty():
+		var node_path_value: Variant = entry.get("node_path")
+		var node_path := str(node_path_value)
+		if slot_id.is_empty() or _spawn_slots.has(slot_id) or typeof(node_path_value) != TYPE_STRING or node_path.is_empty():
 			report.add_error("Spawn slot is invalid or duplicated", {"source": source, "id": slot_id}, true)
 			continue
+		if room_root == null or not room_root.get_node_or_null(NodePath(node_path)) is Node2D:
+			report.add_error("Spawn slot does not exist in the authoritative room", {"source": source, "id": slot_id, "node_path": node_path}, true)
 		_spawn_slots[slot_id] = entry.duplicate(true)
+	if room_root != null:
+		room_root.free()
 
 
 func _validate_encounters(value: Variant, source: String, report) -> void:
@@ -237,10 +262,64 @@ func _validate_spawn(
 		report.add_error("Spawn references an unknown enemy", {"source": source, "spawn_id": spawn_id, "enemy_id": enemy_id}, true)
 	if not _spawn_slots.has(slot_id):
 		report.add_error("Spawn references an unknown slot", {"source": source, "spawn_id": spawn_id, "spawn_slot_id": slot_id}, true)
+	var enemy_choices := _validate_reference_choices(
+		spawn,
+		"enemy_choices",
+		_enemy_definitions,
+		"enemy",
+		spawn_id,
+		source,
+		report
+	)
+	_validate_reference_choices(
+		spawn,
+		"spawn_slot_choices",
+		_spawn_slots,
+		"spawn slot",
+		spawn_id,
+		source,
+		report
+	)
 	var mechanisms: Variant = spawn.get("mechanism_ids", [])
 	if typeof(mechanisms) != TYPE_ARRAY or not _string_array_is_valid(mechanisms):
 		report.add_error("Spawn mechanism ids are invalid", {"source": source, "spawn_id": spawn_id}, true)
 		return
+	var candidate_enemy_ids: Array = [enemy_id]
+	for choice: Variant in enemy_choices:
+		if not candidate_enemy_ids.has(str(choice)):
+			candidate_enemy_ids.append(str(choice))
+	for candidate_enemy_id: String in candidate_enemy_ids:
+		_validate_enemy_mechanisms(candidate_enemy_id, mechanisms, spawn_id, source, report)
+
+
+func _validate_reference_choices(
+	spawn: Dictionary,
+	field: String,
+	references: Dictionary,
+	label: String,
+	spawn_id: String,
+	source: String,
+	report
+) -> Array:
+	if not spawn.has(field):
+		return []
+	var value: Variant = spawn[field]
+	if typeof(value) != TYPE_ARRAY:
+		report.add_error("Spawn %s choices must be an array" % label, {"source": source, "spawn_id": spawn_id, "field": field}, true)
+		return []
+	var choices: Array = value
+	if choices.is_empty():
+		report.add_error("Spawn %s choices must not be empty" % label, {"source": source, "spawn_id": spawn_id, "field": field}, true)
+		return []
+	if not _string_array_is_valid(choices):
+		report.add_error("Spawn %s choices are invalid or duplicated" % label, {"source": source, "spawn_id": spawn_id, "field": field}, true)
+	for choice: Variant in choices:
+		if typeof(choice) == TYPE_STRING and not str(choice).is_empty() and not references.has(str(choice)):
+			report.add_error("Spawn %s choice references an unknown id" % label, {"source": source, "spawn_id": spawn_id, "field": field, "id": choice}, true)
+	return choices.duplicate()
+
+
+func _validate_enemy_mechanisms(enemy_id: String, mechanisms: Array, spawn_id: String, source: String, report) -> void:
 	var enemy_definition_value: Variant = _enemy_definitions.get(enemy_id, {})
 	var allowed: Array = enemy_definition_value.get("allowed_mechanism_ids", []) if enemy_definition_value is Dictionary else []
 	for mechanism_value: Variant in mechanisms:

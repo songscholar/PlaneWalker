@@ -15,6 +15,7 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_authoritative_catalog(suite)
 	_test_deterministic_resolution(suite)
+	_test_real_choice_determinism(suite)
 	_test_invalid_references_are_rejected(suite)
 	suite.finish(get_tree())
 
@@ -74,6 +75,36 @@ func _test_deterministic_resolution(suite) -> void:
 		)
 
 
+func _test_real_choice_determinism(suite) -> void:
+	var choice_data := _valid_minimal_data()
+	var choice_spawn: Dictionary = choice_data["encounters"][0]["waves"][0]["spawns"][0]
+	choice_spawn["enemy_choices"] = ["chaser", "shooter"]
+	choice_spawn["spawn_slot_choices"] = ["slot_a", "slot_b"]
+
+	var first_catalog = EncounterCatalogScript.new()
+	var second_catalog = EncounterCatalogScript.new()
+	suite.assert_true(not first_catalog.load_data(choice_data, "test:choices:first").has_blocking_errors(), "valid enemy and slot choices load")
+	suite.assert_true(not second_catalog.load_data(choice_data, "test:choices:second").has_blocking_errors(), "choice fixture loads independently")
+
+	var first := first_catalog.encounter_definition("test_room_01", FIXED_SEED, 1)
+	var second := second_catalog.encounter_definition("test_room_01", FIXED_SEED, 1)
+	suite.assert_equal(second, first, "same seed resolves real enemy and slot choices across catalog instances")
+	var resolved_spawn: Dictionary = first["waves"][0]["spawns"][0]
+	suite.assert_true(resolved_spawn["enemy_id"] in ["chaser", "shooter"], "enemy choice resolves to a declared reference")
+	suite.assert_true(resolved_spawn["spawn_slot_id"] in ["slot_a", "slot_b"], "slot choice resolves to a declared reference")
+	suite.assert_true(not resolved_spawn.has("enemy_choices"), "resolved encounter removes enemy choices")
+	suite.assert_true(not resolved_spawn.has("spawn_slot_choices"), "resolved encounter removes slot choices")
+
+	var enemy_results: Dictionary = {}
+	var slot_results: Dictionary = {}
+	for seed: int in range(32):
+		var spawn: Dictionary = first_catalog.encounter_definition("test_room_01", seed, 1)["waves"][0]["spawns"][0]
+		enemy_results[str(spawn["enemy_id"])] = true
+		slot_results[str(spawn["spawn_slot_id"])] = true
+	suite.assert_equal(enemy_results.size(), 2, "real enemy choices vary across deterministic seeds")
+	suite.assert_equal(slot_results.size(), 2, "real slot choices vary across deterministic seeds")
+
+
 func _test_invalid_references_are_rejected(suite) -> void:
 	var cases: Array[Dictionary] = [
 		{"label": "duplicate encounter id", "mutation": "duplicate_encounter"},
@@ -81,6 +112,18 @@ func _test_invalid_references_are_rejected(suite) -> void:
 		{"label": "unknown enemy id", "mutation": "unknown_enemy"},
 		{"label": "unknown spawn slot id", "mutation": "unknown_slot"},
 		{"label": "unknown mechanism id", "mutation": "unknown_mechanism"},
+		{"label": "non-scene enemy resource", "mutation": "enemy_scene_not_packed"},
+		{"label": "non-Node2D enemy root", "mutation": "enemy_scene_not_node_2d"},
+		{"label": "spawn slot missing from room", "mutation": "missing_room_slot"},
+		{"label": "enemy choices wrong type", "mutation": "enemy_choices_wrong_type"},
+		{"label": "enemy choices empty", "mutation": "enemy_choices_empty"},
+		{"label": "enemy choices duplicate", "mutation": "enemy_choices_duplicate"},
+		{"label": "enemy choices unknown reference", "mutation": "enemy_choices_unknown"},
+		{"label": "enemy choice mechanism denied", "mutation": "enemy_choice_mechanism_denied"},
+		{"label": "spawn slot choices wrong type", "mutation": "slot_choices_wrong_type"},
+		{"label": "spawn slot choices empty", "mutation": "slot_choices_empty"},
+		{"label": "spawn slot choices duplicate", "mutation": "slot_choices_duplicate"},
+		{"label": "spawn slot choices unknown reference", "mutation": "slot_choices_unknown"},
 	]
 	for case: Dictionary in cases:
 		var data := _valid_minimal_data()
@@ -133,11 +176,13 @@ func _valid_minimal_data() -> Dictionary:
 		"mechanism_ids": ["overload_pulse"],
 		"enemy_definitions": [
 			{"id": "chaser", "scene": "res://scenes/enemies/enemy_chaser.tscn", "allowed_mechanism_ids": []},
+			{"id": "shooter", "scene": "res://scenes/enemies/enemy_shooter.tscn", "allowed_mechanism_ids": []},
 			{"id": "tank", "scene": "res://scenes/enemies/enemy_tank.tscn", "allowed_mechanism_ids": ["overload_pulse"]},
 			{"id": "chrono_warden", "scene": "res://scenes/enemies/boss_chrono_warden.tscn", "allowed_mechanism_ids": []},
 		],
 		"spawn_slots": [
 			{"id": "slot_a", "node_path": "SpawnPoints/SpawnPoint1"},
+			{"id": "slot_b", "node_path": "SpawnPoints/SpawnPoint2"},
 			{"id": "boss", "node_path": "BossSpawnPoint"},
 		],
 		"rooms": rooms,
@@ -157,6 +202,30 @@ func _apply_mutation(data: Dictionary, mutation: String) -> void:
 			data["encounters"][0]["waves"][0]["spawns"][0]["spawn_slot_id"] = "missing"
 		"unknown_mechanism":
 			data["encounters"][3]["waves"][0]["spawns"][0]["mechanism_ids"] = ["missing"]
+		"enemy_scene_not_packed":
+			data["enemy_definitions"][0]["scene"] = "res://scripts/dungeon/encounter_runner.gd"
+		"enemy_scene_not_node_2d":
+			data["enemy_definitions"][0]["scene"] = "res://scenes/ui/choice_panel_v2.tscn"
+		"missing_room_slot":
+			data["spawn_slots"][0]["node_path"] = "SpawnPoints/Missing"
+		"enemy_choices_wrong_type":
+			data["encounters"][0]["waves"][0]["spawns"][0]["enemy_choices"] = "chaser"
+		"enemy_choices_empty":
+			data["encounters"][0]["waves"][0]["spawns"][0]["enemy_choices"] = []
+		"enemy_choices_duplicate":
+			data["encounters"][0]["waves"][0]["spawns"][0]["enemy_choices"] = ["chaser", "chaser"]
+		"enemy_choices_unknown":
+			data["encounters"][0]["waves"][0]["spawns"][0]["enemy_choices"] = ["chaser", "missing"]
+		"enemy_choice_mechanism_denied":
+			data["encounters"][3]["waves"][0]["spawns"][0]["enemy_choices"] = ["tank", "chaser"]
+		"slot_choices_wrong_type":
+			data["encounters"][0]["waves"][0]["spawns"][0]["spawn_slot_choices"] = "slot_a"
+		"slot_choices_empty":
+			data["encounters"][0]["waves"][0]["spawns"][0]["spawn_slot_choices"] = []
+		"slot_choices_duplicate":
+			data["encounters"][0]["waves"][0]["spawns"][0]["spawn_slot_choices"] = ["slot_a", "slot_a"]
+		"slot_choices_unknown":
+			data["encounters"][0]["waves"][0]["spawns"][0]["spawn_slot_choices"] = ["slot_a", "missing"]
 
 
 func _all_spawns(encounter: Dictionary) -> Array[Dictionary]:

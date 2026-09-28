@@ -8,6 +8,9 @@ var _enemies_root: Node2D
 var _spawned: Array[Node] = []
 var _wave_ids: Array[String] = []
 var _completion_count: int = 0
+var _spawn_mode: StringName = &"register"
+var _rejected_spawns: Array[Dictionary] = []
+var _failures: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -24,6 +27,8 @@ func _run() -> void:
 	_runner.spawn_requested.connect(_on_spawn_requested)
 	_runner.wave_started.connect(_on_wave_started)
 	_runner.encounter_completed.connect(_on_encounter_completed)
+	_runner.spawn_rejected.connect(_on_spawn_rejected)
+	_runner.encounter_failed.connect(_on_encounter_failed)
 
 	_runner.start_encounter(_two_wave_encounter(), 20260928, 2)
 	await get_tree().process_frame
@@ -37,6 +42,16 @@ func _run() -> void:
 	EventBus.entity_died.emit(_spawned[0], null)
 	suite.assert_equal(_runner.alive_count(), 1, "duplicate death cannot decrement twice")
 	EventBus.entity_died.emit(_spawned[1], null)
+	var late_summon := Node2D.new()
+	late_summon.add_to_group("enemies")
+	_enemies_root.add_child(late_summon)
+	EventBus.enemy_spawned.emit(late_summon)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	suite.assert_equal(_wave_ids, ["wave_01"], "late summon cancels the deferred wave advance")
+	suite.assert_equal(_runner.current_wave_index(), 0, "late summon keeps the runner on the completed wave")
+	EventBus.entity_died.emit(late_summon, null)
+	late_summon.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	suite.assert_equal(_wave_ids, ["wave_01", "wave_02"], "next wave waits for zero alive actors")
@@ -65,6 +80,29 @@ func _run() -> void:
 	await get_tree().process_frame
 	suite.assert_equal(_completion_count, count_after_cancel, "cancelled encounter ignores delayed deaths")
 
+	_spawn_mode = &"reject"
+	_runner.start_encounter(_two_wave_encounter(), 20260928, 2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	suite.assert_equal(_rejected_spawns.size(), 1, "spawn rejection is observable")
+	suite.assert_equal(_failures.size(), 1, "spawn rejection fails the encounter exactly once")
+	suite.assert_true(not _runner.is_active(), "rejected spawn terminates the encounter")
+	suite.assert_equal(_runner.snapshot()["pending_spawn_count"], 0, "rejected spawn clears pending work")
+
+	_spawn_mode = &"ignore"
+	_runner.start_encounter(_two_wave_encounter(), 20260928, 2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	suite.assert_equal(_rejected_spawns.size(), 2, "unacknowledged spawn is rejected by the runner")
+	suite.assert_equal(_failures.size(), 2, "unacknowledged spawn cannot leave an active encounter")
+	suite.assert_equal(_runner.snapshot()["pending_spawn_count"], 0, "unacknowledged spawn cannot remain pending")
+
+	_spawn_mode = &"register"
+	_runner.start_encounter({}, 20260928, 2)
+	suite.assert_equal(_failures.size(), 3, "empty encounter fails explicitly")
+	suite.assert_true(not _runner.is_active(), "empty encounter never becomes active")
+	suite.assert_equal(_runner.snapshot()["pending_spawn_count"], 0, "empty encounter leaves no pending work")
+
 	_runner.queue_free()
 	_enemies_root.queue_free()
 	await get_tree().process_frame
@@ -72,6 +110,11 @@ func _run() -> void:
 
 
 func _on_spawn_requested(spawn_definition: Dictionary) -> void:
+	if _spawn_mode == &"reject":
+		_runner.reject_spawn(spawn_definition, &"TEST_REJECTION")
+		return
+	if _spawn_mode == &"ignore":
+		return
 	var actor := Node2D.new()
 	actor.add_to_group("enemies")
 	actor.set_meta("spawn_id", spawn_definition.get("id", ""))
@@ -86,6 +129,21 @@ func _on_wave_started(_wave_index: int, wave_id: StringName) -> void:
 
 func _on_encounter_completed(_encounter_id: StringName) -> void:
 	_completion_count += 1
+
+
+func _on_spawn_rejected(spawn_definition: Dictionary, reason: StringName) -> void:
+	_rejected_spawns.append({
+		"spawn": spawn_definition.duplicate(true),
+		"reason": reason,
+	})
+
+
+func _on_encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary) -> void:
+	_failures.append({
+		"encounter_id": encounter_id,
+		"reason": reason,
+		"context": context.duplicate(true),
+	})
 
 
 func _two_wave_encounter() -> Dictionary:

@@ -1,6 +1,8 @@
 class_name RoomController
 extends Node2D
 
+signal authored_runtime_failed(context: Dictionary)
+
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 
 @export var room_id: StringName = &"combat_room_01"
@@ -15,6 +17,7 @@ const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 @export var elite_rooms: Array[int] = [3]
 @export var event_rooms: Array[int] = [2]
 @export var auto_start: bool = true
+@export var allow_legacy_runtime: bool = false
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint
@@ -35,6 +38,7 @@ var _run_director: RunDirector
 var _encounter_catalog: RefCounted
 var _authored_runtime_enabled: bool = false
 var _authored_run_seed: int = 0
+var _authored_runtime_failure: Dictionary = {}
 
 
 func _ready() -> void:
@@ -51,6 +55,8 @@ func _ready() -> void:
 			_encounter_runner.spawn_requested.connect(_on_authored_spawn_requested)
 		if not _encounter_runner.encounter_completed.is_connected(_on_authored_encounter_completed):
 			_encounter_runner.encounter_completed.connect(_on_authored_encounter_completed)
+		if not _encounter_runner.encounter_failed.is_connected(_on_authored_encounter_failed):
+			_encounter_runner.encounter_failed.connect(_on_authored_encounter_failed)
 	if reward_marker != null and reward_marker is Label:
 		reward_marker.text = tr("UI_REWARD_MARKER")
 	EventBus.entity_died.connect(_on_entity_died)
@@ -65,24 +71,35 @@ func configure_authored_runtime(
 	encounter_catalog: RefCounted,
 	run_seed: int
 ) -> bool:
+	_authored_runtime_enabled = true
+	_authored_runtime_failure.clear()
 	if definitions.is_empty() or encounter_catalog == null or _run_director == null or _encounter_runner == null:
+		_fail_authored_runtime(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {
+			"definition_count": definitions.size(),
+			"has_catalog": encounter_catalog != null,
+			"has_director": _run_director != null,
+			"has_runner": _encounter_runner != null,
+		})
 		return false
 	_encounter_runner.call("cancel")
 	_encounter_catalog = encounter_catalog
 	_authored_run_seed = run_seed
-	_authored_runtime_enabled = true
 	rooms_per_floor = definitions.size()
 	_run_director.configure_from_definitions(definitions)
 	return true
 
 
 func begin_run() -> void:
+	if not _authored_runtime_failure.is_empty():
+		return
 	if GameState.current_room <= 0:
 		GameState.current_room = 1
 	start_room()
 
 
 func start_room() -> void:
+	if not _authored_runtime_failure.is_empty():
+		return
 	GameState.set_phase(GameState.GamePhase.DUNGEON)
 	_cleared = false
 	if reward_marker != null:
@@ -100,6 +117,12 @@ func start_room() -> void:
 func _spawn_enemies() -> void:
 	if _authored_runtime_enabled:
 		_start_authored_encounter()
+		return
+	if not allow_legacy_runtime:
+		_fail_authored_runtime(&"LEGACY_RUNTIME_NOT_AUTHORIZED", {
+			"room_id": str(room_id),
+			"room_number": GameState.current_room,
+		})
 		return
 
 	_alive_enemies = 0
@@ -145,7 +168,7 @@ func _start_authored_encounter() -> void:
 		GameState.current_room
 	)
 	if encounter.is_empty():
-		push_error("Authored encounter is unavailable: %s" % encounter_id)
+		_encounter_runner.call("start_encounter", {}, _authored_run_seed, GameState.current_room)
 		return
 	if spawn_warning_duration <= 0.0:
 		for wave: Dictionary in encounter.get("waves", []):
@@ -165,20 +188,31 @@ func _on_authored_spawn_warning(spawn_definition: Dictionary, duration: float) -
 
 
 func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
-	if not _authored_runtime_enabled or _encounter_catalog == null or GameState.phase == GameState.GamePhase.DEATH:
+	if GameState.phase == GameState.GamePhase.DEATH or GameState.phase == GameState.GamePhase.RUN_END:
+		if _encounter_runner != null:
+			_encounter_runner.call("cancel")
+		return
+	if not _authored_runtime_enabled or _encounter_catalog == null:
+		_reject_authored_spawn(spawn_definition, &"AUTHORED_RUNTIME_UNAVAILABLE")
 		return
 	var enemy_id := str(spawn_definition.get("enemy_id", ""))
 	var enemy_definition: Dictionary = _encounter_catalog.call("enemy_definition", enemy_id)
 	var scene_path := str(enemy_definition.get("scene", ""))
 	var marker := _spawn_marker_for(spawn_definition)
-	var packed_scene := load(scene_path) as PackedScene
-	if packed_scene == null or marker == null:
-		push_error("Authored spawn could not resolve enemy or slot: %s" % str(spawn_definition))
+	if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+		_reject_authored_spawn(spawn_definition, &"ENEMY_SCENE_UNAVAILABLE")
 		return
-	var enemy := packed_scene.instantiate()
+	var scene_resource := ResourceLoader.load(scene_path)
+	if not scene_resource is PackedScene:
+		_reject_authored_spawn(spawn_definition, &"ENEMY_SCENE_UNAVAILABLE")
+		return
+	if marker == null:
+		_reject_authored_spawn(spawn_definition, &"SPAWN_SLOT_UNAVAILABLE")
+		return
+	var enemy := (scene_resource as PackedScene).instantiate()
 	if not enemy is Node2D:
 		enemy.free()
-		push_error("Authored enemy must be a Node2D: %s" % enemy_id)
+		_reject_authored_spawn(spawn_definition, &"ENEMY_ROOT_NOT_NODE_2D")
 		return
 	enemies_root.add_child(enemy)
 	(enemy as Node2D).global_position = marker.global_position
@@ -188,7 +222,10 @@ func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
 	enemy.set_meta("encounter_mechanism_ids", mechanism_ids)
 	if mechanism_ids.has("overload_pulse") and enemy.has_method("apply_elite_modifier"):
 		enemy.call("apply_elite_modifier")
-	_encounter_runner.call("register_spawned", enemy, spawn_definition)
+	if not bool(_encounter_runner.call("register_spawned", enemy, spawn_definition)):
+		enemy.queue_free()
+		_reject_authored_spawn(spawn_definition, &"SPAWN_REGISTRATION_REJECTED")
+		return
 	EventBus.enemy_spawned.emit(enemy)
 	EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy, "encounter_spawn": spawn_definition.duplicate(true)})
 
@@ -250,6 +287,46 @@ func _on_entity_died(entity: Node, killer: Variant) -> void:
 func _on_authored_encounter_completed(_encounter_id: StringName) -> void:
 	if _authored_runtime_enabled:
 		_clear_room()
+
+
+func _on_authored_encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary) -> void:
+	_fail_authored_runtime(reason, {
+		"encounter_id": str(encounter_id),
+		"runner_context": context.duplicate(true),
+	})
+
+
+func _reject_authored_spawn(spawn_definition: Dictionary, reason: StringName) -> void:
+	if _encounter_runner != null and bool(_encounter_runner.call("is_active")):
+		_encounter_runner.call("reject_spawn", spawn_definition, reason)
+		return
+	_fail_authored_runtime(reason, {
+		"spawn_definition": spawn_definition.duplicate(true),
+	})
+
+
+func _fail_authored_runtime(code: StringName, details: Dictionary) -> void:
+	if not _authored_runtime_failure.is_empty():
+		return
+	_authored_runtime_enabled = true
+	_authored_runtime_failure = {
+		"result": "runtime_error",
+		"runtime_error_code": str(code),
+		"runtime_error_context": details.duplicate(true),
+		"floor": GameState.current_floor,
+		"rooms_cleared": max(0, GameState.current_room - 1),
+		"current_room": GameState.current_room,
+		"run_time": GameState.run_timer,
+	}
+	_clear_enemy_nodes()
+	authored_runtime_failed.emit(_authored_runtime_failure.duplicate(true))
+	push_error("Authored runtime failed [%s]: %s" % [str(code), str(details)])
+	if GameState.phase != GameState.GamePhase.RUN_END and GameState.phase != GameState.GamePhase.DEATH:
+		GameState.end_run(_authored_runtime_failure)
+
+
+func authored_runtime_failure() -> Dictionary:
+	return _authored_runtime_failure.duplicate(true)
 
 
 func _clear_room() -> void:
