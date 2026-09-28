@@ -1,18 +1,19 @@
 # Plane Walker Wave 4B Encounter Mechanics Implementation Plan
 
-- Status: Approved / Current
-- Authority Level: Current implementation plan
+- Status: Completed / Historical
+- Authority Level: Verified implementation record
 - Applies To: Rewind Echo, Boss telegraphs, elite active mechanic, and authored five-room encounters
-- Implementation Status: Ready for execution after Wave 4A baseline checkpoint
+- Implementation Status: Code and tests complete; all four lanes are integrated in the M1 candidate
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, full-product completion spec, commits `9faa1e2`, `bac5e74`, `f592b0d`
 - Supersedes: Generic Wave 4B wording that does not match the owner's explicit scope
 - Last Verified: 2026-09-28
 - Completion Gate: All four mechanics and their regression tests pass through `./tools/validate_project.sh`
+- Verified Commits: `d17f641` Rewind Echo, `651c53b` Boss telegraphs, `d9aa3f6` elite active mechanic, `20bd93f` authored encounters, `cd647e2` fail-closed runtime hardening
 
 ## Goal
 
-Complete the owner's exact Wave 4B scope without waiting for Wave 4C presentation assets:
+The owner's exact Wave 4B scope is complete and preserved independently from Wave 4C presentation assets:
 
 1. Rewind Echo produces a safe, testable committed rewind path and gameplay afterimage.
 2. Every Chrono Warden action has a non-zero, action-specific telegraph and recovery.
@@ -163,4 +164,8 @@ git diff --check
 git status --short
 ```
 
-Wave 4B is complete only when the new focused tests and every pre-existing discovered scene pass from a clean checkout.
+## Completion outcome
+
+Wave 4B code and tests are complete. Rewind Echo, the six Chrono Warden action telegraphs, Elite Tank `OVERLOAD_PULSE`, and the five authored M1 encounter definitions are integrated into exact candidate commit `79a20fd183fb57b8bdf62019ab80ff3f6e430635`. The repository release Gate passes, and the two authoritative 30-seed candidate runs match digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`.
+
+This plan is now historical. Its mechanics, single-clock rules, committed targeting, authored encounter authority, fail-closed behavior, and regression tests remain binding contracts for later development.

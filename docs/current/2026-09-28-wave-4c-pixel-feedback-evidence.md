@@ -1,9 +1,9 @@
 # Plane Walker Wave 4C Pixel Presentation and Combat Feedback Evidence
 
-- Status: Verified / Independent review remediated
+- Status: Verified / Retained in M1 candidate
 - Authority Level: Execution evidence
 - Applies To: M1 Pixel Proxy, core animation, combat audio, hit/danger/time-power/camera/VFX/UI feedback
-- Implementation Status: Wave 4C complete; repository-wide validation has one concurrent Wave 4A telemetry-path failure recorded below
+- Implementation Status: Wave 4C M1 technical scope complete; final repository Gate `PASS`
 - Owner: UI and pixel presentation lane
 - Depends On: `AGENTS.md`, Wave 4C design and implementation plan
 - Last Verified: 2026-09-28
@@ -122,7 +122,7 @@ Command:
 ./tools/validate_project.sh
 ```
 
-Result before the scene-suite stage:
+Wave 4C integration result:
 
 - Shell/CI contract passed with 33 discovered scenes.
 - Localization contracts passed: 7 tests.
@@ -131,19 +131,27 @@ Result before the scene-suite stage:
 - Bootstrap import passed with only classified sandbox environment diagnostics.
 - Strict clean second import passed without project errors.
 
-The command then reproduced a concurrent Wave 4A telemetry output-path failure in `tests/unit/telemetry/playtest_recorder_test.tscn` under the validation-specific `user-data` directory. Its JSONL parent/path could not be opened. The same telemetry scene passed in the immediately preceding standalone 33/33 suite. Wave 4C presentation, audio, runtime smoke, import, and cleanup tests all passed inside the unified run. Evidence log directory: `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-validation.75wX9n`.
+The earlier validation-specific telemetry output-path regression was subsequently isolated and repaired before the formal M1 candidate. It is no longer an open Wave 4C or repository Gate failure.
 
-This failure is recorded for the integration owner and is not masked, filtered, or modified by the Wave 4C lane.
+Final trusted candidate:
+
+- Commit: `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
+- Repository Gate: `PASS`
+- 30-seed matrix digest: `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`
+- Authoritative repetitions: two; exact digest match
+- Authentic human sessions: `0 / 20`
+- Matching structured observations: `0 / 20`
+- Experience tuning authorized: `false`
 
 ## Stability coordination
 
-The Wave 4D lane reran its 30-seed matrix twice after the production audio lifecycle fix. Both passes completed without `AudioStreamWAV`, `AudioStreamPlaybackWAV`, ObjectDB, or RID leakage. This validates the exact rapid `main.queue_free()` plus five-frame cleanup path that originally exposed the issue.
+The Wave 4D lane reran its authoritative 30-seed matrix twice after the production audio lifecycle fix. Both passes matched digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678` and completed without `AudioStreamWAV`, `AudioStreamPlaybackWAV`, ObjectDB, or RID leakage. This validates the exact rapid `main.queue_free()` plus five-frame cleanup path that originally exposed the issue.
 
 ## Known limitations
 
 - Pixel Proxy and synthesized PCM are production-capable M1 placeholders, not final authored character sheets or mastered audio.
 - Subjective mix balance, controller rumble, and human response/readability scores remain Wave 4D external-playtest evidence.
-- The repository-wide validation command remains non-zero until the concurrent telemetry output-path regression is integrated; Wave 4C's own focused and full scene gates are green.
+- Authentic external evidence is `0 / 20`; no subjective experience tuning or `M1 Go` claim is authorized from repository/synthetic evidence.
 
 ## Retention decision
 

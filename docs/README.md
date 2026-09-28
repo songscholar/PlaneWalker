@@ -3,7 +3,7 @@
 - Status: Approved
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P0 foundation baseline is Current; Wave 0/1, Wave 2, Wave 3A, and Wave 3B are completed historical slices
+- Implementation Status: Wave 4 repository scope complete; formal state is `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -17,7 +17,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 当前实施入口是：
 
 1. [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md)：定义最终范围、架构约束、内容数量和 Product Complete Gate。
-2. [Wave 4B Encounter Mechanics 实施计划](superpowers/plans/2026-09-28-plane-walker-wave-4b-encounter-mechanics.md)：当前战斗与遭遇实现入口。
+2. [Wave 4 与 M1 放行计划](superpowers/plans/2026-09-28-plane-walker-wave-4-m1-release.md)：记录已完成的仓库 Gate、M1 Candidate 状态和外部证据边界。
 3. `AGENTS.md`：定义持续授权、无需再确认的工作以及远程发布、真实付费和私密凭据等外部边界。
 
 ## 当前状态
@@ -31,16 +31,17 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | P0 Foundation Baseline | Completed | 本地化与 Godot 4.6 基线已提交，干净克隆可生成翻译产物并通过验证 |
 | P1 Test/CI Foundation | Completed | 唯一验证入口、只读 CI、双阶段导入和日志分类已通过 |
 | P2–P9 Foundation | Authorized / Planned | 原子存档、内容与效果运行时、单一状态、单一事件、手柄、导出和最终清洁认证 |
-| Wave 4A | In progress / Mandatory | 本地化/数据与干净构建已完成；试玩数据记录、导入和报告工具链正在实现 |
-| Wave 4B | Authorized / Next | 完成回溯残影、Boss 全招前摇、精英主动机制和五房遭遇配置 |
-| Wave 4C | Authorized / Queued | 完成 Pixel Proxy、核心动画、音效与战斗反馈 |
-| Wave 4D | Authorized / Queued | 完成 30 Seed 稳定验证、20 局真实外部试玩、数值调整与 M1 放行报告 |
-| Formal M1 | Required quality gate | 仓库内 Gate 全部完成；20 局真人外部试玩不得伪造，缺少真实数据时状态为 `M1 Candidate — External Validation Pending` |
-| Post-M1 Promotion | Authorized / Evidence-driven | 根据 M1 数据从弓或第三时间能力中只提升一个为首个新 Current |
-| Full Product Content | Authorized / Queued | 五角色、五武器、四时间能力、五层五 Boss、八流派和完整内容池 |
-| Launch / Expansion Systems | Authorized / Queued | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、回放、排行、Mod、外观和 DLC 内容包 |
+| Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
+| Wave 4B | Completed | 回溯残影、Boss 全招前摇、精英主动机制和五房权威遭遇已实现并通过测试 |
+| Wave 4C | Completed for M1 technical scope | Pixel Proxy、核心动画、合成音频、战斗反馈、可访问性开关和清理回归已验证 |
+| Wave 4D | Repository automation completed | 30 Seed 权威矩阵已连续两轮匹配，仓库 Gate `PASS`；真实外部试玩为 `0 / 20` |
+| Formal M1 | `M1 Candidate — External Validation Pending` | Candidate commit `79a20fd183fb57b8bdf62019ab80ff3f6e430635`；Matrix digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`；仓库 Gate 通过，真人 Gate 待外部执行 |
+| Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
+| Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
+| Full Product Content | Preserved / Later program | 五角色、五武器、四时间能力、五层五 Boss、八流派和完整内容池保留，本轮不展开 |
+| Launch / Expansion Systems | Preserved / Later program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、回放、排行、Mod、外观和 DLC 内容包保留，本轮不展开 |
 
-当前工作区含未提交的本地化、数据池、旧 UI、主流程和 Godot 设置变更。P0 要求先检查意图、测试并精确固化，禁止重置、覆盖或丢弃。
+当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
 
 P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expansion 是同一连续交付程序。M1 不是停工点；其中的外部真人试玩是诚信证据 Gate。仓库必须完成会话导入、匿名校验、报告生成、问卷/观察模板和修复跟踪，但自动化模拟不得冒充 20 局真实外部试玩。
 
@@ -65,7 +66,10 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | 文档 | 用途 | 状态 |
 |---|---|---|
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
-| [Wave 4B Encounter Mechanics Plan](superpowers/plans/2026-09-28-plane-walker-wave-4b-encounter-mechanics.md) | 回溯残影、Boss 前摇、精英主动和五房遭遇 | Approved / Current |
+| [Wave 4 与 M1 放行计划](superpowers/plans/2026-09-28-plane-walker-wave-4-m1-release.md) | Wave 4A–4D 仓库成果、M1 Candidate 和外部证据 Gate | Repository complete / External pending |
+| [Wave 4B Encounter Mechanics Plan](superpowers/plans/2026-09-28-plane-walker-wave-4b-encounter-mechanics.md) | 回溯残影、Boss 前摇、精英主动和五房遭遇 | Completed / Historical |
+| [Wave 4C Pixel Feedback Plan](superpowers/plans/2026-09-28-plane-walker-wave-4c-pixel-feedback.md) | M1 Pixel Proxy、音频、战斗反馈与可访问性 | Completed / Historical |
+| [Wave 4C Evidence](current/2026-09-28-wave-4c-pixel-feedback-evidence.md) | Wave 4C 焦点、全套与 Candidate 门禁证据 | Verified / Retained |
 | [P0 Foundation Baseline Evidence](current/2026-09-28-foundation-baseline-evidence.md) | 本地化、验证入口和干净克隆认证证据 | Verified / Completed |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |

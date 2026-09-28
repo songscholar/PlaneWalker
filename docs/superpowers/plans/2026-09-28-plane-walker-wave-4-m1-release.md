@@ -2,23 +2,25 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use subagent-driven execution, TDD, focused reviews, and the repository validation entrypoint for every lane.
 
-- Status: Approved / Current
-- Authority Level: Current milestone execution plan
+- Status: Repository Complete / External Validation Pending
+- Authority Level: Completed milestone record and current external-evidence gate
 - Applies To: Wave 4A, Wave 4B, Wave 4C, Wave 4D, formal M1 decision, and the first post-M1 promotion
-- Implementation Status: In progress
+- Implementation Status: Wave 4A complete; Wave 4B code/tests complete; Wave 4C M1 technical scope complete; Wave 4D repository automation and two matched 30-seed runs complete; M1 state is `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Preserves: verified Wave 0/1, Wave 2, Wave 3A, Wave 3B, P0, and P1 contracts
 - Last Verified: 2026-09-28
-- Exit Gate: repository gates pass and authentic human evidence is either verified or explicitly reported as externally pending
+- Candidate Commit: `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
+- Seed Matrix Digest: `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`
+- Exit Gate: Repository Gate `PASS`; authentic human evidence remains `0 / 20`, so `M1 Go` is not claimed
 
 ## Goal
 
-Finish the production-grade M1 five-room slice: close Wave 4A data work, complete Wave 4B mechanics, deliver Wave 4C pixel/audio/combat feedback, execute Wave 4D deterministic validation and evidence reporting, tune only from recorded evidence, and record the M1 decision. After a passing M1 decision, promote exactly one of Bow, Time Rift, or Time Accelerate to Current through a recorded ADR.
+The repository portion of the production-grade M1 five-room slice is complete: Wave 4A evidence contracts, Wave 4B mechanics, Wave 4C pixel/audio/combat feedback, and Wave 4D deterministic validation/reporting all passed their repository gates. The formal state remains `M1 Candidate — External Validation Pending`; experience tuning and the first post-M1 promotion remain evidence-gated because no authentic human cohort has been supplied.
 
 ## Current delivery boundary
 
-This plan is the complete scope of the current delivery. Five characters, five weapons, five floors, five bosses, Hub, meta progression, full narrative, rankings, replay, Mod support, DLC, and other Next/Launch/Expansion work remain preserved future scope. They are not implemented by this plan unless a compatibility interface is required by an M1 change.
+This plan records the completed repository scope of the Wave 4/M1 delivery. Five characters, five weapons, five floors, five bosses, Hub, meta progression, full narrative, rankings, replay, Mod support, DLC, and other Next/Launch/Expansion work remain preserved later-program scope and are not expanded in this status pass.
 
 ## Architecture
 
@@ -41,7 +43,7 @@ Gameplay remains deterministic and data-driven. Domain and application code own 
 - Every hostile damaging action has a readable non-zero telegraph.
 - New scenes may not add ObjectDB or RID leaks.
 - Use precise staging; never use `git add .` in the shared dirty worktree.
-- Next/Launch/Expansion remains future scope for this delivery.
+- Next/Launch/Expansion remains preserved later-program scope and is not expanded in this delivery record.
 
 ---
 
@@ -71,9 +73,9 @@ Gameplay remains deterministic and data-driven. Domain and application code own 
 
 - [x] Write schema, recorder, serializer, analyzer, de-identification, fixture, and contract tests.
 - [x] Verify the synthetic fixture contributes zero human evidence.
-- [ ] Add the Python contract suite to `tools/validate_project.sh`.
-- [ ] Run the focused Python and Godot telemetry tests.
-- [ ] Commit only the Wave 4A files and update status evidence.
+- [x] Add the Python contract suite to `tools/validate_project.sh`.
+- [x] Run the focused Python and Godot telemetry tests.
+- [x] Commit only the Wave 4A files and update status evidence.
 
 **Verification:**
 
@@ -103,9 +105,9 @@ Expected: contracts and scene test pass; the fixture gate exits non-zero with `h
 - [x] Implement and commit Rewind Echo.
 - [x] Implement and commit all Chrono Warden telegraphs.
 - [x] Implement and commit Elite Tank active behavior.
-- [ ] Finish the five-room authored encounter integration.
-- [ ] Run all focused regressions and the full validation entrypoint.
-- [ ] Record completion evidence and rollback commits.
+- [x] Finish the five-room authored encounter integration.
+- [x] Run all focused regressions and the full validation entrypoint.
+- [x] Record completion evidence and rollback commits.
 
 **Verification:**
 
@@ -131,13 +133,13 @@ Expected: contracts and scene test pass; the fixture gate exits non-zero with `h
 - Combat feedback covers hit flash, readable danger shapes, damage text, time-power identity, restrained camera impulse, VFX cleanup, and UI response.
 - Audio uses explicit buses and safe generated/offline placeholders so a clean checkout has no missing assets.
 
-- [ ] Add failing presentation/feedback contracts.
-- [ ] Implement Pixel Proxy silhouettes and hostile/time-power palette rules.
-- [ ] Implement core animation state feedback without changing gameplay timing authority.
-- [ ] Implement combat audio hooks and project-owned placeholder assets.
-- [ ] Implement hit, danger, time-power, camera, VFX, and UI feedback.
-- [ ] Verify cleanup, canvas scaling, input-independent behavior, and no leaks.
-- [ ] Commit presentation code, assets, tests, and evidence.
+- [x] Add failing presentation/feedback contracts.
+- [x] Implement Pixel Proxy silhouettes and hostile/time-power palette rules.
+- [x] Implement core animation state feedback without changing gameplay timing authority.
+- [x] Implement combat audio hooks and project-owned placeholder assets.
+- [x] Implement hit, danger, time-power, camera, VFX, and UI feedback.
+- [x] Verify cleanup, canvas scaling, input-independent behavior, and no leaks.
+- [x] Commit presentation code, assets, tests, and evidence.
 
 **Verification:**
 
@@ -162,13 +164,13 @@ Expected: contracts and scene test pass; the fixture gate exits non-zero with `h
 - The report consumes validated session JSONL plus the 30-seed result; it does not consume unvalidated free-form notes as release evidence.
 - The release state is one of `M1 Go`, `M1 No-Go`, or `M1 Candidate — External Validation Pending`.
 
-- [ ] Write failing tests for exact seed coverage, duplicate/missing seed rejection, deterministic digest comparison, and gate-state calculation.
-- [ ] Implement the 30-seed runner and machine-readable result.
-- [ ] Implement report generation from deterministic and human-evidence inputs.
-- [ ] Add the playtest protocol, observation form, import instructions, privacy rules, and issue-triage rubric.
-- [ ] Run the 30-seed suite twice and compare digests.
-- [ ] Evaluate the authentic 20-session gate for the exact build cohort.
-- [ ] Commit the toolchain, tests, protocol, and candidate report.
+- [x] Write failing tests for exact seed coverage, duplicate/missing seed rejection, deterministic digest comparison, and gate-state calculation.
+- [x] Implement the 30-seed runner and machine-readable result.
+- [x] Implement report generation from deterministic and human-evidence inputs.
+- [x] Add the playtest protocol, observation form, import instructions, privacy rules, and issue-triage rubric.
+- [x] Run the 30-seed suite twice and compare digests.
+- [x] Evaluate the authentic 20-session gate for the exact build cohort; result: `0 / 20`, external validation pending.
+- [x] Commit the toolchain, tests, protocol, and candidate report.
 
 **Verification:**
 
@@ -181,6 +183,8 @@ python3 tools/m1/compare_seed_reports.py /tmp/planewalker-m1-seeds.json /tmp/pla
 
 ### Task 5: Tune values only from recorded evidence
 
+**Final disposition:** No experience tuning was authorized. The repository evidence proves stability and determinism but contains zero authentic human sessions, so it cannot justify feel, fairness, comprehension, or demand tuning.
+
 **Files:**
 - Modify only the authoritative gameplay data or constants identified by the M1 report.
 - Create or modify regression tests adjacent to each tuned system.
@@ -191,11 +195,10 @@ python3 tools/m1/compare_seed_reports.py /tmp/planewalker-m1-seeds.json /tmp/pla
 - Synthetic seed results may justify stability fixes and deterministic budget corrections.
 - Feel, comprehension, perceived fairness, and demand claims require authentic human evidence.
 
-- [ ] Capture the pre-tuning metric baseline.
-- [ ] Make one bounded tuning batch per dominant failure signature.
-- [ ] Re-run focused tests, 30 seeds, and cohort analysis after each batch.
-- [ ] Reject changes that improve one metric by violating telegraph, duration, or build-diversity gates.
-- [ ] Record retained and reverted tuning decisions.
+- [x] Capture the evidence state: repository Gate `PASS`, authentic human sessions `0 / 20`, no human failure signature.
+- [x] Make no experience-value changes from synthetic or repository-stability evidence.
+- [x] Preserve the exact candidate cohort for future authentic evidence comparison.
+- [x] Record that human-authorized tuning remains pending rather than inventing a tuning result.
 
 ### Task 6: Produce the formal M1 decision
 
@@ -209,13 +212,17 @@ python3 tools/m1/compare_seed_reports.py /tmp/planewalker-m1-seeds.json /tmp/pla
 - `M1 No-Go`: a repository or supplied human-evidence gate fails with an actionable product defect.
 - `M1 Candidate — External Validation Pending`: all repository work is complete but the authentic 20-session cohort is absent or incomplete.
 
-- [ ] Record exact build, commit, content version, tests, seed digests, evidence counts, metrics, known limitations, and rollback points.
-- [ ] Ensure the report does not claim external evidence that was not supplied.
-- [ ] Run `./tools/validate_project.sh` from the integrated worktree.
-- [ ] Validate a clean local clone/checkpoint when the worktree is clean.
-- [ ] Commit the evidence and status update.
+- [x] Record exact build, commit, content version, tests, seed digests, evidence counts, metrics, known limitations, and rollback points.
+- [x] Ensure the report does not claim external evidence that was not supplied.
+- [x] Run `./tools/validate_project.sh` from the integrated candidate worktree.
+- [x] Validate the exact clean candidate commit and trusted release evidence.
+- [x] Commit the repository evidence and candidate status.
+
+Repository decision: `PASS` at `79a20fd183fb57b8bdf62019ab80ff3f6e430635`. Two authoritative 30-seed executions matched digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`. Formal product state remains `M1 Candidate — External Validation Pending` because authentic sessions and matching observations are both `0 / 20`.
 
 ### Task 7: Promote one post-M1 option to Current
+
+**Status:** Not started. This task is correctly evidence-gated and remains outside the completed repository candidate.
 
 **Files:**
 - Create: `docs/adr/2026-09-28-first-post-m1-promotion.md` after M1 evidence is available.
@@ -245,4 +252,15 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.playtest.test_playt
 git status --short
 ```
 
-The current delivery is complete when Tasks 1–6 are implemented and verified, the M1 state is honestly recorded, and Task 7 is completed only if the required M1 evidence exists. Future Next/Launch/Expansion content remains documented and intentionally outside this delivery.
+Tasks 1–6 are complete for repository scope. Task 7 has not started because the required authentic M1 cohort does not exist. The recorded outcome is therefore `M1 Candidate — External Validation Pending`, not `M1 Go`. Future Next/Launch/Expansion content remains preserved and intentionally outside this documentation round.
+
+## Final repository evidence
+
+- Exact candidate commit: `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
+- 30-seed matrix digest: `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`
+- Authoritative repetitions: two; digests matched
+- Repository Gate: `PASS`
+- Authentic human sessions: `0 / 20`
+- Matching structured observations: `0 / 20`
+- Experience tuning: not authorized
+- Post-M1 Bow/Rift/Accelerate promotion: not started
