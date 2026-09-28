@@ -1,9 +1,9 @@
 # Plane Walker 全量愿景与分阶段并行开发设计
 
-- Status: Proposed for user review
+- Status: Approved
 - Authority Level: Milestone design and cross-module contract
 - Applies To: M0 文档治理与 M1 五房垂直切片
-- Implementation Status: Design approved in principle; code implementation not started under this spec
+- Implementation Status: Approved; Wave 0/1 implementation in progress
 - Owner: Project integration lead
 - Depends On: docs/0_深度收敛与系统职责设计.md
 - Supersedes: 现有文档中与 M1 范围、五房节奏、UI 契约、状态迁移相冲突的执行口径
