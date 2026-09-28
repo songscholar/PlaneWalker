@@ -105,8 +105,11 @@ func _test_serializer_round_trip(suite) -> void:
 
 
 func _test_serializer_appends_jsonl_records(suite) -> void:
-	var path := "user://playtest_recorder_test_%d.jsonl" % Time.get_ticks_usec()
-	var absolute_path := ProjectSettings.globalize_path(path)
+	var test_data_dir := OS.get_environment("PLANEWALKER_TEST_DATA_DIR")
+	if test_data_dir.is_empty():
+		test_data_dir = OS.get_temp_dir().path_join("planewalker-tests")
+	var path := test_data_dir.path_join("playtest_recorder_test_%d.jsonl" % Time.get_ticks_usec())
+	var absolute_path := path
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(absolute_path)
 	var first := {"session_id": "pws_00000000000000000000000000000001"}
@@ -115,8 +118,16 @@ func _test_serializer_appends_jsonl_records(suite) -> void:
 	var first_write: Dictionary = PlaytestSerializerScript.append_json_line(path, first)
 	var second_write: Dictionary = PlaytestSerializerScript.append_json_line(path, second)
 
-	suite.assert_equal(first_write.get("ok"), true, "first JSONL record appends")
-	suite.assert_equal(second_write.get("ok"), true, "second JSONL record appends")
+	suite.assert_equal(
+		first_write.get("ok"),
+		true,
+		"first JSONL record appends: result=%s path=%s" % [first_write, absolute_path]
+	)
+	suite.assert_equal(
+		second_write.get("ok"),
+		true,
+		"second JSONL record appends: result=%s path=%s" % [second_write, absolute_path]
+	)
 	var file := FileAccess.open(path, FileAccess.READ)
 	suite.assert_true(file != null, "JSONL output can be opened")
 	if file != null:

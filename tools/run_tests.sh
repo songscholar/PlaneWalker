@@ -108,6 +108,7 @@ run_with_timeout() {
 	local user_data_dir="$4"
 	local started_at=$SECONDS
 
+	PLANEWALKER_TEST_DATA_DIR="${user_data_dir}/files" \
 	XDG_DATA_HOME="${user_data_dir}" \
 	XDG_CACHE_HOME="${user_data_dir}/cache" \
 		"${godot_bin}" \
