@@ -185,6 +185,7 @@ assert_file_contains .github/workflows/validate.yml '\./tools/validate_project\.
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.localization\.test_validate_localization' "localization unit contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 tools/validate_localization\.py' "localization validator entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.playtest\.test_playtest_data' "playtest data contract entrypoint"
+assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.m1\.test_m1_gate' "M1 release gate contract entrypoint"
 assert_file_contains tools/validate_project.sh 'validate_import_logs "\$\{phase\}" "\$\{stdout_log\}" "\$\{engine_log\}"' "each import scans stdout and engine logs"
 
 bootstrap_output="${TEMP_DIR}/bootstrap-expected.out"

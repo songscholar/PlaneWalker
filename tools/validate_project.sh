@@ -174,6 +174,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_localization.py
 printf '\n== Playtest data contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.playtest.test_playtest_data
 
+printf '\n== M1 release gate contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.m1.test_m1_gate
+
 printf '\n== Godot bootstrap import ==\n'
 run_import_phase bootstrap
 printf 'PASS: bootstrap import completed with only approved generated-resource/environment diagnostics\n'
