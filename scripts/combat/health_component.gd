@@ -83,8 +83,6 @@ func _apply_hit_reaction(damage_info: RefCounted, final_amount: float) -> void:
 	})
 	if damage_info.knockback.length_squared() > 0.0 and owner_entity.has_method("apply_knockback"):
 		owner_entity.apply_knockback(damage_info.knockback)
-	if damage_info.tags.has("weapon:sword"):
-		CombatFeedback.request_hit_pause()
 
 
 func heal(amount: float) -> float:
