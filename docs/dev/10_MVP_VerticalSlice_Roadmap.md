@@ -6,6 +6,16 @@
 > **定位**：给 coding agent / 开发者直接执行的首个可玩版本开发规格  
 > **上层约束**：默认服从 `docs/0_深度收敛与系统职责设计.md` 的v1.1收敛口径
 
+- Status: Reference
+- Authority Level: Historical MVP roadmap; current authorization section remains active through `AGENTS.md`
+- Applies To: MVP历史范围与验收背景，不限制已授权的完整产品范围
+- Implementation Status: Superseded for program scope; retained for reference
+- Owner: Project owner
+- Depends On: `AGENTS.md`, `docs/dev/00_Architecture.md`, approved Current milestone specifications
+- Supersedes: None
+- Last Verified: 2026-09-28
+- Contract References: `AGENTS.md`
+
 ---
 
 ## 10.1 结论：现在能不能开始代码开发？
@@ -649,19 +659,21 @@ Boss：时岩傀儡 `boss_time_golem`
 
 ---
 
-## 10.10 开发前还需要用户确认的决策
+## 10.10 已决策：开发前无需再次确认
 
-如果要让agent马上开始写代码，建议先确认以下决策：
+本节原为项目尚未建立时的决策清单。项目所有者现已提供仓库内完整产品开发的持续授权，以下选择已经生效，不再作为编码前置确认项：
 
-| 决策 | 推荐选择 | 原因 |
-|------|----------|------|
-| 是否现在创建Godot项目 | 是 | 当前目录只有docs，没有工程 |
-| Godot版本 | 4.3或4.4稳定版 | 避免API差异过大 |
-| MVP视角 | 2D俯视 | 最快验证战斗与时间机制 |
-| MVP美术 | 占位图形/基础Sprite | 先验证手感 |
-| MVP数据格式 | JSON | 比`.tres`更适合agent批量编辑 |
-| 是否做自动测试 | 做核心逻辑轻量测试 | 伤害、时间能量、数据加载值得测 |
-| 是否做完整Meta | 不做 | MVP先验证局内体验 |
+| 决策 | 已采用选择 | 当前执行口径 |
+|------|------------|--------------|
+| 是否创建Godot项目 | 已创建 | 继续维护现有工程，不重建项目骨架 |
+| Godot版本 | 跟随仓库锁定并验证的4.x版本 | 升级必须通过导入、测试和导出验证 |
+| 游戏视角 | 2D俯视 | 以战斗可读性和时间操控手感为核心 |
+| 美术推进 | Pixel Proxy逐步替换为最终资产 | 允许先做一部分，但不删减已授权内容范围 |
+| 内容数据格式 | JSON为运行时权威内容源 | 通过Schema、契约测试和版本迁移保证可靠性 |
+| 自动测试 | 必须实现 | 覆盖核心逻辑、内容契约、场景集成、存档和回放 |
+| 局外Meta | 属于完整产品范围 | 可分阶段实现，不从最终范围删除 |
+
+实际执行遵循 `AGENTS.md` 和 `docs/dev/00_Architecture.md` 第0节：先完成所有可执行工作并形成可回滚的小提交，里程碑末提交非阻塞的保留、调整或回退审查，然后自动继续下一已授权里程碑。不得因旧版路线图中的历史建议暂停开发。
 
 ---
 
@@ -700,4 +712,3 @@ MVP验证通过后，再按以下顺序扩展：
 8. 再考虑局外Meta、锻造、熟练度。
 
 不要在MVP前开发完整Meta系统。否则很容易先做出成长框架，却没有验证局内战斗是否好玩。
-

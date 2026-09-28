@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: docs/0_深度收敛与系统职责设计.md
 - Supersedes: 现有文档中与 M1 范围、五房节奏、UI 契约、状态迁移相冲突的执行口径
-- Last Verified: 2026-09-29
+- Last Verified: 2026-09-28
 
 ## 1. 决策摘要
 
@@ -108,14 +108,15 @@ M1 只启用时间停止和时间回溯，但时间加速和时间裂隙的设�
 
 发生冲突时按以下顺序执行：
 
-1. 已批准的 ADR。
-2. 已批准的 Current 里程碑规格。
-3. contracts 目录中的接口与数据契约。
-4. 当前系统开发文档。
-5. Full Vision GDD。
-6. Reference 与 Archive。
+1. 仓库根目录 `AGENTS.md` 中的项目执行、持续授权与安全边界。
+2. 已批准的 ADR。
+3. 已批准的 Current 里程碑规格。
+4. contracts 目录中的接口与数据契约。
+5. 当前系统开发文档。
+6. Full Vision GDD。
+7. Reference 与 Archive。
 
-上层愿景决定“为什么做”，Current 决定“现在做什么”，Contract 决定“模块如何互通”。
+`AGENTS.md` 决定“哪些工作可直接执行以及外部边界在哪里”，上层愿景决定“为什么做”，Current 决定“现在做什么”，Contract 决定“模块如何互通”。任何旧文档中的逐项授权要求不得覆盖持续授权规则。
 
 ### 4.2 文档状态
 

@@ -23,12 +23,34 @@ Agents may autonomously:
 
 These actions do not require a conversational permission request.
 
+## No Additional Permission Required
+
+Within the `PlaneWalker` workspace, agents must treat the standing authorization above as sufficient permission. Do not ask the project owner to approve any of the following again:
+
+- Individual file edits, refactors, migrations, removals, generated files, or directory reorganization.
+- Design-document completion, architecture decisions, gameplay tuning, content authoring, UI implementation, or technical-debt cleanup.
+- Adding, updating, or removing project-scoped dependencies, tools, fonts, and freely licensed assets after checking provenance and license compatibility.
+- Running local imports, services, simulations, tests, audits, benchmarks, exports, packaging, or visual QA.
+- Creating reversible local Git commits, branches, checkpoints, fixtures, adapters, and build artifacts.
+- Replacing temporary implementations or current uncommitted work after inspection, tests, and preservation of intended behavior.
+
+An in-scope decision that would previously have triggered a permission question must instead be handled as follows:
+
+1. Continue all unblocked work immediately.
+2. Choose the safest reversible implementation and isolate it in a focused commit.
+3. Use an offline adapter, fixture, stub, or local fallback when an external service is unavailable.
+4. Record the decision, tests, limitations, and rollback point in the next milestone retention review.
+5. Submit a non-blocking retention review for the completed milestone as a whole; do not seek retroactive file-by-file authorization.
+
+This workflow does not expand authorization across the explicit external boundaries listed below.
+
 ## Work First, Review at Milestones
 
 - Do not stop active work to ask whether an in-scope change should be made.
 - Make the best evidence-based decision, implement it, test it, and record it in Git.
 - At the end of each major milestone, provide one consolidated retention review containing commits, tests, known limitations, and reversible decisions.
-- The project owner may then keep, revise, or revert milestone work as a whole.
+- A retention review is informational and non-blocking. Continue into the next authorized milestone unless the project owner explicitly pauses the program or changes scope.
+- The project owner may keep, revise, or revert milestone work as a whole at any later point.
 - Preserve recoverability through small commits; never rely on undocumented working-tree state as the only copy of completed work.
 
 ## Boundaries That Remain Outside Standing Authorization
@@ -44,7 +66,7 @@ Agents must not:
 
 When an unavailable external account, credential, or production service would normally be required, continue by implementing a tested adapter, local service, fixture, or offline fallback. Record the external deployment step for the final retention review instead of interrupting implementation.
 
-If the execution platform itself requires a mandatory approval dialog for sandbox escape, network download, or another protected operation, batch the request as narrowly as possible. Do not ask a separate conversational question before it.
+If the execution platform itself requires a mandatory approval dialog for sandbox escape, network download, or another protected operation, continue every unblocked task first and prefer an in-workspace fallback. If the protected operation remains essential, batch the request as narrowly and as late as possible. Do not ask a separate conversational question before the platform dialog.
 
 ## Full Product Scope
 

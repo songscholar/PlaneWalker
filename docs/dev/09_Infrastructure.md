@@ -79,7 +79,7 @@ export.cfg
 export_presets.cfg
 *.translation
 
-# Godot .NET disabled by default; do not add gameplay .cs files unless explicitly approved
+# Godot .NET disabled by default; add gameplay .cs only when required by an approved ADR/current spec and covered by tests (no separate conversational permission required)
 .mono/
 *.csproj
 *.sln
