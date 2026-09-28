@@ -14,9 +14,34 @@ class FakePlayer:
 	extends Node
 
 	var applied_definitions: Array[Dictionary] = []
+	var ui_hp: float = 100.0
+	var ui_max_hp: float = 100.0
+	var ui_energy: float = 100.0
+	var ui_max_energy: float = 100.0
+	var ui_cooldowns: Dictionary = {
+		"time_stop": 0.0,
+		"time_rewind": 0.0,
+	}
+	var ui_snapshot_valid: bool = true
+	var transient_cancel_count: int = 0
 
 	func apply_reward(definition: Dictionary) -> void:
 		applied_definitions.append(definition.duplicate(true))
+
+	func cancel_transient_actions() -> void:
+		transient_cancel_count += 1
+
+	func get_player_ui_snapshot() -> Dictionary:
+		if not ui_snapshot_valid:
+			return {}
+		return {
+			"hp": ui_hp,
+			"max_hp": ui_max_hp,
+			"energy": ui_energy,
+			"max_energy": ui_max_energy,
+			"action_state": "FREE",
+			"cooldowns": ui_cooldowns.duplicate(true),
+		}
 
 
 class RewardSignalCounter:
@@ -75,6 +100,8 @@ func _run() -> void:
 	await _test_terminal_guards(suite)
 	await _test_selection_phase_death_sync(suite)
 	await _test_pause_overlay(suite)
+	await _test_live_hud_projection(suite)
+	await _test_projection_failure_restores_legacy_hud(suite)
 	GameState.save_path = _original_save_path
 	DirAccess.remove_absolute(TEST_SAVE_PATH)
 	suite.finish(get_tree())
@@ -86,6 +113,8 @@ func _test_fail_safe_activation(suite) -> void:
 	var disabled_adapter: Node = disabled_fixture["adapter"]
 	suite.assert_true(not disabled_adapter._active, "default-off adapter remains inactive")
 	suite.assert_equal(_choice_layer_count(disabled_adapter), 0, "default-off adapter creates no choice layer")
+	suite.assert_equal(_hud_layer_count(disabled_adapter), 0, "default-off adapter creates no V2 HUD")
+	suite.assert_true(_legacy_hud(disabled_fixture["room"]).visible, "default-off adapter keeps legacy HUD visible")
 	suite.assert_equal(_legacy_view_count(disabled_fixture["room"]), 3, "default-off adapter keeps legacy selections")
 	EventBus.room_started.emit(&"ignored_room")
 	EventBus.room_cleared.emit(&"ignored_room")
@@ -97,6 +126,8 @@ func _test_fail_safe_activation(suite) -> void:
 	var invalid_adapter: Node = invalid_fixture["adapter"]
 	suite.assert_true(not invalid_adapter._active, "invalid manifest leaves adapter inactive")
 	suite.assert_equal(_choice_layer_count(invalid_adapter), 0, "invalid manifest creates no choice layer")
+	suite.assert_equal(_hud_layer_count(invalid_adapter), 0, "invalid manifest creates no V2 HUD")
+	suite.assert_true(_legacy_hud(invalid_fixture["room"]).visible, "invalid manifest keeps legacy HUD visible")
 	suite.assert_equal(_legacy_view_count(invalid_fixture["room"]), 3, "invalid manifest keeps legacy selections")
 	await _destroy_fixture(invalid_fixture)
 
@@ -105,6 +136,12 @@ func _test_fail_safe_activation(suite) -> void:
 	var valid_adapter: Node = valid_fixture["adapter"]
 	suite.assert_true(valid_adapter._active, "valid manifest activates adapter")
 	suite.assert_equal(_choice_layer_count(valid_adapter), 1, "valid manifest creates one choice layer")
+	suite.assert_equal(_hud_layer_count(valid_adapter), 1, "valid manifest creates one V2 HUD layer")
+	suite.assert_equal((valid_adapter.get_node("HudLayer") as CanvasLayer).layer, 10, "V2 HUD renders on layer 10")
+	suite.assert_equal((valid_adapter.get_node("ChoiceLayer") as CanvasLayer).layer, 20, "choice panel renders above the V2 HUD")
+	suite.assert_true(not (valid_adapter.get_node("HudLayer") as CanvasLayer).visible, "V2 HUD stays hidden before the first live projection")
+	suite.assert_true(not _legacy_hud(valid_fixture["room"]).visible, "successful V2 boot hides legacy HUD")
+	suite.assert_equal(_legacy_hud(valid_fixture["room"]).process_mode, Node.PROCESS_MODE_DISABLED, "successful V2 boot disables legacy HUD processing")
 	suite.assert_true(_choice_panel(valid_adapter) != null, "valid manifest creates one choice panel")
 	suite.assert_equal(_legacy_view_count(valid_fixture["room"]), 0, "valid manifest frees all legacy selections")
 	await _destroy_fixture(valid_fixture)
@@ -139,11 +176,14 @@ func _test_full_selection_flow(suite) -> void:
 	var first_offer: Dictionary = snapshot["open_offer"]
 	suite.assert_equal(first_offer["category"], "item", "room one opens starter item offer")
 	suite.assert_true(panel.visible, "room clear opens unified choice panel")
+	suite.assert_equal(player.transient_cancel_count, 1, "selection cancels transient player actions before suspension")
 	suite.assert_equal(player.process_mode, Node.PROCESS_MODE_DISABLED, "selection disables player processing")
 	suite.assert_equal(_option_buttons(panel).size(), 3, "unified panel renders three choices")
 	suite.assert_true(projectile.is_queued_for_deletion(), "selection clears time-stoppable projectiles")
 	suite.assert_true(boss_hazard.is_queued_for_deletion(), "selection clears boss hazards")
 	suite.assert_true(not surviving_enemy.is_queued_for_deletion(), "selection safety does not delete enemy actors")
+	_clear_room(1)
+	suite.assert_equal(player.transient_cancel_count, 1, "repeated selection callbacks do not cancel twice")
 
 	var first_option_id := str(first_offer["options"][0]["option_id"])
 	_option_buttons(panel)[0].pressed.emit()
@@ -380,6 +420,60 @@ func _test_selection_phase_death_sync(suite) -> void:
 	await _destroy_fixture(fixture)
 
 
+func _test_live_hud_projection(suite) -> void:
+	_reset_legacy_state()
+	var fixture: Dictionary = await _create_fixture(true, VALID_MANIFEST)
+	var adapter: Node = fixture["adapter"]
+	var player: FakePlayer = fixture["player"]
+	var hud: CanvasLayer = adapter.get_node_or_null("HudLayer") as CanvasLayer
+
+	_start_legacy_run(20261005)
+	_enter_room(1)
+	adapter._process(0.1)
+	var first_state: Dictionary = hud.latest_state()
+	suite.assert_true(not first_state.is_empty(), "live HUD receives its first projected combat state")
+	suite.assert_true(hud.visible, "first successful live projection reveals the V2 HUD")
+	suite.assert_close(float(first_state["player"]["hp"]), 100.0, "live HUD projects player HP")
+	suite.assert_equal(int(first_state["run_time_ms"]), 0, "live HUD projects the initial run time")
+	var authoritative_revision := int(adapter._facade.snapshot()["revision"])
+	var first_view_revision := int(first_state["revision"])
+
+	player.ui_hp = 61.0
+	player.ui_energy = 47.0
+	player.ui_cooldowns["time_stop"] = 3.25
+	GameState.run_timer = 12.345
+	adapter._process(0.09)
+	suite.assert_equal(int(hud.latest_state()["revision"]), first_view_revision, "HUD waits for the 10 Hz render cadence")
+	adapter._process(0.02)
+	var second_state: Dictionary = hud.latest_state()
+	suite.assert_equal(int(adapter._facade.snapshot()["revision"]), authoritative_revision, "HUD projection never mutates authoritative revision")
+	suite.assert_equal(int(second_state["revision"]), first_view_revision + 1, "live values advance an independent view revision")
+	suite.assert_close(float(second_state["player"]["hp"]), 61.0, "same authoritative state can project newer HP")
+	suite.assert_close(float(second_state["player"]["energy"]), 47.0, "same authoritative state can project newer energy")
+	suite.assert_close(float(second_state["player"]["cooldowns"]["time_stop"]), 3.25, "same authoritative state can project newer cooldowns")
+	suite.assert_equal(int(second_state["run_time_ms"]), 12345, "same authoritative state can project newer run time")
+	await _destroy_fixture(fixture)
+
+
+func _test_projection_failure_restores_legacy_hud(suite) -> void:
+	_reset_legacy_state()
+	var fixture: Dictionary = await _create_fixture(true, VALID_MANIFEST)
+	var adapter: Node = fixture["adapter"]
+	var player: FakePlayer = fixture["player"]
+	var legacy_hud := _legacy_hud(fixture["room"])
+	suite.assert_true(not legacy_hud.visible, "V2 boot disables legacy HUD before projection failure setup")
+
+	player.ui_snapshot_valid = false
+	_start_legacy_run(20261006)
+	_enter_room(1)
+	adapter._process(0.1)
+	await get_tree().process_frame
+	suite.assert_equal(_hud_layer_count(adapter), 0, "invalid projection removes the V2 HUD")
+	suite.assert_true(legacy_hud.visible, "invalid projection restores legacy HUD visibility")
+	suite.assert_equal(legacy_hud.process_mode, Node.PROCESS_MODE_INHERIT, "invalid projection restores legacy HUD processing")
+	await _destroy_fixture(fixture)
+
+
 func _create_fixture(adapter_enabled: bool, adapter_manifest_path: String) -> Dictionary:
 	var host := Node.new()
 	host.name = "Fixture"
@@ -391,6 +485,9 @@ func _create_fixture(adapter_enabled: bool, adapter_manifest_path: String) -> Di
 	var player := FakePlayer.new()
 	player.name = "Player"
 	room.add_child(player)
+	var legacy_hud := CanvasLayer.new()
+	legacy_hud.name = "CombatHUD"
+	room.add_child(legacy_hud)
 	for view_name: String in ["RewardSelection", "CurseSelection", "EventSelection"]:
 		var legacy_view := Node.new()
 		legacy_view.name = view_name
@@ -468,11 +565,19 @@ func _assert_rejected_offer_stays_open(
 
 
 func _choice_layer_count(adapter: Node) -> int:
-	return adapter.get_children().filter(func(child: Node) -> bool: return child is CanvasLayer).size()
+	return 1 if adapter.get_node_or_null("ChoiceLayer") is CanvasLayer else 0
+
+
+func _hud_layer_count(adapter: Node) -> int:
+	return 1 if adapter.get_node_or_null("HudLayer") is CanvasLayer else 0
 
 
 func _choice_panel(adapter: Node) -> Control:
 	return adapter.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control
+
+
+func _legacy_hud(room: Node) -> CanvasLayer:
+	return room.get_node("CombatHUD") as CanvasLayer
 
 
 func _legacy_view_count(room: Node) -> int:
