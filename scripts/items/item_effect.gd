@@ -36,6 +36,10 @@ static func apply_to_player(player: Node, effects: Dictionary) -> void:
 		player.time_manager.rewind_cost_multiplier *= float(effects["rewind_cost_multiplier"])
 	if effects.has("rewind_heal"):
 		player.time_manager.rewind_heal += float(effects["rewind_heal"])
+	if effects.has("rewind_echo_enabled"):
+		player.time_manager.rewind_echo_enabled = bool(effects["rewind_echo_enabled"])
+	if effects.has("rewind_path_hit_multiplier"):
+		player.time_manager.rewind_path_hit_multiplier = maxf(player.time_manager.rewind_path_hit_multiplier, float(effects["rewind_path_hit_multiplier"]))
 	if effects.has("rewind_self_damage"):
 		player.time_manager.rewind_self_damage += float(effects["rewind_self_damage"])
 	if effects.has("time_rift_cost_multiplier"):

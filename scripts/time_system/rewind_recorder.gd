@@ -48,6 +48,32 @@ func peek_oldest_snapshot() -> Dictionary:
 	return _snapshots.front().duplicate(true)
 
 
+func prepare_rewind_transaction() -> Dictionary:
+	if _snapshots.is_empty() or target == null or not is_instance_valid(target):
+		return {}
+	var target_snapshot := peek_oldest_snapshot()
+	if not target_snapshot.has("position"):
+		return {}
+	var origin: Vector2 = target.global_position
+	var destination: Vector2 = target_snapshot["position"]
+	var path_samples: Array[Vector2] = [origin]
+	for index: int in range(_snapshots.size() - 1, -1, -1):
+		var sample: Dictionary = _snapshots[index]
+		if not sample.has("position") or not sample["position"] is Vector2:
+			continue
+		var sample_position: Vector2 = sample["position"]
+		if path_samples[-1] != sample_position:
+			path_samples.append(sample_position)
+	if path_samples[-1] != destination:
+		path_samples.append(destination)
+	return {
+		"target_snapshot": target_snapshot.duplicate(true),
+		"origin": origin,
+		"destination": destination,
+		"path_samples": path_samples.duplicate(),
+	}
+
+
 func restore_player_state(snapshot: Dictionary) -> bool:
 	if target == null or not is_instance_valid(target):
 		return false

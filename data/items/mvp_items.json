@@ -57,7 +57,7 @@
 		"archetype": "rewind_echo",
 		"role": "starter",
 		"description": "REWIND_ECHO_DESC",
-		"effects": {"rewind_heal": 28.0}
+		"effects": {"rewind_heal": 28.0, "rewind_echo_enabled": true}
 	},
 	{
 		"id": "accelerated_combo",

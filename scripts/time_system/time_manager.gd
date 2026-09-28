@@ -5,6 +5,7 @@ const TimeRiftScene := preload("res://scenes/time/time_rift.tscn")
 
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
+signal rewind_committed(transaction: Dictionary)
 
 @export var max_energy: float = 100.0
 @export var energy_regen: float = 2.0
@@ -30,6 +31,8 @@ var time_stop_weakpoint_damage_bonus: float = 0.0
 var time_stop_weakpoint_duration: float = 0.0
 var rewind_cost_multiplier: float = 1.0
 var rewind_heal: float = 0.0
+var rewind_echo_enabled: bool = false
+var rewind_path_hit_multiplier: float = 0.0
 var time_rift_cost_multiplier: float = 1.0
 var time_rift_duration_bonus: float = 0.0
 var time_rift_radius_bonus: float = 0.0
@@ -103,15 +106,18 @@ func can_rewind(recorder: Node) -> bool:
 	var effective_cost := rewind_cost * rewind_cost_multiplier
 	if not _can_pay(&"time_rewind", effective_cost):
 		return false
-	return recorder.has_method("peek_oldest_snapshot") and recorder.has_method("consume_oldest_snapshot") and recorder.has_method("restore_player_state")
+	return recorder.has_method("prepare_rewind_transaction") and recorder.has_method("consume_oldest_snapshot") and recorder.has_method("restore_player_state")
 
 
 func try_rewind(recorder: Node) -> bool:
 	var effective_cost := rewind_cost * rewind_cost_multiplier
 	if not can_rewind(recorder):
 		return false
-	var snapshot: Dictionary = recorder.peek_oldest_snapshot()
-	if snapshot.is_empty() or not recorder.restore_player_state(snapshot):
+	var transaction: Dictionary = recorder.prepare_rewind_transaction()
+	if transaction.is_empty():
+		return false
+	var target_snapshot: Dictionary = transaction.get("target_snapshot", {})
+	if target_snapshot.is_empty() or not recorder.restore_player_state(target_snapshot):
 		return false
 	recorder.consume_oldest_snapshot()
 	if recorder.has_method("clear_snapshots"):
@@ -124,6 +130,7 @@ func try_rewind(recorder: Node) -> bool:
 		var health_component := get_parent().get_node_or_null("HealthComponent")
 		if health_component != null and health_component.has_method("heal"):
 			health_component.heal(rewind_heal)
+	rewind_committed.emit(transaction.duplicate(true))
 	EventBus.time_skill_ended.emit(&"time_rewind")
 	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_rewind"})
 	return true

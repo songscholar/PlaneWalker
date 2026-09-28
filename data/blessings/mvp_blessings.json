@@ -17,7 +17,7 @@
 		"archetype": "rewind_echo",
 		"role": "payoff",
 		"description": "BLS_REWIND_PATH_DESC",
-		"effects": {"rewind_cost_multiplier": 0.9, "rewind_heal": 18.0}
+		"effects": {"rewind_cost_multiplier": 0.9, "rewind_heal": 18.0, "rewind_path_hit_multiplier": 0.5}
 	},
 	{
 		"id": "bls_sword_tempo",
