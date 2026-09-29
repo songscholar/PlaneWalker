@@ -26,6 +26,7 @@ var _next_token: int = 1
 var _plan: Dictionary = {}
 var _action_context: Dictionary = {}
 var _buffered_submission: Dictionary = {}
+var _hold_intent_id: StringName = &""
 
 
 func configure(runtime: RefCounted) -> bool:
@@ -47,6 +48,9 @@ func submit_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 		return intent_validation
 	if _runtime == null:
 		return WeaponActionContractScript.failure(WeaponActionContractScript.CODE_NOT_CONFIGURED)
+	var edge := StringName(str(intent.get("edge", "")))
+	if edge in [&"held", &"released"]:
+		return _submit_hold_edge(intent)
 
 	if _phase != PHASE_READY and not _recovery_cancel_is_open():
 		var buffer_frames := int(intent.get(
@@ -78,6 +82,10 @@ func advance_frame(consume_buffered: bool = true) -> void:
 	var phase_data := _current_phase_data()
 	if phase_data.is_empty():
 		cancel(&"invalid_phase_state")
+		return
+	if _phase == &"HOLD":
+		if _phase_frame >= int(phase_data["duration_frames"]):
+			_release_hold(true)
 		return
 	if _phase_frame >= int(phase_data["duration_frames"]):
 		_advance_phase(consume_buffered)
@@ -161,6 +169,7 @@ func snapshot() -> Dictionary:
 		"plan": _plan.duplicate(true),
 		"action_context": _action_context.duplicate(true),
 		"buffered_submission": _buffered_submission.duplicate(true),
+		"hold_intent_id": str(_hold_intent_id),
 		"runtime": runtime_snapshot,
 	}
 
@@ -202,6 +211,9 @@ func presentation_snapshot() -> Dictionary:
 		"phase_duration_frames": int(phase_data.get("duration_frames", 0)),
 		"cancel_from_frame": int(phase_data.get("cancel_from_frame", -1)),
 		"movement_multiplier": movement_multiplier(),
+		"hold_frames": _phase_frame if _phase == &"HOLD" else 0,
+		"minimum_hold_frames": int(phase_data.get("minimum_hold_frames", 0)) if _phase == &"HOLD" else 0,
+		"maximum_hold_frames": int(phase_data.get("duration_frames", 0)) if _phase == &"HOLD" else 0,
 		"token": _token,
 		"generation": _generation,
 		"runtime": runtime_presentation,
@@ -273,6 +285,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 	_phase_index = 0
 	_phase_frame = 0
 	_phase = StringName(str(_current_phase_data().get("phase", "")))
+	_hold_intent_id = StringName(str(intent.get("id", ""))) if _phase == &"HOLD" else &""
 	_buffered_submission.clear()
 
 	weapon_action_committed.emit(
@@ -289,6 +302,161 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 		"generation": _generation,
 		"context": (commit_value as Dictionary).get("context", {}).duplicate(true),
 	}
+
+
+func _submit_hold_edge(intent: Dictionary) -> Dictionary:
+	var intent_id := StringName(str(intent.get("id", "")))
+	if _phase != &"HOLD" or _token <= 0 or intent_id != _hold_intent_id:
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_STALE_HOLD_EDGE,
+			{
+				"intent_id": str(intent_id),
+				"phase": str(_phase),
+			}
+		)
+	if StringName(str(intent.get("edge", ""))) == &"held":
+		return {
+			"ok": true,
+			"code": WeaponActionContractScript.CODE_HOLDING,
+			"token": _token,
+			"generation": _generation,
+			"held_frames": _phase_frame,
+			"context": {},
+		}
+	return _release_hold(false)
+
+
+func _release_hold(automatic: bool) -> Dictionary:
+	if _runtime == null or _phase != &"HOLD" or _token <= 0:
+		return WeaponActionContractScript.failure(WeaponActionContractScript.CODE_STALE_HOLD_EDGE)
+	var phase_data := _current_phase_data()
+	var maximum_hold_frames := int(phase_data.get("duration_frames", 0))
+	var minimum_hold_frames := int(phase_data.get("minimum_hold_frames", 0))
+	var held_frames := mini(_phase_frame, maximum_hold_frames)
+	var released_token := _token
+	var released_generation := _generation
+	if held_frames < minimum_hold_frames:
+		cancel(&"hold_below_minimum")
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_HOLD_TOO_SHORT,
+			{
+				"held_frames": held_frames,
+				"minimum_hold_frames": minimum_hold_frames,
+				"automatic": automatic,
+			}
+		)
+
+	var runtime_before_value: Variant = _runtime.call("snapshot")
+	if not runtime_before_value is Dictionary:
+		cancel(&"hold_release_snapshot_type")
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_COMMIT_FAILED,
+			{"reason": "runtime_snapshot_type"}
+		)
+	var runtime_before := (runtime_before_value as Dictionary).duplicate(true)
+	var release_value: Variant = _runtime.call(
+		"release_hold",
+		_plan.duplicate(true),
+		_token,
+		held_frames
+	)
+	if not release_value is Dictionary or not bool((release_value as Dictionary).get("ok", false)):
+		var failure_result := (
+			_runtime_failure(release_value as Dictionary, WeaponActionContractScript.CODE_COMMIT_FAILED)
+			if release_value is Dictionary
+			else WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_COMMIT_FAILED,
+				{"reason": "hold_release_result_type"}
+			)
+		)
+		return _rollback_and_cancel_hold_release(runtime_before, failure_result)
+
+	var finalized_value: Variant = (release_value as Dictionary).get("finalized_plan")
+	if not finalized_value is Dictionary:
+		return _rollback_and_cancel_hold_release(
+			runtime_before,
+			WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": "finalized_plan", "reason": "type"}
+			)
+		)
+	var finalized_plan := (finalized_value as Dictionary).duplicate(true)
+	var finalized_validation: Dictionary = WeaponActionContractScript.validate_plan(
+		finalized_plan,
+		_weapon_id
+	)
+	if not bool(finalized_validation.get("ok", false)):
+		return _rollback_and_cancel_hold_release(runtime_before, finalized_validation)
+	var identity_validation := _validate_finalized_hold_identity(finalized_plan)
+	if not bool(identity_validation.get("ok", false)):
+		return _rollback_and_cancel_hold_release(runtime_before, identity_validation)
+	var finalized_phases: Array = finalized_plan.get("phases", [])
+	var finalized_phase_names: Array[StringName] = []
+	for phase_value: Variant in finalized_phases:
+		finalized_phase_names.append(StringName(str((phase_value as Dictionary).get("phase", ""))))
+	if finalized_phase_names != [&"WINDUP", &"ACTIVE", &"RECOVERY"]:
+		return _rollback_and_cancel_hold_release(
+			runtime_before,
+			WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": "phases", "reason": "invalid_hold_finalized_sequence"}
+			)
+		)
+
+	_plan = finalized_plan
+	_phase = PHASE_READY
+	_phase_index = -1
+	_phase_frame = 0
+	_hold_intent_id = &""
+	_phase_index = 0
+	_phase = StringName(str(_current_phase_data().get("phase", "")))
+	_enter_current_phase()
+	if _token != released_token or _generation != released_generation:
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_COMMIT_FAILED,
+			{"reason": "release_phase_failed"}
+		)
+	var release_context_value: Variant = (release_value as Dictionary).get("context", {})
+	var release_context := (
+		(release_context_value as Dictionary).duplicate(true)
+		if release_context_value is Dictionary
+		else {}
+	)
+	return {
+		"ok": true,
+		"code": WeaponActionContractScript.CODE_HOLD_RELEASED,
+		"token": released_token,
+		"generation": released_generation,
+		"held_frames": held_frames,
+		"automatic": automatic,
+		"context": release_context,
+	}
+
+
+func _validate_finalized_hold_identity(finalized_plan: Dictionary) -> Dictionary:
+	for field: String in ["weapon_id", "action_id", "profile_id", "profile_version"]:
+		var finalized_value: Variant = finalized_plan.get(field)
+		var skeleton_value: Variant = _plan.get(field)
+		if typeof(finalized_value) != typeof(skeleton_value) or finalized_value != skeleton_value:
+			return WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": field, "reason": "hold_identity_mismatch"}
+			)
+	return WeaponActionContractScript.success()
+
+
+func _rollback_and_cancel_hold_release(
+	runtime_before: Dictionary,
+	failure_result: Dictionary
+) -> Dictionary:
+	if not bool(_runtime.call("restore_snapshot", runtime_before.duplicate(true))):
+		reset_runtime_state(&"hold_release_rollback_failed")
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_COMMIT_FAILED,
+			{"reason": "rollback_failed"}
+		)
+	cancel(&"hold_release_failed")
+	return failure_result
 
 
 func _advance_phase(consume_buffered: bool) -> void:
@@ -381,6 +549,7 @@ func _clear_action_state() -> void:
 	_token = 0
 	_plan.clear()
 	_action_context.clear()
+	_hold_intent_id = &""
 
 
 func _validate_safe_snapshot(safe_snapshot: Dictionary) -> bool:
@@ -402,6 +571,8 @@ func _validate_safe_snapshot(safe_snapshot: Dictionary) -> bool:
 		return false
 	if not safe_snapshot.get("buffered_submission", {}) is Dictionary or not (safe_snapshot.get("buffered_submission", {}) as Dictionary).is_empty():
 		return false
+	if not str(safe_snapshot.get("hold_intent_id", "")).is_empty():
+		return false
 	return safe_snapshot.get("runtime") is Dictionary
 
 
@@ -421,6 +592,7 @@ func _runtime_has_contract(runtime: RefCounted) -> bool:
 		&"plan_intent",
 		&"commit_action",
 		&"on_phase_enter",
+		&"release_hold",
 		&"cancel_action",
 		&"finish_action",
 		&"apply_modifier",

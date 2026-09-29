@@ -16,9 +16,12 @@ class FakeWeaponRuntime:
 	var fail_commit_action: StringName = &""
 	var fail_restore: bool = false
 	var fail_active_entry: bool = false
+	var tamper_finalized_field: StringName = &""
 	var commit_attempts: int = 0
 	var cancel_calls: int = 0
 	var finish_calls: int = 0
+	var hold_release_calls: int = 0
+	var released_hold_frames: Array[int] = []
 	var phase_entries: Array[Dictionary] = []
 
 
@@ -69,7 +72,39 @@ class FakeWeaponRuntime:
 		phase_entries.append({"phase": str(phase), "token": token})
 		if phase == &"ACTIVE" and fail_active_entry:
 			return [{"type": "phase_failed", "reason": "test_active_failure"}]
+		if phase == &"ACTIVE":
+			return [
+				{"type": "payload_released", "token": token},
+				{"type": "cue_requested", "token": token},
+			]
 		return []
+
+
+	func release_hold(plan: Dictionary, token: int, held_frames: int) -> Dictionary:
+		if active_token != token:
+			return {"ok": false, "code": &"STALE_TOKEN"}
+		hold_release_calls += 1
+		released_hold_frames.append(held_frames)
+		var finalized_plan := plan.duplicate(true)
+		var finalized_phases: Array = finalized_plan.get("phases", [])
+		finalized_phases.pop_front()
+		finalized_plan["phases"] = finalized_phases
+		finalized_plan["held_frames"] = held_frames
+		match tamper_finalized_field:
+			&"weapon_id":
+				finalized_plan["weapon_id"] = "tampered_weapon"
+			&"action_id":
+				finalized_plan["action_id"] = "tampered_action"
+			&"profile_id":
+				finalized_plan["profile_id"] = "tampered_profile"
+			&"profile_version":
+				finalized_plan["profile_version"] = 2
+		return {
+			"ok": true,
+			"code": &"OK",
+			"finalized_plan": finalized_plan,
+			"context": {"held_frames": held_frames},
+		}
 
 
 	func cancel_action(token: int, _reason: StringName) -> void:
@@ -125,6 +160,38 @@ class FakeWeaponRuntime:
 
 
 	func _action_plan(intent_id: StringName) -> Dictionary:
+		if intent_id == &"weapon_ultimate":
+			return {
+				"weapon_id": "test_weapon",
+				"action_id": "hold_test",
+				"profile_id": "test_profile",
+				"profile_version": 1,
+				"phases": [
+					{
+						"phase": "HOLD",
+						"duration_frames": 5,
+						"minimum_hold_frames": 2,
+						"movement_multiplier": 0.25,
+					},
+					{
+						"phase": "WINDUP",
+						"duration_frames": 2,
+						"movement_multiplier": 0.5,
+					},
+					{
+						"phase": "ACTIVE",
+						"duration_frames": 1,
+						"movement_multiplier": 0.5,
+					},
+					{
+						"phase": "RECOVERY",
+						"duration_frames": 2,
+						"cancel_from_frame": 1,
+						"movement_multiplier": 0.5,
+					},
+				],
+				"payloads": [{"descriptor_id": "hold_hitbox"}],
+			}
 		var action_id := &"primary_test" if intent_id == &"weapon_primary" else &"secondary_test"
 		return {
 			"weapon_id": "test_weapon",
@@ -156,6 +223,7 @@ class FakeWeaponRuntime:
 
 var _suite
 var _committed_facts: Array[Dictionary] = []
+var _runtime_events: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -173,6 +241,13 @@ func _run() -> void:
 	_test_short_buffer_expires_before_cancel_window()
 	_test_cancel_invalidates_stale_tokens_idempotently()
 	_test_snapshot_is_isolated_and_safe_restore_is_generation_safe()
+	_test_hold_edges_keep_one_action_token_and_one_commit()
+	_test_hold_releases_automatically_once_at_maximum()
+	_test_under_minimum_hold_release_cancels_without_payload_or_cue()
+	_test_stale_hold_release_is_rejected_after_cancel()
+	_test_hold_snapshot_isolated_and_restore_rejection_is_atomic()
+	_test_tampered_finalized_hold_plan_rolls_back_and_cancels()
+	_test_contract_rejects_invalid_hold_boundaries()
 	_test_contract_rejects_non_finite_plans()
 	_test_contract_rejects_non_finite_plan_metadata()
 	_suite.finish(get_tree())
@@ -397,6 +472,229 @@ func _test_snapshot_is_isolated_and_safe_restore_is_generation_safe() -> void:
 	)
 
 
+func _test_hold_edges_keep_one_action_token_and_one_commit() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{"source": "hold_transaction"}
+	)
+	var token := int(pressed.get("token", 0))
+	var generation := int(pressed.get("generation", 0))
+	_suite.assert_true(bool(pressed.get("ok", false)), "hold press commits the transaction")
+	_suite.assert_equal(coordinator.phase_name(), &"HOLD", "hold press enters coordinator-owned HOLD")
+	_suite.assert_true(token > 0, "hold transaction receives an action token")
+
+	coordinator.advance_frame()
+	var held: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "held", "held_frames": 999},
+		{}
+	)
+	_suite.assert_true(bool(held.get("ok", false)), "held edge is acknowledged")
+	_suite.assert_equal(held.get("code"), &"HOLDING", "held edge reports HOLDING without recommit")
+	_suite.assert_equal(held.get("token"), token, "held edge keeps the original action token")
+	_suite.assert_equal(held.get("generation"), generation, "held edge keeps the original generation")
+	_suite.assert_equal(held.get("held_frames"), 1, "held edge reports the coordinator clock instead of trusting input frames")
+	_suite.assert_equal(runtime.commit_attempts, 1, "held edge does not commit a second runtime action")
+	_suite.assert_equal(_committed_facts.size(), 1, "held edge publishes no second commit fact")
+
+	coordinator.advance_frame()
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 999},
+		{}
+	)
+	_suite.assert_true(bool(released.get("ok", false)), "release at the minimum hold boundary succeeds")
+	_suite.assert_equal(released.get("code"), &"HOLD_RELEASED", "manual release reports a hold release")
+	_suite.assert_equal(released.get("token"), token, "release keeps the original action token")
+	_suite.assert_equal(released.get("generation"), generation, "release keeps the original generation")
+	_suite.assert_equal(released.get("held_frames"), 2, "release freezes the authoritative hold duration")
+	_suite.assert_equal(coordinator.phase_name(), &"WINDUP", "release advances the same action into windup")
+	_suite.assert_equal(
+		coordinator.snapshot().get("plan", {}).get("phases", [])[0].get("phase"),
+		"WINDUP",
+		"release atomically adopts a finalized plan without the HOLD skeleton phase"
+	)
+	_suite.assert_equal(runtime.hold_release_calls, 1, "runtime receives exactly one hold release")
+	_suite.assert_equal(runtime.released_hold_frames, [2], "runtime receives the coordinator-owned hold duration")
+	_suite.assert_equal(runtime.commit_attempts, 1, "release does not recommit the runtime action")
+	_suite.assert_equal(_committed_facts.size(), 1, "release publishes no second commit fact")
+
+
+func _test_hold_releases_automatically_once_at_maximum() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{}
+	)
+	var token := int(pressed.get("token", 0))
+	var generation := int(pressed.get("generation", 0))
+
+	_advance(coordinator, 5)
+	_suite.assert_equal(coordinator.phase_name(), &"WINDUP", "maximum hold advances automatically into windup")
+	_suite.assert_equal(coordinator.current_token(), token, "automatic release preserves the action token")
+	_suite.assert_equal(coordinator.generation(), generation, "automatic release preserves the generation")
+	_suite.assert_equal(runtime.hold_release_calls, 1, "maximum hold releases exactly once")
+	_suite.assert_equal(runtime.released_hold_frames, [5], "automatic release freezes the maximum hold duration")
+	_suite.assert_equal(runtime.commit_attempts, 1, "automatic release never recommits the action")
+
+	var stale_release: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 5},
+		{}
+	)
+	_suite.assert_true(not bool(stale_release.get("ok", false)), "release after automatic release is stale")
+	_suite.assert_equal(stale_release.get("code"), &"STALE_HOLD_EDGE", "stale automatic-release edge fails closed")
+	_suite.assert_equal(runtime.hold_release_calls, 1, "stale release cannot release the runtime twice")
+
+
+func _test_under_minimum_hold_release_cancels_without_payload_or_cue() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{}
+	)
+	var token := int(pressed.get("token", 0))
+	var generation := int(pressed.get("generation", 0))
+	coordinator.advance_frame()
+
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 999},
+		{}
+	)
+	_suite.assert_true(not bool(released.get("ok", false)), "under-minimum release is rejected")
+	_suite.assert_equal(released.get("code"), &"HOLD_TOO_SHORT", "under-minimum release reports its boundary failure")
+	_suite.assert_equal(released.get("context", {}).get("held_frames"), 1, "failure reports authoritative held frames")
+	_suite.assert_equal(released.get("context", {}).get("minimum_hold_frames"), 2, "failure reports the minimum boundary")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "under-minimum release cancels atomically to ready")
+	_suite.assert_equal(coordinator.current_token(), 0, "under-minimum release clears the action token")
+	_suite.assert_true(coordinator.generation() > generation, "under-minimum release invalidates the action generation")
+	_suite.assert_true(not coordinator.is_action_token_current(token, generation), "under-minimum release makes the token stale")
+	_suite.assert_equal(runtime.cancel_calls, 1, "under-minimum release cancels runtime exactly once")
+	_suite.assert_equal(runtime.hold_release_calls, 0, "under-minimum release never reaches runtime release")
+	_suite.assert_equal(_runtime_events.size(), 0, "under-minimum release emits no payload or cue")
+	_suite.assert_equal(_phase_names(runtime.phase_entries), ["HOLD"], "under-minimum release never enters payload phases")
+
+
+func _test_stale_hold_release_is_rejected_after_cancel() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{}
+	)
+	var token := int(pressed.get("token", 0))
+	var generation := int(pressed.get("generation", 0))
+	coordinator.cancel(&"dash_cancel")
+
+	_suite.assert_true(coordinator.generation() > generation, "dash cancellation invalidates the HOLD generation")
+	_suite.assert_true(not coordinator.is_action_token_current(token, generation), "dash cancellation invalidates the HOLD token")
+	var stale_release: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 4},
+		{}
+	)
+	_suite.assert_true(not bool(stale_release.get("ok", false)), "release after dash cancellation is rejected")
+	_suite.assert_equal(stale_release.get("code"), &"STALE_HOLD_EDGE", "cancelled HOLD release reports stale edge")
+	_suite.assert_equal(runtime.commit_attempts, 1, "stale release cannot create a new runtime action")
+	_suite.assert_equal(runtime.hold_release_calls, 0, "stale release cannot reach runtime release")
+	_suite.assert_equal(runtime.cancel_calls, 1, "dash cancellation remains idempotent after stale release")
+
+
+func _test_hold_snapshot_isolated_and_restore_rejection_is_atomic() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {})
+	coordinator.advance_frame()
+	var hold_snapshot: Dictionary = coordinator.snapshot()
+	var before_restore: Dictionary = coordinator.snapshot()
+	var exposed_plan: Dictionary = hold_snapshot["plan"]
+	var exposed_phases: Array = exposed_plan["phases"]
+	(exposed_phases[0] as Dictionary)["minimum_hold_frames"] = 0
+
+	_suite.assert_equal(
+		coordinator.snapshot()["plan"]["phases"][0]["minimum_hold_frames"],
+		2,
+		"mutating an exposed HOLD snapshot cannot alter coordinator boundaries"
+	)
+	_suite.assert_true(not coordinator.restore_safe(before_restore), "mid-HOLD restore is rejected")
+	_suite.assert_equal(coordinator.snapshot(), before_restore, "mid-HOLD restore rejection is atomic")
+	var presentation: Dictionary = coordinator.presentation_snapshot()
+	_suite.assert_equal(presentation.get("hold_frames"), 1, "presentation exposes authoritative HOLD progress")
+	_suite.assert_equal(presentation.get("minimum_hold_frames"), 2, "presentation exposes the minimum HOLD boundary")
+	_suite.assert_equal(presentation.get("maximum_hold_frames"), 5, "presentation exposes the maximum HOLD boundary")
+
+
+func _test_tampered_finalized_hold_plan_rolls_back_and_cancels() -> void:
+	for field: StringName in [&"weapon_id", &"action_id", &"profile_id", &"profile_version"]:
+		var fixture := _fixture()
+		var coordinator: RefCounted = fixture["coordinator"]
+		var runtime: FakeWeaponRuntime = fixture["runtime"]
+		runtime.tamper_finalized_field = field
+		var pressed: Dictionary = coordinator.submit_intent(
+			{"id": "weapon_ultimate", "edge": "pressed"},
+			{}
+		)
+		var token := int(pressed.get("token", 0))
+		var generation := int(pressed.get("generation", 0))
+		_advance(coordinator, 2)
+
+		var released: Dictionary = coordinator.submit_intent(
+			{"id": "weapon_ultimate", "edge": "released", "held_frames": 2},
+			{}
+		)
+		var label := str(field)
+		_suite.assert_true(not bool(released.get("ok", false)), "%s tampering is rejected" % label)
+		_suite.assert_equal(released.get("code"), WeaponActionContractScript.CODE_INVALID_PLAN, "%s tampering uses the plan contract failure" % label)
+		_suite.assert_equal(released.get("context", {}).get("field"), label, "%s tampering names the rejected field" % label)
+		_suite.assert_equal(coordinator.phase_name(), &"READY", "%s tampering cancels to ready" % label)
+		_suite.assert_equal(coordinator.current_token(), 0, "%s tampering clears the action token" % label)
+		_suite.assert_true(coordinator.generation() > generation, "%s tampering invalidates generation" % label)
+		_suite.assert_true(not coordinator.is_action_token_current(token, generation), "%s tampering cannot retain a stale token" % label)
+		_suite.assert_equal(runtime.cancel_calls, 1, "%s tampering cancels the restored runtime once" % label)
+		_suite.assert_equal(_runtime_events.size(), 0, "%s tampering emits no payload or cue" % label)
+		_suite.assert_equal(_committed_facts.size(), 1, "%s tampering publishes no second commit" % label)
+
+
+func _test_contract_rejects_invalid_hold_boundaries() -> void:
+	var invalid_minimum := {
+		"weapon_id": "test_weapon",
+		"action_id": "invalid_hold_minimum",
+		"phases": [{
+			"phase": "HOLD",
+			"duration_frames": 5,
+			"minimum_hold_frames": 6,
+		}],
+		"payloads": [],
+	}
+	var minimum_result: Dictionary = WeaponActionContractScript.validate_plan(invalid_minimum, &"test_weapon")
+	_suite.assert_true(not bool(minimum_result.get("ok", false)), "minimum HOLD boundary cannot exceed maximum duration")
+
+	var misplaced_hold := {
+		"weapon_id": "test_weapon",
+		"action_id": "misplaced_hold",
+		"phases": [
+			{"phase": "WINDUP", "duration_frames": 1},
+			{"phase": "HOLD", "duration_frames": 5, "minimum_hold_frames": 2},
+		],
+		"payloads": [],
+	}
+	var misplaced_result: Dictionary = WeaponActionContractScript.validate_plan(misplaced_hold, &"test_weapon")
+	_suite.assert_true(not bool(misplaced_result.get("ok", false)), "HOLD must be the first action phase")
+
+	var terminal_hold := {
+		"weapon_id": "test_weapon",
+		"action_id": "terminal_hold",
+		"phases": [{"phase": "HOLD", "duration_frames": 5, "minimum_hold_frames": 2}],
+		"payloads": [],
+	}
+	var terminal_result: Dictionary = WeaponActionContractScript.validate_plan(terminal_hold, &"test_weapon")
+	_suite.assert_true(not bool(terminal_result.get("ok", false)), "HOLD requires a release phase in the same action plan")
+
+
 func _test_contract_rejects_non_finite_plans() -> void:
 	var fixture := _fixture()
 	var coordinator: RefCounted = fixture["coordinator"]
@@ -425,10 +723,12 @@ func _test_contract_rejects_non_finite_plan_metadata() -> void:
 
 func _fixture() -> Dictionary:
 	_committed_facts.clear()
+	_runtime_events.clear()
 	var runtime := FakeWeaponRuntime.new()
 	var coordinator = WeaponActionCoordinatorScript.new()
 	_suite.assert_true(coordinator.configure(runtime), "coordinator accepts a weapon runtime fixture")
 	coordinator.weapon_action_committed.connect(_on_weapon_action_committed)
+	coordinator.weapon_runtime_event.connect(_on_weapon_runtime_event)
 	return {"coordinator": coordinator, "runtime": runtime}
 
 
@@ -456,3 +756,7 @@ func _on_weapon_action_committed(
 		"token": token,
 		"context": context.duplicate(true),
 	})
+
+
+func _on_weapon_runtime_event(event: Dictionary) -> void:
+	_runtime_events.append(event.duplicate(true))

@@ -3,6 +3,10 @@ extends RefCounted
 
 const CODE_OK := &"OK"
 const CODE_BUFFERED := &"BUFFERED"
+const CODE_HOLDING := &"HOLDING"
+const CODE_HOLD_RELEASED := &"HOLD_RELEASED"
+const CODE_HOLD_TOO_SHORT := &"HOLD_TOO_SHORT"
+const CODE_STALE_HOLD_EDGE := &"STALE_HOLD_EDGE"
 const CODE_INVALID_INTENT := &"INVALID_INTENT"
 const CODE_INVALID_PLAN := &"INVALID_PLAN"
 const CODE_NOT_CONFIGURED := &"NOT_CONFIGURED"
@@ -110,6 +114,12 @@ static func validate_plan(plan: Dictionary, expected_weapon_id: StringName = &""
 		var phase_result := _validate_phase(phase_value as Dictionary, phase_index)
 		if not bool(phase_result.get("ok", false)):
 			return phase_result
+	var first_phase: Dictionary = (phases_value as Array)[0]
+	if (
+		StringName(str(first_phase.get("phase", ""))) == &"HOLD"
+		and (phases_value as Array).size() < 2
+	):
+		return failure(CODE_INVALID_PLAN, {"field": "phases", "reason": "hold_requires_release_phase"})
 
 	var payloads_value: Variant = plan.get("payloads", [])
 	if not payloads_value is Array:
@@ -181,6 +191,31 @@ static func _validate_phase(phase: Dictionary, phase_index: int) -> Dictionary:
 				"index": phase_index,
 				"reason": "half_open_boundary",
 			})
+
+	if phase_name == &"HOLD":
+		if phase_index != 0:
+			return failure(CODE_INVALID_PLAN, {
+				"field": "phases.phase",
+				"index": phase_index,
+				"reason": "hold_must_be_first",
+			})
+		var minimum_value: Variant = phase.get("minimum_hold_frames")
+		if (
+			typeof(minimum_value) != TYPE_INT
+			or int(minimum_value) < 0
+			or int(minimum_value) > int(duration_value)
+		):
+			return failure(CODE_INVALID_PLAN, {
+				"field": "phases.minimum_hold_frames",
+				"index": phase_index,
+				"reason": "outside_hold_duration",
+			})
+	elif phase.has("minimum_hold_frames"):
+		return failure(CODE_INVALID_PLAN, {
+			"field": "phases.minimum_hold_frames",
+			"index": phase_index,
+			"reason": "phase",
+		})
 	return success()
 
 

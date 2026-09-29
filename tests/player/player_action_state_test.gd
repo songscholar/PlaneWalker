@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_attack_active_rejections()
 	_test_attack_recovery_cancel_window()
 	_test_weapon_phase_projection()
+	_test_hold_projection_is_interruptible_without_a_second_clock()
 	_test_weapon_projection_does_not_advance_a_second_clock()
 	_test_weapon_projection_respects_exclusive_states()
 	_test_buffer_only_advance_expires_inputs()
@@ -216,6 +217,25 @@ func _test_weapon_phase_projection() -> void:
 	_suite.assert_equal(action_state.elapsed_state_frames(), 3, "invalid projection preserves projected counters")
 	_suite.assert_true(action_state.clear_weapon_projection(), "weapon projection can be cleared when the coordinator returns ready")
 	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.FREE, "clearing weapon projection returns the compatibility view to free")
+
+
+func _test_hold_projection_is_interruptible_without_a_second_clock() -> void:
+	var action_state = PlayerActionStateScript.new()
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"HOLD", 1, 5),
+		"coordinator HOLD projects into the weapon action compatibility view"
+	)
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_WINDUP, "HOLD reuses the attack windup compatibility state")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 1, "HOLD projection copies the coordinator-owned frame")
+	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.DASH), "dash can interrupt a projected HOLD")
+	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.TIME_CAST), "time cast can interrupt a projected HOLD")
+	action_state.advance_frame()
+	_suite.assert_equal(action_state.elapsed_state_frames(), 1, "local advancement never creates a second HOLD clock")
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"WINDUP", 0, 2),
+		"released HOLD can project the same-token windup phase"
+	)
+	_suite.assert_true(not action_state.can_transition_to(PlayerActionStateScript.State.DASH), "ordinary windup remains non-interruptible")
 
 
 func _test_weapon_projection_does_not_advance_a_second_clock() -> void:

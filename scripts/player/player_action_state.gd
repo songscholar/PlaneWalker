@@ -15,6 +15,7 @@ enum State {
 const INPUT_BUFFER_FRAMES := 8
 const COMBO_BUFFER_FRAMES := 12
 const WEAPON_PHASE_TO_STATE: Dictionary = {
+	&"HOLD": State.ATTACK_WINDUP,
 	&"WINDUP": State.ATTACK_WINDUP,
 	&"ACTIVE": State.ATTACK_ACTIVE,
 	&"RECOVERY": State.ATTACK_RECOVERY,
@@ -34,6 +35,7 @@ var _state_frame: int = 0
 var _state_duration_frames: int = 0
 var _cancel_from_frame: int = -1
 var _weapon_projection_active: bool = false
+var _weapon_phase: StringName = &""
 
 
 func buffer_input(action_id: StringName, frames: int = INPUT_BUFFER_FRAMES) -> void:
@@ -79,6 +81,7 @@ func transition_to(next_state: State, duration_frames: int, cancel_from_frame: i
 	_state_duration_frames = 0 if next_state == State.DEAD else maxi(1, duration_frames)
 	_cancel_from_frame = maxi(0, cancel_from_frame) if next_state == State.ATTACK_RECOVERY and cancel_from_frame >= 0 else -1
 	_weapon_projection_active = false
+	_weapon_phase = &""
 	return true
 
 
@@ -107,6 +110,7 @@ func project_weapon_phase(
 	_state_duration_frames = duration_frames
 	_cancel_from_frame = cancel_from_frame if phase == &"RECOVERY" else -1
 	_weapon_projection_active = true
+	_weapon_phase = phase
 	return true
 
 
@@ -126,6 +130,8 @@ func can_transition_to(next_state: State) -> bool:
 		return current_state != State.DEAD
 	if current_state == State.HITSTUN:
 		return false
+	if _weapon_projection_active and _weapon_phase == &"HOLD":
+		return next_state in [State.DASH, State.TIME_CAST]
 
 	match current_state:
 		State.FREE:
@@ -212,6 +218,7 @@ func _return_to_free() -> void:
 	_state_duration_frames = 0
 	_cancel_from_frame = -1
 	_weapon_projection_active = false
+	_weapon_phase = &""
 
 
 func _is_weapon_state(state: State) -> bool:
