@@ -9,8 +9,41 @@ const BossScene := preload("res://scenes/enemies/boss_chrono_warden.tscn")
 const FloatingTextScript := preload("res://scripts/ui/floating_text_layer.gd")
 const CombatFeedbackOverlayScript := preload("res://scripts/presentation/combat_feedback_overlay.gd")
 const CombatTelegraphScript := preload("res://scripts/fx/combat_telegraph_2d.gd")
+const PixelProxyActorScript := preload("res://scripts/presentation/pixel_proxy_actor.gd")
 
 var _suite
+
+
+class SnapshotPlayer extends Node2D:
+	var weapon_snapshot: Dictionary = {
+		"weapon_id": "sword",
+		"action_id": "",
+		"phase": "READY",
+		"runtime": {"facing": Vector2.RIGHT},
+	}
+	var rewind_facing := Vector2.DOWN
+
+
+	func _init() -> void:
+		add_to_group("player")
+		var visual := Polygon2D.new()
+		visual.name = "Visual"
+		add_child(visual)
+
+
+	func weapon_presentation_snapshot() -> Dictionary:
+		return weapon_snapshot.duplicate(true)
+
+
+	func get_rewind_facing() -> Vector2:
+		return rewind_facing
+
+
+class VelocityActor extends CharacterBody2D:
+	func _init() -> void:
+		var visual := Polygon2D.new()
+		visual.name = "Visual"
+		add_child(visual)
 
 
 func _ready() -> void:
@@ -27,6 +60,7 @@ func _run() -> void:
 	_assert_overlay_contract()
 	await _assert_feedback_runtime_gates()
 	await _assert_floating_text_contract()
+	await _assert_player_weapon_snapshot_proxy_contract()
 	CombatFeedback.reset_feedback_for_test()
 	for _frame: int in range(6):
 		await get_tree().process_frame
@@ -191,7 +225,68 @@ func _assert_directional_proxy_contract(player: Node2D, proxy: Node) -> void:
 
 		_suite.assert_equal(player.global_position, gameplay_position, "proxy never moves the player")
 		_suite.assert_equal(player.velocity, gameplay_velocity, "proxy never changes gameplay velocity")
-		_suite.assert_equal(player.sword_weapon.rotation, weapon_rotation, "proxy only reads weapon angle")
+		_suite.assert_equal(player.sword_weapon.rotation, weapon_rotation, "proxy does not mutate the runtime adapter angle")
+
+
+func _assert_player_weapon_snapshot_proxy_contract() -> void:
+	var player := SnapshotPlayer.new()
+	add_child(player)
+	var proxy := PixelProxyActorScript.new()
+	player.add_child(proxy)
+	_suite.assert_true(proxy.bind_actor(player), "snapshot-only player binds to Pixel Proxy")
+
+	player.weapon_snapshot = {
+		"weapon_id": "sword",
+		"action_id": "light_2",
+		"phase": "WINDUP",
+		"runtime": {"facing": Vector2.LEFT},
+	}
+	proxy.advance_animation_for_test(0.01)
+	var windup: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(windup.get("state"), "attack", "weapon phase drives player attack presentation")
+	_suite.assert_equal(windup.get("weapon_phase"), "WINDUP", "proxy preserves the coordinator weapon phase")
+	_suite.assert_equal(windup.get("weapon_action_id"), "light_2", "proxy preserves the coordinator action identity")
+	_suite.assert_equal(windup.get("facing"), Vector2.LEFT, "weapon runtime snapshot drives attack facing")
+	_suite.assert_equal(windup.get("attack_direction"), Vector2.LEFT, "attack direction follows snapshot facing")
+
+	player.weapon_snapshot = {
+		"weapon_id": "sword",
+		"action_id": "",
+		"phase": "READY",
+		"runtime": {"facing": Vector2.LEFT},
+	}
+	proxy.advance_animation_for_test(0.01)
+	var ready: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(ready.get("state"), "idle", "ready weapon snapshot ends attack presentation")
+	_suite.assert_equal(ready.get("facing"), Vector2.DOWN, "non-weapon presentation keeps gameplay facing fallback")
+
+	player.weapon_snapshot = {
+		"weapon_id": "sword",
+		"action_id": "light_3",
+		"phase": "ACTIVE",
+		"facing": Vector2.UP,
+		"runtime": {},
+	}
+	proxy.advance_animation_for_test(0.01)
+	var top_level: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(top_level.get("facing"), Vector2.UP, "top-level weapon facing remains a compatible snapshot shape")
+
+	var velocity_actor := VelocityActor.new()
+	velocity_actor.velocity = Vector2.LEFT * 100.0
+	add_child(velocity_actor)
+	var velocity_proxy := PixelProxyActorScript.new()
+	velocity_actor.add_child(velocity_proxy)
+	_suite.assert_true(velocity_proxy.bind_actor(velocity_actor), "non-player velocity actor binds to Pixel Proxy")
+	velocity_proxy.advance_animation_for_test(0.01)
+	_suite.assert_equal(
+		velocity_proxy.get_snapshot_for_test().get("facing"),
+		Vector2.LEFT,
+		"non-player actors retain the velocity-facing fallback"
+	)
+
+	player.queue_free()
+	velocity_actor.queue_free()
+	await get_tree().process_frame
 
 
 func _assert_boss_proxy_semantics(boss: Node, proxy: Node) -> void:

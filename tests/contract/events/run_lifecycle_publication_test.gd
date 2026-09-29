@@ -8,6 +8,24 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const FIXED_SEED := 20260929
 
 
+class WeaponProfileFixture:
+	extends RefCounted
+
+	const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runtime_profiles.json"
+
+	static func m1_sword() -> Dictionary:
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PROFILE_CATALOG_PATH))
+		assert(parsed is Array, "weapon runtime profile catalog must contain an array")
+		for definition_value: Variant in parsed as Array:
+			if (
+				definition_value is Dictionary
+				and str((definition_value as Dictionary).get("id", "")) == "sword_m1_v1"
+			):
+				return (definition_value as Dictionary).duplicate(true)
+		assert(false, "weapon runtime profile catalog must contain sword_m1_v1")
+		return {}
+
+
 class RejectingLoadoutPlayer:
 	extends Node
 
@@ -68,6 +86,9 @@ class FailingInitialRoomFacade:
 			"phase": phase,
 			"config": config.duplicate(true),
 		}
+
+	func active_loadout() -> Dictionary:
+		return {"weapon_profile": WeaponProfileFixture.m1_sword()}
 
 	func create_room_runtime(_runner: Node) -> Node:
 		return FailingInitialRoomRuntime.new()
@@ -156,6 +177,9 @@ class SynchronousInitialRoomFacade:
 			"config": config.duplicate(true),
 			"open_offer": open_offer.duplicate(true),
 		}
+
+	func active_loadout() -> Dictionary:
+		return {"weapon_profile": WeaponProfileFixture.m1_sword()}
 
 	func create_room_runtime(_runner: Node) -> Node:
 		var runtime := SynchronousInitialRoomRuntime.new()

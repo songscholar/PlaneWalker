@@ -102,6 +102,10 @@ var _boss_luminance: float = 1.0
 var _has_committed_facing_property: bool = false
 var _has_velocity_property: bool = false
 var _has_exposure_sources_property: bool = false
+var _player_weapon_snapshot: Dictionary = {}
+var _weapon_phase: String = "READY"
+var _weapon_action_id: String = ""
+var _weapon_snapshot_available: bool = false
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -136,6 +140,7 @@ func bind_actor(actor: Node2D) -> bool:
 			health.died.connect(_on_died)
 	if actor.has_signal("attack_phase_changed") and not actor.attack_phase_changed.is_connected(_on_attack_phase_changed):
 		actor.attack_phase_changed.connect(_on_attack_phase_changed)
+	_refresh_player_weapon_presentation()
 	_update_presentation_facing()
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
@@ -157,6 +162,7 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 		_action_remaining = float(ACTION_DURATIONS.get(normalized, 0.2)) if duration <= 0.0 else duration
 	if normalized == &"hit" and _hit_flash_enabled:
 		_flash_remaining = maxf(_flash_remaining, 0.10)
+	_refresh_player_weapon_presentation()
 	_update_presentation_facing()
 	_apply_pixel_transform()
 	queue_redraw()
@@ -227,6 +233,9 @@ func get_snapshot_for_test() -> Dictionary:
 		"flash_active": _flash_remaining > 0.0,
 		"reduced_motion": _reduced_motion,
 		"velocity_capability_cached": _has_velocity_property,
+		"weapon_snapshot_available": _weapon_snapshot_available,
+		"weapon_phase": _weapon_phase,
+		"weapon_action_id": _weapon_action_id,
 		"boss_phase_marks": _boss_phase,
 		"boss_core_shape": _boss_core_shape,
 		"boss_texture_pattern": _boss_texture_pattern,
@@ -245,6 +254,7 @@ func _advance_animation(delta: float) -> void:
 	if not _reduced_motion:
 		_phase_clock += delta
 	_flash_remaining = maxf(0.0, _flash_remaining - delta)
+	_refresh_player_weapon_presentation()
 	if _action_remaining > 0.0:
 		_action_remaining = maxf(0.0, _action_remaining - delta)
 	elif _state != &"death":
@@ -258,24 +268,29 @@ func _advance_animation(delta: float) -> void:
 func _derive_state_from_actor() -> void:
 	if _actor == null or not is_instance_valid(_actor):
 		return
-	if _role == "player" and _actor.has_method("get_player_ui_snapshot"):
-		var snapshot: Dictionary = _actor.get_player_ui_snapshot()
-		match str(snapshot.get("action_state", "FREE")):
-			"ATTACK_WINDUP", "ATTACK_ACTIVE", "ATTACK_RECOVERY":
-				_state = &"attack"
-				return
-			"DASH":
-				_state = &"dash"
-				return
-			"TIME_CAST":
-				_state = &"cast"
-				return
-			"HITSTUN":
-				_state = &"hit"
-				return
-			"DEAD":
-				_state = &"death"
-				return
+	if _role == "player":
+		if _player_weapon_action_is_presented():
+			_state = &"attack"
+			return
+		if _actor.has_method("get_player_ui_snapshot"):
+			var snapshot: Dictionary = _actor.get_player_ui_snapshot()
+			match str(snapshot.get("action_state", "FREE")):
+				"ATTACK_WINDUP", "ATTACK_ACTIVE", "ATTACK_RECOVERY":
+					if not _weapon_snapshot_available:
+						_state = &"attack"
+						return
+				"DASH":
+					_state = &"dash"
+					return
+				"TIME_CAST":
+					_state = &"cast"
+					return
+				"HITSTUN":
+					_state = &"hit"
+					return
+				"DEAD":
+					_state = &"death"
+					return
 	if _has_velocity_property and (_actor.get("velocity") as Vector2).length_squared() > 64.0:
 		_state = &"move"
 	else:
@@ -287,10 +302,12 @@ func _update_presentation_facing() -> void:
 		return
 	var direction := _facing
 	if _role == "player":
-		if _state == &"attack":
-			var weapon := _actor.get_node_or_null("SwordWeapon") as Node2D
-			if weapon != null:
-				direction = Vector2.RIGHT.rotated(weapon.rotation)
+		if _state == &"attack" and _player_weapon_action_is_presented():
+			var weapon_facing := _player_weapon_facing()
+			if weapon_facing.length_squared() > 0.001:
+				direction = weapon_facing
+			elif _actor.has_method("get_rewind_facing"):
+				direction = _actor.get_rewind_facing()
 		elif _actor.has_method("get_rewind_facing"):
 			direction = _actor.get_rewind_facing()
 	elif _has_committed_facing_property:
@@ -306,6 +323,56 @@ func _update_presentation_facing() -> void:
 	_facing = _cardinal_direction(direction)
 	if _state == &"attack":
 		_attack_direction = _facing
+
+
+func _refresh_player_weapon_presentation() -> void:
+	if _role != "player" or _actor == null or not is_instance_valid(_actor):
+		return
+	if not _actor.has_method("weapon_presentation_snapshot"):
+		_player_weapon_snapshot.clear()
+		_weapon_phase = "READY"
+		_weapon_action_id = ""
+		_weapon_snapshot_available = false
+		return
+	var snapshot_value: Variant = _actor.call("weapon_presentation_snapshot")
+	if not snapshot_value is Dictionary:
+		_player_weapon_snapshot.clear()
+		_weapon_phase = "READY"
+		_weapon_action_id = ""
+		_weapon_snapshot_available = false
+		return
+	var next_snapshot := snapshot_value as Dictionary
+	if not next_snapshot.has("phase") or not next_snapshot.has("action_id"):
+		_player_weapon_snapshot.clear()
+		_weapon_phase = "READY"
+		_weapon_action_id = ""
+		_weapon_snapshot_available = false
+		return
+	_player_weapon_snapshot = next_snapshot.duplicate(true)
+	_weapon_phase = str(_player_weapon_snapshot.get("phase", "READY"))
+	_weapon_action_id = str(_player_weapon_snapshot.get("action_id", ""))
+	_weapon_snapshot_available = true
+
+
+func _player_weapon_action_is_presented() -> bool:
+	return (
+		_weapon_snapshot_available
+		and not _weapon_action_id.is_empty()
+		and _weapon_phase in ["WINDUP", "ACTIVE", "RECOVERY"]
+	)
+
+
+func _player_weapon_facing() -> Vector2:
+	var facing_value: Variant = _player_weapon_snapshot.get("facing")
+	if not facing_value is Vector2:
+		var runtime_value: Variant = _player_weapon_snapshot.get("runtime", {})
+		if runtime_value is Dictionary:
+			facing_value = (runtime_value as Dictionary).get("facing")
+	if facing_value is Vector2:
+		var facing := facing_value as Vector2
+		if facing.is_finite():
+			return facing
+	return Vector2.ZERO
 
 
 func _cardinal_direction(direction: Vector2) -> Vector2:

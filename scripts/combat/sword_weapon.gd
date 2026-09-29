@@ -38,6 +38,12 @@ func attack_definition(heavy: bool = false) -> Dictionary:
 		"heavy": heavy,
 		"finisher": bool(data["finisher"]),
 		"multiplier": float(data["multiplier"]),
+		"knockback": 260.0 if heavy else 120.0,
+		"tags": ["attack:heavy", "weapon:sword"] if heavy else (
+			["attack:finisher", "weapon:sword"]
+			if bool(data["finisher"])
+			else ["weapon:sword"]
+		),
 		"windup_frames": _seconds_to_frames(float(data["windup"])),
 		"active_frames": _seconds_to_frames(float(data["active"])),
 		"recovery_frames": _seconds_to_frames(float(data["recovery"])),
@@ -48,12 +54,16 @@ func attack_definition(heavy: bool = false) -> Dictionary:
 
 
 func begin_attack(heavy: bool = false) -> Dictionary:
-	if _attacking:
+	return begin_profile_attack(attack_definition(heavy))
+
+
+func begin_profile_attack(definition: Dictionary) -> Dictionary:
+	if _attacking or not _valid_profile_attack(definition):
 		return {}
-	_current_attack = attack_definition(heavy)
+	_current_attack = definition.duplicate(true)
 	_attacking = true
 	_active = false
-	if not heavy:
+	if not bool(_current_attack["heavy"]):
 		_combo_index = (_combo_index + 1) % LIGHT_COMBO.size()
 	return _current_attack.duplicate(true)
 
@@ -63,8 +73,13 @@ func is_attacking() -> bool:
 
 
 func enter_active_phase() -> bool:
-	if not _attacking or _active or _current_attack.is_empty():
+	return enter_profile_active_phase(_current_attack)
+
+
+func enter_profile_active_phase(definition: Dictionary) -> bool:
+	if not _attacking or _active or not _valid_profile_attack(definition):
 		return false
+	_current_attack = definition.duplicate(true)
 	_active = true
 	var effective_multiplier := float(_current_attack["multiplier"])
 	var heavy := bool(_current_attack["heavy"])
@@ -77,17 +92,14 @@ func enter_active_phase() -> bool:
 		effective_multiplier *= 1.0 + low_hp_damage_multiplier_bonus
 
 	var damage_info := DamageInfoScript.new(base_attack * effective_multiplier, DamageInfoScript.DamageType.PHYSICAL, self, owner_player)
-	damage_info.tags = ["weapon:sword"]
+	var profile_tags: Array[String] = []
+	for tag: Variant in _current_attack["tags"] as Array:
+		profile_tags.append(str(tag))
+	damage_info.tags = profile_tags
+	damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * float(_current_attack["knockback"])
 	if heavy:
-		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 260.0
-		damage_info.tags.append("attack:heavy")
 		if heavy_execute_multiplier_bonus > 0.0:
 			damage_info.tags.append("talent:ruin_execute")
-	else:
-		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 120.0
-		if finisher:
-			damage_info.tags.append("attack:finisher")
-	EventBus.player_attacked.emit(&"sword", {})
 	hitbox.activate(damage_info)
 	return true
 
@@ -121,3 +133,25 @@ func _owner_hp_ratio() -> float:
 	if health_component == null:
 		return 1.0
 	return float(health_component.current_hp) / maxf(1.0, float(health_component.max_hp))
+
+
+func _valid_profile_attack(definition: Dictionary) -> bool:
+	if (
+		typeof(definition.get("heavy")) != TYPE_BOOL
+		or typeof(definition.get("finisher")) != TYPE_BOOL
+		or typeof(definition.get("multiplier")) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(definition.get("multiplier", 0.0)))
+		or float(definition.get("multiplier", 0.0)) <= 0.0
+		or typeof(definition.get("knockback")) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(definition.get("knockback", 0.0)))
+		or float(definition.get("knockback", -1.0)) < 0.0
+		or not definition.get("tags") is Array
+	):
+		return false
+	var tags: Array = definition["tags"]
+	if tags.is_empty():
+		return false
+	for tag: Variant in tags:
+		if typeof(tag) not in [TYPE_STRING, TYPE_STRING_NAME] or str(tag).is_empty():
+			return false
+	return true

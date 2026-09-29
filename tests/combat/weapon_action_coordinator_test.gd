@@ -14,6 +14,8 @@ class FakeWeaponRuntime:
 	var active_action: StringName = &""
 	var reject_secondary: bool = false
 	var fail_commit_action: StringName = &""
+	var fail_restore: bool = false
+	var fail_active_entry: bool = false
 	var commit_attempts: int = 0
 	var cancel_calls: int = 0
 	var finish_calls: int = 0
@@ -65,6 +67,8 @@ class FakeWeaponRuntime:
 
 	func on_phase_enter(_plan: Dictionary, phase: StringName, token: int) -> Array[Dictionary]:
 		phase_entries.append({"phase": str(phase), "token": token})
+		if phase == &"ACTIVE" and fail_active_entry:
+			return [{"type": "phase_failed", "reason": "test_active_failure"}]
 		return []
 
 
@@ -99,6 +103,8 @@ class FakeWeaponRuntime:
 
 
 	func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
+		if fail_restore:
+			return false
 		if (
 			typeof(runtime_snapshot.get("resource")) != TYPE_INT
 			or typeof(runtime_snapshot.get("active_token")) != TYPE_INT
@@ -160,7 +166,10 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_test_rejected_plan_is_atomic()
 	_test_failed_commit_restores_runtime_and_coordinator()
+	_test_failed_commit_with_failed_rollback_resets_safe()
+	_test_phase_failure_cancels_safe()
 	_test_windup_active_recovery_and_cancel_boundary()
+	_test_buffer_consumption_can_be_deferred_for_external_priority()
 	_test_short_buffer_expires_before_cancel_window()
 	_test_cancel_invalidates_stale_tokens_idempotently()
 	_test_snapshot_is_isolated_and_safe_restore_is_generation_safe()
@@ -207,6 +216,56 @@ func _test_failed_commit_restores_runtime_and_coordinator() -> void:
 	_suite.assert_equal(_committed_facts.size(), 0, "failed commit publishes no committed fact")
 
 
+func _test_failed_commit_with_failed_rollback_resets_safe() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{"source": "rollback_failure_fixture"}
+	)
+	_advance(coordinator, 10)
+	var old_token := int(committed.get("token", 0))
+	var generation_before := int(coordinator.generation())
+	runtime.fail_commit_action = &"secondary_test"
+	runtime.fail_restore = true
+
+	var result: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_secondary", "edge": "pressed"},
+		{"source": "rollback_failure"}
+	)
+
+	_suite.assert_true(not bool(result.get("ok", false)), "failed rollback still reports a rejected commit")
+	_suite.assert_equal(result.get("code"), WeaponActionContractScript.CODE_COMMIT_FAILED, "failed rollback uses the commit failure code")
+	_suite.assert_equal(result.get("context", {}).get("reason"), "rollback_failed", "failed rollback is explicit")
+	_suite.assert_equal(runtime.resource, 8, "failed rollback resets runtime resources to a safe baseline")
+	_suite.assert_equal(runtime.active_token, 0, "failed rollback leaves no runtime action token")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "failed rollback leaves the coordinator ready")
+	_suite.assert_equal(coordinator.current_token(), 0, "failed rollback leaves no coordinator token")
+	_suite.assert_true(coordinator.generation() > generation_before, "failed rollback invalidates the replaced action generation")
+	_suite.assert_true(not coordinator.is_action_token_current(old_token, generation_before), "failed rollback cannot revive the replaced token")
+	_suite.assert_equal(_committed_facts.size(), 1, "failed replacement publishes no additional committed fact")
+
+
+func _test_phase_failure_cancels_safe() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	runtime.fail_active_entry = true
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	var token := int(committed.get("token", 0))
+	var generation := int(committed.get("generation", 0))
+	_advance(coordinator, 6)
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "phase failure returns coordinator to ready")
+	_suite.assert_equal(coordinator.current_token(), 0, "phase failure clears the action token")
+	_suite.assert_true(coordinator.generation() > generation, "phase failure invalidates the action generation")
+	_suite.assert_true(not coordinator.is_action_token_current(token, generation), "phase failure cannot retain a stale token")
+	_suite.assert_equal(runtime.cancel_calls, 1, "phase failure cancels the runtime exactly once")
+
+
 func _test_windup_active_recovery_and_cancel_boundary() -> void:
 	var fixture := _fixture()
 	var coordinator: RefCounted = fixture["coordinator"]
@@ -236,8 +295,12 @@ func _test_windup_active_recovery_and_cancel_boundary() -> void:
 
 	_advance(coordinator, 2)
 	_suite.assert_equal(coordinator.phase_name(), &"RECOVERY", "active advances to recovery")
+	_suite.assert_true(not coordinator.recovery_cancel_is_open(), "recovery cancel remains closed before its boundary")
+	var recovery_presentation: Dictionary = coordinator.presentation_snapshot()
+	_suite.assert_equal(recovery_presentation.get("cancel_from_frame"), 2, "presentation exposes the authoritative recovery cancel frame")
 	coordinator.advance_frame()
 	_suite.assert_equal(coordinator.phase_name(), &"RECOVERY", "buffer waits before the recovery cancel frame")
+	_suite.assert_true(not coordinator.recovery_cancel_is_open(), "first recovery frame remains outside the cancel window")
 	_suite.assert_equal(_committed_facts.size(), 1, "waiting buffer still publishes no fact")
 	coordinator.advance_frame()
 
@@ -255,6 +318,23 @@ func _test_windup_active_recovery_and_cancel_boundary() -> void:
 		["WINDUP", "ACTIVE", "RECOVERY", "WINDUP", "ACTIVE", "RECOVERY"],
 		"each committed action enters each declared phase exactly once"
 	)
+
+
+func _test_buffer_consumption_can_be_deferred_for_external_priority() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	coordinator.submit_intent({"id": "weapon_secondary", "edge": "pressed", "buffer_frames": 20}, {})
+	_advance(coordinator, 8)
+	_suite.assert_equal(coordinator.phase_name(), &"RECOVERY", "deferred fixture reaches recovery")
+	var original_token := int(coordinator.current_token())
+	coordinator.advance_frame(false)
+	coordinator.advance_frame(false)
+	_suite.assert_true(coordinator.recovery_cancel_is_open(), "deferred fixture reaches the cancel boundary")
+	_suite.assert_equal(coordinator.current_token(), original_token, "deferred advancement does not auto-commit the buffered weapon action")
+	_suite.assert_true(coordinator.consume_buffered_intent(), "external owner can release the buffered weapon action after priority arbitration")
+	_suite.assert_true(coordinator.current_token() != original_token, "released buffered action receives a new token")
+	_suite.assert_equal(coordinator.phase_name(), &"WINDUP", "released buffered action begins after arbitration")
 
 
 func _test_short_buffer_expires_before_cancel_window() -> void:

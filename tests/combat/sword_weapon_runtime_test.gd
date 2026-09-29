@@ -24,11 +24,13 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 	await _test_profile_snapshot_and_capabilities_are_isolated()
+	await _test_parser_valid_m1_profile_drift_is_rejected()
 	await _test_exact_m1_frame_table_and_combo_progression()
 	await _test_attack_speed_preserves_legacy_fractional_tick_rounding()
 	await _test_heavy_does_not_advance_light_combo()
 	await _test_payload_adapter_preserves_damage_knockback_tags_and_reward_hooks()
 	await _test_plan_and_commit_failures_are_atomic()
+	await _test_restore_snapshot_requires_quiescent_state()
 	await _test_snapshot_restore_cancel_and_reset()
 	_suite.finish(get_tree())
 
@@ -58,6 +60,91 @@ func _test_profile_snapshot_and_capabilities_are_isolated() -> void:
 	_suite.assert_equal(runtime.snapshot().get("profile_id"), "sword_m1_v1", "runtime snapshot retains profile identity")
 	_suite.assert_equal(runtime.snapshot().get("profile_version"), 1, "runtime snapshot retains profile version")
 	await _free_player(fixture["player"])
+
+
+func _test_parser_valid_m1_profile_drift_is_rejected() -> void:
+	var fixture := await _fixture()
+	var player: Node = fixture["player"]
+	var modifiers: RefCounted = fixture["modifiers"]
+	var canonical := _profile_definition()
+	var action_fields: Array[String] = [
+		"windup_frames",
+		"active_frames",
+		"recovery_frames",
+		"cancel_from_frame",
+		"buffer_frames",
+		"movement_multiplier",
+	]
+	for action_index: int in range((canonical["actions"] as Array).size()):
+		for field: String in action_fields:
+			var drift := canonical.duplicate(true)
+			var actions: Array = drift["actions"]
+			var action: Dictionary = actions[action_index]
+			if field == "movement_multiplier":
+				action[field] = float(action[field]) + 0.05
+			else:
+				action[field] = int(action[field]) + 1
+			actions[action_index] = action
+			drift["actions"] = actions
+			_assert_profile_drift_rejected(
+				player,
+				modifiers,
+				drift,
+				"%s.%s" % [str(action.get("action_id", "")), field]
+			)
+
+	for payload_index: int in range((canonical["payloads"] as Array).size()):
+		for field: String in ["damage_multiplier", "knockback", "tags"]:
+			var drift := canonical.duplicate(true)
+			var payloads: Array = drift["payloads"]
+			var payload: Dictionary = payloads[payload_index]
+			var parameters: Dictionary = payload["parameters"]
+			if field == "tags":
+				var tags: Array = (parameters["tags"] as Array).duplicate()
+				tags.append("drift:test")
+				parameters[field] = tags
+			else:
+				parameters[field] = float(parameters[field]) + 0.1
+			payload["parameters"] = parameters
+			payloads[payload_index] = payload
+			drift["payloads"] = payloads
+			_assert_profile_drift_rejected(
+				player,
+				modifiers,
+				drift,
+				"%s.%s" % [str(payload.get("payload_id", "")), field]
+			)
+
+	for action_index: int in range((canonical["actions"] as Array).size()):
+		var drift := canonical.duplicate(true)
+		var actions: Array = drift["actions"]
+		var action: Dictionary = actions[action_index]
+		var next_action: Dictionary = actions[(action_index + 1) % actions.size()]
+		action["cue_id"] = next_action["cue_id"]
+		actions[action_index] = action
+		drift["actions"] = actions
+		_assert_profile_drift_rejected(
+			player,
+			modifiers,
+			drift,
+			"%s.cue_id" % str(action.get("action_id", ""))
+		)
+
+	for cue_index: int in range((canonical["cues"] as Array).size()):
+		for field: String in ["animation_id", "vfx_id", "audio_id", "camera_id"]:
+			var drift := canonical.duplicate(true)
+			var cues: Array = drift["cues"]
+			var cue: Dictionary = cues[cue_index]
+			cue[field] = "%s_drift" % str(cue[field])
+			cues[cue_index] = cue
+			drift["cues"] = cues
+			_assert_profile_drift_rejected(
+				player,
+				modifiers,
+				drift,
+				"%s.%s" % [str(cue.get("cue_id", "")), field]
+			)
+	await _free_player(player)
 
 
 func _test_exact_m1_frame_table_and_combo_progression() -> void:
@@ -155,6 +242,13 @@ func _test_payload_adapter_preserves_damage_knockback_tags_and_reward_hooks() ->
 	var finisher_plan: Dictionary = runtime.plan_intent(_intent(&"weapon_primary"), {}).get("plan", {})
 	_suite.assert_true(runtime.apply_modifier(&"weapon.damage", 2.0), "live modifier changes after finisher plan freeze")
 	_suite.assert_true(bool(runtime.commit_action(finisher_plan, 303).get("ok", false)), "finisher commits")
+	sword.set("_current_attack", {
+		"heavy": false,
+		"finisher": false,
+		"multiplier": 99.0,
+		"knockback": 999.0,
+		"tags": ["forged:adapter"],
+	})
 	runtime.on_phase_enter(finisher_plan, &"ACTIVE", 303)
 	var finisher_damage: RefCounted = sword.hitbox.get("_active_damage_info")
 	_suite.assert_close(
@@ -211,6 +305,61 @@ func _test_plan_and_commit_failures_are_atomic() -> void:
 	forged_plan["action_id"] = "light_3"
 	_suite.assert_true(not bool(runtime.commit_action(forged_plan, 402).get("ok", false)), "stale or forged combo plan is rejected")
 	_suite.assert_equal(runtime.snapshot(), before, "forged plan rejection remains atomic")
+	await _free_player(fixture["player"])
+
+
+func _test_restore_snapshot_requires_quiescent_state() -> void:
+	var fixture := await _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var sword: Node = fixture["sword"]
+	var first: Dictionary = runtime.plan_intent(_intent(&"weapon_primary"), {}).get("plan", {})
+	runtime.commit_action(first, 451)
+	runtime.finish_action(451)
+	var safe_snapshot: Dictionary = runtime.snapshot()
+	_suite.assert_equal(safe_snapshot.get("combo_step"), 1, "safe snapshot retains committed combo progress")
+
+	var unsafe_snapshots: Array[Dictionary] = []
+	var with_token := safe_snapshot.duplicate(true)
+	with_token["active_token"] = 9
+	unsafe_snapshots.append({"name": "active token", "snapshot": with_token})
+	var with_phase := safe_snapshot.duplicate(true)
+	with_phase["active_phase"] = "WINDUP"
+	unsafe_snapshots.append({"name": "non-ready phase", "snapshot": with_phase})
+	var with_plan := safe_snapshot.duplicate(true)
+	with_plan["active_plan"] = {"action_id": "light_1"}
+	unsafe_snapshots.append({"name": "active plan", "snapshot": with_plan})
+	var with_modifiers := safe_snapshot.duplicate(true)
+	with_modifiers["modifier_snapshot"] = {"weapon.damage": 1.0}
+	unsafe_snapshots.append({"name": "active modifier snapshot", "snapshot": with_modifiers})
+	var with_active_adapter := safe_snapshot.duplicate(true)
+	(with_active_adapter["adapter"] as Dictionary)["active"] = true
+	unsafe_snapshots.append({"name": "active adapter", "snapshot": with_active_adapter})
+	var with_attacking_adapter := safe_snapshot.duplicate(true)
+	(with_attacking_adapter["adapter"] as Dictionary)["attacking"] = true
+	unsafe_snapshots.append({"name": "attacking adapter", "snapshot": with_attacking_adapter})
+	var with_current_attack := safe_snapshot.duplicate(true)
+	(with_current_attack["adapter"] as Dictionary)["current_attack"] = {"heavy": false}
+	unsafe_snapshots.append({"name": "adapter current attack", "snapshot": with_current_attack})
+	var with_mismatched_combo := safe_snapshot.duplicate(true)
+	(with_mismatched_combo["adapter"] as Dictionary)["combo_index"] = 2
+	unsafe_snapshots.append({"name": "adapter combo mismatch", "snapshot": with_mismatched_combo})
+
+	for unsafe_case: Dictionary in unsafe_snapshots:
+		runtime.reset_runtime_state(&"restore_test_reset")
+		_suite.assert_true(runtime.restore_snapshot(safe_snapshot), "safe baseline restores before rejection case")
+		var before: Dictionary = runtime.snapshot()
+		_suite.assert_true(
+			not runtime.restore_snapshot(unsafe_case["snapshot"]),
+			"restore rejects %s" % unsafe_case["name"]
+		)
+		_suite.assert_equal(runtime.snapshot(), before, "rejected %s snapshot is atomic" % unsafe_case["name"])
+		_suite.assert_true(not sword.is_attacking(), "rejected %s snapshot leaves adapter idle" % unsafe_case["name"])
+		_suite.assert_true(not sword.hitbox.is_active(), "rejected %s snapshot leaves hitbox closed" % unsafe_case["name"])
+
+	runtime.reset_runtime_state(&"restore_test_final")
+	_suite.assert_true(runtime.restore_snapshot(safe_snapshot), "quiescent snapshot remains accepted")
+	_suite.assert_equal(runtime.snapshot().get("combo_step"), 1, "quiescent restore preserves combo progression")
+	_suite.assert_equal(int(sword.get("_combo_index")), 1, "adapter combo index follows restored runtime combo")
 	await _free_player(fixture["player"])
 
 
@@ -301,6 +450,31 @@ func _profile_definition() -> Dictionary:
 		if definition_value is Dictionary and str((definition_value as Dictionary).get("id", "")) == "sword_m1_v1":
 			return (definition_value as Dictionary).duplicate(true)
 	return {}
+
+
+func _assert_profile_drift_rejected(
+	player: Node,
+	modifiers: RefCounted,
+	definition: Dictionary,
+	label: String
+) -> void:
+	var profile = WeaponRuntimeProfileScript.new()
+	var profile_result: Dictionary = profile.configure(definition)
+	_suite.assert_true(
+		bool(profile_result.get("ok", false)),
+		"%s drift remains parser-valid" % label
+	)
+	if not bool(profile_result.get("ok", false)):
+		return
+	var runtime = SwordWeaponRuntimeScript.new()
+	_suite.assert_true(
+		not runtime.configure(player, profile, modifiers),
+		"Sword runtime rejects parser-valid %s drift" % label
+	)
+	_suite.assert_true(
+		not bool(runtime.snapshot().get("configured", false)),
+		"rejected %s drift never activates the runtime" % label
+	)
 
 
 func _intent(intent_id: StringName) -> Dictionary:

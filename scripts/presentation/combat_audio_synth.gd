@@ -6,6 +6,8 @@ const VOICE_COUNT := 8
 
 const CUE_DEFINITIONS := {
 	&"sword_swing": {"duration": 0.09, "start_hz": 760.0, "end_hz": 310.0, "gain": 0.28, "wave": "square", "noise": 0.08},
+	&"sword_finisher": {"duration": 0.13, "start_hz": 620.0, "end_hz": 140.0, "gain": 0.38, "wave": "square", "noise": 0.16},
+	&"sword_heavy": {"duration": 0.17, "start_hz": 340.0, "end_hz": 72.0, "gain": 0.46, "wave": "saw", "noise": 0.22},
 	&"hit_light": {"duration": 0.08, "start_hz": 520.0, "end_hz": 180.0, "gain": 0.34, "wave": "triangle", "noise": 0.30},
 	&"hit_finisher": {"duration": 0.14, "start_hz": 430.0, "end_hz": 105.0, "gain": 0.48, "wave": "square", "noise": 0.38},
 	&"hit_heavy": {"duration": 0.18, "start_hz": 240.0, "end_hz": 62.0, "gain": 0.58, "wave": "sine", "noise": 0.44},

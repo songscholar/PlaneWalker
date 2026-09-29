@@ -237,6 +237,8 @@ func _connect_event_bus() -> void:
 		EventBus.hit_confirmed.connect(_on_hit_confirmed)
 	if not EventBus.player_attacked.is_connected(_on_player_attacked):
 		EventBus.player_attacked.connect(_on_player_attacked)
+	if not EventBus.weapon_cue_requested.is_connected(_on_weapon_cue_requested):
+		EventBus.weapon_cue_requested.connect(_on_weapon_cue_requested)
 	if not EventBus.player_dashed.is_connected(_on_player_dashed):
 		EventBus.player_dashed.connect(_on_player_dashed)
 	if not EventBus.time_skill_started.is_connected(_on_time_skill_started):
@@ -321,7 +323,9 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 	return (HIT_PROFILES["generic"] as Dictionary).duplicate(true)
 
 
-func _on_player_attacked(_weapon_id: StringName, _context: Dictionary) -> void:
+func _on_player_attacked(weapon_id: StringName, _context: Dictionary) -> void:
+	if weapon_id == &"sword":
+		return
 	var player := _first_player()
 	if player == null:
 		return
@@ -330,6 +334,29 @@ func _on_player_attacked(_weapon_id: StringName, _context: Dictionary) -> void:
 		proxy.play_action(&"attack")
 	if _audio != null:
 		_audio.play_cue(&"sword_swing", 0.8)
+
+
+func _on_weapon_cue_requested(
+	_weapon_id: StringName,
+	_action_id: StringName,
+	_token: int,
+	cue: Dictionary
+) -> void:
+	var player := _first_player()
+	if player != null:
+		var proxy := _ensure_actor_proxy(player)
+		if proxy != null:
+			proxy.play_action(&"attack")
+	var audio_id := StringName(str(cue.get("audio_id", "")))
+	if _audio != null and audio_id != &"":
+		_audio.play_cue(audio_id, 0.8)
+	match str(cue.get("camera_id", "")):
+		"impact_medium":
+			add_camera_trauma(1.0)
+		"impact_heavy":
+			add_camera_trauma(1.5)
+		"impact_ultimate":
+			add_camera_trauma(2.0)
 
 
 func _on_player_dashed(_context: Dictionary) -> void:

@@ -4,10 +4,21 @@ extends CharacterBody2D
 const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
+const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
+const SwordWeaponRuntimeScript := preload("res://scripts/combat/weapons/sword_weapon_runtime.gd")
+const WeaponActionCoordinatorScript := preload("res://scripts/combat/weapons/weapon_action_coordinator.gd")
+const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_modifier_state.gd")
+const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 
 const DEFAULT_LOADOUT_CONFIG := {
 	"weapon_id": "sword",
 	"enabled_time_skills": ["stop", "rewind"],
+}
+const WEAPON_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runtime_profiles.json"
+const WEAPON_MODIFIER_BOUNDS := {
+	"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
+	"weapon.charge_rate": {"minimum": 0.0, "maximum": 5.0},
+	"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
 }
 
 @export var stats: Resource
@@ -29,11 +40,13 @@ var _time_acceleration_multiplier: float = 1.0
 var _time_acceleration_token: int = 0
 var _time_acceleration_remaining: float = 0.0
 var action_state = PlayerActionStateScript.new()
-var _active_attack_definition: Dictionary = {}
-var _combo_window_frames_remaining: int = 0
-var _buffered_attack_heavy: bool = false
+var weapon_action_coordinator: RefCounted
+var weapon_runtime: RefCounted
+var weapon_runtime_profile: RefCounted
+var weapon_modifier_state: RefCounted
+var _weapon_combo_timeout_frames: int = 0
+var _weapon_profile_compatibility_fallback: bool = false
 var _buffered_time_skill: StringName = &""
-var _action_generation: int = 0
 
 const DASH_DURATION := 0.28
 const DASH_COOLDOWN := 0.45
@@ -60,8 +73,7 @@ func _physics_process(delta: float) -> void:
 	_update_timers(delta)
 	advance_action_frame()
 	_update_weapon_aim()
-	_handle_attack_input()
-	_handle_time_input()
+	_handle_priority_action_input()
 	_handle_movement(delta)
 
 
@@ -77,15 +89,40 @@ func _update_weapon_aim() -> void:
 		bow_weapon.rotation = aim_direction.angle()
 
 
-func _handle_attack_input() -> void:
-	if Input.is_action_just_pressed("attack"):
-		try_action(&"attack")
-	if Input.is_action_just_pressed("heavy_attack"):
-		try_action(&"heavy_attack")
+func _handle_priority_action_input() -> void:
+	var time_actions: Array[StringName] = []
+	for action_id: StringName in [&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate"]:
+		if Input.is_action_just_pressed(action_id):
+			time_actions.append(action_id)
+	var weapon_actions: Array[StringName] = []
+	for action_id: StringName in [&"attack", &"heavy_attack"]:
+		if Input.is_action_just_pressed(action_id):
+			weapon_actions.append(action_id)
+	_submit_priority_action_edges(
+		Input.is_action_just_pressed("dash"),
+		time_actions,
+		weapon_actions
+	)
 	handle_ranged_input_for_test(
 		Input.is_action_just_pressed("ranged_attack"),
 		Input.is_action_just_released("ranged_attack")
 	)
+
+
+func _submit_priority_action_edges(
+	dash_pressed: bool,
+	time_actions: Array[StringName],
+	weapon_actions: Array[StringName]
+) -> bool:
+	if dash_pressed and try_action(&"dash"):
+		return true
+	for action_id: StringName in time_actions:
+		if try_action(action_id):
+			return true
+	for action_id: StringName in weapon_actions:
+		if try_action(action_id):
+			return true
+	return false
 
 
 func handle_ranged_input_for_test(just_pressed: bool, just_released: bool) -> void:
@@ -112,24 +149,10 @@ func _commit_ranged_input(action_id: StringName) -> bool:
 	return false
 
 
-func _handle_time_input() -> void:
-	if Input.is_action_just_pressed("time_stop"):
-		try_action(&"time_stop")
-	if Input.is_action_just_pressed("time_rewind"):
-		try_action(&"time_rewind")
-	if Input.is_action_just_pressed("time_rift"):
-		try_action(&"time_rift")
-	if Input.is_action_just_pressed("time_accelerate"):
-		try_action(&"time_accelerate")
-
-
 func _handle_movement(_delta: float) -> void:
 	var input_vector := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if input_vector.length_squared() > 0.001:
 		_last_move_direction = input_vector.normalized()
-
-	if Input.is_action_just_pressed("dash"):
-		try_action(&"dash")
 
 	if action_state.current_state == PlayerActionStateScript.State.DASH:
 		velocity = _dash_velocity + _knockback_velocity
@@ -143,9 +166,9 @@ func try_action(action_id: StringName) -> bool:
 		return false
 	match action_id:
 		&"attack":
-			return loadout_runtime.has_weapon(&"sword") and _request_attack(false)
+			return loadout_runtime.has_weapon(&"sword") and _submit_weapon_intent(&"weapon_primary")
 		&"heavy_attack":
-			return loadout_runtime.has_weapon(&"sword") and _request_attack(true)
+			return loadout_runtime.has_weapon(&"sword") and _submit_weapon_intent(&"weapon_secondary")
 		&"ranged_attack", &"ranged_release":
 			return _commit_ranged_input(action_id)
 		&"dash":
@@ -160,26 +183,58 @@ func try_action(action_id: StringName) -> bool:
 
 
 func configure_loadout(config: Dictionary) -> bool:
-	if loadout_runtime == null or not loadout_runtime.configure(config):
+	if loadout_runtime == null:
 		return false
+	var next_config := config.duplicate(true)
+	var next_weapon_id := StringName(str(next_config.get("weapon_id", "")))
+	var explicit_weapon_profile := next_config.has("weapon_profile")
+	var used_compatibility_profile := false
+	if next_weapon_id == &"sword" and not next_config.has("weapon_profile"):
+		var default_profile := _weapon_profile_definition(&"sword")
+		if default_profile.is_empty():
+			return false
+		next_config["weapon_profile"] = default_profile
+		used_compatibility_profile = true
+	if explicit_weapon_profile and not _profile_allows_milestone(next_config):
+		return false
+
+	var validator = PlayerLoadoutRuntimeScript.new()
+	var loadout_is_valid := validator.configure(next_config)
+	validator.free()
+	if not loadout_is_valid:
+		return false
+
+	var assembly := _assemble_weapon_runtime(next_config)
+	if not bool(assembly.get("ok", false)):
+		return false
+	if not loadout_runtime.configure(next_config):
+		return false
+
+	_disconnect_weapon_coordinator()
+	weapon_runtime_profile = assembly.get("profile") as RefCounted
+	weapon_modifier_state = assembly.get("modifiers") as RefCounted
+	weapon_runtime = assembly.get("runtime") as RefCounted
+	weapon_action_coordinator = assembly.get("coordinator") as RefCounted
+	_weapon_profile_compatibility_fallback = used_compatibility_profile
+	_connect_weapon_coordinator()
 	reset_runtime_state()
 	return true
 
 
 func reset_runtime_state() -> void:
-	_action_generation += 1
 	action_state.reset_runtime_state()
-	_active_attack_definition.clear()
-	_combo_window_frames_remaining = 0
-	_buffered_attack_heavy = false
+	_weapon_combo_timeout_frames = 0
 	_buffered_time_skill = &""
 	_dash_cooldown_remaining = 0.0
 	_dash_velocity = Vector2.ZERO
 	_knockback_velocity = Vector2.ZERO
 	velocity = Vector2.ZERO
 	_last_move_direction = Vector2.RIGHT
-	sword_weapon.cancel_attack()
-	sword_weapon.reset_combo()
+	if weapon_action_coordinator != null:
+		weapon_action_coordinator.reset_runtime_state(&"player_runtime_reset")
+	else:
+		sword_weapon.cancel_attack()
+		sword_weapon.reset_combo()
 	bow_weapon.reset_runtime_state()
 	time_manager.reset_runtime_state()
 	_force_clear_time_acceleration()
@@ -190,29 +245,29 @@ func reset_runtime_state() -> void:
 
 
 func advance_action_frame() -> void:
-	if _combo_window_frames_remaining > 0:
-		_combo_window_frames_remaining -= 1
-		if _combo_window_frames_remaining == 0:
-			sword_weapon.reset_combo()
+	if _weapon_combo_timeout_frames > 0:
+		_weapon_combo_timeout_frames -= 1
+		if _weapon_combo_timeout_frames == 0 and weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
+			weapon_runtime.call("reset_combo")
 
-	var previous_state: int = action_state.current_state
 	action_state.advance_frame()
-	if previous_state == PlayerActionStateScript.State.ATTACK_RECOVERY and action_state.current_state == PlayerActionStateScript.State.FREE:
-		sword_weapon.finish_attack()
-		_active_attack_definition.clear()
+	if weapon_action_coordinator != null:
+		weapon_action_coordinator.advance_frame(false)
+		_sync_weapon_action_projection()
 
-	if action_state.current_state == PlayerActionStateScript.State.ATTACK_WINDUP and action_state.is_state_complete():
-		_enter_attack_active()
-	elif action_state.current_state == PlayerActionStateScript.State.ATTACK_ACTIVE and action_state.is_state_complete():
-		_enter_attack_recovery()
-
-	_consume_buffered_action()
+	var external_action_consumed := _consume_buffered_action()
+	if (
+		not external_action_consumed
+		and weapon_action_coordinator != null
+		and weapon_action_coordinator.consume_buffered_intent()
+	):
+		_sync_weapon_action_projection()
 
 
 func get_action_movement_multiplier() -> float:
+	if weapon_action_coordinator != null and weapon_action_coordinator.phase_name() != &"READY":
+		return weapon_action_coordinator.movement_multiplier()
 	match action_state.current_state:
-		PlayerActionStateScript.State.ATTACK_WINDUP, PlayerActionStateScript.State.ATTACK_ACTIVE, PlayerActionStateScript.State.ATTACK_RECOVERY:
-			return float(_active_attack_definition.get("movement_multiplier", 1.0))
 		PlayerActionStateScript.State.DASH:
 			return DASH_SPEED / maxf(1.0, float(stats.move_speed))
 		PlayerActionStateScript.State.TIME_CAST:
@@ -234,12 +289,12 @@ func apply_hitstun_frames(duration_frames: int) -> bool:
 
 
 func cancel_transient_actions() -> void:
-	_action_generation += 1
 	action_state.clear_buffered_inputs()
 	action_state.force_safe_reset()
-	_combo_window_frames_remaining = 0
-	sword_weapon.reset_combo()
+	_weapon_combo_timeout_frames = 0
 	_clear_transient_effects()
+	if weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
+		weapon_runtime.call("reset_combo")
 
 
 func cancel_active_time_effects(reason: StringName = &"player_cancel") -> void:
@@ -256,11 +311,13 @@ func restore_rewind_safe_action_state(state: Dictionary) -> bool:
 		return false
 	if str(state.get("action_state", "FREE")) != "FREE":
 		return false
-	_active_attack_definition.clear()
-	_combo_window_frames_remaining = 0
-	sword_weapon.reset_combo()
+	_weapon_combo_timeout_frames = 0
+	if weapon_action_coordinator != null:
+		weapon_action_coordinator.reset_runtime_state(&"rewind_restore")
+	else:
+		sword_weapon.cancel_attack()
+		sword_weapon.reset_combo()
 	_dash_velocity = Vector2.ZERO
-	_buffered_attack_heavy = false
 	_buffered_time_skill = &""
 	return action_state.force_safe_reset()
 
@@ -291,55 +348,94 @@ func get_player_ui_snapshot() -> Dictionary:
 		"energy": clampf(float(time_manager.energy), 0.0, float(time_manager.max_energy)),
 		"max_energy": maxf(1.0, float(time_manager.max_energy)),
 		"action_state": state_name,
+		"weapon": weapon_presentation_snapshot(),
 		"time_slots": time_slots.duplicate(true),
 	}
 
 
-func _request_attack(heavy: bool) -> bool:
-	if action_state.can_transition_to(PlayerActionStateScript.State.ATTACK_WINDUP):
-		return _begin_attack(heavy)
-	if _can_buffer_committed_action():
-		_buffered_attack_heavy = heavy
-		action_state.buffer_input(&"combo", PlayerActionStateScript.COMBO_BUFFER_FRAMES)
-		return true
-	return false
+func weapon_presentation_snapshot() -> Dictionary:
+	var result: Dictionary = {
+		"weapon_id": str(loadout_runtime.weapon_id()) if loadout_runtime != null else "",
+		"action_id": "",
+		"phase": "READY",
+		"phase_frame": 0,
+		"phase_duration_frames": 0,
+		"cancel_from_frame": -1,
+		"movement_multiplier": 1.0,
+		"token": 0,
+		"generation": 0,
+		"runtime": {},
+	}
+	if weapon_action_coordinator != null:
+		result = weapon_action_coordinator.presentation_snapshot()
+	var profile_snapshot: Dictionary = (
+		loadout_runtime.weapon_profile_snapshot()
+		if loadout_runtime != null and loadout_runtime.has_method("weapon_profile_snapshot")
+		else {}
+	)
+	result["profile_id"] = str(profile_snapshot.get("id", ""))
+	result["profile_version"] = int(profile_snapshot.get("profile_version", 0))
+	result["compatibility_profile_fallback"] = _weapon_profile_compatibility_fallback
+	return result.duplicate(true)
 
 
-func _begin_attack(heavy: bool) -> bool:
-	if not action_state.can_transition_to(PlayerActionStateScript.State.ATTACK_WINDUP):
+func apply_weapon_modifier(capability: StringName, value: Variant) -> bool:
+	if weapon_runtime == null or not weapon_runtime.has_method("apply_modifier"):
 		return false
-	if action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY:
-		sword_weapon.cancel_attack()
-		_active_attack_definition.clear()
-	var definition: Dictionary = sword_weapon.attack_definition(heavy)
-	if not action_state.transition_to(PlayerActionStateScript.State.ATTACK_WINDUP, int(definition["windup_frames"])):
+	return bool(weapon_runtime.call("apply_modifier", capability, value))
+
+
+func apply_weapon_effect(effect_id: StringName, value: Variant) -> bool:
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
 		return false
-	var committed: Dictionary = sword_weapon.begin_attack(heavy)
-	if committed.is_empty():
-		action_state.force_safe_reset()
-		return false
-	_active_attack_definition = committed
-	_combo_window_frames_remaining = int(committed["combo_reset_frames"])
+	var numeric := float(value)
+	match effect_id:
+		&"combo_finisher_multiplier_bonus":
+			sword_weapon.combo_finisher_multiplier_bonus += numeric
+		&"heavy_damage_multiplier_bonus":
+			sword_weapon.heavy_damage_multiplier_bonus += numeric
+		&"heavy_execute_multiplier_bonus":
+			sword_weapon.heavy_execute_multiplier_bonus += numeric
+		&"heavy_execute_threshold":
+			sword_weapon.heavy_execute_threshold = numeric
+		&"low_hp_damage_multiplier_bonus":
+			sword_weapon.low_hp_damage_multiplier_bonus += numeric
+		&"bow_charge_rate_bonus":
+			bow_weapon.charge_rate_bonus += numeric
+		&"bow_full_charge_damage_multiplier_bonus":
+			bow_weapon.full_charge_damage_multiplier_bonus += numeric
+		&"bow_pierce_bonus":
+			bow_weapon.pierce_bonus += int(value)
+		_:
+			return false
 	return true
 
 
-func _enter_attack_active() -> void:
-	if _active_attack_definition.is_empty():
-		cancel_transient_actions()
-		return
-	if not action_state.transition_to(PlayerActionStateScript.State.ATTACK_ACTIVE, int(_active_attack_definition["active_frames"])):
-		return
-	if not sword_weapon.enter_active_phase():
-		cancel_transient_actions()
-
-
-func _enter_attack_recovery() -> void:
-	sword_weapon.leave_active_phase()
-	action_state.transition_to(
-		PlayerActionStateScript.State.ATTACK_RECOVERY,
-		int(_active_attack_definition["recovery_frames"]),
-		int(_active_attack_definition["recovery_cancel_frame"])
+func _submit_weapon_intent(semantic_action: StringName) -> bool:
+	if weapon_action_coordinator == null:
+		return false
+	if action_state.current_state in [
+		PlayerActionStateScript.State.DASH,
+		PlayerActionStateScript.State.TIME_CAST,
+		PlayerActionStateScript.State.HITSTUN,
+		PlayerActionStateScript.State.DEAD,
+	]:
+		return false
+	var result: Dictionary = weapon_action_coordinator.submit_intent(
+		{
+			"id": str(semantic_action),
+			"edge": "pressed",
+			"buffer_frames": PlayerActionStateScript.COMBO_BUFFER_FRAMES,
+		},
+		{
+			"aim_direction": Vector2.RIGHT.rotated(sword_weapon.global_rotation),
+			"facing": _last_move_direction,
+		}
 	)
+	if not bool(result.get("ok", false)):
+		return false
+	_sync_weapon_action_projection()
+	return true
 
 
 func _request_dash() -> bool:
@@ -355,8 +451,7 @@ func _begin_dash() -> bool:
 	if _dash_cooldown_remaining > 0.0 or not action_state.can_transition_to(PlayerActionStateScript.State.DASH):
 		return false
 	if action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY:
-		sword_weapon.cancel_attack()
-		_active_attack_definition.clear()
+		_cancel_weapon_action(&"dash_cancel")
 	if not action_state.transition_to(PlayerActionStateScript.State.DASH, _seconds_to_frames(DASH_DURATION)):
 		return false
 	_dash_cooldown_remaining = DASH_COOLDOWN
@@ -386,8 +481,7 @@ func _begin_time_skill(skill_id: StringName, context: Dictionary = {}) -> bool:
 	if not time_manager.can_use(skill_id, committed_context):
 		return false
 	if action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY:
-		sword_weapon.cancel_attack()
-		_active_attack_definition.clear()
+		_cancel_weapon_action(&"time_cast_cancel")
 	if not action_state.transition_to(PlayerActionStateScript.State.TIME_CAST, _seconds_to_frames(TIME_CAST_DURATION)):
 		return false
 	var committed: bool = time_manager.try_use(skill_id, committed_context)
@@ -396,19 +490,16 @@ func _begin_time_skill(skill_id: StringName, context: Dictionary = {}) -> bool:
 	return committed
 
 
-func _consume_buffered_action() -> void:
+func _consume_buffered_action() -> bool:
 	var buffered_action := action_state.consume_highest_priority_buffered_input()
 	match buffered_action:
 		&"dash":
-			_begin_dash()
+			return _begin_dash()
 		&"time_cast":
 			var skill_id := _buffered_time_skill
 			_buffered_time_skill = &""
-			_begin_time_skill(skill_id, _time_skill_context(skill_id))
-		&"combo", &"attack":
-			var heavy := _buffered_attack_heavy
-			_buffered_attack_heavy = false
-			_begin_attack(heavy)
+			return _begin_time_skill(skill_id, _time_skill_context(skill_id))
+	return false
 
 
 func _can_buffer_committed_action() -> bool:
@@ -417,6 +508,193 @@ func _can_buffer_committed_action() -> bool:
 		PlayerActionStateScript.State.ATTACK_ACTIVE,
 		PlayerActionStateScript.State.ATTACK_RECOVERY,
 	]
+
+
+func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
+	var weapon_id := StringName(str(config.get("weapon_id", "")))
+	if weapon_id != &"sword":
+		return {
+			"ok": true,
+			"profile": null,
+			"modifiers": null,
+			"runtime": null,
+			"coordinator": null,
+		}
+
+	var profile_value: Variant = config.get("weapon_profile", {})
+	if not profile_value is Dictionary or (profile_value as Dictionary).is_empty():
+		return {"ok": false, "reason": "profile_missing"}
+	var next_profile = WeaponRuntimeProfileScript.new()
+	var profile_result: Dictionary = next_profile.configure((profile_value as Dictionary).duplicate(true))
+	if not bool(profile_result.get("ok", false)):
+		return {"ok": false, "reason": "profile_invalid", "context": profile_result.duplicate(true)}
+
+	var profile_snapshot: Dictionary = next_profile.snapshot()
+	if StringName(str(profile_snapshot.get("weapon_id", ""))) != weapon_id:
+		return {"ok": false, "reason": "profile_weapon_mismatch"}
+	var capabilities := PackedStringArray(profile_snapshot.get("capabilities", []))
+	var bounds := _modifier_bounds_for(capabilities)
+	if bounds.size() != capabilities.size():
+		return {"ok": false, "reason": "capability_bounds_missing"}
+	var next_modifiers = WeaponModifierStateScript.new()
+	if not next_modifiers.configure(capabilities, bounds):
+		return {"ok": false, "reason": "modifier_configuration_failed"}
+
+	var next_runtime = SwordWeaponRuntimeScript.new()
+	if not next_runtime.configure(self, next_profile, next_modifiers):
+		return {"ok": false, "reason": "runtime_configuration_failed"}
+	var next_coordinator = WeaponActionCoordinatorScript.new()
+	if not next_coordinator.configure(next_runtime):
+		return {"ok": false, "reason": "coordinator_configuration_failed"}
+	return {
+		"ok": true,
+		"profile": next_profile,
+		"modifiers": next_modifiers,
+		"runtime": next_runtime,
+		"coordinator": next_coordinator,
+	}
+
+
+func _modifier_bounds_for(capabilities: PackedStringArray) -> Dictionary:
+	var bounds: Dictionary = {}
+	for capability_value: String in capabilities:
+		if not WEAPON_MODIFIER_BOUNDS.has(capability_value):
+			return {}
+		bounds[capability_value] = (WEAPON_MODIFIER_BOUNDS[capability_value] as Dictionary).duplicate(true)
+	return bounds
+
+
+func _weapon_profile_definition(weapon_id: StringName) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(WEAPON_PROFILE_CATALOG_PATH))
+	if not parsed is Array:
+		return {}
+	if weapon_id != &"sword":
+		return {}
+	var preferred_profile_id := "sword_m1_v1"
+	for definition_value: Variant in parsed as Array:
+		if not definition_value is Dictionary:
+			continue
+		var definition := definition_value as Dictionary
+		if str(definition.get("id", "")) == preferred_profile_id:
+			return definition.duplicate(true)
+	return {}
+
+
+func _profile_allows_milestone(config: Dictionary) -> bool:
+	var profile_value: Variant = config.get("weapon_profile", {})
+	if not profile_value is Dictionary:
+		return false
+	var availability_value: Variant = (profile_value as Dictionary).get("availability", [])
+	if not availability_value is Array:
+		return false
+	var milestone := str(config.get("milestone", "M1")).strip_edges().to_upper()
+	for availability: Variant in availability_value as Array:
+		if str(availability).strip_edges().to_upper() == milestone:
+			return true
+	return false
+
+
+func _connect_weapon_coordinator() -> void:
+	if weapon_action_coordinator == null:
+		return
+	if not weapon_action_coordinator.weapon_action_committed.is_connected(_on_weapon_action_committed):
+		weapon_action_coordinator.weapon_action_committed.connect(_on_weapon_action_committed)
+	if not weapon_action_coordinator.weapon_runtime_event.is_connected(_on_weapon_runtime_event):
+		weapon_action_coordinator.weapon_runtime_event.connect(_on_weapon_runtime_event)
+
+
+func _disconnect_weapon_coordinator() -> void:
+	if weapon_action_coordinator == null:
+		return
+	if weapon_action_coordinator.weapon_action_committed.is_connected(_on_weapon_action_committed):
+		weapon_action_coordinator.weapon_action_committed.disconnect(_on_weapon_action_committed)
+	if weapon_action_coordinator.weapon_runtime_event.is_connected(_on_weapon_runtime_event):
+		weapon_action_coordinator.weapon_runtime_event.disconnect(_on_weapon_runtime_event)
+
+
+func _on_weapon_action_committed(
+	weapon_id: StringName,
+	action_id: StringName,
+	token: int,
+	context: Dictionary
+) -> void:
+	if weapon_action_coordinator != null:
+		var coordinator_snapshot: Dictionary = weapon_action_coordinator.snapshot()
+		var plan_value: Variant = coordinator_snapshot.get("plan", {})
+		if plan_value is Dictionary:
+			_weapon_combo_timeout_frames = maxi(
+				0,
+				int((plan_value as Dictionary).get("combo_reset_frames", 0))
+			)
+	EventBus.weapon_action_committed.emit(
+		weapon_id,
+		action_id,
+		token,
+		context.duplicate(true)
+	)
+
+
+func _on_weapon_runtime_event(event: Dictionary) -> void:
+	var event_type := str(event.get("type", ""))
+	var weapon_id := StringName(str(event.get("weapon_id", "")))
+	var action_id := StringName(str(event.get("action_id", "")))
+	var token := int(event.get("token", 0))
+	if weapon_id == &"" or action_id == &"" or token <= 0:
+		return
+	match event_type:
+		"payload_released":
+			EventBus.player_attacked.emit(
+				weapon_id,
+				{
+					"action_id": str(action_id),
+					"descriptor_id": str(event.get("descriptor_id", "")),
+					"token": token,
+				}
+			)
+		"cue_requested":
+			var cue_value: Variant = event.get("cue", {})
+			if cue_value is Dictionary and not (cue_value as Dictionary).is_empty():
+				EventBus.weapon_cue_requested.emit(
+					weapon_id,
+					action_id,
+					token,
+					(cue_value as Dictionary).duplicate(true)
+				)
+
+
+func _sync_weapon_action_projection() -> void:
+	if weapon_action_coordinator == null:
+		if action_state.current_state in [
+			PlayerActionStateScript.State.ATTACK_WINDUP,
+			PlayerActionStateScript.State.ATTACK_ACTIVE,
+			PlayerActionStateScript.State.ATTACK_RECOVERY,
+		]:
+			action_state.clear_weapon_projection()
+		return
+	var presentation: Dictionary = weapon_action_coordinator.presentation_snapshot()
+	var phase := StringName(str(presentation.get("phase", "READY")))
+	if phase == &"READY":
+		action_state.clear_weapon_projection()
+		return
+	action_state.project_weapon_phase(
+		phase,
+		int(presentation.get("phase_frame", 0)),
+		int(presentation.get("phase_duration_frames", 0)),
+		int(presentation.get("cancel_from_frame", -1))
+	)
+
+
+func _cancel_weapon_action(reason: StringName) -> void:
+	if weapon_action_coordinator != null:
+		weapon_action_coordinator.cancel(reason)
+	else:
+		sword_weapon.cancel_attack()
+	if action_state.current_state in [
+		PlayerActionStateScript.State.ATTACK_WINDUP,
+		PlayerActionStateScript.State.ATTACK_ACTIVE,
+		PlayerActionStateScript.State.ATTACK_RECOVERY,
+	]:
+		action_state.clear_weapon_projection()
 
 
 func _time_skill_context(skill_id: StringName) -> Dictionary:
@@ -430,10 +708,8 @@ func _time_skill_context(skill_id: StringName) -> Dictionary:
 
 
 func _clear_transient_effects() -> void:
-	sword_weapon.cancel_attack()
-	_active_attack_definition.clear()
+	_cancel_weapon_action(&"transient_clear")
 	_dash_velocity = Vector2.ZERO
-	_buffered_attack_heavy = false
 	_buffered_time_skill = &""
 	if bow_weapon.has_method("cancel_charge"):
 		bow_weapon.cancel_charge()

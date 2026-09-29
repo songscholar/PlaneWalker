@@ -75,6 +75,27 @@ const COMPATIBILITY_FIELDS: Array[String] = [
 	"modes",
 ]
 const WEAPON_TIME_ABILITIES: Array[String] = ["stop", "rewind", "accelerate", "rift"]
+const WEAPON_RUNTIME_PROFILE_FIELDS: Array[String] = [
+	"id",
+	"category",
+	"availability",
+	"name_key",
+	"description_key",
+	"tags",
+	"compatibility",
+	"effects",
+	"references",
+	"profile_version",
+	"weapon_id",
+	"runtime_kind",
+	"actions",
+	"resources",
+	"capabilities",
+	"payloads",
+	"cues",
+	"time_interactions",
+	"boss_interactions",
+]
 
 var _definitions: Dictionary = {}
 var _active_packs: Array[Dictionary] = []
@@ -372,7 +393,7 @@ func get_weapon_runtime_profile(profile_id: StringName) -> Dictionary:
 	var definition := get_content(profile_id)
 	if str(definition.get("category", "")) != "weapon_runtime_profile":
 		return {}
-	return definition
+	return _canonical_weapon_runtime_profile(definition)
 
 
 func resolve_weapon_runtime_profile(weapon_id: StringName, milestone: StringName) -> Dictionary:
@@ -382,7 +403,18 @@ func resolve_weapon_runtime_profile(weapon_id: StringName, milestone: StringName
 			matches.append(definition)
 	if matches.size() != 1:
 		return {}
-	return matches[0].duplicate(true)
+	return _canonical_weapon_runtime_profile(matches[0])
+
+
+func _canonical_weapon_runtime_profile(definition: Dictionary) -> Dictionary:
+	var source: Dictionary = {}
+	for field: String in WEAPON_RUNTIME_PROFILE_FIELDS:
+		if definition.has(field):
+			source[field] = definition[field].duplicate(true) if definition[field] is Array or definition[field] is Dictionary else definition[field]
+	var result: Dictionary = WeaponRuntimeProfileScript.new().configure(source)
+	if not bool(result.get("ok", false)):
+		return {}
+	return (result.get("profile", {}) as Dictionary).duplicate(true)
 
 
 func get_by_category(category: StringName, availability: StringName = &"") -> Array[Dictionary]:

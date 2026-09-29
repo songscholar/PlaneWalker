@@ -1,6 +1,17 @@
 class_name ItemEffect
 extends RefCounted
 
+const LEGACY_WEAPON_EFFECT_IDS := [
+	&"combo_finisher_multiplier_bonus",
+	&"heavy_damage_multiplier_bonus",
+	&"heavy_execute_multiplier_bonus",
+	&"heavy_execute_threshold",
+	&"low_hp_damage_multiplier_bonus",
+	&"bow_charge_rate_bonus",
+	&"bow_full_charge_damage_multiplier_bonus",
+	&"bow_pierce_bonus",
+]
+
 
 static func apply_to_player(player: Node, effects: Dictionary) -> void:
 	if player == null or effects.is_empty():
@@ -60,22 +71,7 @@ static func apply_to_player(player: Node, effects: Dictionary) -> void:
 		player.time_manager.low_energy_regen_multiplier = maxf(player.time_manager.low_energy_regen_multiplier, float(effects["low_energy_regen_multiplier"]))
 	if effects.has("low_energy_threshold"):
 		player.time_manager.low_energy_threshold = maxf(player.time_manager.low_energy_threshold, float(effects["low_energy_threshold"]))
-	if effects.has("combo_finisher_multiplier_bonus"):
-		player.sword_weapon.combo_finisher_multiplier_bonus += float(effects["combo_finisher_multiplier_bonus"])
-	if effects.has("heavy_damage_multiplier_bonus"):
-		player.sword_weapon.heavy_damage_multiplier_bonus += float(effects["heavy_damage_multiplier_bonus"])
-	if effects.has("heavy_execute_multiplier_bonus"):
-		player.sword_weapon.heavy_execute_multiplier_bonus += float(effects["heavy_execute_multiplier_bonus"])
-	if effects.has("heavy_execute_threshold"):
-		player.sword_weapon.heavy_execute_threshold = float(effects["heavy_execute_threshold"])
-	if effects.has("low_hp_damage_multiplier_bonus"):
-		player.sword_weapon.low_hp_damage_multiplier_bonus += float(effects["low_hp_damage_multiplier_bonus"])
-	if effects.has("bow_charge_rate_bonus"):
-		player.bow_weapon.charge_rate_bonus += float(effects["bow_charge_rate_bonus"])
-	if effects.has("bow_full_charge_damage_multiplier_bonus"):
-		player.bow_weapon.full_charge_damage_multiplier_bonus += float(effects["bow_full_charge_damage_multiplier_bonus"])
-	if effects.has("bow_pierce_bonus"):
-		player.bow_weapon.pierce_bonus += int(effects["bow_pierce_bonus"])
+	_apply_weapon_effects(player, effects)
 	if effects.has("dash_invulnerable_bonus"):
 		player._dash_invulnerable_bonus += float(effects["dash_invulnerable_bonus"])
 	if effects.has("healing_multiplier"):
@@ -89,3 +85,11 @@ static func apply_to_player(player: Node, effects: Dictionary) -> void:
 		player.time_manager.restore_energy(float(effects["time_energy_restore"]))
 	if effects.has("invulnerable_duration"):
 		player.health.apply_invulnerability(float(effects["invulnerable_duration"]))
+
+
+static func _apply_weapon_effects(player: Node, effects: Dictionary) -> void:
+	if not player.has_method("apply_weapon_effect"):
+		return
+	for effect_id: StringName in LEGACY_WEAPON_EFFECT_IDS:
+		if effects.has(effect_id):
+			player.call("apply_weapon_effect", effect_id, effects[effect_id])

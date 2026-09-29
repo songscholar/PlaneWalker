@@ -4,6 +4,7 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const ContentSnapshotProviderScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
+const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 
 
 func _ready() -> void:
@@ -53,6 +54,12 @@ func _test_project_base_pack_v2(suite) -> void:
 	var sword_profile: Dictionary = registry.get_weapon_runtime_profile(&"sword_m1_v1")
 	suite.assert_equal(sword_profile.get("weapon_id"), "sword", "profile lookup resolves its weapon")
 	suite.assert_equal(sword_profile.get("availability"), ["CURRENT", "M1"], "M1 Sword profile covers CURRENT and M1")
+	suite.assert_true(not sword_profile.has("kind"), "runtime profile lookup removes generic content envelope fields")
+	suite.assert_true(not sword_profile.has("pack_id"), "runtime profile lookup removes pack provenance before runtime use")
+	suite.assert_true(
+		bool(WeaponRuntimeProfileScript.new().configure(sword_profile).get("ok", false)),
+		"runtime profile lookup returns an exact parser-ready snapshot"
+	)
 
 	var frozen_burst: Dictionary = registry.get_content(&"frozen_burst")
 	suite.assert_equal(frozen_burst.get("pack_id"), "base", "v2 content records owning pack")

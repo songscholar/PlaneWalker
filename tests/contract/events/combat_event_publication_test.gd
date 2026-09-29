@@ -165,9 +165,20 @@ func _test_committed_player_actions_publish_once() -> void:
 	var sword: Node = player.get_node("SwordWeapon")
 	var bow: Node = player.get_node("BowWeapon")
 
-	_suite.assert_true(not sword.begin_attack(false).is_empty(), "sword attack begins")
-	_suite.assert_true(sword.enter_active_phase(), "sword attack publishes at active commit")
-	_suite.assert_true(not sword.enter_active_phase(), "duplicate active transition is rejected")
+	_suite.assert_true(player.try_action(&"attack"), "sword attack begins through the coordinator")
+	for _frame: int in range(6):
+		player.advance_action_frame()
+	var sword_snapshot: Dictionary = player.weapon_action_coordinator.snapshot()
+	_suite.assert_equal(sword_snapshot.get("phase"), "ACTIVE", "sword attack publishes at active commit")
+	_suite.assert_true(
+		player.weapon_runtime.on_phase_enter(
+			sword_snapshot.get("plan", {}),
+			&"ACTIVE",
+			int(sword_snapshot.get("token", 0))
+		).is_empty(),
+		"duplicate active transition is rejected"
+	)
+	player.cancel_transient_actions()
 
 	_suite.assert_true(bow.start_charge(), "bow charge begins")
 	bow.set("_charge_time", float(bow.full_charge_time))
@@ -182,7 +193,15 @@ func _test_committed_player_actions_publish_once() -> void:
 	_suite.assert_equal(_recorder.attacked.size(), 2, "sword and bow publish one committed attack each")
 	if _recorder.attacked.size() == 2:
 		_suite.assert_equal(_recorder.attacked[0]["weapon_id"], &"sword", "sword fact identifies the weapon")
-		_suite.assert_equal(_recorder.attacked[0]["context"], {}, "sword fact has no invented context")
+		_suite.assert_equal(
+			str(_recorder.attacked[0]["context"].get("action_id", "")),
+			"light_1",
+			"sword release fact identifies the profile action"
+		)
+		_suite.assert_true(
+			int(_recorder.attacked[0]["context"].get("token", 0)) > 0,
+			"sword release fact carries its coordinator token"
+		)
 		_suite.assert_equal(_recorder.attacked[1]["weapon_id"], &"bow", "bow fact identifies the weapon")
 		_suite.assert_close(
 			float(_recorder.attacked[1]["context"].get("charge", -1.0)),

@@ -7,6 +7,7 @@ signal weapon_action_committed(
 	token: int,
 	context: Dictionary
 )
+signal weapon_runtime_event(event: Dictionary)
 
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
 
@@ -65,11 +66,12 @@ func submit_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 	return _commit_intent(intent, context, _phase != PHASE_READY)
 
 
-func advance_frame() -> void:
+func advance_frame(consume_buffered: bool = true) -> void:
 	_frame += 1
 	_prune_expired_buffer()
 	if _phase == PHASE_READY:
-		_consume_buffered_submission()
+		if consume_buffered:
+			_consume_buffered_submission()
 		return
 
 	_phase_frame += 1
@@ -78,9 +80,20 @@ func advance_frame() -> void:
 		cancel(&"invalid_phase_state")
 		return
 	if _phase_frame >= int(phase_data["duration_frames"]):
-		_advance_phase()
-	if _phase != PHASE_READY and _recovery_cancel_is_open():
+		_advance_phase(consume_buffered)
+	if consume_buffered and _phase != PHASE_READY and _recovery_cancel_is_open():
 		_consume_buffered_submission()
+
+
+func consume_buffered_intent() -> bool:
+	if _buffered_submission.is_empty():
+		return false
+	if _phase != PHASE_READY and not _recovery_cancel_is_open():
+		return false
+	var token_before := _token
+	var generation_before := _generation
+	_consume_buffered_submission()
+	return _token != token_before or _generation != generation_before
 
 
 func cancel(reason: StringName = &"cancelled") -> void:
@@ -123,6 +136,10 @@ func movement_multiplier() -> float:
 	if phase_data.is_empty():
 		return 1.0
 	return float(phase_data.get("movement_multiplier", 1.0))
+
+
+func recovery_cancel_is_open() -> bool:
+	return _recovery_cancel_is_open()
 
 
 func snapshot() -> Dictionary:
@@ -183,6 +200,7 @@ func presentation_snapshot() -> Dictionary:
 		"phase": str(_phase),
 		"phase_frame": _phase_frame,
 		"phase_duration_frames": int(phase_data.get("duration_frames", 0)),
+		"cancel_from_frame": int(phase_data.get("cancel_from_frame", -1)),
 		"movement_multiplier": movement_multiplier(),
 		"token": _token,
 		"generation": _generation,
@@ -233,7 +251,12 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 		next_action_token
 	)
 	if not commit_value is Dictionary or not bool((commit_value as Dictionary).get("ok", false)):
-		_runtime.call("restore_snapshot", runtime_before)
+		if not bool(_runtime.call("restore_snapshot", runtime_before)):
+			reset_runtime_state(&"commit_rollback_failed")
+			return WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_COMMIT_FAILED,
+				{"reason": "rollback_failed"}
+			)
 		if commit_value is Dictionary:
 			return _runtime_failure(commit_value as Dictionary, WeaponActionContractScript.CODE_COMMIT_FAILED)
 		return WeaponActionContractScript.failure(
@@ -268,7 +291,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 	}
 
 
-func _advance_phase() -> void:
+func _advance_phase(consume_buffered: bool) -> void:
 	var phases: Array = _plan.get("phases", [])
 	if _phase_index + 1 < phases.size():
 		_phase_index += 1
@@ -280,18 +303,31 @@ func _advance_phase() -> void:
 	var finished_token := _token
 	_runtime.call("finish_action", finished_token)
 	_clear_action_state()
-	_consume_buffered_submission()
+	if consume_buffered:
+		_consume_buffered_submission()
 
 
 func _enter_current_phase() -> void:
 	if _runtime == null or _token <= 0 or _phase == PHASE_READY:
 		return
-	_runtime.call(
+	var events_value: Variant = _runtime.call(
 		"on_phase_enter",
 		_plan.duplicate(true),
 		_phase,
 		_token
 	)
+	if not events_value is Array:
+		cancel(&"phase_event_result_type")
+		return
+	for event_value: Variant in events_value as Array:
+		if not event_value is Dictionary:
+			cancel(&"phase_event_type")
+			return
+		var event := (event_value as Dictionary).duplicate(true)
+		if str(event.get("type", "")) == "phase_failed":
+			cancel(StringName(str(event.get("reason", "phase_failed"))))
+			return
+		weapon_runtime_event.emit(event)
 
 
 func _consume_buffered_submission() -> void:

@@ -39,6 +39,7 @@ func _run() -> void:
 		signal_names.append(StringName(str(signal_definition.get("name", ""))))
 	for required_signal: StringName in [
 		&"weapon_action_committed",
+		&"weapon_cue_requested",
 		&"weapon_resource_changed",
 		&"weapon_hit_confirmed",
 	]:
