@@ -341,6 +341,12 @@ def _index_presets(
     for section_name, values in config.items():
         if not re.fullmatch(r"preset\.\d+", section_name):
             continue
+        values = dict(values)
+        options = config.get(f"{section_name}.options", {})
+        values["__binary_format/embed_pck"] = options.get(
+            "binary_format/embed_pck",
+            "",
+        )
         name = _unquote(values.get("name", ""))
         if not name:
             _add_issue(
@@ -382,6 +388,7 @@ def _validate_target(
             "preset": "",
             "platform": "",
             "artifact": "",
+            "artifact_kind": "",
             "template_files": [],
             "contract_status": "error",
             "template_status": "not_checked",
@@ -392,6 +399,15 @@ def _validate_target(
     preset_name = _target_string(raw_target, "preset", index, issues)
     platform_name = _target_string(raw_target, "platform", index, issues)
     artifact = _target_string(raw_target, "artifact", index, issues)
+    artifact_kind = _target_string(raw_target, "artifact_kind", index, issues)
+    if artifact_kind not in {"file", "directory"}:
+        _add_issue(
+            issues,
+            "target_artifact_kind_invalid",
+            "error",
+            f"target {target_id or index} artifact_kind must be file or directory",
+            target=target_id,
+        )
     template_files = raw_target.get("template_files")
     if (
         not isinstance(template_files, list)
@@ -471,12 +487,21 @@ def _validate_target(
                 f"preset {preset_name} must use export_filter=all_resources",
                 target=target_id,
             )
+        if artifact_kind == "file" and preset.get("__binary_format/embed_pck") != "true":
+            _add_issue(
+                issues,
+                "preset_embed_pck_required",
+                "error",
+                f"preset {preset_name} must embed the PCK for single-file evidence",
+                target=target_id,
+            )
 
     return {
         "id": target_id,
         "preset": preset_name,
         "platform": platform_name,
         "artifact": artifact,
+        "artifact_kind": artifact_kind,
         "template_files": list(template_files),
         "contract_status": "error" if len(issues) > issue_count_before else "pass",
         "template_status": "not_checked",
@@ -598,7 +623,7 @@ def _add_issue(
     issues.append(issue)
 
 
-def _write_json_atomic(path: Path, text: str) -> None:
+def write_json_atomic(path: Path, text: str) -> None:
     destination = path.expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
@@ -660,7 +685,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sort_keys=True,
     ) + "\n"
     if args.json_output is not None:
-        _write_json_atomic(args.json_output, rendered)
+        write_json_atomic(args.json_output, rendered)
     sys.stdout.write(rendered)
 
     if report.get("status") == "pass":

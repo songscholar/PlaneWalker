@@ -90,6 +90,23 @@ class ExportPreflightContractTest(unittest.TestCase):
         self.assertIn("preset_platform_mismatch", issue_codes(report))
         self.assertIn("preset_export_path_mismatch", issue_codes(report))
 
+    def test_file_exports_must_embed_the_pck(self) -> None:
+        with fixture_project() as root:
+            presets = root / "export_presets.cfg"
+            presets.write_text(
+                presets.read_text(encoding="utf-8").replace(
+                    "binary_format/embed_pck=true",
+                    "binary_format/embed_pck=false",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            report = validate_contract(root)
+
+        self.assertEqual(report["status"], "error")
+        self.assertIn("preset_embed_pck_required", issue_codes(report))
+
     def test_local_mode_reports_missing_templates_as_blocked(self) -> None:
         with fixture_project() as root, tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -181,15 +198,13 @@ class ExportPreflightContractTest(unittest.TestCase):
         self.assertEqual(stdout_report, file_report)
         self.assertEqual(stdout_report["status"], "pass")
 
-    def test_project_validation_runs_the_export_contract(self) -> None:
+    def test_project_validation_runs_the_export_contracts(self) -> None:
         validation_script = (PROJECT_ROOT / "tools" / "validate_project.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn(
-            "python3 -m unittest tests.contract.export.test_export_preflight",
-            validation_script,
-        )
+        self.assertIn("tests.contract.export.test_export_preflight", validation_script)
+        self.assertIn("tests.contract.export.test_export_executor", validation_script)
         self.assertIn("python3 tools/export/preflight.py", validation_script)
 
     def test_local_cli_uses_exit_three_for_environment_blockers(self) -> None:

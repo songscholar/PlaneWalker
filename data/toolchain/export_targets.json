@@ -11,6 +11,7 @@
       "preset": "Windows Release",
       "platform": "Windows Desktop",
       "artifact": "build/windows/PlaneWalker.exe",
+      "artifact_kind": "file",
       "template_files": [
         "windows_release_x86_64.exe"
       ]
@@ -20,6 +21,7 @@
       "preset": "Linux Release",
       "platform": "Linux/BSD",
       "artifact": "build/linux/PlaneWalker.x86_64",
+      "artifact_kind": "file",
       "template_files": [
         "linux_release.x86_64"
       ]
@@ -29,6 +31,7 @@
       "preset": "macOS Release",
       "platform": "macOS",
       "artifact": "build/macos/PlaneWalker.app",
+      "artifact_kind": "directory",
       "template_files": [
         "macos.zip"
       ]
