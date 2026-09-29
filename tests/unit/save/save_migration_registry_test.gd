@@ -1,0 +1,171 @@
+extends Node
+
+const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const SaveResultScript := preload("res://scripts/save/save_result.gd")
+const SaveMigrationRegistryScript := preload("res://scripts/save/save_migration_registry.gd")
+
+const LEGACY_FIXTURE_PATH := "res://tests/fixtures/save/legacy_v0.json"
+const MIGRATED_FIXTURE_PATH := "res://tests/fixtures/save/migration_expected_v1.json"
+
+var _nondeterministic_counter: int = 0
+
+
+func _ready() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var suite = TestSuiteScript.new()
+	_test_registration_requires_adjacent_versions(suite)
+	_test_adjacent_steps_run_in_order(suite)
+	_test_source_and_step_inputs_are_isolated(suite)
+	_test_nondeterministic_steps_fail_closed(suite)
+	_test_missing_and_forward_paths_are_rejected(suite)
+	_test_legacy_v0_migrates_to_v1(suite)
+	suite.finish(get_tree())
+
+
+func _test_registration_requires_adjacent_versions(suite) -> void:
+	var registry = SaveMigrationRegistryScript.new(false)
+	var gap = registry.register_migration(0, 2, Callable(self, "_step_zero_to_one"))
+	suite.assert_true(not gap.ok, "migration registry rejects version gaps")
+	suite.assert_equal(gap.code, &"INVALID_ARGUMENT", "version gaps are invalid arguments")
+
+	var first = registry.register_migration(0, 1, Callable(self, "_step_zero_to_one"))
+	suite.assert_true(first.ok, "adjacent migration registration succeeds")
+	var duplicate = registry.register_migration(0, 1, Callable(self, "_step_zero_to_one"))
+	suite.assert_true(not duplicate.ok, "duplicate source migrations are rejected")
+
+
+func _test_adjacent_steps_run_in_order(suite) -> void:
+	var registry = SaveMigrationRegistryScript.new(false)
+	registry.register_migration(0, 1, Callable(self, "_step_zero_to_one"))
+	registry.register_migration(1, 2, Callable(self, "_step_one_to_two"))
+
+	var result = registry.migrate({"schema_version": 0, "trace": []}, 2)
+	suite.assert_true(result.ok, "complete adjacent migration chain succeeds")
+	if not result.ok:
+		return
+	suite.assert_equal(result.payload.get("schema_version"), 2, "migration reaches requested schema")
+	suite.assert_equal(result.payload.get("trace"), ["0-1", "1-2"], "migration steps execute in order")
+	suite.assert_equal(result.metadata.get("step_zero"), true, "first migration metadata is retained")
+	suite.assert_equal(result.metadata.get("step_one"), true, "second migration metadata is retained")
+	suite.assert_equal(result.migrated_from, 0, "result records original schema")
+	suite.assert_equal(result.migrated_to, 2, "result records final schema")
+
+
+func _test_source_and_step_inputs_are_isolated(suite) -> void:
+	var registry = SaveMigrationRegistryScript.new(false)
+	registry.register_migration(0, 1, Callable(self, "_mutating_step"))
+	var source := {
+		"schema_version": 0,
+		"nested": {"values": ["original"]},
+	}
+	var context := {"nested": {"value": "context-original"}}
+
+	var result = registry.migrate(source, 1, context)
+	suite.assert_true(result.ok, "mutating migration succeeds against isolated inputs")
+	suite.assert_equal(source["nested"]["values"], ["original"], "migration never mutates source document")
+	suite.assert_equal(context["nested"]["value"], "context-original", "migration never mutates caller context")
+	if result.ok:
+		var migrated: Dictionary = result.payload
+		migrated["nested"]["values"].append("result-mutated")
+		suite.assert_equal(source["nested"]["values"], ["original"], "result payload is isolated from source")
+
+
+func _test_nondeterministic_steps_fail_closed(suite) -> void:
+	_nondeterministic_counter = 0
+	var registry = SaveMigrationRegistryScript.new(false)
+	registry.register_migration(0, 1, Callable(self, "_nondeterministic_step"))
+
+	var result = registry.migrate({"schema_version": 0}, 1)
+	suite.assert_true(not result.ok, "nondeterministic migration is rejected")
+	suite.assert_equal(result.code, &"MIGRATION_FAILED", "nondeterminism is a migration failure")
+	suite.assert_equal(result.metadata.get("from_version"), 0, "failure identifies source step")
+	suite.assert_equal(result.metadata.get("to_version"), 1, "failure identifies target step")
+
+
+func _test_missing_and_forward_paths_are_rejected(suite) -> void:
+	var registry = SaveMigrationRegistryScript.new(false)
+	var missing = registry.migrate({"schema_version": 0}, 1)
+	suite.assert_true(not missing.ok, "missing migration path fails")
+	suite.assert_equal(missing.code, &"MIGRATION_UNAVAILABLE", "missing path has explicit result code")
+
+	var forward = registry.migrate({"schema_version": 2}, 1)
+	suite.assert_true(not forward.ok, "newer save cannot be migrated backwards")
+	suite.assert_equal(forward.code, &"FORWARD_VERSION", "newer save uses forward-version refusal")
+
+
+func _test_legacy_v0_migrates_to_v1(suite) -> void:
+	var legacy := _read_json(LEGACY_FIXTURE_PATH, suite)
+	var expected := _read_json(MIGRATED_FIXTURE_PATH, suite)
+	if legacy.is_empty() or expected.is_empty():
+		return
+	var original := legacy.duplicate(true)
+	var registry = SaveMigrationRegistryScript.new()
+
+	var result = registry.migrate(legacy, 1, {
+		"profile_id": "slot_1",
+		"save_domain": "base",
+	})
+	suite.assert_true(result.ok, "legacy v0 profile migrates to schema v1")
+	suite.assert_equal(legacy, original, "legacy migration preserves source fixture")
+	if not result.ok:
+		return
+	suite.assert_equal(result.source_kind, &"legacy_v0", "legacy result records source kind")
+	suite.assert_equal(result.migrated_from, 0, "legacy result records v0 source")
+	suite.assert_equal(result.migrated_to, 1, "legacy result records v1 target")
+	suite.assert_equal(result.payload.get("schema_version"), 1, "legacy migration emits schema v1 state")
+	suite.assert_equal(result.payload.get("payload"), expected.get("payload"), "legacy progress matches v1 fixture payload")
+	suite.assert_equal(
+		result.metadata.get("settings_payload"),
+		original.get("persistent", {}).get("settings", {}),
+		"legacy global settings are separated from profile payload"
+	)
+	suite.assert_true(not result.payload.get("payload", {}).has("settings"), "profile payload excludes global settings")
+
+
+func _step_zero_to_one(document: Dictionary, _context: Dictionary):
+	var migrated := document.duplicate(true)
+	var trace: Array = migrated.get("trace", []).duplicate()
+	trace.append("0-1")
+	migrated["trace"] = trace
+	migrated["schema_version"] = 1
+	return SaveResultScript.success(migrated, {"step_zero": true})
+
+
+func _step_one_to_two(document: Dictionary, _context: Dictionary):
+	var migrated := document.duplicate(true)
+	var trace: Array = migrated.get("trace", []).duplicate()
+	trace.append("1-2")
+	migrated["trace"] = trace
+	migrated["schema_version"] = 2
+	return SaveResultScript.success(migrated, {"step_one": true})
+
+
+func _mutating_step(document: Dictionary, context: Dictionary):
+	document["nested"]["values"].append("step-mutated")
+	context["nested"]["value"] = "step-mutated"
+	document["schema_version"] = 1
+	return SaveResultScript.success(document)
+
+
+func _nondeterministic_step(document: Dictionary, _context: Dictionary):
+	_nondeterministic_counter += 1
+	var migrated := document.duplicate(true)
+	migrated["schema_version"] = 1
+	migrated["nonce"] = _nondeterministic_counter
+	return SaveResultScript.success(migrated)
+
+
+func _read_json(path: String, suite) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		suite.assert_true(false, "%s exists" % path)
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	suite.assert_true(file != null, "%s is readable" % path)
+	if file == null:
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	suite.assert_true(parsed is Dictionary, "%s parses as an object" % path)
+	return parsed as Dictionary if parsed is Dictionary else {}
