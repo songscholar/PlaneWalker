@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-29
-- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate parity, coordinator charge, feedback, modifier migration, and legacy-clock retirement are certified through `0cf27da`; Launch Bow and later gates remain active
+- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; Gun and later gates remain active
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -304,15 +304,34 @@ git commit -m "refactor(combat): migrate sword to weapon coordinator"
 ### Task 5: P11C migrate and complete Bow
 
 **Files:**
+- Modify: `data/content_packs/base/content/weapon_runtime_profiles.json`
+- Modify: `data/content_packs/base/pack.json`
 - Create: `scripts/combat/weapons/bow_weapon_runtime.gd`
 - Modify: `scripts/combat/bow_weapon.gd`
+- Modify: `scripts/combat/health_component.gd`
 - Modify: `scripts/combat/player_arrow.gd`
+- Modify: `scripts/combat/weapons/weapon_action_coordinator.gd`
+- Modify: `scripts/combat/weapons/weapon_runtime.gd`
+- Modify: `scripts/enemies/boss_chrono_warden.gd`
+- Modify: `scripts/enemies/enemy_base.gd`
 - Modify: `scripts/player/player_controller.gd`
+- Modify: `scripts/time_system/time_manager.gd`
 - Modify: `autoload/combat_feedback.gd`
 - Modify: `scripts/presentation/pixel_proxy_actor.gd`
 - Modify: `tests/player/ranged_charge_accessibility_test.gd`
 - Create: `tests/combat/bow_weapon_runtime_test.gd`
 - Create: `tests/combat/bow_weapon_runtime_test.tscn`
+- Create: `tests/combat/bow_boss_conversion_test.gd`
+- Create: `tests/combat/bow_boss_conversion_test.tscn`
+- Create: `tests/combat/bow_launch_execution_test.gd`
+- Create: `tests/combat/bow_launch_execution_test.tscn`
+- Create: `tests/contract/content_schema/bow_launch_profile_contract_test.gd`
+- Create: `tests/contract/content_schema/bow_launch_profile_contract_test.tscn`
+- Modify: `tests/contract/content_schema/content_registry_test.gd`
+- Create: `tests/player/player_launch_bow_integration_test.gd`
+- Create: `tests/player/player_launch_bow_integration_test.tscn`
+- Create: `tests/time/bow_time_interaction_context_test.gd`
+- Create: `tests/time/bow_time_interaction_context_test.tscn`
 
 **Interfaces:**
 - Consumes: `bow_candidate_v1` or `bow_launch_v1`, semantic press/release intents, aim context, modifiers, and time context.
@@ -328,20 +347,69 @@ The runtime stores no wall-clock seconds; held frames, cooldown frames, Dash can
 
 Candidate certification is recorded in `docs/current/2026-09-29-p11c-bow-candidate-evidence.md`. The checked step covers Candidate charge ownership and legacy-clock retirement only; Launch cooldown/resource execution remains part of Step 3.
 
-- [ ] **Step 3: Add launch scatter, skill, ultimate, and four time interactions**
+- [x] **Step 3: Add launch scatter, skill, ultimate, and four time interactions**
 
 Every projectile and zone carries one action token and target-deduplication context. Seeded spread uses a stable channel containing run seed, token, and pellet/arrow index.
 
-- [ ] **Step 4: Run Bow, accessibility, replay, feedback, and candidate gates**
+The implemented Launch profile keeps Candidate isolation and adds the four-tier `0–14 / 15–29 / 30–47 / 48+` primary, 48-frame full charge, 228-frame automatic release, Scatter Shot, swept Focus Step, Temporal Arrow, and coordinator-driven Starfall. Stop, Rewind, Accelerate, and Rift resolve through immutable interaction descriptors and live release-time context where required. Chrono Warden control converts to recovery/exposure/poise pressure without interrupting a committed active attack. Complete numeric-authority rejection, death cleanup, Rewind payload identity, Temporal phantom scaling, WINDUP rejection, and failed-release rollback pass their regression tests.
 
-Run: `./tools/run_tests.sh --filter "bow|ranged_charge|replay|combat_feedback|candidate_loadout"`
+- [x] **Step 4: Run Bow, accessibility, snapshot, feedback, and candidate gates**
 
-- [ ] **Step 5: Commit**
+Run each literal filter separately:
 
 ```bash
-git add -- scripts/combat/weapons/bow_weapon_runtime.gd scripts/combat/bow_weapon.gd scripts/combat/player_arrow.gd scripts/player/player_controller.gd autoload/combat_feedback.gd scripts/presentation/pixel_proxy_actor.gd tests/player/ranged_charge_accessibility_test.gd tests/combat/bow_weapon_runtime_test.gd tests/combat/bow_weapon_runtime_test.tscn
-git commit -m "feat(weapon): complete bow runtime"
+./tools/run_tests.sh --filter bow
+./tools/run_tests.sh --filter ranged_charge_accessibility
+./tools/run_tests.sh --filter combat_feedback_runtime
+./tools/run_tests.sh --filter candidate_loadout_panel
+./tools/run_tests.sh --filter weapon_action_coordinator
+./tools/run_tests.sh --filter rewind_action_cancellation
+./tools/run_tests.sh --filter player_loadout_runtime
+./tools/run_tests.sh --filter health_component
 ```
+
+This step verifies deterministic payload planning/execution, coordinator ownership, accessibility, feedback, Candidate isolation, cancellation, lifecycle cleanup, and snapshot safety. Formal replay serialization belongs to Task 9 and is not claimed by the P11C Launch Bow gate.
+
+Final evidence: all eight literal focused filters pass with zero failed scenes and zero new leak warnings; the complete suite and `validate_project.sh` both pass `82 / 82` scenes with only the registered `reward_system_smoke` ObjectDB warning. See `docs/current/2026-09-29-p11c-bow-launch-evidence.md`.
+
+- [x] **Step 5: Commit**
+
+```bash
+git add -- \
+  data/content_packs/base/content/weapon_runtime_profiles.json \
+  data/content_packs/base/pack.json \
+  scripts/combat/bow_weapon.gd \
+  scripts/combat/health_component.gd \
+  scripts/combat/player_arrow.gd \
+  scripts/combat/weapons/bow_weapon_runtime.gd \
+  scripts/combat/weapons/weapon_action_coordinator.gd \
+  scripts/combat/weapons/weapon_runtime.gd \
+  scripts/enemies/boss_chrono_warden.gd \
+  scripts/enemies/enemy_base.gd \
+  scripts/player/player_controller.gd \
+  scripts/time_system/time_manager.gd \
+  tests/combat/bow_boss_conversion_test.gd \
+  tests/combat/bow_boss_conversion_test.tscn \
+  tests/combat/bow_launch_execution_test.gd \
+  tests/combat/bow_launch_execution_test.tscn \
+  tests/combat/bow_weapon_runtime_test.gd \
+  tests/contract/content_schema/bow_launch_profile_contract_test.gd \
+  tests/contract/content_schema/bow_launch_profile_contract_test.tscn \
+  tests/contract/content_schema/content_registry_test.gd \
+  tests/player/player_launch_bow_integration_test.gd \
+  tests/player/player_launch_bow_integration_test.tscn \
+  tests/time/bow_time_interaction_context_test.gd \
+  tests/time/bow_time_interaction_context_test.tscn
+git commit -m "feat(weapon): complete launch bow runtime"
+
+git add -- \
+  docs/current/2026-09-29-p11c-bow-launch-evidence.md \
+  docs/superpowers/plans/2026-09-29-plane-walker-p11-five-weapons.md \
+  docs/README.md
+git commit -m "docs(weapon): certify launch bow runtime"
+```
+
+The runtime commit is `372455d`; the following documentation commit records its local certification.
 
 ### Task 6: P11D implement Gun
 
