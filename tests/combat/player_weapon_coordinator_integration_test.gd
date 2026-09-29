@@ -53,6 +53,7 @@ func _run() -> void:
 	await _test_non_m1_direct_loadout_exposes_compatibility_fallback()
 	await _test_explicit_profile_milestone_mismatch_is_atomic()
 	await _test_bow_candidate_uses_shared_hold_transaction()
+	await _test_bow_undercharge_and_time_cancel_are_atomic()
 	_suite.finish(get_tree())
 
 
@@ -452,6 +453,51 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 
 	_disconnect_recorder(recorder)
 	await get_tree().create_timer(0.25).timeout
+	await _free_player(player)
+
+
+func _test_bow_undercharge_and_time_cancel_are_atomic() -> void:
+	var player := await _spawn_player()
+	var bow_config := _loadout_config("bow")
+	bow_config["milestone"] = "NEXT"
+	bow_config["weapon_profile"] = _profile_definition("bow_candidate_v1")
+	_suite.assert_true(player.configure_loadout(bow_config), "Bow atomic-cancel fixture configures")
+	var recorder := EventRecorder.new()
+	EventBus.weapon_action_committed.connect(recorder.on_weapon_action_committed)
+	EventBus.player_attacked.connect(recorder.on_player_attacked)
+
+	_suite.assert_true(player.try_action(&"ranged_attack"), "undercharge fixture begins HOLD")
+	var undercharge_hold := _weapon_presentation(player)
+	var undercharge_generation := int(undercharge_hold.get("generation", 0))
+	_advance(player, 8)
+	_suite.assert_true(
+		not player.try_action(&"ranged_release"),
+		"release below the nine-frame threshold is rejected"
+	)
+	var undercharged := _weapon_presentation(player)
+	_suite.assert_equal(undercharged.get("phase"), "READY", "undercharge rejection cancels the transaction")
+	_suite.assert_equal(int(undercharged.get("token", -1)), 0, "undercharge rejection clears the action token")
+	_suite.assert_true(
+		int(undercharged.get("generation", 0)) > undercharge_generation,
+		"undercharge rejection invalidates the prior generation"
+	)
+	_suite.assert_equal(recorder.commits.size(), 1, "undercharge publishes only its initial typed commit")
+	_suite.assert_equal(recorder.releases.size(), 0, "undercharge publishes no projectile release")
+
+	_suite.assert_true(player.try_action(&"ranged_attack"), "time-cancel fixture begins a fresh HOLD")
+	var time_hold := _weapon_presentation(player)
+	var time_token := int(time_hold.get("token", 0))
+	var time_manager: Node = player.get_node("TimeManager")
+	var energy_before: float = time_manager.energy
+	_suite.assert_true(player.try_action(&"time_stop"), "Time Cast cancels Bow HOLD at higher priority")
+	var time_cancelled := _weapon_presentation(player)
+	_suite.assert_equal(time_cancelled.get("phase"), "READY", "Time Cast clears Bow HOLD authority")
+	_suite.assert_true(time_manager.energy < energy_before, "winning Time Cast spends energy exactly once")
+	_suite.assert_true(not player.try_action(&"ranged_release"), "stale release cannot revive a Time-cancelled HOLD")
+	_suite.assert_equal(recorder.releases.size(), 0, "Time-cancelled HOLD publishes no projectile release")
+	_suite.assert_true(time_token > int(undercharge_hold.get("token", 0)), "replacement HOLD uses a monotonic token")
+
+	_disconnect_recorder(recorder)
 	await _free_player(player)
 
 
