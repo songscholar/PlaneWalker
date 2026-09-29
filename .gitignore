@@ -11,6 +11,7 @@ __pycache__/
 
 # Godot export files
 export.cfg
+build/
 
 # OS files
 .DS_Store

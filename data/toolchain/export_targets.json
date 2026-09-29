@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "godot": {
+    "project_feature": "4.6",
+    "version_prefix": "4.6.1.stable.official.",
+    "template_version_directory": "4.6.1.stable"
+  },
+  "targets": [
+    {
+      "id": "windows-x86_64",
+      "preset": "Windows Release",
+      "platform": "Windows Desktop",
+      "artifact": "build/windows/PlaneWalker.exe",
+      "template_files": [
+        "windows_release_x86_64.exe"
+      ]
+    },
+    {
+      "id": "linux-x86_64",
+      "preset": "Linux Release",
+      "platform": "Linux/BSD",
+      "artifact": "build/linux/PlaneWalker.x86_64",
+      "template_files": [
+        "linux_release.x86_64"
+      ]
+    },
+    {
+      "id": "macos-universal",
+      "preset": "macOS Release",
+      "platform": "macOS",
+      "artifact": "build/macos/PlaneWalker.app",
+      "template_files": [
+        "macos.zip"
+      ]
+    }
+  ]
+}
