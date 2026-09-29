@@ -1,0 +1,20 @@
+[
+  {
+    "id": "fixture_scripted_edge",
+    "category": "item",
+    "availability": ["NEXT"],
+    "name_key": "FIXTURE_SCRIPTED_EDGE_NAME",
+    "description_key": "FIXTURE_SCRIPTED_EDGE_DESC",
+    "tags": ["hostile_fixture"],
+    "compatibility": {},
+    "effects": {
+      "attack_multiplier": 1.1
+    },
+    "kind": "weapon",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "fixture_scripted_edge",
+    "script_path": "res://evil.gd"
+  }
+]

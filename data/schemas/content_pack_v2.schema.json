@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/content-pack/2.0.0",
+  "title": "Plane Walker Content Pack v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pack_id",
+    "pack_version",
+    "schema_version",
+    "game_version_range",
+    "dependencies",
+    "load_order",
+    "content_manifest",
+    "localization_sources",
+    "asset_manifest",
+    "integrity_hashes",
+    "entitlement_tag"
+  ],
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "pack_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "schema_version": {
+      "const": 2
+    },
+    "game_version_range": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/dependency"
+      }
+    },
+    "load_order": {
+      "type": "integer",
+      "minimum": -100000,
+      "maximum": 100000
+    },
+    "content_manifest": {
+      "$ref": "#/$defs/path_list"
+    },
+    "localization_sources": {
+      "$ref": "#/$defs/path_list"
+    },
+    "asset_manifest": {
+      "$ref": "#/$defs/path_list"
+    },
+    "integrity_hashes": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/relative_path"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "entitlement_tag": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.-]{0,64}$"
+    }
+  },
+  "$defs": {
+    "relative_path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+    },
+    "path_list": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/relative_path"
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack_id", "version_range", "required"],
+      "properties": {
+        "pack_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "version_range": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

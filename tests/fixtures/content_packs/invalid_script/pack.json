@@ -1,0 +1,17 @@
+{
+  "pack_id": "fixture_invalid_script",
+  "pack_version": "1.0.0",
+  "schema_version": 2,
+  "game_version_range": ">=0.4.0-dev <1.0.0",
+  "dependencies": [],
+  "load_order": 10,
+  "content_manifest": [
+    "content/items.json"
+  ],
+  "localization_sources": [],
+  "asset_manifest": [],
+  "integrity_hashes": {
+    "content/items.json": "e45ad0ec09f387e8914a4938f3fd8d1a26bec78e0d576034ab31736e8b2d3578"
+  },
+  "entitlement_tag": ""
+}

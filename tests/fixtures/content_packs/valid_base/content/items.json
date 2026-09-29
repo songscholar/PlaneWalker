@@ -1,0 +1,21 @@
+[
+  {
+    "id": "fixture_chronal_edge",
+    "category": "item",
+    "availability": ["M1"],
+    "name_key": "FIXTURE_CHRONAL_EDGE_NAME",
+    "description_key": "FIXTURE_CHRONAL_EDGE_DESC",
+    "tags": ["weapon", "time"],
+    "compatibility": {
+      "weapon_ids": ["sword"]
+    },
+    "effects": {
+      "attack_multiplier": 1.1
+    },
+    "kind": "weapon",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "fixture_chronal_edge"
+  }
+]
