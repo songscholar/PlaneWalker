@@ -90,9 +90,6 @@ func start_run(config: Dictionary, run_id: String):
 			_revision(),
 			loadout_validation.context
 		)
-	var started = _orchestrator.start_run(normalized, run_id)
-	if not started.ok:
-		return started
 	var loadout_value: Variant = loadout_validation.context.get("loadout", {})
 	if not loadout_value is Dictionary or (loadout_value as Dictionary).is_empty():
 		return CommandResultScript.failure(
@@ -100,6 +97,9 @@ func start_run(config: Dictionary, run_id: String):
 			_revision(),
 			{"field": "loadout", "reason": "validated_context_missing"}
 		)
+	var started = _orchestrator.start_run(normalized, run_id)
+	if not started.ok:
+		return started
 	_accepted_loadout = (loadout_value as Dictionary).duplicate(true)
 	_room_definitions = M1RoomPlanScript.definitions(
 		_encounter_catalog,
