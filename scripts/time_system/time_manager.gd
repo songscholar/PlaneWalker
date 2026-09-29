@@ -50,6 +50,9 @@ var _cooldowns: Dictionary = {
 	&"time_rift": 0.0,
 	&"time_accelerate": 0.0,
 }
+var _active_rifts: Array[Node] = []
+var _time_stop_remaining: float = 0.0
+var _time_accelerate_remaining: float = 0.0
 
 
 func _ready() -> void:
@@ -60,6 +63,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_regen_energy(delta)
 	_tick_cooldowns(delta)
+	_tick_active_effects(delta)
 
 
 func configure_from_stats(stats: Resource) -> void:
@@ -90,7 +94,9 @@ func try_time_stop() -> bool:
 			node.apply_time_stop(effective_duration)
 		if node.has_method("apply_weakpoint"):
 			node.apply_weakpoint(time_stop_weakpoint_duration, time_stop_weakpoint_damage_bonus)
-	get_tree().create_timer(effective_duration).timeout.connect(_end_time_stop)
+	_time_stop_remaining = maxf(0.0, effective_duration)
+	if _time_stop_remaining <= 0.0:
+		_end_time_stop()
 	return true
 
 
@@ -144,6 +150,8 @@ func try_time_rift(rift_position: Vector2) -> bool:
 	var parent := get_parent().get_parent()
 	parent.add_child(rift)
 	rift.global_position = rift_position
+	_prune_active_rifts()
+	_active_rifts.append(rift)
 	EventBus.time_skill_started.emit(&"time_rift", {"position": rift_position})
 	return true
 
@@ -159,12 +167,28 @@ func try_time_accelerate() -> bool:
 	if owner_entity.has_method("apply_time_acceleration"):
 		owner_entity.apply_time_acceleration(effective_multiplier, effective_duration)
 	EventBus.time_skill_started.emit(&"time_accelerate", {})
-	get_tree().create_timer(effective_duration).timeout.connect(_end_time_accelerate)
+	_time_accelerate_remaining = maxf(0.0, effective_duration)
+	if _time_accelerate_remaining <= 0.0:
+		_end_time_accelerate()
 	return true
 
 
 func _end_time_accelerate() -> void:
 	EventBus.time_skill_ended.emit(&"time_accelerate", {})
+
+
+func reset_runtime_state() -> void:
+	_time_stop_remaining = 0.0
+	_time_accelerate_remaining = 0.0
+	energy = max_energy
+	energy_changed.emit(energy, max_energy)
+	for skill_id: StringName in _cooldowns.keys():
+		_cooldowns[skill_id] = 0.0
+		cooldown_changed.emit(skill_id, 0.0)
+	for rift: Node in _active_rifts.duplicate():
+		if is_instance_valid(rift) and rift.has_method("cancel"):
+			rift.cancel(false)
+	_active_rifts.clear()
 
 
 func restore_energy(amount: float) -> void:
@@ -193,6 +217,17 @@ func _tick_cooldowns(delta: float) -> void:
 		cooldown_changed.emit(skill_id, _cooldowns[skill_id])
 
 
+func _tick_active_effects(delta: float) -> void:
+	if _time_stop_remaining > 0.0:
+		_time_stop_remaining = maxf(0.0, _time_stop_remaining - delta)
+		if _time_stop_remaining <= 0.0:
+			_end_time_stop()
+	if _time_accelerate_remaining > 0.0:
+		_time_accelerate_remaining = maxf(0.0, _time_accelerate_remaining - delta)
+		if _time_accelerate_remaining <= 0.0:
+			_end_time_accelerate()
+
+
 func _can_pay(skill_id: StringName, cost: float) -> bool:
 	return energy >= cost and get_cooldown(skill_id) <= 0.0
 
@@ -213,3 +248,9 @@ func _take_self_damage(amount: float, source_tag: StringName) -> void:
 		return
 	if health_component.has_method("lose_health"):
 		health_component.lose_health(amount, source_tag)
+
+
+func _prune_active_rifts() -> void:
+	for rift: Node in _active_rifts.duplicate():
+		if not is_instance_valid(rift) or rift.is_queued_for_deletion():
+			_active_rifts.erase(rift)

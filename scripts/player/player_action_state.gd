@@ -126,6 +126,12 @@ func force_safe_reset() -> bool:
 	return true
 
 
+func reset_runtime_state() -> void:
+	_frame = 0
+	clear_buffered_inputs()
+	_return_to_free()
+
+
 func elapsed_state_frames() -> int:
 	return _state_frame
 

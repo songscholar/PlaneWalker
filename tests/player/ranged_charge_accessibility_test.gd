@@ -18,6 +18,10 @@ func _run() -> void:
 	add_child(player)
 	await get_tree().process_frame
 	var bow: Node = player.bow_weapon
+	suite.assert_true(player.configure_loadout({
+		"weapon_id": "bow",
+		"enabled_time_skills": ["stop", "rewind"],
+	}), "accessibility test explicitly equips Bow")
 
 	_set_charge_mode("hold")
 	player.handle_ranged_input_for_test(true, false)
@@ -33,10 +37,11 @@ func _run() -> void:
 	suite.assert_true(bow.is_charging(), "toggle release edge does not end charge")
 	player.handle_ranged_input_for_test(true, false)
 	suite.assert_true(not bow.is_charging(), "second toggle press releases charge")
+	bow._process(1.0)
 
 	suite.assert_true(
-		not player.try_action(&"ranged_attack"),
-		"direct M1 ranged command remains gated outside the accessibility input path"
+		player.try_action(&"ranged_attack"),
+		"equipped Bow uses the same authoritative ranged action path"
 	)
 
 	GameState.persistent = _original_persistent.duplicate(true)

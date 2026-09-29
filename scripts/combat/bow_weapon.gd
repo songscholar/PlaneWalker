@@ -56,6 +56,11 @@ func cancel_charge() -> void:
 	_charge_time = 0.0
 
 
+func reset_runtime_state() -> void:
+	cancel_charge()
+	_cooldown_remaining = 0.0
+
+
 func is_charging() -> bool:
 	return _charging
 

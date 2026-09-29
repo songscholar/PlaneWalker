@@ -9,6 +9,8 @@ extends Area2D
 @onready var visual: Polygon2D = $Visual
 
 var _affected: Array[Node] = []
+var _remaining_duration: float = 0.0
+var _finished: bool = false
 
 
 func _ready() -> void:
@@ -16,10 +18,16 @@ func _ready() -> void:
 	_configure_shape()
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
-	await get_tree().physics_frame
-	_apply_overlapping_bodies()
-	await get_tree().create_timer(duration).timeout
-	_expire()
+	_remaining_duration = maxf(0.0, duration)
+	call_deferred("_apply_overlapping_bodies")
+
+
+func _process(delta: float) -> void:
+	if _finished:
+		return
+	_remaining_duration = maxf(0.0, _remaining_duration - delta)
+	if _remaining_duration <= 0.0:
+		_expire()
 
 
 func _configure_shape() -> void:
@@ -40,6 +48,8 @@ func _on_body_entered(body: Node) -> void:
 
 
 func _apply_overlapping_bodies() -> void:
+	if _finished:
+		return
 	for body: Node in get_overlapping_bodies():
 		_apply_body(body)
 	for body: Node in get_tree().get_nodes_in_group("enemies"):
@@ -48,6 +58,8 @@ func _apply_overlapping_bodies() -> void:
 
 
 func _apply_body(body: Node) -> void:
+	if _finished:
+		return
 	if not body.has_method("apply_time_rift"):
 		return
 	if _affected.has(body):
@@ -61,9 +73,22 @@ func _on_body_exited(body: Node) -> void:
 
 
 func _expire() -> void:
+	_finish(true)
+
+
+func cancel(publish_end_event: bool = false) -> void:
+	_finish(publish_end_event)
+
+
+func _finish(publish_end_event: bool) -> void:
+	if _finished:
+		return
+	_finished = true
+	set_process(false)
 	for body: Node in _affected.duplicate():
 		_clear_body(body)
-	EventBus.time_skill_ended.emit(&"time_rift", {})
+	if publish_end_event:
+		EventBus.time_skill_ended.emit(&"time_rift", {})
 	queue_free()
 
 

@@ -24,6 +24,11 @@ var _hud_layer: CanvasLayer
 var _choice_layer: CanvasLayer
 var _choice_panel: Control
 var _active_run_id: String = ""
+var _published_run_id: String = ""
+var _initializing_run_id: String = ""
+var _pending_initial_room_started: Dictionary = {}
+var _pending_initial_room_cleared: Dictionary = {}
+var _pending_initial_runtime_failure: Dictionary = {}
 var _ended_run_id: String = ""
 var _run_serial: int = 0
 var _hud_render_accumulator: float = 0.0
@@ -77,13 +82,30 @@ func start_run(config: Dictionary) -> Variant:
 	_dispose_room_runtime()
 	_facade = next_facade
 	_active_run_id = run_id
+	_published_run_id = ""
+	_initializing_run_id = run_id
+	_pending_initial_room_started.clear()
+	_pending_initial_room_cleared.clear()
+	_pending_initial_runtime_failure.clear()
 	_ended_run_id = ""
 	_hud_render_accumulator = 0.0
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
-	var start_snapshot := runtime_snapshot()
-	EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
+
+	_resolve_player_for_start()
+	var accepted_snapshot := runtime_snapshot()
+	var config_value: Variant = accepted_snapshot.get("config", {})
+	if (
+		_player == null
+		or not is_instance_valid(_player)
+		or not _player.has_method("configure_loadout")
+		or not config_value is Dictionary
+	):
+		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
+	var accepted_config := (config_value as Dictionary).duplicate(true)
+	if not bool(_player.call("configure_loadout", accepted_config)):
+		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
 
 	var runner_value: Variant = _room_controller.call("encounter_runner")
 	if not runner_value is Node:
@@ -104,7 +126,32 @@ func start_run(config: Dictionary) -> Variant:
 	_connect_room_runtime()
 	var entered: Variant = _room_runtime.call("begin_current_room")
 	if entered == null or not bool(entered.get("ok")):
-		return entered
+		if entered != null and entered.get("code") is StringName:
+			return _fail_start(
+				entered.get("code") as StringName,
+				(entered.get("context") as Dictionary).duplicate(true)
+			)
+		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"entered": false})
+	if not _pending_initial_runtime_failure.is_empty():
+		return _fail_start(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			{"runtime_failure": _pending_initial_runtime_failure.duplicate(true)}
+		)
+	if _pending_initial_room_started.is_empty():
+		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"room_started": false})
+	if (
+		not _pending_initial_room_cleared.is_empty()
+		and str(_pending_initial_room_cleared.get("room_id", ""))
+		!= str(_pending_initial_room_started.get("room_id", ""))
+	):
+		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"room_event_mismatch": true})
+
+	var start_snapshot := runtime_snapshot()
+	_published_run_id = run_id
+	_initializing_run_id = ""
+	EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
+	_publish_pending_initial_room_started(run_id)
+	_publish_pending_initial_room_cleared(run_id)
 	return entered
 
 
@@ -202,6 +249,16 @@ func _on_room_started(active_room_id: StringName, revision: int) -> void:
 	var run_id := str(state.get("run_id", ""))
 	if run_id.is_empty() or run_id != _active_run_id:
 		return
+	if run_id == _initializing_run_id:
+		if _pending_initial_room_started.is_empty():
+			_pending_initial_room_started = {
+				"run_id": run_id,
+				"room_id": active_room_id,
+				"revision": revision,
+			}
+		return
+	if run_id != _published_run_id:
+		return
 	EventBus.room_started.emit(run_id, active_room_id, revision)
 
 
@@ -210,10 +267,17 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 	var run_id := str(state.get("run_id", ""))
 	if run_id.is_empty() or run_id != _active_run_id:
 		return
-	EventBus.room_cleared.emit(run_id, active_room_id, revision)
-	match int(state.get("phase", -1)):
-		RunPhaseScript.Value.SELECTION_ACTIVE:
-			_open_offer(state.get("open_offer", {}))
+	if run_id == _initializing_run_id:
+		if _pending_initial_room_cleared.is_empty():
+			_pending_initial_room_cleared = {
+				"run_id": run_id,
+				"room_id": active_room_id,
+				"revision": revision,
+			}
+		return
+	if run_id != _published_run_id:
+		return
+	_publish_room_cleared(run_id, active_room_id, revision)
 
 
 func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
@@ -221,6 +285,12 @@ func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
 
 
 func _on_runtime_failed(context: Dictionary) -> void:
+	var state := runtime_snapshot()
+	var run_id := str(state.get("run_id", ""))
+	if not run_id.is_empty() and run_id == _active_run_id and run_id == _initializing_run_id:
+		if _pending_initial_runtime_failure.is_empty():
+			_pending_initial_runtime_failure = context.duplicate(true)
+		return
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
@@ -249,7 +319,7 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 	var run_id := str(selection_state.get("run_id", ""))
 	if str(definition.get("id", "")) != "decline_contract":
 		_player.call("apply_reward", definition)
-	if not run_id.is_empty() and run_id == _active_run_id:
+	if not run_id.is_empty() and run_id == _active_run_id and run_id == _published_run_id:
 		EventBus.reward_selected.emit(run_id, definition.duplicate(true), selection_revision)
 	var transitioned = _facade.call("complete_transition")
 	if not transitioned.ok:
@@ -264,7 +334,12 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 func _publish_terminal_result(authoritative_result: Dictionary) -> void:
 	var state := runtime_snapshot()
 	var run_id := str(state.get("run_id", ""))
-	if run_id.is_empty() or run_id != _active_run_id or _ended_run_id == run_id:
+	if (
+		run_id.is_empty()
+		or run_id != _active_run_id
+		or run_id != _published_run_id
+		or _ended_run_id == run_id
+	):
 		return
 	var phase := int(state.get("phase", -1))
 	if not RunPhaseScript.is_terminal(phase):
@@ -343,14 +418,55 @@ func _fail_start(code: StringName, context: Dictionary) -> Variant:
 		"runtime_error_code": str(code),
 		"runtime_error_context": context.duplicate(true),
 	}
-	if _facade != null:
+	var state := runtime_snapshot()
+	if _facade != null and not RunPhaseScript.is_terminal(int(state.get("phase", -1))):
 		_facade.call("player_died", failure_context)
 	_dispose_room_runtime()
+	_initializing_run_id = ""
+	_pending_initial_room_started.clear()
+	_pending_initial_room_cleared.clear()
+	_pending_initial_runtime_failure.clear()
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
 	_publish_terminal_result(failure_context)
 	return CommandResultScript.failure(code, _revision(), context)
+
+
+func _resolve_player_for_start() -> void:
+	if _player != null and is_instance_valid(_player):
+		return
+	if _room_controller != null and is_instance_valid(_room_controller):
+		_player = _room_controller.get_node_or_null("Player")
+
+
+func _publish_pending_initial_room_started(run_id: String) -> void:
+	if str(_pending_initial_room_started.get("run_id", "")) != run_id:
+		_pending_initial_room_started.clear()
+		return
+	var room_id := StringName(str(_pending_initial_room_started.get("room_id", "")))
+	var revision := int(_pending_initial_room_started.get("revision", 0))
+	_pending_initial_room_started.clear()
+	EventBus.room_started.emit(run_id, room_id, revision)
+
+
+func _publish_pending_initial_room_cleared(run_id: String) -> void:
+	if _pending_initial_room_cleared.is_empty():
+		return
+	if str(_pending_initial_room_cleared.get("run_id", "")) != run_id:
+		_pending_initial_room_cleared.clear()
+		return
+	var room_id := StringName(str(_pending_initial_room_cleared.get("room_id", "")))
+	var revision := int(_pending_initial_room_cleared.get("revision", 0))
+	_pending_initial_room_cleared.clear()
+	_publish_room_cleared(run_id, room_id, revision)
+
+
+func _publish_room_cleared(run_id: String, room_id: StringName, revision: int) -> void:
+	EventBus.room_cleared.emit(run_id, room_id, revision)
+	var state := runtime_snapshot()
+	if int(state.get("phase", -1)) == RunPhaseScript.Value.SELECTION_ACTIVE:
+		_open_offer(state.get("open_offer", {}))
 
 
 func _set_selection_safety(active_selection: bool) -> void:

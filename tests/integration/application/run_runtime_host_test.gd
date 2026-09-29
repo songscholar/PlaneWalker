@@ -5,6 +5,18 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
 
+class LoadoutSpy:
+	extends Node
+
+	var configure_calls: int = 0
+	var received_configs: Array[Dictionary] = []
+
+	func configure_loadout(config: Dictionary) -> bool:
+		configure_calls += 1
+		received_configs.append(config)
+		return true
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	call_deferred("_run")
@@ -28,9 +40,28 @@ func _run() -> void:
 
 	suite.assert_equal(host.process_mode, Node.PROCESS_MODE_ALWAYS, "runtime host remains active while paused")
 	main.get_node("CombatRoom01").set("spawn_warning_duration", 0.0)
-	var started = host.call("start_run", _config())
+	var actual_player: Node = host.get("_player")
+	var loadout_spy := LoadoutSpy.new()
+	host.set("_player", loadout_spy)
+	var caller_config := _config()
+	var started = host.call("start_run", caller_config)
 	suite.assert_true(started.ok, "host starts one run")
 	var snapshot: Dictionary = host.call("runtime_snapshot")
+	suite.assert_equal(loadout_spy.configure_calls, 1, "host applies the accepted loadout exactly once per run")
+	if not loadout_spy.received_configs.is_empty():
+		suite.assert_equal(loadout_spy.received_configs[0], snapshot.get("config", {}), "host applies authoritative snapshot config")
+	caller_config["weapon_id"] = "bow"
+	(caller_config["enabled_time_skills"] as Array)[0] = "rift"
+	if not loadout_spy.received_configs.is_empty():
+		suite.assert_equal(str(loadout_spy.received_configs[0].get("weapon_id", "")), "sword", "caller weapon mutation cannot alter Player input")
+		suite.assert_equal(loadout_spy.received_configs[0].get("enabled_time_skills", []), ["stop", "rewind"], "caller ability mutation cannot alter Player input")
+		loadout_spy.received_configs[0]["weapon_id"] = "forged"
+		(loadout_spy.received_configs[0]["enabled_time_skills"] as Array).append("forged")
+	var isolated_snapshot: Dictionary = host.call("runtime_snapshot")
+	suite.assert_equal(str(isolated_snapshot.get("config", {}).get("weapon_id", "")), "sword", "Player input mutation cannot alter authority")
+	suite.assert_equal(isolated_snapshot.get("config", {}).get("enabled_time_skills", []), ["stop", "rewind"], "nested Player input mutation cannot alter authority")
+	host.set("_player", actual_player)
+	loadout_spy.free()
 	suite.assert_true(not str(snapshot.get("run_id", "")).is_empty(), "host exposes authoritative run id")
 	suite.assert_equal(int(snapshot.get("phase", -1)), RunPhaseScript.Value.COMBAT_ACTIVE, "host begins the first room")
 	suite.assert_equal(host.call("room_plan").size(), 5, "host owns the five-room plan")

@@ -5,9 +5,15 @@ const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 
+const DEFAULT_LOADOUT_CONFIG := {
+	"weapon_id": "sword",
+	"enabled_time_skills": ["stop", "rewind"],
+}
+
 @export var stats: Resource
 
 @onready var health: Node = $HealthComponent
+@onready var loadout_runtime: Node = $PlayerLoadoutRuntime
 @onready var sword_weapon: Node = $SwordWeapon
 @onready var bow_weapon: Node = $BowWeapon
 @onready var time_manager: Node = $TimeManager
@@ -21,6 +27,7 @@ var _last_move_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
 var _time_acceleration_multiplier: float = 1.0
 var _time_acceleration_token: int = 0
+var _time_acceleration_remaining: float = 0.0
 var action_state = PlayerActionStateScript.new()
 var _active_attack_definition: Dictionary = {}
 var _combo_window_frames_remaining: int = 0
@@ -44,6 +51,7 @@ func _ready() -> void:
 	if stats == null:
 		stats = StatsResource.new()
 	_apply_stats_to_components(true)
+	configure_loadout(DEFAULT_LOADOUT_CONFIG)
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
 
@@ -60,6 +68,10 @@ func _physics_process(delta: float) -> void:
 func _update_timers(delta: float) -> void:
 	_dash_cooldown_remaining = maxf(0.0, _dash_cooldown_remaining - delta)
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
+	if _time_acceleration_remaining > 0.0:
+		_time_acceleration_remaining = maxf(0.0, _time_acceleration_remaining - delta)
+		if _time_acceleration_remaining <= 0.0:
+			_clear_time_acceleration(_time_acceleration_token)
 
 
 func _update_weapon_aim() -> void:
@@ -84,15 +96,17 @@ func handle_ranged_input_for_test(just_pressed: bool, just_released: bool) -> vo
 	var mode := str(GameState.get_setting("ranged_charge_mode", "hold"))
 	if mode == "toggle":
 		if just_pressed:
-			_commit_ranged_input(&"ranged_release" if bow_weapon.is_charging() else &"ranged_attack")
+			try_action(&"ranged_release" if bow_weapon.is_charging() else &"ranged_attack")
 		return
 	if just_pressed:
-		_commit_ranged_input(&"ranged_attack")
+		try_action(&"ranged_attack")
 	if just_released:
-		_commit_ranged_input(&"ranged_release")
+		try_action(&"ranged_release")
 
 
 func _commit_ranged_input(action_id: StringName) -> bool:
+	if not loadout_runtime.has_weapon(&"bow"):
+		return false
 	if action_state.current_state != PlayerActionStateScript.State.FREE:
 		return false
 	if action_id == &"ranged_attack":
@@ -133,17 +147,57 @@ func try_action(action_id: StringName) -> bool:
 		return false
 	match action_id:
 		&"attack":
-			return _request_attack(false)
+			return loadout_runtime.has_weapon(&"sword") and _request_attack(false)
 		&"heavy_attack":
-			return _request_attack(true)
+			return loadout_runtime.has_weapon(&"sword") and _request_attack(true)
+		&"ranged_attack", &"ranged_release":
+			return _commit_ranged_input(action_id)
 		&"dash":
 			return _request_dash()
-		&"time_stop", &"time_rewind":
+		&"time_stop":
+			if not loadout_runtime.has_time_ability(&"stop"):
+				return false
 			return _request_time_skill(action_id)
-		&"ranged_attack", &"ranged_release", &"time_rift", &"time_accelerate":
+		&"time_rewind":
+			if not loadout_runtime.has_time_ability(&"rewind"):
+				return false
+			return _request_time_skill(action_id)
+		&"time_rift", &"time_accelerate":
 			return false
 		_:
 			return false
+
+
+func configure_loadout(config: Dictionary) -> bool:
+	if loadout_runtime == null or not loadout_runtime.configure(config):
+		return false
+	reset_runtime_state()
+	return true
+
+
+func reset_runtime_state() -> void:
+	_action_generation += 1
+	action_state.reset_runtime_state()
+	_active_attack_definition.clear()
+	_combo_window_frames_remaining = 0
+	_buffered_attack_heavy = false
+	_buffered_time_skill = &""
+	_dash_cooldown_remaining = 0.0
+	_dash_velocity = Vector2.ZERO
+	_knockback_velocity = Vector2.ZERO
+	velocity = Vector2.ZERO
+	_last_move_direction = Vector2.RIGHT
+	sword_weapon.cancel_attack()
+	sword_weapon.reset_combo()
+	bow_weapon.reset_runtime_state()
+	_time_acceleration_token += 1
+	_time_acceleration_multiplier = 1.0
+	_time_acceleration_remaining = 0.0
+	_apply_stats_to_components(true)
+	time_manager.reset_runtime_state()
+	health.invulnerable = false
+	if rewind_recorder.has_method("clear_snapshots"):
+		rewind_recorder.clear_snapshots()
 
 
 func advance_action_frame() -> void:
@@ -399,16 +453,16 @@ func apply_time_acceleration(multiplier: float, duration: float) -> void:
 	if duration <= 0.0:
 		return
 	_time_acceleration_token += 1
-	var token := _time_acceleration_token
 	_time_acceleration_multiplier = maxf(1.0, multiplier)
+	_time_acceleration_remaining = duration
 	_apply_stats_to_components(false)
-	get_tree().create_timer(duration).timeout.connect(_clear_time_acceleration.bind(token))
 
 
 func _clear_time_acceleration(token: int) -> void:
 	if token != _time_acceleration_token:
 		return
 	_time_acceleration_multiplier = 1.0
+	_time_acceleration_remaining = 0.0
 	_apply_stats_to_components(false)
 
 

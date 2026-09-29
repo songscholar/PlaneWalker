@@ -1,10 +1,206 @@
 extends Node
 
 const MainScene := preload("res://scenes/main.tscn")
+const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
 const FIXED_SEED := 20260929
+
+
+class RejectingLoadoutPlayer:
+	extends Node
+
+	var configure_calls: int = 0
+
+	func configure_loadout(_config: Dictionary) -> bool:
+		configure_calls += 1
+		return false
+
+
+class AcceptingLoadoutPlayer:
+	extends Node
+
+	var configure_calls: int = 0
+
+	func configure_loadout(_config: Dictionary) -> bool:
+		configure_calls += 1
+		return true
+
+
+class FailingInitialRoomRuntime:
+	extends Node
+
+	signal room_started(room_id: StringName, revision: int)
+	signal room_cleared(room_id: StringName, revision: int)
+	signal terminal_committed(context: Dictionary, revision: int)
+	signal runtime_failed(context: Dictionary)
+
+	func begin_current_room() -> Variant:
+		return CommandResultScript.failure(
+			&"INVALID_PHASE",
+			2,
+			{"operation": "begin_current_room"}
+		)
+
+
+class FailingInitialRoomFacade:
+	extends RefCounted
+
+	var config: Dictionary = {}
+	var run_id: String = ""
+	var revision: int = 0
+	var phase: int = RunPhaseScript.Value.HUB
+	var player_died_calls: int = 0
+	var catalog := RefCounted.new()
+
+	func start_run(accepted_config: Dictionary, accepted_run_id: String) -> Variant:
+		config = accepted_config.duplicate(true)
+		run_id = accepted_run_id
+		revision = 1
+		phase = RunPhaseScript.Value.ROOM_TRANSITION
+		return CommandResultScript.success(revision)
+
+	func snapshot() -> Dictionary:
+		return {
+			"run_id": run_id,
+			"revision": revision,
+			"phase": phase,
+			"config": config.duplicate(true),
+		}
+
+	func create_room_runtime(_runner: Node) -> Node:
+		return FailingInitialRoomRuntime.new()
+
+	func encounter_catalog() -> RefCounted:
+		return catalog
+
+	func player_died(_context: Dictionary) -> Variant:
+		player_died_calls += 1
+		revision += 1
+		phase = RunPhaseScript.Value.DEFEAT
+		return CommandResultScript.success(revision)
+
+	func advance_time(_delta_seconds: float) -> Variant:
+		return CommandResultScript.failure(&"TERMINAL_STATE", revision)
+
+
+class FailingInitialRoomController:
+	extends Node
+
+	var runner := Node.new()
+
+	func _init() -> void:
+		add_child(runner)
+
+	func encounter_runner() -> Node:
+		return runner
+
+	func configure_authored_runtime(_runtime: Node, _catalog: RefCounted) -> bool:
+		return true
+
+
+class SynchronousInitialRoomRuntime:
+	extends Node
+
+	signal room_started(room_id: StringName, revision: int)
+	signal room_cleared(room_id: StringName, revision: int)
+	signal terminal_committed(context: Dictionary, revision: int)
+	signal runtime_failed(context: Dictionary)
+
+	var facade: RefCounted
+	var mode: StringName = &"clear"
+
+	func begin_current_room() -> Variant:
+		facade.call("mark_room_started")
+		var entered_revision := int((facade.call("snapshot") as Dictionary).get("revision", 0))
+		room_started.emit(&"room_event_01", entered_revision)
+		if mode == &"clear":
+			facade.call("mark_room_cleared")
+			var cleared_revision := int((facade.call("snapshot") as Dictionary).get("revision", 0))
+			room_cleared.emit(&"room_event_01", cleared_revision)
+		else:
+			runtime_failed.emit({
+				"result": "runtime_error",
+				"runtime_error_code": "SYNCHRONOUS_INITIAL_FAILURE",
+				"room_id": "room_event_01",
+			})
+		return CommandResultScript.success(entered_revision)
+
+
+class SynchronousInitialRoomFacade:
+	extends RefCounted
+
+	var mode: StringName = &"clear"
+	var config: Dictionary = {}
+	var run_id: String = ""
+	var revision: int = 0
+	var phase: int = RunPhaseScript.Value.HUB
+	var open_offer: Dictionary = {}
+	var player_died_calls: int = 0
+	var catalog := RefCounted.new()
+
+	func start_run(accepted_config: Dictionary, accepted_run_id: String) -> Variant:
+		config = accepted_config.duplicate(true)
+		run_id = accepted_run_id
+		revision = 1
+		phase = RunPhaseScript.Value.ROOM_TRANSITION
+		open_offer.clear()
+		return CommandResultScript.success(revision)
+
+	func snapshot() -> Dictionary:
+		return {
+			"run_id": run_id,
+			"revision": revision,
+			"phase": phase,
+			"config": config.duplicate(true),
+			"open_offer": open_offer.duplicate(true),
+		}
+
+	func create_room_runtime(_runner: Node) -> Node:
+		var runtime := SynchronousInitialRoomRuntime.new()
+		runtime.facade = self
+		runtime.mode = mode
+		return runtime
+
+	func encounter_catalog() -> RefCounted:
+		return catalog
+
+	func mark_room_started() -> void:
+		revision = 2
+		phase = RunPhaseScript.Value.COMBAT_ACTIVE
+
+	func mark_room_cleared() -> void:
+		revision = 3
+		phase = RunPhaseScript.Value.SELECTION_ACTIVE
+		open_offer = {
+			"schema_version": 1,
+			"offer_id": "%s:room_event_01:item:3" % run_id,
+			"revision": revision,
+			"category": "item",
+			"title_key": "UI_CHOOSE_REWARD",
+			"can_skip": false,
+			"options": [{
+				"option_id": "frozen_burst",
+				"content_id": "frozen_burst",
+				"name_key": "FROZEN_BURST_NAME",
+				"description_key": "FROZEN_BURST_DESC",
+				"archetype_key": "ARCHETYPE_TIME_STOP_BURST",
+				"role_key": "ROLE_STARTER",
+				"rarity": "common",
+				"icon_id": "content_frozen_burst",
+				"effect_summary_keys": [],
+			}],
+		}
+
+	func player_died(_context: Dictionary) -> Variant:
+		player_died_calls += 1
+		revision += 1
+		phase = RunPhaseScript.Value.DEFEAT
+		return CommandResultScript.success(revision)
+
+	func advance_time(_delta_seconds: float) -> Variant:
+		return CommandResultScript.success(revision)
 
 
 class LifecycleRecorder:
@@ -84,6 +280,10 @@ func _run() -> void:
 	_test_storage_root = _isolated_storage_root()
 	GameState.save_path = _test_storage_root.path_join("legacy.json")
 	GameState.reset_persistent_data(true)
+	await _assert_loadout_failure_is_silent(suite)
+	await _assert_first_room_failure_is_silent(suite)
+	await _assert_synchronous_first_room_clear_is_ordered(suite)
+	await _assert_synchronous_runtime_failure_is_silent(suite)
 
 	var main := MainScene.instantiate()
 	add_child(main)
@@ -113,6 +313,16 @@ func _run() -> void:
 	var started = host.call("start_run", _config())
 	suite.assert_true(started.ok, "valid run starts")
 	_assert_counts(suite, recorder, [1, 1, 0, 0, 0], "successful start publishes run and room entry once")
+	suite.assert_true(recorder.event_ids.size() >= 2, "successful start records run and first-room facts")
+	if recorder.event_ids.size() >= 2:
+		suite.assert_true(recorder.event_ids[0].begins_with("run_started|"), "run_started is the first lifecycle fact")
+		suite.assert_true(recorder.event_ids[1].begins_with("room_started|"), "first room_started follows run_started")
+	if not recorder.run_started_payloads.is_empty():
+		suite.assert_equal(
+			int(recorder.run_started_payloads[0].get("phase", -1)),
+			RunPhaseScript.Value.COMBAT_ACTIVE,
+			"run_started publishes the initialized combat snapshot"
+		)
 	var start_snapshot: Dictionary = host.call("runtime_snapshot")
 	suite.assert_true(str(start_snapshot.get("run_id", "")).begins_with("run-%d-" % FIXED_SEED), "run start exposes the authoritative run id")
 	suite.assert_equal(int(start_snapshot.get("phase", -1)), RunPhaseScript.Value.COMBAT_ACTIVE, "published snapshot mutation cannot alter authority")
@@ -180,6 +390,149 @@ func _run() -> void:
 
 	await _cleanup(main, recorder)
 	suite.finish(get_tree())
+
+
+func _assert_loadout_failure_is_silent(suite) -> void:
+	var main := MainScene.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host := main.get_node_or_null("RunRuntimeHost")
+	var room := main.get_node_or_null("CombatRoom01")
+	var recorder := LifecycleRecorder.new()
+	var rejecting_player := RejectingLoadoutPlayer.new()
+	_connect_recorder(recorder)
+	if host == null or room == null:
+		suite.assert_true(false, "main provides loadout-failure fixtures")
+	else:
+		room.set("spawn_warning_duration", 0.0)
+		host.set("_player", rejecting_player)
+		var failed = host.call("start_run", _config())
+		suite.assert_true(not failed.ok, "player loadout rejection fails the run start")
+		suite.assert_equal(failed.code, &"LOADOUT_APPLY_FAILED", "loadout rejection uses the stable failure code")
+		suite.assert_equal(rejecting_player.configure_calls, 1, "failed loadout is attempted exactly once")
+		_assert_counts(suite, recorder, [0, 0, 0, 0, 0], "loadout failure publishes no lifecycle facts")
+		suite.assert_equal(recorder.event_ids, [], "loadout failure has no hidden lifecycle ordering")
+	_disconnect_recorder(recorder)
+	main.queue_free()
+	rejecting_player.free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _assert_first_room_failure_is_silent(suite) -> void:
+	var main := MainScene.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host := main.get_node_or_null("RunRuntimeHost")
+	var recorder := LifecycleRecorder.new()
+	var player := AcceptingLoadoutPlayer.new()
+	var facade := FailingInitialRoomFacade.new()
+	var room_controller := FailingInitialRoomController.new()
+	_connect_recorder(recorder)
+	if host == null:
+		suite.assert_true(false, "main provides first-room failure fixture")
+	else:
+		host.set("_facade", facade)
+		host.set("_active_run_id", "")
+		host.set("_player", player)
+		host.set("_room_controller", room_controller)
+		var failed = host.call("start_run", _config())
+		suite.assert_true(not failed.ok, "first-room rejection fails the run start")
+		suite.assert_equal(failed.code, &"INVALID_PHASE", "first-room rejection preserves its stable code")
+		suite.assert_equal(player.configure_calls, 1, "first-room failure applies the loadout once")
+		suite.assert_equal(facade.player_died_calls, 1, "first-room failure terminates authority once")
+		suite.assert_true(host.get("_room_runtime") == null, "first-room failure disposes the runtime")
+		_assert_counts(suite, recorder, [0, 0, 0, 0, 0], "first-room failure publishes no lifecycle facts")
+		suite.assert_equal(recorder.event_ids, [], "first-room failure has no hidden lifecycle ordering")
+	_disconnect_recorder(recorder)
+	main.queue_free()
+	player.free()
+	room_controller.free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _assert_synchronous_first_room_clear_is_ordered(suite) -> void:
+	var main := MainScene.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host := main.get_node_or_null("RunRuntimeHost")
+	var recorder := LifecycleRecorder.new()
+	var player := AcceptingLoadoutPlayer.new()
+	var facade := SynchronousInitialRoomFacade.new()
+	var room_controller := FailingInitialRoomController.new()
+	_connect_recorder(recorder)
+	if host == null:
+		suite.assert_true(false, "main provides synchronous clear fixture")
+	else:
+		host.set("_facade", facade)
+		host.set("_active_run_id", "")
+		host.set("_player", player)
+		host.set("_room_controller", room_controller)
+		var started = host.call("start_run", _config())
+		suite.assert_true(started.ok, "synchronous event room initializes successfully")
+		_assert_counts(suite, recorder, [1, 1, 1, 0, 0], "synchronous clear publishes each lifecycle fact once")
+		suite.assert_equal(recorder.event_ids.size(), 3, "synchronous clear records three ordered facts")
+		if recorder.event_ids.size() == 3:
+			suite.assert_true(recorder.event_ids[0].begins_with("run_started|"), "synchronous clear starts with run_started")
+			suite.assert_true(recorder.event_ids[1].begins_with("room_started|"), "synchronous clear publishes room_started second")
+			suite.assert_true(recorder.event_ids[2].begins_with("room_cleared|"), "synchronous clear publishes room_cleared third")
+		var snapshot: Dictionary = host.call("runtime_snapshot")
+		suite.assert_equal(int(snapshot.get("phase", -1)), RunPhaseScript.Value.SELECTION_ACTIVE, "synchronous clear retains selection authority")
+		suite.assert_true(not (snapshot.get("open_offer", {}) as Dictionary).is_empty(), "synchronous clear retains the authoritative offer")
+		var panel := host.call("choice_panel") as Control
+		suite.assert_true(panel != null and panel.visible, "synchronous clear opens the choice panel")
+		suite.assert_equal(facade.player_died_calls, 0, "synchronous clear does not terminate authority")
+		host.set("_active", false)
+	_disconnect_recorder(recorder)
+	main.queue_free()
+	player.free()
+	room_controller.free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _assert_synchronous_runtime_failure_is_silent(suite) -> void:
+	var main := MainScene.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var host := main.get_node_or_null("RunRuntimeHost")
+	var recorder := LifecycleRecorder.new()
+	var player := AcceptingLoadoutPlayer.new()
+	var facade := SynchronousInitialRoomFacade.new()
+	facade.mode = &"runtime_failure"
+	var room_controller := FailingInitialRoomController.new()
+	_connect_recorder(recorder)
+	if host == null:
+		suite.assert_true(false, "main provides synchronous runtime-failure fixture")
+	else:
+		host.set("_facade", facade)
+		host.set("_active_run_id", "")
+		host.set("_player", player)
+		host.set("_room_controller", room_controller)
+		var failed = host.call("start_run", _config())
+		suite.assert_true(not failed.ok, "synchronous runtime failure rejects run start")
+		suite.assert_equal(failed.code, &"AUTHORED_RUNTIME_CONFIGURATION_FAILED", "synchronous runtime failure uses the stable host code")
+		suite.assert_equal(player.configure_calls, 1, "synchronous runtime failure applies the loadout once")
+		suite.assert_equal(facade.player_died_calls, 1, "synchronous runtime failure terminates authority once")
+		suite.assert_true(host.get("_room_runtime") == null, "synchronous runtime failure disposes the runtime")
+		_assert_counts(suite, recorder, [0, 0, 0, 0, 0], "synchronous runtime failure publishes no lifecycle facts")
+		suite.assert_equal(recorder.event_ids, [], "synchronous runtime failure has no hidden lifecycle ordering")
+		host.set("_active", false)
+	_disconnect_recorder(recorder)
+	main.queue_free()
+	player.free()
+	room_controller.free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
 
 
 func _connect_recorder(recorder: LifecycleRecorder) -> void:

@@ -32,6 +32,15 @@ func _test_command_result(suite) -> void:
 	suite.assert_equal(terminal.code, &"TERMINAL_STATE", "failure code is retained")
 	suite.assert_equal(terminal.new_revision, 9, "failure revision is retained")
 
+	var loadout_failed = CommandResultScript.failure(&"LOADOUT_APPLY_FAILED", 10)
+	suite.assert_equal(loadout_failed.code, &"LOADOUT_APPLY_FAILED", "loadout failure code is retained")
+	var authored_runtime_failed = CommandResultScript.failure(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", 11)
+	suite.assert_equal(
+		authored_runtime_failed.code,
+		&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+		"authored runtime failure code is retained"
+	)
+
 	var unknown = CommandResultScript.failure(&"NOT_A_STANDARD_CODE", 3)
 	suite.assert_true(not unknown.ok, "unknown code remains a failure")
 	suite.assert_equal(unknown.code, &"INVALID_ARGUMENT", "unknown standard code is rejected")
