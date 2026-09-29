@@ -49,7 +49,7 @@ def certify_checkout(
         "status": "error",
         "classification": "invalid_source",
         "certified": False,
-        "remaining_gates": ["validation", "exports", "packaged_startup"],
+        "remaining_gates": ["validation", "coverage", "exports", "packaged_startup"],
         "source": {
             "root": str(source),
             "requested_commit": commit,
@@ -133,7 +133,7 @@ def certify_checkout(
         if validation["status"] != "pass":
             report["status"] = "failed"
             report["classification"] = "validation_failed"
-            report["remaining_gates"] = ["validation", "exports", "packaged_startup"]
+            report["remaining_gates"] = ["validation", "coverage", "exports", "packaged_startup"]
             issues.append({
                 "code": str(validation["failure_code"]),
                 "category": "failed",
@@ -143,7 +143,18 @@ def certify_checkout(
             _set_checkout_after(report, checkout_after)
             return _finish(report, evidence_path, EXIT_FAILED)
 
-        report["remaining_gates"] = ["exports", "packaged_startup"]
+        coverage_pending = validation.get("coverage_status") != "collected"
+        if coverage_pending:
+            issues.append({
+                "code": "coverage_not_collected",
+                "category": "blocked",
+                "message": "clean detached validation did not produce a code coverage report",
+            })
+        report["remaining_gates"] = (
+            ["coverage", "exports", "packaged_startup"]
+            if coverage_pending
+            else ["exports", "packaged_startup"]
+        )
         export_report, export_exit = _run_export(
             source,
             checkout,
@@ -173,11 +184,15 @@ def certify_checkout(
                 if isinstance(issue, dict)
             }
             report["status"] = "blocked"
-            report["classification"] = (
-                "export_templates_pending"
-                if export_issue_codes and export_issue_codes == {"template_missing"}
-                else "export_blocked"
-            )
+            templates_only = export_issue_codes and export_issue_codes == {"template_missing"}
+            if coverage_pending and templates_only:
+                report["classification"] = "coverage_and_export_templates_pending"
+            elif templates_only:
+                report["classification"] = "export_templates_pending"
+            elif coverage_pending:
+                report["classification"] = "coverage_and_export_blocked"
+            else:
+                report["classification"] = "export_blocked"
             issues.extend(_copy_issues(export_report.get("issues")))
             return _finish(report, evidence_path, EXIT_BLOCKED)
         if export_exit != EXIT_PASS or export_status != "pass":
@@ -191,6 +206,12 @@ def certify_checkout(
             if isinstance(export_report, dict):
                 issues.extend(_copy_issues(export_report.get("issues")))
             return _finish(report, evidence_path, EXIT_FAILED)
+
+        if coverage_pending:
+            report["status"] = "blocked"
+            report["classification"] = "coverage_pending"
+            report["remaining_gates"] = ["coverage", "packaged_startup"]
+            return _finish(report, evidence_path, EXIT_BLOCKED)
 
         report["status"] = "pass"
         report["classification"] = (
@@ -269,12 +290,14 @@ def _run_validation(
     except OSError:
         exit_code = None
         failure_code = "validation_process_error"
+    coverage_status = _coverage_status(stdout_log)
     return {
         "status": "pass" if failure_code is None else "failed",
         "failure_code": failure_code,
         "command": ["tools/validate_project.sh"],
         "exit_code": exit_code,
         "duration_ms": int((time.monotonic() - started) * 1000),
+        "coverage_status": coverage_status,
         "stdout": _file_evidence(stdout_log, source),
     }
 
@@ -375,6 +398,17 @@ def _file_evidence(path: Path, source: Path) -> dict[str, object]:
         "sha256": digest.hexdigest(),
         "size_bytes": size,
     }
+
+
+def _coverage_status(stdout_log: Path) -> str:
+    if not stdout_log.is_file():
+        return "unknown"
+    text = stdout_log.read_text(encoding="utf-8", errors="replace")
+    if "Code coverage: not collected" in text:
+        return "not_collected"
+    if "Code coverage: collected" in text:
+        return "collected"
+    return "unknown"
 
 
 def _copy_issues(value: object) -> list[dict[str, object]]:

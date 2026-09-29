@@ -83,6 +83,20 @@ class DetachedCheckoutCertificationContractTest(unittest.TestCase):
         self.assertFalse(report["certified"])
         self.assertEqual(report["remaining_gates"], ["packaged_startup"])
 
+    def test_missing_coverage_blocks_even_when_export_passes(self) -> None:
+        with certification_fixture() as fixture, mock.patch.dict(
+            os.environ,
+            {"FIXTURE_VALIDATION_MODE": "no_coverage", "FIXTURE_EXPORT_MODE": "pass"},
+        ):
+            report, exit_code = fixture.certify()
+
+        self.assertEqual(exit_code, EXIT_BLOCKED)
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["classification"], "coverage_pending")
+        self.assertEqual(report["validation"]["coverage_status"], "not_collected")
+        self.assertEqual(report["remaining_gates"], ["coverage", "packaged_startup"])
+        self.assertIn("coverage_not_collected", {issue["code"] for issue in report["issues"]})
+
     def test_dirty_source_candidate_never_becomes_release_evidence(self) -> None:
         with certification_fixture() as fixture, mock.patch.dict(
             os.environ,
@@ -158,6 +172,11 @@ class CertificationFixture:
             "if [[ \"${FIXTURE_VALIDATION_MODE:-pass}\" == \"fail\" ]]; then\n"
             "  printf '%s\\n' 'synthetic validation failure'\n"
             "  exit 9\n"
+            "fi\n"
+            "if [[ \"${FIXTURE_VALIDATION_MODE:-pass}\" == \"no_coverage\" ]]; then\n"
+            "  printf '%s\\n' 'Code coverage: not collected'\n"
+            "else\n"
+            "  printf '%s\\n' 'Code coverage: collected (fixture)'\n"
             "fi\n"
             "printf '%s\\n' 'PASS: synthetic validation'\n",
             encoding="utf-8",
