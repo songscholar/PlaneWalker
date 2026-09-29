@@ -101,7 +101,19 @@ func _test_valid_sword_profile(suite, runtime_script: Variant) -> void:
 	suite.assert_equal(
 		profile.action_for_semantic(&"weapon_primary").get("action_id"),
 		"sword.light",
-		"semantic primary resolves to the configured action"
+		"legacy semantic lookup resolves to the first configured action"
+	)
+	var primary_actions: Array[Dictionary] = profile.actions_for_semantic(&"weapon_primary")
+	suite.assert_equal(primary_actions.size(), 2, "semantic primary exposes every configured action")
+	suite.assert_equal(
+		_action_ids(primary_actions),
+		["sword.light", "sword.light.release"],
+		"semantic action lookup preserves profile declaration order"
+	)
+	suite.assert_equal(
+		profile.actions_for_semantic(&"weapon_ultimate"),
+		[],
+		"unknown semantic action resolves to an empty array"
 	)
 	suite.assert_equal(
 		profile.resource(&"combo").get("maximum"),
@@ -133,8 +145,17 @@ func _test_valid_sword_profile(suite, runtime_script: Variant) -> void:
 
 	source["availability"].clear()
 	source["actions"][0]["windup_frames"] = 999
+	primary_actions[0]["windup_frames"] = 777
+	primary_actions[1]["resource_costs"]["combo"] = 99
 	suite.assert_true(snapshot.get("availability", []).has("M1"), "configured profile is isolated from caller mutation")
 	suite.assert_equal(profile.action_for_semantic(&"weapon_primary").get("windup_frames"), 6, "actions are deep copied")
+	var primary_actions_again: Array[Dictionary] = profile.actions_for_semantic(&"weapon_primary")
+	suite.assert_equal(primary_actions_again[0].get("windup_frames"), 6, "action arrays deep copy each action")
+	suite.assert_equal(
+		primary_actions_again[1].get("resource_costs", {}).get("combo"),
+		0,
+		"action arrays deep copy nested action data"
+	)
 
 
 func _test_invalid_profiles_fail_closed(suite, runtime_script: Variant) -> void:
@@ -206,6 +227,20 @@ func _valid_sword_profile() -> Dictionary:
 				"cancel_from_frame": 6,
 				"buffer_frames": 12,
 				"movement_multiplier": 0.55,
+				"resource_costs": {"combo": 0},
+				"payload_id": "sword.light.hit",
+				"cue_id": "sword.light",
+			},
+			{
+				"action_id": "sword.light.release",
+				"semantic_action": "weapon_primary",
+				"activation_mode": "release",
+				"windup_frames": 7,
+				"active_frames": 6,
+				"recovery_frames": 12,
+				"cancel_from_frame": 6,
+				"buffer_frames": 12,
+				"movement_multiplier": 0.5,
 				"resource_costs": {"combo": 0},
 				"payload_id": "sword.light.hit",
 				"cue_id": "sword.light",
@@ -287,6 +322,13 @@ func _valid_sword_profile() -> Dictionary:
 			},
 		},
 	}
+
+
+func _action_ids(actions: Array[Dictionary]) -> Array[String]:
+	var ids: Array[String] = []
+	for action: Dictionary in actions:
+		ids.append(str(action.get("action_id", "")))
+	return ids
 
 
 func _case(label: String, mutate: Callable) -> Dictionary:

@@ -99,7 +99,19 @@ func snapshot() -> Dictionary:
 
 
 func action_for_semantic(semantic_action: StringName) -> Dictionary:
-	return _copy_indexed(_actions_by_semantic, semantic_action)
+	var actions := actions_for_semantic(semantic_action)
+	return actions[0] if not actions.is_empty() else {}
+
+
+func actions_for_semantic(semantic_action: StringName) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var actions_value: Variant = _actions_by_semantic.get(str(semantic_action), [])
+	if not actions_value is Array:
+		return result
+	for action_value: Variant in actions_value as Array:
+		if action_value is Dictionary:
+			result.append((action_value as Dictionary).duplicate(true))
+	return result
 
 
 func resource(resource_id: StringName) -> Dictionary:
@@ -487,7 +499,8 @@ func _rebuild_indexes() -> void:
 		var action: Dictionary = action_value
 		var semantic_id := str(action["semantic_action"])
 		if not _actions_by_semantic.has(semantic_id):
-			_actions_by_semantic[semantic_id] = action.duplicate(true)
+			_actions_by_semantic[semantic_id] = []
+		(_actions_by_semantic[semantic_id] as Array).append(action.duplicate(true))
 	for resource_value: Variant in _snapshot.get("resources", []):
 		var resource_definition: Dictionary = resource_value
 		_resources_by_id[str(resource_definition["resource_id"])] = resource_definition.duplicate(true)
