@@ -7,8 +7,9 @@
 - Depends On: `da3ab1d`, `data/toolchain/export_targets.json`, `tools/export/preflight.py`
 - Scope: P7 export execution/evidence contract followed by P9 detached-checkout orchestration contract
 - Evidence Boundary: No target is marked exported unless Godot exits successfully, logs are clean, and the expected artifact is hashed from the current invocation
-- Implementation Status: Tasks 1 and 2 complete; Task 3 contract implementation complete and awaiting committed-HEAD evidence run
+- Implementation Status: Tasks 1–3 complete at repository-contract level; committed-HEAD evidence is blocked by coverage and export-template gates
 - Task 1/2 Verification: 27 export contracts passed; local execution stopped before export with three `template_missing` blockers; project validation passed 48 of 49 scenes with one unrelated untracked RoomRuntime test missing its implementation
+- Task 3 Verification: commit `ff3fa7c` reproduced in a clean local clone, passed 34 export contracts and 48/48 committed scene tests, remained clean after execution, then stopped with `coverage_and_export_templates_pending`
 
 **Goal:** Add a real export executor that fails before export when the local toolchain is incomplete, records deterministic file/directory hashes for successful artifacts, and produces machine-readable evidence suitable for later detached-checkout certification.
 
@@ -260,11 +261,11 @@ The fixture repository contains executable fake `tools/validate_project.sh` and 
 
 Use `tempfile.TemporaryDirectory`, `git clone --no-local --no-checkout`, and `git -C <clone> checkout --detach <commit>`. Run validation first and export second. Preserve stdout/stderr logs outside the clone until the final report is atomically written. Never invoke export after validation failure.
 
-- [ ] **Step 3: Run the repository against the missing-template boundary**
+- [x] **Step 3: Run the repository against the missing-template boundary**
 
 Run the orchestrator at committed HEAD. If validation passes and templates remain absent, record `P7/P9 Candidate — Export Templates Pending`. If concurrent committed regressions break validation, record `P7/P9 Candidate — Validation Repair Pending`. Neither state is complete certification.
 
-- [ ] **Step 4: Commit certification contracts separately**
+- [x] **Step 4: Commit certification contracts separately**
 
 ```bash
 git add \
