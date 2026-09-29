@@ -4,6 +4,8 @@ extends RefCounted
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
+const RunConfigScript := preload("res://scripts/application/run_config.gd")
+const RunLoadoutPolicyScript := preload("res://scripts/application/run_loadout_policy.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
@@ -71,7 +73,22 @@ func start_run(config: Dictionary, run_id: String):
 	var readiness = _require_booted("start_run")
 	if not readiness.ok:
 		return readiness
-	var started = _orchestrator.start_run(config, run_id)
+	var normalized := RunConfigScript.normalized(config)
+	var config_validation = RunConfigScript.validate(normalized)
+	if not config_validation.ok:
+		return CommandResultScript.failure(
+			config_validation.code,
+			_revision(),
+			config_validation.context
+		)
+	var loadout_validation = RunLoadoutPolicyScript.new().validate(normalized, _registry)
+	if not loadout_validation.ok:
+		return CommandResultScript.failure(
+			loadout_validation.code,
+			_revision(),
+			loadout_validation.context
+		)
+	var started = _orchestrator.start_run(normalized, run_id)
 	if not started.ok:
 		return started
 	_room_definitions = M1RoomPlanScript.definitions(

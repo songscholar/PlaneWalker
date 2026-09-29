@@ -3,12 +3,14 @@ extends RefCounted
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 
+const SUPPORTED_MILESTONES: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
+
 const DEFAULTS := {
 	"schema_version": 1,
 	"milestone": "M1",
 	"character_id": "wanderer",
 	"weapon_id": "sword",
-	"enabled_time_skills": ["time_stop", "time_rewind"],
+	"enabled_time_skills": ["stop", "rewind"],
 	"difficulty": "normal",
 	"seed": 0,
 	"accessibility_assists": {
@@ -25,11 +27,19 @@ static func validate(value: Dictionary):
 	for field: String in ["milestone", "character_id", "weapon_id", "difficulty"]:
 		if typeof(config[field]) != TYPE_STRING or str(config[field]).is_empty():
 			return _invalid(field)
+	if not SUPPORTED_MILESTONES.has(str(config["milestone"])):
+		return _invalid("milestone")
 	if typeof(config["enabled_time_skills"]) != TYPE_ARRAY:
 		return _invalid("enabled_time_skills")
+	if (config["enabled_time_skills"] as Array).size() != 2:
+		return _invalid("enabled_time_skills")
+	var seen_skills: Dictionary = {}
 	for skill_id: Variant in config["enabled_time_skills"]:
 		if typeof(skill_id) != TYPE_STRING or str(skill_id).is_empty():
 			return _invalid("enabled_time_skills")
+		if seen_skills.has(str(skill_id)):
+			return _invalid("enabled_time_skills")
+		seen_skills[str(skill_id)] = true
 	if typeof(config["seed"]) != TYPE_INT:
 		return _invalid("seed")
 	if typeof(config["accessibility_assists"]) != TYPE_DICTIONARY:

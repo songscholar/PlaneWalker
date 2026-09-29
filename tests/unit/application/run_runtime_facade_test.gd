@@ -21,12 +21,35 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_boot_and_room_flow(suite)
+	_test_loadout_failure_is_atomic(suite)
 	_test_offer_creation_failure_is_atomic(suite)
 	_test_contract_acceptance_is_idempotent(suite)
 	_test_terminal_and_pause_guards(suite)
 	_test_authoritative_clock_forwarding(suite)
 	_test_boot_failure(suite)
 	suite.finish(get_tree())
+
+
+func _test_loadout_failure_is_atomic(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "loadout failure facade boots")
+	var before: Dictionary = facade.snapshot()
+	var room_plan_before: Array[Dictionary] = facade.room_plan()
+	var invalid_m1_bow := {
+		"milestone": "M1",
+		"character_id": "wanderer",
+		"weapon_id": "bow",
+		"enabled_time_skills": ["stop", "rewind"],
+		"seed": FIXED_SEED,
+	}
+
+	var rejected = facade.start_run(invalid_m1_bow, "invalid-m1-bow")
+	var after: Dictionary = facade.snapshot()
+	suite.assert_equal(rejected.code, &"CONTENT_NOT_AVAILABLE", "M1 Bow is rejected before run start")
+	suite.assert_equal(after["phase"], before["phase"], "loadout rejection preserves phase")
+	suite.assert_equal(after["revision"], before["revision"], "loadout rejection preserves revision")
+	suite.assert_equal(after, before, "loadout rejection preserves the complete run snapshot")
+	suite.assert_equal(facade.room_plan(), room_plan_before, "loadout rejection preserves the prepared room plan")
 
 
 func _test_boot_and_room_flow(suite) -> void:

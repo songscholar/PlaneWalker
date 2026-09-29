@@ -52,7 +52,7 @@ func _test_registry_is_runtime_source(suite) -> void:
 		"milestone": "M1",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
-		"enabled_time_skills": ["time_stop", "time_rewind"],
+		"enabled_time_skills": ["stop", "rewind"],
 		"difficulty": "normal",
 		"seed": 20260929,
 	}, "content-cutover")

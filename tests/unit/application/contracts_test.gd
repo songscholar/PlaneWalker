@@ -49,15 +49,16 @@ func _test_run_config(suite) -> void:
 		"milestone": "M1",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
-		"enabled_time_skills": ["time_stop", "time_rewind"],
+		"enabled_time_skills": ["stop", "rewind"],
 		"difficulty": "normal",
 		"seed": 123456,
 	}
 	suite.assert_true(RunConfigScript.validate(config).ok, "M1 config validates")
-	var normalized: Dictionary = RunConfigScript.normalized(config)
+	var mutable_input := config.duplicate(true)
+	var normalized: Dictionary = RunConfigScript.normalized(mutable_input)
 	suite.assert_equal(normalized["seed"], 123456, "seed is normalized")
-	config["enabled_time_skills"].append("time_rift")
-	suite.assert_equal(normalized["enabled_time_skills"], ["time_stop", "time_rewind"], "normalized config is isolated from caller arrays")
+	mutable_input["enabled_time_skills"].append("rift")
+	suite.assert_equal(normalized["enabled_time_skills"], ["stop", "rewind"], "normalized config is isolated from caller arrays")
 	suite.assert_equal(normalized["accessibility_assists"], {
 		"damage_received_multiplier": 1.0,
 		"enemy_telegraph_scale": 1.0,
@@ -65,7 +66,25 @@ func _test_run_config(suite) -> void:
 
 	var defaults: Dictionary = RunConfigScript.normalized({})
 	suite.assert_equal(defaults["milestone"], "M1", "milestone default is stable")
-	suite.assert_equal(defaults["enabled_time_skills"], ["time_stop", "time_rewind"], "time skill defaults are stable")
+	suite.assert_equal(defaults["enabled_time_skills"], ["stop", "rewind"], "time skill defaults are stable")
+
+	var one_skill := config.duplicate(true)
+	one_skill["enabled_time_skills"] = ["stop"]
+	var one_skill_result = RunConfigScript.validate(one_skill)
+	suite.assert_equal(one_skill_result.code, &"INVALID_ARGUMENT", "one time ability is rejected")
+	suite.assert_equal(one_skill_result.context.get("field", ""), "enabled_time_skills", "one time ability reports its field")
+
+	var three_skills := config.duplicate(true)
+	three_skills["enabled_time_skills"] = ["stop", "rewind", "rift"]
+	var three_skills_result = RunConfigScript.validate(three_skills)
+	suite.assert_equal(three_skills_result.code, &"INVALID_ARGUMENT", "three time abilities are rejected")
+	suite.assert_equal(three_skills_result.context.get("field", ""), "enabled_time_skills", "three time abilities report their field")
+
+	var duplicate_skills := config.duplicate(true)
+	duplicate_skills["enabled_time_skills"] = ["stop", "stop"]
+	var duplicate_skills_result = RunConfigScript.validate(duplicate_skills)
+	suite.assert_equal(duplicate_skills_result.code, &"INVALID_ARGUMENT", "duplicate time abilities are rejected")
+	suite.assert_equal(duplicate_skills_result.context.get("field", ""), "enabled_time_skills", "duplicate time abilities report their field")
 
 	var unsupported := config.duplicate(true)
 	unsupported["schema_version"] = 2

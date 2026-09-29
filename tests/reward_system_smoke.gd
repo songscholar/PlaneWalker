@@ -714,7 +714,7 @@ func _create_host_fixture(seed: int) -> Dictionary:
 		"milestone": "M1",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
-		"enabled_time_skills": ["time_stop", "time_rewind"],
+		"enabled_time_skills": ["stop", "rewind"],
 		"difficulty": "normal",
 		"seed": seed,
 	})
