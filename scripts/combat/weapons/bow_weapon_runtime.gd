@@ -20,6 +20,7 @@ const FROZEN_ACTION := {
 	"semantic_action": "weapon_primary",
 	"activation_mode": "release",
 	"hold_threshold_frames": MINIMUM_CHARGE_FRAMES,
+	"maximum_hold_frames": MAXIMUM_CHARGE_FRAMES,
 	"windup_frames": 1,
 	"active_frames": 1,
 	"recovery_frames": CANDIDATE_COOLDOWN_FRAMES,
@@ -59,6 +60,7 @@ const FROZEN_CAPABILITIES: Array[String] = [
 	"weapon.attack_speed",
 	"weapon.charge_rate",
 	"weapon.damage",
+	"weapon.full_charge_damage",
 	"weapon.pierce",
 ]
 const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
@@ -78,9 +80,6 @@ const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 const ADAPTER_NUMERIC_FIELDS: Array[String] = [
 	"base_attack",
 	"attack_speed",
-	"charge_rate_bonus",
-	"full_charge_damage_multiplier_bonus",
-	"pierce_bonus",
 ]
 
 var _owner: Node
@@ -766,7 +765,7 @@ func _payload_parameters(
 		return {}
 	var damage_multiplier := lerpf(minimum_damage, maximum_damage, charge_ratio)
 	var full_charge_multiplier := (
-		1.0 + float(adapter_snapshot["full_charge_damage_multiplier_bonus"])
+		float(modifier_snapshot.get("weapon.full_charge_damage", 1.0))
 		if full_charge
 		else 1.0
 	)
@@ -781,7 +780,7 @@ func _payload_parameters(
 		"damage_multiplier": damage_multiplier,
 		"damage": float(adapter_snapshot["base_attack"]) * damage_multiplier * full_charge_multiplier * generic_damage_multiplier,
 		"speed": lerpf(minimum_speed, maximum_speed, charge_ratio),
-		"pierce": int(adapter_snapshot["pierce_bonus"]) + generic_pierce + (FULL_CHARGE_PIERCE if full_charge else 0),
+		"pierce": generic_pierce + (FULL_CHARGE_PIERCE if full_charge else 0),
 		"full_charge": full_charge,
 		"time_energy_restore": FULL_CHARGE_ENERGY if full_charge else 0.0,
 		"energy_reward_once_per_action": true,
@@ -853,6 +852,7 @@ func _matches_frozen_candidate_profile(profile: Dictionary, indexed: Dictionary)
 			return false
 	for field: String in [
 		"hold_threshold_frames",
+		"maximum_hold_frames",
 		"windup_frames",
 		"active_frames",
 		"recovery_frames",
@@ -865,8 +865,6 @@ func _matches_frozen_candidate_profile(profile: Dictionary, indexed: Dictionary)
 	if not _number_matches_exactly(action.get("movement_multiplier"), float(FROZEN_ACTION["movement_multiplier"])):
 		return false
 	if not action.get("resource_costs") is Dictionary or not (action["resource_costs"] as Dictionary).is_empty():
-		return false
-	if action.has("maximum_hold_frames") and not _integer_matches_exactly(action["maximum_hold_frames"], MAXIMUM_CHARGE_FRAMES):
 		return false
 	if action.has("cooldown_frames") and not _integer_matches_exactly(action["cooldown_frames"], CANDIDATE_COOLDOWN_FRAMES):
 		return false
@@ -903,10 +901,7 @@ func _adapter_values(adapter: Node) -> Dictionary:
 		var value: Variant = adapter.get(field)
 		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
 			return {}
-		if field == "pierce_bonus":
-			result[field] = int(value)
-		else:
-			result[field] = float(value)
+		result[field] = float(value)
 	return result if _valid_frozen_adapter_values(result) else {}
 
 
@@ -916,17 +911,11 @@ func _valid_frozen_adapter_values(value: Dictionary) -> bool:
 	for field: String in ADAPTER_NUMERIC_FIELDS:
 		if not value.has(field):
 			return false
-		if field == "pierce_bonus":
-			if typeof(value[field]) != TYPE_INT:
-				return false
-		elif typeof(value[field]) != TYPE_FLOAT or not is_finite(float(value[field])):
+		if typeof(value[field]) != TYPE_FLOAT or not is_finite(float(value[field])):
 			return false
 	return (
 		float(value["base_attack"]) >= 0.0
 		and float(value["attack_speed"]) > 0.0
-		and 1.0 + float(value["charge_rate_bonus"]) >= 0.0
-		and 1.0 + float(value["full_charge_damage_multiplier_bonus"]) >= 0.0
-		and int(value["pierce_bonus"]) >= 0
 	)
 
 
@@ -935,7 +924,6 @@ func _charge_multiplier(adapter_snapshot: Dictionary, modifiers: Dictionary) -> 
 		0.0,
 		float(adapter_snapshot["attack_speed"])
 		* float(modifiers.get("weapon.attack_speed", 1.0))
-		* (1.0 + float(adapter_snapshot["charge_rate_bonus"]))
 		* float(modifiers.get("weapon.charge_rate", 1.0))
 	)
 

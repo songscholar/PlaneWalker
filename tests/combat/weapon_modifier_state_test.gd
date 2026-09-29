@@ -14,6 +14,8 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_test_capabilities_fail_closed()
 	_test_values_must_be_finite_and_bounded()
+	_test_additive_values_accumulate_from_explicit_identity()
+	_test_additive_rejection_is_atomic()
 	_test_invalid_configuration_is_rejected_atomically()
 	_test_freeze_for_action_returns_an_isolated_snapshot()
 	_suite.finish(get_tree())
@@ -55,6 +57,93 @@ func _test_values_must_be_finite_and_bounded() -> void:
 
 	_suite.assert_true(modifiers.apply(&"weapon.damage", 0.25), "inclusive minimum is accepted")
 	_suite.assert_true(modifiers.apply(&"weapon.damage", 3.0), "inclusive maximum is accepted")
+
+
+func _test_additive_values_accumulate_from_explicit_identity() -> void:
+	var modifiers = WeaponModifierStateScript.new()
+	_suite.assert_true(
+		modifiers.configure(
+			PackedStringArray([
+				"weapon.charge_rate",
+				"weapon.full_charge_damage",
+				"weapon.pierce",
+			]),
+			{
+				"weapon.charge_rate": {"minimum": 0.0, "maximum": 6.0},
+				"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
+				"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
+			}
+		),
+		"additive bow capability fixture configures"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.charge_rate", 0.25, 1.0),
+		"first charge bonus starts from the multiplicative identity"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.charge_rate", 0.15, 1.0),
+		"second charge bonus accumulates"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.full_charge_damage", 0.35, 1.0),
+		"full-charge bonus starts from the multiplicative identity"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.pierce", 1, 0.0),
+		"first pierce bonus starts from the additive identity"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.pierce", 2, 0.0),
+		"second pierce bonus accumulates"
+	)
+	_suite.assert_equal(
+		modifiers.snapshot(),
+		{
+			"weapon.charge_rate": 1.4,
+			"weapon.full_charge_damage": 1.35,
+			"weapon.pierce": 3.0,
+		},
+		"additive capabilities retain legacy bow bonus semantics"
+	)
+
+
+func _test_additive_rejection_is_atomic() -> void:
+	var modifiers = WeaponModifierStateScript.new()
+	_suite.assert_true(
+		modifiers.configure(
+			PackedStringArray(["weapon.charge_rate"]),
+			{"weapon.charge_rate": {"minimum": 0.0, "maximum": 2.0}}
+		),
+		"additive rejection fixture configures"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.charge_rate", 0.25, 1.0),
+		"valid additive value applies"
+	)
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.charge_rate", 0.75, 1.0),
+		"inclusive additive upper bound is accepted"
+	)
+	_suite.assert_equal(
+		modifiers.snapshot(),
+		{"weapon.charge_rate": 2.0},
+		"accepted upper bound is stored exactly"
+	)
+	for invalid_case: Array in [
+		[&"weapon.charge_rate", NAN, 1.0],
+		[&"weapon.charge_rate", 0.25, INF],
+		[&"weapon.charge_rate", 0.001, 1.0],
+		[&"weapon.pierce", 1.0, 0.0],
+	]:
+		_suite.assert_true(
+			not modifiers.apply_additive(invalid_case[0], invalid_case[1], invalid_case[2]),
+			"invalid additive mutation is rejected: %s" % [invalid_case]
+		)
+		_suite.assert_equal(
+			modifiers.snapshot(),
+			{"weapon.charge_rate": 2.0},
+			"additive rejection preserves the last valid state"
+		)
 
 
 func _test_invalid_configuration_is_rejected_atomically() -> void:

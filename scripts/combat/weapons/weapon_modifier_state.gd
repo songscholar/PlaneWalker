@@ -41,6 +41,32 @@ func apply(capability: StringName, value: Variant) -> bool:
 	if not _capabilities.has(capability) or typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
 		return false
 	var numeric := float(value)
+	return _store_bounded(capability, numeric)
+
+
+func apply_additive(capability: StringName, value: Variant, base_value: Variant) -> bool:
+	if (
+		not _capabilities.has(capability)
+		or typeof(value) not in [TYPE_INT, TYPE_FLOAT]
+		or typeof(base_value) not in [TYPE_INT, TYPE_FLOAT]
+	):
+		return false
+	var numeric := float(value)
+	var numeric_base := float(base_value)
+	if not _value_is_bounded(capability, numeric_base):
+		return false
+	var current := float(_values.get(str(capability), numeric_base))
+	return _store_bounded(capability, current + numeric)
+
+
+func _store_bounded(capability: StringName, numeric: float) -> bool:
+	if not _value_is_bounded(capability, numeric):
+		return false
+	_values[str(capability)] = numeric
+	return true
+
+
+func _value_is_bounded(capability: StringName, numeric: float) -> bool:
 	if not is_finite(numeric):
 		return false
 	var capability_bounds: Dictionary = _bounds.get(capability, {})
@@ -48,7 +74,6 @@ func apply(capability: StringName, value: Variant) -> bool:
 		return false
 	if numeric < float(capability_bounds["minimum"]) or numeric > float(capability_bounds["maximum"]):
 		return false
-	_values[str(capability)] = numeric
 	return true
 
 

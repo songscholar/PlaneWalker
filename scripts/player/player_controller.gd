@@ -18,8 +18,9 @@ const DEFAULT_LOADOUT_CONFIG := {
 const WEAPON_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runtime_profiles.json"
 const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
-	"weapon.charge_rate": {"minimum": 0.0, "maximum": 5.0},
+	"weapon.charge_rate": {"minimum": 0.0, "maximum": 6.0},
 	"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+	"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
 	"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
 }
 
@@ -387,6 +388,26 @@ func apply_weapon_modifier(capability: StringName, value: Variant) -> bool:
 	return bool(weapon_runtime.call("apply_modifier", capability, value))
 
 
+func apply_weapon_modifier_bonus(
+	capability: StringName,
+	value: Variant,
+	base_value: float,
+	required_weapon_id: StringName = &""
+) -> bool:
+	if (
+		required_weapon_id != &""
+		and (
+			loadout_runtime == null
+			or not loadout_runtime.has_method("has_weapon")
+			or not bool(loadout_runtime.call("has_weapon", required_weapon_id))
+		)
+	):
+		return false
+	if weapon_modifier_state == null or not weapon_modifier_state.has_method("apply_additive"):
+		return false
+	return bool(weapon_modifier_state.call("apply_additive", capability, value, base_value))
+
+
 func claim_weapon_action_reward(token: int, reward_kind: StringName) -> bool:
 	if token <= 0 or reward_kind == &"":
 		return false
@@ -415,12 +436,6 @@ func apply_weapon_effect(effect_id: StringName, value: Variant) -> bool:
 			sword_weapon.heavy_execute_threshold = numeric
 		&"low_hp_damage_multiplier_bonus":
 			sword_weapon.low_hp_damage_multiplier_bonus += numeric
-		&"bow_charge_rate_bonus":
-			bow_weapon.charge_rate_bonus += numeric
-		&"bow_full_charge_damage_multiplier_bonus":
-			bow_weapon.full_charge_damage_multiplier_bonus += numeric
-		&"bow_pierce_bonus":
-			bow_weapon.pierce_bonus += int(value)
 		_:
 			return false
 	return true
@@ -742,8 +757,6 @@ func _clear_transient_effects() -> void:
 	_cancel_weapon_action(&"transient_clear")
 	_dash_velocity = Vector2.ZERO
 	_buffered_time_skill = &""
-	if bow_weapon.has_method("cancel_charge"):
-		bow_weapon.cancel_charge()
 
 
 func _weapon_hold_is_active() -> bool:

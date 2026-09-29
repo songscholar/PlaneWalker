@@ -67,16 +67,36 @@ func _test_project_base_pack_v2(suite) -> void:
 	)
 
 	var bow_candidate: Dictionary = registry.get_weapon_runtime_profile(&"bow_candidate_v1")
+	var candidate_draw := _action_by_id(bow_candidate, "candidate_draw")
 	suite.assert_equal(
-		_action_by_id(bow_candidate, "candidate_draw").get("cooldown_frames"),
+		candidate_draw.get("cooldown_frames"),
 		21,
 		"Bow candidate draw preserves the authoritative 0.35-second cooldown"
 	)
-	var bow_launch: Dictionary = registry.get_weapon_runtime_profile(&"bow_launch_v1")
 	suite.assert_equal(
-		_action_by_id(bow_launch, "precision_draw").get("cooldown_frames"),
+		candidate_draw.get("maximum_hold_frames"),
+		54,
+		"Bow candidate maximum charge is Profile authoritative"
+	)
+	suite.assert_true(
+		bow_candidate.get("capabilities", []).has("weapon.full_charge_damage"),
+		"Bow candidate declares the migrated full-charge modifier capability"
+	)
+	var bow_launch: Dictionary = registry.get_weapon_runtime_profile(&"bow_launch_v1")
+	var precision_draw := _action_by_id(bow_launch, "precision_draw")
+	suite.assert_equal(
+		precision_draw.get("cooldown_frames"),
 		21,
 		"Launch precision draw preserves candidate cooldown parity"
+	)
+	suite.assert_equal(
+		precision_draw.get("maximum_hold_frames"),
+		54,
+		"Launch precision draw preserves candidate maximum-charge parity"
+	)
+	suite.assert_true(
+		bow_launch.get("capabilities", []).has("weapon.full_charge_damage"),
+		"Launch Bow preserves the migrated full-charge modifier capability"
 	)
 	suite.assert_equal(
 		_action_by_id(bow_launch, "scatter_shot").get("cooldown_frames"),

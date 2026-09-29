@@ -1,15 +1,32 @@
 class_name ItemEffect
 extends RefCounted
 
-const LEGACY_WEAPON_EFFECT_IDS := [
+const LEGACY_SWORD_EFFECT_IDS := [
 	&"combo_finisher_multiplier_bonus",
 	&"heavy_damage_multiplier_bonus",
 	&"heavy_execute_multiplier_bonus",
 	&"heavy_execute_threshold",
 	&"low_hp_damage_multiplier_bonus",
-	&"bow_charge_rate_bonus",
-	&"bow_full_charge_damage_multiplier_bonus",
-	&"bow_pierce_bonus",
+]
+const LEGACY_BOW_CAPABILITY_EFFECTS := [
+	{
+		"effect_id": &"bow_charge_rate_bonus",
+		"weapon_id": &"bow",
+		"capability": &"weapon.charge_rate",
+		"base_value": 1.0,
+	},
+	{
+		"effect_id": &"bow_full_charge_damage_multiplier_bonus",
+		"weapon_id": &"bow",
+		"capability": &"weapon.full_charge_damage",
+		"base_value": 1.0,
+	},
+	{
+		"effect_id": &"bow_pierce_bonus",
+		"weapon_id": &"bow",
+		"capability": &"weapon.pierce",
+		"base_value": 0.0,
+	},
 ]
 
 
@@ -88,8 +105,20 @@ static func apply_to_player(player: Node, effects: Dictionary) -> void:
 
 
 static func _apply_weapon_effects(player: Node, effects: Dictionary) -> void:
-	if not player.has_method("apply_weapon_effect"):
+	if player.has_method("apply_weapon_effect"):
+		for effect_id: StringName in LEGACY_SWORD_EFFECT_IDS:
+			if effects.has(effect_id):
+				player.call("apply_weapon_effect", effect_id, effects[effect_id])
+
+	if not player.has_method("apply_weapon_modifier_bonus"):
 		return
-	for effect_id: StringName in LEGACY_WEAPON_EFFECT_IDS:
+	for mapping: Dictionary in LEGACY_BOW_CAPABILITY_EFFECTS:
+		var effect_id: StringName = mapping["effect_id"]
 		if effects.has(effect_id):
-			player.call("apply_weapon_effect", effect_id, effects[effect_id])
+			player.call(
+				"apply_weapon_modifier_bonus",
+				mapping["capability"],
+				effects[effect_id],
+				mapping["base_value"],
+				mapping["weapon_id"]
+			)

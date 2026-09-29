@@ -12,9 +12,6 @@ const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runt
 class FakeBowAdapter extends Node2D:
 	var base_attack: float = 30.0
 	var attack_speed: float = 1.0
-	var charge_rate_bonus: float = 0.0
-	var full_charge_damage_multiplier_bonus: float = 0.0
-	var pierce_bonus: int = 0
 	var fail_begin: bool = false
 	var corrupt_begin: bool = false
 	var fail_release: bool = false
@@ -83,6 +80,7 @@ func _run() -> void:
 	_test_candidate_charge_boundaries_and_payload_curve()
 	_test_coordinator_hold_skeleton_finalizes_on_the_same_token()
 	_test_real_coordinator_owns_the_complete_hold_transaction()
+	_test_authoritative_charge_rate_capability_scales_effective_hold()
 	_test_modifier_and_action_plan_are_frozen()
 	_test_commit_active_exactly_once_and_reward_deduplication()
 	_test_commit_release_cancel_and_reset_fail_atomically()
@@ -96,7 +94,13 @@ func _test_profile_snapshot_capabilities_and_drift_rejection() -> void:
 	var profile: RefCounted = fixture["profile"]
 	_suite.assert_equal(
 		_sorted_strings(runtime.capabilities()),
-		["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.pierce"],
+		[
+			"weapon.attack_speed",
+			"weapon.charge_rate",
+			"weapon.damage",
+			"weapon.full_charge_damage",
+			"weapon.pierce",
+		],
 		"runtime exposes the candidate Bow capability set"
 	)
 
@@ -114,6 +118,7 @@ func _test_profile_snapshot_capabilities_and_drift_rejection() -> void:
 
 	for drift_case: Dictionary in [
 		{"path": "action.recovery_frames", "value": 22},
+		{"path": "action.maximum_hold_frames_missing", "value": null},
 		{"path": "resource.maximum", "value": 55.0},
 		{"path": "payload.maximum_damage_multiplier", "value": 1.8},
 		{"path": "cue.audio_id", "value": "bow_release_drift"},
@@ -122,6 +127,8 @@ func _test_profile_snapshot_capabilities_and_drift_rejection() -> void:
 		match str(drift_case["path"]):
 			"action.recovery_frames":
 				(drift["actions"] as Array)[0]["recovery_frames"] = drift_case["value"]
+			"action.maximum_hold_frames_missing":
+				(drift["actions"] as Array)[0].erase("maximum_hold_frames")
 			"resource.maximum":
 				(drift["resources"] as Array)[0]["maximum"] = drift_case["value"]
 			"payload.maximum_damage_multiplier":
@@ -266,30 +273,53 @@ func _test_real_coordinator_owns_the_complete_hold_transaction() -> void:
 	_free_fixture(fixture)
 
 
+func _test_authoritative_charge_rate_capability_scales_effective_hold() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var modifiers: RefCounted = fixture["modifiers"]
+	_suite.assert_true(
+		modifiers.apply_additive(&"weapon.charge_rate", 0.5, 1.0),
+		"Bow item bonus reaches the authoritative charge-rate capability"
+	)
+	var accelerated: Dictionary = runtime.plan_intent(
+		_release_intent(36),
+		_aim_context(Vector2.RIGHT)
+	).get("plan", {})
+	_suite.assert_equal(
+		accelerated.get("hold", {}).get("effective_frames"),
+		54.0,
+		"a 1.5 charge-rate modifier converts thirty-six raw frames into full charge"
+	)
+	_suite.assert_true(
+		bool(_payload_parameters(accelerated).get("full_charge", false)),
+		"charge-rate capability can reach the frozen full-charge threshold"
+	)
+	_free_fixture(fixture)
+
+
 func _test_modifier_and_action_plan_are_frozen() -> void:
 	var fixture := _fixture()
 	var runtime: RefCounted = fixture["runtime"]
 	var bow: FakeBowAdapter = fixture["bow"]
 	var modifiers: RefCounted = fixture["modifiers"]
-	bow.full_charge_damage_multiplier_bonus = 0.35
-	bow.pierce_bonus = 2
 	_suite.assert_true(runtime.apply_modifier(&"weapon.damage", 1.5), "declared damage modifier applies")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.full_charge_damage", 1.35), "declared full-charge modifier applies")
 	_suite.assert_true(runtime.apply_modifier(&"weapon.pierce", 3.0), "declared pierce modifier applies")
 	_suite.assert_true(not runtime.apply_modifier(&"weapon.ammo_capacity", 2.0), "undeclared modifier fails closed")
 
 	var plan: Dictionary = runtime.plan_intent(_release_intent(54), _aim_context(Vector2(3.0, 4.0))).get("plan", {})
 	var frozen_parameters := _payload_parameters(plan)
 	_suite.assert_close(float(frozen_parameters.get("damage", 0.0)), 30.0 * 1.75 * 1.35 * 1.5, "plan freezes base attack, full-charge reward, and generic damage")
-	_suite.assert_equal(frozen_parameters.get("pierce"), 6, "plan combines full-charge, legacy, and generic pierce")
+	_suite.assert_equal(frozen_parameters.get("pierce"), 4, "plan combines full-charge and authoritative generic pierce")
 	_suite.assert_equal(frozen_parameters.get("direction"), Vector2(0.6, 0.8), "plan freezes normalized aim direction")
 
 	bow.base_attack = 300.0
-	bow.full_charge_damage_multiplier_bonus = 3.0
-	bow.pierce_bonus = 20
 	_suite.assert_true(runtime.apply_modifier(&"weapon.damage", 2.0), "live modifier changes after plan freeze")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.full_charge_damage", 4.0), "live full-charge modifier changes after plan freeze")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.pierce", 10.0), "live pierce modifier changes after plan freeze")
 	_suite.assert_true(bool(runtime.commit_action(plan, 301).get("ok", false)), "frozen candidate plan commits")
 	_suite.assert_close(float(bow.staged_definition.get("damage", 0.0)), 30.0 * 1.75 * 1.35 * 1.5, "adapter receives frozen damage rather than live mutable fields")
-	_suite.assert_equal(bow.staged_definition.get("pierce"), 6, "adapter receives frozen pierce")
+	_suite.assert_equal(bow.staged_definition.get("pierce"), 4, "adapter receives frozen pierce")
 	_suite.assert_equal(bow.staged_definition.get("token"), 301, "adapter payload receives the committed action token")
 	_suite.assert_true(bool(bow.staged_definition.get("energy_reward_once_per_action", false)), "adapter payload carries the once-per-token reward policy")
 	runtime.cancel_action(301, &"test_cleanup")
@@ -413,11 +443,18 @@ func _fixture() -> Dictionary:
 	var modifiers = WeaponModifierStateScript.new()
 	_suite.assert_true(
 		modifiers.configure(
-			PackedStringArray(["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.pierce"]),
+			PackedStringArray([
+				"weapon.attack_speed",
+				"weapon.charge_rate",
+				"weapon.damage",
+				"weapon.full_charge_damage",
+				"weapon.pierce",
+			]),
 			{
 				"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
 				"weapon.charge_rate": {"minimum": 0.0, "maximum": 5.0},
 				"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+				"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
 				"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
 			}
 		),

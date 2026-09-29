@@ -104,10 +104,10 @@
     "weapon_id": "bow",
     "runtime_kind": "bow",
     "actions": [
-      {"action_id": "candidate_draw", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 9, "cooldown_frames": 21, "windup_frames": 1, "active_frames": 1, "recovery_frames": 21, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 1.0, "resource_costs": {}, "payload_id": "bow_candidate_arrow", "cue_id": "bow_candidate_release"}
+      {"action_id": "candidate_draw", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 9, "maximum_hold_frames": 54, "cooldown_frames": 21, "windup_frames": 1, "active_frames": 1, "recovery_frames": 21, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 1.0, "resource_costs": {}, "payload_id": "bow_candidate_arrow", "cue_id": "bow_candidate_release"}
     ],
     "resources": [{"resource_id": "charge", "minimum": 0.0, "maximum": 54.0, "initial": 0.0, "regen_per_second": 0.0}],
-    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.pierce"],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.full_charge_damage", "weapon.pierce"],
     "payloads": [{"payload_id": "bow_candidate_arrow", "kind": "projectile", "parameters": {"damage_multiplier": 0.75, "maximum_damage_multiplier": 1.75, "speed": 440.0, "maximum_speed": 680.0, "full_charge_ratio": 0.98, "full_charge_energy": 6.0}}],
     "cues": [{"cue_id": "bow_candidate_release", "animation_id": "bow_release", "vfx_id": "bow_arrow_trail", "audio_id": "bow_release", "camera_id": "impact_light"}],
     "time_interactions": {
@@ -132,14 +132,14 @@
     "weapon_id": "bow",
     "runtime_kind": "bow",
     "actions": [
-      {"action_id": "precision_draw", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 9, "cooldown_frames": 21, "windup_frames": 1, "active_frames": 1, "recovery_frames": 21, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.65, "resource_costs": {}, "payload_id": "bow_launch_arrow", "cue_id": "bow_launch_release"},
+      {"action_id": "precision_draw", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 9, "maximum_hold_frames": 54, "cooldown_frames": 21, "windup_frames": 1, "active_frames": 1, "recovery_frames": 21, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.65, "resource_costs": {}, "payload_id": "bow_launch_arrow", "cue_id": "bow_launch_release"},
       {"action_id": "scatter_shot", "semantic_action": "weapon_secondary", "activation_mode": "press", "cooldown_frames": 120, "windup_frames": 8, "active_frames": 2, "recovery_frames": 18, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.5, "resource_costs": {}, "payload_id": "bow_scatter", "cue_id": "bow_scatter_release"},
       {"action_id": "focus_step", "semantic_action": "weapon_utility", "activation_mode": "press", "windup_frames": 2, "active_frames": 4, "recovery_frames": 8, "cancel_from_frame": 4, "buffer_frames": 8, "movement_multiplier": 0.85, "resource_costs": {}, "payload_id": "bow_focus_step", "cue_id": "bow_focus_step"},
       {"action_id": "arrow_rain", "semantic_action": "weapon_skill", "activation_mode": "press", "cooldown_frames": 300, "windup_frames": 12, "active_frames": 6, "recovery_frames": 20, "cancel_from_frame": 14, "buffer_frames": 8, "movement_multiplier": 0.25, "resource_costs": {"time_energy": 20.0}, "payload_id": "bow_arrow_rain", "cue_id": "bow_arrow_rain"},
       {"action_id": "horizon_piercer", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "cooldown_frames": 900, "windup_frames": 15, "active_frames": 4, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "bow_horizon_piercer", "cue_id": "bow_horizon_piercer"}
     ],
     "resources": [{"resource_id": "charge", "minimum": 0.0, "maximum": 54.0, "initial": 0.0, "regen_per_second": 0.0}],
-    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.pierce", "weapon.status_duration"],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.full_charge_damage", "weapon.pierce", "weapon.status_duration"],
     "payloads": [
       {"payload_id": "bow_launch_arrow", "kind": "projectile", "parameters": {"damage_multiplier": 0.75, "maximum_damage_multiplier": 1.75, "speed": 440.0, "maximum_speed": 680.0}},
       {"payload_id": "bow_scatter", "kind": "multi_projectile", "parameters": {"damage_multiplier": 0.55, "count": 5, "spread_degrees": 32.0}},
