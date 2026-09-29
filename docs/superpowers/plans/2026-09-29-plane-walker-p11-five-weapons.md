@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-29
-- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; Gun and later gates remain active
+- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; P11D Launch Gun is locally certified through `e92e7f4`; Staff and later gates remain active
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -428,28 +428,30 @@ The runtime commit is `372455d`; the following documentation commit records its 
 - Consumes: `gun_launch_v1`, aim context, six-round ammo state, time context, and Boss resistance context.
 - Produces: normal/aimed/shotgun actions, reload/perfect reload, Time Load, Void Penetration, Gun HUD, facts, feedback, and snapshots.
 
-- [ ] **Step 1: Write exact boundary tests**
+- [x] **Step 1: Write exact boundary tests**
 
 Cover hold 17/18, ammo 0/1/2/6/7, reload frames 7/8/27/28/35/36/39/40/48, active/free Time Load, ultimate 59/60, projectile construction failure, and multi-pellet deduplication.
 
-- [ ] **Step 2: Implement atomic ammunition and reload transactions**
+- [x] **Step 2: Implement atomic ammunition and reload transactions**
 
 Empty primary starts reload only. Shotgun rejects at one round. Perfect reload fills to seven, grants free Time Load, leaves active cooldown untouched, and enters four recovery frames.
 
-- [ ] **Step 3: Implement Gun payloads, time interactions, Boss conversion, HUD, and feedback**
+- [x] **Step 3: Implement Gun payloads, time interactions, Boss conversion, HUD, and feedback**
 
 All pellets share the committed action token; target hits deduplicate per pellet and resource/fact effects deduplicate per action where required.
 
-- [ ] **Step 4: Run Gun and shared regressions**
+- [x] **Step 4: Run Gun and shared regressions**
 
 Run: `./tools/run_tests.sh --filter "gun|weapon_action_coordinator|run_view_state|combat_feedback|chrono_warden"`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -- scripts/combat/weapons/gun_weapon_runtime.gd scripts/combat/gun_projectile.gd scenes/combat/gun_projectile.tscn tests/combat/gun_weapon_runtime_test.gd tests/combat/gun_weapon_runtime_test.tscn scripts/ui/contracts/run_view_state.gd scripts/application/run_view_state_projector.gd scripts/ui/views/combat_hud_view.gd autoload/combat_feedback.gd
 git commit -m "feat(weapon): add complete gun runtime"
 ```
+
+Execution record: implementation commit `e92e7f4` completed the authoritative Gun Profile, atomic ammunition/reload loop, normal/aimed/shotgun actions, Time Load, Void Penetration, deterministic projectiles, four time interactions, Chrono Warden conversion, HUD, feedback, typed facts, snapshot/reset lifecycle, and M1/NEXT isolation. The focused Gun gate passed `5 / 5`; adjacent Sword/Bow/action regressions passed `18 / 18`; the complete suite and final validation each passed `88 / 88` with only the registered `reward_system_smoke` ObjectDB warning. Evidence is retained in `docs/current/2026-09-29-p11d-gun-launch-evidence.md`.
 
 ### Task 7: P11E implement Staff and elemental status runtime
 
