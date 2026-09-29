@@ -1,6 +1,7 @@
 extends Node
 
 const DEFAULT_LOCALE := "zh_CN"
+const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -10,22 +11,20 @@ const DEFAULT_LOCALE := "zh_CN"
 @onready var title_label: Label = $StartMenu/Panel/Margin/VBox/Title
 @onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
 @onready var pause_menu: CanvasLayer = $PauseMenu
+@onready var runtime_host: Node = $RunRuntimeHost
 
-var _phase_before_pause: GameState.GamePhase = GameState.GamePhase.DUNGEON
 var _lang_button: Button
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_apply_locale()
-	EventBus.run_started.connect(_on_run_started)
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
 	pause_menu.resume_requested.connect(_resume_run)
 	combat_room.visible = false
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	status_label.visible = false
-	GameState.set_phase(GameState.GamePhase.HUB)
 	_setup_language_button()
 	_apply_localization()
 	_show_start_menu()
@@ -65,17 +64,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
 		return
-	if event.is_action_pressed("interact") and GameState.phase == GameState.GamePhase.DEATH:
+	var phase := int(runtime_host.call("runtime_snapshot").get("phase", RunPhaseScript.Value.HUB))
+	if event.is_action_pressed("interact") and RunPhaseScript.is_terminal(phase):
 		get_tree().paused = false
 		get_tree().reload_current_scene()
 		return
-	if event.is_action_pressed("interact") and GameState.phase == GameState.GamePhase.HUB:
+	if event.is_action_pressed("interact") and start_menu.visible:
 		_start_new_run()
-		return
-	if event.is_action_pressed("interact"):
-		EventBus.room_started.emit(&"debug_room_01")
-		EventBus.publish(EventBus.ROOM_STARTED, {"room_id": "debug_room_01"})
-		print("Debug room_started emitted.")
 
 
 func _start_new_run() -> void:
@@ -85,13 +80,22 @@ func _start_new_run() -> void:
 	start_menu.visible = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_INHERIT
-	GameState.start_run({
+	var config := {
+		"schema_version": 1,
+		"milestone": "M1",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
+		"enabled_time_skills": ["time_stop", "time_rewind"],
 		"difficulty": "normal",
-	})
-	if combat_room.has_method("begin_run"):
-		combat_room.begin_run()
+		"seed": int(Time.get_unix_time_from_system()),
+	}
+	var started = runtime_host.call("start_run", config)
+	if not started.ok:
+		combat_room.visible = false
+		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+		start_menu.visible = true
+		return
+	_on_run_started(config)
 
 
 func _show_start_menu() -> void:
@@ -112,12 +116,13 @@ func _result_label(result: String) -> String:
 
 
 func _on_run_started(run_data: Dictionary) -> void:
+	var snapshot: Dictionary = runtime_host.call("runtime_snapshot")
 	status_label.visible = true
 	var text := tr("UI_STATUS_HEADER") + "\n"
-	text += tr("UI_STATUS_PHASE_FMT") % _phase_name(GameState.phase) + "\n"
+	text += tr("UI_STATUS_PHASE_FMT") % _phase_name(int(snapshot.get("phase", -1))) + "\n"
 	text += tr("UI_STATUS_CHARACTER_FMT") % run_data.get("character_id", "") + "\n"
 	text += tr("UI_STATUS_WEAPON_FMT") % run_data.get("weapon_id", "") + "\n"
-	text += tr("UI_STATUS_SEED_FMT") % GameState.run_seed + "\n\n"
+	text += tr("UI_STATUS_SEED_FMT") % int(snapshot.get("run_seed", 0)) + "\n\n"
 	text += tr("UI_STATUS_INPUT_HEADER") + "\n"
 	text += tr("UI_STATUS_INPUT_MOVE") + "\n"
 	text += tr("UI_STATUS_INPUT_ATTACK") + "\n"
@@ -131,11 +136,12 @@ func _on_run_ended(result: Dictionary) -> void:
 	get_tree().paused = false
 	pause_menu.hide_pause()
 	status_label.visible = true
+	var snapshot: Dictionary = runtime_host.call("runtime_snapshot")
 	status_label.text = "%s\n%s: %s\n%s: %s\n%s: %s" % [
 		tr("UI_RUN_ENDED"),
 		tr("UI_RESULT"), _result_label(str(result.get("result", "death"))),
 		tr("UI_ROOMS_CLEARED"), str(result.get("rooms_cleared", 0)),
-		tr("UI_REWARDS"), str(GameState.current_run.get("inventory", [])),
+		tr("UI_REWARDS"), str((snapshot.get("build", {}) as Dictionary).get("items", [])),
 	]
 	print("Run ended: ", result)
 
@@ -148,21 +154,25 @@ func _toggle_pause() -> void:
 
 
 func _pause_run() -> void:
-	if GameState.phase == GameState.GamePhase.HUB or GameState.phase == GameState.GamePhase.DEATH or GameState.phase == GameState.GamePhase.RUN_END:
+	var snapshot: Dictionary = runtime_host.call("runtime_snapshot")
+	var phase := int(snapshot.get("phase", RunPhaseScript.Value.HUB))
+	if phase == RunPhaseScript.Value.HUB or RunPhaseScript.is_terminal(phase):
 		return
-	_phase_before_pause = GameState.phase
-	GameState.set_phase(GameState.GamePhase.PAUSED)
+	var paused = runtime_host.call("pause_run")
+	if not paused.ok:
+		return
 	get_tree().paused = true
 	pause_menu.show_pause()
 
 
 func _resume_run() -> void:
-	if not get_tree().paused and GameState.phase != GameState.GamePhase.PAUSED:
+	if not get_tree().paused:
+		return
+	var resumed = runtime_host.call("resume_run")
+	if not resumed.ok:
 		return
 	get_tree().paused = false
 	pause_menu.hide_pause()
-	if GameState.phase == GameState.GamePhase.PAUSED:
-		GameState.set_phase(_phase_before_pause)
 
 
 func _print_input_map() -> void:
@@ -188,25 +198,23 @@ func _print_input_map() -> void:
 
 func _phase_name(phase: int) -> String:
 	match phase:
-		GameState.GamePhase.BOOT:
+		RunPhaseScript.Value.BOOT:
 			return tr("PHASE_BOOT")
-		GameState.GamePhase.HUB:
+		RunPhaseScript.Value.HUB:
 			return tr("PHASE_HUB")
-		GameState.GamePhase.RUN_START:
+		RunPhaseScript.Value.RUN_PREPARING:
 			return tr("PHASE_RUN_START")
-		GameState.GamePhase.DUNGEON:
+		RunPhaseScript.Value.ROOM_ENTERING, RunPhaseScript.Value.COMBAT_ACTIVE:
 			return tr("PHASE_DUNGEON")
-		GameState.GamePhase.ROOM_CLEAR:
+		RunPhaseScript.Value.ROOM_RESOLVING:
 			return tr("PHASE_ROOM_CLEAR")
-		GameState.GamePhase.SELECTION:
+		RunPhaseScript.Value.SELECTION_ACTIVE, RunPhaseScript.Value.ROOM_TRANSITION:
 			return tr("PHASE_SELECTION")
-		GameState.GamePhase.BOSS_FIGHT:
+		RunPhaseScript.Value.BOSS_ACTIVE:
 			return tr("PHASE_BOSS_FIGHT")
-		GameState.GamePhase.DEATH:
+		RunPhaseScript.Value.DEFEAT:
 			return tr("PHASE_DEATH")
-		GameState.GamePhase.RUN_END:
+		RunPhaseScript.Value.VICTORY:
 			return tr("PHASE_RUN_END")
-		GameState.GamePhase.PAUSED:
-			return tr("PHASE_PAUSED")
 		_:
 			return "UNKNOWN"

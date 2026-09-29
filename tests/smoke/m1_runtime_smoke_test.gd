@@ -39,31 +39,31 @@ func _run() -> void:
 
 	var main: Node = MainScene.instantiate()
 	var room: Node = main.get_node("CombatRoom01")
-	suite.assert_equal(_legacy_view_count(room), 3, "main scene contains legacy selections before adapter boot")
+	suite.assert_equal(_legacy_view_count(room), 3, "main scene contains legacy selections before host boot")
 	add_child(main)
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var adapter: Node = main.get_node_or_null("RuntimeV2Adapter")
-	if adapter == null:
-		suite.assert_true(false, "main scene provides RuntimeV2Adapter")
+	var host: Node = main.get_node_or_null("RunRuntimeHost")
+	if host == null:
+		suite.assert_true(false, "main scene provides RunRuntimeHost")
 		await _cleanup(main, null)
 		suite.finish(get_tree())
 		return
 
-	suite.assert_true(bool(adapter.get("enabled")), "runtime adapter is enabled")
-	suite.assert_equal(adapter.process_mode, Node.PROCESS_MODE_ALWAYS, "runtime adapter stays active while paused")
-	suite.assert_true(bool(adapter.get("_active")), "runtime adapter boots successfully")
-	suite.assert_true(adapter.get("_facade") != null, "runtime adapter owns an authoritative facade")
-	suite.assert_equal(_legacy_view_count(room), 0, "successful adapter boot removes legacy selections")
+	suite.assert_true(main.get_node_or_null("RuntimeV2Adapter") == null, "main scene contains no legacy runtime adapter")
+	suite.assert_equal(host.process_mode, Node.PROCESS_MODE_ALWAYS, "runtime host stays active while paused")
+	suite.assert_true(bool(host.get("_active")), "runtime host boots successfully")
+	suite.assert_true(host.get("_facade") != null, "runtime host owns an authoritative facade")
+	suite.assert_equal(_legacy_view_count(room), 0, "successful host boot removes legacy selections")
 	var camera := room.get_node_or_null("PixelCanvasCamera") as Camera2D
 	suite.assert_true(camera != null and camera.enabled, "M1 runtime keeps the pixel-canvas camera active")
 	if camera != null:
 		suite.assert_equal(camera.position, Vector2(640.0, 360.0), "M1 runtime centers the 1280x720 greybox")
 		suite.assert_equal(camera.zoom, Vector2(0.5, 0.5), "M1 runtime renders the greybox at half zoom")
 
-	var panel := adapter.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control
-	suite.assert_true(panel != null, "runtime adapter creates the unified choice panel")
+	var panel := host.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control
+	suite.assert_true(panel != null, "runtime host creates the unified choice panel")
 	if panel == null:
 		await _cleanup(main, null)
 		suite.finish(get_tree())
@@ -74,19 +74,22 @@ func _run() -> void:
 	room.set("spawn_warning_duration", 0.0)
 	room.visible = true
 	room.process_mode = Node.PROCESS_MODE_INHERIT
-	GameState.start_run({
+	var started = host.call("start_run", {
+		"schema_version": 1,
+		"milestone": "M1",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
+		"enabled_time_skills": ["time_stop", "time_rewind"],
 		"difficulty": "normal",
 		"seed": FIXED_SEED,
 	})
+	suite.assert_true(started.ok, "host starts the fixed-seed M1 run")
 
-	var facade: RefCounted = adapter.get("_facade")
+	var facade: RefCounted = host.get("_facade")
 	_assert_authored_runtime(suite, room, facade)
 	var started_snapshot: Dictionary = facade.call("snapshot")
-	suite.assert_equal(started_snapshot["phase"], RunPhaseScript.Value.ROOM_ENTERING, "fixed-seed run prepares room one")
+	suite.assert_equal(started_snapshot["phase"], RunPhaseScript.Value.COMBAT_ACTIVE, "fixed-seed run enters room one")
 	suite.assert_equal(started_snapshot["run_seed"], FIXED_SEED, "authoritative runtime uses the fixed seed")
-	room.call("begin_run")
 
 	var expected_reward_kinds: Array[String] = ["starter", "reinforcement", "talent", "contract"]
 	var expected_encounter_ids: Array[String] = ["m1_room_01", "m1_room_02", "m1_room_03", "m1_room_04_elite"]

@@ -11,7 +11,6 @@ const CommandResultScript := preload("res://scripts/application/command_result.g
 
 var _facade: RefCounted
 var _catalog: RefCounted
-var _definitions: Array[Dictionary] = []
 var _run_seed: int = 0
 var _runner: Node
 var _room_active: bool = false
@@ -24,14 +23,13 @@ var _current_room_id: StringName = &""
 func configure(
 	facade: RefCounted,
 	encounter_catalog: RefCounted,
-	room_definitions: Array[Dictionary],
+	_room_definitions: Array[Dictionary],
 	run_seed: int,
 	encounter_runner: Node
 ) -> void:
 	_disconnect_runner()
 	_facade = facade
 	_catalog = encounter_catalog
-	_definitions = room_definitions.duplicate(true)
 	_run_seed = run_seed
 	_runner = encounter_runner
 	_room_active = false
@@ -210,7 +208,7 @@ func _complete_current_room() -> Variant:
 		_failure = {
 			"reason": "ROOM_COMMAND_REJECTED",
 			"room_id": str(_current_room_id),
-			"code": str(result.get("code") if result is Dictionary else "INVALID_RESULT"),
+			"code": str(result.get("code")) if result != null else "INVALID_RESULT",
 		}
 		runtime_failed.emit(_failure.duplicate(true))
 	return result

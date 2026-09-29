@@ -25,7 +25,7 @@ size = Vector2(72, 72)
 
 [node name="CombatRoom01" type="Node2D"]
 script = ExtResource("1_room_controller")
-allow_legacy_runtime = true
+allow_legacy_runtime = false
 enemy_scenes = [ExtResource("3_chaser"), ExtResource("4_shooter"), ExtResource("5_tank")]
 boss_scene = ExtResource("8_boss")
 spawn_warning_scene = ExtResource("10_spawn_warning")

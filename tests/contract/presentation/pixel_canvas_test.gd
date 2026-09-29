@@ -43,14 +43,14 @@ func _assert_project_settings() -> void:
 func _assert_scene_contract() -> void:
 	get_window().size = Vector2i(640, 360)
 	var main := MainScene.instantiate()
-	var adapter := main.get_node_or_null("RuntimeV2Adapter")
-	if adapter != null:
-		adapter.set("enabled", false)
 	add_child(main)
 	await get_tree().process_frame
 	await get_tree().process_frame
 
 	var room := main.get_node("CombatRoom01")
+	var host := main.get_node_or_null("RunRuntimeHost")
+	_suite.assert_true(host != null, "main provides the runtime host")
+	_suite.assert_true(main.get_node_or_null("RuntimeV2Adapter") == null, "pixel scene contains no legacy runtime adapter")
 	var camera := room.get_node_or_null("PixelCanvasCamera") as Camera2D
 	_suite.assert_true(camera != null, "combat room provides the pixel-canvas camera")
 	if camera != null:
@@ -79,9 +79,15 @@ func _assert_scene_contract() -> void:
 	_suite.assert_true((main.get_node("StartMenu") as CanvasLayer).layer > 20, "start menu renders above gameplay UI")
 	_suite.assert_true((main.get_node("RunEndOverlay") as CanvasLayer).layer > 20, "run-end overlay renders above gameplay UI")
 	_suite.assert_true((main.get_node("PauseMenu") as CanvasLayer).layer > 20, "pause menu renders above gameplay UI")
-	_assert_control_fits(room.get_node("RewardSelection/Panel"), "legacy reward fallback fits 640x360")
-	_assert_control_fits(room.get_node("CurseSelection/Panel"), "legacy curse fallback fits 640x360")
-	_assert_control_fits(room.get_node("EventSelection/Panel"), "legacy event fallback fits 640x360")
+	if host != null:
+		var choice_panel := host.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control
+		var hud_root := host.get_node_or_null("HudLayer/HudRoot") as Control
+		_suite.assert_true(choice_panel != null, "runtime host creates the V2 choice panel")
+		_suite.assert_true(hud_root != null, "runtime host creates the V2 combat HUD")
+		if choice_panel != null:
+			_assert_control_fits(choice_panel.get_node("SafeArea/Center/PanelRoot"), "V2 choice panel fits 640x360")
+		if hud_root != null:
+			_assert_control_fits(hud_root, "V2 combat HUD fits 640x360")
 
 	main.queue_free()
 	await get_tree().process_frame

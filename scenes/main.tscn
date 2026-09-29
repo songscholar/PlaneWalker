@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
 [ext_resource type="Script" path="res://scripts/ui/run_end_overlay.gd" id="3_run_end_overlay"]
 [ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="4_pause_menu"]
-[ext_resource type="Script" path="res://scripts/application/legacy_run_adapter.gd" id="5_runtime_adapter"]
+[ext_resource type="Script" path="res://scripts/application/run_runtime_host.gd" id="5_runtime_host"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -25,10 +25,9 @@ elite_rooms = Array[int]([4])
 event_rooms = Array[int]([])
 allow_legacy_runtime = false
 
-[node name="RuntimeV2Adapter" type="Node" parent="."]
+[node name="RunRuntimeHost" type="Node" parent="."]
 process_mode = 3
-script = ExtResource("5_runtime_adapter")
-enabled = true
+script = ExtResource("5_runtime_host")
 room_controller_path = NodePath("../CombatRoom01")
 
 [node name="StartMenu" type="CanvasLayer" parent="."]

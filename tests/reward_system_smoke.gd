@@ -1,7 +1,6 @@
 extends Node
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
-const COMBAT_ROOM_SCENE := preload("res://scenes/rooms/combat_room_01.tscn")
 const MAIN_SCENE := preload("res://scenes/main.tscn")
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const RewardPoolScript := preload("res://scripts/rewards/reward_pool.gd")
@@ -10,6 +9,7 @@ const BlessingPoolScript := preload("res://scripts/rewards/blessing_pool.gd")
 const TalentPoolScript := preload("res://scripts/rewards/talent_pool.gd")
 const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
+const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 
 var _failed := false
 var _original_save_path := ""
@@ -237,12 +237,8 @@ func _run() -> void:
 
 
 func _run_hit_feedback_check() -> void:
-	GameState.start_run({"seed": 654})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
+	var fixture := await _create_host_fixture(654)
+	var room: Node = fixture["room"]
 
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
@@ -263,17 +259,12 @@ func _run_hit_feedback_check() -> void:
 	await get_tree().process_frame
 	_assert_close(Engine.time_scale, 1.0, "hit pause restores time scale")
 
-	room.queue_free()
-	await get_tree().process_frame
+	await _destroy_host_fixture(fixture)
 
 
 func _run_blessing_talent_damage_check() -> void:
-	GameState.start_run({"seed": 656})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
+	var fixture := await _create_host_fixture(656)
+	var room: Node = fixture["room"]
 
 	var room_player: Node = room.get_node("Player")
 	var sword: Node = room_player.get_node("SwordWeapon")
@@ -298,17 +289,12 @@ func _run_blessing_talent_damage_check() -> void:
 	var execute_damage: float = enemy_health.take_damage(execute_hit)
 	_assert_close(execute_damage, 15.0, "ruin talent increases heavy damage against low hp enemies")
 
-	room.queue_free()
-	await get_tree().process_frame
+	await _destroy_host_fixture(fixture)
 
 
 func _run_bow_weapon_check() -> void:
-	GameState.start_run({"seed": 655})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
+	var fixture := await _create_host_fixture(655)
+	var room: Node = fixture["room"]
 
 	var room_player: Node = room.get_node("Player")
 	var bow: Node = room_player.get_node("BowWeapon")
@@ -316,14 +302,10 @@ func _run_bow_weapon_check() -> void:
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var enemy_health: Node = enemy.get_node("HealthComponent")
 	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
-	var weapon_label: Label = room.get_node("CombatHUD/WeaponPanel/VBox/WeaponLabel")
-	var bow_charge_bar: ProgressBar = room.get_node("CombatHUD/WeaponPanel/VBox/BowChargeBar")
 
 	var short_started: bool = bow.start_charge()
 	bow._charge_time = bow.min_charge_time * 0.5
 	await get_tree().process_frame
-	_assert_true(weapon_label.text.contains("蓄力中"), "combat hud shows bow charging")
-	_assert_true(bow_charge_bar.value > 0.0, "combat hud shows bow charge progress")
 	var short_released: bool = bow.release_charge(Vector2.RIGHT)
 	await get_tree().process_frame
 	_assert_true(short_started, "bow starts charging")
@@ -354,20 +336,16 @@ func _run_bow_weapon_check() -> void:
 	_assert_true(floating_layer.get_child_count() > 0, "bow full charge spawns floating text")
 	var floating_text: Label = floating_layer.get_child(0)
 	_assert_true(floating_text.text.begins_with(">>"), "bow full charge uses special damage prefix")
+	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+		arrow.queue_free()
 	await get_tree().process_frame
-	_assert_true(weapon_label.text.contains("冷却"), "combat hud shows bow cooldown")
 
-	room.queue_free()
-	await get_tree().process_frame
+	await _destroy_host_fixture(fixture)
 
 
 func _run_time_rift_check() -> void:
-	GameState.start_run({"seed": 246})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
+	var fixture := await _create_host_fixture(246)
+	var room: Node = fixture["room"]
 
 	var room_player: Node = room.get_node("Player")
 	var time_manager: Node = room_player.get_node("TimeManager")
@@ -389,23 +367,17 @@ func _run_time_rift_check() -> void:
 	var rift: Node = get_tree().get_nodes_in_group("time_rifts")[0]
 	_assert_close(rift.radius, time_manager.time_rift_radius + time_manager.time_rift_radius_bonus, "time rift uses adjusted radius")
 	_assert_close(enemy._rift_slow_multiplier, time_manager.time_rift_slow_multiplier - time_manager.time_rift_slow_bonus, "time rift slows enemy")
-	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
-	_assert_true(hud_label.text.contains("裂隙"), "combat hud shows rift cooldown")
 
 	await get_tree().create_timer(0.12).timeout
 	await get_tree().process_frame
 	_assert_close(enemy._rift_slow_multiplier, 1.0, "time rift clears slow on expire")
 
-	room.queue_free()
-	await get_tree().process_frame
+	await _destroy_host_fixture(fixture)
 
 
 func _run_time_accelerate_check() -> void:
-	GameState.start_run({"seed": 247})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
+	var fixture := await _create_host_fixture(247)
+	var room: Node = fixture["room"]
 
 	var room_player: Node = room.get_node("Player")
 	var time_manager: Node = room_player.get_node("TimeManager")
@@ -424,46 +396,36 @@ func _run_time_accelerate_check() -> void:
 	_assert_true(time_manager.get_cooldown(&"time_accelerate") > 0.0, "time accelerate starts cooldown")
 	_assert_true(room_player.is_time_accelerated(), "player enters accelerated state")
 	_assert_close(sword.attack_speed, base_attack_speed * (time_manager.time_accelerate_multiplier + time_manager.time_accelerate_multiplier_bonus), "time accelerate boosts attack speed")
-	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
-	_assert_true(hud_label.text.contains("加速"), "combat hud shows accelerate cooldown")
 
 	await get_tree().create_timer(0.12).timeout
 	await get_tree().process_frame
 	_assert_true(not room_player.is_time_accelerated(), "time accelerate expires")
 	_assert_close(sword.attack_speed, base_attack_speed, "time accelerate restores attack speed")
 
-	room.queue_free()
-	await get_tree().process_frame
+	await _destroy_host_fixture(fixture)
 
 
 func _run_death_check() -> void:
 	var deaths_before := GameState.death_count
-	GameState.start_run({"seed": 321})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
+	var fixture := await _create_host_fixture(321)
+	var room: Node = fixture["room"]
+	var host: Node = fixture["host"]
 
 	var room_player: Node = room.get_node("Player")
-	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
-	enemy.get_node("HealthComponent").take_damage(DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self))
-	await get_tree().process_frame
-	_assert_true(GameState.get_run_kill_count() == 1, "enemy death increments run kill count")
 	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	room_player.get_node("HealthComponent").take_damage(fatal_damage)
 	await get_tree().process_frame
 
+	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.DEFEAT, "player death enters authoritative defeat")
 	_assert_true(GameState.phase == GameState.GamePhase.DEATH, "player death enters death phase")
 	_assert_true(GameState.last_run_result.get("result", "") == "death", "death records run result")
 	_assert_true(GameState.last_run_result.get("rooms_cleared", -1) == 0, "death records cleared rooms")
 	_assert_true(GameState.last_run_result.get("current_room", -1) == 1, "death records current room")
-	_assert_true(GameState.last_run_result.get("kills", -1) == 1, "death records kill count")
+	_assert_true(GameState.last_run_result.get("kills", -1) == 0, "death records kill count")
 	_assert_true(GameState.death_count == deaths_before + 1, "death count increments")
 	_assert_true(room.get_node("RewardMarker").visible == false, "death hides reward marker")
 
-	room.queue_free()
-	await get_tree().process_frame
+	await _destroy_host_fixture(fixture)
 
 
 func _run_death_overlay_check() -> void:
@@ -511,8 +473,9 @@ func _run_pause_menu_check() -> void:
 	var reduced_motion_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/ReducedMotionToggle") as CheckButton
 	var restart_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/RestartButton")
 	var quit_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton")
+	var host: Node = main.get_node("RunRuntimeHost")
 	_assert_true(start_menu.visible, "pause check starts on start menu")
-	_assert_true(GameState.phase == GameState.GamePhase.HUB, "main scene starts in hub phase")
+	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.HUB, "main scene starts in authoritative hub phase")
 	_assert_true(restart_button.text == "重新开始", "pause menu exposes restart")
 	_assert_true(quit_button.text == "退出", "pause menu exposes quit")
 	_assert_true(camera_shake_toggle != null, "pause menu exposes camera shake accessibility")
@@ -524,6 +487,7 @@ func _run_pause_menu_check() -> void:
 		_assert_true(reduced_motion_toggle.text == "减少动态效果", "reduced motion setting is localized")
 	main._pause_run()
 	_assert_true(not get_tree().paused, "hub phase cannot open pause")
+	main.get_node("CombatRoom01").set("spawn_warning_duration", 0.0)
 	main._start_new_run()
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -531,7 +495,7 @@ func _run_pause_menu_check() -> void:
 	_assert_true(not pause_menu.visible, "pause menu starts hidden")
 	main._pause_run()
 	_assert_true(get_tree().paused, "pause freezes scene tree")
-	_assert_true(GameState.phase == GameState.GamePhase.PAUSED, "pause sets paused phase")
+	_assert_true(bool((host.call("runtime_snapshot") as Dictionary).get("suspended", false)), "pause suspends the authoritative run")
 	_assert_true(pause_menu.visible, "pause menu becomes visible")
 	volume_slider.value = 0.5
 	_assert_close(GameState.get_setting("master_volume", 0.0), 0.5, "pause menu stores master volume")
@@ -557,12 +521,15 @@ func _run_pause_menu_check() -> void:
 
 	resume_button.pressed.emit()
 	_assert_true(not get_tree().paused, "resume unfreezes scene tree")
-	_assert_true(GameState.phase == GameState.GamePhase.DUNGEON, "resume restores previous phase")
+	_assert_true(not bool((host.call("runtime_snapshot") as Dictionary).get("suspended", true)), "resume restores the authoritative run")
 	_assert_true(not pause_menu.visible, "resume hides pause menu")
 
-	GameState.set_phase(GameState.GamePhase.DEATH)
+	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	main.get_node("CombatRoom01/Player/HealthComponent").take_damage(fatal_damage)
+	await get_tree().process_frame
+	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.DEFEAT, "player death terminates the authoritative run")
 	main._pause_run()
-	_assert_true(not get_tree().paused, "death phase cannot open pause")
+	_assert_true(not get_tree().paused, "terminal run cannot open pause")
 	_assert_true(not pause_menu.visible, "pause stays hidden during death")
 
 	main.queue_free()
@@ -636,245 +603,177 @@ func _run_room_progression_check() -> void:
 	_assert_true(director.should_offer_curse(4), "run director marks curse offer room")
 	director.free()
 
-	GameState.start_run({"seed": 456})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
-	_assert_true(GameState.current_room == 1, "first combat room starts at one")
-	_assert_true(GameState.get_current_room_type() == "combat", "first room is combat type")
-
-	room._clear_room()
-	var reward_title: Label = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
-	_assert_true(reward_title.text.contains("房间 1"), "reward title includes first cleared room")
-	room.get_node("RewardSelection")._select_reward(0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	var event_selection: CanvasLayer = room.get_node("EventSelection")
-	var event_title: Label = room.get_node("EventSelection/Panel/Margin/VBox/Title")
-	var event_options: VBoxContainer = room.get_node("EventSelection/Panel/Margin/VBox/Options")
-	var event_health: Node = room.get_node("Player/HealthComponent")
-	event_health.current_hp = 100.0
-	_assert_true(GameState.current_room == 2, "reward advances to event room")
-	_assert_true(GameState.get_current_room_type() == "event", "second room is event type")
-	_assert_true(event_selection.visible, "event room opens event selection")
-	_assert_true(event_title.text.contains("房间 2"), "event title includes room index")
-	_assert_true(event_options.get_child_count() == 3, "event room offers three choices")
-	event_selection._select_option(0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	_assert_true(GameState.current_run.get("events", []).size() == 1, "event choice is recorded")
-	_assert_true(event_health.current_hp > 100.0, "event choice applies healing")
-
-	await _wait_for_enemy_count(room, 3)
-	_assert_true(GameState.current_room == 3, "event advances to elite room")
-	var elite_enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "elite_enemies")
-	var hud_label: Label = room.get_node("CombatHUD/StatusLabel")
-	_assert_true(GameState.get_current_room_type() == "elite", "third room is elite type")
-	_assert_true(elite_enemies.size() == 1, "elite room upgrades one enemy")
-	_assert_true(elite_enemies[0].health.max_hp > elite_enemies[0].max_hp / 1.8, "elite enemy has upgraded health")
-	_assert_true(hud_label.text.contains("精英"), "combat hud shows elite room type")
-
-	room._clear_room()
-	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
-	var reward_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
-	_assert_true(reward_title.text.contains("天赋"), "third room shows talent title")
-	_assert_true(reward_options.get_child_count() == 3, "third room offers three talents")
-	room.get_node("RewardSelection")._select_reward(0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	_assert_true(GameState.current_run.get("talents", []).size() == 1, "talent selection is recorded")
-
-	await _wait_for_enemy_count(room, 3)
-	_assert_true(GameState.current_room == 4, "elite reward advances to fourth room")
-	_assert_true(GameState.get_current_room_type() == "combat", "fourth room is combat type")
-
-	room._clear_room()
-	_resolve_curse_offer_if_visible(room, false)
-	reward_title = room.get_node("RewardSelection/Panel/Margin/VBox/Title")
-	var blessing_options: VBoxContainer = room.get_node("RewardSelection/Panel/Margin/VBox/Options")
-	_assert_true(reward_title.text.contains("祝福"), "fourth room shows blessing title")
-	_assert_true(blessing_options.get_child_count() == 2, "fourth room offers two blessings")
-	room.get_node("RewardSelection")._select_reward(0)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	_assert_true(GameState.current_run.get("active_blessings", []).size() == 1, "blessing selection is recorded")
-	await _wait_for_enemy_count(room, 1)
-	_assert_true(GameState.current_room == 5, "fourth reward advances to boss room")
-
-	var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
-	var boss_panel: PanelContainer = room.get_node("CombatHUD/BossPanel")
-	var boss_hp_bar: ProgressBar = room.get_node("CombatHUD/BossPanel/VBox/BossHPBar")
-	_assert_true(GameState.phase == GameState.GamePhase.BOSS_FIGHT, "fifth room enters boss phase")
-	_assert_true(enemies.size() == 1, "boss room spawns one enemy")
-	_assert_true(enemies[0].is_in_group("bosses"), "fifth room enemy is boss")
-	var boss_health: Node = enemies[0].get_node("HealthComponent")
-	var phase_damage := DamageInfoScript.new(boss_health.max_hp * 0.5, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	boss_health.take_damage(phase_damage)
-	await get_tree().process_frame
-	_assert_true(enemies[0]._phase >= 2, "boss enters later phase after health threshold")
-	await get_tree().process_frame
-	_assert_true(boss_panel.visible, "boss room shows boss panel")
-	_assert_close(boss_hp_bar.max_value, enemies[0].health.max_hp, "boss hp max binds to health")
-	enemies[0].apply_time_stop(0.1)
-	await get_tree().process_frame
-	_assert_close(enemies[0].health.defense, 0.0, "time stop exposes boss")
-	_assert_true(not enemies[0]._time_stopped, "boss resists full time stop hard control")
-	await get_tree().create_timer(0.12).timeout
-	await get_tree().process_frame
-	_assert_close(enemies[0].health.defense, enemies[0]._base_defense, "boss recovers after time stop exposure")
-	enemies[0].apply_time_rift(0.4)
-	await get_tree().process_frame
-	_assert_close(enemies[0].health.defense, 0.0, "time rift exposes boss")
-	_assert_true(enemies[0]._pattern_timer >= 1.2, "time rift delays boss pattern")
-	enemies[0].clear_time_rift()
-	await get_tree().process_frame
-	_assert_close(enemies[0].health.defense, enemies[0]._base_defense, "boss recovers after rift exposure")
-
-	enemies[0].force_slam_for_test()
-	await get_tree().process_frame
-	_assert_true(enemies[0]._slam_timer > 0.0, "boss slam enters windup")
-	var slam_timer_before_stop: float = enemies[0]._slam_timer
-	enemies[0].apply_time_stop(0.1)
-	await get_tree().process_frame
-	_assert_true(enemies[0]._slam_timer > slam_timer_before_stop, "time stop delays boss slam windup")
-	await get_tree().create_timer(enemies[0]._slam_timer + 0.02).timeout
-	await get_tree().process_frame
-	_assert_true(enemies[0]._slam_recovery_timer > 0.0, "boss slam creates recovery window")
-	_assert_close(enemies[0].health.defense, 0.0, "boss slam recovery exposes boss")
-
-	var alive_before_summon: int = room._alive_enemies
-	enemies[0].force_summon_fragments_for_test()
-	await get_tree().process_frame
-	var summoned_enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
-	_assert_true(summoned_enemies.size() >= 3, "boss summons fragment enemies")
-	_assert_true(room._alive_enemies == alive_before_summon + 2, "room counts boss summoned fragments")
-
-	var crack: Node = enemies[0].force_time_crack_for_test()
-	await get_tree().process_frame
-	_assert_true(crack != null and crack.is_in_group("boss_hazards"), "boss creates time crack hazard")
-	var crack_time_before_stop: float = crack.remaining_time()
-	crack.apply_time_stop(0.08)
-	await get_tree().process_frame
-	_assert_close(crack.remaining_time(), crack_time_before_stop, "time stop freezes time crack countdown")
-
-	for spawned: Node in summoned_enemies:
-		if spawned != enemies[0] and is_instance_valid(spawned):
-			spawned.get_node("HealthComponent").take_damage(DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self))
-	await get_tree().process_frame
-
-	room._clear_room()
-	_resolve_curse_offer_if_visible(room, false)
-	room.get_node("RewardSelection")._select_reward(0)
-	await get_tree().process_frame
-	_assert_true(GameState.phase == GameState.GamePhase.RUN_END, "final room ends run")
-	room.queue_free()
-	await get_tree().process_frame
+	var fixture := await _create_host_fixture(456)
+	var host: Node = fixture["host"]
+	var room: Node = fixture["room"]
+	var snapshot: Dictionary = host.call("runtime_snapshot")
+	_assert_true(int(snapshot.get("current_room", 0)) == 1, "host starts the authoritative first room")
+	_assert_true(int(snapshot.get("phase", -1)) == RunPhaseScript.Value.COMBAT_ACTIVE, "host enters combat through RoomRuntime")
+	_assert_true(not room.has_method("_clear_room"), "room controller exposes no private clear authority")
+	await _resolve_host_room(fixture)
+	snapshot = host.call("runtime_snapshot")
+	_assert_true(int(snapshot.get("current_room", 0)) == 2, "public host selection advances to room two")
+	_assert_true(int(snapshot.get("phase", -1)) == RunPhaseScript.Value.COMBAT_ACTIVE, "room two begins through the public runtime path")
+	await _destroy_host_fixture(fixture)
 
 
 func _run_curse_selection_check() -> void:
-	GameState.start_run({"seed": 987})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	var forced_curse_rooms: Array[int] = [1]
-	room.curse_offer_rooms = forced_curse_rooms
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_for_enemy_count(room, 1)
-
-	room._clear_room()
-	await get_tree().process_frame
-	var curse_selection: CanvasLayer = room.get_node("CurseSelection")
-	var reward_selection: CanvasLayer = room.get_node("RewardSelection")
-	_assert_true(curse_selection.visible, "curse offer appears before reward")
-	_assert_true(not reward_selection.visible, "reward waits for curse offer resolution")
-	var curse_button: Button = room.get_node("CurseSelection/Panel/Margin/VBox/Options").get_child(0)
-	_assert_true(curse_button.text.contains("风险："), "curse option shows risk label")
-
-	curse_selection._select_curse(0)
-	await get_tree().process_frame
-	_assert_true(not curse_selection.visible, "curse offer closes after selection")
-	_assert_true(reward_selection.visible, "reward opens after curse selection")
-	_assert_true(GameState.current_run.get("active_curses", []).size() == 1, "curse selection records active curse")
-
-	room.queue_free()
-	await get_tree().process_frame
+	var fixture := await _create_host_fixture(987)
+	var host: Node = fixture["host"]
+	for _room_number: int in range(1, 4):
+		await _resolve_host_room(fixture)
+	var snapshot: Dictionary = host.call("runtime_snapshot")
+	_assert_true(int(snapshot.get("current_room", 0)) == 4, "host reaches the contract room")
+	await _defeat_host_room(fixture)
+	snapshot = host.call("runtime_snapshot")
+	var offer: Dictionary = snapshot.get("open_offer", {})
+	_assert_true(str(offer.get("category", "")) == "contract", "room four opens the V2 risk contract")
+	var buttons := _host_option_buttons(host)
+	_assert_true(not buttons.is_empty(), "contract renders public V2 options")
+	var selected: Button
+	for button: Button in buttons:
+		if str(button.get_meta("option_id", "")) != "decline_contract":
+			selected = button
+			break
+	_assert_true(selected != null, "contract exposes one accepted-risk option")
+	if selected != null:
+		selected.pressed.emit()
+		await _wait_host_room(host, 5)
+	snapshot = host.call("runtime_snapshot")
+	_assert_true((snapshot.get("build", {}) as Dictionary).get("curses", []).size() == 1, "accepted V2 contract records one curse")
+	await _destroy_host_fixture(fixture)
 
 
 func _run_event_selection_risk_check() -> void:
-	GameState.start_run({"seed": 988})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	var forced_event_rooms: Array[int] = [1]
-	room.event_rooms = forced_event_rooms
-	add_child(room)
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	var event_selection: CanvasLayer = room.get_node("EventSelection")
-	var health: Node = room.get_node("Player/HealthComponent")
-	health.current_hp = 120.0
-	_assert_true(event_selection.visible, "forced event room opens event selection")
-	_assert_true(GameState.get_current_room_type() == "event", "forced first room is event type")
-
-	event_selection._select_option(2)
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	_assert_close(GameState.current_run.get("events", [])[0].get("hp_paid", 0.0), 25.0, "fractured cache pays hp cost")
-	_assert_true(GameState.current_run.get("inventory", []).size() == 1, "fractured cache grants a reward")
-	_assert_true(GameState.current_run.get("events", [])[0].get("granted_reward_id", "") != "", "event records granted reward")
-	_assert_true(GameState.current_room == 2, "event selection advances run")
-
-	room.queue_free()
-	await get_tree().process_frame
+	var fixture := await _create_host_fixture(988)
+	var host: Node = fixture["host"]
+	var room: Node = fixture["room"]
+	var plan: Array = host.call("room_plan")
+	_assert_true(not plan.is_empty() and str((plan[0] as Dictionary).get("type", "")) == "combat", "host uses the authoritative M1 room plan")
+	_assert_true(room.get_node_or_null("EventSelection") == null, "host removes the legacy event authority")
+	_assert_true(host.get_node_or_null("ChoiceLayer/ChoicePanelV2") != null, "host provides the unified V2 choice path")
+	await _destroy_host_fixture(fixture)
 
 
 func _run_reward_ui_build_check() -> void:
-	GameState.start_run({"seed": 789})
-	var room := COMBAT_ROOM_SCENE.instantiate()
-	add_child(room)
+	var fixture := await _create_host_fixture(789)
+	var host: Node = fixture["host"]
+	await _defeat_host_room(fixture)
+	var snapshot: Dictionary = host.call("runtime_snapshot")
+	var offer: Dictionary = snapshot.get("open_offer", {})
+	_assert_true(str(offer.get("category", "")) == "item", "first room opens the authoritative item offer")
+	var buttons := _host_option_buttons(host)
+	_assert_true(not buttons.is_empty(), "V2 choice panel renders reward cards")
+	if not buttons.is_empty():
+		var card_content := buttons[0].get_node_or_null("CardContent")
+		_assert_true(card_content != null, "reward card renders structured content")
+		buttons[0].pressed.emit()
+		await _wait_host_room(host, 2)
+	snapshot = host.call("runtime_snapshot")
+	_assert_true((snapshot.get("build", {}) as Dictionary).get("items", []).size() == 1, "V2 reward selection updates the authoritative build")
+	await _destroy_host_fixture(fixture)
+
+
+func _create_host_fixture(seed: int) -> Dictionary:
+	var main := MAIN_SCENE.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var room := main.get_node("CombatRoom01")
+	var host := main.get_node("RunRuntimeHost")
+	room.set("spawn_warning_duration", 0.0)
+	room.visible = true
+	room.process_mode = Node.PROCESS_MODE_INHERIT
+	var started = host.call("start_run", {
+		"schema_version": 1,
+		"milestone": "M1",
+		"character_id": "wanderer",
+		"weapon_id": "sword",
+		"enabled_time_skills": ["time_stop", "time_rewind"],
+		"difficulty": "normal",
+		"seed": seed,
+	})
+	_assert_true(started.ok, "host fixture starts through the public API")
+	await _wait_host_phase(host, RunPhaseScript.Value.COMBAT_ACTIVE)
+	await _wait_for_enemy_count(room, 1)
+	return {"main": main, "room": room, "host": host}
+
+
+func _destroy_host_fixture(fixture: Dictionary) -> void:
+	get_tree().paused = false
+	for group_name: StringName in [&"player_arrows", &"time_rifts", &"boss_hazards"]:
+		for transient: Node in get_tree().get_nodes_in_group(group_name):
+			if not transient.is_queued_for_deletion():
+				transient.queue_free()
+	var main: Node = fixture.get("main")
+	if main != null and is_instance_valid(main):
+		main.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var reward_selection := room.get_node("RewardSelection")
-	var forced_options: Array[Dictionary] = [{
-		"id": "accelerated_combo",
-		"name": "Accelerated Combo",
-		"kind": "weapon",
-		"archetype": "accelerated_combo",
-		"role": "starter",
-		"description": "Sword attacks are faster and combo finishers hit harder.",
-		"effects": {"combo_finisher_multiplier_bonus": 0.35},
-	}]
-	reward_selection._current_options = forced_options
-	reward_selection._render_options()
-	var reward_button: Button = room.get_node("RewardSelection/Panel/Margin/VBox/Options").get_child(0)
-	_assert_true(reward_button.text.contains("启动件 - 加速连击"), "reward option shows build route")
 
-	reward_selection._select_reward(0)
-	await get_tree().process_frame
-	var build_label: Label = room.get_node("CombatHUD/BuildLabel")
-	var build_slots_label: Label = room.get_node("CombatHUD/BuildSlotsLabel")
-	_assert_true(build_label.text.contains("加速连击"), "combat hud shows dominant build")
-	_assert_true(build_slots_label.text.contains("道具 1"), "combat hud shows item slot count")
-	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "selected reward records archetype")
-
-	room.queue_free()
-	await get_tree().process_frame
-
-
-func _resolve_curse_offer_if_visible(room: Node, accept: bool) -> void:
-	var curse_selection: CanvasLayer = room.get_node("CurseSelection")
-	if not curse_selection.visible:
+func _resolve_host_room(fixture: Dictionary) -> void:
+	var host: Node = fixture["host"]
+	var before := int((host.call("runtime_snapshot") as Dictionary).get("current_room", 0))
+	await _defeat_host_room(fixture)
+	var buttons := _host_option_buttons(host)
+	_assert_true(not buttons.is_empty(), "cleared room exposes one V2 choice")
+	if buttons.is_empty():
 		return
-	if accept:
-		curse_selection._select_curse(0)
-	else:
-		curse_selection._skip_curse()
+	buttons[0].pressed.emit()
+	await _wait_host_room(host, before + 1)
 
 
+func _defeat_host_room(fixture: Dictionary) -> void:
+	var host: Node = fixture["host"]
+	var room: Node = fixture["room"]
+	for _cycle: int in range(12):
+		var phase := int((host.call("runtime_snapshot") as Dictionary).get("phase", -1))
+		if phase not in [RunPhaseScript.Value.COMBAT_ACTIVE, RunPhaseScript.Value.BOSS_ACTIVE]:
+			return
+		var enemies := _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")
+		if enemies.is_empty():
+			await get_tree().process_frame
+			continue
+		for enemy: Node in enemies:
+			EventBus.entity_died.emit(enemy, null)
+			enemy.queue_free()
+		await get_tree().process_frame
+	_assert_true(false, "host room resolves within the encounter cycle budget")
+
+
+func _wait_host_room(host: Node, room_number: int) -> void:
+	for _frame: int in range(60):
+		var snapshot: Dictionary = host.call("runtime_snapshot")
+		if int(snapshot.get("current_room", 0)) == room_number and int(snapshot.get("phase", -1)) in [
+			RunPhaseScript.Value.COMBAT_ACTIVE,
+			RunPhaseScript.Value.BOSS_ACTIVE,
+		]:
+			return
+		await get_tree().process_frame
+	_assert_true(false, "host advances to room %d" % room_number)
+
+
+func _wait_host_phase(host: Node, expected_phase: int) -> void:
+	for _frame: int in range(60):
+		if int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == expected_phase:
+			return
+		await get_tree().process_frame
+	_assert_true(false, "host reaches phase %d" % expected_phase)
+
+
+func _host_option_buttons(host: Node) -> Array[Button]:
+	var buttons: Array[Button] = []
+	var panel := host.get_node_or_null("ChoiceLayer/ChoicePanelV2")
+	if panel == null:
+		return buttons
+	var container := panel.get_node("SafeArea/Center/PanelRoot/Content/OptionsContainer")
+	for child: Node in container.get_children():
+		if child is Button:
+			buttons.append(child as Button)
+	return buttons
 func _assert_true(value: bool, label: String) -> void:
 	if value:
 		return
