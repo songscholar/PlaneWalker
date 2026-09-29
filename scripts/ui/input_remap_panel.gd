@@ -3,7 +3,6 @@ extends Control
 
 signal capture_started(action: StringName, family: StringName)
 
-const InputActionContractScript := preload("res://scripts/input/input_action_contract.gd")
 const InputRemapServiceScript := preload("res://scripts/input/input_remap_service.gd")
 
 const FAMILY_KEYBOARD_MOUSE := &"keyboard_mouse"
@@ -106,7 +105,7 @@ func _build_rows() -> void:
 		child.queue_free()
 	_row_controls.clear()
 	_focus_controls.clear()
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in _remappable_actions():
 		var row := HBoxContainer.new()
 		row.name = "Row_%s" % str(action)
 		row.custom_minimum_size = Vector2(0.0, 28.0)
@@ -267,8 +266,15 @@ func _on_bindings_changed(_action: StringName) -> void:
 
 
 func _refresh_all_rows() -> void:
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in _remappable_actions():
 		_refresh_row(action)
+
+
+func _remappable_actions() -> Array[StringName]:
+	var actions: Array[StringName] = []
+	for action_value: Variant in _service.call("remappable_actions"):
+		actions.append(StringName(str(action_value)))
+	return actions
 
 
 func _refresh_row(action: StringName) -> void:

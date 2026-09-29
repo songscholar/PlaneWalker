@@ -28,11 +28,11 @@ func _run() -> void:
 	_suite.assert_equal(first_load.get("source", ""), "primary", "valid primary is preferred")
 
 	var profile_b := profile_a.duplicate(true)
-	profile_b["bindings"]["attack"]["controller"] = [{
+	profile_b["bindings"]["weapon_primary"]["controller"] = [{
 		"type": "joypad_button",
 		"button_index": JOY_BUTTON_Y,
 	}]
-	profile_b["bindings"]["heavy_attack"]["controller"] = [{
+	profile_b["bindings"]["weapon_secondary"]["controller"] = [{
 		"type": "joypad_button",
 		"button_index": JOY_BUTTON_X,
 	}]
@@ -45,10 +45,11 @@ func _run() -> void:
 	var recovered: Dictionary = store.load()
 	_suite.assert_true(bool(recovered.get("ok", false)), "corrupt primary recovers")
 	_suite.assert_equal(recovered.get("code", ""), "RECOVERED", "recovery is explicit")
-	_suite.assert_equal(recovered.get("source", ""), "backup_1", "backup is recovery source")
+	_suite.assert_equal(recovered.get("source", ""), "backup_2", "backup is recovery source")
 	_suite.assert_equal(recovered.get("profile", {}), profile_a, "recovery returns last verified backup")
 
 	_test_invalid_profiles_preserve_primary(store, profile_b)
+	_test_legacy_primary_and_backup_are_available_for_migration()
 	_suite.finish(get_tree())
 
 
@@ -58,23 +59,23 @@ func _test_invalid_profiles_preserve_primary(store, valid_profile: Dictionary) -
 	var invalid_profiles: Array[Dictionary] = []
 
 	var forward := valid_profile.duplicate(true)
-	forward["schema_version"] = 2
+	forward["schema_version"] = 3
 	invalid_profiles.append(forward)
 
 	var unknown_action := valid_profile.duplicate(true)
-	unknown_action["bindings"]["debug_action"] = unknown_action["bindings"]["attack"].duplicate(true)
+	unknown_action["bindings"]["debug_action"] = unknown_action["bindings"]["weapon_primary"].duplicate(true)
 	invalid_profiles.append(unknown_action)
 
 	var missing_family := valid_profile.duplicate(true)
-	missing_family["bindings"]["attack"].erase("controller")
+	missing_family["bindings"]["weapon_primary"].erase("controller")
 	invalid_profiles.append(missing_family)
 
 	var duplicate_binding := valid_profile.duplicate(true)
-	duplicate_binding["bindings"]["heavy_attack"]["controller"] = duplicate_binding["bindings"]["attack"]["controller"].duplicate(true)
+	duplicate_binding["bindings"]["weapon_secondary"]["controller"] = duplicate_binding["bindings"]["weapon_primary"]["controller"].duplicate(true)
 	invalid_profiles.append(duplicate_binding)
 
 	var wrong_family := valid_profile.duplicate(true)
-	wrong_family["bindings"]["attack"]["controller"] = [{
+	wrong_family["bindings"]["weapon_primary"]["controller"] = [{
 		"type": "mouse_button",
 		"button_index": MOUSE_BUTTON_LEFT,
 	}]
@@ -87,7 +88,47 @@ func _test_invalid_profiles_preserve_primary(store, valid_profile: Dictionary) -
 		_suite.assert_true(not FileAccess.file_exists(store.pending_path()), "rejection leaves no pending file")
 
 
+func _test_legacy_primary_and_backup_are_available_for_migration() -> void:
+	var store = InputProfileStoreScript.new()
+	store.configure(_unique_test_root())
+	DirAccess.make_dir_recursive_absolute(store.primary_path().get_base_dir())
+	var legacy := _legacy_profile()
+	_write_text(store.legacy_primary_path(), JSON.stringify(legacy))
+	var primary_result: Dictionary = store.load()
+	_suite.assert_true(bool(primary_result.get("ok", false)), "legacy primary remains readable for production migration")
+	_suite.assert_equal(primary_result.get("code", ""), "MIGRATION_REQUIRED", "legacy primary is never mistaken for current schema")
+	_suite.assert_equal(primary_result.get("source", ""), "legacy_primary", "legacy primary source is explicit")
+	_suite.assert_equal(primary_result.get("profile", {}), legacy, "legacy primary round-trips before migration")
+
+	_write_text(store.legacy_backup_path(), JSON.stringify(legacy))
+	_write_text(store.legacy_primary_path(), "{")
+	var backup_result: Dictionary = store.load()
+	_suite.assert_true(bool(backup_result.get("ok", false)), "legacy backup remains a migration rollback point")
+	_suite.assert_equal(backup_result.get("code", ""), "RECOVERED_MIGRATION_REQUIRED", "legacy backup recovery is explicit")
+	_suite.assert_equal(backup_result.get("source", ""), "legacy_backup", "legacy backup source is explicit")
+
+
 func _default_profile() -> Dictionary:
+	var bindings := {}
+	for action: StringName in InputProfileStoreScript.profile_actions():
+		var families := {
+			"keyboard_mouse": [],
+			"controller": [],
+		}
+		for event: InputEvent in InputMap.action_get_events(action):
+			var record: Dictionary = InputBindingCodecScript.encode(event)
+			if record.is_empty():
+				continue
+			var family := InputBindingCodecScript.binding_family(record)
+			(families[family] as Array).append(record)
+		bindings[str(action)] = families
+	return {
+		"schema_version": 2,
+		"bindings": bindings,
+	}
+
+
+func _legacy_profile() -> Dictionary:
 	var bindings := {}
 	for action: StringName in InputActionContractScript.required_actions():
 		var families := {

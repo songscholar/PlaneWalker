@@ -22,9 +22,38 @@ REQUIRED_DOMAIN_KEYS = (
     "RESULT_DEATH",
     "RESULT_FLOOR_CLEARED",
 )
+SEMANTIC_INPUT_TRANSLATIONS = {
+    "INPUT_ACTION_WEAPON_PRIMARY": ("Weapon Primary", "武器主动作"),
+    "INPUT_ACTION_WEAPON_SECONDARY": ("Weapon Secondary", "武器副动作"),
+    "INPUT_ACTION_WEAPON_UTILITY": ("Weapon Utility", "武器功能"),
+    "INPUT_ACTION_WEAPON_SKILL": ("Weapon Skill", "武器技能"),
+    "INPUT_ACTION_WEAPON_ULTIMATE": ("Weapon Ultimate", "武器终极技"),
+    "INPUT_ACTION_TIME_SLOT_1": ("Time Ability 1", "时间能力 1"),
+    "INPUT_ACTION_TIME_SLOT_2": ("Time Ability 2", "时间能力 2"),
+}
 
 
 class LocalizationContractTest(unittest.TestCase):
+    def test_semantic_input_rows_match_in_global_and_base_catalogs(self) -> None:
+        catalogs = (
+            PROJECT_ROOT / "data" / "localization" / "translations.csv",
+            PROJECT_ROOT
+            / "data"
+            / "content_packs"
+            / "base"
+            / "localization"
+            / "translations.csv",
+        )
+        for catalog in catalogs:
+            with self.subTest(catalog=catalog):
+                with catalog.open(encoding="utf-8", newline="") as handle:
+                    rows = {row["keys"]: row for row in csv.DictReader(handle)}
+                actual = {
+                    key: (rows[key]["en"], rows[key]["zh_CN"])
+                    for key in SEMANTIC_INPUT_TRANSLATIONS
+                }
+                self.assertEqual(actual, SEMANTIC_INPUT_TRANSLATIONS)
+
     def test_valid_catalog_covers_code_and_content_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

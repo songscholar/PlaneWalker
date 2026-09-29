@@ -4,11 +4,30 @@ extends RefCounted
 const InputActionContractScript := preload("res://scripts/input/input_action_contract.gd")
 const InputBindingCodecScript := preload("res://scripts/input/input_binding_codec.gd")
 
-const SCHEMA_VERSION := 1
-const PRIMARY_FILE := "input_profile_v1.json"
+const SCHEMA_VERSION := 2
+const LEGACY_SCHEMA_VERSION := 1
+const PRIMARY_FILE := "input_profile_v2.json"
 const PENDING_FILE := "pending.tmp"
-const BACKUP_FILE := "backup_1.json"
+const BACKUP_FILE := "backup_2.json"
+const LEGACY_PRIMARY_FILE := "input_profile_v1.json"
+const LEGACY_BACKUP_FILE := "backup_1.json"
 const BINDING_FAMILIES: Array[String] = ["keyboard_mouse", "controller"]
+const PROFILE_ACTIONS: Array[StringName] = [
+	&"move_up",
+	&"move_down",
+	&"move_left",
+	&"move_right",
+	&"weapon_primary",
+	&"weapon_secondary",
+	&"weapon_utility",
+	&"weapon_skill",
+	&"weapon_ultimate",
+	&"time_slot_1",
+	&"time_slot_2",
+	&"dash",
+	&"interact",
+	&"pause",
+]
 
 var _root_path: String = ""
 
@@ -29,6 +48,18 @@ func backup_path() -> String:
 	return _path(BACKUP_FILE)
 
 
+func legacy_primary_path() -> String:
+	return _path(LEGACY_PRIMARY_FILE)
+
+
+func legacy_backup_path() -> String:
+	return _path(LEGACY_BACKUP_FILE)
+
+
+static func profile_actions() -> Array[StringName]:
+	return PROFILE_ACTIONS.duplicate()
+
+
 func save(profile: Dictionary) -> Dictionary:
 	var readiness := _require_configured()
 	if not bool(readiness["ok"]):
@@ -46,7 +77,7 @@ func save(profile: Dictionary) -> Dictionary:
 	if not bool(write_result["ok"]):
 		_remove_if_present(pending_path())
 		return write_result
-	var pending_result := _load_candidate(pending_path(), "pending")
+	var pending_result := _load_candidate(pending_path(), "pending", SCHEMA_VERSION)
 	if not bool(pending_result["ok"]):
 		_remove_if_present(pending_path())
 		return _failure("VERIFY_FAILED", {"candidate": "pending", "cause": pending_result})
@@ -56,7 +87,7 @@ func save(profile: Dictionary) -> Dictionary:
 
 	var had_verified_primary := false
 	if FileAccess.file_exists(primary_path()):
-		var primary_result := _load_candidate(primary_path(), "primary")
+		var primary_result := _load_candidate(primary_path(), "primary", SCHEMA_VERSION)
 		if bool(primary_result["ok"]):
 			_remove_if_present(backup_path())
 			var backup_error := DirAccess.copy_absolute(primary_path(), backup_path())
@@ -75,7 +106,7 @@ func save(profile: Dictionary) -> Dictionary:
 		_remove_if_present(pending_path())
 		return _failure("IO_ERROR", {"operation": "promote", "error": promote_error})
 
-	var promoted_result := _load_candidate(primary_path(), "primary")
+	var promoted_result := _load_candidate(primary_path(), "primary", SCHEMA_VERSION)
 	if not bool(promoted_result["ok"]) or promoted_result["profile"] != profile:
 		_remove_if_present(primary_path())
 		_restore_backup_if_needed(had_verified_primary)
@@ -87,10 +118,10 @@ func load() -> Dictionary:
 	var readiness := _require_configured()
 	if not bool(readiness["ok"]):
 		return readiness
-	var primary_result := _load_candidate(primary_path(), "primary")
+	var primary_result := _load_candidate(primary_path(), "primary", SCHEMA_VERSION)
 	if bool(primary_result["ok"]):
 		return primary_result
-	var backup_result := _load_candidate(backup_path(), "backup_1")
+	var backup_result := _load_candidate(backup_path(), "backup_2", SCHEMA_VERSION)
 	if bool(backup_result["ok"]):
 		backup_result["code"] = "RECOVERED"
 		backup_result["diagnostics"] = [{
@@ -98,24 +129,71 @@ func load() -> Dictionary:
 			"code": primary_result.get("code", "CORRUPT"),
 		}]
 		return backup_result
-	if primary_result.get("code") == "NOT_FOUND" and backup_result.get("code") == "NOT_FOUND":
+
+	var legacy_primary_result := _load_candidate(
+		legacy_primary_path(),
+		"legacy_primary",
+		LEGACY_SCHEMA_VERSION
+	)
+	if bool(legacy_primary_result["ok"]):
+		legacy_primary_result["code"] = "MIGRATION_REQUIRED"
+		return legacy_primary_result
+	var legacy_backup_result := _load_candidate(
+		legacy_backup_path(),
+		"legacy_backup",
+		LEGACY_SCHEMA_VERSION
+	)
+	if bool(legacy_backup_result["ok"]):
+		legacy_backup_result["code"] = "RECOVERED_MIGRATION_REQUIRED"
+		legacy_backup_result["diagnostics"] = [{
+			"candidate": "legacy_primary",
+			"code": legacy_primary_result.get("code", "CORRUPT"),
+		}]
+		return legacy_backup_result
+
+	if (
+		primary_result.get("code") == "NOT_FOUND"
+		and backup_result.get("code") == "NOT_FOUND"
+		and legacy_primary_result.get("code") == "NOT_FOUND"
+		and legacy_backup_result.get("code") == "NOT_FOUND"
+	):
 		return _failure("NOT_FOUND")
 	return _failure("CORRUPT", {
 		"primary": primary_result,
-		"backup_1": backup_result,
+		"backup_2": backup_result,
+		"legacy_primary": legacy_primary_result,
+		"legacy_backup": legacy_backup_result,
 	})
 
 
 func validate_profile(profile: Dictionary) -> Dictionary:
+	return _validate_profile_for_actions(profile, SCHEMA_VERSION, PROFILE_ACTIONS)
+
+
+func _validate_legacy_profile(profile: Dictionary) -> Dictionary:
+	return _validate_profile_for_actions(
+		profile,
+		LEGACY_SCHEMA_VERSION,
+		InputActionContractScript.required_actions()
+	)
+
+
+func _validate_profile_for_actions(
+	profile: Dictionary,
+	expected_schema_version: int,
+	required_actions: Array[StringName]
+) -> Dictionary:
 	if not _has_exact_fields(profile, ["schema_version", "bindings"]):
 		return _failure("INVALID_PROFILE", {"field": "profile", "reason": "fields"})
-	if typeof(profile.get("schema_version")) != TYPE_INT or int(profile["schema_version"]) != SCHEMA_VERSION:
+	if (
+		typeof(profile.get("schema_version")) != TYPE_INT
+		or int(profile["schema_version"]) != expected_schema_version
+	):
 		return _failure("INVALID_PROFILE", {"field": "schema_version", "reason": "version"})
 	if typeof(profile.get("bindings")) != TYPE_DICTIONARY:
 		return _failure("INVALID_PROFILE", {"field": "bindings", "reason": "type"})
 
 	var bindings: Dictionary = profile["bindings"]
-	var required_actions: Array[StringName] = InputActionContractScript.required_actions()
 	if bindings.size() != required_actions.size():
 		return _failure("INVALID_PROFILE", {"field": "bindings", "reason": "action_count"})
 	for action_value: Variant in bindings.keys():
@@ -172,7 +250,7 @@ func validate_profile(profile: Dictionary) -> Dictionary:
 	return {"ok": true, "code": "OK"}
 
 
-func _load_candidate(path: String, source: String) -> Dictionary:
+func _load_candidate(path: String, source: String, expected_schema_version: int) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return _failure("NOT_FOUND", {"path": path, "source": source})
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -187,7 +265,11 @@ func _load_candidate(path: String, source: String) -> Dictionary:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return _failure("CORRUPT", {"path": path, "source": source, "reason": "json"})
 	var profile := _normalize_json_profile(parsed as Dictionary)
-	var validation := validate_profile(profile)
+	var validation := (
+		_validate_legacy_profile(profile)
+		if expected_schema_version == LEGACY_SCHEMA_VERSION
+		else validate_profile(profile)
+	)
 	if not bool(validation["ok"]):
 		return _failure("CORRUPT", {"path": path, "source": source, "reason": validation})
 	return _success(profile, source, "OK")

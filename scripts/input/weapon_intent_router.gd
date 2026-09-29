@@ -3,15 +3,23 @@ extends RefCounted
 
 const LEGACY_SCHEMA_VERSION := 1
 const CURRENT_SCHEMA_VERSION := 2
-const LEGACY_WEAPON_ACTIONS := {
+const LEGACY_ACTIONS := {
 	&"attack": &"weapon_primary",
 	&"ranged_attack": &"weapon_primary",
 	&"heavy_attack": &"weapon_secondary",
+	&"time_stop": &"time_slot_1",
+	&"time_rift": &"time_slot_1",
+	&"time_rewind": &"time_slot_2",
+	&"time_accelerate": &"time_slot_2",
 }
 const LEGACY_MIGRATION_ORDER: Array[StringName] = [
 	&"attack",
 	&"ranged_attack",
 	&"heavy_attack",
+	&"time_stop",
+	&"time_rift",
+	&"time_rewind",
+	&"time_accelerate",
 ]
 const SEMANTIC_ACTIONS: Array[StringName] = [
 	&"weapon_primary",
@@ -49,14 +57,14 @@ func migrate_profile(profile: Dictionary) -> Dictionary:
 	if schema_version != LEGACY_SCHEMA_VERSION or not _bindings_are_valid(source_bindings, false):
 		return {}
 
-	for semantic_action: StringName in LEGACY_WEAPON_ACTIONS.values():
+	for semantic_action: StringName in LEGACY_ACTIONS.values():
 		if source_bindings.has(str(semantic_action)) or source_bindings.has(semantic_action):
 			return {}
 
 	var migrated_bindings: Dictionary = {}
 	for action_value: Variant in source_bindings.keys():
 		var action_id := StringName(str(action_value))
-		if LEGACY_WEAPON_ACTIONS.has(action_id):
+		if LEGACY_ACTIONS.has(action_id):
 			continue
 		migrated_bindings[str(action_id)] = source_bindings[action_value].duplicate(true)
 
@@ -64,7 +72,7 @@ func migrate_profile(profile: Dictionary) -> Dictionary:
 		var source_key: Variant = _existing_key(source_bindings, legacy_action)
 		if source_key == null:
 			continue
-		var semantic_action: StringName = LEGACY_WEAPON_ACTIONS[legacy_action]
+		var semantic_action: StringName = LEGACY_ACTIONS[legacy_action]
 		var target_key := str(semantic_action)
 		if not migrated_bindings.has(target_key):
 			migrated_bindings[target_key] = source_bindings[source_key].duplicate(true)
@@ -89,7 +97,7 @@ func normalize_edge(
 	held_frames: int,
 	activation_mode: StringName
 ) -> Dictionary:
-	var semantic_action: StringName = LEGACY_WEAPON_ACTIONS.get(action_id, action_id)
+	var semantic_action: StringName = LEGACY_ACTIONS.get(action_id, action_id)
 	if (
 		not SEMANTIC_ACTIONS.has(semantic_action)
 		or not VALID_EDGES.has(raw_edge)
@@ -110,7 +118,7 @@ func reset() -> void:
 
 
 func reset_action(action_id: StringName) -> bool:
-	var semantic_action: StringName = LEGACY_WEAPON_ACTIONS.get(action_id, action_id)
+	var semantic_action: StringName = LEGACY_ACTIONS.get(action_id, action_id)
 	if not SEMANTIC_ACTIONS.has(semantic_action):
 		return false
 	_active_actions.erase(semantic_action)
@@ -180,7 +188,7 @@ func _bindings_are_valid(bindings: Dictionary, reject_legacy_weapon_actions: boo
 		var action_id := StringName(str(key_value))
 		if action_id == &"":
 			return false
-		if reject_legacy_weapon_actions and LEGACY_WEAPON_ACTIONS.has(action_id):
+		if reject_legacy_weapon_actions and LEGACY_ACTIONS.has(action_id):
 			return false
 		if not _binding_set_is_valid(bindings[key_value]):
 			return false

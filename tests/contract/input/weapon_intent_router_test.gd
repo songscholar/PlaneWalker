@@ -13,6 +13,7 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_test_legacy_profile_migration()
+	_test_legacy_time_bindings_merge_in_stable_slot_order()
 	_test_migration_rejects_ambiguous_or_invalid_profiles()
 	_test_schema_two_profiles_are_isolated()
 	_test_hold_and_toggle_modes_emit_equivalent_edges()
@@ -40,7 +41,22 @@ func _test_legacy_profile_migration() -> void:
 				"controller": [{"type": "joypad_button", "button_index": JOY_BUTTON_B}],
 			},
 			"dash": [{"type": "key", "physical_keycode": KEY_SPACE}],
-			"time_stop": [{"type": "key", "physical_keycode": KEY_Q}],
+		"time_stop": {
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_Q}],
+			"controller": [{"type": "joypad_button", "button_index": JOY_BUTTON_LEFT_SHOULDER}],
+		},
+		"time_rewind": {
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_E}],
+			"controller": [{"type": "joypad_button", "button_index": JOY_BUTTON_RIGHT_SHOULDER}],
+		},
+		"time_rift": {
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_R}],
+			"controller": [{"type": "joypad_axis", "axis": JOY_AXIS_TRIGGER_LEFT, "direction": 1}],
+		},
+		"time_accelerate": {
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_F}],
+			"controller": [{"type": "joypad_button", "button_index": JOY_BUTTON_BACK}],
+		},
 		},
 	}
 	var original := legacy.duplicate(true)
@@ -75,16 +91,71 @@ func _test_legacy_profile_migration() -> void:
 		"non-weapon bindings survive migration"
 	)
 	_suite.assert_equal(
-		migrated.get("bindings", {}).get("time_stop", []),
-		legacy["bindings"]["time_stop"],
-		"fixed time bindings remain available to the one-version compatibility adapter"
+		migrated.get("bindings", {}).get("time_slot_1", []),
+		{
+			"keyboard_mouse": [
+				{"type": "key", "physical_keycode": KEY_Q},
+				{"type": "key", "physical_keycode": KEY_R},
+			],
+			"controller": [
+				{"type": "joypad_button", "button_index": JOY_BUTTON_LEFT_SHOULDER},
+				{"type": "joypad_axis", "axis": JOY_AXIS_TRIGGER_LEFT, "direction": 1},
+			],
+		},
+		"legacy stop then rift bindings merge into slot one without loss"
+	)
+	_suite.assert_equal(
+		migrated.get("bindings", {}).get("time_slot_2", []),
+		{
+			"keyboard_mouse": [
+				{"type": "key", "physical_keycode": KEY_E},
+				{"type": "key", "physical_keycode": KEY_F},
+			],
+			"controller": [
+				{"type": "joypad_button", "button_index": JOY_BUTTON_RIGHT_SHOULDER},
+				{"type": "joypad_button", "button_index": JOY_BUTTON_BACK},
+			],
+		},
+		"legacy rewind then accelerate bindings merge into slot two without loss"
 	)
 	_suite.assert_true(not migrated.get("bindings", {}).has("attack"), "legacy attack key is retired in the migrated copy")
 	_suite.assert_true(not migrated.get("bindings", {}).has("heavy_attack"), "legacy heavy key is retired in the migrated copy")
 	_suite.assert_true(not migrated.get("bindings", {}).has("ranged_attack"), "legacy ranged key is retired in the migrated copy")
+	for legacy_time_action: String in ["time_stop", "time_rewind", "time_rift", "time_accelerate"]:
+		_suite.assert_true(
+			not migrated.get("bindings", {}).has(legacy_time_action),
+			"legacy fixed time key is retired after slot migration: %s" % legacy_time_action
+		)
 
 	(migrated["bindings"]["weapon_primary"]["keyboard_mouse"] as Array)[0]["physical_keycode"] = KEY_K
 	_suite.assert_equal(legacy, original, "migration never mutates the persisted source profile")
+
+
+func _test_legacy_time_bindings_merge_in_stable_slot_order() -> void:
+	var router = WeaponIntentRouterScript.new()
+	var duplicate_q := {"type": "key", "physical_keycode": KEY_Q}
+	var migrated: Dictionary = router.migrate_profile({
+		"schema_version": 1,
+		"bindings": {
+			"time_stop": {"keyboard_mouse": [duplicate_q], "controller": []},
+			"time_rewind": {"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_E}], "controller": []},
+			"time_rift": {"keyboard_mouse": [duplicate_q], "controller": []},
+			"time_accelerate": {"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_F}], "controller": []},
+		},
+	})
+	_suite.assert_equal(
+		migrated.get("bindings", {}).get("time_slot_1", {}).get("keyboard_mouse", []),
+		[duplicate_q],
+		"slot one deduplicates after applying stop then rift order"
+	)
+	_suite.assert_equal(
+		migrated.get("bindings", {}).get("time_slot_2", {}).get("keyboard_mouse", []),
+		[
+			{"type": "key", "physical_keycode": KEY_E},
+			{"type": "key", "physical_keycode": KEY_F},
+		],
+		"slot two keeps rewind then accelerate order"
+	)
 
 
 func _test_migration_rejects_ambiguous_or_invalid_profiles() -> void:

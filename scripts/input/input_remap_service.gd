@@ -3,11 +3,20 @@ extends RefCounted
 
 signal bindings_changed(action: StringName)
 
-const InputActionContractScript := preload("res://scripts/input/input_action_contract.gd")
 const InputBindingCodecScript := preload("res://scripts/input/input_binding_codec.gd")
 const InputProfileStoreScript := preload("res://scripts/input/input_profile_store.gd")
+const WeaponIntentRouterScript := preload("res://scripts/input/weapon_intent_router.gd")
 
 const BINDING_FAMILIES: Array[String] = ["keyboard_mouse", "controller"]
+const RETIRED_ACTIONS: Array[StringName] = [
+	&"attack",
+	&"heavy_attack",
+	&"ranged_attack",
+	&"time_stop",
+	&"time_rewind",
+	&"time_rift",
+	&"time_accelerate",
+]
 const AXIS_CAPTURE_THRESHOLD := 0.75
 const JOYPAD_BUTTON_LABELS: Array[String] = [
 	"A", "B", "X", "Y", "Back", "Guide", "Start", "Left Stick", "Right Stick",
@@ -33,6 +42,10 @@ func configure(root_path: String = "user://plane_walker/input", store_override: 
 	_store.configure(root_path)
 
 
+func remappable_actions() -> Array[StringName]:
+	return InputProfileStoreScript.profile_actions()
+
+
 func load_or_defaults() -> Dictionary:
 	var readiness := _require_configured()
 	if not bool(readiness["ok"]):
@@ -40,6 +53,8 @@ func load_or_defaults() -> Dictionary:
 	var loaded: Dictionary = _store.load()
 	if bool(loaded.get("ok", false)):
 		var profile: Dictionary = loaded.get("profile", {})
+		if int(profile.get("schema_version", 0)) == WeaponIntentRouterScript.LEGACY_SCHEMA_VERSION:
+			return _migrate_loaded_profile(loaded, profile)
 		if not _apply_profile(profile):
 			return _failure("APPLY_FAILED")
 		return {
@@ -49,12 +64,12 @@ func load_or_defaults() -> Dictionary:
 			"source": loaded.get("source", "primary"),
 		}
 
-	var before := snapshot_profile()
+	var runtime_before := _snapshot_runtime_events()
 	if not _apply_profile(_default_profile):
 		return _failure("APPLY_FAILED")
 	var saved: Dictionary = _store.save(_default_profile)
 	if not bool(saved.get("ok", false)):
-		_apply_profile(before)
+		_restore_runtime_events(runtime_before)
 		return saved
 	return {
 		"ok": true,
@@ -68,7 +83,7 @@ func remap(action: StringName, family: StringName, event: InputEvent) -> Diction
 	var readiness := _require_configured()
 	if not bool(readiness["ok"]):
 		return readiness
-	if not InputActionContractScript.required_actions().has(action):
+	if not remappable_actions().has(action):
 		return _failure("UNKNOWN_ACTION", {"action": str(action)})
 	if str(family) not in BINDING_FAMILIES:
 		return _failure("UNKNOWN_BINDING_FAMILY", {"family": str(family)})
@@ -133,7 +148,7 @@ func reset_action(action: StringName) -> Dictionary:
 	var readiness := _require_configured()
 	if not bool(readiness["ok"]):
 		return readiness
-	if not InputActionContractScript.required_actions().has(action):
+	if not remappable_actions().has(action):
 		return _failure("UNKNOWN_ACTION", {"action": str(action)})
 	var before := snapshot_profile()
 	var candidate := before.duplicate(true)
@@ -166,7 +181,7 @@ func reset_all() -> Dictionary:
 		return readiness
 	var before := snapshot_profile()
 	var candidate := _default_profile.duplicate(true)
-	return _persist_candidate(before, candidate, InputActionContractScript.required_actions(), "RESET_ALL")
+	return _persist_candidate(before, candidate, remappable_actions(), "RESET_ALL")
 
 
 func binding_labels(action: StringName) -> Dictionary:
@@ -174,7 +189,7 @@ func binding_labels(action: StringName) -> Dictionary:
 		"keyboard_mouse": [],
 		"controller": [],
 	}
-	if not InputActionContractScript.required_actions().has(action):
+	if not remappable_actions().has(action):
 		return labels
 	var profile := snapshot_profile()
 	for family: String in BINDING_FAMILIES:
@@ -185,6 +200,66 @@ func binding_labels(action: StringName) -> Dictionary:
 
 func snapshot_profile() -> Dictionary:
 	return _profile_from_runtime()
+
+
+func _migrate_loaded_profile(loaded: Dictionary, legacy_profile: Dictionary) -> Dictionary:
+	var migrated: Dictionary = WeaponIntentRouterScript.new().migrate_profile(legacy_profile)
+	if migrated.is_empty():
+		return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
+	var migrated_bindings: Dictionary = migrated.get("bindings", {})
+	for action: StringName in remappable_actions():
+		var action_id := str(action)
+		if migrated_bindings.has(action_id):
+			continue
+		migrated_bindings[action_id] = _default_profile["bindings"][action_id].duplicate(true)
+	migrated["bindings"] = migrated_bindings
+
+	var validation: Dictionary = _store.validate_profile(migrated)
+	if not bool(validation.get("ok", false)):
+		return _failure("MIGRATION_FAILED", {
+			"source": loaded.get("source", "unknown"),
+			"cause": validation,
+		})
+	var runtime_before := _snapshot_runtime_events()
+	if not _apply_profile(migrated):
+		_restore_runtime_events(runtime_before)
+		return _failure("APPLY_FAILED")
+	var saved: Dictionary = _store.save(migrated)
+	if not bool(saved.get("ok", false)):
+		_restore_runtime_events(runtime_before)
+		return saved
+	return {
+		"ok": true,
+		"code": (
+			"RECOVERED_MIGRATED"
+			if str(loaded.get("code", "")).begins_with("RECOVERED_")
+			else "MIGRATED"
+		),
+		"profile": migrated.duplicate(true),
+		"source": loaded.get("source", "legacy_primary"),
+	}
+
+
+func _snapshot_runtime_events() -> Dictionary:
+	var snapshot := {}
+	var actions := remappable_actions()
+	for retired_action: StringName in RETIRED_ACTIONS:
+		if not actions.has(retired_action):
+			actions.append(retired_action)
+	for action: StringName in actions:
+		var events: Array[InputEvent] = []
+		for event: InputEvent in InputMap.action_get_events(action):
+			events.append(event.duplicate(true) as InputEvent)
+		snapshot[action] = events
+	return snapshot
+
+
+func _restore_runtime_events(snapshot: Dictionary) -> void:
+	for action_value: Variant in snapshot.keys():
+		var action := StringName(str(action_value))
+		InputMap.action_erase_events(action)
+		for event: InputEvent in snapshot[action_value]:
+			InputMap.action_add_event(action, event)
 
 
 func _persist_candidate(
@@ -210,17 +285,17 @@ func _persist_candidate(
 
 func _profile_from_project_settings() -> Dictionary:
 	var bindings := {}
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in remappable_actions():
 		var action_setting: Dictionary = ProjectSettings.get_setting("input/%s" % action, {})
 		bindings[str(action)] = _records_by_family(action_setting.get("events", []))
-	return {"schema_version": 1, "bindings": bindings}
+	return {"schema_version": InputProfileStoreScript.SCHEMA_VERSION, "bindings": bindings}
 
 
 func _profile_from_runtime() -> Dictionary:
 	var bindings := {}
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in remappable_actions():
 		bindings[str(action)] = _records_by_family(InputMap.action_get_events(action))
-	return {"schema_version": 1, "bindings": bindings}
+	return {"schema_version": InputProfileStoreScript.SCHEMA_VERSION, "bindings": bindings}
 
 
 func _records_by_family(events: Array) -> Dictionary:
@@ -242,7 +317,8 @@ func _records_by_family(events: Array) -> Dictionary:
 
 
 func _apply_profile(profile: Dictionary) -> bool:
-	for action: StringName in InputActionContractScript.required_actions():
+	var decoded_by_action := {}
+	for action: StringName in remappable_actions():
 		var action_id := str(action)
 		if not profile.get("bindings", {}).has(action_id):
 			return false
@@ -253,9 +329,13 @@ func _apply_profile(profile: Dictionary) -> bool:
 				if decoded == null:
 					return false
 				decoded_events.append(decoded)
+		decoded_by_action[action] = decoded_events
+	for action: StringName in remappable_actions():
 		InputMap.action_erase_events(action)
-		for event: InputEvent in decoded_events:
+		for event: InputEvent in decoded_by_action[action]:
 			InputMap.action_add_event(action, event)
+	for retired_action: StringName in RETIRED_ACTIONS:
+		InputMap.action_erase_events(retired_action)
 	return true
 
 
@@ -275,7 +355,7 @@ func _would_remove_last_pause_binding(
 
 
 func _find_owner(profile: Dictionary, family: String, canonical_id: String) -> String:
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in remappable_actions():
 		var records: Array = profile["bindings"][str(action)][family]
 		if _record_index(records, canonical_id) >= 0:
 			return str(action)

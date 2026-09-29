@@ -36,7 +36,23 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var rows: VBoxContainer = panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows")
-	_suite.assert_equal(rows.get_child_count(), 14, "panel renders exactly fourteen action rows")
+	_suite.assert_equal(rows.get_child_count(), 14, "panel renders movement and fourteen semantic-profile rows")
+	for semantic_row: String in [
+		"Row_weapon_primary", "Row_weapon_secondary", "Row_weapon_utility",
+		"Row_weapon_skill", "Row_weapon_ultimate", "Row_time_slot_1", "Row_time_slot_2",
+	]:
+		_suite.assert_true(rows.has_node(semantic_row), "panel exposes semantic remap row %s" % semantic_row)
+	_suite.assert_true(not rows.has_node("Row_attack"), "legacy Attack row leaves the schema two UI")
+	_suite.assert_equal(
+		panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_weapon_primary/ActionLabel").text,
+		tr("INPUT_ACTION_WEAPON_PRIMARY"),
+		"semantic primary row uses its localized display name"
+	)
+	_suite.assert_equal(
+		panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_time_slot_1/ActionLabel").text,
+		tr("INPUT_ACTION_TIME_SLOT_1"),
+		"time slot row uses its localized display name"
+	)
 	_suite.assert_true(panel.get_node("SafeArea/PanelRoot").size.x <= 608.0, "panel fits horizontal safe area")
 	_suite.assert_true(panel.get_node("SafeArea/PanelRoot").size.y <= 328.0, "panel fits vertical safe area")
 	var first_binding := rows.get_child(0).get_node("KeyboardMouseBinding") as Button
@@ -44,15 +60,15 @@ func _run() -> void:
 	var move_up_controller := panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_move_up/ControllerBinding") as Button
 	_suite.assert_equal(move_up_controller.text, "Left Stick Up / D-pad Up", "controller labels use readable directional names")
 
-	var attack_controller := panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_attack/ControllerBinding") as Button
-	var heavy_controller := panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_heavy_attack/ControllerBinding") as Button
+	var attack_controller := panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_weapon_primary/ControllerBinding") as Button
+	var heavy_controller := panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_weapon_secondary/ControllerBinding") as Button
 	attack_controller.pressed.emit()
 	await get_tree().process_frame
 	_suite.assert_true(panel.get_node("CaptureOverlay").visible, "binding button opens capture overlay")
 	Input.parse_input_event(_joy_button(JOY_BUTTON_Y))
 	await get_tree().process_frame
-	_suite.assert_equal(attack_controller.text, "Y", "captured Y remaps Attack controller")
-	_suite.assert_equal(heavy_controller.text, "X", "conflict swap moves X to Heavy Attack")
+	_suite.assert_equal(attack_controller.text, "Y", "captured Y remaps Primary controller")
+	_suite.assert_equal(heavy_controller.text, "X", "conflict swap moves X to Secondary")
 	_suite.assert_equal(panel.get_node("SafeArea/PanelRoot/Layout/StatusLabel").text, tr("UI_BINDING_CONFLICT_SWAPPED"), "swap is disclosed")
 
 	var before_cancel := service.snapshot_profile()
@@ -66,8 +82,8 @@ func _run() -> void:
 	panel.get_node("SafeArea/PanelRoot/Layout/Footer/ResetAllButton").pressed.emit()
 	await get_tree().process_frame
 	_suite.assert_equal(service.snapshot_profile(), _default_profile, "Reset All restores the Task 1 defaults")
-	_suite.assert_equal(attack_controller.text, "X", "Reset All refreshes Attack label")
-	_suite.assert_equal(heavy_controller.text, "Y", "Reset All refreshes Heavy Attack label")
+	_suite.assert_equal(attack_controller.text, "X", "Reset All refreshes Primary label")
+	_suite.assert_equal(heavy_controller.text, "Y", "Reset All refreshes Secondary label")
 
 	restore_button.grab_focus()
 	await get_tree().process_frame
