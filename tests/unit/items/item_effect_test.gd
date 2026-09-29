@@ -82,4 +82,3 @@ func _test_item_effect_does_not_reach_weapon_nodes() -> void:
 		not source.contains("player.bow_weapon"),
 		"item effects do not directly access the bow presentation node"
 	)
-

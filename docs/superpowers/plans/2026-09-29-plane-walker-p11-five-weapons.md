@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-29
-- Implementation Status: P11A certified through commits `245b533`, `ed03dff`, and `5369bf9`; P11B Sword migration is active and later gates remain pending
+- Implementation Status: P11A certified through commits `245b533`, `ed03dff`, and `5369bf9`; P11B Sword migration is locally certified through `1ff2600`; P11C Bow is active and later gates remain pending
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -265,7 +265,7 @@ git commit -m "feat(input): add semantic weapon intents"
 - Consumes: `sword_m1_v1`, coordinator semantic intents, `Stats.attack`, and frozen modifiers.
 - Produces: the exact existing three-light/heavy M1 behavior through the shared coordinator plus Sword presentation state.
 
-- [ ] **Step 1: Add parity assertions for exact M1 frame tables and facts**
+- [x] **Step 1: Add parity assertions for exact M1 frame tables and facts**
 
 ```gdscript
 const M1_EXPECTED := [
@@ -276,25 +276,25 @@ const M1_EXPECTED := [
 ]
 ```
 
-- [ ] **Step 2: Run parity tests against the old path and record GREEN baseline**
+- [x] **Step 2: Run parity tests against the old path and record GREEN baseline**
 
 Run: `./tools/run_tests.sh --filter "player_action_runtime|reward_system_smoke|rewind_action_cancellation|combat_event_publication"`
 
-- [ ] **Step 3: Route Sword through the coordinator**
+- [x] **Step 3: Route Sword through the coordinator**
 
 `PlayerController` owns no Sword action fields. It delegates semantic intents, frame advance, movement multiplier, cancel, reset, snapshot, and presentation reads to the coordinator. `SwordWeapon` becomes a payload adapter used by `SwordWeaponRuntime`; it does not publish facts or own an action clock.
 
-- [ ] **Step 4: Preserve release-frame feedback timing**
+- [x] **Step 4: Preserve release-frame feedback timing**
 
 Bind swing animation/audio/VFX to the profile Active cue, not to the earlier transaction fact. Replace Pixel Proxy child-name lookup with `presentation_snapshot().facing`.
 
-- [ ] **Step 5: Run focused and M1 repository gates**
+- [x] **Step 5: Run focused and M1 repository gates**
 
 Run: `./tools/run_tests.sh --filter "player_action|sword|reward_system_smoke|combat_feedback|rewind_action|m1"`
 
 Expected: all prior M1 values and behaviors pass unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -- scripts/combat/weapons/sword_weapon_runtime.gd scripts/combat/sword_weapon.gd scripts/player scripts/items/item_effect.gd scenes/player/player.tscn autoload/combat_feedback.gd scripts/presentation/pixel_proxy_actor.gd tests/player tests/time/rewind_action_cancellation_test.gd tests/reward_system_smoke.gd
