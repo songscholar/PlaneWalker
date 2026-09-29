@@ -646,6 +646,27 @@ class DocumentGovernanceTest(unittest.TestCase):
             [],
         )
 
+    def test_p10_candidate_evidence_preserves_the_promotion_gate(self) -> None:
+        evidence_path = (
+            PROJECT_ROOT
+            / "docs/current/2026-09-29-p10-candidate-loadouts-evidence.md"
+        )
+        self.assertTrue(evidence_path.is_file())
+        evidence = evidence_path.read_text(encoding="utf-8")
+        readme = (PROJECT_ROOT / "docs/README.md").read_text(encoding="utf-8")
+
+        for required_text in (
+            "Evidence Status: Verified Locally",
+            "M1 Candidate — External Validation Pending",
+            "0 / 20",
+            "Bow, Rift, and Accelerate are not formally promoted to Current",
+        ):
+            self.assertIn(required_text, evidence)
+        self.assertIn(
+            "Post-M1 Promotion | Not started / Evidence-gated",
+            readme,
+        )
+
     def test_p8_completion_has_no_baselined_or_new_violations(self) -> None:
         report = validate_repository(
             PROJECT_ROOT,

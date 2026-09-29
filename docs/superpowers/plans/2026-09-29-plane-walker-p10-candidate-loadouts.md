@@ -1,13 +1,14 @@
 # Plane Walker P10 Candidate Loadouts Implementation Plan
 
-- Status: Active / Current
-- Document Role: Current implementation plan
-- Authority Level: Post-M1 candidate-loadout execution plan
+- Status: Completed / Historical
+- Document Role: Historical implementation record
+- Authority Level: Preserved P10A candidate-loadout regression evidence
 - Applies To: Data-driven character/weapon/time-ability identities, candidate availability, authoritative run-loadout validation, player runtime activation, two-slot HUD presentation, and local candidate-lab verification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-09-29
-- Exit Gate: The base pack contains the authoritative five characters, five weapons, and four time abilities; every run validates one character, one weapon, and exactly two distinct time abilities against milestone availability; M1 remains Sword plus Stop/Rewind; Bow, Rift, and Accelerate are usable only through a clearly labelled local candidate path; equipped actions, HUD slots, typed facts, and cleanup pass focused and unified verification without claiming formal Current promotion
+- Implementation Status: Verified locally; canonical catalogs, authoritative policy, per-run player activation, Bow/Rift/Accelerate candidate runtime, two-slot HUD, Candidate Lab, six legal time pairs, reset, M1 isolation, and exactly-once facts pass the focused and unified repository gates
+- Completion Evidence: Commits `e36f78d90ebda19b6bb7464db8a28d6814d12c9c`, `f60a4222e2c2237ad4026b5bf68e95171017a5f8`, `f8aa3a23c1ac4afab5a028096dd8dc0a582b6ce1`, `fd4812a821874032709bf97aaa53eee5d88482d1`, `1295b59319258a8555a8eec3c27b9a2a593f686d`, `0971f84fbedbbb7c2a6d461720b9e8793e521c3f`, `7d9d1699fe71ef5ecc5efdb0a8cf1c4b38dbc0b2`, `f732f705fbd0590d1a52334c2693038822b1730b`, and `4173b4fa70a0a8137e89e16d45f54846e759878b`; see [P10A candidate-loadout evidence](../../current/2026-09-29-p10-candidate-loadouts-evidence.md)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

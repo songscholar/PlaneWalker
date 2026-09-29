@@ -4,7 +4,7 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P2, P3, P4/P5, P6, and P8 are certified; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
+- Implementation Status: Active; P2, P3, P4/P5, P6, P8, and P10A candidate loadouts are locally certified; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
@@ -288,7 +288,7 @@ The foundation is executed as hard-gated phases:
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
 
-P2, P3, P4/P5, P6, and P8 completion evidence is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
+P2, P3, P4/P5, P6, P8, and P10A candidate-loadout completion evidence is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
 
 ## 10. Delivery Sequence After Foundation
 
@@ -307,6 +307,8 @@ After P0–P9, work continues in dependency order:
 11. Boss Rush, daily/authored challenges, and endless mode.
 12. Replay, ranking, provider integrations, Mod support, operations tooling, cosmetics, and content-pack/DLC delivery.
 13. Clean-checkout product certification and release-operation checklist.
+
+P10A completed the canonical `5 / 5 / 4` character, weapon, and time-ability identity catalog, candidate-only Bow/Rift/Accelerate runtime, configuration-driven two-slot HUD, local Candidate Lab, and all six legal time-pair verification on 2026-09-29. This is locally verified preparation for the evidence-based promotion decision. It does not satisfy delivery step 2, change Quick Start, or promote Bow, Rift, or Accelerate to Current; authentic external playtest evidence remains `0 / 20`.
 
 Parallel agents may work on independent lanes, but shared contracts, manifests, autoloads, and assembly scenes have one integration owner.
 
