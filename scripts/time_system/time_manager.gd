@@ -61,6 +61,7 @@ var _time_accelerate_remaining: float = 0.0
 var _time_accelerate_active: bool = false
 var _time_accelerate_token: int = 0
 var _time_accelerate_publish_lifecycle: bool = false
+var _resource_revision: int = 1
 
 
 func _ready() -> void:
@@ -77,11 +78,14 @@ func _process(delta: float) -> void:
 
 func configure_from_stats(stats: Resource) -> void:
 	var previous_max_energy := max_energy
+	var previous_energy := energy
 	max_energy = stats.time_energy_max
 	energy_regen = stats.time_energy_regen
 	if max_energy > previous_max_energy:
 		energy += max_energy - previous_max_energy
 	energy = clampf(energy, 0.0, max_energy)
+	if max_energy != previous_max_energy or energy != previous_energy:
+		_resource_revision += 1
 	energy_changed.emit(energy, max_energy)
 
 
@@ -308,6 +312,9 @@ func reset_runtime_state() -> void:
 	_end_time_accelerate(_time_accelerate_token, false)
 	_time_accelerate_token += 1
 	energy = max_energy
+	# A full runtime reset invalidates any prepared external-resource ticket even
+	# when the numeric balance was already at maximum.
+	_resource_revision += 1
 	energy_changed.emit(energy, max_energy)
 	for skill_id: StringName in _cooldowns.keys():
 		_cooldowns[skill_id] = 0.0
@@ -320,8 +327,87 @@ func reset_runtime_state() -> void:
 
 
 func restore_energy(amount: float) -> void:
+	if not is_finite(amount) or amount <= 0.0:
+		return
+	var energy_before := energy
 	energy = minf(max_energy, energy + amount)
+	if energy != energy_before:
+		_resource_revision += 1
 	energy_changed.emit(energy, max_energy)
+
+
+func resource_state(resource_id: StringName) -> Dictionary:
+	if resource_id != &"time_energy":
+		return {
+			"ok": false,
+			"code": &"RESOURCE_NOT_FOUND",
+			"context": {"resource_id": str(resource_id)},
+		}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"resource_id": "time_energy",
+		"current": energy,
+		"minimum": 0.0,
+		"maximum": max_energy,
+		"revision": _resource_revision,
+		"context": {},
+	}
+
+
+func try_spend_resource(
+	resource_id: StringName,
+	amount: float,
+	expected_revision: int,
+	reason: StringName
+) -> Dictionary:
+	if resource_id != &"time_energy":
+		return {
+			"ok": false,
+			"code": &"RESOURCE_NOT_FOUND",
+			"context": {"resource_id": str(resource_id)},
+		}
+	if not is_finite(amount) or amount < 0.0:
+		return {
+			"ok": false,
+			"code": &"INVALID_RESOURCE_AMOUNT",
+			"context": {"resource_id": str(resource_id)},
+		}
+	if expected_revision != _resource_revision:
+		return {
+			"ok": false,
+			"code": &"RESOURCE_REVISION_MISMATCH",
+			"context": {
+				"resource_id": str(resource_id),
+				"expected_revision": expected_revision,
+				"actual_revision": _resource_revision,
+			},
+		}
+	if energy < amount:
+		return {
+			"ok": false,
+			"code": &"INSUFFICIENT_RESOURCE",
+			"context": {
+				"resource_id": str(resource_id),
+				"required": amount,
+				"current": energy,
+			},
+		}
+	var before := energy
+	if amount > 0.0:
+		energy = maxf(0.0, energy - amount)
+		_resource_revision += 1
+		energy_changed.emit(energy, max_energy)
+	return {
+		"ok": true,
+		"code": &"OK",
+		"resource_id": str(resource_id),
+		"before": before,
+		"after": energy,
+		"revision": _resource_revision,
+		"reason": str(reason),
+		"context": {},
+	}
 
 
 func get_cooldown(skill_id: StringName) -> float:
@@ -332,7 +418,10 @@ func _regen_energy(delta: float) -> void:
 	if energy >= max_energy:
 		return
 	var regen_multiplier := low_energy_regen_multiplier if energy < low_energy_threshold else 1.0
+	var energy_before := energy
 	energy = minf(max_energy, energy + energy_regen * regen_multiplier * delta)
+	if energy != energy_before:
+		_resource_revision += 1
 	energy_changed.emit(energy, max_energy)
 
 
@@ -362,7 +451,10 @@ func _can_pay(skill_id: StringName, cost: float) -> bool:
 
 
 func _pay_cost(skill_id: StringName, cost: float, cooldown: float) -> void:
+	var energy_before := energy
 	energy = maxf(0.0, energy - cost)
+	if energy != energy_before:
+		_resource_revision += 1
 	_cooldowns[skill_id] = cooldown
 	energy_changed.emit(energy, max_energy)
 	cooldown_changed.emit(skill_id, cooldown)
