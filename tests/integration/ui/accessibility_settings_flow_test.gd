@@ -3,6 +3,8 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const SaveServiceScript := preload("res://scripts/save/save_service.gd")
+const AccessibilityRuntimeScript := preload("res://scripts/accessibility/accessibility_runtime.gd")
+const SubtitlePresenterScript := preload("res://scripts/accessibility/subtitle_presenter.gd")
 
 const EXPECTED_DEFAULTS := {
 	"locale": "zh_CN",
@@ -84,6 +86,53 @@ func _run() -> void:
 	GameState.persistent = {}
 	suite.assert_true(GameState.load_persistent(), "expanded settings reload")
 	suite.assert_equal(GameState.normalized_settings(), saved, "every expanded setting survives restart")
+
+	var ui_root := Control.new()
+	var title_label := Label.new()
+	title_label.add_theme_font_size_override("font_size", 16)
+	ui_root.add_child(title_label)
+	var subtitle_presenter = SubtitlePresenterScript.new()
+	ui_root.add_child(subtitle_presenter)
+	add_child(ui_root)
+	var accessibility = AccessibilityRuntimeScript.new()
+	add_child(accessibility)
+	await get_tree().process_frame
+	accessibility.apply_to_tree(ui_root)
+	suite.assert_equal(accessibility.settings_snapshot()["text_scale"], 1.5, "text scale applies immediately")
+	suite.assert_equal(title_label.get_theme_font_size("font_size"), 24, "title text scales from its base size")
+	accessibility.apply_to_tree(ui_root)
+	suite.assert_equal(title_label.get_theme_font_size("font_size"), 24, "reapplying text scale is not cumulative")
+	suite.assert_close(accessibility.damage_received_multiplier(), 0.6, "damage assist is available to gameplay composition")
+	suite.assert_close(accessibility.enemy_telegraph_scale(), 1.5, "telegraph scale is available to presentation")
+
+	suite.assert_true(GameState.set_setting("text_scale", 1.25), "runtime text scale update persists")
+	suite.assert_equal(title_label.get_theme_font_size("font_size"), 20, "setting changes rescale from the stored base")
+	suite.assert_true(GameState.set_setting("subtitles_enabled", false), "subtitle disable persists")
+	subtitle_presenter.present(&"TEST_SUBTITLE", 1.0)
+	suite.assert_true(not subtitle_presenter.visible, "disabled subtitles remain hidden")
+	suite.assert_true(GameState.set_setting("subtitles_enabled", true), "subtitle enable persists")
+	suite.assert_true(GameState.set_setting("subtitle_scale", 1.25), "subtitle scale persists")
+	subtitle_presenter.present(&"TEST_SUBTITLE", 1.0, &"TEST_SPEAKER")
+	suite.assert_true(subtitle_presenter.visible, "enabled subtitles are visible without spoken audio")
+	suite.assert_true(subtitle_presenter.get_snapshot_for_test()["font_size"] >= 20, "subtitle scale increases readable type")
+	suite.assert_true(AudioServer.get_bus_index(&"Music") >= 0, "Music bus exists")
+	suite.assert_true(AudioServer.get_bus_index(&"SFX") >= 0, "SFX bus exists")
+	suite.assert_true(AudioServer.get_bus_index(&"Dialogue") >= 0, "Dialogue bus exists")
+	var music_bus := AudioServer.get_bus_index(&"Music")
+	var sfx_bus := AudioServer.get_bus_index(&"SFX")
+	suite.assert_close(
+		AudioServer.get_bus_volume_db(music_bus),
+		linear_to_db(0.35),
+		"Music volume maps deterministically from linear settings"
+	)
+	suite.assert_true(GameState.set_setting("master_muted", true), "master mute persists")
+	suite.assert_true(AudioServer.is_bus_mute(AudioServer.get_bus_index(&"Master")), "master mute applies to Master")
+	suite.assert_true(not AudioServer.is_bus_mute(sfx_bus), "master mute does not mutate the SFX bus mute flag")
+	suite.assert_true(GameState.set_setting("master_muted", false), "master unmute persists")
+
+	accessibility.queue_free()
+	ui_root.queue_free()
+	await get_tree().process_frame
 
 	GameState.save_path = _original_save_path
 	GameState.persistent = _original_persistent.duplicate(true)

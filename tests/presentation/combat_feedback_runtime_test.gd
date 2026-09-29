@@ -7,6 +7,8 @@ const ChaserScene := preload("res://scenes/enemies/enemy_chaser.tscn")
 const TankScene := preload("res://scenes/enemies/enemy_tank.tscn")
 const BossScene := preload("res://scenes/enemies/boss_chrono_warden.tscn")
 const FloatingTextScript := preload("res://scripts/ui/floating_text_layer.gd")
+const CombatFeedbackOverlayScript := preload("res://scripts/presentation/combat_feedback_overlay.gd")
+const CombatTelegraphScript := preload("res://scripts/fx/combat_telegraph_2d.gd")
 
 var _suite
 
@@ -332,6 +334,42 @@ func _assert_overlay_contract() -> void:
 		"time abilities use distinct overlay shapes"
 	)
 
+	var overlay = CombatFeedbackOverlayScript.new()
+	add_child(overlay)
+	overlay.set_danger_accessibility(true)
+	overlay.set_low_health_ratio(0.2)
+	var danger: Dictionary = overlay.get_snapshot_for_test()
+	_suite.assert_true(bool(danger.get("high_contrast_danger", false)), "danger overlay enables high contrast")
+	_suite.assert_true(
+		_luminance(danger.get("danger_foreground", Color.BLACK))
+			- _luminance(danger.get("danger_background", Color.WHITE)) >= 0.70,
+		"danger overlay preserves at least 0.70 light/dark luminance separation"
+	)
+	_suite.assert_true(not str(danger.get("danger_pattern", "")).is_empty(), "danger remains color-independent through geometry")
+
+	var telegraph = CombatTelegraphScript.new()
+	add_child(telegraph)
+	telegraph.set_accessibility_options(true, 1.5)
+	telegraph.show_telegraph(
+		"test",
+		"circle",
+		Vector2.ZERO,
+		Vector2.RIGHT,
+		Vector2.ZERO,
+		[],
+		20.0,
+		40.0,
+		1.0
+	)
+	var telegraph_snapshot: Dictionary = telegraph.get_snapshot()
+	_suite.assert_close(float(telegraph_snapshot.get("radius", 0.0)), 30.0, "telegraph scale enlarges visual radius")
+	_suite.assert_close(float(telegraph_snapshot.get("length", 0.0)), 60.0, "telegraph scale enlarges visual length")
+	_suite.assert_close(float(telegraph_snapshot.get("remaining", 0.0)), 1.5, "telegraph scale extends visual lead only")
+	_suite.assert_equal(telegraph_snapshot.get("shape"), "circle", "telegraph keeps its geometric cue")
+	_suite.assert_true(bool(telegraph_snapshot.get("high_contrast_danger", false)), "telegraph uses the high-contrast palette")
+	overlay.queue_free()
+	telegraph.queue_free()
+
 
 func _assert_feedback_runtime_gates() -> void:
 	var stage := Node2D.new()
@@ -433,3 +471,7 @@ func _assert_floating_text_contract() -> void:
 	CombatFeedback.reset_transient_feedback()
 	for _frame: int in range(6):
 		await get_tree().process_frame
+
+
+func _luminance(color: Color) -> float:
+	return color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722

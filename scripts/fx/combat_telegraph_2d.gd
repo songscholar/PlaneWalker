@@ -1,8 +1,14 @@
 class_name CombatTelegraph2D
 extends Node2D
 
-@export var fill_color := Color(1.0, 0.24, 0.18, 0.18)
-@export var outline_color := Color(1.0, 0.64, 0.28, 0.92)
+const DEFAULT_FILL_COLOR := Color(1.0, 0.24, 0.18, 0.18)
+const DEFAULT_OUTLINE_COLOR := Color(1.0, 0.64, 0.28, 0.92)
+const HIGH_CONTRAST_BACKGROUND := Color("101216")
+const HIGH_CONTRAST_FOREGROUND := Color("f7fbff")
+const HIGH_CONTRAST_ACCENT := Color("ffd166")
+
+@export var fill_color := DEFAULT_FILL_COLOR
+@export var outline_color := DEFAULT_OUTLINE_COLOR
 @export var outline_width: float = 2.0
 
 var _action_id: String = ""
@@ -14,6 +20,8 @@ var _summon_slots_global: Array[Vector2] = []
 var _radius: float = 0.0
 var _length: float = 0.0
 var _remaining: float = 0.0
+var _visual_scale: float = 1.0
+var _high_contrast_danger: bool = false
 
 
 func _ready() -> void:
@@ -38,16 +46,24 @@ func show_telegraph(
 	_aim_direction = aim_direction.normalized() if not aim_direction.is_zero_approx() else Vector2.RIGHT
 	_target_global = target_global
 	_summon_slots_global = summon_slots_global.duplicate()
-	_radius = maxf(0.0, radius)
-	_length = maxf(0.0, length)
-	_remaining = maxf(0.0, duration)
+	_radius = maxf(0.0, radius) * _visual_scale
+	_length = maxf(0.0, length) * _visual_scale
+	_remaining = maxf(0.0, duration) * _visual_scale
 	global_position = _origin_global
 	visible = true
 	queue_redraw()
 
 
 func set_remaining_time(value: float) -> void:
-	_remaining = maxf(0.0, value)
+	_remaining = maxf(0.0, value) * _visual_scale
+	queue_redraw()
+
+
+func set_accessibility_options(high_contrast: bool, visual_scale: float) -> void:
+	_high_contrast_danger = high_contrast
+	_visual_scale = clampf(visual_scale, 1.0, 1.5)
+	fill_color = Color(HIGH_CONTRAST_BACKGROUND, 0.52) if high_contrast else DEFAULT_FILL_COLOR
+	outline_color = HIGH_CONTRAST_ACCENT if high_contrast else DEFAULT_OUTLINE_COLOR
 	queue_redraw()
 
 
@@ -75,6 +91,11 @@ func get_snapshot() -> Dictionary:
 		"length": _length,
 		"remaining": _remaining,
 		"visible": visible,
+		"visual_scale": _visual_scale,
+		"high_contrast_danger": _high_contrast_danger,
+		"danger_background": HIGH_CONTRAST_BACKGROUND if _high_contrast_danger else fill_color,
+		"danger_foreground": HIGH_CONTRAST_FOREGROUND if _high_contrast_danger else outline_color,
+		"danger_accent": HIGH_CONTRAST_ACCENT if _high_contrast_danger else outline_color,
 	}
 
 
@@ -89,6 +110,7 @@ func _draw() -> void:
 		"ring":
 			draw_arc(Vector2.ZERO, _radius, 0.0, TAU, 48, outline_color, outline_width, true)
 			draw_arc(Vector2.ZERO, maxf(1.0, _radius - 8.0), 0.0, TAU, 48, fill_color, 8.0, true)
+			_draw_high_contrast_inner_ring(Vector2.ZERO, _radius)
 		"line":
 			_draw_line_proxy()
 		"summon_slots":
@@ -106,11 +128,14 @@ func _draw_cone() -> void:
 	draw_colored_polygon(points, fill_color)
 	draw_polyline(points, outline_color, outline_width, true)
 	draw_line(points[points.size() - 1], Vector2.ZERO, outline_color, outline_width, true)
+	if _high_contrast_danger:
+		draw_polyline(points, HIGH_CONTRAST_FOREGROUND, 1.0, true)
 
 
 func _draw_circle_proxy(center: Vector2, radius: float) -> void:
 	draw_circle(center, radius, fill_color)
 	draw_arc(center, radius, 0.0, TAU, 48, outline_color, outline_width, true)
+	_draw_high_contrast_inner_ring(center, radius)
 
 
 func _draw_line_proxy() -> void:
@@ -119,3 +144,11 @@ func _draw_line_proxy() -> void:
 	var polygon := PackedVector2Array([normal, endpoint + normal, endpoint - normal, -normal])
 	draw_colored_polygon(polygon, fill_color)
 	draw_polyline(PackedVector2Array([normal, endpoint + normal, endpoint - normal, -normal, normal]), outline_color, outline_width, true)
+	if _high_contrast_danger:
+		draw_line(Vector2.ZERO, endpoint, HIGH_CONTRAST_FOREGROUND, 1.0, true)
+
+
+func _draw_high_contrast_inner_ring(center: Vector2, radius: float) -> void:
+	if not _high_contrast_danger:
+		return
+	draw_arc(center, maxf(1.0, radius - 4.0), 0.0, TAU, 48, HIGH_CONTRAST_FOREGROUND, 1.0, true)

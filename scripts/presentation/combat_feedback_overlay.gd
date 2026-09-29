@@ -4,6 +4,9 @@ extends Control
 const STOP_ACCENT := Color(0.2, 0.92, 1.0, 1.0)
 const REWIND_ACCENT := Color(0.42, 0.38, 1.0, 1.0)
 const DANGER_ACCENT := Color(1.0, 0.18, 0.1, 1.0)
+const HIGH_CONTRAST_BACKGROUND := Color("101216")
+const HIGH_CONTRAST_FOREGROUND := Color("f7fbff")
+const HIGH_CONTRAST_ACCENT := Color("ffd166")
 
 var _mode: String = "none"
 var _pattern: String = "none"
@@ -17,6 +20,7 @@ var _low_health_ratio: float = 1.0
 var _clock: float = 0.0
 var _hit_flash_enabled: bool = true
 var _reduced_motion: bool = false
+var _high_contrast_danger: bool = false
 
 
 func _ready() -> void:
@@ -101,6 +105,11 @@ func set_feedback_options(hit_flash_enabled: bool, reduced_motion: bool) -> void
 	queue_redraw()
 
 
+func set_danger_accessibility(high_contrast: bool) -> void:
+	_high_contrast_danger = high_contrast
+	queue_redraw()
+
+
 func get_snapshot_for_test() -> Dictionary:
 	return {
 		"mode": _mode,
@@ -109,6 +118,11 @@ func get_snapshot_for_test() -> Dictionary:
 		"effect_remaining": _effect_remaining,
 		"hit_active": _hit_remaining > 0.0,
 		"low_health_ratio": _low_health_ratio,
+		"high_contrast_danger": _high_contrast_danger,
+		"danger_background": HIGH_CONTRAST_BACKGROUND if _high_contrast_danger else Color(0.08, 0.0, 0.0),
+		"danger_foreground": HIGH_CONTRAST_FOREGROUND if _high_contrast_danger else DANGER_ACCENT,
+		"danger_accent": HIGH_CONTRAST_ACCENT if _high_contrast_danger else DANGER_ACCENT,
+		"danger_pattern": "hard_border_pulse",
 	}
 
 
@@ -132,12 +146,21 @@ func _draw() -> void:
 
 func _draw_low_health_border(viewport_size: Vector2) -> void:
 	var pulse := 0.11 if _reduced_motion else 0.08 + (sin(_clock * 10.0) * 0.5 + 0.5) * 0.07
+	if _high_contrast_danger:
+		_draw_hard_border(viewport_size, Color(HIGH_CONTRAST_BACKGROUND, 0.92), 14.0)
+		_draw_hard_border(viewport_size, Color(HIGH_CONTRAST_FOREGROUND, 0.82), 10.0)
+		_draw_hard_border(viewport_size, Color(HIGH_CONTRAST_ACCENT, 0.55 + pulse), 6.0)
+		return
 	var color := Color(DANGER_ACCENT.r, DANGER_ACCENT.g, DANGER_ACCENT.b, pulse)
 	_draw_hard_border(viewport_size, color, 10.0)
 
 
 func _draw_hit_border(viewport_size: Vector2) -> void:
 	var progress := _hit_remaining / maxf(0.01, _hit_duration)
+	if _hit_is_player and _high_contrast_danger:
+		_draw_hard_border(viewport_size, Color(HIGH_CONTRAST_BACKGROUND, progress * 0.9), 12.0)
+		_draw_hard_border(viewport_size, Color(HIGH_CONTRAST_ACCENT, progress * 0.78), 7.0)
+		return
 	var base := DANGER_ACCENT if _hit_is_player else Color(0.78, 0.96, 1.0)
 	var color := Color(base.r, base.g, base.b, progress * (0.36 if _hit_is_player else 0.20))
 	_draw_hard_border(viewport_size, color, 8.0 if _hit_is_player else 4.0)

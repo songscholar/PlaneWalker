@@ -74,10 +74,32 @@ func _handle_attack_input() -> void:
 		try_action(&"attack")
 	if Input.is_action_just_pressed("heavy_attack"):
 		try_action(&"heavy_attack")
-	if Input.is_action_just_pressed("ranged_attack"):
-		try_action(&"ranged_attack")
-	if Input.is_action_just_released("ranged_attack"):
-		try_action(&"ranged_release")
+	handle_ranged_input_for_test(
+		Input.is_action_just_pressed("ranged_attack"),
+		Input.is_action_just_released("ranged_attack")
+	)
+
+
+func handle_ranged_input_for_test(just_pressed: bool, just_released: bool) -> void:
+	var mode := str(GameState.get_setting("ranged_charge_mode", "hold"))
+	if mode == "toggle":
+		if just_pressed:
+			_commit_ranged_input(&"ranged_release" if bow_weapon.is_charging() else &"ranged_attack")
+		return
+	if just_pressed:
+		_commit_ranged_input(&"ranged_attack")
+	if just_released:
+		_commit_ranged_input(&"ranged_release")
+
+
+func _commit_ranged_input(action_id: StringName) -> bool:
+	if action_state.current_state != PlayerActionStateScript.State.FREE:
+		return false
+	if action_id == &"ranged_attack":
+		return bow_weapon.start_charge()
+	if action_id == &"ranged_release":
+		return bow_weapon.release_charge(Vector2.RIGHT.rotated(bow_weapon.global_rotation))
+	return false
 
 
 func _handle_time_input() -> void:
