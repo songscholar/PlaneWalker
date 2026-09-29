@@ -17,6 +17,11 @@ const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_id
 @onready var energy_label: Label = $HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent/EnergyLabel
 @onready var low_hp_indicator: Label = $HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent/LowHPIndicator
 @onready var build_label: Label = $HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent/BuildLabel
+@onready var weapon_panel: PanelContainer = $HudRoot/SafeArea/HudLayout/WeaponPanel
+@onready var weapon_name_label: Label = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponNameLabel
+@onready var weapon_meter_bar: ProgressBar = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponMeterBar
+@onready var weapon_meter_label: Label = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponMeterLabel
+@onready var weapon_status_label: Label = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponStatusLabel
 @onready var skill_slot_labels: Array[Label] = [
 	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot1Label,
 	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot2Label,
@@ -102,6 +107,8 @@ func _render_state(state: Dictionary) -> void:
 			float(slot["cooldown"])
 		)
 
+	_render_weapon(state["weapon_state"] as Dictionary)
+
 	var build := state["build"] as Dictionary
 	var archetype := str(build["dominant_archetype"])
 	build_label.text = tr("HUD_BUILD_UNFORMED") if archetype.is_empty() else tr("HUD_BUILD_FMT") % tr("ARCHETYPE_" + archetype.to_upper())
@@ -122,6 +129,39 @@ func _format_skill(ability_id: String, cooldown: float) -> String:
 	if cooldown <= 0.0:
 		return "%s  %s" % [label, tr("HUD_WEAPON_READY")]
 	return "%s  %s" % [label, tr("HUD_WEAPON_COOLDOWN_FMT") % cooldown]
+
+
+func _render_weapon(weapon: Dictionary) -> void:
+	var weapon_id := str(weapon["weapon_id"])
+	var meter_kind := str(weapon["meter_kind"])
+	var meter_current := float(weapon["meter_current"])
+	var meter_max := float(weapon["meter_max"])
+	weapon_name_label.text = tr("WEAPON_%s_NAME" % weapon_id.to_upper())
+	weapon_meter_bar.max_value = meter_max
+	weapon_meter_bar.value = meter_current
+	weapon_meter_label.text = _format_weapon_meter(meter_kind, meter_current, meter_max)
+	weapon_status_label.text = _format_weapon_status(weapon)
+
+
+func _format_weapon_meter(meter_kind: String, current: float, maximum: float) -> String:
+	var key := "HUD_WEAPON_METER_%s_FMT" % meter_kind.to_upper()
+	return tr(key) % [roundi(current), roundi(maximum)]
+
+
+func _format_weapon_status(weapon: Dictionary) -> String:
+	var status_id := str(weapon["status_id"])
+	var status_remaining := float(weapon["status_remaining"])
+	var secondary_id := str(weapon["secondary_id"])
+	var secondary_value := float(weapon["secondary_value"])
+	if status_id == "time_load":
+		return tr("HUD_WEAPON_STATUS_TIME_LOAD_FMT") % (status_remaining / 60.0)
+	if status_id == "perfect_reload":
+		return tr("HUD_WEAPON_STATUS_PERFECT_RELOAD")
+	if secondary_id == "time_load" and secondary_value > 0.0:
+		return tr("HUD_WEAPON_STATUS_TIME_LOAD_FMT") % (secondary_value / 60.0)
+	if status_id == "ready":
+		return tr("HUD_WEAPON_READY")
+	return tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper())
 
 
 func _format_time(run_time_ms: int) -> String:

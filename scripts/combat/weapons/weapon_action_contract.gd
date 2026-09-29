@@ -121,6 +121,7 @@ static func validate_plan(plan: Dictionary, expected_weapon_id: StringName = &""
 	if (
 		StringName(str(first_phase.get("phase", ""))) == &"HOLD"
 		and (phases_value as Array).size() < 2
+		and not _has_declared_release_variants(plan)
 	):
 		return failure(CODE_INVALID_PLAN, {"field": "phases", "reason": "hold_requires_release_phase"})
 
@@ -178,7 +179,7 @@ static func _validate_phase(phase: Dictionary, phase_index: int) -> Dictionary:
 
 	if phase.has("cancel_from_frame"):
 		var cancel_value: Variant = phase["cancel_from_frame"]
-		if phase_name != &"RECOVERY":
+		if phase_name not in [&"RECOVERY", &"RESOURCE_ACTION"]:
 			return failure(CODE_INVALID_PLAN, {
 				"field": "phases.cancel_from_frame",
 				"index": phase_index,
@@ -258,6 +259,9 @@ static func _validate_phase(phase: Dictionary, phase_index: int) -> Dictionary:
 
 
 static func _validate_plan_metadata(plan: Dictionary) -> Dictionary:
+	var release_metadata_result := _validate_release_metadata(plan)
+	if not bool(release_metadata_result.get("ok", false)):
+		return release_metadata_result
 	if plan.has("cooldown_frames"):
 		var cooldown_value: Variant = plan["cooldown_frames"]
 		if (
@@ -302,6 +306,81 @@ static func _validate_plan_metadata(plan: Dictionary) -> Dictionary:
 					"reason": "value",
 				})
 	return success()
+
+
+static func _validate_release_metadata(plan: Dictionary) -> Dictionary:
+	if plan.has("release_action_fingerprint"):
+		var fingerprint_value: Variant = plan["release_action_fingerprint"]
+		if (
+			typeof(fingerprint_value) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(fingerprint_value).strip_edges().is_empty()
+		):
+			return failure(CODE_INVALID_PLAN, {
+				"field": "release_action_fingerprint",
+				"reason": "value",
+			})
+
+	var has_allowed_ids := plan.has("allowed_release_action_ids")
+	var has_fingerprints := plan.has("release_action_fingerprints")
+	if not has_allowed_ids and not has_fingerprints:
+		return success()
+	if not has_allowed_ids or not has_fingerprints:
+		return failure(CODE_INVALID_PLAN, {
+			"field": "allowed_release_action_ids",
+			"reason": "paired_metadata_required",
+		})
+	var allowed_value: Variant = plan["allowed_release_action_ids"]
+	var fingerprints_value: Variant = plan["release_action_fingerprints"]
+	if not allowed_value is Array or (allowed_value as Array).is_empty():
+		return failure(CODE_INVALID_PLAN, {
+			"field": "allowed_release_action_ids",
+			"reason": "value",
+		})
+	if not fingerprints_value is Dictionary:
+		return failure(CODE_INVALID_PLAN, {
+			"field": "release_action_fingerprints",
+			"reason": "type",
+		})
+	var normalized_ids: Dictionary = {}
+	for action_id_value: Variant in allowed_value as Array:
+		if typeof(action_id_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return failure(CODE_INVALID_PLAN, {
+				"field": "allowed_release_action_ids",
+				"reason": "type",
+			})
+		var action_id := str(action_id_value).strip_edges()
+		if action_id.is_empty() or normalized_ids.has(action_id):
+			return failure(CODE_INVALID_PLAN, {
+				"field": "allowed_release_action_ids",
+				"reason": "value",
+			})
+		normalized_ids[action_id] = true
+		var fingerprint: Variant = (fingerprints_value as Dictionary).get(action_id)
+		if (
+			typeof(fingerprint) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(fingerprint).strip_edges().is_empty()
+		):
+			return failure(CODE_INVALID_PLAN, {
+				"field": "release_action_fingerprints.%s" % action_id,
+				"reason": "value",
+			})
+	if (fingerprints_value as Dictionary).size() != normalized_ids.size():
+		return failure(CODE_INVALID_PLAN, {
+			"field": "release_action_fingerprints",
+			"reason": "unexpected_action",
+		})
+	return success()
+
+
+static func _has_declared_release_variants(plan: Dictionary) -> bool:
+	var allowed_value: Variant = plan.get("allowed_release_action_ids", [])
+	var fingerprints_value: Variant = plan.get("release_action_fingerprints", {})
+	return (
+		allowed_value is Array
+		and not (allowed_value as Array).is_empty()
+		and fingerprints_value is Dictionary
+		and (fingerprints_value as Dictionary).size() == (allowed_value as Array).size()
+	)
 
 
 static func _variant_numbers_are_finite(value: Variant) -> bool:

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "revision": 3,
   "run_id": "fixture-run",
   "phase": "BOSS_ACTIVE",
@@ -29,6 +29,19 @@
         "cooldown": 0.0
       }
     ]
+  },
+  "weapon_state": {
+    "weapon_id": "sword",
+    "action_id": "",
+    "phase": "READY",
+    "meter_kind": "counter",
+    "meter_current": 1,
+    "meter_max": 1,
+    "status_id": "counter_ready",
+    "status_stacks": 1,
+    "status_remaining": 0,
+    "secondary_id": "combo",
+    "secondary_value": 2
   },
   "build": {
     "items": ["frozen_burst", "rewind_echo"],

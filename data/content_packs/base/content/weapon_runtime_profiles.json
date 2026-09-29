@@ -176,22 +176,22 @@
     "weapon_id": "gun",
     "runtime_kind": "gun",
     "actions": [
-      {"action_id": "normal_fire", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 0, "maximum_hold_frames": 17, "windup_frames": 2, "active_frames": 1, "recovery_frames": 8, "cancel_from_frame": 5, "buffer_frames": 8, "movement_multiplier": 0.8, "resource_costs": {"ammo": 1.0}, "payload_id": "gun_normal_bullet", "cue_id": "gun_normal_fire"},
-      {"action_id": "aimed_fire", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 18, "windup_frames": 4, "active_frames": 1, "recovery_frames": 12, "cancel_from_frame": 8, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"ammo": 1.0}, "payload_id": "gun_aimed_bullet", "cue_id": "gun_aimed_fire"},
-      {"action_id": "shotgun_fire", "semantic_action": "weapon_secondary", "activation_mode": "press", "windup_frames": 5, "active_frames": 1, "recovery_frames": 16, "cancel_from_frame": 11, "buffer_frames": 8, "movement_multiplier": 0.55, "resource_costs": {"ammo": 2.0}, "payload_id": "gun_shotgun_pellets", "cue_id": "gun_shotgun_fire"},
-      {"action_id": "reload", "semantic_action": "weapon_utility", "activation_mode": "confirm", "windup_frames": 8, "active_frames": 32, "recovery_frames": 8, "cancel_from_frame": 7, "buffer_frames": 8, "movement_multiplier": 0.65, "resource_costs": {}, "payload_id": "gun_reload_transaction", "cue_id": "gun_reload_start"},
-      {"action_id": "time_load", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 8, "active_frames": 2, "recovery_frames": 14, "cancel_from_frame": 10, "buffer_frames": 8, "movement_multiplier": 0.5, "resource_costs": {"time_energy": 25.0}, "payload_id": "gun_time_load_buff", "cue_id": "gun_time_load"},
-      {"action_id": "void_penetration", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 12, "active_frames": 2, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "gun_void_round", "cue_id": "gun_void_penetration"}
+      {"action_id": "normal_fire", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 0, "maximum_hold_frames": 17, "cooldown_frames": 0, "windup_frames": 3, "active_frames": 1, "recovery_frames": 8, "cancel_from_frame": 5, "buffer_frames": 8, "movement_multiplier": 0.8, "resource_costs": {"ammo": 1.0}, "payload_id": "gun_normal_bullet", "cue_id": "gun_normal_fire"},
+      {"action_id": "aimed_fire", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 18, "cooldown_frames": 0, "windup_frames": 8, "active_frames": 1, "recovery_frames": 12, "cancel_from_frame": 10, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"ammo": 1.0}, "payload_id": "gun_aimed_bullet", "cue_id": "gun_aimed_fire"},
+      {"action_id": "shotgun_fire", "semantic_action": "weapon_secondary", "activation_mode": "press", "cooldown_frames": 0, "windup_frames": 8, "active_frames": 2, "recovery_frames": 20, "cancel_from_frame": 14, "buffer_frames": 8, "movement_multiplier": 0.55, "resource_costs": {"ammo": 2.0}, "payload_id": "gun_shotgun_pellets", "cue_id": "gun_shotgun_fire"},
+      {"action_id": "reload", "semantic_action": "weapon_utility", "activation_mode": "confirm", "cooldown_frames": 0, "windup_frames": 8, "active_frames": 32, "recovery_frames": 8, "cancel_from_frame": 8, "buffer_frames": 8, "movement_multiplier": 0.65, "resource_costs": {}, "payload_id": "gun_reload_transaction", "cue_id": "gun_reload_start"},
+      {"action_id": "time_load", "semantic_action": "weapon_skill", "activation_mode": "press", "cooldown_frames": 360, "windup_frames": 8, "active_frames": 1, "recovery_frames": 4, "cancel_from_frame": 2, "buffer_frames": 8, "movement_multiplier": 0.5, "resource_costs": {"time_energy": 25.0}, "payload_id": "gun_time_load_buff", "cue_id": "gun_time_load"},
+      {"action_id": "void_penetration", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "cooldown_frames": 720, "windup_frames": 18, "active_frames": 3, "recovery_frames": 25, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 65.0}, "payload_id": "gun_void_round", "cue_id": "gun_void_penetration"}
     ],
     "resources": [{"resource_id": "ammo", "minimum": 0.0, "maximum": 7.0, "initial": 6.0, "regen_per_second": 0.0}],
     "capabilities": ["weapon.ammo_capacity", "weapon.attack_speed", "weapon.damage", "weapon.reload_window", "weapon.status_duration"],
     "payloads": [
-      {"payload_id": "gun_normal_bullet", "kind": "projectile", "parameters": {"damage_multiplier": 1.0, "speed": 760.0}},
-      {"payload_id": "gun_aimed_bullet", "kind": "projectile", "parameters": {"damage_multiplier": 1.8, "speed": 920.0}},
-      {"payload_id": "gun_shotgun_pellets", "kind": "multi_projectile", "parameters": {"damage_multiplier": 0.38, "count": 8, "spread_degrees": 28.0}},
-      {"payload_id": "gun_reload_transaction", "kind": "resource_action", "parameters": {"perfect_start_frame": 28, "perfect_end_frame": 36, "normal_fill": 6, "perfect_fill": 7}},
-      {"payload_id": "gun_time_load_buff", "kind": "buff", "parameters": {"duration_frames": 300, "timing_multiplier": 1.4, "time_damage_multiplier": 0.15}},
-      {"payload_id": "gun_void_round", "kind": "projectile", "parameters": {"damage_multiplier": 11.0, "pierce": 99}}
+      {"payload_id": "gun_normal_bullet", "kind": "projectile", "parameters": {"damage_multiplier": 1.0, "speed_tiles_per_second": 40.0, "maximum_range_tiles": 15.0, "hit_width_tiles": 0.2, "pierce": 0, "knockback_tiles": 0.3}},
+      {"payload_id": "gun_aimed_bullet", "kind": "projectile", "parameters": {"damage_multiplier": 2.5, "critical_chance_bonus": 0.2, "speed_tiles_per_second": 50.0, "maximum_range_tiles": 20.0, "hit_width_tiles": 0.3, "pierce": 1, "knockback_tiles": 1.5}},
+      {"payload_id": "gun_shotgun_pellets", "kind": "multi_projectile", "parameters": {"damage_multiplier": 0.7, "count": 8, "spread_degrees": 45.0, "speed_tiles_per_second": 25.0, "maximum_range_tiles": 5.0, "hit_width_tiles": 0.2, "pierce": 0, "knockback_tiles": 0.5, "close_range_multi_hit_tiles": 1.5, "target_deduplication": "per_pellet"}},
+      {"payload_id": "gun_reload_transaction", "kind": "resource_action", "parameters": {"total_frames": 48, "initial_locked_frames": 8, "dash_cancel_start_frame": 8, "dash_cancel_end_frame_exclusive": 40, "final_locked_start_frame": 40, "perfect_start_frame": 28, "perfect_end_frame": 36, "normal_fill": 6, "perfect_fill": 7, "perfect_recovery_frames": 4}},
+      {"payload_id": "gun_time_load_buff", "kind": "buff", "parameters": {"duration_frames": 300, "action_frame_multiplier": 0.6, "speed_multiplier": 1.4, "time_damage_multiplier": 0.15, "ammo_cost_multiplier": 0.0, "active_refill": 6, "cancel_from_total_frame": 10}},
+      {"payload_id": "gun_void_round", "kind": "projectile", "parameters": {"damage_multiplier": 15.0, "void_damage_ratio": 0.6, "time_damage_ratio": 0.4, "speed_tiles_per_second": 60.0, "maximum_range_tiles": 30.0, "hit_width_tiles": 1.5, "unlimited_pierce": true, "cast_invulnerability": true, "penetration_explosion": {"radius_tiles": 1.5, "damage_multiplier": 0.3, "damage_type": "void"}, "vulnerability": {"duration_frames": 180, "damage_taken_bonus": 0.15}, "trail": {"duration_frames": 300, "width_tiles": 1.0, "tick_interval_frames": 30, "damage_multiplier": 0.1, "damage_type": "void"}, "trail_duration_frames": 300, "time_load_damage_multiplier": 1.3, "time_load_explosion_radius_multiplier": 1.5}}
     ],
     "cues": [
       {"cue_id": "gun_normal_fire", "animation_id": "gun_fire", "vfx_id": "gun_muzzle", "audio_id": "gun_fire", "camera_id": "impact_light"},
@@ -202,12 +202,12 @@
       {"cue_id": "gun_void_penetration", "animation_id": "gun_ultimate", "vfx_id": "gun_void_tracer", "audio_id": "gun_ultimate", "camera_id": "impact_ultimate"}
     ],
     "time_interactions": {
-      "stop": {"interaction_id": "gun_aimed_time_burst", "type": "projectile_modifier", "parameters": {"damage_multiplier": 1.4}},
-      "rewind": {"interaction_id": "gun_rewind_free_shot", "type": "resource_modifier", "parameters": {"window_frames": 120}},
-      "accelerate": {"interaction_id": "gun_recovery_speed", "type": "future_timing_modifier", "parameters": {"timing_multiplier": 1.4}},
-      "rift": {"interaction_id": "gun_rift_trail", "type": "projectile_trail", "parameters": {"duration_frames": 90}}
+      "stop": {"interaction_id": "gun_aimed_time_burst", "type": "projectile_modifier", "parameters": {"requires_action": "aimed_fire", "explosion_radius_tiles": 2.0, "explosion_damage_multiplier": 1.0, "damage_type": "time", "stop_extension_frames": 30, "extension_once_per_action_token": true}},
+      "rewind": {"interaction_id": "gun_rewind_free_shot", "type": "next_action_modifier", "parameters": {"window_frames": 120, "ammo_free": true, "damage_multiplier": 1.5, "one_shot_claim": true}},
+      "accelerate": {"interaction_id": "gun_recovery_speed", "type": "future_timing_modifier", "parameters": {"recovery_delta_frames": -4, "ammo_cost_multiplier": 0.5, "rounding": "ceil"}},
+      "rift": {"interaction_id": "gun_rift_trail", "type": "projectile_trail", "parameters": {"duration_frames": 90, "width_tiles": 1.0, "tick_interval_frames": 30, "damage_multiplier": 0.2, "damage_type": "time", "spatial_policy": "projectile_path_intersection"}}
     },
-    "boss_interactions": {"chrono_warden": {"conversion_id": "gun_weakpoint_pressure", "type": "poise_conversion", "parameters": {"poise_multiplier": 1.1}}}
+    "boss_interactions": {"chrono_warden": {"conversion_id": "gun_weakpoint_pressure", "type": "poise_conversion", "parameters": {"interrupt_active_attack": false, "active_attack_policy": "preserve_committed", "allowed_phases": ["RECOVERY", "EXPOSED"], "control_conversion": "poise_contribution", "poise_multiplier": 1.1, "target_deduplication": true}}}
   },
   {
     "id": "staff_launch_v1",

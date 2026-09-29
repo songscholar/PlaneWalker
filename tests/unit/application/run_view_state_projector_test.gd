@@ -13,6 +13,7 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_live_view_revision_is_independent(suite)
+	_test_weapon_presentations_project_to_union(suite)
 	_test_phase_flags_and_optional_payloads(suite)
 	_test_new_run_resets_view_revision(suite)
 	_test_invalid_inputs_are_rejected(suite)
@@ -52,17 +53,110 @@ func _test_live_view_revision_is_independent(suite) -> void:
 		"equipped slot order and strict action mapping project"
 	)
 	suite.assert_equal(second_view["run_time_ms"], 61000, "live run time projects")
+	suite.assert_equal(
+		second_view["weapon_state"],
+		{
+			"weapon_id": "gun",
+			"action_id": "reload",
+			"phase": "RESOURCE_ACTION",
+			"meter_kind": "reload",
+			"meter_current": 28,
+			"meter_max": 48,
+			"status_id": "perfect_reload",
+			"status_stacks": 1,
+			"status_remaining": 0,
+			"secondary_id": "time_load",
+			"secondary_value": 240,
+		},
+		"Gun reload and Time Load project into the generic weapon union"
+	)
+	suite.assert_true(not second_view["player"].has("weapon"), "raw weapon presentation is removed from player view data")
 
 	second.context["view_state"]["player"]["hp"] = 1.0
 	second.context["view_state"]["player"]["time_slots"][0]["ability_id"] = "changed"
 	second.context["view_state"]["player"]["time_slots"].reverse()
 	second.context["view_state"]["build"]["items"].append("forged")
+	second.context["view_state"]["weapon_state"]["meter_current"] = 0
 	var latest: Dictionary = projector.latest_view_state()
 	suite.assert_close(latest["player"]["hp"], 120.0, "returned context is isolated from projector state")
 	suite.assert_equal(latest["player"]["time_slots"][0]["ability_id"], "stop", "projected slot dictionaries are deep copied")
 	suite.assert_equal(latest["player"]["time_slots"][1]["ability_id"], "rift", "projected slot order is isolated")
 	suite.assert_true(not latest["build"]["items"].has("forged"), "nested build arrays are deep copied")
+	suite.assert_equal(latest["weapon_state"]["meter_current"], 28, "projected weapon state is isolated")
 	suite.assert_equal(player["time_slots"][0]["ability_id"], "stop", "projection never mutates player slot input")
+	suite.assert_equal(player["weapon"]["runtime"]["reload_frame"], 28, "projection never mutates raw weapon presentation")
+
+
+func _test_weapon_presentations_project_to_union(suite) -> void:
+	var projector = RunViewStateProjectorScript.new()
+	var bow_player := _player_snapshot()
+	bow_player["weapon"] = _bow_weapon_presentation()
+	var bow_result = projector.project(
+		_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE),
+		_room_definition(1, "combat"),
+		bow_player,
+		null,
+		1,
+		{}
+	)
+	suite.assert_true(bow_result.ok, "Bow presentation projects")
+	if bow_result.ok:
+		var bow_state: Dictionary = bow_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(bow_state["weapon_id"], "bow", "Bow union keeps canonical weapon id")
+		suite.assert_equal(bow_state["meter_kind"], "charge", "Bow union uses charge meter")
+		suite.assert_equal(bow_state["meter_current"], 30.0, "Bow union projects charge frames")
+		suite.assert_equal(bow_state["meter_max"], 48.0, "Bow union projects maximum charge")
+		suite.assert_equal(bow_state["status_id"], "charging", "Bow hold projects charging status")
+		suite.assert_equal(bow_state["secondary_id"], "hold", "Bow exposes bounded hold progress")
+
+	var sword_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	sword_authoritative["run_id"] = "sword-view-run"
+	var sword_player := _player_snapshot()
+	sword_player["weapon"] = _sword_weapon_presentation()
+	var sword_result = projector.project(
+		sword_authoritative,
+		_room_definition(1, "combat"),
+		sword_player,
+		null,
+		2,
+		{}
+	)
+	suite.assert_true(sword_result.ok, "Sword presentation projects")
+	if sword_result.ok:
+		var sword_state: Dictionary = sword_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(sword_state["weapon_id"], "sword", "Sword union keeps canonical weapon id")
+		suite.assert_equal(sword_state["meter_kind"], "counter", "Sword union uses counter readiness meter")
+		suite.assert_equal(sword_state["meter_current"], 1.0, "ready Sword exposes counter readiness")
+		suite.assert_equal(sword_state["status_id"], "counter_ready", "ready Sword exposes counter status")
+		suite.assert_equal(sword_state["secondary_id"], "combo", "Sword combo is a generic secondary value")
+		suite.assert_equal(sword_state["secondary_value"], 2.0, "Sword combo step projects without a top-level legacy field")
+
+	var perfect_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	perfect_authoritative["run_id"] = "perfect-reload-view-run"
+	var perfect_player := _player_snapshot()
+	perfect_player["weapon"]["runtime"]["reload_frame"] = 40
+	perfect_player["weapon"]["runtime"]["reload_window"] = {
+		"segment": "locked_complete",
+		"dash_cancellable": false,
+		"perfect_confirm": false,
+		"complete": false,
+	}
+	perfect_player["weapon"]["runtime"]["time_load_source"] = "perfect_reload"
+	perfect_player["weapon"]["runtime"]["time_load_remaining_frames"] = 300
+	var perfect_result = projector.project(
+		perfect_authoritative,
+		_room_definition(1, "combat"),
+		perfect_player,
+		null,
+		3,
+		{}
+	)
+	suite.assert_true(perfect_result.ok, "perfect reload recovery projects")
+	if perfect_result.ok:
+		var perfect_state: Dictionary = perfect_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(perfect_state["status_id"], "perfect_reload", "perfect reload source survives the replacement recovery tail")
+		suite.assert_equal(perfect_state["secondary_id"], "time_load", "perfect reload also exposes its free Time Load")
+		suite.assert_equal(perfect_state["secondary_value"], 300, "free Time Load duration remains visible")
 
 
 func _test_phase_flags_and_optional_payloads(suite) -> void:
@@ -154,6 +248,27 @@ func _test_invalid_inputs_are_rejected(suite) -> void:
 	suite.assert_equal(invalid_slot.code, &"INVALID_ARGUMENT", "projector rejects canonical/action slot mismatches")
 	suite.assert_true(projector.latest_view_state().is_empty(), "invalid slot projection does not replace projector state")
 
+	var unknown_weapon := _player_snapshot()
+	unknown_weapon["weapon"]["weapon_id"] = "laser"
+	unknown_weapon["weapon"]["runtime"]["weapon_id"] = "laser"
+	var invalid_weapon = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), unknown_weapon, null, 0, {})
+	suite.assert_equal(invalid_weapon.code, &"INVALID_ARGUMENT", "projector rejects unknown weapon presentations")
+	suite.assert_true(projector.latest_view_state().is_empty(), "unknown weapon does not replace projector state")
+
+	var negative_ammo := _player_snapshot()
+	negative_ammo["weapon"]["action_id"] = ""
+	negative_ammo["weapon"]["phase"] = "READY"
+	negative_ammo["weapon"]["runtime"]["action_id"] = ""
+	negative_ammo["weapon"]["runtime"]["phase"] = "READY"
+	negative_ammo["weapon"]["runtime"]["ammo"] = -1
+	var invalid_ammo = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), negative_ammo, null, 0, {})
+	suite.assert_equal(invalid_ammo.code, &"INVALID_ARGUMENT", "projector rejects negative Gun ammunition")
+
+	var non_finite_time_load := _player_snapshot()
+	non_finite_time_load["weapon"]["runtime"]["time_load_remaining_frames"] = INF
+	var invalid_time_load = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), non_finite_time_load, null, 0, {})
+	suite.assert_equal(invalid_time_load.code, &"INVALID_ARGUMENT", "projector rejects non-finite Gun Time Load state")
+
 
 func _authoritative(phase: int) -> Dictionary:
 	return {
@@ -197,10 +312,72 @@ func _player_snapshot() -> Dictionary:
 		"energy": 72.0,
 		"max_energy": 100.0,
 		"action_state": "FREE",
+		"weapon": _gun_weapon_presentation(),
 		"time_slots": [
 			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 0.0},
 			{"ability_id": "rift", "action_id": "time_rift", "cooldown": 4.5},
 		],
+	}
+
+
+func _gun_weapon_presentation() -> Dictionary:
+	return {
+		"weapon_id": "gun",
+		"action_id": "reload",
+		"phase": "RESOURCE_ACTION",
+		"phase_frame": 20,
+		"phase_duration_frames": 32,
+		"runtime": {
+			"weapon_id": "gun",
+			"action_id": "reload",
+			"phase": "RESOURCE_ACTION",
+			"ammo": 2,
+			"ammo_maximum": 6,
+			"reload_frame": 28,
+			"reload_window": {
+				"segment": "perfect",
+				"dash_cancellable": true,
+				"perfect_confirm": true,
+				"complete": false,
+			},
+			"time_load_source": "active",
+			"time_load_remaining_frames": 240,
+		},
+	}
+
+
+func _bow_weapon_presentation() -> Dictionary:
+	return {
+		"weapon_id": "bow",
+		"action_id": "precision_draw",
+		"phase": "HOLD",
+		"charge_frames": 30.0,
+		"maximum_charge_frames": 48.0,
+		"charge_ratio": 0.625,
+		"full_charge": false,
+		"runtime": {
+			"weapon_id": "bow",
+			"action_id": "precision_draw",
+			"phase": "HOLD",
+			"charge_frames": 30.0,
+			"maximum_charge_frames": 48.0,
+			"full_charge": false,
+		},
+	}
+
+
+func _sword_weapon_presentation() -> Dictionary:
+	return {
+		"weapon_id": "sword",
+		"action_id": "",
+		"phase": "READY",
+		"runtime": {
+			"weapon_id": "sword",
+			"action_id": "",
+			"phase": "READY",
+			"combo_step": 2,
+			"combo_reset_frames": 48,
+		},
 	}
 
 

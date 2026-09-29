@@ -19,6 +19,7 @@ const WEAPON_PHASE_TO_STATE: Dictionary = {
 	&"WINDUP": State.ATTACK_WINDUP,
 	&"ACTIVE": State.ATTACK_ACTIVE,
 	&"RECOVERY": State.ATTACK_RECOVERY,
+	&"RESOURCE_ACTION": State.ATTACK_RECOVERY,
 }
 const BUFFERED_INPUT_PRIORITY: Array[StringName] = [
 	&"dash",
@@ -99,7 +100,7 @@ func project_weapon_phase(
 		return false
 	if cancel_from_frame < -1:
 		return false
-	if phase == &"RECOVERY":
+	if phase in [&"RECOVERY", &"RESOURCE_ACTION"]:
 		if cancel_from_frame >= duration_frames:
 			return false
 	elif cancel_from_frame != -1:
@@ -108,7 +109,7 @@ func project_weapon_phase(
 	current_state = int(WEAPON_PHASE_TO_STATE[phase]) as State
 	_state_frame = phase_frame
 	_state_duration_frames = duration_frames
-	_cancel_from_frame = cancel_from_frame if phase == &"RECOVERY" else -1
+	_cancel_from_frame = cancel_from_frame if phase in [&"RECOVERY", &"RESOURCE_ACTION"] else -1
 	_weapon_projection_active = true
 	_weapon_phase = phase
 	return true
@@ -132,6 +133,8 @@ func can_transition_to(next_state: State) -> bool:
 		return false
 	if _weapon_projection_active and _weapon_phase == &"HOLD":
 		return next_state in [State.DASH, State.TIME_CAST]
+	if _weapon_projection_active and _weapon_phase == &"RESOURCE_ACTION":
+		return _recovery_cancel_is_open() and next_state == State.DASH
 
 	match current_state:
 		State.FREE:

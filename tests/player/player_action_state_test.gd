@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_attack_active_rejections()
 	_test_attack_recovery_cancel_window()
 	_test_weapon_phase_projection()
+	_test_resource_action_projection_uses_authoritative_cancel_window()
 	_test_hold_projection_is_interruptible_without_a_second_clock()
 	_test_weapon_projection_does_not_advance_a_second_clock()
 	_test_weapon_projection_respects_exclusive_states()
@@ -217,6 +218,24 @@ func _test_weapon_phase_projection() -> void:
 	_suite.assert_equal(action_state.elapsed_state_frames(), 3, "invalid projection preserves projected counters")
 	_suite.assert_true(action_state.clear_weapon_projection(), "weapon projection can be cleared when the coordinator returns ready")
 	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.FREE, "clearing weapon projection returns the compatibility view to free")
+
+
+func _test_resource_action_projection_uses_authoritative_cancel_window() -> void:
+	var action_state = PlayerActionStateScript.new()
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"RESOURCE_ACTION", 7, 32, 0),
+		"coordinator resource action projects into the cancel-aware compatibility view"
+	)
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_RECOVERY, "resource action uses the recovery compatibility state")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 7, "resource action copies the coordinator-owned phase frame")
+	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.DASH), "resource action opens Dash from its declared cancel boundary")
+	_suite.assert_true(not action_state.can_transition_to(PlayerActionStateScript.State.TIME_CAST), "resource action cancel window remains Dash-only")
+	_suite.assert_true(not action_state.can_transition_to(PlayerActionStateScript.State.ATTACK_WINDUP), "resource action cannot be replaced by another weapon action")
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"RESOURCE_ACTION", 7, 32),
+		"locked resource action can be projected without a cancel boundary"
+	)
+	_suite.assert_true(not action_state.can_transition_to(PlayerActionStateScript.State.DASH), "locked resource action blocks Dash")
 
 
 func _test_hold_projection_is_interruptible_without_a_second_clock() -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/views/combat_hud_view.gd" id="1_hud"]
 
@@ -39,6 +39,9 @@ bg_color = Color(0.72, 0.14, 0.1, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleEnergyFill"]
 bg_color = Color(0.08, 0.72, 0.9, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleWeaponFill"]
+bg_color = Color(0.9, 0.58, 0.16, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBossFill"]
 bg_color = Color(0.9, 0.24, 0.11, 1)
@@ -139,6 +142,49 @@ theme_override_styles/fill = SubResource("StyleBossFill")
 [node name="BossPhaseLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/BossPanel/BossContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.5, 0.28, 1)
+text = ""
+horizontal_alignment = 1
+
+[node name="WeaponPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -176.0
+offset_bottom = 92.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="WeaponContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/WeaponPanel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="WeaponNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.46, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
+
+[node name="WeaponMeterBar" type="ProgressBar" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
+custom_minimum_size = Vector2(152, 10)
+layout_mode = 2
+max_value = 6.0
+value = 4.0
+show_percentage = false
+theme_override_styles/background = SubResource("StyleBarBackground")
+theme_override_styles/fill = SubResource("StyleWeaponFill")
+
+[node name="WeaponMeterLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.76, 0.48, 1)
+theme_override_font_sizes/font_size = 12
+text = ""
+horizontal_alignment = 1
+
+[node name="WeaponStatusLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 

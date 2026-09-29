@@ -39,6 +39,21 @@ func release_hold(_plan: Dictionary, _token: int, _held_frames: int) -> Dictiona
 	return {"ok": false, "code": &"UNSUPPORTED_HOLD_RELEASE", "context": {}}
 
 
+func handle_live_intent(
+	_plan: Dictionary,
+	_token: int,
+	_phase: StringName,
+	_phase_frame: int,
+	_intent: Dictionary,
+	_context: Dictionary
+) -> Dictionary:
+	return {"handled": false}
+
+
+func advance_runtime_frame(_coordinator_frame: int) -> Array[Dictionary]:
+	return []
+
+
 func cancel_action(_token: int, _reason: StringName) -> void:
 	pass
 

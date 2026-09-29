@@ -329,7 +329,7 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 func _on_player_attacked(weapon_id: StringName, _context: Dictionary) -> void:
 	# Coordinator-backed weapons publish their feedback through Profile cues.
 	# Their compatibility player_attacked fact must not trigger the legacy Sword fallback.
-	if weapon_id in [&"sword", &"bow"]:
+	if weapon_id in [&"sword", &"bow", &"gun"]:
 		return
 	var player := _first_player()
 	if player == null:

@@ -67,6 +67,10 @@ class FakeWeaponRuntime:
 	var fail_phase_entry: StringName = &""
 	var tamper_finalized_field: StringName = &""
 	var return_channel_utility: bool = false
+	var return_reload_utility: bool = false
+	var return_hold_release_variant: bool = false
+	var tamper_release_fingerprint: bool = false
+	var malformed_live_tail: bool = false
 	var reject_unsupported_sword_semantics: bool = false
 	var commit_attempts: int = 0
 	var cancel_calls: int = 0
@@ -76,6 +80,10 @@ class FakeWeaponRuntime:
 	var phase_entries: Array[Dictionary] = []
 	var action_cooldown_frames: int = 0
 	var external_resource_cost: float = 0.0
+	var live_confirm_calls: int = 0
+	var live_confirm_phase: StringName = &""
+	var live_confirm_frame: int = -1
+	var runtime_tick_frames: Array[int] = []
 
 
 	func weapon_id() -> StringName:
@@ -95,6 +103,8 @@ class FakeWeaponRuntime:
 			return {"ok": false, "code": &"UNSUPPORTED_INTENT", "context": {"intent_id": str(intent_id)}}
 		if intent_id == &"weapon_secondary" and reject_secondary:
 			return {"ok": false, "code": &"UNSUPPORTED_INTENT"}
+		if intent_id == &"weapon_utility" and return_reload_utility:
+			return {"ok": true, "plan": _reload_plan()}
 		if intent_id == &"weapon_utility" and return_channel_utility:
 			return {"ok": true, "plan": _channel_plan()}
 		if intent_id == &"weapon_utility":
@@ -152,6 +162,13 @@ class FakeWeaponRuntime:
 		finalized_phases.pop_front()
 		finalized_plan["phases"] = finalized_phases
 		finalized_plan["held_frames"] = held_frames
+		if return_hold_release_variant:
+			finalized_plan["action_id"] = "aimed_test"
+			finalized_plan["release_action_fingerprint"] = (
+				"tampered"
+				if tamper_release_fingerprint
+				else "aimed-test-v1"
+			)
 		match tamper_finalized_field:
 			&"weapon_id":
 				finalized_plan["weapon_id"] = "tampered_weapon"
@@ -167,6 +184,40 @@ class FakeWeaponRuntime:
 			"finalized_plan": finalized_plan,
 			"context": {"held_frames": held_frames},
 		}
+
+
+	func handle_live_intent(
+		_plan: Dictionary,
+		_token: int,
+		phase: StringName,
+		phase_frame: int,
+		intent: Dictionary,
+		_context: Dictionary
+	) -> Dictionary:
+		if not return_reload_utility or StringName(str(intent.get("id", ""))) != &"weapon_utility":
+			return {"handled": false}
+		live_confirm_calls += 1
+		live_confirm_phase = phase
+		live_confirm_frame = phase_frame
+		if phase != &"RESOURCE_ACTION" or phase_frame != 2:
+			return {"handled": true, "ok": false, "code": &"RELOAD_CONFIRM_OUTSIDE_WINDOW"}
+		resource = 99 if malformed_live_tail else 7
+		var recovery_duration := 0 if malformed_live_tail else 4
+		return {
+			"handled": true,
+			"ok": true,
+			"replacement_phases": [{
+				"phase": "RECOVERY",
+				"duration_frames": recovery_duration,
+				"movement_multiplier": 0.65,
+			}],
+			"context": {"perfect_reload": true},
+		}
+
+
+	func advance_runtime_frame(coordinator_frame: int) -> Array[Dictionary]:
+		runtime_tick_frames.append(coordinator_frame)
+		return []
 
 
 	func cancel_action(token: int, _reason: StringName) -> void:
@@ -228,7 +279,7 @@ class FakeWeaponRuntime:
 			else {}
 		)
 		if intent_id == &"weapon_ultimate":
-			return {
+			var hold_plan := {
 				"weapon_id": "test_weapon",
 				"action_id": "hold_test",
 				"profile_id": "test_profile",
@@ -264,6 +315,13 @@ class FakeWeaponRuntime:
 				],
 				"payloads": [{"descriptor_id": "hold_hitbox"}],
 			}
+			if return_hold_release_variant:
+				hold_plan["allowed_release_action_ids"] = ["normal_test", "aimed_test"]
+				hold_plan["release_action_fingerprints"] = {
+					"normal_test": "normal-test-v1",
+					"aimed_test": "aimed-test-v1",
+				}
+			return hold_plan
 		var action_id := &"primary_test" if intent_id == &"weapon_primary" else &"secondary_test"
 		return {
 			"weapon_id": "test_weapon",
@@ -310,6 +368,26 @@ class FakeWeaponRuntime:
 		}
 
 
+	func _reload_plan() -> Dictionary:
+		return {
+			"weapon_id": "test_weapon",
+			"action_id": "reload_test",
+			"cooldown_frames": 0,
+			"resource_costs": {},
+			"phases": [
+				{"phase": "WINDUP", "duration_frames": 2, "movement_multiplier": 0.65},
+				{
+					"phase": "RESOURCE_ACTION",
+					"duration_frames": 5,
+					"cancel_from_frame": 0,
+					"movement_multiplier": 0.65,
+				},
+				{"phase": "RECOVERY", "duration_frames": 2, "movement_multiplier": 0.65},
+			],
+			"payloads": [{"descriptor_id": "reload_transaction"}],
+		}
+
+
 var _suite
 var _committed_facts: Array[Dictionary] = []
 var _runtime_events: Array[Dictionary] = []
@@ -336,8 +414,12 @@ func _run() -> void:
 	_test_stale_hold_release_is_rejected_after_cancel()
 	_test_hold_snapshot_isolated_and_restore_rejection_is_atomic()
 	_test_tampered_finalized_hold_plan_rolls_back_and_cancels()
+	_test_hold_release_variant_adopts_real_action_identity()
+	_test_hold_release_variant_fingerprint_is_frozen()
+	_test_terminal_hold_requires_declared_release_variants()
 	_test_contract_rejects_invalid_hold_boundaries()
 	_test_contract_validates_extended_hold_metadata()
+	_test_contract_accepts_resource_action_cancel_boundary()
 	_test_contract_validates_plan_resources_and_cooldown()
 	_test_resource_prepare_rejects_before_runtime_commit()
 	_test_resource_commit_failure_rolls_back_runtime_and_cooldown()
@@ -350,6 +432,9 @@ func _run() -> void:
 	_test_reserved_context_rejects_before_busy_buffering()
 	_test_ready_presentation_queries_committed_cooldown_ledger()
 	_test_live_input_actions_do_not_enter_busy_buffer()
+	_test_reload_live_intent_uses_coordinator_phase_frame()
+	_test_malformed_live_intent_tail_rolls_back_runtime_only()
+	_test_runtime_tick_uses_coordinator_frame_while_ready_and_busy()
 	_test_busy_unsupported_sword_semantics_preserve_existing_buffer()
 	_test_rewind_safe_reset_preserves_committed_resources()
 	_test_contract_rejects_non_finite_plans()
@@ -767,6 +852,94 @@ func _test_tampered_finalized_hold_plan_rolls_back_and_cancels() -> void:
 		_suite.assert_equal(_committed_facts.size(), 0, "%s tampering publishes no committed fact" % label)
 
 
+func _test_hold_release_variant_adopts_real_action_identity() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	runtime.return_hold_release_variant = true
+	runtime.action_cooldown_frames = 20
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{"source": "variant_identity"}
+	)
+	var token := int(pressed.get("token", 0))
+	_advance(coordinator, 2)
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 999},
+		{}
+	)
+
+	_suite.assert_true(bool(released.get("ok", false)), "declared hold release variant succeeds")
+	_suite.assert_equal(released.get("token"), token, "release variant preserves the original hold token")
+	_suite.assert_equal(coordinator.snapshot().get("plan", {}).get("action_id"), "aimed_test", "coordinator adopts the finalized action identity")
+	_suite.assert_equal(_committed_facts.size(), 1, "release variant publishes exactly one committed fact")
+	_suite.assert_equal(_committed_facts[0].get("action_id"), "aimed_test", "committed fact uses the real finalized action id")
+	_suite.assert_equal(_committed_facts[0].get("context", {}).get("action_id"), "aimed_test", "committed context uses the real finalized action id")
+	_suite.assert_equal(coordinator.presentation_snapshot().get("action_id"), "aimed_test", "presentation uses the real finalized action id")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"aimed_test"), 20, "cooldown ledger uses the finalized action identity")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"hold_test"), 0, "hold skeleton identity never receives a cooldown")
+	_suite.assert_equal(runtime.commit_attempts, 1, "release variant does not recommit the runtime")
+
+
+func _test_hold_release_variant_fingerprint_is_frozen() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	runtime.return_hold_release_variant = true
+	runtime.tamper_release_fingerprint = true
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{}
+	)
+	var generation := int(pressed.get("generation", 0))
+	_advance(coordinator, 2)
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 2},
+		{}
+	)
+
+	_suite.assert_true(not bool(released.get("ok", false)), "undeclared release fingerprint fails closed")
+	_suite.assert_equal(released.get("code"), WeaponActionContractScript.CODE_INVALID_PLAN, "fingerprint mismatch uses the plan contract failure")
+	_suite.assert_equal(released.get("context", {}).get("field"), "release_action_fingerprint", "fingerprint mismatch names the rejected field")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "fingerprint mismatch cancels the hold transaction")
+	_suite.assert_true(coordinator.generation() > generation, "fingerprint mismatch invalidates the hold generation")
+	_suite.assert_equal(runtime.resource, 8, "fingerprint mismatch rolls runtime state back")
+	_suite.assert_equal(_committed_facts.size(), 0, "fingerprint mismatch publishes no committed fact")
+
+
+func _test_terminal_hold_requires_declared_release_variants() -> void:
+	var variant_hold := {
+		"weapon_id": "test_weapon",
+		"action_id": "primary_hold",
+		"profile_id": "test_profile",
+		"profile_version": 1,
+		"allowed_release_action_ids": ["normal_test", "aimed_test"],
+		"release_action_fingerprints": {
+			"normal_test": "normal-test-v1",
+			"aimed_test": "aimed-test-v1",
+		},
+		"phases": [{
+			"phase": "HOLD",
+			"duration_frames": 600,
+			"minimum_hold_frames": 0,
+			"charge_complete_frames": 18,
+		}],
+		"payloads": [],
+	}
+	_suite.assert_true(
+		bool(WeaponActionContractScript.validate_plan(variant_hold, &"test_weapon").get("ok", false)),
+		"declared release variants allow a terminal HOLD skeleton"
+	)
+
+	var undeclared_hold := variant_hold.duplicate(true)
+	undeclared_hold.erase("allowed_release_action_ids")
+	undeclared_hold.erase("release_action_fingerprints")
+	_suite.assert_true(
+		not bool(WeaponActionContractScript.validate_plan(undeclared_hold, &"test_weapon").get("ok", false)),
+		"legacy terminal HOLD without release variants remains invalid"
+	)
+
+
 func _test_contract_rejects_invalid_hold_boundaries() -> void:
 	var invalid_minimum := {
 		"weapon_id": "test_weapon",
@@ -851,6 +1024,26 @@ func _test_contract_validates_extended_hold_metadata() -> void:
 			"%s rejects negative values" % field
 		)
 
+
+func _test_contract_accepts_resource_action_cancel_boundary() -> void:
+	var valid_plan := {
+		"weapon_id": "test_weapon",
+		"action_id": "reload_test",
+		"phases": [{
+			"phase": "RESOURCE_ACTION",
+			"duration_frames": 32,
+			"cancel_from_frame": 0,
+			"movement_multiplier": 0.65,
+		}],
+		"payloads": [],
+	}
+	var accepted: Dictionary = WeaponActionContractScript.validate_plan(valid_plan, &"test_weapon")
+	_suite.assert_true(bool(accepted.get("ok", false)), "resource action may expose an explicit half-open cancel boundary")
+
+	var invalid_plan := valid_plan.duplicate(true)
+	(invalid_plan["phases"][0] as Dictionary)["cancel_from_frame"] = 32
+	var rejected: Dictionary = WeaponActionContractScript.validate_plan(invalid_plan, &"test_weapon")
+	_suite.assert_true(not bool(rejected.get("ok", false)), "resource action cancel boundary remains half-open")
 
 func _test_contract_validates_plan_resources_and_cooldown() -> void:
 	var valid_plan := _extended_hold_plan()
@@ -1162,6 +1355,76 @@ func _test_live_input_actions_do_not_enter_busy_buffer() -> void:
 	_suite.assert_equal(coordinator.phase_name(), &"READY", "original action completes without starting an unmanned live-input action")
 	_suite.assert_equal(runtime.commit_attempts, 1, "busy HOLD, CHANNEL, and release submissions never commit later")
 	_suite.assert_true(token_before > 0, "fixture began with an authoritative action token")
+
+
+func _test_reload_live_intent_uses_coordinator_phase_frame() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	runtime.return_reload_utility = true
+	var started: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_utility", "edge": "pressed"},
+		{}
+	)
+	var token := int(started.get("token", 0))
+	_advance(coordinator, 4)
+	_suite.assert_equal(coordinator.phase_name(), &"RESOURCE_ACTION", "reload reaches its coordinator-owned resource phase")
+	_suite.assert_equal(coordinator.presentation_snapshot().get("phase_frame"), 2, "reload confirm fixture reaches authoritative frame two")
+
+	var confirmed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_utility", "edge": "pressed", "held_frames": 999},
+		{"source": "perfect_reload_confirm"}
+	)
+	_suite.assert_true(bool(confirmed.get("ok", false)), "live reload confirmation is consumed by the active action")
+	_suite.assert_equal(confirmed.get("token"), token, "reload confirmation preserves the active action token")
+	_suite.assert_equal(runtime.live_confirm_calls, 1, "runtime receives one live confirmation")
+	_suite.assert_equal(runtime.live_confirm_phase, &"RESOURCE_ACTION", "runtime receives the coordinator-owned phase")
+	_suite.assert_equal(runtime.live_confirm_frame, 2, "runtime receives the coordinator-owned phase frame")
+	_suite.assert_equal(runtime.resource, 7, "perfect confirmation commits runtime-owned reload reward")
+	_suite.assert_equal(coordinator.phase_name(), &"RECOVERY", "perfect confirmation atomically replaces the remaining tail")
+	_suite.assert_equal(coordinator.presentation_snapshot().get("phase_duration_frames"), 4, "perfect confirmation adopts four recovery frames")
+	_suite.assert_true(coordinator.snapshot().get("buffered_submission", {}).is_empty(), "live confirmation never enters the ordinary input buffer")
+	_suite.assert_equal(runtime.commit_attempts, 1, "live confirmation never recommits the runtime")
+	_suite.assert_equal(_committed_facts.size(), 1, "live confirmation never publishes a second committed fact")
+
+
+func _test_malformed_live_intent_tail_rolls_back_runtime_only() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	runtime.return_reload_utility = true
+	runtime.malformed_live_tail = true
+	var started: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_utility", "edge": "pressed"},
+		{}
+	)
+	var token := int(started.get("token", 0))
+	var generation := int(started.get("generation", 0))
+	_advance(coordinator, 4)
+	var before: Dictionary = coordinator.snapshot()
+	var rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_utility", "edge": "pressed"},
+		{}
+	)
+
+	_suite.assert_true(not bool(rejected.get("ok", false)), "malformed live replacement tail fails closed")
+	_suite.assert_equal(rejected.get("code"), WeaponActionContractScript.CODE_INVALID_PLAN, "malformed live tail uses the plan contract failure")
+	_suite.assert_equal(runtime.resource, 7, "malformed live tail restores the pre-confirm runtime snapshot")
+	_suite.assert_equal(coordinator.current_token(), token, "malformed live tail preserves the active reload token")
+	_suite.assert_equal(coordinator.generation(), generation, "malformed live tail preserves the active generation")
+	_suite.assert_equal(coordinator.phase_name(), &"RESOURCE_ACTION", "malformed live tail leaves reload in its authoritative phase")
+	_suite.assert_equal(coordinator.snapshot(), before, "malformed live tail leaves coordinator state unchanged")
+	_suite.assert_equal(_committed_facts.size(), 1, "malformed live tail publishes no additional committed fact")
+
+
+func _test_runtime_tick_uses_coordinator_frame_while_ready_and_busy() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	_advance(coordinator, 3)
+	coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	_advance(coordinator, 2)
+	_suite.assert_equal(runtime.runtime_tick_frames, [1, 2, 3, 4, 5], "runtime state ticks only from the coordinator's monotonic frame")
 
 
 func _test_busy_unsupported_sword_semantics_preserve_existing_buffer() -> void:

@@ -38,6 +38,7 @@ var _attack_phase_remaining: float = 0.0
 var _committed_attack_direction: Vector2 = Vector2.RIGHT
 var _time_stop_token_sequence: int = 0
 var _time_stop_sources: Dictionary = {}
+var _damage_vulnerability_sources: Dictionary = {}
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -54,6 +55,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_tick_damage_vulnerability_sources()
 	if not health.is_alive():
 		return
 	if _time_stopped:
@@ -213,6 +215,7 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 
 func _on_died(_killer: Variant) -> void:
 	remove_from_group("enemies")
+	_damage_vulnerability_sources.clear()
 	cancel_active_attack()
 	visual.color = Color(0.25, 0.25, 0.28)
 	set_physics_process(false)
@@ -288,6 +291,55 @@ func get_weakpoint_damage_bonus(damage_info: RefCounted) -> float:
 	if damage_info.tags.has("attack:heavy") or damage_info.tags.has("attack:finisher"):
 		return _weakpoint_damage_bonus
 	return 0.0
+
+
+func apply_damage_vulnerability(
+	source_id: StringName,
+	duration_frames: int,
+	damage_taken_bonus: float
+) -> bool:
+	if (
+		source_id == &""
+		or duration_frames <= 0
+		or not is_finite(damage_taken_bonus)
+		or damage_taken_bonus <= 0.0
+		or damage_taken_bonus > 2.0
+		or _damage_vulnerability_sources.has(source_id)
+	):
+		return false
+	_damage_vulnerability_sources[source_id] = {
+		"remaining_frames": duration_frames,
+		"damage_taken_bonus": damage_taken_bonus,
+	}
+	return true
+
+
+func clear_damage_vulnerability_source(source_id: StringName) -> bool:
+	if source_id == &"" or not _damage_vulnerability_sources.has(source_id):
+		return false
+	_damage_vulnerability_sources.erase(source_id)
+	return true
+
+
+func get_damage_taken_multiplier() -> float:
+	var total_bonus := 0.0
+	for source_value: Variant in _damage_vulnerability_sources.values():
+		if source_value is Dictionary:
+			total_bonus += float((source_value as Dictionary).get("damage_taken_bonus", 0.0))
+	return clampf(1.0 + total_bonus, 1.0, 3.0)
+
+
+func _tick_damage_vulnerability_sources() -> void:
+	for source_id: Variant in _damage_vulnerability_sources.keys():
+		var source_value: Variant = _damage_vulnerability_sources.get(source_id)
+		if not source_value is Dictionary:
+			_damage_vulnerability_sources.erase(source_id)
+			continue
+		var remaining := int((source_value as Dictionary).get("remaining_frames", 0)) - 1
+		if remaining <= 0:
+			_damage_vulnerability_sources.erase(source_id)
+		else:
+			(source_value as Dictionary)["remaining_frames"] = remaining
 
 
 func apply_time_rift(source_id: StringName, slow_multiplier: float) -> void:

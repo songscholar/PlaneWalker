@@ -71,6 +71,18 @@ func submit_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 	var edge := StringName(str(intent.get("edge", "")))
 	if edge in [&"held", &"released"]:
 		return _submit_hold_edge(intent, context)
+	if _phase != PHASE_READY:
+		var live_submission := _submit_live_intent(intent, context)
+		if bool(live_submission.get("handled", false)):
+			var live_result: Variant = live_submission.get("result", {})
+			return (
+				(live_result as Dictionary).duplicate(true)
+				if live_result is Dictionary
+				else WeaponActionContractScript.failure(
+					WeaponActionContractScript.CODE_COMMIT_FAILED,
+					{"reason": "live_intent_result_type"}
+				)
+			)
 
 	if _phase != PHASE_READY and not _recovery_cancel_is_open():
 		var busy_plan_result := _plan_busy_submission(intent, context)
@@ -114,6 +126,8 @@ func advance_frame(consume_buffered: bool = true) -> void:
 	if _resource_transaction != null:
 		_resource_transaction.call("advance_frame")
 	_frame += 1
+	if not _advance_runtime_tick():
+		return
 	_prune_expired_buffer()
 	if _phase == PHASE_READY:
 		if consume_buffered:
@@ -583,6 +597,8 @@ func _release_hold(automatic: bool) -> Dictionary:
 			)
 		)
 	var finalized_plan := (finalized_value as Dictionary).duplicate(true)
+	finalized_plan.erase("allowed_release_action_ids")
+	finalized_plan.erase("release_action_fingerprints")
 	var finalized_validation: Dictionary = WeaponActionContractScript.validate_plan(
 		finalized_plan,
 		_weapon_id
@@ -662,14 +678,42 @@ func _release_hold(automatic: bool) -> Dictionary:
 
 
 func _validate_finalized_hold_identity(finalized_plan: Dictionary) -> Dictionary:
-	for field: String in [
-		"weapon_id",
-		"action_id",
-		"profile_id",
-		"profile_version",
-		"cooldown_frames",
-		"resource_costs",
-	]:
+	for field: String in ["weapon_id", "profile_id", "profile_version"]:
+		var finalized_value: Variant = finalized_plan.get(field)
+		var skeleton_value: Variant = _plan.get(field)
+		if typeof(finalized_value) != typeof(skeleton_value) or finalized_value != skeleton_value:
+			return WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": field, "reason": "hold_identity_mismatch"}
+			)
+	var allowed_value: Variant = _plan.get("allowed_release_action_ids", [])
+	var fingerprints_value: Variant = _plan.get("release_action_fingerprints", {})
+	if allowed_value is Array and not (allowed_value as Array).is_empty():
+		var finalized_action_id := str(finalized_plan.get("action_id", ""))
+		if not (allowed_value as Array).has(finalized_action_id):
+			return WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": "action_id", "reason": "undeclared_hold_release_variant"}
+			)
+		var expected_fingerprint := str((fingerprints_value as Dictionary).get(
+			finalized_action_id,
+			""
+		)) if fingerprints_value is Dictionary else ""
+		if (
+			expected_fingerprint.is_empty()
+			or str(finalized_plan.get("release_action_fingerprint", "")) != expected_fingerprint
+		):
+			return WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": "release_action_fingerprint", "reason": "hold_identity_mismatch"}
+			)
+		return WeaponActionContractScript.success()
+	if finalized_plan.has("release_action_fingerprint"):
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_INVALID_PLAN,
+			{"field": "release_action_fingerprint", "reason": "unexpected_hold_variant"}
+		)
+	for field: String in ["action_id", "cooldown_frames", "resource_costs"]:
 		var finalized_value: Variant = finalized_plan.get(field)
 		var skeleton_value: Variant = _plan.get(field)
 		if typeof(finalized_value) != typeof(skeleton_value) or finalized_value != skeleton_value:
@@ -783,7 +827,7 @@ func _prune_expired_buffer() -> void:
 
 
 func _recovery_cancel_is_open() -> bool:
-	if _phase != &"RECOVERY":
+	if _phase not in [&"RECOVERY", &"RESOURCE_ACTION"]:
 		return false
 	var phase_data := _current_phase_data()
 	if not phase_data.has("cancel_from_frame"):
@@ -907,6 +951,153 @@ func _plan_starts_with_hold(plan: Dictionary) -> bool:
 		and (phases_value as Array)[0] is Dictionary
 		and StringName(str(((phases_value as Array)[0] as Dictionary).get("phase", ""))) == &"HOLD"
 	)
+
+
+func _submit_live_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
+	if _runtime == null or not _runtime.has_method("handle_live_intent"):
+		return {"handled": false}
+	var runtime_before_value: Variant = _runtime.call("snapshot")
+	if not runtime_before_value is Dictionary:
+		return {
+			"handled": true,
+			"result": WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_COMMIT_FAILED,
+				{"reason": "live_intent_snapshot_type"}
+			),
+		}
+	var runtime_before := (runtime_before_value as Dictionary).duplicate(true)
+	var live_value: Variant = _runtime.call(
+		"handle_live_intent",
+		_plan.duplicate(true),
+		_token,
+		_phase,
+		_phase_frame,
+		intent.duplicate(true),
+		context.duplicate(true)
+	)
+	if not live_value is Dictionary:
+		return _live_intent_failure(
+			runtime_before,
+			WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_COMMIT_FAILED,
+				{"reason": "live_intent_result_type"}
+			)
+		)
+	var live_result := live_value as Dictionary
+	if not bool(live_result.get("handled", false)):
+		return {"handled": false}
+	if not bool(live_result.get("ok", false)):
+		return _live_intent_failure(
+			runtime_before,
+			_runtime_failure(live_result, WeaponActionContractScript.CODE_RUNTIME_REJECTED)
+		)
+
+	var replacement_value: Variant = live_result.get("replacement_phases", [])
+	if not replacement_value is Array:
+		return _live_intent_failure(
+			runtime_before,
+			WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_INVALID_PLAN,
+				{"field": "replacement_phases", "reason": "type"}
+			)
+		)
+	var replacement_phases := replacement_value as Array
+	if not replacement_phases.is_empty():
+		var current_phases_value: Variant = _plan.get("phases", [])
+		if not current_phases_value is Array:
+			return _live_intent_failure(
+				runtime_before,
+				WeaponActionContractScript.failure(
+					WeaponActionContractScript.CODE_INVALID_PLAN,
+					{"field": "phases", "reason": "type"}
+				)
+			)
+		var next_phases: Array = []
+		for phase_index: int in range(_phase_index):
+			var prefix_phase: Variant = (current_phases_value as Array)[phase_index]
+			next_phases.append(
+				(prefix_phase as Dictionary).duplicate(true)
+				if prefix_phase is Dictionary
+				else prefix_phase
+			)
+		for replacement_phase: Variant in replacement_phases:
+			next_phases.append(
+				(replacement_phase as Dictionary).duplicate(true)
+				if replacement_phase is Dictionary
+				else replacement_phase
+			)
+		var finalized_plan := _plan.duplicate(true)
+		finalized_plan["phases"] = next_phases
+		var plan_validation: Dictionary = WeaponActionContractScript.validate_plan(
+			finalized_plan,
+			_weapon_id
+		)
+		if not bool(plan_validation.get("ok", false)):
+			return _live_intent_failure(runtime_before, plan_validation)
+		var active_token := _token
+		var active_generation := _generation
+		_plan = finalized_plan
+		_phase_index = next_phases.size() - replacement_phases.size()
+		_phase_frame = 0
+		_phase = StringName(str(_current_phase_data().get("phase", "")))
+		_enter_current_phase()
+		if _token != active_token or _generation != active_generation or _phase == PHASE_READY:
+			return {
+				"handled": true,
+				"result": WeaponActionContractScript.failure(
+					WeaponActionContractScript.CODE_COMMIT_FAILED,
+					{"reason": "live_intent_phase_entry_failed"}
+				),
+			}
+
+	var context_value: Variant = live_result.get("context", {})
+	var result_context := (
+		(context_value as Dictionary).duplicate(true)
+		if context_value is Dictionary
+		else {}
+	)
+	return {
+		"handled": true,
+		"result": {
+			"ok": true,
+			"code": WeaponActionContractScript.CODE_OK,
+			"token": _token,
+			"generation": _generation,
+			"context": result_context,
+		},
+	}
+
+
+func _live_intent_failure(runtime_before: Dictionary, failure_result: Dictionary) -> Dictionary:
+	if not bool(_runtime.call("restore_snapshot", runtime_before.duplicate(true))):
+		_force_runtime_safe_reset(&"live_intent_rollback_failed")
+		return {
+			"handled": true,
+			"result": WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_COMMIT_FAILED,
+				{"reason": "rollback_failed"}
+			),
+		}
+	return {"handled": true, "result": failure_result.duplicate(true)}
+
+
+func _advance_runtime_tick() -> bool:
+	if _runtime == null or not _runtime.has_method("advance_runtime_frame"):
+		return true
+	var events_value: Variant = _runtime.call("advance_runtime_frame", _frame)
+	if not events_value is Array:
+		_force_runtime_safe_reset(&"runtime_tick_result_type")
+		return false
+	for event_value: Variant in events_value as Array:
+		if not event_value is Dictionary:
+			_force_runtime_safe_reset(&"runtime_tick_event_type")
+			return false
+		var event := (event_value as Dictionary).duplicate(true)
+		if str(event.get("type", "")) in ["phase_failed", "runtime_failed"]:
+			_force_runtime_safe_reset(StringName(str(event.get("reason", "runtime_tick_failed"))))
+			return false
+		weapon_runtime_event.emit(event)
+	return true
 
 
 func _plan_busy_submission(intent: Dictionary, context: Dictionary) -> Dictionary:

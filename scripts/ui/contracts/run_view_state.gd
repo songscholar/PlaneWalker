@@ -4,7 +4,7 @@ extends RefCounted
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
 const PHASES: Array[String] = [
 	"BOOT",
 	"HUB",
@@ -18,6 +18,103 @@ const PHASES: Array[String] = [
 	"VICTORY",
 	"DEFEAT",
 ]
+const WEAPON_PHASES: Array[String] = [
+	"READY",
+	"HOLD",
+	"CHANNEL",
+	"WINDUP",
+	"ACTIVE",
+	"RESOURCE_ACTION",
+	"RECOVERY",
+]
+const WEAPON_STATE_FIELDS: Array[String] = [
+	"weapon_id",
+	"action_id",
+	"phase",
+	"meter_kind",
+	"meter_current",
+	"meter_max",
+	"status_id",
+	"status_stacks",
+	"status_remaining",
+	"secondary_id",
+	"secondary_value",
+]
+const LEGACY_WEAPON_FIELDS: Array[String] = [
+	"weapon",
+	"sword_state",
+	"bow_state",
+	"gun_state",
+	"staff_state",
+	"gauntlets_state",
+]
+const LEGACY_TOP_LEVEL_WEAPON_FIELDS: Array[String] = [
+	"weapon_id",
+	"action_id",
+	"meter_kind",
+	"meter_current",
+	"meter_max",
+	"status_id",
+	"status_stacks",
+	"status_remaining",
+	"secondary_id",
+	"secondary_value",
+	"ammo",
+	"ammo_maximum",
+	"reload_frame",
+	"charge_frames",
+	"combo_step",
+	"mana",
+	"element",
+	"guard",
+	"counter",
+]
+const METER_KINDS_BY_WEAPON := {
+	"sword": ["guard", "charge", "counter"],
+	"bow": ["charge", "hold"],
+	"gun": ["ammo", "reload"],
+	"staff": ["mana", "element", "sequence"],
+	"gauntlets": ["combo", "timeout", "counter"],
+}
+const STATUS_IDS_BY_WEAPON := {
+	"sword": ["ready", "acting", "guarding", "charging", "counter_ready"],
+	"bow": ["ready", "acting", "charging", "full_charge", "holding"],
+	"gun": ["ready", "acting", "reloading", "perfect_reload", "time_load"],
+	"staff": ["ready", "acting", "channeling", "element_fire", "element_ice", "element_lightning", "sequence_ready"],
+	"gauntlets": ["ready", "acting", "counter_ready", "combo_active"],
+}
+const STATUS_IDS_BY_METER := {
+	"sword": {
+		"guard": ["ready", "acting", "guarding"],
+		"charge": ["ready", "acting", "charging"],
+		"counter": ["ready", "acting", "counter_ready"],
+	},
+	"bow": {
+		"charge": ["ready", "acting", "charging", "full_charge"],
+		"hold": ["ready", "acting", "holding"],
+	},
+	"gun": {
+		"ammo": ["ready", "acting", "time_load"],
+		"reload": ["reloading", "perfect_reload"],
+	},
+	"staff": {
+		"mana": ["ready", "acting", "channeling"],
+		"element": ["ready", "acting", "element_fire", "element_ice", "element_lightning"],
+		"sequence": ["ready", "acting", "sequence_ready"],
+	},
+	"gauntlets": {
+		"combo": ["ready", "acting", "combo_active"],
+		"timeout": ["ready", "acting", "combo_active"],
+		"counter": ["ready", "acting", "counter_ready"],
+	},
+}
+const SECONDARY_IDS_BY_WEAPON := {
+	"sword": ["", "combo", "counter"],
+	"bow": ["", "hold"],
+	"gun": ["", "time_load", "reload_window"],
+	"staff": ["", "element", "sequence"],
+	"gauntlets": ["", "combo", "timeout", "counter"],
+}
 
 
 static func validate(value: Variant):
@@ -40,6 +137,12 @@ static func validate(value: Variant):
 		return _failure(revision, "suspended", "expected boolean")
 	if not _is_integer(state.get("run_time_ms")) or int(state["run_time_ms"]) < 0:
 		return _failure(revision, "run_time_ms", "expected non-negative integer")
+	for legacy_field: String in LEGACY_WEAPON_FIELDS:
+		if state.has(legacy_field):
+			return _failure(revision, legacy_field, "legacy weapon field is not supported")
+	for legacy_field: String in LEGACY_TOP_LEVEL_WEAPON_FIELDS:
+		if state.has(legacy_field):
+			return _failure(revision, legacy_field, "weapon state must use the weapon_state union")
 
 	var room_result = _validate_room(state.get("room"), revision)
 	if not room_result.ok:
@@ -47,6 +150,9 @@ static func validate(value: Variant):
 	var player_result = _validate_player(state.get("player"), revision)
 	if not player_result.ok:
 		return player_result
+	var weapon_result = _validate_weapon_state(state.get("weapon_state"), revision)
+	if not weapon_result.ok:
+		return weapon_result
 	var build_result = _validate_build(state.get("build"), revision)
 	if not build_result.ok:
 		return build_result
@@ -106,6 +212,11 @@ static func _validate_player(value: Variant, revision: int):
 		return _failure(revision, "player.energy", "energy must be within maximum")
 	if not _is_non_empty_string(player.get("action_state")):
 		return _failure(revision, "player.action_state", "expected non-empty string")
+	for legacy_field: String in LEGACY_WEAPON_FIELDS:
+		if player.has(legacy_field):
+			return _failure(revision, "player.%s" % legacy_field, "raw weapon state is not supported")
+	if player.has("weapon_state"):
+		return _failure(revision, "player.weapon_state", "weapon state must be top-level")
 	if player.has("cooldowns"):
 		return _failure(revision, "player.cooldowns", "legacy cooldown dictionary is not supported")
 	if typeof(player.get("time_slots")) != TYPE_ARRAY:
@@ -138,6 +249,87 @@ static func _validate_player(value: Variant, revision: int):
 			return _failure(revision, "player.time_slots[%d].cooldown" % index, "expected non-negative finite number")
 		ability_ids.append(ability_id)
 		action_ids.append(action_id)
+	return CommandResultScript.success(revision)
+
+
+static func _validate_weapon_state(value: Variant, revision: int):
+	if typeof(value) != TYPE_DICTIONARY:
+		return _failure(revision, "weapon_state", "expected dictionary")
+	var weapon := value as Dictionary
+	for field: String in WEAPON_STATE_FIELDS:
+		if not weapon.has(field):
+			return _failure(revision, "weapon_state.%s" % field, "missing field")
+	for raw_field: Variant in weapon:
+		var field := str(raw_field)
+		if not WEAPON_STATE_FIELDS.has(field):
+			return _failure(revision, "weapon_state.%s" % field, "unexpected field")
+
+	var weapon_id := str(weapon.get("weapon_id", ""))
+	if not _is_non_empty_string(weapon.get("weapon_id")) or not METER_KINDS_BY_WEAPON.has(weapon_id):
+		return _failure(revision, "weapon_state.weapon_id", "unknown weapon")
+	if typeof(weapon.get("action_id")) != TYPE_STRING:
+		return _failure(revision, "weapon_state.action_id", "expected string")
+	var action_id := str(weapon["action_id"])
+	if not _is_non_empty_string(weapon.get("phase")) or not WEAPON_PHASES.has(str(weapon["phase"])):
+		return _failure(revision, "weapon_state.phase", "unknown phase")
+	var phase := str(weapon["phase"])
+	if phase == "READY" and not action_id.is_empty():
+		return _failure(revision, "weapon_state.action_id", "ready phase cannot expose an active action")
+	if phase != "READY" and action_id.is_empty():
+		return _failure(revision, "weapon_state.action_id", "active phase requires an action")
+
+	if not _is_non_empty_string(weapon.get("meter_kind")):
+		return _failure(revision, "weapon_state.meter_kind", "expected non-empty string")
+	var meter_kind := str(weapon["meter_kind"])
+	var allowed_meters := METER_KINDS_BY_WEAPON[weapon_id] as Array
+	if not allowed_meters.has(meter_kind):
+		return _failure(revision, "weapon_state.meter_kind", "meter is not supported by weapon")
+	if not _is_number(weapon.get("meter_current")) or not _is_number(weapon.get("meter_max")):
+		return _failure(revision, "weapon_state.meter_current", "meter values must be finite numbers")
+	var meter_current := float(weapon["meter_current"])
+	var meter_max := float(weapon["meter_max"])
+	if meter_max <= 0.0 or meter_current < 0.0 or meter_current > meter_max:
+		return _failure(revision, "weapon_state.meter_current", "meter must be within a positive maximum")
+	if weapon_id == "gun" and meter_kind in ["ammo", "reload"]:
+		if not _is_integer(weapon["meter_current"]) or not _is_integer(weapon["meter_max"]):
+			return _failure(revision, "weapon_state.meter_current", "Gun meter values must be integers")
+
+	if not _is_non_empty_string(weapon.get("status_id")):
+		return _failure(revision, "weapon_state.status_id", "expected non-empty string")
+	var status_id := str(weapon["status_id"])
+	var allowed_statuses := STATUS_IDS_BY_WEAPON[weapon_id] as Array
+	if not allowed_statuses.has(status_id):
+		return _failure(revision, "weapon_state.status_id", "status is not supported by weapon")
+	var statuses_by_meter := STATUS_IDS_BY_METER[weapon_id] as Dictionary
+	var allowed_meter_statuses := statuses_by_meter[meter_kind] as Array
+	if not allowed_meter_statuses.has(status_id):
+		return _failure(revision, "weapon_state.status_id", "status is not supported by weapon meter")
+	if not _is_integer(weapon.get("status_stacks")) or int(weapon["status_stacks"]) < 0:
+		return _failure(revision, "weapon_state.status_stacks", "expected non-negative integer")
+	if not _is_number(weapon.get("status_remaining")) or float(weapon["status_remaining"]) < 0.0:
+		return _failure(revision, "weapon_state.status_remaining", "expected non-negative finite number")
+	if status_id in ["ready", "acting"] and int(weapon["status_stacks"]) != 0:
+		return _failure(revision, "weapon_state.status_stacks", "neutral status cannot carry stacks")
+	if status_id not in ["ready", "acting"] and int(weapon["status_stacks"]) <= 0:
+		return _failure(revision, "weapon_state.status_stacks", "active status requires a stack")
+
+	if typeof(weapon.get("secondary_id")) != TYPE_STRING:
+		return _failure(revision, "weapon_state.secondary_id", "expected string")
+	var secondary_id := str(weapon["secondary_id"])
+	var allowed_secondaries := SECONDARY_IDS_BY_WEAPON[weapon_id] as Array
+	if not allowed_secondaries.has(secondary_id):
+		return _failure(revision, "weapon_state.secondary_id", "secondary state is not supported by weapon")
+	if not _is_number(weapon.get("secondary_value")) or float(weapon["secondary_value"]) < 0.0:
+		return _failure(revision, "weapon_state.secondary_value", "expected non-negative finite number")
+	if secondary_id.is_empty() and not is_zero_approx(float(weapon["secondary_value"])):
+		return _failure(revision, "weapon_state.secondary_value", "empty secondary state must be zero")
+
+	if weapon_id == "gun":
+		if meter_kind == "reload" and action_id != "reload":
+			return _failure(revision, "weapon_state.meter_kind", "reload meter requires reload action")
+		if status_id == "time_load" and secondary_id == "time_load":
+			return _failure(revision, "weapon_state.secondary_id", "Time Load cannot be duplicated")
+
 	return CommandResultScript.success(revision)
 
 

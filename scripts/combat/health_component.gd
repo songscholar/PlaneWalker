@@ -109,6 +109,10 @@ func _apply_target_damage_modifiers(damage_info: RefCounted) -> float:
 	var owner_entity := get_parent()
 	if owner_entity.is_in_group("player"):
 		amount *= damage_received_multiplier
+	if owner_entity.has_method("get_damage_taken_multiplier"):
+		var target_multiplier: float = owner_entity.get_damage_taken_multiplier()
+		if is_finite(target_multiplier) and target_multiplier > 0.0:
+			amount *= target_multiplier
 	if owner_entity.has_method("get_weakpoint_damage_bonus"):
 		var weakpoint_bonus: float = owner_entity.get_weakpoint_damage_bonus(damage_info)
 		if weakpoint_bonus > 0.0:

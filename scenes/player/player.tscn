@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player_controller"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health_component"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/combat/bow_weapon.gd" id="8_bow_weapon"]
 [ext_resource type="PackedScene" path="res://scenes/time/rewind_echo_runtime.tscn" id="9_rewind_echo"]
 [ext_resource type="Script" path="res://scripts/player/player_loadout_runtime.gd" id="10_player_loadout"]
+[ext_resource type="Script" path="res://scripts/combat/gun_weapon.gd" id="11_gun_weapon"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 14.0
@@ -66,4 +67,8 @@ shape = SubResource("RectangleShape2D_sword")
 
 [node name="BowWeapon" type="Node2D" parent="."]
 script = ExtResource("8_bow_weapon")
+owner_path = NodePath("..")
+
+[node name="GunWeapon" type="Node2D" parent="."]
+script = ExtResource("11_gun_weapon")
 owner_path = NodePath("..")

@@ -57,6 +57,7 @@ func _run() -> void:
 	_assert_hit_feedback_profiles()
 	_assert_audio_contract()
 	await _assert_bow_feedback_contract()
+	await _assert_gun_feedback_contract()
 	await _assert_audio_cleanup_contract()
 	_assert_overlay_contract()
 	await _assert_feedback_runtime_gates()
@@ -434,6 +435,19 @@ func _assert_audio_contract() -> void:
 		cues.get(&"bow_release", {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
 		"Bow release never aliases the Sword swing signature"
 	)
+	for cue_id: StringName in [
+		&"gun_fire",
+		&"gun_aimed_fire",
+		&"gun_shotgun",
+		&"gun_reload",
+		&"gun_time_load",
+		&"gun_ultimate",
+	]:
+		_suite.assert_true(cues.has(cue_id), "Gun cue %s has a dedicated audio signature" % str(cue_id))
+		_suite.assert_true(
+			cues.get(cue_id, {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
+			"Gun cue %s never aliases the Sword swing signature" % str(cue_id)
+		)
 
 
 func _assert_bow_feedback_contract() -> void:
@@ -526,6 +540,105 @@ func _assert_bow_feedback_contract() -> void:
 	)
 	history = CombatFeedback.get_audio_contract_for_test().get("history", [])
 	_suite.assert_equal(history.count(&"bow_release"), 1, "feedback reset permits token reuse in a later run")
+
+	player.queue_free()
+	await get_tree().process_frame
+	CombatFeedback.reset_feedback_for_test()
+
+
+func _assert_gun_feedback_contract() -> void:
+	var player := SnapshotPlayer.new()
+	player.weapon_snapshot = {
+		"weapon_id": "gun",
+		"action_id": "normal_fire",
+		"phase": "ACTIVE",
+		"token": 801,
+		"ammo": 5,
+		"ammo_maximum": 6,
+		"reload_frame": -1,
+		"reload_window": {"segment": "invalid", "perfect_confirm": false},
+		"time_load_source": "",
+		"time_load_remaining_frames": 0,
+		"facing": Vector2.RIGHT,
+	}
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "Gun feedback probe receives a player proxy")
+	CombatFeedback.reset_feedback_for_test()
+
+	EventBus.player_attacked.emit(&"gun", {"token": 801})
+	EventBus.weapon_cue_requested.emit(
+		&"gun",
+		&"normal_fire",
+		801,
+		{
+			"cue_id": "gun_normal_fire",
+			"animation_id": "gun_fire",
+			"vfx_id": "gun_muzzle",
+			"audio_id": "gun_fire",
+			"camera_id": "impact_light",
+		}
+	)
+	EventBus.weapon_cue_requested.emit(
+		&"gun",
+		&"normal_fire",
+		801,
+		{
+			"cue_id": "gun_normal_fire",
+			"animation_id": "gun_fire",
+			"vfx_id": "gun_muzzle",
+			"audio_id": "gun_fire",
+			"camera_id": "impact_light",
+		}
+	)
+	var history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"gun_fire"), 1, "one Gun action token plays its Profile fire cue exactly once")
+	_suite.assert_equal(history.count(&"sword_swing"), 0, "Gun fire never falls back to the legacy Sword cue")
+	if proxy != null:
+		proxy.advance_animation_for_test(0.01)
+		var fire_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(fire_snapshot.get("weapon_visual"), "gun", "Gun cue keeps a firearm silhouette")
+		_suite.assert_true(bool(fire_snapshot.get("gun_muzzle_visible", false)), "Gun active fire exposes a muzzle cue")
+		_suite.assert_true(not bool(fire_snapshot.get("melee_slash_visible", true)), "Gun fire never exposes the melee slash primitive")
+
+	player.weapon_snapshot = {
+		"weapon_id": "gun",
+		"action_id": "reload",
+		"phase": "RESOURCE_ACTION",
+		"token": 802,
+		"ammo": 1,
+		"ammo_maximum": 6,
+		"reload_frame": 30,
+		"reload_window": {"segment": "perfect", "perfect_confirm": true},
+		"time_load_source": "perfect_reload",
+		"time_load_remaining_frames": 300,
+		"facing": Vector2.LEFT,
+	}
+	if proxy != null:
+		proxy.advance_animation_for_test(0.01)
+		var reload_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(reload_snapshot.get("state"), "attack", "Gun reload remains an explicit weapon presentation state")
+		_suite.assert_true(bool(reload_snapshot.get("gun_reload_marker_visible", false)), "Gun reload exposes its progress marker")
+		_suite.assert_true(bool(reload_snapshot.get("gun_perfect_ring_visible", false)), "perfect reload window exposes a shape cue")
+		_suite.assert_true(bool(reload_snapshot.get("gun_time_load_active", false)), "free Time Load adds a persistent tint cue")
+		_suite.assert_equal(reload_snapshot.get("facing"), Vector2.LEFT, "Gun reload reads snapshot facing")
+
+	EventBus.weapon_cue_requested.emit(
+		&"gun",
+		&"reload",
+		802,
+		{
+			"cue_id": "gun_reload_start",
+			"animation_id": "gun_reload",
+			"vfx_id": "gun_reload_marker",
+			"audio_id": "gun_reload",
+			"camera_id": "resource_action",
+		}
+	)
+	history = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"gun_reload"), 1, "Gun reload has a dedicated cue")
+	_suite.assert_equal(history.count(&"sword_swing"), 0, "Gun reload never aliases Sword audio")
 
 	player.queue_free()
 	await get_tree().process_frame

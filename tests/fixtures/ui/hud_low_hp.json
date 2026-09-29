@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "revision": 2,
   "run_id": "fixture-run",
   "phase": "COMBAT_ACTIVE",
@@ -29,6 +29,19 @@
         "cooldown": 0.0
       }
     ]
+  },
+  "weapon_state": {
+    "weapon_id": "bow",
+    "action_id": "precision_draw",
+    "phase": "HOLD",
+    "meter_kind": "charge",
+    "meter_current": 30,
+    "meter_max": 48,
+    "status_id": "charging",
+    "status_stacks": 1,
+    "status_remaining": 0,
+    "secondary_id": "hold",
+    "secondary_value": 30
   },
   "build": {
     "items": ["frozen_burst"],

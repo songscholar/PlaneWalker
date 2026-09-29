@@ -243,7 +243,11 @@ func get_snapshot_for_test() -> Dictionary:
 		"weapon_visual": _weapon_visual_kind(),
 		"bow_tension": _bow_tension,
 		"bow_charge_tier": _bow_charge_tier,
-		"melee_slash_visible": _state == &"attack" and _weapon_visual_kind() != "bow",
+		"gun_muzzle_visible": _gun_muzzle_visible(),
+		"gun_reload_marker_visible": _gun_reload_marker_visible(),
+		"gun_perfect_ring_visible": _gun_perfect_ring_visible(),
+		"gun_time_load_active": _gun_time_load_active(),
+		"melee_slash_visible": _state == &"attack" and _weapon_visual_kind() == "sword",
 		"boss_phase_marks": _boss_phase,
 		"boss_core_shape": _boss_core_shape,
 		"boss_texture_pattern": _boss_texture_pattern,
@@ -374,12 +378,52 @@ func _player_weapon_action_is_presented() -> bool:
 	return (
 		_weapon_snapshot_available
 		and not _weapon_action_id.is_empty()
-		and _weapon_phase in ["HOLD", "WINDUP", "ACTIVE", "RECOVERY"]
+		and _weapon_phase in ["HOLD", "WINDUP", "ACTIVE", "RESOURCE_ACTION", "RECOVERY"]
 	)
 
 
 func _weapon_visual_kind() -> String:
-	return "bow" if _weapon_id == "bow" else "sword"
+	match _weapon_id:
+		"bow":
+			return "bow"
+		"gun":
+			return "gun"
+		_:
+			return "sword"
+
+
+func _gun_muzzle_visible() -> bool:
+	return (
+		_weapon_id == "gun"
+		and _weapon_phase == "ACTIVE"
+		and _weapon_action_id in ["normal_fire", "aimed_fire", "shotgun_fire", "void_penetration"]
+	)
+
+
+func _gun_reload_marker_visible() -> bool:
+	return (
+		_weapon_id == "gun"
+		and _weapon_action_id == "reload"
+		and _weapon_phase in ["WINDUP", "RESOURCE_ACTION", "RECOVERY"]
+	)
+
+
+func _gun_perfect_ring_visible() -> bool:
+	if not _gun_reload_marker_visible() or _weapon_phase != "RESOURCE_ACTION":
+		return false
+	var window_value: Variant = _player_weapon_snapshot.get("reload_window", {})
+	return (
+		window_value is Dictionary
+		and str((window_value as Dictionary).get("segment", "")) == "perfect"
+		and bool((window_value as Dictionary).get("perfect_confirm", false))
+	)
+
+
+func _gun_time_load_active() -> bool:
+	return (
+		_weapon_id == "gun"
+		and int(_player_weapon_snapshot.get("time_load_remaining_frames", 0)) > 0
+	)
 
 
 func _resolve_bow_charge_tier() -> String:
@@ -460,6 +504,10 @@ func _apply_pixel_transform() -> void:
 				offset = _facing * (-2.0 if _weapon_phase == "HOLD" else 2.0)
 				if not _reduced_motion:
 					target_scale = Vector2(1.03, 0.98) if absf(_facing.x) > 0.0 else Vector2(0.98, 1.03)
+			elif _weapon_visual_kind() == "gun":
+				offset = _facing * (-2.0 if _weapon_phase == "ACTIVE" else 0.0)
+				if not _reduced_motion and _weapon_phase == "ACTIVE":
+					target_scale = Vector2(1.04, 0.98) if absf(_facing.x) > 0.0 else Vector2(0.98, 1.04)
 			else:
 				offset = _facing * 2.0
 				target_scale = Vector2(1.08, 0.94) if absf(_facing.x) > 0.0 else Vector2(0.94, 1.08)
@@ -538,6 +586,8 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 	draw_set_transform(Vector2.ZERO, _facing.angle(), Vector2.ONE)
 	if _weapon_visual_kind() == "bow":
 		_draw_player_bow(accent)
+	elif _weapon_visual_kind() == "gun":
+		_draw_player_gun(accent)
 	elif _state == &"attack":
 		draw_rect(Rect2(10, -4, 18, 4), accent, true)
 		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
@@ -577,6 +627,27 @@ func _draw_player_bow(accent: Color) -> void:
 			PackedVector2Array([Vector2(24, 0), Vector2(20, -4), Vector2(20, 4)]),
 			arrow_color
 		)
+
+
+func _draw_player_gun(accent: Color) -> void:
+	var gun_color := accent.darkened(0.18)
+	draw_rect(Rect2(10, -4, 18, 8), gun_color, true)
+	draw_rect(Rect2(14, 4, 6, 8), gun_color.darkened(0.28), true)
+	draw_rect(Rect2(26, -2, 8, 4), accent, true)
+	if _gun_muzzle_visible():
+		draw_colored_polygon(
+			PackedVector2Array([Vector2(36, 0), Vector2(44, -6), Vector2(42, 0), Vector2(44, 6)]),
+			Color(1.0, 0.86, 0.34)
+		)
+	if _gun_reload_marker_visible():
+		var reload_frame := clampi(int(_player_weapon_snapshot.get("reload_frame", 0)), 0, 48)
+		var marker_x := lerpf(10.0, 34.0, float(reload_frame) / 48.0)
+		draw_rect(Rect2(10, 15, 24, 2), Color(0.22, 0.3, 0.36), true)
+		draw_rect(Rect2(marker_x - 1.0, 13, 2, 6), accent, true)
+	if _gun_perfect_ring_visible():
+		draw_arc(Vector2(22, 0), 18.0, 0.0, TAU, 16, Color(1.0, 0.88, 0.3), 2.0, false)
+	if _gun_time_load_active():
+		draw_arc(Vector2.ZERO, 21.0, 0.0, TAU, 16, Color(0.24, 0.94, 1.0), 2.0, false)
 
 
 func _draw_chaser(primary: Color, secondary: Color, accent: Color) -> void:

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "revision": 1,
   "run_id": "fixture-run",
   "phase": "COMBAT_ACTIVE",
@@ -29,6 +29,19 @@
         "cooldown": 4.5
       }
     ]
+  },
+  "weapon_state": {
+    "weapon_id": "gun",
+    "action_id": "normal_fire",
+    "phase": "ACTIVE",
+    "meter_kind": "ammo",
+    "meter_current": 4,
+    "meter_max": 6,
+    "status_id": "time_load",
+    "status_stacks": 1,
+    "status_remaining": 180,
+    "secondary_id": "",
+    "secondary_value": 0
   },
   "build": {
     "items": [],
