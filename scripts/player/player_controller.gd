@@ -7,6 +7,7 @@ const PlayerActionStateScript := preload("res://scripts/player/player_action_sta
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
 const BowWeaponRuntimeScript := preload("res://scripts/combat/weapons/bow_weapon_runtime.gd")
 const GunWeaponRuntimeScript := preload("res://scripts/combat/weapons/gun_weapon_runtime.gd")
+const StaffWeaponRuntimeScript := preload("res://scripts/combat/weapons/staff_weapon_runtime.gd")
 const SwordWeaponRuntimeScript := preload("res://scripts/combat/weapons/sword_weapon_runtime.gd")
 const WeaponActionCoordinatorScript := preload("res://scripts/combat/weapons/weapon_action_coordinator.gd")
 const WeaponIntentRouterScript := preload("res://scripts/input/weapon_intent_router.gd")
@@ -25,6 +26,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.charge_rate": {"minimum": 0.0, "maximum": 6.0},
 	"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
 	"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
+	"weapon.mana_max": {"minimum": 0.0, "maximum": 300.0},
 	"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
 	"weapon.reload_window": {"minimum": 0.0, "maximum": 10.0},
 	"weapon.status_duration": {"minimum": 0.0, "maximum": 10.0},
@@ -37,6 +39,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 @onready var sword_weapon: Node = $SwordWeapon
 @onready var bow_weapon: Node = $BowWeapon
 @onready var gun_weapon: Node = $GunWeapon
+@onready var staff_weapon: Node = $StaffWeapon
 @onready var time_manager: Node = $TimeManager
 @onready var rewind_recorder: Node = $RewindRecorder
 @onready var visual: Polygon2D = $Visual
@@ -59,6 +62,7 @@ var _weapon_profile_compatibility_fallback: bool = false
 var _buffered_time_skill: StringName = &""
 var _weapon_action_reward_claims: Dictionary = {}
 var _weapon_action_ids_by_token: Dictionary = {}
+var _weapon_action_generations_by_token: Dictionary = {}
 var _weapon_action_token_order: Array[int] = []
 var _weapon_hit_fact_claims: Dictionary = {}
 var _weapon_resource_fact_state: Dictionary = {}
@@ -76,6 +80,7 @@ const TIME_CAST_MOVEMENT_MULTIPLIER := 0.35
 const BOW_TARGET_DISTANCE_PIXELS := 8.0 * 64.0
 const GUN_BASE_ATTACK := 15.0
 const GUN_ATTACK_SPEED := 0.9
+const STAFF_BASE_ATTACK := 9.0
 const MAX_TRACKED_WEAPON_FACT_TOKENS := 256
 
 
@@ -91,6 +96,10 @@ func _ready() -> void:
 		gun_weapon.action_hit_confirmed.connect(_on_gun_action_hit_confirmed)
 	if not gun_weapon.resource_reward_requested.is_connected(_on_gun_resource_reward_requested):
 		gun_weapon.resource_reward_requested.connect(_on_gun_resource_reward_requested)
+	if not staff_weapon.payload_result_reported.is_connected(_on_staff_payload_result_reported):
+		staff_weapon.payload_result_reported.connect(_on_staff_payload_result_reported)
+	if not staff_weapon.resource_reward_requested.is_connected(_on_staff_resource_reward_requested):
+		staff_weapon.resource_reward_requested.connect(_on_staff_resource_reward_requested)
 
 
 func _physics_process(delta: float) -> void:
@@ -112,6 +121,7 @@ func _update_weapon_aim() -> void:
 		sword_weapon.rotation = aim_direction.angle()
 		bow_weapon.rotation = aim_direction.angle()
 		gun_weapon.rotation = aim_direction.angle()
+		staff_weapon.rotation = aim_direction.angle()
 
 
 func _handle_priority_action_input() -> void:
@@ -257,14 +267,14 @@ func configure_loadout(config: Dictionary) -> bool:
 		):
 			return false
 		next_config["weapon_profile"] = authoritative_profile.duplicate(true)
-	if next_weapon_id in [&"sword", &"bow"] and not next_config.has("weapon_profile"):
+	if next_weapon_id in [&"sword", &"bow", &"staff"] and not next_config.has("weapon_profile"):
 		var default_profile := _weapon_profile_definition(next_weapon_id)
 		if default_profile.is_empty():
 			return false
 		next_config["weapon_profile"] = default_profile
 		used_compatibility_profile = true
 	if (
-		(explicit_weapon_profile or next_weapon_id == &"bow")
+		(explicit_weapon_profile or next_weapon_id in [&"bow", &"staff"])
 		and next_config.has("weapon_profile")
 		and not _profile_allows_milestone(next_config)
 	):
@@ -298,6 +308,7 @@ func reset_runtime_state() -> void:
 	_weapon_combo_timeout_frames = 0
 	_weapon_action_reward_claims.clear()
 	_weapon_action_ids_by_token.clear()
+	_weapon_action_generations_by_token.clear()
 	_weapon_action_token_order.clear()
 	_weapon_hit_fact_claims.clear()
 	_weapon_resource_fact_state.clear()
@@ -315,6 +326,7 @@ func reset_runtime_state() -> void:
 		sword_weapon.reset_combo()
 	bow_weapon.reset_runtime_state()
 	gun_weapon.reset_runtime_state()
+	staff_weapon.reset_runtime_state()
 	_sync_weapon_resource_facts(&"runtime_reset")
 	_clear_owned_player_arrows()
 	_clear_owned_player_projectiles()
@@ -383,6 +395,7 @@ func cancel_transient_actions() -> void:
 	_clear_transient_effects()
 	_clear_owned_player_arrows()
 	_clear_owned_player_projectiles()
+	_clear_owned_staff_payloads()
 	if weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
 		weapon_runtime.call("reset_combo")
 
@@ -412,6 +425,7 @@ func restore_rewind_safe_action_state(state: Dictionary) -> bool:
 	_weapon_intent_router.call("reset_all")
 	_clear_owned_player_arrows()
 	_clear_owned_player_projectiles()
+	_clear_owned_staff_payloads()
 	return action_state.force_safe_reset()
 
 
@@ -681,7 +695,7 @@ func _can_buffer_committed_action() -> bool:
 
 func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	var weapon_id := StringName(str(config.get("weapon_id", "")))
-	if weapon_id not in [&"sword", &"bow", &"gun"]:
+	if weapon_id not in [&"sword", &"bow", &"gun", &"staff"]:
 		return {
 			"ok": true,
 			"profile": null,
@@ -732,6 +746,8 @@ func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	var next_coordinator = WeaponActionCoordinatorScript.new()
 	if not next_coordinator.configure(next_runtime, next_resource_transaction):
 		return {"ok": false, "reason": "coordinator_configuration_failed"}
+	if weapon_id == &"staff" and not bool(staff_weapon.call("configure_result_sink", next_runtime)):
+		return {"ok": false, "reason": "payload_result_sink_configuration_failed"}
 	return {
 		"ok": true,
 		"profile": next_profile,
@@ -749,6 +765,8 @@ func _new_weapon_runtime(weapon_id: StringName) -> RefCounted:
 			return BowWeaponRuntimeScript.new()
 		&"gun":
 			return GunWeaponRuntimeScript.new()
+		&"staff":
+			return StaffWeaponRuntimeScript.new()
 		_:
 			return null
 
@@ -766,6 +784,7 @@ func _weapon_profile_definition(weapon_id: StringName) -> Dictionary:
 	var preferred_profile_id: String = str({
 		&"sword": "sword_m1_v1",
 		&"bow": "bow_candidate_v1",
+		&"staff": "staff_launch_v1",
 	}.get(weapon_id, ""))
 	if preferred_profile_id.is_empty():
 		return {}
@@ -850,7 +869,7 @@ func _on_weapon_action_committed(
 	token: int,
 	context: Dictionary
 ) -> void:
-	_track_weapon_action_token(token, action_id)
+	_track_weapon_action_token(token, action_id, int(context.get("action_generation", 0)))
 	if weapon_action_coordinator != null:
 		var coordinator_snapshot: Dictionary = weapon_action_coordinator.snapshot()
 		var plan_value: Variant = coordinator_snapshot.get("plan", {})
@@ -868,16 +887,26 @@ func _on_weapon_action_committed(
 	_sync_weapon_resource_facts(&"action_committed")
 
 
-func _track_weapon_action_token(token: int, action_id: StringName) -> void:
-	if token <= 0 or action_id == &"":
+func _track_weapon_action_token(token: int, action_id: StringName, generation: int) -> void:
+	if token <= 0 or action_id == &"" or generation <= 0:
 		return
 	if not _weapon_action_ids_by_token.has(token):
 		_weapon_action_token_order.append(token)
 	_weapon_action_ids_by_token[token] = action_id
+	_weapon_action_generations_by_token[token] = generation
 	while _weapon_action_token_order.size() > MAX_TRACKED_WEAPON_FACT_TOKENS:
 		var expired_token: int = int(_weapon_action_token_order.pop_front())
 		_weapon_action_ids_by_token.erase(expired_token)
+		_weapon_action_generations_by_token.erase(expired_token)
 		_weapon_hit_fact_claims.erase(expired_token)
+		_clear_weapon_action_reward_claims(expired_token)
+
+
+func _clear_weapon_action_reward_claims(action_token: int) -> void:
+	var prefix := "%d:" % action_token
+	for claim_key: Variant in _weapon_action_reward_claims.keys():
+		if str(claim_key).begins_with(prefix):
+			_weapon_action_reward_claims.erase(claim_key)
 
 
 func _on_gun_action_hit_confirmed(action_token: int, target: Node) -> void:
@@ -937,20 +966,90 @@ func _on_gun_resource_reward_requested(
 	)
 
 
+func _on_staff_resource_reward_requested(
+	action_token: int,
+	claim_id: StringName,
+	reward_id: StringName,
+	amount: float
+) -> void:
+	var generation := int(_weapon_action_generations_by_token.get(action_token, 0))
+	if (
+		action_token <= 0
+		or generation <= 0
+		or claim_id == &""
+		or reward_id != &"time_energy"
+		or not is_finite(amount)
+		or amount <= 0.0
+		or loadout_runtime == null
+		or not loadout_runtime.has_weapon(&"staff")
+		or StringName(str(_weapon_action_ids_by_token.get(action_token, ""))) != &"primordial_wrath"
+		or not _valid_staff_ultimate_reward_claim(claim_id)
+		or not claim_weapon_action_reward(
+			action_token,
+			StringName(
+				"resource:%s:%s:generation:%d" % [
+					str(reward_id),
+					str(claim_id),
+					generation,
+				]
+			)
+		)
+	):
+		return
+	var before := float(time_manager.energy)
+	time_manager.restore_energy(amount)
+	var current := float(time_manager.energy)
+	if current <= before:
+		return
+	EventBus.weapon_resource_changed.emit(
+		&"staff",
+		reward_id,
+		current,
+		float(time_manager.max_energy),
+		&"ultimate_tick"
+	)
+
+
+func _valid_staff_ultimate_reward_claim(claim_id: StringName) -> bool:
+	const PREFIX := "staff_ultimate_tick:"
+	var claim := str(claim_id)
+	if not claim.begins_with(PREFIX):
+		return false
+	var tick_text := claim.trim_prefix(PREFIX)
+	if not tick_text.is_valid_int():
+		return false
+	var tick_index := int(tick_text)
+	return tick_index >= 0 and tick_index < 20 and str(tick_index) == tick_text
+
+
 func _sync_weapon_resource_facts(reason: StringName) -> void:
 	if (
 		weapon_runtime == null
 		or not weapon_runtime.has_method("presentation_snapshot")
 		or loadout_runtime == null
-		or not loadout_runtime.has_weapon(&"gun")
 	):
 		return
+	var weapon_id: StringName = loadout_runtime.weapon_id()
+	var resource_id: StringName = &""
+	var current_field := ""
+	var maximum_field := ""
+	match weapon_id:
+		&"gun":
+			resource_id = &"ammo"
+			current_field = "ammo"
+			maximum_field = "ammo_maximum"
+		&"staff":
+			resource_id = &"mana"
+			current_field = "mana"
+			maximum_field = "mana_maximum"
+		_:
+			return
 	var snapshot_value: Variant = weapon_runtime.call("presentation_snapshot")
 	if not snapshot_value is Dictionary:
 		return
 	var snapshot := snapshot_value as Dictionary
-	var current_value: Variant = snapshot.get("ammo")
-	var maximum_value: Variant = snapshot.get("ammo_maximum")
+	var current_value: Variant = snapshot.get(current_field)
+	var maximum_value: Variant = snapshot.get(maximum_field)
 	if (
 		typeof(current_value) not in [TYPE_INT, TYPE_FLOAT]
 		or typeof(maximum_value) not in [TYPE_INT, TYPE_FLOAT]
@@ -966,7 +1065,8 @@ func _sync_weapon_resource_facts(reason: StringName) -> void:
 		or current > maximum
 	):
 		return
-	var previous_value: Variant = _weapon_resource_fact_state.get("ammo")
+	var resource_key := str(resource_id)
+	var previous_value: Variant = _weapon_resource_fact_state.get(resource_key)
 	if previous_value is Dictionary:
 		var previous := previous_value as Dictionary
 		if (
@@ -974,8 +1074,18 @@ func _sync_weapon_resource_facts(reason: StringName) -> void:
 			and is_equal_approx(float(previous.get("maximum", -1.0)), maximum)
 		):
 			return
-	_weapon_resource_fact_state["ammo"] = {"current": current, "maximum": maximum}
-	EventBus.weapon_resource_changed.emit(&"gun", &"ammo", current, maximum, reason)
+	_weapon_resource_fact_state[resource_key] = {"current": current, "maximum": maximum}
+	EventBus.weapon_resource_changed.emit(weapon_id, resource_id, current, maximum, reason)
+
+
+func _on_staff_payload_result_reported(
+	_action_token: int,
+	_generation: int,
+	_result: Dictionary
+) -> void:
+	if loadout_runtime == null or not loadout_runtime.has_weapon(&"staff"):
+		return
+	_sync_weapon_resource_facts(&"payload_result")
 
 
 func _on_weapon_runtime_event(event: Dictionary) -> void:
@@ -1185,6 +1295,8 @@ func _weapon_aim_direction() -> Vector2:
 			rotation_value = float(bow_weapon.global_rotation)
 		&"gun":
 			rotation_value = float(gun_weapon.global_rotation)
+		&"staff":
+			rotation_value = float(staff_weapon.global_rotation)
 	return Vector2.RIGHT.rotated(rotation_value)
 
 
@@ -1213,16 +1325,21 @@ func _clear_owned_player_arrows() -> void:
 
 
 func _clear_owned_player_projectiles() -> void:
-	if gun_weapon == null:
+	if gun_weapon == null and staff_weapon == null:
 		return
 	for projectile: Node in get_tree().get_nodes_in_group("player_projectiles"):
 		if (
 			is_instance_valid(projectile)
 			and not projectile.is_queued_for_deletion()
 			and projectile.get("owner_entity") == self
-			and projectile.get("source") == gun_weapon
+			and projectile.get("source") in [gun_weapon, staff_weapon]
 		):
 			projectile.queue_free()
+
+
+func _clear_owned_staff_payloads() -> void:
+	if staff_weapon != null and staff_weapon.has_method("reset_runtime_state"):
+		staff_weapon.call("reset_runtime_state")
 
 
 func _seconds_to_frames(seconds: float) -> int:
@@ -1299,6 +1416,7 @@ func _on_died(_killer: Variant) -> void:
 		_clear_transient_effects()
 		_clear_owned_player_arrows()
 		_clear_owned_player_projectiles()
+		_clear_owned_staff_payloads()
 		cancel_active_time_effects(&"player_died")
 
 
@@ -1314,3 +1432,4 @@ func _apply_stats_to_components(reset_health: bool) -> void:
 	bow_weapon.attack_speed = stats.attack_speed * _time_acceleration_multiplier
 	gun_weapon.base_attack = GUN_BASE_ATTACK
 	gun_weapon.attack_speed = GUN_ATTACK_SPEED * _time_acceleration_multiplier
+	staff_weapon.base_attack = STAFF_BASE_ATTACK

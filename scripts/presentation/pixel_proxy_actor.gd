@@ -109,6 +109,7 @@ var _weapon_action_id: String = ""
 var _weapon_snapshot_available: bool = false
 var _bow_tension: float = 0.0
 var _bow_charge_tier: String = ""
+var _staff_element: String = ""
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -247,6 +248,10 @@ func get_snapshot_for_test() -> Dictionary:
 		"gun_reload_marker_visible": _gun_reload_marker_visible(),
 		"gun_perfect_ring_visible": _gun_perfect_ring_visible(),
 		"gun_time_load_active": _gun_time_load_active(),
+		"staff_element": _staff_element,
+		"staff_cast_circle_visible": _staff_cast_circle_visible(),
+		"staff_zone_boundary_visible": _staff_zone_boundary_visible(),
+		"staff_combination_signature_visible": _staff_combination_signature_visible(),
 		"melee_slash_visible": _state == &"attack" and _weapon_visual_kind() == "sword",
 		"boss_phase_marks": _boss_phase,
 		"boss_core_shape": _boss_core_shape,
@@ -361,6 +366,23 @@ func _refresh_player_weapon_presentation() -> void:
 		else 0.0
 	)
 	_bow_charge_tier = _resolve_bow_charge_tier() if _weapon_id == "bow" else ""
+	var runtime_value: Variant = _player_weapon_snapshot.get("runtime", {})
+	var runtime: Dictionary = (
+		(runtime_value as Dictionary)
+		if runtime_value is Dictionary
+		else {}
+	)
+	_staff_element = (
+		str(runtime.get(
+			"element",
+			runtime.get(
+				"current_element",
+				_player_weapon_snapshot.get("current_element", "fire")
+			)
+		))
+		if _weapon_id == "staff"
+		else ""
+	)
 	_weapon_snapshot_available = true
 
 
@@ -372,6 +394,7 @@ func _clear_player_weapon_presentation() -> void:
 	_weapon_snapshot_available = false
 	_bow_tension = 0.0
 	_bow_charge_tier = ""
+	_staff_element = ""
 
 
 func _player_weapon_action_is_presented() -> bool:
@@ -388,6 +411,8 @@ func _weapon_visual_kind() -> String:
 			return "bow"
 		"gun":
 			return "gun"
+		"staff":
+			return "staff"
 		_:
 			return "sword"
 
@@ -423,6 +448,52 @@ func _gun_time_load_active() -> bool:
 	return (
 		_weapon_id == "gun"
 		and int(_player_weapon_snapshot.get("time_load_remaining_frames", 0)) > 0
+	)
+
+
+func _staff_cast_circle_visible() -> bool:
+	return (
+		_weapon_id == "staff"
+		and _weapon_phase in ["WINDUP", "ACTIVE"]
+		and _weapon_action_id in ["charged_element", "planar_collapse", "primordial_wrath"]
+	)
+
+
+func _staff_zone_boundary_visible() -> bool:
+	return (
+		_weapon_id == "staff"
+		and _weapon_action_id in ["planar_collapse", "primordial_wrath"]
+		and _weapon_phase in ["ACTIVE", "RECOVERY"]
+	)
+
+
+func _staff_combination_signature_visible() -> bool:
+	var runtime_value: Variant = _player_weapon_snapshot.get("runtime", {})
+	var runtime: Dictionary = (
+		(runtime_value as Dictionary)
+		if runtime_value is Dictionary
+		else {}
+	)
+	var remaining_frames := int(runtime.get(
+		"combo_remaining_frames",
+		runtime.get(
+			"sequence_remaining_frames",
+			_player_weapon_snapshot.get("sequence_remaining_frames", 0)
+		)
+	))
+	var pending_combo_value: Variant = runtime.get("pending_combo", {})
+	var pending_combo := (
+		(pending_combo_value as Dictionary)
+		if pending_combo_value is Dictionary
+		else {}
+	)
+	return (
+		_weapon_id == "staff"
+		and (
+			remaining_frames > 0
+			or not str(_player_weapon_snapshot.get("combination_id", "")).is_empty()
+			or not pending_combo.is_empty()
+		)
 	)
 
 
@@ -588,6 +659,8 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 		_draw_player_bow(accent)
 	elif _weapon_visual_kind() == "gun":
 		_draw_player_gun(accent)
+	elif _weapon_visual_kind() == "staff":
+		_draw_player_staff(accent)
 	elif _state == &"attack":
 		draw_rect(Rect2(10, -4, 18, 4), accent, true)
 		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
@@ -648,6 +721,30 @@ func _draw_player_gun(accent: Color) -> void:
 		draw_arc(Vector2(22, 0), 18.0, 0.0, TAU, 16, Color(1.0, 0.88, 0.3), 2.0, false)
 	if _gun_time_load_active():
 		draw_arc(Vector2.ZERO, 21.0, 0.0, TAU, 16, Color(0.24, 0.94, 1.0), 2.0, false)
+
+
+func _draw_player_staff(accent: Color) -> void:
+	var element_color := _staff_element_color()
+	draw_rect(Rect2(12, -3, 24, 5), accent.darkened(0.28), true)
+	draw_rect(Rect2(32, -7, 5, 13), accent, true)
+	draw_circle(Vector2(36, -9), 6.0, element_color)
+	if _staff_cast_circle_visible():
+		draw_arc(Vector2(22, 0), 17.0, 0.0, TAU, 18, element_color, 2.0, false)
+	if _staff_zone_boundary_visible():
+		draw_arc(Vector2(22, 0), 23.0, 0.0, TAU, 20, element_color.darkened(0.18), 2.0, false)
+	if _staff_combination_signature_visible():
+		draw_arc(Vector2(36, -9), 10.0, 0.0, TAU, 12, Color.WHITE, 1.0, false)
+		draw_rect(Rect2(32, -10, 8, 2), element_color.lightened(0.25), true)
+
+
+func _staff_element_color() -> Color:
+	match _staff_element:
+		"ice":
+			return Color(0.34, 0.82, 1.0)
+		"lightning":
+			return Color(0.92, 0.82, 0.28)
+		_:
+			return Color(1.0, 0.34, 0.18)
 
 
 func _draw_chaser(primary: Color, secondary: Color, accent: Color) -> void:

@@ -2,6 +2,9 @@ class_name EnemyBase
 extends CharacterBody2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const ElementalStatusRuntimeScript := preload("res://scripts/combat/elemental_status_runtime.gd")
+const ELEMENTAL_STATUS_SEED_INITIALIZED_META := &"elemental_status_seed_initialized"
+const ELEMENTAL_STATUS_SEED_MATERIAL_META := &"elemental_status_seed_material"
 
 enum AttackPhase {
 	READY,
@@ -39,6 +42,8 @@ var _committed_attack_direction: Vector2 = Vector2.RIGHT
 var _time_stop_token_sequence: int = 0
 var _time_stop_sources: Dictionary = {}
 var _damage_vulnerability_sources: Dictionary = {}
+var elemental_status_runtime: RefCounted = ElementalStatusRuntimeScript.new()
+var _elemental_blind_action_sequence: int = 0
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -58,23 +63,28 @@ func _physics_process(delta: float) -> void:
 	_tick_damage_vulnerability_sources()
 	if not health.is_alive():
 		return
-	if _time_stopped:
+	if _time_stopped or is_elementally_frozen():
 		velocity = Vector2.ZERO
 		move_and_slide()
+		_tick_elemental_status_runtime()
 		return
+	var action_delta: float = delta * float(elemental_status_runtime.attack_speed_multiplier())
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
-	_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
-	_tick_additional_action_timers(delta)
+	_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - action_delta)
+	_tick_additional_action_timers(action_delta)
 	if target == null or not is_instance_valid(target):
 		target = get_tree().get_first_node_in_group("player") as Node2D
 	if target == null:
+		_tick_elemental_status_runtime()
 		return
-	_tick_attack_phase(delta)
+	_tick_attack_phase(action_delta)
 	if is_attack_locked():
 		velocity = _knockback_velocity
 		move_and_slide()
+		_tick_elemental_status_runtime()
 		return
-	_tick_ai(delta)
+	_tick_ai(action_delta)
+	_tick_elemental_status_runtime()
 
 
 func _tick_ai(_delta: float) -> void:
@@ -92,7 +102,7 @@ func _move_toward_target(speed_multiplier: float = 1.0) -> void:
 
 
 func _current_move_speed() -> float:
-	return move_speed * _rift_slow_multiplier
+	return move_speed * _rift_slow_multiplier * elemental_status_runtime.slow_multiplier()
 
 
 func _try_begin_primary_attack() -> bool:
@@ -114,7 +124,8 @@ func _tick_attack_phase(delta: float) -> void:
 	if _attack_phase_remaining > 0.0:
 		return
 	if _attack_phase == AttackPhase.WINDUP:
-		_resolve_primary_attack()
+		if not _should_elemental_blind_miss():
+			_resolve_primary_attack()
 		_attack_cooldown_remaining = attack_cooldown
 		_set_attack_phase(AttackPhase.RECOVERY, _active_attack_recovery_duration())
 		return
@@ -197,6 +208,9 @@ func _refresh_control_visual() -> void:
 	if _time_stopped:
 		visual.modulate = Color(0.55, 0.9, 1.0, 1.0)
 		return
+	if is_elementally_frozen():
+		visual.modulate = Color(0.65, 0.82, 1.0, 1.0)
+		return
 	match _attack_phase:
 		AttackPhase.WINDUP:
 			visual.modulate = Color(1.0, 0.78, 0.36, 1.0)
@@ -216,6 +230,7 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 func _on_died(_killer: Variant) -> void:
 	remove_from_group("enemies")
 	_damage_vulnerability_sources.clear()
+	reset_elemental_statuses()
 	cancel_active_attack()
 	visual.color = Color(0.25, 0.25, 0.28)
 	set_physics_process(false)
@@ -326,7 +341,136 @@ func get_damage_taken_multiplier() -> float:
 	for source_value: Variant in _damage_vulnerability_sources.values():
 		if source_value is Dictionary:
 			total_bonus += float((source_value as Dictionary).get("damage_taken_bonus", 0.0))
+	total_bonus += elemental_status_runtime.shock_damage_bonus()
 	return clampf(1.0 + total_bonus, 1.0, 3.0)
+
+
+func apply_elemental_status(
+	effect_id: StringName,
+	source_id: StringName,
+	generation: int,
+	duration_frames: int,
+	magnitude: float = 1.0,
+	tick_interval_frames: int = 30,
+	attack_speed_multiplier: float = -1.0,
+	damage_source: Node = null,
+	damage_attacker: Node = null
+) -> bool:
+	var applied: bool = elemental_status_runtime.apply_status(
+		effect_id,
+		source_id,
+		generation,
+		duration_frames,
+		magnitude,
+		tick_interval_frames,
+		attack_speed_multiplier,
+		damage_source,
+		damage_attacker
+	)
+	if applied:
+		_refresh_control_visual()
+	return applied
+
+
+func clear_elemental_status(effect_id: StringName, source_id: StringName, generation: int) -> bool:
+	var removed: bool = elemental_status_runtime.remove_status(effect_id, source_id, generation)
+	if removed:
+		_refresh_control_visual()
+	return removed
+
+
+func clear_owned_elemental_statuses(source_id: StringName, generation: int = -1) -> int:
+	var removed: int = elemental_status_runtime.clear_owned(source_id, generation)
+	if removed > 0:
+		_refresh_control_visual()
+	return removed
+
+
+func clear_elemental_statuses(_reason: StringName = &"clear") -> int:
+	var removed: int = elemental_status_runtime.clear_all()
+	if removed > 0:
+		_refresh_control_visual()
+	return removed
+
+
+func reset_elemental_statuses() -> void:
+	elemental_status_runtime.reset_runtime_state()
+	_elemental_blind_action_sequence = 0
+	if has_meta(ELEMENTAL_STATUS_SEED_INITIALIZED_META):
+		remove_meta(ELEMENTAL_STATUS_SEED_INITIALIZED_META)
+	if has_meta(ELEMENTAL_STATUS_SEED_MATERIAL_META):
+		remove_meta(ELEMENTAL_STATUS_SEED_MATERIAL_META)
+	_refresh_control_visual()
+
+
+func configure_elemental_status_seed(
+	deterministic_seed: int,
+	slow_floor_multiplier: float = 0.30,
+	attack_slow_floor_multiplier: float = -1.0
+) -> void:
+	elemental_status_runtime.configure(
+		deterministic_seed,
+		slow_floor_multiplier,
+		attack_slow_floor_multiplier
+	)
+
+
+func has_elemental_status(effect_id: StringName, source_id: StringName, generation: int) -> bool:
+	return elemental_status_runtime.has_status(effect_id, source_id, generation)
+
+
+func is_elementally_frozen() -> bool:
+	return elemental_status_runtime.is_frozen()
+
+
+func elemental_status_snapshot() -> Dictionary:
+	return elemental_status_runtime.snapshot()
+
+
+func _tick_elemental_status_runtime() -> void:
+	var events: Dictionary = elemental_status_runtime.advance_frame()
+	for tick_value: Variant in events.get("burn_ticks", []):
+		if not health.is_alive() or not tick_value is Dictionary:
+			break
+		var tick := tick_value as Dictionary
+		var tick_damage := float(tick.get("damage", 0.0))
+		if tick_damage <= 0.0:
+			continue
+		var damage_source := _live_node_or_null(tick.get("damage_source"))
+		var damage_attacker := _live_node_or_null(tick.get("damage_attacker"))
+		var damage_info := DamageInfoScript.new(
+			tick_damage,
+			DamageInfoScript.DamageType.FIRE,
+			damage_source,
+			damage_attacker
+		)
+		damage_info.can_crit = false
+		damage_info.tags = [
+			"weapon:staff",
+			"element:fire",
+			"status:burn",
+			"status_source:%s" % str(tick.get("source_id", "")),
+			"status_generation:%d" % int(tick.get("generation", -1)),
+		]
+		health.take_damage(damage_info)
+	if not (events.get("expired", []) as Array).is_empty():
+		_refresh_control_visual()
+
+
+func _live_node_or_null(value: Variant) -> Node:
+	if value is Node and is_instance_valid(value):
+		return value as Node
+	return null
+
+
+func _should_elemental_blind_miss() -> bool:
+	var action_sequence := _elemental_blind_action_sequence
+	_elemental_blind_action_sequence += 1
+	return elemental_status_runtime.should_blind_miss(action_sequence)
+
+
+func _exit_tree() -> void:
+	elemental_status_runtime.clear_all()
 
 
 func _tick_damage_vulnerability_sources() -> void:

@@ -149,6 +149,8 @@ func _format_weapon_meter(meter_kind: String, current: float, maximum: float) ->
 
 
 func _format_weapon_status(weapon: Dictionary) -> String:
+	if str(weapon["weapon_id"]) == "staff":
+		return _format_staff_status(weapon)
 	var status_id := str(weapon["status_id"])
 	var status_remaining := float(weapon["status_remaining"])
 	var secondary_id := str(weapon["secondary_id"])
@@ -162,6 +164,36 @@ func _format_weapon_status(weapon: Dictionary) -> String:
 	if status_id == "ready":
 		return tr("HUD_WEAPON_READY")
 	return tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper())
+
+
+func _format_staff_status(weapon: Dictionary) -> String:
+	var status_id := str(weapon["status_id"])
+	var element_key := _staff_element_translation_key(int(weapon["secondary_value"]))
+	var element_label := tr(element_key)
+	if status_id == "sequence_ready":
+		return "%s · %s · %.1fs" % [
+			tr("HUD_WEAPON_STATUS_SEQUENCE_READY"),
+			element_label,
+			float(weapon["status_remaining"]) / 60.0,
+		]
+	if status_id in ["channeling", "acting"]:
+		return "%s · %s" % [
+			tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper()),
+			element_label,
+		]
+	return tr("HUD_WEAPON_STATUS_%s" % status_id.to_upper())
+
+
+func _staff_element_translation_key(element_code: int) -> String:
+	match element_code:
+		1:
+			return "HUD_WEAPON_STATUS_ELEMENT_FIRE"
+		2:
+			return "HUD_WEAPON_STATUS_ELEMENT_ICE"
+		3:
+			return "HUD_WEAPON_STATUS_ELEMENT_LIGHTNING"
+		_:
+			return "HUD_WEAPON_STATUS_ELEMENT_FIRE"
 
 
 func _format_time(run_time_ms: int) -> String:

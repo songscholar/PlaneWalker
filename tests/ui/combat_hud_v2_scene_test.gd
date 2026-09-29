@@ -162,6 +162,30 @@ func _run() -> void:
 		_suite.assert_true(weapon_meter_label.text.contains("40 / 48"), "perfect reload keeps the reload meter visible")
 		_suite.assert_true(weapon_status_label.text.contains(tr("HUD_WEAPON_STATUS_PERFECT_RELOAD")), "perfect reload has an explicit localized status")
 		_suite.assert_true(not weapon_status_label.text.contains("reload"), "perfect reload status does not expose the internal action id")
+	var staff_run := combat.duplicate(true)
+	staff_run["run_id"] = "fixture-staff-run"
+	staff_run["revision"] = 0
+	staff_run["weapon_state"] = {
+		"weapon_id": "staff",
+		"action_id": "primordial_wrath",
+		"phase": "RECOVERY",
+		"meter_kind": "mana",
+		"meter_current": 74,
+		"meter_max": 100,
+		"status_id": "sequence_ready",
+		"status_stacks": 1,
+		"status_remaining": 180,
+		"secondary_id": "element",
+		"secondary_value": 1,
+	}
+	_suite.assert_true(hud.render(staff_run).ok, "Staff weapon state renders")
+	if weapon_name_label != null and weapon_meter_label != null and weapon_status_label != null:
+		_suite.assert_equal(weapon_name_label.text, tr("WEAPON_STAFF_NAME"), "Staff name is localized")
+		_suite.assert_true(weapon_meter_label.text.contains("74 / 100"), "Staff Mana meter renders")
+		_suite.assert_true(weapon_status_label.text.contains(tr("HUD_WEAPON_STATUS_SEQUENCE_READY")), "Staff sequence-ready status renders")
+		_suite.assert_true(weapon_status_label.text.contains(tr("HUD_WEAPON_STATUS_ELEMENT_FIRE")), "Staff current element renders")
+		_suite.assert_true(weapon_status_label.text.contains("3.0"), "Staff sequence duration renders in seconds")
+		_suite.assert_true(not weapon_status_label.text.contains("primordial_wrath"), "Staff HUD does not expose the internal action id")
 	_suite.assert_equal(combat, combat_input, "render treats the supplied snapshot as immutable input")
 	var latest: Dictionary = hud.latest_state()
 	if not latest.is_empty():

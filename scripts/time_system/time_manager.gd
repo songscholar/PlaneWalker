@@ -55,6 +55,8 @@ var _cooldowns: Dictionary = {
 	&"time_accelerate": 0.0,
 }
 var _active_rifts: Array[Node] = []
+var _active_rift_generations: Dictionary = {}
+var _time_rift_source_sequence: int = 0
 var _time_stop_remaining: float = 0.0
 var _time_stop_active: bool = false
 var _time_stop_source_sequence: int = 0
@@ -242,7 +244,9 @@ func try_time_rift(rift_position: Vector2) -> bool:
 	parent.add_child(rift)
 	rift.global_position = rift_position
 	_prune_active_rifts()
+	_time_rift_source_sequence += 1
 	_active_rifts.append(rift)
+	_active_rift_generations[rift] = _time_rift_source_sequence
 	EventBus.time_skill_started.emit(&"time_rift", {"position": rift_position})
 	return true
 
@@ -321,6 +325,7 @@ func cancel_all_time_effects(_reason: StringName) -> void:
 		if rift.has_method("cancel"):
 			rift.cancel(true)
 	_active_rifts.clear()
+	_active_rift_generations.clear()
 
 
 func reset_runtime_state() -> void:
@@ -341,6 +346,7 @@ func reset_runtime_state() -> void:
 		if rift.has_method("cancel"):
 			rift.cancel(false)
 	_active_rifts.clear()
+	_active_rift_generations.clear()
 
 
 func restore_energy(amount: float) -> void:
@@ -355,21 +361,31 @@ func restore_energy(amount: float) -> void:
 
 func weapon_interaction_context() -> Dictionary:
 	_prune_active_rifts()
+	var active_rift_descriptors := _active_rift_descriptors()
+	var active_rift_generation := (
+		int(active_rift_descriptors.back().get("generation", 0))
+		if not active_rift_descriptors.is_empty()
+		else 0
+	)
 	return {
 		"stop_active": _time_stop_active,
+		"stop_generation": _time_stop_source_sequence if _time_stop_active else 0,
 		"stop_remaining_frames": roundi(_time_stop_remaining * 60.0),
 		"stop_extension_remaining_frames": maxi(
 			0,
 			MAX_WEAPON_STOP_EXTENSION_FRAMES - _weapon_stop_extension_frames
 		),
 		"accelerate_active": _time_accelerate_active,
+		"accelerate_generation": _time_accelerate_token if _time_accelerate_active else 0,
 		"rewind_echo_available": (
 			_rewind_weapon_window_remaining > 0.0
 			and not _rewind_weapon_window_claimed
 		),
 		"rewind_echo_generation": _rewind_weapon_window_generation,
 		"rift_active": not _active_rifts.is_empty(),
+		"rift_generation": active_rift_generation,
 		"active_rift_count": _active_rifts.size(),
+		"active_rifts": active_rift_descriptors,
 	}
 
 
@@ -552,6 +568,7 @@ func _take_self_damage(amount: float, source_tag: StringName) -> void:
 
 func _prune_active_rifts() -> void:
 	var valid_rifts: Array[Node] = []
+	var valid_generations: Dictionary = {}
 	for rift_value: Variant in _active_rifts:
 		if not is_instance_valid(rift_value):
 			continue
@@ -559,4 +576,31 @@ func _prune_active_rifts() -> void:
 		if rift == null or rift.is_queued_for_deletion():
 			continue
 		valid_rifts.append(rift)
+		var generation := int(_active_rift_generations.get(rift, 0))
+		if generation > 0:
+			valid_generations[rift] = generation
 	_active_rifts = valid_rifts
+	_active_rift_generations = valid_generations
+
+
+func _active_rift_descriptors() -> Array[Dictionary]:
+	var descriptors: Array[Dictionary] = []
+	for rift: Node in _active_rifts:
+		var generation := int(_active_rift_generations.get(rift, 0))
+		if generation <= 0 or not rift is Node2D:
+			continue
+		var radius_value: Variant = rift.get("radius")
+		if typeof(radius_value) not in [TYPE_INT, TYPE_FLOAT]:
+			continue
+		var radius := float(radius_value)
+		if not is_finite(radius) or radius <= 0.0:
+			continue
+		descriptors.append({
+			"generation": generation,
+			"center": (rift as Node2D).global_position,
+			"radius": radius,
+		})
+	descriptors.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return int(left.get("generation", 0)) < int(right.get("generation", 0))
+	)
+	return descriptors

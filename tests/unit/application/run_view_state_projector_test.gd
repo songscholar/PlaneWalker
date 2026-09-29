@@ -158,6 +158,72 @@ func _test_weapon_presentations_project_to_union(suite) -> void:
 		suite.assert_equal(perfect_state["secondary_id"], "time_load", "perfect reload also exposes its free Time Load")
 		suite.assert_equal(perfect_state["secondary_value"], 300, "free Time Load duration remains visible")
 
+	var staff_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	staff_authoritative["run_id"] = "staff-view-run"
+	var staff_player := _player_snapshot()
+	staff_player["weapon"] = _staff_weapon_presentation()
+	var staff_result = projector.project(
+		staff_authoritative,
+		_room_definition(1, "combat"),
+		staff_player,
+		null,
+		4,
+		{}
+	)
+	suite.assert_true(staff_result.ok, "Staff presentation projects")
+	if staff_result.ok:
+		var staff_state: Dictionary = staff_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(staff_state["weapon_id"], "staff", "Staff union keeps canonical weapon id")
+		suite.assert_equal(staff_state["meter_kind"], "mana", "Staff union uses its Mana meter")
+		suite.assert_equal(staff_state["meter_current"], 74.0, "Staff current Mana projects")
+		suite.assert_equal(staff_state["meter_max"], 100.0, "Staff maximum Mana projects")
+		suite.assert_equal(staff_state["status_id"], "sequence_ready", "runtime combo element exposes the sequence window")
+		suite.assert_equal(staff_state["status_remaining"], 180, "runtime combo remaining frames project")
+		suite.assert_equal(staff_state["secondary_id"], "element", "Staff exposes its current element generically")
+		suite.assert_equal(staff_state["secondary_value"], 3, "runtime Lightning maps to stable element code three")
+
+	var legacy_staff_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	legacy_staff_authoritative["run_id"] = "legacy-staff-view-run"
+	var legacy_staff_player := _player_snapshot()
+	legacy_staff_player["weapon"] = _legacy_staff_weapon_presentation()
+	var legacy_staff_result = projector.project(
+		legacy_staff_authoritative,
+		_room_definition(1, "combat"),
+		legacy_staff_player,
+		null,
+		5,
+		{}
+	)
+	suite.assert_true(legacy_staff_result.ok, "legacy Staff presentation aliases remain supported")
+	if legacy_staff_result.ok:
+		var legacy_staff_state: Dictionary = legacy_staff_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(legacy_staff_state["meter_current"], 63.0, "legacy Staff Mana still projects")
+		suite.assert_equal(legacy_staff_state["status_id"], "sequence_ready", "legacy sequence fields still project")
+		suite.assert_equal(legacy_staff_state["status_remaining"], 90, "legacy sequence remaining frames still project")
+		suite.assert_equal(legacy_staff_state["secondary_value"], 2, "legacy Ice maps to stable element code two")
+
+	var fire_staff_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	fire_staff_authoritative["run_id"] = "fire-staff-view-run"
+	var fire_staff_player := _player_snapshot()
+	fire_staff_player["weapon"] = _staff_weapon_presentation()
+	fire_staff_player["weapon"]["runtime"]["element"] = "fire"
+	fire_staff_player["weapon"]["runtime"]["combo_element"] = ""
+	fire_staff_player["weapon"]["runtime"]["combo_remaining_frames"] = 0
+	var fire_staff_result = projector.project(
+		fire_staff_authoritative,
+		_room_definition(1, "combat"),
+		fire_staff_player,
+		null,
+		6,
+		{}
+	)
+	suite.assert_true(fire_staff_result.ok, "runtime Fire presentation projects without a combo window")
+	if fire_staff_result.ok:
+		var fire_staff_state: Dictionary = fire_staff_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(fire_staff_state["status_id"], "element_fire", "Fire readiness projects its localized status id")
+		suite.assert_equal(fire_staff_state["status_remaining"], 0, "closed combo window has no remaining duration")
+		suite.assert_equal(fire_staff_state["secondary_value"], 1, "runtime Fire maps to stable element code one")
+
 
 func _test_phase_flags_and_optional_payloads(suite) -> void:
 	var projector = RunViewStateProjectorScript.new()
@@ -377,6 +443,45 @@ func _sword_weapon_presentation() -> Dictionary:
 			"phase": "READY",
 			"combo_step": 2,
 			"combo_reset_frames": 48,
+		},
+	}
+
+
+func _staff_weapon_presentation() -> Dictionary:
+	return {
+		"weapon_id": "staff",
+		"action_id": "",
+		"phase": "READY",
+		"runtime": {
+			"weapon_id": "staff",
+			"action_id": "",
+			"phase": "READY",
+			"mana": 74.0,
+			"mana_maximum": 100.0,
+			"element": "lightning",
+			"combo_element": "ice",
+			"combo_remaining_frames": 180,
+			"current_element": "fire",
+			"sequence_first_element": "",
+			"sequence_remaining_frames": 0,
+		},
+	}
+
+
+func _legacy_staff_weapon_presentation() -> Dictionary:
+	return {
+		"weapon_id": "staff",
+		"action_id": "",
+		"phase": "READY",
+		"runtime": {
+			"weapon_id": "staff",
+			"action_id": "",
+			"phase": "READY",
+			"mana": 63.0,
+			"mana_maximum": 100.0,
+			"current_element": "ice",
+			"sequence_first_element": "lightning",
+			"sequence_remaining_frames": 90,
 		},
 	}
 

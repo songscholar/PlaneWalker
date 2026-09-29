@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/staff_projectile.gd" id="1_staff_projectile"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_staff_projectile"]
+radius = 9.6
+
+[node name="StaffProjectile" type="Area2D"]
+script = ExtResource("1_staff_projectile")
+
+[node name="Visual" type="Polygon2D" parent="."]
+color = Color(0.72, 0.48, 1, 1)
+polygon = PackedVector2Array(14, 0, 5, -6, -3, -7, -11, 0, -3, 7, 5, 6)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_staff_projectile")

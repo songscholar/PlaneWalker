@@ -5,6 +5,8 @@ signal enemy_summoned(enemy: Node)
 
 const FragmentScene := preload("res://scenes/enemies/enemy_chaser.tscn")
 const TimeCrackScript := preload("res://scripts/enemies/boss_time_crack.gd")
+const STAFF_FREEZE_DELAY_FRAMES := 12
+const STAFF_BLIND_DELAY_FRAMES := 8
 
 enum BossAction { NONE, MELEE, SLAM, RADIAL, AIMED, SUMMON, TIME_CRACK }
 enum BossActionPhase { IDLE, WINDUP, RECOVERY }
@@ -337,6 +339,7 @@ func _update_phase() -> void:
 		next_phase = 2
 	if next_phase == _phase:
 		return
+	clear_elemental_statuses(&"boss_phase_transition")
 	_phase = next_phase
 	radial_projectile_count = 10 if _phase == 2 else 12
 	move_speed = 92.0 if _phase == 2 else 108.0
@@ -595,6 +598,63 @@ func clear_time_rift(source_id: StringName) -> void:
 	super.clear_time_rift(source_id)
 	if source_was_active:
 		_remove_exposure_source(source_id)
+
+
+func apply_elemental_status(
+	effect_id: StringName,
+	source_id: StringName,
+	generation: int,
+	duration_frames: int,
+	magnitude: float = 1.0,
+	tick_interval_frames: int = 30,
+	attack_speed_multiplier: float = -1.0,
+	damage_source: Node = null,
+	damage_attacker: Node = null
+) -> bool:
+	if effect_id in [&"freeze", &"blind"] and not _can_convert_staff_control():
+		return false
+	var already_active := has_elemental_status(effect_id, source_id, generation)
+	var applied := super.apply_elemental_status(
+		effect_id,
+		source_id,
+		generation,
+		duration_frames,
+		magnitude,
+		tick_interval_frames,
+		attack_speed_multiplier,
+		damage_source,
+		damage_attacker
+	)
+	if not applied or already_active:
+		return applied
+	match effect_id:
+		&"freeze":
+			_apply_staff_control_delay(STAFF_FREEZE_DELAY_FRAMES)
+		&"blind":
+			_apply_staff_control_delay(STAFF_BLIND_DELAY_FRAMES)
+	return true
+
+
+func is_elementally_frozen() -> bool:
+	return false
+
+
+func _can_convert_staff_control() -> bool:
+	if _action_phase == BossActionPhase.WINDUP:
+		return false
+	return _action_phase == BossActionPhase.RECOVERY or _exposed
+
+
+func _apply_staff_control_delay(delay_frames: int) -> void:
+	var delay_seconds := maxf(0.0, float(delay_frames) / 60.0)
+	if delay_seconds <= 0.0:
+		return
+	if _action != BossAction.NONE:
+		_action_time_remaining += delay_seconds
+		if _action_phase == BossActionPhase.WINDUP:
+			combat_telegraph.set_remaining_time(_action_time_remaining)
+		return
+	_pattern_timer += delay_seconds
 
 
 func apply_weapon_control_conversion(

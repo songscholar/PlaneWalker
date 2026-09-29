@@ -50,6 +50,14 @@ func handle_live_intent(
 	return {"handled": false}
 
 
+func handle_payload_result(
+	_token: int,
+	_generation: int,
+	_result: Dictionary
+) -> Dictionary:
+	return {"ok": false, "code": &"UNSUPPORTED_PAYLOAD_RESULT"}
+
+
 func advance_runtime_frame(_coordinator_frame: int) -> Array[Dictionary]:
 	return []
 

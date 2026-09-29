@@ -98,7 +98,7 @@ const STATUS_IDS_BY_METER := {
 		"reload": ["reloading", "perfect_reload"],
 	},
 	"staff": {
-		"mana": ["ready", "acting", "channeling"],
+		"mana": ["ready", "acting", "channeling", "element_fire", "element_ice", "element_lightning", "sequence_ready"],
 		"element": ["ready", "acting", "element_fire", "element_ice", "element_lightning"],
 		"sequence": ["ready", "acting", "sequence_ready"],
 	},
@@ -329,6 +329,21 @@ static func _validate_weapon_state(value: Variant, revision: int):
 			return _failure(revision, "weapon_state.meter_kind", "reload meter requires reload action")
 		if status_id == "time_load" and secondary_id == "time_load":
 			return _failure(revision, "weapon_state.secondary_id", "Time Load cannot be duplicated")
+	if weapon_id == "staff":
+		if secondary_id != "element" or not _is_integer(weapon["secondary_value"]):
+			return _failure(revision, "weapon_state.secondary_id", "Staff Mana state requires an integer element code")
+		var element_code := int(weapon["secondary_value"])
+		if element_code < 1 or element_code > 3:
+			return _failure(revision, "weapon_state.secondary_value", "unknown Staff element code")
+		var status_element_codes := {
+			"element_fire": 1,
+			"element_ice": 2,
+			"element_lightning": 3,
+		}
+		if status_element_codes.has(status_id) and int(status_element_codes[status_id]) != element_code:
+			return _failure(revision, "weapon_state.status_id", "Staff element status must match the element code")
+		if status_id == "sequence_ready" and float(weapon["status_remaining"]) <= 0.0:
+			return _failure(revision, "weapon_state.status_remaining", "Staff sequence window must have remaining time")
 
 	return CommandResultScript.success(revision)
 

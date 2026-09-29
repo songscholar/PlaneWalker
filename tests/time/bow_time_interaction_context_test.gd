@@ -14,6 +14,7 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	await _test_rewind_window_is_generation_safe_and_single_claim()
 	await _test_stop_and_accelerate_are_exposed_without_private_reads()
+	await _test_rift_context_tracks_live_spatial_generations()
 	_suite.finish(get_tree())
 
 
@@ -60,11 +61,16 @@ func _test_rewind_window_is_generation_safe_and_single_claim() -> void:
 func _test_stop_and_accelerate_are_exposed_without_private_reads() -> void:
 	var player := await _spawn_player()
 	var time_manager: Node = player.get_node("TimeManager")
+	time_manager.time_stop_cost = 0.0
+	time_manager.time_stop_cooldown = 0.0
 	time_manager.time_stop_duration = 0.2
 	_suite.assert_true(player.try_action(&"time_slot_1"), "Stop commits for the weapon context fixture")
+	var stop_generation := 0
 	if player.has_method("weapon_time_interaction_context"):
 		var stopped: Dictionary = player.call("weapon_time_interaction_context")
 		_suite.assert_true(bool(stopped.get("stop_active", false)), "weapon context reports active Stop")
+		stop_generation = int(stopped.get("stop_generation", 0))
+		_suite.assert_true(stop_generation > 0, "active Stop exposes a positive source generation")
 		var remaining_before := int(stopped.get("stop_remaining_frames", 0))
 		_suite.assert_true(player.has_method("extend_weapon_time_stop"), "Player exposes bounded Stop extension for Bow hits")
 		if player.has_method("extend_weapon_time_stop"):
@@ -87,14 +93,104 @@ func _test_stop_and_accelerate_are_exposed_without_private_reads() -> void:
 				"one Stop activation cannot accumulate unbounded extensions across action tokens"
 			)
 	player.cancel_active_time_effects(&"test_reset")
+	var stopped_reset: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(not bool(stopped_reset.get("stop_active", true)), "ending Stop clears its active context")
+	_suite.assert_equal(int(stopped_reset.get("stop_generation", -1)), 0, "ending Stop exposes no live source generation")
+	_advance_time_cast(player)
+	_suite.assert_true(player.try_action(&"time_slot_1"), "Stop can reactivate after its prior lifecycle ends")
+	var stopped_again: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(
+		int(stopped_again.get("stop_generation", 0)) > stop_generation,
+		"reactivated Stop advances its source generation monotonically"
+	)
+	player.cancel_active_time_effects(&"test_reset")
 	await _free_player(player)
 
 	player = await _spawn_player(["accelerate", "rewind"])
+	time_manager = player.get_node("TimeManager")
+	time_manager.time_accelerate_cost = 0.0
+	time_manager.time_accelerate_cooldown = 0.0
 	_suite.assert_true(player.try_action(&"time_slot_1"), "Accelerate commits for the weapon context fixture")
+	var accelerate_generation := 0
 	if player.has_method("weapon_time_interaction_context"):
 		var accelerated: Dictionary = player.call("weapon_time_interaction_context")
 		_suite.assert_true(bool(accelerated.get("accelerate_active", false)), "weapon context reports active Accelerate")
+		accelerate_generation = int(accelerated.get("accelerate_generation", 0))
+		_suite.assert_true(accelerate_generation > 0, "active Accelerate exposes a positive source generation")
 	player.cancel_active_time_effects(&"test_reset")
+	var accelerated_reset: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(not bool(accelerated_reset.get("accelerate_active", true)), "ending Accelerate clears its active context")
+	_suite.assert_equal(int(accelerated_reset.get("accelerate_generation", -1)), 0, "ending Accelerate exposes no live source generation")
+	_advance_time_cast(player)
+	_suite.assert_true(player.try_action(&"time_slot_1"), "Accelerate can reactivate after its prior lifecycle ends")
+	var accelerated_again: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(
+		int(accelerated_again.get("accelerate_generation", 0)) > accelerate_generation,
+		"reactivated Accelerate advances its source generation monotonically"
+	)
+	player.cancel_active_time_effects(&"test_reset")
+	await _free_player(player)
+
+
+func _test_rift_context_tracks_live_spatial_generations() -> void:
+	var player := await _spawn_player(["rift", "rewind"])
+	var time_manager: Node = player.get_node("TimeManager")
+	time_manager.time_rift_cost = 0.0
+	time_manager.time_rift_cooldown = 0.0
+	time_manager.time_rift_duration = 10.0
+	time_manager.time_rift_radius = 104.0
+	player.global_position = Vector2(64.0, 32.0)
+
+	_suite.assert_true(player.try_action(&"time_slot_1"), "Rift commits for the weapon context fixture")
+	var first: Dictionary = player.call("weapon_time_interaction_context")
+	var first_generation := int(first.get("rift_generation", 0))
+	_suite.assert_true(bool(first.get("rift_active", false)), "weapon context reports active Rift")
+	_suite.assert_true(first_generation > 0, "active Rift exposes a positive source generation")
+	var first_descriptors: Array = first.get("active_rifts", [])
+	_suite.assert_equal(first_descriptors.size(), 1, "one active Rift exposes one spatial descriptor")
+	if first_descriptors.size() == 1:
+		var first_descriptor := first_descriptors[0] as Dictionary
+		_suite.assert_equal(int(first_descriptor.get("generation", 0)), first_generation, "Rift descriptor matches the active generation")
+		_suite.assert_equal(first_descriptor.get("center"), Vector2(64.0, 32.0), "Rift descriptor exposes its committed center")
+		_suite.assert_close(float(first_descriptor.get("radius", 0.0)), 104.0, "Rift descriptor exposes its committed radius")
+	var first_rift: Node = (time_manager.get("_active_rifts") as Array)[0]
+
+	_advance_time_cast(player)
+	player.global_position = Vector2(192.0, 96.0)
+	_suite.assert_true(player.try_action(&"time_slot_1"), "a second Rift can overlap the first")
+	var second: Dictionary = player.call("weapon_time_interaction_context")
+	var second_generation := int(second.get("rift_generation", 0))
+	_suite.assert_true(second_generation > first_generation, "new Rift advances its source generation monotonically")
+	var overlapping: Array = second.get("active_rifts", [])
+	_suite.assert_equal(overlapping.size(), 2, "overlapping Rifts expose both descriptors")
+	if overlapping.size() == 2:
+		_suite.assert_equal(int((overlapping[0] as Dictionary).get("generation", 0)), first_generation, "Rift descriptors sort by generation")
+		_suite.assert_equal(int((overlapping[1] as Dictionary).get("generation", 0)), second_generation, "newest Rift descriptor sorts last")
+		_suite.assert_equal((overlapping[1] as Dictionary).get("center"), Vector2(192.0, 96.0), "each Rift descriptor keeps its own center")
+	var active_rifts: Array = time_manager.get("_active_rifts") as Array
+	var second_rift: Node = active_rifts[active_rifts.size() - 1]
+	second_rift.call("cancel", false)
+
+	var fallback: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(bool(fallback.get("rift_active", false)), "ending the newest Rift preserves an older live source")
+	_suite.assert_equal(int(fallback.get("rift_generation", 0)), first_generation, "Rift generation falls back to the remaining source")
+	_suite.assert_equal((fallback.get("active_rifts", []) as Array).size(), 1, "ending one Rift removes only its descriptor")
+
+	first_rift.call("_process", 11.0)
+	var expired: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(not bool(expired.get("rift_active", true)), "expired Rifts clear the active context")
+	_suite.assert_equal(int(expired.get("rift_generation", -1)), 0, "expired Rifts expose no live generation")
+	_suite.assert_equal((expired.get("active_rifts", []) as Array).size(), 0, "expired Rifts remove every descriptor")
+
+	_advance_time_cast(player)
+	_suite.assert_true(player.try_action(&"time_slot_1"), "Rift can reactivate after every prior source expires")
+	var reactivated: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(int(reactivated.get("rift_generation", 0)) > second_generation, "reactivated Rift advances beyond prior generations")
+	time_manager.reset_runtime_state()
+	var reset_context: Dictionary = player.call("weapon_time_interaction_context")
+	_suite.assert_true(not bool(reset_context.get("rift_active", true)), "runtime reset clears active Rift context")
+	_suite.assert_equal(int(reset_context.get("rift_generation", -1)), 0, "runtime reset clears the live Rift generation")
+	_suite.assert_equal((reset_context.get("active_rifts", []) as Array).size(), 0, "runtime reset clears every Rift descriptor")
 	await _free_player(player)
 
 
@@ -120,3 +216,8 @@ func _free_player(player: Node) -> void:
 	player.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
+
+
+func _advance_time_cast(player: Node) -> void:
+	for _frame: int in range(12):
+		player.advance_action_frame()

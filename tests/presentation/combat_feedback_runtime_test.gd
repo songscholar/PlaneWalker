@@ -58,6 +58,7 @@ func _run() -> void:
 	_assert_audio_contract()
 	await _assert_bow_feedback_contract()
 	await _assert_gun_feedback_contract()
+	await _assert_staff_feedback_contract()
 	await _assert_audio_cleanup_contract()
 	_assert_overlay_contract()
 	await _assert_feedback_runtime_gates()
@@ -448,6 +449,18 @@ func _assert_audio_contract() -> void:
 			cues.get(cue_id, {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
 			"Gun cue %s never aliases the Sword swing signature" % str(cue_id)
 		)
+	for cue_id: StringName in [
+		&"staff_basic",
+		&"staff_element_cast",
+		&"staff_cycle",
+		&"staff_skill",
+		&"staff_ultimate",
+	]:
+		_suite.assert_true(cues.has(cue_id), "Staff cue %s has a dedicated audio signature" % str(cue_id))
+		_suite.assert_true(
+			cues.get(cue_id, {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
+			"Staff cue %s never aliases the Sword swing signature" % str(cue_id)
+		)
 
 
 func _assert_bow_feedback_contract() -> void:
@@ -639,6 +652,90 @@ func _assert_gun_feedback_contract() -> void:
 	history = CombatFeedback.get_audio_contract_for_test().get("history", [])
 	_suite.assert_equal(history.count(&"gun_reload"), 1, "Gun reload has a dedicated cue")
 	_suite.assert_equal(history.count(&"sword_swing"), 0, "Gun reload never aliases Sword audio")
+
+	player.queue_free()
+	await get_tree().process_frame
+	CombatFeedback.reset_feedback_for_test()
+
+
+func _assert_staff_feedback_contract() -> void:
+	var player := SnapshotPlayer.new()
+	player.weapon_snapshot = {
+		"weapon_id": "staff",
+		"action_id": "charged_element",
+		"phase": "ACTIVE",
+		"token": 901,
+		"runtime": {
+			"element": "ice",
+			"combo_element": "fire",
+			"combo_remaining_frames": 180,
+			"pending_combo": {},
+		},
+		"facing": Vector2.RIGHT,
+	}
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "Staff feedback probe receives a player proxy")
+	CombatFeedback.reset_feedback_for_test()
+
+	EventBus.player_attacked.emit(&"staff", {"token": 901})
+	EventBus.weapon_cue_requested.emit(
+		&"staff",
+		&"charged_element",
+		901,
+		{
+			"cue_id": "staff_element_cast",
+			"animation_id": "staff_charge",
+			"vfx_id": "staff_element_cast",
+			"audio_id": "staff_element_cast",
+			"camera_id": "impact_medium",
+		}
+	)
+	EventBus.weapon_cue_requested.emit(
+		&"staff",
+		&"charged_element",
+		901,
+		{
+			"cue_id": "staff_element_cast",
+			"animation_id": "staff_charge",
+			"vfx_id": "staff_element_cast",
+			"audio_id": "staff_element_cast",
+			"camera_id": "impact_medium",
+		}
+	)
+	var history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"staff_element_cast"), 1, "one Staff action token plays its cast cue exactly once")
+	_suite.assert_equal(history.count(&"sword_swing"), 0, "Staff cast never falls back to the legacy Sword cue")
+	if proxy != null:
+		proxy.advance_animation_for_test(0.01)
+		var cast_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(cast_snapshot.get("weapon_visual"), "staff", "Staff cue keeps a staff silhouette")
+		_suite.assert_equal(cast_snapshot.get("staff_element"), "ice", "Staff proxy reads the canonical runtime element")
+		_suite.assert_true(bool(cast_snapshot.get("staff_cast_circle_visible", false)), "charged Staff cast exposes a cast circle")
+		_suite.assert_true(bool(cast_snapshot.get("staff_combination_signature_visible", false)), "active sequence exposes a combination signature")
+		_suite.assert_true(not bool(cast_snapshot.get("melee_slash_visible", true)), "Staff cast never exposes the melee slash primitive")
+
+	player.weapon_snapshot = {
+		"weapon_id": "staff",
+		"action_id": "planar_collapse",
+		"phase": "ACTIVE",
+		"token": 902,
+		"runtime": {
+			"element": "lightning",
+			"combo_element": "",
+			"combo_remaining_frames": 0,
+			"pending_combo": {},
+		},
+		"facing": Vector2.LEFT,
+	}
+	if proxy != null:
+		proxy.advance_animation_for_test(0.01)
+		var zone_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_true(bool(zone_snapshot.get("staff_zone_boundary_visible", false)), "Plane Collapse exposes a zone boundary")
+		_suite.assert_equal(zone_snapshot.get("staff_element"), "lightning", "Staff proxy updates from canonical runtime element changes")
+		_suite.assert_true(not bool(zone_snapshot.get("staff_combination_signature_visible", true)), "expired Staff combo hides its signature")
+		_suite.assert_equal(zone_snapshot.get("facing"), Vector2.LEFT, "Staff cast reads snapshot facing")
 
 	player.queue_free()
 	await get_tree().process_frame

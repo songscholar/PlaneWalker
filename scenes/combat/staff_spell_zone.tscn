@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/staff_spell_zone.gd" id="1_staff_spell_zone"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_staff_spell_zone"]
+radius = 64.0
+
+[node name="StaffSpellZone" type="Area2D"]
+script = ExtResource("1_staff_spell_zone")
+
+[node name="Visual" type="Polygon2D" parent="."]
+color = Color(0.46, 0.7, 1, 0.22)
+polygon = PackedVector2Array(64, 0, 55.4256, 32, 32, 55.4256, 0, 64, -32, 55.4256, -55.4256, 32, -64, 0, -55.4256, -32, -32, -55.4256, 0, -64, 32, -55.4256, 55.4256, -32)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_staff_spell_zone")

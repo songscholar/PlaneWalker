@@ -31,6 +31,27 @@ func _run() -> void:
 	_assert_weapon_state(combat, "gun", "ammo", "time_load", "combat fixture")
 	_assert_weapon_state(low_hp, "bow", "charge", "charging", "low-hp fixture")
 	_assert_weapon_state(boss, "sword", "counter", "counter_ready", "boss fixture")
+	var staff_state := combat.duplicate(true)
+	staff_state["weapon_state"] = {
+		"weapon_id": "staff",
+		"action_id": "",
+		"phase": "READY",
+		"meter_kind": "mana",
+		"meter_current": 74,
+		"meter_max": 100,
+		"status_id": "sequence_ready",
+		"status_stacks": 1,
+		"status_remaining": 180,
+		"secondary_id": "element",
+		"secondary_value": 1,
+	}
+	_suite.assert_true(RunViewStateScript.validate(staff_state).ok, "Staff Mana, element, and sequence window validate")
+	var invalid_staff_element := staff_state.duplicate(true)
+	invalid_staff_element["weapon_state"]["secondary_value"] = 4
+	_suite.assert_true(not RunViewStateScript.validate(invalid_staff_element).ok, "unknown Staff element code is rejected")
+	var expired_staff_sequence := staff_state.duplicate(true)
+	expired_staff_sequence["weapon_state"]["status_remaining"] = 0
+	_suite.assert_true(not RunViewStateScript.validate(expired_staff_sequence).ok, "Staff sequence-ready status requires remaining time")
 
 	_assert_invalid(combat, "schema_version", null, "missing schema version is rejected", true)
 	_assert_invalid(combat, "schema_version", 2, "pre-weapon-union schema is rejected")

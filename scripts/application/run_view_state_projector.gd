@@ -124,6 +124,8 @@ func _weapon_view(value: Variant) -> Dictionary:
 			return _bow_weapon_view(action_id, phase, source, runtime)
 		"gun":
 			return _gun_weapon_view(action_id, phase, runtime)
+		"staff":
+			return _staff_weapon_view(action_id, phase, runtime)
 		_:
 			return {
 				"ok": true,
@@ -239,6 +241,60 @@ func _gun_weapon_view(action_id: String, phase: String, runtime: Dictionary) -> 
 			time_load_remaining if secondary_time_load else 0
 		),
 	}
+
+
+func _staff_weapon_view(action_id: String, phase: String, runtime: Dictionary) -> Dictionary:
+	var mana: Variant = runtime.get("mana", 0.0)
+	var mana_maximum: Variant = runtime.get("mana_maximum", 100.0)
+	var element_field := "element" if runtime.has("element") else "current_element"
+	var current_element := str(runtime.get(element_field, "fire"))
+	var element_code := _staff_element_code(current_element)
+	if element_code == 0:
+		return {"ok": false, "field": "player.weapon.runtime.%s" % element_field}
+	var sequence_first_element := str(runtime.get(
+		"combo_element",
+		runtime.get("sequence_first_element", "")
+	))
+	var sequence_remaining: Variant = runtime.get(
+		"combo_remaining_frames",
+		runtime.get("sequence_remaining_frames", 0)
+	)
+	var has_sequence := not sequence_first_element.is_empty() and not _is_zero_finite_number(sequence_remaining)
+	var status_id := "element_%s" % current_element
+	if has_sequence:
+		status_id = "sequence_ready"
+	elif phase == "HOLD":
+		status_id = "channeling"
+	elif phase != "READY":
+		status_id = "acting"
+	return {
+		"ok": true,
+		"weapon_state": _weapon_state(
+			"staff",
+			action_id,
+			phase,
+			"mana",
+			mana,
+			mana_maximum,
+			status_id,
+			0 if status_id == "acting" else 1,
+			sequence_remaining if has_sequence else 0,
+			"element",
+			element_code
+		),
+	}
+
+
+func _staff_element_code(element_id: String) -> int:
+	match element_id:
+		"fire":
+			return 1
+		"ice":
+			return 2
+		"lightning":
+			return 3
+		_:
+			return 0
 
 
 func _weapon_state(
