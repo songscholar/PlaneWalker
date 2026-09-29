@@ -107,15 +107,18 @@ func report_player_died(killer: Variant = null) -> Variant:
 		return _failure_result(&"RUNTIME_NOT_CONFIGURED", {"operation": "report_player_died"})
 	if _room_terminal:
 		return _failure_result(&"TERMINAL_STATE", {"operation": "report_player_died"})
-	_room_terminal = true
-	_room_active = false
-	_cancel_runner()
-	return _facade.call("player_died", {
+	var result: Variant = _facade.call("player_died", {
 		"result": "death",
 		"room_id": str(_current_room_id),
 		"current_room": int(_current_room.get("room_number", 0)),
 		"killer": killer,
 	})
+	if not _result_ok(result):
+		return result
+	_room_terminal = true
+	_room_active = false
+	_cancel_runner()
+	return result
 
 
 func snapshot() -> Dictionary:

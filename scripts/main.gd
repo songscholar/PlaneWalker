@@ -163,7 +163,7 @@ func _apply_run_accessibility_assists(run_data: Dictionary) -> void:
 	player_health.call("configure_accessibility_assists", assists)
 
 
-func _on_run_ended(result: Dictionary) -> void:
+func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
 	GameState.record_run_summary(result)
 	get_tree().paused = false
 	pause_menu.hide_pause()

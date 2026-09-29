@@ -18,7 +18,7 @@ class RunResultSignalCounter:
 	var count: int = 0
 	var payloads: Array[Dictionary] = []
 
-	func record(payload: Dictionary) -> void:
+	func record(_run_id: String, payload: Dictionary, _revision: int) -> void:
 		count += 1
 		payloads.append(payload.duplicate(true))
 

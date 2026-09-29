@@ -21,6 +21,7 @@ class FacadeSpy:
 	var complete_room_calls: int = 0
 	var boss_defeated_calls: int = 0
 	var player_died_calls: int = 0
+	var reject_player_died: bool = false
 
 	func current_room_definition() -> Dictionary:
 		return room_definition.duplicate(true)
@@ -45,6 +46,8 @@ class FacadeSpy:
 
 	func player_died(context: Dictionary = {}):
 		player_died_calls += 1
+		if reject_player_died:
+			return CommandResultScript.failure(&"INVALID_PHASE", int(state["revision"]), context)
 		state["revision"] = int(state["revision"]) + 1
 		return CommandResultScript.success(int(state["revision"]), context)
 
@@ -113,6 +116,7 @@ func _run() -> void:
 	_test_event_room_completes_without_runner(suite)
 	_test_spawn_and_failure_paths(suite)
 	_test_player_death_is_idempotent(suite)
+	_test_rejected_player_death_preserves_active_room(suite)
 	_test_next_room_can_begin_after_selection_transition(suite)
 	_test_facade_composes_the_authoritative_room_runtime(suite)
 	_test_room_controller_contains_no_run_authority(suite)
@@ -187,6 +191,20 @@ func _test_player_death_is_idempotent(suite) -> void:
 	suite.assert_true(runtime.report_player_died("hazard").ok, "player death submits through the facade")
 	suite.assert_true(not runtime.report_player_died("late").ok, "duplicate player death is rejected")
 	suite.assert_equal(facade.player_died_calls, 1, "player death command is submitted once")
+	_free_fixture(fixture)
+
+
+func _test_rejected_player_death_preserves_active_room(suite) -> void:
+	var fixture := _fixture(_room(&"combat", "death_rejected", 1))
+	var runtime: Node = fixture["runtime"]
+	var facade: RefCounted = fixture["facade"]
+	runtime.begin_current_room()
+	(facade as FacadeSpy).reject_player_died = true
+	var rejected = runtime.report_player_died("late")
+	var state: Dictionary = runtime.snapshot()
+	suite.assert_true(not rejected.ok, "rejected player death returns the authoritative failure")
+	suite.assert_true(bool(state.get("room_active", false)), "rejected player death keeps the room active")
+	suite.assert_true(not bool(state.get("room_terminal", true)), "rejected player death does not mark the room terminal")
 	_free_fixture(fixture)
 
 

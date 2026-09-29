@@ -14,7 +14,7 @@ func _ready() -> void:
 	restart_button.pressed.connect(_restart_run)
 
 
-func _on_run_ended(result: Dictionary) -> void:
+func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
 	var outcome := str(result.get("result", ""))
 	var title := tr("UI_RUN_COMPLETE") if outcome == "floor_cleared" else tr("UI_RUN_FAILED")
 	result_label.text = "%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s" % [

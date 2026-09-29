@@ -84,7 +84,8 @@ func start_run(config: Dictionary) -> Variant:
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
-	EventBus.run_started.emit(normalized.duplicate(true))
+	var start_snapshot := runtime_snapshot()
+	EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
 
 	var runner_value: Variant = _room_controller.call("encounter_runner")
 	if not runner_value is Node:
@@ -195,20 +196,19 @@ func _dispose_room_runtime() -> void:
 
 
 func _on_room_started(active_room_id: StringName, revision: int) -> void:
-	var room_definition := _facade.call("current_room_definition") as Dictionary
-	var room_type := StringName(str(room_definition.get("type", "combat")))
-	EventBus.room_started.emit(active_room_id)
-	EventBus.publish(EventBus.ROOM_STARTED, {
-		"room_id": active_room_id,
-		"room_type": room_type,
-		"revision": revision,
-	})
+	var state := runtime_snapshot()
+	var run_id := str(state.get("run_id", ""))
+	if run_id.is_empty() or run_id != _active_run_id:
+		return
+	EventBus.room_started.emit(run_id, active_room_id, revision)
 
 
 func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 	var state := runtime_snapshot()
-	EventBus.room_cleared.emit(active_room_id)
-	EventBus.publish(EventBus.ROOM_CLEARED, {"room_id": active_room_id, "revision": revision})
+	var run_id := str(state.get("run_id", ""))
+	if run_id.is_empty() or run_id != _active_run_id:
+		return
+	EventBus.room_cleared.emit(run_id, active_room_id, revision)
 	match int(state.get("phase", -1)):
 		RunPhaseScript.Value.SELECTION_ACTIVE:
 			_open_offer(state.get("open_offer", {}))
@@ -226,10 +226,7 @@ func _on_runtime_failed(context: Dictionary) -> void:
 func _on_entity_died(entity: Node, killer: Variant) -> void:
 	if _room_runtime == null or entity == null or not entity.is_in_group("player"):
 		return
-	var state := runtime_snapshot()
-	if int(state.get("phase", -1)) != RunPhaseScript.Value.DEFEAT:
-		return
-	_publish_terminal_result(state.get("result", {"result": "death", "killer": killer}))
+	call_deferred("_publish_terminal_result", {"result": "death", "killer": killer})
 
 
 func _open_offer(offer_value: Variant) -> void:
@@ -249,15 +246,19 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 		_choice_panel.show_rejection(_rejection_message_key(result))
 		return
 	var definition: Dictionary = result.context.get("definition", {}).duplicate(true)
+	var selection_revision := int(result.new_revision)
+	var selection_state := runtime_snapshot()
+	var run_id := str(selection_state.get("run_id", ""))
+	if str(definition.get("id", "")) != "decline_contract":
+		_player.call("apply_reward", definition)
+	if not run_id.is_empty() and run_id == _active_run_id:
+		EventBus.reward_selected.emit(run_id, definition.duplicate(true), selection_revision)
 	var transitioned = _facade.call("complete_transition")
 	if not transitioned.ok:
 		_choice_panel.show_rejection(_rejection_message_key(transitioned))
 		return
-	if str(definition.get("id", "")) != "decline_contract":
-		_player.call("apply_reward", definition)
 	_choice_panel.close_panel()
 	_set_selection_safety(false)
-	EventBus.reward_selected.emit(definition.duplicate(true))
 	if _room_runtime != null and is_instance_valid(_room_runtime):
 		_room_runtime.call_deferred("begin_current_room")
 
@@ -271,7 +272,8 @@ func _publish_terminal_result(authoritative_result: Dictionary) -> void:
 	if not RunPhaseScript.is_terminal(phase):
 		return
 	_ended_run_id = run_id
-	EventBus.run_ended.emit(_terminal_result(state, authoritative_result))
+	var result := _terminal_result(state, authoritative_result)
+	EventBus.run_ended.emit(run_id, result.duplicate(true), int(state.get("revision", 0)))
 
 
 func _terminal_result(state: Dictionary, authoritative_result: Dictionary) -> Dictionary:

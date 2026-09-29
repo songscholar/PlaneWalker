@@ -321,7 +321,7 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 	return (HIT_PROFILES["generic"] as Dictionary).duplicate(true)
 
 
-func _on_player_attacked(_weapon_id: StringName) -> void:
+func _on_player_attacked(_weapon_id: StringName, _context: Dictionary) -> void:
 	var player := _first_player()
 	if player == null:
 		return
@@ -332,7 +332,7 @@ func _on_player_attacked(_weapon_id: StringName) -> void:
 		_audio.play_cue(&"sword_swing", 0.8)
 
 
-func _on_player_dashed() -> void:
+func _on_player_dashed(_context: Dictionary) -> void:
 	var player := _first_player()
 	if player == null:
 		return
@@ -345,7 +345,7 @@ func _on_player_dashed() -> void:
 	add_camera_trauma(1.0)
 
 
-func _on_time_skill_started(skill_id: StringName) -> void:
+func _on_time_skill_started(skill_id: StringName, _context: Dictionary) -> void:
 	var player := _first_player()
 	if player != null:
 		var proxy := _ensure_actor_proxy(player)
@@ -358,12 +358,12 @@ func _on_time_skill_started(skill_id: StringName) -> void:
 	add_camera_trauma(2.0 if skill_id == &"time_stop" else 3.0)
 
 
-func _on_time_skill_ended(skill_id: StringName) -> void:
+func _on_time_skill_ended(skill_id: StringName, _context: Dictionary) -> void:
 	if _overlay != null:
 		_overlay.finish_time_skill(skill_id)
 
 
-func _on_enemy_spawned(enemy: Node) -> void:
+func _on_enemy_spawned(enemy: Node, _context: Dictionary) -> void:
 	if enemy is Node2D:
 		call_deferred("_ensure_actor_proxy", enemy as Node2D)
 
@@ -393,7 +393,7 @@ func _on_rewind_committed(transaction: Dictionary, actor: Node2D) -> void:
 			proxy.spawn_afterimage(samples[index], 0.34)
 
 
-func _on_run_ended(_result: Dictionary) -> void:
+func _on_run_ended(_run_id: String, _result: Dictionary, _revision: int) -> void:
 	_reset_feedback()
 
 

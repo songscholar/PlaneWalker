@@ -118,7 +118,7 @@ func _run() -> void:
 	suite.assert_equal(assists.get("damage_received_multiplier"), GameState.get_setting("damage_received_multiplier", 1.0), "run config records damage assist")
 	suite.assert_equal(assists.get("enemy_telegraph_scale"), GameState.get_setting("enemy_telegraph_scale", 1.0), "run config records telegraph assist")
 
-	EventBus.run_ended.emit({
+	EventBus.run_ended.emit("controller-focus-test", {
 		"result": "death",
 		"current_room": 1,
 		"rooms_cleared": 0,
@@ -128,7 +128,7 @@ func _run() -> void:
 		"blessings": [],
 		"talent_choices": [],
 		"curses": [],
-	})
+	}, 1)
 	await _frames(3)
 	var restart_button := main.get_node("RunEndOverlay/Panel/Margin/VBox/RestartButton") as Button
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), restart_button, "result modal focuses Restart")
