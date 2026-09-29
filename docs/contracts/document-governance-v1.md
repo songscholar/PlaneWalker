@@ -94,7 +94,18 @@ Examples of valid lifecycle pairs:
 | `Completed / Historical` | `Historical implementation record` |
 | `Superseded / Historical` | `Historical specification` |
 
-## 5. Relative-link contract
+## 5. ADR contract
+
+`docs/adrs/README.md` is the mandatory Current index for repository architecture decisions. Numbered ADR filenames match four digits followed by a lowercase kebab-case name, such as `0001-document-authority-and-lifecycle.md`.
+
+Every numbered ADR declares exactly one `Decision Status` in its metadata header:
+
+- `Accepted`: the decision participates in the active authority chain;
+- `Superseded`: a later accepted ADR explicitly replaces the decision while preserving its historical reasoning.
+
+The ADR index links every numbered ADR exactly once. Draft proposals do not receive a numbered filename; unsupported values such as `Draft`, `Proposed`, or `Rejected` fail the governed repository contract.
+
+## 6. Relative-link contract
 
 Repository-local Markdown destinations are relative to the document containing the link. They must:
 
@@ -105,7 +116,7 @@ Repository-local Markdown destinations are relative to the document containing t
 
 HTTP, HTTPS, `mailto:`, and fragment-only links are accepted without network access. The validator never dereferences an external URL. Markdown-like examples inside fenced or inline code are not links.
 
-## 6. Migration baseline
+## 7. Migration baseline
 
 `tools/document_governance_baseline.json` is a temporary migration ledger, not a permanent exemption mechanism. Its exact schema is:
 
@@ -120,7 +131,7 @@ Each ID is stable as `path::code::subject`. The list is sorted and unique. Valid
 
 The final P8 exit gate requires an empty `allowed_violation_ids` list.
 
-## 7. Verification commands
+## 8. Verification commands
 
 Focused contract:
 

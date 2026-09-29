@@ -36,6 +36,8 @@ METADATA_PATTERN = re.compile(r"^- ([A-Za-z][A-Za-z0-9 ]*):\s*(.*)$")
 MARKDOWN_LINK_PATTERN = re.compile(r"!?\[[^\]\n]+\]\(([^)\n]+)\)")
 INLINE_CODE_PATTERN = re.compile(r"(`+)(.*?)\1")
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ADR_FILENAME_PATTERN = re.compile(r"^\d{4}-[a-z0-9][a-z0-9-]*\.md$")
+ADR_DECISION_STATUSES = {"Accepted", "Superseded"}
 
 
 @dataclass(frozen=True, order=True)
@@ -125,6 +127,8 @@ def validate_repository(
     for path in documents:
         for violation in validate_document(root, path):
             by_id.setdefault(violation.violation_id, violation)
+    for violation in _validate_adr_chain(root):
+        by_id.setdefault(violation.violation_id, violation)
     violations = tuple(sorted(by_id.values()))
     allowed = load_baseline(baseline_path) if baseline_path is not None else ()
     actual_ids = set(by_id)
@@ -361,9 +365,161 @@ def _validate_links(
     parsed: ParsedDocument,
 ) -> list[Violation]:
     violations: list[Violation] = []
+    for line_number, destination in _markdown_destinations(parsed.lines):
+        if not destination or destination.startswith("#"):
+            continue
+        parsed_url = urlsplit(destination)
+        scheme = parsed_url.scheme.casefold()
+        if scheme in ALLOWED_EXTERNAL_SCHEMES:
+            continue
+        if (
+            scheme
+            or destination.startswith("/")
+            or PureWindowsPath(destination).is_absolute()
+        ):
+            violations.append(
+                Violation(
+                    "absolute_local_link",
+                    parsed.relative_path,
+                    line_number,
+                    destination,
+                    "repository-local Markdown links must be relative",
+                )
+            )
+            continue
+        raw_path = destination.split("#", 1)[0].split("?", 1)[0]
+        decoded_path = unquote(raw_path)
+        if not decoded_path:
+            continue
+        target = (path.parent / decoded_path).resolve(strict=False)
+        if not _is_within(target, project_root):
+            violations.append(
+                Violation(
+                    "link_outside_repository",
+                    parsed.relative_path,
+                    line_number,
+                    destination,
+                    "relative Markdown link resolves outside the repository",
+                )
+            )
+            continue
+        if not target.exists() or not _has_exact_case(project_root, target):
+            violations.append(
+                Violation(
+                    "missing_link_target",
+                    parsed.relative_path,
+                    line_number,
+                    destination,
+                    "relative Markdown link target does not exist with exact case",
+                )
+            )
+    return violations
+
+
+def _validate_adr_chain(project_root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    adr_directory = project_root / "docs/adrs"
+    index_path = adr_directory / "README.md"
+    numbered_adrs = (
+        tuple(
+            sorted(
+                (
+                    path
+                    for path in adr_directory.glob("*.md")
+                    if ADR_FILENAME_PATTERN.fullmatch(path.name)
+                ),
+                key=lambda path: path.name,
+            )
+        )
+        if adr_directory.is_dir()
+        else ()
+    )
+
+    if not index_path.is_file():
+        violations.append(
+            Violation(
+                "adr_index_missing",
+                "docs/adrs/README.md",
+                1,
+                "README.md",
+                "the governed ADR authority chain requires docs/adrs/README.md",
+            )
+        )
+
+    for adr_path in numbered_adrs:
+        parsed, _ = _parse_document(project_root, adr_path)
+        if parsed is None:
+            continue
+        decision_status = parsed.metadata.get("Decision Status")
+        if decision_status is None or not decision_status:
+            violations.append(
+                Violation(
+                    "adr_decision_status_missing",
+                    parsed.relative_path,
+                    parsed.title_line,
+                    "Decision Status",
+                    "numbered ADRs require Decision Status in the metadata header",
+                )
+            )
+        elif decision_status not in ADR_DECISION_STATUSES:
+            violations.append(
+                Violation(
+                    "adr_decision_status_invalid",
+                    parsed.relative_path,
+                    parsed.metadata_lines["Decision Status"],
+                    "Decision Status",
+                    "Decision Status must be Accepted or Superseded",
+                )
+            )
+
+    if not index_path.is_file():
+        return violations
+
+    index_parsed, _ = _parse_document(project_root, index_path)
+    if index_parsed is None:
+        return violations
+    link_counts = {adr_path.resolve(): 0 for adr_path in numbered_adrs}
+    for _line_number, destination in _markdown_destinations(index_parsed.lines):
+        if not destination or destination.startswith("#"):
+            continue
+        if urlsplit(destination).scheme:
+            continue
+        raw_path = destination.split("#", 1)[0].split("?", 1)[0]
+        if not raw_path:
+            continue
+        target = (index_path.parent / unquote(raw_path)).resolve(strict=False)
+        if target in link_counts:
+            link_counts[target] += 1
+
+    for adr_path in numbered_adrs:
+        count = link_counts[adr_path.resolve()]
+        if count == 0:
+            violations.append(
+                Violation(
+                    "adr_unindexed",
+                    "docs/adrs/README.md",
+                    index_parsed.title_line,
+                    adr_path.name,
+                    "every numbered ADR must be linked exactly once from the ADR index",
+                )
+            )
+        elif count > 1:
+            violations.append(
+                Violation(
+                    "adr_duplicate_index_link",
+                    "docs/adrs/README.md",
+                    index_parsed.title_line,
+                    adr_path.name,
+                    "a numbered ADR may appear only once in the ADR index",
+                )
+            )
+    return violations
+
+
+def _markdown_destinations(lines: Iterable[str]) -> Iterable[tuple[int, str]]:
     in_fence = False
     fence_marker = ""
-    for line_number, source_line in enumerate(parsed.lines, 1):
+    for line_number, source_line in enumerate(lines, 1):
         stripped = source_line.lstrip()
         marker_match = re.match(r"(```+|~~~+)", stripped)
         if marker_match:
@@ -380,51 +536,7 @@ def _validate_links(
             continue
         line = INLINE_CODE_PATTERN.sub("", source_line)
         for match in MARKDOWN_LINK_PATTERN.finditer(line):
-            destination = _normalize_markdown_destination(match.group(1))
-            if not destination or destination.startswith("#"):
-                continue
-            parsed_url = urlsplit(destination)
-            scheme = parsed_url.scheme.casefold()
-            if scheme in ALLOWED_EXTERNAL_SCHEMES:
-                continue
-            if scheme or destination.startswith("/") or PureWindowsPath(destination).is_absolute():
-                violations.append(
-                    Violation(
-                        "absolute_local_link",
-                        parsed.relative_path,
-                        line_number,
-                        destination,
-                        "repository-local Markdown links must be relative",
-                    )
-                )
-                continue
-            raw_path = destination.split("#", 1)[0].split("?", 1)[0]
-            decoded_path = unquote(raw_path)
-            if not decoded_path:
-                continue
-            target = (path.parent / decoded_path).resolve(strict=False)
-            if not _is_within(target, project_root):
-                violations.append(
-                    Violation(
-                        "link_outside_repository",
-                        parsed.relative_path,
-                        line_number,
-                        destination,
-                        "relative Markdown link resolves outside the repository",
-                    )
-                )
-                continue
-            if not target.exists() or not _has_exact_case(project_root, target):
-                violations.append(
-                    Violation(
-                        "missing_link_target",
-                        parsed.relative_path,
-                        line_number,
-                        destination,
-                        "relative Markdown link target does not exist with exact case",
-                    )
-                )
-    return violations
+            yield line_number, _normalize_markdown_destination(match.group(1))
 
 
 def _normalize_markdown_destination(destination: str) -> str:

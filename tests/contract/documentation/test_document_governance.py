@@ -109,6 +109,40 @@ LEGACY_CONTRACT = """# Legacy contract
 - Last Verified: 2026-09-29
 """
 
+EMPTY_ADR_INDEX = """# Architecture Decision Records
+
+- Status: Approved / Current
+- Document Role: Current ADR index
+- Authority Level: Test ADR authority index
+- Applies To: Repository architecture decisions
+- Owner: Test owner
+- Depends On: `AGENTS.md`
+- Last Verified: 2026-09-29
+
+No numbered decisions have been accepted.
+"""
+
+VALID_ADR = """# ADR 0001: Test decision
+
+- Status: Approved / Current
+- Document Role: Current architecture decision
+- Authority Level: Accepted test decision
+- Applies To: ADR contract fixtures
+- Owner: Test owner
+- Depends On: `AGENTS.md`
+- Last Verified: 2026-09-29
+- Decision Status: Accepted
+
+## Decision
+
+The fixture decision is accepted.
+"""
+
+VALID_ADR_INDEX = EMPTY_ADR_INDEX.replace(
+    "No numbered decisions have been accepted.",
+    "- [ADR 0001: Test decision](0001-test-decision.md)",
+)
+
 
 class DocumentGovernanceTest(unittest.TestCase):
     def test_valid_current_plan_and_historical_plan_pass(self) -> None:
@@ -416,12 +450,93 @@ class DocumentGovernanceTest(unittest.TestCase):
 
         self.assertEqual(remaining, [])
 
+    def test_adr_index_is_required(self) -> None:
+        with repository_fixture() as root:
+            (root / "docs/adrs/README.md").unlink()
+
+            report = validate_repository(root)
+
+        self.assertIn("adr_index_missing", {item.code for item in report.violations})
+
+    def test_numbered_adr_requires_valid_decision_status(self) -> None:
+        with repository_fixture() as root:
+            adr_path = root / "docs/adrs/0001-test-decision.md"
+            write_document(
+                adr_path,
+                VALID_ADR.replace("- Decision Status: Accepted\n", ""),
+            )
+
+            missing_report = validate_repository(root)
+            write_document(
+                adr_path,
+                VALID_ADR.replace("Decision Status: Accepted", "Decision Status: Draft"),
+            )
+            invalid_report = validate_repository(root)
+
+        self.assertIn(
+            "adr_decision_status_missing",
+            {item.code for item in missing_report.violations},
+        )
+        self.assertIn(
+            "adr_decision_status_invalid",
+            {item.code for item in invalid_report.violations},
+        )
+
+    def test_adr_index_links_every_numbered_adr_exactly_once(self) -> None:
+        with repository_fixture() as root:
+            write_document(root / "docs/adrs/0001-test-decision.md", VALID_ADR)
+
+            missing_report = validate_repository(root)
+            write_document(
+                root / "docs/adrs/README.md",
+                VALID_ADR_INDEX
+                + "\n- [Duplicate decision](0001-test-decision.md)\n",
+            )
+            duplicate_report = validate_repository(root)
+
+        self.assertIn("adr_unindexed", {item.code for item in missing_report.violations})
+        self.assertIn(
+            "adr_duplicate_index_link",
+            {item.code for item in duplicate_report.violations},
+        )
+
+    def test_valid_adr_chain_passes(self) -> None:
+        with repository_fixture() as root:
+            write_document(root / "docs/adrs/0001-test-decision.md", VALID_ADR)
+            write_document(root / "docs/adrs/README.md", VALID_ADR_INDEX)
+
+            report = validate_repository(root)
+
+        self.assertEqual(
+            [item for item in report.violations if item.code.startswith("adr_")],
+            [],
+        )
+
+    def test_repository_adr_index_covers_every_numbered_adr(self) -> None:
+        self.assertTrue((PROJECT_ROOT / "docs/adrs/README.md").is_file())
+        self.assertTrue(
+            (
+                PROJECT_ROOT
+                / "docs/adrs/0001-document-authority-and-lifecycle.md"
+            ).is_file()
+        )
+        report = validate_repository(
+            PROJECT_ROOT,
+            PROJECT_ROOT / "tools/document_governance_baseline.json",
+        )
+
+        self.assertEqual(
+            [item for item in report.violations if item.code.startswith("adr_")],
+            [],
+        )
+
 
 @contextmanager
 def repository_fixture() -> Iterator[Path]:
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         (root / "tools").mkdir(parents=True)
+        write_document(root / "docs/adrs/README.md", EMPTY_ADR_INDEX)
         yield root
 
 
