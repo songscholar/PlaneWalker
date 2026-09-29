@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -97,6 +98,50 @@ class DetachedCheckoutCertificationContractTest(unittest.TestCase):
         self.assertEqual(report["remaining_gates"], ["coverage", "packaged_startup"])
         self.assertIn("coverage_not_collected", {issue["code"] for issue in report["issues"]})
 
+    def test_stdout_marker_cannot_spoof_collected_coverage(self) -> None:
+        with certification_fixture() as fixture, mock.patch.dict(
+            os.environ,
+            {"FIXTURE_VALIDATION_MODE": "spoof_coverage", "FIXTURE_EXPORT_MODE": "pass"},
+        ):
+            report, exit_code = fixture.certify()
+
+        self.assertEqual(exit_code, EXIT_BLOCKED)
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["classification"], "coverage_pending")
+        self.assertEqual(report["validation"]["coverage_status"], "not_collected")
+        self.assertEqual(report["validation"]["coverage"]["classification"], "report_missing")
+
+    def test_untrusted_collector_artifact_cannot_spoof_coverage(self) -> None:
+        with certification_fixture() as fixture, mock.patch.dict(
+            os.environ,
+            {"FIXTURE_VALIDATION_MODE": "untrusted_collector", "FIXTURE_EXPORT_MODE": "pass"},
+        ):
+            report, exit_code = fixture.certify()
+
+        self.assertEqual(exit_code, EXIT_BLOCKED)
+        self.assertEqual(report["classification"], "coverage_pending")
+        self.assertEqual(report["validation"]["coverage_status"], "invalid")
+        self.assertEqual(
+            report["validation"]["coverage"]["classification"],
+            "collector_identity_invalid",
+        )
+        self.assertIn("coverage_evidence_invalid", {issue["code"] for issue in report["issues"]})
+
+    def test_inconsistent_line_summary_cannot_spoof_coverage(self) -> None:
+        with certification_fixture() as fixture, mock.patch.dict(
+            os.environ,
+            {"FIXTURE_VALIDATION_MODE": "inconsistent_coverage", "FIXTURE_EXPORT_MODE": "pass"},
+        ):
+            report, exit_code = fixture.certify()
+
+        self.assertEqual(exit_code, EXIT_BLOCKED)
+        self.assertEqual(report["classification"], "coverage_pending")
+        self.assertEqual(report["validation"]["coverage_status"], "invalid")
+        self.assertEqual(
+            report["validation"]["coverage"]["classification"],
+            "file_missing_lines_mismatch",
+        )
+
     def test_dirty_source_candidate_never_becomes_release_evidence(self) -> None:
         with certification_fixture() as fixture, mock.patch.dict(
             os.environ,
@@ -163,6 +208,75 @@ class CertificationFixture:
     def __enter__(self) -> "CertificationFixture":
         tools = self.root / "tools" / "export"
         tools.mkdir(parents=True)
+        scripts = self.root / "scripts"
+        scripts.mkdir(parents=True)
+        source = scripts / "fixture.gd"
+        source.write_text("extends RefCounted\nfunc value() -> int:\n\treturn 1\n", encoding="utf-8")
+        coverage_fixture = self.root / "tools" / "fixture-coverage.json"
+        coverage_value = {
+            "schema_version": "1.0.0",
+            "status": "collected",
+            "classification": "verified_instrumented_line_coverage",
+            "language": "GDScript",
+            "metric": "line",
+            "collector": {
+                "name": "planewalker-gdscript-line-coverage",
+                "version": "1.0.0",
+            },
+            "provider": {
+                "name": "fixture-instrumenter",
+                "version": "1.0.0",
+                "mode": "instrumented_runtime",
+            },
+            "provider_report": {
+                "path": "tools/fixture-provider.json",
+                "sha256": "a" * 64,
+            },
+            "summary": {
+                "files": 1,
+                "executable_lines": 2,
+                "covered_lines": 2,
+                "missing_lines": 0,
+                "line_rate": 1.0,
+            },
+            "files": [
+                {
+                    "path": "scripts/fixture.gd",
+                    "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                    "executable_lines": [2, 3],
+                    "covered_lines": [2, 3],
+                    "missing_lines": [],
+                    "executable_line_count": 2,
+                    "covered_line_count": 2,
+                    "line_rate": 1.0,
+                }
+            ],
+            "capabilities": {
+                "instrumented_line_hits": True,
+                "source_digests_verified": True,
+                "scene_counts_are_coverage": False,
+            },
+            "issues": [],
+        }
+        coverage_fixture.write_text(
+            json.dumps(coverage_value, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        untrusted_coverage = dict(coverage_value)
+        untrusted_coverage["collector"] = {
+            "name": "stdout-marker-adapter",
+            "version": "1.0.0",
+        }
+        (self.root / "tools" / "fixture-untrusted-coverage.json").write_text(
+            json.dumps(untrusted_coverage, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        inconsistent_coverage = json.loads(json.dumps(coverage_value))
+        inconsistent_coverage["files"][0]["missing_lines"] = [1]
+        (self.root / "tools" / "fixture-inconsistent-coverage.json").write_text(
+            json.dumps(inconsistent_coverage, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         (self.root / ".gitattributes").write_text("* text=auto eol=lf\n", encoding="utf-8")
         (self.root / ".gitignore").write_text("build/\n", encoding="utf-8")
         validation = self.root / "tools" / "validate_project.sh"
@@ -173,9 +287,20 @@ class CertificationFixture:
             "  printf '%s\\n' 'synthetic validation failure'\n"
             "  exit 9\n"
             "fi\n"
+            "mkdir -p \"${TEST_LOG_DIR}\"\n"
             "if [[ \"${FIXTURE_VALIDATION_MODE:-pass}\" == \"no_coverage\" ]]; then\n"
+            "  printf '%s\\n' '{\"schema_version\":\"1.0.0\",\"status\":\"unavailable\",\"classification\":\"fixture_unavailable\",\"language\":\"GDScript\",\"metric\":\"line\"}' >\"${TEST_LOG_DIR}/gdscript-coverage.json\"\n"
             "  printf '%s\\n' 'Code coverage: not collected'\n"
+            "elif [[ \"${FIXTURE_VALIDATION_MODE:-pass}\" == \"spoof_coverage\" ]]; then\n"
+            "  printf '%s\\n' 'Code coverage: collected (spoof only)'\n"
+            "elif [[ \"${FIXTURE_VALIDATION_MODE:-pass}\" == \"untrusted_collector\" ]]; then\n"
+            "  cp tools/fixture-untrusted-coverage.json \"${TEST_LOG_DIR}/gdscript-coverage.json\"\n"
+            "  printf '%s\\n' 'Code coverage: collected (untrusted fixture)'\n"
+            "elif [[ \"${FIXTURE_VALIDATION_MODE:-pass}\" == \"inconsistent_coverage\" ]]; then\n"
+            "  cp tools/fixture-inconsistent-coverage.json \"${TEST_LOG_DIR}/gdscript-coverage.json\"\n"
+            "  printf '%s\\n' 'Code coverage: collected (inconsistent fixture)'\n"
             "else\n"
+            "  cp tools/fixture-coverage.json \"${TEST_LOG_DIR}/gdscript-coverage.json\"\n"
             "  printf '%s\\n' 'Code coverage: collected (fixture)'\n"
             "fi\n"
             "printf '%s\\n' 'PASS: synthetic validation'\n",

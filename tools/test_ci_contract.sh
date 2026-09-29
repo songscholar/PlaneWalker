@@ -138,6 +138,37 @@ make_fake_godot "${TEMP_DIR}/godot-pass" pass
 pass_output="$(GODOT_BIN="${TEMP_DIR}/godot-pass" TEST_LOG_DIR="${TEMP_DIR}/pass-logs" tools/run_tests.sh --filter seed_service_test)"
 assert_contains "${pass_output}" "Scene tests: 1 passed, 0 failed" "successful scene summary"
 assert_contains "${pass_output}" "Code coverage: not collected" "honest coverage summary"
+[[ -f "${TEMP_DIR}/pass-logs/gdscript-coverage.json" ]] \
+	|| fail "scene runner must retain a machine-readable GDScript coverage report"
+python3 - "${TEMP_DIR}/pass-logs/gdscript-coverage.json" <<'PY'
+import json
+import sys
+
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+if report.get("status") != "unavailable":
+    raise SystemExit("stock runner coverage must fail closed as unavailable")
+if report.get("metric") != "line" or report.get("language") != "GDScript":
+    raise SystemExit("coverage report must describe GDScript line coverage")
+collector = report.get("collector", {})
+if collector.get("name") != "planewalker-gdscript-line-coverage":
+    raise SystemExit("coverage report must identify the trusted collector")
+if report.get("capabilities", {}).get("instrumented_line_hits") is not False:
+    raise SystemExit("unavailable coverage must not claim instrumented line hits")
+if report.get("capabilities", {}).get("scene_counts_are_coverage") is not False:
+    raise SystemExit("scene counts must never be accepted as code coverage")
+PY
+
+printf '%s\n' '{"status":"collected","summary":{"covered_lines":1,"executable_lines":1}}' \
+	>"${TEMP_DIR}/aggregate-only-coverage.json"
+set +e
+GDSCRIPT_COVERAGE_PROVIDER_REPORT="${TEMP_DIR}/aggregate-only-coverage.json" \
+	GODOT_BIN="${TEMP_DIR}/godot-pass" \
+	TEST_LOG_DIR="${TEMP_DIR}/invalid-coverage-logs" \
+	tools/run_tests.sh --filter seed_service_test >/dev/null 2>&1
+invalid_coverage_status=$?
+set -e
+[[ ${invalid_coverage_status} -ne 0 ]] \
+	|| fail "invalid or aggregate-only coverage evidence must fail closed"
 
 make_fake_godot "${TEMP_DIR}/godot-exit-failure" exit_failure
 set +e
@@ -191,6 +222,7 @@ assert_file_contains tools/validate_project.sh 'python3 tools/document_governanc
 assert_file_contains tools/validate_project.sh 'tools/document_governance_baseline\.json' "documentation migration baseline"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.playtest\.test_playtest_data' "playtest data contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.m1\.test_m1_gate' "M1 release gate contract entrypoint"
+assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.coverage\.test_gdscript_coverage' "GDScript coverage contract entrypoint"
 assert_file_contains tools/validate_project.sh 'validate_import_logs "\$\{phase\}" "\$\{stdout_log\}" "\$\{engine_log\}"' "each import scans stdout and engine logs"
 
 bootstrap_output="${TEMP_DIR}/bootstrap-expected.out"

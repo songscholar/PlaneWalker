@@ -92,6 +92,7 @@ else
 	command -v "${godot_command}" >/dev/null 2>&1 || fail "Godot executable not found: ${godot_command}"
 	godot_bin="$(command -v "${godot_command}")"
 fi
+command -v python3 >/dev/null 2>&1 || fail "python3 is required for coverage evidence"
 
 if [[ -n "${TEST_LOG_DIR:-}" ]]; then
 	log_dir="${TEST_LOG_DIR}"
@@ -210,6 +211,32 @@ done
 
 printf '\nScene tests: %d passed, %d failed, %d total\n' "${passed}" "${failed}" "${#test_scenes[@]}"
 printf 'Known leak warnings: %d\n' "${known_leak_warnings}"
-printf 'Code coverage: not collected (scene execution counts are not code coverage)\n'
 
-(( failed == 0 ))
+coverage_report="${log_dir}/gdscript-coverage.json"
+coverage_command=(
+	python3
+	"${PROJECT_ROOT}/tools/coverage/collect_gdscript_coverage.py"
+	--project-root "${PROJECT_ROOT}"
+	--godot-bin "${godot_bin}"
+	--output "${coverage_report}"
+)
+if [[ -n "${GDSCRIPT_COVERAGE_PROVIDER_REPORT:-}" ]]; then
+	coverage_command+=(--provider-report "${GDSCRIPT_COVERAGE_PROVIDER_REPORT}")
+fi
+set +e
+coverage_output="$("${coverage_command[@]}" 2>&1)"
+coverage_status=$?
+set -e
+printf '%s\n' "${coverage_output}"
+
+coverage_failed=false
+case "${coverage_status}" in
+	0|3)
+		;;
+	*)
+		coverage_failed=true
+		printf '[  FAILED  ] GDScript coverage evidence is invalid (exit %d)\n' "${coverage_status}" >&2
+		;;
+esac
+
+(( failed == 0 )) && [[ "${coverage_failed}" == false ]]

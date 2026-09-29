@@ -182,6 +182,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.playtest.test_playt
 printf '\n== M1 release gate contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.m1.test_m1_gate
 
+printf '\n== GDScript coverage contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.coverage.test_gdscript_coverage
+
 printf '\n== Export contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.export.test_export_preflight \

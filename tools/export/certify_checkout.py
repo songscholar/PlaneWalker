@@ -22,6 +22,9 @@ EXIT_PASS = 0
 EXIT_INVALID = 2
 EXIT_BLOCKED = 3
 EXIT_FAILED = 4
+TRUSTED_COVERAGE_COLLECTOR = "planewalker-gdscript-line-coverage"
+TRUSTED_COVERAGE_COLLECTOR_VERSION = "1.0.0"
+TRUSTED_COVERAGE_CLASSIFICATION = "verified_instrumented_line_coverage"
 
 
 def certify_checkout(
@@ -143,12 +146,22 @@ def certify_checkout(
             _set_checkout_after(report, checkout_after)
             return _finish(report, evidence_path, EXIT_FAILED)
 
-        coverage_pending = validation.get("coverage_status") != "collected"
+        coverage_status = validation.get("coverage_status")
+        coverage_pending = coverage_status != "collected"
         if coverage_pending:
+            coverage_invalid = coverage_status == "invalid"
             issues.append({
-                "code": "coverage_not_collected",
+                "code": (
+                    "coverage_evidence_invalid"
+                    if coverage_invalid
+                    else "coverage_not_collected"
+                ),
                 "category": "blocked",
-                "message": "clean detached validation did not produce a code coverage report",
+                "message": (
+                    "clean detached validation produced invalid code coverage evidence"
+                    if coverage_invalid
+                    else "clean detached validation did not produce a code coverage report"
+                ),
             })
         report["remaining_gates"] = (
             ["coverage", "exports", "packaged_startup"]
@@ -290,14 +303,19 @@ def _run_validation(
     except OSError:
         exit_code = None
         failure_code = "validation_process_error"
-    coverage_status = _coverage_status(stdout_log)
+    coverage = _coverage_status(
+        validation_log_dir / "scene-tests" / "gdscript-coverage.json",
+        checkout,
+        source,
+    )
     return {
         "status": "pass" if failure_code is None else "failed",
         "failure_code": failure_code,
         "command": ["tools/validate_project.sh"],
         "exit_code": exit_code,
         "duration_ms": int((time.monotonic() - started) * 1000),
-        "coverage_status": coverage_status,
+        "coverage_status": coverage["status"],
+        "coverage": coverage,
         "stdout": _file_evidence(stdout_log, source),
     }
 
@@ -400,15 +418,189 @@ def _file_evidence(path: Path, source: Path) -> dict[str, object]:
     }
 
 
-def _coverage_status(stdout_log: Path) -> str:
-    if not stdout_log.is_file():
-        return "unknown"
-    text = stdout_log.read_text(encoding="utf-8", errors="replace")
-    if "Code coverage: not collected" in text:
-        return "not_collected"
-    if "Code coverage: collected" in text:
-        return "collected"
-    return "unknown"
+def _coverage_status(
+    report_path: Path,
+    checkout: Path,
+    source: Path,
+) -> dict[str, object]:
+    evidence = _file_evidence(report_path, source)
+    if not report_path.is_file():
+        return {
+            "status": "not_collected",
+            "classification": "report_missing",
+            "report": evidence,
+        }
+    try:
+        value = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return {
+            "status": "invalid",
+            "classification": "report_unreadable",
+            "message": str(error),
+            "report": evidence,
+        }
+    if not isinstance(value, dict):
+        return {
+            "status": "invalid",
+            "classification": "report_root_invalid",
+            "report": evidence,
+        }
+    if value.get("status") == "unavailable":
+        return {
+            "status": "not_collected",
+            "classification": str(value.get("classification", "provider_unavailable")),
+            "report": evidence,
+        }
+    if value.get("status") != "collected":
+        return {
+            "status": "invalid",
+            "classification": str(value.get("classification", "report_status_invalid")),
+            "report": evidence,
+        }
+
+    invalid_reason = _collected_coverage_invalid_reason(value, checkout)
+    if invalid_reason is not None:
+        return {
+            "status": "invalid",
+            "classification": invalid_reason,
+            "report": evidence,
+        }
+    return {
+        "status": "collected",
+        "classification": str(value.get("classification", "verified_line_coverage")),
+        "language": "GDScript",
+        "metric": "line",
+        "provider": dict(value["provider"]),
+        "summary": dict(value["summary"]),
+        "report": evidence,
+    }
+
+
+def _collected_coverage_invalid_reason(
+    value: dict[str, object],
+    checkout: Path,
+) -> str | None:
+    if value.get("schema_version") != "1.0.0":
+        return "schema_invalid"
+    if value.get("classification") != TRUSTED_COVERAGE_CLASSIFICATION:
+        return "classification_invalid"
+    if value.get("language") != "GDScript" or value.get("metric") != "line":
+        return "metric_invalid"
+    collector = value.get("collector")
+    if not isinstance(collector, dict):
+        return "collector_identity_invalid"
+    if (
+        collector.get("name") != TRUSTED_COVERAGE_COLLECTOR
+        or collector.get("version") != TRUSTED_COVERAGE_COLLECTOR_VERSION
+    ):
+        return "collector_identity_invalid"
+    provider_report = value.get("provider_report")
+    if not isinstance(provider_report, dict):
+        return "provider_report_evidence_missing"
+    provider_digest = provider_report.get("sha256")
+    if (
+        not isinstance(provider_digest, str)
+        or len(provider_digest) != 64
+        or any(character not in "0123456789abcdef" for character in provider_digest)
+    ):
+        return "provider_report_digest_invalid"
+    if not isinstance(provider_report.get("path"), str) or not provider_report["path"]:
+        return "provider_report_path_invalid"
+    if value.get("issues") != []:
+        return "collected_report_has_issues"
+    capabilities = value.get("capabilities")
+    if not isinstance(capabilities, dict):
+        return "capabilities_missing"
+    if capabilities.get("instrumented_line_hits") is not True:
+        return "instrumented_line_hits_missing"
+    if capabilities.get("source_digests_verified") is not True:
+        return "source_digests_unverified"
+    if capabilities.get("scene_counts_are_coverage") is not False:
+        return "scene_counts_claimed_as_coverage"
+    provider = value.get("provider")
+    if not isinstance(provider, dict):
+        return "provider_missing"
+    if provider.get("mode") != "instrumented_runtime":
+        return "provider_mode_invalid"
+    if not str(provider.get("name", "")).strip() or not str(provider.get("version", "")).strip():
+        return "provider_identity_invalid"
+
+    files = value.get("files")
+    summary = value.get("summary")
+    if not isinstance(files, list) or not files or not isinstance(summary, dict):
+        return "line_evidence_missing"
+    seen_paths: set[str] = set()
+    executable_total = 0
+    covered_total = 0
+    for file_value in files:
+        if not isinstance(file_value, dict):
+            return "file_evidence_invalid"
+        relative_text = file_value.get("path")
+        if not isinstance(relative_text, str) or not relative_text:
+            return "file_path_invalid"
+        relative = Path(relative_text)
+        if relative.is_absolute() or ".." in relative.parts or relative.suffix != ".gd":
+            return "file_path_invalid"
+        normalized_path = relative.as_posix()
+        if normalized_path in seen_paths:
+            return "file_path_duplicate"
+        seen_paths.add(normalized_path)
+        source_path = (checkout / relative).resolve()
+        try:
+            source_path.relative_to(checkout.resolve())
+        except ValueError:
+            return "file_path_invalid"
+        if not source_path.is_file():
+            return "source_missing"
+        if file_value.get("source_sha256") != _file_evidence(source_path, checkout)["sha256"]:
+            return "source_digest_mismatch"
+        executable = _positive_line_set(file_value.get("executable_lines"), allow_empty=False)
+        covered = _positive_line_set(file_value.get("covered_lines"), allow_empty=True)
+        if executable is None or covered is None or not covered.issubset(executable):
+            return "line_set_invalid"
+        try:
+            source_text = source_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return "source_unreadable"
+        line_count = len(source_text.splitlines())
+        if max(executable) > line_count:
+            return "line_out_of_range"
+        if file_value.get("executable_line_count") != len(executable):
+            return "file_count_mismatch"
+        if file_value.get("covered_line_count") != len(covered):
+            return "file_count_mismatch"
+        expected_missing = sorted(executable - covered)
+        if file_value.get("missing_lines") != expected_missing:
+            return "file_missing_lines_mismatch"
+        expected_file_rate = round(len(covered) / len(executable), 6)
+        if file_value.get("line_rate") != expected_file_rate:
+            return "file_rate_mismatch"
+        executable_total += len(executable)
+        covered_total += len(covered)
+
+    if summary.get("files") != len(files):
+        return "summary_count_mismatch"
+    if summary.get("executable_lines") != executable_total:
+        return "summary_count_mismatch"
+    if summary.get("covered_lines") != covered_total:
+        return "summary_count_mismatch"
+    if summary.get("missing_lines") != executable_total - covered_total:
+        return "summary_count_mismatch"
+    expected_rate = round(covered_total / executable_total, 6)
+    if summary.get("line_rate") != expected_rate:
+        return "summary_rate_mismatch"
+    return None
+
+
+def _positive_line_set(value: object, *, allow_empty: bool) -> set[int] | None:
+    if not isinstance(value, list) or (not value and not allow_empty):
+        return None
+    if any(not isinstance(line, int) or isinstance(line, bool) or line <= 0 for line in value):
+        return None
+    normalized = set(value)
+    if len(normalized) != len(value):
+        return None
+    return normalized
 
 
 def _copy_issues(value: object) -> list[dict[str, object]]:
