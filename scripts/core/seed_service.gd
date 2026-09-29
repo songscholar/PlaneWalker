@@ -29,3 +29,20 @@ static func make_rng(
 	var rng := RandomNumberGenerator.new()
 	rng.seed = derive_seed(run_seed, channel, floor_index, room_index, roll_index)
 	return rng
+
+
+static func derive_weapon_action_seed(
+	run_seed: int,
+	profile_id: StringName,
+	action_id: StringName,
+	payload_id: StringName,
+	action_token: int,
+	outcome_index: int
+) -> int:
+	var channel := StringName("weapon_action_v1:%s:%s:%s:%d" % [
+		str(profile_id),
+		str(action_id),
+		str(payload_id),
+		action_token,
+	])
+	return derive_seed(run_seed, channel, 0, 0, outcome_index)

@@ -103,6 +103,9 @@ static func validate_plan(plan: Dictionary, expected_weapon_id: StringName = &""
 			"reason": "mismatch",
 			"expected": str(expected_weapon_id),
 		})
+	var metadata_result := _validate_plan_metadata(plan)
+	if not bool(metadata_result.get("ok", false)):
+		return metadata_result
 
 	var phases_value: Variant = plan.get("phases")
 	if not phases_value is Array or (phases_value as Array).is_empty():
@@ -192,6 +195,12 @@ static func _validate_phase(phase: Dictionary, phase_index: int) -> Dictionary:
 				"reason": "half_open_boundary",
 			})
 
+	const HOLD_ONLY_FIELDS: Array[String] = [
+		"minimum_hold_frames",
+		"charge_complete_frames",
+		"hold_progress_multiplier",
+		"movement_start_multiplier",
+	]
 	if phase_name == &"HOLD":
 		if phase_index != 0:
 			return failure(CODE_INVALID_PLAN, {
@@ -210,12 +219,88 @@ static func _validate_phase(phase: Dictionary, phase_index: int) -> Dictionary:
 				"index": phase_index,
 				"reason": "outside_hold_duration",
 			})
-	elif phase.has("minimum_hold_frames"):
-		return failure(CODE_INVALID_PLAN, {
-			"field": "phases.minimum_hold_frames",
-			"index": phase_index,
-			"reason": "phase",
-		})
+		if phase.has("charge_complete_frames"):
+			var charge_complete_value: Variant = phase["charge_complete_frames"]
+			if (
+				typeof(charge_complete_value) != TYPE_INT
+				or int(charge_complete_value) <= 0
+				or int(charge_complete_value) < int(minimum_value)
+				or int(charge_complete_value) > int(duration_value)
+			):
+				return failure(CODE_INVALID_PLAN, {
+					"field": "phases.charge_complete_frames",
+					"index": phase_index,
+					"reason": "outside_hold_duration",
+				})
+		for multiplier_field: String in ["hold_progress_multiplier", "movement_start_multiplier"]:
+			if not phase.has(multiplier_field):
+				continue
+			var multiplier_value: Variant = phase[multiplier_field]
+			if (
+				typeof(multiplier_value) not in [TYPE_INT, TYPE_FLOAT]
+				or not is_finite(float(multiplier_value))
+				or float(multiplier_value) < 0.0
+			):
+				return failure(CODE_INVALID_PLAN, {
+					"field": "phases.%s" % multiplier_field,
+					"index": phase_index,
+					"reason": "value",
+				})
+	else:
+		for hold_field: String in HOLD_ONLY_FIELDS:
+			if phase.has(hold_field):
+				return failure(CODE_INVALID_PLAN, {
+					"field": "phases.%s" % hold_field,
+					"index": phase_index,
+					"reason": "phase",
+				})
+	return success()
+
+
+static func _validate_plan_metadata(plan: Dictionary) -> Dictionary:
+	if plan.has("cooldown_frames"):
+		var cooldown_value: Variant = plan["cooldown_frames"]
+		if (
+			typeof(cooldown_value) != TYPE_INT
+			or int(cooldown_value) < 0
+			or int(cooldown_value) > MAX_PHASE_FRAMES
+		):
+			return failure(CODE_INVALID_PLAN, {
+				"field": "cooldown_frames",
+				"reason": "value",
+			})
+
+	if plan.has("resource_costs"):
+		var resource_costs_value: Variant = plan["resource_costs"]
+		if not resource_costs_value is Dictionary:
+			return failure(CODE_INVALID_PLAN, {
+				"field": "resource_costs",
+				"reason": "type",
+			})
+		var normalized_ids: Dictionary = {}
+		for resource_id_value: Variant in (resource_costs_value as Dictionary).keys():
+			if typeof(resource_id_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+				return failure(CODE_INVALID_PLAN, {
+					"field": "resource_costs",
+					"reason": "resource_id_type",
+				})
+			var resource_id := str(resource_id_value).strip_edges()
+			if resource_id.is_empty() or normalized_ids.has(resource_id):
+				return failure(CODE_INVALID_PLAN, {
+					"field": "resource_costs",
+					"reason": "resource_id_value",
+				})
+			normalized_ids[resource_id] = true
+			var cost_value: Variant = (resource_costs_value as Dictionary)[resource_id_value]
+			if (
+				typeof(cost_value) not in [TYPE_INT, TYPE_FLOAT]
+				or not is_finite(float(cost_value))
+				or float(cost_value) < 0.0
+			):
+				return failure(CODE_INVALID_PLAN, {
+					"field": "resource_costs.%s" % resource_id,
+					"reason": "value",
+				})
 	return success()
 
 

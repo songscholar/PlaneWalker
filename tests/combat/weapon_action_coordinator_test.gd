@@ -248,6 +248,8 @@ func _run() -> void:
 	_test_hold_snapshot_isolated_and_restore_rejection_is_atomic()
 	_test_tampered_finalized_hold_plan_rolls_back_and_cancels()
 	_test_contract_rejects_invalid_hold_boundaries()
+	_test_contract_validates_extended_hold_metadata()
+	_test_contract_validates_plan_resources_and_cooldown()
 	_test_contract_rejects_non_finite_plans()
 	_test_contract_rejects_non_finite_plan_metadata()
 	_suite.finish(get_tree())
@@ -693,6 +695,118 @@ func _test_contract_rejects_invalid_hold_boundaries() -> void:
 	}
 	var terminal_result: Dictionary = WeaponActionContractScript.validate_plan(terminal_hold, &"test_weapon")
 	_suite.assert_true(not bool(terminal_result.get("ok", false)), "HOLD requires a release phase in the same action plan")
+
+
+func _test_contract_validates_extended_hold_metadata() -> void:
+	var valid_plan := _extended_hold_plan()
+	_suite.assert_true(
+		bool(WeaponActionContractScript.validate_plan(valid_plan, &"test_weapon").get("ok", false)),
+		"extended HOLD metadata is optional and valid within the phase boundary"
+	)
+
+	var legacy_plan := valid_plan.duplicate(true)
+	var legacy_hold: Dictionary = (legacy_plan["phases"] as Array)[0]
+	legacy_hold.erase("charge_complete_frames")
+	legacy_hold.erase("hold_progress_multiplier")
+	legacy_hold.erase("movement_start_multiplier")
+	_suite.assert_true(
+		bool(WeaponActionContractScript.validate_plan(legacy_plan, &"test_weapon").get("ok", false)),
+		"legacy HOLD plans remain valid when extended metadata is absent"
+	)
+
+	for field: String in ["charge_complete_frames", "hold_progress_multiplier", "movement_start_multiplier"]:
+		var misplaced := valid_plan.duplicate(true)
+		var phases: Array = misplaced["phases"]
+		var hold: Dictionary = phases[0]
+		var windup: Dictionary = phases[1]
+		windup[field] = hold[field]
+		var misplaced_result: Dictionary = WeaponActionContractScript.validate_plan(misplaced, &"test_weapon")
+		_suite.assert_true(not bool(misplaced_result.get("ok", false)), "%s is HOLD-only" % field)
+
+	var before_minimum := valid_plan.duplicate(true)
+	(before_minimum["phases"] as Array)[0]["charge_complete_frames"] = 1
+	_suite.assert_true(
+		not bool(WeaponActionContractScript.validate_plan(before_minimum, &"test_weapon").get("ok", false)),
+		"charge completion cannot precede the minimum HOLD boundary"
+	)
+
+	var after_duration := valid_plan.duplicate(true)
+	(after_duration["phases"] as Array)[0]["charge_complete_frames"] = 6
+	_suite.assert_true(
+		not bool(WeaponActionContractScript.validate_plan(after_duration, &"test_weapon").get("ok", false)),
+		"charge completion cannot exceed the automatic-release duration"
+	)
+
+	for field: String in ["hold_progress_multiplier", "movement_start_multiplier"]:
+		var negative := valid_plan.duplicate(true)
+		(negative["phases"] as Array)[0][field] = -0.01
+		_suite.assert_true(
+			not bool(WeaponActionContractScript.validate_plan(negative, &"test_weapon").get("ok", false)),
+			"%s rejects negative values" % field
+		)
+
+
+func _test_contract_validates_plan_resources_and_cooldown() -> void:
+	var valid_plan := _extended_hold_plan()
+	valid_plan["cooldown_frames"] = 0
+	valid_plan["resource_costs"] = {
+		"time_energy": 20.0,
+		&"ammo": 1,
+	}
+	_suite.assert_true(
+		bool(WeaponActionContractScript.validate_plan(valid_plan, &"test_weapon").get("ok", false)),
+		"finite non-negative cooldowns and resource costs are accepted"
+	)
+
+	for invalid_cooldown: Variant in [-1, 1.5, WeaponActionContractScript.MAX_PHASE_FRAMES + 1]:
+		var invalid := valid_plan.duplicate(true)
+		invalid["cooldown_frames"] = invalid_cooldown
+		_suite.assert_true(
+			not bool(WeaponActionContractScript.validate_plan(invalid, &"test_weapon").get("ok", false)),
+			"invalid cooldown %s fails closed" % str(invalid_cooldown)
+		)
+
+	var non_dictionary_costs := valid_plan.duplicate(true)
+	non_dictionary_costs["resource_costs"] = []
+	_suite.assert_true(
+		not bool(WeaponActionContractScript.validate_plan(non_dictionary_costs, &"test_weapon").get("ok", false)),
+		"resource costs must be a dictionary"
+	)
+
+	for invalid_cost: Variant in [-1.0, NAN, INF, "one"]:
+		var invalid := valid_plan.duplicate(true)
+		invalid["resource_costs"] = {"ammo": invalid_cost}
+		_suite.assert_true(
+			not bool(WeaponActionContractScript.validate_plan(invalid, &"test_weapon").get("ok", false)),
+			"invalid resource cost %s fails closed" % str(invalid_cost)
+		)
+
+	var empty_resource_id := valid_plan.duplicate(true)
+	empty_resource_id["resource_costs"] = {"": 1.0}
+	_suite.assert_true(
+		not bool(WeaponActionContractScript.validate_plan(empty_resource_id, &"test_weapon").get("ok", false)),
+		"resource costs reject empty resource identifiers"
+	)
+
+
+func _extended_hold_plan() -> Dictionary:
+	return {
+		"weapon_id": "test_weapon",
+		"action_id": "extended_hold",
+		"phases": [
+			{
+				"phase": "HOLD",
+				"duration_frames": 5,
+				"minimum_hold_frames": 2,
+				"charge_complete_frames": 4,
+				"hold_progress_multiplier": 1.25,
+				"movement_start_multiplier": 1.0,
+				"movement_multiplier": 0.65,
+			},
+			{"phase": "WINDUP", "duration_frames": 1},
+		],
+		"payloads": [],
+	}
 
 
 func _test_contract_rejects_non_finite_plans() -> void:

@@ -27,4 +27,34 @@ func _run() -> void:
 		SeedServiceScript.derive_seed(-123, &"draft", 1, 2, 3),
 		"negative run seeds are deterministic"
 	)
+	var action_seed := SeedServiceScript.derive_weapon_action_seed(
+		123,
+		&"bow_launch_v1",
+		&"scatter_shot",
+		&"bow_scatter",
+		17,
+		0
+	)
+	suite.assert_equal(
+		action_seed,
+		SeedServiceScript.derive_weapon_action_seed(
+			123,
+			&"bow_launch_v1",
+			&"scatter_shot",
+			&"bow_scatter",
+			17,
+			0
+		),
+		"weapon action seeds reproduce from the complete stable context"
+	)
+	var isolated_action_seeds: Array[int] = [
+		SeedServiceScript.derive_weapon_action_seed(124, &"bow_launch_v1", &"scatter_shot", &"bow_scatter", 17, 0),
+		SeedServiceScript.derive_weapon_action_seed(123, &"bow_candidate_v1", &"scatter_shot", &"bow_scatter", 17, 0),
+		SeedServiceScript.derive_weapon_action_seed(123, &"bow_launch_v1", &"arrow_rain", &"bow_scatter", 17, 0),
+		SeedServiceScript.derive_weapon_action_seed(123, &"bow_launch_v1", &"scatter_shot", &"bow_arrow_rain", 17, 0),
+		SeedServiceScript.derive_weapon_action_seed(123, &"bow_launch_v1", &"scatter_shot", &"bow_scatter", 18, 0),
+		SeedServiceScript.derive_weapon_action_seed(123, &"bow_launch_v1", &"scatter_shot", &"bow_scatter", 17, 1),
+	]
+	for isolated_seed: int in isolated_action_seeds:
+		suite.assert_true(action_seed != isolated_seed, "each weapon action seed dimension owns an isolated channel")
 	suite.finish(get_tree())
