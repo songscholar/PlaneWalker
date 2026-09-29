@@ -53,6 +53,12 @@ func _run() -> void:
 	add_child(main)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var quick_start_config: Dictionary = main.call("_build_run_config")
+	suite.assert_equal(quick_start_config.get("milestone"), "M1", "Quick Start remains milestone M1")
+	suite.assert_equal(quick_start_config.get("character_id"), "wanderer", "Quick Start remains Wanderer")
+	suite.assert_equal(quick_start_config.get("weapon_id"), "sword", "Quick Start remains Sword")
+	suite.assert_equal(quick_start_config.get("enabled_time_skills"), ["stop", "rewind"], "Quick Start remains Stop plus Rewind")
+	suite.assert_true(not main.get_node("CandidateLabLayer/CandidateLoadoutPanel").visible, "candidate route starts isolated from M1")
 
 	var host: Node = main.get_node_or_null("RunRuntimeHost")
 	if host == null:

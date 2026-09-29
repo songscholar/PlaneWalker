@@ -7,6 +7,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var combat_room: Node2D = $CombatRoom01
 @onready var start_menu: CanvasLayer = $StartMenu
 @onready var start_button: Button = $StartMenu/Panel/Margin/VBox/StartButton
+@onready var candidate_button: Button = $StartMenu/Panel/Margin/VBox/CandidateButton
 @onready var last_run_label: Label = $StartMenu/Panel/Margin/VBox/LastRunLabel
 @onready var title_label: Label = $StartMenu/Panel/Margin/VBox/Title
 @onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
@@ -15,6 +16,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var accessibility_runtime: Node = $AccessibilityRuntime
 @onready var input_remap_panel: Control = $InputRemapLayer/InputRemapPanel
 @onready var accessibility_settings_panel: Control = $AccessibilitySettingsLayer/AccessibilitySettingsPanel
+@onready var candidate_loadout_panel: Control = $CandidateLabLayer/CandidateLoadoutPanel
 
 var _lang_button: Button
 
@@ -24,6 +26,8 @@ func _ready() -> void:
 	_apply_locale()
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
+	candidate_button.pressed.connect(_open_candidate_lab)
+	candidate_loadout_panel.connect("candidate_requested", _start_candidate_run)
 	pause_menu.resume_requested.connect(_resume_run)
 	pause_menu.remap_requested.connect(_open_input_remap)
 	pause_menu.accessibility_requested.connect(_open_accessibility_settings)
@@ -45,6 +49,7 @@ func _setup_language_button() -> void:
 	if _lang_button != null:
 		return
 	_lang_button = Button.new()
+	_lang_button.name = "LanguageButton"
 	_lang_button.custom_minimum_size = Vector2(360, 40)
 	_lang_button.focus_mode = Control.FOCUS_ALL
 	_lang_button.pressed.connect(_toggle_language)
@@ -63,45 +68,68 @@ func _apply_localization() -> void:
 	title_label.text = tr("UI_TITLE")
 	subtitle_label.text = tr("UI_SUBTITLE")
 	start_button.text = tr("UI_QUICK_START")
+	candidate_button.text = tr("UI_CANDIDATE_LAB")
 	if _lang_button != null:
 		_lang_button.text = tr("UI_LANG_EN") if str(TranslationServer.get_locale()) == "zh_CN" else tr("UI_LANG_ZH")
+	candidate_loadout_panel.call("refresh_localization")
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if input_remap_panel.visible or accessibility_settings_panel.visible:
+	if input_remap_panel.visible or accessibility_settings_panel.visible or candidate_loadout_panel.visible:
 		return
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
+		return
+	if event.is_action_pressed("interact") and start_menu.visible:
+		_start_new_run()
 		return
 	var phase := int(runtime_host.call("runtime_snapshot").get("phase", RunPhaseScript.Value.HUB))
 	if event.is_action_pressed("interact") and RunPhaseScript.is_terminal(phase):
 		get_tree().paused = false
 		get_tree().reload_current_scene()
-		return
-	if event.is_action_pressed("interact") and start_menu.visible:
-		_start_new_run()
 
 
 func _start_new_run() -> void:
 	if not start_menu.visible:
 		return
-	FocusCoordinator.close_scope(start_menu)
+	_launch_run(_build_run_config(), false)
+
+
+func _open_candidate_lab() -> void:
+	if not start_menu.visible:
+		return
+	candidate_loadout_panel.call("open_panel", candidate_button)
+
+
+func _start_candidate_run(candidate_config: Dictionary) -> void:
+	if not start_menu.visible or not candidate_loadout_panel.visible:
+		return
+	var config := candidate_config.duplicate(true)
+	config["seed"] = int(Time.get_unix_time_from_system())
+	config["accessibility_assists"] = _accessibility_assists()
+	_launch_run(config, true)
+
+
+func _launch_run(config: Dictionary, from_candidate: bool) -> bool:
 	get_tree().paused = false
-	start_menu.visible = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_PAUSABLE
-	var config := _build_run_config()
 	var started = runtime_host.call("start_run", config)
 	if not started.ok:
 		combat_room.visible = false
 		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
-		_show_start_menu()
-		return
+		if from_candidate:
+			candidate_loadout_panel.call("show_start_rejected")
+		return false
+	if candidate_loadout_panel.visible:
+		candidate_loadout_panel.call("close_panel")
+	FocusCoordinator.close_scope(start_menu)
+	start_menu.visible = false
 	_on_run_started(config)
+	return true
 
 
 func _build_run_config() -> Dictionary:
-	var settings := GameState.normalized_settings()
 	return {
 		"schema_version": 1,
 		"milestone": "M1",
@@ -110,16 +138,21 @@ func _build_run_config() -> Dictionary:
 		"enabled_time_skills": ["stop", "rewind"],
 		"difficulty": "normal",
 		"seed": int(Time.get_unix_time_from_system()),
-		"accessibility_assists": {
-			"damage_received_multiplier": float(settings.get("damage_received_multiplier", 1.0)),
-			"enemy_telegraph_scale": float(settings.get("enemy_telegraph_scale", 1.0)),
-		},
+		"accessibility_assists": _accessibility_assists(),
+	}
+
+
+func _accessibility_assists() -> Dictionary:
+	var settings := GameState.normalized_settings()
+	return {
+		"damage_received_multiplier": float(settings.get("damage_received_multiplier", 1.0)),
+		"enemy_telegraph_scale": float(settings.get("enemy_telegraph_scale", 1.0)),
 	}
 
 
 func _show_start_menu() -> void:
 	start_menu.visible = true
-	FocusCoordinator.link_ring([start_button, _lang_button], false)
+	FocusCoordinator.link_ring([start_button, candidate_button, _lang_button], false)
 	FocusCoordinator.open_scope(start_menu, start_button)
 	var summary: Dictionary = GameState.persistent.get("last_run_summary", {})
 	if summary.is_empty():

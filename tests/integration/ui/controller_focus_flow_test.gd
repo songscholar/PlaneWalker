@@ -2,7 +2,83 @@ extends Node
 
 const FixturesScript := preload("res://scripts/ui/fixtures/selection_offer_fixtures.gd")
 const MainScene := preload("res://scenes/main.tscn")
+const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+
+
+class AcceptingCandidatePlayer:
+	extends Node
+
+	func configure_loadout(_config: Dictionary) -> bool:
+		return true
+
+
+class PartialFailureRuntime:
+	extends Node
+
+	signal room_started(room_id: StringName, revision: int)
+	signal room_cleared(room_id: StringName, revision: int)
+	signal terminal_committed(context: Dictionary, revision: int)
+	signal runtime_failed(context: Dictionary)
+
+	func begin_current_room() -> Variant:
+		return CommandResultScript.failure(&"INVALID_PHASE", 2, {"operation": "begin_current_room"})
+
+
+class PartialFailureFacade:
+	extends RefCounted
+
+	var config: Dictionary = {}
+	var run_id := ""
+	var revision := 0
+	var phase := RunPhaseScript.Value.HUB
+	var catalog := RefCounted.new()
+
+	func start_run(accepted_config: Dictionary, accepted_run_id: String) -> Variant:
+		config = accepted_config.duplicate(true)
+		run_id = accepted_run_id
+		revision = 1
+		phase = RunPhaseScript.Value.ROOM_TRANSITION
+		return CommandResultScript.success(revision)
+
+	func snapshot() -> Dictionary:
+		return {
+			"run_id": run_id,
+			"revision": revision,
+			"phase": phase,
+			"config": config.duplicate(true),
+		}
+
+	func create_room_runtime(_runner: Node) -> Node:
+		return PartialFailureRuntime.new()
+
+	func encounter_catalog() -> RefCounted:
+		return catalog
+
+	func player_died(_context: Dictionary) -> Variant:
+		revision += 1
+		phase = RunPhaseScript.Value.DEFEAT
+		return CommandResultScript.success(revision)
+
+	func advance_time(_delta_seconds: float) -> Variant:
+		return CommandResultScript.failure(&"TERMINAL_STATE", revision)
+
+
+class PartialFailureRoomController:
+	extends Node
+
+	var runner := Node.new()
+
+	func _init() -> void:
+		add_child(runner)
+
+	func encounter_runner() -> Node:
+		return runner
+
+	func configure_authored_runtime(_runtime: Node, _catalog: RefCounted) -> bool:
+		return true
+
 
 var _restart_requested := false
 
@@ -15,12 +91,96 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	get_window().size = Vector2i(640, 360)
+	await _assert_terminal_candidate_fallback(suite)
 	var main := MainScene.instantiate()
 	add_child(main)
 	await _frames(3)
 
 	var start_button := main.get_node("StartMenu/Panel/Margin/VBox/StartButton") as Button
+	var candidate_button := main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton") as Button
+	var candidate_panel := main.get_node("CandidateLabLayer/CandidateLoadoutPanel") as Control
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), start_button, "start flow enters on Quick Start")
+	_send_action(&"ui_down")
+	await _frames(2)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_button, "start flow reaches Candidate Lab")
+	_send_action(&"ui_accept")
+	await _frames(3)
+	suite.assert_true(candidate_panel.visible, "controller opens Candidate Lab")
+	var candidate_buttons: Array[Button] = [
+		candidate_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/BowButton") as Button,
+		candidate_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/RiftButton") as Button,
+		candidate_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/AccelerateButton") as Button,
+		candidate_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/BackButton") as Button,
+	]
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_buttons[0], "candidate flow enters on Bow")
+	_send_action(&"interact")
+	await _frames(2)
+	suite.assert_true(main.get_node("StartMenu").visible, "interact cannot bypass Candidate Lab into Quick Start")
+	suite.assert_true(candidate_panel.visible, "interact leaves Candidate Lab open")
+	suite.assert_true(not main.get_node("CombatRoom01").visible, "interact does not start hidden M1 combat")
+	main.call("_start_candidate_run", {
+		"schema_version": 1,
+		"milestone": "NEXT",
+		"character_id": "wanderer",
+		"weapon_id": "unknown_candidate",
+		"enabled_time_skills": ["stop", "rewind"],
+		"difficulty": "normal",
+	})
+	await _frames(3)
+	suite.assert_true(candidate_panel.visible, "rejected candidate start leaves the panel open")
+	suite.assert_true(main.get_node("StartMenu").visible, "rejected candidate start preserves the start menu")
+	suite.assert_true(not main.get_node("CombatRoom01").visible, "rejected candidate start restores hidden combat")
+	suite.assert_equal(
+		(candidate_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/StatusLabel") as Label).text,
+		tr("UI_CANDIDATE_START_REJECTED"),
+		"rejected candidate start shows the localized error"
+	)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_buttons[0], "rejected candidate start restores usable preset focus")
+	for index: int in range(1, candidate_buttons.size()):
+		_send_action(&"ui_down")
+		await _frames(2)
+		suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_buttons[index], "candidate focus reaches option %d" % (index + 1))
+	_send_action(&"ui_down")
+	await _frames(2)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_buttons[0], "candidate focus wraps from Back to Bow")
+	_send_action(&"ui_cancel")
+	await _frames(3)
+	suite.assert_true(not candidate_panel.visible, "candidate cancel closes the panel")
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_button, "candidate cancel restores Candidate Lab focus")
+	var language_button := main.get("_lang_button") as Button
+	_send_action(&"ui_down")
+	await _frames(2)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), language_button, "start flow reaches Language after Candidate Lab")
+	_send_action(&"ui_down")
+	await _frames(2)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), start_button, "start focus ring wraps Language to Quick Start")
+	_send_action(&"ui_down")
+	await _frames(2)
+	_send_action(&"ui_accept")
+	await _frames(3)
+	suite.assert_true(candidate_panel.visible, "Candidate Lab can reopen after focus restoration")
+	_send_action(&"ui_accept")
+	await _frames(4)
+	suite.assert_true(not candidate_panel.visible, "successful candidate start closes the candidate panel")
+	suite.assert_true(not main.get_node("StartMenu").visible, "successful candidate start closes Start")
+	suite.assert_true(main.get_node("CombatRoom01").visible, "successful candidate start enters combat")
+	var candidate_snapshot: Dictionary = main.get_node("RunRuntimeHost").call("runtime_snapshot")
+	var candidate_config: Dictionary = candidate_snapshot.get("config", {})
+	suite.assert_equal(candidate_config.get("milestone"), "NEXT", "candidate start uses milestone NEXT")
+	suite.assert_equal(candidate_config.get("character_id"), "wanderer", "candidate start uses Wanderer")
+	suite.assert_equal(candidate_config.get("weapon_id"), "bow", "Bow candidate reaches the runtime host")
+	suite.assert_equal(candidate_config.get("enabled_time_skills"), ["stop", "rewind"], "Bow candidate keeps its frozen time pair")
+	suite.assert_true(candidate_config.has("seed"), "Main supplies the candidate seed")
+	suite.assert_true(candidate_config.has("accessibility_assists"), "Main supplies candidate accessibility assists")
+	await get_tree().create_timer(0.5, true, false, true).timeout
+	main.queue_free()
+	await _frames(4)
+
+	main = MainScene.instantiate()
+	add_child(main)
+	await _frames(3)
+	start_button = main.get_node("StartMenu/Panel/Margin/VBox/StartButton") as Button
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), start_button, "fresh start flow still enters on Quick Start")
 	_send_action(&"ui_accept")
 	await _frames(4)
 	suite.assert_true(not main.get_node("StartMenu").visible, "ui_accept starts the run from Start")
@@ -157,6 +317,68 @@ func _run() -> void:
 	restarted_main.queue_free()
 	await _frames(4)
 	suite.finish(get_tree())
+
+
+func _assert_terminal_candidate_fallback(suite) -> void:
+	var main := MainScene.instantiate()
+	add_child(main)
+	await _frames(3)
+	var host := main.get_node("RunRuntimeHost")
+	var candidate_button := main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton") as Button
+	var candidate_panel := main.get_node("CandidateLabLayer/CandidateLoadoutPanel") as Control
+	var real_room_controller: Node = host.get("_room_controller")
+	var real_player: Node = host.get("_player")
+	var failing_facade := PartialFailureFacade.new()
+	var accepting_player := AcceptingCandidatePlayer.new()
+	var failing_controller := PartialFailureRoomController.new()
+	host.set("_facade", failing_facade)
+	host.set("_active_run_id", "")
+	host.set("_player", accepting_player)
+	host.set("_room_controller", failing_controller)
+	candidate_panel.call("open_panel", candidate_button)
+	await _frames(2)
+	main.call("_start_candidate_run", {
+		"schema_version": 1,
+		"milestone": "NEXT",
+		"character_id": "wanderer",
+		"weapon_id": "bow",
+		"enabled_time_skills": ["stop", "rewind"],
+		"difficulty": "normal",
+	})
+	await _frames(2)
+	suite.assert_true(candidate_panel.visible, "partial candidate failure leaves Candidate Lab open")
+	suite.assert_true(
+		RunPhaseScript.is_terminal(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1))),
+		"partial candidate failure leaves the host terminal"
+	)
+	host.set("_room_controller", real_room_controller)
+	host.set("_player", real_player)
+	accepting_player.free()
+	failing_controller.free()
+	candidate_panel.call("close_panel")
+	await _frames(2)
+	suite.assert_true(main.get_node("StartMenu").visible, "closing failed Candidate Lab returns to Start")
+
+	var previous_current_scene := get_tree().current_scene
+	get_tree().current_scene = null
+	var interact := InputEventAction.new()
+	interact.action = &"interact"
+	interact.pressed = true
+	main.call("_unhandled_input", interact)
+	get_tree().current_scene = previous_current_scene
+	await _frames(4)
+	var snapshot: Dictionary = host.call("runtime_snapshot")
+	var config: Dictionary = snapshot.get("config", {})
+	suite.assert_equal(config.get("milestone"), "M1", "one interact starts the M1 Quick Start after terminal candidate failure")
+	suite.assert_equal(config.get("character_id"), "wanderer", "terminal candidate fallback keeps Quick Start Wanderer")
+	suite.assert_equal(config.get("weapon_id"), "sword", "terminal candidate fallback keeps Quick Start Sword")
+	suite.assert_equal(config.get("enabled_time_skills"), ["stop", "rewind"], "terminal candidate fallback keeps Stop plus Rewind")
+	suite.assert_true(not main.get_node("StartMenu").visible, "single fallback interact hides Start")
+	suite.assert_true(main.get_node("CombatRoom01").visible, "single fallback interact enters combat")
+	if main.get_node("CombatRoom01").visible:
+		await get_tree().create_timer(0.5, true, false, true).timeout
+	main.queue_free()
+	await _frames(4)
 
 
 func _frames(count: int) -> void:

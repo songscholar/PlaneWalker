@@ -1,0 +1,100 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/candidate_loadout_panel.gd" id="1_candidate_panel"]
+
+[node name="CandidateLoadoutPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_candidate_panel")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.0156863, 0.0313726, 0.0470588, 0.9)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Center" type="CenterContainer" parent="SafeArea"]
+layout_mode = 2
+
+[node name="PanelRoot" type="PanelContainer" parent="SafeArea/Center"]
+custom_minimum_size = Vector2(536, 320)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/Center/PanelRoot"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 14
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Center/PanelRoot/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="TitleLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Candidate Lab"
+horizontal_alignment = 1
+
+[node name="WarningLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.819608, 0.4, 1)
+theme_override_font_sizes/font_size = 11
+text = "Local verification only. These candidates are not formally promoted."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="BowButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(500, 44)
+layout_mode = 2
+focus_mode = 2
+text = "Wanderer / Bow / Time Stop + Rewind"
+
+[node name="RiftButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(500, 44)
+layout_mode = 2
+focus_mode = 2
+text = "Wanderer / Sword / Time Stop + Rift"
+
+[node name="AccelerateButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(500, 44)
+layout_mode = 2
+focus_mode = 2
+text = "Wanderer / Sword / Time Stop + Accelerate"
+
+[node name="StatusLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.419608, 0.419608, 1)
+theme_override_font_sizes/font_size = 11
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="BackButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(500, 38)
+layout_mode = 2
+focus_mode = 2
+text = "Back"

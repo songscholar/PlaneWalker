@@ -65,6 +65,19 @@ func _assert_scene_contract() -> void:
 		_suite.assert_true(camera.enabled, "pixel-canvas camera is enabled")
 
 	_assert_control_fits(main.get_node("StartMenu/Panel"), "start menu fits 640x360")
+	_assert_control_fits(main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton"), "Candidate Lab entry fits 640x360")
+	var candidate_panel := main.get_node("CandidateLabLayer/CandidateLoadoutPanel") as Control
+	candidate_panel.call(
+		"open_panel",
+		main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton") as Button
+	)
+	await get_tree().process_frame
+	_assert_control_fits(
+		candidate_panel.get_node("SafeArea/Center/PanelRoot"),
+		"candidate loadout panel fits 640x360"
+	)
+	candidate_panel.call("close_panel")
+	await get_tree().process_frame
 	_assert_control_fits(main.get_node("RunEndOverlay/Panel"), "run-end panel fits 640x360")
 	_assert_control_fits(main.get_node("PauseMenu/Panel"), "pause panel fits 640x360")
 	for action_path: String in [
