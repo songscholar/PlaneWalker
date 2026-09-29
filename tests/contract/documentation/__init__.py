@@ -1,0 +1,1 @@
+"""Documentation governance contract tests."""

@@ -18,7 +18,7 @@ else
 	command -v "${godot_command}" >/dev/null 2>&1 || fail "Godot executable not found: ${godot_command}"
 	godot_bin="$(command -v "${godot_command}")"
 fi
-command -v python3 >/dev/null 2>&1 || fail "python3 is required for localization contracts"
+command -v python3 >/dev/null 2>&1 || fail "python3 is required for repository contracts"
 
 if [[ -n "${VALIDATION_LOG_DIR:-}" ]]; then
 	validation_log_dir="${VALIDATION_LOG_DIR}"
@@ -166,8 +166,13 @@ if [[ "${SKIP_CI_CONTRACT:-false}" != true ]]; then
 	"${SCRIPT_DIR}/test_ci_contract.sh"
 fi
 
-printf '\n== Localization contracts ==\n'
 cd "${PROJECT_ROOT}"
+printf '\n== Documentation governance contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.documentation.test_document_governance
+PYTHONDONTWRITEBYTECODE=1 python3 tools/document_governance.py \
+	--baseline tools/document_governance_baseline.json
+
+printf '\n== Localization contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
 PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_localization.py
 
