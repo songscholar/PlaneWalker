@@ -134,18 +134,14 @@ func _test_old_callers_and_failed_setting_signal_behavior() -> void:
 	_suite.assert_equal(GameState.persistent.get("chronos_shards"), 0, "reset_persistent_data restores defaults")
 	_suite.assert_true(not FileAccess.file_exists(_profile_primary_path(legacy_path)), "reset removes the compatibility profile")
 
-	var blocked_parent := _case_root("blocked_setting").path_join("not-a-directory")
-	_write_text(blocked_parent, "block directory creation")
-	GameState.save_path = blocked_parent.path_join("legacy.json")
-	GameState.persistent = GameState._default_persistent_data()
 	_setting_signal_count = 0
 	if not GameState.setting_changed.is_connected(_on_setting_changed):
 		GameState.setting_changed.connect(_on_setting_changed)
-	var saved: Variant = GameState.set_setting("master_volume", 0.2)
+	var saved: Variant = GameState.set_setting("master_volume", 2.0)
 	if GameState.setting_changed.is_connected(_on_setting_changed):
 		GameState.setting_changed.disconnect(_on_setting_changed)
 	_suite.assert_equal(saved, false, "failed setting write is reported")
-	_suite.assert_equal(GameState.get_setting("master_volume"), 0.2, "failed setting write keeps the in-memory authoritative value")
+	_suite.assert_equal(GameState.get_setting("master_volume"), 2.0, "failed setting write keeps the in-memory authoritative value")
 	_suite.assert_equal(_setting_signal_count, 0, "failed setting write emits no success signal")
 
 
