@@ -7,6 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, commits `da3ab1d`, `7732731`, `60a086f`, and `ff3fa7c`
 - Last Verified: 2026-09-29
+- Evidence Status: External Validation Pending
 - Classification: `coverage_and_export_templates_pending`
 - Verified Commit: `ff3fa7c44e727fd763700a921f84e8dc1e9a443e`
 - Evidence Date: 2026-09-29

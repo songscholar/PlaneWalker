@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2 and P3 certified; P4 is Current; P6 input foundation and P7/P9 certification tooling are progressing in parallel; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2 and P3 certified; P4 is Current; P6 and P7/P9 continue in parallel; P8 metadata, lifecycle, links, ADRs, Current indexing, and evidence-state governance are implemented; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -37,7 +37,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | P5 Single event publication | Authorized / Planned | Typed gameplay facts exactly-once 与 generic EventBus 退休待 P4 生命周期收口后实施 |
 | P6 Controller/focus/accessibility | Active / Parallel | 14 动作手柄合同、可恢复 profile 和安全 remap 已提交；焦点/UI/完整无障碍链路继续实施 |
 | P7/P9 Export and clean certification | Active / Externally blocked | 工具链、fail-closed 执行器、detached clone 认证已提交；真实覆盖率、导出模板和 packaged startup 尚未通过 |
-| P8 Documentation governance | Authorized / Planned | 当前/历史状态、链接、ADR 和发布文档治理待统一收口 |
+| P8 Documentation governance | Active / Current | 离线验证、元数据/生命周期、零基线、ADR、Current 索引和证据状态已完成；P8 证据与最终状态切换待最终认证 |
 | Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
 | Wave 4B | Completed | 回溯残影、Boss 全招前摇、精英主动机制和五房权威遭遇已实现并通过测试 |
 | Wave 4C | Completed for M1 technical scope | Pixel Proxy、核心动画、合成音频、战斗反馈、可访问性开关和清理回归已验证 |
@@ -73,18 +73,29 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | 文档 | 用途 | 状态 |
 |---|---|---|
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
-| [Wave 4 与 M1 放行计划](superpowers/plans/2026-09-28-plane-walker-wave-4-m1-release.md) | Wave 4A–4D 仓库成果、M1 Candidate 和外部证据 Gate | Repository complete / External pending |
+| [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
+| [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
+| [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Current contract |
+| [Content Pack v2 Contract](contracts/content-pack-v2.md) | Base/更新/Mod/DLC 内容包、完整性与声明式效果边界 | Frozen / Current contract |
+| [M1 Playtest Protocol](current/2026-09-28-m1-playtest-protocol.md) | 真实外部试玩、匿名化、cohort、观察和证明合同 | Approved / Current protocol |
+| [M1 Release Report](current/2026-09-28-m1-release-report.md) | 30 Seed 仓库证据、真实玩家门禁与正式 M1 结论 | External Validation Pending / Current |
+| [Wave 4 与 M1 放行计划](superpowers/plans/2026-09-28-plane-walker-wave-4-m1-release.md) | Wave 4A–4D 仓库成果、M1 Candidate 和外部证据 Gate | External Validation Pending / Current |
 | [Wave 4B Encounter Mechanics Plan](superpowers/plans/2026-09-28-plane-walker-wave-4b-encounter-mechanics.md) | 回溯残影、Boss 前摇、精英主动和五房遭遇 | Completed / Historical |
 | [Wave 4C Pixel Feedback Plan](superpowers/plans/2026-09-28-plane-walker-wave-4c-pixel-feedback.md) | M1 Pixel Proxy、音频、战斗反馈与可访问性 | Completed / Historical |
-| [Wave 4C Evidence](current/2026-09-28-wave-4c-pixel-feedback-evidence.md) | Wave 4C 焦点、全套与 Candidate 门禁证据 | Verified / Retained |
-| [P0 Foundation Baseline Evidence](current/2026-09-28-foundation-baseline-evidence.md) | 本地化、验证入口和干净克隆认证证据 | Verified / Completed |
-| [P2 Atomic SaveService Evidence](current/2026-09-29-p2-atomic-save-evidence.md) | 原子存档、迁移、恢复、隔离、GameState 兼容和 P3/P4 接力证据 | Verified / Completed |
-| [P3 ContentRegistry v2 Evidence](current/2026-09-29-p3-content-registry-evidence.md) | 版本化内容包、声明式效果、运行时切换和 SaveService 指纹证据 | Verified / Completed |
+| [Wave 4C Evidence](current/2026-09-28-wave-4c-pixel-feedback-evidence.md) | Wave 4C 焦点、全套与 Candidate 门禁证据 | Verified Locally / Current |
+| [P0 Foundation Baseline Evidence](current/2026-09-28-foundation-baseline-evidence.md) | 本地化、验证入口和干净克隆认证证据 | Verified Locally / Current |
+| [P2 Atomic SaveService Evidence](current/2026-09-29-p2-atomic-save-evidence.md) | 原子存档、迁移、恢复、隔离、GameState 兼容和 P3/P4 接力证据 | Verified Locally / Current |
+| [P3 ContentRegistry v2 Evidence](current/2026-09-29-p3-content-registry-evidence.md) | 版本化内容包、声明式效果、运行时切换和 SaveService 指纹证据 | Verified Locally / Current |
 | [P4/P5 Authority and Event Plan](superpowers/plans/2026-09-29-plane-walker-p4-p5-authority-events.md) | 单一 RunState、RoomRuntime、Host 切换、镜像退休和 exactly-once 事件 | Active / Current |
 | [P6 Controller and Accessibility Plan](superpowers/plans/2026-09-29-plane-walker-p6-controller-accessibility.md) | 手柄、重映射、焦点恢复与无障碍持久化 | Active / Parallel |
-| [P7/P9 Export Certification Evidence](current/2026-09-29-p7-p9-export-certification-evidence.md) | 导出预检、fail-closed 执行器、detached clone 与当前 blocker | Verified tooling / External prerequisites pending |
+| [P7/P9 Export Certification Plan](superpowers/plans/2026-09-29-plane-walker-p7-p9-exports-certification.md) | 三平台导出合同、离线预检和清洁认证基础 | Active / Current |
+| [Export Executor and Evidence Plan](superpowers/plans/2026-09-29-plane-walker-export-executor-evidence.md) | 导出执行、artifact hash、detached checkout 和 fail-closed 证据 | External Validation Pending / Current |
+| [P7/P9 Export Certification Evidence](current/2026-09-29-p7-p9-export-certification-evidence.md) | 导出预检、fail-closed 执行器、detached clone 与当前 blocker | External Validation Pending / Current |
+| [P8 Documentation Governance Plan](superpowers/plans/2026-09-29-plane-walker-p8-document-governance.md) | 文档元数据、生命周期、链接、ADR、Current 索引和证据状态 | Active / Current |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
+
+P3 证据保留其认证时的历史 HEAD 与指纹。后续提交 `0eb9942` 在新增本地化键后刷新了当前 Base Pack 的本地化完整性哈希；它不追溯改写 P3 认证记录，任何“当前内容 digest”必须从当前 HEAD 重新生成。
 
 ### 核心产品设计
 

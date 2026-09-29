@@ -388,8 +388,20 @@ Allowed before that decision:
 
 ## 15. Governance
 
+- The executable documentation policy is [Document Governance v1](../../contracts/document-governance-v1.md); accepted architecture and governance decisions are indexed in the [ADR authority chain](../../adrs/README.md).
+- `Implemented` means the repository implementation exists but its complete local verification gate has not yet passed.
+- `Verified Locally` means the declared repository tests and evidence pass without claiming external publication, platform, commercial, credential-bound, or authentic-human results.
+- `External Validation Pending` means repository work may be complete but required human, platform, credential, commercial, signing, export-environment, or publication evidence is still absent.
+- `Published` may be used only after the named external artifact or service is actually public and its publication evidence is recorded.
 - Every Current implementation plan links to this specification and states its exit Gate.
 - Every completed plan becomes Historical with completion commits and preserved regression contracts.
 - Product counts, canonical IDs, architecture authorities, M1 evidence criteria, or Product Complete Gate changes require a reviewed update to this file.
 - An external task may be pending while repository implementation continues; documentation must distinguish `Implemented`, `Verified Locally`, `External Validation Pending`, and `Published`.
 - No document may claim human, platform, commercial, or public-release evidence that was not actually produced.
+
+The offline governance check is:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 tools/document_governance.py \
+  --baseline tools/document_governance_baseline.json
+```

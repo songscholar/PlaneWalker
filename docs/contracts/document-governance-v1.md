@@ -105,7 +105,20 @@ Every numbered ADR declares exactly one `Decision Status` in its metadata header
 
 The ADR index links every numbered ADR exactly once. Draft proposals do not receive a numbered filename; unsupported values such as `Draft`, `Proposed`, or `Rejected` fail the governed repository contract.
 
-## 6. Relative-link contract
+## 6. Current index and evidence-state contract
+
+`docs/README.md` directly links every Current specification, implementation plan, contract, protocol, and evidence record. It links the Current ADR index; numbered ADR coverage remains the responsibility of that index and is not duplicated in the repository entrypoint.
+
+Release evidence uses exactly one of these `Evidence Status` values:
+
+- `Implemented`: the repository implementation exists but its complete local verification gate has not passed;
+- `Verified Locally`: the declared repository tests and evidence pass without claiming external results;
+- `External Validation Pending`: required human, platform, credential, commercial, signing, export-environment, or publication evidence is absent;
+- `Published`: the named external artifact or service is public and publication evidence is recorded.
+
+The M1 release report and P7/P9 export-certification evidence always declare `Evidence Status`. No automated or synthetic result may promote either document from `External Validation Pending` to `Published`.
+
+## 7. Relative-link contract
 
 Repository-local Markdown destinations are relative to the document containing the link. They must:
 
@@ -116,7 +129,7 @@ Repository-local Markdown destinations are relative to the document containing t
 
 HTTP, HTTPS, `mailto:`, and fragment-only links are accepted without network access. The validator never dereferences an external URL. Markdown-like examples inside fenced or inline code are not links.
 
-## 7. Migration baseline
+## 8. Migration baseline
 
 `tools/document_governance_baseline.json` is a temporary migration ledger, not a permanent exemption mechanism. Its exact schema is:
 
@@ -131,7 +144,7 @@ Each ID is stable as `path::code::subject`. The list is sorted and unique. Valid
 
 The final P8 exit gate requires an empty `allowed_violation_ids` list.
 
-## 8. Verification commands
+## 9. Verification commands
 
 Focused contract:
 

@@ -143,6 +143,21 @@ VALID_ADR_INDEX = EMPTY_ADR_INDEX.replace(
     "- [ADR 0001: Test decision](0001-test-decision.md)",
 )
 
+CURRENT_DOCUMENT_INDEX = """# Documentation index
+
+- Status: Approved / Current
+- Document Role: Current documentation index
+- Authority Level: Test documentation index
+- Applies To: Current test authorities
+- Owner: Test owner
+- Depends On: `AGENTS.md`
+- Last Verified: 2026-09-29
+
+- [ADR index](adrs/README.md)
+"""
+
+RELEASE_EVIDENCE_PATH = Path("docs/current/2026-09-28-m1-release-report.md")
+
 
 class DocumentGovernanceTest(unittest.TestCase):
     def test_valid_current_plan_and_historical_plan_pass(self) -> None:
@@ -527,6 +542,107 @@ class DocumentGovernanceTest(unittest.TestCase):
 
         self.assertEqual(
             [item for item in report.violations if item.code.startswith("adr_")],
+            [],
+        )
+
+    def test_current_documents_must_be_linked_from_docs_readme(self) -> None:
+        with repository_fixture() as root:
+            write_document(root / "docs/README.md", CURRENT_DOCUMENT_INDEX)
+            write_document(root / "docs/contracts/current.md", VALID_CURRENT_SPEC)
+
+            missing_report = validate_repository(root)
+            write_document(
+                root / "docs/README.md",
+                CURRENT_DOCUMENT_INDEX
+                + "\n- [Current contract](contracts/current.md)\n",
+            )
+            indexed_report = validate_repository(root)
+
+        self.assertIn(
+            "docs/README.md::current_document_unindexed::docs/contracts/current.md",
+            {item.violation_id for item in missing_report.violations},
+        )
+        self.assertNotIn(
+            "current_document_unindexed",
+            {item.code for item in indexed_report.violations},
+        )
+
+    def test_release_evidence_requires_one_canonical_state(self) -> None:
+        with repository_fixture() as root:
+            evidence_path = root / RELEASE_EVIDENCE_PATH
+            write_document(evidence_path, VALID_CURRENT_SPEC)
+            missing_report = validate_repository(root)
+
+            write_document(
+                evidence_path,
+                VALID_CURRENT_SPEC.replace(
+                    "- Last Verified: 2026-09-29",
+                    "- Last Verified: 2026-09-29\n- Evidence Status: Verified",
+                ),
+            )
+            invalid_report = validate_repository(root)
+
+            canonical_reports = []
+            for evidence_status in (
+                "Implemented",
+                "Verified Locally",
+                "External Validation Pending",
+                "Published",
+            ):
+                write_document(
+                    evidence_path,
+                    VALID_CURRENT_SPEC.replace(
+                        "- Last Verified: 2026-09-29",
+                        "- Last Verified: 2026-09-29\n"
+                        f"- Evidence Status: {evidence_status}",
+                    ),
+                )
+                canonical_reports.append(validate_repository(root))
+
+        self.assertIn(
+            "invalid_evidence_state",
+            {item.code for item in missing_report.violations},
+        )
+        self.assertIn(
+            "invalid_evidence_state",
+            {item.code for item in invalid_report.violations},
+        )
+        self.assertTrue(
+            all(
+                "invalid_evidence_state"
+                not in {item.code for item in report.violations}
+                for report in canonical_reports
+            )
+        )
+
+    def test_repository_readme_indexes_every_current_authority(self) -> None:
+        self.assertTrue((PROJECT_ROOT / "docs/README.md").is_file())
+        report = validate_repository(
+            PROJECT_ROOT,
+            PROJECT_ROOT / "tools/document_governance_baseline.json",
+        )
+
+        self.assertEqual(
+            [
+                item.violation_id
+                for item in report.violations
+                if item.code == "current_document_unindexed"
+            ],
+            [],
+        )
+
+    def test_repository_release_documents_use_canonical_evidence_states(self) -> None:
+        report = validate_repository(
+            PROJECT_ROOT,
+            PROJECT_ROOT / "tools/document_governance_baseline.json",
+        )
+
+        self.assertEqual(
+            [
+                item.violation_id
+                for item in report.violations
+                if item.code == "invalid_evidence_state"
+            ],
             [],
         )
 

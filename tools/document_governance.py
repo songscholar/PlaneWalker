@@ -38,6 +38,16 @@ INLINE_CODE_PATTERN = re.compile(r"(`+)(.*?)\1")
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ADR_FILENAME_PATTERN = re.compile(r"^\d{4}-[a-z0-9][a-z0-9-]*\.md$")
 ADR_DECISION_STATUSES = {"Accepted", "Superseded"}
+EVIDENCE_STATUSES = {
+    "Implemented",
+    "Verified Locally",
+    "External Validation Pending",
+    "Published",
+}
+RELEASE_EVIDENCE_PATHS = {
+    "docs/current/2026-09-28-m1-release-report.md",
+    "docs/current/2026-09-29-p7-p9-export-certification-evidence.md",
+}
 
 
 @dataclass(frozen=True, order=True)
@@ -128,6 +138,10 @@ def validate_repository(
         for violation in validate_document(root, path):
             by_id.setdefault(violation.violation_id, violation)
     for violation in _validate_adr_chain(root):
+        by_id.setdefault(violation.violation_id, violation)
+    for violation in _validate_current_document_index(root, documents):
+        by_id.setdefault(violation.violation_id, violation)
+    for violation in _validate_release_evidence_states(root, documents):
         by_id.setdefault(violation.violation_id, violation)
     violations = tuple(sorted(by_id.values()))
     allowed = load_baseline(baseline_path) if baseline_path is not None else ()
@@ -513,6 +527,88 @@ def _validate_adr_chain(project_root: Path) -> list[Violation]:
                     "a numbered ADR may appear only once in the ADR index",
                 )
             )
+    return violations
+
+
+def _validate_current_document_index(
+    project_root: Path,
+    documents: Iterable[Path],
+) -> list[Violation]:
+    readme_path = project_root / "docs/README.md"
+    if not readme_path.is_file():
+        return []
+    readme_parsed, _ = _parse_document(project_root, readme_path)
+    if readme_parsed is None:
+        return []
+
+    linked_paths: set[Path] = set()
+    for _line_number, destination in _markdown_destinations(readme_parsed.lines):
+        if not destination or destination.startswith("#"):
+            continue
+        if urlsplit(destination).scheme:
+            continue
+        raw_path = destination.split("#", 1)[0].split("?", 1)[0]
+        if not raw_path:
+            continue
+        target = (readme_path.parent / unquote(raw_path)).resolve(strict=False)
+        if _is_within(target, project_root):
+            linked_paths.add(target)
+
+    violations: list[Violation] = []
+    for path in documents:
+        resolved_path = path.resolve()
+        if resolved_path == readme_path.resolve():
+            continue
+        if path.parent == project_root / "docs/adrs" and ADR_FILENAME_PATTERN.fullmatch(
+            path.name
+        ):
+            continue
+        parsed, _ = _parse_document(project_root, path)
+        if (
+            parsed is None
+            or _role_lifecycle(parsed.metadata.get("Document Role", ""))
+            != "current"
+        ):
+            continue
+        if resolved_path in linked_paths:
+            continue
+        violations.append(
+            Violation(
+                "current_document_unindexed",
+                "docs/README.md",
+                readme_parsed.title_line,
+                parsed.relative_path,
+                "every Current authority must be linked from docs/README.md",
+            )
+        )
+    return violations
+
+
+def _validate_release_evidence_states(
+    project_root: Path,
+    documents: Iterable[Path],
+) -> list[Violation]:
+    violations: list[Violation] = []
+    for path in documents:
+        parsed, _ = _parse_document(project_root, path)
+        if parsed is None:
+            continue
+        evidence_status = parsed.metadata.get("Evidence Status")
+        requires_status = parsed.relative_path in RELEASE_EVIDENCE_PATHS
+        if not requires_status and evidence_status is None:
+            continue
+        if evidence_status in EVIDENCE_STATUSES:
+            continue
+        violations.append(
+            Violation(
+                "invalid_evidence_state",
+                parsed.relative_path,
+                parsed.metadata_lines.get("Evidence Status", parsed.title_line),
+                "Evidence Status",
+                "release evidence must declare Implemented, Verified Locally, "
+                "External Validation Pending, or Published",
+            )
+        )
     return violations
 
 
