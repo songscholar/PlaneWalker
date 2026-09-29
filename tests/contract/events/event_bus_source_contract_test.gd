@@ -34,6 +34,15 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
+	var signal_names: Array[StringName] = []
+	for signal_definition: Dictionary in EventBus.get_signal_list():
+		signal_names.append(StringName(str(signal_definition.get("name", ""))))
+	for required_signal: StringName in [
+		&"weapon_action_committed",
+		&"weapon_resource_changed",
+		&"weapon_hit_confirmed",
+	]:
+		suite.assert_true(signal_names.has(required_signal), "EventBus exposes typed %s fact" % required_signal)
 	var paths: Array[String] = []
 	for root: String in PRODUCTION_ROOTS:
 		_collect_gdscript_paths(root, paths)

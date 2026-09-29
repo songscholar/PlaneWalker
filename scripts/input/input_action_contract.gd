@@ -17,15 +17,39 @@ const REQUIRED_ACTIONS: Array[StringName] = [
 	&"interact",
 	&"pause",
 ]
+const SEMANTIC_ACTIONS: Array[StringName] = [
+	&"weapon_primary",
+	&"weapon_secondary",
+	&"weapon_utility",
+	&"weapon_skill",
+	&"weapon_ultimate",
+	&"time_slot_1",
+	&"time_slot_2",
+	&"dash",
+	&"interact",
+	&"pause",
+]
 
 
 static func required_actions() -> Array[StringName]:
 	return REQUIRED_ACTIONS.duplicate()
 
 
+static func semantic_actions() -> Array[StringName]:
+	return SEMANTIC_ACTIONS.duplicate()
+
+
 static func missing_required_bindings() -> Array[Dictionary]:
+	return _missing_bindings(REQUIRED_ACTIONS)
+
+
+static func missing_semantic_bindings() -> Array[Dictionary]:
+	return _missing_bindings(SEMANTIC_ACTIONS)
+
+
+static func _missing_bindings(actions: Array[StringName]) -> Array[Dictionary]:
 	var missing: Array[Dictionary] = []
-	for action: StringName in REQUIRED_ACTIONS:
+	for action: StringName in actions:
 		if not InputMap.has_action(action):
 			missing.append({"action": str(action), "family": "action"})
 			continue

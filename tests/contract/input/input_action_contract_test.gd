@@ -18,6 +18,11 @@ func _run() -> void:
 		[],
 		"every required action has keyboard/mouse and controller bindings"
 	)
+	_suite.assert_equal(
+		InputActionContractScript.missing_semantic_bindings(),
+		[],
+		"every semantic weapon/time slot has keyboard/mouse and controller bindings"
+	)
 
 	var expected_controller_bindings := {
 		&"move_up": ["axis:1:-1", "button:11"],
@@ -35,11 +40,26 @@ func _run() -> void:
 		&"interact": ["button:0"],
 		&"pause": ["button:6"],
 	}
+	var expected_semantic_controller_bindings := {
+		&"weapon_primary": ["button:2"],
+		&"weapon_secondary": ["button:3"],
+		&"weapon_utility": ["button:4"],
+		&"weapon_skill": ["button:5"],
+		&"weapon_ultimate": ["button:7"],
+		&"time_slot_1": ["button:9"],
+		&"time_slot_2": ["button:10"],
+	}
 	for action: StringName in expected_controller_bindings:
 		_suite.assert_equal(
 			InputActionContractScript.controller_binding_ids(action),
 			expected_controller_bindings[action],
 			"%s keeps its default controller grammar" % action
+		)
+	for action: StringName in expected_semantic_controller_bindings:
+		_suite.assert_equal(
+			InputActionContractScript.controller_binding_ids(action),
+			expected_semantic_controller_bindings[action],
+			"%s has a stable semantic controller binding" % action
 		)
 
 	for movement_action: StringName in [
