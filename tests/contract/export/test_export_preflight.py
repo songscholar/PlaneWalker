@@ -205,6 +205,7 @@ class ExportPreflightContractTest(unittest.TestCase):
 
         self.assertIn("tests.contract.export.test_export_preflight", validation_script)
         self.assertIn("tests.contract.export.test_export_executor", validation_script)
+        self.assertIn("tests.contract.export.test_certify_checkout", validation_script)
         self.assertIn("python3 tools/export/preflight.py", validation_script)
 
     def test_local_cli_uses_exit_three_for_environment_blockers(self) -> None:

@@ -54,11 +54,11 @@ def run_exports(
 
     report: dict[str, object] = {
         "schema_version": "1.0.0",
-        "generated_at_utc": _utc_now(),
+        "generated_at_utc": utc_now(),
         "status": "error",
         "classification": "invalid_contract",
         "project_root": str(root),
-        "repository": _collect_git_state(root),
+        "repository": collect_git_state(root),
         "preflight": contract_report,
         "targets": [],
         "issues": issues,
@@ -299,9 +299,9 @@ def _new_target_record(target: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _collect_git_state(root: Path) -> dict[str, object]:
-    head = _git(root, "rev-parse", "HEAD")
-    status = _git(root, "status", "--porcelain", "--untracked-files=all")
+def collect_git_state(root: Path) -> dict[str, object]:
+    head = git_output(root, "rev-parse", "HEAD")
+    status = git_output(root, "status", "--porcelain", "--untracked-files=all")
     available = head is not None and status is not None
     dirty_paths = status.splitlines() if status else []
     return {
@@ -312,7 +312,7 @@ def _collect_git_state(root: Path) -> dict[str, object]:
     }
 
 
-def _git(root: Path, *arguments: str) -> str | None:
+def git_output(root: Path, *arguments: str) -> str | None:
     try:
         completed = subprocess.run(
             ["git", "-C", str(root), *arguments],
@@ -389,7 +389,7 @@ def _display_path(path: Path, root: Path) -> str:
         return str(path.resolve())
 
 
-def _utc_now() -> str:
+def utc_now() -> str:
     source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH")
     if source_date_epoch and source_date_epoch.isdigit():
         moment = datetime.fromtimestamp(int(source_date_epoch), tz=timezone.utc)

@@ -7,7 +7,7 @@
 - Depends On: `da3ab1d`, `data/toolchain/export_targets.json`, `tools/export/preflight.py`
 - Scope: P7 export execution/evidence contract followed by P9 detached-checkout orchestration contract
 - Evidence Boundary: No target is marked exported unless Godot exits successfully, logs are clean, and the expected artifact is hashed from the current invocation
-- Implementation Status: Tasks 1 and 2 complete; Task 3 remains the next independent P9 slice
+- Implementation Status: Tasks 1 and 2 complete; Task 3 contract implementation complete and awaiting committed-HEAD evidence run
 - Task 1/2 Verification: 27 export contracts passed; local execution stopped before export with three `template_missing` blockers; project validation passed 48 of 49 scenes with one unrelated untracked RoomRuntime test missing its implementation
 
 **Goal:** Add a real export executor that fails before export when the local toolchain is incomplete, records deterministic file/directory hashes for successful artifacts, and produces machine-readable evidence suitable for later detached-checkout certification.
@@ -252,11 +252,11 @@ git commit -m "feat(export): record fail-closed artifact evidence"
 - Produces one report containing source commit, clone commit, clean-clone status, validation exit/log hash, nested export evidence, and final `pass|blocked|failed` state.
 - Missing templates produce `blocked` after clean import/tests; they do not produce P7/P9 completion.
 
-- [ ] **Step 1: Build fake-repository contract tests**
+- [x] **Step 1: Build fake-repository contract tests**
 
 The fixture repository contains executable fake `tools/validate_project.sh` and `tools/export/build_exports.py`. Tests prove clone HEAD equality, a clean detached checkout, propagation of validation failure, propagation of export blocker state, and refusal to certify a dirty source without `--allow-source-dirty-candidate`.
 
-- [ ] **Step 2: Implement local-clone orchestration**
+- [x] **Step 2: Implement local-clone orchestration**
 
 Use `tempfile.TemporaryDirectory`, `git clone --no-local --no-checkout`, and `git -C <clone> checkout --detach <commit>`. Run validation first and export second. Preserve stdout/stderr logs outside the clone until the final report is atomically written. Never invoke export after validation failure.
 
