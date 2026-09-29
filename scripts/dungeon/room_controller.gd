@@ -3,8 +3,6 @@ extends Node2D
 
 signal authored_runtime_failed(context: Dictionary)
 
-const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
-
 @export var room_id: StringName = &"combat_room_01"
 @export var enemy_scenes: Array[PackedScene] = []
 @export var boss_scene: PackedScene
@@ -25,158 +23,125 @@ const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 @onready var reward_marker: Node = get_node_or_null(reward_marker_path)
 @onready var _encounter_runner: Node = get_node_or_null("EncounterRunner")
 
-var _legacy_alive_enemies: int = 0
-var _alive_enemies: int:
-	get:
-		if _authored_runtime_enabled and _encounter_runner != null:
-			return int(_encounter_runner.call("alive_count"))
-		return _legacy_alive_enemies
-	set(value):
-		_legacy_alive_enemies = value
-var _cleared: bool = false
-var _run_director: RunDirector
+var _room_runtime: Node
 var _encounter_catalog: RefCounted
 var _authored_runtime_enabled: bool = false
-var _authored_run_seed: int = 0
 var _authored_runtime_failure: Dictionary = {}
+var _current_room_definition: Dictionary = {}
+var _cleared: bool = false
+var _alive_enemies: int:
+	get:
+		if _encounter_runner != null and _encounter_runner.has_method("alive_count"):
+			return int(_encounter_runner.call("alive_count"))
+		return 0
 
 
 func _ready() -> void:
-	_run_director = get_node_or_null(run_director_path) as RunDirector
-	if _run_director == null:
-		_run_director = RunDirectorScript.new()
-		add_child(_run_director)
-	_run_director.configure_fixed_sequence(rooms_per_floor, event_rooms, elite_rooms, curse_offer_rooms)
 	if _encounter_runner != null:
 		_encounter_runner.call("configure", enemies_root)
-		if not _encounter_runner.spawn_warning_requested.is_connected(_on_authored_spawn_warning):
-			_encounter_runner.spawn_warning_requested.connect(_on_authored_spawn_warning)
-		if not _encounter_runner.spawn_requested.is_connected(_on_authored_spawn_requested):
-			_encounter_runner.spawn_requested.connect(_on_authored_spawn_requested)
-		if not _encounter_runner.encounter_completed.is_connected(_on_authored_encounter_completed):
-			_encounter_runner.encounter_completed.connect(_on_authored_encounter_completed)
-		if not _encounter_runner.encounter_failed.is_connected(_on_authored_encounter_failed):
-			_encounter_runner.encounter_failed.connect(_on_authored_encounter_failed)
 	if reward_marker != null and reward_marker is Label:
 		reward_marker.text = tr("UI_REWARD_MARKER")
-	EventBus.entity_died.connect(_on_entity_died)
-	EventBus.reward_selected.connect(_on_reward_selected)
-	EventBus.enemy_spawned.connect(_on_enemy_spawned)
+	if not EventBus.entity_died.is_connected(_on_entity_died):
+		EventBus.entity_died.connect(_on_entity_died)
 	if auto_start:
 		call_deferred("begin_run")
 
 
-func configure_authored_runtime(
-	definitions: Array[Dictionary],
-	encounter_catalog: RefCounted,
-	run_seed: int
-) -> bool:
+func encounter_runner() -> Node:
+	return _encounter_runner
+
+
+func configure_authored_runtime(room_runtime: Node, encounter_catalog: RefCounted) -> bool:
+	_disconnect_room_runtime()
 	_authored_runtime_enabled = true
 	_authored_runtime_failure.clear()
-	if definitions.is_empty() or encounter_catalog == null or _run_director == null or _encounter_runner == null:
-		_fail_authored_runtime(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {
-			"definition_count": definitions.size(),
-			"has_catalog": encounter_catalog != null,
-			"has_director": _run_director != null,
-			"has_runner": _encounter_runner != null,
+	_current_room_definition.clear()
+	if room_runtime == null or encounter_catalog == null or _encounter_runner == null:
+		_record_runtime_failure({
+			"result": "runtime_error",
+			"runtime_error_code": "AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			"runtime_error_context": {
+				"has_runtime": room_runtime != null,
+				"has_catalog": encounter_catalog != null,
+				"has_runner": _encounter_runner != null,
+			},
 		})
 		return false
-	_encounter_runner.call("cancel")
+	_room_runtime = room_runtime
 	_encounter_catalog = encounter_catalog
-	_authored_run_seed = run_seed
-	rooms_per_floor = definitions.size()
-	_run_director.configure_from_definitions(definitions)
+	if not _room_runtime.spawn_warning_requested.is_connected(_on_authored_spawn_warning):
+		_room_runtime.spawn_warning_requested.connect(_on_authored_spawn_warning)
+	if not _room_runtime.spawn_requested.is_connected(_on_authored_spawn_requested):
+		_room_runtime.spawn_requested.connect(_on_authored_spawn_requested)
+	if not _room_runtime.room_started.is_connected(_on_runtime_room_started):
+		_room_runtime.room_started.connect(_on_runtime_room_started)
+	if not _room_runtime.room_cleared.is_connected(_on_runtime_room_cleared):
+		_room_runtime.room_cleared.connect(_on_runtime_room_cleared)
+	if not _room_runtime.runtime_failed.is_connected(_on_runtime_failed):
+		_room_runtime.runtime_failed.connect(_on_runtime_failed)
 	return true
 
 
-func begin_run() -> void:
-	if not _authored_runtime_failure.is_empty():
-		return
-	if GameState.current_room <= 0:
-		GameState.current_room = 1
-	start_room()
+func begin_run() -> Variant:
+	return begin_current_room()
 
 
-func start_room() -> void:
-	if not _authored_runtime_failure.is_empty():
+func start_room() -> Variant:
+	return begin_current_room()
+
+
+func begin_current_room() -> Variant:
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		return null
+	return _room_runtime.call("begin_current_room")
+
+
+func authored_runtime_failure() -> Dictionary:
+	return _authored_runtime_failure.duplicate(true)
+
+
+func _disconnect_room_runtime() -> void:
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		_room_runtime = null
 		return
-	GameState.set_phase(GameState.GamePhase.DUNGEON)
+	if _room_runtime.spawn_warning_requested.is_connected(_on_authored_spawn_warning):
+		_room_runtime.spawn_warning_requested.disconnect(_on_authored_spawn_warning)
+	if _room_runtime.spawn_requested.is_connected(_on_authored_spawn_requested):
+		_room_runtime.spawn_requested.disconnect(_on_authored_spawn_requested)
+	if _room_runtime.room_started.is_connected(_on_runtime_room_started):
+		_room_runtime.room_started.disconnect(_on_runtime_room_started)
+	if _room_runtime.room_cleared.is_connected(_on_runtime_room_cleared):
+		_room_runtime.room_cleared.disconnect(_on_runtime_room_cleared)
+	if _room_runtime.runtime_failed.is_connected(_on_runtime_failed):
+		_room_runtime.runtime_failed.disconnect(_on_runtime_failed)
+	_room_runtime = null
+
+
+func _on_runtime_room_started(_active_room_id: StringName, _revision: int) -> void:
 	_cleared = false
+	_authored_runtime_failure.clear()
 	if reward_marker != null:
 		reward_marker.visible = false
-	if _encounter_runner != null:
-		_encounter_runner.call("cancel")
 	_clear_enemy_nodes()
-	GameState.set_current_room_type(_current_room_type())
-	var active_room_id := _active_room_id()
-	EventBus.room_started.emit(active_room_id)
-	EventBus.publish(EventBus.ROOM_STARTED, {"room_id": active_room_id, "room_type": GameState.get_current_room_type()})
-	await _spawn_enemies()
+	var runtime_snapshot: Dictionary = _room_runtime.call("snapshot")
+	_current_room_definition = runtime_snapshot.get("room_definition", {}).duplicate(true)
+	if _encounter_runner != null and _encounter_runner.has_method("set_timing_override"):
+		_encounter_runner.call(
+			"set_timing_override",
+			0.0 if spawn_warning_duration <= 0.0 else -1.0
+		)
 
 
-func _spawn_enemies() -> void:
-	if _authored_runtime_enabled:
-		_start_authored_encounter()
+func _on_runtime_room_cleared(_active_room_id: StringName, _revision: int) -> void:
+	if _cleared:
 		return
-	if not allow_legacy_runtime:
-		_fail_authored_runtime(&"LEGACY_RUNTIME_NOT_AUTHORIZED", {
-			"room_id": str(room_id),
-			"room_number": GameState.current_room,
-		})
-		return
-
-	_alive_enemies = 0
-	if _is_event_room():
-		_cleared = true
-		GameState.set_phase(GameState.GamePhase.SELECTION)
-		return
-	if _is_boss_room() and boss_scene != null:
-		_show_spawn_warning(boss_spawn_point.global_position, 44.0, spawn_warning_duration)
-		await get_tree().create_timer(spawn_warning_duration).timeout
-		if GameState.phase == GameState.GamePhase.DEATH:
-			return
-		_spawn_legacy_boss()
-		return
-
-	var points := spawn_points.get_children()
-	var spawn_count := _run_director.spawn_count_for(GameState.current_room, points.size(), enemy_scenes.size())
-	for index: int in range(spawn_count):
-		_show_spawn_warning(points[index].global_position, 24.0, spawn_warning_duration)
-	await get_tree().create_timer(spawn_warning_duration).timeout
-	if GameState.phase == GameState.GamePhase.DEATH:
-		return
-	for index: int in range(spawn_count):
-		var scene_index := mini(index, enemy_scenes.size() - 1)
-		var enemy := enemy_scenes[scene_index].instantiate()
-		enemies_root.add_child(enemy)
-		enemy.global_position = points[index].global_position
-		if _is_elite_room() and index == spawn_count - 1 and enemy.has_method("apply_elite_modifier"):
-			enemy.apply_elite_modifier()
-		_alive_enemies += 1
-		enemy.set_meta("room_counted", true)
-		EventBus.enemy_spawned.emit(enemy)
-		EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy})
+	_cleared = true
+	if reward_marker != null:
+		reward_marker.visible = true
 
 
-func _start_authored_encounter() -> void:
-	var room_definition := _run_director.room_definition_for(GameState.current_room)
-	var encounter_id := str(room_definition.get("encounter_id", ""))
-	var encounter: Dictionary = _encounter_catalog.call(
-		"encounter_definition",
-		encounter_id,
-		_authored_run_seed,
-		GameState.current_room
-	)
-	if encounter.is_empty():
-		_encounter_runner.call("start_encounter", {}, _authored_run_seed, GameState.current_room)
-		return
-	if spawn_warning_duration <= 0.0:
-		for wave: Dictionary in encounter.get("waves", []):
-			wave["delay_seconds"] = 0.0
-			wave["telegraph_seconds"] = 0.0
-	if _is_boss_room():
-		GameState.set_phase(GameState.GamePhase.BOSS_FIGHT)
-	_encounter_runner.call("start_encounter", encounter, _authored_run_seed, GameState.current_room)
+func _on_runtime_failed(context: Dictionary) -> void:
+	_record_runtime_failure(context)
 
 
 func _on_authored_spawn_warning(spawn_definition: Dictionary, duration: float) -> void:
@@ -188,11 +153,7 @@ func _on_authored_spawn_warning(spawn_definition: Dictionary, duration: float) -
 
 
 func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
-	if GameState.phase == GameState.GamePhase.DEATH or GameState.phase == GameState.GamePhase.RUN_END:
-		if _encounter_runner != null:
-			_encounter_runner.call("cancel")
-		return
-	if not _authored_runtime_enabled or _encounter_catalog == null:
+	if not _authored_runtime_enabled or _encounter_catalog == null or _room_runtime == null:
 		_reject_authored_spawn(spawn_definition, &"AUTHORED_RUNTIME_UNAVAILABLE")
 		return
 	var enemy_id := str(spawn_definition.get("enemy_id", ""))
@@ -222,180 +183,64 @@ func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
 	enemy.set_meta("encounter_mechanism_ids", mechanism_ids)
 	if mechanism_ids.has("overload_pulse") and enemy.has_method("apply_elite_modifier"):
 		enemy.call("apply_elite_modifier")
-	if not bool(_encounter_runner.call("register_spawned", enemy, spawn_definition)):
+	if not bool(_room_runtime.call("register_spawned", enemy, spawn_definition)):
 		enemy.queue_free()
 		_reject_authored_spawn(spawn_definition, &"SPAWN_REGISTRATION_REJECTED")
 		return
 	EventBus.enemy_spawned.emit(enemy)
-	EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": enemy, "encounter_spawn": spawn_definition.duplicate(true)})
+	EventBus.publish(EventBus.ENEMY_SPAWNED, {
+		"enemy": enemy,
+		"encounter_spawn": spawn_definition.duplicate(true),
+	})
+
+
+func _reject_authored_spawn(spawn_definition: Dictionary, reason: StringName) -> void:
+	if _room_runtime != null and is_instance_valid(_room_runtime):
+		_room_runtime.call("reject_spawn", spawn_definition, reason)
 
 
 func _spawn_marker_for(spawn_definition: Dictionary) -> Node2D:
 	if _encounter_catalog == null:
 		return null
-	var slot: Dictionary = _encounter_catalog.call("spawn_slot", str(spawn_definition.get("spawn_slot_id", "")))
+	var slot: Dictionary = _encounter_catalog.call(
+		"spawn_slot",
+		str(spawn_definition.get("spawn_slot_id", ""))
+	)
 	var node_path := NodePath(str(slot.get("node_path", "")))
 	return get_node_or_null(node_path) as Node2D
 
 
 func _show_spawn_warning(spawn_position: Vector2, radius: float, duration: float) -> void:
-	if spawn_warning_scene != null:
-		var warning := spawn_warning_scene.instantiate()
-		warning.radius = radius
-		warning.duration = maxf(0.0, duration)
-		add_child(warning)
-		warning.global_position = spawn_position
-
-
-func _spawn_legacy_boss() -> void:
-	GameState.set_phase(GameState.GamePhase.BOSS_FIGHT)
-	var boss := boss_scene.instantiate()
-	enemies_root.add_child(boss)
-	boss.global_position = boss_spawn_point.global_position
-	_alive_enemies = 1
-	boss.set_meta("room_counted", true)
-	EventBus.enemy_spawned.emit(boss)
-	EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": boss, "boss": true})
-
-
-func _on_enemy_spawned(enemy: Node) -> void:
-	if _authored_runtime_enabled:
+	if spawn_warning_scene == null:
 		return
-	if enemy == null or not is_instance_valid(enemy):
-		return
-	if enemy.get_parent() != enemies_root:
-		return
-	if bool(enemy.get_meta("room_counted", false)):
-		return
-	enemy.set_meta("room_counted", true)
-	_alive_enemies += 1
+	var warning := spawn_warning_scene.instantiate()
+	warning.radius = radius
+	warning.duration = maxf(0.0, duration)
+	add_child(warning)
+	warning.global_position = spawn_position
 
 
 func _on_entity_died(entity: Node, killer: Variant) -> void:
-	if entity.is_in_group("player"):
-		_on_player_died(killer)
+	if entity == null or not entity.is_in_group("player"):
 		return
-	if _authored_runtime_enabled:
-		return
-	if _cleared or GameState.phase == GameState.GamePhase.DEATH or not entity.is_in_group("enemies"):
-		return
-	_alive_enemies = max(0, _alive_enemies - 1)
-	if _alive_enemies == 0:
-		_clear_room()
+	if _room_runtime != null and is_instance_valid(_room_runtime):
+		_room_runtime.call("report_player_died", killer)
+	_clear_enemy_nodes()
+	if reward_marker != null:
+		reward_marker.visible = false
 
 
-func _on_authored_encounter_completed(_encounter_id: StringName) -> void:
-	if _authored_runtime_enabled:
-		_clear_room()
-
-
-func _on_authored_encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary) -> void:
-	_fail_authored_runtime(reason, {
-		"encounter_id": str(encounter_id),
-		"runner_context": context.duplicate(true),
-	})
-
-
-func _reject_authored_spawn(spawn_definition: Dictionary, reason: StringName) -> void:
-	if _encounter_runner != null and bool(_encounter_runner.call("is_active")):
-		_encounter_runner.call("reject_spawn", spawn_definition, reason)
-		return
-	_fail_authored_runtime(reason, {
-		"spawn_definition": spawn_definition.duplicate(true),
-	})
-
-
-func _fail_authored_runtime(code: StringName, details: Dictionary) -> void:
+func _record_runtime_failure(context: Dictionary) -> void:
 	if not _authored_runtime_failure.is_empty():
 		return
-	_authored_runtime_enabled = true
-	_authored_runtime_failure = {
-		"result": "runtime_error",
-		"runtime_error_code": str(code),
-		"runtime_error_context": details.duplicate(true),
-		"floor": GameState.current_floor,
-		"rooms_cleared": max(0, GameState.current_room - 1),
-		"current_room": GameState.current_room,
-		"run_time": GameState.run_timer,
-	}
+	_authored_runtime_failure = context.duplicate(true)
 	_clear_enemy_nodes()
-	authored_runtime_failed.emit(_authored_runtime_failure.duplicate(true))
-	push_error("Authored runtime failed [%s]: %s" % [str(code), str(details)])
-	if GameState.phase != GameState.GamePhase.RUN_END and GameState.phase != GameState.GamePhase.DEATH:
-		GameState.end_run(_authored_runtime_failure)
-
-
-func authored_runtime_failure() -> Dictionary:
-	return _authored_runtime_failure.duplicate(true)
-
-
-func _clear_room() -> void:
-	if GameState.phase == GameState.GamePhase.DEATH or _cleared:
-		return
-	if _authored_runtime_enabled and _encounter_runner != null and bool(_encounter_runner.call("is_active")):
-		_encounter_runner.call("cancel")
-	_cleared = true
-	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
 	if reward_marker != null:
-		reward_marker.visible = true
-	GameState.set_curse_offer_pending(_should_offer_curse())
-	var active_room_id := _active_room_id()
-	EventBus.room_cleared.emit(active_room_id)
-	EventBus.publish(EventBus.ROOM_CLEARED, {"room_id": active_room_id})
-
-
-func _on_reward_selected(_reward_data: Dictionary) -> void:
-	if not _cleared or GameState.phase == GameState.GamePhase.DEATH:
-		return
-	if GameState.current_room >= rooms_per_floor:
-		GameState.end_run({
-			"result": "floor_cleared",
-			"floor": GameState.current_floor,
-			"rooms_cleared": GameState.current_room,
-			"run_time": GameState.run_timer,
-			"rewards": GameState.current_run.get("rewards", []),
-			"blessings": GameState.current_run.get("blessings", []),
-			"talent_choices": GameState.current_run.get("talent_choices", []),
-			"curses": GameState.current_run.get("curses", []),
-		})
-		return
-	GameState.current_room += 1
-	call_deferred("start_room")
+		reward_marker.visible = false
+	authored_runtime_failed.emit(_authored_runtime_failure.duplicate(true))
 
 
 func _clear_enemy_nodes() -> void:
 	for enemy: Node in enemies_root.get_children():
-		enemy.queue_free()
-
-
-func _active_room_id() -> StringName:
-	return StringName("%s_%02d" % [room_id, GameState.current_room])
-
-
-func _is_boss_room() -> bool:
-	return _current_room_type() == &"boss"
-
-
-func _is_elite_room() -> bool:
-	return _current_room_type() == &"elite"
-
-
-func _is_event_room() -> bool:
-	return _current_room_type() == &"event"
-
-
-func _current_room_type() -> StringName:
-	return StringName(_run_director.room_type_for(GameState.current_room))
-
-
-func _should_offer_curse() -> bool:
-	return _run_director.should_offer_curse(GameState.current_room)
-
-
-func _on_player_died(killer: Variant) -> void:
-	if _encounter_runner != null:
-		_encounter_runner.call("cancel")
-	_clear_enemy_nodes()
-	if reward_marker != null:
-		reward_marker.visible = false
-	GameState.fail_run(killer)
+		if not enemy.is_queued_for_deletion():
+			enemy.queue_free()

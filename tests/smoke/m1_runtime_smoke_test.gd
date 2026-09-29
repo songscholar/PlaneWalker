@@ -155,7 +155,12 @@ func _run() -> void:
 
 func _assert_authored_runtime(suite, room: Node, facade: RefCounted) -> void:
 	suite.assert_true(bool(room.get("_authored_runtime_enabled")), "M1 room controller enables authored encounters")
-	suite.assert_equal(room.get("_run_director").call("room_count"), 5, "room controller consumes the shared five-room plan")
+	var runtime_value: Variant = room.get("_room_runtime")
+	suite.assert_true(runtime_value is Node, "M1 room controller receives the authoritative RoomRuntime")
+	if runtime_value is Node:
+		var runtime_snapshot: Dictionary = (runtime_value as Node).call("snapshot")
+		suite.assert_true(bool(runtime_snapshot.get("configured", false)), "M1 RoomRuntime is configured")
+	suite.assert_equal(facade.call("room_plan").size(), 5, "facade owns the shared five-room plan")
 	suite.assert_true(room.get("_encounter_catalog") == facade.call("encounter_catalog"), "room controller and facade share one catalog instance")
 
 

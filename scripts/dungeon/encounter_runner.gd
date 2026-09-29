@@ -17,6 +17,7 @@ var _pending_spawn_ids: Dictionary = {}
 var _active: bool = false
 var _advance_scheduled: bool = false
 var _last_failure: Dictionary = {}
+var _timing_override_seconds: float = -1.0
 
 
 func _ready() -> void:
@@ -28,6 +29,10 @@ func _ready() -> void:
 
 func configure(enemies_root: Node) -> void:
 	_enemies_root = enemies_root
+
+
+func set_timing_override(seconds: float = -1.0) -> void:
+	_timing_override_seconds = seconds if seconds >= 0.0 else -1.0
 
 
 func start_encounter(encounter: Dictionary, _run_seed: int, _room_number: int) -> void:
@@ -139,12 +144,20 @@ func _start_next_wave(token: int) -> void:
 		return
 	var wave: Dictionary = waves[_wave_index]
 	wave_started.emit(_wave_index, StringName(str(wave.get("id", ""))))
-	var delay_seconds := float(wave.get("delay_seconds", 0.0))
+	var delay_seconds := (
+		_timing_override_seconds
+		if _timing_override_seconds >= 0.0
+		else float(wave.get("delay_seconds", 0.0))
+	)
 	if delay_seconds > 0.0:
 		await get_tree().create_timer(delay_seconds).timeout
 		if not _active or token != _generation:
 			return
-	var telegraph_seconds := float(wave.get("telegraph_seconds", 0.0))
+	var telegraph_seconds := (
+		_timing_override_seconds
+		if _timing_override_seconds >= 0.0
+		else float(wave.get("telegraph_seconds", 0.0))
+	)
 	var spawns: Array = wave.get("spawns", [])
 	_pending_spawn_ids.clear()
 	for spawn_value: Variant in spawns:

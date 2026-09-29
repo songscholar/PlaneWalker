@@ -8,6 +8,7 @@ const ContentRegistryScript := preload("res://scripts/content/content_registry.g
 const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
+const RoomRuntimeScript := preload("res://scripts/dungeon/room_runtime.gd")
 const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
 
 const GAME_VERSION := "0.4.0-dev"
@@ -260,6 +261,20 @@ func encounter_catalog() -> RefCounted:
 
 func content_registry() -> RefCounted:
 	return _registry
+
+
+func create_room_runtime(encounter_runner: Node) -> Node:
+	if not _booted or _orchestrator == null or _encounter_catalog == null or encounter_runner == null:
+		return null
+	var runtime := RoomRuntimeScript.new()
+	runtime.configure(
+		self,
+		_encounter_catalog,
+		room_plan(),
+		int(_orchestrator.snapshot().get("run_seed", 0)),
+		encounter_runner
+	)
+	return runtime
 
 
 func _require_booted(operation: String):

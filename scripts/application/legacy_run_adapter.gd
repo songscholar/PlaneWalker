@@ -33,6 +33,7 @@ var _legacy_hud_state_captured: bool = false
 var _hud_render_accumulator: float = 0.0
 var _choice_layer: CanvasLayer
 var _choice_panel: Control
+var _room_runtime: Node
 var _active_run_id: String = ""
 var _run_serial: int = 0
 var _last_tree_paused: bool = false
@@ -150,6 +151,109 @@ func _connect_runtime_signals() -> void:
 		EventBus.room_cleared.connect(_on_room_cleared)
 	if not EventBus.run_ended.is_connected(_on_run_ended):
 		EventBus.run_ended.connect(_on_run_ended)
+	if not EventBus.entity_died.is_connected(_on_runtime_entity_died):
+		EventBus.entity_died.connect(_on_runtime_entity_died)
+
+
+func _connect_room_runtime() -> void:
+	if _room_runtime == null:
+		return
+	if not _room_runtime.room_started.is_connected(_on_runtime_room_started):
+		_room_runtime.room_started.connect(_on_runtime_room_started)
+	if not _room_runtime.room_cleared.is_connected(_on_runtime_room_cleared):
+		_room_runtime.room_cleared.connect(_on_runtime_room_cleared)
+	if not _room_runtime.runtime_failed.is_connected(_on_runtime_failed):
+		_room_runtime.runtime_failed.connect(_on_runtime_failed)
+
+
+func _dispose_room_runtime() -> void:
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		_room_runtime = null
+		return
+	if _room_runtime.room_started.is_connected(_on_runtime_room_started):
+		_room_runtime.room_started.disconnect(_on_runtime_room_started)
+	if _room_runtime.room_cleared.is_connected(_on_runtime_room_cleared):
+		_room_runtime.room_cleared.disconnect(_on_runtime_room_cleared)
+	if _room_runtime.runtime_failed.is_connected(_on_runtime_failed):
+		_room_runtime.runtime_failed.disconnect(_on_runtime_failed)
+	_room_runtime.queue_free()
+	_room_runtime = null
+
+
+func _on_runtime_room_started(active_room_id: StringName, revision: int) -> void:
+	if not _can_handle_lifecycle():
+		return
+	var state := _facade.snapshot() as Dictionary
+	GameState.current_room = int(state.get("current_room", GameState.current_room))
+	var room_definition := _facade.current_room_definition() as Dictionary
+	var room_type := StringName(str(room_definition.get("type", "combat")))
+	GameState.set_current_room_type(room_type)
+	GameState.set_phase(
+		GameState.GamePhase.BOSS_FIGHT
+		if room_type == &"boss"
+		else GameState.GamePhase.DUNGEON
+	)
+	EventBus.room_started.emit(active_room_id)
+	EventBus.publish(EventBus.ROOM_STARTED, {
+		"room_id": active_room_id,
+		"room_type": room_type,
+		"revision": revision,
+	})
+
+
+func _on_runtime_room_cleared(active_room_id: StringName, revision: int) -> void:
+	if not _active or _facade == null or _active_run_id.is_empty():
+		return
+	var state := _facade.snapshot() as Dictionary
+	if not _matches_active_run(state):
+		return
+	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
+	EventBus.room_cleared.emit(active_room_id)
+	EventBus.publish(EventBus.ROOM_CLEARED, {
+		"room_id": active_room_id,
+		"revision": revision,
+	})
+	match int(state.get("phase", -1)):
+		RunPhaseScript.Value.SELECTION_ACTIVE:
+			_open_existing_room_offer()
+		RunPhaseScript.Value.VICTORY:
+			_complete_legacy_boss_projection()
+
+
+func _on_runtime_failed(context: Dictionary) -> void:
+	if _choice_panel != null:
+		_choice_panel.close_panel()
+	_set_selection_safety(false)
+	if GameState.phase != GameState.GamePhase.RUN_END and GameState.phase != GameState.GamePhase.DEATH:
+		GameState.end_run(context.duplicate(true))
+
+
+func _on_runtime_entity_died(entity: Node, killer: Variant) -> void:
+	if _room_runtime == null or entity == null or not entity.is_in_group("player"):
+		return
+	var state := _facade.snapshot() as Dictionary
+	if int(state.get("phase", -1)) != RunPhaseScript.Value.DEFEAT:
+		return
+	if GameState.phase != GameState.GamePhase.DEATH and GameState.phase != GameState.GamePhase.RUN_END:
+		GameState.fail_run(killer)
+
+
+func _complete_legacy_boss_projection() -> void:
+	var context := {
+		"result": "floor_cleared",
+		"floor": GameState.current_floor,
+		"rooms_cleared": GameState.current_room,
+		"current_room": GameState.current_room,
+		"run_time": GameState.run_timer,
+		"rewards": GameState.current_run.get("rewards", []).duplicate(true),
+		"blessings": GameState.current_run.get("blessings", []).duplicate(true),
+		"talent_choices": GameState.current_run.get("talent_choices", []).duplicate(true),
+		"curses": GameState.current_run.get("curses", []).duplicate(true),
+	}
+	if _choice_panel != null:
+		_choice_panel.close_panel()
+	_set_selection_safety(false)
+	GameState.end_run(context)
 
 
 func _on_run_started(run_data: Dictionary) -> void:
@@ -175,6 +279,7 @@ func _on_run_started(run_data: Dictionary) -> void:
 	var started = next_facade.start_run(config, run_id)
 	if not started.ok:
 		return
+	_dispose_room_runtime()
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
@@ -183,7 +288,26 @@ func _on_run_started(run_data: Dictionary) -> void:
 	_last_tree_paused = get_tree().paused
 	_hud_render_accumulator = 0.0
 	var configured := false
-	if _room_controller.has_method("configure_authored_runtime"):
+	if (
+		_room_controller.has_method("encounter_runner")
+		and next_facade.has_method("create_room_runtime")
+		and _room_controller.has_method("configure_authored_runtime")
+	):
+		var runner_value: Variant = _room_controller.call("encounter_runner")
+		if runner_value is Node:
+			var runtime_value: Variant = next_facade.call("create_room_runtime", runner_value)
+			if runtime_value is Node:
+				_room_runtime = runtime_value as Node
+				_room_runtime.name = "RoomRuntime"
+				add_child(_room_runtime)
+				configured = bool(_room_controller.call(
+					"configure_authored_runtime",
+					_room_runtime,
+					next_facade.encounter_catalog()
+				))
+				if configured:
+					_connect_room_runtime()
+	elif _room_controller.has_method("configure_authored_runtime"):
 		configured = bool(_room_controller.call(
 			"configure_authored_runtime",
 			next_facade.room_plan(),
@@ -199,6 +323,8 @@ func _on_run_started(run_data: Dictionary) -> void:
 
 
 func _on_room_started(_room_id: StringName) -> void:
+	if _room_runtime != null:
+		return
 	if not _can_handle_lifecycle():
 		return
 	var state := _facade.snapshot() as Dictionary
@@ -214,6 +340,8 @@ func _on_room_started(_room_id: StringName) -> void:
 
 
 func _on_room_cleared(_room_id: StringName) -> void:
+	if _room_runtime != null:
+		return
 	if not _can_handle_lifecycle():
 		return
 	var state := _facade.snapshot() as Dictionary
@@ -232,6 +360,17 @@ func _open_room_offer() -> void:
 		return
 	var offer: Dictionary = completed.context.get("offer", {}).duplicate(true)
 	if offer.is_empty():
+		return
+	_set_selection_safety(true)
+	var rendered = _choice_panel.render(offer)
+	if not rendered.ok:
+		_set_selection_safety(false)
+
+
+func _open_existing_room_offer() -> void:
+	var state := _facade.snapshot() as Dictionary
+	var offer: Dictionary = state.get("open_offer", {}).duplicate(true)
+	if offer.is_empty() or _choice_panel == null:
 		return
 	_set_selection_safety(true)
 	var rendered = _choice_panel.render(offer)
@@ -281,6 +420,12 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 	_choice_panel.close_panel()
 	_set_selection_safety(false)
 	EventBus.reward_selected.emit(definition)
+	if _room_runtime != null and _room_controller != null:
+		var state := _facade.snapshot() as Dictionary
+		GameState.current_room = int(state.get("current_room", GameState.current_room))
+		var room_definition := _facade.current_room_definition() as Dictionary
+		GameState.set_current_room_type(StringName(str(room_definition.get("type", "combat"))))
+		_room_controller.call_deferred("begin_current_room")
 
 
 func _mirror_definition_to_game_state(definition: Dictionary) -> void:
