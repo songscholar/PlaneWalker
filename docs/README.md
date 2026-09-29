@@ -45,7 +45,8 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Formal M1 | `M1 Candidate — External Validation Pending` | Candidate commit `79a20fd183fb57b8bdf62019ab80ff3f6e430635`；Matrix digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`；仓库 Gate 通过，真人 Gate 待外部执行 |
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
-| Full Product Content | Preserved / Later program | 五角色、五武器、四时间能力、五层五 Boss、八流派和完整内容池保留，本轮不展开 |
+| P10 Candidate Loadouts | Active / Current | 建立五角色、五武器、四时间能力的权威目录，并在不宣称正式晋升的前提下完成 Bow/Rift/Accelerate 候选 Loadout、双能力 HUD 与六组合验证 |
+| Full Product Content | Active / Phased program | 五角色、五武器、四时间能力、五层五 Boss、八流派和完整内容池按依赖顺序持续实施 |
 | Launch / Expansion Systems | Preserved / Later program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、回放、排行、Mod、外观和 DLC 内容包保留，本轮不展开 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
@@ -95,6 +96,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P7/P9 Export Certification Evidence](current/2026-09-29-p7-p9-export-certification-evidence.md) | 导出预检、fail-closed 执行器、detached clone 与当前 blocker | External Validation Pending / Current |
 | [P8 Documentation Governance Plan](superpowers/plans/2026-09-29-plane-walker-p8-document-governance.md) | 文档元数据、生命周期、链接、ADR、Current 索引和证据状态实施记录 | Completed / Historical |
 | [P8 Documentation Governance Evidence](current/2026-09-29-p8-document-governance-evidence.md) | 零基线、Current 索引、ADR、证据状态和离线整库治理认证 | Verified Locally / Current |
+| [P10 Candidate Loadouts Plan](superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md) | 五角色/五武器/四能力目录、候选 Loadout、运行时隔离、双槽 HUD 和六组合验证 | Active / Current |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
 
