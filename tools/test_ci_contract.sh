@@ -127,6 +127,13 @@ scene_count="$(wc -l <"${TEMP_DIR}/expected-scenes.txt" | tr -d ' ')"
 [[ ${scene_count} -gt 0 ]] || fail "test discovery must find at least one scene"
 diff -u "${TEMP_DIR}/expected-scenes.txt" "${TEMP_DIR}/listed-scenes.txt" \
 	|| fail "--list must return every test scene in stable order"
+for event_contract in \
+	tests/contract/events/run_lifecycle_publication_test.tscn \
+	tests/contract/events/combat_event_publication_test.tscn \
+	tests/contract/events/event_bus_source_contract_test.tscn; do
+	grep -Fxq -- "${event_contract}" "${TEMP_DIR}/listed-scenes.txt" \
+		|| fail "event contract must be included in scene discovery: ${event_contract}"
+done
 
 set +e
 tools/run_tests.sh --filter definitely-not-a-real-test >/dev/null 2>&1
@@ -224,6 +231,10 @@ assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contr
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.m1\.test_m1_gate' "M1 release gate contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.coverage\.test_gdscript_coverage' "GDScript coverage contract entrypoint"
 assert_file_contains tools/validate_project.sh 'validate_import_logs "\$\{phase\}" "\$\{stdout_log\}" "\$\{engine_log\}"' "each import scans stdout and engine logs"
+assert_file_contains tools/validate_project.sh '"\$\{SCRIPT_DIR\}/run_tests\.sh"$' "validation runs the scene-test entrypoint without a partial wrapper"
+if grep -Eq -- '--filter|--skip|--exclude' tools/validate_project.sh; then
+	fail "validation entrypoint must not filter or exclude discovered scene tests"
+fi
 
 bootstrap_output="${TEMP_DIR}/bootstrap-expected.out"
 if ! run_fake_validation bootstrap_expected "${bootstrap_output}"; then
@@ -232,6 +243,8 @@ if ! run_fake_validation bootstrap_expected "${bootstrap_output}"; then
 fi
 assert_contains "$(cat "${bootstrap_output}")" "generated translation resources were absent before bootstrap" "bootstrap translation classification"
 assert_contains "$(cat "${bootstrap_output}")" "cannot persist global Godot editor settings" "editor settings environment warning"
+assert_contains "$(cat "${bootstrap_output}")" "Discovered scene tests: ${scene_count}" "validation executes every discovered scene"
+assert_contains "$(cat "${bootstrap_output}")" "Scene tests: ${scene_count} passed, 0 failed" "validation reports the complete discovered scene count"
 
 set +e
 run_fake_validation bootstrap_partial "${TEMP_DIR}/bootstrap-partial.out"

@@ -213,6 +213,7 @@ func _test_summoned_instances_publish_once() -> void:
 	var boss := BossScene.instantiate()
 	boss.process_mode = Node.PROCESS_MODE_DISABLED
 	enemies.add_child(boss)
+	boss.enemy_summoned.connect(_acknowledge_summon_for_test)
 	await get_tree().process_frame
 
 	var before := _recorder.spawned_instance_ids.size()
@@ -232,6 +233,10 @@ func _test_summoned_instances_publish_once() -> void:
 	enemies.queue_free()
 	player.queue_free()
 	await get_tree().process_frame
+
+
+func _acknowledge_summon_for_test(enemy: Node) -> void:
+	enemy.set_meta("encounter_counted", true)
 
 
 func _unique_count(values: Array[int]) -> int:

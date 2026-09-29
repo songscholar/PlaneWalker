@@ -1,6 +1,8 @@
 extends "res://scripts/enemies/enemy_base.gd"
 class_name BossChronoWarden
 
+signal enemy_summoned(enemy: Node)
+
 const FragmentScene := preload("res://scenes/enemies/enemy_chaser.tscn")
 const TimeCrackScript := preload("res://scripts/enemies/boss_time_crack.gd")
 
@@ -417,7 +419,9 @@ func _summon_fragments() -> void:
 		fragment.global_position = summon_slots[index]
 		if fragment.has_method("apply_elite_modifier") and _phase >= 3:
 			fragment.apply_elite_modifier(1.25, 1.1, 1.0)
-		EventBus.enemy_spawned.emit(fragment, {"boss": false, "summoned": true})
+		enemy_summoned.emit(fragment)
+		if bool(fragment.get_meta("encounter_counted", false)):
+			EventBus.enemy_spawned.emit(fragment, {"boss": false, "summoned": true})
 
 
 func _create_time_crack() -> Node:

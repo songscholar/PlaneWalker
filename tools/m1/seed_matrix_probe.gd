@@ -225,7 +225,10 @@ func _defeat_spawned_enemies(enemies: Array[Node]) -> void:
 	for enemy: Node in enemies:
 		if enemy == null or not is_instance_valid(enemy):
 			continue
-		EventBus.entity_died.emit(enemy, null)
+		var room := enemy.get_parent().get_parent()
+		var runtime: Node = room.get("_room_runtime")
+		if runtime != null:
+			runtime.call("report_entity_died", enemy)
 		enemy.queue_free()
 	await get_tree().process_frame
 

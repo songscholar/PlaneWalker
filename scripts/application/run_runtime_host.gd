@@ -44,8 +44,6 @@ func _ready() -> void:
 		return
 	_create_hud_layer()
 	_create_choice_layer()
-	if not EventBus.entity_died.is_connected(_on_entity_died):
-		EventBus.entity_died.connect(_on_entity_died)
 	_active = true
 
 
@@ -177,6 +175,8 @@ func _connect_room_runtime() -> void:
 		_room_runtime.room_started.connect(_on_room_started)
 	if not _room_runtime.room_cleared.is_connected(_on_room_cleared):
 		_room_runtime.room_cleared.connect(_on_room_cleared)
+	if not _room_runtime.terminal_committed.is_connected(_on_terminal_committed):
+		_room_runtime.terminal_committed.connect(_on_terminal_committed)
 	if not _room_runtime.runtime_failed.is_connected(_on_runtime_failed):
 		_room_runtime.runtime_failed.connect(_on_runtime_failed)
 
@@ -189,6 +189,8 @@ func _dispose_room_runtime() -> void:
 		_room_runtime.room_started.disconnect(_on_room_started)
 	if _room_runtime.room_cleared.is_connected(_on_room_cleared):
 		_room_runtime.room_cleared.disconnect(_on_room_cleared)
+	if _room_runtime.terminal_committed.is_connected(_on_terminal_committed):
+		_room_runtime.terminal_committed.disconnect(_on_terminal_committed)
 	if _room_runtime.runtime_failed.is_connected(_on_runtime_failed):
 		_room_runtime.runtime_failed.disconnect(_on_runtime_failed)
 	_room_runtime.queue_free()
@@ -212,8 +214,10 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 	match int(state.get("phase", -1)):
 		RunPhaseScript.Value.SELECTION_ACTIVE:
 			_open_offer(state.get("open_offer", {}))
-		RunPhaseScript.Value.VICTORY:
-			_publish_terminal_result(state.get("result", {}))
+
+
+func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
+	_publish_terminal_result(context)
 
 
 func _on_runtime_failed(context: Dictionary) -> void:
@@ -221,12 +225,6 @@ func _on_runtime_failed(context: Dictionary) -> void:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
 	_publish_terminal_result(context)
-
-
-func _on_entity_died(entity: Node, killer: Variant) -> void:
-	if _room_runtime == null or entity == null or not entity.is_in_group("player"):
-		return
-	call_deferred("_publish_terminal_result", {"result": "death", "killer": killer})
 
 
 func _open_offer(offer_value: Variant) -> void:

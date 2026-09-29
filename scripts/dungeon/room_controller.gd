@@ -21,6 +21,7 @@ signal authored_runtime_failed(context: Dictionary)
 @onready var enemies_root: Node2D = $Enemies
 @onready var reward_marker: Node = get_node_or_null(reward_marker_path)
 @onready var _encounter_runner: Node = get_node_or_null("EncounterRunner")
+@onready var _player_health: Node = get_node_or_null("Player/HealthComponent")
 
 var _room_runtime: Node
 var _encounter_catalog: RefCounted
@@ -40,8 +41,8 @@ func _ready() -> void:
 		_encounter_runner.call("configure", enemies_root)
 	if reward_marker != null and reward_marker is Label:
 		reward_marker.text = tr("UI_REWARD_MARKER")
-	if not EventBus.entity_died.is_connected(_on_entity_died):
-		EventBus.entity_died.connect(_on_entity_died)
+	if _player_health != null and _player_health.has_signal("died") and not _player_health.died.is_connected(_on_player_died):
+		_player_health.died.connect(_on_player_died)
 	if auto_start:
 		call_deferred("begin_run")
 
@@ -186,10 +187,42 @@ func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
 		enemy.queue_free()
 		_reject_authored_spawn(spawn_definition, &"SPAWN_REGISTRATION_REJECTED")
 		return
+	_bind_enemy_lifecycle(enemy)
 	EventBus.enemy_spawned.emit(enemy, {
 		"boss": enemy.is_in_group("bosses"),
 		"summoned": false,
 	})
+
+
+func _bind_enemy_lifecycle(enemy: Node) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var health := enemy.get_node_or_null("HealthComponent")
+	if health != null and health.has_signal("died"):
+		var death_callback := _on_registered_enemy_died.bind(enemy)
+		if not health.died.is_connected(death_callback):
+			health.died.connect(death_callback)
+	if enemy.has_signal("enemy_summoned"):
+		var summon_callback := Callable(self, "_on_enemy_summoned")
+		if not enemy.is_connected("enemy_summoned", summon_callback):
+			enemy.connect("enemy_summoned", summon_callback)
+
+
+func _on_enemy_summoned(enemy: Node) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		enemy.queue_free()
+		return
+	if not bool(_room_runtime.call("register_spawned", enemy, {"summoned": true})):
+		enemy.queue_free()
+		return
+	_bind_enemy_lifecycle(enemy)
+
+
+func _on_registered_enemy_died(_killer: Variant, enemy: Node) -> void:
+	if _room_runtime != null and is_instance_valid(_room_runtime):
+		_room_runtime.call("report_entity_died", enemy)
 
 
 func _reject_authored_spawn(spawn_definition: Dictionary, reason: StringName) -> void:
@@ -218,9 +251,7 @@ func _show_spawn_warning(spawn_position: Vector2, radius: float, duration: float
 	warning.global_position = spawn_position
 
 
-func _on_entity_died(entity: Node, killer: Variant) -> void:
-	if entity == null or not entity.is_in_group("player"):
-		return
+func _on_player_died(killer: Variant) -> void:
 	if _room_runtime != null and is_instance_valid(_room_runtime):
 		_room_runtime.call("report_player_died", killer)
 	_clear_enemy_nodes()

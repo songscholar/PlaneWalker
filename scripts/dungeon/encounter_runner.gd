@@ -20,13 +20,6 @@ var _last_failure: Dictionary = {}
 var _timing_override_seconds: float = -1.0
 
 
-func _ready() -> void:
-	if not EventBus.enemy_spawned.is_connected(_on_enemy_spawned):
-		EventBus.enemy_spawned.connect(_on_enemy_spawned)
-	if not EventBus.entity_died.is_connected(_on_entity_died):
-		EventBus.entity_died.connect(_on_entity_died)
-
-
 func configure(enemies_root: Node) -> void:
 	_enemies_root = enemies_root
 
@@ -209,17 +202,3 @@ func _fail_encounter(reason: StringName, context: Dictionary) -> void:
 		"context": context.duplicate(true),
 	}
 	encounter_failed.emit(encounter_id, reason, context.duplicate(true))
-
-
-func _on_enemy_spawned(enemy: Node, _context: Dictionary) -> void:
-	if not _active or enemy == null or not is_instance_valid(enemy):
-		return
-	if _enemies_root == null or (enemy != _enemies_root and not _enemies_root.is_ancestor_of(enemy)):
-		return
-	if bool(enemy.get_meta("encounter_counted", false)):
-		return
-	register_spawned(enemy)
-
-
-func _on_entity_died(entity: Node, _killer: Variant) -> void:
-	notify_entity_defeated(entity)

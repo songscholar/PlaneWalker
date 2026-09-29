@@ -763,7 +763,9 @@ func _defeat_host_room(fixture: Dictionary) -> void:
 			await get_tree().process_frame
 			continue
 		for enemy: Node in enemies:
-			EventBus.entity_died.emit(enemy, null)
+			var runtime: Node = room.get("_room_runtime")
+			if runtime != null:
+				runtime.call("report_entity_died", enemy)
 			enemy.queue_free()
 		await get_tree().process_frame
 	_assert_true(false, "host room resolves within the encounter cycle budget")

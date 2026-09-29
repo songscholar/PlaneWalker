@@ -143,10 +143,17 @@ func _test_boss_completion(suite) -> void:
 	var runtime: Node = fixture["runtime"]
 	var facade: RefCounted = fixture["facade"]
 	var runner: Node = fixture["runner"]
+	var terminal_contexts: Array[Dictionary] = []
+	runtime.terminal_committed.connect(
+		func(context: Dictionary, _revision: int): terminal_contexts.append(context.duplicate(true))
+	)
 	suite.assert_true(runtime.begin_current_room().ok, "boss room begins")
 	runner.encounter_completed.emit(&"chrono_warden")
 	suite.assert_equal(facade.boss_defeated_calls, 1, "boss completion submits the terminal command")
 	suite.assert_equal(facade.complete_room_calls, 0, "boss completion never submits a normal clear")
+	suite.assert_equal(terminal_contexts.size(), 1, "boss completion emits one direct terminal commit")
+	if not terminal_contexts.is_empty():
+		suite.assert_equal(terminal_contexts[0].get("result", ""), "victory", "boss terminal context is authoritative")
 	_free_fixture(fixture)
 
 
@@ -187,10 +194,15 @@ func _test_player_death_is_idempotent(suite) -> void:
 	var fixture := _fixture(_room(&"combat", "death_test", 1))
 	var runtime: Node = fixture["runtime"]
 	var facade: RefCounted = fixture["facade"]
+	var terminal_revisions: Array[int] = []
+	runtime.terminal_committed.connect(
+		func(_context: Dictionary, revision: int): terminal_revisions.append(revision)
+	)
 	runtime.begin_current_room()
 	suite.assert_true(runtime.report_player_died("hazard").ok, "player death submits through the facade")
 	suite.assert_true(not runtime.report_player_died("late").ok, "duplicate player death is rejected")
 	suite.assert_equal(facade.player_died_calls, 1, "player death command is submitted once")
+	suite.assert_equal(terminal_revisions.size(), 1, "player death emits one direct terminal commit")
 	_free_fixture(fixture)
 
 
@@ -198,6 +210,10 @@ func _test_rejected_player_death_preserves_active_room(suite) -> void:
 	var fixture := _fixture(_room(&"combat", "death_rejected", 1))
 	var runtime: Node = fixture["runtime"]
 	var facade: RefCounted = fixture["facade"]
+	var terminal_revisions: Array[int] = []
+	runtime.terminal_committed.connect(
+		func(_context: Dictionary, revision: int): terminal_revisions.append(revision)
+	)
 	runtime.begin_current_room()
 	(facade as FacadeSpy).reject_player_died = true
 	var rejected = runtime.report_player_died("late")
@@ -205,6 +221,7 @@ func _test_rejected_player_death_preserves_active_room(suite) -> void:
 	suite.assert_true(not rejected.ok, "rejected player death returns the authoritative failure")
 	suite.assert_true(bool(state.get("room_active", false)), "rejected player death keeps the room active")
 	suite.assert_true(not bool(state.get("room_terminal", true)), "rejected player death does not mark the room terminal")
+	suite.assert_equal(terminal_revisions.size(), 0, "rejected player death emits no terminal commit")
 	_free_fixture(fixture)
 
 
@@ -265,6 +282,8 @@ func _test_room_controller_contains_no_run_authority(suite) -> void:
 	suite.assert_true(not source.contains("GameState."), "room controller does not read or write the legacy run state")
 	suite.assert_true(not source.contains("EventBus.room_started.emit"), "room controller does not publish room entry facts")
 	suite.assert_true(not source.contains("EventBus.room_cleared.emit"), "room controller does not publish room clear facts")
+	suite.assert_true(not source.contains("EventBus.entity_died.connect"), "room controller does not consume death facts for domain transitions")
+	suite.assert_true(source.contains("_player_health.died.connect"), "room controller receives player death through a direct local signal")
 	suite.assert_true(source.contains("_room_runtime.call(\"register_spawned\""), "room controller acknowledges scene spawns through RoomRuntime")
 
 

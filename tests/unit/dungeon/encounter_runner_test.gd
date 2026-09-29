@@ -37,20 +37,20 @@ func _run() -> void:
 	suite.assert_equal(_spawned.size(), 2, "runner requests every first-wave spawn")
 	suite.assert_equal(_runner.alive_count(), 2, "runner exclusively counts first-wave actors")
 
-	EventBus.entity_died.emit(_spawned[0], null)
+	_runner.notify_entity_defeated(_spawned[0])
 	suite.assert_equal(_runner.alive_count(), 1, "one defeat decrements alive count once")
-	EventBus.entity_died.emit(_spawned[0], null)
+	_runner.notify_entity_defeated(_spawned[0])
 	suite.assert_equal(_runner.alive_count(), 1, "duplicate death cannot decrement twice")
-	EventBus.entity_died.emit(_spawned[1], null)
+	_runner.notify_entity_defeated(_spawned[1])
 	var late_summon := Node2D.new()
 	late_summon.add_to_group("enemies")
 	_enemies_root.add_child(late_summon)
-	EventBus.enemy_spawned.emit(late_summon, {"boss": false, "summoned": true})
+	_runner.register_spawned(late_summon, {"id": "late-summon"})
 	await get_tree().process_frame
 	await get_tree().process_frame
 	suite.assert_equal(_wave_ids, ["wave_01"], "late summon cancels the deferred wave advance")
 	suite.assert_equal(_runner.current_wave_index(), 0, "late summon keeps the runner on the completed wave")
-	EventBus.entity_died.emit(late_summon, null)
+	_runner.notify_entity_defeated(late_summon)
 	late_summon.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -60,15 +60,15 @@ func _run() -> void:
 	var summon := Node2D.new()
 	summon.add_to_group("enemies")
 	_enemies_root.add_child(summon)
-	EventBus.enemy_spawned.emit(summon, {"boss": false, "summoned": true})
+	_runner.register_spawned(summon, {"id": "summon"})
 	suite.assert_equal(_runner.alive_count(), 2, "runner counts an in-room summon")
-	EventBus.entity_died.emit(_spawned[2], null)
+	_runner.notify_entity_defeated(_spawned[2])
 	suite.assert_equal(_runner.alive_count(), 1, "encounter remains active while summon lives")
-	EventBus.entity_died.emit(summon, null)
+	_runner.notify_entity_defeated(summon)
 	await get_tree().process_frame
 	suite.assert_equal(_runner.alive_count(), 0, "all actors are cleared")
 	suite.assert_equal(_completion_count, 1, "encounter completes exactly once")
-	EventBus.entity_died.emit(summon, null)
+	_runner.notify_entity_defeated(summon)
 	suite.assert_equal(_completion_count, 1, "late duplicate death cannot complete twice")
 
 	_runner.start_encounter(_two_wave_encounter(), 20260928, 2)
@@ -76,7 +76,7 @@ func _run() -> void:
 	_runner.cancel()
 	var count_after_cancel := _completion_count
 	for actor: Node in _spawned:
-		EventBus.entity_died.emit(actor, null)
+		_runner.notify_entity_defeated(actor)
 	await get_tree().process_frame
 	suite.assert_equal(_completion_count, count_after_cancel, "cancelled encounter ignores delayed deaths")
 

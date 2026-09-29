@@ -5,6 +5,7 @@ signal spawn_warning_requested(spawn_definition: Dictionary, duration: float)
 signal spawn_requested(spawn_definition: Dictionary)
 signal room_started(room_id: StringName, revision: int)
 signal room_cleared(room_id: StringName, revision: int)
+signal terminal_committed(context: Dictionary, revision: int)
 signal runtime_failed(context: Dictionary)
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
@@ -107,18 +108,26 @@ func report_player_died(killer: Variant = null) -> Variant:
 		return _failure_result(&"RUNTIME_NOT_CONFIGURED", {"operation": "report_player_died"})
 	if _room_terminal:
 		return _failure_result(&"TERMINAL_STATE", {"operation": "report_player_died"})
-	var result: Variant = _facade.call("player_died", {
+	var context := {
 		"result": "death",
 		"room_id": str(_current_room_id),
 		"current_room": int(_current_room.get("room_number", 0)),
 		"killer": killer,
-	})
+	}
+	var result: Variant = _facade.call("player_died", context)
 	if not _result_ok(result):
 		return result
 	_room_terminal = true
 	_room_active = false
 	_cancel_runner()
+	terminal_committed.emit(context.duplicate(true), _result_revision(result))
 	return result
+
+
+func report_entity_died(entity: Node) -> bool:
+	if not _can_delegate_spawn() or entity == null or not is_instance_valid(entity):
+		return false
+	return bool(_runner.call("notify_entity_defeated", entity))
 
 
 func snapshot() -> Dictionary:
@@ -197,16 +206,21 @@ func _complete_current_room() -> Variant:
 	_cancel_runner()
 	var room_type := str(_current_room.get("type", "combat"))
 	var result: Variant
+	var terminal_context: Dictionary = {}
 	if room_type == "boss":
-		result = _facade.call("boss_defeated", {
+		terminal_context = {
 			"result": "victory",
 			"room_id": str(_current_room_id),
 			"current_room": int(_current_room.get("room_number", 0)),
-		})
+		}
+		result = _facade.call("boss_defeated", terminal_context)
 	else:
 		result = _facade.call("complete_current_room")
 	if _result_ok(result):
-		room_cleared.emit(_current_room_id, _result_revision(result))
+		var revision := _result_revision(result)
+		room_cleared.emit(_current_room_id, revision)
+		if not terminal_context.is_empty():
+			terminal_committed.emit(terminal_context.duplicate(true), revision)
 	else:
 		_failure = {
 			"reason": "ROOM_COMMAND_REJECTED",
