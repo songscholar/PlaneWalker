@@ -303,7 +303,12 @@ func _binding_label(record: Dictionary) -> String:
 			var base := JOYPAD_AXIS_LABELS[axis] if axis < JOYPAD_AXIS_LABELS.size() else "Axis %d" % axis
 			if axis in [JOY_AXIS_TRIGGER_LEFT, JOY_AXIS_TRIGGER_RIGHT]:
 				return base
-			return "%s %s" % [base, "-" if int(record["direction"]) < 0 else "+"]
+			var direction := int(record["direction"])
+			if axis in [JOY_AXIS_LEFT_X, JOY_AXIS_RIGHT_X]:
+				return "%s %s" % [base.trim_suffix(" X"), "Left" if direction < 0 else "Right"]
+			if axis in [JOY_AXIS_LEFT_Y, JOY_AXIS_RIGHT_Y]:
+				return "%s %s" % [base.trim_suffix(" Y"), "Up" if direction < 0 else "Down"]
+			return "%s %s" % [base, "-" if direction < 0 else "+"]
 	return "Unknown"
 
 

@@ -1,0 +1,198 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/input_remap_panel.gd" id="1"]
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+bg_color = Color(0.025, 0.04, 0.06, 0.99)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.12, 0.72, 0.92, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="CaptureStyle"]
+bg_color = Color(0.04, 0.06, 0.08, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.82, 0.3, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 18.0
+content_margin_top = 14.0
+content_margin_right = 18.0
+content_margin_bottom = 14.0
+
+[node name="InputRemapPanel" type="Control"]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.005, 0.008, 0.015, 0.9)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="PanelRoot" type="PanelContainer" parent="SafeArea"]
+custom_minimum_size = Vector2(608, 328)
+layout_mode = 2
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/PanelRoot"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="TitleLabel" type="Label" parent="SafeArea/PanelRoot/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Input Remapping"
+horizontal_alignment = 1
+
+[node name="ColumnHeaders" type="HBoxContainer" parent="SafeArea/PanelRoot/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ActionHeader" type="Label" parent="SafeArea/PanelRoot/Layout/ColumnHeaders"]
+custom_minimum_size = Vector2(156, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
+text = "Action"
+
+[node name="KeyboardHeader" type="Label" parent="SafeArea/PanelRoot/Layout/ColumnHeaders"]
+custom_minimum_size = Vector2(142, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Keyboard / Mouse"
+horizontal_alignment = 1
+
+[node name="ControllerHeader" type="Label" parent="SafeArea/PanelRoot/Layout/ColumnHeaders"]
+custom_minimum_size = Vector2(118, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Controller"
+horizontal_alignment = 1
+
+[node name="ResetHeader" type="Control" parent="SafeArea/PanelRoot/Layout/ColumnHeaders"]
+custom_minimum_size = Vector2(68, 0)
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="SafeArea/PanelRoot/Layout"]
+custom_minimum_size = Vector2(0, 188)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Rows" type="VBoxContainer" parent="SafeArea/PanelRoot/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 3
+
+[node name="StatusLabel" type="Label" parent="SafeArea/PanelRoot/Layout"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.3, 1)
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+
+[node name="Footer" type="HBoxContainer" parent="SafeArea/PanelRoot/Layout"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 8
+
+[node name="ResetAllButton" type="Button" parent="SafeArea/PanelRoot/Layout/Footer"]
+custom_minimum_size = Vector2(110, 24)
+layout_mode = 2
+focus_mode = 2
+text = "Reset All"
+
+[node name="BackButton" type="Button" parent="SafeArea/PanelRoot/Layout/Footer"]
+custom_minimum_size = Vector2(90, 24)
+layout_mode = 2
+focus_mode = 2
+text = "Back"
+
+[node name="CaptureOverlay" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Shade" type="ColorRect" parent="CaptureOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.82)
+
+[node name="Center" type="CenterContainer" parent="CaptureOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CapturePanel" type="PanelContainer" parent="CaptureOverlay/Center"]
+custom_minimum_size = Vector2(360, 108)
+layout_mode = 2
+theme_override_styles/panel = SubResource("CaptureStyle")
+
+[node name="CaptureLayout" type="VBoxContainer" parent="CaptureOverlay/Center/CapturePanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CapturePrompt" type="Label" parent="CaptureOverlay/Center/CapturePanel/CaptureLayout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.55, 1)
+theme_override_font_sizes/font_size = 14
+text = "Press an input"
+horizontal_alignment = 1
+
+[node name="CancelLabel" type="Label" parent="CaptureOverlay/Center/CapturePanel/CaptureLayout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.76, 0.82, 1)
+theme_override_font_sizes/font_size = 10
+text = "B / Esc: Cancel"
+horizontal_alignment = 1
