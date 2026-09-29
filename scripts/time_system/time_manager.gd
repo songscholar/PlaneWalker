@@ -4,6 +4,9 @@ extends Node
 const TimeRiftScene := preload("res://scenes/time/time_rift.tscn")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
+const REWIND_WEAPON_WINDOW_DURATION := 2.0
+const MAX_WEAPON_STOP_EXTENSION_FRAMES := 60
+
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
 signal rewind_committed(transaction: Dictionary)
@@ -57,10 +60,15 @@ var _time_stop_active: bool = false
 var _time_stop_source_sequence: int = 0
 var _time_stop_source_id: StringName = &""
 var _time_stop_targets: Array[Node] = []
+var _weapon_stop_extension_frames: int = 0
+var _weapon_stop_extension_tokens: Dictionary = {}
 var _time_accelerate_remaining: float = 0.0
 var _time_accelerate_active: bool = false
 var _time_accelerate_token: int = 0
 var _time_accelerate_publish_lifecycle: bool = false
+var _rewind_weapon_window_remaining: float = 0.0
+var _rewind_weapon_window_generation: int = 0
+var _rewind_weapon_window_claimed: bool = false
 var _resource_revision: int = 1
 
 
@@ -142,6 +150,8 @@ func try_time_stop() -> bool:
 	_time_stop_source_id = StringName("time_stop:%d:%d" % [get_instance_id(), _time_stop_source_sequence])
 	_time_stop_remaining = maxf(0.0, effective_duration)
 	_time_stop_active = true
+	_weapon_stop_extension_frames = 0
+	_weapon_stop_extension_tokens.clear()
 	_time_stop_targets.clear()
 	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
 		if node.has_method("apply_time_stop_source"):
@@ -169,6 +179,8 @@ func _end_time_stop(publish_end_event: bool) -> bool:
 	_time_stop_source_id = &""
 	_time_stop_active = false
 	_time_stop_remaining = 0.0
+	_weapon_stop_extension_frames = 0
+	_weapon_stop_extension_tokens.clear()
 	if publish_end_event:
 		EventBus.time_skill_ended.emit(&"time_stop", {})
 	return true
@@ -203,6 +215,9 @@ func try_rewind(recorder: Node) -> bool:
 		var health_component := get_parent().get_node_or_null("HealthComponent")
 		if health_component != null and health_component.has_method("heal"):
 			health_component.heal(rewind_heal)
+	_rewind_weapon_window_generation += 1
+	_rewind_weapon_window_remaining = REWIND_WEAPON_WINDOW_DURATION
+	_rewind_weapon_window_claimed = false
 	rewind_committed.emit(transaction.duplicate(true))
 	EventBus.time_skill_ended.emit(&"time_rewind", {})
 	return true
@@ -300,6 +315,7 @@ func _end_time_accelerate(token: int, publish_end_event: bool) -> bool:
 func cancel_all_time_effects(_reason: StringName) -> void:
 	_end_time_stop(true)
 	_end_time_accelerate(_time_accelerate_token, true)
+	_clear_rewind_weapon_window()
 	_prune_active_rifts()
 	for rift: Node in _active_rifts.duplicate():
 		if rift.has_method("cancel"):
@@ -310,6 +326,7 @@ func cancel_all_time_effects(_reason: StringName) -> void:
 func reset_runtime_state() -> void:
 	_end_time_stop(false)
 	_end_time_accelerate(_time_accelerate_token, false)
+	_clear_rewind_weapon_window()
 	_time_accelerate_token += 1
 	energy = max_energy
 	# A full runtime reset invalidates any prepared external-resource ticket even
@@ -334,6 +351,59 @@ func restore_energy(amount: float) -> void:
 	if energy != energy_before:
 		_resource_revision += 1
 	energy_changed.emit(energy, max_energy)
+
+
+func weapon_interaction_context() -> Dictionary:
+	_prune_active_rifts()
+	return {
+		"stop_active": _time_stop_active,
+		"stop_remaining_frames": roundi(_time_stop_remaining * 60.0),
+		"stop_extension_remaining_frames": maxi(
+			0,
+			MAX_WEAPON_STOP_EXTENSION_FRAMES - _weapon_stop_extension_frames
+		),
+		"accelerate_active": _time_accelerate_active,
+		"rewind_echo_available": (
+			_rewind_weapon_window_remaining > 0.0
+			and not _rewind_weapon_window_claimed
+		),
+		"rewind_echo_generation": _rewind_weapon_window_generation,
+		"rift_active": not _active_rifts.is_empty(),
+		"active_rift_count": _active_rifts.size(),
+	}
+
+
+func extend_stop_for_weapon(action_token: int, extension_frames: int) -> bool:
+	if (
+		not _time_stop_active
+		or action_token <= 0
+		or extension_frames <= 0
+		or _weapon_stop_extension_tokens.has(action_token)
+	):
+		return false
+	var available := MAX_WEAPON_STOP_EXTENSION_FRAMES - _weapon_stop_extension_frames
+	var granted := mini(extension_frames, available)
+	if granted <= 0:
+		return false
+	_weapon_stop_extension_tokens[action_token] = true
+	_weapon_stop_extension_frames += granted
+	_time_stop_remaining += float(granted) / 60.0
+	return true
+
+
+func claim_weapon_interaction(interaction_id: StringName, generation: int) -> bool:
+	if interaction_id != &"bow_rewind_echo":
+		return false
+	if (
+		generation <= 0
+		or generation != _rewind_weapon_window_generation
+		or _rewind_weapon_window_remaining <= 0.0
+		or _rewind_weapon_window_claimed
+	):
+		return false
+	_rewind_weapon_window_claimed = true
+	_rewind_weapon_window_remaining = 0.0
+	return true
 
 
 func resource_state(resource_id: StringName) -> Dictionary:
@@ -435,6 +505,10 @@ func _tick_cooldowns(delta: float) -> void:
 
 
 func _tick_active_effects(delta: float) -> void:
+	if _rewind_weapon_window_remaining > 0.0:
+		_rewind_weapon_window_remaining = maxf(0.0, _rewind_weapon_window_remaining - delta)
+		if _rewind_weapon_window_remaining <= 0.0:
+			_rewind_weapon_window_claimed = true
 	if _time_stop_active and _time_stop_remaining > 0.0:
 		_time_stop_remaining = maxf(0.0, _time_stop_remaining - delta)
 		if _time_stop_remaining <= 0.0:
@@ -444,6 +518,11 @@ func _tick_active_effects(delta: float) -> void:
 		_time_accelerate_remaining = maxf(0.0, _time_accelerate_remaining - delta)
 		if _time_accelerate_remaining <= 0.0:
 			_end_time_accelerate(active_token, true)
+
+
+func _clear_rewind_weapon_window() -> void:
+	_rewind_weapon_window_remaining = 0.0
+	_rewind_weapon_window_claimed = false
 
 
 func _can_pay(skill_id: StringName, cost: float) -> bool:

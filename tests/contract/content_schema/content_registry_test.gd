@@ -86,13 +86,18 @@ func _test_project_base_pack_v2(suite) -> void:
 	var precision_draw := _action_by_id(bow_launch, "precision_draw")
 	suite.assert_equal(
 		precision_draw.get("cooldown_frames"),
-		21,
-		"Launch precision draw preserves candidate cooldown parity"
+		0,
+		"Launch precision draw relies on tier recovery instead of Candidate cooldown"
 	)
 	suite.assert_equal(
 		precision_draw.get("maximum_hold_frames"),
-		54,
-		"Launch precision draw preserves candidate maximum-charge parity"
+		228,
+		"Launch precision draw preserves the three-second full-charge hold"
+	)
+	suite.assert_equal(
+		_payload_by_id(bow_launch, "bow_launch_arrow").get("parameters", {}).get("full_charge_frames"),
+		48,
+		"Launch precision draw reaches full charge at frame forty-eight"
 	)
 	suite.assert_true(
 		bow_launch.get("capabilities", []).has("weapon.full_charge_damage"),
@@ -109,14 +114,24 @@ func _test_project_base_pack_v2(suite) -> void:
 		"Launch utility without a declared cooldown normalizes to zero"
 	)
 	suite.assert_equal(
-		_action_by_id(bow_launch, "arrow_rain").get("cooldown_frames"),
+		_action_by_id(bow_launch, "temporal_arrow").get("cooldown_frames"),
 		300,
-		"Launch Bow skill cooldown is Profile authoritative"
+		"Temporal Arrow cooldown is Profile authoritative"
 	)
 	suite.assert_equal(
-		_action_by_id(bow_launch, "horizon_piercer").get("cooldown_frames"),
+		_action_by_id(bow_launch, "temporal_arrow").get("resource_costs", {}).get("time_energy"),
+		30.0,
+		"Temporal Arrow Time Energy cost is Profile authoritative"
+	)
+	suite.assert_equal(
+		_action_by_id(bow_launch, "starfall_arrow_rain").get("cooldown_frames"),
 		900,
-		"Launch Bow ultimate cooldown is Profile authoritative"
+		"Starfall cooldown is Profile authoritative"
+	)
+	suite.assert_equal(
+		_action_by_id(bow_launch, "starfall_arrow_rain").get("resource_costs", {}).get("time_energy"),
+		70.0,
+		"Starfall Time Energy cost is Profile authoritative"
 	)
 
 	var frozen_burst: Dictionary = registry.get_content(&"frozen_burst")
@@ -178,6 +193,13 @@ func _action_by_id(profile: Dictionary, action_id: String) -> Dictionary:
 	for action_value: Variant in profile.get("actions", []):
 		if action_value is Dictionary and str((action_value as Dictionary).get("action_id", "")) == action_id:
 			return (action_value as Dictionary).duplicate(true)
+	return {}
+
+
+func _payload_by_id(profile: Dictionary, payload_id: String) -> Dictionary:
+	for payload_value: Variant in profile.get("payloads", []):
+		if payload_value is Dictionary and str((payload_value as Dictionary).get("payload_id", "")) == payload_id:
+			return (payload_value as Dictionary).duplicate(true)
 	return {}
 
 

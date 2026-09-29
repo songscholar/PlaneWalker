@@ -18,6 +18,7 @@ var dead: bool = false
 var healing_multiplier: float = 1.0
 var _invulnerability_token: int = 0
 var _active_invulnerability_tokens: Dictionary = {}
+var _active_invulnerability_sources: Dictionary = {}
 
 
 func _ready() -> void:
@@ -28,6 +29,7 @@ func _ready() -> void:
 
 
 func configure_from_stats(stats: Resource) -> void:
+	clear_invulnerability_sources()
 	max_hp = stats.max_hp
 	defense = stats.defense
 	current_hp = max_hp
@@ -138,14 +140,42 @@ func apply_invulnerability(duration: float) -> void:
 	_invulnerability_token += 1
 	var token := _invulnerability_token
 	_active_invulnerability_tokens[token] = true
-	invulnerable = true
+	_refresh_invulnerability_state()
 	_expire_invulnerability(token, duration)
 
 
 func _expire_invulnerability(token: int, duration: float) -> void:
 	await get_tree().create_timer(duration, false).timeout
 	_active_invulnerability_tokens.erase(token)
-	invulnerable = not _active_invulnerability_tokens.is_empty()
+	_refresh_invulnerability_state()
+
+
+func acquire_invulnerability_source(source_id: StringName) -> bool:
+	if source_id == &"" or _active_invulnerability_sources.has(source_id):
+		return false
+	_active_invulnerability_sources[source_id] = true
+	_refresh_invulnerability_state()
+	return true
+
+
+func release_invulnerability_source(source_id: StringName) -> bool:
+	if source_id == &"" or not _active_invulnerability_sources.has(source_id):
+		return false
+	_active_invulnerability_sources.erase(source_id)
+	_refresh_invulnerability_state()
+	return true
+
+
+func clear_invulnerability_sources() -> void:
+	_active_invulnerability_sources.clear()
+	_refresh_invulnerability_state()
+
+
+func _refresh_invulnerability_state() -> void:
+	invulnerable = (
+		not _active_invulnerability_tokens.is_empty()
+		or not _active_invulnerability_sources.is_empty()
+	)
 
 
 func is_alive() -> bool:
@@ -156,5 +186,6 @@ func _die(killer: Variant) -> void:
 	if dead:
 		return
 	dead = true
+	clear_invulnerability_sources()
 	EventBus.entity_died.emit(get_parent(), killer)
 	died.emit(killer)

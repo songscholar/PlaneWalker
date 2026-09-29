@@ -30,6 +30,7 @@ var _action_context: Dictionary = {}
 var _buffered_submission: Dictionary = {}
 var _hold_intent_id: StringName = &""
 var _hold_runtime_snapshot: Dictionary = {}
+var _hold_live_context: Dictionary = {}
 
 
 func configure(runtime: RefCounted, resource_transaction: RefCounted = null) -> bool:
@@ -69,7 +70,7 @@ func submit_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 		return WeaponActionContractScript.failure(WeaponActionContractScript.CODE_NOT_CONFIGURED)
 	var edge := StringName(str(intent.get("edge", "")))
 	if edge in [&"held", &"released"]:
-		return _submit_hold_edge(intent)
+		return _submit_hold_edge(intent, context)
 
 	if _phase != PHASE_READY and not _recovery_cancel_is_open():
 		var busy_plan_result := _plan_busy_submission(intent, context)
@@ -123,6 +124,8 @@ func advance_frame(consume_buffered: bool = true) -> void:
 	var phase_data := _current_phase_data()
 	if phase_data.is_empty():
 		cancel(&"invalid_phase_state")
+		return
+	if not _emit_action_frame_events():
 		return
 	if _phase == &"HOLD":
 		if _phase_frame >= int(phase_data["duration_frames"]):
@@ -214,6 +217,25 @@ func recovery_cancel_is_open() -> bool:
 	return _recovery_cancel_is_open()
 
 
+func update_live_context(context: Dictionary) -> bool:
+	if _phase != &"HOLD" or _runtime == null or _token <= 0:
+		return false
+	var validation := _validate_submission_context(context)
+	if not bool(validation.get("ok", false)):
+		return false
+	if _runtime.has_method("update_hold_context"):
+		var updated_value: Variant = _runtime.call(
+			"update_hold_context",
+			_plan.duplicate(true),
+			_token,
+			context.duplicate(true)
+		)
+		if typeof(updated_value) != TYPE_BOOL or not bool(updated_value):
+			return false
+	_hold_live_context = context.duplicate(true)
+	return true
+
+
 func snapshot() -> Dictionary:
 	var runtime_snapshot: Dictionary = {}
 	if _runtime != null:
@@ -235,6 +257,7 @@ func snapshot() -> Dictionary:
 		"buffered_submission": _buffered_submission.duplicate(true),
 		"hold_intent_id": str(_hold_intent_id),
 		"hold_runtime_snapshot": _hold_runtime_snapshot.duplicate(true),
+		"hold_live_context": _hold_live_context.duplicate(true),
 		"runtime": runtime_snapshot,
 		"resource_transaction": (
 			(_resource_transaction.call("snapshot") as Dictionary).duplicate(true)
@@ -437,6 +460,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 	_phase = StringName(str(_current_phase_data().get("phase", "")))
 	_hold_intent_id = StringName(str(intent.get("id", ""))) if _phase == &"HOLD" else &""
 	_hold_runtime_snapshot = hold_runtime_before.duplicate(true) if starts_with_hold else {}
+	_hold_live_context = context.duplicate(true) if starts_with_hold else {}
 	_buffered_submission.clear()
 
 	var committed_token := _token
@@ -472,7 +496,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 	}
 
 
-func _submit_hold_edge(intent: Dictionary) -> Dictionary:
+func _submit_hold_edge(intent: Dictionary, context: Dictionary) -> Dictionary:
 	var intent_id := StringName(str(intent.get("id", "")))
 	if _phase != &"HOLD" or _token <= 0 or intent_id != _hold_intent_id:
 		return WeaponActionContractScript.failure(
@@ -483,6 +507,11 @@ func _submit_hold_edge(intent: Dictionary) -> Dictionary:
 			}
 		)
 	if StringName(str(intent.get("edge", ""))) == &"held":
+		if not update_live_context(context):
+			return WeaponActionContractScript.failure(
+				WeaponActionContractScript.CODE_RUNTIME_REJECTED,
+				{"reason": "hold_context_rejected"}
+			)
 		return {
 			"ok": true,
 			"code": WeaponActionContractScript.CODE_HOLDING,
@@ -491,6 +520,11 @@ func _submit_hold_edge(intent: Dictionary) -> Dictionary:
 			"held_frames": _phase_frame,
 			"context": {},
 		}
+	if not update_live_context(context):
+		return WeaponActionContractScript.failure(
+			WeaponActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "hold_context_rejected"}
+		)
 	return _release_hold(false)
 
 
@@ -589,6 +623,9 @@ func _release_hold(automatic: bool) -> Dictionary:
 	_phase_index = -1
 	_phase_frame = 0
 	_hold_intent_id = &""
+	if not _hold_live_context.is_empty():
+		_action_context = _hold_live_context.duplicate(true)
+	_hold_live_context.clear()
 	_phase_index = 0
 	_phase = StringName(str(_current_phase_data().get("phase", "")))
 	var release_context_value: Variant = (release_value as Dictionary).get("context", {})
@@ -696,6 +733,31 @@ func _enter_current_phase() -> void:
 		weapon_runtime_event.emit(event)
 
 
+func _emit_action_frame_events() -> bool:
+	if _runtime == null or _token <= 0 or _phase == PHASE_READY:
+		return true
+	var events_value: Variant = _runtime.call(
+		"on_action_frame",
+		_plan.duplicate(true),
+		_phase,
+		_token,
+		_phase_frame
+	)
+	if not events_value is Array:
+		cancel(&"action_frame_event_result_type")
+		return false
+	for event_value: Variant in events_value as Array:
+		if not event_value is Dictionary:
+			cancel(&"action_frame_event_type")
+			return false
+		var event := (event_value as Dictionary).duplicate(true)
+		if str(event.get("type", "")) == "phase_failed":
+			cancel(StringName(str(event.get("reason", "action_frame_failed"))))
+			return false
+		weapon_runtime_event.emit(event)
+	return true
+
+
 func _consume_buffered_submission() -> void:
 	if _buffered_submission.is_empty():
 		return
@@ -778,6 +840,7 @@ func _clear_action_state() -> void:
 	_action_context.clear()
 	_hold_intent_id = &""
 	_hold_runtime_snapshot.clear()
+	_hold_live_context.clear()
 
 
 func _validate_safe_snapshot(safe_snapshot: Dictionary) -> bool:
@@ -804,6 +867,11 @@ func _validate_safe_snapshot(safe_snapshot: Dictionary) -> bool:
 	if (
 		not safe_snapshot.get("hold_runtime_snapshot", {}) is Dictionary
 		or not (safe_snapshot.get("hold_runtime_snapshot", {}) as Dictionary).is_empty()
+	):
+		return false
+	if (
+		not safe_snapshot.get("hold_live_context", {}) is Dictionary
+		or not (safe_snapshot.get("hold_live_context", {}) as Dictionary).is_empty()
 	):
 		return false
 	return safe_snapshot.get("runtime") is Dictionary
@@ -945,6 +1013,7 @@ func _runtime_has_contract(runtime: RefCounted) -> bool:
 		&"plan_intent",
 		&"commit_action",
 		&"on_phase_enter",
+		&"on_action_frame",
 		&"release_hold",
 		&"cancel_action",
 		&"finish_action",

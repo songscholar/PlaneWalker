@@ -24,6 +24,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
 	"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
 	"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
+	"weapon.status_duration": {"minimum": 0.0, "maximum": 10.0},
 }
 
 @export var stats: Resource
@@ -64,6 +65,7 @@ const BASE_COLOR := Color(0.2, 0.85, 0.95)
 const TIME_CAST_DURATION := 0.18
 const HITSTUN_DURATION := 0.18
 const TIME_CAST_MOVEMENT_MULTIPLIER := 0.35
+const BOW_TARGET_DISTANCE_PIXELS := 8.0 * 64.0
 
 
 func _ready() -> void:
@@ -292,6 +294,7 @@ func reset_runtime_state() -> void:
 		sword_weapon.cancel_attack()
 		sword_weapon.reset_combo()
 	bow_weapon.reset_runtime_state()
+	_clear_owned_player_arrows()
 	time_manager.reset_runtime_state()
 	_force_clear_time_acceleration()
 	_apply_stats_to_components(true)
@@ -309,6 +312,8 @@ func advance_action_frame() -> void:
 	action_state.advance_frame()
 	if weapon_action_coordinator != null:
 		var held_semantic := _active_hold_semantic_action()
+		if held_semantic != &"" and weapon_action_coordinator.has_method("update_live_context"):
+			weapon_action_coordinator.update_live_context(_weapon_submission_context())
 		weapon_action_coordinator.advance_frame(false)
 		if held_semantic != &"" and weapon_action_coordinator.phase_name() != &"HOLD":
 			_weapon_intent_router.call("reset_action", held_semantic)
@@ -352,6 +357,7 @@ func cancel_transient_actions() -> void:
 	action_state.force_safe_reset()
 	_weapon_combo_timeout_frames = 0
 	_clear_transient_effects()
+	_clear_owned_player_arrows()
 	if weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
 		weapon_runtime.call("reset_combo")
 
@@ -379,6 +385,7 @@ func restore_rewind_safe_action_state(state: Dictionary) -> bool:
 	_dash_velocity = Vector2.ZERO
 	_buffered_time_skill = &""
 	_weapon_intent_router.call("reset_all")
+	_clear_owned_player_arrows()
 	return action_state.force_safe_reset()
 
 
@@ -478,6 +485,25 @@ func claim_weapon_action_reward(token: int, reward_kind: StringName) -> bool:
 	return true
 
 
+func weapon_time_interaction_context() -> Dictionary:
+	if time_manager == null or not time_manager.has_method("weapon_interaction_context"):
+		return {}
+	var context_value: Variant = time_manager.call("weapon_interaction_context")
+	return (context_value as Dictionary).duplicate(true) if context_value is Dictionary else {}
+
+
+func claim_weapon_time_interaction(interaction_id: StringName, generation: int) -> bool:
+	if time_manager == null or not time_manager.has_method("claim_weapon_interaction"):
+		return false
+	return bool(time_manager.call("claim_weapon_interaction", interaction_id, generation))
+
+
+func extend_weapon_time_stop(action_token: int, extension_frames: int) -> bool:
+	if time_manager == null or not time_manager.has_method("extend_stop_for_weapon"):
+		return false
+	return bool(time_manager.call("extend_stop_for_weapon", action_token, extension_frames))
+
+
 func apply_weapon_effect(effect_id: StringName, value: Variant) -> bool:
 	if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
 		return false
@@ -533,11 +559,7 @@ func _submit_normalized_weapon_intent(intent: Dictionary) -> bool:
 	))
 	var result: Dictionary = weapon_action_coordinator.submit_intent(
 		submitted_intent,
-		{
-			"aim_direction": _weapon_aim_direction(),
-			"facing": _last_move_direction,
-			"run_seed": loadout_runtime.run_seed() if loadout_runtime != null else 0,
-		}
+		_weapon_submission_context()
 	)
 	_sync_weapon_action_projection()
 	if not bool(result.get("ok", false)):
@@ -1016,6 +1038,30 @@ func _weapon_aim_direction() -> Vector2:
 	return Vector2.RIGHT.rotated(rotation_value)
 
 
+func _weapon_submission_context() -> Dictionary:
+	var aim_direction := _weapon_aim_direction().normalized()
+	return {
+		"aim_direction": aim_direction,
+		"target_point": global_position + aim_direction * BOW_TARGET_DISTANCE_PIXELS,
+		"facing": _last_move_direction,
+		"run_seed": loadout_runtime.run_seed() if loadout_runtime != null else 0,
+		"time_interactions": weapon_time_interaction_context(),
+	}
+
+
+func _clear_owned_player_arrows() -> void:
+	if bow_weapon == null:
+		return
+	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+		if (
+			is_instance_valid(arrow)
+			and not arrow.is_queued_for_deletion()
+			and arrow.get("owner_entity") == self
+			and arrow.get("source") == bow_weapon
+		):
+			arrow.queue_free()
+
+
 func _seconds_to_frames(seconds: float) -> int:
 	return maxi(1, ceili(seconds * Engine.physics_ticks_per_second))
 
@@ -1088,6 +1134,7 @@ func _on_died(_killer: Variant) -> void:
 	if action_state.transition_to(PlayerActionStateScript.State.DEAD, 0):
 		action_state.clear_buffered_inputs()
 		_clear_transient_effects()
+		_clear_owned_player_arrows()
 		cancel_active_time_effects(&"player_died")
 
 

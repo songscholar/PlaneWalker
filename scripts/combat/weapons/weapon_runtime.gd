@@ -26,6 +26,15 @@ func on_phase_enter(_plan: Dictionary, _phase: StringName, _token: int) -> Array
 	return []
 
 
+func on_action_frame(
+	_plan: Dictionary,
+	_phase: StringName,
+	_token: int,
+	_phase_frame: int
+) -> Array[Dictionary]:
+	return []
+
+
 func release_hold(_plan: Dictionary, _token: int, _held_frames: int) -> Dictionary:
 	return {"ok": false, "code": &"UNSUPPORTED_HOLD_RELEASE", "context": {}}
 

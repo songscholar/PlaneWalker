@@ -300,6 +300,10 @@ func clear_time_rift(source_id: StringName) -> void:
 	_recompute_rift_slow()
 
 
+func is_time_rifted() -> bool:
+	return not _rift_slow_sources.is_empty()
+
+
 func _recompute_rift_slow() -> void:
 	_rift_slow_multiplier = 1.0
 	for source_multiplier: Variant in _rift_slow_sources.values():

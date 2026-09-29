@@ -66,6 +66,9 @@ const ACTION_DEFINITIONS := {
 @export var slam_radius: float = 72.0
 @export var fragment_count: int = 2
 @export var crack_arm_delay: float = 1.15
+@export var weapon_poise_threshold: float = 100.0
+@export var weapon_poise_recovery_bonus_frames: int = 30
+@export var weapon_poise_decay_per_second: float = 8.0
 
 @onready var combat_telegraph: Node2D = $CombatTelegraph2D
 
@@ -84,6 +87,8 @@ var _committed_target_point := Vector2.ZERO
 var _committed_summon_slots: Array[Vector2] = []
 var _action_resolution_counts: Dictionary = {}
 var _exposure_sources: Dictionary = {}
+var _weapon_control_sources: Dictionary = {}
+var _weapon_poise: float = 0.0
 var slam_windup: float:
 	get:
 		return _action_windup(BossAction.SLAM)
@@ -117,6 +122,7 @@ func _ready() -> void:
 
 func _tick_ai(delta: float) -> void:
 	_update_phase()
+	_weapon_poise = maxf(0.0, _weapon_poise - maxf(0.0, weapon_poise_decay_per_second) * delta)
 	_pattern_timer = maxf(0.0, _pattern_timer - delta)
 	if _tick_action(delta):
 		_hold_position()
@@ -589,6 +595,64 @@ func clear_time_rift(source_id: StringName) -> void:
 	super.clear_time_rift(source_id)
 	if source_was_active:
 		_remove_exposure_source(source_id)
+
+
+func apply_weapon_control_conversion(
+	source_id: StringName,
+	recovery_frames: int,
+	exposure_frames: int,
+	poise_damage: float
+) -> bool:
+	if (
+		source_id == &""
+		or _weapon_control_sources.has(source_id)
+		or recovery_frames < 0
+		or exposure_frames < 0
+		or not is_finite(poise_damage)
+		or poise_damage < 0.0
+	):
+		return false
+	if _action_phase == BossActionPhase.WINDUP:
+		return false
+	if _action_phase != BossActionPhase.RECOVERY and not _exposed:
+		return false
+	_weapon_control_sources[source_id] = true
+	if _action_phase == BossActionPhase.RECOVERY and recovery_frames > 0:
+		_action_time_remaining += minf(float(recovery_frames) / 60.0, 1.5)
+	if exposure_frames > 0:
+		_add_exposure_source(source_id)
+	var source_lifetime_frames := maxi(1, maxi(recovery_frames, exposure_frames))
+	get_tree().create_timer(minf(float(source_lifetime_frames) / 60.0, 1.5), false).timeout.connect(
+		_clear_weapon_control_source.bind(source_id)
+	)
+	_weapon_poise = minf(maxf(0.0, weapon_poise_threshold), _weapon_poise + poise_damage)
+	if weapon_poise_threshold > 0.0 and _weapon_poise >= weapon_poise_threshold:
+		_weapon_poise = 0.0
+		if _action_phase == BossActionPhase.RECOVERY:
+			_action_time_remaining += maxf(0.0, float(weapon_poise_recovery_bonus_frames) / 60.0)
+	return true
+
+
+func get_weapon_control_snapshot_for_test() -> Dictionary:
+	return {
+		"source_count": _weapon_control_sources.size(),
+		"poise": _weapon_poise,
+		"poise_threshold": weapon_poise_threshold,
+	}
+
+
+func _clear_weapon_control_source(source_id: StringName) -> void:
+	if not _weapon_control_sources.has(source_id):
+		return
+	_weapon_control_sources.erase(source_id)
+	_remove_exposure_source(source_id)
+
+
+func _clear_weapon_control_sources() -> void:
+	for source_value: Variant in _weapon_control_sources.keys():
+		_remove_exposure_source(StringName(str(source_value)))
+	_weapon_control_sources.clear()
+	_weapon_poise = 0.0
 
 
 func _add_exposure_source(source_id: StringName) -> void:
