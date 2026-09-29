@@ -1,6 +1,7 @@
 # Plane Walker 全量愿景与分阶段并行开发设计
 
-- Status: Historical
+- Status: Superseded / Historical
+- Document Role: Historical specification
 - Authority Level: Verified M1 design record; no longer the program execution authority
 - Applies To: Wave 0/1, Wave 2, Wave 3A, and Wave 3B historical contracts
 - Implementation Status: Wave 0/1 foundation, Wave 2 isolated systems, Wave 3A runtime integration, and Wave 3B combat/UI hardening verified; remaining work is governed by the full-product completion specification

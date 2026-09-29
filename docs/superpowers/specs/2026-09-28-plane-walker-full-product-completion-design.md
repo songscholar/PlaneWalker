@@ -1,6 +1,7 @@
 # Plane Walker Full Product Completion Design
 
-- Status: Approved
+- Status: Approved / Current
+- Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
 - Implementation Status: Active; P2 Atomic SaveService and P3 ContentRegistry v2 are complete; P4 Single RunState / RoomRuntime is Current

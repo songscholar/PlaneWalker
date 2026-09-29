@@ -1,6 +1,7 @@
 # Plane Walker Wave 4B Encounter Mechanics Implementation Plan
 
 - Status: Completed / Historical
+- Document Role: Historical implementation record
 - Authority Level: Verified implementation record
 - Applies To: Rewind Echo, Boss telegraphs, elite active mechanic, and authored five-room encounters
 - Implementation Status: Code and tests complete; all four lanes are integrated in the M1 candidate
@@ -9,6 +10,7 @@
 - Supersedes: Generic Wave 4B wording that does not match the owner's explicit scope
 - Last Verified: 2026-09-28
 - Completion Gate: All four mechanics and their regression tests pass through `./tools/validate_project.sh`
+- Completion Evidence: Commits `d17f641`, `651c53b`, `d9aa3f6`, `20bd93f`, and `cd647e2`
 - Verified Commits: `d17f641` Rewind Echo, `651c53b` Boss telegraphs, `d9aa3f6` elite active mechanic, `20bd93f` authored encounters, `cd647e2` fail-closed runtime hardening
 
 ## Goal

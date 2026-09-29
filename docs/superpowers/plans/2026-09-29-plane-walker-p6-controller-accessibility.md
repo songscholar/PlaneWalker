@@ -1,8 +1,10 @@
 # Plane Walker P6 Controller, Focus, and Accessibility Implementation Plan
 
 - Status: Active / Tasks 1–4 implemented
+- Document Role: Current implementation plan
 - Authority Level: P6 foundation execution plan
 - Applies To: Current start, combat, selection, pause, result, remapping, and accessibility flows
+- Owner: Project integration lead
 - Exit Gate: Every Current flow completes controller-only, focus recovers after every modal transition, remaps and accessibility settings survive restart, and the complete P6 regression set passes with clean logs
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Integration Order: Tasks 1–5 are input/UI-owned; Tasks 6–9 begin only after the active P2 save and P3 content changes are committed so P6 never writes through another lane's uncommitted files

@@ -1,8 +1,12 @@
 # P3 ContentRegistry v2 Completion Evidence
 
-- Status: Verified / Completed
+- Status: Verified Locally / Current
+- Document Role: Current evidence record
 - Authority Level: Foundation certification evidence
 - Applies To: P3 versioned content packs, declarative effects, runtime content activation, and SaveService content fingerprints
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Verified On: 2026-09-29
 - Certified HEAD: `43b0f9a` plus the later documentation-only certification commit
 - Rollback Point: `72093bd` (`refactor(save): route GameState through SaveService`)

@@ -1,12 +1,17 @@
 # Plane Walker P7/P9 Export Certification Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
-- Status: Current
-- Authority: `AGENTS.md` standing authorization and the approved full-product completion design
+- Status: Active / Current
+- Document Role: Current implementation plan
+- Authority Level: P7/P9 export-contract and clean-certification foundation plan
+- Applies To: Windows, Linux/Steam Deck, and macOS export presets, offline preflight, clean checkout, coverage, and packaged startup
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Scope: First independent P7/P9 slice only; repository export contract and local toolchain preflight
 - Exit Gate: Tracked Windows, Linux/Steam Deck, and macOS release presets pass an offline contract; local preflight refuses to report readiness when Godot or export templates are absent
 - Not Claimed By This Slice: Successful platform exports, packaged startup, signing, notarization, Steam upload, or complete detached-worktree certification
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Establish a deterministic, offline-runnable contract for the three required desktop exports and a tested local preflight that distinguishes repository defects from missing local toolchain components.
 

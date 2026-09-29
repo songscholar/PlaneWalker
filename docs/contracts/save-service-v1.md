@@ -1,10 +1,14 @@
 # Plane Walker Save Service v1 Contract
 
-- Status: Approved implementation contract for P2
+- Status: Approved / Current
+- Document Role: Current contract
+- Authority Level: Atomic persistence, migration, recovery, and compatibility contract
+- Applies To: Local profile saves, global settings, migration, recovery, and content-pack compatibility
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Schema version: `1`
-- Applies to: local profile saves, global settings, migration, recovery, and later content-pack compatibility
 - Authority: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md` section 7.3 and P2 exit gate
-- Last verified: 2026-09-28
 
 ## 1. Purpose and trust boundary
 

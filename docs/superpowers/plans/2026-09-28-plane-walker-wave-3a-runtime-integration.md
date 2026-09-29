@@ -1,8 +1,14 @@
 # Plane Walker Wave 3A Runtime Integration Implementation Plan
 
-- Status: Completed
+- Status: Completed / Historical
 - Document Role: Historical implementation record
+- Authority Level: Preserved Wave 3A implementation record
+- Applies To: Runtime facade, legacy bridge, unified selection, main-scene cutover, and five-room smoke flow
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Implementation Status: Verified by `d161da2`, `573bf44`, `36aed4d`, and status checkpoint `1bff8dd`
+- Completion Evidence: Commits `d161da2`, `573bf44`, `36aed4d`, and status checkpoint `1bff8dd`
 - Completed On: 2026-09-28
 - Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Preservation Rule: Runtime facade idempotency, safe legacy fallback, and five-room smoke behavior remain regression requirements.

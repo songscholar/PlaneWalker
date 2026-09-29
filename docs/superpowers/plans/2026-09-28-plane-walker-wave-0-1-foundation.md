@@ -1,8 +1,14 @@
 # Plane Walker Wave 0/1 Foundation Implementation Plan
 
-- Status: Completed
+- Status: Completed / Historical
 - Document Role: Historical implementation record
+- Authority Level: Preserved Wave 0/1 implementation record
+- Applies To: Frozen M1 contracts, RunState, RunOrchestrator, SeedService, combat correctness, and contract HUD foundation
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Implementation Status: Verified by `78efc69`, `60d362b`, `1e2e1e9`, and status checkpoint `1f7d4b3`
+- Completion Evidence: Commits `78efc69`, `60d362b`, `1e2e1e9`, and status checkpoint `1f7d4b3`
 - Completed On: 2026-09-28
 - Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Preservation Rule: The verified contracts and regression gates in this plan remain binding until an approved replacement passes equivalent tests.

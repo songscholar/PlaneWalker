@@ -1,7 +1,12 @@
 # Plane Walker M1 真人试玩、证据导入与调参协议
 
-- Status: Approved / Ready for external execution
+- Status: Approved / Current
+- Document Role: Current operational protocol
+- Authority Level: M1 external-evidence collection contract
 - Applies To: Wave 4D authentic playtest cohort, M1 release decision, evidence-driven tuning
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Evidence Minimum: 20 valid human sessions from one exact build/content cohort
 - Privacy: anonymous identifiers only; no names, email, platform ID, IP, device name, notes, recordings, or free text in release evidence
 - Synthetic Policy: synthetic and automated evidence is always excluded from the human gate

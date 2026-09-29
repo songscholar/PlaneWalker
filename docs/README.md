@@ -1,6 +1,7 @@
 # Plane Walker 开发文档入口
 
-- Status: Approved
+- Status: Approved / Current
+- Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
 - Implementation Status: P2 and P3 certified; P4 is Current; P6 input foundation and P7/P9 certification tooling are progressing in parallel; formal state remains `M1 Candidate — External Validation Pending`

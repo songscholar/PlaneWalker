@@ -1,8 +1,14 @@
 # Plane Walker Wave 3B Combat and UI Hardening Implementation Plan
 
-- Status: Completed
+- Status: Completed / Historical
 - Document Role: Historical implementation record
+- Authority Level: Preserved Wave 3B implementation record
+- Applies To: Combat timing, enemy and Boss telegraphs, rewind cancellation, live HUD projection, and 640×360 presentation
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Implementation Status: Verified by `c4b7e04`, `9cba692`, `f8145c3`, `c13ec9f`, `8f3594d`, `5e55bd4`, and status checkpoint `66da460`
+- Completion Evidence: Commits `c4b7e04`, `9cba692`, `f8145c3`, `c13ec9f`, `8f3594d`, `5e55bd4`, and status checkpoint `66da460`
 - Completed On: 2026-09-28
 - Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Preservation Rule: Combat clock ownership, telegraphing, rewind cancellation, live HUD projection, and 640×360 presentation remain regression requirements.

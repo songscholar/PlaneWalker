@@ -1,15 +1,20 @@
 # Plane Walker Export Executor and Evidence Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
-- Status: Current
-- Authority: `AGENTS.md` and the approved full-product completion design
+- Status: External Validation Pending / Current
+- Document Role: Current implementation plan
+- Authority Level: P7/P9 export execution and evidence plan
+- Applies To: Desktop export execution, artifact hashing, clean-clone certification, coverage, templates, and packaged startup
+- Owner: Project integration lead
 - Depends On: `da3ab1d`, `data/toolchain/export_targets.json`, `tools/export/preflight.py`
+- Last Verified: 2026-09-29
+- Exit Gate: Coverage, all three platform exports, artifact hashes, and packaged startup pass from one clean detached checkout
 - Scope: P7 export execution/evidence contract followed by P9 detached-checkout orchestration contract
 - Evidence Boundary: No target is marked exported unless Godot exits successfully, logs are clean, and the expected artifact is hashed from the current invocation
 - Implementation Status: Tasks 1–3 complete at repository-contract level; committed-HEAD evidence is blocked by coverage and export-template gates
 - Task 1/2 Verification: 27 export contracts passed; local execution stopped before export with three `template_missing` blockers; project validation passed 48 of 49 scenes with one unrelated untracked RoomRuntime test missing its implementation
 - Task 3 Verification: commit `ff3fa7c` reproduced in a clean local clone, passed 34 export contracts and 48/48 committed scene tests, remained clean after execution, then stopped with `coverage_and_export_templates_pending`
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a real export executor that fails before export when the local toolchain is incomplete, records deterministic file/directory hashes for successful artifacts, and produces machine-readable evidence suitable for later detached-checkout certification.
 

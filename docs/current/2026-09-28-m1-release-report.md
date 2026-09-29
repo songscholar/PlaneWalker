@@ -1,6 +1,12 @@
 # Plane Walker M1 放行报告
 
-- Status: M1 Candidate — External Validation Pending
+- Status: External Validation Pending / Current
+- Document Role: Current evidence record
+- Authority Level: Formal M1 release decision evidence
+- Applies To: M1 repository stability, authentic human-playtest gate, and first post-M1 promotion decision
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/current/2026-09-28-m1-playtest-protocol.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Evidence Schema: M1 seed matrix `2.0.0` / playtest session `1.0.0` / observation `1.0.0` / external attestation `2.0.0`
 - Build Version: `0.4.0-dev`
 - Commit: `79a20fd183fb57b8bdf62019ab80ff3f6e430635`

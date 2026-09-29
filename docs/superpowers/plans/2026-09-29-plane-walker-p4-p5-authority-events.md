@@ -1,5 +1,14 @@
 # Plane Walker P4/P5 Authority and Event Publication Implementation Plan
 
+- Status: Active / Current
+- Document Role: Current implementation plan
+- Authority Level: P4/P5 runtime authority and event-publication execution plan
+- Applies To: RunState ownership, RoomRuntime lifecycle, RunRuntimeHost cutover, legacy mirror retirement, and typed exactly-once gameplay facts
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
+- Exit Gate: RunOrchestrator and RoomRuntime are the sole run/room writers, legacy mirrors and generic EventBus paths are retired, exactly-once facts pass focused tests, and `./tools/validate_project.sh` passes
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven development, TDD, focused reviews, and the repository validation entrypoint. Each task is an independently reviewable commit; do not combine tasks or stage unrelated shared-worktree changes.
 
 **Goal:** Make `RunOrchestrator` the sole writer of one authoritative `RunState`, make `RoomRuntime` the sole room-lifecycle coordinator, retire `GameState` run mirrors and `LegacyRunAdapter`, and publish every gameplay fact exactly once through typed signals without breaking the five-room M1 runtime.

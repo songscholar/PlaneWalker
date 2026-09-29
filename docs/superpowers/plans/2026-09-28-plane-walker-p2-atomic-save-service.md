@@ -1,5 +1,15 @@
 # Plane Walker P2 Atomic SaveService Implementation Plan
 
+- Status: Completed / Historical
+- Document Role: Historical implementation record
+- Authority Level: Preserved P2 persistence implementation record
+- Applies To: Atomic profile/settings persistence, migration, recovery, compatibility, and GameState routing
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/contracts/save-service-v1.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
+- Implementation Status: P2 implementation and certification are complete
+- Completion Evidence: `docs/current/2026-09-29-p2-atomic-save-evidence.md` and commits `cb6e9ef`, `e153475`, `1ecc716`, `6e3b922`, `72093bd`, and `8852a21`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven development when available. Implement tasks in order, keep file ownership isolated, and review every focused commit before integration.
 
 **Goal:** Replace `GameState`'s destructive single-file JSON persistence with a versioned, integrity-checked, profile-isolated SaveService that atomically stages writes, rotates two backups, recovers corruption, rejects forward versions, and preserves the current M1 settings/progression behavior.

@@ -1,8 +1,7 @@
 # Plane Walker Wave 4 与 M1 放行实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: use subagent-driven execution, TDD, focused reviews, and the repository validation entrypoint for every lane.
-
-- Status: Repository Complete / External Validation Pending
+- Status: External Validation Pending / Current
+- Document Role: Current implementation plan
 - Authority Level: Completed milestone record and current external-evidence gate
 - Applies To: Wave 4A, Wave 4B, Wave 4C, Wave 4D, formal M1 decision, and the first post-M1 promotion
 - Implementation Status: Wave 4A complete; Wave 4B code/tests complete; Wave 4C M1 technical scope complete; Wave 4D repository automation and two matched 30-seed runs complete; M1 state is `M1 Candidate — External Validation Pending`
@@ -13,6 +12,8 @@
 - Candidate Commit: `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
 - Seed Matrix Digest: `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`
 - Exit Gate: Repository Gate `PASS`; authentic human evidence remains `0 / 20`, so `M1 Go` is not claimed
+
+> **For agentic workers:** REQUIRED SUB-SKILL: use subagent-driven execution, TDD, focused reviews, and the repository validation entrypoint for every lane.
 
 ## Goal
 

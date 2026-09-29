@@ -1,8 +1,13 @@
 # Plane Walker Content Pack v2 Contract
 
-- Status: Frozen for P3 implementation
+- Status: Frozen / Current
+- Document Role: Current contract
+- Authority Level: Versioned content-pack and declarative-effect contract
+- Applies To: Base game, first-party updates, Mods, DLC, localization, approved assets, and deterministic content snapshots
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/contracts/save-service-v1.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Schema version: `2`
-- Last verified: 2026-09-29
 
 ## Purpose
 

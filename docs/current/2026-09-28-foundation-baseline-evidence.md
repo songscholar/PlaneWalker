@@ -1,6 +1,7 @@
 # Plane Walker Foundation Baseline Evidence
 
-- Status: Verified / Completed
+- Status: Verified Locally / Current
+- Document Role: Current evidence record
 - Authority Level: Execution evidence
 - Applies To: P0 localization/data baseline and P1 reproducible validation foundation
 - Implementation Status: Complete

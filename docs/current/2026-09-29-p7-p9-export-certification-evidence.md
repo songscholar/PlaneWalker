@@ -1,10 +1,15 @@
 # Plane Walker P7/P9 Export Certification Evidence
 
-- Status: P7/P9 Candidate — Coverage and Export Templates Pending
+- Status: External Validation Pending / Current
+- Document Role: Current evidence record
+- Authority Level: P7/P9 local certification evidence
+- Applies To: Reproducible desktop exports, detached-checkout validation, coverage, templates, and packaged startup
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, commits `da3ab1d`, `7732731`, `60a086f`, and `ff3fa7c`
+- Last Verified: 2026-09-29
 - Classification: `coverage_and_export_templates_pending`
 - Verified Commit: `ff3fa7c44e727fd763700a921f84e8dc1e9a443e`
 - Evidence Date: 2026-09-29
-- Depends On: `da3ab1d`, `7732731`, `60a086f`, `ff3fa7c`
 - Authority: `AGENTS.md` and `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Certification Result: Not certified; no platform export or packaged startup is claimed
 

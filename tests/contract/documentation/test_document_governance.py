@@ -394,6 +394,28 @@ class DocumentGovernanceTest(unittest.TestCase):
         self.assertIn("python3 tools/document_governance.py", validation_script)
         self.assertIn("tools/document_governance_baseline.json", validation_script)
 
+    def test_repository_documents_have_complete_metadata_and_lifecycle(self) -> None:
+        report = validate_repository(
+            PROJECT_ROOT,
+            PROJECT_ROOT / "tools/document_governance_baseline.json",
+        )
+        forbidden_codes = {
+            "missing_metadata",
+            "empty_metadata",
+            "metadata_outside_header",
+            "ambiguous_lifecycle",
+            "lifecycle_status_mismatch",
+            "invalid_verified_date",
+        }
+
+        remaining = [
+            violation.violation_id
+            for violation in report.violations
+            if violation.code in forbidden_codes
+        ]
+
+        self.assertEqual(remaining, [])
+
 
 @contextmanager
 def repository_fixture() -> Iterator[Path]:

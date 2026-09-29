@@ -1,6 +1,7 @@
 # Plane Walker Wave 4C Pixel Presentation and Combat Feedback Evidence
 
-- Status: Verified / Retained in M1 candidate
+- Status: Verified Locally / Current
+- Document Role: Current evidence record
 - Authority Level: Execution evidence
 - Applies To: M1 Pixel Proxy, core animation, combat audio, hit/danger/time-power/camera/VFX/UI feedback
 - Implementation Status: Wave 4C M1 technical scope complete; final repository Gate `PASS`

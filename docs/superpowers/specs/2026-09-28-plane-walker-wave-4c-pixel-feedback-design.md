@@ -1,9 +1,10 @@
 # Plane Walker Wave 4C Pixel Presentation and Combat Feedback Design
 
-- Status: Approved / Current
-- Authority Level: Current implementation design
+- Status: Completed / Historical
+- Document Role: Historical specification
+- Authority Level: Verified Wave 4C implementation design
 - Applies To: M1 Pixel Proxy, core actor animation, combat audio, camera/VFX, hit/danger/time-power/UI feedback
-- Implementation Status: Ready for execution
+- Implementation Status: Implemented and retained in the M1 candidate
 - Owner: UI and pixel presentation lane
 - Depends On: `AGENTS.md`, full-product completion design, staged M1 combat-feel and pixel-canvas gates
 - Supersedes: Temporary Polygon-only greybox presentation for M1 actors

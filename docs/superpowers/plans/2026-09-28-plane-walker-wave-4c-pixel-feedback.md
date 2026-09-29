@@ -1,11 +1,14 @@
 # Plane Walker Wave 4C Pixel Presentation and Combat Feedback Implementation Plan
 
 - Status: Completed / Historical
+- Document Role: Historical implementation record
 - Authority Level: Verified M1 presentation implementation record
 - Applies To: M1 Pixel Proxy, synthesized audio, combat feedback, presentation cleanup, and accessibility presentation gates
 - Implementation Status: M1 technical scope complete and retained in candidate `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
 - Owner: UI and pixel presentation lane
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/superpowers/specs/2026-09-28-plane-walker-wave-4c-pixel-feedback-design.md`
 - Last Verified: 2026-09-28
+- Completion Evidence: `docs/current/2026-09-28-wave-4c-pixel-feedback-evidence.md` and candidate commit `79a20fd183fb57b8bdf62019ab80ff3f6e430635`
 - Evidence: `docs/current/2026-09-28-wave-4c-pixel-feedback-evidence.md`
 
 > **For agentic workers:** Execute each task with tests first and keep Wave 4B encounter/gameplay files unchanged.

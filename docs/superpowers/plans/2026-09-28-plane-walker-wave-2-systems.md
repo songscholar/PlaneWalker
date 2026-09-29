@@ -1,8 +1,14 @@
 # Plane Walker Wave 2 Systems Implementation Plan
 
-- Status: Completed
+- Status: Completed / Historical
 - Document Role: Historical implementation record
+- Authority Level: Preserved Wave 2 implementation record
+- Applies To: ContentRegistry, M1 room plan, DraftService, PlayerActionState, and ChoicePanel contracts
+- Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-09-29
 - Implementation Status: Verified by `9dfa596`, `76bf5fd`, `5982667`, and status checkpoint `5ea1d23`
+- Completion Evidence: Commits `9dfa596`, `76bf5fd`, `5982667`, and status checkpoint `5ea1d23`
 - Completed On: 2026-09-28
 - Execution Authority: Superseded by `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Preservation Rule: Content registry, deterministic drafting, action-state, and ChoicePanel contracts remain regression requirements.
