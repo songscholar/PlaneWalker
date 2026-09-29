@@ -129,7 +129,7 @@ func _test_candidate_actions_remain_inactive_in_m1() -> void:
 	_suite.assert_true(not player.try_action(&"ranged_attack"), "M1 rejects Bow without deleting its implementation")
 	_suite.assert_true(not player.try_action(&"time_rift"), "M1 rejects unequipped Time Rift")
 	_suite.assert_true(not player.try_action(&"time_accelerate"), "M1 rejects unequipped Time Accelerate")
-	_suite.assert_true(not bow.is_charging(), "rejected Bow input does not start charging")
+	_suite.assert_true(not bow.is_profile_action_active(), "rejected Bow input stages no profile payload")
 	_suite.assert_close(time_manager.energy, energy_before, "rejected candidate skills spend no energy")
 
 	var snapshot: Dictionary = player.get_player_ui_snapshot()

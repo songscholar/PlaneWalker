@@ -99,7 +99,10 @@ func _test_m1_equipment_isolation() -> void:
 	_suite.assert_true(not bool(player.call("try_action", &"ranged_attack")), "unequipped Bow is rejected")
 	_suite.assert_true(not bool(player.call("try_action", &"time_rift")), "unequipped Rift is rejected")
 	_suite.assert_true(not bool(player.call("try_action", &"time_accelerate")), "unequipped Accelerate is rejected")
-	_suite.assert_true(not bool(player.get_node("BowWeapon").call("is_charging")), "rejected Bow input has no charge side effect")
+	_suite.assert_true(
+		not bool(player.get_node("BowWeapon").call("is_profile_action_active")),
+		"rejected Bow input stages no profile payload"
+	)
 
 	var time_manager: Node = player.get_node("TimeManager")
 	time_manager.set("time_stop_duration", 0.01)

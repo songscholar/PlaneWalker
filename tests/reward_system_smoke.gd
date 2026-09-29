@@ -126,10 +126,6 @@ func _run() -> void:
 	_assert_close(time_manager.time_accelerate_multiplier_bonus, 0.2, "accelerate multiplier payoff")
 	_assert_close(time_manager.low_energy_regen_multiplier, 2.0, "low energy regen talent")
 	_assert_close(time_manager.low_energy_threshold, 30.0, "low energy threshold talent")
-	_assert_close(bow.charge_rate_bonus, 0.25, "bow charge rate starter")
-	_assert_close(bow.full_charge_damage_multiplier_bonus, 0.35, "bow full charge damage payoff")
-	_assert_true(bow.pierce_bonus == 1, "bow pierce starter")
-
 	var recorded_state := RunBuildStateScript.new()
 	recorded_state.record_item({"id": "test_power", "effects": {}})
 	recorded_state.record_item({
@@ -308,35 +304,57 @@ func _run_bow_weapon_check() -> void:
 
 	var room_player: Node = room.get_node("Player")
 	var bow: Node = room_player.get_node("BowWeapon")
+	_assert_true(room_player.configure_loadout({
+		"schema_version": 1,
+		"milestone": "M1",
+		"character_id": "wanderer",
+		"weapon_id": "bow",
+		"enabled_time_skills": ["stop", "rewind"],
+		"difficulty": "normal",
+		"seed": 655,
+	}), "bow smoke equips the profile-backed player runtime")
 	var time_manager: Node = room_player.get_node("TimeManager")
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var enemy_health: Node = enemy.get_node("HealthComponent")
 	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
 
-	var short_started: bool = bow.start_charge()
-	bow._charge_time = bow.min_charge_time * 0.5
+	var short_started: bool = room_player.try_action(&"ranged_attack")
+	for _frame: int in range(8):
+		room_player.advance_action_frame()
+	var short_released: bool = room_player.try_action(&"ranged_release")
 	await get_tree().process_frame
-	var short_released: bool = bow.release_charge(Vector2.RIGHT)
-	await get_tree().process_frame
-	_assert_true(short_started, "bow starts charging")
+	_assert_true(short_started, "bow starts coordinator HOLD")
 	_assert_true(not short_released, "bow short charge does not fire")
 	_assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "bow short charge spawns no arrow")
 
-	bow._cooldown_remaining = 0.0
-	bow.charge_rate_bonus = 0.25
-	bow.full_charge_damage_multiplier_bonus = 0.35
-	bow.pierce_bonus = 1
+	room_player.apply_reward({
+		"id": "test_bow_runtime_capabilities",
+		"effects": {
+			"bow_charge_rate_bonus": 0.25,
+			"bow_full_charge_damage_multiplier_bonus": 0.35,
+			"bow_pierce_bonus": 1,
+		},
+	})
+	_assert_true(room_player.weapon_modifier_state != null, "bow runtime owns modifier authority")
+	if room_player.weapon_modifier_state != null:
+		var bow_modifiers: Dictionary = room_player.weapon_modifier_state.snapshot()
+		_assert_close(bow_modifiers.get("weapon.charge_rate", 0.0), 1.25, "bow charge reward reaches modifier authority")
+		_assert_close(bow_modifiers.get("weapon.full_charge_damage", 0.0), 1.35, "bow full-charge reward reaches modifier authority")
+		_assert_close(bow_modifiers.get("weapon.pierce", 0.0), 1.0, "bow pierce reward reaches modifier authority")
 	time_manager.energy = 40.0
 	var energy_before_arrow: float = time_manager.energy
-	_assert_true(bow.start_charge(), "bow starts full charge")
-	bow._charge_time = bow.full_charge_time
-	var fired: bool = bow.release_charge(room_player.global_position.direction_to(enemy.global_position))
+	bow.rotation = room_player.global_position.direction_to(enemy.global_position).angle()
+	_assert_true(room_player.try_action(&"ranged_attack"), "bow starts full coordinator HOLD")
+	for _frame: int in range(54):
+		room_player.advance_action_frame()
+	var fired: bool = room_player.weapon_presentation_snapshot().get("phase") == "WINDUP"
+	room_player.advance_action_frame()
 	await get_tree().process_frame
 	var arrows := get_tree().get_nodes_in_group("player_arrows")
 	_assert_true(fired, "bow full charge fires")
 	_assert_true(not arrows.is_empty(), "bow full charge spawns arrow")
 	if not arrows.is_empty():
-		_assert_close(arrows[0].pierce, 2.0, "bow reward increases pierce")
+		_assert_close(arrows[0].pierce, 2.0, "bow capability reward increases pierce")
 		_assert_true(arrows[0].damage > bow.base_attack * 2.0, "bow reward increases full charge damage")
 		_assert_true(arrows[0].full_charge, "bow full charge marks arrow")
 

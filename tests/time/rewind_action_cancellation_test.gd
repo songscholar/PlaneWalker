@@ -1,6 +1,5 @@
 extends Node
 
-const BowWeaponScript := preload("res://scripts/combat/bow_weapon.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerScene := preload("res://scenes/player/player.tscn")
 const RewindRecorderScript := preload("res://scripts/time_system/rewind_recorder.gd")
@@ -57,7 +56,7 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	EventBus.player_attacked.connect(_on_player_attacked)
-	await _test_bow_charge_cancellation(suite)
+	await _test_bow_hold_cancellation(suite)
 	await _test_rewind_cancels_before_restoring(suite)
 	await _test_player_cancellation_is_idempotent(suite)
 	await _test_rewind_cancels_each_transient_phase(suite)
@@ -66,31 +65,29 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
-func _test_bow_charge_cancellation(suite) -> void:
-	var owner := Node2D.new()
-	owner.name = "Owner"
-	add_child(owner)
+func _test_bow_hold_cancellation(suite) -> void:
+	var player := await _spawn_player()
+	suite.assert_true(player.configure_loadout(_bow_loadout()), "cancellation fixture equips profile-backed Bow")
+	var attacks_before := _player_attack_events
+	suite.assert_true(player.try_action(&"ranged_attack"), "Bow begins a coordinator-owned HOLD")
+	var hold: Dictionary = player.weapon_presentation_snapshot()
+	var hold_token := int(hold.get("token", 0))
+	var hold_generation := int(hold.get("generation", 0))
+	suite.assert_equal(hold.get("phase"), "HOLD", "Bow cancellation setup reaches HOLD")
+	_advance(player, 9)
 
-	var bow := BowWeaponScript.new()
-	bow.name = "BowWeapon"
-	bow.owner_path = NodePath("..")
-	owner.add_child(bow)
-	await get_tree().process_frame
+	player.cancel_transient_actions()
+	var cancelled: Dictionary = player.weapon_presentation_snapshot()
+	suite.assert_equal(cancelled.get("phase"), "READY", "cancel closes Bow HOLD immediately")
+	suite.assert_true(int(cancelled.get("generation", 0)) > hold_generation, "cancel invalidates the HOLD generation")
+	suite.assert_true(not player.try_action(&"ranged_release"), "stale release cannot resolve a cancelled HOLD")
+	suite.assert_equal(_player_attack_events, attacks_before, "cancelled HOLD publishes no projectile release")
+	suite.assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "cancelled HOLD spawns no arrow")
+	suite.assert_true(hold_token > 0, "cancelled HOLD owned a real action token")
 
-	suite.assert_true(bow.start_charge(), "bow starts a cancellable charge")
-	bow._charge_time = bow.full_charge_time
-	bow.cancel_charge()
-	suite.assert_true(not bow.is_charging(), "cancel closes bow charge immediately")
-	suite.assert_close(bow.get_charge_ratio(), 0.0, "cancel clears abandoned bow charge progress")
-	suite.assert_close(bow.get_cooldown_remaining(), 0.0, "cancel does not invent a bow cooldown")
-	suite.assert_true(not bow.release_charge(Vector2.RIGHT), "release after cancellation cannot fire an arrow")
-
-	bow.cancel_charge()
-	suite.assert_true(not bow.is_charging(), "bow cancellation is idempotent")
-	suite.assert_close(bow.get_charge_ratio(), 0.0, "repeated cancellation keeps charge cleared")
-
-	owner.queue_free()
-	await get_tree().process_frame
+	player.cancel_transient_actions()
+	suite.assert_equal(player.weapon_presentation_snapshot().get("phase"), "READY", "Bow cancellation is idempotent")
+	await _free_player(player)
 
 
 func _test_rewind_cancels_before_restoring(suite) -> void:
@@ -150,15 +147,12 @@ func _test_player_cancellation_is_idempotent(suite) -> void:
 	var player := await _spawn_player()
 	var sword: Node = player.get_node("SwordWeapon")
 	var hitbox: Node = sword.get_node("Hitbox")
-	var bow: Node = player.get_node("BowWeapon")
 	var definition: Dictionary = sword.attack_definition(false)
 	var attacks_before: int = _player_attack_events
 
 	suite.assert_true(player.try_action(&"attack"), "player commits a cancellable sword windup")
 	suite.assert_true(player.try_action(&"dash"), "dash can buffer before cancellation")
 	suite.assert_true(player.action_state.has_buffered_input(&"dash"), "setup contains a buffered dash")
-	suite.assert_true(bow.start_charge(), "legacy bow charge can coexist for cancellation compatibility")
-	bow._charge_time = bow.full_charge_time
 	player.cancel_transient_actions()
 	player.cancel_transient_actions()
 
@@ -166,8 +160,6 @@ func _test_player_cancellation_is_idempotent(suite) -> void:
 	suite.assert_true(not player.action_state.has_buffered_input(&"dash"), "cancellation clears buffered inputs")
 	suite.assert_true(not sword.is_attacking(), "cancellation closes pending sword windup")
 	suite.assert_true(not hitbox.is_active(), "cancellation keeps hitbox closed")
-	suite.assert_true(not bow.is_charging(), "cancellation closes legacy bow charge")
-	suite.assert_close(bow.get_charge_ratio(), 0.0, "cancellation clears bow charge progress")
 	suite.assert_equal(player._dash_velocity, Vector2.ZERO, "cancellation clears dash velocity")
 
 	_advance(player, int(definition["windup_frames"]) + int(definition["active_frames"]) + int(definition["recovery_frames"]) + 2)
@@ -261,16 +253,22 @@ func _test_rewind_cancels_each_transient_phase(suite) -> void:
 
 	var bow_player := await _spawn_player()
 	players.append(bow_player)
-	var bow: Node = bow_player.get_node("BowWeapon")
+	suite.assert_true(bow_player.configure_loadout(_bow_loadout()), "rewind fixture equips profile-backed Bow")
 	var bow_recorder: Node = bow_player.get_node("RewindRecorder")
 	bow_recorder.clear_snapshots()
 	bow_recorder._record_snapshot()
-	bow.start_charge()
-	bow._charge_time = bow.full_charge_time
-	suite.assert_true(bow_player.get_node("TimeManager").try_rewind(bow_recorder), "rewind succeeds during legacy bow charge")
-	suite.assert_true(not bow.is_charging(), "rewind cancels bow charge")
-	suite.assert_close(bow.get_charge_ratio(), 0.0, "rewind clears bow charge progress")
-	suite.assert_true(not bow.release_charge(Vector2.RIGHT), "rewound bow release cannot fire")
+	var bow_attacks_before := _player_attack_events
+	suite.assert_true(bow_player.try_action(&"ranged_attack"), "rewind setup begins Bow HOLD")
+	_advance(bow_player, 9)
+	var bow_hold: Dictionary = bow_player.weapon_presentation_snapshot()
+	var bow_generation := int(bow_hold.get("generation", 0))
+	suite.assert_true(bow_player.get_node("TimeManager").try_rewind(bow_recorder), "rewind succeeds during Bow HOLD")
+	var rewound_bow: Dictionary = bow_player.weapon_presentation_snapshot()
+	suite.assert_equal(rewound_bow.get("phase"), "READY", "rewind cancels Bow HOLD")
+	suite.assert_true(int(rewound_bow.get("generation", 0)) > bow_generation, "rewind invalidates the abandoned HOLD generation")
+	suite.assert_true(not bow_player.try_action(&"ranged_release"), "rewound stale release cannot fire")
+	suite.assert_equal(_player_attack_events, bow_attacks_before, "rewound HOLD publishes no attack fact")
+	suite.assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "rewound HOLD spawns no arrow")
 
 	await get_tree().create_timer(0.55).timeout
 	for player: Node in players:
@@ -329,6 +327,18 @@ func _free_player(player: Node) -> void:
 func _advance(player: Node, frames: int) -> void:
 	for _frame: int in range(frames):
 		player.advance_action_frame()
+
+
+func _bow_loadout() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"milestone": "M1",
+		"character_id": "wanderer",
+		"weapon_id": "bow",
+		"enabled_time_skills": ["stop", "rewind"],
+		"difficulty": "normal",
+		"seed": 20260930,
+	}
 
 
 func _on_player_attacked(_weapon_id: StringName, _context: Dictionary) -> void:

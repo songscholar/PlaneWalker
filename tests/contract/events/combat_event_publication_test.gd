@@ -162,7 +162,6 @@ func _test_committed_player_actions_publish_once() -> void:
 	var player := PlayerScene.instantiate()
 	add_child(player)
 	await get_tree().process_frame
-	var sword: Node = player.get_node("SwordWeapon")
 	var bow: Node = player.get_node("BowWeapon")
 
 	_suite.assert_true(player.try_action(&"attack"), "sword attack begins through the coordinator")
@@ -180,12 +179,70 @@ func _test_committed_player_actions_publish_once() -> void:
 	)
 	player.cancel_transient_actions()
 
-	_suite.assert_true(bow.start_charge(), "bow charge begins")
-	bow.set("_charge_time", float(bow.full_charge_time))
-	_suite.assert_true(bow.release_charge(Vector2.RIGHT), "charged bow shot commits")
-	bow.set("_cooldown_remaining", 0.0)
-	_suite.assert_true(bow.start_charge(), "second bow charge begins")
-	_suite.assert_true(not bow.release_charge(Vector2.RIGHT), "undercharged bow release is rejected")
+	_suite.assert_true(
+		player.configure_loadout({
+			"schema_version": 1,
+			"milestone": "M1",
+			"character_id": "wanderer",
+			"weapon_id": "bow",
+			"enabled_time_skills": ["stop", "rewind"],
+			"difficulty": "normal",
+			"seed": 20260930,
+		}),
+		"bow publication fixture uses the profile-backed player path"
+	)
+	for legacy_method: StringName in [
+		&"start_charge",
+		&"release_charge",
+		&"cancel_charge",
+		&"is_charging",
+		&"get_charge_ratio",
+		&"get_cooldown_remaining",
+	]:
+		_suite.assert_true(
+			not bow.has_method(legacy_method),
+			"Bow adapter retires legacy action clock method %s" % legacy_method
+		)
+	var bow_source := FileAccess.get_file_as_string("res://scripts/combat/bow_weapon.gd")
+	_suite.assert_true(not bow_source.contains("func _process("), "Bow adapter owns no frame clock")
+	_suite.assert_true(
+		not bow_source.contains("EventBus.player_attacked.emit"),
+		"Bow adapter cannot bypass Player event publication"
+	)
+
+	_suite.assert_true(player.try_action(&"ranged_attack"), "bow press commits through Player and Coordinator")
+	var hold_snapshot: Dictionary = player.weapon_presentation_snapshot()
+	var bow_token := int(hold_snapshot.get("token", 0))
+	_suite.assert_equal(hold_snapshot.get("phase"), "HOLD", "bow press enters coordinator HOLD")
+	for _frame: int in range(9):
+		player.advance_action_frame()
+	_suite.assert_true(player.try_action(&"ranged_release"), "charged bow release resolves the same HOLD token")
+	_suite.assert_equal(
+		int(player.weapon_presentation_snapshot().get("token", 0)),
+		bow_token,
+		"bow release preserves the committed action token"
+	)
+	player.advance_action_frame()
+	var bow_active: Dictionary = player.weapon_action_coordinator.snapshot()
+	_suite.assert_equal(bow_active.get("phase"), "ACTIVE", "bow release publishes only when ACTIVE begins")
+	_suite.assert_true(
+		player.weapon_runtime.on_phase_enter(
+			bow_active.get("plan", {}),
+			&"ACTIVE",
+			int(bow_active.get("token", 0))
+		).is_empty(),
+		"duplicate Bow ACTIVE transition cannot publish a second payload or cue"
+	)
+	player.cancel_transient_actions()
+
+	var attacks_before_undercharge := _recorder.attacked.size()
+	_suite.assert_true(player.try_action(&"ranged_attack"), "second bow press begins a fresh HOLD")
+	_suite.assert_true(not player.try_action(&"ranged_release"), "undercharged bow release is rejected")
+	_suite.assert_equal(
+		_recorder.attacked.size(),
+		attacks_before_undercharge,
+		"undercharged release publishes no attack fact"
+	)
 
 	_suite.assert_true(player.try_action(&"dash"), "dash commits from free state")
 	_suite.assert_true(not player.try_action(&"dash"), "active dash rejects a duplicate commit")
@@ -203,10 +260,19 @@ func _test_committed_player_actions_publish_once() -> void:
 			"sword release fact carries its coordinator token"
 		)
 		_suite.assert_equal(_recorder.attacked[1]["weapon_id"], &"bow", "bow fact identifies the weapon")
-		_suite.assert_close(
-			float(_recorder.attacked[1]["context"].get("charge", -1.0)),
-			1.0,
-			"bow fact records committed charge"
+		_suite.assert_equal(
+			str(_recorder.attacked[1]["context"].get("action_id", "")),
+			"candidate_draw",
+			"bow release fact identifies the profile action"
+		)
+		_suite.assert_equal(
+			int(_recorder.attacked[1]["context"].get("token", 0)),
+			bow_token,
+			"bow release fact carries the shared coordinator token"
+		)
+		_suite.assert_true(
+			not _recorder.attacked[1]["context"].has("charge"),
+			"bow release fact no longer exposes legacy adapter charge state"
 		)
 	_suite.assert_equal(_recorder.dash_contexts, [{}], "one committed dash publishes an empty context")
 
