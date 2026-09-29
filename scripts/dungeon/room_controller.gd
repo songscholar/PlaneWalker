@@ -186,10 +186,9 @@ func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
 		enemy.queue_free()
 		_reject_authored_spawn(spawn_definition, &"SPAWN_REGISTRATION_REJECTED")
 		return
-	EventBus.enemy_spawned.emit(enemy)
-	EventBus.publish(EventBus.ENEMY_SPAWNED, {
-		"enemy": enemy,
-		"encounter_spawn": spawn_definition.duplicate(true),
+	EventBus.enemy_spawned.emit(enemy, {
+		"boss": enemy.is_in_group("bosses"),
+		"summoned": false,
 	})
 
 

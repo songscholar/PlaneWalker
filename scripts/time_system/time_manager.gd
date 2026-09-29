@@ -84,8 +84,7 @@ func try_time_stop() -> bool:
 		return false
 	_pay_cost(&"time_stop", effective_cost, time_stop_cooldown)
 	_take_self_damage(time_stop_self_damage, &"curse:time_stop")
-	EventBus.time_skill_started.emit(&"time_stop")
-	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_stop"})
+	EventBus.time_skill_started.emit(&"time_stop", {})
 	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
 		if node.has_method("apply_time_stop"):
 			node.apply_time_stop(effective_duration)
@@ -96,8 +95,7 @@ func try_time_stop() -> bool:
 
 
 func _end_time_stop() -> void:
-	EventBus.time_skill_ended.emit(&"time_stop")
-	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_stop"})
+	EventBus.time_skill_ended.emit(&"time_stop", {})
 
 
 func can_rewind(recorder: Node) -> bool:
@@ -122,8 +120,7 @@ func try_rewind(recorder: Node) -> bool:
 	recorder.consume_oldest_snapshot()
 	if recorder.has_method("clear_snapshots"):
 		recorder.clear_snapshots()
-	EventBus.time_skill_started.emit(&"time_rewind")
-	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rewind"})
+	EventBus.time_skill_started.emit(&"time_rewind", {})
 	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
 	_take_self_damage(rewind_self_damage, &"curse:rewind")
 	if rewind_heal > 0.0:
@@ -131,8 +128,7 @@ func try_rewind(recorder: Node) -> bool:
 		if health_component != null and health_component.has_method("heal"):
 			health_component.heal(rewind_heal)
 	rewind_committed.emit(transaction.duplicate(true))
-	EventBus.time_skill_ended.emit(&"time_rewind")
-	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_rewind"})
+	EventBus.time_skill_ended.emit(&"time_rewind", {})
 	return true
 
 
@@ -148,8 +144,7 @@ func try_time_rift(rift_position: Vector2) -> bool:
 	var parent := get_parent().get_parent()
 	parent.add_child(rift)
 	rift.global_position = rift_position
-	EventBus.time_skill_started.emit(&"time_rift")
-	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_rift", "position": rift_position})
+	EventBus.time_skill_started.emit(&"time_rift", {"position": rift_position})
 	return true
 
 
@@ -163,15 +158,13 @@ func try_time_accelerate() -> bool:
 	var owner_entity := get_parent()
 	if owner_entity.has_method("apply_time_acceleration"):
 		owner_entity.apply_time_acceleration(effective_multiplier, effective_duration)
-	EventBus.time_skill_started.emit(&"time_accelerate")
-	EventBus.publish(EventBus.TIME_SKILL_STARTED, {"skill_id": "time_accelerate"})
+	EventBus.time_skill_started.emit(&"time_accelerate", {})
 	get_tree().create_timer(effective_duration).timeout.connect(_end_time_accelerate)
 	return true
 
 
 func _end_time_accelerate() -> void:
-	EventBus.time_skill_ended.emit(&"time_accelerate")
-	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_accelerate"})
+	EventBus.time_skill_ended.emit(&"time_accelerate", {})
 
 
 func restore_energy(amount: float) -> void:

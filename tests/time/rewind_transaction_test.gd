@@ -94,11 +94,11 @@ func _run() -> void:
 	_suite.finish(get_tree())
 
 
-func _on_time_skill_started(skill_id: StringName) -> void:
+func _on_time_skill_started(skill_id: StringName, _context: Dictionary) -> void:
 	if skill_id == &"time_rewind":
 		_started_count += 1
 
 
-func _on_time_skill_ended(skill_id: StringName) -> void:
+func _on_time_skill_ended(skill_id: StringName, _context: Dictionary) -> void:
 	if skill_id == &"time_rewind":
 		_ended_count += 1

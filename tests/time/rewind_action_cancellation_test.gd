@@ -331,5 +331,5 @@ func _advance(player: Node, frames: int) -> void:
 		player.advance_action_frame()
 
 
-func _on_player_attacked(_weapon_id: StringName) -> void:
+func _on_player_attacked(_weapon_id: StringName, _context: Dictionary) -> void:
 	_player_attack_events += 1

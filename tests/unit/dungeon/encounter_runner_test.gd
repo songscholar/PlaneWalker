@@ -45,7 +45,7 @@ func _run() -> void:
 	var late_summon := Node2D.new()
 	late_summon.add_to_group("enemies")
 	_enemies_root.add_child(late_summon)
-	EventBus.enemy_spawned.emit(late_summon)
+	EventBus.enemy_spawned.emit(late_summon, {"boss": false, "summoned": true})
 	await get_tree().process_frame
 	await get_tree().process_frame
 	suite.assert_equal(_wave_ids, ["wave_01"], "late summon cancels the deferred wave advance")
@@ -60,7 +60,7 @@ func _run() -> void:
 	var summon := Node2D.new()
 	summon.add_to_group("enemies")
 	_enemies_root.add_child(summon)
-	EventBus.enemy_spawned.emit(summon)
+	EventBus.enemy_spawned.emit(summon, {"boss": false, "summoned": true})
 	suite.assert_equal(_runner.alive_count(), 2, "runner counts an in-room summon")
 	EventBus.entity_died.emit(_spawned[2], null)
 	suite.assert_equal(_runner.alive_count(), 1, "encounter remains active while summon lives")

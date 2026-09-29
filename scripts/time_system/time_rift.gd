@@ -63,8 +63,7 @@ func _on_body_exited(body: Node) -> void:
 func _expire() -> void:
 	for body: Node in _affected.duplicate():
 		_clear_body(body)
-	EventBus.time_skill_ended.emit(&"time_rift")
-	EventBus.publish(EventBus.TIME_SKILL_ENDED, {"skill_id": "time_rift"})
+	EventBus.time_skill_ended.emit(&"time_rift", {})
 	queue_free()
 
 

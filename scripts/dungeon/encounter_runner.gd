@@ -211,10 +211,12 @@ func _fail_encounter(reason: StringName, context: Dictionary) -> void:
 	encounter_failed.emit(encounter_id, reason, context.duplicate(true))
 
 
-func _on_enemy_spawned(enemy: Node) -> void:
+func _on_enemy_spawned(enemy: Node, _context: Dictionary) -> void:
 	if not _active or enemy == null or not is_instance_valid(enemy):
 		return
 	if _enemies_root == null or (enemy != _enemies_root and not _enemies_root.is_ancestor_of(enemy)):
+		return
+	if bool(enemy.get_meta("encounter_counted", false)):
 		return
 	register_spawned(enemy)
 

@@ -84,5 +84,4 @@ func _fire_arrow(direction: Vector2, charge_ratio: float) -> void:
 	arrow.source = self
 	arrow.owner_entity = owner_player
 	get_tree().current_scene.add_child(arrow)
-	EventBus.player_attacked.emit(&"bow")
-	EventBus.publish(EventBus.PLAYER_ATTACKED, {"weapon_id": "bow", "charge": charge_ratio})
+	EventBus.player_attacked.emit(&"bow", {"charge": charge_ratio})

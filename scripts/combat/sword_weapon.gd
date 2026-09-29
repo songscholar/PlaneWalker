@@ -87,8 +87,7 @@ func enter_active_phase() -> bool:
 		damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * 120.0
 		if finisher:
 			damage_info.tags.append("attack:finisher")
-	EventBus.player_attacked.emit(&"sword")
-	EventBus.publish(EventBus.PLAYER_ATTACKED, {"weapon_id": "sword"})
+	EventBus.player_attacked.emit(&"sword", {})
 	hitbox.activate(damage_info)
 	return true
 

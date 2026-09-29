@@ -57,10 +57,6 @@ func take_damage(damage_info: RefCounted) -> float:
 
 	var owner_entity := get_parent()
 	EventBus.damage_about_to_apply.emit(damage_info, owner_entity)
-	EventBus.publish(EventBus.DAMAGE_ABOUT_TO_APPLY, {
-		"damage_info": damage_info,
-		"target": owner_entity,
-	})
 
 	var original_amount: float = damage_info.amount
 	damage_info.amount = _apply_target_damage_modifiers(damage_info)
@@ -71,11 +67,6 @@ func take_damage(damage_info: RefCounted) -> float:
 	if final_amount > 0.0:
 		_apply_hit_reaction(damage_info, final_amount)
 	EventBus.damage_applied.emit(damage_info, owner_entity, final_amount)
-	EventBus.publish(EventBus.DAMAGE_APPLIED, {
-		"damage_info": damage_info,
-		"target": owner_entity,
-		"final_amount": final_amount,
-	})
 
 	if current_hp <= 0.0:
 		_die(damage_info.attacker)
@@ -85,11 +76,6 @@ func take_damage(damage_info: RefCounted) -> float:
 func _apply_hit_reaction(damage_info: RefCounted, final_amount: float) -> void:
 	var owner_entity := get_parent()
 	EventBus.hit_confirmed.emit(damage_info, owner_entity, final_amount)
-	EventBus.publish(EventBus.HIT_CONFIRMED, {
-		"damage_info": damage_info,
-		"target": owner_entity,
-		"final_amount": final_amount,
-	})
 	if damage_info.knockback.length_squared() > 0.0 and owner_entity.has_method("apply_knockback"):
 		owner_entity.apply_knockback(damage_info.knockback)
 
@@ -171,8 +157,4 @@ func _die(killer: Variant) -> void:
 		return
 	dead = true
 	EventBus.entity_died.emit(get_parent(), killer)
-	EventBus.publish(EventBus.ENTITY_DIED, {
-		"entity": get_parent(),
-		"killer": killer,
-	})
 	died.emit(killer)

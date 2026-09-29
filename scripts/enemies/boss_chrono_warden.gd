@@ -417,8 +417,7 @@ func _summon_fragments() -> void:
 		fragment.global_position = summon_slots[index]
 		if fragment.has_method("apply_elite_modifier") and _phase >= 3:
 			fragment.apply_elite_modifier(1.25, 1.1, 1.0)
-		EventBus.enemy_spawned.emit(fragment)
-		EventBus.publish(EventBus.ENEMY_SPAWNED, {"enemy": fragment, "summoned": true})
+		EventBus.enemy_spawned.emit(fragment, {"boss": false, "summoned": true})
 
 
 func _create_time_crack() -> Node:

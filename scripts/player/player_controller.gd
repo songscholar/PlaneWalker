@@ -308,8 +308,7 @@ func _begin_dash() -> bool:
 	_dash_cooldown_remaining = DASH_COOLDOWN
 	_dash_velocity = _last_move_direction * DASH_SPEED
 	health.apply_invulnerability(DASH_INVULNERABLE_TIME + _dash_invulnerable_bonus)
-	EventBus.player_dashed.emit()
-	EventBus.publish(EventBus.PLAYER_DASHED)
+	EventBus.player_dashed.emit({})
 	return true
 
 
