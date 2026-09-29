@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "revision": 2,
   "run_id": "fixture-run",
   "phase": "COMBAT_ACTIVE",
@@ -17,10 +17,18 @@
     "energy": 18.0,
     "max_energy": 100.0,
     "action_state": "FREE",
-    "cooldowns": {
-      "time_stop": 3.25,
-      "time_rewind": 0.0
-    }
+    "time_slots": [
+      {
+        "ability_id": "rift",
+        "action_id": "time_rift",
+        "cooldown": 3.25
+      },
+      {
+        "ability_id": "accelerate",
+        "action_id": "time_accelerate",
+        "cooldown": 0.0
+      }
+    ]
   },
   "build": {
     "items": ["frozen_burst"],

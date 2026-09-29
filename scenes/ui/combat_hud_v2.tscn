@@ -214,16 +214,16 @@ theme_override_styles/panel = SubResource("StylePanel")
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="StopLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
+[node name="AbilitySlot1Label" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
 theme_override_font_sizes/font_size = 16
-text = "Q"
+text = ""
 horizontal_alignment = 1
 
-[node name="RewindLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
+[node name="AbilitySlot2Label" type="Label" parent="HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.72, 1, 1)
 theme_override_font_sizes/font_size = 16
-text = "E"
+text = ""
 horizontal_alignment = 1

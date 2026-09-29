@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "revision": 3,
   "run_id": "fixture-run",
   "phase": "BOSS_ACTIVE",
@@ -17,10 +17,18 @@
     "energy": 91.0,
     "max_energy": 115.0,
     "action_state": "FREE",
-    "cooldowns": {
-      "time_stop": 0.0,
-      "time_rewind": 0.0
-    }
+    "time_slots": [
+      {
+        "ability_id": "rewind",
+        "action_id": "time_rewind",
+        "cooldown": 0.0
+      },
+      {
+        "ability_id": "stop",
+        "action_id": "time_stop",
+        "cooldown": 0.0
+      }
+    ]
   },
   "build": {
     "items": ["frozen_burst", "rewind_echo"],

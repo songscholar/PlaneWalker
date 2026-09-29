@@ -5,6 +5,7 @@ signal intent_emitted(intent: Dictionary)
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
+const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
 @onready var hud_root: Control = $HudRoot
 @onready var room_label: Label = $HudRoot/SafeArea/HudLayout/RoomPanel/RoomContent/RoomLabel
@@ -16,8 +17,10 @@ const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.g
 @onready var energy_label: Label = $HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent/EnergyLabel
 @onready var low_hp_indicator: Label = $HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent/LowHPIndicator
 @onready var build_label: Label = $HudRoot/SafeArea/HudLayout/PlayerPanel/PlayerContent/BuildLabel
-@onready var stop_label: Label = $HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/StopLabel
-@onready var rewind_label: Label = $HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/RewindLabel
+@onready var skill_slot_labels: Array[Label] = [
+	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot1Label,
+	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot2Label,
+]
 @onready var boss_panel: PanelContainer = $HudRoot/SafeArea/HudLayout/BossPanel
 @onready var boss_name_label: Label = $HudRoot/SafeArea/HudLayout/BossPanel/BossContent/BossNameLabel
 @onready var boss_hp_bar: ProgressBar = $HudRoot/SafeArea/HudLayout/BossPanel/BossContent/BossHPBar
@@ -91,9 +94,13 @@ func _render_state(state: Dictionary) -> void:
 	low_hp_indicator.visible = hp / max_hp <= 0.3
 	low_hp_indicator.text = "!  HP < 30%  !"
 
-	var cooldowns := player["cooldowns"] as Dictionary
-	stop_label.text = _format_skill("Q", float(cooldowns.get("time_stop", 0.0)))
-	rewind_label.text = _format_skill("E", float(cooldowns.get("time_rewind", 0.0)))
+	var time_slots := player["time_slots"] as Array
+	for index: int in range(skill_slot_labels.size()):
+		var slot := time_slots[index] as Dictionary
+		skill_slot_labels[index].text = _format_skill(
+			str(slot["ability_id"]),
+			float(slot["cooldown"])
+		)
 
 	var build := state["build"] as Dictionary
 	var archetype := str(build["dominant_archetype"])
@@ -110,7 +117,8 @@ func _render_state(state: Dictionary) -> void:
 	boss_phase_label.text = tr("UI_STATUS_PHASE_FMT") % ("%d / %d" % [int(boss_state["phase_index"]), int(boss_state["phase_total"])])
 
 
-func _format_skill(label: String, cooldown: float) -> String:
+func _format_skill(ability_id: String, cooldown: float) -> String:
+	var label := tr(TimeAbilityIdsScript.localization_key(ability_id))
 	if cooldown <= 0.0:
 		return "%s  %s" % [label, tr("HUD_WEAPON_READY")]
 	return "%s  %s" % [label, tr("HUD_WEAPON_COOLDOWN_FMT") % cooldown]

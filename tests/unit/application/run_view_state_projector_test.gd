@@ -25,6 +25,8 @@ func _test_live_view_revision_is_independent(suite) -> void:
 	var player := _player_snapshot()
 	var first = projector.project(authoritative, _room_definition(1, "combat"), player, null, 60000, {})
 	suite.assert_true(first.ok, "combat runtime projects a valid view state")
+	if not first.ok:
+		return
 	var first_view: Dictionary = first.context["view_state"]
 	suite.assert_true(RunViewStateScript.validate(first_view).ok, "projected combat view validates")
 	suite.assert_equal(first_view["revision"], 0, "first view revision begins at zero")
@@ -34,21 +36,33 @@ func _test_live_view_revision_is_independent(suite) -> void:
 
 	player["hp"] = 120.0
 	player["energy"] = 45.0
-	player["cooldowns"]["time_stop"] = 3.5
+	player["time_slots"][0]["cooldown"] = 3.5
 	var second = projector.project(authoritative, _room_definition(1, "combat"), player, null, 61000, {})
 	suite.assert_true(second.ok, "live player changes project under the same authoritative revision")
 	var second_view: Dictionary = second.context["view_state"]
 	suite.assert_equal(second_view["revision"], 1, "view revision advances independently")
 	suite.assert_equal(authoritative["revision"], 7, "projection never mutates authoritative revision")
 	suite.assert_close(second_view["player"]["hp"], 120.0, "live hp projects")
-	suite.assert_close(second_view["player"]["cooldowns"]["time_stop"], 3.5, "live cooldown projects")
+	suite.assert_equal(
+		second_view["player"]["time_slots"],
+		[
+			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 3.5},
+			{"ability_id": "rift", "action_id": "time_rift", "cooldown": 4.5},
+		],
+		"equipped slot order and strict action mapping project"
+	)
 	suite.assert_equal(second_view["run_time_ms"], 61000, "live run time projects")
 
 	second.context["view_state"]["player"]["hp"] = 1.0
+	second.context["view_state"]["player"]["time_slots"][0]["ability_id"] = "changed"
+	second.context["view_state"]["player"]["time_slots"].reverse()
 	second.context["view_state"]["build"]["items"].append("forged")
 	var latest: Dictionary = projector.latest_view_state()
 	suite.assert_close(latest["player"]["hp"], 120.0, "returned context is isolated from projector state")
+	suite.assert_equal(latest["player"]["time_slots"][0]["ability_id"], "stop", "projected slot dictionaries are deep copied")
+	suite.assert_equal(latest["player"]["time_slots"][1]["ability_id"], "rift", "projected slot order is isolated")
 	suite.assert_true(not latest["build"]["items"].has("forged"), "nested build arrays are deep copied")
+	suite.assert_equal(player["time_slots"][0]["ability_id"], "stop", "projection never mutates player slot input")
 
 
 func _test_phase_flags_and_optional_payloads(suite) -> void:
@@ -65,6 +79,8 @@ func _test_phase_flags_and_optional_payloads(suite) -> void:
 	}
 	var selection = projector.project(selection_state, _room_definition(1, "combat"), _player_snapshot(), null, 62000, {})
 	suite.assert_true(selection.ok, "selection phase projects")
+	if not selection.ok:
+		return
 	var selection_view: Dictionary = selection.context["view_state"]
 	suite.assert_true(selection_view["ui_flags"]["show_hud"], "selection keeps the HUD visible")
 	suite.assert_true(not selection_view["ui_flags"]["accept_gameplay_input"], "selection blocks gameplay input")
@@ -104,10 +120,16 @@ func _test_phase_flags_and_optional_payloads(suite) -> void:
 func _test_new_run_resets_view_revision(suite) -> void:
 	var projector = RunViewStateProjectorScript.new()
 	var first = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), _player_snapshot(), null, 1, {})
+	suite.assert_true(first.ok, "first run projects before revision assertions")
+	if not first.ok:
+		return
 	suite.assert_equal(first.context["view_state"]["revision"], 0, "first run starts at view revision zero")
 	var next_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
 	next_authoritative["run_id"] = "view-run-two"
 	var second = projector.project(next_authoritative, _room_definition(1, "combat"), _player_snapshot(), null, 1, {})
+	suite.assert_true(second.ok, "second run projects before revision assertions")
+	if not second.ok:
+		return
 	suite.assert_equal(second.context["view_state"]["revision"], 0, "new run id resets the view revision baseline")
 	suite.assert_equal(projector.latest_view_state()["run_id"], "view-run-two", "latest state belongs to the new run")
 
@@ -125,6 +147,12 @@ func _test_invalid_inputs_are_rejected(suite) -> void:
 	var invalid_view = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), invalid_player, null, 0, {})
 	suite.assert_equal(invalid_view.code, &"INVALID_ARGUMENT", "invalid projected player state is rejected")
 	suite.assert_true(projector.latest_view_state().is_empty(), "failed projection does not replace the latest valid view")
+
+	var mismatched_slot := _player_snapshot()
+	mismatched_slot["time_slots"][1]["action_id"] = "time_rewind"
+	var invalid_slot = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), mismatched_slot, null, 0, {})
+	suite.assert_equal(invalid_slot.code, &"INVALID_ARGUMENT", "projector rejects canonical/action slot mismatches")
+	suite.assert_true(projector.latest_view_state().is_empty(), "invalid slot projection does not replace projector state")
 
 
 func _authoritative(phase: int) -> Dictionary:
@@ -169,10 +197,10 @@ func _player_snapshot() -> Dictionary:
 		"energy": 72.0,
 		"max_energy": 100.0,
 		"action_state": "FREE",
-		"cooldowns": {
-			"time_stop": 0.0,
-			"time_rewind": 4.5,
-		},
+		"time_slots": [
+			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 0.0},
+			{"ability_id": "rift", "action_id": "time_rift", "cooldown": 4.5},
+		],
 	}
 
 

@@ -2,7 +2,6 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
-const FixturesScript := preload("res://scripts/ui/fixtures/run_view_state_fixtures.gd")
 
 var _suite
 
@@ -14,20 +13,25 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 
-	var combat := FixturesScript.load_fixture("res://tests/fixtures/ui/hud_combat.json")
+	var combat := _load_json("res://tests/fixtures/ui/hud_combat.json")
 	_suite.assert_true(not combat.is_empty(), "combat fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(combat).ok, "combat fixture validates")
+	_suite.assert_equal(RunViewStateScript.SCHEMA_VERSION, 2, "data-driven time slots use view-state schema 2")
 
-	var low_hp := FixturesScript.load_fixture("res://tests/fixtures/ui/hud_low_hp.json")
+	var low_hp := _load_json("res://tests/fixtures/ui/hud_low_hp.json")
 	_suite.assert_true(not low_hp.is_empty(), "low hp fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(low_hp).ok, "low hp fixture validates")
 
-	var boss := FixturesScript.load_fixture("res://tests/fixtures/ui/hud_boss.json")
+	var boss := _load_json("res://tests/fixtures/ui/hud_boss.json")
 	_suite.assert_true(not boss.is_empty(), "boss fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(boss).ok, "boss fixture validates")
+	_assert_slot_order(combat, ["stop", "rift"], ["time_stop", "time_rift"], "combat fixture")
+	_assert_slot_order(low_hp, ["rift", "accelerate"], ["time_rift", "time_accelerate"], "low-hp fixture")
+	_assert_slot_order(boss, ["rewind", "stop"], ["time_rewind", "time_stop"], "boss fixture")
 
 	_assert_invalid(combat, "schema_version", null, "missing schema version is rejected", true)
-	_assert_invalid(combat, "schema_version", 99, "unsupported schema version is rejected")
+	_assert_invalid(combat, "schema_version", 1, "legacy cooldown schema is rejected")
+	_assert_invalid(combat, "schema_version", 99, "unknown schema version is rejected")
 	_assert_invalid(combat, "revision", -1, "negative revision is rejected")
 	_assert_invalid(combat, "run_id", "", "empty run id is rejected")
 	_assert_invalid(combat, "phase", "UNKNOWN", "unknown phase is rejected")
@@ -45,8 +49,66 @@ func _run() -> void:
 	_suite.assert_true(not RunViewStateScript.validate(non_finite_hp).ok, "non-finite hp is rejected")
 
 	var non_finite_cooldown := combat.duplicate(true)
-	non_finite_cooldown["player"]["cooldowns"]["time_rewind"] = INF
+	non_finite_cooldown["player"]["time_slots"][1]["cooldown"] = INF
 	_suite.assert_true(not RunViewStateScript.validate(non_finite_cooldown).ok, "non-finite cooldown is rejected")
+
+	var nan_cooldown := combat.duplicate(true)
+	nan_cooldown["player"]["time_slots"][0]["cooldown"] = NAN
+	_suite.assert_true(not RunViewStateScript.validate(nan_cooldown).ok, "NaN cooldown is rejected")
+
+	var negative_cooldown := combat.duplicate(true)
+	negative_cooldown["player"]["time_slots"][0]["cooldown"] = -0.01
+	_suite.assert_true(not RunViewStateScript.validate(negative_cooldown).ok, "negative cooldown is rejected")
+
+	var missing_slots := combat.duplicate(true)
+	missing_slots["player"].erase("time_slots")
+	_suite.assert_true(not RunViewStateScript.validate(missing_slots).ok, "missing time slots are rejected")
+
+	var legacy_cooldowns := combat.duplicate(true)
+	legacy_cooldowns["player"].erase("time_slots")
+	legacy_cooldowns["player"]["cooldowns"] = {"time_stop": 0.0, "time_rift": 4.5}
+	_suite.assert_true(not RunViewStateScript.validate(legacy_cooldowns).ok, "legacy cooldown dictionaries cannot replace time slots")
+
+	var one_slot := combat.duplicate(true)
+	one_slot["player"]["time_slots"].resize(1)
+	_suite.assert_true(not RunViewStateScript.validate(one_slot).ok, "one time slot is rejected")
+
+	var three_slots := combat.duplicate(true)
+	three_slots["player"]["time_slots"].append({
+		"ability_id": "rewind",
+		"action_id": "time_rewind",
+		"cooldown": 0.0,
+	})
+	_suite.assert_true(not RunViewStateScript.validate(three_slots).ok, "more than two time slots are rejected")
+
+	var duplicate_ability := combat.duplicate(true)
+	duplicate_ability["player"]["time_slots"][1] = {
+		"ability_id": "stop",
+		"action_id": "time_stop",
+		"cooldown": 4.5,
+	}
+	_suite.assert_true(not RunViewStateScript.validate(duplicate_ability).ok, "duplicate canonical abilities are rejected")
+
+	var duplicate_action := combat.duplicate(true)
+	duplicate_action["player"]["time_slots"][1] = {
+		"ability_id": "rift",
+		"action_id": "time_stop",
+		"cooldown": 4.5,
+	}
+	_suite.assert_true(not RunViewStateScript.validate(duplicate_action).ok, "duplicate action ids are rejected")
+
+	var unknown_ability := combat.duplicate(true)
+	unknown_ability["player"]["time_slots"][1]["ability_id"] = "unknown"
+	unknown_ability["player"]["time_slots"][1]["action_id"] = "time_unknown"
+	_suite.assert_true(not RunViewStateScript.validate(unknown_ability).ok, "unknown canonical abilities are rejected")
+
+	var unknown_action := combat.duplicate(true)
+	unknown_action["player"]["time_slots"][1]["action_id"] = "time_unknown"
+	_suite.assert_true(not RunViewStateScript.validate(unknown_action).ok, "unknown action ids are rejected")
+
+	var mismatched_pair := combat.duplicate(true)
+	mismatched_pair["player"]["time_slots"][1]["action_id"] = "time_rewind"
+	_suite.assert_true(not RunViewStateScript.validate(mismatched_pair).ok, "canonical and input action ids must match exactly")
 
 	var room_outside_total := combat.duplicate(true)
 	room_outside_total["room"]["index"] = 6
@@ -61,10 +123,15 @@ func _run() -> void:
 	_suite.assert_true(not RunViewStateScript.validate(invalid_archetype_score).ok, "non-finite archetype scores are rejected")
 
 	var copied := RunViewStateScript.copy_of(boss)
-	copied["build"]["items"][0] = "changed"
-	copied["boss"]["hp"] = 1.0
-	_suite.assert_equal(boss["build"]["items"][0], "frozen_burst", "nested arrays are isolated")
-	_suite.assert_close(float(boss["boss"]["hp"]), 315.0, "nested dictionaries are isolated")
+	_suite.assert_true(not copied.is_empty(), "valid time-slot state can be copied")
+	if not copied.is_empty():
+		copied["build"]["items"][0] = "changed"
+		copied["boss"]["hp"] = 1.0
+		copied["player"]["time_slots"][0]["ability_id"] = "changed"
+		copied["player"]["time_slots"].reverse()
+		_suite.assert_equal(boss["build"]["items"][0], "frozen_burst", "nested arrays are isolated")
+		_suite.assert_close(float(boss["boss"]["hp"]), 315.0, "nested dictionaries are isolated")
+		_assert_slot_order(boss, ["rewind", "stop"], ["time_rewind", "time_stop"], "source after copy mutation")
 
 	_suite.finish(get_tree())
 
@@ -76,3 +143,42 @@ func _assert_invalid(base: Dictionary, key: String, value: Variant, label: Strin
 	else:
 		candidate[key] = value
 	_suite.assert_true(not RunViewStateScript.validate(candidate).ok, label)
+
+
+func _assert_slot_order(
+	state: Dictionary,
+	expected_abilities: Array,
+	expected_actions: Array,
+	label: String
+) -> void:
+	var player: Dictionary = state.get("player", {})
+	var slots: Variant = player.get("time_slots")
+	_suite.assert_true(slots is Array, "%s exposes a time-slot array" % label)
+	if not slots is Array:
+		return
+	var actual_slots := slots as Array
+	_suite.assert_equal(actual_slots.size(), 2, "%s exposes exactly two time slots" % label)
+	if actual_slots.size() != 2:
+		return
+	var ability_ids: Array[String] = []
+	var action_ids: Array[String] = []
+	for slot: Variant in actual_slots:
+		if not slot is Dictionary:
+			continue
+		ability_ids.append(str((slot as Dictionary).get("ability_id", "")))
+		action_ids.append(str((slot as Dictionary).get("action_id", "")))
+	_suite.assert_equal(ability_ids, expected_abilities, "%s preserves canonical ability order" % label)
+	_suite.assert_equal(action_ids, expected_actions, "%s preserves input action order" % label)
+
+
+func _load_json(path: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	_suite.assert_true(file != null, "%s opens" % path)
+	if file == null:
+		return {}
+	var json := JSON.new()
+	var error := json.parse(file.get_as_text())
+	_suite.assert_equal(error, OK, "%s parses" % path)
+	if error != OK or not json.data is Dictionary:
+		return {}
+	return (json.data as Dictionary).duplicate(true)

@@ -276,16 +276,22 @@ func restore_rewind_facing(facing: Vector2) -> void:
 
 func get_player_ui_snapshot() -> Dictionary:
 	var state_name := str(PlayerActionStateScript.State.keys()[action_state.current_state])
+	var time_slots: Array[Dictionary] = []
+	for raw_ability_id: Variant in loadout_runtime.time_ability_ids():
+		var ability_id := StringName(str(raw_ability_id))
+		var action_id: StringName = time_manager.action_skill_id(ability_id)
+		time_slots.append({
+			"ability_id": str(ability_id),
+			"action_id": str(action_id),
+			"cooldown": maxf(0.0, time_manager.get_cooldown(action_id)),
+		})
 	return {
 		"hp": clampf(float(health.current_hp), 0.0, float(health.max_hp)),
 		"max_hp": maxf(1.0, float(health.max_hp)),
 		"energy": clampf(float(time_manager.energy), 0.0, float(time_manager.max_energy)),
 		"max_energy": maxf(1.0, float(time_manager.max_energy)),
 		"action_state": state_name,
-		"cooldowns": {
-			"time_stop": maxf(0.0, time_manager.get_cooldown(&"time_stop")),
-			"time_rewind": maxf(0.0, time_manager.get_cooldown(&"time_rewind")),
-		},
+		"time_slots": time_slots.duplicate(true),
 	}
 
 

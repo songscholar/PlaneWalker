@@ -2,8 +2,9 @@ class_name RunViewState
 extends RefCounted
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const PHASES: Array[String] = [
 	"BOOT",
 	"HUB",
@@ -105,14 +106,38 @@ static func _validate_player(value: Variant, revision: int):
 		return _failure(revision, "player.energy", "energy must be within maximum")
 	if not _is_non_empty_string(player.get("action_state")):
 		return _failure(revision, "player.action_state", "expected non-empty string")
-	if typeof(player.get("cooldowns")) != TYPE_DICTIONARY:
-		return _failure(revision, "player.cooldowns", "expected dictionary")
-	var cooldowns := player["cooldowns"] as Dictionary
-	for skill_id: Variant in cooldowns:
-		if not _is_non_empty_string(str(skill_id)):
-			return _failure(revision, "player.cooldowns", "skill id cannot be empty")
-		if not _is_number(cooldowns[skill_id]) or float(cooldowns[skill_id]) < 0.0:
-			return _failure(revision, "player.cooldowns.%s" % str(skill_id), "expected non-negative number")
+	if player.has("cooldowns"):
+		return _failure(revision, "player.cooldowns", "legacy cooldown dictionary is not supported")
+	if typeof(player.get("time_slots")) != TYPE_ARRAY:
+		return _failure(revision, "player.time_slots", "expected array")
+	var time_slots := player["time_slots"] as Array
+	if time_slots.size() != 2:
+		return _failure(revision, "player.time_slots", "expected exactly two entries")
+	var ability_ids: Array[StringName] = []
+	var action_ids: Array[StringName] = []
+	for index: int in range(time_slots.size()):
+		var raw_slot: Variant = time_slots[index]
+		if typeof(raw_slot) != TYPE_DICTIONARY:
+			return _failure(revision, "player.time_slots[%d]" % index, "expected dictionary")
+		var slot := raw_slot as Dictionary
+		var raw_ability_id: Variant = slot.get("ability_id")
+		var raw_action_id: Variant = slot.get("action_id")
+		if not _is_non_empty_string(raw_ability_id) or not TimeAbilityIdsScript.is_canonical_id(raw_ability_id):
+			return _failure(revision, "player.time_slots[%d].ability_id" % index, "unknown canonical ability")
+		if not _is_non_empty_string(raw_action_id) or not TimeAbilityIdsScript.is_action_id(raw_action_id):
+			return _failure(revision, "player.time_slots[%d].action_id" % index, "unknown input action")
+		if not TimeAbilityIdsScript.pair_matches(raw_ability_id, raw_action_id):
+			return _failure(revision, "player.time_slots[%d].action_id" % index, "action does not match ability")
+		var ability_id := StringName(str(raw_ability_id))
+		var action_id := StringName(str(raw_action_id))
+		if ability_ids.has(ability_id):
+			return _failure(revision, "player.time_slots", "ability ids must be distinct")
+		if action_ids.has(action_id):
+			return _failure(revision, "player.time_slots", "action ids must be distinct")
+		if not _is_number(slot.get("cooldown")) or float(slot["cooldown"]) < 0.0:
+			return _failure(revision, "player.time_slots[%d].cooldown" % index, "expected non-negative finite number")
+		ability_ids.append(ability_id)
+		action_ids.append(action_id)
 	return CommandResultScript.success(revision)
 
 

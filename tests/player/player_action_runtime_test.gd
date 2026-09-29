@@ -18,6 +18,7 @@ func _run() -> void:
 	await _test_time_actions_use_the_action_owner()
 	await _test_hitstun_and_dead_are_exclusive()
 	await _test_candidate_actions_remain_inactive_in_m1()
+	await _test_ui_snapshot_uses_equipped_time_slots()
 	_suite.finish(get_tree())
 
 
@@ -136,8 +137,75 @@ func _test_candidate_actions_remain_inactive_in_m1() -> void:
 	_suite.assert_close(snapshot["max_hp"], player.health.max_hp, "UI snapshot reads max hp")
 	_suite.assert_close(snapshot["energy"], time_manager.energy, "UI snapshot reads time energy")
 	_suite.assert_equal(snapshot["action_state"], "FREE", "UI snapshot publishes stable action name")
-	_suite.assert_true(snapshot["cooldowns"].has("time_stop"), "UI snapshot includes time-stop cooldown")
-	_suite.assert_true(snapshot["cooldowns"].has("time_rewind"), "UI snapshot includes rewind cooldown")
+	await _free_player(player)
+
+
+func _test_ui_snapshot_uses_equipped_time_slots() -> void:
+	var player := await _spawn_player()
+	var time_manager: Node = player.get_node("TimeManager")
+	var default_snapshot: Dictionary = player.get_player_ui_snapshot()
+	_suite.assert_true(not default_snapshot.has("cooldowns"), "UI snapshot removes the legacy cooldown dictionary")
+	_suite.assert_equal(
+		default_snapshot.get("time_slots", []),
+		[
+			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 0.0},
+			{"ability_id": "rewind", "action_id": "time_rewind", "cooldown": 0.0},
+		],
+		"default M1 snapshot publishes Stop/Rewind in configured order"
+	)
+
+	_suite.assert_true(
+		player.configure_loadout({"weapon_id": "sword", "enabled_time_skills": ["stop", "rift"]}),
+		"candidate Stop/Rift loadout configures for UI projection"
+	)
+	time_manager.set("_cooldowns", {
+		&"time_stop": 1.25,
+		&"time_rewind": 2.0,
+		&"time_rift": 4.5,
+		&"time_accelerate": 3.0,
+	})
+	var candidate_snapshot: Dictionary = player.get_player_ui_snapshot()
+	_suite.assert_equal(
+		candidate_snapshot.get("time_slots", []),
+		[
+			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 1.25},
+			{"ability_id": "rift", "action_id": "time_rift", "cooldown": 4.5},
+		],
+		"candidate snapshot publishes only equipped abilities with strict action mapping"
+	)
+
+	var exposed_slots: Variant = candidate_snapshot.get("time_slots")
+	if exposed_slots is Array and (exposed_slots as Array).size() == 2:
+		(exposed_slots as Array)[0]["ability_id"] = "changed"
+		(exposed_slots as Array).reverse()
+	var snapshot_again: Dictionary = player.get_player_ui_snapshot()
+	_suite.assert_equal(
+		snapshot_again.get("time_slots", []),
+		[
+			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 1.25},
+			{"ability_id": "rift", "action_id": "time_rift", "cooldown": 4.5},
+		],
+		"mutating a UI snapshot cannot change equipped slot identity or order"
+	)
+
+	_suite.assert_true(
+		player.configure_loadout({"weapon_id": "sword", "enabled_time_skills": ["accelerate", "rewind"]}),
+		"candidate Accelerate/Rewind loadout configures for UI projection"
+	)
+	time_manager.set("_cooldowns", {
+		&"time_stop": 1.0,
+		&"time_rewind": 2.5,
+		&"time_rift": 3.0,
+		&"time_accelerate": 6.75,
+	})
+	_suite.assert_equal(
+		player.get_player_ui_snapshot().get("time_slots", []),
+		[
+			{"ability_id": "accelerate", "action_id": "time_accelerate", "cooldown": 6.75},
+			{"ability_id": "rewind", "action_id": "time_rewind", "cooldown": 2.5},
+		],
+		"remaining canonical abilities keep their strict action mapping and configured order"
+	)
 	await _free_player(player)
 
 

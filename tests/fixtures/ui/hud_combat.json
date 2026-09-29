@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "revision": 1,
   "run_id": "fixture-run",
   "phase": "COMBAT_ACTIVE",
@@ -17,10 +17,18 @@
     "energy": 72.0,
     "max_energy": 100.0,
     "action_state": "FREE",
-    "cooldowns": {
-      "time_stop": 0.0,
-      "time_rewind": 4.5
-    }
+    "time_slots": [
+      {
+        "ability_id": "stop",
+        "action_id": "time_stop",
+        "cooldown": 0.0
+      },
+      {
+        "ability_id": "rift",
+        "action_id": "time_rift",
+        "cooldown": 4.5
+      }
+    ]
   },
   "build": {
     "items": [],

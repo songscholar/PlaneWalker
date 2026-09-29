@@ -2,17 +2,7 @@ class_name TimeManager
 extends Node
 
 const TimeRiftScene := preload("res://scenes/time/time_rift.tscn")
-
-const ACTION_TO_CANONICAL: Dictionary = {
-	&"stop": &"stop",
-	&"rewind": &"rewind",
-	&"rift": &"rift",
-	&"accelerate": &"accelerate",
-	&"time_stop": &"stop",
-	&"time_rewind": &"rewind",
-	&"time_rift": &"rift",
-	&"time_accelerate": &"accelerate",
-}
+const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
@@ -96,21 +86,11 @@ func configure_from_stats(stats: Resource) -> void:
 
 
 func canonical_skill_id(skill_id: StringName) -> StringName:
-	return StringName(ACTION_TO_CANONICAL.get(skill_id, &""))
+	return TimeAbilityIdsScript.canonical_id(skill_id)
 
 
 func action_skill_id(skill_id: StringName) -> StringName:
-	match canonical_skill_id(skill_id):
-		&"stop":
-			return &"time_stop"
-		&"rewind":
-			return &"time_rewind"
-		&"rift":
-			return &"time_rift"
-		&"accelerate":
-			return &"time_accelerate"
-		_:
-			return &""
+	return TimeAbilityIdsScript.action_id(skill_id)
 
 
 func can_use(skill_id: StringName, context: Dictionary) -> bool:
