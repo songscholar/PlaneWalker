@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-29
-- Implementation Status: P11A certified through commits `245b533`, `ed03dff`, and `5369bf9`; P11B Sword migration is locally certified through `1ff2600`; P11C Bow is active and later gates remain pending
+- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate parity, coordinator charge, feedback, modifier migration, and legacy-clock retirement are certified through `0cf27da`; Launch Bow and later gates remain active
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -318,13 +318,15 @@ git commit -m "refactor(combat): migrate sword to weapon coordinator"
 - Consumes: `bow_candidate_v1` or `bow_launch_v1`, semantic press/release intents, aim context, modifiers, and time context.
 - Produces: deterministic arrows/scatter/rain/trails, charge ViewState, typed facts, and snapshot-safe Bow state.
 
-- [ ] **Step 1: Freeze P10 candidate boundaries in failing coordinator tests**
+- [x] **Step 1: Freeze P10 candidate boundaries in failing coordinator tests**
 
 Assert 0.15-second minimum charge, 0.9-second full charge, 0.35-second cooldown, 0.75–1.75 damage interpolation, 440–680 speed, 0.98 full-charge threshold, +1 pierce, six energy restore, hold/toggle equivalence, and atomic undercharge rejection.
 
-- [ ] **Step 2: Remove Bow `_process()` authority and implement coordinator-owned charge**
+- [x] **Step 2: Remove Bow `_process()` authority and implement coordinator-owned charge**
 
 The runtime stores no wall-clock seconds; held frames, cooldown frames, Dash cancel, release, and replay snapshots are coordinator driven.
+
+Candidate certification is recorded in `docs/current/2026-09-29-p11c-bow-candidate-evidence.md`. The checked step covers Candidate charge ownership and legacy-clock retirement only; Launch cooldown/resource execution remains part of Step 3.
 
 - [ ] **Step 3: Add launch scatter, skill, ultimate, and four time interactions**
 
