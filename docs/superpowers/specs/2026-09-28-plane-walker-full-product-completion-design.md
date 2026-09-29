@@ -4,7 +4,7 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P2 Atomic SaveService and P3 ContentRegistry v2 are complete; P4 Single RunState / RoomRuntime is Current
+- Implementation Status: Active; P2, P3, P4/P5, P6, and P8 are certified; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
@@ -279,16 +279,16 @@ The foundation is executed as hard-gated phases:
 | P1 | Test and CI foundation | One command imports, validates, runs tests, scans logs, and reports honest coverage categories |
 | P2 (Completed 2026-09-29) | Atomic SaveService | Atomic write, backups, migrations, corruption recovery, and forward refusal pass destructive-fixture tests |
 | P3 (Completed 2026-09-29) | ContentRegistry v2 and effect runtime | JSON/content packs are the only source; schemas, references, handlers, localization, and eligibility validate |
-| P4 (Current) | Single RunState/RoomRuntime | RunOrchestrator is sole phase writer; mirrored writable state and LegacyRunAdapter are retired after parity |
-| P5 | Single event publication | Typed signals publish each fact once; dual publish/subscribe paths are removed |
-| P6 | Controller/focus/accessibility | Every current flow completes controller-only and accessibility settings persist |
+| P4 (Completed 2026-09-29) | Single RunState/RoomRuntime | RunOrchestrator is sole phase writer; mirrored writable state and LegacyRunAdapter are retired after parity |
+| P5 (Completed 2026-09-29) | Single event publication | Typed signals publish each fact once; dual publish/subscribe paths are removed |
+| P6 (Completed 2026-09-29) | Controller/focus/accessibility | Every current flow completes controller-only and accessibility settings persist |
 | P7 | Reproducible exports | Windows, Linux/Steam Deck, and macOS export from a clean checkout with documented toolchain |
-| P8 | Documentation governance | README, current specs, contracts, ADRs, historical/archive labels, and link/status validation are complete |
+| P8 (Completed 2026-09-29) | Documentation governance | README, current specs, contracts, ADRs, historical/archive labels, and link/status validation are complete |
 | P9 | Detached-worktree certification | Clean import, tests, coverage report, export, and packaged startup succeed without hidden local state |
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
 
-P2 completion evidence is recorded in `docs/current/2026-09-29-p2-atomic-save-evidence.md`. P3 completion evidence is recorded in `docs/current/2026-09-29-p3-content-registry-evidence.md`. P4 is now the current sequential foundation gate; P6 input/accessibility and P7/P9 export-certification tooling may progress in parallel where they do not change P4 authority boundaries. P4 may not reintroduce direct save writes into GameState or bypass the activated content registry.
+P2, P3, P4/P5, P6, and P8 completion evidence is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
 
 ## 10. Delivery Sequence After Foundation
 

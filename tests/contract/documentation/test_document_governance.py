@@ -646,6 +646,16 @@ class DocumentGovernanceTest(unittest.TestCase):
             [],
         )
 
+    def test_p8_completion_has_no_baselined_or_new_violations(self) -> None:
+        report = validate_repository(
+            PROJECT_ROOT,
+            PROJECT_ROOT / "tools/document_governance_baseline.json",
+        )
+
+        self.assertEqual(report.allowed_violation_ids, ())
+        self.assertEqual(report.violations, ())
+        self.assertTrue(report.ok)
+
 
 @contextmanager
 def repository_fixture() -> Iterator[Path]:

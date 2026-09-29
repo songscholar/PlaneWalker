@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2, P3, P4/P5, and P6 certified; P7/P9 continues with honest coverage/export blockers; P8 metadata, lifecycle, links, ADRs, Current indexing, and evidence-state governance are implemented; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2, P3, P4/P5, P6, and P8 certified; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -37,7 +37,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | P5 Single event publication | Completed / Certified | 14 个 typed gameplay facts exactly-once；generic EventBus 与所有运行域状态变更订阅已退休 |
 | P6 Controller/focus/accessibility | Completed / Certified | 14 动作双设备合同、可恢复 remap、纯手柄焦点链、15 项设置 UI、字幕/音频/视觉替代和本局助攻快照已通过 focused、整库及 detached gate |
 | P7/P9 Export and clean certification | Active / Externally blocked | 工具链、fail-closed 执行器、detached clone 认证已提交；真实覆盖率、导出模板和 packaged startup 尚未通过 |
-| P8 Documentation governance | Active / Current | 离线验证、元数据/生命周期、零基线、ADR、Current 索引和证据状态已完成；P8 证据与最终状态切换待最终认证 |
+| P8 Documentation governance | Completed / Certified | 离线验证、元数据/生命周期、零基线、ADR、Current 索引、证据状态和整库认证已完成 |
 | Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
 | Wave 4B | Completed | 回溯残影、Boss 全招前摇、精英主动机制和五房权威遭遇已实现并通过测试 |
 | Wave 4C | Completed for M1 technical scope | Pixel Proxy、核心动画、合成音频、战斗反馈、可访问性开关和清理回归已验证 |
@@ -93,7 +93,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P7/P9 Export Certification Plan](superpowers/plans/2026-09-29-plane-walker-p7-p9-exports-certification.md) | 三平台导出合同、离线预检和清洁认证基础 | Active / Current |
 | [Export Executor and Evidence Plan](superpowers/plans/2026-09-29-plane-walker-export-executor-evidence.md) | 导出执行、artifact hash、detached checkout 和 fail-closed 证据 | External Validation Pending / Current |
 | [P7/P9 Export Certification Evidence](current/2026-09-29-p7-p9-export-certification-evidence.md) | 导出预检、fail-closed 执行器、detached clone 与当前 blocker | External Validation Pending / Current |
-| [P8 Documentation Governance Plan](superpowers/plans/2026-09-29-plane-walker-p8-document-governance.md) | 文档元数据、生命周期、链接、ADR、Current 索引和证据状态 | Active / Current |
+| [P8 Documentation Governance Plan](superpowers/plans/2026-09-29-plane-walker-p8-document-governance.md) | 文档元数据、生命周期、链接、ADR、Current 索引和证据状态实施记录 | Completed / Historical |
+| [P8 Documentation Governance Evidence](current/2026-09-29-p8-document-governance-evidence.md) | 零基线、Current 索引、ADR、证据状态和离线整库治理认证 | Verified Locally / Current |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
 

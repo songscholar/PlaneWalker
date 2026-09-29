@@ -1,13 +1,14 @@
 # Plane Walker P8 Documentation Governance Implementation Plan
 
-- Status: Active / Current
-- Document Role: Current implementation plan
-- Authority Level: P8 foundation execution plan
+- Status: Completed / Historical
+- Document Role: Historical implementation record
+- Authority Level: Preserved P8 documentation-governance regression evidence
 - Applies To: Documentation metadata, lifecycle labels, internal links, ADRs, release evidence language, and offline validation
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Last Verified: 2026-09-29
-- Exit Gate: Every governed document has complete metadata and an unambiguous Current or Historical role, every repository-relative Markdown link resolves offline, ADR and release-state indexes exist, the legacy violation baseline is empty, and `./tools/validate_project.sh` passes
+- Implementation Status: Verified locally; governed metadata, lifecycle roles, relative links, ADR indexing, Current indexing, evidence states, and the empty migration baseline pass the unified repository gate
+- Completion Evidence: Commits `7dc7260`, `85a9a42`, `74ed576`, and `272a6b2`; see `docs/current/2026-09-29-p8-document-governance-evidence.md`
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
