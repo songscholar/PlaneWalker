@@ -1,0 +1,100 @@
+[
+  {
+    "id": "bls_rewind_path",
+    "category": "blessing",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "BLS_REWIND_PATH_NAME",
+    "description_key": "BLS_REWIND_PATH_DESC",
+    "tags": [
+      "payoff",
+      "rewind_echo",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "rewind_cost_multiplier": 0.9,
+      "rewind_heal": 18.0,
+      "rewind_path_hit_multiplier": 0.5
+    },
+    "kind": "time",
+    "archetype": "rewind_echo",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_bls_rewind_path"
+  },
+  {
+    "id": "bls_stop_weakpoint",
+    "category": "blessing",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "BLS_STOP_WEAKPOINT_NAME",
+    "description_key": "BLS_STOP_WEAKPOINT_DESC",
+    "tags": [
+      "freeze_burst",
+      "payoff",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_stop_weakpoint_damage_bonus": 0.35,
+      "time_stop_weakpoint_duration": 3.0
+    },
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_bls_stop_weakpoint"
+  },
+  {
+    "id": "bls_survive_thread",
+    "category": "blessing",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "BLS_SURVIVE_THREAD_NAME",
+    "description_key": "BLS_SURVIVE_THREAD_DESC",
+    "tags": [
+      "payoff",
+      "perfect_guard",
+      "survival"
+    ],
+    "compatibility": {},
+    "effects": {
+      "max_hp_bonus": 20.0,
+      "time_energy_max_bonus": 15.0,
+      "invulnerable_duration": 0.8
+    },
+    "kind": "survival",
+    "archetype": "perfect_guard",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_bls_survive_thread"
+  },
+  {
+    "id": "bls_sword_tempo",
+    "category": "blessing",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "BLS_SWORD_TEMPO_NAME",
+    "description_key": "BLS_SWORD_TEMPO_DESC",
+    "tags": [
+      "accelerated_combo",
+      "payoff",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_speed_multiplier": 1.08,
+      "combo_finisher_multiplier_bonus": 0.2
+    },
+    "kind": "weapon",
+    "archetype": "accelerated_combo",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_bls_sword_tempo"
+  }
+]

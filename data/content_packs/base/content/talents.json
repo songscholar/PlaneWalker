@@ -1,0 +1,73 @@
+[
+  {
+    "id": "tal_eternity_reserve",
+    "category": "talent",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "TAL_ETERNITY_RESERVE_NAME",
+    "description_key": "TAL_ETERNITY_RESERVE_DESC",
+    "tags": [
+      "eternity",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "low_energy_regen_multiplier": 2.0,
+      "low_energy_threshold": 30.0
+    },
+    "kind": "eternity",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_tal_eternity_reserve"
+  },
+  {
+    "id": "tal_ruin_execute",
+    "category": "talent",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "TAL_RUIN_EXECUTE_NAME",
+    "description_key": "TAL_RUIN_EXECUTE_DESC",
+    "tags": [
+      "perfect_guard",
+      "route",
+      "ruin"
+    ],
+    "compatibility": {},
+    "effects": {
+      "heavy_execute_multiplier_bonus": 0.5,
+      "heavy_execute_threshold": 0.3
+    },
+    "kind": "ruin",
+    "archetype": "perfect_guard",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_tal_ruin_execute"
+  },
+  {
+    "id": "tal_steel_recover",
+    "category": "talent",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "TAL_STEEL_RECOVER_NAME",
+    "description_key": "TAL_STEEL_RECOVER_DESC",
+    "tags": [
+      "perfect_guard",
+      "route",
+      "steel"
+    ],
+    "compatibility": {},
+    "effects": {
+      "max_hp_bonus": 20.0,
+      "heal": 20.0
+    },
+    "kind": "steel",
+    "archetype": "perfect_guard",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_tal_steel_recover"
+  }
+]

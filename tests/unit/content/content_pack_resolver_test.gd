@@ -6,6 +6,7 @@ const ContentPackResolverScript := preload("res://scripts/content/content_pack_r
 
 const VALID_PACK_PATH := "res://tests/fixtures/content_packs/valid_base/pack.json"
 const BAD_DIGEST_PACK_PATH := "res://tests/fixtures/content_packs/bad_digest/pack.json"
+const PROJECT_BASE_PACK_PATH := "res://data/content_packs/base/pack.json"
 const CHAIN_ROOT := "res://tests/fixtures/content_packs/dependency_chain"
 const CYCLE_ROOT := "res://tests/fixtures/content_packs/dependency_cycle"
 
@@ -18,6 +19,7 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_descriptor_load_and_digest(suite)
 	_test_descriptor_integrity_failure(suite)
+	_test_project_base_pack(suite)
 	_test_fixture_graphs(suite)
 	_test_stable_dependency_order(suite)
 	_test_duplicate_pack_ids(suite)
@@ -49,6 +51,52 @@ func _test_descriptor_integrity_failure(suite) -> void:
 	var loaded: Dictionary = ContentPackDescriptorScript.load_path(BAD_DIGEST_PACK_PATH, false)
 	suite.assert_true(not bool(loaded.get("ok", false)), "bad content digest is rejected")
 	suite.assert_equal(loaded.get("code"), &"INTEGRITY_MISMATCH", "bad digest has stable code")
+
+
+func _test_project_base_pack(suite) -> void:
+	var loaded: Dictionary = ContentPackDescriptorScript.load_path(PROJECT_BASE_PACK_PATH, true)
+	suite.assert_true(bool(loaded.get("ok", false)), "project base pack passes descriptor and integrity validation")
+	if not bool(loaded.get("ok", false)):
+		return
+	var descriptor: Dictionary = loaded.get("descriptor", {})
+	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
+	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
+	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 4, "project base pack owns four normalized content sources")
+	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
+
+	var entries: Array[Dictionary] = []
+	for relative_path_value: Variant in descriptor.get("content_manifest", []):
+		var file := FileAccess.open(str(descriptor.get("root_path", "")).path_join(str(relative_path_value)), FileAccess.READ)
+		suite.assert_true(file != null, "project base content source opens: %s" % str(relative_path_value))
+		if file == null:
+			continue
+		var parsed: Variant = JSON.parse_string(file.get_as_text())
+		suite.assert_true(parsed is Array, "project base content source is an array: %s" % str(relative_path_value))
+		if not parsed is Array:
+			continue
+		for entry_value: Variant in parsed:
+			if entry_value is Dictionary:
+				entries.append((entry_value as Dictionary).duplicate(true))
+	suite.assert_equal(entries.size(), 33, "project base pack preserves all current content definitions")
+	var allowed_archetypes: Array[String] = [
+		"",
+		"accelerated_combo",
+		"freeze_burst",
+		"low_hp_void",
+		"perfect_guard",
+		"piercing_barrage",
+		"rewind_echo",
+		"rift_trap",
+	]
+	for entry: Dictionary in entries:
+		for required_field: String in [
+			"id", "category", "availability", "name_key", "description_key",
+			"tags", "compatibility", "effects", "kind", "archetype", "role",
+			"rarity", "icon_id",
+		]:
+			suite.assert_true(entry.has(required_field), "base entry %s has %s" % [entry.get("id", ""), required_field])
+		suite.assert_true(not entry.has("name") and not entry.has("description"), "base entry %s uses v2 localization fields" % entry.get("id", ""))
+		suite.assert_true(allowed_archetypes.has(str(entry.get("archetype", ""))), "base entry %s uses authoritative archetype taxonomy" % entry.get("id", ""))
 
 
 func _test_fixture_graphs(suite) -> void:

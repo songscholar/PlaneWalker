@@ -202,8 +202,8 @@ git commit -m "feat(content): validate declarative gameplay effects"
 - Modify: `scripts/content/content_validation_report.gd`
 - Create: `scripts/content/content_snapshot_provider.gd`
 - Create: `data/content_packs/base/pack.json`
-- Create: `data/content_packs/base/content_manifest.json`
-- Move or copy with verified parity: existing M1 JSON sources under `data/content_packs/base/content/`
+- Create with verified parity: normalized v2 JSON sources under `data/content_packs/base/content/`
+- Create: `data/content_packs/base/localization/translations.csv`
 - Modify: `tests/contract/content_schema/content_registry_test.gd`
 - Create: `tests/unit/content/content_snapshot_provider_test.gd`
 - Create: `tests/unit/content/content_snapshot_provider_test.tscn`

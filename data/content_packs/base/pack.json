@@ -1,0 +1,26 @@
+{
+  "pack_id": "base",
+  "pack_version": "0.4.0-dev",
+  "schema_version": 2,
+  "game_version_range": ">=0.4.0-dev <1.0.0",
+  "dependencies": [],
+  "load_order": 0,
+  "content_manifest": [
+    "content/blessings.json",
+    "content/curses.json",
+    "content/items.json",
+    "content/talents.json"
+  ],
+  "localization_sources": [
+    "localization/translations.csv"
+  ],
+  "asset_manifest": [],
+  "integrity_hashes": {
+    "content/blessings.json": "b9a0eb5299f9a27fdb73947fb81b2285bf04183dcd172a60e5e8a3cf130a199b",
+    "content/curses.json": "182bab81b4739950ace61f42b669cc901a33152dae0bf3a5e89b6a0d993cc9a9",
+    "content/items.json": "768f372baffcd5dcc3d8d72ef139a788e151f777524bb864b6d9078d125fc822",
+    "content/talents.json": "2dda15642435b022bd1d0182d68d78479649ee53b06c484e62a5c9f23dbc1395",
+    "localization/translations.csv": "e5fec72cad390b0704ebc8c8c5bf77e44aa56373aa5920279d414bed7d7e577e"
+  },
+  "entitlement_tag": ""
+}

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "blood_rewind",
+    "category": "curse",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "BLOOD_REWIND_NAME",
+    "description_key": "BLOOD_REWIND_DESC",
+    "tags": [
+      "risk",
+      "time_skill",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "rewind_heal": 45.0,
+      "rewind_self_damage": 18.0
+    },
+    "kind": "time_skill",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_blood_rewind"
+  },
+  {
+    "id": "brittle_vitality",
+    "category": "curse",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "BRITTLE_VITALITY_NAME",
+    "description_key": "BRITTLE_VITALITY_DESC",
+    "tags": [
+      "healing",
+      "risk",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_multiplier": 1.25,
+      "healing_multiplier": 0.5
+    },
+    "kind": "healing",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_brittle_vitality"
+  },
+  {
+    "id": "glass_tempo",
+    "category": "curse",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "GLASS_TEMPO_NAME",
+    "description_key": "GLASS_TEMPO_DESC",
+    "tags": [
+      "risk",
+      "survival",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_speed_multiplier": 1.25,
+      "max_hp_multiplier": 0.78
+    },
+    "kind": "survival",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_glass_tempo"
+  },
+  {
+    "id": "narrow_escape",
+    "category": "curse",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "NARROW_ESCAPE_NAME",
+    "description_key": "NARROW_ESCAPE_DESC",
+    "tags": [
+      "positioning",
+      "risk",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "dash_invulnerable_bonus": 0.15,
+      "defense_bonus": -2.0
+    },
+    "kind": "positioning",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_narrow_escape"
+  },
+  {
+    "id": "overclocked_stasis",
+    "category": "curse",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "OVERCLOCKED_STASIS_NAME",
+    "description_key": "OVERCLOCKED_STASIS_DESC",
+    "tags": [
+      "risk",
+      "time_skill",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_stop_duration_bonus": 1.2,
+      "time_stop_self_damage": 12.0
+    },
+    "kind": "time_skill",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_overclocked_stasis"
+  },
+  {
+    "id": "starving_clock",
+    "category": "curse",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "STARVING_CLOCK_NAME",
+    "description_key": "STARVING_CLOCK_DESC",
+    "tags": [
+      "economy",
+      "risk",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_energy_max_bonus": 40.0,
+      "time_energy_regen_multiplier": 0.5
+    },
+    "kind": "economy",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_starving_clock"
+  }
+]

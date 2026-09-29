@@ -1,0 +1,472 @@
+[
+  {
+    "id": "accelerant_window",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "ACCELERANT_WINDOW_NAME",
+    "description_key": "ACCELERANT_WINDOW_DESC",
+    "tags": [
+      "accelerated_combo",
+      "payoff",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_accelerate_duration_bonus": 0.8,
+      "time_accelerate_multiplier_bonus": 0.2
+    },
+    "kind": "time",
+    "archetype": "accelerated_combo",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_accelerant_window"
+  },
+  {
+    "id": "accelerated_combo",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "ACCELERATED_COMBO_NAME",
+    "description_key": "ACCELERATED_COMBO_DESC",
+    "tags": [
+      "accelerated_combo",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_speed_multiplier": 1.08,
+      "combo_finisher_multiplier_bonus": 0.35
+    },
+    "kind": "weapon",
+    "archetype": "accelerated_combo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_accelerated_combo"
+  },
+  {
+    "id": "chronal_battery",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "CHRONAL_BATTERY_NAME",
+    "description_key": "CHRONAL_BATTERY_DESC",
+    "tags": [
+      "time",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_energy_max_bonus": 25.0,
+      "time_energy_restore": 25.0
+    },
+    "kind": "time",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_chronal_battery"
+  },
+  {
+    "id": "cleaving_moment",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "CLEAVING_MOMENT_NAME",
+    "description_key": "CLEAVING_MOMENT_DESC",
+    "tags": [
+      "perfect_guard",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "heavy_damage_multiplier_bonus": 0.4
+    },
+    "kind": "weapon",
+    "archetype": "perfect_guard",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_cleaving_moment"
+  },
+  {
+    "id": "efficient_overdrive",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "EFFICIENT_OVERDRIVE_NAME",
+    "description_key": "EFFICIENT_OVERDRIVE_DESC",
+    "tags": [
+      "accelerated_combo",
+      "payoff",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_accelerate_cost_multiplier": 0.85,
+      "attack_speed_multiplier": 1.06
+    },
+    "kind": "time",
+    "archetype": "accelerated_combo",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_efficient_overdrive"
+  },
+  {
+    "id": "evasive_guard_route",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "EVASIVE_GUARD_ROUTE_NAME",
+    "description_key": "EVASIVE_GUARD_ROUTE_DESC",
+    "tags": [
+      "perfect_guard",
+      "starter",
+      "survival"
+    ],
+    "compatibility": {},
+    "effects": {
+      "defense_bonus": 3.0,
+      "dash_invulnerable_bonus": 0.08
+    },
+    "kind": "survival",
+    "archetype": "perfect_guard",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_evasive_guard_route"
+  },
+  {
+    "id": "focused_draw",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "FOCUSED_DRAW_NAME",
+    "description_key": "FOCUSED_DRAW_DESC",
+    "tags": [
+      "payoff",
+      "piercing_barrage",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "bow_charge_rate_bonus": 0.15,
+      "bow_full_charge_damage_multiplier_bonus": 0.35
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_focused_draw"
+  },
+  {
+    "id": "frozen_burst",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "FROZEN_BURST_NAME",
+    "description_key": "FROZEN_BURST_DESC",
+    "tags": [
+      "freeze_burst",
+      "starter",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_stop_duration_bonus": 0.75,
+      "time_stop_cost_multiplier": 0.9
+    },
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_frozen_burst"
+  },
+  {
+    "id": "piercing_draw",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "PIERCING_DRAW_NAME",
+    "description_key": "PIERCING_DRAW_DESC",
+    "tags": [
+      "piercing_barrage",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "bow_charge_rate_bonus": 0.25,
+      "bow_pierce_bonus": 1
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_piercing_draw"
+  },
+  {
+    "id": "quickened_blade",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "QUICKENED_BLADE_NAME",
+    "description_key": "QUICKENED_BLADE_DESC",
+    "tags": [
+      "utility",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_speed_multiplier": 1.15
+    },
+    "kind": "weapon",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_quickened_blade"
+  },
+  {
+    "id": "rewind_echo",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "REWIND_ECHO_NAME",
+    "description_key": "REWIND_ECHO_DESC",
+    "tags": [
+      "rewind_echo",
+      "starter",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "rewind_heal": 28.0,
+      "rewind_echo_enabled": true
+    },
+    "kind": "time",
+    "archetype": "rewind_echo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_rewind_echo"
+  },
+  {
+    "id": "rewind_salve",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "REWIND_SALVE_NAME",
+    "description_key": "REWIND_SALVE_DESC",
+    "tags": [
+      "survival",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "max_hp_bonus": 20.0,
+      "heal": 35.0
+    },
+    "kind": "survival",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_rewind_salve"
+  },
+  {
+    "id": "rift_conductor",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "RIFT_CONDUCTOR_NAME",
+    "description_key": "RIFT_CONDUCTOR_DESC",
+    "tags": [
+      "payoff",
+      "rift_trap",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_rift_cost_multiplier": 0.85,
+      "time_energy_regen_bonus": 0.6
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_rift_conductor"
+  },
+  {
+    "id": "rift_current",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "RIFT_CURRENT_NAME",
+    "description_key": "RIFT_CURRENT_DESC",
+    "tags": [
+      "time",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_energy_regen_bonus": 1.25
+    },
+    "kind": "time",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_rift_current"
+  },
+  {
+    "id": "rift_engine",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "RIFT_ENGINE_NAME",
+    "description_key": "RIFT_ENGINE_DESC",
+    "tags": [
+      "rift_trap",
+      "starter",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_energy_max_bonus": 20.0,
+      "time_energy_regen_bonus": 0.8
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_rift_engine"
+  },
+  {
+    "id": "rift_snare",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "RIFT_SNARE_NAME",
+    "description_key": "RIFT_SNARE_DESC",
+    "tags": [
+      "payoff",
+      "rift_trap",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {
+      "time_rift_duration_bonus": 1.0,
+      "time_rift_radius_bonus": 22.0,
+      "time_rift_slow_bonus": 0.12
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_rift_snare"
+  },
+  {
+    "id": "sword_edge",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "SWORD_EDGE_NAME",
+    "description_key": "SWORD_EDGE_DESC",
+    "tags": [
+      "utility",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_multiplier": 1.18
+    },
+    "kind": "weapon",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_sword_edge"
+  },
+  {
+    "id": "tempered_guard",
+    "category": "item",
+    "availability": [
+      "M1"
+    ],
+    "name_key": "TEMPERED_GUARD_NAME",
+    "description_key": "TEMPERED_GUARD_DESC",
+    "tags": [
+      "survival",
+      "utility"
+    ],
+    "compatibility": {},
+    "effects": {
+      "defense_bonus": 2.0,
+      "invulnerable_duration": 1.0
+    },
+    "kind": "survival",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_tempered_guard"
+  },
+  {
+    "id": "tempo_barrage",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "TEMPO_BARRAGE_NAME",
+    "description_key": "TEMPO_BARRAGE_DESC",
+    "tags": [
+      "piercing_barrage",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {},
+    "effects": {
+      "attack_speed_multiplier": 1.1,
+      "time_energy_max_bonus": 15.0
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_tempo_barrage"
+  },
+  {
+    "id": "void_brink",
+    "category": "item",
+    "availability": [
+      "NEXT"
+    ],
+    "name_key": "VOID_BRINK_NAME",
+    "description_key": "VOID_BRINK_DESC",
+    "tags": [
+      "low_hp_void",
+      "risk",
+      "starter"
+    ],
+    "compatibility": {},
+    "effects": {
+      "low_hp_damage_multiplier_bonus": 0.45
+    },
+    "kind": "risk",
+    "archetype": "low_hp_void",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_void_brink"
+  }
+]
