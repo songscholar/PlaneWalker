@@ -20,7 +20,7 @@
   "properties": {
     "pack_id": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
     },
     "pack_version": {
       "type": "string",
@@ -89,7 +89,7 @@
       "properties": {
         "pack_id": {
           "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
         },
         "version_range": {
           "type": "string",

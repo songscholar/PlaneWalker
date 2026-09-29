@@ -2,7 +2,7 @@ class_name ContentPackDescriptor
 extends RefCounted
 
 const PACK_SCHEMA_VERSION := 2
-const ID_PATTERN := "^[a-z0-9][a-z0-9_.-]{0,63}$"
+const ID_PATTERN := "^[a-z0-9][a-z0-9_-]{0,63}$"
 const VERSION_PATTERN := "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
 const DIGEST_PATTERN := "^[a-f0-9]{64}$"
 const RELATIVE_PATH_PATTERN := "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"

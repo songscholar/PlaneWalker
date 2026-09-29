@@ -61,7 +61,7 @@ func _test_pack_schema(suite) -> void:
 		"pack schema"
 	)
 	var properties: Dictionary = schema.get("properties", {})
-	suite.assert_equal(properties.get("pack_id", {}).get("pattern"), "^[a-z0-9][a-z0-9_.-]{0,63}$", "pack id blocks unsafe paths")
+	suite.assert_equal(properties.get("pack_id", {}).get("pattern"), "^[a-z0-9][a-z0-9_-]{0,63}$", "pack id matches SaveService snapshot policy")
 	suite.assert_equal(properties.get("schema_version", {}).get("const"), 2, "pack schema version is explicit")
 	suite.assert_equal(properties.get("dependencies", {}).get("type"), "array", "pack dependencies are ordered records")
 	suite.assert_equal(properties.get("integrity_hashes", {}).get("additionalProperties", {}).get("pattern"), "^[a-f0-9]{64}$", "integrity digests are sha256 hex")

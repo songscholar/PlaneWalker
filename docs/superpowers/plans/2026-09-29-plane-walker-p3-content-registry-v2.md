@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - The base game, first-party updates, Mods, and DLC use one pack envelope and one validation pipeline.
-- Content IDs and pack IDs match `^[a-z0-9][a-z0-9_.-]{0,63}$` and remain stable after release.
+- Pack IDs match `^[a-z0-9][a-z0-9_-]{0,63}$`; content IDs may additionally contain `.`. Both remain stable after release.
 - Content data cannot name or execute arbitrary GDScript paths.
 - Dependency order is deterministic; cycles, duplicate IDs, incompatible versions, and missing dependencies fail closed.
 - Invalid optional packs are isolated; an invalid required base pack blocks boot.
@@ -237,12 +237,12 @@ Activate resolved packs in order, reject duplicate IDs across packs, validate av
 
 - [ ] **Step 5: Implement deterministic save snapshot**
 
-Return:
+Return the exact frozen SaveService snapshot shape:
 
 ```gdscript
 {
-	"aggregate_digest": "<sha256>",
-	"packs": [{"pack_id": "base", "pack_version": "1.0.0", "schema_version": 2, "digest": "<sha256>"}]
+	"aggregate_sha256": "<sha256>",
+	"packs": [{"pack_id": "base", "pack_version": "1.0.0", "schema_version": 2, "fingerprint_sha256": "<sha256>"}]
 }
 ```
 

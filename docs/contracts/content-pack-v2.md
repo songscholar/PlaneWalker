@@ -10,7 +10,7 @@ The base game, first-party updates, Mods, and DLC use the same versioned content
 
 ## Pack identity and paths
 
-`pack_id` and content IDs match `^[a-z0-9][a-z0-9_.-]{0,63}$`. Pack-relative paths use `/`, may not be absolute, and may not contain `..`, empty segments, or a GDScript extension. IDs and released pack versions are immutable identities.
+`pack_id` matches `^[a-z0-9][a-z0-9_-]{0,63}$` so it can be stored in the frozen SaveService snapshot format. Content IDs match `^[a-z0-9][a-z0-9_.-]{0,63}$`. Pack-relative paths use `/`, may not be absolute, and may not contain `..`, empty segments, or a GDScript extension. IDs and released pack versions are immutable identities.
 
 Every `pack.json` requires:
 
