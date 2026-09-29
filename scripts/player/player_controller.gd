@@ -47,6 +47,7 @@ var weapon_modifier_state: RefCounted
 var _weapon_combo_timeout_frames: int = 0
 var _weapon_profile_compatibility_fallback: bool = false
 var _buffered_time_skill: StringName = &""
+var _weapon_action_reward_claims: Dictionary = {}
 
 const DASH_DURATION := 0.28
 const DASH_COOLDOWN := 0.45
@@ -224,6 +225,7 @@ func configure_loadout(config: Dictionary) -> bool:
 func reset_runtime_state() -> void:
 	action_state.reset_runtime_state()
 	_weapon_combo_timeout_frames = 0
+	_weapon_action_reward_claims.clear()
 	_buffered_time_skill = &""
 	_dash_cooldown_remaining = 0.0
 	_dash_velocity = Vector2.ZERO
@@ -383,6 +385,16 @@ func apply_weapon_modifier(capability: StringName, value: Variant) -> bool:
 	if weapon_runtime == null or not weapon_runtime.has_method("apply_modifier"):
 		return false
 	return bool(weapon_runtime.call("apply_modifier", capability, value))
+
+
+func claim_weapon_action_reward(token: int, reward_kind: StringName) -> bool:
+	if token <= 0 or reward_kind == &"":
+		return false
+	var key := "%d:%s" % [token, str(reward_kind)]
+	if _weapon_action_reward_claims.has(key):
+		return false
+	_weapon_action_reward_claims[key] = true
+	return true
 
 
 func apply_weapon_effect(effect_id: StringName, value: Variant) -> bool:
