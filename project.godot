@@ -26,6 +26,7 @@ EventBus="*res://autoload/event_bus.gd"
 GameState="*res://autoload/game_state.gd"
 CombatFeedback="*res://autoload/combat_feedback.gd"
 SceneLoader="*res://autoload/scene_loader.gd"
+FocusCoordinator="*res://scripts/ui/focus_coordinator.gd"
 
 [internationalization]
 

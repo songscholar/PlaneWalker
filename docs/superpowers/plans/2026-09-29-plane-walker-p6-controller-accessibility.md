@@ -1,6 +1,6 @@
 # Plane Walker P6 Controller, Focus, and Accessibility Implementation Plan
 
-- Status: Active / Tasks 1–3 implemented
+- Status: Active / Tasks 1–4 implemented
 - Authority Level: P6 foundation execution plan
 - Applies To: Current start, combat, selection, pause, result, remapping, and accessibility flows
 - Exit Gate: Every Current flow completes controller-only, focus recovers after every modal transition, remaps and accessibility settings survive restart, and the complete P6 regression set passes with clean logs
@@ -387,7 +387,7 @@ Expected: both tests pass and `missing_required_bindings()` remains empty after 
 - Consumes: modal root `Node`, initial `Control`, current viewport focus owner, and valid visible focusable descendants.
 - Produces: autoload `FocusCoordinator.open_scope(scope: Node, initial_focus: Control)`, `close_scope(scope: Node)`, `recover(scope: Node, fallback: Control)`, `link_ring(controls: Array[Control], horizontal: bool)`, and `active_scope() -> Node`.
 
-- [ ] **Step 1: Write nested-modal focus failures**
+- [x] **Step 1: Write nested-modal focus failures**
 
 Build controls entirely in the test and assert:
 
@@ -406,7 +406,7 @@ suite.assert_equal(get_viewport().gui_get_focus_owner(), option_one, "closing pa
 
 Also cover a freed previous owner, hidden initial control, disabled button, closing a non-top scope, and `recover()` when focus escapes outside the active scope.
 
-- [ ] **Step 2: Verify the red state**
+- [x] **Step 2: Verify the red state**
 
 Run:
 
@@ -416,13 +416,13 @@ Run:
 
 Expected: the `FocusCoordinator` autoload or script is absent.
 
-- [ ] **Step 3: Implement a bounded focus-frame stack**
+- [x] **Step 3: Implement a bounded focus-frame stack**
 
 Each frame stores weak references to `scope`, `initial_focus`, and `previous_owner`. `open_scope()` removes an older frame for the same scope, pushes one frame, and uses `call_deferred("_focus_first_valid", scope, initial_focus)`. `_is_focusable()` requires `is_instance_valid`, `is_visible_in_tree`, `focus_mode != Control.FOCUS_NONE`, and `not disabled` for `BaseButton`.
 
 `link_ring()` sets both `focus_neighbor_left/right` or `focus_neighbor_top/bottom` plus `focus_next/focus_previous`, wrapping first and last controls.
 
-- [ ] **Step 4: Register the autoload and verify**
+- [x] **Step 4: Register the autoload and verify**
 
 Add:
 
