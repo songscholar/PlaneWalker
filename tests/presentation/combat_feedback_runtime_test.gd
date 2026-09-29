@@ -56,6 +56,7 @@ func _run() -> void:
 	_assert_hit_pause_duration_contract()
 	_assert_hit_feedback_profiles()
 	_assert_audio_contract()
+	await _assert_bow_feedback_contract()
 	await _assert_audio_cleanup_contract()
 	_assert_overlay_contract()
 	await _assert_feedback_runtime_gates()
@@ -271,6 +272,38 @@ func _assert_player_weapon_snapshot_proxy_contract() -> void:
 	var top_level: Dictionary = proxy.get_snapshot_for_test()
 	_suite.assert_equal(top_level.get("facing"), Vector2.UP, "top-level weapon facing remains a compatible snapshot shape")
 
+	player.weapon_snapshot = {
+		"weapon_id": "bow",
+		"action_id": "bow.primary",
+		"phase": "HOLD",
+		"token": 73,
+		"charge_ratio": 0.72,
+		"full_charge": false,
+		"facing": Vector2.RIGHT,
+	}
+	proxy.advance_animation_for_test(0.01)
+	var bow_hold: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(bow_hold.get("state"), "attack", "Bow hold has an explicit weapon presentation state")
+	_suite.assert_equal(bow_hold.get("weapon_id"), "bow", "proxy preserves the equipped Bow identity")
+	_suite.assert_equal(bow_hold.get("weapon_visual"), "bow", "Bow snapshot selects a bow silhouette instead of a sword line")
+	_suite.assert_equal(bow_hold.get("bow_charge_tier"), "high", "Bow presentation exposes a deterministic charge tier")
+	_suite.assert_close(float(bow_hold.get("bow_tension", -1.0)), 0.72, "Bow string tension follows the coordinator snapshot")
+	_suite.assert_true(not bool(bow_hold.get("melee_slash_visible", true)), "Bow hold never exposes the melee slash primitive")
+
+	player.weapon_snapshot = {
+		"weapon_id": "bow",
+		"action_id": "bow.primary",
+		"phase": "ACTIVE",
+		"token": 73,
+		"charge_ratio": 1.0,
+		"full_charge": true,
+		"facing": Vector2.RIGHT,
+	}
+	proxy.advance_animation_for_test(0.01)
+	var bow_release: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(bow_release.get("bow_charge_tier"), "full", "full-charge Bow release has a distinct presentation tier")
+	_suite.assert_close(float(bow_release.get("bow_tension", -1.0)), 1.0, "full-charge Bow release preserves maximum tension")
+
 	var velocity_actor := VelocityActor.new()
 	velocity_actor.velocity = Vector2.LEFT * 100.0
 	add_child(velocity_actor)
@@ -394,6 +427,109 @@ func _assert_audio_contract() -> void:
 		cues.get(&"time_stop", {}).get("fingerprint") != cues.get(&"time_rewind", {}).get("fingerprint"),
 		"Time Stop and Rewind have distinct audio signatures"
 	)
+	_suite.assert_true(cues.has(&"bow_release"), "Bow profile release cue has a dedicated audio signature")
+	_suite.assert_true(cues.has(&"bow_tension_low"), "Bow tension can expose a low-tier audio signature")
+	_suite.assert_true(cues.has(&"bow_tension_high"), "Bow tension can expose a high-tier audio signature")
+	_suite.assert_true(
+		cues.get(&"bow_release", {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
+		"Bow release never aliases the Sword swing signature"
+	)
+
+
+func _assert_bow_feedback_contract() -> void:
+	var player := SnapshotPlayer.new()
+	player.weapon_snapshot = {
+		"weapon_id": "bow",
+		"action_id": "bow.primary",
+		"phase": "ACTIVE",
+		"token": 701,
+		"charge_ratio": 0.72,
+		"full_charge": false,
+		"facing": Vector2.RIGHT,
+	}
+	add_child(player)
+	await get_tree().process_frame
+	_suite.assert_true(
+		CombatFeedback.ensure_actor_proxy_for_test(player) != null,
+		"Bow feedback probe receives a player proxy"
+	)
+	CombatFeedback.reset_feedback_for_test()
+
+	EventBus.player_attacked.emit(&"bow", {"token": 701})
+	EventBus.weapon_cue_requested.emit(
+		&"bow",
+		&"bow.primary",
+		701,
+		{
+			"cue_id": "bow_candidate_release",
+			"animation_id": "bow_release",
+			"vfx_id": "bow_arrow_trail",
+			"audio_id": "bow_release",
+			"camera_id": "impact_light",
+		}
+	)
+	EventBus.weapon_cue_requested.emit(
+		&"bow",
+		&"bow.primary",
+		701,
+		{
+			"cue_id": "bow_candidate_release",
+			"animation_id": "bow_release",
+			"vfx_id": "bow_arrow_trail",
+			"audio_id": "bow_release",
+			"camera_id": "impact_light",
+		}
+	)
+	var history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"bow_release"), 1, "one Bow action token plays its Profile release cue exactly once")
+	_suite.assert_equal(history.count(&"sword_swing"), 0, "Bow release never falls back to the legacy Sword cue")
+
+	EventBus.weapon_cue_requested.emit(
+		&"bow",
+		&"bow.primary",
+		701,
+		{
+			"cue_id": "bow_tension_high",
+			"animation_id": "bow_tension",
+			"vfx_id": "bow_tension_high",
+			"audio_id": "bow_tension_high",
+			"camera_id": "",
+		}
+	)
+	EventBus.weapon_cue_requested.emit(
+		&"bow",
+		&"bow.primary",
+		702,
+		{
+			"cue_id": "bow_candidate_release",
+			"animation_id": "bow_release",
+			"vfx_id": "bow_arrow_trail",
+			"audio_id": "bow_release",
+			"camera_id": "impact_light",
+		}
+	)
+	history = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"bow_tension_high"), 1, "one token can carry a distinct future Bow tension cue")
+	_suite.assert_equal(history.count(&"bow_release"), 2, "a later Bow token receives its own release cue")
+	CombatFeedback.reset_feedback_for_test()
+	EventBus.weapon_cue_requested.emit(
+		&"bow",
+		&"bow.primary",
+		701,
+		{
+			"cue_id": "bow_candidate_release",
+			"animation_id": "bow_release",
+			"vfx_id": "bow_arrow_trail",
+			"audio_id": "bow_release",
+			"camera_id": "impact_light",
+		}
+	)
+	history = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"bow_release"), 1, "feedback reset permits token reuse in a later run")
+
+	player.queue_free()
+	await get_tree().process_frame
+	CombatFeedback.reset_feedback_for_test()
 
 
 func _assert_audio_cleanup_contract() -> void:

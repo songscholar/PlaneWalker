@@ -103,9 +103,12 @@ var _has_committed_facing_property: bool = false
 var _has_velocity_property: bool = false
 var _has_exposure_sources_property: bool = false
 var _player_weapon_snapshot: Dictionary = {}
+var _weapon_id: String = ""
 var _weapon_phase: String = "READY"
 var _weapon_action_id: String = ""
 var _weapon_snapshot_available: bool = false
+var _bow_tension: float = 0.0
+var _bow_charge_tier: String = ""
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -234,8 +237,13 @@ func get_snapshot_for_test() -> Dictionary:
 		"reduced_motion": _reduced_motion,
 		"velocity_capability_cached": _has_velocity_property,
 		"weapon_snapshot_available": _weapon_snapshot_available,
+		"weapon_id": _weapon_id,
 		"weapon_phase": _weapon_phase,
 		"weapon_action_id": _weapon_action_id,
+		"weapon_visual": _weapon_visual_kind(),
+		"bow_tension": _bow_tension,
+		"bow_charge_tier": _bow_charge_tier,
+		"melee_slash_visible": _state == &"attack" and _weapon_visual_kind() != "bow",
 		"boss_phase_marks": _boss_phase,
 		"boss_core_shape": _boss_core_shape,
 		"boss_texture_pattern": _boss_texture_pattern,
@@ -329,37 +337,59 @@ func _refresh_player_weapon_presentation() -> void:
 	if _role != "player" or _actor == null or not is_instance_valid(_actor):
 		return
 	if not _actor.has_method("weapon_presentation_snapshot"):
-		_player_weapon_snapshot.clear()
-		_weapon_phase = "READY"
-		_weapon_action_id = ""
-		_weapon_snapshot_available = false
+		_clear_player_weapon_presentation()
 		return
 	var snapshot_value: Variant = _actor.call("weapon_presentation_snapshot")
 	if not snapshot_value is Dictionary:
-		_player_weapon_snapshot.clear()
-		_weapon_phase = "READY"
-		_weapon_action_id = ""
-		_weapon_snapshot_available = false
+		_clear_player_weapon_presentation()
 		return
 	var next_snapshot := snapshot_value as Dictionary
 	if not next_snapshot.has("phase") or not next_snapshot.has("action_id"):
-		_player_weapon_snapshot.clear()
-		_weapon_phase = "READY"
-		_weapon_action_id = ""
-		_weapon_snapshot_available = false
+		_clear_player_weapon_presentation()
 		return
 	_player_weapon_snapshot = next_snapshot.duplicate(true)
+	_weapon_id = str(_player_weapon_snapshot.get("weapon_id", ""))
 	_weapon_phase = str(_player_weapon_snapshot.get("phase", "READY"))
 	_weapon_action_id = str(_player_weapon_snapshot.get("action_id", ""))
+	_bow_tension = (
+		clampf(float(_player_weapon_snapshot.get("charge_ratio", 0.0)), 0.0, 1.0)
+		if _weapon_id == "bow"
+		else 0.0
+	)
+	_bow_charge_tier = _resolve_bow_charge_tier() if _weapon_id == "bow" else ""
 	_weapon_snapshot_available = true
+
+
+func _clear_player_weapon_presentation() -> void:
+	_player_weapon_snapshot.clear()
+	_weapon_id = ""
+	_weapon_phase = "READY"
+	_weapon_action_id = ""
+	_weapon_snapshot_available = false
+	_bow_tension = 0.0
+	_bow_charge_tier = ""
 
 
 func _player_weapon_action_is_presented() -> bool:
 	return (
 		_weapon_snapshot_available
 		and not _weapon_action_id.is_empty()
-		and _weapon_phase in ["WINDUP", "ACTIVE", "RECOVERY"]
+		and _weapon_phase in ["HOLD", "WINDUP", "ACTIVE", "RECOVERY"]
 	)
+
+
+func _weapon_visual_kind() -> String:
+	return "bow" if _weapon_id == "bow" else "sword"
+
+
+func _resolve_bow_charge_tier() -> String:
+	if bool(_player_weapon_snapshot.get("full_charge", false)) or _bow_tension >= 0.98:
+		return "full"
+	if _bow_tension >= 0.67:
+		return "high"
+	if _bow_tension >= 0.34:
+		return "medium"
+	return "low"
 
 
 func _player_weapon_facing() -> Vector2:
@@ -426,8 +456,13 @@ func _apply_pixel_transform() -> void:
 				offset.y = -absf(sin(_phase_clock * 12.0)) * 2.0
 				target_scale = Vector2(1.04, 0.96)
 		&"attack":
-			offset = _facing * 2.0
-			target_scale = Vector2(1.08, 0.94) if absf(_facing.x) > 0.0 else Vector2(0.94, 1.08)
+			if _weapon_visual_kind() == "bow":
+				offset = _facing * (-2.0 if _weapon_phase == "HOLD" else 2.0)
+				if not _reduced_motion:
+					target_scale = Vector2(1.03, 0.98) if absf(_facing.x) > 0.0 else Vector2(0.98, 1.03)
+			else:
+				offset = _facing * 2.0
+				target_scale = Vector2(1.08, 0.94) if absf(_facing.x) > 0.0 else Vector2(0.94, 1.08)
 		&"dash":
 			offset = _facing * (2.0 if _reduced_motion else 4.0)
 			if not _reduced_motion:
@@ -501,12 +536,47 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 	draw_rect(Rect2(-12, 0, 4, 12), primary.darkened(0.2), true)
 	draw_rect(Rect2(8, 0, 4, 12), primary.darkened(0.2), true)
 	draw_set_transform(Vector2.ZERO, _facing.angle(), Vector2.ONE)
-	if _state == &"attack":
+	if _weapon_visual_kind() == "bow":
+		_draw_player_bow(accent)
+	elif _state == &"attack":
 		draw_rect(Rect2(10, -4, 18, 4), accent, true)
 		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
 	else:
 		draw_rect(Rect2(10, 2, 14, 4), accent.darkened(0.15), true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_player_bow(accent: Color) -> void:
+	var bow_color := accent.darkened(0.18)
+	var nock_x := snappedf(18.0 - 8.0 * _bow_tension, 2.0)
+	draw_polyline(
+		PackedVector2Array([
+			Vector2(18, -14),
+			Vector2(22, -8),
+			Vector2(22, 8),
+			Vector2(18, 14),
+		]),
+		bow_color,
+		2.0,
+		false
+	)
+	draw_polyline(
+		PackedVector2Array([
+			Vector2(18, -14),
+			Vector2(nock_x, 0),
+			Vector2(18, 14),
+		]),
+		Color(0.88, 0.94, 1.0),
+		1.0,
+		false
+	)
+	if _state == &"attack":
+		var arrow_color := Color.WHITE if _bow_charge_tier == "full" else accent
+		draw_rect(Rect2(nock_x, -1, 22.0 - nock_x, 2), arrow_color, true)
+		draw_colored_polygon(
+			PackedVector2Array([Vector2(24, 0), Vector2(20, -4), Vector2(20, 4)]),
+			arrow_color
+		)
 
 
 func _draw_chaser(primary: Color, secondary: Color, accent: Color) -> void:

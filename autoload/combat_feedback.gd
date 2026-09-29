@@ -3,6 +3,7 @@ extends Node
 const PixelProxyScript := preload("res://scripts/presentation/pixel_proxy_actor.gd")
 const AudioSynthScript := preload("res://scripts/presentation/combat_audio_synth.gd")
 const OverlayScript := preload("res://scripts/presentation/combat_feedback_overlay.gd")
+const MAX_TRACKED_WEAPON_CUES := 256
 
 var _restore_scale: float = 1.0
 var _pause_token: int = 0
@@ -23,6 +24,8 @@ var _reduced_motion: bool = false
 var _high_contrast_danger: bool = false
 var _cached_player: Node2D
 var _cached_player_health: HealthComponent
+var _played_weapon_cues: Dictionary = {}
+var _played_weapon_cue_order: Array[String] = []
 
 
 const HIT_PROFILES := {
@@ -324,7 +327,9 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 
 
 func _on_player_attacked(weapon_id: StringName, _context: Dictionary) -> void:
-	if weapon_id == &"sword":
+	# Coordinator-backed weapons publish their feedback through Profile cues.
+	# Their compatibility player_attacked fact must not trigger the legacy Sword fallback.
+	if weapon_id in [&"sword", &"bow"]:
 		return
 	var player := _first_player()
 	if player == null:
@@ -337,11 +342,22 @@ func _on_player_attacked(weapon_id: StringName, _context: Dictionary) -> void:
 
 
 func _on_weapon_cue_requested(
-	_weapon_id: StringName,
-	_action_id: StringName,
-	_token: int,
+	weapon_id: StringName,
+	action_id: StringName,
+	token: int,
 	cue: Dictionary
 ) -> void:
+	var cue_id := StringName(str(cue.get("cue_id", "")))
+	if weapon_id == &"" or action_id == &"" or token <= 0 or cue_id == &"":
+		return
+	var deduplication_key := "%s|%s|%d|%s" % [weapon_id, action_id, token, cue_id]
+	if _played_weapon_cues.has(deduplication_key):
+		return
+	_played_weapon_cues[deduplication_key] = true
+	_played_weapon_cue_order.append(deduplication_key)
+	if _played_weapon_cue_order.size() > MAX_TRACKED_WEAPON_CUES:
+		_played_weapon_cues.erase(_played_weapon_cue_order.pop_front())
+
 	var player := _first_player()
 	if player != null:
 		var proxy := _ensure_actor_proxy(player)
@@ -508,6 +524,8 @@ func _reset_feedback() -> void:
 		Engine.time_scale = _restore_scale
 	_restore_scale = 1.0
 	_camera_trauma = 0.0
+	_played_weapon_cues.clear()
+	_played_weapon_cue_order.clear()
 	_restore_camera_offset()
 	if _audio != null and _audio.has_method("stop_all"):
 		_audio.stop_all()
@@ -521,6 +539,8 @@ func _exit_tree() -> void:
 	_pause_deadline_usec = 0
 	Engine.time_scale = _restore_scale
 	_restore_scale = 1.0
+	_played_weapon_cues.clear()
+	_played_weapon_cue_order.clear()
 	_restore_camera_offset()
 	if _audio != null and is_instance_valid(_audio) and _audio.has_method("stop_all"):
 		_audio.stop_all()
