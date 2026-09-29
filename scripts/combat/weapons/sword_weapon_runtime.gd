@@ -559,6 +559,7 @@ func _matches_frozen_action(action: Dictionary, expected: Dictionary) -> bool:
 		"recovery_frames",
 		"cancel_from_frame",
 		"buffer_frames",
+		"cooldown_frames",
 		"movement_multiplier",
 		"resource_costs",
 		"payload_id",
@@ -588,6 +589,8 @@ func _matches_frozen_action(action: Dictionary, expected: Dictionary) -> bool:
 	]:
 		if not _integer_matches_exactly(action[frame_field], int(expected[frame_field])):
 			return false
+	if not _integer_matches_exactly(action["cooldown_frames"], 0):
+		return false
 	return _number_matches_exactly(action["movement_multiplier"], float(expected["movement_multiplier"]))
 
 
