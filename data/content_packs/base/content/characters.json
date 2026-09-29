@@ -1,0 +1,90 @@
+[
+  {
+    "id": "primordial_knight",
+    "category": "character",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CHARACTER_PRIMORDIAL_KNIGHT_NAME",
+    "description_key": "CHARACTER_PRIMORDIAL_KNIGHT_DESC",
+    "tags": [
+      "armor_window",
+      "deliberate_burst",
+      "heavy_commitment"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "time_guardian",
+    "category": "character",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CHARACTER_TIME_GUARDIAN_NAME",
+    "description_key": "CHARACTER_TIME_GUARDIAN_DESC",
+    "tags": [
+      "cooldown_control",
+      "defensive_timing",
+      "perfect_guard"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "time_lord",
+    "category": "character",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CHARACTER_TIME_LORD_NAME",
+    "description_key": "CHARACTER_TIME_LORD_DESC",
+    "tags": [
+      "multi_ability",
+      "time_resource",
+      "timing_complexity"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "void_walker",
+    "category": "character",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CHARACTER_VOID_WALKER_NAME",
+    "description_key": "CHARACTER_VOID_WALKER_DESC",
+    "tags": [
+      "low_hp_void",
+      "spatial_risk",
+      "void"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "wanderer",
+    "category": "character",
+    "availability": [
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CHARACTER_WANDERER_NAME",
+    "description_key": "CHARACTER_WANDERER_DESC",
+    "tags": [
+      "balanced",
+      "baseline",
+      "timing"
+    ],
+    "compatibility": {},
+    "effects": {}
+  }
+]

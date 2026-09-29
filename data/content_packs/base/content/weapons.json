@@ -1,0 +1,91 @@
+[
+  {
+    "id": "bow",
+    "category": "weapon",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WEAPON_BOW_NAME",
+    "description_key": "WEAPON_BOW_DESC",
+    "tags": [
+      "charge",
+      "precision",
+      "ranged"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "gauntlets",
+    "category": "weapon",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WEAPON_GAUNTLETS_NAME",
+    "description_key": "WEAPON_GAUNTLETS_DESC",
+    "tags": [
+      "close_pressure",
+      "combo",
+      "melee"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "gun",
+    "category": "weapon",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WEAPON_GUN_NAME",
+    "description_key": "WEAPON_GUN_DESC",
+    "tags": [
+      "ammunition",
+      "burst_cycle",
+      "reload"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "staff",
+    "category": "weapon",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WEAPON_STAFF_NAME",
+    "description_key": "WEAPON_STAFF_DESC",
+    "tags": [
+      "area_control",
+      "ranged",
+      "spell_sequence"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "sword",
+    "category": "weapon",
+    "availability": [
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WEAPON_SWORD_NAME",
+    "description_key": "WEAPON_SWORD_DESC",
+    "tags": [
+      "counter_window",
+      "melee",
+      "short_commitment"
+    ],
+    "compatibility": {},
+    "effects": {}
+  }
+]

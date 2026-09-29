@@ -25,6 +25,7 @@ const VALID_CATEGORIES: Array[String] = [
 	"cosmetic",
 	"challenge",
 ]
+const EFFECT_BEARING_CATEGORIES: Array[String] = ["blessing", "curse", "item", "talent"]
 const OVERRIDABLE_FIELDS: Array[String] = ["archetype", "role", "rarity", "kind"]
 const CONTENT_ID_PATTERN := "^[a-z0-9][a-z0-9_.-]{0,63}$"
 const LOCALIZATION_KEY_PATTERN := "^[A-Z][A-Z0-9_]{1,127}$"
@@ -747,12 +748,19 @@ func _v2_entry_error(
 		var compatibility_error := _id_array_error((entry["compatibility"] as Dictionary)[field_value], [], true)
 		if not compatibility_error.is_empty():
 			return {"field": "compatibility.%s" % field, "reason": compatibility_error}
-	var effect_report = effect_catalog.validate_effects(
-		entry["effects"],
-		{"category": str(entry["category"])}
-	)
-	if effect_report.has_blocking_errors():
-		return {"field": "effects", "reason": "invalid", "errors": effect_report.blocking_errors.duplicate(true)}
+	if not entry["effects"] is Dictionary:
+		return {"field": "effects", "reason": "type"}
+	var category := str(entry["category"])
+	if not EFFECT_BEARING_CATEGORIES.has(category):
+		if not (entry["effects"] as Dictionary).is_empty():
+			return {"field": "effects", "reason": "unsupported_category"}
+	else:
+		var effect_report = effect_catalog.validate_effects(
+			entry["effects"],
+			{"category": category}
+		)
+		if effect_report.has_blocking_errors():
+			return {"field": "effects", "reason": "invalid", "errors": effect_report.blocking_errors.duplicate(true)}
 	for field: String in ["kind", "archetype", "role"]:
 		if entry.has(field) and not _optional_identifier_is_valid(entry[field]):
 			return {"field": field, "reason": "value"}

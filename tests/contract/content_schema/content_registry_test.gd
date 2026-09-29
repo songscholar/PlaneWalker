@@ -3,6 +3,7 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const ContentSnapshotProviderScript := preload("res://scripts/content/content_snapshot_provider.gd")
+const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 
 
 func _ready() -> void:
@@ -24,6 +25,7 @@ func _run() -> void:
 	_test_duplicate_ids(suite)
 	_test_required_fields(suite)
 	_test_next_content_isolation(suite)
+	_test_identity_effect_boundary(suite)
 	suite.finish(get_tree())
 
 
@@ -38,7 +40,10 @@ func _test_project_base_pack_v2(suite) -> void:
 	if report.has_blocking_errors():
 		return
 	suite.assert_equal(report.active_pack_count, 1, "project base pack is the only active pack")
-	suite.assert_equal(report.loaded_count, 33, "project base pack loads all current definitions")
+	suite.assert_equal(report.loaded_count, 47, "project base pack loads rewards and canonical loadout definitions")
+	suite.assert_equal(report.content_count_by_category.get("character"), 5, "base pack registers five characters")
+	suite.assert_equal(report.content_count_by_category.get("weapon"), 5, "base pack registers five weapons")
+	suite.assert_equal(report.content_count_by_category.get("time_ability"), 4, "base pack registers four time abilities")
 	suite.assert_equal(report.content_count_by_category.get("item"), 20, "base pack preserves twenty items")
 	suite.assert_equal(report.content_count_by_category.get("blessing"), 4, "base pack preserves four blessings")
 	suite.assert_equal(report.content_count_by_category.get("curse"), 6, "base pack preserves six curses")
@@ -66,6 +71,40 @@ func _test_project_base_pack_v2(suite) -> void:
 	suite.assert_equal(registry.active_packs()[0].get("pack_id"), "base", "active pack getter returns deep copies")
 
 
+func _test_identity_effect_boundary(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var effect_catalog = EffectHandlerCatalogScript.new()
+	var localization_keys := {
+		"TEST_CHARACTER_NAME": true,
+		"TEST_CHARACTER_DESC": true,
+	}
+	var identity := {
+		"id": "test_character",
+		"category": "character",
+		"availability": ["NEXT"],
+		"name_key": "TEST_CHARACTER_NAME",
+		"description_key": "TEST_CHARACTER_DESC",
+		"tags": ["test"],
+		"compatibility": {},
+		"effects": {},
+	}
+	suite.assert_equal(
+		registry.call("_v2_entry_error", identity, effect_catalog, localization_keys),
+		{},
+		"identity content accepts an empty declarative effect set"
+	)
+	var executable_identity := identity.duplicate(true)
+	executable_identity["effects"] = {"attack_multiplier": 1.1}
+	var error: Dictionary = registry.call(
+		"_v2_entry_error",
+		executable_identity,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(error.get("field"), "effects", "identity content rejects effect execution")
+	suite.assert_equal(error.get("reason"), "unsupported_category", "identity effect rejection is explicit")
+
+
 func _test_optional_pack_isolation(suite) -> void:
 	var registry = ContentRegistryScript.new()
 	var report = registry.load_packs(
@@ -79,7 +118,7 @@ func _test_optional_pack_isolation(suite) -> void:
 	suite.assert_true(not report.has_blocking_errors(), "invalid optional pack does not block base content")
 	suite.assert_true(report.isolated_pack_ids.has("fixture_invalid_script"), "invalid optional pack is isolated")
 	suite.assert_equal(report.active_pack_count, 1, "only base remains active")
-	suite.assert_equal(report.loaded_count, 33, "optional pack failure cannot remove base definitions")
+	suite.assert_equal(report.loaded_count, 47, "optional pack failure cannot remove base definitions")
 	suite.assert_true(registry.get_content(&"fixture_scripted_edge").is_empty(), "hostile optional entry is not indexed")
 
 

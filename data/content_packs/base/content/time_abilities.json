@@ -1,0 +1,78 @@
+[
+  {
+    "id": "accelerate",
+    "category": "time_ability",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "TIME_ABILITY_ACCELERATE_NAME",
+    "description_key": "TIME_ABILITY_ACCELERATE_DESC",
+    "tags": [
+      "accelerated_combo",
+      "execution_pressure",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "rewind",
+    "category": "time_ability",
+    "availability": [
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "TIME_ABILITY_REWIND_NAME",
+    "description_key": "TIME_ABILITY_REWIND_DESC",
+    "tags": [
+      "history",
+      "rewind_echo",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "rift",
+    "category": "time_ability",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "TIME_ABILITY_RIFT_NAME",
+    "description_key": "TIME_ABILITY_RIFT_DESC",
+    "tags": [
+      "projectile_control",
+      "rift_trap",
+      "spatial_control"
+    ],
+    "compatibility": {},
+    "effects": {}
+  },
+  {
+    "id": "stop",
+    "category": "time_ability",
+    "availability": [
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "TIME_ABILITY_STOP_NAME",
+    "description_key": "TIME_ABILITY_STOP_DESC",
+    "tags": [
+      "freeze_burst",
+      "projectile_control",
+      "time"
+    ],
+    "compatibility": {},
+    "effects": {}
+  }
+]

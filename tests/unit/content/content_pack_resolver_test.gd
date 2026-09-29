@@ -61,7 +61,7 @@ func _test_project_base_pack(suite) -> void:
 	var descriptor: Dictionary = loaded.get("descriptor", {})
 	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
 	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
-	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 4, "project base pack owns four normalized content sources")
+	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 7, "project base pack owns rewards and loadout identity sources")
 	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
 
 	var entries: Array[Dictionary] = []
@@ -77,7 +77,7 @@ func _test_project_base_pack(suite) -> void:
 		for entry_value: Variant in parsed:
 			if entry_value is Dictionary:
 				entries.append((entry_value as Dictionary).duplicate(true))
-	suite.assert_equal(entries.size(), 33, "project base pack preserves all current content definitions")
+	suite.assert_equal(entries.size(), 47, "project base pack preserves rewards and canonical loadout definitions")
 	var allowed_archetypes: Array[String] = [
 		"",
 		"accelerated_combo",
@@ -91,10 +91,12 @@ func _test_project_base_pack(suite) -> void:
 	for entry: Dictionary in entries:
 		for required_field: String in [
 			"id", "category", "availability", "name_key", "description_key",
-			"tags", "compatibility", "effects", "kind", "archetype", "role",
-			"rarity", "icon_id",
+			"tags", "compatibility", "effects",
 		]:
 			suite.assert_true(entry.has(required_field), "base entry %s has %s" % [entry.get("id", ""), required_field])
+		if str(entry.get("category", "")) in ["item", "blessing", "curse", "talent"]:
+			for reward_field: String in ["kind", "archetype", "role", "rarity", "icon_id"]:
+				suite.assert_true(entry.has(reward_field), "reward entry %s has %s" % [entry.get("id", ""), reward_field])
 		suite.assert_true(not entry.has("name") and not entry.has("description"), "base entry %s uses v2 localization fields" % entry.get("id", ""))
 		suite.assert_true(allowed_archetypes.has(str(entry.get("archetype", ""))), "base entry %s uses authoritative archetype taxonomy" % entry.get("id", ""))
 
