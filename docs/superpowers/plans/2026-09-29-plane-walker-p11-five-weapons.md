@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-29
-- Implementation Status: P11A ready to execute after approved design commit `40c10ba`; later gates remain pending
+- Implementation Status: P11A certified through commits `245b533`, `ed03dff`, and `5369bf9`; P11B Sword migration is active and later gates remain pending
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -54,7 +54,7 @@
 - Consumes: `ContentRegistry.load_packs(pack_roots, game_version)` and normalized run milestone/weapon IDs.
 - Produces: `WeaponRuntimeProfile.from_definition(definition) -> WeaponRuntimeProfile`, `ContentRegistry.get_weapon_runtime_profile(profile_id) -> Dictionary`, and accepted run config field `weapon_profile_id`.
 
-- [ ] **Step 1: Write failing profile and loadout contracts**
+- [x] **Step 1: Write failing profile and loadout contracts**
 
 ```gdscript
 func test_m1_sword_resolves_exact_profile() -> void:
@@ -67,13 +67,13 @@ func test_launch_staff_profile_is_not_available_in_m1() -> void:
 	assert_false(rejected.ok)
 ```
 
-- [ ] **Step 2: Run contracts and confirm missing profile authority fails**
+- [x] **Step 2: Run contracts and confirm missing profile authority fails**
 
 Run: `./tools/run_tests.sh --filter "content_registry|loadout_catalog|staff_spell_catalog"`
 
 Expected: FAIL because `weapon_runtime_profiles.json`, profile lookup, or `weapon_profile_id` does not exist.
 
-- [ ] **Step 3: Implement the exact profile boundary**
+- [x] **Step 3: Implement the exact profile boundary**
 
 ```gdscript
 class_name WeaponRuntimeProfile
@@ -101,17 +101,17 @@ static func from_definition(definition: Dictionary) -> WeaponRuntimeProfile:
 
 The Registry rejects missing/duplicate IDs, unsupported semantic actions, non-positive frame windows, cancel frames beyond recovery, invalid resource bounds, unknown payload/cue IDs, weapon/profile mismatches, and availability widening.
 
-- [ ] **Step 4: Absorb the interrupted Staff data draft**
+- [x] **Step 4: Absorb the interrupted Staff data draft**
 
 Remove the draft `weapon_spell` category from `content_entry_v2.schema.json` and `ContentRegistry.VALID_CATEGORIES`. Move reusable Staff action numbers into `staff_launch_v1`; retain bilingual spell text for P11E. Register the profile manifest and exact SHA-256 values in `pack.json`.
 
-- [ ] **Step 5: Run focused and pack-integrity tests**
+- [x] **Step 5: Run focused and pack-integrity tests**
 
 Run: `./tools/run_tests.sh --filter "content_registry|content_pack_resolver|loadout_catalog|weapon_runtime_profile"`
 
 Expected: PASS with the Base Pack active, exact manifest hashes, and fail-closed invalid fixtures.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -- data/schemas/weapon_runtime_profile_v1.schema.json data/content_packs/base/content/weapon_runtime_profiles.json data/content_packs/base/content/weapons.json data/content_packs/base/pack.json scripts/content/content_registry.gd scripts/application/run_loadout_policy.gd data/schemas/content_entry_v2.schema.json scripts/combat/weapons/weapon_runtime_profile.gd tests/contract/content_schema
@@ -131,7 +131,7 @@ git commit -m "feat(content): add weapon runtime profiles"
 - Consumes: one configured `WeaponRuntime`, immutable profile, intent dictionaries, and generation-safe frame ticks.
 - Produces: `submit_intent(intent, context) -> Dictionary`, `advance_frame()`, `cancel(reason)`, `snapshot()`, `restore_safe(snapshot)`, and `presentation_snapshot()`.
 
-- [ ] **Step 1: Write failing transaction tests**
+- [x] **Step 1: Write failing transaction tests**
 
 ```gdscript
 func test_rejected_plan_is_atomic() -> void:
@@ -148,13 +148,13 @@ func test_windup_active_recovery_and_cancel_boundary() -> void:
 	assert_eq(coordinator.phase_name(), "ACTIVE")
 ```
 
-- [ ] **Step 2: Run the coordinator scene and confirm RED**
+- [x] **Step 2: Run the coordinator scene and confirm RED**
 
 Run: `./tools/run_tests.sh --filter weapon_action_coordinator`
 
 Expected: FAIL because the coordinator classes are missing.
 
-- [ ] **Step 3: Implement the narrow runtime contract**
+- [x] **Step 3: Implement the narrow runtime contract**
 
 ```gdscript
 class_name WeaponRuntime
@@ -174,13 +174,13 @@ func presentation_snapshot() -> Dictionary: return {}
 
 `WeaponActionContract` validates finite numeric fields, immutable action tokens, hold/release edges, payload descriptors, phase timings, and half-open cancel windows. The coordinator deep-copies every committed plan and publishes no fact from a rejected plan.
 
-- [ ] **Step 4: Verify phase, buffer, cancel, stale-generation, snapshot, and exactly-once tests**
+- [x] **Step 4: Verify phase, buffer, cancel, stale-generation, snapshot, and exactly-once tests**
 
 Run: `./tools/run_tests.sh --filter "weapon_action_coordinator|player_action_state"`
 
 Expected: PASS; legacy state tests remain green while the new coordinator is still additive.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -- scripts/combat/weapons/weapon_action_contract.gd scripts/combat/weapons/weapon_runtime.gd scripts/combat/weapons/weapon_action_coordinator.gd tests/combat/weapon_action_coordinator_test.gd tests/combat/weapon_action_coordinator_test.tscn
@@ -205,7 +205,7 @@ git commit -m "feat(combat): add weapon action coordinator"
 - Consumes: persisted input profile, current accessibility mode, raw Godot action edges, and profile capabilities.
 - Produces: semantic `{id, edge, held_frames}` intents, frozen modifier snapshots, and typed weapon facts.
 
-- [ ] **Step 1: Write failing migration, hold/toggle, and capability tests**
+- [x] **Step 1: Write failing migration, hold/toggle, and capability tests**
 
 ```gdscript
 func test_legacy_attack_migrates_to_primary_without_losing_binding() -> void:
@@ -218,11 +218,11 @@ func test_unsupported_modifier_fails_closed() -> void:
 	assert_eq(modifiers.snapshot(), {})
 ```
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 Run: `./tools/run_tests.sh --filter "weapon_intent_router|weapon_modifier_state|combat_event_publication|input_action_contract"`
 
-- [ ] **Step 3: Implement semantic compatibility and additive facts**
+- [x] **Step 3: Implement semantic compatibility and additive facts**
 
 ```gdscript
 signal weapon_action_committed(weapon_id: StringName, action_id: StringName, token: int, context: Dictionary)
@@ -232,13 +232,13 @@ signal weapon_hit_confirmed(weapon_id: StringName, action_id: StringName, token:
 
 Legacy actions remain accepted only through the router. `WeaponModifierState.freeze_for_action()` returns a deep copy and rejects NaN, infinity, unknown capabilities, and invalid bounds.
 
-- [ ] **Step 4: Run input, controller, event, and accessibility regressions**
+- [x] **Step 4: Run input, controller, event, and accessibility regressions**
 
 Run: `./tools/run_tests.sh --filter "input|accessibility|controller|combat_event_publication|weapon_modifier_state"`
 
 Expected: PASS with keyboard/mouse and controller coverage for every required semantic action.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -- scripts/input/weapon_intent_router.gd scripts/input/input_action_contract.gd scripts/combat/weapons/weapon_modifier_state.gd project.godot autoload/event_bus.gd tests/contract/input tests/combat/weapon_modifier_state_test.gd tests/combat/weapon_modifier_state_test.tscn tests/contract/events/combat_event_publication_test.gd

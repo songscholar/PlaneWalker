@@ -100,6 +100,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P10 Candidate Loadouts Evidence](current/2026-09-29-p10-candidate-loadouts-evidence.md) | 五角色/五武器/四能力、候选运行时、双槽 HUD、Candidate Lab、六组合与事实完整性认证 | Verified Locally / Current |
 | [P11 Five Complete Weapons Design](superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md) | 五武器共享动作权威、完整节奏、输入、HUD、反馈、时间与 Boss 联动及 30 组合验证 | Approved / Current authority |
 | [P11 Five Complete Weapons Plan](superpowers/plans/2026-09-29-plane-walker-p11-five-weapons.md) | P11A–P11H 共享权威、五武器迁移/实现、跨武器系统及认证执行计划 | Active / Current |
+| [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
 
