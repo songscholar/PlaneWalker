@@ -18,6 +18,7 @@ radius = 14.0
 size = Vector2(72, 36)
 
 [node name="Player" type="CharacterBody2D"]
+process_mode = 1
 script = ExtResource("1_player_controller")
 
 [node name="Visual" type="Polygon2D" parent="."]

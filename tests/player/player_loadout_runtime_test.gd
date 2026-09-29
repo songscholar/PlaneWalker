@@ -98,7 +98,9 @@ func _test_m1_equipment_isolation() -> void:
 	_suite.assert_true(bool(player.call("try_action", &"ranged_attack")), "equipped Bow starts charging")
 	_suite.assert_true(bool(player.get_node("BowWeapon").call("is_charging")), "equipped Bow owns the ranged path")
 	_suite.assert_true(not bool(player.call("try_action", &"time_rewind")), "unequipped Rewind is rejected")
-	_suite.assert_true(not bool(player.call("try_action", &"time_rift")), "equipped Rift remains inactive before Task 4")
+	time_manager.time_rift_duration = 0.01
+	_suite.assert_true(bool(player.call("try_action", &"time_rift")), "equipped Rift commits through the shared action owner")
+	_suite.assert_equal(player.action_state.current_state, PlayerActionStateScript.State.TIME_CAST, "equipped Rift owns the time-cast state")
 	await _free_player(player)
 
 

@@ -16,7 +16,9 @@ var _age: float = 0.0
 var _armed: bool = false
 var _resolved: bool = false
 var _time_stop_token_sequence: int = 0
-var _active_time_stop_tokens: Dictionary = {}
+var _time_stop_sources: Dictionary = {}
+var _rift_slow_multiplier: float = 1.0
+var _rift_slow_sources: Dictionary = {}
 
 
 func _ready() -> void:
@@ -42,7 +44,7 @@ func _physics_process(delta: float) -> void:
 	if not _armed:
 		visual.rotation += delta * 8.0
 		return
-	global_position += direction.normalized() * speed * delta
+	global_position += direction.normalized() * speed * _rift_slow_multiplier * delta
 
 
 func _on_area_entered(area: Area2D) -> void:
@@ -75,13 +77,42 @@ func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	_time_stop_token_sequence += 1
-	var token := _time_stop_token_sequence
-	_active_time_stop_tokens[token] = true
-	_time_stopped = true
-	await get_tree().create_timer(duration).timeout
-	_active_time_stop_tokens.erase(token)
-	_time_stopped = not _active_time_stop_tokens.is_empty()
+	var source_id := StringName("legacy_time_stop_%d_%d" % [get_instance_id(), _time_stop_token_sequence])
+	apply_time_stop_source(source_id, duration)
+	get_tree().create_timer(duration, false).timeout.connect(clear_time_stop_source.bind(source_id))
+
+
+func apply_time_stop_source(source_id: StringName, duration: float) -> void:
+	if source_id == &"" or duration <= 0.0:
+		return
+	_time_stop_sources[source_id] = true
+	_recompute_time_stop()
+
+
+func clear_time_stop_source(source_id: StringName) -> void:
+	_time_stop_sources.erase(source_id)
+	_recompute_time_stop()
+
+
+func _recompute_time_stop() -> void:
+	_time_stopped = not _time_stop_sources.is_empty()
 
 
 func is_time_stopped() -> bool:
 	return _time_stopped
+
+
+func apply_time_rift(source_id: StringName, slow_multiplier: float) -> void:
+	_rift_slow_sources[source_id] = clampf(slow_multiplier, 0.1, 1.0)
+	_recompute_rift_slow()
+
+
+func clear_time_rift(source_id: StringName) -> void:
+	_rift_slow_sources.erase(source_id)
+	_recompute_rift_slow()
+
+
+func _recompute_rift_slow() -> void:
+	_rift_slow_multiplier = 1.0
+	for source_multiplier: Variant in _rift_slow_sources.values():
+		_rift_slow_multiplier = minf(_rift_slow_multiplier, float(source_multiplier))

@@ -29,7 +29,7 @@ var _attack_cooldown_remaining: float = 0.0
 var _time_stopped: bool = false
 var _knockback_velocity: Vector2 = Vector2.ZERO
 var _rift_slow_multiplier: float = 1.0
-var _rift_slow_sources: int = 0
+var _rift_slow_sources: Dictionary = {}
 var _is_elite: bool = false
 var _weakpoint_damage_bonus: float = 0.0
 var _weakpoint_token: int = 0
@@ -37,7 +37,7 @@ var _attack_phase: AttackPhase = AttackPhase.READY
 var _attack_phase_remaining: float = 0.0
 var _committed_attack_direction: Vector2 = Vector2.RIGHT
 var _time_stop_token_sequence: int = 0
-var _active_time_stop_tokens: Dictionary = {}
+var _time_stop_sources: Dictionary = {}
 
 const KNOCKBACK_DECAY := 10.0
 
@@ -238,14 +238,32 @@ func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	_time_stop_token_sequence += 1
-	var token := _time_stop_token_sequence
-	_active_time_stop_tokens[token] = true
-	_time_stopped = true
-	_refresh_control_visual()
-	var effective_duration := duration * (elite_time_stop_multiplier if _is_elite else 1.0)
-	await get_tree().create_timer(effective_duration).timeout
-	_active_time_stop_tokens.erase(token)
-	_time_stopped = not _active_time_stop_tokens.is_empty()
+	var source_id := StringName("legacy_time_stop_%d_%d" % [get_instance_id(), _time_stop_token_sequence])
+	apply_time_stop_source(source_id, duration)
+	if not _is_elite or elite_time_stop_multiplier >= 1.0:
+		get_tree().create_timer(duration, false).timeout.connect(clear_time_stop_source.bind(source_id))
+
+
+func apply_time_stop_source(source_id: StringName, duration: float) -> void:
+	if source_id == &"" or duration <= 0.0 or _time_stop_sources.has(source_id):
+		return
+	_time_stop_sources[source_id] = true
+	_recompute_time_stop()
+	if _is_elite and elite_time_stop_multiplier < 1.0:
+		var resisted_duration := duration * clampf(elite_time_stop_multiplier, 0.0, 1.0)
+		if resisted_duration <= 0.0:
+			clear_time_stop_source(source_id)
+		else:
+			get_tree().create_timer(resisted_duration, false).timeout.connect(clear_time_stop_source.bind(source_id))
+
+
+func clear_time_stop_source(source_id: StringName) -> void:
+	_time_stop_sources.erase(source_id)
+	_recompute_time_stop()
+
+
+func _recompute_time_stop() -> void:
+	_time_stopped = not _time_stop_sources.is_empty()
 	_refresh_control_visual()
 
 
@@ -272,15 +290,20 @@ func get_weakpoint_damage_bonus(damage_info: RefCounted) -> float:
 	return 0.0
 
 
-func apply_time_rift(slow_multiplier: float) -> void:
-	_rift_slow_sources += 1
-	_rift_slow_multiplier = minf(_rift_slow_multiplier, clampf(slow_multiplier, 0.1, 1.0))
+func apply_time_rift(source_id: StringName, slow_multiplier: float) -> void:
+	_rift_slow_sources[source_id] = clampf(slow_multiplier, 0.1, 1.0)
+	_recompute_rift_slow()
 
 
-func clear_time_rift() -> void:
-	_rift_slow_sources = maxi(0, _rift_slow_sources - 1)
-	if _rift_slow_sources == 0:
-		_rift_slow_multiplier = 1.0
+func clear_time_rift(source_id: StringName) -> void:
+	_rift_slow_sources.erase(source_id)
+	_recompute_rift_slow()
+
+
+func _recompute_rift_slow() -> void:
+	_rift_slow_multiplier = 1.0
+	for source_multiplier: Variant in _rift_slow_sources.values():
+		_rift_slow_multiplier = minf(_rift_slow_multiplier, float(source_multiplier))
 
 
 func apply_elite_modifier(hp_multiplier: float = 1.8, attack_multiplier: float = 1.25, speed_multiplier: float = 1.08) -> void:

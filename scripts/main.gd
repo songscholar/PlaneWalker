@@ -89,7 +89,7 @@ func _start_new_run() -> void:
 	get_tree().paused = false
 	start_menu.visible = false
 	combat_room.visible = true
-	combat_room.process_mode = Node.PROCESS_MODE_INHERIT
+	combat_room.process_mode = Node.PROCESS_MODE_PAUSABLE
 	var config := _build_run_config()
 	var started = runtime_host.call("start_run", config)
 	if not started.ok:
@@ -166,6 +166,7 @@ func _apply_run_accessibility_assists(run_data: Dictionary) -> void:
 func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
 	GameState.record_run_summary(result)
 	get_tree().paused = false
+	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	pause_menu.hide_pause()
 	status_label.visible = true
 	var snapshot: Dictionary = runtime_host.call("runtime_snapshot")

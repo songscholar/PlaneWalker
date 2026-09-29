@@ -12,7 +12,7 @@ var _timer: float = 0.0
 var _exploded: bool = false
 var _visual: Polygon2D
 var _time_stop_token_sequence: int = 0
-var _active_time_stop_tokens: Dictionary = {}
+var _time_stop_sources: Dictionary = {}
 
 
 func _ready() -> void:
@@ -37,12 +37,25 @@ func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	_time_stop_token_sequence += 1
-	var token := _time_stop_token_sequence
-	_active_time_stop_tokens[token] = true
-	_time_stopped = true
-	await get_tree().create_timer(duration).timeout
-	_active_time_stop_tokens.erase(token)
-	_time_stopped = not _active_time_stop_tokens.is_empty()
+	var source_id := StringName("legacy_time_stop_%d_%d" % [get_instance_id(), _time_stop_token_sequence])
+	apply_time_stop_source(source_id, duration)
+	get_tree().create_timer(duration, false).timeout.connect(clear_time_stop_source.bind(source_id))
+
+
+func apply_time_stop_source(source_id: StringName, duration: float) -> void:
+	if source_id == &"" or duration <= 0.0:
+		return
+	_time_stop_sources[source_id] = true
+	_recompute_time_stop()
+
+
+func clear_time_stop_source(source_id: StringName) -> void:
+	_time_stop_sources.erase(source_id)
+	_recompute_time_stop()
+
+
+func _recompute_time_stop() -> void:
+	_time_stopped = not _time_stop_sources.is_empty()
 
 
 func is_time_stopped() -> bool:

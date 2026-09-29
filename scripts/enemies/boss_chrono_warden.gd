@@ -504,6 +504,16 @@ func _restore_visual_color() -> void:
 func apply_time_stop(duration: float) -> void:
 	if duration <= 0.0:
 		return
+	_time_stop_token_sequence += 1
+	var source_id := StringName("legacy_time_stop_%d_%d" % [get_instance_id(), _time_stop_token_sequence])
+	apply_time_stop_source(source_id, duration)
+	get_tree().create_timer(duration, false).timeout.connect(clear_time_stop_source.bind(source_id))
+
+
+func apply_time_stop_source(source_id: StringName, duration: float) -> void:
+	if source_id == &"" or duration <= 0.0 or _time_stop_sources.has(source_id):
+		return
+	_time_stop_sources[source_id] = true
 	var resisted_delay := minf(duration * 0.35, 1.1)
 	match _action_phase:
 		BossActionPhase.WINDUP:
@@ -513,8 +523,14 @@ func apply_time_stop(duration: float) -> void:
 			_action_time_remaining += maxf(resisted_delay, 0.8)
 		_:
 			_pattern_timer += resisted_delay
-	_add_exposure_source(&"time_stop")
-	get_tree().create_timer(duration).timeout.connect(_remove_exposure_source.bind(&"time_stop"))
+	_add_exposure_source(source_id)
+
+
+func clear_time_stop_source(source_id: StringName) -> void:
+	if not _time_stop_sources.has(source_id):
+		return
+	_time_stop_sources.erase(source_id)
+	_remove_exposure_source(source_id)
 
 
 func get_boss_ui_snapshot() -> Dictionary:
@@ -560,16 +576,19 @@ func _action_phase_name(action_phase: int) -> String:
 	return "IDLE"
 
 
-func apply_time_rift(slow_multiplier: float) -> void:
-	super.apply_time_rift(slow_multiplier)
-	_add_exposure_source(&"time_rift")
+func apply_time_rift(source_id: StringName, slow_multiplier: float) -> void:
+	var source_was_active := _rift_slow_sources.has(source_id)
+	super.apply_time_rift(source_id, slow_multiplier)
+	if not source_was_active:
+		_add_exposure_source(source_id)
 	_pattern_timer = maxf(_pattern_timer, 1.2)
 
 
-func clear_time_rift() -> void:
-	super.clear_time_rift()
-	if _rift_slow_sources == 0:
-		_remove_exposure_source(&"time_rift")
+func clear_time_rift(source_id: StringName) -> void:
+	var source_was_active := _rift_slow_sources.has(source_id)
+	super.clear_time_rift(source_id)
+	if source_was_active:
+		_remove_exposure_source(source_id)
 
 
 func _add_exposure_source(source_id: StringName) -> void:

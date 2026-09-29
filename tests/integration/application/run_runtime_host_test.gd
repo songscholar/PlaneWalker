@@ -1,6 +1,8 @@
 extends Node
 
 const MainScene := preload("res://scenes/main.tscn")
+const EnemyChaserScene := preload("res://scenes/enemies/enemy_chaser.tscn")
+const EnemyProjectileScene := preload("res://scenes/enemies/enemy_projectile.tscn")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
@@ -17,6 +19,39 @@ class LoadoutSpy:
 		return true
 
 
+class RoomProcessProbe:
+	extends Node
+
+	var ticks: int = 0
+
+	func _process(_delta: float) -> void:
+		ticks += 1
+
+
+class TerminalFacade:
+	extends RefCounted
+
+	var state: Dictionary = {}
+
+	func snapshot() -> Dictionary:
+		return state.duplicate(true)
+
+	func advance_time(_delta: float) -> Variant:
+		return null
+
+
+class TerminalOrderRecorder:
+	extends RefCounted
+
+	var events: Array[String] = []
+
+	func record_time_end(skill_id: StringName, _context: Dictionary) -> void:
+		events.append("end:%s" % str(skill_id))
+
+	func record_run_end(_run_id: String, _result: Dictionary, _revision: int) -> void:
+		events.append("run_ended")
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	call_deferred("_run")
@@ -24,6 +59,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
+	await _assert_main_gameplay_pause_boundary(suite)
 	var main := MainScene.instantiate()
 	add_child(main)
 	await get_tree().process_frame
@@ -94,6 +130,7 @@ func _run() -> void:
 		"paused host process does not advance the authoritative run clock"
 	)
 	suite.assert_true(host.call("resume_run").ok, "host resumes after the clock assertion")
+	_assert_terminal_time_cleanup_order(suite, main, host, actual_player)
 
 	main.queue_free()
 	await get_tree().process_frame
@@ -101,6 +138,136 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	suite.finish(get_tree())
+
+
+func _assert_main_gameplay_pause_boundary(suite) -> void:
+	var main := MainScene.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var room: Node = main.get_node("CombatRoom01")
+	room.set("spawn_warning_duration", 0.0)
+	main.call("_start_new_run")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_suite_process_mode_assertions(suite, room)
+
+	var player: Node2D = room.get_node("Player") as Node2D
+	var enemy := EnemyChaserScene.instantiate()
+	var projectile := EnemyProjectileScene.instantiate()
+	var probe := RoomProcessProbe.new()
+	room.get_node("Enemies").add_child(enemy)
+	room.add_child(projectile)
+	room.add_child(probe)
+	enemy.global_position = player.global_position + Vector2(300.0, 0.0)
+	enemy.target = player
+	enemy.attack_range = 0.0
+	projectile.global_position = Vector2(300.0, 140.0)
+	projectile.direction = Vector2.RIGHT
+	projectile.speed = 180.0
+	projectile.arm_time = 0.0
+	projectile.lifetime = 5.0
+	await get_tree().create_timer(0.05).timeout
+
+	get_tree().paused = true
+	var enemy_position_before: Vector2 = enemy.global_position
+	var projectile_position_before: Vector2 = projectile.global_position
+	var probe_ticks_before := probe.ticks
+	await get_tree().create_timer(0.10, true).timeout
+	suite.assert_equal(enemy.global_position, enemy_position_before, "paused Main freezes the real enemy")
+	suite.assert_equal(projectile.global_position, projectile_position_before, "paused Main freezes the real projectile")
+	suite.assert_equal(probe.ticks, probe_ticks_before, "paused Main freezes ordinary room children")
+
+	get_tree().paused = false
+	await get_tree().create_timer(0.10).timeout
+	suite.assert_true(enemy.global_position != enemy_position_before, "resumed Main advances the real enemy")
+	suite.assert_true(projectile.global_position != projectile_position_before, "resumed Main advances the real projectile")
+	suite.assert_true(probe.ticks > probe_ticks_before, "resumed Main advances ordinary room children")
+	main.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _suite_process_mode_assertions(suite, room: Node) -> void:
+	suite.assert_equal(room.process_mode, Node.PROCESS_MODE_PAUSABLE, "active Main keeps CombatRoom01 pausable")
+
+
+func _assert_terminal_time_cleanup_order(suite, main: Node, host: Node, player: Node) -> void:
+	var main_run_end := Callable(main, "_on_run_ended")
+	if EventBus.run_ended.is_connected(main_run_end):
+		EventBus.run_ended.disconnect(main_run_end)
+	var recorder := TerminalOrderRecorder.new()
+	EventBus.time_skill_ended.connect(recorder.record_time_end)
+	EventBus.run_ended.connect(recorder.record_run_end)
+	var facade := TerminalFacade.new()
+
+	_activate_terminal_time_effects(suite, player)
+	facade.state = _terminal_snapshot("terminal-order-victory", RunPhaseScript.Value.VICTORY, "victory")
+	host.set("_facade", facade)
+	host.set("_active_run_id", "terminal-order-victory")
+	host.set("_published_run_id", "terminal-order-victory")
+	host.set("_ended_run_id", "")
+	host.call("_on_terminal_committed", {"result": "victory"}, 10)
+	_assert_terminal_order(suite, recorder.events, "terminal_committed")
+	var victory_events := recorder.events.duplicate()
+	host.call("_on_terminal_committed", {"result": "victory"}, 10)
+	suite.assert_equal(recorder.events, victory_events, "duplicate terminal commit adds no cleanup or run facts")
+	player.cancel_active_time_effects(&"test_cleanup")
+
+	recorder.events.clear()
+	player.reset_runtime_state()
+	_activate_terminal_time_effects(suite, player)
+	facade.state = _terminal_snapshot("terminal-order-failure", RunPhaseScript.Value.DEFEAT, "runtime_error")
+	host.set("_active_run_id", "terminal-order-failure")
+	host.set("_published_run_id", "terminal-order-failure")
+	host.set("_ended_run_id", "")
+	host.call("_on_runtime_failed", {"result": "runtime_error"})
+	_assert_terminal_order(suite, recorder.events, "runtime_failed")
+	var failure_events := recorder.events.duplicate()
+	host.call("_on_runtime_failed", {"result": "runtime_error"})
+	suite.assert_equal(recorder.events, failure_events, "duplicate runtime failure adds no cleanup or run facts")
+	player.cancel_active_time_effects(&"test_cleanup")
+
+	if EventBus.time_skill_ended.is_connected(recorder.record_time_end):
+		EventBus.time_skill_ended.disconnect(recorder.record_time_end)
+	if EventBus.run_ended.is_connected(recorder.record_run_end):
+		EventBus.run_ended.disconnect(recorder.record_run_end)
+
+
+func _activate_terminal_time_effects(suite, player: Node) -> void:
+	var manager: Node = player.get_node("TimeManager")
+	manager.energy_regen = 0.0
+	manager.time_stop_duration = 10.0
+	manager.time_rift_duration = 10.0
+	manager.time_accelerate_duration = 10.0
+	manager.energy = manager.max_energy
+	suite.assert_true(manager.try_time_stop(), "terminal fixture starts Stop")
+	suite.assert_true(manager.try_time_rift(player.global_position), "terminal fixture starts Rift")
+	suite.assert_true(manager.try_time_accelerate(), "terminal fixture starts Accelerate")
+
+
+func _terminal_snapshot(run_id: String, phase: int, outcome: String) -> Dictionary:
+	return {
+		"run_id": run_id,
+		"revision": 10,
+		"phase": phase,
+		"current_room": 5,
+		"result": {"result": outcome},
+		"stats": {},
+		"build": {},
+	}
+
+
+func _assert_terminal_order(suite, events: Array[String], label: String) -> void:
+	suite.assert_equal(events.size(), 4, "%s publishes three time ends plus run_ended" % label)
+	var run_end_index := events.find("run_ended")
+	suite.assert_true(run_end_index >= 0, "%s publishes run_ended" % label)
+	for skill_id: String in ["time_stop", "time_rift", "time_accelerate"]:
+		var event_name := "end:%s" % skill_id
+		suite.assert_equal(events.count(event_name), 1, "%s ends %s exactly once" % [label, skill_id])
+		var end_index := events.find(event_name)
+		suite.assert_true(end_index >= 0 and end_index < run_end_index, "%s ends %s before run_ended" % [label, skill_id])
 
 
 func _config() -> Dictionary:

@@ -11,15 +11,23 @@ extends Area2D
 var _affected: Array[Node] = []
 var _remaining_duration: float = 0.0
 var _finished: bool = false
+var _source_id: StringName
+
+
+func _init() -> void:
+	_source_id = StringName("time_rift_%d" % get_instance_id())
 
 
 func _ready() -> void:
 	add_to_group("time_rifts")
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_configure_shape()
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	area_entered.connect(_on_area_entered)
+	area_exited.connect(_on_area_exited)
 	_remaining_duration = maxf(0.0, duration)
-	call_deferred("_apply_overlapping_bodies")
+	call_deferred("_apply_overlapping_targets")
 
 
 func _process(delta: float) -> void:
@@ -44,39 +52,49 @@ func _configure_shape() -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	_apply_body(body)
+	_apply_target(body)
 
 
-func _apply_overlapping_bodies() -> void:
+func _on_area_entered(area: Area2D) -> void:
+	_apply_target(area)
+
+
+func _apply_overlapping_targets() -> void:
 	if _finished:
 		return
 	for body: Node in get_overlapping_bodies():
-		_apply_body(body)
+		_apply_target(body)
+	for area: Area2D in get_overlapping_areas():
+		_apply_target(area)
 	for body: Node in get_tree().get_nodes_in_group("enemies"):
 		if body is Node2D and global_position.distance_to(body.global_position) <= radius:
-			_apply_body(body)
+			_apply_target(body)
 
 
-func _apply_body(body: Node) -> void:
+func _apply_target(target: Node) -> void:
 	if _finished:
 		return
-	if not body.has_method("apply_time_rift"):
+	if not target.has_method("apply_time_rift"):
 		return
-	if _affected.has(body):
+	if _affected.has(target):
 		return
-	body.apply_time_rift(slow_multiplier)
-	_affected.append(body)
+	target.apply_time_rift(_source_id, slow_multiplier)
+	_affected.append(target)
 
 
 func _on_body_exited(body: Node) -> void:
-	_clear_body(body)
+	_clear_target(body)
+
+
+func _on_area_exited(area: Area2D) -> void:
+	_clear_target(area)
 
 
 func _expire() -> void:
 	_finish(true)
 
 
-func cancel(publish_end_event: bool = false) -> void:
+func cancel(publish_end_event: bool = true) -> void:
 	_finish(publish_end_event)
 
 
@@ -85,15 +103,16 @@ func _finish(publish_end_event: bool) -> void:
 		return
 	_finished = true
 	set_process(false)
-	for body: Node in _affected.duplicate():
-		_clear_body(body)
+	for target: Node in _affected.duplicate():
+		_clear_target(target)
 	if publish_end_event:
 		EventBus.time_skill_ended.emit(&"time_rift", {})
 	queue_free()
 
 
-func _clear_body(body: Node) -> void:
-	if _affected.has(body):
-		_affected.erase(body)
-	if is_instance_valid(body) and body.has_method("clear_time_rift"):
-		body.clear_time_rift()
+func _clear_target(target: Node) -> void:
+	if not _affected.has(target):
+		return
+	_affected.erase(target)
+	if is_instance_valid(target) and target.has_method("clear_time_rift"):
+		target.clear_time_rift(_source_id)

@@ -68,10 +68,6 @@ func _physics_process(delta: float) -> void:
 func _update_timers(delta: float) -> void:
 	_dash_cooldown_remaining = maxf(0.0, _dash_cooldown_remaining - delta)
 	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
-	if _time_acceleration_remaining > 0.0:
-		_time_acceleration_remaining = maxf(0.0, _time_acceleration_remaining - delta)
-		if _time_acceleration_remaining <= 0.0:
-			_clear_time_acceleration(_time_acceleration_token)
 
 
 func _update_weapon_aim() -> void:
@@ -154,16 +150,11 @@ func try_action(action_id: StringName) -> bool:
 			return _commit_ranged_input(action_id)
 		&"dash":
 			return _request_dash()
-		&"time_stop":
-			if not loadout_runtime.has_time_ability(&"stop"):
+		&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate":
+			var canonical_id: StringName = time_manager.canonical_skill_id(action_id)
+			if canonical_id == &"" or not loadout_runtime.has_time_ability(canonical_id):
 				return false
 			return _request_time_skill(action_id)
-		&"time_rewind":
-			if not loadout_runtime.has_time_ability(&"rewind"):
-				return false
-			return _request_time_skill(action_id)
-		&"time_rift", &"time_accelerate":
-			return false
 		_:
 			return false
 
@@ -190,11 +181,9 @@ func reset_runtime_state() -> void:
 	sword_weapon.cancel_attack()
 	sword_weapon.reset_combo()
 	bow_weapon.reset_runtime_state()
-	_time_acceleration_token += 1
-	_time_acceleration_multiplier = 1.0
-	_time_acceleration_remaining = 0.0
-	_apply_stats_to_components(true)
 	time_manager.reset_runtime_state()
+	_force_clear_time_acceleration()
+	_apply_stats_to_components(true)
 	health.invulnerable = false
 	if rewind_recorder.has_method("clear_snapshots"):
 		rewind_recorder.clear_snapshots()
@@ -251,6 +240,11 @@ func cancel_transient_actions() -> void:
 	_combo_window_frames_remaining = 0
 	sword_weapon.reset_combo()
 	_clear_transient_effects()
+
+
+func cancel_active_time_effects(reason: StringName = &"player_cancel") -> void:
+	if time_manager != null and time_manager.has_method("cancel_all_time_effects"):
+		time_manager.cancel_all_time_effects(reason)
 
 
 func get_rewind_safe_action_state() -> Dictionary:
@@ -367,8 +361,11 @@ func _begin_dash() -> bool:
 
 
 func _request_time_skill(skill_id: StringName) -> bool:
+	var context := _time_skill_context(skill_id)
+	if not time_manager.can_use(skill_id, context):
+		return false
 	if action_state.can_transition_to(PlayerActionStateScript.State.TIME_CAST):
-		return _begin_time_skill(skill_id)
+		return _begin_time_skill(skill_id, context)
 	if _can_buffer_committed_action():
 		_buffered_time_skill = skill_id
 		action_state.buffer_input(&"time_cast", PlayerActionStateScript.COMBO_BUFFER_FRAMES)
@@ -376,19 +373,18 @@ func _request_time_skill(skill_id: StringName) -> bool:
 	return false
 
 
-func _begin_time_skill(skill_id: StringName) -> bool:
+func _begin_time_skill(skill_id: StringName, context: Dictionary = {}) -> bool:
 	if not action_state.can_transition_to(PlayerActionStateScript.State.TIME_CAST):
 		return false
-	if skill_id == &"time_stop" and not time_manager.can_time_stop():
-		return false
-	if skill_id == &"time_rewind" and not time_manager.can_rewind(rewind_recorder):
+	var committed_context := context if not context.is_empty() else _time_skill_context(skill_id)
+	if not time_manager.can_use(skill_id, committed_context):
 		return false
 	if action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY:
 		sword_weapon.cancel_attack()
 		_active_attack_definition.clear()
 	if not action_state.transition_to(PlayerActionStateScript.State.TIME_CAST, _seconds_to_frames(TIME_CAST_DURATION)):
 		return false
-	var committed: bool = time_manager.try_time_stop() if skill_id == &"time_stop" else time_manager.try_rewind(rewind_recorder)
+	var committed: bool = time_manager.try_use(skill_id, committed_context)
 	if not committed and action_state.current_state == PlayerActionStateScript.State.TIME_CAST:
 		action_state.force_safe_reset()
 	return committed
@@ -402,7 +398,7 @@ func _consume_buffered_action() -> void:
 		&"time_cast":
 			var skill_id := _buffered_time_skill
 			_buffered_time_skill = &""
-			_begin_time_skill(skill_id)
+			_begin_time_skill(skill_id, _time_skill_context(skill_id))
 		&"combo", &"attack":
 			var heavy := _buffered_attack_heavy
 			_buffered_attack_heavy = false
@@ -415,6 +411,16 @@ func _can_buffer_committed_action() -> bool:
 		PlayerActionStateScript.State.ATTACK_ACTIVE,
 		PlayerActionStateScript.State.ATTACK_RECOVERY,
 	]
+
+
+func _time_skill_context(skill_id: StringName) -> Dictionary:
+	match time_manager.canonical_skill_id(skill_id):
+		&"rewind":
+			return {"recorder": rewind_recorder}
+		&"rift":
+			return {"position": global_position}
+		_:
+			return {}
 
 
 func _clear_transient_effects() -> void:
@@ -450,20 +456,37 @@ func apply_knockback(knockback: Vector2) -> void:
 
 
 func apply_time_acceleration(multiplier: float, duration: float) -> void:
-	if duration <= 0.0:
-		return
-	_time_acceleration_token += 1
+	if time_manager != null and time_manager.has_method("apply_legacy_time_acceleration"):
+		time_manager.apply_legacy_time_acceleration(multiplier, duration)
+
+
+func apply_time_acceleration_token(token: int, multiplier: float, duration: float) -> bool:
+	if token <= 0 or duration <= 0.0:
+		return false
+	_time_acceleration_token = token
 	_time_acceleration_multiplier = maxf(1.0, multiplier)
 	_time_acceleration_remaining = duration
 	_apply_stats_to_components(false)
+	return true
 
 
-func _clear_time_acceleration(token: int) -> void:
+func clear_time_acceleration(token: int) -> bool:
 	if token != _time_acceleration_token:
-		return
+		return false
 	_time_acceleration_multiplier = 1.0
 	_time_acceleration_remaining = 0.0
 	_apply_stats_to_components(false)
+	return true
+
+
+func _clear_time_acceleration(token: int) -> void:
+	clear_time_acceleration(token)
+
+
+func _force_clear_time_acceleration() -> void:
+	_time_acceleration_token += 1
+	_time_acceleration_multiplier = 1.0
+	_time_acceleration_remaining = 0.0
 
 
 func is_time_accelerated() -> bool:
@@ -482,6 +505,7 @@ func _on_died(_killer: Variant) -> void:
 	if action_state.transition_to(PlayerActionStateScript.State.DEAD, 0):
 		action_state.clear_buffered_inputs()
 		_clear_transient_effects()
+		cancel_active_time_effects(&"player_died")
 
 
 func _apply_stats_to_components(reset_health: bool) -> void:

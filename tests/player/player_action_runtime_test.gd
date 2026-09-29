@@ -17,7 +17,7 @@ func _run() -> void:
 	await _test_active_dash_buffer_and_recovery_cancel()
 	await _test_time_actions_use_the_action_owner()
 	await _test_hitstun_and_dead_are_exclusive()
-	await _test_future_actions_remain_inactive_in_m1()
+	await _test_candidate_actions_remain_inactive_in_m1()
 	_suite.finish(get_tree())
 
 
@@ -119,17 +119,17 @@ func _test_hitstun_and_dead_are_exclusive() -> void:
 	await _free_player(player)
 
 
-func _test_future_actions_remain_inactive_in_m1() -> void:
+func _test_candidate_actions_remain_inactive_in_m1() -> void:
 	var player := await _spawn_player()
 	var bow: Node = player.get_node("BowWeapon")
 	var time_manager: Node = player.get_node("TimeManager")
 	var energy_before: float = time_manager.energy
 
 	_suite.assert_true(not player.try_action(&"ranged_attack"), "M1 rejects Bow without deleting its implementation")
-	_suite.assert_true(not player.try_action(&"time_rift"), "M1 rejects Time Rift")
-	_suite.assert_true(not player.try_action(&"time_accelerate"), "M1 rejects Time Accelerate")
+	_suite.assert_true(not player.try_action(&"time_rift"), "M1 rejects unequipped Time Rift")
+	_suite.assert_true(not player.try_action(&"time_accelerate"), "M1 rejects unequipped Time Accelerate")
 	_suite.assert_true(not bow.is_charging(), "rejected Bow input does not start charging")
-	_suite.assert_close(time_manager.energy, energy_before, "rejected future skills spend no energy")
+	_suite.assert_close(time_manager.energy, energy_before, "rejected candidate skills spend no energy")
 
 	var snapshot: Dictionary = player.get_player_ui_snapshot()
 	_suite.assert_close(snapshot["hp"], player.health.current_hp, "UI snapshot reads current hp")

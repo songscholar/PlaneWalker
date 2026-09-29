@@ -281,6 +281,7 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 
 
 func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
+	_cancel_player_time_effects(&"run_terminal")
 	_publish_terminal_result(context)
 
 
@@ -294,6 +295,7 @@ func _on_runtime_failed(context: Dictionary) -> void:
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
+	_cancel_player_time_effects(&"runtime_failed")
 	_publish_terminal_result(context)
 
 
@@ -477,6 +479,8 @@ func _set_selection_safety(active_selection: bool) -> void:
 		if _player != null and is_instance_valid(_player):
 			if _player.has_method("cancel_transient_actions"):
 				_player.call("cancel_transient_actions")
+			if _player.has_method("cancel_active_time_effects"):
+				_player.call("cancel_active_time_effects", &"selection_opened")
 			_player_process_mode = _player.process_mode
 			_player.process_mode = Node.PROCESS_MODE_DISABLED
 		_clear_hostile_transients()
@@ -486,6 +490,11 @@ func _set_selection_safety(active_selection: bool) -> void:
 	if _player != null and is_instance_valid(_player):
 		_player.process_mode = _player_process_mode
 	_selection_safety_active = false
+
+
+func _cancel_player_time_effects(reason: StringName) -> void:
+	if _player != null and is_instance_valid(_player) and _player.has_method("cancel_active_time_effects"):
+		_player.call("cancel_active_time_effects", reason)
 
 
 func _clear_hostile_transients() -> void:
