@@ -1,0 +1,17 @@
+{
+  "aggregate_sha256": "3ea513ffe38dacd241522b087c5c39b28aa67e2d691bd8de68298661fe39c8d4",
+  "packs": [
+    {
+      "pack_id": "m1_bonus",
+      "pack_version": "1.0.0",
+      "schema_version": 1,
+      "fingerprint_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "pack_id": "base",
+      "pack_version": "0.4.0-dev",
+      "schema_version": 1,
+      "fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ]
+}

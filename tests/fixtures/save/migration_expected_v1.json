@@ -1,0 +1,53 @@
+{
+  "magic": "PWSAVE",
+  "schema_version": 1,
+  "document_kind": "profile",
+  "profile_id": "slot_1",
+  "save_domain": "base",
+  "sequence": 0,
+  "game_version": "0.4.0-dev",
+  "created_at_utc": "2026-09-28T08:00:00Z",
+  "saved_at_utc": "2026-09-28T08:00:00Z",
+  "content_snapshot": {
+    "aggregate_sha256": "3ea513ffe38dacd241522b087c5c39b28aa67e2d691bd8de68298661fe39c8d4",
+    "packs": [
+      {
+        "pack_id": "base",
+        "pack_version": "0.4.0-dev",
+        "schema_version": 1,
+        "fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "pack_id": "m1_bonus",
+        "pack_version": "1.0.0",
+        "schema_version": 1,
+        "fingerprint_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  "payload": {
+    "chronos_shards": 17,
+    "existential_imprints": 3,
+    "unlocked_nodes": ["node_guard_1"],
+    "discovered_items": ["sword_edge"],
+    "unlocked_characters": ["wanderer"],
+    "unlocked_weapons": ["sword"],
+    "weapon_proficiency": {"sword": 4},
+    "npc_affinity": {"odysseus": 2},
+    "unlocked_achievements": ["first_return"],
+    "cosmetics": {"wanderer": ["default"]},
+    "runs_completed": 5,
+    "victories": 1,
+    "best_rooms_cleared": 5,
+    "last_run_summary": {
+      "result": "floor_cleared",
+      "floor": 1,
+      "rooms_cleared": 5,
+      "kills": 7
+    }
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "36cdc260707557737d93271d91ec06410acc0edd5086e5547129d9e75785f444"
+  }
+}

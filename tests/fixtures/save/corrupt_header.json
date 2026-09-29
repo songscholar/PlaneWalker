@@ -1,0 +1,27 @@
+{
+  "magic": "BROKEN",
+  "schema_version": 1,
+  "document_kind": "profile",
+  "profile_id": "slot_1",
+  "save_domain": "base",
+  "sequence": 12,
+  "game_version": "0.4.0-dev",
+  "created_at_utc": "2026-09-28T08:00:00Z",
+  "saved_at_utc": "2026-09-28T09:00:00Z",
+  "content_snapshot": {
+    "aggregate_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "packs": [
+      {
+        "pack_id": "base",
+        "pack_version": "0.4.0-dev",
+        "schema_version": 1,
+        "fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    ]
+  },
+  "payload": {"chronos_shards": 21},
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "persistent": {
+    "chronos_shards": 17,
+    "existential_imprints": 3,
+    "unlocked_nodes": ["node_guard_1"],
+    "discovered_items": ["sword_edge"],
+    "unlocked_characters": ["wanderer"],
+    "unlocked_weapons": ["sword"],
+    "weapon_proficiency": {"sword": 4},
+    "npc_affinity": {"odysseus": 2},
+    "unlocked_achievements": ["first_return"],
+    "cosmetics": {"wanderer": ["default"]},
+    "settings": {
+      "locale": "en",
+      "master_volume": 0.4,
+      "master_muted": true,
+      "camera_shake_enabled": false,
+      "hit_flash_enabled": false,
+      "reduced_motion": true
+    },
+    "runs_completed": 5,
+    "victories": 1,
+    "best_rooms_cleared": 5,
+    "last_run_summary": {
+      "result": "floor_cleared",
+      "floor": 1,
+      "rooms_cleared": 5,
+      "kills": 7
+    }
+  }
+}
