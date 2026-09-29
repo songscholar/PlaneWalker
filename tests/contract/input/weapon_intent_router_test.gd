@@ -16,6 +16,8 @@ func _run() -> void:
 	_test_migration_rejects_ambiguous_or_invalid_profiles()
 	_test_schema_two_profiles_are_isolated()
 	_test_hold_and_toggle_modes_emit_equivalent_edges()
+	_test_press_mode_is_stateless()
+	_test_reset_action_and_reset_all_clear_latches()
 	_test_edge_validation_fails_closed()
 	_suite.finish(get_tree())
 
@@ -148,6 +150,71 @@ func _test_hold_and_toggle_modes_emit_equivalent_edges() -> void:
 	_suite.assert_equal(toggle_edges, hold_edges, "hold and toggle normalize to the same semantic edge sequence")
 	_suite.assert_equal(hold_edges[0], {"id": &"weapon_primary", "edge": &"pressed", "held_frames": 0}, "legacy attack normalizes to semantic primary")
 	_suite.assert_equal(hold_edges[2].get("held_frames"), 18, "release preserves the authoritative held-frame count")
+
+
+func _test_press_mode_is_stateless() -> void:
+	var router = WeaponIntentRouterScript.new()
+	var first_press: Dictionary = router.normalize_edge(
+		&"weapon_secondary",
+		&"pressed",
+		0,
+		&"press"
+	)
+	_suite.assert_equal(
+		first_press,
+		{"id": &"weapon_secondary", "edge": &"pressed", "held_frames": 0},
+		"press mode emits the semantic pressed edge"
+	)
+	_suite.assert_equal(
+		router.normalize_edge(&"weapon_secondary", &"held", 12, &"press"),
+		{},
+		"press mode ignores held edges"
+	)
+	_suite.assert_equal(
+		router.normalize_edge(&"weapon_secondary", &"released", 12, &"press"),
+		{},
+		"press mode keeps physical release silent"
+	)
+	_suite.assert_equal(
+		router.normalize_edge(&"heavy_attack", &"pressed", 99, &"press"),
+		{"id": &"weapon_secondary", "edge": &"pressed", "held_frames": 0},
+		"a later legacy alias press remains stateless and normalizes to the same semantic slot"
+	)
+
+
+func _test_reset_action_and_reset_all_clear_latches() -> void:
+	var router = WeaponIntentRouterScript.new()
+	_suite.assert_equal(
+		router.normalize_edge(&"attack", &"pressed", 0, &"toggle"),
+		{"id": &"weapon_primary", "edge": &"pressed", "held_frames": 0},
+		"legacy primary begins a toggle latch"
+	)
+	_suite.assert_true(
+		router.reset_action(&"attack"),
+		"reset_action accepts a legacy alias and clears its semantic latch"
+	)
+	_suite.assert_equal(
+		router.normalize_edge(&"weapon_primary", &"pressed", 0, &"toggle"),
+		{"id": &"weapon_primary", "edge": &"pressed", "held_frames": 0},
+		"a cancelled toggle starts fresh after reset_action"
+	)
+	_suite.assert_true(
+		not router.reset_action(&"debug_action"),
+		"reset_action fails closed for unknown actions"
+	)
+
+	router.normalize_edge(&"weapon_secondary", &"pressed", 0, &"toggle")
+	router.reset_all()
+	_suite.assert_equal(
+		router.normalize_edge(&"weapon_primary", &"pressed", 0, &"toggle"),
+		{"id": &"weapon_primary", "edge": &"pressed", "held_frames": 0},
+		"reset_all clears the primary latch"
+	)
+	_suite.assert_equal(
+		router.normalize_edge(&"weapon_secondary", &"pressed", 0, &"toggle"),
+		{"id": &"weapon_secondary", "edge": &"pressed", "held_frames": 0},
+		"reset_all clears every other semantic latch"
+	)
 
 
 func _test_edge_validation_fails_closed() -> void:

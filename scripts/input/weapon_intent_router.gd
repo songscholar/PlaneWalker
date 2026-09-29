@@ -26,7 +26,7 @@ const SEMANTIC_ACTIONS: Array[StringName] = [
 	&"pause",
 ]
 const VALID_EDGES: Array[StringName] = [&"pressed", &"held", &"released"]
-const VALID_MODES: Array[StringName] = [&"hold", &"toggle"]
+const VALID_MODES: Array[StringName] = [&"press", &"hold", &"toggle"]
 
 var _active_actions: Dictionary = {}
 var _held_frames: Dictionary = {}
@@ -98,14 +98,35 @@ func normalize_edge(
 	):
 		return {}
 
+	if activation_mode == &"press":
+		return _normalize_press_edge(semantic_action, raw_edge)
 	if activation_mode == &"toggle":
 		return _normalize_toggle_edge(semantic_action, raw_edge, held_frames)
 	return _normalize_hold_edge(semantic_action, raw_edge, held_frames)
 
 
 func reset() -> void:
+	reset_all()
+
+
+func reset_action(action_id: StringName) -> bool:
+	var semantic_action: StringName = LEGACY_WEAPON_ACTIONS.get(action_id, action_id)
+	if not SEMANTIC_ACTIONS.has(semantic_action):
+		return false
+	_active_actions.erase(semantic_action)
+	_held_frames.erase(semantic_action)
+	return true
+
+
+func reset_all() -> void:
 	_active_actions.clear()
 	_held_frames.clear()
+
+
+func _normalize_press_edge(action_id: StringName, raw_edge: StringName) -> Dictionary:
+	if raw_edge != &"pressed":
+		return {}
+	return _intent(action_id, &"pressed", 0)
 
 
 func _normalize_hold_edge(action_id: StringName, raw_edge: StringName, frames: int) -> Dictionary:
