@@ -52,6 +52,7 @@ func _run() -> void:
 	await _test_mismatched_profile_reconfigure_is_atomic()
 	await _test_non_m1_direct_loadout_exposes_compatibility_fallback()
 	await _test_explicit_profile_milestone_mismatch_is_atomic()
+	await _test_bow_candidate_uses_shared_hold_transaction()
 	_suite.finish(get_tree())
 
 
@@ -382,6 +383,75 @@ func _test_explicit_profile_milestone_mismatch_is_atomic() -> void:
 		before.get("generation"),
 		"milestone mismatch rejection does not replace the coordinator"
 	)
+	await _free_player(player)
+
+
+func _test_bow_candidate_uses_shared_hold_transaction() -> void:
+	var player := await _spawn_player()
+	var bow_config := _loadout_config("bow")
+	bow_config["milestone"] = "NEXT"
+	bow_config["weapon_profile"] = _profile_definition("bow_candidate_v1")
+	_suite.assert_true(
+		player.configure_loadout(bow_config),
+		"NEXT Bow candidate configures a profile-backed runtime and coordinator"
+	)
+	_suite.assert_true(player.weapon_runtime != null, "Bow candidate owns a real weapon runtime")
+	_suite.assert_true(
+		player.weapon_action_coordinator != null,
+		"Bow candidate owns the shared weapon action coordinator"
+	)
+	if player.weapon_action_coordinator == null:
+		await _free_player(player)
+		return
+
+	var recorder := EventRecorder.new()
+	EventBus.weapon_action_committed.connect(recorder.on_weapon_action_committed)
+	EventBus.player_attacked.connect(recorder.on_player_attacked)
+
+	_suite.assert_true(player.try_action(&"ranged_attack"), "Bow press commits the charge transaction")
+	var hold := _weapon_presentation(player)
+	var hold_token := int(hold.get("token", 0))
+	var hold_generation := int(hold.get("generation", 0))
+	_suite.assert_equal(hold.get("phase"), "HOLD", "Bow press enters coordinator-owned HOLD")
+	_suite.assert_true(hold_token > 0, "Bow HOLD owns a coordinator action token")
+	_suite.assert_equal(recorder.commits.size(), 1, "Bow press publishes one typed commit")
+	_suite.assert_equal(recorder.releases.size(), 0, "Bow HOLD publishes no projectile release")
+
+	_advance(player, 9)
+	_suite.assert_true(player.try_action(&"ranged_release"), "threshold release resolves the active HOLD")
+	var released := _weapon_presentation(player)
+	_suite.assert_equal(released.get("phase"), "WINDUP", "threshold release advances the same transaction to WINDUP")
+	_suite.assert_equal(int(released.get("token", 0)), hold_token, "release preserves the original action token")
+	_suite.assert_equal(int(released.get("generation", 0)), hold_generation, "release does not create a replacement generation")
+	_suite.assert_equal(recorder.commits.size(), 1, "release does not publish a second commit")
+	_suite.assert_equal(recorder.releases.size(), 0, "Bow release waits for ACTIVE before projectile publication")
+
+	player.cancel_transient_actions()
+	var releases_before_cancelled_hold := recorder.releases.size()
+	_suite.assert_true(player.try_action(&"ranged_attack"), "Bow can begin a fresh HOLD after cancellation")
+	var cancelled_hold := _weapon_presentation(player)
+	var cancelled_token := int(cancelled_hold.get("token", 0))
+	var cancelled_generation := int(cancelled_hold.get("generation", 0))
+	_suite.assert_true(player.try_action(&"dash"), "Dash cancels Bow HOLD immediately")
+	var cancelled := _weapon_presentation(player)
+	_suite.assert_equal(cancelled.get("phase"), "READY", "Dash cancellation clears Bow HOLD")
+	_suite.assert_true(
+		int(cancelled.get("generation", 0)) > cancelled_generation,
+		"Dash cancellation invalidates the Bow HOLD generation"
+	)
+	_suite.assert_true(
+		not player.try_action(&"ranged_release"),
+		"stale release cannot resolve the cancelled Bow token"
+	)
+	_suite.assert_equal(
+		recorder.releases.size(),
+		releases_before_cancelled_hold,
+		"cancelled Bow HOLD publishes no additional projectile release"
+	)
+	_suite.assert_true(cancelled_token > hold_token, "fresh Bow HOLD uses a monotonic token")
+
+	_disconnect_recorder(recorder)
+	await get_tree().create_timer(0.25).timeout
 	await _free_player(player)
 
 

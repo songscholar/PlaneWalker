@@ -113,7 +113,11 @@ func _test_m1_equipment_isolation() -> void:
 	_suite.assert_true(bool(player.call("configure_loadout", _config("bow", ["stop", "rift"]))), "candidate Bow loadout applies")
 	_suite.assert_true(not bool(player.call("try_action", &"attack")), "unequipped Sword is rejected")
 	_suite.assert_true(bool(player.call("try_action", &"ranged_attack")), "equipped Bow starts charging")
-	_suite.assert_true(bool(player.get_node("BowWeapon").call("is_charging")), "equipped Bow owns the ranged path")
+	_suite.assert_equal(
+		player.weapon_presentation_snapshot().get("phase"),
+		"HOLD",
+		"equipped Bow charge is owned by the shared coordinator"
+	)
 	_suite.assert_true(not bool(player.call("try_action", &"time_rewind")), "unequipped Rewind is rejected")
 	time_manager.time_rift_duration = 0.01
 	_suite.assert_true(bool(player.call("try_action", &"time_rift")), "equipped Rift commits through the shared action owner")
@@ -123,13 +127,12 @@ func _test_m1_equipment_isolation() -> void:
 
 func _test_successful_reconfigure_resets_runtime_state() -> void:
 	var player := await _spawn_player()
-	var bow: Node = player.get_node("BowWeapon")
 	var time_manager: Node = player.get_node("TimeManager")
 
 	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rift"])), "dirty-state setup equips Bow")
 	_suite.assert_true(player.try_action(&"ranged_attack"), "dirty-state setup begins Bow charge")
-	bow.set("_cooldown_remaining", 2.0)
-	_suite.assert_true(player.try_action(&"dash"), "dirty-state setup begins dash")
+	var bow_hold: Dictionary = player.weapon_presentation_snapshot()
+	player.set("_dash_cooldown_remaining", 2.0)
 	player.action_state.buffer_input(&"attack", 30)
 	player.apply_knockback(Vector2(90.0, -30.0))
 	player.velocity = Vector2(120.0, 40.0)
@@ -143,15 +146,22 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 		&"time_rift": 5.0,
 		&"time_accelerate": 6.0,
 	})
-	_suite.assert_true(bow.is_charging(), "Bow charge exists before successful reconfigure")
-	_suite.assert_true(bow.get_cooldown_remaining() > 0.0, "Bow cooldown exists before successful reconfigure")
+	_suite.assert_equal(bow_hold.get("phase"), "HOLD", "coordinator Bow charge exists before successful reconfigure")
+	_suite.assert_true(int(bow_hold.get("token", 0)) > 0, "coordinator Bow charge owns a token before reconfigure")
+	_suite.assert_equal(
+		bow_hold.get("runtime", {}).get("cooldown_frames"),
+		21,
+		"Bow candidate exposes its Profile-authoritative cooldown"
+	)
 	_suite.assert_true(player.is_time_accelerated(), "acceleration exists before successful reconfigure")
 	_suite.assert_true(not get_tree().get_nodes_in_group("time_rifts").is_empty(), "Rift exists before successful reconfigure")
 
 	_suite.assert_true(player.configure_loadout(_config("sword", ["stop", "rewind"])), "valid reconfigure succeeds")
 	await get_tree().process_frame
-	_suite.assert_true(not bow.is_charging(), "successful reconfigure clears Bow charge")
-	_suite.assert_close(bow.get_cooldown_remaining(), 0.0, "successful reconfigure clears Bow cooldown")
+	var reconfigured_weapon: Dictionary = player.weapon_presentation_snapshot()
+	_suite.assert_equal(reconfigured_weapon.get("weapon_id"), "sword", "successful reconfigure replaces Bow authority")
+	_suite.assert_equal(reconfigured_weapon.get("phase"), "READY", "successful reconfigure clears Bow HOLD")
+	_suite.assert_equal(int(reconfigured_weapon.get("token", -1)), 0, "successful reconfigure invalidates Bow token")
 	_suite.assert_close(time_manager.energy, time_manager.max_energy, "successful reconfigure restores time energy")
 	for skill_id: StringName in [&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate"]:
 		_suite.assert_close(time_manager.get_cooldown(skill_id), 0.0, "successful reconfigure clears %s cooldown" % skill_id)
@@ -168,12 +178,11 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 
 func _test_invalid_reconfigure_preserves_runtime_state() -> void:
 	var player := await _spawn_player()
-	var bow: Node = player.get_node("BowWeapon")
 	var time_manager: Node = player.get_node("TimeManager")
 	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rewind"])), "invalid reset setup equips Bow")
 	_suite.assert_true(player.try_action(&"ranged_attack"), "invalid reset setup begins Bow charge")
-	bow.set("_cooldown_remaining", 2.0)
-	_suite.assert_true(player.try_action(&"dash"), "invalid reset setup begins dash")
+	var bow_before: Dictionary = player.weapon_presentation_snapshot()
+	player.set("_dash_cooldown_remaining", 2.0)
 	player.action_state.buffer_input(&"attack", 30)
 	player.apply_knockback(Vector2(60.0, 15.0))
 	player.apply_time_acceleration(1.5, 0.1)
@@ -186,12 +195,15 @@ func _test_invalid_reconfigure_preserves_runtime_state() -> void:
 	})
 
 	_suite.assert_true(not player.configure_loadout(_config("sword", ["stop"])), "invalid reconfigure fails")
-	_suite.assert_true(bow.is_charging(), "invalid reconfigure preserves Bow charge")
-	_suite.assert_close(bow.get_cooldown_remaining(), 2.0, "invalid reconfigure preserves Bow cooldown")
+	var bow_after: Dictionary = player.weapon_presentation_snapshot()
+	_suite.assert_equal(bow_after.get("phase"), "HOLD", "invalid reconfigure preserves coordinator Bow charge")
+	_suite.assert_equal(bow_after.get("token"), bow_before.get("token"), "invalid reconfigure preserves Bow token")
+	_suite.assert_equal(bow_after.get("generation"), bow_before.get("generation"), "invalid reconfigure preserves Bow generation")
+	_suite.assert_close(float(player.get("_dash_cooldown_remaining")), 2.0, "invalid reconfigure preserves dash cooldown")
 	_suite.assert_close(time_manager.energy, 17.0, "invalid reconfigure preserves time energy")
 	_suite.assert_close(time_manager.get_cooldown(&"time_rift"), 5.0, "invalid reconfigure preserves time cooldowns")
 	_suite.assert_true(player.is_time_accelerated(), "invalid reconfigure preserves acceleration")
-	_suite.assert_equal(player.action_state.current_state, PlayerActionStateScript.State.DASH, "invalid reconfigure preserves action state")
+	_suite.assert_equal(player.action_state.current_state, PlayerActionStateScript.State.ATTACK_WINDUP, "invalid reconfigure preserves HOLD projection")
 	_suite.assert_true(player.action_state.has_buffered_input(&"attack"), "invalid reconfigure preserves buffered actions")
 	_suite.assert_equal(player.get("_knockback_velocity"), Vector2(60.0, 15.0), "invalid reconfigure preserves knockback")
 	_suite.assert_equal(str(player.loadout_runtime.weapon_id()), "bow", "invalid reconfigure preserves the equipped weapon")

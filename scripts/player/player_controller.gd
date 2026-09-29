@@ -5,6 +5,7 @@ const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
+const BowWeaponRuntimeScript := preload("res://scripts/combat/weapons/bow_weapon_runtime.gd")
 const SwordWeaponRuntimeScript := preload("res://scripts/combat/weapons/sword_weapon_runtime.gd")
 const WeaponActionCoordinatorScript := preload("res://scripts/combat/weapons/weapon_action_coordinator.gd")
 const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_modifier_state.gd")
@@ -19,6 +20,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
 	"weapon.charge_rate": {"minimum": 0.0, "maximum": 5.0},
 	"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+	"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
 }
 
 @export var stats: Resource
@@ -130,7 +132,7 @@ func handle_ranged_input_for_test(just_pressed: bool, just_released: bool) -> vo
 	var mode := str(GameState.get_setting("ranged_charge_mode", "hold"))
 	if mode == "toggle":
 		if just_pressed:
-			try_action(&"ranged_release" if bow_weapon.is_charging() else &"ranged_attack")
+			try_action(&"ranged_release" if _weapon_hold_is_active() else &"ranged_attack")
 		return
 	if just_pressed:
 		try_action(&"ranged_attack")
@@ -139,14 +141,12 @@ func handle_ranged_input_for_test(just_pressed: bool, just_released: bool) -> vo
 
 
 func _commit_ranged_input(action_id: StringName) -> bool:
-	if not loadout_runtime.has_weapon(&"bow"):
-		return false
-	if action_state.current_state != PlayerActionStateScript.State.FREE:
+	if not loadout_runtime.has_weapon(&"bow") or weapon_action_coordinator == null:
 		return false
 	if action_id == &"ranged_attack":
-		return bow_weapon.start_charge()
+		return _submit_weapon_intent(&"weapon_primary", &"pressed")
 	if action_id == &"ranged_release":
-		return bow_weapon.release_charge(Vector2.RIGHT.rotated(bow_weapon.global_rotation))
+		return _submit_weapon_intent(&"weapon_primary", &"released")
 	return false
 
 
@@ -190,8 +190,8 @@ func configure_loadout(config: Dictionary) -> bool:
 	var next_weapon_id := StringName(str(next_config.get("weapon_id", "")))
 	var explicit_weapon_profile := next_config.has("weapon_profile")
 	var used_compatibility_profile := false
-	if next_weapon_id == &"sword" and not next_config.has("weapon_profile"):
-		var default_profile := _weapon_profile_definition(&"sword")
+	if next_weapon_id in [&"sword", &"bow"] and not next_config.has("weapon_profile"):
+		var default_profile := _weapon_profile_definition(next_weapon_id)
 		if default_profile.is_empty():
 			return false
 		next_config["weapon_profile"] = default_profile
@@ -390,6 +390,9 @@ func apply_weapon_modifier(capability: StringName, value: Variant) -> bool:
 func claim_weapon_action_reward(token: int, reward_kind: StringName) -> bool:
 	if token <= 0 or reward_kind == &"":
 		return false
+	if weapon_runtime != null and weapon_runtime.has_method("claim_action_reward"):
+		var runtime_result: Variant = weapon_runtime.call("claim_action_reward", token, reward_kind)
+		return runtime_result is Dictionary and bool((runtime_result as Dictionary).get("ok", false))
 	var key := "%d:%s" % [token, str(reward_kind)]
 	if _weapon_action_reward_claims.has(key):
 		return false
@@ -423,7 +426,10 @@ func apply_weapon_effect(effect_id: StringName, value: Variant) -> bool:
 	return true
 
 
-func _submit_weapon_intent(semantic_action: StringName) -> bool:
+func _submit_weapon_intent(
+	semantic_action: StringName,
+	edge: StringName = &"pressed"
+) -> bool:
 	if weapon_action_coordinator == null:
 		return false
 	if action_state.current_state in [
@@ -436,17 +442,17 @@ func _submit_weapon_intent(semantic_action: StringName) -> bool:
 	var result: Dictionary = weapon_action_coordinator.submit_intent(
 		{
 			"id": str(semantic_action),
-			"edge": "pressed",
+			"edge": str(edge),
 			"buffer_frames": PlayerActionStateScript.COMBO_BUFFER_FRAMES,
 		},
 		{
-			"aim_direction": Vector2.RIGHT.rotated(sword_weapon.global_rotation),
+			"aim_direction": _weapon_aim_direction(),
 			"facing": _last_move_direction,
 		}
 	)
+	_sync_weapon_action_projection()
 	if not bool(result.get("ok", false)):
 		return false
-	_sync_weapon_action_projection()
 	return true
 
 
@@ -462,7 +468,10 @@ func _request_dash() -> bool:
 func _begin_dash() -> bool:
 	if _dash_cooldown_remaining > 0.0 or not action_state.can_transition_to(PlayerActionStateScript.State.DASH):
 		return false
-	if action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY:
+	if (
+		action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY
+		or _weapon_hold_is_active()
+	):
 		_cancel_weapon_action(&"dash_cancel")
 	if not action_state.transition_to(PlayerActionStateScript.State.DASH, _seconds_to_frames(DASH_DURATION)):
 		return false
@@ -492,7 +501,10 @@ func _begin_time_skill(skill_id: StringName, context: Dictionary = {}) -> bool:
 	var committed_context := context if not context.is_empty() else _time_skill_context(skill_id)
 	if not time_manager.can_use(skill_id, committed_context):
 		return false
-	if action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY:
+	if (
+		action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY
+		or _weapon_hold_is_active()
+	):
 		_cancel_weapon_action(&"time_cast_cancel")
 	if not action_state.transition_to(PlayerActionStateScript.State.TIME_CAST, _seconds_to_frames(TIME_CAST_DURATION)):
 		return false
@@ -524,7 +536,7 @@ func _can_buffer_committed_action() -> bool:
 
 func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	var weapon_id := StringName(str(config.get("weapon_id", "")))
-	if weapon_id != &"sword":
+	if weapon_id not in [&"sword", &"bow"]:
 		return {
 			"ok": true,
 			"profile": null,
@@ -552,7 +564,11 @@ func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	if not next_modifiers.configure(capabilities, bounds):
 		return {"ok": false, "reason": "modifier_configuration_failed"}
 
-	var next_runtime = SwordWeaponRuntimeScript.new()
+	var next_runtime = (
+		SwordWeaponRuntimeScript.new()
+		if weapon_id == &"sword"
+		else BowWeaponRuntimeScript.new()
+	)
 	if not next_runtime.configure(self, next_profile, next_modifiers):
 		return {"ok": false, "reason": "runtime_configuration_failed"}
 	var next_coordinator = WeaponActionCoordinatorScript.new()
@@ -580,9 +596,12 @@ func _weapon_profile_definition(weapon_id: StringName) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(WEAPON_PROFILE_CATALOG_PATH))
 	if not parsed is Array:
 		return {}
-	if weapon_id != &"sword":
+	var preferred_profile_id: String = str({
+		&"sword": "sword_m1_v1",
+		&"bow": "bow_candidate_v1",
+	}.get(weapon_id, ""))
+	if preferred_profile_id.is_empty():
 		return {}
-	var preferred_profile_id := "sword_m1_v1"
 	for definition_value: Variant in parsed as Array:
 		if not definition_value is Dictionary:
 			continue
@@ -725,6 +744,23 @@ func _clear_transient_effects() -> void:
 	_buffered_time_skill = &""
 	if bow_weapon.has_method("cancel_charge"):
 		bow_weapon.cancel_charge()
+
+
+func _weapon_hold_is_active() -> bool:
+	return (
+		weapon_action_coordinator != null
+		and weapon_action_coordinator.phase_name() == &"HOLD"
+	)
+
+
+func _weapon_aim_direction() -> Vector2:
+	var weapon_id: StringName = loadout_runtime.weapon_id() if loadout_runtime != null else &""
+	var rotation_value: float = (
+		float(bow_weapon.global_rotation)
+		if weapon_id == &"bow"
+		else float(sword_weapon.global_rotation)
+	)
+	return Vector2.RIGHT.rotated(rotation_value)
 
 
 func _seconds_to_frames(seconds: float) -> int:

@@ -64,7 +64,7 @@ func _restore_time_energy() -> void:
 			or not bool(owner_entity.call(
 				"claim_weapon_action_reward",
 				action_token,
-				&"bow_full_charge_energy"
+				&"full_charge_energy"
 			))
 		):
 			return
