@@ -69,6 +69,10 @@ func weapon_profile_snapshot() -> Dictionary:
 	return _weapon_profile.duplicate(true)
 
 
+func run_seed() -> int:
+	return int(_config.get("seed", 0))
+
+
 func time_ability_ids() -> Array:
 	return _time_ability_ids.duplicate(true)
 

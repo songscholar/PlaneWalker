@@ -441,6 +441,7 @@ func _build_hold_skeleton(
 	modifier_snapshot: Dictionary
 ) -> Dictionary:
 	var timing_multiplier := _timing_multiplier(adapter_snapshot, modifier_snapshot)
+	var charge_multiplier := _charge_multiplier(adapter_snapshot, modifier_snapshot)
 	return {
 		"weapon_id": str(WEAPON_ID),
 		"action_id": str(ACTION_ID),
@@ -450,6 +451,7 @@ func _build_hold_skeleton(
 		"activation_mode": "release",
 		"buffer_frames": int(_action.get("buffer_frames", 8)),
 		"cooldown_frames": _profile_cooldown_frames(),
+		"resource_costs": (_action.get("resource_costs", {}) as Dictionary).duplicate(true),
 		"aim_direction_snapshot": direction,
 		"modifier_snapshot": modifier_snapshot.duplicate(true),
 		"adapter_snapshot": adapter_snapshot.duplicate(true),
@@ -459,6 +461,9 @@ func _build_hold_skeleton(
 				"phase": "HOLD",
 				"duration_frames": MAXIMUM_CHARGE_FRAMES,
 				"minimum_hold_frames": MINIMUM_CHARGE_FRAMES,
+				"charge_complete_frames": MAXIMUM_CHARGE_FRAMES,
+				"hold_progress_multiplier": charge_multiplier,
+				"movement_start_multiplier": float(_action["movement_multiplier"]),
 				"movement_multiplier": float(_action["movement_multiplier"]),
 			},
 			{
@@ -523,6 +528,7 @@ func _build_final_plan_result(
 		"activation_mode": "release",
 		"buffer_frames": int(_action.get("buffer_frames", 8)),
 		"cooldown_frames": _profile_cooldown_frames(),
+		"resource_costs": (_action.get("resource_costs", {}) as Dictionary).duplicate(true),
 		"hold": {
 			"resource_id": str(RESOURCE_ID),
 			"raw_frames": raw_frames,
@@ -641,6 +647,7 @@ func _validate_final_plan(plan: Dictionary) -> Dictionary:
 		or str(plan.get("activation_mode", "")) != "release"
 		or int(plan.get("buffer_frames", -1)) != int(FROZEN_ACTION["buffer_frames"])
 		or int(plan.get("cooldown_frames", -1)) != _profile_cooldown_frames()
+		or plan.get("resource_costs", {}) != _action.get("resource_costs", {})
 	):
 		return _failure(&"ACTION_PROFILE_MISMATCH")
 	if not plan.get("hold") is Dictionary:

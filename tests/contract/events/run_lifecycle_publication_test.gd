@@ -335,7 +335,14 @@ func _run() -> void:
 	_assert_counts(suite, recorder, [0, 0, 0, 0, 0], "failed start publishes no lifecycle facts")
 
 	var started = host.call("start_run", _config())
-	suite.assert_true(started.ok, "valid run starts")
+	suite.assert_true(
+		started.ok,
+		"valid run starts: code=%s context=%s" % [str(started.code), str(started.context)]
+	)
+	if not started.ok:
+		await _cleanup(main, recorder)
+		suite.finish(get_tree())
+		return
 	_assert_counts(suite, recorder, [1, 1, 0, 0, 0], "successful start publishes run and room entry once")
 	suite.assert_true(recorder.event_ids.size() >= 2, "successful start records run and first-room facts")
 	if recorder.event_ids.size() >= 2:

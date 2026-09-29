@@ -409,13 +409,13 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 	EventBus.weapon_action_committed.connect(recorder.on_weapon_action_committed)
 	EventBus.player_attacked.connect(recorder.on_player_attacked)
 
-	_suite.assert_true(player.try_action(&"ranged_attack"), "Bow press commits the charge transaction")
+	_suite.assert_true(player.try_action(&"ranged_attack"), "Bow press reserves the charge transaction")
 	var hold := _weapon_presentation(player)
 	var hold_token := int(hold.get("token", 0))
 	var hold_generation := int(hold.get("generation", 0))
 	_suite.assert_equal(hold.get("phase"), "HOLD", "Bow press enters coordinator-owned HOLD")
 	_suite.assert_true(hold_token > 0, "Bow HOLD owns a coordinator action token")
-	_suite.assert_equal(recorder.commits.size(), 1, "Bow press publishes one typed commit")
+	_suite.assert_equal(recorder.commits.size(), 0, "Bow press publishes no typed commit before release")
 	_suite.assert_equal(recorder.releases.size(), 0, "Bow HOLD publishes no projectile release")
 
 	_advance(player, 9)
@@ -424,11 +424,16 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 	_suite.assert_equal(released.get("phase"), "WINDUP", "threshold release advances the same transaction to WINDUP")
 	_suite.assert_equal(int(released.get("token", 0)), hold_token, "release preserves the original action token")
 	_suite.assert_equal(int(released.get("generation", 0)), hold_generation, "release does not create a replacement generation")
-	_suite.assert_equal(recorder.commits.size(), 1, "release does not publish a second commit")
+	_suite.assert_equal(recorder.commits.size(), 1, "release publishes exactly one typed commit")
 	_suite.assert_equal(recorder.releases.size(), 0, "Bow release waits for ACTIVE before projectile publication")
 
 	player.cancel_transient_actions()
 	var releases_before_cancelled_hold := recorder.releases.size()
+	_suite.assert_true(
+		not player.try_action(&"ranged_attack"),
+		"cancelling recovery cannot bypass the committed Bow cooldown"
+	)
+	_advance(player, 21)
 	_suite.assert_true(player.try_action(&"ranged_attack"), "Bow can begin a fresh HOLD after cancellation")
 	var cancelled_hold := _weapon_presentation(player)
 	var cancelled_token := int(cancelled_hold.get("token", 0))
@@ -481,7 +486,7 @@ func _test_bow_undercharge_and_time_cancel_are_atomic() -> void:
 		int(undercharged.get("generation", 0)) > undercharge_generation,
 		"undercharge rejection invalidates the prior generation"
 	)
-	_suite.assert_equal(recorder.commits.size(), 1, "undercharge publishes only its initial typed commit")
+	_suite.assert_equal(recorder.commits.size(), 0, "undercharge publishes no typed commit")
 	_suite.assert_equal(recorder.releases.size(), 0, "undercharge publishes no projectile release")
 
 	_suite.assert_true(player.try_action(&"ranged_attack"), "time-cancel fixture begins a fresh HOLD")

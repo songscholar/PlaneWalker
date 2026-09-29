@@ -3,7 +3,55 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
 const WeaponActionCoordinatorScript := preload("res://scripts/combat/weapons/weapon_action_coordinator.gd")
+const WeaponResourceTransactionScript := preload("res://scripts/combat/weapons/weapon_resource_transaction.gd")
 const WeaponRuntimeScript := preload("res://scripts/combat/weapons/weapon_runtime.gd")
+
+
+class FakeResourceProvider extends RefCounted:
+	var current: float = 100.0
+	var revision: int = 1
+	var spend_calls: int = 0
+	var reject_commit: bool = false
+
+
+	func resource_state(resource_id: StringName) -> Dictionary:
+		if resource_id != &"time_energy":
+			return {"ok": false, "code": &"RESOURCE_NOT_FOUND", "context": {}}
+		return {
+			"ok": true,
+			"code": &"OK",
+			"resource_id": "time_energy",
+			"current": current,
+			"minimum": 0.0,
+			"maximum": 100.0,
+			"revision": revision,
+			"context": {},
+		}
+
+
+	func try_spend_resource(
+		resource_id: StringName,
+		amount: float,
+		expected_revision: int,
+		_reason: StringName
+	) -> Dictionary:
+		spend_calls += 1
+		if reject_commit:
+			return {"ok": false, "code": &"PROVIDER_REJECTED", "context": {}}
+		if resource_id != &"time_energy" or expected_revision != revision or current < amount:
+			return {"ok": false, "code": &"RESOURCE_COMMIT_FAILED", "context": {}}
+		var before := current
+		current -= amount
+		revision += 1
+		return {
+			"ok": true,
+			"code": &"OK",
+			"resource_id": "time_energy",
+			"before": before,
+			"after": current,
+			"revision": revision,
+			"context": {},
+		}
 
 
 class FakeWeaponRuntime:
@@ -16,13 +64,18 @@ class FakeWeaponRuntime:
 	var fail_commit_action: StringName = &""
 	var fail_restore: bool = false
 	var fail_active_entry: bool = false
+	var fail_phase_entry: StringName = &""
 	var tamper_finalized_field: StringName = &""
+	var return_channel_utility: bool = false
+	var reject_unsupported_sword_semantics: bool = false
 	var commit_attempts: int = 0
 	var cancel_calls: int = 0
 	var finish_calls: int = 0
 	var hold_release_calls: int = 0
 	var released_hold_frames: Array[int] = []
 	var phase_entries: Array[Dictionary] = []
+	var action_cooldown_frames: int = 0
+	var external_resource_cost: float = 0.0
 
 
 	func weapon_id() -> StringName:
@@ -35,8 +88,15 @@ class FakeWeaponRuntime:
 
 	func plan_intent(intent: Dictionary, _context: Dictionary) -> Dictionary:
 		var intent_id := StringName(str(intent.get("id", "")))
+		if (
+			reject_unsupported_sword_semantics
+			and intent_id in [&"weapon_utility", &"weapon_skill", &"weapon_ultimate"]
+		):
+			return {"ok": false, "code": &"UNSUPPORTED_INTENT", "context": {"intent_id": str(intent_id)}}
 		if intent_id == &"weapon_secondary" and reject_secondary:
 			return {"ok": false, "code": &"UNSUPPORTED_INTENT"}
+		if intent_id == &"weapon_utility" and return_channel_utility:
+			return {"ok": true, "plan": _channel_plan()}
 		if intent_id == &"weapon_utility":
 			return {
 				"ok": true,
@@ -70,6 +130,8 @@ class FakeWeaponRuntime:
 
 	func on_phase_enter(_plan: Dictionary, phase: StringName, token: int) -> Array[Dictionary]:
 		phase_entries.append({"phase": str(phase), "token": token})
+		if phase == fail_phase_entry:
+			return [{"type": "phase_failed", "reason": "test_immediate_phase_failure"}]
 		if phase == &"ACTIVE" and fail_active_entry:
 			return [{"type": "phase_failed", "reason": "test_active_failure"}]
 		if phase == &"ACTIVE":
@@ -160,17 +222,27 @@ class FakeWeaponRuntime:
 
 
 	func _action_plan(intent_id: StringName) -> Dictionary:
+		var resource_costs := (
+			{"time_energy": external_resource_cost}
+			if external_resource_cost > 0.0
+			else {}
+		)
 		if intent_id == &"weapon_ultimate":
 			return {
 				"weapon_id": "test_weapon",
 				"action_id": "hold_test",
 				"profile_id": "test_profile",
 				"profile_version": 1,
+				"cooldown_frames": action_cooldown_frames,
+				"resource_costs": resource_costs,
 				"phases": [
 					{
 						"phase": "HOLD",
 						"duration_frames": 5,
 						"minimum_hold_frames": 2,
+						"charge_complete_frames": 4,
+						"hold_progress_multiplier": 1.0,
+						"movement_start_multiplier": 1.0,
 						"movement_multiplier": 0.25,
 					},
 					{
@@ -196,6 +268,8 @@ class FakeWeaponRuntime:
 		return {
 			"weapon_id": "test_weapon",
 			"action_id": str(action_id),
+			"cooldown_frames": action_cooldown_frames,
+			"resource_costs": resource_costs,
 			"phases": [
 				{
 					"phase": "WINDUP",
@@ -218,6 +292,21 @@ class FakeWeaponRuntime:
 				"descriptor_id": "test_hitbox",
 				"damage_multiplier": 1.0,
 			}],
+		}
+
+
+	func _channel_plan() -> Dictionary:
+		return {
+			"weapon_id": "test_weapon",
+			"action_id": "channel_test",
+			"cooldown_frames": 0,
+			"resource_costs": {},
+			"phases": [{
+				"phase": "CHANNEL",
+				"duration_frames": 4,
+				"movement_multiplier": 0.5,
+			}],
+			"payloads": [],
 		}
 
 
@@ -250,6 +339,19 @@ func _run() -> void:
 	_test_contract_rejects_invalid_hold_boundaries()
 	_test_contract_validates_extended_hold_metadata()
 	_test_contract_validates_plan_resources_and_cooldown()
+	_test_resource_prepare_rejects_before_runtime_commit()
+	_test_resource_commit_failure_rolls_back_runtime_and_cooldown()
+	_test_resource_success_spends_once_and_enforces_cooldown()
+	_test_hold_cost_commits_only_on_valid_release()
+	_test_hold_abort_restores_runtime_owned_resource_until_release_commit()
+	_test_hold_release_success_survives_immediate_phase_cancellation()
+	_test_dynamic_hold_progress_controls_movement()
+	_test_reserved_context_fields_are_rejected()
+	_test_reserved_context_rejects_before_busy_buffering()
+	_test_ready_presentation_queries_committed_cooldown_ledger()
+	_test_live_input_actions_do_not_enter_busy_buffer()
+	_test_busy_unsupported_sword_semantics_preserve_existing_buffer()
+	_test_rewind_safe_reset_preserves_committed_resources()
 	_test_contract_rejects_non_finite_plans()
 	_test_contract_rejects_non_finite_plan_metadata()
 	_suite.finish(get_tree())
@@ -484,9 +586,10 @@ func _test_hold_edges_keep_one_action_token_and_one_commit() -> void:
 	)
 	var token := int(pressed.get("token", 0))
 	var generation := int(pressed.get("generation", 0))
-	_suite.assert_true(bool(pressed.get("ok", false)), "hold press commits the transaction")
+	_suite.assert_true(bool(pressed.get("ok", false)), "hold press reserves the transaction token")
 	_suite.assert_equal(coordinator.phase_name(), &"HOLD", "hold press enters coordinator-owned HOLD")
 	_suite.assert_true(token > 0, "hold transaction receives an action token")
+	_suite.assert_equal(_committed_facts.size(), 0, "HOLD press publishes no committed fact before a valid release")
 
 	coordinator.advance_frame()
 	var held: Dictionary = coordinator.submit_intent(
@@ -499,7 +602,7 @@ func _test_hold_edges_keep_one_action_token_and_one_commit() -> void:
 	_suite.assert_equal(held.get("generation"), generation, "held edge keeps the original generation")
 	_suite.assert_equal(held.get("held_frames"), 1, "held edge reports the coordinator clock instead of trusting input frames")
 	_suite.assert_equal(runtime.commit_attempts, 1, "held edge does not commit a second runtime action")
-	_suite.assert_equal(_committed_facts.size(), 1, "held edge publishes no second commit fact")
+	_suite.assert_equal(_committed_facts.size(), 0, "held edge publishes no premature commit fact")
 
 	coordinator.advance_frame()
 	var released: Dictionary = coordinator.submit_intent(
@@ -520,7 +623,8 @@ func _test_hold_edges_keep_one_action_token_and_one_commit() -> void:
 	_suite.assert_equal(runtime.hold_release_calls, 1, "runtime receives exactly one hold release")
 	_suite.assert_equal(runtime.released_hold_frames, [2], "runtime receives the coordinator-owned hold duration")
 	_suite.assert_equal(runtime.commit_attempts, 1, "release does not recommit the runtime action")
-	_suite.assert_equal(_committed_facts.size(), 1, "release publishes no second commit fact")
+	_suite.assert_equal(_committed_facts.size(), 1, "valid release publishes exactly one committed fact")
+	_suite.assert_equal(_committed_facts[0].get("token"), token, "release fact keeps the reserved HOLD token")
 
 
 func _test_hold_releases_automatically_once_at_maximum() -> void:
@@ -541,6 +645,7 @@ func _test_hold_releases_automatically_once_at_maximum() -> void:
 	_suite.assert_equal(runtime.hold_release_calls, 1, "maximum hold releases exactly once")
 	_suite.assert_equal(runtime.released_hold_frames, [5], "automatic release freezes the maximum hold duration")
 	_suite.assert_equal(runtime.commit_attempts, 1, "automatic release never recommits the action")
+	_suite.assert_equal(_committed_facts.size(), 1, "automatic release publishes one committed fact")
 
 	var stale_release: Dictionary = coordinator.submit_intent(
 		{"id": "weapon_ultimate", "edge": "released", "held_frames": 5},
@@ -579,6 +684,7 @@ func _test_under_minimum_hold_release_cancels_without_payload_or_cue() -> void:
 	_suite.assert_equal(runtime.hold_release_calls, 0, "under-minimum release never reaches runtime release")
 	_suite.assert_equal(_runtime_events.size(), 0, "under-minimum release emits no payload or cue")
 	_suite.assert_equal(_phase_names(runtime.phase_entries), ["HOLD"], "under-minimum release never enters payload phases")
+	_suite.assert_equal(_committed_facts.size(), 0, "under-minimum release publishes no committed fact")
 
 
 func _test_stale_hold_release_is_rejected_after_cancel() -> void:
@@ -658,7 +764,7 @@ func _test_tampered_finalized_hold_plan_rolls_back_and_cancels() -> void:
 		_suite.assert_true(not coordinator.is_action_token_current(token, generation), "%s tampering cannot retain a stale token" % label)
 		_suite.assert_equal(runtime.cancel_calls, 1, "%s tampering cancels the restored runtime once" % label)
 		_suite.assert_equal(_runtime_events.size(), 0, "%s tampering emits no payload or cue" % label)
-		_suite.assert_equal(_committed_facts.size(), 1, "%s tampering publishes no second commit" % label)
+		_suite.assert_equal(_committed_facts.size(), 0, "%s tampering publishes no committed fact" % label)
 
 
 func _test_contract_rejects_invalid_hold_boundaries() -> void:
@@ -789,6 +895,331 @@ func _test_contract_validates_plan_resources_and_cooldown() -> void:
 	)
 
 
+func _test_resource_prepare_rejects_before_runtime_commit() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	provider.current = 19.0
+
+	var rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(not bool(rejected.get("ok", false)), "insufficient external resource rejects")
+	_suite.assert_equal(rejected.get("code"), &"INSUFFICIENT_RESOURCE", "resource prepare failure is typed")
+	_suite.assert_equal(runtime.commit_attempts, 0, "resource prepare rejects before runtime payload staging")
+	_suite.assert_equal(provider.spend_calls, 0, "resource prepare rejection never calls provider commit")
+	_suite.assert_equal(_committed_facts.size(), 0, "resource prepare rejection publishes no fact")
+
+
+func _test_resource_commit_failure_rolls_back_runtime_and_cooldown() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 30
+	provider.reject_commit = true
+
+	var rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(not bool(rejected.get("ok", false)), "provider rejection fails the action")
+	_suite.assert_equal(runtime.commit_attempts, 1, "runtime payload is staged before the final resource commit")
+	_suite.assert_equal(runtime.resource, 8, "provider rejection restores the runtime snapshot")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "provider rejection keeps coordinator ready")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"primary_test"), 0, "provider rejection rolls cooldown back")
+	_suite.assert_close(provider.current, 100.0, "provider rejection spends no energy")
+	_suite.assert_equal(_committed_facts.size(), 0, "provider rejection publishes no committed fact")
+
+
+func _test_resource_success_spends_once_and_enforces_cooldown() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 20
+
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "funded action commits")
+	_suite.assert_close(provider.current, 80.0, "funded action spends once")
+	_suite.assert_equal(provider.spend_calls, 1, "funded action calls provider once")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"primary_test"), 20, "funded action starts cooldown")
+	_advance(coordinator, 12)
+	var attempts_before := runtime.commit_attempts
+	var cooling_down: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(not bool(cooling_down.get("ok", false)), "active cooldown rejects a ready action")
+	_suite.assert_equal(cooling_down.get("code"), &"COOLDOWN_ACTIVE", "cooldown rejection is typed")
+	_suite.assert_equal(runtime.commit_attempts, attempts_before, "cooldown rejects before runtime staging")
+	_suite.assert_close(provider.current, 80.0, "cooldown rejection spends no additional energy")
+	_advance(coordinator, 8)
+	_suite.assert_true(
+		bool(coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {}).get("ok", false)),
+		"action reopens exactly when cooldown reaches zero"
+	)
+	_suite.assert_close(provider.current, 60.0, "second legal action spends once")
+
+
+func _test_hold_cost_commits_only_on_valid_release() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 40
+
+	_suite.assert_true(
+		bool(coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {}).get("ok", false)),
+		"paid HOLD reserves a token"
+	)
+	coordinator.advance_frame()
+	var undercharged: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 1},
+		{}
+	)
+	_suite.assert_true(not bool(undercharged.get("ok", false)), "undercharged paid HOLD rejects")
+	_suite.assert_close(provider.current, 100.0, "undercharged HOLD spends no resource")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"hold_test"), 0, "undercharged HOLD starts no cooldown")
+	_suite.assert_equal(_committed_facts.size(), 0, "undercharged HOLD publishes no committed fact")
+
+	_suite.assert_true(
+		bool(coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {}).get("ok", false)),
+		"fresh paid HOLD reserves a new token"
+	)
+	_advance(coordinator, 2)
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "held_frames": 2},
+		{}
+	)
+	_suite.assert_true(bool(released.get("ok", false)), "valid paid HOLD releases")
+	_suite.assert_close(provider.current, 80.0, "valid HOLD spends exactly once at release")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"hold_test"), 40, "valid HOLD starts cooldown at release")
+	_suite.assert_equal(_committed_facts.size(), 1, "valid HOLD publishes exactly one committed fact")
+
+
+func _test_hold_abort_restores_runtime_owned_resource_until_release_commit() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+
+	coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {})
+	_suite.assert_equal(runtime.resource, 7, "HOLD press may stage runtime-owned resource state")
+	coordinator.cancel(&"dash_cancel")
+	_suite.assert_equal(runtime.resource, 8, "cancelling an unreleased HOLD restores the press snapshot")
+
+	coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {})
+	coordinator.advance_frame()
+	var undercharged: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released"},
+		{}
+	)
+	_suite.assert_true(not bool(undercharged.get("ok", false)), "undercharged HOLD aborts")
+	_suite.assert_equal(runtime.resource, 8, "undercharged HOLD restores runtime-owned resources")
+
+	coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {})
+	_advance(coordinator, 2)
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released"},
+		{}
+	)
+	_suite.assert_true(bool(released.get("ok", false)), "valid HOLD reaches its irreversible release commit")
+	_suite.assert_equal(runtime.resource, 7, "valid release retains the runtime-owned debit")
+	coordinator.cancel(&"post_release_cancel")
+	_suite.assert_equal(runtime.resource, 7, "post-commit cancellation cannot refund runtime-owned resources")
+
+
+func _test_hold_release_success_survives_immediate_phase_cancellation() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 40
+	runtime.fail_phase_entry = &"WINDUP"
+
+	var pressed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{}
+	)
+	_advance(coordinator, 2)
+	var released: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released"},
+		{}
+	)
+
+	_suite.assert_true(bool(released.get("ok", false)), "release remains successful after the committed fact is published")
+	_suite.assert_equal(released.get("code"), WeaponActionContractScript.CODE_HOLD_RELEASED, "irreversible release keeps its success code")
+	_suite.assert_equal(released.get("token"), pressed.get("token"), "irreversible release reports the committed token")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "immediate phase failure may still cancel future action state")
+	_suite.assert_close(provider.current, 80.0, "immediate cancellation cannot refund an external commit")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"hold_test"), 40, "immediate cancellation preserves committed cooldown")
+	_suite.assert_equal(runtime.resource, 7, "immediate cancellation preserves the runtime-owned release debit")
+	_suite.assert_equal(_committed_facts.size(), 1, "irreversible release publishes exactly one committed fact")
+
+
+func _test_dynamic_hold_progress_controls_movement() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {})
+	_advance(coordinator, 2)
+	var presentation: Dictionary = coordinator.presentation_snapshot()
+	_suite.assert_equal(presentation.get("hold_frames"), 2, "HOLD presentation exposes raw coordinator frames")
+	_suite.assert_close(float(presentation.get("effective_hold_frames", -1.0)), 2.0, "HOLD presentation exposes effective frames")
+	_suite.assert_equal(presentation.get("charge_complete_frames"), 4, "HOLD presentation separates charge completion from auto release")
+	_suite.assert_equal(presentation.get("maximum_hold_frames"), 5, "HOLD presentation preserves auto-release boundary")
+	_suite.assert_close(float(presentation.get("charge_ratio", -1.0)), 0.5, "HOLD presentation computes charge ratio")
+	_suite.assert_close(coordinator.movement_multiplier(), 0.625, "HOLD movement interpolates from start to end multiplier")
+
+
+func _test_reserved_context_fields_are_rejected() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{"action_token": 999}
+	)
+	_suite.assert_true(not bool(rejected.get("ok", false)), "callers cannot forge reserved action context")
+	_suite.assert_equal(rejected.get("code"), WeaponActionContractScript.CODE_INVALID_INTENT, "reserved context rejection is typed")
+	_suite.assert_equal(runtime.commit_attempts, 0, "reserved context rejects before runtime planning")
+
+
+func _test_reserved_context_rejects_before_busy_buffering() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	var snapshot_before: Dictionary = coordinator.snapshot()
+
+	var rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_secondary", "edge": "pressed", "buffer_frames": 20},
+		{"resource_transaction": {"forged": true}}
+	)
+
+	_suite.assert_true(not bool(rejected.get("ok", false)), "reserved resource context fails before busy buffering")
+	_suite.assert_equal(rejected.get("code"), WeaponActionContractScript.CODE_INVALID_INTENT, "busy reserved context rejection is typed")
+	_suite.assert_equal(rejected.get("context", {}).get("field"), "resource_transaction", "resource transaction context is coordinator-owned")
+	_suite.assert_equal(coordinator.snapshot(), snapshot_before, "reserved busy submission cannot mutate the buffer")
+	_suite.assert_equal(runtime.commit_attempts, 1, "reserved busy submission never reaches planning or commit")
+
+
+func _test_ready_presentation_queries_committed_cooldown_ledger() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	runtime.action_cooldown_frames = 20
+	coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	_advance(coordinator, 12)
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "cooldown presentation fixture finishes its action")
+
+	var presentation: Dictionary = coordinator.presentation_snapshot(&"primary_test")
+	_suite.assert_equal(presentation.get("phase"), "READY", "cooldown remains queryable while ready")
+	_suite.assert_equal(presentation.get("cooldown_action_id"), "primary_test", "presentation identifies the queried cooldown action")
+	_suite.assert_equal(presentation.get("cooldown_remaining_frames"), 8, "ready presentation reports the live cooldown")
+	_suite.assert_equal(presentation.get("cooldown_ledger", {}).get("primary_test"), 8, "presentation exposes the queryable cooldown ledger")
+
+
+func _test_live_input_actions_do_not_enter_busy_buffer() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	var token_before := int(coordinator.current_token())
+
+	var hold_rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed", "buffer_frames": 20},
+		{}
+	)
+	_suite.assert_true(not bool(hold_rejected.get("ok", false)), "HOLD press is rejected while the cancel window is closed")
+	_suite.assert_true(hold_rejected.get("code") != WeaponActionContractScript.CODE_BUFFERED, "HOLD press never enters the ordinary input buffer")
+
+	runtime.return_channel_utility = true
+	var channel_rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_utility", "edge": "pressed", "buffer_frames": 20},
+		{}
+	)
+	_suite.assert_true(not bool(channel_rejected.get("ok", false)), "CHANNEL press is rejected while the cancel window is closed")
+	_suite.assert_true(channel_rejected.get("code") != WeaponActionContractScript.CODE_BUFFERED, "CHANNEL press never enters the ordinary input buffer")
+
+	var release_rejected: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "released", "buffer_frames": 20},
+		{}
+	)
+	_suite.assert_true(not bool(release_rejected.get("ok", false)), "release edge is stale while no matching HOLD owns the token")
+	_suite.assert_equal(release_rejected.get("code"), WeaponActionContractScript.CODE_STALE_HOLD_EDGE, "release edge fails closed instead of buffering")
+
+	_advance(coordinator, 12)
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "original action completes without starting an unmanned live-input action")
+	_suite.assert_equal(runtime.commit_attempts, 1, "busy HOLD, CHANNEL, and release submissions never commit later")
+	_suite.assert_true(token_before > 0, "fixture began with an authoritative action token")
+
+
+func _test_busy_unsupported_sword_semantics_preserve_existing_buffer() -> void:
+	for target_phase: StringName in [&"HOLD", &"WINDUP", &"ACTIVE", &"RECOVERY"]:
+		var fixture := _fixture()
+		var coordinator: RefCounted = fixture["coordinator"]
+		var runtime: FakeWeaponRuntime = fixture["runtime"]
+		if target_phase == &"HOLD":
+			coordinator.submit_intent({"id": "weapon_ultimate", "edge": "pressed"}, {})
+		else:
+			coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+			if target_phase == &"ACTIVE":
+				_advance(coordinator, 6)
+			elif target_phase == &"RECOVERY":
+				_advance(coordinator, 8)
+		_suite.assert_equal(coordinator.phase_name(), target_phase, "%s fixture reaches its busy phase" % str(target_phase))
+		_suite.assert_true(not coordinator.recovery_cancel_is_open(), "%s fixture keeps the cancel window closed" % str(target_phase))
+
+		var buffered: Dictionary = coordinator.submit_intent(
+			{"id": "weapon_secondary", "edge": "pressed", "buffer_frames": 30},
+			{"source": "existing_valid_buffer"}
+		)
+		_suite.assert_equal(buffered.get("code"), WeaponActionContractScript.CODE_BUFFERED, "%s fixture stores one valid ordinary buffer" % str(target_phase))
+		var token_before := int(coordinator.current_token())
+		var snapshot_before: Dictionary = coordinator.snapshot()
+		runtime.reject_unsupported_sword_semantics = true
+
+		for semantic_action: StringName in [&"weapon_utility", &"weapon_skill", &"weapon_ultimate"]:
+			var rejected: Dictionary = coordinator.submit_intent(
+				{"id": str(semantic_action), "edge": "pressed", "buffer_frames": 30},
+				{"source": "unsupported_sword_semantic"}
+			)
+			var label := "%s/%s" % [str(target_phase), str(semantic_action)]
+			_suite.assert_true(not bool(rejected.get("ok", false)), "%s fails atomically while busy" % label)
+			_suite.assert_equal(rejected.get("code"), &"UNSUPPORTED_INTENT", "%s preserves the runtime plan failure" % label)
+			_suite.assert_equal(coordinator.snapshot(), snapshot_before, "%s cannot replace the valid buffered action" % label)
+			_suite.assert_equal(coordinator.current_token(), token_before, "%s cannot mutate the active token" % label)
+
+
+func _test_rewind_safe_reset_preserves_committed_resources() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 30
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	var generation_before := int(committed.get("generation", 0))
+	coordinator.restore_rewind_safe_state()
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "rewind-safe reset abandons the active action")
+	_suite.assert_true(coordinator.generation() > generation_before, "rewind-safe reset invalidates the action generation")
+	_suite.assert_close(provider.current, 80.0, "rewind-safe reset does not refund external resource")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"primary_test"), 30, "rewind-safe reset preserves committed cooldown")
+
+
 func _extended_hold_plan() -> Dictionary:
 	return {
 		"weapon_id": "test_weapon",
@@ -839,11 +1270,29 @@ func _fixture() -> Dictionary:
 	_committed_facts.clear()
 	_runtime_events.clear()
 	var runtime := FakeWeaponRuntime.new()
+	var provider := FakeResourceProvider.new()
+	var resource_transaction = WeaponResourceTransactionScript.new()
+	_suite.assert_true(
+		resource_transaction.configure(
+			&"test_weapon",
+			PackedStringArray(),
+			{&"time_energy": provider}
+		),
+		"coordinator resource transaction fixture configures"
+	)
 	var coordinator = WeaponActionCoordinatorScript.new()
-	_suite.assert_true(coordinator.configure(runtime), "coordinator accepts a weapon runtime fixture")
+	_suite.assert_true(
+		coordinator.configure(runtime, resource_transaction),
+		"coordinator accepts runtime and resource transaction fixtures"
+	)
 	coordinator.weapon_action_committed.connect(_on_weapon_action_committed)
 	coordinator.weapon_runtime_event.connect(_on_weapon_runtime_event)
-	return {"coordinator": coordinator, "runtime": runtime}
+	return {
+		"coordinator": coordinator,
+		"runtime": runtime,
+		"provider": provider,
+		"resource_transaction": resource_transaction,
+	}
 
 
 func _advance(coordinator: RefCounted, frames: int) -> void:

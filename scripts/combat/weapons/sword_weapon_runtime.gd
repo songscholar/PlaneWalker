@@ -237,6 +237,8 @@ func plan_intent(intent: Dictionary, _context: Dictionary) -> Dictionary:
 		"combo_step_before": _combo_step,
 		"combo_reset_frames": COMBO_RESET_FRAMES,
 		"buffer_frames": int(action.get("buffer_frames", 12)),
+		"cooldown_frames": int(action.get("cooldown_frames", 0)),
+		"resource_costs": (action.get("resource_costs", {}) as Dictionary).duplicate(true),
 		"modifier_snapshot": frozen_modifiers,
 		"base_attack_snapshot": float(_adapter.get("base_attack")),
 		"legacy_reward_snapshot": _legacy_reward_snapshot(),

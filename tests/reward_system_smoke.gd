@@ -306,7 +306,7 @@ func _run_bow_weapon_check() -> void:
 	var bow: Node = room_player.get_node("BowWeapon")
 	_assert_true(room_player.configure_loadout({
 		"schema_version": 1,
-		"milestone": "M1",
+		"milestone": "NEXT",
 		"character_id": "wanderer",
 		"weapon_id": "bow",
 		"enabled_time_skills": ["stop", "rewind"],

@@ -332,7 +332,7 @@ func _advance(player: Node, frames: int) -> void:
 func _bow_loadout() -> Dictionary:
 	return {
 		"schema_version": 1,
-		"milestone": "M1",
+		"milestone": "NEXT",
 		"character_id": "wanderer",
 		"weapon_id": "bow",
 		"enabled_time_skills": ["stop", "rewind"],

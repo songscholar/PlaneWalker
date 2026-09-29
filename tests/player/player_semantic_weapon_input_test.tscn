@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/player/player_semantic_weapon_input_test.gd" id="1_test"]
+
+[node name="PlayerSemanticWeaponInputTest" type="Node"]
+script = ExtResource("1_test")

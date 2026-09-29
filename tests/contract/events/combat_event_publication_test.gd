@@ -182,7 +182,7 @@ func _test_committed_player_actions_publish_once() -> void:
 	_suite.assert_true(
 		player.configure_loadout({
 			"schema_version": 1,
-			"milestone": "M1",
+			"milestone": "NEXT",
 			"character_id": "wanderer",
 			"weapon_id": "bow",
 			"enabled_time_skills": ["stop", "rewind"],
@@ -236,6 +236,12 @@ func _test_committed_player_actions_publish_once() -> void:
 	player.cancel_transient_actions()
 
 	var attacks_before_undercharge := _recorder.attacked.size()
+	_suite.assert_true(
+		not player.try_action(&"ranged_attack"),
+		"cancelling the active arrow cannot bypass the committed Bow cooldown"
+	)
+	for _frame: int in range(20):
+		player.advance_action_frame()
 	_suite.assert_true(player.try_action(&"ranged_attack"), "second bow press begins a fresh HOLD")
 	_suite.assert_true(not player.try_action(&"ranged_release"), "undercharged bow release is rejected")
 	_suite.assert_equal(

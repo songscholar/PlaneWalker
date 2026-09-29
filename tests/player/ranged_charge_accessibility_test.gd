@@ -18,8 +18,13 @@ func _run() -> void:
 	add_child(player)
 	await get_tree().process_frame
 	suite.assert_true(player.configure_loadout({
+		"schema_version": 1,
+		"milestone": "NEXT",
+		"character_id": "wanderer",
 		"weapon_id": "bow",
 		"enabled_time_skills": ["stop", "rewind"],
+		"difficulty": "normal",
+		"seed": 20260929,
 	}), "accessibility test explicitly equips Bow")
 	suite.assert_true(
 		player.weapon_action_coordinator != null,
@@ -38,6 +43,7 @@ func _run() -> void:
 	suite.assert_equal(hold_released.get("phase"), "WINDUP", "hold release finalizes charge")
 	suite.assert_equal(int(hold_released.get("token", 0)), hold_token, "hold release preserves the action token")
 	player.cancel_transient_actions()
+	_advance(player, 21)
 
 	_set_charge_mode("toggle")
 	player.handle_ranged_input_for_test(true, false)
@@ -58,7 +64,9 @@ func _run() -> void:
 	suite.assert_equal(toggle_released.get("phase"), "WINDUP", "second toggle press releases charge")
 	suite.assert_equal(int(toggle_released.get("token", 0)), toggle_token, "toggle release preserves the action token")
 	player.cancel_transient_actions()
+	_advance(player, 21)
 
+	_set_charge_mode("hold")
 	suite.assert_true(
 		player.try_action(&"ranged_attack"),
 		"equipped Bow uses the same authoritative ranged action path"
@@ -67,6 +75,44 @@ func _run() -> void:
 		player.weapon_presentation_snapshot().get("phase"),
 		"HOLD",
 		"authoritative ranged action path enters shared HOLD"
+	)
+	_advance(player, 9)
+	player.handle_ranged_input_for_test(false, true)
+	suite.assert_equal(
+		player.weapon_presentation_snapshot().get("phase"),
+		"WINDUP",
+		"a direct press can be released by the physical hold-mode edge"
+	)
+	player.cancel_transient_actions()
+	_advance(player, 21)
+
+	_set_charge_mode("toggle")
+	suite.assert_true(player.try_action(&"ranged_attack"), "direct toggle press begins HOLD")
+	_advance(player, 9)
+	suite.assert_true(player.try_action(&"ranged_attack"), "second direct toggle press resolves HOLD")
+	suite.assert_equal(
+		player.weapon_presentation_snapshot().get("phase"),
+		"WINDUP",
+		"public try_action uses the same toggle state machine as physical input"
+	)
+	player.cancel_transient_actions()
+	_advance(player, 21)
+
+	_set_charge_mode("toggle")
+	player.handle_ranged_input_for_test(true, false)
+	_advance(player, 54)
+	suite.assert_equal(
+		player.weapon_presentation_snapshot().get("phase"),
+		"WINDUP",
+		"maximum HOLD automatically releases in toggle mode"
+	)
+	player.cancel_transient_actions()
+	_advance(player, 21)
+	player.handle_ranged_input_for_test(true, false)
+	suite.assert_equal(
+		player.weapon_presentation_snapshot().get("phase"),
+		"HOLD",
+		"automatic release clears the toggle latch for the next press"
 	)
 
 	GameState.persistent = _original_persistent.duplicate(true)

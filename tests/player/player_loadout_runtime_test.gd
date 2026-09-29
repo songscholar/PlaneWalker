@@ -35,6 +35,7 @@ func _test_component_contract() -> void:
 	_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "component stores the equipped weapon")
 	_suite.assert_true(runtime.has_method("weapon_profile_id"), "component exposes the equipped profile identity")
 	_suite.assert_true(runtime.has_method("weapon_profile_snapshot"), "component exposes an isolated profile snapshot")
+	_suite.assert_true(runtime.has_method("run_seed"), "component exposes the accepted deterministic run seed")
 	if runtime.has_method("weapon_profile_id"):
 		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "component stores the equipped weapon profile")
 	_suite.assert_equal(_string_ids(runtime.call("time_ability_ids")), ["stop", "rewind"], "component stores exactly two abilities")
@@ -60,6 +61,8 @@ func _test_component_contract() -> void:
 		var returned_profile: Dictionary = runtime.call("weapon_profile_snapshot")
 		returned_profile["id"] = "forged_profile"
 		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "profile query returns an isolated copy")
+	if runtime.has_method("run_seed"):
+		_suite.assert_equal(int(runtime.call("run_seed")), 20260929, "component preserves the accepted run seed")
 
 	var invalid_configs: Array[Dictionary] = []
 	invalid_configs.append(_config("sword", ["stop"]))
@@ -113,7 +116,7 @@ func _test_m1_equipment_isolation() -> void:
 	_suite.assert_true(bool(player.call("try_action", &"time_rewind")), "equipped Rewind commits")
 
 	player.call("cancel_transient_actions")
-	_suite.assert_true(bool(player.call("configure_loadout", _config("bow", ["stop", "rift"]))), "candidate Bow loadout applies")
+	_suite.assert_true(bool(player.call("configure_loadout", _config("bow", ["stop", "rift"], "NEXT"))), "candidate Bow loadout applies")
 	_suite.assert_true(not bool(player.call("try_action", &"attack")), "unequipped Sword is rejected")
 	_suite.assert_true(bool(player.call("try_action", &"ranged_attack")), "equipped Bow starts charging")
 	_suite.assert_equal(
@@ -132,7 +135,7 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 	var player := await _spawn_player()
 	var time_manager: Node = player.get_node("TimeManager")
 
-	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rift"])), "dirty-state setup equips Bow")
+	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rift"], "NEXT")), "dirty-state setup equips Bow")
 	_suite.assert_true(player.try_action(&"ranged_attack"), "dirty-state setup begins Bow charge")
 	var bow_hold: Dictionary = player.weapon_presentation_snapshot()
 	player.set("_dash_cooldown_remaining", 2.0)
@@ -182,7 +185,7 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 func _test_invalid_reconfigure_preserves_runtime_state() -> void:
 	var player := await _spawn_player()
 	var time_manager: Node = player.get_node("TimeManager")
-	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rewind"])), "invalid reset setup equips Bow")
+	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rewind"], "NEXT")), "invalid reset setup equips Bow")
 	_suite.assert_true(player.try_action(&"ranged_attack"), "invalid reset setup begins Bow charge")
 	var bow_before: Dictionary = player.weapon_presentation_snapshot()
 	player.set("_dash_cooldown_remaining", 2.0)
@@ -229,10 +232,10 @@ func _test_reconfigure_revives_dead_player() -> void:
 	await _free_player(player)
 
 
-func _config(weapon_id: String, ability_ids: Array) -> Dictionary:
+func _config(weapon_id: String, ability_ids: Array, milestone: String = "M1") -> Dictionary:
 	return {
 		"schema_version": 1,
-		"milestone": "M1",
+		"milestone": milestone,
 		"character_id": "wanderer",
 		"weapon_id": weapon_id,
 		"enabled_time_skills": ability_ids.duplicate(true),

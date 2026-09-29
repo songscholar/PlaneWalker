@@ -192,6 +192,8 @@ func _test_coordinator_hold_skeleton_finalizes_on_the_same_token() -> void:
 	_suite.assert_equal(_phase(skeleton, 0).get("phase"), "HOLD", "candidate charge begins with HOLD")
 	_suite.assert_equal(_phase(skeleton, 0).get("duration_frames"), 54, "HOLD owns the fifty-four frame maximum")
 	_suite.assert_equal(_phase(skeleton, 0).get("minimum_hold_frames"), 9, "HOLD owns the nine frame minimum")
+	_suite.assert_equal(_phase(skeleton, 0).get("charge_complete_frames"), 54, "candidate baseline completes charge at fifty-four effective frames")
+	_suite.assert_close(float(_phase(skeleton, 0).get("hold_progress_multiplier", -1.0)), 1.0, "candidate baseline advances HOLD at one effective frame per raw frame")
 	_suite.assert_equal(_phase(skeleton, 1).get("phase"), "WINDUP", "HOLD skeleton declares its release path")
 	_suite.assert_true(bool(runtime.commit_action(skeleton, 201).get("ok", false)), "HOLD skeleton commits")
 	_suite.assert_equal(runtime.snapshot().get("active_phase"), "HOLD", "runtime tracks the committed HOLD under the action token")
@@ -256,7 +258,7 @@ func _test_real_coordinator_owns_the_complete_hold_transaction() -> void:
 	var token := int(pressed.get("token", 0))
 	var generation := int(pressed.get("generation", 0))
 	_suite.assert_equal(coordinator.phase_name(), &"HOLD", "real coordinator owns Bow HOLD timing")
-	_suite.assert_equal(committed_count[0], 1, "Bow HOLD publishes one action commit at press")
+	_suite.assert_equal(committed_count[0], 0, "Bow HOLD publishes no commit before a valid release")
 	for _frame: int in range(9):
 		coordinator.advance_frame()
 	var released: Dictionary = coordinator.submit_intent(_release_intent(9), {})
@@ -264,7 +266,7 @@ func _test_real_coordinator_owns_the_complete_hold_transaction() -> void:
 	_suite.assert_equal(released.get("token"), token, "real coordinator preserves the Bow action token across release")
 	_suite.assert_equal(released.get("generation"), generation, "real coordinator preserves the Bow generation across release")
 	_suite.assert_equal(coordinator.phase_name(), &"WINDUP", "real coordinator adopts Bow finalized windup")
-	_suite.assert_equal(committed_count[0], 1, "Bow release does not publish a second action commit")
+	_suite.assert_equal(committed_count[0], 1, "Bow release publishes exactly one action commit")
 	_suite.assert_equal(bow.begin_count, 1, "real coordinator stages one arrow on release")
 	coordinator.advance_frame()
 	_suite.assert_equal(coordinator.phase_name(), &"ACTIVE", "one windup frame reaches Bow ACTIVE")
@@ -276,6 +278,7 @@ func _test_real_coordinator_owns_the_complete_hold_transaction() -> void:
 func _test_authoritative_charge_rate_capability_scales_effective_hold() -> void:
 	var fixture := _fixture()
 	var runtime: RefCounted = fixture["runtime"]
+	var bow: FakeBowAdapter = fixture["bow"]
 	var modifiers: RefCounted = fixture["modifiers"]
 	_suite.assert_true(
 		modifiers.apply_additive(&"weapon.charge_rate", 0.5, 1.0),
@@ -294,6 +297,64 @@ func _test_authoritative_charge_rate_capability_scales_effective_hold() -> void:
 		bool(_payload_parameters(accelerated).get("full_charge", false)),
 		"charge-rate capability can reach the frozen full-charge threshold"
 	)
+
+	var pressed_plan: Dictionary = runtime.plan_intent(
+		_press_intent(),
+		_aim_context(Vector2.RIGHT)
+	).get("plan", {})
+	var hold_phase := _phase(pressed_plan, 0)
+	_suite.assert_equal(
+		hold_phase.get("charge_complete_frames"),
+		54,
+		"Bow skeleton keeps the candidate fifty-four effective-frame charge scale"
+	)
+	_suite.assert_close(
+		float(hold_phase.get("hold_progress_multiplier", -1.0)),
+		1.5,
+		"Bow skeleton exports the frozen charge-rate multiplier to the coordinator"
+	)
+
+	var coordinator = WeaponActionCoordinatorScript.new()
+	_suite.assert_true(coordinator.configure(runtime), "coordinator accepts the accelerated Bow runtime")
+	_suite.assert_true(
+		bool(coordinator.submit_intent(_press_intent(), _aim_context(Vector2.RIGHT)).get("ok", false)),
+		"accelerated Bow begins one coordinator-owned HOLD"
+	)
+	for _frame: int in range(35):
+		coordinator.advance_frame()
+	var before_full: Dictionary = coordinator.presentation_snapshot()
+	_suite.assert_close(
+		float(before_full.get("charge_ratio", -1.0)),
+		52.5 / 54.0,
+		"thirty-five raw frames remain below full charge at 1.5x"
+	)
+	coordinator.advance_frame()
+	var full: Dictionary = coordinator.presentation_snapshot()
+	_suite.assert_close(
+		float(full.get("effective_hold_frames", -1.0)),
+		54.0,
+		"thirty-six raw frames reach fifty-four effective charge frames at 1.5x"
+	)
+	_suite.assert_close(
+		float(full.get("charge_ratio", -1.0)),
+		1.0,
+		"coordinator HUD ratio reaches full charge after thirty-six raw frames"
+	)
+	_suite.assert_close(
+		float(full.get("movement_multiplier", -1.0)),
+		float(hold_phase.get("movement_multiplier", -2.0)),
+		"full-charge HOLD applies the Bow phase's completed movement multiplier"
+	)
+	_suite.assert_true(
+		bool(coordinator.submit_intent(_release_intent(36), {}).get("ok", false)),
+		"accelerated Bow releases at the thirty-six-frame full-charge boundary"
+	)
+	_suite.assert_close(
+		float(bow.staged_definition.get("damage", 0.0)),
+		30.0 * 1.75,
+		"accelerated coordinator release stages full-charge candidate damage"
+	)
+	coordinator.cancel(&"test_cleanup")
 	_free_fixture(fixture)
 
 
