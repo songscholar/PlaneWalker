@@ -79,7 +79,7 @@ autowrap_mode = 3
 max_lines_visible = 2
 
 [node name="Scroll" type="ScrollContainer" parent="SafeArea/PanelRoot/Layout"]
-custom_minimum_size = Vector2(0, 220)
+custom_minimum_size = Vector2(0, 219)
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
