@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/weapon-runtime-profile/1.0.0",
+  "title": "Plane Walker Weapon Runtime Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "category",
+    "availability",
+    "name_key",
+    "description_key",
+    "tags",
+    "compatibility",
+    "effects",
+    "references",
+    "profile_version",
+    "weapon_id",
+    "actions",
+    "resources",
+    "capabilities",
+    "payloads",
+    "cues"
+  ],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "category": { "const": "weapon_runtime_profile" },
+    "availability": { "$ref": "#/$defs/milestone_list" },
+    "name_key": { "$ref": "#/$defs/localization_key" },
+    "description_key": { "$ref": "#/$defs/localization_key" },
+    "tags": { "$ref": "#/$defs/id_list" },
+    "compatibility": { "$ref": "#/$defs/compatibility" },
+    "effects": {
+      "type": "object",
+      "maxProperties": 0,
+      "additionalProperties": false
+    },
+    "references": { "$ref": "#/$defs/id_list" },
+    "profile_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "weapon_id": { "$ref": "#/$defs/id" },
+    "runtime_kind": {
+      "type": "string",
+      "enum": ["sword", "bow", "gun", "staff", "gauntlets"]
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/action" }
+    },
+    "resources": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/resource" }
+    },
+    "capabilities": {
+      "allOf": [
+        { "$ref": "#/$defs/id_list" },
+        { "minItems": 1 }
+      ]
+    },
+    "payloads": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/payload" }
+    },
+    "cues": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/cue" }
+    },
+    "time_interactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stop": { "$ref": "#/$defs/time_interaction" },
+        "rewind": { "$ref": "#/$defs/time_interaction" },
+        "accelerate": { "$ref": "#/$defs/time_interaction" },
+        "rift": { "$ref": "#/$defs/time_interaction" }
+      }
+    },
+    "boss_interactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chrono_warden": { "$ref": "#/$defs/boss_interaction" }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,95}$"
+    },
+    "localization_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "id_list": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "milestone_list": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "character_ids": { "$ref": "#/$defs/id_list" },
+        "weapon_ids": { "$ref": "#/$defs/id_list" },
+        "time_ability_ids": { "$ref": "#/$defs/id_list" },
+        "archetype_ids": { "$ref": "#/$defs/id_list" },
+        "modes": { "$ref": "#/$defs/id_list" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "semantic_action",
+        "activation_mode",
+        "windup_frames",
+        "active_frames",
+        "recovery_frames",
+        "cancel_from_frame",
+        "buffer_frames",
+        "movement_multiplier",
+        "resource_costs",
+        "payload_id",
+        "cue_id"
+      ],
+      "properties": {
+        "action_id": { "$ref": "#/$defs/id" },
+        "semantic_action": {
+          "type": "string",
+          "enum": [
+            "weapon_primary",
+            "weapon_secondary",
+            "weapon_utility",
+            "weapon_skill",
+            "weapon_ultimate"
+          ]
+        },
+        "activation_mode": {
+          "type": "string",
+          "enum": ["press", "release", "hold", "toggle", "channel", "confirm"]
+        },
+        "hold_threshold_frames": { "type": "integer", "minimum": 0 },
+        "maximum_hold_frames": { "type": "integer", "minimum": 0 },
+        "windup_frames": { "type": "integer", "minimum": 1 },
+        "active_frames": { "type": "integer", "minimum": 1 },
+        "recovery_frames": { "type": "integer", "minimum": 1 },
+        "cancel_from_frame": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "buffer_frames": { "type": "integer", "minimum": 1 },
+        "movement_multiplier": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10.0
+        },
+        "resource_costs": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0.0
+          }
+        },
+        "payload_id": { "$ref": "#/$defs/id" },
+        "cue_id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_id", "minimum", "maximum", "initial"],
+      "properties": {
+        "resource_id": { "$ref": "#/$defs/id" },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "initial": { "type": "number" },
+        "regen_per_second": { "type": "number", "minimum": 0.0 }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^(?!.*(?:script|method|callable|handler))[a-z][a-z0-9_.-]{0,95}$"
+      },
+      "additionalProperties": { "$ref": "#/$defs/parameter_value" }
+    },
+    "parameter_value": {
+      "oneOf": [
+        { "type": "number" },
+        { "type": "integer" },
+        { "type": "boolean" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/parameter_value" }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^(?!.*(?:script|method|callable|handler))[a-z][a-z0-9_.-]{0,95}$"
+          },
+          "additionalProperties": { "$ref": "#/$defs/parameter_value" }
+        }
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payload_id", "kind", "parameters"],
+      "properties": {
+        "payload_id": { "$ref": "#/$defs/id" },
+        "kind": { "$ref": "#/$defs/id" },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      }
+    },
+    "cue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cue_id", "animation_id", "vfx_id", "audio_id", "camera_id"],
+      "properties": {
+        "cue_id": { "$ref": "#/$defs/id" },
+        "animation_id": { "$ref": "#/$defs/id" },
+        "vfx_id": { "$ref": "#/$defs/id" },
+        "audio_id": { "$ref": "#/$defs/id" },
+        "camera_id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "time_interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interaction_id", "type", "parameters"],
+      "properties": {
+        "interaction_id": { "$ref": "#/$defs/id" },
+        "type": { "$ref": "#/$defs/id" },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      }
+    },
+    "boss_interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversion_id", "type", "parameters"],
+      "properties": {
+        "conversion_id": { "$ref": "#/$defs/id" },
+        "type": { "$ref": "#/$defs/id" },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      }
+    }
+  }
+}

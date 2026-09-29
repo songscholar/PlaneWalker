@@ -40,15 +40,19 @@ func _test_project_base_pack_v2(suite) -> void:
 	if report.has_blocking_errors():
 		return
 	suite.assert_equal(report.active_pack_count, 1, "project base pack is the only active pack")
-	suite.assert_equal(report.loaded_count, 47, "project base pack loads rewards and canonical loadout definitions")
+	suite.assert_equal(report.loaded_count, 54, "project base pack loads rewards, loadouts, and weapon runtime profiles")
 	suite.assert_equal(report.content_count_by_category.get("character"), 5, "base pack registers five characters")
 	suite.assert_equal(report.content_count_by_category.get("weapon"), 5, "base pack registers five weapons")
+	suite.assert_equal(report.content_count_by_category.get("weapon_runtime_profile"), 7, "base pack registers seven milestone-aware weapon profiles")
 	suite.assert_equal(report.content_count_by_category.get("time_ability"), 4, "base pack registers four time abilities")
 	suite.assert_equal(report.content_count_by_category.get("item"), 20, "base pack preserves twenty items")
 	suite.assert_equal(report.content_count_by_category.get("blessing"), 4, "base pack preserves four blessings")
 	suite.assert_equal(report.content_count_by_category.get("curse"), 6, "base pack preserves six curses")
 	suite.assert_equal(report.content_count_by_category.get("talent"), 3, "base pack preserves three talents")
 	suite.assert_equal(report.metadata.get("activation_order"), ["base"], "base activation order is recorded")
+	var sword_profile: Dictionary = registry.get_weapon_runtime_profile(&"sword_m1_v1")
+	suite.assert_equal(sword_profile.get("weapon_id"), "sword", "profile lookup resolves its weapon")
+	suite.assert_equal(sword_profile.get("availability"), ["CURRENT", "M1"], "M1 Sword profile covers CURRENT and M1")
 
 	var frozen_burst: Dictionary = registry.get_content(&"frozen_burst")
 	suite.assert_equal(frozen_burst.get("pack_id"), "base", "v2 content records owning pack")
@@ -118,7 +122,7 @@ func _test_optional_pack_isolation(suite) -> void:
 	suite.assert_true(not report.has_blocking_errors(), "invalid optional pack does not block base content")
 	suite.assert_true(report.isolated_pack_ids.has("fixture_invalid_script"), "invalid optional pack is isolated")
 	suite.assert_equal(report.active_pack_count, 1, "only base remains active")
-	suite.assert_equal(report.loaded_count, 47, "optional pack failure cannot remove base definitions")
+	suite.assert_equal(report.loaded_count, 54, "optional pack failure cannot remove base definitions")
 	suite.assert_true(registry.get_content(&"fixture_scripted_edge").is_empty(), "hostile optional entry is not indexed")
 
 

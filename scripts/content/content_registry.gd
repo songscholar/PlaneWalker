@@ -5,6 +5,7 @@ const ValidationReportScript := preload("res://scripts/content/content_validatio
 const ContentPackDescriptorScript := preload("res://scripts/content/content_pack_descriptor.gd")
 const ContentPackResolverScript := preload("res://scripts/content/content_pack_resolver.gd")
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
+const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -24,6 +25,7 @@ const VALID_CATEGORIES: Array[String] = [
 	"narrative",
 	"cosmetic",
 	"challenge",
+	"weapon_runtime_profile",
 ]
 const EFFECT_BEARING_CATEGORIES: Array[String] = ["blessing", "curse", "item", "talent"]
 const OVERRIDABLE_FIELDS: Array[String] = ["archetype", "role", "rarity", "kind"]
@@ -54,6 +56,16 @@ const V2_ALLOWED_FIELDS: Array[String] = [
 	"rarity",
 	"icon_id",
 	"references",
+	"profile_version",
+	"weapon_id",
+	"runtime_kind",
+	"capabilities",
+	"resources",
+	"actions",
+	"payloads",
+	"cues",
+	"time_interactions",
+	"boss_interactions",
 ]
 const COMPATIBILITY_FIELDS: Array[String] = [
 	"character_ids",
@@ -62,6 +74,7 @@ const COMPATIBILITY_FIELDS: Array[String] = [
 	"archetype_ids",
 	"modes",
 ]
+const WEAPON_TIME_ABILITIES: Array[String] = ["stop", "rewind", "accelerate", "rift"]
 
 var _definitions: Dictionary = {}
 var _active_packs: Array[Dictionary] = []
@@ -353,6 +366,23 @@ func load_entries(
 func get_content(content_id: StringName) -> Dictionary:
 	var definition: Dictionary = _definitions.get(str(content_id), {})
 	return definition.duplicate(true)
+
+
+func get_weapon_runtime_profile(profile_id: StringName) -> Dictionary:
+	var definition := get_content(profile_id)
+	if str(definition.get("category", "")) != "weapon_runtime_profile":
+		return {}
+	return definition
+
+
+func resolve_weapon_runtime_profile(weapon_id: StringName, milestone: StringName) -> Dictionary:
+	var matches: Array[Dictionary] = []
+	for definition: Dictionary in get_by_category(&"weapon_runtime_profile", milestone):
+		if str(definition.get("weapon_id", "")) == str(weapon_id):
+			matches.append(definition)
+	if matches.size() != 1:
+		return {}
+	return matches[0].duplicate(true)
 
 
 func get_by_category(category: StringName, availability: StringName = &"") -> Array[Dictionary]:
@@ -761,6 +791,17 @@ func _v2_entry_error(
 		)
 		if effect_report.has_blocking_errors():
 			return {"field": "effects", "reason": "invalid", "errors": effect_report.blocking_errors.duplicate(true)}
+	if category == "weapon_runtime_profile":
+		var profile_result: Dictionary = WeaponRuntimeProfileScript.new().configure(entry)
+		if not bool(profile_result.get("ok", false)):
+			var profile_context: Dictionary = profile_result.get("context", {})
+			return {
+				"field": str(profile_context.get("field", "weapon_runtime_profile")),
+				"reason": str(profile_context.get("reason", "invalid")),
+			}
+		var integration_error := _weapon_runtime_profile_integration_error(entry)
+		if not integration_error.is_empty():
+			return integration_error
 	for field: String in ["kind", "archetype", "role"]:
 		if entry.has(field) and not _optional_identifier_is_valid(entry[field]):
 			return {"field": field, "reason": "value"}
@@ -773,6 +814,23 @@ func _v2_entry_error(
 		if not reference_error.is_empty():
 			return {"field": "references", "reason": reference_error}
 	return {}
+
+
+func _weapon_runtime_profile_integration_error(entry: Dictionary) -> Dictionary:
+	if not entry.get("time_interactions") is Dictionary:
+		return {"field": "time_interactions", "reason": "missing"}
+	var time_interactions: Dictionary = entry["time_interactions"]
+	if time_interactions.size() != WEAPON_TIME_ABILITIES.size():
+		return {"field": "time_interactions", "reason": "incomplete"}
+	for ability_id: String in WEAPON_TIME_ABILITIES:
+		if not time_interactions.has(ability_id):
+			return {"field": "time_interactions.%s" % ability_id, "reason": "missing"}
+	if not entry.get("boss_interactions") is Dictionary:
+		return {"field": "boss_interactions", "reason": "missing"}
+	if not (entry["boss_interactions"] as Dictionary).has("chrono_warden"):
+		return {"field": "boss_interactions.chrono_warden", "reason": "missing"}
+	return {}
+
 
 
 func _id_array_error(
@@ -824,11 +882,33 @@ func _first_reference_error(
 	pack_definitions: Array[Dictionary],
 	available_ids: Dictionary
 ) -> Dictionary:
+	var definitions_by_id: Dictionary = {}
+	for existing_id: Variant in _definitions.keys():
+		definitions_by_id[str(existing_id)] = _definitions[existing_id]
+	for definition: Dictionary in pack_definitions:
+		definitions_by_id[str(definition["id"])] = definition
 	for definition: Dictionary in pack_definitions:
 		for reference_value: Variant in definition.get("references", []):
 			var reference_id := str(reference_value)
 			if not available_ids.has(reference_id):
 				return {"content_id": str(definition["id"]), "reference_id": reference_id}
+		if str(definition.get("category", "")) != "weapon_runtime_profile":
+			continue
+		var weapon_id := str(definition.get("weapon_id", ""))
+		var weapon_value: Variant = definitions_by_id.get(weapon_id)
+		if not weapon_value is Dictionary or str((weapon_value as Dictionary).get("category", "")) != "weapon":
+			return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_category"}
+		var weapon_availability: Array = (weapon_value as Dictionary).get("availability", [])
+		for milestone_value: Variant in definition.get("availability", []):
+			if not weapon_availability.has(str(milestone_value)):
+				return {
+					"content_id": str(definition["id"]),
+					"reference_id": weapon_id,
+					"reason": "availability_widening",
+					"milestone": str(milestone_value),
+				}
+		if not (weapon_value as Dictionary).get("references", []).has(str(definition["id"])):
+			return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_back_reference"}
 	return {}
 
 

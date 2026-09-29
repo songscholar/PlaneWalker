@@ -1,0 +1,315 @@
+[
+  {
+    "id": "sword_m1_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["M1", "CURRENT"],
+    "name_key": "WEAPON_SWORD_NAME",
+    "description_key": "WEAPON_SWORD_DESC",
+    "tags": ["m1_parity", "short_commitment"],
+    "compatibility": {"weapon_ids": ["sword"]},
+    "effects": {},
+    "references": ["sword"],
+    "profile_version": 1,
+    "weapon_id": "sword",
+    "runtime_kind": "sword",
+    "actions": [
+      {"action_id": "light_1", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 6, "active_frames": 5, "recovery_frames": 11, "cancel_from_frame": 6, "buffer_frames": 12, "movement_multiplier": 0.55, "resource_costs": {}, "payload_id": "sword_light_1_hitbox", "cue_id": "sword_light_1_active"},
+      {"action_id": "light_2", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 8, "active_frames": 5, "recovery_frames": 12, "cancel_from_frame": 6, "buffer_frames": 12, "movement_multiplier": 0.55, "resource_costs": {}, "payload_id": "sword_light_2_hitbox", "cue_id": "sword_light_2_active"},
+      {"action_id": "light_3", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 10, "active_frames": 6, "recovery_frames": 17, "cancel_from_frame": 6, "buffer_frames": 12, "movement_multiplier": 0.55, "resource_costs": {}, "payload_id": "sword_light_3_hitbox", "cue_id": "sword_light_3_active"},
+      {"action_id": "heavy", "semantic_action": "weapon_secondary", "activation_mode": "press", "windup_frames": 21, "active_frames": 8, "recovery_frames": 27, "cancel_from_frame": 15, "buffer_frames": 12, "movement_multiplier": 0.2, "resource_costs": {}, "payload_id": "sword_heavy_hitbox", "cue_id": "sword_heavy_active"}
+    ],
+    "resources": [{"resource_id": "combo_step", "minimum": 0.0, "maximum": 2.0, "initial": 0.0, "regen_per_second": 0.0}],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage"],
+    "payloads": [
+      {"payload_id": "sword_light_1_hitbox", "kind": "hitbox", "parameters": {"damage_multiplier": 0.8, "knockback": 120.0, "tags": ["weapon:sword"]}},
+      {"payload_id": "sword_light_2_hitbox", "kind": "hitbox", "parameters": {"damage_multiplier": 1.0, "knockback": 120.0, "tags": ["weapon:sword"]}},
+      {"payload_id": "sword_light_3_hitbox", "kind": "hitbox", "parameters": {"damage_multiplier": 1.3, "knockback": 120.0, "tags": ["attack:finisher", "weapon:sword"]}},
+      {"payload_id": "sword_heavy_hitbox", "kind": "hitbox", "parameters": {"damage_multiplier": 2.0, "knockback": 260.0, "tags": ["attack:heavy", "weapon:sword"]}}
+    ],
+    "cues": [
+      {"cue_id": "sword_light_1_active", "animation_id": "sword_light_1", "vfx_id": "sword_light_arc", "audio_id": "sword_swing", "camera_id": "impact_light"},
+      {"cue_id": "sword_light_2_active", "animation_id": "sword_light_2", "vfx_id": "sword_light_arc", "audio_id": "sword_swing", "camera_id": "impact_light"},
+      {"cue_id": "sword_light_3_active", "animation_id": "sword_light_3", "vfx_id": "sword_finisher_arc", "audio_id": "sword_finisher", "camera_id": "impact_medium"},
+      {"cue_id": "sword_heavy_active", "animation_id": "sword_heavy", "vfx_id": "sword_heavy_arc", "audio_id": "sword_heavy", "camera_id": "impact_heavy"}
+    ],
+    "time_interactions": {
+      "stop": {"interaction_id": "sword_stop_conversion", "type": "conversion_window", "parameters": {"maximum_bonus_frames": 0}},
+      "rewind": {"interaction_id": "sword_rewind_strike", "type": "next_action_modifier", "parameters": {"window_frames": 0}},
+      "accelerate": {"interaction_id": "future_action_speed", "type": "future_timing_modifier", "parameters": {"timing_multiplier": 1.0}},
+      "rift": {"interaction_id": "sword_rift_guard", "type": "zone_conversion", "parameters": {"radius_multiplier": 1.0}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "sword_poised_hit", "type": "poise_conversion", "parameters": {"poise_multiplier": 1.0}}}
+  },
+  {
+    "id": "sword_launch_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["NEXT", "LAUNCH", "EXPANSION"],
+    "name_key": "WEAPON_SWORD_NAME",
+    "description_key": "WEAPON_SWORD_DESC",
+    "tags": ["counter_window", "launch_grammar", "melee"],
+    "compatibility": {"weapon_ids": ["sword"]},
+    "effects": {},
+    "references": ["sword"],
+    "profile_version": 1,
+    "weapon_id": "sword",
+    "runtime_kind": "sword",
+    "actions": [
+      {"action_id": "light_chain", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 5, "active_frames": 5, "recovery_frames": 10, "cancel_from_frame": 5, "buffer_frames": 12, "movement_multiplier": 0.58, "resource_costs": {}, "payload_id": "sword_launch_light", "cue_id": "sword_launch_light_active"},
+      {"action_id": "charged_slash", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 30, "windup_frames": 4, "active_frames": 8, "recovery_frames": 22, "cancel_from_frame": 13, "buffer_frames": 12, "movement_multiplier": 0.2, "resource_costs": {}, "payload_id": "sword_launch_charge", "cue_id": "sword_launch_charge_active"},
+      {"action_id": "guard", "semantic_action": "weapon_secondary", "activation_mode": "hold", "windup_frames": 2, "active_frames": 1, "recovery_frames": 8, "cancel_from_frame": 4, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"guard": 10.0}, "payload_id": "sword_guard", "cue_id": "sword_guard_start"},
+      {"action_id": "counter", "semantic_action": "weapon_utility", "activation_mode": "press", "windup_frames": 3, "active_frames": 6, "recovery_frames": 12, "cancel_from_frame": 7, "buffer_frames": 8, "movement_multiplier": 0.35, "resource_costs": {"intent": 25.0}, "payload_id": "sword_counter", "cue_id": "sword_counter_active"},
+      {"action_id": "temporal_judgment", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 10, "active_frames": 8, "recovery_frames": 18, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.2, "resource_costs": {"time_energy": 20.0}, "payload_id": "sword_skill_zone", "cue_id": "sword_skill_active"},
+      {"action_id": "primordial_edge", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 18, "active_frames": 12, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "sword_ultimate_wave", "cue_id": "sword_ultimate_active"}
+    ],
+    "resources": [
+      {"resource_id": "guard", "minimum": 0.0, "maximum": 100.0, "initial": 100.0, "regen_per_second": 8.0},
+      {"resource_id": "intent", "minimum": 0.0, "maximum": 100.0, "initial": 0.0, "regen_per_second": 0.0}
+    ],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.status_duration"],
+    "payloads": [
+      {"payload_id": "sword_launch_light", "kind": "hitbox", "parameters": {"damage_multiplier": 1.0, "knockback": 130.0}},
+      {"payload_id": "sword_launch_charge", "kind": "hitbox", "parameters": {"damage_multiplier": 2.6, "knockback": 280.0}},
+      {"payload_id": "sword_guard", "kind": "guard", "parameters": {"block_multiplier": 0.5}},
+      {"payload_id": "sword_counter", "kind": "hitbox", "parameters": {"damage_multiplier": 2.2, "knockback": 240.0}},
+      {"payload_id": "sword_skill_zone", "kind": "zone", "parameters": {"damage_multiplier": 2.8, "duration_frames": 90}},
+      {"payload_id": "sword_ultimate_wave", "kind": "wave", "parameters": {"damage_multiplier": 9.0, "knockback": 320.0}}
+    ],
+    "cues": [
+      {"cue_id": "sword_launch_light_active", "animation_id": "sword_launch_light", "vfx_id": "sword_light_arc", "audio_id": "sword_swing", "camera_id": "impact_light"},
+      {"cue_id": "sword_launch_charge_active", "animation_id": "sword_launch_charge", "vfx_id": "sword_charge_arc", "audio_id": "sword_charge", "camera_id": "impact_heavy"},
+      {"cue_id": "sword_guard_start", "animation_id": "sword_guard", "vfx_id": "sword_guard_flash", "audio_id": "sword_guard", "camera_id": "guard"},
+      {"cue_id": "sword_counter_active", "animation_id": "sword_counter", "vfx_id": "sword_counter_line", "audio_id": "sword_counter", "camera_id": "impact_heavy"},
+      {"cue_id": "sword_skill_active", "animation_id": "sword_skill", "vfx_id": "sword_skill_zone", "audio_id": "sword_skill", "camera_id": "impact_medium"},
+      {"cue_id": "sword_ultimate_active", "animation_id": "sword_ultimate", "vfx_id": "sword_ultimate_wave", "audio_id": "sword_ultimate", "camera_id": "impact_ultimate"}
+    ],
+    "time_interactions": {
+      "stop": {"interaction_id": "sword_stop_conversion", "type": "conversion_window", "parameters": {"maximum_bonus_frames": 30}},
+      "rewind": {"interaction_id": "sword_rewind_strike", "type": "next_action_modifier", "parameters": {"window_frames": 120}},
+      "accelerate": {"interaction_id": "future_action_speed", "type": "future_timing_modifier", "parameters": {"timing_multiplier": 1.4}},
+      "rift": {"interaction_id": "sword_rift_guard", "type": "zone_conversion", "parameters": {"radius_multiplier": 1.5}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "sword_poised_hit", "type": "poise_conversion", "parameters": {"poise_multiplier": 1.25}}}
+  },
+  {
+    "id": "bow_candidate_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["NEXT"],
+    "name_key": "WEAPON_BOW_NAME",
+    "description_key": "WEAPON_BOW_DESC",
+    "tags": ["candidate_parity", "charge", "precision"],
+    "compatibility": {"weapon_ids": ["bow"]},
+    "effects": {},
+    "references": ["bow"],
+    "profile_version": 1,
+    "weapon_id": "bow",
+    "runtime_kind": "bow",
+    "actions": [
+      {"action_id": "candidate_draw", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 9, "windup_frames": 1, "active_frames": 1, "recovery_frames": 21, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 1.0, "resource_costs": {}, "payload_id": "bow_candidate_arrow", "cue_id": "bow_candidate_release"}
+    ],
+    "resources": [{"resource_id": "charge", "minimum": 0.0, "maximum": 54.0, "initial": 0.0, "regen_per_second": 0.0}],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.pierce"],
+    "payloads": [{"payload_id": "bow_candidate_arrow", "kind": "projectile", "parameters": {"damage_multiplier": 0.75, "maximum_damage_multiplier": 1.75, "speed": 440.0, "maximum_speed": 680.0, "full_charge_ratio": 0.98, "full_charge_energy": 6.0}}],
+    "cues": [{"cue_id": "bow_candidate_release", "animation_id": "bow_release", "vfx_id": "bow_arrow_trail", "audio_id": "bow_release", "camera_id": "impact_light"}],
+    "time_interactions": {
+      "stop": {"interaction_id": "bow_stopped_target_burst", "type": "target_modifier", "parameters": {"damage_multiplier": 1.0}},
+      "rewind": {"interaction_id": "bow_echo_arrows", "type": "echo_payload", "parameters": {"echo_count": 0}},
+      "accelerate": {"interaction_id": "bow_charge_speed", "type": "future_timing_modifier", "parameters": {"timing_multiplier": 1.0}},
+      "rift": {"interaction_id": "bow_rift_penetration", "type": "projectile_modifier", "parameters": {"pierce_bonus": 0}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "bow_weakpoint", "type": "weakpoint_conversion", "parameters": {"poise_multiplier": 1.0}}}
+  },
+  {
+    "id": "bow_launch_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "WEAPON_BOW_NAME",
+    "description_key": "WEAPON_BOW_DESC",
+    "tags": ["charge", "precision", "ranged"],
+    "compatibility": {"weapon_ids": ["bow"]},
+    "effects": {},
+    "references": ["bow"],
+    "profile_version": 1,
+    "weapon_id": "bow",
+    "runtime_kind": "bow",
+    "actions": [
+      {"action_id": "precision_draw", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 9, "windup_frames": 1, "active_frames": 1, "recovery_frames": 21, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.65, "resource_costs": {}, "payload_id": "bow_launch_arrow", "cue_id": "bow_launch_release"},
+      {"action_id": "scatter_shot", "semantic_action": "weapon_secondary", "activation_mode": "press", "windup_frames": 8, "active_frames": 2, "recovery_frames": 18, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.5, "resource_costs": {}, "payload_id": "bow_scatter", "cue_id": "bow_scatter_release"},
+      {"action_id": "focus_step", "semantic_action": "weapon_utility", "activation_mode": "press", "windup_frames": 2, "active_frames": 4, "recovery_frames": 8, "cancel_from_frame": 4, "buffer_frames": 8, "movement_multiplier": 0.85, "resource_costs": {}, "payload_id": "bow_focus_step", "cue_id": "bow_focus_step"},
+      {"action_id": "arrow_rain", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 12, "active_frames": 6, "recovery_frames": 20, "cancel_from_frame": 14, "buffer_frames": 8, "movement_multiplier": 0.25, "resource_costs": {"time_energy": 20.0}, "payload_id": "bow_arrow_rain", "cue_id": "bow_arrow_rain"},
+      {"action_id": "horizon_piercer", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 15, "active_frames": 4, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "bow_horizon_piercer", "cue_id": "bow_horizon_piercer"}
+    ],
+    "resources": [{"resource_id": "charge", "minimum": 0.0, "maximum": 54.0, "initial": 0.0, "regen_per_second": 0.0}],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.pierce", "weapon.status_duration"],
+    "payloads": [
+      {"payload_id": "bow_launch_arrow", "kind": "projectile", "parameters": {"damage_multiplier": 0.75, "maximum_damage_multiplier": 1.75, "speed": 440.0, "maximum_speed": 680.0}},
+      {"payload_id": "bow_scatter", "kind": "multi_projectile", "parameters": {"damage_multiplier": 0.55, "count": 5, "spread_degrees": 32.0}},
+      {"payload_id": "bow_focus_step", "kind": "movement", "parameters": {"distance": 96.0}},
+      {"payload_id": "bow_arrow_rain", "kind": "zone", "parameters": {"damage_multiplier": 0.7, "count": 8}},
+      {"payload_id": "bow_horizon_piercer", "kind": "projectile", "parameters": {"damage_multiplier": 10.0, "pierce": 99}}
+    ],
+    "cues": [
+      {"cue_id": "bow_launch_release", "animation_id": "bow_release", "vfx_id": "bow_arrow_trail", "audio_id": "bow_release", "camera_id": "impact_light"},
+      {"cue_id": "bow_scatter_release", "animation_id": "bow_scatter", "vfx_id": "bow_scatter_fan", "audio_id": "bow_scatter", "camera_id": "impact_medium"},
+      {"cue_id": "bow_focus_step", "animation_id": "bow_focus_step", "vfx_id": "bow_focus_line", "audio_id": "bow_focus_step", "camera_id": "movement_short"},
+      {"cue_id": "bow_arrow_rain", "animation_id": "bow_arrow_rain", "vfx_id": "bow_arrow_rain", "audio_id": "bow_arrow_rain", "camera_id": "impact_medium"},
+      {"cue_id": "bow_horizon_piercer", "animation_id": "bow_ultimate", "vfx_id": "bow_horizon_line", "audio_id": "bow_ultimate", "camera_id": "impact_ultimate"}
+    ],
+    "time_interactions": {
+      "stop": {"interaction_id": "bow_stopped_target_burst", "type": "target_modifier", "parameters": {"damage_multiplier": 1.5}},
+      "rewind": {"interaction_id": "bow_echo_arrows", "type": "echo_payload", "parameters": {"echo_count": 2}},
+      "accelerate": {"interaction_id": "bow_charge_speed", "type": "future_timing_modifier", "parameters": {"timing_multiplier": 1.4}},
+      "rift": {"interaction_id": "bow_rift_penetration", "type": "projectile_modifier", "parameters": {"pierce_bonus": 2}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "bow_weakpoint", "type": "weakpoint_conversion", "parameters": {"poise_multiplier": 1.15}}}
+  },
+  {
+    "id": "gun_launch_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "WEAPON_GUN_NAME",
+    "description_key": "WEAPON_GUN_DESC",
+    "tags": ["ammunition", "burst_cycle", "reload"],
+    "compatibility": {"weapon_ids": ["gun"]},
+    "effects": {},
+    "references": ["gun"],
+    "profile_version": 1,
+    "weapon_id": "gun",
+    "runtime_kind": "gun",
+    "actions": [
+      {"action_id": "normal_fire", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 0, "maximum_hold_frames": 17, "windup_frames": 2, "active_frames": 1, "recovery_frames": 8, "cancel_from_frame": 5, "buffer_frames": 8, "movement_multiplier": 0.8, "resource_costs": {"ammo": 1.0}, "payload_id": "gun_normal_bullet", "cue_id": "gun_normal_fire"},
+      {"action_id": "aimed_fire", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 18, "windup_frames": 4, "active_frames": 1, "recovery_frames": 12, "cancel_from_frame": 8, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"ammo": 1.0}, "payload_id": "gun_aimed_bullet", "cue_id": "gun_aimed_fire"},
+      {"action_id": "shotgun_fire", "semantic_action": "weapon_secondary", "activation_mode": "press", "windup_frames": 5, "active_frames": 1, "recovery_frames": 16, "cancel_from_frame": 11, "buffer_frames": 8, "movement_multiplier": 0.55, "resource_costs": {"ammo": 2.0}, "payload_id": "gun_shotgun_pellets", "cue_id": "gun_shotgun_fire"},
+      {"action_id": "reload", "semantic_action": "weapon_utility", "activation_mode": "confirm", "windup_frames": 8, "active_frames": 32, "recovery_frames": 8, "cancel_from_frame": 7, "buffer_frames": 8, "movement_multiplier": 0.65, "resource_costs": {}, "payload_id": "gun_reload_transaction", "cue_id": "gun_reload_start"},
+      {"action_id": "time_load", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 8, "active_frames": 2, "recovery_frames": 14, "cancel_from_frame": 10, "buffer_frames": 8, "movement_multiplier": 0.5, "resource_costs": {"time_energy": 25.0}, "payload_id": "gun_time_load_buff", "cue_id": "gun_time_load"},
+      {"action_id": "void_penetration", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 12, "active_frames": 2, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "gun_void_round", "cue_id": "gun_void_penetration"}
+    ],
+    "resources": [{"resource_id": "ammo", "minimum": 0.0, "maximum": 7.0, "initial": 6.0, "regen_per_second": 0.0}],
+    "capabilities": ["weapon.ammo_capacity", "weapon.attack_speed", "weapon.damage", "weapon.reload_window", "weapon.status_duration"],
+    "payloads": [
+      {"payload_id": "gun_normal_bullet", "kind": "projectile", "parameters": {"damage_multiplier": 1.0, "speed": 760.0}},
+      {"payload_id": "gun_aimed_bullet", "kind": "projectile", "parameters": {"damage_multiplier": 1.8, "speed": 920.0}},
+      {"payload_id": "gun_shotgun_pellets", "kind": "multi_projectile", "parameters": {"damage_multiplier": 0.38, "count": 8, "spread_degrees": 28.0}},
+      {"payload_id": "gun_reload_transaction", "kind": "resource_action", "parameters": {"perfect_start_frame": 28, "perfect_end_frame": 36, "normal_fill": 6, "perfect_fill": 7}},
+      {"payload_id": "gun_time_load_buff", "kind": "buff", "parameters": {"duration_frames": 300, "timing_multiplier": 1.4, "time_damage_multiplier": 0.15}},
+      {"payload_id": "gun_void_round", "kind": "projectile", "parameters": {"damage_multiplier": 11.0, "pierce": 99}}
+    ],
+    "cues": [
+      {"cue_id": "gun_normal_fire", "animation_id": "gun_fire", "vfx_id": "gun_muzzle", "audio_id": "gun_fire", "camera_id": "impact_light"},
+      {"cue_id": "gun_aimed_fire", "animation_id": "gun_aimed_fire", "vfx_id": "gun_aimed_tracer", "audio_id": "gun_aimed_fire", "camera_id": "impact_medium"},
+      {"cue_id": "gun_shotgun_fire", "animation_id": "gun_shotgun", "vfx_id": "gun_shotgun_flash", "audio_id": "gun_shotgun", "camera_id": "impact_heavy"},
+      {"cue_id": "gun_reload_start", "animation_id": "gun_reload", "vfx_id": "gun_reload_marker", "audio_id": "gun_reload", "camera_id": "resource_action"},
+      {"cue_id": "gun_time_load", "animation_id": "gun_time_load", "vfx_id": "gun_time_load_tint", "audio_id": "gun_time_load", "camera_id": "impact_medium"},
+      {"cue_id": "gun_void_penetration", "animation_id": "gun_ultimate", "vfx_id": "gun_void_tracer", "audio_id": "gun_ultimate", "camera_id": "impact_ultimate"}
+    ],
+    "time_interactions": {
+      "stop": {"interaction_id": "gun_aimed_time_burst", "type": "projectile_modifier", "parameters": {"damage_multiplier": 1.4}},
+      "rewind": {"interaction_id": "gun_rewind_free_shot", "type": "resource_modifier", "parameters": {"window_frames": 120}},
+      "accelerate": {"interaction_id": "gun_recovery_speed", "type": "future_timing_modifier", "parameters": {"timing_multiplier": 1.4}},
+      "rift": {"interaction_id": "gun_rift_trail", "type": "projectile_trail", "parameters": {"duration_frames": 90}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "gun_weakpoint_pressure", "type": "poise_conversion", "parameters": {"poise_multiplier": 1.1}}}
+  },
+  {
+    "id": "staff_launch_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "WEAPON_STAFF_NAME",
+    "description_key": "WEAPON_STAFF_DESC",
+    "tags": ["area_control", "elements", "spell_sequence"],
+    "compatibility": {"weapon_ids": ["staff"]},
+    "effects": {},
+    "references": ["staff"],
+    "profile_version": 1,
+    "weapon_id": "staff",
+    "runtime_kind": "staff",
+    "actions": [
+      {"action_id": "arcane_bolt", "semantic_action": "weapon_primary", "activation_mode": "release", "maximum_hold_frames": 29, "windup_frames": 4, "active_frames": 1, "recovery_frames": 10, "cancel_from_frame": 6, "buffer_frames": 8, "movement_multiplier": 0.75, "resource_costs": {}, "payload_id": "staff_arcane_bolt", "cue_id": "staff_arcane_bolt"},
+      {"action_id": "charged_element", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 30, "windup_frames": 8, "active_frames": 2, "recovery_frames": 16, "cancel_from_frame": 11, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"mana": 18.0}, "payload_id": "staff_element_cast", "cue_id": "staff_element_cast"},
+      {"action_id": "element_cycle", "semantic_action": "weapon_utility", "activation_mode": "press", "windup_frames": 1, "active_frames": 1, "recovery_frames": 2, "cancel_from_frame": 1, "buffer_frames": 8, "movement_multiplier": 1.0, "resource_costs": {}, "payload_id": "staff_element_cycle", "cue_id": "staff_element_cycle"},
+      {"action_id": "planar_collapse", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 12, "active_frames": 6, "recovery_frames": 20, "cancel_from_frame": 14, "buffer_frames": 8, "movement_multiplier": 0.25, "resource_costs": {"mana": 30.0, "time_energy": 20.0}, "payload_id": "staff_planar_collapse", "cue_id": "staff_planar_collapse"},
+      {"action_id": "primordial_wrath", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 20, "active_frames": 20, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"mana": 60.0, "time_energy": 55.0}, "payload_id": "staff_primordial_wrath", "cue_id": "staff_primordial_wrath"}
+    ],
+    "resources": [{"resource_id": "mana", "minimum": 0.0, "maximum": 100.0, "initial": 100.0, "regen_per_second": 3.0}],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.mana_max", "weapon.status_duration"],
+    "payloads": [
+      {"payload_id": "staff_arcane_bolt", "kind": "projectile", "parameters": {"damage_multiplier": 0.8, "speed": 560.0}},
+      {"payload_id": "staff_element_cast", "kind": "typed_element", "parameters": {"damage_multiplier": 1.8, "elements": ["fire", "ice", "lightning"], "costs": {"fire": 20.0, "ice": 25.0, "lightning": 18.0}, "combo_window_frames": 300}},
+      {"payload_id": "staff_element_cycle", "kind": "resource_action", "parameters": {"sequence": ["fire", "ice", "lightning"]}},
+      {"payload_id": "staff_planar_collapse", "kind": "zone", "parameters": {"damage_multiplier": 3.2, "duration_frames": 180}},
+      {"payload_id": "staff_primordial_wrath", "kind": "seeded_sequence", "parameters": {"damage_multiplier": 0.9, "count": 20, "seed_channel": "staff_primordial_wrath", "elements": ["fire", "ice", "lightning"]}}
+    ],
+    "cues": [
+      {"cue_id": "staff_arcane_bolt", "animation_id": "staff_basic", "vfx_id": "staff_basic_orb", "audio_id": "staff_basic", "camera_id": "impact_light"},
+      {"cue_id": "staff_element_cast", "animation_id": "staff_charge", "vfx_id": "staff_element_cast", "audio_id": "staff_element_cast", "camera_id": "impact_medium"},
+      {"cue_id": "staff_element_cycle", "animation_id": "staff_cycle", "vfx_id": "staff_element_orb", "audio_id": "staff_cycle", "camera_id": "resource_action"},
+      {"cue_id": "staff_planar_collapse", "animation_id": "staff_skill", "vfx_id": "staff_collapse_zone", "audio_id": "staff_skill", "camera_id": "impact_heavy"},
+      {"cue_id": "staff_primordial_wrath", "animation_id": "staff_ultimate", "vfx_id": "staff_ultimate_storm", "audio_id": "staff_ultimate", "camera_id": "impact_ultimate"}
+    ],
+    "time_interactions": {
+      "stop": {"interaction_id": "staff_stop_field", "type": "zone_modifier", "parameters": {"area_multiplier": 1.5}},
+      "rewind": {"interaction_id": "staff_rewind_free_cast", "type": "resource_modifier", "parameters": {"window_frames": 120}},
+      "accelerate": {"interaction_id": "staff_fast_charge", "type": "future_timing_modifier", "parameters": {"hold_threshold_frames": 15, "mana_multiplier": 0.7}},
+      "rift": {"interaction_id": "staff_rift_combination", "type": "zone_modifier", "parameters": {"area_multiplier": 1.3, "time_damage_multiplier": 0.5}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "staff_control_conversion", "type": "control_conversion", "parameters": {"freeze_delay_frames": 12, "blind_delay_frames": 8}}}
+  },
+  {
+    "id": "gauntlets_launch_v1",
+    "category": "weapon_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "WEAPON_GAUNTLETS_NAME",
+    "description_key": "WEAPON_GAUNTLETS_DESC",
+    "tags": ["close_pressure", "combo", "melee"],
+    "compatibility": {"weapon_ids": ["gauntlets"]},
+    "effects": {},
+    "references": ["gauntlets"],
+    "profile_version": 1,
+    "weapon_id": "gauntlets",
+    "runtime_kind": "gauntlets",
+    "actions": [
+      {"action_id": "punch_1", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 3, "active_frames": 3, "recovery_frames": 5, "cancel_from_frame": 3, "buffer_frames": 12, "movement_multiplier": 0.72, "resource_costs": {}, "payload_id": "gauntlets_punch_1", "cue_id": "gauntlets_left_jab"},
+      {"action_id": "punch_2", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 2, "active_frames": 3, "recovery_frames": 5, "cancel_from_frame": 3, "buffer_frames": 12, "movement_multiplier": 0.72, "resource_costs": {}, "payload_id": "gauntlets_punch_2", "cue_id": "gauntlets_right_jab"},
+      {"action_id": "punch_3", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 3, "active_frames": 4, "recovery_frames": 6, "cancel_from_frame": 4, "buffer_frames": 12, "movement_multiplier": 0.68, "resource_costs": {}, "payload_id": "gauntlets_punch_3", "cue_id": "gauntlets_left_hook"},
+      {"action_id": "punch_4", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 3, "active_frames": 4, "recovery_frames": 6, "cancel_from_frame": 4, "buffer_frames": 12, "movement_multiplier": 0.68, "resource_costs": {}, "payload_id": "gauntlets_punch_4", "cue_id": "gauntlets_right_hook"},
+      {"action_id": "punch_5", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 5, "active_frames": 6, "recovery_frames": 14, "cancel_from_frame": 10, "buffer_frames": 12, "movement_multiplier": 0.5, "resource_costs": {}, "payload_id": "gauntlets_punch_5", "cue_id": "gauntlets_uppercut"},
+      {"action_id": "charged_heavy", "semantic_action": "weapon_secondary", "activation_mode": "release", "hold_threshold_frames": 30, "windup_frames": 6, "active_frames": 5, "recovery_frames": 16, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.35, "resource_costs": {}, "payload_id": "gauntlets_charged_heavy", "cue_id": "gauntlets_charged_heavy"},
+      {"action_id": "dodge_counter", "semantic_action": "weapon_utility", "activation_mode": "press", "windup_frames": 2, "active_frames": 5, "recovery_frames": 8, "cancel_from_frame": 6, "buffer_frames": 8, "movement_multiplier": 0.82, "resource_costs": {}, "payload_id": "gauntlets_dodge_counter", "cue_id": "gauntlets_dodge_counter"},
+      {"action_id": "space_time_shatter", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 5, "active_frames": 8, "recovery_frames": 12, "cancel_from_frame": 9, "buffer_frames": 8, "movement_multiplier": 0.4, "resource_costs": {"time_energy": 20.0}, "payload_id": "gauntlets_space_time_shatter", "cue_id": "gauntlets_space_time_shatter"},
+      {"action_id": "primordial_collapse_punch", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 20, "active_frames": 10, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "gauntlets_primordial_collapse", "cue_id": "gauntlets_primordial_collapse"}
+    ],
+    "resources": [
+      {"resource_id": "chain_step", "minimum": 0.0, "maximum": 4.0, "initial": 0.0, "regen_per_second": 0.0},
+      {"resource_id": "combo", "minimum": 0.0, "maximum": 999.0, "initial": 0.0, "regen_per_second": 0.0}
+    ],
+    "capabilities": ["weapon.attack_speed", "weapon.combo_timeout", "weapon.damage", "weapon.status_duration"],
+    "payloads": [
+      {"payload_id": "gauntlets_punch_1", "kind": "hitbox", "parameters": {"damage_multiplier": 0.8, "combo_gain": 1}},
+      {"payload_id": "gauntlets_punch_2", "kind": "hitbox", "parameters": {"damage_multiplier": 0.9, "combo_gain": 1}},
+      {"payload_id": "gauntlets_punch_3", "kind": "hitbox", "parameters": {"damage_multiplier": 1.2, "combo_gain": 1}},
+      {"payload_id": "gauntlets_punch_4", "kind": "hitbox", "parameters": {"damage_multiplier": 1.3, "combo_gain": 1}},
+      {"payload_id": "gauntlets_punch_5", "kind": "hitbox", "parameters": {"damage_multiplier": 3.0, "combo_gain": 1, "launch": 1.0}},
+      {"payload_id": "gauntlets_charged_heavy", "kind": "hitbox", "parameters": {"damage_multiplier": 4.0, "combo_gain": 3}},
+      {"payload_id": "gauntlets_dodge_counter", "kind": "hitbox", "parameters": {"damage_multiplier": 2.5, "combo_gain": 5}},
+      {"payload_id": "gauntlets_space_time_shatter", "kind": "shockwave", "parameters": {"damage_multiplier": 3.5, "combo_gain": 0}},
+      {"payload_id": "gauntlets_primordial_collapse", "kind": "hitbox", "parameters": {"damage_multiplier": 12.0, "combo_gain": 0}}
+    ],
+    "cues": [
+      {"cue_id": "gauntlets_left_jab", "animation_id": "gauntlets_left_jab", "vfx_id": "gauntlets_jab_wind", "audio_id": "gauntlets_jab", "camera_id": "impact_light"},
+      {"cue_id": "gauntlets_right_jab", "animation_id": "gauntlets_right_jab", "vfx_id": "gauntlets_jab_wind", "audio_id": "gauntlets_jab", "camera_id": "impact_light"},
+      {"cue_id": "gauntlets_left_hook", "animation_id": "gauntlets_left_hook", "vfx_id": "gauntlets_hook_wind", "audio_id": "gauntlets_hook", "camera_id": "impact_medium"},
+      {"cue_id": "gauntlets_right_hook", "animation_id": "gauntlets_right_hook", "vfx_id": "gauntlets_hook_wind", "audio_id": "gauntlets_hook", "camera_id": "impact_medium"},
+      {"cue_id": "gauntlets_uppercut", "animation_id": "gauntlets_uppercut", "vfx_id": "gauntlets_uppercut", "audio_id": "gauntlets_uppercut", "camera_id": "impact_heavy"},
+      {"cue_id": "gauntlets_charged_heavy", "animation_id": "gauntlets_charged", "vfx_id": "gauntlets_charged_ring", "audio_id": "gauntlets_charged", "camera_id": "impact_heavy"},
+      {"cue_id": "gauntlets_dodge_counter", "animation_id": "gauntlets_counter", "vfx_id": "gauntlets_counter_line", "audio_id": "gauntlets_counter", "camera_id": "impact_heavy"},
+      {"cue_id": "gauntlets_space_time_shatter", "animation_id": "gauntlets_skill", "vfx_id": "gauntlets_shatter", "audio_id": "gauntlets_skill", "camera_id": "impact_heavy"},
+      {"cue_id": "gauntlets_primordial_collapse", "animation_id": "gauntlets_ultimate", "vfx_id": "gauntlets_collapse", "audio_id": "gauntlets_ultimate", "camera_id": "impact_ultimate"}
+    ],
+    "time_interactions": {
+      "stop": {"interaction_id": "gauntlets_stop_extension", "type": "duration_extension", "parameters": {"per_hit_frames": 5, "maximum_bonus_frames": 30}},
+      "rewind": {"interaction_id": "gauntlets_rewind_counter", "type": "next_action_modifier", "parameters": {"window_frames": 120, "damage_multiplier": 2.0}},
+      "accelerate": {"interaction_id": "gauntlets_third_hit_echo", "type": "echo_payload", "parameters": {"hit_interval": 3, "damage_multiplier": 0.5}},
+      "rift": {"interaction_id": "gauntlets_rift_control", "type": "time_context_modifier", "parameters": {"effect_multiplier": 1.5, "cost_multiplier": 0.7}}
+    },
+    "boss_interactions": {"chrono_warden": {"conversion_id": "gauntlets_poised_launch", "type": "poise_conversion", "parameters": {"poise_multiplier": 1.4, "airborne": false}}}
+  }
+]

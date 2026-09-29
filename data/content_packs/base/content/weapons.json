@@ -14,6 +14,10 @@
       "precision",
       "ranged"
     ],
+    "references": [
+      "bow_candidate_v1",
+      "bow_launch_v1"
+    ],
     "compatibility": {},
     "effects": {}
   },
@@ -30,6 +34,9 @@
       "close_pressure",
       "combo",
       "melee"
+    ],
+    "references": [
+      "gauntlets_launch_v1"
     ],
     "compatibility": {},
     "effects": {}
@@ -48,6 +55,9 @@
       "burst_cycle",
       "reload"
     ],
+    "references": [
+      "gun_launch_v1"
+    ],
     "compatibility": {},
     "effects": {}
   },
@@ -64,6 +74,9 @@
       "area_control",
       "ranged",
       "spell_sequence"
+    ],
+    "references": [
+      "staff_launch_v1"
     ],
     "compatibility": {},
     "effects": {}
@@ -84,6 +97,10 @@
       "counter_window",
       "melee",
       "short_commitment"
+    ],
+    "references": [
+      "sword_launch_v1",
+      "sword_m1_v1"
     ],
     "compatibility": {},
     "effects": {}

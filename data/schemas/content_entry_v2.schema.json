@@ -37,7 +37,8 @@
         "boss",
         "narrative",
         "cosmetic",
-        "challenge"
+        "challenge",
+        "weapon_runtime_profile"
       ]
     },
     "availability": {
@@ -107,6 +108,39 @@
     },
     "references": {
       "$ref": "#/$defs/id_list"
+    },
+    "profile_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "weapon_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "runtime_kind": {
+      "type": "string",
+      "enum": ["sword", "bow", "gun", "staff", "gauntlets"]
+    },
+    "capabilities": {
+      "$ref": "#/$defs/id_list"
+    },
+    "resources": {
+      "type": "array"
+    },
+    "actions": {
+      "type": "array"
+    },
+    "payloads": {
+      "type": "array"
+    },
+    "cues": {
+      "type": "array"
+    },
+    "time_interactions": {
+      "type": "object"
+    },
+    "boss_interactions": {
+      "type": "object"
     }
   },
   "$defs": {

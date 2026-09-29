@@ -40,6 +40,33 @@ func validate(config: Dictionary, registry: RefCounted):
 	)
 	if not bool(weapon_result.get("ok", false)):
 		return _content_failure(weapon_result)
+	if not registry.has_method("resolve_weapon_runtime_profile"):
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			0,
+			{"field": "weapon_profile", "reason": "registry_boundary"}
+		)
+	var profile_value: Variant = registry.call(
+		"resolve_weapon_runtime_profile",
+		StringName(str(normalized["weapon_id"])),
+		StringName(milestone)
+	)
+	var weapon_profile: Dictionary = (
+		(profile_value as Dictionary).duplicate(true)
+		if profile_value is Dictionary
+		else {}
+	)
+	if weapon_profile.is_empty():
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			0,
+			{
+				"field": "weapon_profile",
+				"reason": "missing_or_ambiguous",
+				"weapon_id": str(normalized["weapon_id"]),
+				"milestone": milestone,
+			}
+		)
 
 	var abilities: Array[Dictionary] = []
 	for ability_id_value: Variant in normalized["enabled_time_skills"]:
@@ -60,6 +87,7 @@ func validate(config: Dictionary, registry: RefCounted):
 			"loadout": {
 				"character": (character_result["definition"] as Dictionary).duplicate(true),
 				"weapon": (weapon_result["definition"] as Dictionary).duplicate(true),
+				"weapon_profile": weapon_profile.duplicate(true),
 				"time_abilities": abilities,
 			},
 		}

@@ -69,6 +69,7 @@ func _test_m1_default(suite) -> void:
 	var loadout: Dictionary = result.context.get("loadout", {})
 	suite.assert_equal(str(loadout.get("character", {}).get("id", "")), "wanderer", "M1 default resolves Wanderer")
 	suite.assert_equal(str(loadout.get("weapon", {}).get("id", "")), "sword", "M1 default resolves Sword")
+	suite.assert_equal(str(loadout.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "M1 default resolves the frozen Sword profile")
 	suite.assert_equal(_definition_ids(loadout.get("time_abilities", [])), ["stop", "rewind"], "M1 default resolves Stop and Rewind in slot order")
 
 
@@ -124,6 +125,8 @@ func _test_next_candidate_presets(suite) -> void:
 			continue
 		var loadout: Dictionary = result.context.get("loadout", {})
 		suite.assert_equal(str(loadout.get("weapon", {}).get("id", "")), preset["weapon_id"], "%s resolves its weapon" % str(preset["label"]))
+		var expected_profile := "bow_candidate_v1" if str(preset["weapon_id"]) == "bow" else "sword_launch_v1"
+		suite.assert_equal(str(loadout.get("weapon_profile", {}).get("id", "")), expected_profile, "%s resolves its milestone profile" % str(preset["label"]))
 		suite.assert_equal(_definition_ids(loadout.get("time_abilities", [])), preset["skills"], "%s resolves both ability slots" % str(preset["label"]))
 
 

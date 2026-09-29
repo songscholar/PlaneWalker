@@ -12,6 +12,10 @@ const EXPECTED_CHARACTERS := [
 ]
 const EXPECTED_WEAPONS := ["bow", "gauntlets", "gun", "staff", "sword"]
 const EXPECTED_TIME_ABILITIES := ["accelerate", "rewind", "rift", "stop"]
+const EXPECTED_WEAPON_PROFILES := [
+	"bow_candidate_v1", "bow_launch_v1", "gauntlets_launch_v1", "gun_launch_v1",
+	"staff_launch_v1", "sword_launch_v1", "sword_m1_v1",
+]
 
 
 func _ready() -> void:
@@ -51,6 +55,11 @@ func _assert_catalog(suite, registry: RefCounted) -> void:
 		_ids(registry.get_by_category(&"time_ability")),
 		EXPECTED_TIME_ABILITIES,
 		"four time abilities are canonical"
+	)
+	suite.assert_equal(
+		_ids(registry.get_by_category(&"weapon_runtime_profile")),
+		EXPECTED_WEAPON_PROFILES,
+		"seven milestone-aware weapon runtime profiles are canonical"
 	)
 
 
