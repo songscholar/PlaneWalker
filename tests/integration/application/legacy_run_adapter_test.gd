@@ -5,7 +5,7 @@ const CommandResultScript := preload("res://scripts/application/command_result.g
 const LegacyRunAdapterScript := preload("res://scripts/application/legacy_run_adapter.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 
-const VALID_MANIFEST := "res://data/content_manifest.json"
+const VALID_MANIFEST := "res://data/content_packs/base/pack.json"
 const INVALID_MANIFEST := "res://tests/fixtures/content/missing-manifest.json"
 
 

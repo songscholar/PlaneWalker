@@ -147,42 +147,46 @@ func _run() -> void:
 	var first_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	var second_roll := RewardPoolScript.roll_options(3, 123, 1, [])
 	_assert_true(_reward_ids(first_roll) == _reward_ids(second_roll), "reward roll is deterministic")
-	_assert_true(RewardPoolScript.all_rewards().size() >= RewardPoolScript.REWARDS.size(), "item rewards load from data")
-	_assert_true(RewardPoolScript.REWARDS.size() >= 14, "reward pool includes build starters")
-	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("frozen_burst"), "reward pool includes frozen burst starter")
-	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("accelerated_combo"), "reward pool includes combo starter")
-	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("tempo_barrage"), "reward pool includes barrage starter")
-	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("piercing_draw"), "reward pool includes bow starter")
-	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("focused_draw"), "reward pool includes bow payoff")
-	_assert_true(_reward_ids(RewardPoolScript.REWARDS).has("rift_snare"), "reward pool includes rift payoff")
+	var registered_rewards := RewardPoolScript.all_rewards()
+	_assert_true(registered_rewards.size() >= 14, "base pack includes build starters")
+	_assert_true(registered_rewards.all(func(entry): return entry.get("pack_id") == "base"), "item rewards originate from the base pack")
+	_assert_true(_reward_ids(registered_rewards).has("frozen_burst"), "reward pool includes frozen burst starter")
+	_assert_true(_reward_ids(registered_rewards).has("accelerated_combo"), "reward pool includes combo starter")
+	_assert_true(_reward_ids(registered_rewards).has("tempo_barrage"), "reward pool includes barrage starter")
+	_assert_true(_reward_ids(registered_rewards).has("piercing_draw"), "reward pool includes bow starter")
+	_assert_true(_reward_ids(registered_rewards).has("focused_draw"), "reward pool includes bow payoff")
+	_assert_true(_reward_ids(registered_rewards).has("rift_snare"), "reward pool includes rift payoff")
 	_assert_true(RewardPoolScript.get_reward_route_label({
-		"archetype": "rift_control",
+		"archetype": "rift_trap",
 		"role": "payoff",
-	}).contains("收益件 - 裂隙掌控"), "reward route labels payoff")
+	}).contains("收益件 - 裂隙陷阱"), "reward route labels payoff")
 	_assert_true(RewardPoolScript.get_reward_route_label({
-		"archetype": "piercing_draw",
+		"archetype": "piercing_barrage",
 		"role": "starter",
-	}).contains("启动件 - 穿透射击"), "reward route labels bow starter")
+	}).contains("启动件 - 穿透弹幕"), "reward route labels bow starter")
 
 	var first_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	var second_curse_roll := CursePoolScript.roll_options(2, 123, 2, [])
 	_assert_true(_reward_ids(first_curse_roll) == _reward_ids(second_curse_roll), "curse roll is deterministic")
-	_assert_true(CursePoolScript.all_curses().size() >= CursePoolScript.CURSES.size(), "curses load from data")
-	_assert_true(CursePoolScript.CURSES.size() >= 6, "curse pool includes first risk set")
+	var registered_curses := CursePoolScript.all_curses()
+	_assert_true(registered_curses.size() >= 6, "base pack includes the first curse set")
+	_assert_true(registered_curses.all(func(entry): return entry.get("pack_id") == "base"), "curses originate from the base pack")
 
 	var first_blessing_roll := BlessingPoolScript.roll_options(2, 123, 4, [])
 	var second_blessing_roll := BlessingPoolScript.roll_options(2, 123, 4, [])
 	_assert_true(_reward_ids(first_blessing_roll) == _reward_ids(second_blessing_roll), "blessing roll is deterministic")
-	_assert_true(BlessingPoolScript.all_blessings().size() >= BlessingPoolScript.BLESSINGS.size(), "blessings load from data")
-	_assert_true(BlessingPoolScript.BLESSINGS.size() >= 4, "blessing pool includes MVP blessings")
-	_assert_true(_reward_ids(BlessingPoolScript.BLESSINGS).has("bls_stop_weakpoint"), "blessing pool includes stop weakpoint")
+	var registered_blessings := BlessingPoolScript.all_blessings()
+	_assert_true(registered_blessings.size() >= 4, "base pack includes M1 blessings")
+	_assert_true(registered_blessings.all(func(entry): return entry.get("pack_id") == "base"), "blessings originate from the base pack")
+	_assert_true(_reward_ids(registered_blessings).has("bls_stop_weakpoint"), "blessing pool includes stop weakpoint")
 
 	var first_talent_roll := TalentPoolScript.roll_options(3, 123, 3, [])
 	var second_talent_roll := TalentPoolScript.roll_options(3, 123, 3, [])
 	_assert_true(_reward_ids(first_talent_roll) == _reward_ids(second_talent_roll), "talent roll is deterministic")
-	_assert_true(TalentPoolScript.all_talents().size() >= TalentPoolScript.TALENTS.size(), "talents load from data")
-	_assert_true(TalentPoolScript.TALENTS.size() >= 3, "talent pool includes MVP talents")
-	_assert_true(_reward_ids(TalentPoolScript.TALENTS).has("tal_ruin_execute"), "talent pool includes ruin execute")
+	var registered_talents := TalentPoolScript.all_talents()
+	_assert_true(registered_talents.size() >= 3, "base pack includes M1 talents")
+	_assert_true(registered_talents.all(func(entry): return entry.get("pack_id") == "base"), "talents originate from the base pack")
+	_assert_true(_reward_ids(registered_talents).has("tal_ruin_execute"), "talent pool includes ruin execute")
 
 	player.apply_curse({
 		"id": "test_curse",

@@ -10,7 +10,8 @@ const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
 
-const DEFAULT_MANIFEST_PATH := "res://data/content_manifest.json"
+const GAME_VERSION := "0.4.0-dev"
+const DEFAULT_CONTENT_PATH := "res://data/content_packs/base/pack.json"
 const DEFAULT_ENCOUNTER_PATH := "res://data/encounters/m1_encounters.json"
 
 var _registry: RefCounted
@@ -22,7 +23,7 @@ var _booted: bool = false
 
 
 func boot(
-	manifest_path: String = DEFAULT_MANIFEST_PATH,
+	content_path: String = DEFAULT_CONTENT_PATH,
 	encounter_path: String = DEFAULT_ENCOUNTER_PATH
 ):
 	_booted = false
@@ -32,7 +33,15 @@ func boot(
 	_orchestrator = RunOrchestratorScript.new()
 	_room_definitions.clear()
 
-	var report = _registry.load_manifest(manifest_path)
+	var report
+	if content_path.to_lower().ends_with("pack.json"):
+		report = _registry.load_packs(
+			[{"path": content_path, "required": true}],
+			GAME_VERSION,
+			&"M1"
+		)
+	else:
+		report = _registry.load_manifest(content_path)
 	if report.has_blocking_errors():
 		return CommandResultScript.failure(
 			&"CONTENT_NOT_AVAILABLE",
@@ -244,6 +253,10 @@ func room_plan() -> Array[Dictionary]:
 
 func encounter_catalog() -> RefCounted:
 	return _encounter_catalog
+
+
+func content_registry() -> RefCounted:
+	return _registry
 
 
 func _require_booted(operation: String):

@@ -86,9 +86,9 @@ func _test_boot_and_room_flow(suite) -> void:
 	var selected = facade.submit_selection(str(offer_one["offer_id"]), frozen_option, int(offer_one["revision"]))
 	suite.assert_true(selected.ok, "canonical starter selection succeeds")
 	suite.assert_true(facade.snapshot()["build"]["items"].has("frozen_burst"), "starter writes authoritative build")
-	suite.assert_equal(facade.snapshot()["build"]["dominant_archetype"], "time_stop_burst", "starter establishes dominant route")
+	suite.assert_equal(facade.snapshot()["build"]["dominant_archetype"], "freeze_burst", "starter establishes dominant route")
 	selected.context["definition"]["archetype"] = "MUTATED"
-	suite.assert_equal(facade.snapshot()["build"]["dominant_archetype"], "time_stop_burst", "selection context is a deep copy")
+	suite.assert_equal(facade.snapshot()["build"]["dominant_archetype"], "freeze_burst", "selection context is a deep copy")
 	var duplicate = facade.submit_selection(str(offer_one["offer_id"]), frozen_option, int(offer_one["revision"]))
 	suite.assert_equal(duplicate.code, &"ALREADY_CONSUMED", "committed offer cannot submit twice")
 	suite.assert_equal(facade.snapshot()["build"]["reward_history"].size(), 1, "duplicate submit does not duplicate history")

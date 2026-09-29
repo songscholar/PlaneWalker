@@ -64,7 +64,7 @@ func _test_starter_offer(suite, service, registry, room: Dictionary) -> void:
 	suite.assert_equal(offer["options"].size(), 3, "starter offer has three options")
 	var archetypes := _option_archetypes(service, offer)
 	archetypes.sort()
-	suite.assert_equal(archetypes, ["accelerated_combo", "rewind_echo", "time_stop_burst"], "starter offer covers all three routes")
+	suite.assert_equal(archetypes, ["accelerated_combo", "freeze_burst", "rewind_echo"], "starter offer covers all three routes")
 	suite.assert_true(not _option_ids(offer).has("bow_next"), "NEXT definitions never appear")
 
 	for seed_value: int in range(1000):
@@ -72,12 +72,12 @@ func _test_starter_offer(suite, service, registry, room: Dictionary) -> void:
 		suite.assert_true(seeded.ok, "starter seed %d succeeds" % seed_value)
 		var seeded_routes := _option_archetypes(service, seeded.context["offer"])
 		seeded_routes.sort()
-		suite.assert_equal(seeded_routes, ["accelerated_combo", "rewind_echo", "time_stop_burst"], "starter seed %d covers valid routes" % seed_value)
+		suite.assert_equal(seeded_routes, ["accelerated_combo", "freeze_burst", "rewind_echo"], "starter seed %d covers valid routes" % seed_value)
 
 
 func _test_reinforcement_offer(suite, service, registry, room: Dictionary) -> void:
 	var state := _state(456, 2)
-	state["build"]["dominant_archetype"] = "time_stop_burst"
+	state["build"]["dominant_archetype"] = "freeze_burst"
 	state["build"]["items"] = ["utility_guard"]
 	var result = service.create_offer(registry, state, room)
 	suite.assert_true(result.ok, "reinforcement offer succeeds")
@@ -85,8 +85,8 @@ func _test_reinforcement_offer(suite, service, registry, room: Dictionary) -> vo
 	suite.assert_true(SelectionOfferScript.validate(offer).ok, "reinforcement offer satisfies selection contract")
 	suite.assert_equal(offer["options"].size(), 3, "reinforcement offer has three options")
 	var definitions := _definitions(service, offer)
-	suite.assert_equal(definitions.filter(func(entry): return entry["role"] == "payoff" and entry["archetype"] == "time_stop_burst").size(), 1, "reinforcement includes dominant payoff")
-	suite.assert_equal(definitions.filter(func(entry): return entry["role"] == "starter" and entry["archetype"] != "time_stop_burst").size(), 1, "reinforcement includes alternative starter")
+	suite.assert_equal(definitions.filter(func(entry): return entry["role"] == "payoff" and entry["archetype"] == "freeze_burst").size(), 1, "reinforcement includes dominant payoff")
+	suite.assert_equal(definitions.filter(func(entry): return entry["role"] == "starter" and entry["archetype"] != "freeze_burst").size(), 1, "reinforcement includes alternative starter")
 	suite.assert_equal(definitions.filter(func(entry): return entry["role"] == "utility").size(), 1, "reinforcement includes utility")
 	suite.assert_true(not _option_ids(offer).has("utility_guard"), "owned definitions never appear")
 
@@ -112,7 +112,7 @@ func _test_real_talent_offer(suite, room: Dictionary) -> void:
 		return
 	var definitions := _definitions(service, result.context["offer"])
 	suite.assert_equal(definitions.size(), 3, "real talent offer has three definitions")
-	suite.assert_true(definitions.all(func(entry): return str(entry["archetype"]) != "rift_control"), "real talent offer does not leak rift route")
+	suite.assert_true(definitions.all(func(entry): return str(entry["archetype"]) != "rift_trap"), "real talent offer does not leak rift route")
 
 
 func _test_contract_offer(suite, service, registry, room: Dictionary) -> void:

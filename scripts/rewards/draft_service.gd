@@ -6,7 +6,7 @@ const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
 
 const STARTER_ARCHETYPES: Array[String] = [
-	"time_stop_burst",
+	"freeze_burst",
 	"rewind_echo",
 	"accelerated_combo",
 ]

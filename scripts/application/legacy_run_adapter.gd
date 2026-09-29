@@ -17,7 +17,7 @@ const LEGACY_SELECTION_NAMES: Array[StringName] = [
 
 @export var enabled: bool = false
 @export var room_controller_path: NodePath
-@export_file("*.json") var manifest_path: String = "res://data/content_manifest.json"
+@export_file("*.json") var manifest_path: String = "res://data/content_packs/base/pack.json"
 @export var allow_legacy_runtime_fallback: bool = false
 
 var _active: bool = false

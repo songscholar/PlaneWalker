@@ -7,7 +7,7 @@
     "name_key": "STOP_STARTER_NAME",
     "description_key": "STOP_STARTER_DESC",
     "kind": "time",
-    "archetype": "time_stop_burst",
+    "archetype": "freeze_burst",
     "role": "starter",
     "rarity": "common",
     "effects": {"time_stop_duration_bonus": 0.5}
@@ -46,7 +46,7 @@
     "name_key": "STOP_PAYOFF_NAME",
     "description_key": "STOP_PAYOFF_DESC",
     "kind": "time",
-    "archetype": "time_stop_burst",
+    "archetype": "freeze_burst",
     "role": "payoff",
     "rarity": "uncommon",
     "effects": {"time_stop_weakpoint_damage_bonus": 0.25}
@@ -124,7 +124,7 @@
     "name_key": "TALENT_STOP_NAME",
     "description_key": "TALENT_STOP_DESC",
     "kind": "route",
-    "archetype": "time_stop_burst",
+    "archetype": "freeze_burst",
     "role": "payoff",
     "rarity": "rare",
     "effects": {"heavy_damage_multiplier_bonus": 0.2}
