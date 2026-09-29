@@ -1,6 +1,6 @@
 # Plane Walker P6 Controller, Focus, and Accessibility Implementation Plan
 
-- Status: Active / Task 1 implemented
+- Status: Active / Tasks 1–3 implemented
 - Authority Level: P6 foundation execution plan
 - Applies To: Current start, combat, selection, pause, result, remapping, and accessibility flows
 - Exit Gate: Every Current flow completes controller-only, focus recovers after every modal transition, remaps and accessibility settings survive restart, and the complete P6 regression set passes with clean logs
@@ -166,7 +166,7 @@ Recorded result:
 Scene tests: 1 passed, 0 failed, 1 total
 ```
 
-- [ ] **Step 6: Create the focused commit**
+- [x] **Step 6: Create the focused commit**
 
 Run:
 
@@ -209,7 +209,7 @@ Expected: only the five named P6 paths are committed; concurrent dirty files rem
 }
 ```
 
-- [ ] **Step 1: Write codec failures before production code**
+- [x] **Step 1: Write codec failures before production code**
 
 Create round-trip assertions for one event of each supported type:
 
@@ -228,7 +228,7 @@ for record: Dictionary in records:
 
 Reject unknown keys, device-specific IDs, zero axis direction, and unsupported event classes with an empty dictionary/null result.
 
-- [ ] **Step 2: Run the codec test and capture the missing-script failure**
+- [x] **Step 2: Run the codec test and capture the missing-script failure**
 
 Run:
 
@@ -238,7 +238,7 @@ Run:
 
 Expected: parse failure naming `scripts/input/input_binding_codec.gd`.
 
-- [ ] **Step 3: Implement the exact codec**
+- [x] **Step 3: Implement the exact codec**
 
 Use this dispatch and no `str(event)` serialization:
 
@@ -258,7 +258,7 @@ static func encode(event: InputEvent) -> Dictionary:
 
 `decode()` always sets `device = -1`; axis values are exactly `-1.0` or `1.0`.
 
-- [ ] **Step 4: Write atomic-store failures**
+- [x] **Step 4: Write atomic-store failures**
 
 The store test uses a unique `PLANEWALKER_TEST_DATA_DIR` root and asserts:
 
@@ -273,7 +273,7 @@ suite.assert_true(not FileAccess.file_exists(store.pending_path()), "pending fil
 
 Invalid schema version, unknown action, missing binding family, duplicate canonical binding, and a binding belonging to the wrong family return `ok=false` without replacing the primary.
 
-- [ ] **Step 5: Implement `InputProfileStore`**
+- [x] **Step 5: Implement `InputProfileStore`**
 
 Constructor/configuration:
 
@@ -284,7 +284,7 @@ func configure(root_path: String = "user://plane_walker/input") -> void:
 
 Save order is exact: validate → write `pending.tmp` → parse/validate pending → copy verified primary to `backup_1.json` → rename pending to `input_profile_v1.json` → parse/validate primary. A failure preserves the last verified primary and returns `{ "ok": false, "code": <stable_code> }`.
 
-- [ ] **Step 6: Run focused tests and commit**
+- [x] **Step 6: Run focused tests and commit**
 
 Run:
 
@@ -314,7 +314,7 @@ Expected: both scenes pass with no runtime or leak signatures.
 - Produces: `load_or_defaults() -> Dictionary`, `remap(action: StringName, family: StringName, event: InputEvent) -> Dictionary`, `reset_action(action: StringName) -> Dictionary`, `reset_all() -> Dictionary`, `binding_labels(action: StringName) -> Dictionary`, and `bindings_changed(action: StringName)`.
 - Conflict rule: if the requested canonical binding already belongs to a different required action in the same family, swap the two actions' first bindings atomically. If the displaced action has no first binding, reject with `UNREACHABLE_ACTION`.
 
-- [ ] **Step 1: Write remap invariants as failing tests**
+- [x] **Step 1: Write remap invariants as failing tests**
 
 ```gdscript
 var result := service.remap(&"attack", &"controller", _joy_button(JOY_BUTTON_Y))
@@ -326,7 +326,7 @@ suite.assert_equal(InputActionContractScript.missing_required_bindings(), [], "s
 
 Also assert that Esc/Start cannot be bound away from `pause` unless another pause binding remains, analog axis values below `0.75` are rejected for capture, and `reset_all()` reproduces the Task 1 controller IDs exactly.
 
-- [ ] **Step 2: Verify the red state**
+- [x] **Step 2: Verify the red state**
 
 Run:
 
@@ -336,7 +336,7 @@ Run:
 
 Expected: missing `input_remap_service.gd` parse failure.
 
-- [ ] **Step 3: Implement validation, swapping, and rollback**
+- [x] **Step 3: Implement validation, swapping, and rollback**
 
 The mutation sequence is exact:
 
@@ -357,7 +357,7 @@ return {"ok": true, "profile": candidate.duplicate(true)}
 
 `load_or_defaults()` applies a verified profile only after complete validation; corrupt/invalid data recovers backup or resets to project defaults and returns a non-fatal status code for UI messaging.
 
-- [ ] **Step 4: Run tests and commit**
+- [x] **Step 4: Run tests and commit**
 
 Run:
 
