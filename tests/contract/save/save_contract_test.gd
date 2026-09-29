@@ -108,9 +108,21 @@ func _test_settings_schema(suite) -> void:
 	suite.assert_equal(payload.get("additionalProperties"), false, "settings payload is closed")
 	for setting_id: String in [
 		"locale", "master_volume", "master_muted", "camera_shake_enabled",
-		"hit_flash_enabled", "reduced_motion",
+		"hit_flash_enabled", "reduced_motion", "music_volume", "sfx_volume",
+		"dialogue_volume", "text_scale", "high_contrast_danger", "subtitles_enabled",
+		"subtitle_scale", "ranged_charge_mode", "damage_received_multiplier",
+		"enemy_telegraph_scale",
 	]:
 		suite.assert_true(payload.get("properties", {}).has(setting_id), "settings schema includes %s" % setting_id)
+	_assert_required_fields(
+		suite,
+		payload,
+		[
+			"locale", "master_volume", "master_muted", "camera_shake_enabled",
+			"hit_flash_enabled", "reduced_motion",
+		],
+		"legacy settings compatibility"
+	)
 
 
 func _test_profile_fixtures(suite) -> void:

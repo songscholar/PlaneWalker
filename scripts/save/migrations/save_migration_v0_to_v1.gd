@@ -7,9 +7,19 @@ const DEFAULT_SETTINGS := {
 	"locale": "zh_CN",
 	"master_volume": 0.85,
 	"master_muted": false,
+	"music_volume": 0.80,
+	"sfx_volume": 0.90,
+	"dialogue_volume": 0.90,
 	"camera_shake_enabled": true,
 	"hit_flash_enabled": true,
 	"reduced_motion": false,
+	"text_scale": 1.0,
+	"high_contrast_danger": false,
+	"subtitles_enabled": true,
+	"subtitle_scale": 1.0,
+	"ranged_charge_mode": "hold",
+	"damage_received_multiplier": 1.0,
+	"enemy_telegraph_scale": 1.0,
 }
 
 

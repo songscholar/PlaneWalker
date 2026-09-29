@@ -21,6 +21,8 @@ func _run() -> void:
 	_test_canonical_json_and_digest(suite)
 	_test_profile_envelope_round_trip(suite)
 	_test_settings_envelope_round_trip(suite)
+	_test_settings_v1_backward_compatibility(suite)
+	_test_accessibility_settings_validation(suite)
 	_test_envelope_rejects_tampering(suite)
 	_test_envelope_rejects_invalid_documents(suite)
 	suite.finish(get_tree())
@@ -193,6 +195,86 @@ func _test_settings_envelope_round_trip(suite) -> void:
 
 	settings["locale"] = "en"
 	suite.assert_equal(envelope["payload"]["locale"], "zh_CN", "settings creation deep-copies payload")
+
+
+func _test_settings_v1_backward_compatibility(suite) -> void:
+	var historical_settings := {
+		"locale": "en",
+		"master_volume": 0.65,
+		"master_muted": false,
+		"camera_shake_enabled": true,
+		"hit_flash_enabled": true,
+		"reduced_motion": false,
+	}
+	var created = SaveEnvelopeScript.create_settings(
+		5,
+		"0.4.0-dev",
+		"2026-09-28T08:00:00Z",
+		"2026-09-28T09:00:00Z",
+		historical_settings
+	)
+	suite.assert_true(created.ok, "historical six-field settings remain readable")
+	if created.ok:
+		suite.assert_true(SaveEnvelopeScript.validate(created.payload, &"settings").ok, "historical settings envelope remains valid")
+
+
+func _test_accessibility_settings_validation(suite) -> void:
+	var expanded := {
+		"locale": "zh_CN",
+		"master_volume": 0.85,
+		"master_muted": false,
+		"music_volume": 0.8,
+		"sfx_volume": 0.9,
+		"dialogue_volume": 0.9,
+		"camera_shake_enabled": true,
+		"hit_flash_enabled": true,
+		"reduced_motion": false,
+		"text_scale": 1.25,
+		"high_contrast_danger": true,
+		"subtitles_enabled": true,
+		"subtitle_scale": 1.5,
+		"ranged_charge_mode": "toggle",
+		"damage_received_multiplier": 0.8,
+		"enemy_telegraph_scale": 1.25,
+	}
+	var created = SaveEnvelopeScript.create_settings(
+		6,
+		"0.4.0-dev",
+		"2026-09-28T08:00:00Z",
+		"2026-09-28T09:00:00Z",
+		expanded
+	)
+	suite.assert_true(created.ok, "expanded accessibility settings are accepted")
+	if created.ok:
+		suite.assert_equal(created.payload.get("payload"), expanded, "expanded accessibility settings round trip exactly")
+
+	for invalid_case: Dictionary in [
+		{"field": "music_volume", "value": NAN},
+		{"field": "sfx_volume", "value": 1.1},
+		{"field": "dialogue_volume", "value": -0.1},
+		{"field": "text_scale", "value": 1.1},
+		{"field": "subtitle_scale", "value": 2.0},
+		{"field": "ranged_charge_mode", "value": "auto"},
+		{"field": "damage_received_multiplier", "value": 0.5},
+		{"field": "enemy_telegraph_scale", "value": 2.0},
+	]:
+		var invalid := expanded.duplicate(true)
+		invalid[invalid_case["field"]] = invalid_case["value"]
+		var result = SaveEnvelopeScript.create_settings(
+			6,
+			"0.4.0-dev",
+			"2026-09-28T08:00:00Z",
+			"2026-09-28T09:00:00Z",
+			invalid
+		)
+		suite.assert_true(not result.ok, "invalid %s is rejected" % invalid_case["field"])
+
+	var unknown := expanded.duplicate(true)
+	unknown["undeclared_setting"] = true
+	suite.assert_true(
+		not SaveEnvelopeScript.create_settings(6, "0.4.0-dev", "2026-09-28T08:00:00Z", "2026-09-28T09:00:00Z", unknown).ok,
+		"unknown accessibility settings remain rejected"
+	)
 
 
 func _test_envelope_rejects_tampering(suite) -> void:

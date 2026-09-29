@@ -9,13 +9,41 @@ const SaveServiceScript := preload("res://scripts/save/save_service.gd")
 const SAVE_GAME_VERSION := "0.4.0-dev"
 const DEFAULT_PROFILE_ID := "slot_1"
 const DEFAULT_SAVE_DOMAIN := "base"
+const DEFAULT_SETTINGS := {
+	"locale": "zh_CN",
+	"master_volume": 0.85,
+	"master_muted": false,
+	"music_volume": 0.80,
+	"sfx_volume": 0.90,
+	"dialogue_volume": 0.90,
+	"camera_shake_enabled": true,
+	"hit_flash_enabled": true,
+	"reduced_motion": false,
+	"text_scale": 1.0,
+	"high_contrast_danger": false,
+	"subtitles_enabled": true,
+	"subtitle_scale": 1.0,
+	"ranged_charge_mode": "hold",
+	"damage_received_multiplier": 1.0,
+	"enemy_telegraph_scale": 1.0,
+}
 const SETTING_IDS: Array[String] = [
 	"locale",
 	"master_volume",
 	"master_muted",
+	"music_volume",
+	"sfx_volume",
+	"dialogue_volume",
 	"camera_shake_enabled",
 	"hit_flash_enabled",
 	"reduced_motion",
+	"text_scale",
+	"high_contrast_danger",
+	"subtitles_enabled",
+	"subtitle_scale",
+	"ranged_charge_mode",
+	"damage_received_multiplier",
+	"enemy_telegraph_scale",
 ]
 
 signal setting_changed(setting_id: StringName, value: Variant)
@@ -248,6 +276,12 @@ func get_setting(setting_id: String, default_value: Variant = null) -> Variant:
 	return persistent.get("settings", {}).get(setting_id, default_value)
 
 
+func normalized_settings() -> Dictionary:
+	var settings_value: Variant = persistent.get("settings", {})
+	var settings := settings_value as Dictionary if settings_value is Dictionary else {}
+	return _settings_payload(settings)
+
+
 func load_persistent() -> bool:
 	var service_result = _ensure_save_service()
 	if not service_result.ok:
@@ -386,14 +420,7 @@ func _settings_payload(settings: Dictionary) -> Dictionary:
 
 
 func _default_settings_payload() -> Dictionary:
-	return {
-		"locale": "zh_CN",
-		"master_volume": 0.85,
-		"master_muted": false,
-		"camera_shake_enabled": true,
-		"hit_flash_enabled": true,
-		"reduced_motion": false,
-	}
+	return DEFAULT_SETTINGS.duplicate(true)
 
 
 func _base_content_snapshot() -> Dictionary:

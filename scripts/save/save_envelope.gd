@@ -44,6 +44,24 @@ const SETTINGS_PAYLOAD_FIELDS: Array[String] = [
 	"locale",
 	"master_volume",
 	"master_muted",
+	"music_volume",
+	"sfx_volume",
+	"dialogue_volume",
+	"camera_shake_enabled",
+	"hit_flash_enabled",
+	"reduced_motion",
+	"text_scale",
+	"high_contrast_danger",
+	"subtitles_enabled",
+	"subtitle_scale",
+	"ranged_charge_mode",
+	"damage_received_multiplier",
+	"enemy_telegraph_scale",
+]
+const LEGACY_SETTINGS_REQUIRED_FIELDS: Array[String] = [
+	"locale",
+	"master_volume",
+	"master_muted",
 	"camera_shake_enabled",
 	"hit_flash_enabled",
 	"reduced_motion",
@@ -320,20 +338,59 @@ static func _content_snapshot_error(snapshot: Dictionary) -> Dictionary:
 
 
 static func _settings_payload_error(payload: Dictionary) -> Dictionary:
-	if not _has_exact_fields(payload, SETTINGS_PAYLOAD_FIELDS):
-		return {"field": "payload", "reason": "fields"}
+	if not _has_required_fields(payload, LEGACY_SETTINGS_REQUIRED_FIELDS):
+		return {"field": "payload", "reason": "missing-required-fields"}
+	if not _has_only_known_fields(payload, SETTINGS_PAYLOAD_FIELDS):
+		return {"field": "payload", "reason": "unknown-fields"}
 	if typeof(payload["locale"]) != TYPE_STRING or str(payload["locale"]) not in ["zh_CN", "en"]:
 		return {"field": "payload.locale", "reason": "value", "value": payload["locale"]}
-	var volume_type := typeof(payload["master_volume"])
-	if volume_type not in [TYPE_INT, TYPE_FLOAT]:
-		return {"field": "payload.master_volume", "reason": "type"}
-	var volume := float(payload["master_volume"])
-	if not is_finite(volume) or volume < 0.0 or volume > 1.0:
-		return {"field": "payload.master_volume", "reason": "range", "value": payload["master_volume"]}
-	for field: String in ["master_muted", "camera_shake_enabled", "hit_flash_enabled", "reduced_motion"]:
+	for field: String in ["master_volume", "music_volume", "sfx_volume", "dialogue_volume"]:
+		if not payload.has(field):
+			continue
+		var volume_error := _finite_range_error(payload[field], "payload.%s" % field, 0.0, 1.0)
+		if not volume_error.is_empty():
+			return volume_error
+	for field: String in [
+		"master_muted",
+		"camera_shake_enabled",
+		"hit_flash_enabled",
+		"reduced_motion",
+		"high_contrast_danger",
+		"subtitles_enabled",
+	]:
+		if not payload.has(field):
+			continue
 		if typeof(payload[field]) != TYPE_BOOL:
 			return {"field": "payload.%s" % field, "reason": "type", "value": payload[field]}
+	for field: String in ["text_scale", "subtitle_scale"]:
+		if payload.has(field) and not _number_is_one_of(payload[field], [1.0, 1.25, 1.5]):
+			return {"field": "payload.%s" % field, "reason": "value", "value": payload[field]}
+	if payload.has("ranged_charge_mode") and (
+		typeof(payload["ranged_charge_mode"]) != TYPE_STRING
+		or str(payload["ranged_charge_mode"]) not in ["hold", "toggle"]
+	):
+		return {"field": "payload.ranged_charge_mode", "reason": "value", "value": payload["ranged_charge_mode"]}
+	if payload.has("damage_received_multiplier") and not _number_is_one_of(payload["damage_received_multiplier"], [1.0, 0.8, 0.6]):
+		return {"field": "payload.damage_received_multiplier", "reason": "value", "value": payload["damage_received_multiplier"]}
+	if payload.has("enemy_telegraph_scale") and not _number_is_one_of(payload["enemy_telegraph_scale"], [1.0, 1.25, 1.5]):
+		return {"field": "payload.enemy_telegraph_scale", "reason": "value", "value": payload["enemy_telegraph_scale"]}
 	return {}
+
+
+static func _finite_range_error(value: Variant, field: String, minimum: float, maximum: float) -> Dictionary:
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
+		return {"field": field, "reason": "type", "value": value}
+	var numeric := float(value)
+	if not is_finite(numeric) or numeric < minimum or numeric > maximum:
+		return {"field": field, "reason": "range", "value": value}
+	return {}
+
+
+static func _number_is_one_of(value: Variant, allowed: Array[float]) -> bool:
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT]:
+		return false
+	var numeric := float(value)
+	return is_finite(numeric) and numeric in allowed
 
 
 static func _integrity_error(document: Dictionary) -> Dictionary:
@@ -364,6 +421,20 @@ static func _has_exact_fields(value: Dictionary, expected_fields: Array) -> bool
 		return false
 	for field: Variant in expected_fields:
 		if not value.has(field):
+			return false
+	return true
+
+
+static func _has_required_fields(value: Dictionary, required_fields: Array) -> bool:
+	for field: Variant in required_fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+static func _has_only_known_fields(value: Dictionary, known_fields: Array) -> bool:
+	for field: Variant in value.keys():
+		if not known_fields.has(field):
 			return false
 	return true
 

@@ -117,10 +117,28 @@ func _test_legacy_v0_migrates_to_v1(suite) -> void:
 	suite.assert_equal(result.migrated_to, 1, "legacy result records v1 target")
 	suite.assert_equal(result.payload.get("schema_version"), 1, "legacy migration emits schema v1 state")
 	suite.assert_equal(result.payload.get("payload"), expected.get("payload"), "legacy progress matches v1 fixture payload")
+	var expected_settings := {
+		"locale": "en",
+		"master_volume": 0.4,
+		"master_muted": true,
+		"music_volume": 0.8,
+		"sfx_volume": 0.9,
+		"dialogue_volume": 0.9,
+		"camera_shake_enabled": false,
+		"hit_flash_enabled": false,
+		"reduced_motion": true,
+		"text_scale": 1.0,
+		"high_contrast_danger": false,
+		"subtitles_enabled": true,
+		"subtitle_scale": 1.0,
+		"ranged_charge_mode": "hold",
+		"damage_received_multiplier": 1.0,
+		"enemy_telegraph_scale": 1.0,
+	}
 	suite.assert_equal(
 		result.metadata.get("settings_payload"),
-		original.get("persistent", {}).get("settings", {}),
-		"legacy global settings are separated from profile payload"
+		expected_settings,
+		"legacy global settings are separated and expanded with Current defaults"
 	)
 	suite.assert_true(not result.payload.get("payload", {}).has("settings"), "profile payload excludes global settings")
 

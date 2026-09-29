@@ -38,9 +38,19 @@
         "locale": { "type": "string", "enum": ["zh_CN", "en"] },
         "master_volume": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
         "master_muted": { "type": "boolean" },
+        "music_volume": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "sfx_volume": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "dialogue_volume": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
         "camera_shake_enabled": { "type": "boolean" },
         "hit_flash_enabled": { "type": "boolean" },
-        "reduced_motion": { "type": "boolean" }
+        "reduced_motion": { "type": "boolean" },
+        "text_scale": { "type": "number", "enum": [1.0, 1.25, 1.5] },
+        "high_contrast_danger": { "type": "boolean" },
+        "subtitles_enabled": { "type": "boolean" },
+        "subtitle_scale": { "type": "number", "enum": [1.0, 1.25, 1.5] },
+        "ranged_charge_mode": { "type": "string", "enum": ["hold", "toggle"] },
+        "damage_received_multiplier": { "type": "number", "enum": [1.0, 0.8, 0.6] },
+        "enemy_telegraph_scale": { "type": "number", "enum": [1.0, 1.25, 1.5] }
       }
     },
     "integrity": { "$ref": "#/$defs/integrity" }

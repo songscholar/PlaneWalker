@@ -57,6 +57,9 @@ func _test_first_save_and_settings_isolation(suite) -> void:
 	suite.assert_equal(loaded.payload, {"runs_completed": 1.0}, "profile payload round trips through canonical JSON")
 
 	var settings_payload := _settings_payload("en", 0.65)
+	settings_payload["text_scale"] = 1.5
+	settings_payload["ranged_charge_mode"] = "toggle"
+	settings_payload["damage_received_multiplier"] = 0.8
 	var settings_saved = service.save_settings(settings_payload)
 	suite.assert_true(settings_saved.ok, "global settings save succeeds")
 	suite.assert_equal(service.load_settings().payload, settings_payload, "global settings round trip independently")
