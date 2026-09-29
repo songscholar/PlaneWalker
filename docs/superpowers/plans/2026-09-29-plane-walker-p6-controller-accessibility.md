@@ -1,14 +1,15 @@
 # Plane Walker P6 Controller, Focus, and Accessibility Implementation Plan
 
-- Status: Active / Tasks 1–4 implemented
-- Document Role: Current implementation plan
-- Authority Level: P6 foundation execution plan
+- Status: Completed / Historical
+- Document Role: Historical implementation record
+- Authority Level: P6 preserved regression plan
 - Applies To: Current start, combat, selection, pause, result, remapping, and accessibility flows
 - Owner: Project integration lead
-- Exit Gate: Every Current flow completes controller-only, focus recovers after every modal transition, remaps and accessibility settings survive restart, and the complete P6 regression set passes with clean logs
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 - Integration Order: Tasks 1–5 are input/UI-owned; Tasks 6–9 begin only after the active P2 save and P3 content changes are committed so P6 never writes through another lane's uncommitted files
 - Last Verified: 2026-09-29
+- Implementation Status: Verified locally at `fdb9b2376eaa4cb8feb66667446d8af5cf9167ea`; all nine tasks and the detached repository gate passed
+- Completion Evidence: `docs/current/2026-09-29-p6-controller-accessibility-evidence.md`
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -463,7 +464,7 @@ Expected: nested and invalid-owner cases pass with no orphan nodes.
 - Consumes: `FocusCoordinator`, existing `interact`, `pause`, built-in `ui_accept`, `ui_cancel`, and directional UI actions.
 - Produces: deterministic focus ownership for Start → Choice → Pause-over-Choice → Choice restore → Run End → Restart.
 
-- [ ] **Step 1: Write the authoritative controller-flow test**
+- [x] **Step 1: Write the authoritative controller-flow test**
 
 Instantiate `scenes/main.tscn`, disable `RuntimeV2Adapter` where domain setup is not under test, and drive actions through `Input.parse_input_event()`:
 
@@ -486,7 +487,7 @@ suite.assert_equal(_focus_name(), "Option_choose_frozen_burst", "closing pause r
 
 The test then emits `run_ended`, verifies `RestartButton`, accepts it through a test-safe restart callable, and asserts Start receives focus after reset. It also proves every choice is reachable with `ui_right` and that rejection returns focus to the previously submitted option.
 
-- [ ] **Step 2: Run the flow test red**
+- [x] **Step 2: Run the flow test red**
 
 Run:
 
@@ -496,7 +497,7 @@ Run:
 
 Expected: start menu has no focus and pause close does not restore selection.
 
-- [ ] **Step 3: Add screen-owned focus declarations**
+- [x] **Step 3: Add screen-owned focus declarations**
 
 Use these exact calls:
 
@@ -548,11 +549,11 @@ FocusCoordinator.open_scope(self, buttons[0])
 
 `show_rejection()` recovers the first enabled option; `close_panel()` closes its scope before deleting buttons.
 
-- [ ] **Step 4: Declare explicit scene navigation order**
+- [x] **Step 4: Declare explicit scene navigation order**
 
 In `scenes/main.tscn`, set `focus_mode = 2` on Start, Resume, Restart, Quit, sliders, and toggles. Set `focus_next`/`focus_previous` as a closed vertical ring for pause controls. Noninteractive labels keep `focus_mode = 0`.
 
-- [ ] **Step 5: Run Current-flow regressions and commit**
+- [x] **Step 5: Run Current-flow regressions and commit**
 
 Run:
 
@@ -587,7 +588,7 @@ Expected: controller flow, choice, and 640×360 layout tests all pass.
 - Consumes: `InputActionContract.required_actions()`, `InputRemapService.binding_labels()`, captured input events, and `FocusCoordinator`.
 - Produces: `open_panel()`, `close_panel()`, `capture_started(action, family)`, localized conflict/recovery messages, Reset Action, and Reset All.
 
-- [ ] **Step 1: Write UI capture failures**
+- [x] **Step 1: Write UI capture failures**
 
 Assert that the panel renders exactly 14 action rows, each row exposes keyboard/mouse and controller buttons, opening focuses the first binding, choosing Attack Controller opens a capture modal, a Y event swaps Attack/Heavy Attack labels, B cancels capture without mutation, Reset All restores Task 1 labels, and closing restores the pause menu's Remap button.
 
@@ -600,7 +601,7 @@ event.pressed = true
 Input.parse_input_event(event)
 ```
 
-- [ ] **Step 2: Verify the red state**
+- [x] **Step 2: Verify the red state**
 
 Run:
 
@@ -610,7 +611,7 @@ Run:
 
 Expected: remap scene/script is absent.
 
-- [ ] **Step 3: Build the viewport-safe remap scene**
+- [x] **Step 3: Build the viewport-safe remap scene**
 
 Use a `PanelContainer` no larger than `608×328`, a `ScrollContainer`, one vertical row per action, two binding buttons per row, Reset Action, Reset All, Back, and a capture overlay. All action labels use `INPUT_ACTION_<UPPER_ID>` keys. Binding labels use Godot enum display names and the forms `Left Stick Up`, `D-pad Up`, `Left Trigger`, and `Right Trigger`.
 
@@ -623,11 +624,11 @@ Capture accepts only:
 
 `ui_cancel` closes capture first, then closes the panel on the next press.
 
-- [ ] **Step 4: Add exact localization keys to both catalogs**
+- [x] **Step 4: Add exact localization keys to both catalogs**
 
 Add English and Simplified Chinese values for `UI_INPUT_REMAP`, `UI_BINDING_KEYBOARD_MOUSE`, `UI_BINDING_CONTROLLER`, `UI_PRESS_INPUT`, `UI_BINDING_CONFLICT_SWAPPED`, `UI_BINDING_REJECTED`, `UI_RESET_ACTION`, `UI_RESET_ALL`, `UI_BACK`, and all 14 `INPUT_ACTION_*` labels. Run the localization validator before committing.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
@@ -685,11 +686,11 @@ const DEFAULT_SETTINGS := {
 }
 ```
 
-- [ ] **Step 1: Write backward-compatibility and persistence failures**
+- [x] **Step 1: Write backward-compatibility and persistence failures**
 
 Tests load a historical six-field settings v1 payload, require the exact defaults above for absent fields, write the expanded payload, reload it, and assert every field survives. Invalid enum/number values are rejected: text/subtitle scale must be one of `1.0`, `1.25`, `1.5`; charge mode is `hold` or `toggle`; damage multiplier is `1.0`, `0.8`, or `0.6`; telegraph scale is `1.0`, `1.25`, or `1.5`; all volumes are finite `0.0…1.0`.
 
-- [ ] **Step 2: Run the focused save/UI tests red**
+- [x] **Step 2: Run the focused save/UI tests red**
 
 Run:
 
@@ -700,7 +701,7 @@ Run:
 
 Expected: the expanded payload is rejected and the accessibility scene test is absent.
 
-- [ ] **Step 3: Add read-compatible schema normalization**
+- [x] **Step 3: Add read-compatible schema normalization**
 
 Keep settings schema ID and envelope `schema_version` at `1`. The original six fields remain required in the JSON schema; new fields are declared properties but are optional on read. `GameState._settings_payload()` always merges `DEFAULT_SETTINGS` first, so every newly written payload is complete.
 
@@ -715,7 +716,7 @@ if not _has_only_known_fields(payload, SETTINGS_PAYLOAD_FIELDS):
 
 Then validate each optional new field only when present. On load, merge defaults before exposing values or saving again.
 
-- [ ] **Step 4: Verify compatibility and commit the save-owned batch**
+- [x] **Step 4: Verify compatibility and commit the save-owned batch**
 
 Run:
 
@@ -759,7 +760,7 @@ Expected: historical settings remain readable, new settings round-trip, and the 
 - Consumes: `GameState.setting_changed`, normalized settings, UI roots, combat danger overlays/telegraphs, and ranged input edges.
 - Produces: `AccessibilityRuntime.apply_to_tree(root: Node)`, `settings_snapshot() -> Dictionary`, `damage_received_multiplier() -> float`, `enemy_telegraph_scale() -> float`, and `SubtitlePresenter.present(cue_key: StringName, duration: float, speaker_key: StringName = &"")`.
 
-- [ ] **Step 1: Write failing behavior tests**
+- [x] **Step 1: Write failing behavior tests**
 
 Accessibility integration assertions:
 
@@ -784,7 +785,7 @@ suite.assert_true(not player.bow_weapon.is_charging(), "second toggle press rele
 
 Presentation assertions require high-contrast danger to use a light/dark luminance delta of at least `0.70`, retain the existing geometric band/telegraph cue, and reduced motion to suppress only nonessential motion, never timing or danger visibility.
 
-- [ ] **Step 2: Verify focused red states**
+- [x] **Step 2: Verify focused red states**
 
 Run:
 
@@ -796,19 +797,19 @@ Run:
 
 Expected: new runtime/script/settings behaviors are absent.
 
-- [ ] **Step 3: Add the bus layout and deterministic volume application**
+- [x] **Step 3: Add the bus layout and deterministic volume application**
 
 `default_bus_layout.tres` defines Master plus Music, SFX, and Dialogue child buses. `AccessibilityRuntime` maps linear settings to decibels with `linear_to_db(clampf(value, 0.001, 1.0))`; master mute applies only to Master. `CombatAudioSynth` assigns generated combat players to `SFX`. `SubtitlePresenter` is presentation-only and uses the Dialogue setting for future spoken cues without requiring audio to show text.
 
-- [ ] **Step 4: Apply text scale without cumulative multiplication**
+- [x] **Step 4: Apply text scale without cumulative multiplication**
 
 For each `Control`, store original explicit font sizes in metadata keys beginning `accessibility_base_font_`. Reapplication always computes `roundi(base_size * text_scale)`, never current size times scale. Dynamically created choice cards call `AccessibilityRuntime.apply_to_tree(button)` after their labels are added.
 
-- [ ] **Step 5: Apply high-contrast and color-independent danger cues**
+- [x] **Step 5: Apply high-contrast and color-independent danger cues**
 
 High contrast changes overlay/telegraph palette to near-black `Color("101216")`, white `Color("f7fbff")`, and amber `Color("ffd166")`. Existing pulse bands, outlines, attack arcs, and audio cues remain active so color is never the only channel. `enemy_telegraph_scale` multiplies visual lead duration/size only; it does not change the authoritative enemy attack frame.
 
-- [ ] **Step 6: Implement hold/toggle ranged input**
+- [x] **Step 6: Implement hold/toggle ranged input**
 
 Extract input edges into:
 
@@ -827,11 +828,11 @@ func handle_ranged_input_for_test(just_pressed: bool, just_released: bool) -> vo
 
 `_handle_attack_input()` delegates its ranged edges to this method. Hold mode preserves existing behavior exactly.
 
-- [ ] **Step 7: Add the complete pause/settings controls and disclosure**
+- [x] **Step 7: Add the complete pause/settings controls and disclosure**
 
 Use controller-focusable OptionButtons/CheckButtons/Sliders for the exact Task 7 fields. The assist group displays localized neutral copy equivalent to: “Assist options change incoming damage or warning visibility. They do not reduce rewards, disable progression, or label the player.” The run start payload records both assist values under `accessibility_assists`.
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 Run:
 
@@ -862,7 +863,7 @@ Expected: settings apply immediately, persist, preserve existing hold behavior, 
 - Consumes: all P6 focused tests, the repository validation entrypoint, clean-log scans, and a detached-worktree check.
 - Produces: exact commits, tool versions, commands, results, limitations, rollback points, and an honest automated-versus-human evidence boundary.
 
-- [ ] **Step 1: Run all focused P6 tests**
+- [x] **Step 1: Run all focused P6 tests**
 
 Run:
 
@@ -880,7 +881,7 @@ Run:
 
 Expected: every scene passes with zero runtime/leak signatures.
 
-- [ ] **Step 2: Run the complete repository gate**
+- [x] **Step 2: Run the complete repository gate**
 
 Run:
 
@@ -890,11 +891,11 @@ Run:
 
 Expected: localization, playtest/M1 contracts, two imports, and every discovered scene test pass. If a concurrent lane changed a contract, rebase the P6 assertion on the new authoritative interface rather than weakening the P6 invariant.
 
-- [ ] **Step 3: Certify from a detached checkout**
+- [x] **Step 3: Certify from a detached checkout**
 
 From a temporary path outside the active worktree, create a detached worktree at the P6 candidate commit, run `./tools/validate_project.sh`, then remove that exact temporary worktree through normal `git worktree remove`. Record the candidate commit and Godot `4.6.1.stable.official.14d19694e` in the evidence file.
 
-- [ ] **Step 4: Write the evidence record**
+- [x] **Step 4: Write the evidence record**
 
 The evidence document states:
 
@@ -906,7 +907,7 @@ The evidence document states:
 - resolutions verified by automated layout checks;
 - human controller comfort, motor accessibility, subtitle comprehension, and real hardware diversity remain authentic external QA and are not claimed by headless tests.
 
-- [ ] **Step 5: Update the documentation index and commit**
+- [x] **Step 5: Update the documentation index and commit**
 
 Run:
 

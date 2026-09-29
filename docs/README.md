@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2 and P3 certified; P4 is Current; P6 and P7/P9 continue in parallel; P8 metadata, lifecycle, links, ADRs, Current indexing, and evidence-state governance are implemented; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2, P3, and P6 certified; P4/P5 is Current; P7/P9 continues with honest coverage/export blockers; P8 metadata, lifecycle, links, ADRs, Current indexing, and evidence-state governance are implemented; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -35,7 +35,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | P3 ContentRegistry v2 | Completed / Certified | Base pack、依赖/完整性/本地化/效果校验、运行时唯一内容源和 SaveService 指纹已验证 |
 | P4 Single RunState / RoomRuntime | Active / Current | 唯一 RunState 已封装；RoomRuntime、Host 切换、镜像退休和单事件发布继续实施 |
 | P5 Single event publication | Authorized / Planned | Typed gameplay facts exactly-once 与 generic EventBus 退休待 P4 生命周期收口后实施 |
-| P6 Controller/focus/accessibility | Active / Parallel | 14 动作手柄合同、可恢复 profile 和安全 remap 已提交；焦点/UI/完整无障碍链路继续实施 |
+| P6 Controller/focus/accessibility | Completed / Certified | 14 动作双设备合同、可恢复 remap、纯手柄焦点链、15 项设置 UI、字幕/音频/视觉替代和本局助攻快照已通过 focused、整库及 detached gate |
 | P7/P9 Export and clean certification | Active / Externally blocked | 工具链、fail-closed 执行器、detached clone 认证已提交；真实覆盖率、导出模板和 packaged startup 尚未通过 |
 | P8 Documentation governance | Active / Current | 离线验证、元数据/生命周期、零基线、ADR、Current 索引和证据状态已完成；P8 证据与最终状态切换待最终认证 |
 | Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
@@ -87,7 +87,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P2 Atomic SaveService Evidence](current/2026-09-29-p2-atomic-save-evidence.md) | 原子存档、迁移、恢复、隔离、GameState 兼容和 P3/P4 接力证据 | Verified Locally / Current |
 | [P3 ContentRegistry v2 Evidence](current/2026-09-29-p3-content-registry-evidence.md) | 版本化内容包、声明式效果、运行时切换和 SaveService 指纹证据 | Verified Locally / Current |
 | [P4/P5 Authority and Event Plan](superpowers/plans/2026-09-29-plane-walker-p4-p5-authority-events.md) | 单一 RunState、RoomRuntime、Host 切换、镜像退休和 exactly-once 事件 | Active / Current |
-| [P6 Controller and Accessibility Plan](superpowers/plans/2026-09-29-plane-walker-p6-controller-accessibility.md) | 手柄、重映射、焦点恢复与无障碍持久化 | Active / Parallel |
+| [P6 Controller and Accessibility Plan](superpowers/plans/2026-09-29-plane-walker-p6-controller-accessibility.md) | 手柄、重映射、焦点恢复与无障碍持久化实施记录 | Completed / Historical |
+| [P6 Controller and Accessibility Evidence](current/2026-09-29-p6-controller-accessibility-evidence.md) | 纯手柄流程、设置持久化、运行时替代、focused/整库/detached 认证和真人验证边界 | Verified Locally / Current |
 | [P7/P9 Export Certification Plan](superpowers/plans/2026-09-29-plane-walker-p7-p9-exports-certification.md) | 三平台导出合同、离线预检和清洁认证基础 | Active / Current |
 | [Export Executor and Evidence Plan](superpowers/plans/2026-09-29-plane-walker-export-executor-evidence.md) | 导出执行、artifact hash、detached checkout 和 fail-closed 证据 | External Validation Pending / Current |
 | [P7/P9 Export Certification Evidence](current/2026-09-29-p7-p9-export-certification-evidence.md) | 导出预检、fail-closed 执行器、detached clone 与当前 blocker | External Validation Pending / Current |
