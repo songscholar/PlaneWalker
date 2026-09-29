@@ -2,6 +2,7 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const ContentSnapshotProviderScript := preload("res://scripts/content/content_snapshot_provider.gd")
 
 
 func _ready() -> void:
@@ -10,6 +11,9 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
+	_test_project_base_pack_v2(suite)
+	_test_optional_pack_isolation(suite)
+	_test_required_invalid_pack_blocks(suite)
 	_test_project_manifest(suite)
 	_test_fixture_manifest(suite)
 	_test_file_and_root_errors(suite)
@@ -21,6 +25,74 @@ func _run() -> void:
 	_test_required_fields(suite)
 	_test_next_content_isolation(suite)
 	suite.finish(get_tree())
+
+
+func _test_project_base_pack_v2(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		"0.4.0-dev",
+		&"M1"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "project base pack activates: %s" % str(report.blocking_errors))
+	if report.has_blocking_errors():
+		return
+	suite.assert_equal(report.active_pack_count, 1, "project base pack is the only active pack")
+	suite.assert_equal(report.loaded_count, 33, "project base pack loads all current definitions")
+	suite.assert_equal(report.content_count_by_category.get("item"), 20, "base pack preserves twenty items")
+	suite.assert_equal(report.content_count_by_category.get("blessing"), 4, "base pack preserves four blessings")
+	suite.assert_equal(report.content_count_by_category.get("curse"), 6, "base pack preserves six curses")
+	suite.assert_equal(report.content_count_by_category.get("talent"), 3, "base pack preserves three talents")
+	suite.assert_equal(report.metadata.get("activation_order"), ["base"], "base activation order is recorded")
+
+	var frozen_burst: Dictionary = registry.get_content(&"frozen_burst")
+	suite.assert_equal(frozen_burst.get("pack_id"), "base", "v2 content records owning pack")
+	suite.assert_equal(frozen_burst.get("archetype"), "freeze_burst", "v2 content uses authoritative freeze archetype")
+	suite.assert_equal(registry.get_content(&"rift_snare").get("archetype"), "rift_trap", "v2 content uses authoritative rift archetype")
+	suite.assert_equal(registry.get_content(&"piercing_draw").get("archetype"), "piercing_barrage", "v2 content uses authoritative ranged archetype")
+	suite.assert_equal(registry.get_content(&"tal_ruin_execute").get("archetype"), "perfect_guard", "v2 content removes mechanic-tag top-level archetypes")
+	suite.assert_true(registry.get_content(&"piercing_draw").get("availability", []).has("NEXT"), "future bow content remains preserved")
+	suite.assert_equal(registry.get_by_category(&"item", &"M1").size(), 8, "M1 item eligibility remains unchanged")
+	suite.assert_true(not registry.get_by_tag(&"piercing_barrage", &"NEXT").is_empty(), "tag query exposes normalized route")
+
+	var snapshot: Dictionary = ContentSnapshotProviderScript.snapshot(registry)
+	suite.assert_equal(snapshot.get("packs", []).size(), 1, "activated registry produces one save snapshot row")
+	if not snapshot.get("packs", []).is_empty():
+		suite.assert_equal(snapshot.get("packs", [])[0].get("pack_id"), "base", "save snapshot identifies base pack")
+	suite.assert_equal(str(snapshot.get("aggregate_sha256", "")).length(), 64, "save snapshot has aggregate sha256")
+
+	var active_copy: Array[Dictionary] = registry.active_packs()
+	active_copy[0]["pack_id"] = "mutated"
+	suite.assert_equal(registry.active_packs()[0].get("pack_id"), "base", "active pack getter returns deep copies")
+
+
+func _test_optional_pack_isolation(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[
+			{"path": "res://data/content_packs/base/pack.json", "required": true},
+			{"path": "res://tests/fixtures/content_packs/invalid_script/pack.json", "required": false},
+		],
+		"0.4.0-dev",
+		&"M1"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "invalid optional pack does not block base content")
+	suite.assert_true(report.isolated_pack_ids.has("fixture_invalid_script"), "invalid optional pack is isolated")
+	suite.assert_equal(report.active_pack_count, 1, "only base remains active")
+	suite.assert_equal(report.loaded_count, 33, "optional pack failure cannot remove base definitions")
+	suite.assert_true(registry.get_content(&"fixture_scripted_edge").is_empty(), "hostile optional entry is not indexed")
+
+
+func _test_required_invalid_pack_blocks(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": "res://tests/fixtures/content_packs/invalid_script/pack.json", "required": true}],
+		"0.4.0-dev",
+		&"M1"
+	)
+	suite.assert_true(report.has_blocking_errors(), "invalid required pack blocks activation")
+	suite.assert_true(registry.all_content().is_empty(), "blocked activation exposes no partial content")
+	suite.assert_true(registry.active_packs().is_empty(), "blocked activation exposes no partial packs")
 
 
 func _test_project_manifest(suite) -> void:
