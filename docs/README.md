@@ -3,11 +3,11 @@
 - Status: Approved
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: Wave 4 repository scope complete; formal state is `M1 Candidate — External Validation Pending`
+- Implementation Status: P2 Atomic SaveService certified; P3 ContentRegistry v2 active; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
-- Last Verified: 2026-09-28
+- Last Verified: 2026-09-29
 - Contract References: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 
 ## 当前执行结论
@@ -30,7 +30,9 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Wave 3B | Completed / Historical | 敌人前摇、Boss 行为互斥、玩家单时钟、回溯取消、真实 HUD 与 640×360 画布已验证 |
 | P0 Foundation Baseline | Completed | 本地化与 Godot 4.6 基线已提交，干净克隆可生成翻译产物并通过验证 |
 | P1 Test/CI Foundation | Completed | 唯一验证入口、只读 CI、双阶段导入和日志分类已通过 |
-| P2–P9 Foundation | Authorized / Planned | 原子存档、内容与效果运行时、单一状态、单一事件、手柄、导出和最终清洁认证 |
+| P2 Atomic SaveService | Completed / Certified | 原子写入、双备份、迁移、损坏恢复、前向拒绝、Profile/Mod 域隔离和一次性 legacy 导入已验证 |
+| P3 ContentRegistry v2 | Active / Current | 版本化内容包、声明式效果和 SaveService 内容快照接力正在集成 |
+| P4–P9 Foundation | Authorized / Planned | 单一状态、单一事件、手柄、导出、文档治理和最终清洁认证 |
 | Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
 | Wave 4B | Completed | 回溯残影、Boss 全招前摇、精英主动机制和五房权威遭遇已实现并通过测试 |
 | Wave 4C | Completed for M1 technical scope | Pixel Proxy、核心动画、合成音频、战斗反馈、可访问性开关和清理回归已验证 |
@@ -71,6 +73,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Wave 4C Pixel Feedback Plan](superpowers/plans/2026-09-28-plane-walker-wave-4c-pixel-feedback.md) | M1 Pixel Proxy、音频、战斗反馈与可访问性 | Completed / Historical |
 | [Wave 4C Evidence](current/2026-09-28-wave-4c-pixel-feedback-evidence.md) | Wave 4C 焦点、全套与 Candidate 门禁证据 | Verified / Retained |
 | [P0 Foundation Baseline Evidence](current/2026-09-28-foundation-baseline-evidence.md) | 本地化、验证入口和干净克隆认证证据 | Verified / Completed |
+| [P2 Atomic SaveService Evidence](current/2026-09-29-p2-atomic-save-evidence.md) | 原子存档、迁移、恢复、隔离、GameState 兼容和 P3/P4 接力证据 | Verified / Completed |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
 

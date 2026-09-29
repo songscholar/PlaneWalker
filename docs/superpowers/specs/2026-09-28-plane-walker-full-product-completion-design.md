@@ -3,12 +3,12 @@
 - Status: Approved
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P0 Foundation Baseline is Current
+- Implementation Status: Active; P2 Atomic SaveService is complete and P3 ContentRegistry v2 is Current
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
 - Preserves: All verified Wave 0/1, Wave 2, Wave 3A, and Wave 3B contracts and regression evidence
-- Last Verified: 2026-09-28
+- Last Verified: 2026-09-29
 - Contract References: `AGENTS.md`, future approved ADRs, `docs/contracts/`, current implementation plans
 
 ## 1. Decision
@@ -217,6 +217,8 @@ The registry validates identity uniqueness, dependency cycles, version compatibi
 
 Save operations use temp write, integrity verification, backup rotation, and atomic rename. The service supports explicit schema versions, forward-version refusal, ordered migrations, corruption recovery, profile isolation, Mod/content-pack fingerprints, and deterministic fixtures. Optional cloud sync is a provider capability, not the primary save authority.
 
+P2 completed this boundary on 2026-09-29. `SaveService` owns production profile/settings writes, while GameState is a temporary compatibility caller for legacy import and existing settings/profile APIs. P3 `ContentSnapshotProvider` supplies the save-compatible active-pack fingerprint; runtime assembly must inject it without changing the version-1 envelope. P4 removes GameState's run-domain mirrors but retains the SaveService-backed compatibility surface until profile/settings callers move to a dedicated composition boundary.
+
 ### 7.4 Platform providers
 
 All platform features use `PlatformProvider` interfaces with an always-available offline implementation:
@@ -274,8 +276,8 @@ The foundation is executed as hard-gated phases:
 |---|---|---|
 | P0 | Baseline/checkpoint | Current localization/runtime work is preserved, contract-tested, committed precisely, and reproduced from a clean checkout |
 | P1 | Test and CI foundation | One command imports, validates, runs tests, scans logs, and reports honest coverage categories |
-| P2 | Atomic SaveService | Atomic write, backups, migrations, corruption recovery, and forward refusal pass destructive-fixture tests |
-| P3 | ContentRegistry v2 and effect runtime | JSON/content packs are the only source; schemas, references, handlers, localization, and eligibility validate |
+| P2 (Completed 2026-09-29) | Atomic SaveService | Atomic write, backups, migrations, corruption recovery, and forward refusal pass destructive-fixture tests |
+| P3 (Current) | ContentRegistry v2 and effect runtime | JSON/content packs are the only source; schemas, references, handlers, localization, and eligibility validate |
 | P4 | Single RunState/RoomRuntime | RunOrchestrator is sole phase writer; mirrored writable state and LegacyRunAdapter are retired after parity |
 | P5 | Single event publication | Typed signals publish each fact once; dual publish/subscribe paths are removed |
 | P6 | Controller/focus/accessibility | Every current flow completes controller-only and accessibility settings persist |
@@ -284,6 +286,8 @@ The foundation is executed as hard-gated phases:
 | P9 | Detached-worktree certification | Clean import, tests, coverage report, export, and packaged startup succeed without hidden local state |
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
+
+P2 completion evidence is recorded in `docs/current/2026-09-29-p2-atomic-save-evidence.md`. The next foundation gate is P3; P4 follows with the already planned RunState/RoomRuntime authority cutover and may not reintroduce direct save writes into GameState.
 
 ## 10. Delivery Sequence After Foundation
 
