@@ -141,10 +141,12 @@ assert_contains "${pass_output}" "Code coverage: not collected" "honest coverage
 
 make_fake_godot "${TEMP_DIR}/godot-exit-failure" exit_failure
 set +e
-GODOT_BIN="${TEMP_DIR}/godot-exit-failure" TEST_LOG_DIR="${TEMP_DIR}/exit-failure-logs" tools/run_tests.sh --filter seed_service_test >/dev/null 2>&1
+exit_failure_output="$(GODOT_BIN="${TEMP_DIR}/godot-exit-failure" TEST_LOG_DIR="${TEMP_DIR}/exit-failure-logs" tools/run_tests.sh --filter seed_service_test 2>&1)"
 exit_failure_status=$?
 set -e
 [[ ${exit_failure_status} -ne 0 ]] || fail "a non-zero Godot exit must fail the suite"
+assert_contains "${exit_failure_output}" "[  FAILED  ]" "non-zero exit diagnostic"
+assert_contains "${exit_failure_output}" "Scene tests: 0 passed, 1 failed" "non-zero exit summary"
 
 make_fake_godot "${TEMP_DIR}/godot-log-failure" log_failure
 set +e

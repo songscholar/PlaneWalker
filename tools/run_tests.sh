@@ -128,10 +128,8 @@ run_with_timeout() {
 		sleep 0.1
 	done
 
-	set +e
 	wait "${current_pid}"
 	local status=$?
-	set -e
 	current_pid=""
 	return "${status}"
 }
