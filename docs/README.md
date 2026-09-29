@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, P11A, P11B, P11C Bow Candidate, Launch Bow L2, and P11D Launch Gun certified locally; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, P11A, P11B, P11C Bow Candidate, Launch Bow L2, P11D Launch Gun, and P11E Launch Staff through `f1f022d` are certified locally; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -46,7 +46,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
-| Full Product Content | Active / Phased program | P11A/P11B、Bow Candidate、Launch Bow L2 与 P11D Launch Gun 已本地认证；Staff、Gauntlets、五层五 Boss、八流派和完整内容池按依赖顺序持续实施 |
+| Full Product Content | Active / Phased program | P11A/P11B、Bow Candidate、Launch Bow L2、P11D Launch Gun 与 P11E Launch Staff 已本地认证；Gauntlets、五层五 Boss、八流派和完整内容池按依赖顺序持续实施 |
 | Launch / Expansion Systems | Preserved / Later program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、回放、排行、Mod、外观和 DLC 内容包保留，本轮不展开 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
@@ -105,6 +105,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P11C Bow Candidate Migration Evidence](current/2026-09-29-p11c-bow-candidate-evidence.md) | Bow Candidate 同 token HOLD/release、道具能力迁移、反馈、legacy 时钟退休及 75 场景全量认证 | Verified Locally / Current |
 | [P11C Launch Bow L2 Evidence](current/2026-09-29-p11c-bow-launch-evidence.md) | Launch 四档蓄力、五动作、四时间联动、Chrono Warden 转换、确定性 payload、清理边界与 82 场景全量认证 | Verified Locally / Current |
 | [P11D Launch Gun Evidence](current/2026-09-29-p11d-gun-launch-evidence.md) | 枪械弹药/换弹、三种射击、Time Load、Void Penetration、四时间联动、HUD/反馈、生命周期与 88 场景全量认证 | Verified Locally / Current |
+| [P11E Launch Staff Evidence](current/2026-09-29-p11e-staff-launch-evidence.md) | 法杖 Mana/三元素/六组合、真实效果、四时间联动、Boss 转换、HUD/反馈、有界生命周期与 97 场景整库认证 | Verified Locally / Current |
 | [P0 Foundation Baseline Plan](superpowers/plans/2026-09-28-plane-walker-foundation-baseline.md) | 已执行的本地化基线与清洁重现计划 | Completed / Historical |
 | [分阶段开发设计](superpowers/specs/2026-09-28-plane-walker-staged-development-design.md) | 保留 M1 设计理由和已验证契约 | Historical / Superseded for execution order |
 

@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-29
-- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; P11D Launch Gun is locally certified through `e92e7f4`; Staff and later gates remain active
+- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; P11D Launch Gun is locally certified through `e92e7f4`; P11E Launch Staff is locally certified through `f1f022d`; P11F and later gates remain active
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -475,32 +475,36 @@ Execution record: implementation commit `e92e7f4` completed the authoritative Gu
 - Consumes: `staff_launch_v1`, 100 Mana/3-per-second resource, ordered element state, aim/seed/time/Boss contexts.
 - Produces: basic/charged spells, six ordered combinations, source-aware statuses/zones, collapse/ultimate, Staff HUD, facts, feedback, and snapshots.
 
-- [ ] **Step 1: Write Mana, sequence, status, and deterministic payload tests**
+- [x] **Step 1: Write Mana, sequence, status, and deterministic payload tests**
 
 Cover 30-frame charge, Fire 20, Ice 25, Lightning 18, atomic combination reservation/refund, 300-frame window, same-element rejection, six ordered pairs, bounded two-percent Mana return, deterministic chain order, overlapping sources, cleanup, and Boss freeze/blind conversions.
 
-- [ ] **Step 2: Implement source-aware status ownership**
+- [x] **Step 2: Implement source-aware status ownership**
 
 Each status is keyed by `(effect_id, source_id, generation)`. Removing one source cannot clear another; death, room disposal, phase transition, and run reset remove all owned sources.
 
-- [ ] **Step 3: Implement Staff runtime and payloads through the coordinator**
+- [x] **Step 3: Implement Staff runtime and payloads through the coordinator**
 
 No Staff `_process()` owns an action clock. Mana regeneration is a deterministic resource tick, and every random ultimate outcome comes from a stable seeded channel.
 
-- [ ] **Step 4: Complete Staff HUD, feedback, localization, time, and Boss contracts**
+- [x] **Step 4: Complete Staff HUD, feedback, localization, time, and Boss contracts**
 
 Update both localization catalogs identically for shared keys and refresh the Base Pack localization hash only after final text is stable.
 
-- [ ] **Step 5: Run Staff, content, enemy, Boss, localization, and replay gates**
+- [x] **Step 5: Run Staff, content, enemy, Boss, localization, and replay gates**
 
 Run: `./tools/run_tests.sh --filter "staff|elemental_status|content_registry|localization|chrono_warden|replay"`
 
-- [ ] **Step 6: Commit**
+Execution record: the final Staff gate passed `7 / 7` at `planewalker-tests.6ks5Ap` with zero leak warnings. The final repository gate passed at `planewalker-validation.1Wdg8l`, including `97 / 97` Godot scenes, documentation `30 / 30` with zero violations, localization `8 / 8`, playtest data `13 / 13`, M1 release gate `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37` in contract mode, and clean bootstrap/import checks. The only registered suite warning is `reward_system_smoke`; final static and independent reviews found no P0, P1, or P2 blocker. Replay serialization remains P11G scope and is not claimed by the P11E evidence.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add -- scripts/combat/weapons/staff_weapon_runtime.gd scripts/combat/elemental_status_runtime.gd scripts/combat/staff_projectile.gd scripts/combat/staff_spell_zone.gd scenes/combat/staff_projectile.tscn scenes/combat/staff_spell_zone.tscn tests/combat/staff_weapon_runtime_test.gd tests/combat/staff_weapon_runtime_test.tscn tests/combat/elemental_status_runtime_test.gd tests/combat/elemental_status_runtime_test.tscn scripts/enemies data/content_packs/base/localization/translations.csv data/localization/translations.csv data/content_packs/base/pack.json
 git commit -m "feat(weapon): add complete staff runtime"
 ```
+
+Implementation commit `f1f022d` completed the authoritative Staff Profile, Mana and element sequencing, six ordered combinations, real projectile/zone/status execution, four time interactions, Chrono Warden conversion, Player/HUD/feedback integration, snapshot/reset cleanup, bounded ledgers, and Launch/Expansion isolation. Evidence is retained in `docs/current/2026-09-29-p11e-staff-launch-evidence.md`.
 
 ### Task 8: P11F implement Gauntlets and Boss poise mapping
 
