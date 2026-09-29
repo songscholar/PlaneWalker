@@ -22,6 +22,7 @@ var _encounter_catalog: RefCounted
 var _draft: RefCounted
 var _orchestrator: RefCounted
 var _room_definitions: Array[Dictionary] = []
+var _accepted_loadout: Dictionary = {}
 var _booted: bool = false
 
 
@@ -35,6 +36,7 @@ func boot(
 	_draft = DraftServiceScript.new()
 	_orchestrator = RunOrchestratorScript.new()
 	_room_definitions.clear()
+	_accepted_loadout.clear()
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -91,6 +93,14 @@ func start_run(config: Dictionary, run_id: String):
 	var started = _orchestrator.start_run(normalized, run_id)
 	if not started.ok:
 		return started
+	var loadout_value: Variant = loadout_validation.context.get("loadout", {})
+	if not loadout_value is Dictionary or (loadout_value as Dictionary).is_empty():
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			_revision(),
+			{"field": "loadout", "reason": "validated_context_missing"}
+		)
+	_accepted_loadout = (loadout_value as Dictionary).duplicate(true)
 	_room_definitions = M1RoomPlanScript.definitions(
 		_encounter_catalog,
 		int(_orchestrator.snapshot().get("run_seed", 0))
@@ -251,6 +261,10 @@ func snapshot() -> Dictionary:
 	if _orchestrator == null:
 		return {}
 	return _orchestrator.snapshot()
+
+
+func active_loadout() -> Dictionary:
+	return _accepted_loadout.duplicate(true)
 
 
 func current_room_definition() -> Dictionary:

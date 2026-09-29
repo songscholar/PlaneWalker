@@ -30,8 +30,13 @@ func _test_component_contract() -> void:
 
 	var runtime = runtime_script.new()
 	var source := _config("sword", ["stop", "rewind"])
+	source["weapon_profile"] = _weapon_profile("sword_m1_v1", "sword")
 	_suite.assert_true(bool(runtime.call("configure", source)), "valid loadout configures the component")
 	_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "component stores the equipped weapon")
+	_suite.assert_true(runtime.has_method("weapon_profile_id"), "component exposes the equipped profile identity")
+	_suite.assert_true(runtime.has_method("weapon_profile_snapshot"), "component exposes an isolated profile snapshot")
+	if runtime.has_method("weapon_profile_id"):
+		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "component stores the equipped weapon profile")
 	_suite.assert_equal(_string_ids(runtime.call("time_ability_ids")), ["stop", "rewind"], "component stores exactly two abilities")
 	_suite.assert_true(bool(runtime.call("has_weapon", &"sword")), "component answers equipped weapon queries")
 	_suite.assert_true(not bool(runtime.call("has_weapon", &"bow")), "component rejects unequipped weapon queries")
@@ -41,22 +46,34 @@ func _test_component_contract() -> void:
 
 	source["weapon_id"] = "bow"
 	(source["enabled_time_skills"] as Array)[0] = "rift"
+	(source["weapon_profile"] as Dictionary)["id"] = "forged_profile"
 	_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "component is isolated from caller weapon mutation")
 	_suite.assert_equal(_string_ids(runtime.call("time_ability_ids")), ["stop", "rewind"], "component deep-copies caller ability arrays")
+	if runtime.has_method("weapon_profile_id"):
+		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "component deep-copies the caller weapon profile")
 
 	var returned_ids: Array = runtime.call("time_ability_ids")
 	returned_ids[0] = "accelerate"
 	returned_ids.append("rift")
 	_suite.assert_equal(_string_ids(runtime.call("time_ability_ids")), ["stop", "rewind"], "ability query returns an isolated copy")
+	if runtime.has_method("weapon_profile_snapshot"):
+		var returned_profile: Dictionary = runtime.call("weapon_profile_snapshot")
+		returned_profile["id"] = "forged_profile"
+		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "profile query returns an isolated copy")
 
 	var invalid_configs: Array[Dictionary] = []
 	invalid_configs.append(_config("sword", ["stop"]))
 	invalid_configs.append(_config("sword", ["stop", "rewind", "rift"]))
 	invalid_configs.append(_config("sword", ["stop", "stop"]))
+	var mismatched_profile := _config("sword", ["stop", "rewind"])
+	mismatched_profile["weapon_profile"] = _weapon_profile("bow_candidate_v1", "bow")
+	invalid_configs.append(mismatched_profile)
 	for invalid: Dictionary in invalid_configs:
 		_suite.assert_true(not bool(runtime.call("configure", invalid)), "component rejects malformed two-ability loadout")
 		_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "failed configure preserves the prior weapon")
 		_suite.assert_equal(_string_ids(runtime.call("time_ability_ids")), ["stop", "rewind"], "failed configure preserves the prior abilities atomically")
+		if runtime.has_method("weapon_profile_id"):
+			_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "failed configure preserves the prior profile atomically")
 	runtime.free()
 
 
@@ -206,6 +223,19 @@ func _config(weapon_id: String, ability_ids: Array) -> Dictionary:
 		"enabled_time_skills": ability_ids.duplicate(true),
 		"difficulty": "normal",
 		"seed": 20260929,
+	}
+
+
+func _weapon_profile(profile_id: String, weapon_id: String) -> Dictionary:
+	return {
+		"id": profile_id,
+		"weapon_id": weapon_id,
+		"runtime_kind": weapon_id,
+		"actions": [],
+		"resources": [],
+		"capabilities": [],
+		"payloads": [],
+		"cues": [],
 	}
 
 

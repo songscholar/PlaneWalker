@@ -85,7 +85,10 @@ func _run() -> void:
 	var snapshot: Dictionary = host.call("runtime_snapshot")
 	suite.assert_equal(loadout_spy.configure_calls, 1, "host applies the accepted loadout exactly once per run")
 	if not loadout_spy.received_configs.is_empty():
-		suite.assert_equal(loadout_spy.received_configs[0], snapshot.get("config", {}), "host applies authoritative snapshot config")
+		var player_config: Dictionary = loadout_spy.received_configs[0]
+		suite.assert_equal(str(player_config.get("weapon_id", "")), str(snapshot.get("config", {}).get("weapon_id", "")), "host applies the authoritative weapon id")
+		suite.assert_equal(player_config.get("enabled_time_skills", []), snapshot.get("config", {}).get("enabled_time_skills", []), "host applies the authoritative time loadout")
+		suite.assert_equal(str(player_config.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "host forwards the policy-accepted weapon profile")
 	caller_config["weapon_id"] = "bow"
 	(caller_config["enabled_time_skills"] as Array)[0] = "rift"
 	if not loadout_spy.received_configs.is_empty():
@@ -93,6 +96,9 @@ func _run() -> void:
 		suite.assert_equal(loadout_spy.received_configs[0].get("enabled_time_skills", []), ["stop", "rewind"], "caller ability mutation cannot alter Player input")
 		loadout_spy.received_configs[0]["weapon_id"] = "forged"
 		(loadout_spy.received_configs[0]["enabled_time_skills"] as Array).append("forged")
+		(loadout_spy.received_configs[0]["weapon_profile"] as Dictionary)["id"] = "forged_profile"
+		var authoritative_loadout: Dictionary = host.get("_facade").call("active_loadout")
+		suite.assert_equal(str(authoritative_loadout.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "Player profile mutation cannot alter facade authority")
 	var isolated_snapshot: Dictionary = host.call("runtime_snapshot")
 	suite.assert_equal(str(isolated_snapshot.get("config", {}).get("weapon_id", "")), "sword", "Player input mutation cannot alter authority")
 	suite.assert_equal(isolated_snapshot.get("config", {}).get("enabled_time_skills", []), ["stop", "rewind"], "nested Player input mutation cannot alter authority")

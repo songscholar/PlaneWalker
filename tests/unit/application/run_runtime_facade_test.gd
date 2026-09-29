@@ -20,6 +20,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
+	_test_active_loadout_authority(suite)
 	_test_boot_and_room_flow(suite)
 	_test_loadout_failure_is_atomic(suite)
 	_test_offer_creation_failure_is_atomic(suite)
@@ -28,6 +29,27 @@ func _run() -> void:
 	_test_authoritative_clock_forwarding(suite)
 	_test_boot_failure(suite)
 	suite.finish(get_tree())
+
+
+func _test_active_loadout_authority(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "active loadout facade boots")
+	suite.assert_true(facade.has_method("active_loadout"), "facade exposes the accepted loadout boundary")
+	if not facade.has_method("active_loadout"):
+		return
+	suite.assert_true((facade.call("active_loadout") as Dictionary).is_empty(), "boot starts without a stale accepted loadout")
+	suite.assert_true(facade.start_run({"seed": FIXED_SEED}, "active-loadout-run").ok, "active loadout run starts")
+	var loadout: Dictionary = facade.call("active_loadout")
+	suite.assert_equal(str(loadout.get("weapon", {}).get("id", "")), "sword", "accepted loadout retains the canonical weapon")
+	suite.assert_equal(str(loadout.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "accepted loadout retains the canonical weapon profile")
+	loadout["weapon_profile"]["id"] = "forged_profile"
+	suite.assert_equal(
+		str((facade.call("active_loadout") as Dictionary).get("weapon_profile", {}).get("id", "")),
+		"sword_m1_v1",
+		"accepted loadout query returns a deep copy"
+	)
+	suite.assert_true(facade.boot().ok, "reboot succeeds after active loadout fixture")
+	suite.assert_true((facade.call("active_loadout") as Dictionary).is_empty(), "reboot clears the prior accepted loadout")
 
 
 func _test_loadout_failure_is_atomic(suite) -> void:
@@ -50,6 +72,8 @@ func _test_loadout_failure_is_atomic(suite) -> void:
 	suite.assert_equal(after["revision"], before["revision"], "loadout rejection preserves revision")
 	suite.assert_equal(after, before, "loadout rejection preserves the complete run snapshot")
 	suite.assert_equal(facade.room_plan(), room_plan_before, "loadout rejection preserves the prepared room plan")
+	if facade.has_method("active_loadout"):
+		suite.assert_true((facade.call("active_loadout") as Dictionary).is_empty(), "rejected start does not publish an accepted loadout")
 
 
 func _test_boot_and_room_flow(suite) -> void:

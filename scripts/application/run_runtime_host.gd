@@ -96,14 +96,28 @@ func start_run(config: Dictionary) -> Variant:
 	_resolve_player_for_start()
 	var accepted_snapshot := runtime_snapshot()
 	var config_value: Variant = accepted_snapshot.get("config", {})
+	var accepted_loadout_value: Variant = (
+		next_facade.call("active_loadout")
+		if next_facade.has_method("active_loadout")
+		else null
+	)
 	if (
 		_player == null
 		or not is_instance_valid(_player)
 		or not _player.has_method("configure_loadout")
 		or not config_value is Dictionary
+		or not accepted_loadout_value is Dictionary
 	):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
 	var accepted_config := (config_value as Dictionary).duplicate(true)
+	var accepted_loadout := accepted_loadout_value as Dictionary
+	var weapon_profile_value: Variant = accepted_loadout.get("weapon_profile", {})
+	if not weapon_profile_value is Dictionary or (weapon_profile_value as Dictionary).is_empty():
+		return _fail_start(
+			&"LOADOUT_APPLY_FAILED",
+			{"configured": false, "reason": "weapon_profile_missing"}
+		)
+	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
 	if not bool(_player.call("configure_loadout", accepted_config)):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
 
