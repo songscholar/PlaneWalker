@@ -14,6 +14,11 @@ enum State {
 
 const INPUT_BUFFER_FRAMES := 8
 const COMBO_BUFFER_FRAMES := 12
+const WEAPON_PHASE_TO_STATE: Dictionary = {
+	&"WINDUP": State.ATTACK_WINDUP,
+	&"ACTIVE": State.ATTACK_ACTIVE,
+	&"RECOVERY": State.ATTACK_RECOVERY,
+}
 const BUFFERED_INPUT_PRIORITY: Array[StringName] = [
 	&"dash",
 	&"time_cast",
@@ -28,6 +33,7 @@ var _buffers: Dictionary = {}
 var _state_frame: int = 0
 var _state_duration_frames: int = 0
 var _cancel_from_frame: int = -1
+var _weapon_projection_active: bool = false
 
 
 func buffer_input(action_id: StringName, frames: int = INPUT_BUFFER_FRAMES) -> void:
@@ -72,6 +78,42 @@ func transition_to(next_state: State, duration_frames: int, cancel_from_frame: i
 	_state_frame = 0
 	_state_duration_frames = 0 if next_state == State.DEAD else maxi(1, duration_frames)
 	_cancel_from_frame = maxi(0, cancel_from_frame) if next_state == State.ATTACK_RECOVERY and cancel_from_frame >= 0 else -1
+	_weapon_projection_active = false
+	return true
+
+
+func project_weapon_phase(
+	phase: StringName,
+	phase_frame: int,
+	duration_frames: int,
+	cancel_from_frame: int = -1
+) -> bool:
+	if current_state != State.FREE and not _is_weapon_state(current_state):
+		return false
+	if not WEAPON_PHASE_TO_STATE.has(phase):
+		return false
+	if duration_frames <= 0 or phase_frame < 0 or phase_frame >= duration_frames:
+		return false
+	if cancel_from_frame < -1:
+		return false
+	if phase == &"RECOVERY":
+		if cancel_from_frame >= duration_frames:
+			return false
+	elif cancel_from_frame != -1:
+		return false
+
+	current_state = int(WEAPON_PHASE_TO_STATE[phase]) as State
+	_state_frame = phase_frame
+	_state_duration_frames = duration_frames
+	_cancel_from_frame = cancel_from_frame if phase == &"RECOVERY" else -1
+	_weapon_projection_active = true
+	return true
+
+
+func clear_weapon_projection() -> bool:
+	if current_state != State.FREE and not _is_weapon_state(current_state):
+		return false
+	_return_to_free()
 	return true
 
 
@@ -99,8 +141,9 @@ func can_transition_to(next_state: State) -> bool:
 
 
 func advance_frame() -> void:
-	_frame += 1
-	_prune_expired_buffers()
+	advance_buffer_frame()
+	if _weapon_projection_active:
+		return
 	if current_state == State.FREE:
 		return
 	_state_frame += 1
@@ -112,6 +155,11 @@ func advance_frame() -> void:
 		_state_frame = _state_duration_frames
 		return
 	_return_to_free()
+
+
+func advance_buffer_frame() -> void:
+	_frame += 1
+	_prune_expired_buffers()
 
 
 func is_state_complete() -> bool:
@@ -163,6 +211,11 @@ func _return_to_free() -> void:
 	_state_frame = 0
 	_state_duration_frames = 0
 	_cancel_from_frame = -1
+	_weapon_projection_active = false
+
+
+func _is_weapon_state(state: State) -> bool:
+	return state in [State.ATTACK_WINDUP, State.ATTACK_ACTIVE, State.ATTACK_RECOVERY]
 
 
 func _prune_expired_buffers() -> void:

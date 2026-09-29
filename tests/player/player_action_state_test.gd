@@ -21,6 +21,10 @@ func _run() -> void:
 	_test_attack_phase_completion_is_owner_driven()
 	_test_attack_active_rejections()
 	_test_attack_recovery_cancel_window()
+	_test_weapon_phase_projection()
+	_test_weapon_projection_does_not_advance_a_second_clock()
+	_test_weapon_projection_respects_exclusive_states()
+	_test_buffer_only_advance_expires_inputs()
 	_test_safe_reset_clears_transient_state()
 	_test_clear_buffered_inputs()
 	_test_dash_rejects_attack()
@@ -176,6 +180,78 @@ func _test_attack_recovery_cancel_window() -> void:
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.DASH), "recovery accepts dash at cancel frame")
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.TIME_CAST), "recovery accepts time cast at cancel frame")
 	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.ATTACK_WINDUP), "recovery accepts combo attack at cancel frame")
+
+
+func _test_weapon_phase_projection() -> void:
+	var action_state = PlayerActionStateScript.new()
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"WINDUP", 2, 6),
+		"coordinator windup projects into the legacy action-state view"
+	)
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_WINDUP, "windup projection maps to attack windup")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 2, "windup projection copies the authoritative phase frame")
+	_suite.assert_equal(action_state.remaining_state_frames(), 4, "windup projection copies the authoritative duration")
+
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"ACTIVE", 3, 5),
+		"coordinator active projects without requiring a legacy transition"
+	)
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_ACTIVE, "active projection maps to attack active")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 3, "active projection copies the authoritative phase frame")
+
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"RECOVERY", 2, 8, 3),
+		"coordinator recovery projects with its cancel boundary"
+	)
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_RECOVERY, "recovery projection maps to attack recovery")
+	_suite.assert_true(not action_state.can_transition_to(PlayerActionStateScript.State.DASH), "projected recovery blocks dash before its cancel boundary")
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"RECOVERY", 3, 8, 3),
+		"coordinator can refresh the projected recovery frame"
+	)
+	_suite.assert_true(action_state.can_transition_to(PlayerActionStateScript.State.DASH), "projected recovery opens dash exactly at its cancel boundary")
+
+	_suite.assert_true(not action_state.project_weapon_phase(&"CHANNEL", 1, 4), "unsupported weapon phases fail closed")
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_RECOVERY, "invalid projection does not mutate the current view")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 3, "invalid projection preserves projected counters")
+	_suite.assert_true(action_state.clear_weapon_projection(), "weapon projection can be cleared when the coordinator returns ready")
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.FREE, "clearing weapon projection returns the compatibility view to free")
+
+
+func _test_weapon_projection_does_not_advance_a_second_clock() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.project_weapon_phase(&"WINDUP", 1, 3)
+	action_state.advance_frame()
+	action_state.advance_buffer_frame()
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_WINDUP, "local frame advancement does not complete a projected weapon phase")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 1, "projected weapon phase frame changes only when the coordinator refreshes it")
+	_suite.assert_equal(action_state.remaining_state_frames(), 2, "projected duration remains a read-only compatibility view")
+
+
+func _test_weapon_projection_respects_exclusive_states() -> void:
+	var dash_state = PlayerActionStateScript.new()
+	dash_state.transition_to(PlayerActionStateScript.State.DASH, 4)
+	_suite.assert_true(not dash_state.project_weapon_phase(&"WINDUP", 0, 6), "weapon projection cannot replace an exclusive dash")
+	_suite.assert_true(not dash_state.clear_weapon_projection(), "clearing a projection cannot cancel an exclusive dash")
+	_suite.assert_equal(dash_state.current_state, PlayerActionStateScript.State.DASH, "exclusive dash authority remains intact")
+
+	var dead_state = PlayerActionStateScript.new()
+	dead_state.transition_to(PlayerActionStateScript.State.DEAD, 0)
+	_suite.assert_true(not dead_state.project_weapon_phase(&"ACTIVE", 0, 5), "weapon projection cannot replace dead state")
+	_suite.assert_true(not dead_state.clear_weapon_projection(), "clearing a projection cannot revive dead state")
+	_suite.assert_equal(dead_state.current_state, PlayerActionStateScript.State.DEAD, "dead remains terminal after projection calls")
+
+
+func _test_buffer_only_advance_expires_inputs() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.project_weapon_phase(&"ACTIVE", 2, 5)
+	action_state.buffer_input(&"dash", 2)
+	action_state.advance_buffer_frame()
+	_suite.assert_true(action_state.has_buffered_input(&"dash"), "buffer-only advancement retains input before expiry")
+	action_state.advance_buffer_frame()
+	_suite.assert_true(not action_state.has_buffered_input(&"dash"), "buffer-only advancement prunes input at expiry")
+	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.ATTACK_ACTIVE, "buffer-only advancement preserves the projected phase")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 2, "buffer-only advancement never advances projected weapon counters")
 
 
 func _test_safe_reset_clears_transient_state() -> void:
