@@ -10,6 +10,7 @@ signal died(killer: Variant)
 @export var max_hp: float = 100.0
 @export var defense: float = 0.0
 @export var starts_full: bool = true
+@export_range(0.0, 1.0, 0.05) var damage_received_multiplier: float = 1.0
 
 var current_hp: float = 0.0
 var invulnerable: bool = false
@@ -40,6 +41,14 @@ func apply_stat_totals(stats: Resource) -> void:
 	if max_hp > previous_max_hp:
 		current_hp += max_hp - previous_max_hp
 	current_hp = clampf(current_hp, 0.0, max_hp)
+
+
+func configure_accessibility_assists(assists: Dictionary) -> void:
+	var multiplier: Variant = assists.get("damage_received_multiplier", 1.0)
+	if typeof(multiplier) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(multiplier)):
+		damage_received_multiplier = 1.0
+		return
+	damage_received_multiplier = clampf(float(multiplier), 0.0, 1.0)
 
 
 func take_damage(damage_info: RefCounted) -> float:
@@ -110,6 +119,8 @@ func lose_health(amount: float, source: Variant = null) -> float:
 func _apply_target_damage_modifiers(damage_info: RefCounted) -> float:
 	var amount: float = damage_info.amount
 	var owner_entity := get_parent()
+	if owner_entity.is_in_group("player"):
+		amount *= damage_received_multiplier
 	if owner_entity.has_method("get_weakpoint_damage_bonus"):
 		var weakpoint_bonus: float = owner_entity.get_weakpoint_damage_bonus(damage_info)
 		if weakpoint_bonus > 0.0:

@@ -61,20 +61,34 @@ func _assert_scene_contract() -> void:
 	_assert_control_fits(main.get_node("StartMenu/Panel"), "start menu fits 640x360")
 	_assert_control_fits(main.get_node("RunEndOverlay/Panel"), "run-end panel fits 640x360")
 	_assert_control_fits(main.get_node("PauseMenu/Panel"), "pause panel fits 640x360")
-	for setting_path: String in [
-		"PauseMenu/Panel/Margin/VBox/CameraShakeToggle",
-		"PauseMenu/Panel/Margin/VBox/HitFlashToggle",
-		"PauseMenu/Panel/Margin/VBox/ReducedMotionToggle",
+	for action_path: String in [
+		"PauseMenu/Panel/Margin/VBox/ResumeButton",
+		"PauseMenu/Panel/Margin/VBox/SettingsButton",
+		"PauseMenu/Panel/Margin/VBox/RemapButton",
+		"PauseMenu/Panel/Margin/VBox/RestartButton",
+		"PauseMenu/Panel/Margin/VBox/QuitButton",
 	]:
-		var setting_control := main.get_node_or_null(setting_path) as Control
-		_suite.assert_true(setting_control != null, "%s exists" % setting_path)
-		if setting_control != null:
-			_assert_control_fits(setting_control, "%s fits 640x360" % setting_path)
+		var action_control := main.get_node_or_null(action_path) as Control
+		_suite.assert_true(action_control != null, "%s exists" % action_path)
+		if action_control != null:
+			_assert_control_fits(action_control, "%s fits 640x360" % action_path)
 	var pause_panel := main.get_node("PauseMenu/Panel") as Control
 	var pause_quit := main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton") as Control
 	_suite.assert_true(
 		pause_quit.get_global_rect().end.y <= pause_panel.get_global_rect().end.y - 9.0,
 		"pause settings and actions remain inside the compact panel"
+	)
+	_assert_control_fits(
+		main.get_node("AccessibilitySettingsLayer/AccessibilitySettingsPanel/SafeArea/PanelRoot"),
+		"accessibility settings panel fits 640x360"
+	)
+	_assert_control_fits(
+		main.get_node("InputRemapLayer/InputRemapPanel/SafeArea/PanelRoot"),
+		"input remap panel fits 640x360"
+	)
+	_assert_control_fits(
+		main.get_node("SubtitleLayer/SubtitlePresenter"),
+		"subtitle presenter fits 640x360"
 	)
 	_suite.assert_true((main.get_node("StartMenu") as CanvasLayer).layer > 20, "start menu renders above gameplay UI")
 	_suite.assert_true((main.get_node("RunEndOverlay") as CanvasLayer).layer > 20, "run-end overlay renders above gameplay UI")

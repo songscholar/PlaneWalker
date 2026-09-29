@@ -63,11 +63,12 @@ func _ready() -> void:
 func open_panel(restore_focus: Control = null) -> void:
 	if restore_focus != null:
 		_restore_focus = restore_focus
-	if get_viewport().gui_get_focus_owner() == null and _restore_focus != null:
+	if _restore_focus != null and _restore_focus.is_inside_tree() and _restore_focus.is_visible_in_tree():
 		_restore_focus.grab_focus()
 	visible = true
 	status_label.text = ""
 	_refresh_all_rows()
+	FocusCoordinator.link_ring(_focus_controls, false)
 	if not _focus_controls.is_empty():
 		FocusCoordinator.open_scope(self, _focus_controls[0])
 

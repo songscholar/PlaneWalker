@@ -20,6 +20,7 @@ var _had_combat_actor: bool = false
 var _camera_shake_enabled: bool = true
 var _hit_flash_enabled: bool = true
 var _reduced_motion: bool = false
+var _high_contrast_danger: bool = false
 var _cached_player: Node2D
 var _cached_player_health: HealthComponent
 
@@ -176,6 +177,7 @@ func get_feedback_options_for_test() -> Dictionary:
 		"camera_shake_enabled": _camera_shake_enabled,
 		"hit_flash_enabled": _hit_flash_enabled,
 		"reduced_motion": _reduced_motion,
+		"high_contrast_danger": _high_contrast_danger,
 	}
 
 
@@ -191,6 +193,7 @@ func reload_feedback_options_from_game_state() -> void:
 		"camera_shake_enabled": bool(GameState.get_setting("camera_shake_enabled", true)),
 		"hit_flash_enabled": bool(GameState.get_setting("hit_flash_enabled", true)),
 		"reduced_motion": bool(GameState.get_setting("reduced_motion", false)),
+		"high_contrast_danger": bool(GameState.get_setting("high_contrast_danger", false)),
 	})
 
 
@@ -201,16 +204,20 @@ func set_feedback_options(options: Dictionary) -> void:
 		_hit_flash_enabled = bool(options["hit_flash_enabled"])
 	if options.has("reduced_motion"):
 		_reduced_motion = bool(options["reduced_motion"])
+	if options.has("high_contrast_danger"):
+		_high_contrast_danger = bool(options["high_contrast_danger"])
 	if not _camera_shake_enabled or _reduced_motion:
 		_camera_trauma = 0.0
 		_restore_camera_offset()
 	if _overlay != null and _overlay.has_method("set_feedback_options"):
 		_overlay.set_feedback_options(_hit_flash_enabled, _reduced_motion)
+	if _overlay != null and _overlay.has_method("set_danger_accessibility"):
+		_overlay.set_danger_accessibility(_high_contrast_danger)
 	_configure_existing_proxies()
 
 
 func _on_game_setting_changed(setting_id: StringName, value: Variant) -> void:
-	if setting_id not in [&"camera_shake_enabled", &"hit_flash_enabled", &"reduced_motion"]:
+	if setting_id not in [&"camera_shake_enabled", &"hit_flash_enabled", &"reduced_motion", &"high_contrast_danger"]:
 		return
 	set_feedback_options({str(setting_id): value})
 

@@ -5,6 +5,10 @@ const MAX_SCOPE_DEPTH := 16
 var _frames: Array[Dictionary] = []
 
 
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+
 func open_scope(scope: Node, initial_focus: Control) -> void:
 	if scope == null or not is_instance_valid(scope):
 		return

@@ -53,6 +53,10 @@ func render(offer: Dictionary):
 	for option_value: Variant in _current_offer["options"]:
 		_add_option_button(option_value as Dictionary, str(_current_offer["category"]))
 	visible = true
+	var buttons := _option_buttons()
+	FocusCoordinator.link_ring(buttons, true)
+	if not buttons.is_empty():
+		FocusCoordinator.open_scope(self, buttons[0])
 	return CommandResultScript.success(revision)
 
 
@@ -64,9 +68,13 @@ func show_rejection(message_key: String) -> void:
 	error_label.visible = true
 	visible = true
 	_set_buttons_disabled(false)
+	var buttons := _option_buttons()
+	if not buttons.is_empty():
+		FocusCoordinator.recover(self, buttons[0])
 
 
 func close_panel() -> void:
+	FocusCoordinator.close_scope(self)
 	visible = false
 	_submitted = false
 	_current_offer = {}
@@ -90,6 +98,9 @@ func _add_option_button(option: Dictionary, category: String) -> void:
 	button.pressed.connect(_on_option_pressed.bind(_current_offer_id, option_id, _current_revision))
 	options_container.add_child(button)
 	_add_card_content(button, option, tone)
+	var accessibility_nodes := get_tree().get_nodes_in_group("accessibility_runtime")
+	if not accessibility_nodes.is_empty():
+		(accessibility_nodes[0] as Node).call("apply_to_tree", button)
 
 
 func _on_option_pressed(source_offer_id: String, option_id: String, source_revision: int) -> void:
@@ -108,6 +119,14 @@ func _set_buttons_disabled(disabled: bool) -> void:
 	for child: Node in options_container.get_children():
 		if child is Button:
 			(child as Button).disabled = disabled
+
+
+func _option_buttons() -> Array[Control]:
+	var buttons: Array[Control] = []
+	for child: Node in options_container.get_children():
+		if child is Button and not (child as Button).disabled:
+			buttons.append(child as Control)
+	return buttons
 
 
 func _clear_options() -> void:

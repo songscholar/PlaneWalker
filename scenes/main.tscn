@@ -1,10 +1,14 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
 [ext_resource type="Script" path="res://scripts/ui/run_end_overlay.gd" id="3_run_end_overlay"]
 [ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="4_pause_menu"]
 [ext_resource type="Script" path="res://scripts/application/run_runtime_host.gd" id="5_runtime_host"]
+[ext_resource type="PackedScene" path="res://scenes/ui/input_remap_panel.tscn" id="6_input_remap"]
+[ext_resource type="Script" path="res://scripts/accessibility/accessibility_runtime.gd" id="7_accessibility"]
+[ext_resource type="Script" path="res://scripts/accessibility/subtitle_presenter.gd" id="8_subtitle"]
+[ext_resource type="PackedScene" path="res://scenes/ui/accessibility_settings_panel.tscn" id="9_accessibility_panel"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -29,6 +33,37 @@ allow_legacy_runtime = false
 process_mode = 3
 script = ExtResource("5_runtime_host")
 room_controller_path = NodePath("../CombatRoom01")
+
+[node name="AccessibilityRuntime" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("7_accessibility")
+
+[node name="SubtitleLayer" type="CanvasLayer" parent="."]
+layer = 25
+
+[node name="SubtitlePresenter" type="PanelContainer" parent="SubtitleLayer"]
+custom_minimum_size = Vector2(0, 44)
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 64.0
+offset_top = -64.0
+offset_right = -64.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("8_subtitle")
+
+[node name="InputRemapLayer" type="CanvasLayer" parent="."]
+layer = 60
+
+[node name="InputRemapPanel" parent="InputRemapLayer" instance=ExtResource("6_input_remap")]
+
+[node name="AccessibilitySettingsLayer" type="CanvasLayer" parent="."]
+layer = 59
+
+[node name="AccessibilitySettingsPanel" parent="AccessibilitySettingsLayer" instance=ExtResource("9_accessibility_panel")]
 
 [node name="StartMenu" type="CanvasLayer" parent="."]
 layer = 30
@@ -79,6 +114,7 @@ horizontal_alignment = 1
 [node name="StartButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(360, 56)
+focus_mode = 2
 text = "Quick Start"
 
 [node name="RunEndOverlay" type="CanvasLayer" parent="."]
@@ -92,9 +128,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -250.0
-offset_top = -170.0
+offset_top = -164.0
 offset_right = 250.0
-offset_bottom = 170.0
+offset_bottom = 164.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -120,6 +156,7 @@ horizontal_alignment = 1
 
 [node name="RestartButton" type="Button" parent="RunEndOverlay/Panel/Margin/VBox"]
 layout_mode = 2
+focus_mode = 2
 text = "Restart Run"
 
 [node name="PauseMenu" type="CanvasLayer" parent="."]
@@ -133,15 +170,15 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -180.0
-offset_top = -178.0
+offset_top = -130.0
 offset_right = 180.0
-offset_bottom = 178.0
+offset_bottom = 130.0
 grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Margin" type="MarginContainer" parent="PauseMenu/Panel"]
 offset_right = 360.0
-offset_bottom = 360.0
+offset_bottom = 260.0
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 16
@@ -151,49 +188,35 @@ theme_override_constants/margin_bottom = 10
 offset_left = 16.0
 offset_top = 10.0
 offset_right = 344.0
-offset_bottom = 346.0
-theme_override_constants/separation = 5
+offset_bottom = 250.0
+theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="PauseMenu/Panel/Margin/VBox"]
 layout_mode = 2
 text = "Paused"
 horizontal_alignment = 1
 
-[node name="VolumeLabel" type="Label" parent="PauseMenu/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Master Volume 85%"
-
-[node name="VolumeSlider" type="HSlider" parent="PauseMenu/Panel/Margin/VBox"]
-layout_mode = 2
-min_value = 0.0
-max_value = 1.0
-step = 0.05
-value = 0.85
-
-[node name="MuteToggle" type="CheckButton" parent="PauseMenu/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Mute"
-
-[node name="CameraShakeToggle" type="CheckButton" parent="PauseMenu/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Camera Shake"
-
-[node name="HitFlashToggle" type="CheckButton" parent="PauseMenu/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Hit Flash"
-
-[node name="ReducedMotionToggle" type="CheckButton" parent="PauseMenu/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Reduced Motion"
-
 [node name="ResumeButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
 layout_mode = 2
+focus_mode = 2
 text = "Resume"
+
+[node name="SettingsButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
+layout_mode = 2
+focus_mode = 2
+text = "Accessibility"
+
+[node name="RemapButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
+layout_mode = 2
+focus_mode = 2
+text = "Input Remapping"
 
 [node name="RestartButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
 layout_mode = 2
+focus_mode = 2
 text = "Restart Run"
 
 [node name="QuitButton" type="Button" parent="PauseMenu/Panel/Margin/VBox"]
 layout_mode = 2
+focus_mode = 2
 text = "Quit"

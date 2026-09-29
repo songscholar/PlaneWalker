@@ -58,6 +58,10 @@ func _test_run_config(suite) -> void:
 	suite.assert_equal(normalized["seed"], 123456, "seed is normalized")
 	config["enabled_time_skills"].append("time_rift")
 	suite.assert_equal(normalized["enabled_time_skills"], ["time_stop", "time_rewind"], "normalized config is isolated from caller arrays")
+	suite.assert_equal(normalized["accessibility_assists"], {
+		"damage_received_multiplier": 1.0,
+		"enemy_telegraph_scale": 1.0,
+	}, "accessibility assists default to neutral values")
 
 	var defaults: Dictionary = RunConfigScript.normalized({})
 	suite.assert_equal(defaults["milestone"], "M1", "milestone default is stable")
@@ -74,6 +78,16 @@ func _test_run_config(suite) -> void:
 	var empty_weapon := config.duplicate(true)
 	empty_weapon["weapon_id"] = ""
 	suite.assert_equal(RunConfigScript.validate(empty_weapon).code, &"INVALID_ARGUMENT", "empty weapon id is rejected")
+
+	var valid_assists := config.duplicate(true)
+	valid_assists["accessibility_assists"] = {
+		"damage_received_multiplier": 0.6,
+		"enemy_telegraph_scale": 1.5,
+	}
+	suite.assert_true(RunConfigScript.validate(valid_assists).ok, "declared accessibility assists validate")
+	var invalid_assists := valid_assists.duplicate(true)
+	invalid_assists["accessibility_assists"]["damage_received_multiplier"] = 0.5
+	suite.assert_equal(RunConfigScript.validate(invalid_assists).code, &"INVALID_ARGUMENT", "undeclared damage assist is rejected")
 
 
 func _test_selection_offer(suite) -> void:

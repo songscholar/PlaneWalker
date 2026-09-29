@@ -11,6 +11,10 @@ const DEFAULTS := {
 	"enabled_time_skills": ["time_stop", "time_rewind"],
 	"difficulty": "normal",
 	"seed": 0,
+	"accessibility_assists": {
+		"damage_received_multiplier": 1.0,
+		"enemy_telegraph_scale": 1.0,
+	},
 }
 
 
@@ -28,6 +32,15 @@ static func validate(value: Dictionary):
 			return _invalid("enabled_time_skills")
 	if typeof(config["seed"]) != TYPE_INT:
 		return _invalid("seed")
+	if typeof(config["accessibility_assists"]) != TYPE_DICTIONARY:
+		return _invalid("accessibility_assists")
+	var assists: Dictionary = config["accessibility_assists"]
+	if assists.size() != 2 or not assists.has("damage_received_multiplier") or not assists.has("enemy_telegraph_scale"):
+		return _invalid("accessibility_assists")
+	if not _number_is_one_of(assists["damage_received_multiplier"], [1.0, 0.8, 0.6]):
+		return _invalid("accessibility_assists.damage_received_multiplier")
+	if not _number_is_one_of(assists["enemy_telegraph_scale"], [1.0, 1.25, 1.5]):
+		return _invalid("accessibility_assists.enemy_telegraph_scale")
 	return CommandResultScript.success(0)
 
 
@@ -45,3 +58,7 @@ static func normalized(value: Dictionary) -> Dictionary:
 
 static func _invalid(field: String):
 	return CommandResultScript.failure(&"INVALID_ARGUMENT", 0, {"field": field})
+
+
+static func _number_is_one_of(value: Variant, allowed: Array[float]) -> bool:
+	return typeof(value) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(value)) and float(value) in allowed

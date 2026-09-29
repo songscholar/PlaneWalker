@@ -10,6 +10,7 @@ const FONT_SIZE_KEYS: Array[StringName] = [
 	&"mono_font_size",
 ]
 const FONT_META_PREFIX := "accessibility_base_font_"
+const IGNORE_TEXT_SCALE_META := &"accessibility_ignore_text_scale"
 
 var _settings: Dictionary = {}
 var _roots: Array[WeakRef] = []
@@ -17,6 +18,7 @@ var _roots: Array[WeakRef] = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("accessibility_runtime")
 	_refresh_settings()
 	if not GameState.setting_changed.is_connected(_on_setting_changed):
 		GameState.setting_changed.connect(_on_setting_changed)
@@ -120,6 +122,8 @@ func _apply_node(node: Node) -> void:
 
 
 func _apply_control_text_scale(control: Control) -> void:
+	if bool(control.get_meta(IGNORE_TEXT_SCALE_META, false)):
+		return
 	var text_scale := float(_settings.get("text_scale", 1.0))
 	for font_size_key: StringName in FONT_SIZE_KEYS:
 		var meta_key := FONT_META_PREFIX + str(font_size_key)

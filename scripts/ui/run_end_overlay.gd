@@ -29,9 +29,11 @@ func _on_run_ended(result: Dictionary) -> void:
 		tr("UI_CURSES"), _names_for(result.get("curses", [])),
 	]
 	visible = true
+	FocusCoordinator.open_scope(self, restart_button)
 
 
 func _restart_run() -> void:
+	FocusCoordinator.close_scope(self)
 	get_tree().reload_current_scene()
 
 

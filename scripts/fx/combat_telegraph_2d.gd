@@ -17,6 +17,8 @@ var _origin_global := Vector2.ZERO
 var _aim_direction := Vector2.RIGHT
 var _target_global := Vector2.ZERO
 var _summon_slots_global: Array[Vector2] = []
+var _base_radius: float = 0.0
+var _base_length: float = 0.0
 var _radius: float = 0.0
 var _length: float = 0.0
 var _remaining: float = 0.0
@@ -27,6 +29,10 @@ var _high_contrast_danger: bool = false
 func _ready() -> void:
 	top_level = true
 	visible = false
+	set_accessibility_options(
+		bool(GameState.get_setting("high_contrast_danger", false)),
+		float(GameState.get_setting("enemy_telegraph_scale", 1.0))
+	)
 
 
 func show_telegraph(
@@ -46,8 +52,9 @@ func show_telegraph(
 	_aim_direction = aim_direction.normalized() if not aim_direction.is_zero_approx() else Vector2.RIGHT
 	_target_global = target_global
 	_summon_slots_global = summon_slots_global.duplicate()
-	_radius = maxf(0.0, radius) * _visual_scale
-	_length = maxf(0.0, length) * _visual_scale
+	_base_radius = maxf(0.0, radius)
+	_base_length = maxf(0.0, length)
+	_rescale_geometry()
 	_remaining = maxf(0.0, duration) * _visual_scale
 	global_position = _origin_global
 	visible = true
@@ -62,9 +69,15 @@ func set_remaining_time(value: float) -> void:
 func set_accessibility_options(high_contrast: bool, visual_scale: float) -> void:
 	_high_contrast_danger = high_contrast
 	_visual_scale = clampf(visual_scale, 1.0, 1.5)
+	_rescale_geometry()
 	fill_color = Color(HIGH_CONTRAST_BACKGROUND, 0.52) if high_contrast else DEFAULT_FILL_COLOR
 	outline_color = HIGH_CONTRAST_ACCENT if high_contrast else DEFAULT_OUTLINE_COLOR
 	queue_redraw()
+
+
+func _rescale_geometry() -> void:
+	_radius = _base_radius * _visual_scale
+	_length = _base_length * _visual_scale
 
 
 func update_origin_global(origin_global: Vector2) -> void:

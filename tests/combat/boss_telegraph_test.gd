@@ -3,6 +3,7 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const PlayerScene := preload("res://scenes/player/player.tscn")
 const BossScene := preload("res://scenes/enemies/boss_chrono_warden.tscn")
+const CombatTelegraphScript := preload("res://scripts/fx/combat_telegraph_2d.gd")
 
 const ACTION_SHAPES := {
 	"MELEE": "cone",
@@ -22,11 +23,46 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	await _test_visible_telegraph_rescales_from_authored_geometry()
 	await _test_action_definitions_are_complete_and_readable()
 	for action_name: String in ACTION_SHAPES.keys():
 		await _test_action_contract(action_name)
 	await _test_time_stop_extends_each_committed_phase()
 	_suite.finish(get_tree())
+
+
+func _test_visible_telegraph_rescales_from_authored_geometry() -> void:
+	var telegraph := CombatTelegraphScript.new()
+	add_child(telegraph)
+	await get_tree().process_frame
+	telegraph.set_accessibility_options(false, 1.0)
+	telegraph.show_telegraph(
+		"ACCESSIBILITY_SCALE",
+		"line",
+		Vector2.ZERO,
+		Vector2.RIGHT,
+		Vector2.ZERO,
+		[],
+		20.0,
+		40.0,
+		1.0
+	)
+	telegraph.set_accessibility_options(false, 1.5)
+	var enlarged: Dictionary = telegraph.get_snapshot()
+	_suite.assert_close(float(enlarged.get("radius", 0.0)), 30.0, "visible telegraph radius updates immediately when scale grows")
+	_suite.assert_close(float(enlarged.get("length", 0.0)), 60.0, "visible telegraph length updates immediately when scale grows")
+
+	telegraph.set_accessibility_options(false, 1.25)
+	var reduced: Dictionary = telegraph.get_snapshot()
+	_suite.assert_close(float(reduced.get("radius", 0.0)), 25.0, "telegraph radius rescales from its authored value")
+	_suite.assert_close(float(reduced.get("length", 0.0)), 50.0, "telegraph length rescales from its authored value")
+
+	telegraph.set_accessibility_options(false, 1.25)
+	var repeated: Dictionary = telegraph.get_snapshot()
+	_suite.assert_close(float(repeated.get("radius", 0.0)), 25.0, "reapplying telegraph scale cannot compound radius")
+	_suite.assert_close(float(repeated.get("length", 0.0)), 50.0, "reapplying telegraph scale cannot compound length")
+	telegraph.queue_free()
+	await get_tree().process_frame
 
 
 func _test_action_definitions_are_complete_and_readable() -> void:

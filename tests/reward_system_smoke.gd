@@ -465,12 +465,9 @@ func _run_pause_menu_check() -> void:
 	var start_menu: CanvasLayer = main.get_node("StartMenu")
 	var pause_menu: CanvasLayer = main.get_node("PauseMenu")
 	var resume_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/ResumeButton")
-	var volume_label: Label = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeLabel")
-	var volume_slider: HSlider = main.get_node("PauseMenu/Panel/Margin/VBox/VolumeSlider")
-	var mute_toggle: CheckButton = main.get_node("PauseMenu/Panel/Margin/VBox/MuteToggle")
-	var camera_shake_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/CameraShakeToggle") as CheckButton
-	var hit_flash_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/HitFlashToggle") as CheckButton
-	var reduced_motion_toggle := main.get_node_or_null("PauseMenu/Panel/Margin/VBox/ReducedMotionToggle") as CheckButton
+	var settings_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/SettingsButton")
+	var remap_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/RemapButton")
+	var settings_panel: Control = main.get_node("AccessibilitySettingsLayer/AccessibilitySettingsPanel")
 	var restart_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/RestartButton")
 	var quit_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton")
 	var host: Node = main.get_node("RunRuntimeHost")
@@ -478,13 +475,11 @@ func _run_pause_menu_check() -> void:
 	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.HUB, "main scene starts in authoritative hub phase")
 	_assert_true(restart_button.text == "重新开始", "pause menu exposes restart")
 	_assert_true(quit_button.text == "退出", "pause menu exposes quit")
-	_assert_true(camera_shake_toggle != null, "pause menu exposes camera shake accessibility")
-	_assert_true(hit_flash_toggle != null, "pause menu exposes hit flash accessibility")
-	_assert_true(reduced_motion_toggle != null, "pause menu exposes reduced motion accessibility")
-	if camera_shake_toggle != null and hit_flash_toggle != null and reduced_motion_toggle != null:
-		_assert_true(camera_shake_toggle.text == "镜头震动", "camera shake setting is localized")
-		_assert_true(hit_flash_toggle.text == "受击闪光", "hit flash setting is localized")
-		_assert_true(reduced_motion_toggle.text == "减少动态效果", "reduced motion setting is localized")
+	_assert_true(settings_button.text == tr("UI_ACCESSIBILITY_SETTINGS"), "pause menu exposes localized accessibility settings")
+	_assert_true(remap_button.text == tr("UI_INPUT_REMAP"), "pause menu exposes localized input remapping")
+	_assert_true(settings_panel.call("get_setting_control", "camera_shake_enabled") != null, "settings panel exposes camera shake accessibility")
+	_assert_true(settings_panel.call("get_setting_control", "hit_flash_enabled") != null, "settings panel exposes hit flash accessibility")
+	_assert_true(settings_panel.call("get_setting_control", "reduced_motion") != null, "settings panel exposes reduced motion accessibility")
 	main._pause_run()
 	_assert_true(not get_tree().paused, "hub phase cannot open pause")
 	main.get_node("CombatRoom01").set("spawn_warning_duration", 0.0)
@@ -497,27 +492,39 @@ func _run_pause_menu_check() -> void:
 	_assert_true(get_tree().paused, "pause freezes scene tree")
 	_assert_true(bool((host.call("runtime_snapshot") as Dictionary).get("suspended", false)), "pause suspends the authoritative run")
 	_assert_true(pause_menu.visible, "pause menu becomes visible")
-	volume_slider.value = 0.5
-	_assert_close(GameState.get_setting("master_volume", 0.0), 0.5, "pause menu stores master volume")
-	_assert_true(volume_label.text.contains("50%"), "pause menu updates volume label")
+	settings_button.pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert_true(settings_panel.visible, "pause menu opens the accessibility settings panel")
+	var volume_slider := settings_panel.call("get_setting_control", "master_volume") as HSlider
+	var mute_toggle := settings_panel.call("get_setting_control", "master_muted") as CheckButton
+	var camera_shake_toggle := settings_panel.call("get_setting_control", "camera_shake_enabled") as CheckButton
+	var hit_flash_toggle := settings_panel.call("get_setting_control", "hit_flash_enabled") as CheckButton
+	var reduced_motion_toggle := settings_panel.call("get_setting_control", "reduced_motion") as CheckButton
+	var volume_label := settings_panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_master_volume/ValueLabel") as Label
+	volume_slider.value = 50.0
+	_assert_close(GameState.get_setting("master_volume", 0.0), 0.5, "settings panel stores master volume")
+	_assert_true(volume_label.text.contains("50%"), "settings panel updates volume label")
 	mute_toggle.button_pressed = true
-	_assert_true(bool(GameState.get_setting("master_muted", false)), "pause menu stores mute setting")
-	if camera_shake_toggle != null and hit_flash_toggle != null and reduced_motion_toggle != null:
-		_assert_true(camera_shake_toggle.button_pressed, "camera shake defaults on")
-		_assert_true(hit_flash_toggle.button_pressed, "hit flash defaults on")
-		_assert_true(not reduced_motion_toggle.button_pressed, "reduced motion defaults off")
-		camera_shake_toggle.button_pressed = false
-		hit_flash_toggle.button_pressed = false
-		reduced_motion_toggle.button_pressed = true
-		_assert_true(not bool(GameState.get_setting("camera_shake_enabled", true)), "pause menu persists camera shake")
-		_assert_true(not bool(GameState.get_setting("hit_flash_enabled", true)), "pause menu persists hit flash")
-		_assert_true(bool(GameState.get_setting("reduced_motion", false)), "pause menu persists reduced motion")
-		_assert_true(CombatFeedback.has_method("get_feedback_options_for_test"), "feedback exposes runtime option evidence")
-		if CombatFeedback.has_method("get_feedback_options_for_test"):
-			var feedback_options: Dictionary = CombatFeedback.get_feedback_options_for_test()
-			_assert_true(not bool(feedback_options.get("camera_shake_enabled", true)), "camera shake setting applies immediately")
-			_assert_true(not bool(feedback_options.get("hit_flash_enabled", true)), "hit flash setting applies immediately")
-			_assert_true(bool(feedback_options.get("reduced_motion", false)), "reduced motion setting applies immediately")
+	_assert_true(bool(GameState.get_setting("master_muted", false)), "settings panel stores mute setting")
+	_assert_true(camera_shake_toggle.button_pressed, "camera shake defaults on")
+	_assert_true(hit_flash_toggle.button_pressed, "hit flash defaults on")
+	_assert_true(not reduced_motion_toggle.button_pressed, "reduced motion defaults off")
+	camera_shake_toggle.button_pressed = false
+	hit_flash_toggle.button_pressed = false
+	reduced_motion_toggle.button_pressed = true
+	_assert_true(not bool(GameState.get_setting("camera_shake_enabled", true)), "settings panel persists camera shake")
+	_assert_true(not bool(GameState.get_setting("hit_flash_enabled", true)), "settings panel persists hit flash")
+	_assert_true(bool(GameState.get_setting("reduced_motion", false)), "settings panel persists reduced motion")
+	_assert_true(CombatFeedback.has_method("get_feedback_options_for_test"), "feedback exposes runtime option evidence")
+	if CombatFeedback.has_method("get_feedback_options_for_test"):
+		var feedback_options: Dictionary = CombatFeedback.get_feedback_options_for_test()
+		_assert_true(not bool(feedback_options.get("camera_shake_enabled", true)), "camera shake setting applies immediately")
+		_assert_true(not bool(feedback_options.get("hit_flash_enabled", true)), "hit flash setting applies immediately")
+		_assert_true(bool(feedback_options.get("reduced_motion", false)), "reduced motion setting applies immediately")
+	settings_panel.call("close_panel")
+	await get_tree().process_frame
+	_assert_true(not settings_panel.visible, "settings panel closes back to pause")
 
 	resume_button.pressed.emit()
 	_assert_true(not get_tree().paused, "resume unfreezes scene tree")

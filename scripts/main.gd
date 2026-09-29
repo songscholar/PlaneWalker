@@ -12,6 +12,9 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var runtime_host: Node = $RunRuntimeHost
+@onready var accessibility_runtime: Node = $AccessibilityRuntime
+@onready var input_remap_panel: Control = $InputRemapLayer/InputRemapPanel
+@onready var accessibility_settings_panel: Control = $AccessibilitySettingsLayer/AccessibilitySettingsPanel
 
 var _lang_button: Button
 
@@ -22,12 +25,15 @@ func _ready() -> void:
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
 	pause_menu.resume_requested.connect(_resume_run)
+	pause_menu.remap_requested.connect(_open_input_remap)
+	pause_menu.accessibility_requested.connect(_open_accessibility_settings)
 	combat_room.visible = false
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	status_label.visible = false
 	_setup_language_button()
 	_apply_localization()
 	_show_start_menu()
+	call_deferred("_apply_accessibility_to_runtime")
 	_print_input_map()
 
 
@@ -40,6 +46,7 @@ func _setup_language_button() -> void:
 		return
 	_lang_button = Button.new()
 	_lang_button.custom_minimum_size = Vector2(360, 40)
+	_lang_button.focus_mode = Control.FOCUS_ALL
 	_lang_button.pressed.connect(_toggle_language)
 	start_button.get_parent().add_child(_lang_button)
 
@@ -61,6 +68,8 @@ func _apply_localization() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if input_remap_panel.visible or accessibility_settings_panel.visible:
+		return
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
 		return
@@ -76,11 +85,24 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_new_run() -> void:
 	if not start_menu.visible:
 		return
+	FocusCoordinator.close_scope(start_menu)
 	get_tree().paused = false
 	start_menu.visible = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_INHERIT
-	var config := {
+	var config := _build_run_config()
+	var started = runtime_host.call("start_run", config)
+	if not started.ok:
+		combat_room.visible = false
+		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+		_show_start_menu()
+		return
+	_on_run_started(config)
+
+
+func _build_run_config() -> Dictionary:
+	var settings := GameState.normalized_settings()
+	return {
 		"schema_version": 1,
 		"milestone": "M1",
 		"character_id": "wanderer",
@@ -88,18 +110,17 @@ func _start_new_run() -> void:
 		"enabled_time_skills": ["time_stop", "time_rewind"],
 		"difficulty": "normal",
 		"seed": int(Time.get_unix_time_from_system()),
+		"accessibility_assists": {
+			"damage_received_multiplier": float(settings.get("damage_received_multiplier", 1.0)),
+			"enemy_telegraph_scale": float(settings.get("enemy_telegraph_scale", 1.0)),
+		},
 	}
-	var started = runtime_host.call("start_run", config)
-	if not started.ok:
-		combat_room.visible = false
-		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
-		start_menu.visible = true
-		return
-	_on_run_started(config)
 
 
 func _show_start_menu() -> void:
 	start_menu.visible = true
+	FocusCoordinator.link_ring([start_button, _lang_button], false)
+	FocusCoordinator.open_scope(start_menu, start_button)
 	var summary: Dictionary = GameState.persistent.get("last_run_summary", {})
 	if summary.is_empty():
 		last_run_label.text = tr("UI_NO_RUNS")
@@ -116,6 +137,7 @@ func _result_label(result: String) -> String:
 
 
 func _on_run_started(run_data: Dictionary) -> void:
+	_apply_run_accessibility_assists(run_data)
 	var snapshot: Dictionary = runtime_host.call("runtime_snapshot")
 	status_label.visible = true
 	var text := tr("UI_STATUS_HEADER") + "\n"
@@ -130,6 +152,15 @@ func _on_run_started(run_data: Dictionary) -> void:
 	text += tr("UI_STATUS_BOSS_HINT")
 	status_label.text = text
 	print("Run started: ", run_data)
+
+
+func _apply_run_accessibility_assists(run_data: Dictionary) -> void:
+	var player_health := combat_room.get_node_or_null("Player/HealthComponent")
+	if player_health == null or not player_health.has_method("configure_accessibility_assists"):
+		return
+	var assists_value: Variant = run_data.get("accessibility_assists", {})
+	var assists: Dictionary = assists_value.duplicate(true) if assists_value is Dictionary else {}
+	player_health.call("configure_accessibility_assists", assists)
 
 
 func _on_run_ended(result: Dictionary) -> void:
@@ -173,6 +204,18 @@ func _resume_run() -> void:
 		return
 	get_tree().paused = false
 	pause_menu.hide_pause()
+
+
+func _open_input_remap() -> void:
+	input_remap_panel.call("open_panel", pause_menu.remap_button)
+
+
+func _open_accessibility_settings() -> void:
+	accessibility_settings_panel.call("open_panel", pause_menu.settings_button)
+
+
+func _apply_accessibility_to_runtime() -> void:
+	accessibility_runtime.call("apply_to_tree", self)
 
 
 func _print_input_map() -> void:

@@ -18,6 +18,7 @@ func _ready() -> void:
 	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.add_theme_font_size_override("font_size", BASE_FONT_SIZE)
+	_label.set_meta(&"accessibility_ignore_text_scale", true)
 	add_child(_label)
 	_hide_timer = Timer.new()
 	_hide_timer.one_shot = true

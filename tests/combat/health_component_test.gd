@@ -13,6 +13,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	var original_persistent := GameState.persistent.duplicate(true)
 	var owner := Node2D.new()
 	var health := HealthComponentScript.new()
 	health.name = "HealthComponent"
@@ -44,6 +45,29 @@ func _run() -> void:
 	await get_tree().create_timer(0.10).timeout
 	_suite.assert_true(not health.invulnerable, "invulnerability expires after gameplay resumes")
 
+	owner.add_to_group("player")
+	var settings := GameState.normalized_settings()
+	settings["damage_received_multiplier"] = 0.6
+	GameState.persistent["settings"] = settings
+	health.current_hp = 100.0
+	var default_damage: float = health.take_damage(damage_info)
+	_suite.assert_close(default_damage, 10.0, "player damage defaults to an unassisted run without a snapshot")
+	_suite.assert_close(health.current_hp, 90.0, "persistent settings do not leak into an unconfigured run")
+
+	health.configure_accessibility_assists({"damage_received_multiplier": 0.6})
+	health.current_hp = 100.0
+	var assisted_damage: float = health.take_damage(damage_info)
+	_suite.assert_close(assisted_damage, 6.0, "run snapshot damage assist reduces incoming damage deterministically")
+	_suite.assert_close(health.current_hp, 94.0, "damage assist changes only the applied player damage")
+
+	settings["damage_received_multiplier"] = 0.8
+	GameState.persistent["settings"] = settings
+	health.current_hp = 100.0
+	var stable_damage: float = health.take_damage(damage_info)
+	_suite.assert_close(stable_damage, 6.0, "mid-run persistent setting changes cannot mutate the run snapshot")
+	_suite.assert_close(health.current_hp, 94.0, "recorded and applied damage assist stay aligned for the run")
+
+	GameState.persistent = original_persistent
 	owner.queue_free()
 	await get_tree().process_frame
 	_suite.finish(get_tree())

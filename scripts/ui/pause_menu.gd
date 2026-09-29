@@ -2,15 +2,13 @@ class_name PauseMenu
 extends CanvasLayer
 
 signal resume_requested()
+signal remap_requested()
+signal accessibility_requested()
 
 @onready var title_label: Label = $Panel/Margin/VBox/Title
 @onready var resume_button: Button = $Panel/Margin/VBox/ResumeButton
-@onready var volume_label: Label = $Panel/Margin/VBox/VolumeLabel
-@onready var volume_slider: HSlider = $Panel/Margin/VBox/VolumeSlider
-@onready var mute_toggle: CheckButton = $Panel/Margin/VBox/MuteToggle
-@onready var camera_shake_toggle: CheckButton = $Panel/Margin/VBox/CameraShakeToggle
-@onready var hit_flash_toggle: CheckButton = $Panel/Margin/VBox/HitFlashToggle
-@onready var reduced_motion_toggle: CheckButton = $Panel/Margin/VBox/ReducedMotionToggle
+@onready var settings_button: Button = $Panel/Margin/VBox/SettingsButton
+@onready var remap_button: Button = $Panel/Margin/VBox/RemapButton
 @onready var restart_button: Button = $Panel/Margin/VBox/RestartButton
 @onready var quit_button: Button = $Panel/Margin/VBox/QuitButton
 
@@ -20,34 +18,47 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	title_label.text = tr("UI_PAUSED")
 	resume_button.text = tr("UI_RESUME")
+	settings_button.text = tr("UI_ACCESSIBILITY_SETTINGS")
+	remap_button.text = tr("UI_INPUT_REMAP")
 	restart_button.text = tr("UI_RESTART_RUN")
 	quit_button.text = tr("UI_QUIT")
-	mute_toggle.text = tr("UI_MUTE")
-	camera_shake_toggle.text = tr("UI_CAMERA_SHAKE")
-	hit_flash_toggle.text = tr("UI_HIT_FLASH")
-	reduced_motion_toggle.text = tr("UI_REDUCED_MOTION")
 	resume_button.pressed.connect(_on_resume_pressed)
+	settings_button.pressed.connect(_on_settings_pressed)
+	remap_button.pressed.connect(_on_remap_pressed)
 	restart_button.pressed.connect(_on_restart_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
-	volume_slider.value_changed.connect(_on_volume_changed)
-	mute_toggle.toggled.connect(_on_mute_toggled)
-	camera_shake_toggle.toggled.connect(_on_camera_shake_toggled)
-	hit_flash_toggle.toggled.connect(_on_hit_flash_toggled)
-	reduced_motion_toggle.toggled.connect(_on_reduced_motion_toggled)
-	_load_settings()
-	_apply_audio_settings()
+	FocusCoordinator.link_ring(
+		[resume_button, settings_button, remap_button, restart_button, quit_button],
+		false
+	)
 
 
 func show_pause() -> void:
 	visible = true
+	FocusCoordinator.open_scope(self, resume_button)
 
 
 func hide_pause() -> void:
+	FocusCoordinator.close_scope(self)
 	visible = false
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and FocusCoordinator.active_scope() == self and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		resume_requested.emit()
 
 
 func _on_resume_pressed() -> void:
 	resume_requested.emit()
+
+
+func _on_settings_pressed() -> void:
+	accessibility_requested.emit()
+
+
+func _on_remap_pressed() -> void:
+	remap_requested.emit()
 
 
 func _on_restart_pressed() -> void:
@@ -57,49 +68,3 @@ func _on_restart_pressed() -> void:
 
 func _on_quit_pressed() -> void:
 	get_tree().quit()
-
-
-func _load_settings() -> void:
-	volume_slider.value = float(GameState.get_setting("master_volume", 0.85))
-	mute_toggle.set_pressed_no_signal(bool(GameState.get_setting("master_muted", false)))
-	camera_shake_toggle.set_pressed_no_signal(bool(GameState.get_setting("camera_shake_enabled", true)))
-	hit_flash_toggle.set_pressed_no_signal(bool(GameState.get_setting("hit_flash_enabled", true)))
-	reduced_motion_toggle.set_pressed_no_signal(bool(GameState.get_setting("reduced_motion", false)))
-	_update_volume_label()
-
-
-func _on_volume_changed(value: float) -> void:
-	GameState.set_setting("master_volume", clampf(value, 0.0, 1.0))
-	_update_volume_label()
-	_apply_audio_settings()
-
-
-func _on_mute_toggled(toggled_on: bool) -> void:
-	GameState.set_setting("master_muted", toggled_on)
-	_apply_audio_settings()
-
-
-func _on_camera_shake_toggled(toggled_on: bool) -> void:
-	GameState.set_setting("camera_shake_enabled", toggled_on)
-
-
-func _on_hit_flash_toggled(toggled_on: bool) -> void:
-	GameState.set_setting("hit_flash_enabled", toggled_on)
-
-
-func _on_reduced_motion_toggled(toggled_on: bool) -> void:
-	GameState.set_setting("reduced_motion", toggled_on)
-
-
-func _update_volume_label() -> void:
-	volume_label.text = tr("UI_MASTER_VOLUME_FMT") % roundi(volume_slider.value * 100.0)
-
-
-func _apply_audio_settings() -> void:
-	var bus_index := AudioServer.get_bus_index("Master")
-	if bus_index < 0:
-		return
-	var muted := bool(GameState.get_setting("master_muted", false))
-	var volume := float(GameState.get_setting("master_volume", 0.85))
-	AudioServer.set_bus_mute(bus_index, muted)
-	AudioServer.set_bus_volume_db(bus_index, linear_to_db(clampf(volume, 0.001, 1.0)))
