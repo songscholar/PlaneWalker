@@ -7,7 +7,6 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 
 const VALID_MANIFEST := "res://data/content_manifest.json"
 const INVALID_MANIFEST := "res://tests/fixtures/content/missing-manifest.json"
-const TEST_SAVE_PATH := "/tmp/planewalker_wave3a_adapter_test_save.json"
 
 
 class FakePlayer:
@@ -97,6 +96,8 @@ class TransitionRejectingFacade:
 
 
 var _original_save_path: String
+var _original_persistent: Dictionary
+var _test_storage_root: String
 
 
 func _ready() -> void:
@@ -107,7 +108,10 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_original_save_path = GameState.save_path
-	GameState.save_path = TEST_SAVE_PATH
+	_original_persistent = GameState.persistent.duplicate(true)
+	_test_storage_root = _isolated_storage_root("legacy_run_adapter")
+	GameState.save_path = _test_storage_root.path_join("legacy.json")
+	GameState.reset_persistent_data(true)
 	await _test_fail_safe_activation(suite)
 	await _test_authored_configuration_failure_is_terminal(suite)
 	await _test_full_selection_flow(suite)
@@ -118,8 +122,10 @@ func _run() -> void:
 	await _test_pause_overlay(suite)
 	await _test_live_hud_projection(suite)
 	await _test_projection_failure_restores_legacy_hud(suite)
+	GameState.reset_persistent_data(true)
 	GameState.save_path = _original_save_path
-	DirAccess.remove_absolute(TEST_SAVE_PATH)
+	GameState.persistent = _original_persistent.duplicate(true)
+	_remove_tree(_test_storage_root)
 	suite.finish(get_tree())
 
 
@@ -648,3 +654,29 @@ func _find_option_id(offer: Dictionary, expected_id: String) -> String:
 		if str(option.get("option_id", "")) == expected_id:
 			return expected_id
 	return ""
+
+
+func _isolated_storage_root(test_name: String) -> String:
+	var base := OS.get_environment("PLANEWALKER_TEST_DATA_DIR")
+	if base.is_empty():
+		base = OS.get_temp_dir().path_join("planewalker-tests")
+	return base.path_join("%s_%d_%d" % [test_name, OS.get_process_id(), Time.get_ticks_usec()])
+
+
+func _remove_tree(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+		return
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	var directory := DirAccess.open(path)
+	if directory == null:
+		return
+	directory.list_dir_begin()
+	var entry := directory.get_next()
+	while not entry.is_empty():
+		if entry not in [".", ".."]:
+			_remove_tree(path.path_join(entry))
+		entry = directory.get_next()
+	directory.list_dir_end()
+	DirAccess.remove_absolute(path)

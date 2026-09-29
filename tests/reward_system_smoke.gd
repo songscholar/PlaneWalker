@@ -13,6 +13,7 @@ const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 
 var _failed := false
 var _original_save_path := ""
+var _test_storage_root := ""
 
 
 func _ready() -> void:
@@ -21,9 +22,8 @@ func _ready() -> void:
 
 func _run() -> void:
 	_original_save_path = GameState.save_path
-	GameState.save_path = OS.get_temp_dir().path_join(
-		"plane_walker_smoke_test_save_%d.json" % OS.get_process_id()
-	)
+	_test_storage_root = _isolated_storage_root("reward_system_smoke")
+	GameState.save_path = _test_storage_root.path_join("legacy.json")
 	GameState.reset_persistent_data(true)
 	TranslationServer.set_locale("zh_CN")
 
@@ -228,6 +228,7 @@ func _run() -> void:
 	GameState.reset_persistent_data(true)
 	GameState.save_path = _original_save_path
 	GameState.load_persistent()
+	_remove_tree(_test_storage_root)
 	get_tree().quit(1 if _failed else 0)
 
 
@@ -918,3 +919,29 @@ func _wait_for_health_below(health: Node, threshold: float, timeout: float = 1.2
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
 	_assert_true(false, "health dropped below %.1f before timeout" % threshold)
+
+
+func _isolated_storage_root(test_name: String) -> String:
+	var base := OS.get_environment("PLANEWALKER_TEST_DATA_DIR")
+	if base.is_empty():
+		base = OS.get_temp_dir().path_join("planewalker-tests")
+	return base.path_join("%s_%d_%d" % [test_name, OS.get_process_id(), Time.get_ticks_usec()])
+
+
+func _remove_tree(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+		return
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	var directory := DirAccess.open(path)
+	if directory == null:
+		return
+	directory.list_dir_begin()
+	var entry := directory.get_next()
+	while not entry.is_empty():
+		if entry not in [".", ".."]:
+			_remove_tree(path.path_join(entry))
+		entry = directory.get_next()
+	directory.list_dir_end()
+	DirAccess.remove_absolute(path)

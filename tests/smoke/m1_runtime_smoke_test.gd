@@ -5,7 +5,6 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const MainScene := preload("res://scenes/main.tscn")
 
 const FIXED_SEED := 20260929
-const TEST_SAVE_PATH := "/tmp/planewalker_wave3a_m1_runtime_smoke_save.json"
 
 
 class RewardSignalCounter:
@@ -21,6 +20,7 @@ class RewardSignalCounter:
 
 var _original_save_path: String
 var _original_persistent: Dictionary
+var _test_storage_root: String
 
 
 func _ready() -> void:
@@ -32,7 +32,9 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_original_save_path = GameState.save_path
 	_original_persistent = GameState.persistent.duplicate(true)
-	GameState.save_path = TEST_SAVE_PATH
+	_test_storage_root = _isolated_storage_root("m1_runtime_smoke")
+	GameState.save_path = _test_storage_root.path_join("legacy.json")
+	GameState.reset_persistent_data(true)
 	_reset_legacy_state()
 
 	var main: Node = MainScene.instantiate()
@@ -245,10 +247,10 @@ func _cleanup(main: Node, reward_counter: RewardSignalCounter) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_reset_legacy_state()
+	GameState.reset_persistent_data(true)
 	GameState.save_path = _original_save_path
 	GameState.persistent = _original_persistent.duplicate(true)
-	if FileAccess.file_exists(TEST_SAVE_PATH):
-		DirAccess.remove_absolute(TEST_SAVE_PATH)
+	_remove_tree(_test_storage_root)
 
 
 func _reset_legacy_state() -> void:
@@ -262,3 +264,29 @@ func _reset_legacy_state() -> void:
 	GameState.last_run_result = {}
 	if GameState.build_state != null:
 		GameState.build_state.reset()
+
+
+func _isolated_storage_root(test_name: String) -> String:
+	var base := OS.get_environment("PLANEWALKER_TEST_DATA_DIR")
+	if base.is_empty():
+		base = OS.get_temp_dir().path_join("planewalker-tests")
+	return base.path_join("%s_%d_%d" % [test_name, OS.get_process_id(), Time.get_ticks_usec()])
+
+
+func _remove_tree(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+		return
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	var directory := DirAccess.open(path)
+	if directory == null:
+		return
+	directory.list_dir_begin()
+	var entry := directory.get_next()
+	while not entry.is_empty():
+		if entry not in [".", ".."]:
+			_remove_tree(path.path_join(entry))
+		entry = directory.get_next()
+	directory.list_dir_end()
+	DirAccess.remove_absolute(path)
