@@ -10,9 +10,13 @@ var revision: int = 0
 var phase: int = RunPhaseScript.Value.BOOT
 var suspended: bool = false
 var run_seed: int = 0
+var current_floor: int = 1
 var current_room: int = 0
 var room_total: int = 5
 var run_time_ms: int = 0
+var resources: Dictionary = {}
+var stats: Dictionary = {"kills": 0}
+var events: Array = []
 var build_state: RefCounted
 var open_offer: Dictionary = {}
 var consumed_offer_ids: Dictionary = {}
@@ -24,17 +28,18 @@ func _init() -> void:
 	build_state = RunBuildStateScript.new()
 
 
-func reset(p_config: Dictionary, p_run_id: String) -> void:
-	var previous_revision := revision
+func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
 	config = RunConfigScript.normalized(p_config)
 	run_id = p_run_id
-	revision = previous_revision
-	phase = RunPhaseScript.Value.BOOT
 	suspended = false
 	run_seed = int(config["seed"])
+	current_floor = 1
 	current_room = 0
 	room_total = 5
 	run_time_ms = 0
+	resources = {}
+	stats = {"kills": 0}
+	events = []
 	if build_state == null:
 		build_state = RunBuildStateScript.new()
 	build_state.reset()
@@ -71,9 +76,13 @@ func snapshot() -> Dictionary:
 		"phase": phase,
 		"suspended": suspended,
 		"run_seed": run_seed,
+		"current_floor": current_floor,
 		"current_room": current_room,
 		"room_total": room_total,
 		"run_time_ms": run_time_ms,
+		"resources": resources.duplicate(true),
+		"stats": stats.duplicate(true),
+		"events": events.duplicate(true),
 		"build": build_state.to_dictionary().duplicate(true),
 		"open_offer": open_offer.duplicate(true),
 		"consumed_offer_ids": consumed_offer_ids.keys().duplicate(),

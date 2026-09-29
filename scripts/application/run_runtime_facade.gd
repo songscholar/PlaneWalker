@@ -73,7 +73,10 @@ func start_run(config: Dictionary, run_id: String):
 	var started = _orchestrator.start_run(config, run_id)
 	if not started.ok:
 		return started
-	_room_definitions = M1RoomPlanScript.definitions(_encounter_catalog, int(_orchestrator.state.run_seed))
+	_room_definitions = M1RoomPlanScript.definitions(
+		_encounter_catalog,
+		int(_orchestrator.snapshot().get("run_seed", 0))
+	)
 	_draft.reset()
 	return _orchestrator.preparation_completed()
 
@@ -96,7 +99,7 @@ func complete_current_room():
 	var readiness = _require_booted("complete_current_room")
 	if not readiness.ok:
 		return readiness
-	if _orchestrator.state.is_terminal():
+	if _orchestrator.is_terminal():
 		return CommandResultScript.failure(&"TERMINAL_STATE", _revision())
 
 	var room := current_room_definition()
@@ -106,13 +109,13 @@ func complete_current_room():
 			_revision(),
 			{"operation": "complete_current_room"}
 		)
-	if _orchestrator.state.phase != RunPhaseScript.Value.COMBAT_ACTIVE:
+	if _orchestrator.phase() != RunPhaseScript.Value.COMBAT_ACTIVE:
 		return CommandResultScript.failure(
 			&"INVALID_PHASE",
 			_revision(),
 			{"operation": "complete_current_room"}
 		)
-	var prospective_snapshot: Dictionary = _orchestrator.state.snapshot()
+	var prospective_snapshot: Dictionary = _orchestrator.snapshot()
 	prospective_snapshot["revision"] = _revision() + 1
 	prospective_snapshot["phase"] = RunPhaseScript.Value.ROOM_RESOLVING
 	var created = _draft.create_offer(_registry, prospective_snapshot, room)
@@ -134,22 +137,22 @@ func submit_selection(offer_id: String, option_id: String, revision: int):
 	var readiness = _require_booted("submit_selection")
 	if not readiness.ok:
 		return readiness
-	if _orchestrator.state.is_terminal():
+	if _orchestrator.is_terminal():
 		return CommandResultScript.failure(&"TERMINAL_STATE", _revision())
-	if _orchestrator.state.has_consumed_offer(offer_id):
+	if _orchestrator.has_consumed_offer(offer_id):
 		return CommandResultScript.failure(
 			&"ALREADY_CONSUMED",
 			_revision(),
 			{"offer_id": offer_id}
 		)
-	if _orchestrator.state.phase != RunPhaseScript.Value.SELECTION_ACTIVE:
+	if _orchestrator.phase() != RunPhaseScript.Value.SELECTION_ACTIVE:
 		return CommandResultScript.failure(
 			&"INVALID_PHASE",
 			_revision(),
 			{"operation": "submit_selection"}
 		)
 
-	var canonical: Dictionary = _orchestrator.state.open_offer
+	var canonical: Dictionary = _orchestrator.snapshot().get("open_offer", {})
 	if str(canonical.get("offer_id", "")) != offer_id:
 		return CommandResultScript.failure(
 			&"OFFER_CLOSED",
@@ -222,13 +225,13 @@ func resume_run():
 func snapshot() -> Dictionary:
 	if _orchestrator == null:
 		return {}
-	return _orchestrator.state.snapshot().duplicate(true)
+	return _orchestrator.snapshot()
 
 
 func current_room_definition() -> Dictionary:
 	if not _booted or _orchestrator == null or _room_definitions.is_empty():
 		return {}
-	var room_number := int(_orchestrator.state.current_room)
+	var room_number := int(_orchestrator.snapshot().get("current_room", 0))
 	if room_number <= 0 or room_number > _room_definitions.size():
 		return {}
 	return _room_definitions[room_number - 1].duplicate(true)
@@ -242,7 +245,7 @@ func current_encounter_definition() -> Dictionary:
 		return {}
 	return _encounter_catalog.encounter_definition(
 		str(room.get("encounter_id", "")),
-		int(_orchestrator.state.run_seed),
+		int(_orchestrator.snapshot().get("run_seed", 0)),
 		int(room.get("room_number", 0))
 	)
 
@@ -270,6 +273,6 @@ func _require_booted(operation: String):
 
 
 func _revision() -> int:
-	if _orchestrator == null or _orchestrator.state == null:
+	if _orchestrator == null:
 		return 0
-	return int(_orchestrator.state.revision)
+	return _orchestrator.revision()
