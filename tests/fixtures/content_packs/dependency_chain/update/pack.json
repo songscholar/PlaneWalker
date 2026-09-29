@@ -1,0 +1,19 @@
+{
+  "pack_id": "fixture_chain_update",
+  "pack_version": "1.1.0",
+  "schema_version": 2,
+  "game_version_range": ">=0.4.0-dev <1.0.0",
+  "dependencies": [
+    {
+      "pack_id": "fixture_chain_base",
+      "version_range": ">=1.0.0 <2.0.0",
+      "required": true
+    }
+  ],
+  "load_order": 10,
+  "content_manifest": [],
+  "localization_sources": [],
+  "asset_manifest": [],
+  "integrity_hashes": {},
+  "entitlement_tag": ""
+}

@@ -1,0 +1,13 @@
+{
+  "pack_id": "fixture_chain_base",
+  "pack_version": "1.0.0",
+  "schema_version": 2,
+  "game_version_range": ">=0.4.0-dev <1.0.0",
+  "dependencies": [],
+  "load_order": 50,
+  "content_manifest": [],
+  "localization_sources": [],
+  "asset_manifest": [],
+  "integrity_hashes": {},
+  "entitlement_tag": ""
+}
