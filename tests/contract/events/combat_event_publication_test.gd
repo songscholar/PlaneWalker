@@ -19,6 +19,30 @@ const PRODUCER_PATHS: Array[String] = [
 	"res://scripts/ui/floating_text_layer.gd",
 ]
 
+class RewindRecorderStub:
+	extends Node
+
+	var _snapshot_available := true
+
+	func has_snapshot() -> bool:
+		return _snapshot_available
+
+	func prepare_rewind_transaction() -> Dictionary:
+		return {"target_snapshot": {"position": Vector2.ZERO}} if _snapshot_available else {}
+
+	func restore_player_state(_snapshot: Dictionary) -> bool:
+		return _snapshot_available
+
+	func consume_oldest_snapshot() -> Dictionary:
+		if not _snapshot_available:
+			return {}
+		_snapshot_available = false
+		return {"position": Vector2.ZERO}
+
+	func clear_snapshots() -> void:
+		_snapshot_available = false
+
+
 class EventRecorder:
 	extends RefCounted
 
@@ -191,10 +215,24 @@ func _test_time_skill_lifecycle_and_rejections() -> void:
 	_suite.assert_true(manager.try_time_rift(rift_position), "Time Rift commits")
 	await get_tree().create_timer(0.08).timeout
 
+	manager.reset_runtime_state()
+	var rewind_recorder := RewindRecorderStub.new()
+	player.add_child(rewind_recorder)
+	_suite.assert_true(manager.try_rewind(rewind_recorder), "Time Rewind commits")
+
+	manager.reset_runtime_state()
+	manager.time_accelerate_duration = 0.02
+	_suite.assert_true(manager.try_time_accelerate(), "Time Accelerate commits")
+	await get_tree().create_timer(0.05).timeout
+
 	_suite.assert_equal(_recorder.time_started.get(&"time_stop", 0), 1, "successful Time Stop starts once")
 	_suite.assert_equal(_recorder.time_ended.get(&"time_stop", 0), 1, "successful Time Stop ends once")
+	_suite.assert_equal(_recorder.time_started.get(&"time_rewind", 0), 1, "successful Time Rewind starts once")
+	_suite.assert_equal(_recorder.time_ended.get(&"time_rewind", 0), 1, "successful Time Rewind ends once")
 	_suite.assert_equal(_recorder.time_started.get(&"time_rift", 0), 1, "successful Time Rift starts once")
 	_suite.assert_equal(_recorder.time_ended.get(&"time_rift", 0), 1, "successful Time Rift ends once")
+	_suite.assert_equal(_recorder.time_started.get(&"time_accelerate", 0), 1, "successful Time Accelerate starts once")
+	_suite.assert_equal(_recorder.time_ended.get(&"time_accelerate", 0), 1, "successful Time Accelerate ends once")
 	_suite.assert_equal(_recorder.rejected_skill_events, 0, "rejected skills publish nothing")
 	var rift_contexts: Array = _recorder.time_start_contexts.get(&"time_rift", [])
 	_suite.assert_equal(rift_contexts.size(), 1, "Time Rift has one start context")

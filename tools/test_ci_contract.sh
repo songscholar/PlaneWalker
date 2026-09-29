@@ -127,12 +127,13 @@ scene_count="$(wc -l <"${TEMP_DIR}/expected-scenes.txt" | tr -d ' ')"
 [[ ${scene_count} -gt 0 ]] || fail "test discovery must find at least one scene"
 diff -u "${TEMP_DIR}/expected-scenes.txt" "${TEMP_DIR}/listed-scenes.txt" \
 	|| fail "--list must return every test scene in stable order"
-for event_contract in \
+for required_lifecycle_scene in \
 	tests/contract/events/run_lifecycle_publication_test.tscn \
 	tests/contract/events/combat_event_publication_test.tscn \
-	tests/contract/events/event_bus_source_contract_test.tscn; do
-	grep -Fxq -- "${event_contract}" "${TEMP_DIR}/listed-scenes.txt" \
-		|| fail "event contract must be included in scene discovery: ${event_contract}"
+	tests/contract/events/event_bus_source_contract_test.tscn \
+	tests/smoke/time_loadout_matrix_smoke_test.tscn; do
+	grep -Fxq -- "${required_lifecycle_scene}" "${TEMP_DIR}/listed-scenes.txt" \
+		|| fail "lifecycle certification must be included in scene discovery: ${required_lifecycle_scene}"
 done
 
 set +e

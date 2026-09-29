@@ -296,8 +296,9 @@ func _end_time_accelerate(token: int, publish_end_event: bool) -> bool:
 func cancel_all_time_effects(_reason: StringName) -> void:
 	_end_time_stop(true)
 	_end_time_accelerate(_time_accelerate_token, true)
+	_prune_active_rifts()
 	for rift: Node in _active_rifts.duplicate():
-		if is_instance_valid(rift) and rift.has_method("cancel"):
+		if rift.has_method("cancel"):
 			rift.cancel(true)
 	_active_rifts.clear()
 
@@ -311,8 +312,9 @@ func reset_runtime_state() -> void:
 	for skill_id: StringName in _cooldowns.keys():
 		_cooldowns[skill_id] = 0.0
 		cooldown_changed.emit(skill_id, 0.0)
+	_prune_active_rifts()
 	for rift: Node in _active_rifts.duplicate():
-		if is_instance_valid(rift) and rift.has_method("cancel"):
+		if rift.has_method("cancel"):
 			rift.cancel(false)
 	_active_rifts.clear()
 
@@ -378,6 +380,12 @@ func _take_self_damage(amount: float, source_tag: StringName) -> void:
 
 
 func _prune_active_rifts() -> void:
-	for rift: Node in _active_rifts.duplicate():
-		if not is_instance_valid(rift) or rift.is_queued_for_deletion():
-			_active_rifts.erase(rift)
+	var valid_rifts: Array[Node] = []
+	for rift_value: Variant in _active_rifts:
+		if not is_instance_valid(rift_value):
+			continue
+		var rift := rift_value as Node
+		if rift == null or rift.is_queued_for_deletion():
+			continue
+		valid_rifts.append(rift)
+	_active_rifts = valid_rifts
