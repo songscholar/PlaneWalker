@@ -59,7 +59,11 @@ const ACTION_FIELDS: Array[String] = [
 	"payload_id",
 	"cue_id",
 ]
-const ACTION_OPTIONAL_FIELDS: Array[String] = ["hold_threshold_frames", "maximum_hold_frames"]
+const ACTION_OPTIONAL_FIELDS: Array[String] = [
+	"hold_threshold_frames",
+	"maximum_hold_frames",
+	"cooldown_frames",
+]
 const RESOURCE_FIELDS: Array[String] = ["resource_id", "minimum", "maximum", "initial"]
 const RESOURCE_OPTIONAL_FIELDS: Array[String] = ["regen_per_second"]
 const PAYLOAD_FIELDS: Array[String] = ["payload_id", "kind", "parameters"]
@@ -228,9 +232,14 @@ func _validate_and_normalize(source: Dictionary) -> Dictionary:
 		if not boss_error.is_empty():
 			return boss_error
 
+	var normalized := source.duplicate(true)
+	for action_value: Variant in normalized["actions"]:
+		var action: Dictionary = action_value
+		action["cooldown_frames"] = int(action.get("cooldown_frames", 0))
+
 	return {
 		"ok": true,
-		"profile": source.duplicate(true),
+		"profile": normalized,
 		"context": {},
 	}
 
@@ -350,9 +359,9 @@ func _validate_actions(value: Variant, resource_ids: Dictionary, payload_ids: Di
 				return _failure("%s.cancel_from_frame" % field, "expected_positive_integer_or_null")
 			if int(entry["cancel_from_frame"]) > int(entry["recovery_frames"]):
 				return _failure("%s.cancel_from_frame" % field, "after_recovery")
-		for hold_field: String in ACTION_OPTIONAL_FIELDS:
-			if entry.has(hold_field) and not _is_non_negative_integer(entry[hold_field]):
-				return _failure("%s.%s" % [field, hold_field], "expected_non_negative_integer")
+		for optional_frame_field: String in ACTION_OPTIONAL_FIELDS:
+			if entry.has(optional_frame_field) and not _is_non_negative_integer(entry[optional_frame_field]):
+				return _failure("%s.%s" % [field, optional_frame_field], "expected_non_negative_integer")
 		if entry.has("hold_threshold_frames") and entry.has("maximum_hold_frames") and int(entry["maximum_hold_frames"]) < int(entry["hold_threshold_frames"]):
 			return _failure("%s.maximum_hold_frames" % field, "before_hold_threshold")
 		if not _is_finite_number(entry["movement_multiplier"]):

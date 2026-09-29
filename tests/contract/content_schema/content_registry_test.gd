@@ -60,6 +60,44 @@ func _test_project_base_pack_v2(suite) -> void:
 		bool(WeaponRuntimeProfileScript.new().configure(sword_profile).get("ok", false)),
 		"runtime profile lookup returns an exact parser-ready snapshot"
 	)
+	suite.assert_equal(
+		_action_by_id(sword_profile, "light_1").get("cooldown_frames"),
+		0,
+		"canonical registry profiles serialize omitted cooldowns as zero"
+	)
+
+	var bow_candidate: Dictionary = registry.get_weapon_runtime_profile(&"bow_candidate_v1")
+	suite.assert_equal(
+		_action_by_id(bow_candidate, "candidate_draw").get("cooldown_frames"),
+		21,
+		"Bow candidate draw preserves the authoritative 0.35-second cooldown"
+	)
+	var bow_launch: Dictionary = registry.get_weapon_runtime_profile(&"bow_launch_v1")
+	suite.assert_equal(
+		_action_by_id(bow_launch, "precision_draw").get("cooldown_frames"),
+		21,
+		"Launch precision draw preserves candidate cooldown parity"
+	)
+	suite.assert_equal(
+		_action_by_id(bow_launch, "scatter_shot").get("cooldown_frames"),
+		120,
+		"Launch scatter cooldown is Profile authoritative"
+	)
+	suite.assert_equal(
+		_action_by_id(bow_launch, "focus_step").get("cooldown_frames"),
+		0,
+		"Launch utility without a declared cooldown normalizes to zero"
+	)
+	suite.assert_equal(
+		_action_by_id(bow_launch, "arrow_rain").get("cooldown_frames"),
+		300,
+		"Launch Bow skill cooldown is Profile authoritative"
+	)
+	suite.assert_equal(
+		_action_by_id(bow_launch, "horizon_piercer").get("cooldown_frames"),
+		900,
+		"Launch Bow ultimate cooldown is Profile authoritative"
+	)
 
 	var frozen_burst: Dictionary = registry.get_content(&"frozen_burst")
 	suite.assert_equal(frozen_burst.get("pack_id"), "base", "v2 content records owning pack")
@@ -114,6 +152,13 @@ func _test_identity_effect_boundary(suite) -> void:
 	)
 	suite.assert_equal(error.get("field"), "effects", "identity content rejects effect execution")
 	suite.assert_equal(error.get("reason"), "unsupported_category", "identity effect rejection is explicit")
+
+
+func _action_by_id(profile: Dictionary, action_id: String) -> Dictionary:
+	for action_value: Variant in profile.get("actions", []):
+		if action_value is Dictionary and str((action_value as Dictionary).get("action_id", "")) == action_id:
+			return (action_value as Dictionary).duplicate(true)
+	return {}
 
 
 func _test_optional_pack_isolation(suite) -> void:

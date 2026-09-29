@@ -161,6 +161,7 @@
         },
         "hold_threshold_frames": { "type": "integer", "minimum": 0 },
         "maximum_hold_frames": { "type": "integer", "minimum": 0 },
+        "cooldown_frames": { "type": "integer", "minimum": 0, "default": 0 },
         "windup_frames": { "type": "integer", "minimum": 1 },
         "active_frames": { "type": "integer", "minimum": 1 },
         "recovery_frames": { "type": "integer", "minimum": 1 },

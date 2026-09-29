@@ -16,6 +16,7 @@ func _run() -> void:
 	var runtime_script: Variant = _load_runtime_script(suite)
 	if runtime_script != null:
 		_test_valid_sword_profile(suite, runtime_script)
+		_test_action_cooldown_contract(suite, runtime_script)
 		_test_invalid_profiles_fail_closed(suite, runtime_script)
 	suite.finish(get_tree())
 
@@ -85,6 +86,25 @@ func _test_schema_contract(suite) -> void:
 			semantic_actions.has(semantic_action),
 			"schema supports semantic action %s" % semantic_action
 		)
+	suite.assert_equal(
+		action_properties.get("cooldown_frames", {}).get("type"),
+		"integer",
+		"action cooldown is serialized as an integer frame count"
+	)
+	suite.assert_equal(
+		action_properties.get("cooldown_frames", {}).get("minimum"),
+		0,
+		"action cooldown accepts zero for actions without a cooldown"
+	)
+	suite.assert_equal(
+		action_properties.get("cooldown_frames", {}).get("default"),
+		0,
+		"action cooldown schema documents the parser default"
+	)
+	suite.assert_true(
+		not action_definition.get("required", []).has("cooldown_frames"),
+		"legacy profiles may omit action cooldowns"
+	)
 
 
 func _test_valid_sword_profile(suite, runtime_script: Variant) -> void:
@@ -156,6 +176,93 @@ func _test_valid_sword_profile(suite, runtime_script: Variant) -> void:
 		0,
 		"action arrays deep copy nested action data"
 	)
+
+
+func _test_action_cooldown_contract(suite, runtime_script: Variant) -> void:
+	var profile = runtime_script.new()
+	var legacy_result: Dictionary = profile.configure(_valid_sword_profile())
+	suite.assert_true(
+		bool(legacy_result.get("ok", false)),
+		"profiles without cooldown_frames remain compatible"
+	)
+	if not bool(legacy_result.get("ok", false)):
+		return
+
+	var serialized: Dictionary = legacy_result.get("profile", {})
+	var serialized_actions: Array = serialized.get("actions", [])
+	suite.assert_equal(
+		serialized_actions[0].get("cooldown_frames") if not serialized_actions.is_empty() else null,
+		0,
+		"serialized profiles normalize omitted action cooldowns to zero"
+	)
+	suite.assert_equal(
+		profile.snapshot().get("actions", [])[0].get("cooldown_frames"),
+		0,
+		"profile snapshots retain normalized cooldowns"
+	)
+	var json_round_trip: Variant = JSON.parse_string(JSON.stringify(profile.snapshot()))
+	suite.assert_true(json_round_trip is Dictionary, "normalized profiles serialize to JSON")
+	if json_round_trip is Dictionary:
+		suite.assert_equal(
+			(json_round_trip as Dictionary).get("actions", [])[0].get("cooldown_frames"),
+			0,
+			"JSON serialization retains normalized cooldowns"
+		)
+	suite.assert_equal(
+		profile.action_for_semantic(&"weapon_primary").get("cooldown_frames"),
+		0,
+		"frozen action definitions expose the normalized cooldown"
+	)
+	serialized_actions[0]["cooldown_frames"] = 999
+	suite.assert_equal(
+		profile.action_for_semantic(&"weapon_primary").get("cooldown_frames"),
+		0,
+		"serialized profile mutations cannot change the frozen action definition"
+	)
+
+	var explicit := _valid_sword_profile()
+	explicit["actions"][2]["cooldown_frames"] = 120
+	var explicit_profile = runtime_script.new()
+	var explicit_result: Dictionary = explicit_profile.configure(explicit)
+	suite.assert_true(
+		bool(explicit_result.get("ok", false)),
+		"an explicit non-negative integer cooldown configures"
+	)
+	if bool(explicit_result.get("ok", false)):
+		suite.assert_equal(
+			explicit_profile.action_for_semantic(&"weapon_secondary").get("cooldown_frames"),
+			120,
+			"explicit cooldowns survive parsing and frozen action lookup"
+		)
+
+	var accepted: Dictionary = profile.snapshot()
+	for invalid_case: Dictionary in [
+		{"label": "negative", "value": -1},
+		{"label": "fractional", "value": 0.5},
+		{"label": "string", "value": "21"},
+	]:
+		var invalid := _valid_sword_profile()
+		invalid["actions"][0]["cooldown_frames"] = invalid_case["value"]
+		var invalid_result: Dictionary = profile.configure(invalid)
+		suite.assert_true(
+			not bool(invalid_result.get("ok", false)),
+			"%s action cooldown fails closed" % invalid_case["label"]
+		)
+		suite.assert_equal(
+			invalid_result.get("context", {}).get("field"),
+			"actions[0].cooldown_frames",
+			"%s cooldown rejection identifies the authoritative field" % invalid_case["label"]
+		)
+		suite.assert_equal(
+			invalid_result.get("context", {}).get("reason"),
+			"expected_non_negative_integer",
+			"%s cooldown rejection uses the integer contract" % invalid_case["label"]
+		)
+		suite.assert_equal(
+			profile.snapshot(),
+			accepted,
+			"%s cooldown rejection preserves the accepted profile" % invalid_case["label"]
+		)
 
 
 func _test_invalid_profiles_fail_closed(suite, runtime_script: Variant) -> void:
