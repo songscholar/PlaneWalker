@@ -1,5 +1,17 @@
 # Plane Walker P11 Staff Runtime Implementation Plan
 
+- Status: Superseded
+- Document Role: Historical implementation plan
+- Authority Level: Superseded by the unified P11 five-weapon plan
+- Applies To: Historical Staff-only planning assumptions created before shared weapon runtime authority was frozen
+- Owner: Project integration lead
+- Depends On: `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`
+- Last Verified: 2026-09-29
+- Implementation Status: Not executed as an independent plan; absorbed into the unified P11 five-weapon implementation before runtime integration
+- Completion Evidence: Historical planning commit `301a6ba`; no certified Staff runtime or GREEN gate was produced by this plan
+
+> **Supersession notice:** This plan is retained for audit history only. Its direct `StaffWeapon` + `PlayerController` integration path is not executable authority. Reusable Staff requirements are absorbed into the unified P11 plan and must use `WeaponIntentRouter`, `WeaponActionCoordinator`, `WeaponRuntimeProfile`, and `WeaponModifierState`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: execute each task with test-first changes, targeted verification, and a focused commit.
 
 **Goal:** Deliver a fully playable Staff weapon vertical slice with deterministic elemental spells, ordered combos, time-system interactions, Boss-safe control effects, HUD state, feedback, and regression coverage.
