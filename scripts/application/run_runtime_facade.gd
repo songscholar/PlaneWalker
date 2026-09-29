@@ -223,6 +223,13 @@ func resume_run():
 	return _orchestrator.resume_run()
 
 
+func advance_time(delta_seconds: float):
+	var readiness = _require_booted("advance_time")
+	if not readiness.ok:
+		return readiness
+	return _orchestrator.advance_time(delta_seconds)
+
+
 func snapshot() -> Dictionary:
 	if _orchestrator == null:
 		return {}

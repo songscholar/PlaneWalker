@@ -13,7 +13,6 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
-	var original_phase: int = GameState.phase
 	var original_locale := str(TranslationServer.get_locale())
 	var original_window_size := get_window().size
 	get_window().size = Vector2i(640, 360)
@@ -23,6 +22,7 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	var combat := FixturesScript.load_fixture("res://tests/fixtures/ui/hud_combat.json")
+	var combat_input := combat.duplicate(true)
 	var result = hud.render(combat)
 	_suite.assert_true(result.ok, "combat state renders")
 	_suite.assert_close(hud.hp_bar.max_value, 200.0, "hp maximum renders")
@@ -71,7 +71,7 @@ func _run() -> void:
 	next_run["run_id"] = "fixture-run-two"
 	next_run["revision"] = 0
 	_suite.assert_true(hud.render(next_run).ok, "new run id resets the revision baseline")
-	_suite.assert_equal(GameState.phase, original_phase, "render leaves gameplay phase unchanged")
+	_suite.assert_equal(combat, combat_input, "render treats the supplied snapshot as immutable input")
 	_suite.assert_true(hud.get_node_or_null("Player") == null, "standalone hud has no player dependency")
 
 	hud.queue_free()

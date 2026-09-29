@@ -11,6 +11,18 @@ const RunBuildStateScript := preload("res://scripts/progression/run_build_state.
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 
+
+class RunResultSignalCounter:
+	extends RefCounted
+
+	var count: int = 0
+	var payloads: Array[Dictionary] = []
+
+	func record(payload: Dictionary) -> void:
+		count += 1
+		payloads.append(payload.duplicate(true))
+
+
 var _failed := false
 var _original_save_path := ""
 var _test_storage_root := ""
@@ -118,23 +130,21 @@ func _run() -> void:
 	_assert_close(bow.full_charge_damage_multiplier_bonus, 0.35, "bow full charge damage payoff")
 	_assert_true(bow.pierce_bonus == 1, "bow pierce starter")
 
-	GameState.start_run({"seed": 123})
-	GameState.add_run_reward({"id": "test_power", "effects": {}})
-	GameState.add_run_reward({
+	var recorded_state := RunBuildStateScript.new()
+	recorded_state.record_item({"id": "test_power", "effects": {}})
+	recorded_state.record_item({
 		"id": "test_archetype",
 		"archetype": "accelerated_combo",
 		"role": "starter",
 		"effects": {},
 	})
-	_assert_true(GameState.current_run.get("inventory", []).has("test_power"), "run inventory records reward")
-	_assert_true(GameState.get_build_state_snapshot().get("items", []).has("test_power"), "build state records reward")
-	_assert_true(GameState.current_run.get("archetypes", {}).get("accelerated_combo", 0) == 1, "run records reward archetype")
-	_assert_true(GameState.get_dominant_archetype() == "accelerated_combo", "run tracks dominant archetype")
-	_assert_true(GameState.get_build_state_snapshot().get("dominant_archetype", "") == "accelerated_combo", "build state tracks dominant archetype")
-	_assert_true(GameState.current_room == 0, "run starts before first room")
+	var recorded_build: Dictionary = recorded_state.to_dictionary()
+	_assert_true(recorded_build.get("items", []).has("test_power"), "build state records reward")
+	_assert_true(recorded_build.get("archetypes", {}).get("accelerated_combo", 0) == 1, "build state records reward archetype")
+	_assert_true(recorded_build.get("dominant_archetype", "") == "accelerated_combo", "build state tracks dominant archetype")
 
 	var rebuilt_state := RunBuildStateScript.from_run({
-		"rewards": GameState.current_run.get("rewards", []),
+		"rewards": recorded_build.get("reward_history", []),
 		"blessings": [{"id": "test_blessing"}],
 		"curses": [{"id": "test_curse"}],
 		"talent_choices": [{"id": "test_talent"}],
@@ -199,8 +209,8 @@ func _run() -> void:
 			"healing_multiplier": 0.5,
 		},
 	})
-	_assert_true(GameState.current_run.get("active_curses", []).has("test_curse"), "run records active curse")
-	_assert_true(GameState.get_build_state_snapshot().get("curses", []).has("test_curse"), "build state records active curse")
+	recorded_state.record_curse({"id": "test_curse", "effects": {}})
+	_assert_true(recorded_state.to_dictionary().get("curses", []).has("test_curse"), "build state records active curse")
 	_assert_close(sword.base_attack, 56.25, "curse applies attack upside")
 	_assert_close(health.max_hp, 176.0, "curse applies max hp risk")
 	_assert_close(time_manager.energy_regen, 1.625, "curse applies time regen risk")
@@ -406,25 +416,35 @@ func _run_time_accelerate_check() -> void:
 
 
 func _run_death_check() -> void:
-	var deaths_before := GameState.death_count
 	var fixture := await _create_host_fixture(321)
 	var room: Node = fixture["room"]
 	var host: Node = fixture["host"]
+	var result_counter := RunResultSignalCounter.new()
+	EventBus.run_ended.connect(result_counter.record)
 
 	var room_player: Node = room.get_node("Player")
 	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
 	room_player.get_node("HealthComponent").take_damage(fatal_damage)
 	await get_tree().process_frame
 
-	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.DEFEAT, "player death enters authoritative defeat")
-	_assert_true(GameState.phase == GameState.GamePhase.DEATH, "player death enters death phase")
-	_assert_true(GameState.last_run_result.get("result", "") == "death", "death records run result")
-	_assert_true(GameState.last_run_result.get("rooms_cleared", -1) == 0, "death records cleared rooms")
-	_assert_true(GameState.last_run_result.get("current_room", -1) == 1, "death records current room")
-	_assert_true(GameState.last_run_result.get("kills", -1) == 0, "death records kill count")
-	_assert_true(GameState.death_count == deaths_before + 1, "death count increments")
+	var terminal_snapshot: Dictionary = host.call("runtime_snapshot")
+	var terminal_result: Dictionary = terminal_snapshot.get("result", {})
+	_assert_true(int(terminal_snapshot.get("phase", -1)) == RunPhaseScript.Value.DEFEAT, "player death enters authoritative defeat")
+	_assert_true(str(terminal_result.get("result", "")) == "death", "authoritative death records the result")
+	_assert_true(int(terminal_result.get("current_room", -1)) == 1, "authoritative death records the current room")
+	_assert_true(result_counter.count == 1, "player death emits one terminal result")
+	if not result_counter.payloads.is_empty():
+		var emitted_result: Dictionary = result_counter.payloads[0]
+		_assert_true(str(emitted_result.get("result", "")) == "death", "death event publishes the result")
+		_assert_true(int(emitted_result.get("rooms_cleared", -1)) == 0, "death event records cleared rooms")
+		_assert_true(int(emitted_result.get("current_room", -1)) == 1, "death event records current room")
+		_assert_true(int(emitted_result.get("kills", -1)) == 0, "death event records kill count")
+	var persistent_summary: Dictionary = GameState.persistent.get("last_run_summary", {})
+	_assert_true(str(persistent_summary.get("result", "")) == "death", "death persists the terminal summary")
 	_assert_true(room.get_node("RewardMarker").visible == false, "death hides reward marker")
 
+	if EventBus.run_ended.is_connected(result_counter.record):
+		EventBus.run_ended.disconnect(result_counter.record)
 	await _destroy_host_fixture(fixture)
 
 
@@ -563,9 +583,7 @@ func _run_persistence_check() -> void:
 	GameState.set_setting("camera_shake_enabled", false)
 	GameState.set_setting("hit_flash_enabled", false)
 	GameState.set_setting("reduced_motion", true)
-	GameState.start_run({"seed": 991})
-	GameState.current_room = 5
-	GameState.end_run({
+	_assert_true(GameState.record_run_summary({
 		"result": "floor_cleared",
 		"floor": 1,
 		"rooms_cleared": 5,
@@ -575,7 +593,7 @@ func _run_persistence_check() -> void:
 		"blessings": [{"id": "test_blessing"}],
 		"talent_choices": [{"id": "test_talent"}],
 		"curses": [{"id": "test_curse"}],
-	})
+	}), "run summary can be persisted")
 
 	_assert_true(GameState.persistent.get("runs_completed", 0) == 1, "run persistence increments completion count")
 	_assert_true(GameState.persistent.get("victories", 0) == 1, "run persistence increments victory count")

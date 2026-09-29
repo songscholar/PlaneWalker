@@ -386,9 +386,6 @@ func apply_reward(reward_data: Dictionary) -> void:
 func apply_curse(curse_data: Dictionary) -> void:
 	var effects: Dictionary = curse_data.get("effects", {})
 	_apply_effects(effects)
-	GameState.add_run_curse(curse_data)
-	EventBus.curse_selected.emit(curse_data)
-	EventBus.publish(EventBus.CURSE_SELECTED, {"curse": curse_data})
 
 
 func _apply_effects(effects: Dictionary) -> void:

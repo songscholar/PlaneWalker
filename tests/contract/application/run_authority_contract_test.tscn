@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://tests/contract/application/run_authority_contract_test.gd" type="Script" id="1"]
+
+[node name="RunAuthorityContractTest" type="Node"]
+script = ExtResource("1")

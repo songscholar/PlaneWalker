@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_death_closes_active_selection(suite)
 	_test_invalid_transitions(suite)
 	_test_pause_overlay(suite)
+	_test_authoritative_run_clock(suite)
 	suite.finish(get_tree())
 
 
@@ -211,6 +212,38 @@ func _test_pause_overlay(suite) -> void:
 	suite.assert_true(resumed.ok, "resume is accepted")
 	suite.assert_true(not orchestrator.snapshot()["suspended"], "resume clears suspended overlay")
 	suite.assert_equal(orchestrator.phase(), active_phase, "resume preserves active phase")
+
+
+func _test_authoritative_run_clock(suite) -> void:
+	var orchestrator = RunOrchestratorScript.new()
+	orchestrator.enter_hub()
+	orchestrator.start_run(_config(), "run-clock")
+	orchestrator.preparation_completed()
+	orchestrator.room_entered(false)
+	var revision_before: int = orchestrator.revision()
+
+	var first = orchestrator.advance_time(0.016)
+	suite.assert_true(first.ok, "active run accepts clock advancement")
+	suite.assert_equal(orchestrator.snapshot()["run_time_ms"], 16, "clock records whole milliseconds")
+	suite.assert_equal(orchestrator.revision(), revision_before, "clock ticks do not invalidate gameplay revisions")
+	orchestrator.advance_time(0.0045)
+	suite.assert_equal(orchestrator.snapshot()["run_time_ms"], 20, "clock retains fractional milliseconds without running fast")
+
+	orchestrator.pause_run()
+	var paused_time: int = orchestrator.snapshot()["run_time_ms"]
+	suite.assert_true(orchestrator.advance_time(1.0).ok, "paused clock tick is an accepted no-op")
+	suite.assert_equal(orchestrator.snapshot()["run_time_ms"], paused_time, "paused run time does not advance")
+	orchestrator.resume_run()
+	orchestrator.advance_time(0.125)
+	suite.assert_equal(orchestrator.snapshot()["run_time_ms"], 145, "resumed run continues the authoritative clock")
+
+	var before_invalid: int = orchestrator.snapshot()["run_time_ms"]
+	var invalid = orchestrator.advance_time(-0.25)
+	suite.assert_equal(invalid.code, &"INVALID_ARGUMENT", "negative clock deltas are rejected")
+	suite.assert_equal(orchestrator.snapshot()["run_time_ms"], before_invalid, "rejected clock delta cannot mutate time")
+	orchestrator.player_died({"result": "death"})
+	suite.assert_true(orchestrator.advance_time(1.0).ok, "terminal clock tick is an accepted no-op")
+	suite.assert_equal(orchestrator.snapshot()["run_time_ms"], before_invalid, "terminal run time remains frozen")
 
 
 func _assert_accepts_phase(suite, result, orchestrator, expected_phase: int, label: String) -> void:

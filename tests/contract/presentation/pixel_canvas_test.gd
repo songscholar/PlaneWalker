@@ -43,14 +43,20 @@ func _assert_project_settings() -> void:
 func _assert_scene_contract() -> void:
 	get_window().size = Vector2i(640, 360)
 	var main := MainScene.instantiate()
+	var room := main.get_node("CombatRoom01")
+	for legacy_view_name: String in ["CombatHUD", "RewardSelection", "CurseSelection", "EventSelection"]:
+		_suite.assert_true(
+			room.get_node_or_null(legacy_view_name) == null,
+			"combat room contains no legacy %s node" % legacy_view_name
+		)
+	_suite.assert_true(main.get_node_or_null("RuntimeV2Adapter") == null, "main contains no runtime V2 adapter")
+	_suite.assert_true(main.get_node_or_null("LegacyRunAdapter") == null, "main contains no legacy adapter")
 	add_child(main)
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var room := main.get_node("CombatRoom01")
 	var host := main.get_node_or_null("RunRuntimeHost")
 	_suite.assert_true(host != null, "main provides the runtime host")
-	_suite.assert_true(main.get_node_or_null("RuntimeV2Adapter") == null, "pixel scene contains no legacy runtime adapter")
 	var camera := room.get_node_or_null("PixelCanvasCamera") as Camera2D
 	_suite.assert_true(camera != null, "combat room provides the pixel-canvas camera")
 	if camera != null:

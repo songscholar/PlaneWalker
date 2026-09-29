@@ -154,6 +154,28 @@ func resume_run():
 	return _accept_without_phase_change()
 
 
+func advance_time(delta_seconds: float):
+	if not is_finite(delta_seconds) or delta_seconds < 0.0:
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "delta_seconds"}
+		)
+	if _state.suspended or _state.is_terminal() or _state.phase in [
+		RunPhaseScript.Value.BOOT,
+		RunPhaseScript.Value.HUB,
+	]:
+		return CommandResultScript.success(
+			_state.revision,
+			{"advanced_ms": 0, "run_time_ms": _state.run_time_ms}
+		)
+	var advanced_ms: int = int(_state.advance_time(delta_seconds))
+	return CommandResultScript.success(
+		_state.revision,
+		{"advanced_ms": advanced_ms, "run_time_ms": _state.run_time_ms}
+	)
+
+
 func _accept_phase(next_phase: int):
 	_state.phase = next_phase
 	return CommandResultScript.success(_state.advance_revision())

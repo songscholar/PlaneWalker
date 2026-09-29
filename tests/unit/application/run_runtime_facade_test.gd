@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_offer_creation_failure_is_atomic(suite)
 	_test_contract_acceptance_is_idempotent(suite)
 	_test_terminal_and_pause_guards(suite)
+	_test_authoritative_clock_forwarding(suite)
 	_test_boot_failure(suite)
 	suite.finish(get_tree())
 
@@ -192,6 +193,20 @@ func _test_terminal_and_pause_guards(suite) -> void:
 	suite.assert_equal(facade.complete_current_room().code, &"TERMINAL_STATE", "defeat rejects late room completion")
 	suite.assert_equal(facade.submit_selection("late-offer", "late-option", 0).code, &"TERMINAL_STATE", "defeat rejects late selection")
 	suite.assert_equal(facade.enter_current_room().code, &"TERMINAL_STATE", "defeat rejects late room entry")
+
+
+func _test_authoritative_clock_forwarding(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "clock facade boots")
+	suite.assert_true(facade.start_run({"seed": FIXED_SEED}, "wave3a-clock").ok, "clock run starts")
+	suite.assert_true(facade.enter_current_room().ok, "clock room enters")
+	var revision_before: int = facade.snapshot()["revision"]
+	suite.assert_true(facade.advance_time(0.25).ok, "facade forwards active clock time")
+	suite.assert_equal(facade.snapshot()["run_time_ms"], 250, "facade snapshot exposes authoritative elapsed time")
+	suite.assert_equal(facade.snapshot()["revision"], revision_before, "elapsed time does not churn command revision")
+	suite.assert_true(facade.pause_run().ok, "clock run pauses")
+	suite.assert_true(facade.advance_time(1.0).ok, "facade accepts paused clock no-op")
+	suite.assert_equal(facade.snapshot()["run_time_ms"], 250, "facade clock freezes while suspended")
 
 
 func _test_boot_failure(suite) -> void:

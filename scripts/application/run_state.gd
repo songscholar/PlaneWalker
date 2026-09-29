@@ -14,6 +14,7 @@ var current_floor: int = 1
 var current_room: int = 0
 var room_total: int = 5
 var run_time_ms: int = 0
+var _run_time_fraction_ms: float = 0.0
 var resources: Dictionary = {}
 var stats: Dictionary = {"kills": 0}
 var events: Array = []
@@ -37,6 +38,7 @@ func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
 	current_room = 0
 	room_total = 5
 	run_time_ms = 0
+	_run_time_fraction_ms = 0.0
 	resources = {}
 	stats = {"kills": 0}
 	events = []
@@ -51,6 +53,14 @@ func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
 func advance_revision() -> int:
 	revision += 1
 	return revision
+
+
+func advance_time(delta_seconds: float) -> int:
+	var total_ms := _run_time_fraction_ms + maxf(0.0, delta_seconds) * 1000.0
+	var whole_ms := int(floor(total_ms + 0.000001))
+	_run_time_fraction_ms = total_ms - float(whole_ms)
+	run_time_ms += whole_ms
+	return whole_ms
 
 
 func is_terminal() -> bool:

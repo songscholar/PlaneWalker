@@ -18,6 +18,17 @@ class RewardSignalCounter:
 		payloads.append(payload.duplicate(true))
 
 
+class RunResultSignalCounter:
+	extends RefCounted
+
+	var count: int = 0
+	var payloads: Array[Dictionary] = []
+
+	func record(payload: Dictionary) -> void:
+		count += 1
+		payloads.append(payload.duplicate(true))
+
+
 var _original_save_path: String
 var _original_persistent: Dictionary
 var _test_storage_root: String
@@ -35,11 +46,10 @@ func _run() -> void:
 	_test_storage_root = _isolated_storage_root("m1_runtime_smoke")
 	GameState.save_path = _test_storage_root.path_join("legacy.json")
 	GameState.reset_persistent_data(true)
-	_reset_legacy_state()
 
 	var main: Node = MainScene.instantiate()
 	var room: Node = main.get_node("CombatRoom01")
-	suite.assert_equal(_legacy_view_count(room), 3, "main scene contains legacy selections before host boot")
+	suite.assert_equal(_legacy_gameplay_view_count(room), 0, "main scene contains no legacy HUD or selections")
 	add_child(main)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -47,15 +57,19 @@ func _run() -> void:
 	var host: Node = main.get_node_or_null("RunRuntimeHost")
 	if host == null:
 		suite.assert_true(false, "main scene provides RunRuntimeHost")
-		await _cleanup(main, null)
+		await _cleanup(main, null, null)
 		suite.finish(get_tree())
 		return
 
 	suite.assert_true(main.get_node_or_null("RuntimeV2Adapter") == null, "main scene contains no legacy runtime adapter")
+	suite.assert_true(main.get_node_or_null("LegacyRunAdapter") == null, "main scene contains no legacy adapter node")
 	suite.assert_equal(host.process_mode, Node.PROCESS_MODE_ALWAYS, "runtime host stays active while paused")
-	suite.assert_true(bool(host.get("_active")), "runtime host boots successfully")
-	suite.assert_true(host.get("_facade") != null, "runtime host owns an authoritative facade")
-	suite.assert_equal(_legacy_view_count(room), 0, "successful host boot removes legacy selections")
+	suite.assert_equal(
+		int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)),
+		RunPhaseScript.Value.HUB,
+		"runtime host boots into the authoritative hub"
+	)
+	suite.assert_equal(_legacy_gameplay_view_count(room), 0, "runtime boot keeps legacy gameplay UI absent")
 	var camera := room.get_node_or_null("PixelCanvasCamera") as Camera2D
 	suite.assert_true(camera != null and camera.enabled, "M1 runtime keeps the pixel-canvas camera active")
 	if camera != null:
@@ -65,12 +79,14 @@ func _run() -> void:
 	var panel := host.get_node_or_null("ChoiceLayer/ChoicePanelV2") as Control
 	suite.assert_true(panel != null, "runtime host creates the unified choice panel")
 	if panel == null:
-		await _cleanup(main, null)
+		await _cleanup(main, null, null)
 		suite.finish(get_tree())
 		return
 
 	var reward_counter := RewardSignalCounter.new()
+	var result_counter := RunResultSignalCounter.new()
 	EventBus.reward_selected.connect(reward_counter.record)
+	EventBus.run_ended.connect(result_counter.record)
 	room.set("spawn_warning_duration", 0.0)
 	room.visible = true
 	room.process_mode = Node.PROCESS_MODE_INHERIT
@@ -85,9 +101,8 @@ func _run() -> void:
 	})
 	suite.assert_true(started.ok, "host starts the fixed-seed M1 run")
 
-	var facade: RefCounted = host.get("_facade")
-	_assert_authored_runtime(suite, room, facade)
-	var started_snapshot: Dictionary = facade.call("snapshot")
+	_assert_authored_runtime(suite, room, host)
+	var started_snapshot: Dictionary = host.call("runtime_snapshot")
 	suite.assert_equal(started_snapshot["phase"], RunPhaseScript.Value.COMBAT_ACTIVE, "fixed-seed run enters room one")
 	suite.assert_equal(started_snapshot["run_seed"], FIXED_SEED, "authoritative runtime uses the fixed seed")
 
@@ -100,9 +115,10 @@ func _run() -> void:
 		[["tank"]],
 	]
 	for room_number: int in range(1, 5):
-		await _wait_for_room_phase(facade, RunPhaseScript.Value.COMBAT_ACTIVE)
-		suite.assert_equal(GameState.current_room, room_number, "room controller naturally enters room %d" % room_number)
-		var room_definition: Dictionary = facade.call("current_room_definition")
+		await _wait_for_room_phase(host, RunPhaseScript.Value.COMBAT_ACTIVE)
+		var active_snapshot: Dictionary = host.call("runtime_snapshot")
+		suite.assert_equal(active_snapshot["current_room"], room_number, "authoritative runtime enters room %d" % room_number)
+		var room_definition: Dictionary = (host.call("room_plan") as Array)[room_number - 1]
 		suite.assert_equal(
 			str(room_definition.get("reward_kind", "")),
 			expected_reward_kinds[room_number - 1],
@@ -113,11 +129,10 @@ func _run() -> void:
 			expected_encounter_ids[room_number - 1],
 			"room %d uses the authored encounter id" % room_number
 		)
-		var active_snapshot: Dictionary = facade.call("snapshot")
 		suite.assert_equal(active_snapshot["phase"], RunPhaseScript.Value.COMBAT_ACTIVE, "room %d enters combat" % room_number)
 
 		await _play_authored_waves(suite, room, expected_waves[room_number - 1], room_number)
-		var offer_snapshot: Dictionary = facade.call("snapshot")
+		var offer_snapshot: Dictionary = host.call("runtime_snapshot")
 		var offer: Dictionary = offer_snapshot["open_offer"]
 		suite.assert_true(not offer.is_empty(), "room %d opens one offer" % room_number)
 		suite.assert_true(panel.visible, "room %d shows the unified panel" % room_number)
@@ -128,21 +143,25 @@ func _run() -> void:
 		buttons[0].pressed.emit()
 		suite.assert_equal(reward_counter.count, room_number, "room %d emits one compatibility reward fact" % room_number)
 		suite.assert_true(not panel.visible, "room %d closes the unified panel after selection" % room_number)
-		suite.assert_equal(GameState.current_room, room_number + 1, "room %d selection advances the legacy room controller" % room_number)
+		suite.assert_equal(
+			int((host.call("runtime_snapshot") as Dictionary).get("current_room", 0)),
+			room_number + 1,
+			"room %d selection advances the authoritative runtime" % room_number
+		)
 
-	await _wait_for_room_phase(facade, RunPhaseScript.Value.BOSS_ACTIVE)
-	suite.assert_equal(GameState.current_room, 5, "room controller naturally enters the boss room")
-	var boss_snapshot: Dictionary = facade.call("snapshot")
+	await _wait_for_room_phase(host, RunPhaseScript.Value.BOSS_ACTIVE)
+	var boss_snapshot: Dictionary = host.call("runtime_snapshot")
+	suite.assert_equal(boss_snapshot["current_room"], 5, "authoritative runtime enters the boss room")
 	suite.assert_equal(boss_snapshot["phase"], RunPhaseScript.Value.BOSS_ACTIVE, "room five enters boss phase")
 	suite.assert_true(boss_snapshot["open_offer"].is_empty(), "boss room starts without an offer")
-	suite.assert_equal(facade.call("current_room_definition")["encounter_id"], "m1_room_05_boss", "room five uses the boss encounter id")
+	suite.assert_equal((host.call("room_plan") as Array)[4]["encounter_id"], "m1_room_05_boss", "room five uses the boss encounter id")
 
 	var spawned_bosses := await _wait_for_spawned_enemies(room)
 	suite.assert_equal(spawned_bosses.size(), 1, "boss room spawns one boss actor")
 	if not spawned_bosses.is_empty():
 		suite.assert_equal(spawned_bosses[0].get_meta("encounter_enemy_id", ""), "chrono_warden", "boss spawn identity comes from the catalog")
 	await _defeat_spawned_enemies(spawned_bosses)
-	var final_snapshot: Dictionary = facade.call("snapshot")
+	var final_snapshot: Dictionary = host.call("runtime_snapshot")
 	suite.assert_equal(final_snapshot["phase"], RunPhaseScript.Value.VICTORY, "boss defeat enters victory")
 	suite.assert_true(final_snapshot["open_offer"].is_empty(), "boss victory opens no offer")
 	suite.assert_equal(reward_counter.count, 4, "five-room run emits exactly four compatibility reward facts")
@@ -150,21 +169,29 @@ func _run() -> void:
 	suite.assert_equal(final_snapshot["consumed_offer_ids"].size(), 4, "authoritative snapshot consumes four offers")
 	var build: Dictionary = final_snapshot["build"]
 	suite.assert_true(_selected_count(build) > 0, "authoritative snapshot contains a non-empty build")
-	_assert_build_counts_agree(suite, build)
+	suite.assert_equal(result_counter.count, 1, "boss victory emits one terminal result")
+	if not result_counter.payloads.is_empty():
+		var emitted_result: Dictionary = result_counter.payloads[0]
+		suite.assert_equal(emitted_result.get("result", ""), "floor_cleared", "victory event exposes the persisted result vocabulary")
+		suite.assert_equal(emitted_result.get("current_room", 0), 5, "victory event records the final room")
+		suite.assert_equal(_summary_selected_count(emitted_result), _selected_count(build), "victory event build agrees with the authoritative snapshot")
+	var persistent_summary: Dictionary = GameState.persistent.get("last_run_summary", {})
+	suite.assert_equal(persistent_summary.get("result", ""), "floor_cleared", "victory persists the terminal summary")
+	suite.assert_equal(persistent_summary.get("current_room", 0), 5, "persistent summary records the final room")
 
-	await _cleanup(main, reward_counter)
+	await _cleanup(main, reward_counter, result_counter)
 	suite.finish(get_tree())
 
 
-func _assert_authored_runtime(suite, room: Node, facade: RefCounted) -> void:
+func _assert_authored_runtime(suite, room: Node, host: Node) -> void:
 	suite.assert_true(bool(room.get("_authored_runtime_enabled")), "M1 room controller enables authored encounters")
 	var runtime_value: Variant = room.get("_room_runtime")
 	suite.assert_true(runtime_value is Node, "M1 room controller receives the authoritative RoomRuntime")
 	if runtime_value is Node:
 		var runtime_snapshot: Dictionary = (runtime_value as Node).call("snapshot")
 		suite.assert_true(bool(runtime_snapshot.get("configured", false)), "M1 RoomRuntime is configured")
-	suite.assert_equal(facade.call("room_plan").size(), 5, "facade owns the shared five-room plan")
-	suite.assert_true(room.get("_encounter_catalog") == facade.call("encounter_catalog"), "room controller and facade share one catalog instance")
+	suite.assert_equal(host.call("room_plan").size(), 5, "host owns the shared five-room plan")
+	suite.assert_true(room.get("_encounter_catalog") == host.call("encounter_catalog"), "room controller and host share one catalog instance")
 
 
 func _play_authored_waves(suite, room: Node, expected_waves: Array, room_number: int) -> void:
@@ -182,16 +209,6 @@ func _play_authored_waves(suite, room: Node, expected_waves: Array, room_number:
 		await _defeat_spawned_enemies(spawned_enemies)
 
 
-func _assert_build_counts_agree(suite, authoritative_build: Dictionary) -> void:
-	var legacy_build: Dictionary = GameState.get_build_state_snapshot()
-	for field: String in ["items", "blessings", "curses", "talents"]:
-		suite.assert_equal(
-			legacy_build.get(field, []).size(),
-			authoritative_build.get(field, []).size(),
-			"GameState %s count matches the authoritative snapshot" % field
-		)
-
-
 func _selected_count(build: Dictionary) -> int:
 	var count := 0
 	for field: String in ["items", "blessings", "curses", "talents"]:
@@ -199,9 +216,18 @@ func _selected_count(build: Dictionary) -> int:
 	return count
 
 
-func _wait_for_room_phase(facade: RefCounted, expected_phase: int) -> void:
+func _summary_selected_count(summary: Dictionary) -> int:
+	return (
+		summary.get("rewards", []).size()
+		+ summary.get("blessings", []).size()
+		+ summary.get("curses", []).size()
+		+ summary.get("talent_choices", []).size()
+	)
+
+
+func _wait_for_room_phase(host: Node, expected_phase: int) -> void:
 	for _frame: int in range(30):
-		if int((facade.call("snapshot") as Dictionary).get("phase", -1)) == expected_phase:
+		if int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == expected_phase:
 			return
 		await get_tree().process_frame
 
@@ -237,41 +263,33 @@ func _option_buttons(panel: Control) -> Array[Button]:
 	return buttons
 
 
-func _legacy_view_count(room: Node) -> int:
+func _legacy_gameplay_view_count(room: Node) -> int:
 	var count := 0
-	for view_name: String in ["RewardSelection", "CurseSelection", "EventSelection"]:
+	for view_name: String in ["CombatHUD", "RewardSelection", "CurseSelection", "EventSelection"]:
 		if room.get_node_or_null(view_name) != null:
 			count += 1
 	return count
 
 
-func _cleanup(main: Node, reward_counter: RewardSignalCounter) -> void:
+func _cleanup(
+	main: Node,
+	reward_counter: RewardSignalCounter,
+	result_counter: RunResultSignalCounter
+) -> void:
 	get_tree().paused = false
 	if reward_counter != null and EventBus.reward_selected.is_connected(reward_counter.record):
 		EventBus.reward_selected.disconnect(reward_counter.record)
+	if result_counter != null and EventBus.run_ended.is_connected(result_counter.record):
+		EventBus.run_ended.disconnect(result_counter.record)
 	if main != null and is_instance_valid(main):
 		main.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
-	_reset_legacy_state()
 	GameState.reset_persistent_data(true)
 	GameState.save_path = _original_save_path
 	GameState.persistent = _original_persistent.duplicate(true)
 	_remove_tree(_test_storage_root)
-
-
-func _reset_legacy_state() -> void:
-	get_tree().paused = false
-	GameState.phase = GameState.GamePhase.HUB
-	GameState.current_floor = 1
-	GameState.current_room = 0
-	GameState.run_seed = 0
-	GameState.run_timer = 0.0
-	GameState.current_run = {}
-	GameState.last_run_result = {}
-	if GameState.build_state != null:
-		GameState.build_state.reset()
 
 
 func _isolated_storage_root(test_name: String) -> String:

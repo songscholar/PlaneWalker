@@ -38,6 +38,32 @@ func _run() -> void:
 	var room := main.get_node("CombatRoom01")
 	suite.assert_true(room.get("_room_runtime") != null, "room controller receives the host-owned RoomRuntime")
 
+	var before_tick: Dictionary = host.call("runtime_snapshot")
+	host.call("_process", 1.25)
+	var after_tick: Dictionary = host.call("runtime_snapshot")
+	suite.assert_equal(
+		int(after_tick.get("run_time_ms", 0)) - int(before_tick.get("run_time_ms", 0)),
+		1250,
+		"host process advances the authoritative run clock"
+	)
+	var projector: RefCounted = host.get("_projector")
+	var view_state: Dictionary = projector.call("latest_view_state")
+	suite.assert_equal(
+		int(view_state.get("run_time_ms", -1)),
+		int(after_tick.get("run_time_ms", 0)),
+		"HUD projection reads the authoritative snapshot clock"
+	)
+
+	suite.assert_true(host.call("pause_run").ok, "host pauses the active run")
+	var paused_time_ms := int((host.call("runtime_snapshot") as Dictionary).get("run_time_ms", 0))
+	host.call("_process", 0.5)
+	suite.assert_equal(
+		int((host.call("runtime_snapshot") as Dictionary).get("run_time_ms", 0)),
+		paused_time_ms,
+		"paused host process does not advance the authoritative run clock"
+	)
+	suite.assert_true(host.call("resume_run").ok, "host resumes after the clock assertion")
+
 	main.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame

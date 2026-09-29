@@ -27,7 +27,6 @@ auto_start = false
 curse_offer_rooms = Array[int]([])
 elite_rooms = Array[int]([4])
 event_rooms = Array[int]([])
-allow_legacy_runtime = false
 
 [node name="RunRuntimeHost" type="Node" parent="."]
 process_mode = 3

@@ -10,11 +10,6 @@ const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_f
 const RunViewStateProjectorScript := preload("res://scripts/application/run_view_state_projector.gd")
 
 const HUD_RENDER_INTERVAL := 0.1
-const LEGACY_SELECTION_NAMES: Array[StringName] = [
-	&"RewardSelection",
-	&"CurseSelection",
-	&"EventSelection",
-]
 
 @export var room_controller_path: NodePath
 @export_file("*.json") var manifest_path: String = "res://data/content_packs/base/pack.json"
@@ -26,10 +21,10 @@ var _room_controller: Node
 var _player: Node
 var _projector: RefCounted
 var _hud_layer: CanvasLayer
-var _legacy_hud: Node
 var _choice_layer: CanvasLayer
 var _choice_panel: Control
 var _active_run_id: String = ""
+var _ended_run_id: String = ""
 var _run_serial: int = 0
 var _hud_render_accumulator: float = 0.0
 var _selection_safety_active: bool = false
@@ -44,13 +39,11 @@ func _ready() -> void:
 	_player = _room_controller.get_node_or_null("Player")
 	if _player == null:
 		return
-	_legacy_hud = _room_controller.get_node_or_null("CombatHUD")
 	_facade = _boot_facade()
 	if _facade == null:
 		return
 	_create_hud_layer()
 	_create_choice_layer()
-	_disable_legacy_selection_views()
 	if not EventBus.entity_died.is_connected(_on_entity_died):
 		EventBus.entity_died.connect(_on_entity_died)
 	_active = true
@@ -59,6 +52,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not _active or _facade == null or _active_run_id.is_empty():
 		return
+	_facade.call("advance_time", maxf(0.0, delta))
 	_hud_render_accumulator += maxf(0.0, delta)
 	if _hud_render_accumulator < HUD_RENDER_INTERVAL:
 		return
@@ -85,11 +79,12 @@ func start_run(config: Dictionary) -> Variant:
 	_dispose_room_runtime()
 	_facade = next_facade
 	_active_run_id = run_id
+	_ended_run_id = ""
 	_hud_render_accumulator = 0.0
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
-	GameState.start_run(normalized)
+	EventBus.run_started.emit(normalized.duplicate(true))
 
 	var runner_value: Variant = _room_controller.call("encounter_runner")
 	if not runner_value is Node:
@@ -164,7 +159,6 @@ func _create_hud_layer() -> void:
 	_hud_layer.name = "HudLayer"
 	_hud_layer.layer = 10
 	add_child(_hud_layer)
-	_set_legacy_hud_enabled(false)
 
 
 func _create_choice_layer() -> void:
@@ -175,17 +169,6 @@ func _create_choice_layer() -> void:
 	_choice_panel = ChoicePanelScene.instantiate() as Control
 	_choice_layer.add_child(_choice_panel)
 	_choice_panel.option_chosen.connect(_on_option_chosen)
-
-
-func _disable_legacy_selection_views() -> void:
-	for view_name: StringName in LEGACY_SELECTION_NAMES:
-		var view := _room_controller.get_node_or_null(NodePath(str(view_name)))
-		if view == null:
-			continue
-		view.process_mode = Node.PROCESS_MODE_DISABLED
-		if view is CanvasItem:
-			(view as CanvasItem).visible = false
-		view.queue_free()
 
 
 func _connect_room_runtime() -> void:
@@ -212,16 +195,8 @@ func _dispose_room_runtime() -> void:
 
 
 func _on_room_started(active_room_id: StringName, revision: int) -> void:
-	var state := runtime_snapshot()
-	GameState.current_room = int(state.get("current_room", GameState.current_room))
 	var room_definition := _facade.call("current_room_definition") as Dictionary
 	var room_type := StringName(str(room_definition.get("type", "combat")))
-	GameState.set_current_room_type(room_type)
-	GameState.set_phase(
-		GameState.GamePhase.BOSS_FIGHT
-		if room_type == &"boss"
-		else GameState.GamePhase.DUNGEON
-	)
 	EventBus.room_started.emit(active_room_id)
 	EventBus.publish(EventBus.ROOM_STARTED, {
 		"room_id": active_room_id,
@@ -232,21 +207,20 @@ func _on_room_started(active_room_id: StringName, revision: int) -> void:
 
 func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 	var state := runtime_snapshot()
-	GameState.set_phase(GameState.GamePhase.ROOM_CLEAR)
 	EventBus.room_cleared.emit(active_room_id)
 	EventBus.publish(EventBus.ROOM_CLEARED, {"room_id": active_room_id, "revision": revision})
 	match int(state.get("phase", -1)):
 		RunPhaseScript.Value.SELECTION_ACTIVE:
 			_open_offer(state.get("open_offer", {}))
 		RunPhaseScript.Value.VICTORY:
-			_end_legacy_projection(false, state.get("result", {}))
+			_publish_terminal_result(state.get("result", {}))
 
 
 func _on_runtime_failed(context: Dictionary) -> void:
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
-	_end_legacy_projection(false, context)
+	_publish_terminal_result(context)
 
 
 func _on_entity_died(entity: Node, killer: Variant) -> void:
@@ -255,7 +229,7 @@ func _on_entity_died(entity: Node, killer: Variant) -> void:
 	var state := runtime_snapshot()
 	if int(state.get("phase", -1)) != RunPhaseScript.Value.DEFEAT:
 		return
-	_end_legacy_projection(true, state.get("result", {"result": "death", "killer": killer}))
+	_publish_terminal_result(state.get("result", {"result": "death", "killer": killer}))
 
 
 func _open_offer(offer_value: Variant) -> void:
@@ -281,51 +255,86 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 		return
 	if str(definition.get("id", "")) != "decline_contract":
 		_player.call("apply_reward", definition)
-		_mirror_definition_to_game_state(definition)
 	_choice_panel.close_panel()
 	_set_selection_safety(false)
 	EventBus.reward_selected.emit(definition.duplicate(true))
-	var state := runtime_snapshot()
-	GameState.current_room = int(state.get("current_room", GameState.current_room))
 	if _room_runtime != null and is_instance_valid(_room_runtime):
 		_room_runtime.call_deferred("begin_current_room")
 
 
-func _mirror_definition_to_game_state(definition: Dictionary) -> void:
-	match str(definition.get("category", "")):
-		"item":
-			GameState.add_run_reward(definition)
-		"blessing":
-			GameState.add_run_blessing(definition)
-		"curse":
-			GameState.add_run_curse(definition)
-		"talent":
-			GameState.add_run_talent(definition)
-
-
-func _end_legacy_projection(is_death: bool, authoritative_result: Dictionary) -> void:
-	if GameState.phase in [GameState.GamePhase.DEATH, GameState.GamePhase.RUN_END]:
+func _publish_terminal_result(authoritative_result: Dictionary) -> void:
+	var state := runtime_snapshot()
+	var run_id := str(state.get("run_id", ""))
+	if run_id.is_empty() or run_id != _active_run_id or _ended_run_id == run_id:
 		return
-	if is_death:
-		GameState.fail_run(authoritative_result.get("killer"))
+	var phase := int(state.get("phase", -1))
+	if not RunPhaseScript.is_terminal(phase):
 		return
-	var result := _legacy_result(authoritative_result)
-	GameState.end_run(result)
+	_ended_run_id = run_id
+	EventBus.run_ended.emit(_terminal_result(state, authoritative_result))
 
 
-func _legacy_result(authoritative_result: Dictionary) -> Dictionary:
-	var result := authoritative_result.duplicate(true)
-	if str(result.get("result", "")) == "victory":
-		result["result"] = "floor_cleared"
-	result["floor"] = GameState.current_floor
-	result["rooms_cleared"] = GameState.current_room
-	result["current_room"] = GameState.current_room
-	result["run_time"] = GameState.run_timer
-	result["rewards"] = GameState.current_run.get("rewards", []).duplicate(true)
-	result["blessings"] = GameState.current_run.get("blessings", []).duplicate(true)
-	result["talent_choices"] = GameState.current_run.get("talent_choices", []).duplicate(true)
-	result["curses"] = GameState.current_run.get("curses", []).duplicate(true)
+func _terminal_result(state: Dictionary, authoritative_result: Dictionary) -> Dictionary:
+	var result_value: Variant = state.get("result", {})
+	var result := (result_value as Dictionary).duplicate(true) if result_value is Dictionary else {}
+	if result.is_empty():
+		result = authoritative_result.duplicate(true)
+
+	var phase := int(state.get("phase", -1))
+	var outcome := str(result.get("result", ""))
+	if phase == RunPhaseScript.Value.VICTORY or outcome == "victory":
+		outcome = "floor_cleared"
+	elif outcome.is_empty():
+		outcome = "death" if phase == RunPhaseScript.Value.DEFEAT else "runtime_error"
+
+	var current_room := int(state.get("current_room", 0))
+	var rooms_cleared := current_room if phase == RunPhaseScript.Value.VICTORY else maxi(0, current_room - 1)
+	var stats_value: Variant = state.get("stats", {})
+	var stats: Dictionary = (stats_value as Dictionary).duplicate(true) if stats_value is Dictionary else {}
+	var build_value: Variant = state.get("build", {})
+	var build: Dictionary = (build_value as Dictionary).duplicate(true) if build_value is Dictionary else {}
+	var categorized := _categorized_history(build)
+
+	result["result"] = outcome
+	result["floor"] = int(state.get("current_floor", 1))
+	result["rooms_cleared"] = int(result.get("rooms_cleared", rooms_cleared))
+	result["current_room"] = int(result.get("current_room", current_room))
+	result["run_time"] = float(state.get("run_time_ms", 0)) / 1000.0
+	result["kills"] = int(result.get("kills", stats.get("kills", 0)))
+	result["stats"] = stats
+	result["rewards"] = categorized["items"]
+	result["blessings"] = categorized["blessings"]
+	result["talent_choices"] = categorized["talents"]
+	result["curses"] = categorized["curses"]
+	result["run_id"] = str(state.get("run_id", ""))
+	result["revision"] = int(state.get("revision", 0))
 	return result
+
+
+func _categorized_history(build: Dictionary) -> Dictionary:
+	var categorized := {
+		"items": [],
+		"blessings": [],
+		"curses": [],
+		"talents": [],
+	}
+	var history_value: Variant = build.get("reward_history", [])
+	if not history_value is Array:
+		return categorized
+	for entry_value: Variant in history_value:
+		if not entry_value is Dictionary:
+			continue
+		var entry := (entry_value as Dictionary).duplicate(true)
+		match str(entry.get("category", "")):
+			"item":
+				categorized["items"].append(entry)
+			"blessing":
+				categorized["blessings"].append(entry)
+			"curse":
+				categorized["curses"].append(entry)
+			"talent":
+				categorized["talents"].append(entry)
+	return categorized
 
 
 func _fail_start(code: StringName, context: Dictionary) -> Variant:
@@ -340,7 +349,7 @@ func _fail_start(code: StringName, context: Dictionary) -> Variant:
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
-	_end_legacy_projection(false, failure_context)
+	_publish_terminal_result(failure_context)
 	return CommandResultScript.failure(code, _revision(), context)
 
 
@@ -355,7 +364,6 @@ func _set_selection_safety(active_selection: bool) -> void:
 			_player_process_mode = _player.process_mode
 			_player.process_mode = Node.PROCESS_MODE_DISABLED
 		_clear_hostile_transients()
-		GameState.set_phase(GameState.GamePhase.SELECTION)
 		return
 	if not _selection_safety_active:
 		return
@@ -387,7 +395,7 @@ func _render_live_hud() -> void:
 		room_definition,
 		_player_ui_snapshot(),
 		_boss_ui_snapshot(),
-		roundi(GameState.run_timer * 1000.0),
+		int(authoritative.get("run_time_ms", 0)),
 		{"show_pause": get_tree().paused}
 	)
 	if projected.ok:
@@ -425,16 +433,6 @@ func _boss_ui_snapshot() -> Variant:
 			"phase_total": phase_total,
 		}
 	return null
-
-
-func _set_legacy_hud_enabled(enabled_state: bool) -> void:
-	if _legacy_hud == null or not is_instance_valid(_legacy_hud):
-		return
-	_legacy_hud.process_mode = Node.PROCESS_MODE_INHERIT if enabled_state else Node.PROCESS_MODE_DISABLED
-	if _legacy_hud is CanvasLayer:
-		(_legacy_hud as CanvasLayer).visible = enabled_state
-	elif _legacy_hud is CanvasItem:
-		(_legacy_hud as CanvasItem).visible = enabled_state
 
 
 func _rejection_message_key(result: RefCounted) -> String:

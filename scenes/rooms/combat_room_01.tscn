@@ -1,17 +1,13 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room_controller"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/enemy_chaser.tscn" id="3_chaser"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/enemy_shooter.tscn" id="4_shooter"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/enemy_tank.tscn" id="5_tank"]
-[ext_resource type="Script" path="res://scripts/ui/combat_hud.gd" id="6_combat_hud"]
-[ext_resource type="Script" path="res://scripts/ui/reward_selection.gd" id="7_reward_selection"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/boss_chrono_warden.tscn" id="8_boss"]
 [ext_resource type="Script" path="res://scripts/ui/floating_text_layer.gd" id="9_floating_text"]
 [ext_resource type="PackedScene" path="res://scenes/fx/spawn_warning.tscn" id="10_spawn_warning"]
-[ext_resource type="Script" path="res://scripts/ui/curse_selection.gd" id="11_curse_selection"]
-[ext_resource type="Script" path="res://scripts/ui/event_selection.gd" id="12_event_selection"]
 [ext_resource type="Script" path="res://scripts/dungeon/encounter_runner.gd" id="13_encounter_runner"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_horizontal"]
@@ -25,7 +21,6 @@ size = Vector2(72, 72)
 
 [node name="CombatRoom01" type="Node2D"]
 script = ExtResource("1_room_controller")
-allow_legacy_runtime = false
 enemy_scenes = [ExtResource("3_chaser"), ExtResource("4_shooter"), ExtResource("5_tank")]
 boss_scene = ExtResource("8_boss")
 spawn_warning_scene = ExtResource("10_spawn_warning")
@@ -126,235 +121,5 @@ offset_right = 940.0
 offset_bottom = 130.0
 text = "Room cleared - reward placeholder"
 
-[node name="CombatHUD" type="CanvasLayer" parent="."]
-script = ExtResource("6_combat_hud")
-player_path = NodePath("../Player")
-
-[node name="StatusLabel" type="Label" parent="CombatHUD"]
-offset_left = 24.0
-offset_top = 628.0
-offset_right = 760.0
-offset_bottom = 678.0
-text = "HP / Time"
-
-[node name="BuildLabel" type="Label" parent="CombatHUD"]
-offset_left = 24.0
-offset_top = 122.0
-offset_right = 344.0
-offset_bottom = 150.0
-text = "Build: Unformed"
-
-[node name="BuildSlotsLabel" type="Label" parent="CombatHUD"]
-offset_left = 24.0
-offset_top = 150.0
-offset_right = 420.0
-offset_bottom = 178.0
-text = "Items 0 | Blessings 0 | Curses 0 | Talents 0"
-
-[node name="WeaponPanel" type="PanelContainer" parent="CombatHUD"]
-offset_left = 24.0
-offset_top = 184.0
-offset_right = 344.0
-offset_bottom = 254.0
-
-[node name="VBox" type="VBoxContainer" parent="CombatHUD/WeaponPanel"]
-offset_right = 320.0
-offset_bottom = 70.0
-theme_override_constants/separation = 8
-
-[node name="WeaponLabel" type="Label" parent="CombatHUD/WeaponPanel/VBox"]
-layout_mode = 2
-text = "Sword | Bow Ready"
-
-[node name="BowChargeBar" type="ProgressBar" parent="CombatHUD/WeaponPanel/VBox"]
-layout_mode = 2
-max_value = 1.0
-show_percentage = false
-
-[node name="PlayerPanel" type="PanelContainer" parent="CombatHUD"]
-offset_left = 24.0
-offset_top = 24.0
-offset_right = 344.0
-offset_bottom = 118.0
-
-[node name="VBox" type="VBoxContainer" parent="CombatHUD/PlayerPanel"]
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 320.0
-offset_bottom = 94.0
-theme_override_constants/separation = 8
-
-[node name="HPBar" type="ProgressBar" parent="CombatHUD/PlayerPanel/VBox"]
-layout_mode = 2
-max_value = 200.0
-value = 200.0
-show_percentage = false
-
-[node name="TimeBar" type="ProgressBar" parent="CombatHUD/PlayerPanel/VBox"]
-layout_mode = 2
-max_value = 100.0
-value = 100.0
-show_percentage = false
-
-[node name="RoomBanner" type="Label" parent="CombatHUD"]
-visible = false
-offset_left = 480.0
-offset_top = 42.0
-offset_right = 800.0
-offset_bottom = 82.0
-text = "Room"
-horizontal_alignment = 1
-
-[node name="BossPanel" type="PanelContainer" parent="CombatHUD"]
-visible = false
-offset_left = 360.0
-offset_top = 604.0
-offset_right = 920.0
-offset_bottom = 684.0
-
-[node name="VBox" type="VBoxContainer" parent="CombatHUD/BossPanel"]
-offset_right = 560.0
-offset_bottom = 80.0
-theme_override_constants/separation = 8
-
-[node name="BossName" type="Label" parent="CombatHUD/BossPanel/VBox"]
-layout_mode = 2
-text = "Chrono Warden"
-horizontal_alignment = 1
-
-[node name="BossHPBar" type="ProgressBar" parent="CombatHUD/BossPanel/VBox"]
-layout_mode = 2
-max_value = 420.0
-value = 420.0
-show_percentage = false
-
 [node name="FloatingTextLayer" type="CanvasLayer" parent="."]
 script = ExtResource("9_floating_text")
-
-[node name="RewardSelection" type="CanvasLayer" parent="."]
-script = ExtResource("7_reward_selection")
-player_path = NodePath("../Player")
-
-[node name="Panel" type="PanelContainer" parent="RewardSelection"]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -170.0
-offset_right = 250.0
-offset_bottom = 170.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="Margin" type="MarginContainer" parent="RewardSelection/Panel"]
-offset_right = 500.0
-offset_bottom = 380.0
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
-
-[node name="VBox" type="VBoxContainer" parent="RewardSelection/Panel/Margin"]
-offset_left = 24.0
-offset_top = 20.0
-offset_right = 476.0
-offset_bottom = 360.0
-theme_override_constants/separation = 14
-
-[node name="Title" type="Label" parent="RewardSelection/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Choose a reward"
-horizontal_alignment = 1
-
-[node name="Options" type="VBoxContainer" parent="RewardSelection/Panel/Margin/VBox"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="CurseSelection" type="CanvasLayer" parent="."]
-script = ExtResource("11_curse_selection")
-player_path = NodePath("../Player")
-
-[node name="Panel" type="PanelContainer" parent="CurseSelection"]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -170.0
-offset_right = 250.0
-offset_bottom = 170.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="Margin" type="MarginContainer" parent="CurseSelection/Panel"]
-offset_right = 500.0
-offset_bottom = 450.0
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
-
-[node name="VBox" type="VBoxContainer" parent="CurseSelection/Panel/Margin"]
-offset_left = 24.0
-offset_top = 20.0
-offset_right = 476.0
-offset_bottom = 430.0
-theme_override_constants/separation = 14
-
-[node name="Title" type="Label" parent="CurseSelection/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Risk altar"
-horizontal_alignment = 1
-
-[node name="Options" type="VBoxContainer" parent="CurseSelection/Panel/Margin/VBox"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="SkipButton" type="Button" parent="CurseSelection/Panel/Margin/VBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(420, 48)
-text = "Skip curse"
-
-[node name="EventSelection" type="CanvasLayer" parent="."]
-script = ExtResource("12_event_selection")
-player_path = NodePath("../Player")
-
-[node name="Panel" type="PanelContainer" parent="EventSelection"]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -170.0
-offset_right = 250.0
-offset_bottom = 170.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="Margin" type="MarginContainer" parent="EventSelection/Panel"]
-offset_right = 500.0
-offset_bottom = 380.0
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
-
-[node name="VBox" type="VBoxContainer" parent="EventSelection/Panel/Margin"]
-offset_left = 24.0
-offset_top = 20.0
-offset_right = 476.0
-offset_bottom = 360.0
-theme_override_constants/separation = 14
-
-[node name="Title" type="Label" parent="EventSelection/Panel/Margin/VBox"]
-layout_mode = 2
-text = "Temporal event"
-horizontal_alignment = 1
-
-[node name="Options" type="VBoxContainer" parent="EventSelection/Panel/Margin/VBox"]
-layout_mode = 2
-theme_override_constants/separation = 12

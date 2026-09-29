@@ -164,6 +164,7 @@ func _apply_run_accessibility_assists(run_data: Dictionary) -> void:
 
 
 func _on_run_ended(result: Dictionary) -> void:
+	GameState.record_run_summary(result)
 	get_tree().paused = false
 	pause_menu.hide_pause()
 	status_label.visible = true

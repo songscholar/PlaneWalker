@@ -15,7 +15,6 @@ signal authored_runtime_failed(context: Dictionary)
 @export var elite_rooms: Array[int] = [3]
 @export var event_rooms: Array[int] = [2]
 @export var auto_start: bool = true
-@export var allow_legacy_runtime: bool = false
 
 @onready var spawn_points: Node2D = $SpawnPoints
 @onready var boss_spawn_point: Marker2D = $BossSpawnPoint

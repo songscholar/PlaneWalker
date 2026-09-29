@@ -29,10 +29,11 @@ func _run() -> void:
 	_original_save_path = GameState.save_path
 	_original_persistent = GameState.persistent.duplicate(true)
 	GameState.save_path = _probe_save_path
+	GameState.reset_persistent_data(true)
 	var runs: Array[Dictionary] = []
 	for seed_value: int in range(seed_start, seed_start + seed_count):
 		runs.append(await _run_seed(seed_value))
-	_restore_legacy_state()
+	_restore_profile_state()
 	var file := FileAccess.open(output_path, FileAccess.WRITE)
 	if file == null:
 		push_error("M1 seed probe could not open output path: %s" % output_path)
@@ -44,7 +45,7 @@ func _run() -> void:
 
 
 func _run_seed(seed_value: int) -> Dictionary:
-	_reset_legacy_state()
+	_reset_probe_state()
 	var result := {
 		"seed": seed_value,
 		"terminal_state": "technical_failure",
@@ -63,28 +64,34 @@ func _run_seed(seed_value: int) -> Dictionary:
 	await get_tree().process_frame
 
 	var room := main.get_node_or_null("CombatRoom01")
-	var adapter := main.get_node_or_null("RuntimeV2Adapter")
-	if room == null or adapter == null or not bool(adapter.get("_active")):
+	var host := main.get_node_or_null("RunRuntimeHost")
+	if room == null or host == null or not bool(host.get("_active")):
 		_add_failure(result, "runtime_boot_failed")
 		await _cleanup_main(main)
 		return result
-	var panel := adapter.get_node_or_null("ChoiceLayer/ChoicePanelV2")
+	var panel := host.get_node_or_null("ChoiceLayer/ChoicePanelV2")
 	room.set("spawn_warning_duration", 0.0)
 	room.visible = true
 	room.process_mode = Node.PROCESS_MODE_INHERIT
-	GameState.start_run({
+	var started: Variant = host.call("start_run", {
+		"schema_version": 1,
+		"milestone": "M1",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
+		"enabled_time_skills": ["time_stop", "time_rewind"],
 		"difficulty": "normal",
 		"seed": seed_value,
 	})
+	if started == null or not bool(started.get("ok")):
+		_add_failure(result, "runtime_start_failed")
+		await _cleanup_main(main)
+		return result
 	await get_tree().process_frame
 	if not bool(room.get("_authored_runtime_enabled")):
 		_add_failure(result, "authored_runtime_disabled")
 		await _cleanup_main(main)
 		return result
-	var facade: RefCounted = adapter.get("_facade")
-	room.call("begin_run")
+	var facade: RefCounted = host.get("_facade")
 
 	for room_number: int in range(1, 5):
 		if not await _wait_for_phase(facade, RunPhaseScript.Value.COMBAT_ACTIVE):
@@ -252,24 +259,15 @@ func _cleanup_main(main: Node) -> void:
 		CombatFeedback.call("reset_transient_feedback")
 	await get_tree().process_frame
 	await get_tree().process_frame
-	_reset_legacy_state()
+	_reset_probe_state()
 
 
-func _reset_legacy_state() -> void:
+func _reset_probe_state() -> void:
 	get_tree().paused = false
-	GameState.phase = GameState.GamePhase.HUB
-	GameState.current_floor = 1
-	GameState.current_room = 0
-	GameState.run_seed = 0
-	GameState.run_timer = 0.0
-	GameState.current_run = {}
-	GameState.last_run_result = {}
-	if GameState.build_state != null:
-		GameState.build_state.reset()
 
 
-func _restore_legacy_state() -> void:
-	_reset_legacy_state()
+func _restore_profile_state() -> void:
+	_reset_probe_state()
 	GameState.save_path = _original_save_path
 	GameState.persistent = _original_persistent.duplicate(true)
 	if FileAccess.file_exists(_probe_save_path):
