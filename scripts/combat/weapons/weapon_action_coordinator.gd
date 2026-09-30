@@ -59,6 +59,13 @@ func configure(runtime: RefCounted, resource_transaction: RefCounted = null) -> 
 	return true
 
 
+func set_next_token_floor(next_token_floor: int) -> bool:
+	if next_token_floor <= 0 or _phase != PHASE_READY or _token != 0:
+		return false
+	_next_token = maxi(_next_token, next_token_floor)
+	return true
+
+
 func submit_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 	var intent_validation: Dictionary = WeaponActionContractScript.validate_intent(intent)
 	if not bool(intent_validation.get("ok", false)):

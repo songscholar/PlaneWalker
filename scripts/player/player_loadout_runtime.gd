@@ -57,6 +57,10 @@ func configure(config: Dictionary) -> bool:
 	return true
 
 
+func snapshot() -> Dictionary:
+	return _config.duplicate(true)
+
+
 func weapon_id() -> StringName:
 	return _weapon_id
 

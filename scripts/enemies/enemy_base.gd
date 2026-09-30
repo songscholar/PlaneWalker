@@ -5,6 +5,7 @@ const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const ElementalStatusRuntimeScript := preload("res://scripts/combat/elemental_status_runtime.gd")
 const ELEMENTAL_STATUS_SEED_INITIALIZED_META := &"elemental_status_seed_initialized"
 const ELEMENTAL_STATUS_SEED_MATERIAL_META := &"elemental_status_seed_material"
+const MAX_WEAPON_HIT_CONTROL_CLAIMS := 256
 
 enum AttackPhase {
 	READY,
@@ -42,6 +43,8 @@ var _committed_attack_direction: Vector2 = Vector2.RIGHT
 var _time_stop_token_sequence: int = 0
 var _time_stop_sources: Dictionary = {}
 var _damage_vulnerability_sources: Dictionary = {}
+var _weapon_hit_control_claims: Dictionary = {}
+var _weapon_hit_control_claim_order: Array[int] = []
 var elemental_status_runtime: RefCounted = ElementalStatusRuntimeScript.new()
 var _elemental_blind_action_sequence: int = 0
 
@@ -230,6 +233,7 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 func _on_died(_killer: Variant) -> void:
 	remove_from_group("enemies")
 	_damage_vulnerability_sources.clear()
+	clear_weapon_hit_control_state(&"death")
 	reset_elemental_statuses()
 	cancel_active_attack()
 	visual.color = Color(0.25, 0.25, 0.28)
@@ -250,6 +254,72 @@ func cancel_active_attack() -> void:
 
 func apply_knockback(knockback: Vector2) -> void:
 	_knockback_velocity += knockback
+
+
+func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
+	if (
+		damage_info == null
+		or not is_finite(final_amount)
+		or final_amount <= 0.0
+		or health == null
+		or not health.is_alive()
+	):
+		return false
+	var action_token_value: Variant = damage_info.get("action_token")
+	var source_generation_value: Variant = damage_info.get("source_generation")
+	var effect_value: Variant = damage_info.get("control_effect")
+	if (
+		typeof(action_token_value) != TYPE_INT
+		or int(action_token_value) <= 0
+		or typeof(source_generation_value) != TYPE_INT
+		or int(source_generation_value) != int(action_token_value)
+		or not effect_value is Dictionary
+		or (effect_value as Dictionary).is_empty()
+	):
+		return false
+	var action_token := int(action_token_value)
+	if _weapon_hit_control_claims.has(action_token):
+		return false
+	var effect := (effect_value as Dictionary).duplicate(true)
+	if not _resolve_weapon_hit_control(effect, damage_info, final_amount):
+		return false
+	_record_weapon_hit_control_claim(action_token)
+	return true
+
+
+func _resolve_weapon_hit_control(
+	effect: Dictionary,
+	_damage_info: RefCounted,
+	_final_amount: float
+) -> bool:
+	if str(effect.get("kind", "")) != "launch":
+		return false
+	var displacement_value: Variant = effect.get("displacement_pixels", 0.0)
+	return (
+		typeof(displacement_value) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(displacement_value))
+		and float(displacement_value) >= 0.0
+	)
+
+
+func _record_weapon_hit_control_claim(action_token: int) -> void:
+	while _weapon_hit_control_claim_order.size() >= MAX_WEAPON_HIT_CONTROL_CLAIMS:
+		var expired_token: int = _weapon_hit_control_claim_order.pop_front()
+		_weapon_hit_control_claims.erase(expired_token)
+	_weapon_hit_control_claims[action_token] = true
+	_weapon_hit_control_claim_order.append(action_token)
+
+
+func clear_weapon_hit_control_state(_reason: StringName = &"reset") -> void:
+	_weapon_hit_control_claims.clear()
+	_weapon_hit_control_claim_order.clear()
+
+
+func get_weapon_hit_control_snapshot_for_test() -> Dictionary:
+	return {
+		"claim_count": _weapon_hit_control_claims.size(),
+		"claim_capacity": MAX_WEAPON_HIT_CONTROL_CLAIMS,
+	}
 
 
 func apply_time_stop(duration: float) -> void:

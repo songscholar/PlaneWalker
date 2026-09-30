@@ -80,6 +80,8 @@ func _apply_hit_reaction(damage_info: RefCounted, final_amount: float) -> void:
 	EventBus.hit_confirmed.emit(damage_info, owner_entity, final_amount)
 	if damage_info.knockback.length_squared() > 0.0 and owner_entity.has_method("apply_knockback"):
 		owner_entity.apply_knockback(damage_info.knockback)
+	if owner_entity.has_method("apply_weapon_hit_control"):
+		owner_entity.call("apply_weapon_hit_control", damage_info, final_amount)
 
 
 func heal(amount: float) -> float:

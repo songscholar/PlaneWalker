@@ -7,6 +7,8 @@ const FragmentScene := preload("res://scenes/enemies/enemy_chaser.tscn")
 const TimeCrackScript := preload("res://scripts/enemies/boss_time_crack.gd")
 const STAFF_FREEZE_DELAY_FRAMES := 12
 const STAFF_BLIND_DELAY_FRAMES := 8
+const GAUNTLETS_CONVERSION_ID := "gauntlets_poised_launch"
+const GAUNTLETS_POISE_MULTIPLIER := 1.4
 
 enum BossAction { NONE, MELEE, SLAM, RADIAL, AIMED, SUMMON, TIME_CRACK }
 enum BossActionPhase { IDLE, WINDUP, RECOVERY }
@@ -340,6 +342,7 @@ func _update_phase() -> void:
 	if next_phase == _phase:
 		return
 	clear_elemental_statuses(&"boss_phase_transition")
+	_clear_weapon_control_sources()
 	_phase = next_phase
 	radial_projectile_count = 10 if _phase == 2 else 12
 	move_speed = 92.0 if _phase == 2 else 108.0
@@ -681,23 +684,87 @@ func apply_weapon_control_conversion(
 		_action_time_remaining += minf(float(recovery_frames) / 60.0, 1.5)
 	if exposure_frames > 0:
 		_add_exposure_source(source_id)
-	var source_lifetime_frames := maxi(1, maxi(recovery_frames, exposure_frames))
-	get_tree().create_timer(minf(float(source_lifetime_frames) / 60.0, 1.5), false).timeout.connect(
-		_clear_weapon_control_source.bind(source_id)
-	)
+	var source_lifetime_frames := maxi(recovery_frames, exposure_frames)
+	if source_lifetime_frames > 0:
+		get_tree().create_timer(minf(float(source_lifetime_frames) / 60.0, 1.5), false).timeout.connect(
+			_clear_weapon_control_source.bind(source_id)
+		)
 	_weapon_poise = minf(maxf(0.0, weapon_poise_threshold), _weapon_poise + poise_damage)
 	if weapon_poise_threshold > 0.0 and _weapon_poise >= weapon_poise_threshold:
 		_weapon_poise = 0.0
 		if _action_phase == BossActionPhase.RECOVERY:
 			_action_time_remaining += maxf(0.0, float(weapon_poise_recovery_bonus_frames) / 60.0)
+	if source_lifetime_frames <= 0:
+		_clear_weapon_control_source(source_id)
 	return true
 
 
+func _resolve_weapon_hit_control(
+	effect: Dictionary,
+	damage_info: RefCounted,
+	_final_amount: float
+) -> bool:
+	if (
+		str(effect.get("kind", "")) != "launch"
+		or str(effect.get("conversion_id", "")) != GAUNTLETS_CONVERSION_ID
+		or typeof(effect.get("airborne")) != TYPE_BOOL
+		or bool(effect.get("airborne", true))
+		or str(effect.get("active_attack_policy", "")) != "preserve_committed"
+		or typeof(effect.get("interrupt_active_attack")) != TYPE_BOOL
+		or bool(effect.get("interrupt_active_attack", true))
+		or not damage_info.tags.has("weapon:gauntlets")
+	):
+		return false
+	var allowed_states_value: Variant = effect.get("allowed_states", [])
+	if not allowed_states_value is Array:
+		return false
+	var conversion_state := (
+		"EXPOSED"
+		if _exposed and _action_phase != BossActionPhase.WINDUP
+		else _action_phase_name(_action_phase)
+	)
+	if conversion_state not in (allowed_states_value as Array):
+		return false
+	var poise_damage_value: Variant = effect.get("poise_damage")
+	var multiplier_value: Variant = effect.get("boss_poise_multiplier")
+	var displacement_value: Variant = effect.get("displacement_pixels", 0.0)
+	if (
+		typeof(poise_damage_value) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(poise_damage_value))
+		or float(poise_damage_value) <= 0.0
+		or typeof(multiplier_value) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(multiplier_value))
+		or not is_equal_approx(float(multiplier_value), GAUNTLETS_POISE_MULTIPLIER)
+		or typeof(displacement_value) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(displacement_value))
+		or float(displacement_value) < 0.0
+	):
+		return false
+	var action_token := int(damage_info.get("action_token"))
+	var source_generation := int(damage_info.get("source_generation"))
+	var source_id := StringName(str(effect.get(
+		"source_id",
+		"%s:%d:%d" % [GAUNTLETS_CONVERSION_ID, action_token, source_generation]
+	)))
+	if source_id == &"":
+		return false
+	return apply_weapon_control_conversion(
+		source_id,
+		0,
+		0,
+		float(poise_damage_value) * GAUNTLETS_POISE_MULTIPLIER
+	)
+
+
 func get_weapon_control_snapshot_for_test() -> Dictionary:
+	var hit_control: Dictionary = get_weapon_hit_control_snapshot_for_test()
 	return {
 		"source_count": _weapon_control_sources.size(),
 		"poise": _weapon_poise,
 		"poise_threshold": weapon_poise_threshold,
+		"hit_claim_count": int(hit_control.get("claim_count", 0)),
+		"hit_claim_capacity": int(hit_control.get("claim_capacity", 0)),
+		"airborne": false,
 	}
 
 
@@ -713,6 +780,11 @@ func _clear_weapon_control_sources() -> void:
 		_remove_exposure_source(StringName(str(source_value)))
 	_weapon_control_sources.clear()
 	_weapon_poise = 0.0
+
+
+func clear_weapon_hit_control_state(reason: StringName = &"reset") -> void:
+	super.clear_weapon_hit_control_state(reason)
+	_clear_weapon_control_sources()
 
 
 func _add_exposure_source(source_id: StringName) -> void:

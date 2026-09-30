@@ -12,6 +12,9 @@ var crit_chance: float = 0.0
 var crit_multiplier: float = 1.5
 var knockback: Vector2 = Vector2.ZERO
 var tags: Array[String] = []
+var action_token: int = 0
+var source_generation: int = 0
+var control_effect: Dictionary = {}
 
 
 func _init(
@@ -33,4 +36,7 @@ func copy_for_source(new_source: Node) -> RefCounted:
 	copied.crit_multiplier = crit_multiplier
 	copied.knockback = knockback
 	copied.tags = tags.duplicate()
+	copied.action_token = action_token
+	copied.source_generation = source_generation
+	copied.control_effect = control_effect.duplicate(true)
 	return copied

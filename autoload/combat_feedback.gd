@@ -321,7 +321,7 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 		return (HIT_PROFILES["heavy"] as Dictionary).duplicate(true)
 	if tags.has("attack:finisher"):
 		return (HIT_PROFILES["finisher"] as Dictionary).duplicate(true)
-	if tags.has("weapon:sword"):
+	if tags.has("weapon:sword") or tags.has("weapon:gauntlets"):
 		return (HIT_PROFILES["light"] as Dictionary).duplicate(true)
 	return (HIT_PROFILES["generic"] as Dictionary).duplicate(true)
 
@@ -329,7 +329,7 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 func _on_player_attacked(weapon_id: StringName, _context: Dictionary) -> void:
 	# Coordinator-backed weapons publish their feedback through Profile cues.
 	# Their compatibility player_attacked fact must not trigger the legacy Sword fallback.
-	if weapon_id in [&"sword", &"bow", &"gun", &"staff"]:
+	if weapon_id in [&"sword", &"bow", &"gun", &"staff", &"gauntlets"]:
 		return
 	var player := _first_player()
 	if player == null:
@@ -362,7 +362,12 @@ func _on_weapon_cue_requested(
 	if player != null:
 		var proxy := _ensure_actor_proxy(player)
 		if proxy != null:
-			proxy.play_action(&"attack")
+			var animation_id := StringName(str(cue.get("animation_id", "")))
+			var vfx_id := StringName(str(cue.get("vfx_id", "")))
+			if proxy.has_method("play_weapon_cue"):
+				proxy.play_weapon_cue(animation_id, vfx_id)
+			else:
+				proxy.play_action(&"attack")
 	var audio_id := StringName(str(cue.get("audio_id", "")))
 	if _audio != null and audio_id != &"":
 		_audio.play_cue(audio_id, 0.8)

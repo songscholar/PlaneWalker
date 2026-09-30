@@ -224,6 +224,51 @@ func _test_weapon_presentations_project_to_union(suite) -> void:
 		suite.assert_equal(fire_staff_state["status_remaining"], 0, "closed combo window has no remaining duration")
 		suite.assert_equal(fire_staff_state["secondary_value"], 1, "runtime Fire maps to stable element code one")
 
+	var gauntlets_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	gauntlets_authoritative["run_id"] = "gauntlets-view-run"
+	var gauntlets_player := _player_snapshot()
+	gauntlets_player["weapon"] = _gauntlets_weapon_presentation()
+	var gauntlets_result = projector.project(
+		gauntlets_authoritative,
+		_room_definition(1, "combat"),
+		gauntlets_player,
+		null,
+		7,
+		{}
+	)
+	suite.assert_true(gauntlets_result.ok, "Gauntlets presentation projects")
+	if gauntlets_result.ok:
+		var gauntlets_state: Dictionary = gauntlets_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(gauntlets_state["weapon_id"], "gauntlets", "Gauntlets union keeps canonical weapon id")
+		suite.assert_equal(gauntlets_state["meter_kind"], "combo", "active Gauntlets pressure uses the Combo meter")
+		suite.assert_equal(gauntlets_state["meter_current"], 15, "Gauntlets Combo count projects")
+		suite.assert_equal(gauntlets_state["meter_max"], 30, "Gauntlets Combo meter reaches its final tier at thirty")
+		suite.assert_equal(gauntlets_state["status_id"], "combo_active", "five-plus Combo exposes active pressure")
+		suite.assert_equal(gauntlets_state["status_remaining"], 77, "Gauntlets timeout remains readable")
+		suite.assert_equal(gauntlets_state["secondary_id"], "combo", "Gauntlets keeps the exact Combo as secondary state")
+		suite.assert_equal(gauntlets_state["secondary_value"], 15, "Gauntlets exact Combo count is preserved")
+
+	var counter_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	counter_authoritative["run_id"] = "gauntlets-counter-view-run"
+	var counter_player := _player_snapshot()
+	counter_player["weapon"] = _gauntlets_weapon_presentation()
+	counter_player["weapon"]["runtime"]["counter_ready"] = true
+	var counter_result = projector.project(
+		counter_authoritative,
+		_room_definition(1, "combat"),
+		counter_player,
+		null,
+		8,
+		{}
+	)
+	suite.assert_true(counter_result.ok, "live Gauntlets Counter window projects")
+	if counter_result.ok:
+		var counter_state: Dictionary = counter_result.context["view_state"]["weapon_state"]
+		suite.assert_equal(counter_state["meter_kind"], "counter", "live Counter window replaces the Combo meter")
+		suite.assert_equal(counter_state["meter_current"], 1, "live Counter window projects ready state")
+		suite.assert_equal(counter_state["meter_max"], 1, "Counter readiness uses a binary meter")
+		suite.assert_equal(counter_state["status_id"], "counter_ready", "live Counter window projects its localized status")
+
 
 func _test_phase_flags_and_optional_payloads(suite) -> void:
 	var projector = RunViewStateProjectorScript.new()
@@ -334,6 +379,33 @@ func _test_invalid_inputs_are_rejected(suite) -> void:
 	non_finite_time_load["weapon"]["runtime"]["time_load_remaining_frames"] = INF
 	var invalid_time_load = projector.project(_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE), _room_definition(1, "combat"), non_finite_time_load, null, 0, {})
 	suite.assert_equal(invalid_time_load.code, &"INVALID_ARGUMENT", "projector rejects non-finite Gun Time Load state")
+
+	var invalid_gauntlets_cases: Array[Dictionary] = [
+		{"field": "combo_count", "value": -1, "message": "negative Gauntlets Combo"},
+		{"field": "combo_count", "value": "15", "message": "non-numeric Gauntlets Combo"},
+		{"field": "combo_count", "value": 1000, "message": "Gauntlets Combo above the Profile maximum"},
+		{"field": "combo_remaining_frames", "value": INF, "message": "non-finite Gauntlets timeout"},
+		{"field": "combo_remaining_frames", "value": 1.5, "message": "fractional Gauntlets timeout"},
+		{"field": "counter_ready", "value": 1, "message": "non-boolean Gauntlets counter readiness"},
+		{"field": "chain_step", "value": 5, "message": "Gauntlets chain step above the Profile maximum"},
+	]
+	for invalid_case: Dictionary in invalid_gauntlets_cases:
+		var invalid_gauntlets := _player_snapshot()
+		invalid_gauntlets["weapon"] = _gauntlets_weapon_presentation()
+		invalid_gauntlets["weapon"]["runtime"][str(invalid_case["field"])] = invalid_case["value"]
+		var invalid_gauntlets_result = projector.project(
+			_authoritative(RunPhaseScript.Value.COMBAT_ACTIVE),
+			_room_definition(1, "combat"),
+			invalid_gauntlets,
+			null,
+			0,
+			{}
+		)
+		suite.assert_equal(
+			invalid_gauntlets_result.code,
+			&"INVALID_ARGUMENT",
+			"projector rejects %s" % str(invalid_case["message"])
+		)
 
 
 func _authoritative(phase: int) -> Dictionary:
@@ -482,6 +554,23 @@ func _legacy_staff_weapon_presentation() -> Dictionary:
 			"current_element": "ice",
 			"sequence_first_element": "lightning",
 			"sequence_remaining_frames": 90,
+		},
+	}
+
+
+func _gauntlets_weapon_presentation() -> Dictionary:
+	return {
+		"weapon_id": "gauntlets",
+		"action_id": "",
+		"phase": "READY",
+		"runtime": {
+			"weapon_id": "gauntlets",
+			"action_id": "",
+			"phase": "READY",
+			"chain_step": 3,
+			"combo_count": 15,
+			"combo_remaining_frames": 77,
+			"counter_ready": false,
 		},
 	}
 

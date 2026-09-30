@@ -20,6 +20,7 @@ func _run() -> void:
 	await _test_physical_legacy_and_semantic_aliases_deduplicate()
 	await _test_bow_primary_aliases_release_only_on_the_last_edge()
 	await _test_rejected_toggle_press_does_not_poison_the_next_attempt()
+	await _test_weapon_aim_priority_and_fallback_match_submission_context()
 	await _test_bow_candidate_respects_milestone_boundaries()
 	await _test_candidate_bow_rejects_launch_only_slots_atomically()
 	if EventBus.weapon_action_committed.is_connected(_on_weapon_action_committed):
@@ -171,6 +172,68 @@ func _test_rejected_toggle_press_does_not_poison_the_next_attempt() -> void:
 	player.cancel_transient_actions()
 	GameState.persistent = previous_persistent.duplicate(true)
 	await _free_player(player)
+
+
+func _test_weapon_aim_priority_and_fallback_match_submission_context() -> void:
+	var player := await _spawn_player()
+	player.restore_rewind_facing(Vector2.LEFT)
+
+	var right_stick: Vector2 = player.call(
+		"_resolve_weapon_aim_direction",
+		Vector2.UP,
+		Vector2.RIGHT
+	)
+	_suite.assert_equal(right_stick, Vector2.UP, "right-stick aim has priority over mouse direction")
+	player.call("_apply_weapon_aim_direction", right_stick)
+	_assert_all_weapon_aims(player, Vector2.UP, "right-stick")
+	_assert_vector_close(
+		player.call("_weapon_submission_context").get("aim_direction"),
+		Vector2.UP,
+		"right-stick visual aim and committed context"
+	)
+
+	var mouse: Vector2 = player.call(
+		"_resolve_weapon_aim_direction",
+		Vector2(0.1, 0.0),
+		Vector2.DOWN
+	)
+	_suite.assert_equal(mouse, Vector2.DOWN, "mouse aim remains compatible below the stick deadzone")
+	player.call("_apply_weapon_aim_direction", mouse)
+	_assert_all_weapon_aims(player, Vector2.DOWN, "mouse")
+	_assert_vector_close(
+		player.call("_weapon_submission_context").get("aim_direction"),
+		Vector2.DOWN,
+		"mouse visual aim and committed context"
+	)
+
+	var fallback: Vector2 = player.call(
+		"_resolve_weapon_aim_direction",
+		Vector2.ZERO,
+		Vector2.ZERO
+	)
+	_suite.assert_equal(fallback, Vector2.LEFT, "missing stick and mouse input falls back to recent movement facing")
+	player.call("_apply_weapon_aim_direction", fallback)
+	_assert_all_weapon_aims(player, Vector2.LEFT, "movement fallback")
+	_assert_vector_close(
+		player.call("_weapon_submission_context").get("aim_direction"),
+		Vector2.LEFT,
+		"fallback visual aim and committed context"
+	)
+	await _free_player(player)
+
+
+func _assert_all_weapon_aims(player: Node, expected: Vector2, label: String) -> void:
+	for node_name: String in ["SwordWeapon", "BowWeapon", "GauntletsWeapon", "GunWeapon", "StaffWeapon"]:
+		var weapon: Node2D = player.get_node(node_name)
+		var actual := Vector2.RIGHT.rotated(weapon.rotation)
+		_suite.assert_close(actual.x, expected.x, "%s %s aim x matches" % [label, node_name])
+		_suite.assert_close(actual.y, expected.y, "%s %s aim y matches" % [label, node_name])
+
+
+func _assert_vector_close(actual_value: Variant, expected: Vector2, label: String) -> void:
+	var actual: Vector2 = actual_value as Vector2
+	_suite.assert_close(actual.x, expected.x, "%s x agrees" % label)
+	_suite.assert_close(actual.y, expected.y, "%s y agrees" % label)
 
 
 func _test_bow_candidate_respects_milestone_boundaries() -> void:

@@ -59,6 +59,7 @@ func _run() -> void:
 	await _assert_bow_feedback_contract()
 	await _assert_gun_feedback_contract()
 	await _assert_staff_feedback_contract()
+	await _assert_gauntlets_feedback_contract()
 	await _assert_audio_cleanup_contract()
 	_assert_overlay_contract()
 	await _assert_feedback_runtime_gates()
@@ -399,15 +400,22 @@ func _assert_hit_feedback_profiles() -> void:
 	var hostile := light.copy_for_source(self)
 	hostile.tags.clear()
 	hostile.tags.append("enemy:melee")
+	var gauntlets := light.copy_for_source(self)
+	gauntlets.tags.clear()
+	gauntlets.tags.append("weapon:gauntlets")
 
 	var light_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(light, false)
 	var finisher_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(finisher, false)
 	var heavy_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(heavy, false)
 	var hostile_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(hostile, true)
+	var gauntlets_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(gauntlets, false)
 	_suite.assert_equal(light_profile.get("pause_frames"), 3, "light hit pauses for three frames")
 	_suite.assert_equal(finisher_profile.get("pause_frames"), 5, "finisher pauses for five frames")
 	_suite.assert_equal(heavy_profile.get("pause_frames"), 6, "heavy hit pauses for six frames")
 	_suite.assert_equal(hostile_profile.get("pause_frames"), 2, "player hurt pauses for two frames")
+	_suite.assert_equal(gauntlets_profile.get("pause_frames"), 3, "Gauntlets contact keeps a crisp three-frame hit pause")
+	_suite.assert_equal(gauntlets_profile.get("audio_cue"), &"hit_light", "Gauntlets contact keeps the dedicated impact audio path")
+	_suite.assert_close(float(gauntlets_profile.get("camera_trauma", 0.0)), 3.0, "Gauntlets contact keeps its light-hit camera response")
 	_suite.assert_true(
 		float(heavy_profile.get("camera_trauma", 0.0)) > float(light_profile.get("camera_trauma", 0.0)),
 		"heavy hit camera feedback exceeds light hit"
@@ -460,6 +468,20 @@ func _assert_audio_contract() -> void:
 		_suite.assert_true(
 			cues.get(cue_id, {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
 			"Staff cue %s never aliases the Sword swing signature" % str(cue_id)
+		)
+	for cue_id: StringName in [
+		&"gauntlets_jab",
+		&"gauntlets_hook",
+		&"gauntlets_uppercut",
+		&"gauntlets_charged",
+		&"gauntlets_counter",
+		&"gauntlets_skill",
+		&"gauntlets_ultimate",
+	]:
+		_suite.assert_true(cues.has(cue_id), "Gauntlets cue %s has a dedicated audio signature" % str(cue_id))
+		_suite.assert_true(
+			cues.get(cue_id, {}).get("fingerprint") != cues.get(&"sword_swing", {}).get("fingerprint"),
+			"Gauntlets cue %s never aliases the Sword swing signature" % str(cue_id)
 		)
 
 
@@ -679,6 +701,7 @@ func _assert_staff_feedback_contract() -> void:
 	_suite.assert_true(proxy != null, "Staff feedback probe receives a player proxy")
 	CombatFeedback.reset_feedback_for_test()
 
+
 	EventBus.player_attacked.emit(&"staff", {"token": 901})
 	EventBus.weapon_cue_requested.emit(
 		&"staff",
@@ -736,6 +759,132 @@ func _assert_staff_feedback_contract() -> void:
 		_suite.assert_equal(zone_snapshot.get("staff_element"), "lightning", "Staff proxy updates from canonical runtime element changes")
 		_suite.assert_true(not bool(zone_snapshot.get("staff_combination_signature_visible", true)), "expired Staff combo hides its signature")
 		_suite.assert_equal(zone_snapshot.get("facing"), Vector2.LEFT, "Staff cast reads snapshot facing")
+
+	player.queue_free()
+	await get_tree().process_frame
+	CombatFeedback.reset_feedback_for_test()
+
+
+func _assert_gauntlets_feedback_contract() -> void:
+	var player := SnapshotPlayer.new()
+	player.weapon_snapshot = {
+		"weapon_id": "gauntlets",
+		"action_id": "dodge_counter",
+		"phase": "ACTIVE",
+		"token": 1001,
+		"runtime": {
+			"combo_count": 15,
+			"chain_step": 0,
+			"counter_ready": true,
+		},
+		"facing": Vector2.LEFT,
+	}
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "Gauntlets feedback probe receives a player proxy")
+	CombatFeedback.reset_feedback_for_test()
+	if proxy != null:
+		proxy.advance_animation_for_test(0.01)
+		var equipped_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(
+			equipped_snapshot.get("weapon_visual"),
+			"gauntlets",
+			"Gauntlets snapshot selects a fist silhouette instead of the Sword fallback"
+		)
+		_suite.assert_true(
+			not bool(equipped_snapshot.get("melee_slash_visible", true)),
+			"Gauntlets never exposes the Sword slash primitive"
+		)
+
+	EventBus.player_attacked.emit(&"gauntlets", {"token": 1001})
+	EventBus.weapon_cue_requested.emit(
+		&"gauntlets",
+		&"dodge_counter",
+		1001,
+		{
+			"cue_id": "gauntlets_dodge_counter",
+			"animation_id": "gauntlets_counter",
+			"vfx_id": "gauntlets_counter_line",
+			"audio_id": "gauntlets_counter",
+			"camera_id": "impact_heavy",
+		}
+	)
+	EventBus.weapon_cue_requested.emit(
+		&"gauntlets",
+		&"dodge_counter",
+		1001,
+		{
+			"cue_id": "gauntlets_dodge_counter",
+			"animation_id": "gauntlets_counter",
+			"vfx_id": "gauntlets_counter_line",
+			"audio_id": "gauntlets_counter",
+			"camera_id": "impact_heavy",
+		}
+	)
+	var history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(history.count(&"gauntlets_counter"), 1, "one Gauntlets token plays its Counter cue exactly once")
+	_suite.assert_equal(history.count(&"sword_swing"), 0, "Gauntlets never falls back to the legacy Sword cue")
+	_suite.assert_true(
+		float(CombatFeedback.get_camera_feedback_snapshot_for_test().get("trauma", 0.0)) >= 1.5,
+		"Gauntlets Counter preserves the heavy camera response"
+	)
+	if proxy != null:
+		var counter_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(
+			counter_snapshot.get("presentation_animation_id"),
+			"gauntlets_counter",
+			"CombatFeedback routes the Profile animation id into the player proxy"
+		)
+		_suite.assert_equal(
+			counter_snapshot.get("presentation_vfx_id"),
+			"gauntlets_counter_line",
+			"CombatFeedback routes the Profile VFX id into the player proxy"
+		)
+		_suite.assert_true(
+			bool(counter_snapshot.get("gauntlets_counter_line_visible", false)),
+			"Dodge Counter renders a dedicated speed-line cue"
+		)
+
+	EventBus.weapon_cue_requested.emit(
+		&"gauntlets",
+		&"punch_1",
+		1002,
+		{
+			"cue_id": "gauntlets_left_jab",
+			"animation_id": "gauntlets_left_jab",
+			"vfx_id": "gauntlets_jab_wind",
+			"audio_id": "gauntlets_jab",
+			"camera_id": "impact_light",
+		}
+	)
+	if proxy != null:
+		var left_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(left_snapshot.get("gauntlets_lead_fist"), "left", "first punch visibly leads with the left fist")
+		_suite.assert_true(bool(left_snapshot.get("gauntlets_punch_wind_visible", false)), "left jab renders a punch-wind trail")
+
+	EventBus.weapon_cue_requested.emit(
+		&"gauntlets",
+		&"punch_2",
+		1003,
+		{
+			"cue_id": "gauntlets_right_jab",
+			"animation_id": "gauntlets_right_jab",
+			"vfx_id": "gauntlets_jab_wind",
+			"audio_id": "gauntlets_jab",
+			"camera_id": "impact_light",
+		}
+	)
+	if proxy != null:
+		var right_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(right_snapshot.get("gauntlets_lead_fist"), "right", "second punch visibly leads with the right fist")
+		_suite.assert_true(bool(right_snapshot.get("gauntlets_punch_wind_visible", false)), "right jab keeps the punch-wind trail")
+		proxy.advance_animation_for_test(0.30)
+		var expired_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_true(
+			not bool(expired_snapshot.get("gauntlets_punch_wind_visible", true)),
+			"transient punch wind expires instead of sticking to the actor"
+		)
 
 	player.queue_free()
 	await get_tree().process_frame

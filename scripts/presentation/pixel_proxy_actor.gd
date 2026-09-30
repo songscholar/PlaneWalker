@@ -110,6 +110,9 @@ var _weapon_snapshot_available: bool = false
 var _bow_tension: float = 0.0
 var _bow_charge_tier: String = ""
 var _staff_element: String = ""
+var _presentation_animation_id: String = ""
+var _presentation_vfx_id: String = ""
+var _presentation_cue_remaining: float = 0.0
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -170,6 +173,13 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 	_update_presentation_facing()
 	_apply_pixel_transform()
 	queue_redraw()
+
+
+func play_weapon_cue(animation_id: StringName, vfx_id: StringName) -> void:
+	_presentation_animation_id = str(animation_id)
+	_presentation_vfx_id = str(vfx_id)
+	_presentation_cue_remaining = _weapon_cue_duration()
+	play_action(&"attack", _presentation_cue_remaining)
 
 
 func spawn_afterimage(world_position: Vector2, lifetime: float = 0.22) -> Node2D:
@@ -252,6 +262,11 @@ func get_snapshot_for_test() -> Dictionary:
 		"staff_cast_circle_visible": _staff_cast_circle_visible(),
 		"staff_zone_boundary_visible": _staff_zone_boundary_visible(),
 		"staff_combination_signature_visible": _staff_combination_signature_visible(),
+		"presentation_animation_id": _presentation_animation_id,
+		"presentation_vfx_id": _presentation_vfx_id,
+		"gauntlets_lead_fist": _gauntlets_lead_fist(),
+		"gauntlets_punch_wind_visible": _gauntlets_punch_wind_visible(),
+		"gauntlets_counter_line_visible": _gauntlets_counter_line_visible(),
 		"melee_slash_visible": _state == &"attack" and _weapon_visual_kind() == "sword",
 		"boss_phase_marks": _boss_phase,
 		"boss_core_shape": _boss_core_shape,
@@ -271,6 +286,10 @@ func _advance_animation(delta: float) -> void:
 	if not _reduced_motion:
 		_phase_clock += delta
 	_flash_remaining = maxf(0.0, _flash_remaining - delta)
+	_presentation_cue_remaining = maxf(0.0, _presentation_cue_remaining - delta)
+	if _presentation_cue_remaining <= 0.0:
+		_presentation_animation_id = ""
+		_presentation_vfx_id = ""
 	_refresh_player_weapon_presentation()
 	if _action_remaining > 0.0:
 		_action_remaining = maxf(0.0, _action_remaining - delta)
@@ -413,8 +432,59 @@ func _weapon_visual_kind() -> String:
 			return "gun"
 		"staff":
 			return "staff"
+		"gauntlets":
+			return "gauntlets"
 		_:
 			return "sword"
+
+
+func _weapon_cue_duration() -> float:
+	if _presentation_animation_id == "gauntlets_ultimate":
+		return 0.34
+	if _presentation_animation_id in ["gauntlets_charged", "gauntlets_counter", "gauntlets_uppercut", "gauntlets_skill"]:
+		return 0.26
+	return 0.22
+
+
+func _gauntlets_lead_fist() -> String:
+	if _weapon_id != "gauntlets":
+		return ""
+	if _presentation_animation_id.begins_with("gauntlets_left_"):
+		return "left"
+	if _presentation_animation_id.begins_with("gauntlets_right_"):
+		return "right"
+	match _presentation_animation_id:
+		"gauntlets_counter", "gauntlets_uppercut":
+			return "right"
+		"gauntlets_charged", "gauntlets_skill", "gauntlets_ultimate":
+			return "both"
+	match _weapon_action_id:
+		"punch_1", "punch_3":
+			return "left"
+		"punch_2", "punch_4", "punch_5", "dodge_counter":
+			return "right"
+		"charged_heavy", "space_time_shatter", "primordial_collapse_punch":
+			return "both"
+	var runtime_value: Variant = _player_weapon_snapshot.get("runtime", {})
+	if runtime_value is Dictionary:
+		return "left" if int((runtime_value as Dictionary).get("chain_step", 0)) % 2 == 0 else "right"
+	return "left"
+
+
+func _gauntlets_punch_wind_visible() -> bool:
+	return (
+		_weapon_id == "gauntlets"
+		and _presentation_cue_remaining > 0.0
+		and _presentation_vfx_id in ["gauntlets_jab_wind", "gauntlets_hook_wind", "gauntlets_uppercut"]
+	)
+
+
+func _gauntlets_counter_line_visible() -> bool:
+	return (
+		_weapon_id == "gauntlets"
+		and _presentation_cue_remaining > 0.0
+		and _presentation_vfx_id == "gauntlets_counter_line"
+	)
 
 
 func _gun_muzzle_visible() -> bool:
@@ -579,6 +649,10 @@ func _apply_pixel_transform() -> void:
 				offset = _facing * (-2.0 if _weapon_phase == "ACTIVE" else 0.0)
 				if not _reduced_motion and _weapon_phase == "ACTIVE":
 					target_scale = Vector2(1.04, 0.98) if absf(_facing.x) > 0.0 else Vector2(0.98, 1.04)
+			elif _weapon_visual_kind() == "gauntlets":
+				offset = _facing * (4.0 if _presentation_animation_id == "gauntlets_counter" else 2.0)
+				if not _reduced_motion:
+					target_scale = Vector2(1.1, 0.92) if absf(_facing.x) > 0.0 else Vector2(0.92, 1.1)
 			else:
 				offset = _facing * 2.0
 				target_scale = Vector2(1.08, 0.94) if absf(_facing.x) > 0.0 else Vector2(0.94, 1.08)
@@ -661,6 +735,8 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 		_draw_player_gun(accent)
 	elif _weapon_visual_kind() == "staff":
 		_draw_player_staff(accent)
+	elif _weapon_visual_kind() == "gauntlets":
+		_draw_player_gauntlets(accent)
 	elif _state == &"attack":
 		draw_rect(Rect2(10, -4, 18, 4), accent, true)
 		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
@@ -735,6 +811,40 @@ func _draw_player_staff(accent: Color) -> void:
 	if _staff_combination_signature_visible():
 		draw_arc(Vector2(36, -9), 10.0, 0.0, TAU, 12, Color.WHITE, 1.0, false)
 		draw_rect(Rect2(32, -10, 8, 2), element_color.lightened(0.25), true)
+
+
+func _draw_player_gauntlets(accent: Color) -> void:
+	var glove_color := accent.darkened(0.08)
+	var lead_fist := _gauntlets_lead_fist()
+	var left_extension := 10.0 if _state == &"attack" and lead_fist in ["left", "both"] else 0.0
+	var right_extension := 10.0 if _state == &"attack" and lead_fist in ["right", "both"] else 0.0
+	draw_rect(Rect2(8.0 + left_extension, -11.0, 8.0, 8.0), glove_color, true)
+	draw_rect(Rect2(8.0 + right_extension, 3.0, 8.0, 8.0), glove_color.lightened(0.12), true)
+	draw_rect(Rect2(14.0 + left_extension, -9.0, 4.0, 4.0), Color.WHITE, true)
+	draw_rect(Rect2(14.0 + right_extension, 5.0, 4.0, 4.0), Color.WHITE, true)
+	if _gauntlets_punch_wind_visible():
+		var wind_y := -7.0 if lead_fist == "left" else 7.0
+		for index: int in range(3):
+			var line_offset := float(index) * 5.0
+			draw_line(
+				Vector2(20.0 + line_offset, wind_y - 5.0),
+				Vector2(32.0 + line_offset, wind_y - 5.0),
+				accent.lightened(0.24),
+				2.0
+			)
+	if _gauntlets_counter_line_visible():
+		for index: int in range(4):
+			var line_y := -12.0 + float(index) * 8.0
+			draw_line(Vector2(-28.0, line_y), Vector2(4.0, line_y), Color(0.52, 0.96, 1.0), 2.0)
+	match _presentation_vfx_id:
+		"gauntlets_charged_ring":
+			draw_arc(Vector2(22.0, 0.0), 16.0, 0.0, TAU, 16, Color(1.0, 0.82, 0.28), 2.0, false)
+		"gauntlets_shatter":
+			for angle: float in [-0.6, -0.2, 0.2, 0.6]:
+				draw_line(Vector2(18.0, 0.0), Vector2(38.0, 0.0).rotated(angle), accent, 2.0)
+		"gauntlets_collapse":
+			draw_arc(Vector2(18.0, 0.0), 18.0, 0.0, TAU, 18, accent, 2.0, false)
+			draw_arc(Vector2(18.0, 0.0), 26.0, 0.0, TAU, 22, Color.WHITE, 2.0, false)
 
 
 func _staff_element_color() -> Color:

@@ -186,6 +186,28 @@ func _run() -> void:
 		_suite.assert_true(weapon_status_label.text.contains(tr("HUD_WEAPON_STATUS_ELEMENT_FIRE")), "Staff current element renders")
 		_suite.assert_true(weapon_status_label.text.contains("3.0"), "Staff sequence duration renders in seconds")
 		_suite.assert_true(not weapon_status_label.text.contains("primordial_wrath"), "Staff HUD does not expose the internal action id")
+	var gauntlets_run := combat.duplicate(true)
+	gauntlets_run["run_id"] = "fixture-gauntlets-run"
+	gauntlets_run["revision"] = 0
+	gauntlets_run["weapon_state"] = {
+		"weapon_id": "gauntlets",
+		"action_id": "",
+		"phase": "READY",
+		"meter_kind": "combo",
+		"meter_current": 15,
+		"meter_max": 30,
+		"status_id": "combo_active",
+		"status_stacks": 1,
+		"status_remaining": 120,
+		"secondary_id": "combo",
+		"secondary_value": 15,
+	}
+	_suite.assert_true(hud.render(gauntlets_run).ok, "Gauntlets weapon state renders")
+	if weapon_name_label != null and weapon_meter_label != null and weapon_status_label != null:
+		_suite.assert_equal(weapon_name_label.text, tr("WEAPON_GAUNTLETS_NAME"), "Gauntlets name is localized")
+		_suite.assert_true(weapon_meter_label.text.contains("15 / 30"), "Gauntlets Combo meter renders")
+		_suite.assert_true(weapon_status_label.text.contains(tr("HUD_WEAPON_STATUS_COMBO_ACTIVE")), "Gauntlets active Combo status renders")
+		_suite.assert_true(not weapon_status_label.text.contains("gauntlets"), "Gauntlets HUD does not expose an internal identifier")
 	_suite.assert_equal(combat, combat_input, "render treats the supplied snapshot as immutable input")
 	var latest: Dictionary = hud.latest_state()
 	if not latest.is_empty():

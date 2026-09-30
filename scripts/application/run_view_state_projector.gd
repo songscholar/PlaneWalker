@@ -126,6 +126,8 @@ func _weapon_view(value: Variant) -> Dictionary:
 			return _gun_weapon_view(action_id, phase, runtime)
 		"staff":
 			return _staff_weapon_view(action_id, phase, runtime)
+		"gauntlets":
+			return _gauntlets_weapon_view(action_id, phase, runtime)
 		_:
 			return {
 				"ok": true,
@@ -295,6 +297,53 @@ func _staff_element_code(element_id: String) -> int:
 			return 3
 		_:
 			return 0
+
+
+func _gauntlets_weapon_view(action_id: String, phase: String, runtime: Dictionary) -> Dictionary:
+	var combo_field := "combo_count" if runtime.has("combo_count") else "combo"
+	var combo_value: Variant = runtime.get(combo_field, 0)
+	if typeof(combo_value) != TYPE_INT or int(combo_value) < 0 or int(combo_value) > 999:
+		return {"ok": false, "field": "player.weapon.runtime.%s" % combo_field}
+	var combo_count := int(combo_value)
+	var chain_step_value: Variant = runtime.get("chain_step", 0)
+	if typeof(chain_step_value) != TYPE_INT or int(chain_step_value) < 0 or int(chain_step_value) > 4:
+		return {"ok": false, "field": "player.weapon.runtime.chain_step"}
+	var combo_remaining: Variant = runtime.get(
+		"combo_remaining_frames",
+		runtime.get("combo_timeout_remaining_frames", 0)
+	)
+	if typeof(combo_remaining) != TYPE_INT or int(combo_remaining) < 0:
+		return {"ok": false, "field": "player.weapon.runtime.combo_remaining_frames"}
+	var counter_ready_value: Variant = runtime.get("counter_ready", false)
+	if typeof(counter_ready_value) != TYPE_BOOL:
+		return {"ok": false, "field": "player.weapon.runtime.counter_ready"}
+	var counter_ready := bool(counter_ready_value)
+	var meter_kind := "counter" if counter_ready else "combo"
+	var meter_current: Variant = 1 if counter_ready else mini(combo_count, 30)
+	var meter_max: Variant = 1 if counter_ready else 30
+	var status_id := "ready"
+	if counter_ready:
+		status_id = "counter_ready"
+	elif phase != "READY":
+		status_id = "acting"
+	elif combo_count >= 5:
+		status_id = "combo_active"
+	return {
+		"ok": true,
+		"weapon_state": _weapon_state(
+			"gauntlets",
+			action_id,
+			phase,
+			meter_kind,
+			meter_current,
+			meter_max,
+			status_id,
+			0 if status_id in ["ready", "acting"] else 1,
+			combo_remaining if status_id == "combo_active" else 0,
+			"combo" if combo_count > 0 else "",
+			combo_count if combo_count > 0 else 0
+		),
+	}
 
 
 func _weapon_state(

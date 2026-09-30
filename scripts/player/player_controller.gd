@@ -6,6 +6,7 @@ const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
 const BowWeaponRuntimeScript := preload("res://scripts/combat/weapons/bow_weapon_runtime.gd")
+const GauntletsWeaponRuntimeScript := preload("res://scripts/combat/weapons/gauntlets_weapon_runtime.gd")
 const GunWeaponRuntimeScript := preload("res://scripts/combat/weapons/gun_weapon_runtime.gd")
 const StaffWeaponRuntimeScript := preload("res://scripts/combat/weapons/staff_weapon_runtime.gd")
 const SwordWeaponRuntimeScript := preload("res://scripts/combat/weapons/sword_weapon_runtime.gd")
@@ -24,6 +25,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.ammo_capacity": {"minimum": 0.0, "maximum": 20.0},
 	"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
 	"weapon.charge_rate": {"minimum": 0.0, "maximum": 6.0},
+	"weapon.combo_timeout": {"minimum": 0.25, "maximum": 4.0},
 	"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
 	"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
 	"weapon.mana_max": {"minimum": 0.0, "maximum": 300.0},
@@ -38,6 +40,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 @onready var loadout_runtime: Node = $PlayerLoadoutRuntime
 @onready var sword_weapon: Node = $SwordWeapon
 @onready var bow_weapon: Node = $BowWeapon
+@onready var gauntlets_weapon: Node = $GauntletsWeapon
 @onready var gun_weapon: Node = $GunWeapon
 @onready var staff_weapon: Node = $StaffWeapon
 @onready var time_manager: Node = $TimeManager
@@ -49,6 +52,10 @@ var _dash_velocity: Vector2 = Vector2.ZERO
 var _knockback_velocity: Vector2 = Vector2.ZERO
 var _last_move_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
+var _runtime_frame: int = 0
+var _dash_completion_token: int = 0
+var _dash_completed_at_runtime_frame: int = -1
+var _dash_direction: Vector2 = Vector2.RIGHT
 var _time_acceleration_multiplier: float = 1.0
 var _time_acceleration_token: int = 0
 var _time_acceleration_remaining: float = 0.0
@@ -66,6 +73,7 @@ var _weapon_action_generations_by_token: Dictionary = {}
 var _weapon_action_token_order: Array[int] = []
 var _weapon_hit_fact_claims: Dictionary = {}
 var _weapon_resource_fact_state: Dictionary = {}
+var _next_weapon_action_token_floor: int = 1
 var _weapon_intent_router: RefCounted = WeaponIntentRouterScript.new()
 
 const DASH_DURATION := 0.28
@@ -80,8 +88,12 @@ const TIME_CAST_MOVEMENT_MULTIPLIER := 0.35
 const BOW_TARGET_DISTANCE_PIXELS := 8.0 * 64.0
 const GUN_BASE_ATTACK := 15.0
 const GUN_ATTACK_SPEED := 0.9
+const GAUNTLETS_BASE_ATTACK := 6.0
+const GAUNTLETS_ATTACK_SPEED := 1.4
 const STAFF_BASE_ATTACK := 9.0
 const MAX_TRACKED_WEAPON_FACT_TOKENS := 256
+const RIGHT_STICK_AIM_DEADZONE := 0.25
+const GAUNTLETS_COUNTER_WINDOW_LAST_FRAME := 8
 
 
 func _ready() -> void:
@@ -100,6 +112,11 @@ func _ready() -> void:
 		staff_weapon.payload_result_reported.connect(_on_staff_payload_result_reported)
 	if not staff_weapon.resource_reward_requested.is_connected(_on_staff_resource_reward_requested):
 		staff_weapon.resource_reward_requested.connect(_on_staff_resource_reward_requested)
+	if (
+		gauntlets_weapon.has_signal("impact_feedback_requested")
+		and not gauntlets_weapon.impact_feedback_requested.is_connected(_on_gauntlets_impact_feedback_requested)
+	):
+		gauntlets_weapon.impact_feedback_requested.connect(_on_gauntlets_impact_feedback_requested)
 
 
 func _physics_process(delta: float) -> void:
@@ -116,12 +133,49 @@ func _update_timers(delta: float) -> void:
 
 
 func _update_weapon_aim() -> void:
-	var aim_direction := global_position.direction_to(get_global_mouse_position())
-	if aim_direction.length_squared() > 0.001:
-		sword_weapon.rotation = aim_direction.angle()
-		bow_weapon.rotation = aim_direction.angle()
-		gun_weapon.rotation = aim_direction.angle()
-		staff_weapon.rotation = aim_direction.angle()
+	var aim_direction := _resolve_weapon_aim_direction(
+		_right_stick_aim_direction(),
+		global_position.direction_to(get_global_mouse_position())
+	)
+	_apply_weapon_aim_direction(aim_direction)
+
+
+func _right_stick_aim_direction() -> Vector2:
+	for device_id: int in Input.get_connected_joypads():
+		var direction := Vector2(
+			Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X),
+			Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_Y)
+		)
+		if direction.length_squared() > RIGHT_STICK_AIM_DEADZONE * RIGHT_STICK_AIM_DEADZONE:
+			return direction
+	return Vector2.ZERO
+
+
+func _resolve_weapon_aim_direction(
+	right_stick_direction: Vector2,
+	mouse_direction: Vector2
+) -> Vector2:
+	if (
+		right_stick_direction.length_squared()
+		> RIGHT_STICK_AIM_DEADZONE * RIGHT_STICK_AIM_DEADZONE
+	):
+		return right_stick_direction.normalized()
+	if mouse_direction.length_squared() > 0.001:
+		return mouse_direction.normalized()
+	if _last_move_direction.length_squared() > 0.001:
+		return _last_move_direction.normalized()
+	return Vector2.RIGHT
+
+
+func _apply_weapon_aim_direction(direction: Vector2) -> void:
+	if direction.length_squared() <= 0.001:
+		return
+	var rotation_value := direction.angle()
+	sword_weapon.rotation = rotation_value
+	bow_weapon.rotation = rotation_value
+	gauntlets_weapon.rotation = rotation_value
+	gun_weapon.rotation = rotation_value
+	staff_weapon.rotation = rotation_value
 
 
 func _handle_priority_action_input() -> void:
@@ -247,6 +301,7 @@ func try_action(action_id: StringName) -> bool:
 func configure_loadout(config: Dictionary) -> bool:
 	if loadout_runtime == null:
 		return false
+	_capture_next_weapon_action_token_floor()
 	var next_config := config.duplicate(true)
 	var next_weapon_id := StringName(str(next_config.get("weapon_id", "")))
 	var explicit_weapon_profile := next_config.has("weapon_profile")
@@ -267,14 +322,14 @@ func configure_loadout(config: Dictionary) -> bool:
 		):
 			return false
 		next_config["weapon_profile"] = authoritative_profile.duplicate(true)
-	if next_weapon_id in [&"sword", &"bow", &"staff"] and not next_config.has("weapon_profile"):
+	if next_weapon_id in [&"sword", &"bow", &"staff", &"gauntlets"] and not next_config.has("weapon_profile"):
 		var default_profile := _weapon_profile_definition(next_weapon_id)
 		if default_profile.is_empty():
 			return false
 		next_config["weapon_profile"] = default_profile
 		used_compatibility_profile = true
 	if (
-		(explicit_weapon_profile or next_weapon_id in [&"bow", &"staff"])
+		(explicit_weapon_profile or next_weapon_id in [&"bow", &"staff", &"gauntlets"])
 		and next_config.has("weapon_profile")
 		and not _profile_allows_milestone(next_config)
 	):
@@ -289,7 +344,24 @@ func configure_loadout(config: Dictionary) -> bool:
 	var assembly := _assemble_weapon_runtime(next_config)
 	if not bool(assembly.get("ok", false)):
 		return false
+	var loadout_before: Dictionary = (
+		(loadout_runtime.call("snapshot") as Dictionary).duplicate(true)
+		if loadout_runtime.has_method("snapshot")
+		else {}
+	)
 	if not loadout_runtime.configure(next_config):
+		return false
+	var assembled_runtime := assembly.get("runtime") as RefCounted
+	if (
+		bool(assembly.get("requires_adapter_activation", false))
+		and (
+			assembled_runtime == null
+			or not assembled_runtime.has_method("activate_adapter")
+			or not bool(assembled_runtime.call("activate_adapter"))
+		)
+	):
+		if not loadout_before.is_empty():
+			loadout_runtime.configure(loadout_before)
 		return false
 
 	_disconnect_weapon_coordinator()
@@ -316,6 +388,10 @@ func reset_runtime_state() -> void:
 	_buffered_time_skill = &""
 	_dash_cooldown_remaining = 0.0
 	_dash_velocity = Vector2.ZERO
+	_runtime_frame = 0
+	_dash_completion_token = 0
+	_dash_completed_at_runtime_frame = -1
+	_dash_direction = Vector2.RIGHT
 	_knockback_velocity = Vector2.ZERO
 	velocity = Vector2.ZERO
 	_last_move_direction = Vector2.RIGHT
@@ -325,6 +401,7 @@ func reset_runtime_state() -> void:
 		sword_weapon.cancel_attack()
 		sword_weapon.reset_combo()
 	bow_weapon.reset_runtime_state()
+	gauntlets_weapon.reset_runtime_state()
 	gun_weapon.reset_runtime_state()
 	staff_weapon.reset_runtime_state()
 	_sync_weapon_resource_facts(&"runtime_reset")
@@ -339,12 +416,20 @@ func reset_runtime_state() -> void:
 
 
 func advance_action_frame() -> void:
+	_runtime_frame += 1
 	if _weapon_combo_timeout_frames > 0:
 		_weapon_combo_timeout_frames -= 1
 		if _weapon_combo_timeout_frames == 0 and weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
 			weapon_runtime.call("reset_combo")
 
+	var previous_action_state: int = action_state.current_state
 	action_state.advance_frame()
+	if (
+		previous_action_state == PlayerActionStateScript.State.DASH
+		and action_state.current_state == PlayerActionStateScript.State.FREE
+	):
+		_dash_completion_token += 1
+		_dash_completed_at_runtime_frame = _runtime_frame
 	if weapon_action_coordinator != null:
 		var held_semantic := _active_hold_semantic_action()
 		if held_semantic != &"" and weapon_action_coordinator.has_method("update_live_context"):
@@ -396,6 +481,7 @@ func cancel_transient_actions() -> void:
 	_clear_owned_player_arrows()
 	_clear_owned_player_projectiles()
 	_clear_owned_staff_payloads()
+	_clear_owned_gauntlets_payloads()
 	if weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
 		weapon_runtime.call("reset_combo")
 
@@ -426,6 +512,7 @@ func restore_rewind_safe_action_state(state: Dictionary) -> bool:
 	_clear_owned_player_arrows()
 	_clear_owned_player_projectiles()
 	_clear_owned_staff_payloads()
+	_clear_owned_gauntlets_payloads()
 	return action_state.force_safe_reset()
 
 
@@ -475,6 +562,12 @@ func weapon_presentation_snapshot() -> Dictionary:
 	}
 	if weapon_action_coordinator != null:
 		result = weapon_action_coordinator.presentation_snapshot()
+	if loadout_runtime != null and loadout_runtime.has_weapon(&"gauntlets"):
+		var runtime_value: Variant = result.get("runtime", {})
+		if runtime_value is Dictionary:
+			var runtime_presentation := (runtime_value as Dictionary).duplicate(true)
+			runtime_presentation["counter_ready"] = _gauntlets_counter_window_is_open()
+			result["runtime"] = runtime_presentation
 	var profile_snapshot: Dictionary = (
 		loadout_runtime.weapon_profile_snapshot()
 		if loadout_runtime != null and loadout_runtime.has_method("weapon_profile_snapshot")
@@ -635,7 +728,8 @@ func _begin_dash() -> bool:
 	if not action_state.transition_to(PlayerActionStateScript.State.DASH, _seconds_to_frames(DASH_DURATION)):
 		return false
 	_dash_cooldown_remaining = DASH_COOLDOWN
-	_dash_velocity = _last_move_direction * DASH_SPEED
+	_dash_direction = _last_move_direction.normalized()
+	_dash_velocity = _dash_direction * DASH_SPEED
 	health.apply_invulnerability(DASH_INVULNERABLE_TIME + _dash_invulnerable_bonus)
 	EventBus.player_dashed.emit({})
 	return true
@@ -695,7 +789,7 @@ func _can_buffer_committed_action() -> bool:
 
 func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	var weapon_id := StringName(str(config.get("weapon_id", "")))
-	if weapon_id not in [&"sword", &"bow", &"gun", &"staff"]:
+	if weapon_id not in [&"sword", &"bow", &"gun", &"staff", &"gauntlets"]:
 		return {
 			"ok": true,
 			"profile": null,
@@ -726,7 +820,18 @@ func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	var next_runtime = _new_weapon_runtime(weapon_id)
 	if next_runtime == null:
 		return {"ok": false, "reason": "runtime_unavailable"}
-	if not next_runtime.configure(self, next_profile, next_modifiers):
+	var requires_adapter_activation := (
+		weapon_id == &"gauntlets"
+		and next_runtime.has_method("configure_detached")
+		and next_runtime.has_method("activate_adapter")
+	)
+	var runtime_configured := bool(next_runtime.call(
+		"configure_detached" if requires_adapter_activation else "configure",
+		self,
+		next_profile,
+		next_modifiers
+	))
+	if not runtime_configured:
 		return {"ok": false, "reason": "runtime_configuration_failed"}
 	var runtime_owned_resources := PackedStringArray()
 	for resource_value: Variant in profile_snapshot.get("resources", []):
@@ -746,6 +851,11 @@ func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 	var next_coordinator = WeaponActionCoordinatorScript.new()
 	if not next_coordinator.configure(next_runtime, next_resource_transaction):
 		return {"ok": false, "reason": "coordinator_configuration_failed"}
+	if not bool(next_coordinator.call(
+		"set_next_token_floor",
+		_next_weapon_action_token_floor
+	)):
+		return {"ok": false, "reason": "coordinator_token_floor_failed"}
 	if weapon_id == &"staff" and not bool(staff_weapon.call("configure_result_sink", next_runtime)):
 		return {"ok": false, "reason": "payload_result_sink_configuration_failed"}
 	return {
@@ -754,6 +864,7 @@ func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
 		"modifiers": next_modifiers,
 		"runtime": next_runtime,
 		"coordinator": next_coordinator,
+		"requires_adapter_activation": requires_adapter_activation,
 	}
 
 
@@ -767,6 +878,8 @@ func _new_weapon_runtime(weapon_id: StringName) -> RefCounted:
 			return GunWeaponRuntimeScript.new()
 		&"staff":
 			return StaffWeaponRuntimeScript.new()
+		&"gauntlets":
+			return GauntletsWeaponRuntimeScript.new()
 		_:
 			return null
 
@@ -785,6 +898,7 @@ func _weapon_profile_definition(weapon_id: StringName) -> Dictionary:
 		&"sword": "sword_m1_v1",
 		&"bow": "bow_candidate_v1",
 		&"staff": "staff_launch_v1",
+		&"gauntlets": "gauntlets_launch_v1",
 	}.get(weapon_id, ""))
 	if preferred_profile_id.is_empty():
 		return {}
@@ -854,6 +968,20 @@ func _connect_weapon_coordinator() -> void:
 		weapon_action_coordinator.weapon_runtime_event.connect(_on_weapon_runtime_event)
 
 
+func _capture_next_weapon_action_token_floor() -> void:
+	if weapon_action_coordinator == null or not weapon_action_coordinator.has_method("snapshot"):
+		return
+	var coordinator_snapshot_value: Variant = weapon_action_coordinator.call("snapshot")
+	if not coordinator_snapshot_value is Dictionary:
+		return
+	var observed_next_token := int((coordinator_snapshot_value as Dictionary).get("next_token", 0))
+	if observed_next_token > 0:
+		_next_weapon_action_token_floor = maxi(
+			_next_weapon_action_token_floor,
+			observed_next_token
+		)
+
+
 func _disconnect_weapon_coordinator() -> void:
 	if weapon_action_coordinator == null:
 		return
@@ -869,6 +997,11 @@ func _on_weapon_action_committed(
 	token: int,
 	context: Dictionary
 ) -> void:
+	if token > 0:
+		_next_weapon_action_token_floor = maxi(
+			_next_weapon_action_token_floor,
+			token + 1
+		)
 	_track_weapon_action_token(token, action_id, int(context.get("action_generation", 0)))
 	if weapon_action_coordinator != null:
 		var coordinator_snapshot: Dictionary = weapon_action_coordinator.snapshot()
@@ -1088,6 +1221,35 @@ func _on_staff_payload_result_reported(
 	_sync_weapon_resource_facts(&"payload_result")
 
 
+func _on_gauntlets_impact_feedback_requested(
+	action_token: int,
+	generation: int,
+	fact: Dictionary
+) -> void:
+	if (
+		action_token <= 0
+		or generation != action_token
+		or loadout_runtime == null
+		or not loadout_runtime.has_weapon(&"gauntlets")
+		or not _weapon_action_ids_by_token.has(action_token)
+	):
+		return
+	var action_id := StringName(str(_weapon_action_ids_by_token[action_token]))
+	var target_id := int(fact.get("target_id", 0))
+	if action_id == &"" or str(fact.get("action_id", "")) != str(action_id) or target_id <= 0:
+		return
+	var context := fact.duplicate(true)
+	context["source"] = "gauntlets_payload"
+	context["generation"] = generation
+	EventBus.weapon_hit_confirmed.emit(
+		&"gauntlets",
+		action_id,
+		action_token,
+		target_id,
+		context
+	)
+
+
 func _on_weapon_runtime_event(event: Dictionary) -> void:
 	var event_type := str(event.get("type", ""))
 	var weapon_id := StringName(str(event.get("weapon_id", "")))
@@ -1287,6 +1449,24 @@ func _active_hold_semantic_action() -> StringName:
 	return StringName(str((snapshot.get("plan", {}) as Dictionary).get("semantic_action", "")))
 
 
+func _gauntlets_counter_window_is_open() -> bool:
+	if (
+		loadout_runtime == null
+		or not loadout_runtime.has_weapon(&"gauntlets")
+		or weapon_action_coordinator == null
+		or weapon_action_coordinator.phase_name() != &"READY"
+		or action_state.current_state != PlayerActionStateScript.State.FREE
+		or _dash_completion_token <= 0
+		or _dash_completed_at_runtime_frame < 0
+	):
+		return false
+	var frames_since_completion := _runtime_frame - _dash_completed_at_runtime_frame
+	return (
+		frames_since_completion >= 0
+		and frames_since_completion <= GAUNTLETS_COUNTER_WINDOW_LAST_FRAME
+	)
+
+
 func _weapon_aim_direction() -> Vector2:
 	var weapon_id: StringName = loadout_runtime.weapon_id() if loadout_runtime != null else &""
 	var rotation_value := float(sword_weapon.global_rotation)
@@ -1297,16 +1477,27 @@ func _weapon_aim_direction() -> Vector2:
 			rotation_value = float(gun_weapon.global_rotation)
 		&"staff":
 			rotation_value = float(staff_weapon.global_rotation)
+		&"gauntlets":
+			rotation_value = float(gauntlets_weapon.global_rotation)
 	return Vector2.RIGHT.rotated(rotation_value)
 
 
 func _weapon_submission_context() -> Dictionary:
 	var aim_direction := _weapon_aim_direction().normalized()
+	var frames_since_dash_completion := -1
+	if _dash_completion_token > 0 and _dash_completed_at_runtime_frame >= 0:
+		frames_since_dash_completion = maxi(
+			0,
+			_runtime_frame - _dash_completed_at_runtime_frame
+		)
 	return {
 		"aim_direction": aim_direction,
 		"target_point": global_position + aim_direction * BOW_TARGET_DISTANCE_PIXELS,
 		"facing": _last_move_direction,
 		"run_seed": loadout_runtime.run_seed() if loadout_runtime != null else 0,
+		"dash_completion_token": _dash_completion_token,
+		"frames_since_dash_completion": frames_since_dash_completion,
+		"dash_direction": _dash_direction,
 		"time_interactions": weapon_time_interaction_context(),
 	}
 
@@ -1340,6 +1531,11 @@ func _clear_owned_player_projectiles() -> void:
 func _clear_owned_staff_payloads() -> void:
 	if staff_weapon != null and staff_weapon.has_method("reset_runtime_state"):
 		staff_weapon.call("reset_runtime_state")
+
+
+func _clear_owned_gauntlets_payloads() -> void:
+	if gauntlets_weapon != null and gauntlets_weapon.has_method("reset_runtime_state"):
+		gauntlets_weapon.call("reset_runtime_state")
 
 
 func _seconds_to_frames(seconds: float) -> int:
@@ -1403,6 +1599,11 @@ func is_time_accelerated() -> bool:
 
 
 func _on_damaged(_amount: float, _current_hp: float) -> void:
+	if loadout_runtime != null and loadout_runtime.has_weapon(&"gauntlets") and weapon_runtime != null:
+		if weapon_runtime.has_method("on_player_damaged"):
+			weapon_runtime.call("on_player_damaged")
+		elif weapon_runtime.has_method("reset_combo"):
+			weapon_runtime.call("reset_combo")
 	visual.color = Color(1.0, 0.95, 0.85)
 	var tween := create_tween()
 	tween.tween_property(visual, "color", BASE_COLOR, 0.12)
@@ -1417,6 +1618,7 @@ func _on_died(_killer: Variant) -> void:
 		_clear_owned_player_arrows()
 		_clear_owned_player_projectiles()
 		_clear_owned_staff_payloads()
+		_clear_owned_gauntlets_payloads()
 		cancel_active_time_effects(&"player_died")
 
 
@@ -1432,4 +1634,6 @@ func _apply_stats_to_components(reset_health: bool) -> void:
 	bow_weapon.attack_speed = stats.attack_speed * _time_acceleration_multiplier
 	gun_weapon.base_attack = GUN_BASE_ATTACK
 	gun_weapon.attack_speed = GUN_ATTACK_SPEED * _time_acceleration_multiplier
+	gauntlets_weapon.base_attack = GAUNTLETS_BASE_ATTACK
+	gauntlets_weapon.attack_speed = GAUNTLETS_ATTACK_SPEED * _time_acceleration_multiplier
 	staff_weapon.base_attack = STAFF_BASE_ATTACK
