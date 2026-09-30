@@ -113,6 +113,7 @@ cd "${PROJECT_ROOT}"
 [[ -x tools/run_tests.sh ]] || fail "tools/run_tests.sh must exist and be executable"
 [[ -x tools/validate_project.sh ]] || fail "tools/validate_project.sh must exist and be executable"
 [[ -f .github/workflows/validate.yml ]] || fail ".github/workflows/validate.yml must exist"
+[[ -f requirements-dev.txt ]] || fail "requirements-dev.txt must declare validation dependencies"
 
 bash -n tools/run_tests.sh
 bash -n tools/validate_project.sh
@@ -221,8 +222,12 @@ set -e
 assert_file_contains .github/workflows/validate.yml '^permissions:$' "workflow permissions block"
 assert_file_contains .github/workflows/validate.yml 'contents: read' "workflow read-only repository access"
 assert_file_contains .github/workflows/validate.yml 'godot-ci:4\.6\.1' "workflow Godot version pin"
+assert_file_contains .github/workflows/validate.yml 'actions/setup-python@[0-9a-f]{40}' "workflow pinned Python bootstrap action"
+assert_file_contains .github/workflows/validate.yml "python-version: '3\.12'" "workflow Python version pin"
 assert_file_contains .github/workflows/validate.yml 'python3 --version' "workflow Python availability check"
+assert_file_contains .github/workflows/validate.yml 'python3 -m pip install --requirement requirements-dev\.txt' "workflow development dependency bootstrap"
 assert_file_contains .github/workflows/validate.yml '\./tools/validate_project\.sh' "workflow validation entrypoint"
+assert_file_contains requirements-dev.txt '^jsonschema==[0-9]+\.[0-9]+\.[0-9]+$' "jsonschema dependency pin"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.localization\.test_validate_localization' "localization unit contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 tools/validate_localization\.py' "localization validator entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.documentation\.test_document_governance' "documentation unit contract entrypoint"

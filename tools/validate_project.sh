@@ -167,10 +167,17 @@ if [[ "${SKIP_CI_CONTRACT:-false}" != true ]]; then
 fi
 
 cd "${PROJECT_ROOT}"
+if ! PYTHONDONTWRITEBYTECODE=1 python3 -c 'import jsonschema' >/dev/null 2>&1; then
+	fail "missing Python validation dependencies; run: python3 -m pip install --requirement requirements-dev.txt"
+fi
 printf '\n== Documentation governance contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.documentation.test_document_governance
 PYTHONDONTWRITEBYTECODE=1 python3 tools/document_governance.py \
 	--baseline tools/document_governance_baseline.json
+
+printf '\n== Content schema contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+	tests.contract.content_schema.test_character_runtime_profile_schema
 
 printf '\n== Localization contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization

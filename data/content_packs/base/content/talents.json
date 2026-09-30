@@ -3,7 +3,11 @@
     "id": "tal_eternity_reserve",
     "category": "talent",
     "availability": [
-      "M1"
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "TAL_ETERNITY_RESERVE_NAME",
     "description_key": "TAL_ETERNITY_RESERVE_DESC",
@@ -11,7 +15,7 @@
       "eternity",
       "utility"
     ],
-    "compatibility": {},
+    "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
       "low_energy_regen_multiplier": 2.0,
       "low_energy_threshold": 30.0
@@ -26,7 +30,11 @@
     "id": "tal_ruin_execute",
     "category": "talent",
     "availability": [
-      "M1"
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "TAL_RUIN_EXECUTE_NAME",
     "description_key": "TAL_RUIN_EXECUTE_DESC",
@@ -35,7 +43,7 @@
       "route",
       "ruin"
     ],
-    "compatibility": {},
+    "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
       "heavy_execute_multiplier_bonus": 0.5,
       "heavy_execute_threshold": 0.3
@@ -50,7 +58,11 @@
     "id": "tal_steel_recover",
     "category": "talent",
     "availability": [
-      "M1"
+      "M1",
+      "CURRENT",
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "TAL_STEEL_RECOVER_NAME",
     "description_key": "TAL_STEEL_RECOVER_DESC",
@@ -59,7 +71,7 @@
       "route",
       "steel"
     ],
-    "compatibility": {},
+    "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
       "max_hp_bonus": 20.0,
       "heal": 20.0
@@ -69,5 +81,185 @@
     "role": "route",
     "rarity": "common",
     "icon_id": "content_tal_steel_recover"
+  },
+  {
+    "id": "widened_guard",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_WIDENED_GUARD_NAME",
+    "description_key": "TAL_WIDENED_GUARD_DESC",
+    "tags": ["character", "guard", "time_guardian"],
+    "compatibility": {"character_ids": ["time_guardian"]},
+    "effects": {},
+    "kind": "time_guardian",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_widened_guard"
+  },
+  {
+    "id": "fortress_core",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_FORTRESS_CORE_NAME",
+    "description_key": "TAL_FORTRESS_CORE_DESC",
+    "tags": ["character", "fortress", "time_guardian"],
+    "compatibility": {"character_ids": ["time_guardian"]},
+    "effects": {},
+    "kind": "time_guardian",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_fortress_core"
+  },
+  {
+    "id": "temporal_rebuke",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_TEMPORAL_REBUKE_NAME",
+    "description_key": "TAL_TEMPORAL_REBUKE_DESC",
+    "tags": ["character", "rebuke", "time_guardian"],
+    "compatibility": {"character_ids": ["time_guardian"]},
+    "effects": {},
+    "kind": "time_guardian",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_temporal_rebuke"
+  },
+  {
+    "id": "deep_debt",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_DEEP_DEBT_NAME",
+    "description_key": "TAL_DEEP_DEBT_DESC",
+    "tags": ["character", "void_debt", "void_walker"],
+    "compatibility": {"character_ids": ["void_walker"]},
+    "effects": {},
+    "kind": "void_walker",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_deep_debt"
+  },
+  {
+    "id": "bounded_devour",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_BOUNDED_DEVOUR_NAME",
+    "description_key": "TAL_BOUNDED_DEVOUR_DESC",
+    "tags": ["character", "devour", "void_walker"],
+    "compatibility": {"character_ids": ["void_walker"]},
+    "effects": {},
+    "kind": "void_walker",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_bounded_devour"
+  },
+  {
+    "id": "risk_step",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_RISK_STEP_NAME",
+    "description_key": "TAL_RISK_STEP_DESC",
+    "tags": ["character", "risk", "void_walker"],
+    "compatibility": {"character_ids": ["void_walker"]},
+    "effects": {},
+    "kind": "void_walker",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_risk_step"
+  },
+  {
+    "id": "resonant_plate",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_RESONANT_PLATE_NAME",
+    "description_key": "TAL_RESONANT_PLATE_DESC",
+    "tags": ["armor", "character", "primordial_knight"],
+    "compatibility": {"character_ids": ["primordial_knight"]},
+    "effects": {},
+    "kind": "primordial_knight",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_resonant_plate"
+  },
+  {
+    "id": "echo_forge",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_ECHO_FORGE_NAME",
+    "description_key": "TAL_ECHO_FORGE_DESC",
+    "tags": ["character", "echo", "primordial_knight"],
+    "compatibility": {"character_ids": ["primordial_knight"]},
+    "effects": {},
+    "kind": "primordial_knight",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_echo_forge"
+  },
+  {
+    "id": "realm_collapse",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_REALM_COLLAPSE_NAME",
+    "description_key": "TAL_REALM_COLLAPSE_DESC",
+    "tags": ["character", "instability", "primordial_knight"],
+    "compatibility": {"character_ids": ["primordial_knight"]},
+    "effects": {},
+    "kind": "primordial_knight",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_realm_collapse"
+  },
+  {
+    "id": "codex_margin",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_CODEX_MARGIN_NAME",
+    "description_key": "TAL_CODEX_MARGIN_DESC",
+    "tags": ["character", "codex", "time_lord"],
+    "compatibility": {"character_ids": ["time_lord"]},
+    "effects": {},
+    "kind": "time_lord",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_codex_margin"
+  },
+  {
+    "id": "efficient_inscription",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_EFFICIENT_INSCRIPTION_NAME",
+    "description_key": "TAL_EFFICIENT_INSCRIPTION_DESC",
+    "tags": ["character", "infusion", "time_lord"],
+    "compatibility": {"character_ids": ["time_lord"]},
+    "effects": {},
+    "kind": "time_lord",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_efficient_inscription"
+  },
+  {
+    "id": "dominion_cadence",
+    "category": "talent",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "TAL_DOMINION_CADENCE_NAME",
+    "description_key": "TAL_DOMINION_CADENCE_DESC",
+    "tags": ["character", "dominion", "time_lord"],
+    "compatibility": {"character_ids": ["time_lord"]},
+    "effects": {},
+    "kind": "time_lord",
+    "archetype": "",
+    "role": "route",
+    "rarity": "common",
+    "icon_id": "content_dominion_cadence"
   }
 ]

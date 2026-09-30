@@ -6,6 +6,7 @@ const ContentPackDescriptorScript := preload("res://scripts/content/content_pack
 const ContentPackResolverScript := preload("res://scripts/content/content_pack_resolver.gd")
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
+const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/character_runtime_profile.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -26,6 +27,7 @@ const VALID_CATEGORIES: Array[String] = [
 	"cosmetic",
 	"challenge",
 	"weapon_runtime_profile",
+	"character_runtime_profile",
 ]
 const EFFECT_BEARING_CATEGORIES: Array[String] = ["blessing", "curse", "item", "talent"]
 const OVERRIDABLE_FIELDS: Array[String] = ["archetype", "role", "rarity", "kind"]
@@ -58,6 +60,7 @@ const V2_ALLOWED_FIELDS: Array[String] = [
 	"references",
 	"profile_version",
 	"weapon_id",
+	"character_id",
 	"runtime_kind",
 	"capabilities",
 	"resources",
@@ -66,6 +69,14 @@ const V2_ALLOWED_FIELDS: Array[String] = [
 	"cues",
 	"time_interactions",
 	"boss_interactions",
+	"base_stats",
+	"mobility",
+	"resource",
+	"passive",
+	"character_skill",
+	"weapon_mastery",
+	"presentation",
+	"talent_ids",
 ]
 const COMPATIBILITY_FIELDS: Array[String] = [
 	"character_ids",
@@ -74,6 +85,11 @@ const COMPATIBILITY_FIELDS: Array[String] = [
 	"archetype_ids",
 	"modes",
 ]
+const COMPATIBILITY_CATEGORY_BY_FIELD := {
+	"character_ids": "character",
+	"weapon_ids": "weapon",
+	"time_ability_ids": "time_ability",
+}
 const WEAPON_TIME_ABILITIES: Array[String] = ["stop", "rewind", "accelerate", "rift"]
 const WEAPON_RUNTIME_PROFILE_FIELDS: Array[String] = [
 	"id",
@@ -95,6 +111,41 @@ const WEAPON_RUNTIME_PROFILE_FIELDS: Array[String] = [
 	"cues",
 	"time_interactions",
 	"boss_interactions",
+]
+const CHARACTER_RUNTIME_PROFILE_FIELDS: Array[String] = [
+	"id",
+	"category",
+	"availability",
+	"name_key",
+	"description_key",
+	"tags",
+	"compatibility",
+	"effects",
+	"references",
+	"profile_version",
+	"character_id",
+	"runtime_kind",
+	"base_stats",
+	"mobility",
+	"resource",
+	"passive",
+	"character_skill",
+	"weapon_mastery",
+	"time_interactions",
+	"presentation",
+	"capabilities",
+	"talent_ids",
+]
+const CHARACTER_PROFILE_ONLY_FIELDS: Array[String] = [
+	"character_id",
+	"base_stats",
+	"mobility",
+	"resource",
+	"passive",
+	"character_skill",
+	"weapon_mastery",
+	"presentation",
+	"talent_ids",
 ]
 
 var _definitions: Dictionary = {}
@@ -424,12 +475,40 @@ func resolve_weapon_runtime_profile(weapon_id: StringName, milestone: StringName
 	return _canonical_weapon_runtime_profile(matches[0])
 
 
+func get_character_runtime_profile(profile_id: StringName) -> Dictionary:
+	var definition := get_content(profile_id)
+	if str(definition.get("category", "")) != "character_runtime_profile":
+		return {}
+	return _canonical_character_runtime_profile(definition)
+
+
+func resolve_character_runtime_profile(character_id: StringName, milestone: StringName) -> Dictionary:
+	var matches: Array[Dictionary] = []
+	for definition: Dictionary in get_by_category(&"character_runtime_profile", milestone):
+		if str(definition.get("character_id", "")) == str(character_id):
+			matches.append(definition)
+	if matches.size() != 1:
+		return {}
+	return _canonical_character_runtime_profile(matches[0])
+
+
 func _canonical_weapon_runtime_profile(definition: Dictionary) -> Dictionary:
 	var source: Dictionary = {}
 	for field: String in WEAPON_RUNTIME_PROFILE_FIELDS:
 		if definition.has(field):
 			source[field] = definition[field].duplicate(true) if definition[field] is Array or definition[field] is Dictionary else definition[field]
 	var result: Dictionary = WeaponRuntimeProfileScript.new().configure(source)
+	if not bool(result.get("ok", false)):
+		return {}
+	return (result.get("profile", {}) as Dictionary).duplicate(true)
+
+
+func _canonical_character_runtime_profile(definition: Dictionary) -> Dictionary:
+	var source: Dictionary = {}
+	for field: String in CHARACTER_RUNTIME_PROFILE_FIELDS:
+		if definition.has(field):
+			source[field] = definition[field].duplicate(true) if definition[field] is Array or definition[field] is Dictionary else definition[field]
+	var result: Dictionary = CharacterRuntimeProfileScript.new().configure(source)
 	if not bool(result.get("ok", false)):
 		return {}
 	return (result.get("profile", {}) as Dictionary).duplicate(true)
@@ -808,6 +887,7 @@ func _v2_entry_error(
 		return {"field": "id", "reason": "value"}
 	if typeof(entry["category"]) != TYPE_STRING or not VALID_CATEGORIES.has(str(entry["category"])):
 		return {"field": "category", "reason": "value"}
+	var category := str(entry["category"])
 	var availability_error := _id_array_error(entry["availability"], VALID_AVAILABILITY, false, false)
 	if not availability_error.is_empty():
 		return {"field": "availability", "reason": availability_error}
@@ -825,12 +905,21 @@ func _v2_entry_error(
 		var field := str(field_value)
 		if not COMPATIBILITY_FIELDS.has(field):
 			return {"field": "compatibility.%s" % field, "reason": "unknown"}
-		var compatibility_error := _id_array_error((entry["compatibility"] as Dictionary)[field_value], [], true)
+		if category == "character_runtime_profile" and field in ["archetype_ids", "modes"]:
+			return {"field": "compatibility.%s" % field, "reason": "unsupported_constraint"}
+		var compatibility_error := _id_array_error(
+			(entry["compatibility"] as Dictionary)[field_value],
+			[],
+			category != "character_runtime_profile"
+		)
 		if not compatibility_error.is_empty():
 			return {"field": "compatibility.%s" % field, "reason": compatibility_error}
 	if not entry["effects"] is Dictionary:
 		return {"field": "effects", "reason": "type"}
-	var category := str(entry["category"])
+	if category != "character_runtime_profile":
+		for character_field: String in CHARACTER_PROFILE_ONLY_FIELDS:
+			if entry.has(character_field):
+				return {"field": character_field, "reason": "category_specific_field"}
 	if not EFFECT_BEARING_CATEGORIES.has(category):
 		if not (entry["effects"] as Dictionary).is_empty():
 			return {"field": "effects", "reason": "unsupported_category"}
@@ -852,6 +941,17 @@ func _v2_entry_error(
 		var integration_error := _weapon_runtime_profile_integration_error(entry)
 		if not integration_error.is_empty():
 			return integration_error
+	if category == "character_runtime_profile":
+		var character_profile_result: Dictionary = CharacterRuntimeProfileScript.new().configure(entry)
+		if not bool(character_profile_result.get("ok", false)):
+			var character_profile_context: Dictionary = character_profile_result.get("context", {})
+			return {
+				"field": str(character_profile_context.get("field", "character_runtime_profile")),
+				"reason": str(character_profile_context.get("reason", "invalid")),
+			}
+		var character_integration_error := _character_runtime_profile_integration_error(entry)
+		if not character_integration_error.is_empty():
+			return character_integration_error
 	for field: String in ["kind", "archetype", "role"]:
 		if entry.has(field) and not _optional_identifier_is_valid(entry[field]):
 			return {"field": field, "reason": "value"}
@@ -879,6 +979,34 @@ func _weapon_runtime_profile_integration_error(entry: Dictionary) -> Dictionary:
 		return {"field": "boss_interactions", "reason": "missing"}
 	if not (entry["boss_interactions"] as Dictionary).has("chrono_warden"):
 		return {"field": "boss_interactions.chrono_warden", "reason": "missing"}
+	return {}
+
+
+func _character_runtime_profile_integration_error(entry: Dictionary) -> Dictionary:
+	var mastery_value: Variant = entry.get("weapon_mastery")
+	if not mastery_value is Dictionary:
+		return {"field": "weapon_mastery", "reason": "missing"}
+	var weapon_mastery: Dictionary = mastery_value
+	var expected_weapons: Array[String] = []
+	expected_weapons.append_array(
+		["sword", "bow"]
+		if str(entry.get("id", "")) == "wanderer_m1_v1"
+		else CharacterRuntimeProfileScript.WEAPON_IDS
+	)
+	if weapon_mastery.size() != expected_weapons.size():
+		return {"field": "weapon_mastery", "reason": "incomplete"}
+	for weapon_id: String in expected_weapons:
+		if not weapon_mastery.has(weapon_id):
+			return {"field": "weapon_mastery.%s" % weapon_id, "reason": "missing"}
+	var interactions_value: Variant = entry.get("time_interactions")
+	if not interactions_value is Dictionary:
+		return {"field": "time_interactions", "reason": "missing"}
+	var time_interactions: Dictionary = interactions_value
+	if time_interactions.size() != CharacterRuntimeProfileScript.TIME_ABILITY_IDS.size():
+		return {"field": "time_interactions", "reason": "incomplete"}
+	for ability_id: String in CharacterRuntimeProfileScript.TIME_ABILITY_IDS:
+		if not time_interactions.has(ability_id):
+			return {"field": "time_interactions.%s" % ability_id, "reason": "missing"}
 	return {}
 
 
@@ -942,23 +1070,167 @@ func _first_reference_error(
 			var reference_id := str(reference_value)
 			if not available_ids.has(reference_id):
 				return {"content_id": str(definition["id"]), "reference_id": reference_id}
-		if str(definition.get("category", "")) != "weapon_runtime_profile":
+		var category := str(definition.get("category", ""))
+		var compatibility_reference_error := _compatibility_reference_error(
+			definition,
+			definitions_by_id
+		)
+		if not compatibility_reference_error.is_empty():
+			return compatibility_reference_error
+		if category == "weapon_runtime_profile":
+			var weapon_id := str(definition.get("weapon_id", ""))
+			var weapon_value: Variant = definitions_by_id.get(weapon_id)
+			if not weapon_value is Dictionary or str((weapon_value as Dictionary).get("category", "")) != "weapon":
+				return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_category"}
+			var weapon_availability: Array = (weapon_value as Dictionary).get("availability", [])
+			for milestone_value: Variant in definition.get("availability", []):
+				if not weapon_availability.has(str(milestone_value)):
+					return {
+						"content_id": str(definition["id"]),
+						"reference_id": weapon_id,
+						"reason": "availability_widening",
+						"milestone": str(milestone_value),
+					}
+			if not (weapon_value as Dictionary).get("references", []).has(str(definition["id"])):
+				return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_back_reference"}
+		if category == "character_runtime_profile":
+			var character_id := str(definition.get("character_id", ""))
+			var character_value: Variant = definitions_by_id.get(character_id)
+			if not character_value is Dictionary or str((character_value as Dictionary).get("category", "")) != "character":
+				return {"content_id": str(definition["id"]), "reference_id": character_id, "reason": "character_category"}
+			var character_availability: Array = (character_value as Dictionary).get("availability", [])
+			for milestone_value: Variant in definition.get("availability", []):
+				if not character_availability.has(str(milestone_value)):
+					return {
+						"content_id": str(definition["id"]),
+						"reference_id": character_id,
+						"reason": "availability_widening",
+						"milestone": str(milestone_value),
+					}
+			if not (character_value as Dictionary).get("references", []).has(str(definition["id"])):
+				return {"content_id": str(definition["id"]), "reference_id": character_id, "reason": "character_back_reference"}
+			var required_reference_error := _character_profile_required_reference_error(
+				definition,
+				definitions_by_id
+			)
+			if not required_reference_error.is_empty():
+				return required_reference_error
+			for talent_id_value: Variant in definition.get("talent_ids", []):
+				var talent_id := str(talent_id_value)
+				var talent_value: Variant = definitions_by_id.get(talent_id)
+				if not talent_value is Dictionary or str((talent_value as Dictionary).get("category", "")) != "talent":
+					return {
+						"content_id": str(definition["id"]),
+						"reference_id": talent_id,
+						"reason": "talent_category",
+					}
+				for milestone_value: Variant in definition.get("availability", []):
+					if not (talent_value as Dictionary).get("availability", []).has(str(milestone_value)):
+						return {
+							"content_id": str(definition["id"]),
+							"reference_id": talent_id,
+							"reason": "talent_availability",
+							"milestone": str(milestone_value),
+						}
+				var talent_compatibility: Dictionary = (talent_value as Dictionary).get("compatibility", {})
+				if not talent_compatibility.has("character_ids"):
+					return {
+						"content_id": str(definition["id"]),
+						"reference_id": talent_id,
+						"reason": "talent_character_scope_missing",
+					}
+				var talent_character_ids: Array = talent_compatibility["character_ids"]
+				if talent_character_ids.size() != 1 or str(talent_character_ids[0]) != character_id:
+					return {
+						"content_id": str(definition["id"]),
+						"reference_id": talent_id,
+						"reason": "talent_character_mismatch",
+					}
+	return {}
+
+
+func _compatibility_reference_error(
+	definition: Dictionary,
+	definitions_by_id: Dictionary
+) -> Dictionary:
+	var compatibility_value: Variant = definition.get("compatibility", {})
+	if not compatibility_value is Dictionary:
+		return {
+			"content_id": str(definition.get("id", "")),
+			"field": "compatibility",
+			"reason": "type",
+		}
+	var compatibility: Dictionary = compatibility_value
+	for field_value: Variant in COMPATIBILITY_CATEGORY_BY_FIELD.keys():
+		var field := str(field_value)
+		if not compatibility.has(field):
 			continue
-		var weapon_id := str(definition.get("weapon_id", ""))
-		var weapon_value: Variant = definitions_by_id.get(weapon_id)
-		if not weapon_value is Dictionary or str((weapon_value as Dictionary).get("category", "")) != "weapon":
-			return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_category"}
-		var weapon_availability: Array = (weapon_value as Dictionary).get("availability", [])
-		for milestone_value: Variant in definition.get("availability", []):
-			if not weapon_availability.has(str(milestone_value)):
+		for compatible_id_value: Variant in compatibility[field]:
+			var compatible_id := str(compatible_id_value)
+			var compatible_value: Variant = definitions_by_id.get(compatible_id)
+			if (
+				not compatible_value is Dictionary
+				or str((compatible_value as Dictionary).get("category", ""))
+				!= str(COMPATIBILITY_CATEGORY_BY_FIELD[field_value])
+			):
 				return {
-					"content_id": str(definition["id"]),
-					"reference_id": weapon_id,
+					"content_id": str(definition.get("id", "")),
+					"reference_id": compatible_id,
+					"field": "compatibility.%s" % field,
+					"reason": "compatibility_category",
+				}
+			for milestone_value: Variant in definition.get("availability", []):
+				if not (compatible_value as Dictionary).get("availability", []).has(str(milestone_value)):
+					return {
+						"content_id": str(definition.get("id", "")),
+						"reference_id": compatible_id,
+						"field": "compatibility.%s" % field,
+						"reason": "availability_widening",
+						"milestone": str(milestone_value),
+					}
+	return {}
+
+
+func _character_profile_required_reference_error(
+	definition: Dictionary,
+	definitions_by_id: Dictionary
+) -> Dictionary:
+	var profile_id := str(definition.get("id", ""))
+	var expected_categories: Dictionary = {}
+	for weapon_id: String in CharacterRuntimeProfileScript.WEAPON_IDS:
+		expected_categories[weapon_id] = "weapon"
+	for ability_id: String in CharacterRuntimeProfileScript.TIME_ABILITY_IDS:
+		expected_categories[ability_id] = "time_ability"
+	for reference_id_value: Variant in expected_categories.keys():
+		var reference_id := str(reference_id_value)
+		if profile_id == "wanderer_m1_v1" and reference_id in ["gun", "staff", "gauntlets"]:
+			continue
+		var referenced_value: Variant = definitions_by_id.get(reference_id)
+		if (
+			not referenced_value is Dictionary
+			or str((referenced_value as Dictionary).get("category", ""))
+			!= str(expected_categories[reference_id_value])
+		):
+			return {
+				"content_id": profile_id,
+				"reference_id": reference_id,
+				"reason": "%s_category" % str(expected_categories[reference_id_value]),
+			}
+		var required_milestones: Array = definition.get("availability", [])
+		if profile_id == "wanderer_m1_v1":
+			required_milestones = (
+				["M1", "CURRENT", "NEXT"]
+				if reference_id in ["sword", "stop", "rewind"]
+				else ["NEXT"]
+			)
+		for milestone_value: Variant in required_milestones:
+			if not (referenced_value as Dictionary).get("availability", []).has(str(milestone_value)):
+				return {
+					"content_id": profile_id,
+					"reference_id": reference_id,
 					"reason": "availability_widening",
 					"milestone": str(milestone_value),
 				}
-		if not (weapon_value as Dictionary).get("references", []).has(str(definition["id"])):
-			return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_back_reference"}
 	return {}
 
 

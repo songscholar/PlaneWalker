@@ -16,6 +16,10 @@ const EXPECTED_WEAPON_PROFILES := [
 	"bow_candidate_v1", "bow_launch_v1", "gauntlets_launch_v1", "gun_launch_v1",
 	"staff_launch_v1", "sword_launch_v1", "sword_m1_v1",
 ]
+const EXPECTED_CHARACTER_PROFILES := [
+	"primordial_knight_launch_v1", "time_guardian_launch_v1", "time_lord_launch_v1",
+	"void_walker_launch_v1", "wanderer_launch_v1", "wanderer_m1_v1",
+]
 
 
 func _ready() -> void:
@@ -60,6 +64,21 @@ func _assert_catalog(suite, registry: RefCounted) -> void:
 		_ids(registry.get_by_category(&"weapon_runtime_profile")),
 		EXPECTED_WEAPON_PROFILES,
 		"seven milestone-aware weapon runtime profiles are canonical"
+	)
+	suite.assert_equal(
+		_ids(registry.get_by_category(&"character_runtime_profile")),
+		EXPECTED_CHARACTER_PROFILES,
+		"six milestone-aware character runtime profiles are canonical"
+	)
+	suite.assert_equal(
+		str(registry.resolve_character_runtime_profile(&"wanderer", &"M1").get("id", "")),
+		"wanderer_m1_v1",
+		"M1 resolves only the frozen Wanderer profile"
+	)
+	suite.assert_equal(
+		str(registry.resolve_character_runtime_profile(&"wanderer", &"LAUNCH").get("id", "")),
+		"wanderer_launch_v1",
+		"Launch resolves only the Launch Wanderer profile"
 	)
 
 

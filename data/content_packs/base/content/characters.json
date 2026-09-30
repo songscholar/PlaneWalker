@@ -13,6 +13,9 @@
       "deliberate_burst",
       "heavy_commitment"
     ],
+    "references": [
+      "primordial_knight_launch_v1"
+    ],
     "compatibility": {},
     "effects": {}
   },
@@ -29,6 +32,9 @@
       "cooldown_control",
       "defensive_timing",
       "perfect_guard"
+    ],
+    "references": [
+      "time_guardian_launch_v1"
     ],
     "compatibility": {},
     "effects": {}
@@ -47,6 +53,9 @@
       "time_resource",
       "timing_complexity"
     ],
+    "references": [
+      "time_lord_launch_v1"
+    ],
     "compatibility": {},
     "effects": {}
   },
@@ -63,6 +72,9 @@
       "low_hp_void",
       "spatial_risk",
       "void"
+    ],
+    "references": [
+      "void_walker_launch_v1"
     ],
     "compatibility": {},
     "effects": {}
@@ -83,6 +95,10 @@
       "balanced",
       "baseline",
       "timing"
+    ],
+    "references": [
+      "wanderer_launch_v1",
+      "wanderer_m1_v1"
     ],
     "compatibility": {},
     "effects": {}

@@ -1,0 +1,662 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/character-runtime-profile/1.0.0",
+  "title": "Plane Walker Character Runtime Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "category",
+    "availability",
+    "name_key",
+    "description_key",
+    "tags",
+    "compatibility",
+    "effects",
+    "references",
+    "profile_version",
+    "character_id",
+    "runtime_kind",
+    "base_stats",
+    "mobility",
+    "resource",
+    "passive",
+    "character_skill",
+    "weapon_mastery",
+    "time_interactions",
+    "presentation",
+    "capabilities",
+    "talent_ids"
+  ],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "category": { "const": "character_runtime_profile" },
+    "availability": { "$ref": "#/$defs/milestone_list" },
+    "name_key": { "$ref": "#/$defs/localization_key" },
+    "description_key": { "$ref": "#/$defs/localization_key" },
+    "tags": { "$ref": "#/$defs/id_list" },
+    "compatibility": { "$ref": "#/$defs/compatibility" },
+    "effects": {
+      "type": "object",
+      "maxProperties": 0,
+      "additionalProperties": false
+    },
+    "references": { "$ref": "#/$defs/id_list" },
+    "profile_version": { "type": "integer", "const": 1 },
+    "character_id": {
+      "type": "string",
+      "enum": ["wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord"]
+    },
+    "runtime_kind": {
+      "type": "string",
+      "enum": ["wanderer_m1_compat", "wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord"]
+    },
+    "base_stats": { "$ref": "#/$defs/base_stats" },
+    "mobility": { "$ref": "#/$defs/mobility" },
+    "resource": { "$ref": "#/$defs/resource" },
+    "passive": { "$ref": "#/$defs/passive" },
+    "character_skill": { "$ref": "#/$defs/character_skill" },
+    "weapon_mastery": { "$ref": "#/$defs/weapon_mastery" },
+    "time_interactions": { "$ref": "#/$defs/time_interactions" },
+    "presentation": { "$ref": "#/$defs/presentation" },
+    "capabilities": {
+      "allOf": [
+        { "$ref": "#/$defs/id_list" },
+        { "minItems": 1 }
+      ]
+    },
+    "talent_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "tal_eternity_reserve", "tal_ruin_execute", "tal_steel_recover",
+          "widened_guard", "fortress_core", "temporal_rebuke",
+          "deep_debt", "bounded_devour", "risk_step",
+          "resonant_plate", "echo_forge", "realm_collapse",
+          "codex_margin", "efficient_inscription", "dominion_cadence"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "localization_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "id_list": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "non_empty_id_list": {
+      "allOf": [
+        { "$ref": "#/$defs/id_list" },
+        { "minItems": 1 }
+      ]
+    },
+    "milestone_list": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "character_ids": { "$ref": "#/$defs/non_empty_id_list" },
+        "weapon_ids": { "$ref": "#/$defs/non_empty_id_list" },
+        "time_ability_ids": { "$ref": "#/$defs/non_empty_id_list" }
+      }
+    },
+    "base_stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_hp",
+        "attack",
+        "defense",
+        "move_speed",
+        "attack_speed",
+        "crit_chance",
+        "crit_multiplier",
+        "time_energy_max",
+        "time_energy_regen"
+      ],
+      "properties": {
+        "max_hp": { "type": "number", "exclusiveMinimum": 0.0 },
+        "attack": { "type": "number", "exclusiveMinimum": 0.0 },
+        "defense": { "type": "number", "minimum": 0.0 },
+        "move_speed": { "type": "number", "exclusiveMinimum": 0.0 },
+        "attack_speed": { "type": "number", "exclusiveMinimum": 0.0 },
+        "crit_chance": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "crit_multiplier": { "type": "number", "exclusiveMinimum": 0.0 },
+        "time_energy_max": { "type": "number", "exclusiveMinimum": 0.0 },
+        "time_energy_regen": { "type": "number", "minimum": 0.0 }
+      }
+    },
+    "mobility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dash_duration_frames",
+        "dash_cooldown_frames",
+        "dash_speed",
+        "dash_cost_kind",
+        "dash_cost",
+        "dash_invulnerable_frames"
+      ],
+      "properties": {
+        "dash_duration_frames": { "type": "integer", "minimum": 1 },
+        "dash_cooldown_frames": { "type": "integer", "minimum": 1 },
+        "dash_speed": { "type": "number", "exclusiveMinimum": 0.0 },
+        "dash_cost_kind": { "const": "none" },
+        "dash_cost": { "const": 0 },
+        "dash_invulnerable_frames": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_id", "handler_id", "minimum", "maximum", "initial", "gain_cap_per_action"],
+      "properties": {
+        "resource_id": { "$ref": "#/$defs/id" },
+        "handler_id": {
+          "type": "string",
+          "enum": ["none", "path_marks", "ward", "void_debt", "resonance", "codex_pages"]
+        },
+        "minimum": { "type": "number", "minimum": 0.0 },
+        "maximum": { "type": "number", "minimum": 0.0 },
+        "initial": { "type": "number", "minimum": 0.0 },
+        "gain_cap_per_action": { "type": "number", "minimum": 0.0 }
+      }
+    },
+    "passive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handler_id", "parameters"],
+      "properties": {
+        "handler_id": {
+          "type": "string",
+          "enum": ["none", "wanderer_path", "chrono_bulwark", "void_debt", "planar_resonance", "chrono_codex"]
+        },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"handler_id": {"const": "none"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "wanderer_path"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "progress_threshold": 3,
+            "wayfarer_window_frames": 180,
+            "first_room_immediate": true,
+            "wayfarer_energy_restore": 6,
+            "wayfarer_heal_ratio": 0.02,
+            "room_clear_heal_per_mark": 2,
+            "forgiveness_expiry_frames": 180,
+            "sword_recovery_reduction_frames": 4,
+            "bow_full_charge_frames": 44,
+            "gun_reload_perfect_start": 26,
+            "gun_reload_perfect_end": 37,
+            "staff_window_extension_frames": 60,
+            "staff_window_cap_frames": 360,
+            "gauntlets_combo_extension_frames": 30,
+            "gauntlets_combo_cap_frames": 150
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "chrono_bulwark"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "damage_reduction": 0.35,
+            "rebuke_window_frames": 180,
+            "rebuke_echo_multiplier": 0.75,
+            "cooldown_reduction_frames": 30
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "void_debt"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "corruption_threshold": 60,
+            "corruption_tick_damage": 1,
+            "corruption_tick_frames": 30,
+            "conversion_cap": 20,
+            "risk_radius": 240,
+            "echo_radius": 160,
+            "echo_multiplier": 0.75,
+            "conversion_heal_cap": 6
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "planar_resonance"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "reservation_cost": 3,
+            "armor_reduction": 0.35,
+            "echo_multiplier": 0.75,
+            "echo_release_after_recovery": true
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "chrono_codex"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "pair_window_frames": 300,
+            "primer_page_cost": 1,
+            "page_rate_cap_frames": 60
+          }}}}
+        }
+      ]
+    },
+    "character_skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skill_id", "handler_id", "cooldown_frames", "energy_cost", "hold_threshold_frames", "parameters"],
+      "properties": {
+        "skill_id": { "$ref": "#/$defs/id" },
+        "handler_id": {
+          "type": "string",
+          "enum": ["none", "waypoint_recall", "chrono_fortress", "void_devour", "realm_cleave", "codex_dominion"]
+        },
+        "cooldown_frames": { "type": "integer", "minimum": 0 },
+        "energy_cost": { "type": "number", "minimum": 0.0 },
+        "hold_threshold_frames": { "type": "integer", "minimum": 0 },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"handler_id": {"const": "none"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "waypoint_recall"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "windup_frames": 6,
+            "recovery_frames": 12,
+            "anchor_frames": 480,
+            "healing_ratio": 0.25
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "chrono_fortress"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "perfect_last_frame": 8,
+            "normal_last_frame": 23,
+            "close_frame": 24,
+            "duration_frames": 180,
+            "ward_cost": 3,
+            "fortress_cooldown_frames": 600,
+            "movement_multiplier": 0.7,
+            "frontal_reduction": 0.5,
+            "frontal_cone_degrees": 120,
+            "shockwave_radius": 192,
+            "shockwave_multiplier": 1.0
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "void_devour"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "windup_frames": 24,
+            "active_frames": 1,
+            "recovery_frames": 30,
+            "health_cost_ratio": 0.2,
+            "minimum_health_cost": 10,
+            "damage_multiplier": 4.0,
+            "cone_tiles": 8,
+            "cone_degrees": 60,
+            "heal_ratio": 0.15,
+            "heal_cap_ratio": 0.12
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "realm_cleave"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "windup_frames": 36,
+            "active_frames": 1,
+            "recovery_frames": 30,
+            "armor_reduction": 0.4,
+            "base_multiplier": 1.5,
+            "stack_multiplier": 0.35,
+            "radius_tiles": 5,
+            "instability_frames": 480,
+            "instability_bonus": 0.2
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "codex_dominion"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "infusion_duration_frames": 300,
+            "infusion_echo_multiplier": 2.0,
+            "dominion_energy_cost": 60,
+            "dominion_page_cost": 2,
+            "dominion_cooldown_frames": 480,
+            "dominion_charge_frames": 300
+          }}}}
+        }
+      ]
+    },
+    "weapon_mastery": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {"required": ["sword", "bow"], "maxProperties": 2},
+        {"required": ["sword", "bow", "gun", "staff", "gauntlets"], "minProperties": 5}
+      ],
+      "properties": {
+        "sword": {
+          "allOf": [
+            { "$ref": "#/$defs/mastery" },
+            { "properties": { "mastery_family": { "const": "sword" } } }
+          ]
+        },
+        "bow": {
+          "allOf": [
+            { "$ref": "#/$defs/mastery" },
+            { "properties": { "mastery_family": { "const": "bow" } } }
+          ]
+        },
+        "gun": {
+          "allOf": [
+            { "$ref": "#/$defs/mastery" },
+            { "properties": { "mastery_family": { "const": "gun" } } }
+          ]
+        },
+        "staff": {
+          "allOf": [
+            { "$ref": "#/$defs/mastery" },
+            { "properties": { "mastery_family": { "const": "staff" } } }
+          ]
+        },
+        "gauntlets": {
+          "allOf": [
+            { "$ref": "#/$defs/mastery" },
+            { "properties": { "mastery_family": { "const": "gauntlets" } } }
+          ]
+        }
+      }
+    },
+    "mastery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handler_id", "mastery_family", "parameters"],
+      "properties": {
+        "handler_id": {
+          "type": "string",
+          "enum": ["none", "wanderer_mastery", "time_guardian_mastery", "void_walker_mastery", "primordial_knight_mastery", "time_lord_mastery"]
+        },
+        "mastery_family": {
+          "type": "string",
+          "enum": ["sword", "bow", "gun", "staff", "gauntlets"]
+        },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "handler_id": {
+                "enum": ["none", "wanderer_mastery", "time_guardian_mastery", "void_walker_mastery", "time_lord_mastery"]
+              }
+            },
+            "required": ["handler_id"]
+          },
+          "then": {"properties": {"parameters": {"const": {}}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "handler_id": {"const": "primordial_knight_mastery"},
+              "mastery_family": {"const": "sword"}
+            },
+            "required": ["handler_id", "mastery_family"]
+          },
+          "then": {"properties": {"parameters": {"const": {
+            "commitment_action": "charged_slash",
+            "minimum_hold_frames": 30
+          }}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "handler_id": {"const": "primordial_knight_mastery"},
+              "mastery_family": {"const": "bow"}
+            },
+            "required": ["handler_id", "mastery_family"]
+          },
+          "then": {"properties": {"parameters": {"const": {
+            "commitment_action": "precision_draw",
+            "requires_full_charge": true
+          }}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "handler_id": {"const": "primordial_knight_mastery"},
+              "mastery_family": {"const": "gun"}
+            },
+            "required": ["handler_id", "mastery_family"]
+          },
+          "then": {"properties": {"parameters": {"const": {
+            "commitment_action": "aimed_fire",
+            "minimum_hold_frames": 18
+          }}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "handler_id": {"const": "primordial_knight_mastery"},
+              "mastery_family": {"const": "staff"}
+            },
+            "required": ["handler_id", "mastery_family"]
+          },
+          "then": {"properties": {"parameters": {"const": {
+            "commitment_action": "charged_element",
+            "minimum_hold_frames": 30
+          }}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "handler_id": {"const": "primordial_knight_mastery"},
+              "mastery_family": {"const": "gauntlets"}
+            },
+            "required": ["handler_id", "mastery_family"]
+          },
+          "then": {"properties": {"parameters": {"const": {
+            "commitment_action": "charged_heavy",
+            "minimum_hold_frames": 30
+          }}}}
+        }
+      ]
+    },
+    "time_interactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stop", "rewind", "accelerate", "rift"],
+      "properties": {
+        "stop": { "$ref": "#/$defs/time_interaction" },
+        "rewind": { "$ref": "#/$defs/time_interaction" },
+        "accelerate": { "$ref": "#/$defs/time_interaction" },
+        "rift": { "$ref": "#/$defs/time_interaction" }
+      }
+    },
+    "time_interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handler_id", "parameters"],
+      "properties": {
+        "handler_id": {
+          "type": "string",
+          "enum": [
+            "none",
+            "wanderer_stop", "wanderer_rewind", "wanderer_accelerate", "wanderer_rift",
+            "time_guardian_stop", "time_guardian_rewind", "time_guardian_accelerate", "time_guardian_rift",
+            "void_walker_stop", "void_walker_rewind", "void_walker_accelerate", "void_walker_rift",
+            "primordial_knight_stop", "primordial_knight_rewind", "primordial_knight_accelerate", "primordial_knight_rift",
+            "time_lord_stop", "time_lord_rewind", "time_lord_accelerate", "time_lord_rift"
+          ]
+        },
+        "parameters": { "$ref": "#/$defs/parameters" }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"handler_id": {"const": "none"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "wanderer_stop"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"window_bonus_frames": 60}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "wanderer_rewind"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"preserve_anchor": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "wanderer_accelerate"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"progress_threshold": 2}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "wanderer_rift"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"progress_bonus": 1}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_guardian_stop"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"boss_exposure_only": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_guardian_rewind"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"preserve_guard_claims": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_guardian_accelerate"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"fixed_guard_frames": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_guardian_rift"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"requires_full_ward": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "void_walker_stop"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"pause_corruption": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "void_walker_rewind"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"preserve_self_cost": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "void_walker_accelerate"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"preserve_corruption_budget": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "void_walker_rift"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"additional_debt_cost": 10}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "primordial_knight_stop"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"release_echo_on_end": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "primordial_knight_rewind"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"preserve_world_echo": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "primordial_knight_accelerate"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"shorten_echo_delay": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "primordial_knight_rift"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {"anchor_once_per_generation": true}}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_lord_stop"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "rewind_zone_radius": 96,
+            "rewind_zone_frames": 90,
+            "rewind_zone_speed_scalar": 0.5,
+            "rewind_dominion_zone_radius": 128,
+            "rewind_dominion_zone_frames": 150,
+            "rewind_dominion_speed_scalar": 0.35,
+            "rift_projectile_speed_scalar": 0.5,
+            "rift_overlap_cap_frames": 180,
+            "rift_dominion_projectile_speed_scalar": 0.35,
+            "rift_dominion_overlap_cap_frames": 240,
+            "accelerate_recovery_multiplier": 0.8,
+            "accelerate_recovery_frames": 90,
+            "accelerate_dominion_recovery_multiplier": 0.65,
+            "accelerate_dominion_recovery_frames": 150
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_lord_rewind"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "freeze_pre_return_position": true,
+            "rift_pulse_multiplier": 1.25,
+            "rift_dominion_pulse_multiplier": 1.75,
+            "accelerate_echo_frames": 180,
+            "accelerate_echo_multiplier": 0.75,
+            "accelerate_dominion_echo_frames": 300,
+            "accelerate_dominion_echo_multiplier": 1.1
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_lord_accelerate"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "rift_tick_interval_multiplier": 0.75,
+            "rift_tick_cap_frames": 180,
+            "rift_dominion_tick_interval_multiplier": 0.5,
+            "rift_dominion_tick_cap_frames": 240
+          }}}}
+        },
+        {
+          "if": {"properties": {"handler_id": {"const": "time_lord_rift"}}, "required": ["handler_id"]},
+          "then": {"properties": {"parameters": {"const": {
+            "preserve_committed_tick_count": true,
+            "preserve_total_damage": true
+          }}}}
+        }
+      ]
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["palette_id", "meter_id", "skill_cue_id"],
+      "properties": {
+        "palette_id": {
+          "type": "string",
+          "enum": ["wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord"]
+        },
+        "meter_id": {
+          "type": "string",
+          "enum": ["none", "path_marks", "ward", "void_debt", "resonance", "codex_pages"]
+        },
+        "skill_cue_id": {
+          "type": "string",
+          "enum": ["none", "waypoint_recall", "chrono_fortress", "void_devour", "realm_cleave", "codex_dominion"]
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^(?!.*(?:script|method|callable))[a-z][a-z0-9_.-]{0,95}$"
+      },
+      "additionalProperties": { "$ref": "#/$defs/parameter_value" }
+    },
+    "parameter_value": {
+      "oneOf": [
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "string" }
+      ]
+    }
+  }
+}

@@ -5,6 +5,7 @@ const ContentRegistryScript := preload("res://scripts/content/content_registry.g
 const ContentSnapshotProviderScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
+const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/character_runtime_profile.gd")
 
 
 func _ready() -> void:
@@ -42,15 +43,16 @@ func _test_project_base_pack_v2(suite) -> void:
 	if report.has_blocking_errors():
 		return
 	suite.assert_equal(report.active_pack_count, 1, "project base pack is the only active pack")
-	suite.assert_equal(report.loaded_count, 54, "project base pack loads rewards, loadouts, and weapon runtime profiles")
+	suite.assert_equal(report.loaded_count, 72, "project base pack loads rewards, fifteen talents, and both runtime-profile dimensions")
 	suite.assert_equal(report.content_count_by_category.get("character"), 5, "base pack registers five characters")
+	suite.assert_equal(report.content_count_by_category.get("character_runtime_profile"), 6, "base pack registers six milestone-aware character profiles")
 	suite.assert_equal(report.content_count_by_category.get("weapon"), 5, "base pack registers five weapons")
 	suite.assert_equal(report.content_count_by_category.get("weapon_runtime_profile"), 7, "base pack registers seven milestone-aware weapon profiles")
 	suite.assert_equal(report.content_count_by_category.get("time_ability"), 4, "base pack registers four time abilities")
 	suite.assert_equal(report.content_count_by_category.get("item"), 20, "base pack preserves twenty items")
 	suite.assert_equal(report.content_count_by_category.get("blessing"), 4, "base pack preserves four blessings")
 	suite.assert_equal(report.content_count_by_category.get("curse"), 6, "base pack preserves six curses")
-	suite.assert_equal(report.content_count_by_category.get("talent"), 3, "base pack preserves three talents")
+	suite.assert_equal(report.content_count_by_category.get("talent"), 15, "base pack registers exactly fifteen talents")
 	suite.assert_equal(report.metadata.get("activation_order"), ["base"], "base activation order is recorded")
 	var sword_profile: Dictionary = registry.get_weapon_runtime_profile(&"sword_m1_v1")
 	suite.assert_equal(sword_profile.get("weapon_id"), "sword", "profile lookup resolves its weapon")
@@ -65,6 +67,24 @@ func _test_project_base_pack_v2(suite) -> void:
 		_action_by_id(sword_profile, "light_1").get("cooldown_frames"),
 		0,
 		"canonical registry profiles serialize omitted cooldowns as zero"
+	)
+	var m1_character_profile: Dictionary = registry.get_character_runtime_profile(&"wanderer_m1_v1")
+	suite.assert_equal(m1_character_profile.get("character_id"), "wanderer", "character profile lookup resolves its character")
+	suite.assert_equal(m1_character_profile.get("availability"), ["CURRENT", "M1", "NEXT"], "M1 Wanderer profile remains milestone-isolated")
+	suite.assert_equal(m1_character_profile.get("runtime_kind"), "wanderer_m1_compat", "M1 Wanderer uses the compatibility runtime")
+	suite.assert_true(not m1_character_profile.has("pack_id"), "character runtime profile strips pack provenance")
+	suite.assert_true(
+		bool(CharacterRuntimeProfileScript.new().configure(m1_character_profile).get("ok", false)),
+		"character profile lookup returns an exact parser-ready snapshot"
+	)
+	var launch_character_profile: Dictionary = registry.resolve_character_runtime_profile(&"time_lord", &"LAUNCH")
+	suite.assert_equal(launch_character_profile.get("id"), "time_lord_launch_v1", "milestone resolver returns one Launch character profile")
+	suite.assert_true(registry.resolve_character_runtime_profile(&"time_lord", &"M1").is_empty(), "Launch character profile cannot resolve in M1")
+	launch_character_profile["base_stats"]["max_hp"] = 999
+	suite.assert_equal(
+		registry.resolve_character_runtime_profile(&"time_lord", &"LAUNCH").get("base_stats", {}).get("max_hp"),
+		175.0,
+		"character profile resolver returns deep copies"
 	)
 
 	var bow_candidate: Dictionary = registry.get_weapon_runtime_profile(&"bow_candidate_v1")
@@ -376,7 +396,7 @@ func _test_optional_pack_isolation(suite) -> void:
 	suite.assert_true(not report.has_blocking_errors(), "invalid optional pack does not block base content")
 	suite.assert_true(report.isolated_pack_ids.has("fixture_invalid_script"), "invalid optional pack is isolated")
 	suite.assert_equal(report.active_pack_count, 1, "only base remains active")
-	suite.assert_equal(report.loaded_count, 54, "optional pack failure cannot remove base definitions")
+	suite.assert_equal(report.loaded_count, 72, "optional pack failure cannot remove base definitions")
 	suite.assert_true(registry.get_content(&"fixture_scripted_edge").is_empty(), "hostile optional entry is not indexed")
 
 

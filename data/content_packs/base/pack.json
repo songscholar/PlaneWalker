@@ -7,6 +7,7 @@
   "load_order": 0,
   "content_manifest": [
     "content/blessings.json",
+    "content/character_runtime_profiles.json",
     "content/characters.json",
     "content/curses.json",
     "content/items.json",
@@ -21,14 +22,15 @@
   "asset_manifest": [],
   "integrity_hashes": {
     "content/blessings.json": "b9a0eb5299f9a27fdb73947fb81b2285bf04183dcd172a60e5e8a3cf130a199b",
-    "content/characters.json": "2516fa7f4f4e5a73478d6f009070763e9747e9905c59266b176462207ff698d7",
+    "content/character_runtime_profiles.json": "c1d148fee2a0ab2d79efc14aeb684c3ea4b2e6954b830a75cc8dee14058bc3ff",
+    "content/characters.json": "8fd8aef62d60112cc0db8600e76e7c9ba9f9a1cbbfec7a1d007a834413ce8f3a",
     "content/curses.json": "182bab81b4739950ace61f42b669cc901a33152dae0bf3a5e89b6a0d993cc9a9",
     "content/items.json": "768f372baffcd5dcc3d8d72ef139a788e151f777524bb864b6d9078d125fc822",
-    "content/talents.json": "2dda15642435b022bd1d0182d68d78479649ee53b06c484e62a5c9f23dbc1395",
+    "content/talents.json": "0a70cb7c8b2aa9a1144f606a05e350b681a0e53d86ef6fa49e7e1a81ef3b6c8b",
     "content/time_abilities.json": "33401f7d8a9fd5fdb705e51b3eb287ab8d995fe6b2f6f3049ab2c21cb9e76a15",
     "content/weapon_runtime_profiles.json": "e9d17db1458bc5b2ea5372d446c7d53c699c377a6d2d1a67316e9a7181808d40",
     "content/weapons.json": "e97d8e4aa3fa276a9058800fb0b9f5cbe497201cc066e1a0d5da3d549a1afd8a",
-    "localization/translations.csv": "213de13f89d02fed287dd0a1caca20465eab819c896355fb5bfb74abd7a71c3b"
+    "localization/translations.csv": "968e199a4331e251442589608965a27485e04f33b7c0959d9e227091c52bc8f8"
   },
   "entitlement_tag": ""
 }

@@ -1,0 +1,311 @@
+[
+  {
+    "id": "wanderer_m1_v1",
+    "category": "character_runtime_profile",
+    "availability": ["M1", "CURRENT", "NEXT"],
+    "name_key": "CHARACTER_WANDERER_NAME",
+    "description_key": "CHARACTER_WANDERER_DESC",
+    "tags": ["baseline", "m1_parity"],
+    "compatibility": {"character_ids": ["wanderer"]},
+    "effects": {},
+    "references": ["wanderer", "sword", "bow", "stop", "rewind", "accelerate", "rift", "tal_eternity_reserve", "tal_ruin_execute", "tal_steel_recover"],
+    "profile_version": 1,
+    "character_id": "wanderer",
+    "runtime_kind": "wanderer_m1_compat",
+    "base_stats": {
+      "max_hp": 200,
+      "attack": 30,
+      "defense": 0,
+      "move_speed": 220,
+      "attack_speed": 1.0,
+      "crit_chance": 0.05,
+      "crit_multiplier": 1.5,
+      "time_energy_max": 100,
+      "time_energy_regen": 2
+    },
+    "mobility": {
+      "dash_duration_frames": 17,
+      "dash_cooldown_frames": 27,
+      "dash_speed": 520,
+      "dash_cost_kind": "none",
+      "dash_cost": 0,
+      "dash_invulnerable_frames": 12
+    },
+    "resource": {"resource_id": "none", "handler_id": "none", "minimum": 0, "maximum": 0, "initial": 0, "gain_cap_per_action": 0},
+    "passive": {"handler_id": "none", "parameters": {}},
+    "character_skill": {"skill_id": "none", "handler_id": "none", "cooldown_frames": 0, "energy_cost": 0, "hold_threshold_frames": 0, "parameters": {}},
+    "weapon_mastery": {
+      "sword": {"handler_id": "none", "mastery_family": "sword", "parameters": {}},
+      "bow": {"handler_id": "none", "mastery_family": "bow", "parameters": {}}
+    },
+    "time_interactions": {
+      "stop": {"handler_id": "none", "parameters": {}},
+      "rewind": {"handler_id": "none", "parameters": {}},
+      "accelerate": {"handler_id": "none", "parameters": {}},
+      "rift": {"handler_id": "none", "parameters": {}}
+    },
+    "presentation": {"palette_id": "wanderer", "meter_id": "none", "skill_cue_id": "none"},
+    "capabilities": ["character.m1_parity"],
+    "talent_ids": ["tal_eternity_reserve", "tal_ruin_execute", "tal_steel_recover"]
+  },
+  {
+    "id": "wanderer_launch_v1",
+    "category": "character_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "CHARACTER_WANDERER_NAME",
+    "description_key": "CHARACTER_WANDERER_DESC",
+    "tags": ["balanced", "path_marks", "waypoint"],
+    "compatibility": {"character_ids": ["wanderer"]},
+    "effects": {},
+    "references": ["wanderer", "sword", "bow", "gun", "staff", "gauntlets", "stop", "rewind", "accelerate", "rift", "tal_eternity_reserve", "tal_ruin_execute", "tal_steel_recover"],
+    "profile_version": 1,
+    "character_id": "wanderer",
+    "runtime_kind": "wanderer",
+    "base_stats": {
+      "max_hp": 200,
+      "attack": 30,
+      "defense": 0,
+      "move_speed": 220,
+      "attack_speed": 1.0,
+      "crit_chance": 0.05,
+      "crit_multiplier": 1.5,
+      "time_energy_max": 100,
+      "time_energy_regen": 2
+    },
+    "mobility": {
+      "dash_duration_frames": 17,
+      "dash_cooldown_frames": 27,
+      "dash_speed": 520,
+      "dash_cost_kind": "none",
+      "dash_cost": 0,
+      "dash_invulnerable_frames": 12
+    },
+    "resource": {"resource_id": "path_marks", "handler_id": "path_marks", "minimum": 0, "maximum": 5, "initial": 0, "gain_cap_per_action": 1},
+    "passive": {"handler_id": "wanderer_path", "parameters": {"progress_threshold": 3, "wayfarer_window_frames": 180, "first_room_immediate": true, "wayfarer_energy_restore": 6, "wayfarer_heal_ratio": 0.02, "room_clear_heal_per_mark": 2, "forgiveness_expiry_frames": 180, "sword_recovery_reduction_frames": 4, "bow_full_charge_frames": 44, "gun_reload_perfect_start": 26, "gun_reload_perfect_end": 37, "staff_window_extension_frames": 60, "staff_window_cap_frames": 360, "gauntlets_combo_extension_frames": 30, "gauntlets_combo_cap_frames": 150}},
+    "character_skill": {"skill_id": "waypoint_recall", "handler_id": "waypoint_recall", "cooldown_frames": 720, "energy_cost": 30, "hold_threshold_frames": 0, "parameters": {"windup_frames": 6, "recovery_frames": 12, "anchor_frames": 480, "healing_ratio": 0.25}},
+    "weapon_mastery": {
+      "sword": {"handler_id": "wanderer_mastery", "mastery_family": "sword", "parameters": {}},
+      "bow": {"handler_id": "wanderer_mastery", "mastery_family": "bow", "parameters": {}},
+      "gun": {"handler_id": "wanderer_mastery", "mastery_family": "gun", "parameters": {}},
+      "staff": {"handler_id": "wanderer_mastery", "mastery_family": "staff", "parameters": {}},
+      "gauntlets": {"handler_id": "wanderer_mastery", "mastery_family": "gauntlets", "parameters": {}}
+    },
+    "time_interactions": {
+      "stop": {"handler_id": "wanderer_stop", "parameters": {"window_bonus_frames": 60}},
+      "rewind": {"handler_id": "wanderer_rewind", "parameters": {"preserve_anchor": true}},
+      "accelerate": {"handler_id": "wanderer_accelerate", "parameters": {"progress_threshold": 2}},
+      "rift": {"handler_id": "wanderer_rift", "parameters": {"progress_bonus": 1}}
+    },
+    "presentation": {"palette_id": "wanderer", "meter_id": "path_marks", "skill_cue_id": "waypoint_recall"},
+    "capabilities": ["character.anchor", "character.mastery_conversion", "character.path_marks"],
+    "talent_ids": ["tal_eternity_reserve", "tal_ruin_execute", "tal_steel_recover"]
+  },
+  {
+    "id": "time_guardian_launch_v1",
+    "category": "character_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "CHARACTER_TIME_GUARDIAN_NAME",
+    "description_key": "CHARACTER_TIME_GUARDIAN_DESC",
+    "tags": ["defense", "guard", "ward"],
+    "compatibility": {"character_ids": ["time_guardian"]},
+    "effects": {},
+    "references": ["time_guardian", "sword", "bow", "gun", "staff", "gauntlets", "stop", "rewind", "accelerate", "rift", "widened_guard", "fortress_core", "temporal_rebuke"],
+    "profile_version": 1,
+    "character_id": "time_guardian",
+    "runtime_kind": "time_guardian",
+    "base_stats": {
+      "max_hp": 240,
+      "attack": 27,
+      "defense": 10,
+      "move_speed": 190,
+      "attack_speed": 0.9,
+      "crit_chance": 0.04,
+      "crit_multiplier": 1.5,
+      "time_energy_max": 120,
+      "time_energy_regen": 2
+    },
+    "mobility": {
+      "dash_duration_frames": 18,
+      "dash_cooldown_frames": 30,
+      "dash_speed": 500,
+      "dash_cost_kind": "none",
+      "dash_cost": 0,
+      "dash_invulnerable_frames": 12
+    },
+    "resource": {"resource_id": "ward", "handler_id": "ward", "minimum": 0, "maximum": 3, "initial": 0, "gain_cap_per_action": 1},
+    "passive": {"handler_id": "chrono_bulwark", "parameters": {"damage_reduction": 0.35, "rebuke_window_frames": 180, "rebuke_echo_multiplier": 0.75, "cooldown_reduction_frames": 30}},
+    "character_skill": {"skill_id": "chrono_fortress", "handler_id": "chrono_fortress", "cooldown_frames": 240, "energy_cost": 40, "hold_threshold_frames": 30, "parameters": {"perfect_last_frame": 8, "normal_last_frame": 23, "close_frame": 24, "duration_frames": 180, "ward_cost": 3, "fortress_cooldown_frames": 600, "movement_multiplier": 0.7, "frontal_reduction": 0.5, "frontal_cone_degrees": 120, "shockwave_radius": 192, "shockwave_multiplier": 1.0}},
+    "weapon_mastery": {
+      "sword": {"handler_id": "time_guardian_mastery", "mastery_family": "sword", "parameters": {}},
+      "bow": {"handler_id": "time_guardian_mastery", "mastery_family": "bow", "parameters": {}},
+      "gun": {"handler_id": "time_guardian_mastery", "mastery_family": "gun", "parameters": {}},
+      "staff": {"handler_id": "time_guardian_mastery", "mastery_family": "staff", "parameters": {}},
+      "gauntlets": {"handler_id": "time_guardian_mastery", "mastery_family": "gauntlets", "parameters": {}}
+    },
+    "time_interactions": {
+      "stop": {"handler_id": "time_guardian_stop", "parameters": {"boss_exposure_only": true}},
+      "rewind": {"handler_id": "time_guardian_rewind", "parameters": {"preserve_guard_claims": true}},
+      "accelerate": {"handler_id": "time_guardian_accelerate", "parameters": {"fixed_guard_frames": true}},
+      "rift": {"handler_id": "time_guardian_rift", "parameters": {"requires_full_ward": true}}
+    },
+    "presentation": {"palette_id": "time_guardian", "meter_id": "ward", "skill_cue_id": "chrono_fortress"},
+    "capabilities": ["character.damage_guard", "character.fortress", "character.ward"],
+    "talent_ids": ["widened_guard", "fortress_core", "temporal_rebuke"]
+  },
+  {
+    "id": "void_walker_launch_v1",
+    "category": "character_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "CHARACTER_VOID_WALKER_NAME",
+    "description_key": "CHARACTER_VOID_WALKER_DESC",
+    "tags": ["risk", "spatial", "void_debt"],
+    "compatibility": {"character_ids": ["void_walker"]},
+    "effects": {},
+    "references": ["void_walker", "sword", "bow", "gun", "staff", "gauntlets", "stop", "rewind", "accelerate", "rift", "deep_debt", "bounded_devour", "risk_step"],
+    "profile_version": 1,
+    "character_id": "void_walker",
+    "runtime_kind": "void_walker",
+    "base_stats": {
+      "max_hp": 160,
+      "attack": 32,
+      "defense": 0,
+      "move_speed": 235,
+      "attack_speed": 1.05,
+      "crit_chance": 0.08,
+      "crit_multiplier": 1.6,
+      "time_energy_max": 90,
+      "time_energy_regen": 2
+    },
+    "mobility": {
+      "dash_duration_frames": 15,
+      "dash_cooldown_frames": 24,
+      "dash_speed": 560,
+      "dash_cost_kind": "none",
+      "dash_cost": 0,
+      "dash_invulnerable_frames": 11
+    },
+    "resource": {"resource_id": "void_debt", "handler_id": "void_debt", "minimum": 0, "maximum": 100, "initial": 0, "gain_cap_per_action": 100},
+    "passive": {"handler_id": "void_debt", "parameters": {"corruption_threshold": 60, "corruption_tick_damage": 1, "corruption_tick_frames": 30, "conversion_cap": 20, "risk_radius": 240, "echo_radius": 160, "echo_multiplier": 0.75, "conversion_heal_cap": 6}},
+    "character_skill": {"skill_id": "void_devour", "handler_id": "void_devour", "cooldown_frames": 480, "energy_cost": 25, "hold_threshold_frames": 0, "parameters": {"windup_frames": 24, "active_frames": 1, "recovery_frames": 30, "health_cost_ratio": 0.2, "minimum_health_cost": 10, "damage_multiplier": 4.0, "cone_tiles": 8, "cone_degrees": 60, "heal_ratio": 0.15, "heal_cap_ratio": 0.12}},
+    "weapon_mastery": {
+      "sword": {"handler_id": "void_walker_mastery", "mastery_family": "sword", "parameters": {}},
+      "bow": {"handler_id": "void_walker_mastery", "mastery_family": "bow", "parameters": {}},
+      "gun": {"handler_id": "void_walker_mastery", "mastery_family": "gun", "parameters": {}},
+      "staff": {"handler_id": "void_walker_mastery", "mastery_family": "staff", "parameters": {}},
+      "gauntlets": {"handler_id": "void_walker_mastery", "mastery_family": "gauntlets", "parameters": {}}
+    },
+    "time_interactions": {
+      "stop": {"handler_id": "void_walker_stop", "parameters": {"pause_corruption": true}},
+      "rewind": {"handler_id": "void_walker_rewind", "parameters": {"preserve_self_cost": true}},
+      "accelerate": {"handler_id": "void_walker_accelerate", "parameters": {"preserve_corruption_budget": true}},
+      "rift": {"handler_id": "void_walker_rift", "parameters": {"additional_debt_cost": 10}}
+    },
+    "presentation": {"palette_id": "void_walker", "meter_id": "void_debt", "skill_cue_id": "void_devour"},
+    "capabilities": ["character.irreversible_cost", "character.risk_geometry", "character.void_debt"],
+    "talent_ids": ["deep_debt", "bounded_devour", "risk_step"]
+  },
+  {
+    "id": "primordial_knight_launch_v1",
+    "category": "character_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "CHARACTER_PRIMORDIAL_KNIGHT_NAME",
+    "description_key": "CHARACTER_PRIMORDIAL_KNIGHT_DESC",
+    "tags": ["armor", "echo", "resonance"],
+    "compatibility": {"character_ids": ["primordial_knight"]},
+    "effects": {},
+    "references": ["primordial_knight", "sword", "bow", "gun", "staff", "gauntlets", "stop", "rewind", "accelerate", "rift", "resonant_plate", "echo_forge", "realm_collapse"],
+    "profile_version": 1,
+    "character_id": "primordial_knight",
+    "runtime_kind": "primordial_knight",
+    "base_stats": {
+      "max_hp": 230,
+      "attack": 31,
+      "defense": 8,
+      "move_speed": 200,
+      "attack_speed": 0.9,
+      "crit_chance": 0.05,
+      "crit_multiplier": 1.55,
+      "time_energy_max": 110,
+      "time_energy_regen": 2
+    },
+    "mobility": {
+      "dash_duration_frames": 18,
+      "dash_cooldown_frames": 30,
+      "dash_speed": 490,
+      "dash_cost_kind": "none",
+      "dash_cost": 0,
+      "dash_invulnerable_frames": 10
+    },
+    "resource": {"resource_id": "resonance", "handler_id": "resonance", "minimum": 0, "maximum": 3, "initial": 0, "gain_cap_per_action": 1},
+    "passive": {"handler_id": "planar_resonance", "parameters": {"reservation_cost": 3, "armor_reduction": 0.35, "echo_multiplier": 0.75, "echo_release_after_recovery": true}},
+    "character_skill": {"skill_id": "realm_cleave", "handler_id": "realm_cleave", "cooldown_frames": 540, "energy_cost": 35, "hold_threshold_frames": 0, "parameters": {"windup_frames": 36, "active_frames": 1, "recovery_frames": 30, "armor_reduction": 0.4, "base_multiplier": 1.5, "stack_multiplier": 0.35, "radius_tiles": 5, "instability_frames": 480, "instability_bonus": 0.2}},
+    "weapon_mastery": {
+      "sword": {"handler_id": "primordial_knight_mastery", "mastery_family": "sword", "parameters": {"commitment_action": "charged_slash", "minimum_hold_frames": 30}},
+      "bow": {"handler_id": "primordial_knight_mastery", "mastery_family": "bow", "parameters": {"commitment_action": "precision_draw", "requires_full_charge": true}},
+      "gun": {"handler_id": "primordial_knight_mastery", "mastery_family": "gun", "parameters": {"commitment_action": "aimed_fire", "minimum_hold_frames": 18}},
+      "staff": {"handler_id": "primordial_knight_mastery", "mastery_family": "staff", "parameters": {"commitment_action": "charged_element", "minimum_hold_frames": 30}},
+      "gauntlets": {"handler_id": "primordial_knight_mastery", "mastery_family": "gauntlets", "parameters": {"commitment_action": "charged_heavy", "minimum_hold_frames": 30}}
+    },
+    "time_interactions": {
+      "stop": {"handler_id": "primordial_knight_stop", "parameters": {"release_echo_on_end": true}},
+      "rewind": {"handler_id": "primordial_knight_rewind", "parameters": {"preserve_world_echo": true}},
+      "accelerate": {"handler_id": "primordial_knight_accelerate", "parameters": {"shorten_echo_delay": true}},
+      "rift": {"handler_id": "primordial_knight_rift", "parameters": {"anchor_once_per_generation": true}}
+    },
+    "presentation": {"palette_id": "primordial_knight", "meter_id": "resonance", "skill_cue_id": "realm_cleave"},
+    "capabilities": ["character.armor_window", "character.planar_echo", "character.resonance"],
+    "talent_ids": ["resonant_plate", "echo_forge", "realm_collapse"]
+  },
+  {
+    "id": "time_lord_launch_v1",
+    "category": "character_runtime_profile",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "CHARACTER_TIME_LORD_NAME",
+    "description_key": "CHARACTER_TIME_LORD_DESC",
+    "tags": ["codex", "pair_engine", "time"],
+    "compatibility": {"character_ids": ["time_lord"]},
+    "effects": {},
+    "references": ["time_lord", "sword", "bow", "gun", "staff", "gauntlets", "stop", "rewind", "accelerate", "rift", "codex_margin", "efficient_inscription", "dominion_cadence"],
+    "profile_version": 1,
+    "character_id": "time_lord",
+    "runtime_kind": "time_lord",
+    "base_stats": {
+      "max_hp": 175,
+      "attack": 24,
+      "defense": 2,
+      "move_speed": 205,
+      "attack_speed": 0.95,
+      "crit_chance": 0.05,
+      "crit_multiplier": 1.5,
+      "time_energy_max": 160,
+      "time_energy_regen": 4
+    },
+    "mobility": {
+      "dash_duration_frames": 16,
+      "dash_cooldown_frames": 27,
+      "dash_speed": 520,
+      "dash_cost_kind": "none",
+      "dash_cost": 0,
+      "dash_invulnerable_frames": 12
+    },
+    "resource": {"resource_id": "codex_pages", "handler_id": "codex_pages", "minimum": 0, "maximum": 3, "initial": 0, "gain_cap_per_action": 1},
+    "passive": {"handler_id": "chrono_codex", "parameters": {"pair_window_frames": 300, "primer_page_cost": 1, "page_rate_cap_frames": 60}},
+    "character_skill": {"skill_id": "codex_dominion", "handler_id": "codex_dominion", "cooldown_frames": 120, "energy_cost": 10, "hold_threshold_frames": 60, "parameters": {"infusion_duration_frames": 300, "infusion_echo_multiplier": 2.0, "dominion_energy_cost": 60, "dominion_page_cost": 2, "dominion_cooldown_frames": 480, "dominion_charge_frames": 300}},
+    "weapon_mastery": {
+      "sword": {"handler_id": "time_lord_mastery", "mastery_family": "sword", "parameters": {}},
+      "bow": {"handler_id": "time_lord_mastery", "mastery_family": "bow", "parameters": {}},
+      "gun": {"handler_id": "time_lord_mastery", "mastery_family": "gun", "parameters": {}},
+      "staff": {"handler_id": "time_lord_mastery", "mastery_family": "staff", "parameters": {}},
+      "gauntlets": {"handler_id": "time_lord_mastery", "mastery_family": "gauntlets", "parameters": {}}
+    },
+    "time_interactions": {
+      "stop": {"handler_id": "time_lord_stop", "parameters": {"rewind_zone_radius": 96, "rewind_zone_frames": 90, "rewind_zone_speed_scalar": 0.5, "rewind_dominion_zone_radius": 128, "rewind_dominion_zone_frames": 150, "rewind_dominion_speed_scalar": 0.35, "rift_projectile_speed_scalar": 0.5, "rift_overlap_cap_frames": 180, "rift_dominion_projectile_speed_scalar": 0.35, "rift_dominion_overlap_cap_frames": 240, "accelerate_recovery_multiplier": 0.8, "accelerate_recovery_frames": 90, "accelerate_dominion_recovery_multiplier": 0.65, "accelerate_dominion_recovery_frames": 150}},
+      "rewind": {"handler_id": "time_lord_rewind", "parameters": {"freeze_pre_return_position": true, "rift_pulse_multiplier": 1.25, "rift_dominion_pulse_multiplier": 1.75, "accelerate_echo_frames": 180, "accelerate_echo_multiplier": 0.75, "accelerate_dominion_echo_frames": 300, "accelerate_dominion_echo_multiplier": 1.1}},
+      "accelerate": {"handler_id": "time_lord_accelerate", "parameters": {"rift_tick_interval_multiplier": 0.75, "rift_tick_cap_frames": 180, "rift_dominion_tick_interval_multiplier": 0.5, "rift_dominion_tick_cap_frames": 240}},
+      "rift": {"handler_id": "time_lord_rift", "parameters": {"preserve_committed_tick_count": true, "preserve_total_damage": true}}
+    },
+    "presentation": {"palette_id": "time_lord", "meter_id": "codex_pages", "skill_cue_id": "codex_dominion"},
+    "capabilities": ["character.codex_pages", "character.time_pair", "character.time_primer"],
+    "talent_ids": ["codex_margin", "efficient_inscription", "dominion_cadence"]
+  }
+]

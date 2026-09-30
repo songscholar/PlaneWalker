@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_milestone_availability(suite)
 	_test_next_candidate_presets(suite)
 	_test_launch_weapon_time_matrix(suite)
+	_test_launch_character_weapon_time_matrix(suite)
 	_test_result_definitions_are_deep_copies(suite)
 	suite.finish(get_tree())
 
@@ -69,6 +70,7 @@ func _test_m1_default(suite) -> void:
 		return
 	var loadout: Dictionary = result.context.get("loadout", {})
 	suite.assert_equal(str(loadout.get("character", {}).get("id", "")), "wanderer", "M1 default resolves Wanderer")
+	suite.assert_equal(str(loadout.get("character_profile", {}).get("id", "")), "wanderer_m1_v1", "M1 default resolves the frozen Wanderer profile")
 	suite.assert_equal(str(loadout.get("weapon", {}).get("id", "")), "sword", "M1 default resolves Sword")
 	suite.assert_equal(str(loadout.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "M1 default resolves the frozen Sword profile")
 	suite.assert_equal(_definition_ids(loadout.get("time_abilities", [])), ["stop", "rewind"], "M1 default resolves Stop and Rewind in slot order")
@@ -157,6 +159,56 @@ func _test_launch_weapon_time_matrix(suite) -> void:
 			)
 
 
+func _test_launch_character_weapon_time_matrix(suite) -> void:
+	var characters: Array[String] = [
+		"wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord",
+	]
+	var weapons: Array[String] = ["sword", "bow", "gun", "staff", "gauntlets"]
+	var time_pairs: Array[Array] = [
+		["stop", "rewind"],
+		["stop", "rift"],
+		["stop", "accelerate"],
+		["rewind", "rift"],
+		["rewind", "accelerate"],
+		["rift", "accelerate"],
+	]
+	var reversed_pairs: Array[Array] = []
+	for pair: Array in time_pairs:
+		reversed_pairs.append([pair[1], pair[0]])
+	for milestone: String in ["LAUNCH", "EXPANSION"]:
+		var accepted := 0
+		var rejected_reversed := 0
+		for character_id: String in characters:
+			for weapon_id: String in weapons:
+				for pair: Array in time_pairs:
+					var config := _config(weapon_id, pair, milestone)
+					config["character_id"] = character_id
+					var label := "%s / %s / %s / %s" % [milestone, character_id, weapon_id, "+".join(pair)]
+					var result = _policy.validate(config, _registry)
+					suite.assert_true(result.ok, "%s validates through the 150-loadout policy matrix" % label)
+					if not result.ok:
+						continue
+					var loadout: Dictionary = result.context.get("loadout", {})
+					suite.assert_equal(
+						str(loadout.get("character_profile", {}).get("character_id", "")),
+						character_id,
+						"%s resolves its authoritative character profile" % label
+					)
+					accepted += 1
+				for pair: Array in reversed_pairs:
+					var reversed_config := _config(weapon_id, pair, milestone)
+					reversed_config["character_id"] = character_id
+					var reversed_result = _policy.validate(reversed_config, _registry)
+					suite.assert_equal(
+						reversed_result.code,
+						&"INVALID_ARGUMENT",
+						"%s / %s / %s rejects noncanonical pair %s" % [milestone, character_id, weapon_id, "+".join(pair)]
+					)
+					rejected_reversed += 1
+		suite.assert_equal(accepted, 150, "%s accepts exactly 150 canonical loadouts" % milestone)
+		suite.assert_equal(rejected_reversed, 150, "%s rejects all 150 reversed duplicates" % milestone)
+
+
 func _test_result_definitions_are_deep_copies(suite) -> void:
 	var first = _policy.validate(_config(), _registry)
 	suite.assert_true(first.ok, "deep-copy fixture validates")
@@ -164,6 +216,7 @@ func _test_result_definitions_are_deep_copies(suite) -> void:
 		return
 	var loadout: Dictionary = first.context["loadout"]
 	loadout["character"]["tags"].append("forged-character-tag")
+	loadout["character_profile"]["base_stats"]["attack"] = 999
 	loadout["weapon"]["availability"].clear()
 	loadout["time_abilities"][0]["compatibility"]["forged"] = ["mutation"]
 
@@ -173,6 +226,7 @@ func _test_result_definitions_are_deep_copies(suite) -> void:
 		return
 	var fresh: Dictionary = second.context["loadout"]
 	suite.assert_true(not fresh["character"]["tags"].has("forged-character-tag"), "character definition is isolated")
+	suite.assert_equal(fresh["character_profile"]["base_stats"]["attack"], 30.0, "character profile is isolated")
 	suite.assert_true(not fresh["weapon"]["availability"].is_empty(), "weapon definition is isolated")
 	suite.assert_true(not fresh["time_abilities"][0]["compatibility"].has("forged"), "time ability definition is isolated")
 	suite.assert_true(not _registry.get_content(&"wanderer")["tags"].has("forged-character-tag"), "policy result cannot mutate the registry")

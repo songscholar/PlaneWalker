@@ -61,7 +61,7 @@ func _test_project_base_pack(suite) -> void:
 	var descriptor: Dictionary = loaded.get("descriptor", {})
 	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
 	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
-	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 8, "project base pack owns rewards, loadout identities, and weapon runtime profiles")
+	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 9, "project base pack owns rewards, loadout identities, and both runtime-profile dimensions")
 	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
 
 	var entries: Array[Dictionary] = []
@@ -77,7 +77,7 @@ func _test_project_base_pack(suite) -> void:
 		for entry_value: Variant in parsed:
 			if entry_value is Dictionary:
 				entries.append((entry_value as Dictionary).duplicate(true))
-	suite.assert_equal(entries.size(), 54, "project base pack preserves rewards, loadout definitions, and weapon runtime profiles")
+	suite.assert_equal(entries.size(), 72, "project base pack preserves rewards, fifteen talents, loadout definitions, and both runtime-profile dimensions")
 	var allowed_archetypes: Array[String] = [
 		"",
 		"accelerated_combo",

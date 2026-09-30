@@ -38,7 +38,8 @@
         "narrative",
         "cosmetic",
         "challenge",
-        "weapon_runtime_profile"
+        "weapon_runtime_profile",
+        "character_runtime_profile"
       ]
     },
     "availability": {
@@ -117,9 +118,17 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
     },
+    "character_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
     "runtime_kind": {
       "type": "string",
-      "enum": ["sword", "bow", "gun", "staff", "gauntlets"]
+      "enum": [
+        "sword", "bow", "gun", "staff", "gauntlets",
+        "wanderer_m1_compat", "wanderer", "time_guardian", "void_walker",
+        "primordial_knight", "time_lord"
+      ]
     },
     "capabilities": {
       "$ref": "#/$defs/id_list"
@@ -141,8 +150,70 @@
     },
     "boss_interactions": {
       "type": "object"
+    },
+    "base_stats": {
+      "type": "object"
+    },
+    "mobility": {
+      "type": "object"
+    },
+    "resource": {
+      "type": "object"
+    },
+    "passive": {
+      "type": "object"
+    },
+    "character_skill": {
+      "type": "object"
+    },
+    "weapon_mastery": {
+      "type": "object"
+    },
+    "presentation": {
+      "type": "object"
+    },
+    "talent_ids": {
+      "$ref": "#/$defs/id_list"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "category": {"const": "character_runtime_profile"}
+        },
+        "required": ["category"]
+      },
+      "then": {
+        "properties": {
+          "profile_version": {"const": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {"not": {"const": "character_runtime_profile"}}
+        },
+        "required": ["category"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["character_id"]},
+            {"required": ["base_stats"]},
+            {"required": ["mobility"]},
+            {"required": ["resource"]},
+            {"required": ["passive"]},
+            {"required": ["character_skill"]},
+            {"required": ["weapon_mastery"]},
+            {"required": ["presentation"]},
+            {"required": ["talent_ids"]}
+          ]
+        }
+      }
+    }
+  ],
   "$defs": {
     "id_list": {
       "type": "array",
