@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-09-30
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Rewind remains active
+- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Gameplay Rewind committed at `87eb931`; Task 2B remains active
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -475,13 +475,17 @@ git add -- scripts/player/characters/irreversible_character_ledger.gd scripts/co
 git commit -m "feat(health): add irreversible hp ledger"
 ```
 
-- [ ] **Step 7: Implement three-phase Gameplay Rewind**
+- [x] **Step 7: Implement three-phase Gameplay Rewind**
 
 Prepare freezes ticket/run/history revisions; current and snapshot ledger state; position, facing, velocity, HP/dead, safe action, PlayerActionState/coordinator state, snapshot history, and the pre-return origin used by later Time Lord conversions. It has zero side effects. Target HP applies the irreversible-loss formula and rejects negative ledger deltas, revision regression, terminal revival, non-finite values, stale tickets, and participant drift.
 
 Commit validates every participant before installing any state. Gameplay Rewind cancels only uncommitted actions and preserves committed projectiles/zones/world payloads. Samples are consumed and lifecycle/cost/cooldown events publish only after all installs succeed. Any install failure rolls Player, Health, ActionState, coordinator/runtime, and history back to the exact frozen before-state; rollback itself is single-use and rejects stale/foreign tickets.
 
-- [ ] **Step 8: Run Rewind and adjacent gates**
+Implemented in `87eb931`. Prepare has zero side effects and freezes the complete participant/history revision set. Commit preflights every participant before the first install; stale tickets discard only their frozen ledger transaction and preserve history or participant state created after prepare. Seven injected failure stages restore Time, Health and the irreversible ledger, Player, PlayerActionState, WeaponActionCoordinator/runtime, and Rewind history to the exact frozen before-state. Terminal/dead players cannot be revived, history is consumed only after participant installs succeed, and observable lifecycle/health/resource/cooldown events publish only after final verification.
+
+All five weapon paths now cancel only action-local uncommitted state while guarding committed projectiles, zones, waves, claims, and the same payload Node instances. A successful Gameplay Rewind deliberately marks the current P11 weapon Replay capture `GAMEPLAY_REWIND_UNSUPPORTED`; `weapon_replay_snapshot()` then returns empty instead of manufacturing an untrustworthy checkpoint. Replay schema 4 and authoritative reconstruction through `WorldPayloadAuthority` remain owned by Task 2B and Task 7.
+
+- [x] **Step 8: Run Rewind and adjacent gates**
 
 ```bash
 ./tools/run_tests.sh --filter damage_resolution
@@ -498,12 +502,11 @@ git diff --check
 
 Expected: PASS; a prevented hit leaves HP and generic fact counts unchanged, and every failed Rewind is byte-for-byte state preserving.
 
-- [ ] **Step 9: Commit the rollback-safe Gameplay Rewind**
+Verified on Godot `4.6.1`. Focused gates passed for PlayerActionState, WeaponActionCoordinator, Rewind transaction/cancellation/echo, Time loadout runtime, observable weapon restore atomicity, combat-event publication, both time/loadout matrix smokes, all five weapon runtimes and real payload paths, and Staff/Gauntlets Replay fact variants. The full scene suite passed `117 / 117` with `0` failures; the only warning remains the pre-existing `reward_system_smoke.tscn` ObjectDB leak. `git diff --check` also passed.
 
-```bash
-git add -- scripts/time_system/rewind_recorder.gd scripts/time_system/time_manager.gd scripts/player/player_controller.gd scripts/player/player_action_state.gd scripts/combat/health_component.gd tests/time/rewind_transaction_test.gd tests/time/rewind_action_cancellation_test.gd tests/replay/weapon_restore_observable_atomicity_test.gd tests/contract/events/combat_event_publication_test.gd
-git commit -m "fix(time): make gameplay rewind rollback-safe"
-```
+- [x] **Step 9: Commit the rollback-safe Gameplay Rewind**
+
+Completed in `87eb931` (`fix(time): make gameplay rewind rollback-safe`). The committed scope includes the Rewind/Health/Time/Player transaction authorities, PlayerActionState, WeaponActionCoordinator and base runtime contracts, five weapon adapters and runtimes, semantic input routing, and all adjacent regression coverage required by the stricter adapter contract.
 
 ### Task 2B: P12B fixed-frame time actions and world-payload authority
 
