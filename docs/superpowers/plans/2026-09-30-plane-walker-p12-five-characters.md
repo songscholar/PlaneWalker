@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-09-30
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP and rollback-safe Rewind remain active
+- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Rewind remains active
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -377,7 +377,7 @@ Also assert invalid/immunity short-circuit, Sword perfect guard never performs o
 
 The focused suite includes `test_damage_info_from_plan_deep_freezes_source_collections`, `test_damage_resolution_snapshot_has_exact_fields_and_isolation`, `test_malformed_defense_decision_is_side_effect_free`, `test_dead_and_invulnerable_targets_return_prevented_resolution`, `test_unguardable_and_irreversible_tags_bypass_defense_decisions`, and `test_resolution_id_does_not_use_instance_identity`. Update Sword Launch parity so a perfect guard applies zero damage, preserves HP, never writes `refunded_damage`, and still commits exactly one Intent/guard fact. Keep `HealthComponent.take_damage()` as a float-returning compatibility wrapper over the new resolver while all callers migrate to immutable plans.
 
-- [ ] **Step 2: Write failing irreversible-loss and Rewind rollback tests**
+- [x] **Step 2: Write failing irreversible-loss and Rewind rollback tests**
 
 ```gdscript
 func test_rewind_subtracts_irreversible_loss_since_snapshot() -> void:
@@ -456,11 +456,13 @@ git add -- scripts/combat/damage_resolution.gd scripts/combat/damage_info.gd scr
 git commit -m "fix(combat): install immutable damage resolution"
 ```
 
-- [ ] **Step 6: Implement and certify monotonic irreversible HP state**
+- [x] **Step 6: Implement and certify monotonic irreversible HP state**
 
 `IrreversibleCharacterLedger` owns `run_id`, a monotonic actual-loss total, revision, and stable claim map keyed by `run_id:reason:source_generation:source_token`. Duplicate, non-finite, non-positive, empty-reason, invalid-token, stale-run, and forged-root claims fail without mutation. Healing and Gameplay Rewind never reduce the total. Reset installs a new run identity and invalidates old claims. Replay restore may install a fully validated snapshot; transaction rollback may install only the exact frozen pre-transaction snapshot.
 
 `HealthComponent.lose_health_irreversible()` records the actual HP removed, including terminal loss, before death publication. `TimeManager._take_self_damage()` uses this path with a unique compatibility token/generation until Task 2B replaces it with the authoritative TimeAction transaction identity. `RunRuntimeHost` injects one stable run ID into Player, Health, Ledger, and Rewind rather than allowing tests to invent a separate identity path.
+
+Implemented in `6761ede`. The ledger validates exact claim maps and SHA-256 roots, supports explicit single-use transaction freeze/restore/discard, and rejects stale-run, duplicate, malformed, non-finite, and forged state without mutation. Health records actual overkill loss before `damaged`, `entity_died`, and `died`; generic irreversible `DamageInfo` and TimeManager self-costs share the same authority. `RunRuntimeHost` installs run identity before loadout reset, and new runs invalidate both prior claims and Rewind history. Focused gates passed and the full scene suite completed at `117 / 117`; the only warning remains the pre-existing `reward_system_smoke.tscn` ObjectDB leak.
 
 ```bash
 ./tools/run_tests.sh --filter irreversible_character_ledger
