@@ -6,8 +6,8 @@
 - Applies To: Sword, Bow, Gun, Staff, Gauntlets, shared weapon action authority, weapon input semantics, weapon HUD state, weapon feedback, item hooks, time interactions, and the 30 weapon/time-loadout smoke matrix
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/3.1combat-system-design.md`, `docs/4_角色与数值体系设计.md`, `docs/5_6_UI美术音效技术设计.md`, `docs/contracts/content-pack-v2.md`
-- Last Verified: 2026-09-29
-- Implementation Status: Approved under the standing full-product authorization; P11 implementation begins after locally certified P10A commit `2df1078`
+- Last Verified: 2026-09-30
+- Implementation Status: P11A–P11H are locally certified at implementation commit `01c3712`; the five weapon runtimes, cross-weapon HUD and feedback, Launch Loadout UI, deterministic weapon Replay, 30-loadout matrix, and synthetic simulation report pass the repository-local gate recorded in `docs/current/2026-09-30-p11-five-weapons-evidence.md`
 
 ## 1. Decision
 
@@ -458,7 +458,7 @@ Scene-test counts are not line coverage. GDScript line coverage remains `not col
 
 ## 14. Delivery decomposition
 
-P11 is implemented as independently reviewable gates:
+P11 was delivered through eight independently reviewable gates, all locally certified:
 
 1. **P11A Shared authority:** ADR, semantic input contract, runtime-profile schema, coordinator, modifier state, facts, and failing shared contracts.
 2. **P11B Sword migration:** `sword_m1_v1` parity, launch Sword profile, feedback migration, and removal of Sword-specific controller ownership.
@@ -483,3 +483,5 @@ P11 is locally complete only when:
 - the 30 weapon/time-loadout matrix and deterministic simulations pass;
 - full repository validation passes with only registered warnings;
 - formal M1 remains `M1 Candidate — External Validation Pending`, authentic human evidence remains `0 / 20`, and no weapon is falsely described as externally validated, published, or product-complete.
+
+The repository-local P11 exit gate is satisfied. Exact commands, focused Replay evidence, the 30-loadout matrix, the byte-identical 900-sample synthetic reports, final repository counts, and remaining external boundaries are recorded in the [consolidated P11 evidence](../../current/2026-09-30-p11-five-weapons-evidence.md).

@@ -4,12 +4,12 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P2, P3, P4/P5, P6, P8, and P10A candidate loadouts are locally certified; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
+- Implementation Status: Active; P2, P3, P4/P5, P6, P8, P10A candidate loadouts, and P11A–P11H five complete weapon runtimes with Launch Loadout UI, deterministic weapon Replay, and the 30-loadout matrix are locally certified; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
 - Preserves: All verified Wave 0/1, Wave 2, Wave 3A, and Wave 3B contracts and regression evidence
-- Last Verified: 2026-09-29
+- Last Verified: 2026-09-30
 - Contract References: `AGENTS.md`, future approved ADRs, `docs/contracts/`, current implementation plans
 
 ## 1. Decision
@@ -288,7 +288,7 @@ The foundation is executed as hard-gated phases:
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
 
-P2, P3, P4/P5, P6, P8, and P10A candidate-loadout completion evidence is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
+Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, and the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md) is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
 
 ## 10. Delivery Sequence After Foundation
 
@@ -297,7 +297,7 @@ After P0–P9, work continues in dependency order:
 1. Wave 4A–4D and formal M1 decision.
 2. Evidence-based Bow/third-time-ability promotion.
 3. Four complete time abilities.
-4. Five complete weapons.
+4. Five complete weapons — `Completed / Certified 2026-09-30`.
 5. Five complete characters and 150 loadout smoke matrix.
 6. Eight archetype mechanics and the complete launch item/blessing/curse/talent pools.
 7. Five-floor dungeon, route/economy/events/merchant budgets, and thirty rooms.
@@ -309,6 +309,8 @@ After P0–P9, work continues in dependency order:
 13. Clean-checkout product certification and release-operation checklist.
 
 P10A completed the canonical `5 / 5 / 4` character, weapon, and time-ability identity catalog, candidate-only Bow/Rift/Accelerate runtime, configuration-driven two-slot HUD, local Candidate Lab, and all six legal time-pair verification on 2026-09-29. This is locally verified preparation for the evidence-based promotion decision. It does not satisfy delivery step 2, change Quick Start, or promote Bow, Rift, or Accelerate to Current; authentic external playtest evidence remains `0 / 20`.
+
+P11A–P11H completed delivery step 4 at implementation commit `01c3712` on 2026-09-30: all five weapons use the shared action authority, the formal Launch Loadout reaches every weapon and legal time pair, deterministic weapon Replay and external-fact validation pass, and the 30-loadout matrix plus synthetic simulation report are locally certified. This does not complete five character-specific gameplay kits, the 150-loadout matrix, full player-facing replay productization, or any later floor, Boss, Hub, narrative, ranking, Mod, or DLC gate. Formal M1 and external export/release boundaries are unchanged.
 
 Parallel agents may work on independent lanes, but shared contracts, manifests, autoloads, and assembly scenes have one integration owner.
 

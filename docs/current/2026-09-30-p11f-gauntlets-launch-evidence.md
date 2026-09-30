@@ -18,7 +18,7 @@ P11F Launch Gauntlets is `Verified Locally` at implementation commit `2cfd31c`. 
 
 The final Gauntlets suite passed `6 / 6` with zero leak warnings. The final repository validation passed `103 / 103` Godot scene tests with only the registered `reward_system_smoke` ObjectDB warning. Documentation, localization, playtest-data, M1, coverage-contract, export-contract, bootstrap-import, and clean-import sub-gates all passed. Final implementation and integration reviews reported no P0 or P1 blocker.
 
-Gauntlets remains limited to `LAUNCH` and `EXPANSION`. This implementation does not add a complete five-weapon player-facing loadout menu, promote Gauntlets to Current, or change the frozen M1 candidate.
+Gauntlets remains limited to `LAUNCH` and `EXPANSION`. At the P11F checkpoint, this implementation did not yet add a complete five-weapon player-facing loadout menu. That menu and the cross-weapon Replay gate were subsequently completed under P11G and are certified in the [consolidated P11 evidence](2026-09-30-p11-five-weapons-evidence.md). Gauntlets is not promoted to Current, and the frozen M1 candidate is unchanged.
 
 Formal product status remains `M1 Candidate — External Validation Pending`. Authentic external human playtests remain `0 / 20`. GDScript line coverage remains `not collected (godot_line_coverage_unsupported)`.
 
@@ -90,7 +90,7 @@ P11F is not a backend-only implementation. The certified player-visible path inc
 - Profile-driven `animation_id` and `vfx_id` routing, impact-tier hit pause, camera feedback, token deduplication, and typed hit-confirmed facts;
 - automated projector, HUD scene, feedback, semantic input, real Area2D hit, real zone, and Aura tests.
 
-This evidence does not claim that every Launch/Expansion feature already has a formal UI. Gun, Staff, and Gauntlets still need a unified player-facing five-weapon selection flow. Replay, Hub, meta progression, maps, shops, events, narrative, rankings, Mod management, cosmetics, challenges, and DLC status UI remain later gates. Their definition of done must include a formal player entry point, state/error feedback, keyboard/controller access, and UI/visual tests.
+At the P11F checkpoint, this evidence did not claim that every Launch/Expansion feature already had a formal UI. The unified player-facing five-weapon selection flow and deterministic weapon Replay were subsequently completed under P11G. Hub, meta progression, maps, shops, events, narrative, rankings, Mod management, cosmetics, challenges, complete replay productization, and DLC status UI remain later gates. Their definition of done must include a formal player entry point, state/error feedback, keyboard/controller access, and UI/visual tests.
 
 ## Validation evidence
 
@@ -130,9 +130,9 @@ The import path emitted only approved macOS CA-store/settings diagnostics. Final
 - Gauntlets remains `LAUNCH` / `EXPANSION`; M1 and NEXT availability are unchanged.
 - M1 remains `M1 Candidate — External Validation Pending`; authentic external human playtests remain `0 / 20`.
 - Programmatic Pixel Proxy art is mechanically certified but still requires real-player screenshot and subjective visual tuning.
-- Full localization/input/resolution visual acceptance, exact Combo tier naming, feedback-frequency budgets, replay, and legacy removal remain P11G scope.
+- Full localization/input/resolution automation, feedback-frequency budgets, deterministic weapon Replay, and legacy weapon fallback removal were subsequently closed by P11G. Exact subjective acceptance and final Combo tier naming still require product and human review.
 - Contract-mode export checks do not certify installed templates, packaged startup, signing, store credentials, publication, or remote push.
 
-## Next handoff
+## Handoff closure
 
-P11G is the next implementation gate. It must finish capability-based item effects, remove legacy `player_attacked` and Sword presentation fallbacks, add deterministic five-weapon replay, enforce high-frequency accessibility budgets, complete cross-weapon UI contracts, and create the unified player-facing Launch loadout entry rather than treating runtime availability as sufficient UI completion.
+The P11G handoff is complete. Capability-based item effects, legacy fact/fallback removal, deterministic five-weapon Replay, high-frequency accessibility budgets, cross-weapon UI contracts, and the unified player-facing Launch Loadout entry are certified in the [consolidated P11 evidence](2026-09-30-p11-five-weapons-evidence.md). The next local program is the remaining Full Product content and Launch/Expansion system sequence, not additional P11 weapon-runtime work.

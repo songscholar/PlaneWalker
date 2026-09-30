@@ -1,14 +1,14 @@
 # Plane Walker P11 Five Complete Weapons Implementation Plan
 
-- Status: Active / Current
-- Document Role: Current implementation plan
-- Authority Level: Executable P11 work breakdown under the approved five-weapon design
+- Status: Completed / Historical
+- Document Role: Historical implementation and local certification record
+- Authority Level: Preserved P11 implementation and regression evidence under the approved five-weapon design
 - Applies To: Shared weapon action authority, Sword, Bow, Gun, Staff, Gauntlets, semantic input, profiles, facts, HUD, presentation, time interactions, Boss integration, simulations, and certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
 - Last Verified: 2026-09-30
-- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; P11D Launch Gun is locally certified through `e92e7f4`; P11E Launch Staff is locally certified through `f1f022d`; P11F Launch Gauntlets is locally certified through `2cfd31c`; P11G and later gates remain active
-- Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
+- Implementation Status: P11A–P11H are locally certified as of 2026-09-30. Existing P11A–P11F implementation commit references remain valid; P11G/P11H implementation is certified at `01c3712`. Formal product status remains `M1 Candidate — External Validation Pending`.
+- Completion Evidence: `docs/current/2026-09-30-p11-five-weapons-evidence.md`; five coordinator-owned weapons, Launch Loadout UI, deterministic replay, the 30-loadout matrix, two byte-identical 900-sample synthetic reports, and the `113 / 113` repository scene gate pass locally
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -32,6 +32,8 @@
 - The interrupted Staff `weapon_spell` draft is migration material only; it is never committed in its current schema.
 - Every focused Godot run must be scanned for parser errors, runtime errors, leaks, and unexpected ObjectDB warnings.
 - GDScript line coverage remains `not collected (godot_line_coverage_unsupported)` until a real provider exists.
+- The `30 seeds × 30 loadouts` report contains 900 synthetic deterministic samples and is not human playtest evidence.
+- Export contracts pass in contract mode. Real export templates, distributable package creation and startup, signing, publication, and store credentials remain unverified external boundaries.
 
 ---
 
@@ -495,7 +497,7 @@ Update both localization catalogs identically for shared keys and refresh the Ba
 
 Run: `./tools/run_tests.sh --filter "staff|elemental_status|content_registry|localization|chrono_warden|replay"`
 
-Execution record: the final Staff gate passed `7 / 7` at `planewalker-tests.6ks5Ap` with zero leak warnings. The final repository gate passed at `planewalker-validation.1Wdg8l`, including `97 / 97` Godot scenes, documentation `30 / 30` with zero violations, localization `8 / 8`, playtest data `13 / 13`, M1 release gate `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37` in contract mode, and clean bootstrap/import checks. The only registered suite warning is `reward_system_smoke`; final static and independent reviews found no P0, P1, or P2 blocker. Replay serialization remains P11G scope and is not claimed by the P11E evidence.
+Execution record: the final Staff gate passed `7 / 7` at `planewalker-tests.6ks5Ap` with zero leak warnings. The final repository gate passed at `planewalker-validation.1Wdg8l`, including `97 / 97` Godot scenes, documentation `30 / 30` with zero violations, localization `8 / 8`, playtest data `13 / 13`, M1 release gate `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37` in contract mode, and clean bootstrap/import checks. The only registered suite warning is `reward_system_smoke`; final static and independent reviews found no P0, P1, or P2 blocker. At the P11E checkpoint, replay serialization was deferred to P11G; it is now locally certified under Task 9.
 
 - [x] **Step 6: Commit**
 
@@ -548,7 +550,7 @@ git add -- scripts/combat/weapons/gauntlets_weapon_runtime.gd scripts/combat/wea
 git commit -m "feat(weapon): add complete gauntlets runtime"
 ```
 
-Execution record: P11F Launch Gauntlets is certified at implementation commit `2cfd31c`. The final Gauntlets gate passed `6 / 6` with zero leak warnings at `planewalker-tests.gKEXxs`. The final repository gate passed at `planewalker-validation.vp6gcQ`, including `103 / 103` Godot scenes, documentation `30 / 30` with zero violations, localization `8 / 8`, playtest data `13 / 13`, M1 release gate `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37` in contract mode, and clean bootstrap/import checks. The only registered suite warning is `reward_system_smoke`. Final reviews reported no P0/P1 blocker. Formal product status remains `M1 Candidate — External Validation Pending`, authentic external playtests remain `0 / 20`, and replay plus cross-weapon player-entry UI remain P11G scope.
+Execution record: P11F Launch Gauntlets is certified at implementation commit `2cfd31c`. The final Gauntlets gate passed `6 / 6` with zero leak warnings at `planewalker-tests.gKEXxs`. The final repository gate passed at `planewalker-validation.vp6gcQ`, including `103 / 103` Godot scenes, documentation `30 / 30` with zero violations, localization `8 / 8`, playtest data `13 / 13`, M1 release gate `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37` in contract mode, and clean bootstrap/import checks. The only registered suite warning is `reward_system_smoke`. Final reviews reported no P0/P1 blocker. Formal product status remains `M1 Candidate — External Validation Pending`, authentic external playtests remain `0 / 20`. At the P11F checkpoint, replay and cross-weapon player-entry UI were deferred to P11G; both are now locally certified.
 
 ### Task 9: P11G cross-weapon UI, modifiers, replay, accessibility, and legacy removal
 
@@ -563,40 +565,68 @@ Execution record: P11F Launch Gauntlets is certified at implementation commit `2
 - Modify: `autoload/event_bus.gd`
 - Modify: `scripts/replay/replay_recorder.gd`
 - Modify: `scripts/replay/replay_player.gd`
+- Create: `scenes/ui/launch_loadout_panel.tscn`
+- Create: `scripts/ui/launch_loadout_panel.gd`
+- Modify: `scenes/main.tscn`
+- Modify: `scripts/main.gd`
+- Modify: `data/content/effect_catalog.json`
+- Modify: `scripts/content/effects/effect_definition.gd`
+- Modify: `scripts/content/effects/effect_handler_catalog.gd`
 - Modify: `tests/ui/run_view_state_contract_test.gd`
 - Modify: `tests/unit/application/run_view_state_projector_test.gd`
 - Modify: `tests/presentation/combat_feedback_runtime_test.gd`
 - Create: `tests/replay/weapon_runtime_replay_test.gd`
 - Create: `tests/replay/weapon_runtime_replay_test.tscn`
+- Create: `tests/replay/weapon_external_fact_replay_test.gd`
+- Create: `tests/replay/weapon_restore_observable_atomicity_test.gd`
+- Create: `tests/replay/weapon_staff_external_fact_variants_test.gd`
+- Create: `tests/replay/weapon_gauntlets_external_fact_variants_test.gd`
+- Create: `tests/ui/launch_loadout_panel_test.gd`
+- Create: `tests/ui/launch_loadout_panel_test.tscn`
+- Create: `tests/integration/ui/launch_loadout_flow_test.gd`
+- Create: `tests/integration/ui/launch_loadout_flow_test.tscn`
+- Modify: `tests/integration/ui/controller_focus_flow_test.gd`
 
 **Interfaces:**
 - Consumes: weapon presentation snapshots, typed facts, modifier capabilities, accessibility settings, and deterministic action/resource snapshots.
 - Produces: validated `weapon_state` union, generic weapon HUD, correct proxy/audio/VFX routing, deterministic replay, and no legacy Sword/Bow branches.
 
-- [ ] **Step 1: Write union, replay, cue-deduplication, and accessibility tests**
+- [x] **Step 1: Write union, replay, cue-deduplication, and accessibility tests**
 
 Reject unknown weapon/meter/status combinations, NaN/infinite/negative meters, duplicate cue facts, mismatched replay profile versions, and high-frequency flash/shake outside accessibility limits.
 
-- [ ] **Step 2: Move every item effect to `WeaponModifierState` capabilities**
+- [x] **Step 2: Move every item effect to `WeaponModifierState` capabilities**
 
 Remove direct writes to `player.sword_weapon` and `player.bow_weapon`. Content validation rejects unsupported effect-to-capability mappings before activation.
 
-- [ ] **Step 3: Retire legacy facts and presentation fallbacks**
+- [x] **Step 3: Retire legacy facts and presentation fallbacks**
 
-Remove `player_attacked` after all five runtimes and consumers use typed facts/cues. Remove generic `sword_swing` routing and every `SwordWeapon` child lookup.
+Remove `player_attacked` after all five runtimes and consumers use typed facts/cues. Retire every cross-weapon fallback to `sword_swing`; retain `sword_swing` only as the Sword-specific cue and retain weapon adapter nodes only as payload sources. Controller and presentation authority no longer depends on child lookup.
 
-- [ ] **Step 4: Verify HUD at all required resolutions and input modes**
+- [x] **Step 4: Verify HUD at all required resolutions and input modes**
 
-Run visual/interaction checks at 640×360, 1280×720, 1920×1080, and ultrawide safe frames for keyboard/mouse, controller, hold, and toggle modes.
+Run Launch Loadout checks at 640×360, 1280×720, 1920×1080, and 3440×1440; run generic combat-HUD checks at 640×360, 1280×720, 1920×1080, and 2560×1080. Cover keyboard/mouse, real-controller flow, and the applicable hold/toggle accessibility modes.
 
-- [ ] **Step 5: Run cross-system tests and commit**
+- [x] **Step 5: Run cross-system tests and record local certification**
 
-Run: `./tools/run_tests.sh --filter "run_view_state|combat_feedback|pixel_proxy|replay|accessibility|item_effect"`
+Run each literal filter separately because `tools/run_tests.sh` does not interpret regular-expression alternation:
+
+```bash
+./tools/run_tests.sh --filter run_view_state
+./tools/run_tests.sh --filter combat_feedback
+./tools/run_tests.sh --filter replay
+./tools/run_tests.sh --filter accessibility
+./tools/run_tests.sh --filter item_effect
+./tools/run_tests.sh --filter launch_loadout
+./tools/run_tests.sh --filter combat_hud
+```
 
 ```bash
 git add -- scripts/items scripts/application scripts/ui scripts/presentation scripts/replay autoload tests/ui tests/unit/application tests/presentation tests/replay
 git commit -m "refactor(weapons): unify cross-weapon presentation"
 ```
+
+Execution record: the five-weapon `weapon_state` HUD union, capability-based ItemEffect routing, formal Launch Loadout UI, keyboard/mouse and real-controller flow, Bow/ranged-charge hold/toggle accessibility, deterministic five-weapon Replay, external-fact transition validation, atomic restore, and stale-generation rejection are locally complete. The Launch entry covers all five weapons and all six legal time pairs. The Replay directory passed `5 / 5` with zero leaks at `planewalker-tests.nJef75`; focused external-fact replay passed at `planewalker-tests.xXPIoJ`; Gauntlets external-fact variants passed at `planewalker-tests.N8ZOvg`. No non-Sword weapon depends on a `sword_swing` presentation fallback.
 
 ### Task 10: P11H 30-loadout matrix, simulations, documentation, and certification
 
@@ -606,7 +636,7 @@ git commit -m "refactor(weapons): unify cross-weapon presentation"
 - Create: `tests/smoke/weapon_time_loadout_matrix_smoke_test.tscn`
 - Create: `tools/run_weapon_simulation_matrix.py`
 - Create: `tests/contract/playtest/test_weapon_simulation_report.py`
-- Create: `docs/current/2026-09-29-p11-five-weapons-evidence.md`
+- Create: `docs/current/2026-09-30-p11-five-weapons-evidence.md`
 - Modify: `docs/README.md`
 - Modify: this plan
 
@@ -614,7 +644,7 @@ git commit -m "refactor(weapons): unify cross-weapon presentation"
 - Consumes: five registered weapon profiles, six unordered legal time pairs, fixed seeds, full repository validation, and honest external-evidence boundaries.
 - Produces: 30 deterministic loadout results, 30-seed weapon metrics, clean reset/replay evidence, and a locally verified P11 retention report.
 
-- [ ] **Step 1: Write the matrix contract**
+- [x] **Step 1: Write the matrix contract**
 
 ```gdscript
 const WEAPONS := [&"sword", &"bow", &"gun", &"staff", &"gauntlets"]
@@ -626,11 +656,11 @@ const TIME_PAIRS := [
 
 Each case starts a run, commits representative weapon actions and both time abilities, validates HUD state, resets cleanly, and repeats with the same terminal digest.
 
-- [ ] **Step 2: Add deterministic simulation reporting**
+- [x] **Step 2: Add deterministic simulation reporting**
 
-The report records DPS, risk uptime, starvation, burst, area coverage, status uptime, perfect-reload value, Staff combination frequency, and Gauntlets Combo retention. It reports observations; it does not claim authentic human playtest evidence.
+The report records DPS, risk uptime, starvation, burst, area coverage, status uptime, perfect-reload value, Staff combination frequency, and Gauntlets Combo retention. It covers 30 loadouts with 30 canonical seeds each, for 900 synthetic samples. It reports deterministic model observations; it does not claim authentic human playtest evidence. The simulation-report contract passes `8 / 8`.
 
-- [ ] **Step 3: Run focused matrix twice and compare digests**
+- [x] **Step 3: Run focused matrix twice and compare digests**
 
 Run: `./tools/run_tests.sh --filter weapon_time_loadout_matrix`
 
@@ -638,11 +668,13 @@ Run: `PYTHONDONTWRITEBYTECODE=1 python3 tools/run_weapon_simulation_matrix.py --
 
 Run the same command with `/tmp/planewalker-p11-sim-b.json`; expected SHA-256 digests are identical.
 
-- [ ] **Step 4: Run full repository gates**
+Execution record: both reports contain internal `content_digest` `5888bdc254eed6a374ed02dfd7fb7f72e606b29fb98cf8d8159d3479035e87c8`. The two output files are byte-identical and each has SHA-256 `6e34e2ba697f966766e39f8f004854d661d0c232bf5d10228f90de85f43463aa`.
+
+- [x] **Step 4: Run full repository gates**
 
 Run: `./tools/validate_project.sh`
 
-Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.documentation.test_document_governance tests.contract.localization.test_localization_contract tests.contract.playtest.test_weapon_simulation_report`
+Run: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.documentation.test_document_governance tests.contract.localization.test_validate_localization tests.contract.playtest.test_weapon_simulation_report`
 
 Run: `PYTHONDONTWRITEBYTECODE=1 python3 tools/document_governance.py --baseline tools/document_governance_baseline.json`
 
@@ -650,23 +682,27 @@ Run: `git diff --check`
 
 Expected: all tests pass; logs contain no parser/runtime/leak errors and only explicitly registered warnings.
 
-- [ ] **Step 5: Write evidence without overstating external validation**
+Execution record: documentation governance `30 / 30`, localization `8 / 8`, playtest contracts `13 / 13`, M1 release contracts `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37`, Godot scenes `113 / 113`, and project validation all pass. The only registered suite warning is the known `tests/reward_system_smoke.tscn` ObjectDB leak. GDScript line coverage remains uncollected. Export templates, packaged startup, signing, and public publication remain unverified.
+
+- [x] **Step 5: Write evidence without overstating external validation**
 
 Record exact commits, commands, pass counts, digests, registered warnings, `0 / 20` authentic human playtests, unsupported GDScript line coverage, and outstanding export/signing/publication credentials.
 
-- [ ] **Step 6: Mark this plan historical and commit certification**
+- [x] **Step 6: Mark this plan historical and record local certification**
+
+The P11G/P11H implementation certification commit is `01c3712`. This document does not invent the hash of its own later documentation-certification commit.
 
 ```bash
-git add -- tests/smoke tools/run_weapon_simulation_matrix.py tests/contract/playtest docs/current/2026-09-29-p11-five-weapons-evidence.md docs/README.md docs/superpowers/plans/2026-09-29-plane-walker-p11-five-weapons.md
+git add -- tests/smoke tools/run_weapon_simulation_matrix.py tests/contract/playtest docs/current/2026-09-30-p11-five-weapons-evidence.md docs/README.md docs/superpowers/plans/2026-09-29-plane-walker-p11-five-weapons.md
 git commit -m "docs(weapons): certify P11 five-weapon runtime"
 ```
 
 ## P11 Exit Gate
 
-- Five weapons use one coordinator and no weapon-specific action ownership remains in `PlayerController`.
-- M1 Sword and P10 Bow candidate parity pass before their expanded profiles are accepted.
-- Gun, Staff, and Gauntlets are complete at LAUNCH/EXPANSION and unavailable earlier.
-- Every weapon has input, resource/rhythm, primary/secondary/utility as applicable, skill, ultimate, four time interactions, Chrono Warden conversion, HUD, feedback, controller, accessibility, snapshot, reset, and replay coverage.
-- The 30 loadout matrix and two-run deterministic digests pass.
-- Full validation is green with only registered warnings.
-- P11 evidence remains local and does not change the M1 external-validation status.
+- [x] Five weapons use one coordinator and no weapon-specific action ownership remains in `PlayerController`.
+- [x] M1 Sword and P10 Bow candidate parity pass before their expanded profiles are accepted.
+- [x] Gun, Staff, and Gauntlets are complete at LAUNCH/EXPANSION and unavailable earlier.
+- [x] Every weapon has input, resource/rhythm, primary/secondary/utility as applicable, skill, ultimate, four time interactions, Chrono Warden conversion, HUD, feedback, controller, accessibility, snapshot, reset, and replay coverage.
+- [x] The 30-loadout matrix and two-run deterministic digests pass.
+- [x] Full validation is green with only registered warnings.
+- [x] P11 evidence is locally certified and does not change `M1 Candidate — External Validation Pending`, `0 / 20` authentic human playtests, unsupported GDScript line coverage, or the real export/signing/publication boundaries.
