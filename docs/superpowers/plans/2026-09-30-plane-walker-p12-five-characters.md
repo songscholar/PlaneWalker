@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-09-30
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage, irreversible HP, and rollback-safe Rewind is the active implementation slice
+- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP and rollback-safe Rewind remain active
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -327,7 +327,7 @@ Completed at implementation commit `61eaae6`; local certification is recorded in
 
 The typed defense-decision envelope has exactly `prevented`, `multiplier`, `prevent_reason`, `guard_kind`, and `commit_context`. `{}` means no defense. `prevented=true` requires `multiplier=1.0`; otherwise `multiplier` must be finite and in `0.0..1.0`. Unknown keys, conflicting prevention fields, invalid types, and out-of-range values fail without HP, fact, guard-resource, or action-state side effects. Sword and later character defenses first plan decisions, then commit their guard/resource/mastery facts only after `HealthComponent` accepts the resolution.
 
-- [ ] **Step 1: Write failing damage-order and prevention tests**
+- [x] **Step 1: Write failing damage-order and prevention tests**
 
 ```gdscript
 func test_prevented_damage_has_no_hp_or_generic_fact_side_effect() -> void:
@@ -424,7 +424,7 @@ Ledger tests also cover actual-loss rather than requested overkill, healing mono
 
 Expected: FAIL because prevention is still mutation-plus-refund and Rewind does not carry the irreversible ledger or rollback ticket.
 
-- [ ] **Step 4: Implement immutable resolution and ordered application**
+- [x] **Step 4: Implement immutable resolution and ordered application**
 
 `DamageInfo` deep-freezes a validated plan. Existing constructor call sites migrate to complete plans rather than constructing and assigning fields later. Container getters and `snapshot()` return copies. `copy_for_source()` is the only source-substitution path. `HealthComponent.resolve_and_apply_damage()` creates one `DamageResolution`; only an applied result subtracts HP and publishes `damaged`, `damage_applied`, or `hit_confirmed`. `take_damage()` remains the compatibility wrapper returning the finalized float.
 
@@ -432,7 +432,7 @@ Sword and character guards return typed defense decisions instead of mutating `D
 
 The immutable snapshot contains exactly `resolution_id`, `run_id`, `target_id`, `hostile_source_id`, `attack_generation`, `action_token`, `original_amount`, `post_weapon_defense_amount`, `post_character_defense_amount`, `post_accessibility_amount`, `post_defense_amount`, `finalized_damage`, `prevented`, `prevent_reason`, `guard_kind`, `irreversible`, and `tags`. `prevented` fixes finalized damage at zero. A positive non-prevented attack that survives percentage stages retains the existing minimum-one rule after flat defense. Self-cost, corruption, terminal, and explicitly unguardable tags bypass weapon/character defense but still produce a resolution and, when marked irreversible, one ledger claim.
 
-- [ ] **Step 5: Run damage gates and commit the immutable pipeline**
+- [x] **Step 5: Run damage gates and commit the immutable pipeline**
 
 ```bash
 ./tools/run_tests.sh --filter damage_resolution
