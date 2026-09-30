@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/accessibility/subtitle_presenter.gd" id="8_subtitle"]
 [ext_resource type="PackedScene" path="res://scenes/ui/accessibility_settings_panel.tscn" id="9_accessibility_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/candidate_loadout_panel.tscn" id="10_candidate_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/launch_loadout_panel.tscn" id="11_launch_panel"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -70,6 +71,11 @@ layer = 35
 
 [node name="CandidateLoadoutPanel" parent="CandidateLabLayer" instance=ExtResource("10_candidate_panel")]
 
+[node name="LaunchLoadoutLayer" type="CanvasLayer" parent="."]
+layer = 36
+
+[node name="LaunchLoadoutPanel" parent="LaunchLoadoutLayer" instance=ExtResource("11_launch_panel")]
+
 [node name="StartMenu" type="CanvasLayer" parent="."]
 layer = 30
 
@@ -99,7 +105,7 @@ offset_left = 28.0
 offset_top = 18.0
 offset_right = 432.0
 offset_bottom = 310.0
-theme_override_constants/separation = 10
+theme_override_constants/separation = 6
 
 [node name="Title" type="Label" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
@@ -118,15 +124,21 @@ horizontal_alignment = 1
 
 [node name="StartButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(360, 52)
+custom_minimum_size = Vector2(360, 44)
 focus_mode = 2
 text = "Quick Start"
 
 [node name="CandidateButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(360, 44)
+custom_minimum_size = Vector2(360, 38)
 focus_mode = 2
 text = "Candidate Lab"
+
+[node name="LaunchButton" type="Button" parent="StartMenu/Panel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(360, 38)
+focus_mode = 2
+text = "Launch Loadout"
 
 [node name="RunEndOverlay" type="CanvasLayer" parent="."]
 layer = 30

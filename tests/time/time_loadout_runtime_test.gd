@@ -38,6 +38,26 @@ class RewindRecorderStub:
 	func clear_snapshots() -> void:
 		pass
 
+
+class ReplayStopTarget extends Node:
+	var apply_calls: int = 0
+	var clear_calls: int = 0
+	var sources: Dictionary = {}
+
+	func _ready() -> void:
+		add_to_group("time_stoppable")
+
+	func apply_time_stop_source(source_id: StringName, _duration: float) -> void:
+		apply_calls += 1
+		sources[source_id] = true
+
+	func clear_time_stop_source(source_id: StringName) -> void:
+		clear_calls += 1
+		sources.erase(source_id)
+
+	func is_time_stopped() -> bool:
+		return not sources.is_empty()
+
 var _suite
 var _time_started: Dictionary = {}
 var _time_ended: Dictionary = {}
@@ -55,6 +75,7 @@ func _run() -> void:
 	await _test_time_manager_generic_contract()
 	await _test_active_stop_and_accelerate_reject_reapply()
 	await _test_cancel_clears_real_time_stop_targets()
+	await _test_replay_restore_reconciles_real_time_stop_targets()
 	await _test_pause_freezes_real_time_stop_targets()
 	await _test_manager_stop_honors_real_elite_resistance()
 	await _test_six_unordered_pairs_gate_all_actions()
@@ -143,6 +164,90 @@ func _test_cancel_clears_real_time_stop_targets() -> void:
 	await get_tree().create_timer(0.45).timeout
 	enemy.queue_free()
 	projectile.queue_free()
+	await get_tree().process_frame
+	await _free_player(player)
+
+
+func _test_replay_restore_reconciles_real_time_stop_targets() -> void:
+	var player := await _spawn_player()
+	var manager: Node = player.get_node("TimeManager")
+	var enemy := EnemyChaserScene.instantiate()
+	var projectile := EnemyProjectileScene.instantiate()
+	var probe := ReplayStopTarget.new()
+	add_child(enemy)
+	add_child(projectile)
+	add_child(probe)
+	enemy.set_physics_process(false)
+	projectile.set_physics_process(false)
+	await get_tree().process_frame
+
+	var inactive_snapshot: Dictionary = manager.weapon_replay_snapshot()
+	var impossible_rewind_generation := inactive_snapshot.duplicate(true)
+	impossible_rewind_generation["rewind_window_remaining"] = 1.0
+	impossible_rewind_generation["rewind_window_generation"] = 0
+	_suite.assert_true(
+		not manager.restore_weapon_replay_snapshot(impossible_rewind_generation),
+		"active Rewind replay window requires a positive generation"
+	)
+	var impossible_rewind_claim := inactive_snapshot.duplicate(true)
+	impossible_rewind_claim["rewind_window_remaining"] = 1.0
+	impossible_rewind_claim["rewind_window_generation"] = 7
+	impossible_rewind_claim["rewind_window_claimed"] = true
+	_suite.assert_true(
+		not manager.restore_weapon_replay_snapshot(impossible_rewind_claim),
+		"active Rewind replay window cannot already be claimed"
+	)
+	var valid_claimed_rewind := inactive_snapshot.duplicate(true)
+	valid_claimed_rewind["rewind_window_generation"] = 7
+	valid_claimed_rewind["rewind_window_claimed"] = true
+	_suite.assert_true(
+		manager.restore_weapon_replay_snapshot(valid_claimed_rewind),
+		"closed Rewind replay window preserves its positive claimed generation"
+	)
+	_suite.assert_true(
+		manager.restore_weapon_replay_snapshot(inactive_snapshot),
+		"Rewind replay fixture restores its initial cleared state"
+	)
+	var active_snapshot := inactive_snapshot.duplicate(true)
+	active_snapshot["stop_active"] = true
+	active_snapshot["stop_source_sequence"] = 41
+	active_snapshot["stop_source_id"] = "replay_stop:41"
+	active_snapshot["stop_remaining"] = 0.40
+	var zero_remaining := active_snapshot.duplicate(true)
+	zero_remaining["stop_remaining"] = 0.0
+	_suite.assert_true(
+		not manager.restore_weapon_replay_snapshot(zero_remaining),
+		"active Stop replay snapshot with zero remaining duration fails closed"
+	)
+	_suite.assert_true(not probe.is_time_stopped(), "rejected zero-duration Stop changes no real target")
+	_suite.assert_true(
+		manager.restore_weapon_replay_snapshot(active_snapshot),
+		"replay restore accepts an authoritative active Stop snapshot"
+	)
+	_suite.assert_true(enemy.is_time_stopped(), "active Stop replay restore stops the real enemy")
+	_suite.assert_true(projectile.is_time_stopped(), "active Stop replay restore stops the real projectile")
+	_suite.assert_equal(probe.apply_calls, 1, "active Stop replay restore applies its source once")
+	_suite.assert_equal(probe.clear_calls, 0, "initial active Stop replay restore clears no source")
+	_suite.assert_true(
+		manager.restore_weapon_replay_snapshot(active_snapshot),
+		"repeated active Stop replay restore is accepted idempotently"
+	)
+	_suite.assert_equal(probe.apply_calls, 1, "repeated active Stop restore does not reapply its source")
+	_suite.assert_equal(probe.clear_calls, 0, "repeated active Stop restore does not clear its source")
+
+	_suite.assert_true(
+		manager.restore_weapon_replay_snapshot(inactive_snapshot),
+		"replay restore accepts the authoritative inactive Stop snapshot"
+	)
+	_suite.assert_true(not enemy.is_time_stopped(), "inactive Stop replay restore releases the real enemy")
+	_suite.assert_true(not projectile.is_time_stopped(), "inactive Stop replay restore releases the real projectile")
+	_suite.assert_equal(probe.clear_calls, 1, "inactive Stop replay restore clears the active source once")
+
+	# Restored target timers must settle before fixture teardown.
+	await get_tree().create_timer(0.45).timeout
+	enemy.queue_free()
+	projectile.queue_free()
+	probe.queue_free()
 	await get_tree().process_frame
 	await _free_player(player)
 

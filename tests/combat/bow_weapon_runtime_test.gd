@@ -95,6 +95,51 @@ class FakeBowAdapter extends Node2D:
 		reset_count += 1
 		_clear_action()
 
+	func runtime_snapshot() -> Dictionary:
+		var shot_active := not staged_definition.is_empty()
+		var action_active := not staged_action_definition.is_empty()
+		var definition := staged_action_definition if action_active else staged_definition
+		var state := "idle"
+		if action_active:
+			state = "action_released" if _released else "action_prepared"
+		elif shot_active:
+			state = "shot_released" if _released else "shot_prepared"
+		return {
+			"schema_version": 1,
+			"phase_state": state,
+			"profile_shot": staged_definition.duplicate(true),
+			"profile_shot_released": shot_active and _released,
+			"profile_action": staged_action_definition.duplicate(true),
+			"profile_action_released": action_active and _released,
+			"shared_claims": {},
+			"starfall_schedule": {},
+			"starfall_source_id": "",
+			"starfall_elapsed_frames": 0,
+			"starfall_targets": [],
+			"starfall_invulnerability_active": false,
+			"arrows": [],
+			"definition": definition.duplicate(true),
+		}
+
+	func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+		return (
+			int(value.get("schema_version", -1)) == 1
+			and str(value.get("phase_state", "")) in ["idle", "shot_prepared", "shot_released", "action_prepared", "action_released"]
+			and value.get("profile_shot") is Dictionary
+			and value.get("profile_action") is Dictionary
+		)
+
+	func restore_runtime_snapshot(value: Dictionary) -> bool:
+		if not can_restore_runtime_snapshot(value):
+			return false
+		staged_definition = (value["profile_shot"] as Dictionary).duplicate(true)
+		staged_action_definition = (value["profile_action"] as Dictionary).duplicate(true)
+		_active = not staged_definition.is_empty() or not staged_action_definition.is_empty()
+		_released = bool(value.get("profile_shot_released", false)) or bool(value.get("profile_action_released", false))
+		released_definition = staged_definition.duplicate(true) if not staged_definition.is_empty() and _released else {}
+		released_action_definition = staged_action_definition.duplicate(true) if not staged_action_definition.is_empty() and _released else {}
+		return runtime_snapshot() == value
+
 	func _clear_action() -> void:
 		_active = false
 		_released = false
@@ -537,8 +582,8 @@ func _test_launch_hold_snapshot_restore_and_active_restore_rejection() -> void:
 	_suite.assert_true(bool(released.get("ok", false)), "restored Launch HOLD releases on the original token")
 	_suite.assert_equal(bow.begin_count, 1, "restored release stages one immutable action packet")
 	var active_snapshot: Dictionary = runtime.snapshot()
-	_suite.assert_true(not runtime.restore_snapshot(active_snapshot), "active staged Launch payload cannot be restored unsafely")
-	_suite.assert_equal(runtime.snapshot(), active_snapshot, "unsafe active restore rejection is atomic")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "active staged Launch payload restores authoritatively")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "active Launch restore preserves exact runtime and adapter state")
 	runtime.cancel_action(121, &"test_cleanup")
 	_free_fixture(fixture)
 
@@ -925,7 +970,13 @@ func _test_quiescent_snapshot_restore_preserves_reward_ledger() -> void:
 	runtime.commit_action(plan, 601)
 	runtime.on_phase_enter(plan, &"ACTIVE", 601)
 	var unsafe: Dictionary = runtime.snapshot()
-	_suite.assert_true(not runtime.restore_snapshot(unsafe), "restore rejects an active projectile transaction")
+	_suite.assert_true(runtime.restore_snapshot(unsafe), "restore accepts an authoritative active projectile transaction")
+	_suite.assert_equal(runtime.snapshot(), unsafe, "active candidate restore is deterministic")
+	var forged_active := unsafe.duplicate(true)
+	(forged_active["adapter_snapshot"]["profile_shot"] as Dictionary)["damage"] = 999.0
+	var before_forged_active: Dictionary = runtime.snapshot()
+	_suite.assert_true(not runtime.restore_snapshot(forged_active), "candidate restore rejects an adapter shot that differs from the committed plan")
+	_suite.assert_equal(runtime.snapshot(), before_forged_active, "forged active adapter payload rejection is atomic")
 	runtime.on_phase_enter(plan, &"RECOVERY", 601)
 	runtime.finish_action(601)
 	var safe: Dictionary = runtime.snapshot()
@@ -943,6 +994,10 @@ func _test_quiescent_snapshot_restore_preserves_reward_ledger() -> void:
 	var before_rejection: Dictionary = runtime.snapshot()
 	_suite.assert_true(not runtime.restore_snapshot(malformed), "restore rejects claims without matching eligibility")
 	_suite.assert_equal(runtime.snapshot(), before_rejection, "malformed restore rejection is atomic")
+	var extra_field := safe.duplicate(true)
+	extra_field["future_field"] = true
+	_suite.assert_true(not runtime.restore_snapshot(extra_field), "unknown runtime snapshot fields fail closed")
+	_suite.assert_equal(runtime.snapshot(), before_rejection, "unknown-field rejection leaves runtime untouched")
 	_suite.assert_true(not bow.is_profile_action_active(), "snapshot restore leaves adapter quiescent")
 	_free_fixture(fixture)
 

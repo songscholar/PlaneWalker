@@ -19,6 +19,7 @@ const PROFILE_CATALOG_PATH := (
 	"res://data/content_packs/base/content/weapon_runtime_profiles.json"
 )
 const PLAYER_CONTROLLER_PATH := "res://scripts/player/player_controller.gd"
+const SWORD_RUNTIME_PATH := "res://scripts/combat/weapons/sword_weapon_runtime.gd"
 const M1_EXPECTED: Array[Dictionary] = [
 	{
 		"id": "light_1",
@@ -71,16 +72,23 @@ const M1_EXPECTED: Array[Dictionary] = [
 ]
 
 
-class AttackRecorder:
+class CueRecorder:
 	extends RefCounted
 
-	var attacks: Array[Dictionary] = []
+	var cues: Array[Dictionary] = []
 
 
-	func on_player_attacked(weapon_id: StringName, context: Dictionary) -> void:
-		attacks.append({
+	func on_weapon_cue_requested(
+		weapon_id: StringName,
+		action_id: StringName,
+		token: int,
+		cue: Dictionary
+	) -> void:
+		cues.append({
 			"weapon_id": weapon_id,
-			"context": context.duplicate(true),
+			"action_id": action_id,
+			"token": token,
+			"cue": cue.duplicate(true),
 		})
 
 
@@ -105,7 +113,9 @@ func _run() -> void:
 
 func _test_player_controller_delegates_sword_action_authority() -> void:
 	var source := FileAccess.get_file_as_string(PLAYER_CONTROLLER_PATH)
+	var runtime_source := FileAccess.get_file_as_string(SWORD_RUNTIME_PATH)
 	_suite.assert_true(not source.is_empty(), "PlayerController source is readable")
+	_suite.assert_true(not runtime_source.is_empty(), "Sword runtime source is readable")
 	var retained_authority: Array[String] = []
 	for legacy_symbol: String in [
 		"var _active_attack_definition",
@@ -122,6 +132,14 @@ func _test_player_controller_delegates_sword_action_authority() -> void:
 		retained_authority,
 		[],
 		"PlayerController delegates Sword timing, combo, and phase authority to the coordinator"
+	)
+	_suite.assert_true(
+		not source.contains("$SwordWeapon") and not source.contains("sword_weapon."),
+		"PlayerController has no Sword-specific child lookup or adapter operations"
+	)
+	_suite.assert_true(
+		not runtime_source.contains("get_node_or_null(\"SwordWeapon\")"),
+		"Sword runtime receives its payload adapter by explicit dependency injection"
 	)
 
 
@@ -332,8 +350,8 @@ func _test_release_feedback_starts_once_at_active() -> void:
 	var player := await _spawn_player()
 	var coordinator: RefCounted = player.weapon_action_coordinator
 	var runtime: RefCounted = player.weapon_runtime
-	var recorder := AttackRecorder.new()
-	EventBus.player_attacked.connect(recorder.on_player_attacked)
+	var recorder := CueRecorder.new()
+	EventBus.weapon_cue_requested.connect(recorder.on_weapon_cue_requested)
 	CombatFeedback.reset_feedback_for_test()
 
 	var committed_facts: Array[Dictionary] = []
@@ -349,7 +367,7 @@ func _test_release_feedback_starts_once_at_active() -> void:
 
 	_suite.assert_true(player.try_action(&"attack"), "feedback probe commits")
 	_suite.assert_equal(committed_facts.size(), 1, "transaction fact publishes once at commit")
-	_suite.assert_equal(recorder.attacks.size(), 0, "windup publishes no legacy release fact")
+	_suite.assert_equal(recorder.cues.size(), 0, "windup publishes no typed release cue")
 	_suite.assert_equal(
 		_count_audio_cue(&"sword_swing"),
 		0,
@@ -357,13 +375,14 @@ func _test_release_feedback_starts_once_at_active() -> void:
 	)
 
 	_advance_player(player, int(M1_EXPECTED[0]["windup"]) - 1)
-	_suite.assert_equal(recorder.attacks.size(), 0, "pre-active frame still has no release fact")
+	_suite.assert_equal(recorder.cues.size(), 0, "pre-active frame still has no release cue")
 	_suite.assert_equal(_count_audio_cue(&"sword_swing"), 0, "pre-active frame remains silent")
 	player.advance_action_frame()
 	_suite.assert_equal(coordinator.phase_name(), &"ACTIVE", "release probe enters active exactly")
-	_suite.assert_equal(recorder.attacks.size(), 1, "active publishes one legacy release fact")
-	if recorder.attacks.size() == 1:
-		_suite.assert_equal(recorder.attacks[0]["weapon_id"], &"sword", "release fact identifies Sword")
+	_suite.assert_equal(recorder.cues.size(), 1, "active publishes one typed release cue")
+	if recorder.cues.size() == 1:
+		_suite.assert_equal(recorder.cues[0]["weapon_id"], &"sword", "release cue identifies Sword")
+		_suite.assert_equal(recorder.cues[0]["action_id"], &"light_1", "release cue identifies the profile action")
 	_suite.assert_equal(_count_audio_cue(&"sword_swing"), 1, "active plays release audio once")
 
 	var snapshot: Dictionary = coordinator.snapshot()
@@ -373,12 +392,12 @@ func _test_release_feedback_starts_once_at_active() -> void:
 		int(snapshot.get("token", 0))
 	)
 	_suite.assert_true(duplicate_events.is_empty(), "duplicate active callback releases no event")
-	_suite.assert_equal(recorder.attacks.size(), 1, "duplicate active callback publishes no fact")
+	_suite.assert_equal(recorder.cues.size(), 1, "duplicate active callback publishes no cue")
 	_suite.assert_equal(_count_audio_cue(&"sword_swing"), 1, "duplicate active callback plays no audio")
 	_suite.assert_equal(committed_facts.size(), 1, "phase entry does not duplicate transaction fact")
 
-	if EventBus.player_attacked.is_connected(recorder.on_player_attacked):
-		EventBus.player_attacked.disconnect(recorder.on_player_attacked)
+	if EventBus.weapon_cue_requested.is_connected(recorder.on_weapon_cue_requested):
+		EventBus.weapon_cue_requested.disconnect(recorder.on_weapon_cue_requested)
 	CombatFeedback.reset_feedback_for_test()
 	await _free_player(player)
 
@@ -401,6 +420,10 @@ func _runtime_fixture() -> Dictionary:
 		"Sword M1 modifiers configure"
 	)
 	var runtime = SwordWeaponRuntimeScript.new()
+	_suite.assert_true(
+		runtime.bind_adapter(player.get_node("SwordWeapon")),
+		"Sword M1 runtime accepts an explicit payload adapter"
+	)
 	_suite.assert_true(runtime.configure(player, profile, modifiers), "Sword M1 runtime configures")
 	var coordinator = WeaponActionCoordinatorScript.new()
 	_suite.assert_true(coordinator.configure(runtime), "Sword M1 coordinator configures")

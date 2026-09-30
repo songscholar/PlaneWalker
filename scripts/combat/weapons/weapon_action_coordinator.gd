@@ -175,7 +175,7 @@ func cancel(reason: StringName = &"cancelled") -> void:
 	if _runtime != null and _token > 0:
 		_runtime.call("cancel_action", _token, reason)
 	if restore_uncommitted_hold and _runtime != null:
-		if not bool(_runtime.call("restore_snapshot", hold_runtime_snapshot)):
+		if not _restore_runtime_snapshot_strict(hold_runtime_snapshot):
 			_runtime.call("reset_runtime_state", &"hold_cancel_rollback_failed")
 	_generation += 1
 	_buffered_submission.clear()
@@ -297,8 +297,16 @@ func restore_safe(safe_snapshot: Dictionary) -> bool:
 		return false
 	var runtime_before := (runtime_before_value as Dictionary).duplicate(true)
 	var target_runtime := (safe_snapshot["runtime"] as Dictionary).duplicate(true)
-	if not bool(_runtime.call("restore_snapshot", target_runtime)):
-		_runtime.call("restore_snapshot", runtime_before)
+	if (
+		not bool(_runtime.call("restore_snapshot", target_runtime))
+		or not _runtime_snapshot_matches(target_runtime)
+	):
+		if not _restore_runtime_snapshot_strict(runtime_before):
+			_force_restore_fail_closed(
+				&"safe_restore_rollback_failed",
+				{"generation": _generation, "next_token": _next_token, "frame": _frame},
+				safe_snapshot
+			)
 		return false
 
 	var previous_generation := _generation
@@ -307,6 +315,55 @@ func restore_safe(safe_snapshot: Dictionary) -> bool:
 	_generation = maxi(previous_generation, int(safe_snapshot["generation"])) + 1
 	_buffered_submission.clear()
 	_clear_action_state()
+	return true
+
+
+func restore_snapshot(value: Dictionary) -> bool:
+	return _restore_snapshot_internal(value, true)
+
+
+func restore_snapshot_for_rollback(value: Dictionary) -> bool:
+	return _restore_snapshot_internal(value, false)
+
+
+func _restore_snapshot_internal(value: Dictionary, enforce_monotonicity: bool) -> bool:
+	if (
+		_runtime == null
+		or _resource_transaction == null
+		or not _validate_runtime_snapshot(value)
+		or (enforce_monotonicity and not _snapshot_token_transition_is_monotonic(value))
+	):
+		return false
+
+	var before := snapshot()
+	var runtime_before := (before["runtime"] as Dictionary).duplicate(true)
+	var resource_before := (before["resource_transaction"] as Dictionary).duplicate(true)
+	if not bool(_runtime.call("restore_snapshot", (value["runtime"] as Dictionary).duplicate(true))):
+		if not _restore_runtime_snapshot_strict(runtime_before):
+			_force_restore_fail_closed(&"runtime_target_rollback_failed", before, value)
+		return false
+	if not bool(_resource_transaction.call(
+		"restore_snapshot",
+		(value["resource_transaction"] as Dictionary).duplicate(true)
+	)):
+		var resource_rollback_ok := true
+		if not _resource_snapshot_matches(resource_before):
+			resource_rollback_ok = _restore_resource_snapshot_strict(resource_before)
+		var runtime_rollback_ok := _restore_runtime_snapshot_strict(runtime_before)
+		if not resource_rollback_ok or not runtime_rollback_ok:
+			_force_restore_fail_closed(&"resource_target_rollback_failed", before, value)
+		return false
+
+	_install_snapshot_state(value)
+	if snapshot() != value:
+		var resource_rollback_ok := _restore_resource_snapshot_strict(resource_before)
+		var runtime_rollback_ok := _restore_runtime_snapshot_strict(runtime_before)
+		if resource_rollback_ok and runtime_rollback_ok:
+			_install_snapshot_state(before)
+			if snapshot() == before:
+				return false
+		_force_restore_fail_closed(&"snapshot_verification_rollback_failed", before, value)
+		return false
 	return true
 
 
@@ -428,7 +485,12 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 	if starts_with_hold:
 		var hold_runtime_before_value: Variant = _runtime.call("snapshot")
 		if not hold_runtime_before_value is Dictionary:
-			_runtime.call("restore_snapshot", runtime_before)
+			if not _restore_runtime_snapshot_strict(runtime_before):
+				_force_runtime_safe_reset(&"hold_snapshot_rollback_failed")
+				return WeaponActionContractScript.failure(
+					WeaponActionContractScript.CODE_COMMIT_FAILED,
+					{"reason": "rollback_failed"}
+				)
 			return WeaponActionContractScript.failure(
 				WeaponActionContractScript.CODE_COMMIT_FAILED,
 				{"reason": "hold_runtime_snapshot_type"}
@@ -441,7 +503,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 		next_action_token
 	)
 	if not commit_value is Dictionary or not bool((commit_value as Dictionary).get("ok", false)):
-		if not bool(_runtime.call("restore_snapshot", runtime_before)):
+		if not _restore_runtime_snapshot_strict(runtime_before):
 			_force_runtime_safe_reset(&"commit_rollback_failed")
 			return WeaponActionContractScript.failure(
 				WeaponActionContractScript.CODE_COMMIT_FAILED,
@@ -461,7 +523,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 			resource_ticket.duplicate(true)
 		)
 		if not bool(resource_commit.get("ok", false)):
-			if not bool(_runtime.call("restore_snapshot", runtime_before)):
+			if not _restore_runtime_snapshot_strict(runtime_before):
 				_force_runtime_safe_reset(&"resource_commit_rollback_failed")
 				return WeaponActionContractScript.failure(
 					WeaponActionContractScript.CODE_COMMIT_FAILED,
@@ -735,7 +797,7 @@ func _rollback_and_cancel_hold_release(
 	runtime_before: Dictionary,
 	failure_result: Dictionary
 ) -> Dictionary:
-	if not bool(_runtime.call("restore_snapshot", runtime_before.duplicate(true))):
+	if not _restore_runtime_snapshot_strict(runtime_before):
 		_force_runtime_safe_reset(&"hold_release_rollback_failed")
 		return WeaponActionContractScript.failure(
 			WeaponActionContractScript.CODE_COMMIT_FAILED,
@@ -928,6 +990,145 @@ func _validate_safe_snapshot(safe_snapshot: Dictionary) -> bool:
 	return safe_snapshot.get("runtime") is Dictionary
 
 
+func _validate_runtime_snapshot(value: Dictionary) -> bool:
+	if (
+		int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
+		or str(value.get("weapon_id", "")) != str(_weapon_id)
+		or typeof(value.get("frame")) != TYPE_INT
+		or int(value.get("frame", -1)) < 0
+		or typeof(value.get("generation")) != TYPE_INT
+		or int(value.get("generation", 0)) <= 0
+		or typeof(value.get("next_token")) != TYPE_INT
+		or int(value.get("next_token", 0)) <= 0
+		or typeof(value.get("token")) != TYPE_INT
+		or int(value.get("token", -1)) < 0
+		or typeof(value.get("phase")) != TYPE_STRING
+		or typeof(value.get("phase_index")) != TYPE_INT
+		or typeof(value.get("phase_frame")) != TYPE_INT
+		or int(value.get("phase_frame", -1)) < 0
+		or not value.get("plan") is Dictionary
+		or not value.get("action_context") is Dictionary
+		or not value.get("buffered_submission") is Dictionary
+		or typeof(value.get("hold_intent_id")) != TYPE_STRING
+		or not value.get("hold_runtime_snapshot") is Dictionary
+		or not value.get("hold_live_context") is Dictionary
+		or not value.get("runtime") is Dictionary
+		or not value.get("resource_transaction") is Dictionary
+	):
+		return false
+	var token := int(value["token"])
+	var next_token := int(value["next_token"])
+	if token > 0 and next_token <= token:
+		return false
+	var resource_snapshot := value["resource_transaction"] as Dictionary
+	if (
+		str(resource_snapshot.get("weapon_id", "")) != str(_weapon_id)
+		or not resource_snapshot.get("committed_tokens") is Dictionary
+	):
+		return false
+	if not _valid_buffered_submission(value["buffered_submission"], int(value["frame"])):
+		return false
+	var runtime_snapshot := value["runtime"] as Dictionary
+	if runtime_snapshot.has("active_token") and int(runtime_snapshot.get("active_token", -1)) != token:
+		return false
+	if runtime_snapshot.has("active_phase") and str(runtime_snapshot.get("active_phase", "")) != str(value["phase"]):
+		return false
+
+	var phase := StringName(str(value["phase"]))
+	var plan := value["plan"] as Dictionary
+	if phase == PHASE_READY:
+		return (
+			token == 0
+			and int(value["phase_index"]) == -1
+			and int(value["phase_frame"]) == 0
+			and plan.is_empty()
+			and (value["action_context"] as Dictionary).is_empty()
+			and str(value["hold_intent_id"]).is_empty()
+			and (value["hold_runtime_snapshot"] as Dictionary).is_empty()
+			and (value["hold_live_context"] as Dictionary).is_empty()
+		)
+	if token <= 0:
+		return false
+	var plan_validation: Dictionary = WeaponActionContractScript.validate_plan(plan, _weapon_id)
+	if not bool(plan_validation.get("ok", false)):
+		return false
+	var phases_value: Variant = plan.get("phases")
+	if not phases_value is Array:
+		return false
+	var phase_index := int(value["phase_index"])
+	var phases := phases_value as Array
+	if phase_index < 0 or phase_index >= phases.size() or not phases[phase_index] is Dictionary:
+		return false
+	var phase_data := phases[phase_index] as Dictionary
+	if (
+		str(phase_data.get("phase", "")) != str(phase)
+		or int(value["phase_frame"]) >= int(phase_data.get("duration_frames", 0))
+	):
+		return false
+	var committed_tokens := resource_snapshot["committed_tokens"] as Dictionary
+	if phase == &"HOLD":
+		return (
+			not str(value["hold_intent_id"]).is_empty()
+			and not (value["hold_runtime_snapshot"] as Dictionary).is_empty()
+			and not committed_tokens.has(token)
+		)
+	return (
+		str(value["hold_intent_id"]).is_empty()
+		and (value["hold_runtime_snapshot"] as Dictionary).is_empty()
+		and (value["hold_live_context"] as Dictionary).is_empty()
+		and committed_tokens.has(token)
+	)
+
+
+func _snapshot_token_transition_is_monotonic(value: Dictionary) -> bool:
+	var target_frame := int(value["frame"])
+	var target_generation := int(value["generation"])
+	var target_next_token := int(value["next_token"])
+	var target_token := int(value["token"])
+	if (
+		target_frame < _frame
+		or target_generation < _generation
+		or target_next_token < _next_token
+	):
+		return false
+	if target_token <= 0:
+		return true
+	if _token > 0:
+		if target_token < _token:
+			return false
+		if target_token == _token and target_generation != _generation:
+			return false
+		return true
+	return target_token >= _next_token
+
+
+func _valid_buffered_submission(value: Dictionary, snapshot_frame: int) -> bool:
+	if value.is_empty():
+		return true
+	return (
+		value.get("intent") is Dictionary
+		and value.get("context") is Dictionary
+		and typeof(value.get("expires_at_frame")) == TYPE_INT
+		and int(value.get("expires_at_frame", -1)) > snapshot_frame
+	)
+
+
+func _install_snapshot_state(value: Dictionary) -> void:
+	_frame = int(value["frame"])
+	_generation = int(value["generation"])
+	_next_token = int(value["next_token"])
+	_token = int(value["token"])
+	_phase = StringName(str(value["phase"]))
+	_phase_index = int(value["phase_index"])
+	_phase_frame = int(value["phase_frame"])
+	_plan = (value["plan"] as Dictionary).duplicate(true)
+	_action_context = (value["action_context"] as Dictionary).duplicate(true)
+	_buffered_submission = (value["buffered_submission"] as Dictionary).duplicate(true)
+	_hold_intent_id = StringName(str(value["hold_intent_id"]))
+	_hold_runtime_snapshot = (value["hold_runtime_snapshot"] as Dictionary).duplicate(true)
+	_hold_live_context = (value["hold_live_context"] as Dictionary).duplicate(true)
+
+
 func _runtime_failure(runtime_result: Dictionary, fallback_code: StringName) -> Dictionary:
 	var code_value: Variant = runtime_result.get("code", fallback_code)
 	var code := StringName(str(code_value)) if not str(code_value).is_empty() else fallback_code
@@ -1076,7 +1277,7 @@ func _submit_live_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 
 
 func _live_intent_failure(runtime_before: Dictionary, failure_result: Dictionary) -> Dictionary:
-	if not bool(_runtime.call("restore_snapshot", runtime_before.duplicate(true))):
+	if not _restore_runtime_snapshot_strict(runtime_before):
 		_force_runtime_safe_reset(&"live_intent_rollback_failed")
 		return {
 			"handled": true,
@@ -1195,6 +1396,60 @@ func _committed_context(
 	return context
 
 
+func _restore_runtime_snapshot_strict(target: Dictionary) -> bool:
+	if _runtime == null or not bool(_runtime.call("restore_snapshot", target.duplicate(true))):
+		return false
+	return _runtime_snapshot_matches(target)
+
+
+func _runtime_snapshot_matches(target: Dictionary) -> bool:
+	if _runtime == null:
+		return false
+	var current_value: Variant = _runtime.call("snapshot")
+	return current_value is Dictionary and current_value == target
+
+
+func _restore_resource_snapshot_strict(target: Dictionary) -> bool:
+	if (
+		_resource_transaction == null
+		or not bool(_resource_transaction.call("restore_snapshot", target.duplicate(true)))
+	):
+		return false
+	return _resource_snapshot_matches(target)
+
+
+func _resource_snapshot_matches(target: Dictionary) -> bool:
+	if _resource_transaction == null:
+		return false
+	var current_value: Variant = _resource_transaction.call("snapshot")
+	return current_value is Dictionary and current_value == target
+
+
+func _force_restore_fail_closed(
+	reason: StringName,
+	before: Dictionary,
+	target: Dictionary
+) -> void:
+	if _runtime != null:
+		_runtime.call("reset_runtime_state", reason)
+	if _resource_transaction != null:
+		if _resource_transaction.has_method("fail_closed"):
+			_resource_transaction.call("fail_closed", reason)
+		else:
+			_resource_transaction.call("reset_runtime_state")
+	_frame = maxi(_frame, maxi(int(before.get("frame", 0)), int(target.get("frame", 0))))
+	_next_token = maxi(
+		_next_token,
+		maxi(int(before.get("next_token", 1)), int(target.get("next_token", 1)))
+	)
+	_generation = maxi(
+		_generation,
+		maxi(int(before.get("generation", 1)), int(target.get("generation", 1)))
+	) + 1
+	_buffered_submission.clear()
+	_clear_action_state()
+
+
 func _force_runtime_safe_reset(reason: StringName) -> void:
 	if _runtime != null:
 		_runtime.call("reset_runtime_state", reason)
@@ -1235,6 +1490,8 @@ func _resource_transaction_has_contract(transaction: RefCounted) -> bool:
 		&"advance_frame",
 		&"cooldown_remaining",
 		&"snapshot",
+		&"restore_snapshot",
+		&"fail_closed",
 		&"rewind_safe_reset",
 		&"reset_runtime_state",
 	]:

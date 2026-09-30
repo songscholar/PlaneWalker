@@ -15,6 +15,7 @@ class RecordingStaffAdapter extends Node2D:
 	var attack_speed: float = 0.85
 	var staged_definition: Dictionary = {}
 	var _active: bool = false
+	var _released: bool = false
 
 
 	func begin_profile_action(definition: Dictionary) -> Dictionary:
@@ -22,11 +23,15 @@ class RecordingStaffAdapter extends Node2D:
 			return {}
 		staged_definition = definition.duplicate(true)
 		_active = true
+		_released = false
 		return staged_definition.duplicate(true)
 
 
 	func release_profile_action() -> bool:
-		return _active
+		if not _active or _released:
+			return false
+		_released = true
+		return true
 
 
 	func is_profile_action_active() -> bool:
@@ -45,8 +50,50 @@ class RecordingStaffAdapter extends Node2D:
 		_clear_action()
 
 
+	func runtime_snapshot() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"profile_action": staged_definition.duplicate(true),
+			"profile_action_released": _released,
+			"phase_state": "released" if _released else ("prepared" if _active else "idle"),
+			"prepared_payloads": [],
+			"owned_payloads": [],
+			"callback_claims": {},
+			"callback_claim_order": [],
+			"resource_reward_claims": {},
+			"resource_reward_claim_order": [],
+		}
+
+
+	func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+		if (
+			int(value.get("schema_version", -1)) != 1
+			or not value.get("profile_action") is Dictionary
+			or typeof(value.get("profile_action_released")) != TYPE_BOOL
+			or str(value.get("phase_state", "")) not in ["idle", "prepared", "released"]
+		):
+			return false
+		var action := value.get("profile_action", {}) as Dictionary
+		var state := str(value.get("phase_state", ""))
+		return (
+			(state == "idle" and action.is_empty() and not bool(value["profile_action_released"]))
+			or (state == "prepared" and not action.is_empty() and not bool(value["profile_action_released"]))
+			or (state == "released" and not action.is_empty() and bool(value["profile_action_released"]))
+		)
+
+
+	func restore_runtime_snapshot(value: Dictionary) -> bool:
+		if not can_restore_runtime_snapshot(value):
+			return false
+		staged_definition = (value["profile_action"] as Dictionary).duplicate(true)
+		_active = not staged_definition.is_empty()
+		_released = bool(value["profile_action_released"])
+		return runtime_snapshot() == value
+
+
 	func _clear_action() -> void:
 		_active = false
+		_released = false
 		staged_definition.clear()
 
 

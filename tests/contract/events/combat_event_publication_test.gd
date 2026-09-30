@@ -50,7 +50,7 @@ class EventRecorder:
 	var damage_applied_count: int = 0
 	var hit_confirmed_count: int = 0
 	var entity_died_count: int = 0
-	var attacked: Array[Dictionary] = []
+	var weapon_cues: Array[Dictionary] = []
 	var dash_contexts: Array[Dictionary] = []
 	var spawned_instance_ids: Array[int] = []
 	var spawn_contexts: Array[Dictionary] = []
@@ -71,8 +71,18 @@ class EventRecorder:
 	func on_entity_died(_entity: Node, _killer: Variant) -> void:
 		entity_died_count += 1
 
-	func on_player_attacked(weapon_id: StringName, context: Dictionary) -> void:
-		attacked.append({"weapon_id": weapon_id, "context": context.duplicate(true)})
+	func on_weapon_cue_requested(
+		weapon_id: StringName,
+		action_id: StringName,
+		token: int,
+		cue: Dictionary
+	) -> void:
+		weapon_cues.append({
+			"weapon_id": weapon_id,
+			"action_id": action_id,
+			"token": token,
+			"cue": cue.duplicate(true),
+		})
 
 	func on_player_dashed(context: Dictionary) -> void:
 		dash_contexts.append(context.duplicate(true))
@@ -204,10 +214,20 @@ func _test_committed_player_actions_publish_once() -> void:
 			"Bow adapter retires legacy action clock method %s" % legacy_method
 		)
 	var bow_source := FileAccess.get_file_as_string("res://scripts/combat/bow_weapon.gd")
+	var player_source := FileAccess.get_file_as_string("res://scripts/player/player_controller.gd")
+	var event_bus_source := FileAccess.get_file_as_string("res://autoload/event_bus.gd")
 	_suite.assert_true(not bow_source.contains("func _process("), "Bow adapter owns no frame clock")
 	_suite.assert_true(
 		not bow_source.contains("EventBus.player_attacked.emit"),
 		"Bow adapter cannot bypass Player event publication"
+	)
+	_suite.assert_true(
+		not player_source.contains("player_attacked"),
+		"PlayerController retires the legacy player_attacked publication"
+	)
+	_suite.assert_true(
+		not event_bus_source.contains("player_attacked"),
+		"EventBus retires the legacy player_attacked signal"
 	)
 
 	_suite.assert_true(player.try_action(&"ranged_attack"), "bow press commits through Player and Coordinator")
@@ -235,7 +255,7 @@ func _test_committed_player_actions_publish_once() -> void:
 	)
 	player.cancel_transient_actions()
 
-	var attacks_before_undercharge := _recorder.attacked.size()
+	var cues_before_undercharge := _recorder.weapon_cues.size()
 	_suite.assert_true(
 		not player.try_action(&"ranged_attack"),
 		"cancelling the active arrow cannot bypass the committed Bow cooldown"
@@ -245,40 +265,40 @@ func _test_committed_player_actions_publish_once() -> void:
 	_suite.assert_true(player.try_action(&"ranged_attack"), "second bow press begins a fresh HOLD")
 	_suite.assert_true(not player.try_action(&"ranged_release"), "undercharged bow release is rejected")
 	_suite.assert_equal(
-		_recorder.attacked.size(),
-		attacks_before_undercharge,
-		"undercharged release publishes no attack fact"
+		_recorder.weapon_cues.size(),
+		cues_before_undercharge,
+		"undercharged release publishes no weapon cue"
 	)
 
 	_suite.assert_true(player.try_action(&"dash"), "dash commits from free state")
 	_suite.assert_true(not player.try_action(&"dash"), "active dash rejects a duplicate commit")
 
-	_suite.assert_equal(_recorder.attacked.size(), 2, "sword and bow publish one committed attack each")
-	if _recorder.attacked.size() == 2:
-		_suite.assert_equal(_recorder.attacked[0]["weapon_id"], &"sword", "sword fact identifies the weapon")
+	_suite.assert_equal(_recorder.weapon_cues.size(), 2, "sword and bow publish one typed release cue each")
+	if _recorder.weapon_cues.size() == 2:
+		_suite.assert_equal(_recorder.weapon_cues[0]["weapon_id"], &"sword", "sword cue identifies the weapon")
 		_suite.assert_equal(
-			str(_recorder.attacked[0]["context"].get("action_id", "")),
+			str(_recorder.weapon_cues[0].get("action_id", "")),
 			"light_1",
-			"sword release fact identifies the profile action"
+			"sword release cue identifies the profile action"
 		)
 		_suite.assert_true(
-			int(_recorder.attacked[0]["context"].get("token", 0)) > 0,
-			"sword release fact carries its coordinator token"
+			int(_recorder.weapon_cues[0].get("token", 0)) > 0,
+			"sword release cue carries its coordinator token"
 		)
-		_suite.assert_equal(_recorder.attacked[1]["weapon_id"], &"bow", "bow fact identifies the weapon")
+		_suite.assert_equal(_recorder.weapon_cues[1]["weapon_id"], &"bow", "bow cue identifies the weapon")
 		_suite.assert_equal(
-			str(_recorder.attacked[1]["context"].get("action_id", "")),
+			str(_recorder.weapon_cues[1].get("action_id", "")),
 			"candidate_draw",
-			"bow release fact identifies the profile action"
+			"bow release cue identifies the profile action"
 		)
 		_suite.assert_equal(
-			int(_recorder.attacked[1]["context"].get("token", 0)),
+			int(_recorder.weapon_cues[1].get("token", 0)),
 			bow_token,
-			"bow release fact carries the shared coordinator token"
+			"bow release cue carries the shared coordinator token"
 		)
 		_suite.assert_true(
-			not _recorder.attacked[1]["context"].has("charge"),
-			"bow release fact no longer exposes legacy adapter charge state"
+			not _recorder.weapon_cues[1]["cue"].has("charge"),
+			"bow release cue no longer exposes legacy adapter charge state"
 		)
 	_suite.assert_equal(_recorder.dash_contexts, [{}], "one committed dash publishes an empty context")
 
@@ -380,7 +400,7 @@ func _connect_recorder() -> void:
 	EventBus.damage_applied.connect(_recorder.on_damage_applied)
 	EventBus.hit_confirmed.connect(_recorder.on_hit_confirmed)
 	EventBus.entity_died.connect(_recorder.on_entity_died)
-	EventBus.player_attacked.connect(_recorder.on_player_attacked)
+	EventBus.weapon_cue_requested.connect(_recorder.on_weapon_cue_requested)
 	EventBus.player_dashed.connect(_recorder.on_player_dashed)
 	EventBus.enemy_spawned.connect(_recorder.on_enemy_spawned)
 	EventBus.time_skill_started.connect(_recorder.on_time_started)
@@ -392,7 +412,7 @@ func _disconnect_recorder() -> void:
 	EventBus.damage_applied.disconnect(_recorder.on_damage_applied)
 	EventBus.hit_confirmed.disconnect(_recorder.on_hit_confirmed)
 	EventBus.entity_died.disconnect(_recorder.on_entity_died)
-	EventBus.player_attacked.disconnect(_recorder.on_player_attacked)
+	EventBus.weapon_cue_requested.disconnect(_recorder.on_weapon_cue_requested)
 	EventBus.player_dashed.disconnect(_recorder.on_player_dashed)
 	EventBus.enemy_spawned.disconnect(_recorder.on_enemy_spawned)
 	EventBus.time_skill_started.disconnect(_recorder.on_time_started)

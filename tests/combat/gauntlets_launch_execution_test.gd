@@ -95,6 +95,24 @@ class RecordingSink:
 		}
 
 
+class ReportStateObserver extends RefCounted:
+	var weapon: Node
+	var records: Array[Dictionary] = []
+
+
+	func _init(configured_weapon: Node) -> void:
+		weapon = configured_weapon
+
+
+	func handle_payload_result(action_token: int, generation: int, result: Dictionary) -> void:
+		records.append({
+			"action_token": action_token,
+			"generation": generation,
+			"result": result.duplicate(true),
+			"runtime_snapshot": weapon.runtime_snapshot(),
+		})
+
+
 class RecordingHurtbox:
 	extends Area2D
 
@@ -125,6 +143,7 @@ func _run() -> void:
 	await _test_zone_ticks_and_reset_cleanup()
 	await _test_runtime_materializes_skill_ultimate_and_rewind_payloads()
 	await _test_runtime_snapshot_restore_is_atomic_with_real_adapter()
+	await _test_adapter_snapshot_restores_hit_zone_echo_claims_and_callbacks()
 	await _test_runtime_snapshot_restore_clears_stale_combo_aura()
 	await _test_runtime_rift_generation_executes_only_owned_zone()
 	await _test_runtime_rift_plan_freezes_combo_and_generation()
@@ -392,6 +411,8 @@ func _test_accelerate_echo_is_non_recursive() -> void:
 	var fixture := await _fixture()
 	var weapon: Node = fixture["weapon"]
 	var sink: RecordingSink = fixture["sink"]
+	var observer := ReportStateObserver.new(weapon)
+	weapon.payload_result_reported.connect(observer.handle_payload_result)
 	sink.echo_on_next_eligible_hit = true
 	var definition := _definition("punch_1", 501, [_descriptor("hitbox", 0, {
 		"damage_multiplier": 0.8,
@@ -405,6 +426,17 @@ func _test_accelerate_echo_is_non_recursive() -> void:
 	var primary: Node = weapon.owned_payloads_for_test()[0]
 	var target := _target(7001, Vector2(64.0, 0.0))
 	primary.execute_target_for_test(target)
+	_suite.assert_equal(observer.records.size(), 1, "accelerated primary exposes one public payload result")
+	if observer.records.size() == 1:
+		var observed_payloads := (
+			(observer.records[0].get("runtime_snapshot", {}) as Dictionary).get("owned_payloads", [])
+		) as Array
+		var observed_echoes := 0
+		for payload_value: Variant in observed_payloads:
+			var payload_snapshot := (payload_value as Dictionary).get("snapshot", {}) as Dictionary
+			if bool(payload_snapshot.get("is_echo", false)):
+				observed_echoes += 1
+		_suite.assert_equal(observed_echoes, 1, "Accelerate echo exists before the public payload-result signal")
 	var payloads: Array[Node] = weapon.owned_payloads_for_test()
 	_suite.assert_equal(payloads.size(), 2, "third eligible hit response spawns one dynamic echo")
 	if payloads.size() == 2:
@@ -554,9 +586,18 @@ func _test_runtime_snapshot_restore_is_atomic_with_real_adapter() -> void:
 	).get("plan", {})
 	_suite.assert_true(bool(runtime.commit_action(plan, 920).get("ok", false)), "snapshot fixture stages real Collapse payloads")
 	var windup_snapshot: Dictionary = runtime.snapshot()
+	var windup_adapter := windup_snapshot.get("adapter", {}) as Dictionary
 	var prepared_before: Array[Dictionary] = weapon.prepared_payload_snapshots_for_test()
 	_suite.assert_equal(prepared_before.size(), 2, "snapshot fixture owns two prepared Collapse payloads")
+	_suite.assert_equal((windup_adapter.get("prepared_payloads", []) as Array).size(), 2, "WINDUP snapshot serializes both prepared payloads")
 	_suite.assert_true(health.invulnerable, "Collapse WINDUP owns cast invulnerability")
+	var forged_runtime_top_level := windup_snapshot.duplicate(true)
+	forged_runtime_top_level["unexpected_authority"] = true
+	_suite.assert_true(
+		not runtime.restore_snapshot(forged_runtime_top_level),
+		"Gauntlets Runtime rejects an unknown top-level snapshot field"
+	)
+	_suite.assert_equal(runtime.snapshot(), windup_snapshot, "Gauntlets Runtime top-level rejection is atomic")
 
 	var malformed_snapshot := windup_snapshot.duplicate(true)
 	var malformed_definition := (malformed_snapshot["committed_definition"] as Dictionary).duplicate(true)
@@ -570,20 +611,169 @@ func _test_runtime_snapshot_restore_is_atomic_with_real_adapter() -> void:
 	_suite.assert_true(health.invulnerable, "malformed real WINDUP preserves cast invulnerability")
 
 	runtime.on_phase_enter(plan, &"ACTIVE", 920)
+	var restore_target := _target(9920, Vector2(64.0, 0.0))
+	weapon.owned_payloads_for_test()[0].execute_target_for_test(restore_target)
 	var active_snapshot: Dictionary = runtime.snapshot()
 	var owned_before := _payload_snapshots(weapon.owned_payloads_for_test())
-	_suite.assert_equal(owned_before.size(), 2, "ACTIVE snapshot fixture releases both Collapse payloads")
-	_suite.assert_true(not runtime.restore_snapshot(windup_snapshot), "ACTIVE cannot restore an older real WINDUP snapshot")
-	_suite.assert_equal(runtime.snapshot(), active_snapshot, "ACTIVE to old WINDUP rejection preserves Runtime state")
-	_suite.assert_equal(_payload_snapshots(weapon.owned_payloads_for_test()), owned_before, "ACTIVE to old WINDUP rejection preserves owned payloads")
-	_suite.assert_true(health.invulnerable, "ACTIVE to old WINDUP rejection preserves invulnerability")
+	_suite.assert_equal(owned_before.size(), 3, "ACTIVE snapshot fixture owns both Collapse hits and the spawned zone")
+	_suite.assert_equal(((active_snapshot.get("adapter", {}) as Dictionary).get("owned_payloads", []) as Array).size(), 3, "ACTIVE snapshot serializes released hits and spawned zone")
+	_suite.assert_true(runtime.restore_snapshot(windup_snapshot), "ACTIVE restores the exact prepared WINDUP state")
+	_suite.assert_equal(runtime.snapshot(), windup_snapshot, "ACTIVE to WINDUP restore is deterministic")
+	_suite.assert_equal(weapon.prepared_payload_snapshots_for_test(), prepared_before, "ACTIVE to WINDUP rebuilds prepared payloads")
+	_suite.assert_equal(weapon.owned_payload_count_for_test(), 0, "ACTIVE to WINDUP removes released payloads")
+	_suite.assert_true(health.invulnerable, "ACTIVE to WINDUP preserves Collapse invulnerability")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "WINDUP restores the exact released ACTIVE state")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "WINDUP to ACTIVE restore is deterministic")
+	_suite.assert_equal(_payload_snapshots(weapon.owned_payloads_for_test()), owned_before, "WINDUP to ACTIVE rebuilds released payloads")
 
 	runtime.on_phase_enter(plan, &"RECOVERY", 920)
 	var recovery_snapshot: Dictionary = runtime.snapshot()
-	_suite.assert_true(not runtime.restore_snapshot(windup_snapshot), "RECOVERY cannot restore an older real WINDUP snapshot")
-	_suite.assert_equal(runtime.snapshot(), recovery_snapshot, "RECOVERY to old WINDUP rejection preserves Runtime state")
-	_suite.assert_equal(_payload_snapshots(weapon.owned_payloads_for_test()), owned_before, "RECOVERY to old WINDUP rejection preserves owned payloads")
-	_suite.assert_true(health.invulnerable, "RECOVERY to old WINDUP rejection preserves invulnerability")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "RECOVERY restores the exact ACTIVE payload state")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "RECOVERY to ACTIVE restore is deterministic")
+	_suite.assert_equal(_payload_snapshots(weapon.owned_payloads_for_test()), owned_before, "RECOVERY to ACTIVE rebuilds released payloads")
+	_suite.assert_true(runtime.restore_snapshot(recovery_snapshot), "ACTIVE restores the exact RECOVERY payload state")
+	_suite.assert_equal(runtime.snapshot(), recovery_snapshot, "ACTIVE to RECOVERY restore is deterministic")
+	_suite.assert_true(health.invulnerable, "RECOVERY restore preserves invulnerability")
+	await _cleanup_nodes([restore_target])
+	await _cleanup_fixture(fixture)
+
+
+func _test_adapter_snapshot_restores_hit_zone_echo_claims_and_callbacks() -> void:
+	var fixture := await _fixture()
+	var weapon: Node = fixture["weapon"]
+	var sink: RecordingSink = fixture["sink"]
+	sink.echo_on_next_eligible_hit = true
+	var definition := _definition("charged_heavy", 930, [_descriptor("hitbox", 0, {
+		"damage_multiplier": 4.0,
+		"combo_gain": 3,
+		"combo_eligible": true,
+		"energy_eligible": true,
+		"stop_extension_eligible": true,
+		"recursive_echo": false,
+		"is_echo": false,
+		"active_frames": 5,
+		"zone": {
+			"mode": "charged_heavy_shockwave",
+			"radius_tiles": 1.5,
+			"duration_frames": 90,
+			"tick_interval_frames": 30,
+			"damage_multiplier": 0.2,
+			"damage_type_split": {"physical": 1.0},
+			"move_speed_multiplier": 1.0,
+		},
+	})])
+	_suite.assert_true(not weapon.begin_profile_action(definition).is_empty(), "snapshot claims fixture stages")
+	_suite.assert_true(weapon.release_profile_action(), "snapshot claims fixture releases")
+	var first_target := _target(9930, Vector2(64.0, 0.0))
+	var primary: Node = weapon.owned_payloads_for_test()[0]
+	primary.advance_execution_for_test(2)
+	primary.execute_target_for_test(first_target)
+	var spawned_payloads: Array[Node] = weapon.owned_payloads_for_test()
+	if spawned_payloads.size() == 3:
+		spawned_payloads[1].advance_execution_for_test(30)
+		spawned_payloads[2].execute_target_for_test(first_target)
+	var before: Dictionary = weapon.runtime_snapshot()
+	var before_payloads := before.get("owned_payloads", []) as Array
+	_suite.assert_equal(before_payloads.size(), 3, "snapshot owns primary hit, spawned zone, and echo")
+	_suite.assert_true((before.get("reported_claim_order", []) as Array).size() >= 2, "snapshot preserves reported callback claims")
+	if before_payloads.size() == 3:
+		var primary_snapshot := (before_payloads[0] as Dictionary).get("snapshot", {}) as Dictionary
+		var zone_snapshot := (before_payloads[1] as Dictionary).get("snapshot", {}) as Dictionary
+		_suite.assert_equal(primary_snapshot.get("remaining_frames"), 3, "hit snapshot preserves remaining execution frames")
+		_suite.assert_equal(primary_snapshot.get("direction"), Vector2.RIGHT, "hit snapshot preserves world direction")
+		_suite.assert_equal(zone_snapshot.get("remaining_frames"), 60, "zone snapshot preserves remaining execution frames")
+		_suite.assert_true(not (zone_snapshot.get("damage_claim_keys", []) as Array).is_empty(), "zone snapshot preserves damage claims")
+		_suite.assert_equal((before_payloads[1] as Dictionary).get("global_position"), Vector2(64.0, 0.0), "zone snapshot preserves world position")
+	weapon.reset_runtime_state()
+	_suite.assert_equal(weapon.owned_payload_count_for_test(), 0, "restore fixture removes live nodes before reconstruction")
+	_suite.assert_true(weapon.restore_runtime_snapshot(before), "adapter reconstructs a released snapshot from reset state")
+	_suite.assert_equal(weapon.runtime_snapshot(), before, "adapter restore is deterministic")
+	var restored_payloads: Array[Node] = weapon.owned_payloads_for_test()
+	_suite.assert_equal(restored_payloads.size(), 3, "restore rebuilds hit, zone, and echo nodes")
+	var first_received := first_target.received.size()
+	var duplicate_results_before := sink.results.size()
+	restored_payloads[0].execute_target_for_test(first_target)
+	restored_payloads[2].execute_target_for_test(first_target)
+	_suite.assert_equal(first_target.received.size(), first_received, "restored hit claim prevents duplicate damage and reward")
+	_suite.assert_equal(sink.results.size(), duplicate_results_before, "restored hit and echo claims suppress duplicate callbacks")
+	var next_target := _target(9931, Vector2(96.0, 0.0))
+	var results_before := sink.results.size()
+	restored_payloads[0].execute_target_for_test(next_target)
+	_suite.assert_true(sink.results.size() > results_before, "restored payload callback remains live")
+	var after_callback: Dictionary = weapon.runtime_snapshot()
+	var forged_hit_snapshot: Dictionary = restored_payloads[0].execution_snapshot()
+	forged_hit_snapshot["unexpected_authority"] = true
+	var hit_before_rejection: Dictionary = restored_payloads[0].execution_snapshot()
+	var hit_dependencies := {
+		"source": weapon,
+		"owner_entity": weapon.get_parent(),
+		"progress_claims": {},
+		"progress_claim_order": [],
+		"damage_claims": {},
+		"damage_claim_order": [],
+	}
+	_suite.assert_true(
+		not restored_payloads[0].can_restore_execution_snapshot(forged_hit_snapshot),
+		"Gauntlets hit snapshot rejects unknown authoritative fields"
+	)
+	_suite.assert_true(
+		not restored_payloads[0].restore_execution_snapshot(forged_hit_snapshot, hit_dependencies),
+		"Gauntlets hit restore rejects an unknown authoritative field"
+	)
+	_suite.assert_equal(
+		restored_payloads[0].execution_snapshot(),
+		hit_before_rejection,
+		"Gauntlets hit unknown-field rejection is atomic"
+	)
+	var forged_zone_snapshot: Dictionary = restored_payloads[1].execution_snapshot()
+	forged_zone_snapshot["unexpected_authority"] = true
+	var zone_before_rejection: Dictionary = restored_payloads[1].execution_snapshot()
+	var zone_dependencies := {
+		"source": weapon,
+		"owner_entity": weapon.get_parent(),
+	}
+	_suite.assert_true(
+		not restored_payloads[1].can_restore_execution_snapshot(forged_zone_snapshot),
+		"Gauntlets zone snapshot rejects unknown authoritative fields"
+	)
+	_suite.assert_true(
+		not restored_payloads[1].restore_execution_snapshot(forged_zone_snapshot, zone_dependencies),
+		"Gauntlets zone restore rejects an unknown authoritative field"
+	)
+	_suite.assert_equal(
+		restored_payloads[1].execution_snapshot(),
+		zone_before_rejection,
+		"Gauntlets zone unknown-field rejection is atomic"
+	)
+	var forged_adapter_top_level := after_callback.duplicate(true)
+	forged_adapter_top_level["unexpected_authority"] = true
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_adapter_top_level),
+		"Gauntlets Adapter rejects an unknown top-level snapshot field"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_adapter_top_level),
+		"Gauntlets Adapter restore rejects an unknown top-level snapshot field"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), after_callback, "Gauntlets Adapter top-level rejection is atomic")
+	var forged_adapter_wrapper := after_callback.duplicate(true)
+	forged_adapter_wrapper["owned_payloads"][0]["unexpected_authority"] = true
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_adapter_wrapper),
+		"Gauntlets Adapter rejects an unknown payload-wrapper field"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_adapter_wrapper),
+		"Gauntlets Adapter restore rejects an unknown payload-wrapper field"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), after_callback, "Gauntlets Adapter wrapper rejection is atomic")
+	var malformed: Dictionary = before.duplicate(true)
+	var malformed_owned := (malformed["owned_payloads"] as Array).duplicate(true)
+	(malformed_owned[0] as Dictionary)["global_position"] = Vector2(INF, 0.0)
+	malformed["owned_payloads"] = malformed_owned
+	_suite.assert_true(not weapon.restore_runtime_snapshot(malformed), "malformed adapter snapshot fails closed")
+	_suite.assert_equal(weapon.runtime_snapshot(), after_callback, "failed adapter restore rolls back atomically")
+	await _cleanup_nodes([first_target, next_target])
 	await _cleanup_fixture(fixture)
 
 

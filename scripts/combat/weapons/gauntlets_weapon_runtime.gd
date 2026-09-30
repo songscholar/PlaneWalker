@@ -5,7 +5,7 @@ const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const GauntletsComboStateScript := preload("res://scripts/combat/weapons/gauntlets_combo_state.gd")
 
-const SNAPSHOT_SCHEMA_VERSION := 1
+const SNAPSHOT_SCHEMA_VERSION := 2
 const PROFILE_ID := "gauntlets_launch_v1"
 const PROFILE_VERSION := 1
 const PROFILE_FINGERPRINT := "63b6a21a7ea03cd1d63ba93307eac84320a1bf9b3b430d9943cfea0f2b32cdd9"
@@ -22,6 +22,14 @@ const COUNTER_WINDOW_LAST_FRAME := 8
 const MAX_TRACKED_ACTIONS := 256
 const MAX_TRACKED_GENERATIONS := 256
 const HIGH_COMBO_THRESHOLD := 30
+const RUNTIME_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "configured", "profile_id", "profile_version", "combo_state", "chain_step",
+	"combo_count", "combo_remaining_frames", "last_runtime_frame", "stop_extensions_by_generation",
+	"accelerate_hits_by_generation", "claimed_rewind_generations", "claimed_rewind_generation_floor",
+	"action_ledgers", "action_token_floor", "aura_source_generation", "active_token", "active_phase",
+	"active_plan", "modifier_snapshot", "committed_definition", "live_hold_context", "adapter_active",
+	"adapter",
+]
 const FROZEN_CAPABILITIES: Array[String] = [
 	"weapon.attack_speed", "weapon.combo_timeout", "weapon.damage", "weapon.status_duration",
 ]
@@ -40,7 +48,8 @@ const RELEASE_ACTION_FINGERPRINTS := {
 const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
 	&"configure_result_sink", &"begin_profile_action", &"release_profile_action",
 	&"is_profile_action_active", &"cancel_profile_action", &"finish_profile_action",
-	&"reset_runtime_state", &"set_combo_slow_aura",
+	&"reset_runtime_state", &"set_combo_slow_aura", &"runtime_snapshot",
+	&"can_restore_runtime_snapshot", &"restore_runtime_snapshot",
 ]
 const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"apply", &"freeze_for_action", &"snapshot", &"reset",
@@ -297,7 +306,11 @@ func handle_payload_result(token: int, generation: int, result: Dictionary) -> D
 	var stop_eligible := not is_echo and bool(ledger.get("stop_extension_eligible", false))
 	if result.has("stop_extension_eligible"):
 		stop_eligible = stop_eligible and bool(result["stop_extension_eligible"])
-	var stop_extension := _apply_stop_extension(token, int(ledger.get("stop_generation", 0))) if stop_eligible else 0
+	var stop_extension := (
+		_apply_stop_extension(token, generation, int(ledger.get("stop_generation", 0)))
+		if stop_eligible
+		else 0
+	)
 	var accelerate_eligible := not is_echo and bool(ledger.get("accelerate_eligible", false)) and not bool(result.get("recursive_echo", false))
 	var echo_descriptor := _advance_accelerate(int(ledger.get("accelerate_generation", 0)), ledger) if accelerate_eligible else {}
 	ledger["last_outcome_id"] = str(outcome_value)
@@ -308,6 +321,181 @@ func handle_payload_result(token: int, generation: int, result: Dictionary) -> D
 		"ok": true, "code": &"OK", "combo_gain": int(combo_result.get("combo_gain", 0)),
 		"energy_return": energy_return, "stop_extension_frames": stop_extension,
 		"echo_descriptor": echo_descriptor, "tier": _combo_state.call("tier_snapshot"), "context": {},
+	}
+
+
+func project_payload_result_replay_transition(
+	runtime_snapshot: Dictionary,
+	token: int,
+	generation: int,
+	result: Dictionary
+) -> Dictionary:
+	if not _valid_payload_replay_projection_snapshot(runtime_snapshot):
+		return _failure(&"INVALID_RUNTIME_SNAPSHOT")
+	var action_token_floor := int(runtime_snapshot.get("action_token_floor", 0))
+	if token <= 0 or generation != token or token <= action_token_floor:
+		return _failure(&"STALE_GENERATION")
+	var token_key := str(token)
+	var source_ledgers := runtime_snapshot.get("action_ledgers", {}) as Dictionary
+	if not source_ledgers.has(token_key) or not source_ledgers[token_key] is Dictionary:
+		return _failure(&"STALE_TOKEN")
+	var target_value: Variant = result.get("target_id")
+	var outcome_value: Variant = result.get("outcome_id")
+	var damage_value: Variant = result.get("damage", 0.0)
+	if typeof(target_value) != TYPE_INT or int(target_value) <= 0:
+		return _failure(&"INVALID_TARGET")
+	if typeof(outcome_value) not in [TYPE_STRING, TYPE_STRING_NAME] or str(outcome_value).is_empty():
+		return _failure(&"INVALID_OUTCOME")
+	if (
+		typeof(damage_value) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(damage_value))
+		or float(damage_value) < 0.0
+	):
+		return _failure(&"INVALID_DAMAGE")
+
+	var projected_combo: RefCounted = GauntletsComboStateScript.new()
+	if not bool(projected_combo.call(
+		"restore_snapshot",
+		(runtime_snapshot.get("combo_state", {}) as Dictionary).duplicate(true)
+	)):
+		return _failure(&"INVALID_RUNTIME_SNAPSHOT")
+	var expected_snapshot := runtime_snapshot.duplicate(true)
+	if not bool(result.get("hit_confirmed", result.get("hit", false))):
+		return _payload_replay_projection_success(
+			expected_snapshot,
+			0,
+			0,
+			0,
+			{},
+			projected_combo.call("tier_snapshot") as Dictionary
+		)
+
+	var ledger := (source_ledgers[token_key] as Dictionary).duplicate(true)
+	var is_echo := bool(result.get("is_echo", false))
+	var combo_eligible := bool(ledger.get("combo_eligible", false)) and not is_echo
+	if result.has("combo_eligible"):
+		combo_eligible = combo_eligible and bool(result["combo_eligible"])
+	var combo_result: Dictionary = projected_combo.call(
+		"record_hit",
+		token,
+		generation,
+		int(target_value),
+		int(ledger.get("combo_gain", 0)),
+		combo_eligible,
+		int(ledger.get("combo_timeout_frames", 120))
+	)
+	if combo_eligible and not bool(combo_result.get("ok", false)):
+		return _failure(StringName(str(combo_result.get("code", "INVALID_HIT"))))
+
+	var frozen_tier := (ledger.get("combo_tier_snapshot", {}) as Dictionary).duplicate(true)
+	var energy_eligible := not is_echo and bool(ledger.get("energy_eligible", false))
+	if result.has("energy_eligible"):
+		energy_eligible = energy_eligible and bool(result["energy_eligible"])
+	var energy_return := int(frozen_tier.get("energy_return", 0)) if energy_eligible else 0
+
+	var stop_eligible := not is_echo and bool(ledger.get("stop_extension_eligible", false))
+	if result.has("stop_extension_eligible"):
+		stop_eligible = stop_eligible and bool(result["stop_extension_eligible"])
+	var stop_extension := 0
+	if stop_eligible:
+		var stop_generation := int(ledger.get("stop_generation", 0))
+		if stop_generation > 0:
+			var stop_key := str(stop_generation)
+			var projected_stop_ledgers := (
+				expected_snapshot.get("stop_extensions_by_generation", {}) as Dictionary
+			).duplicate(true)
+			var current_stop_extension := int(projected_stop_ledgers.get(stop_key, 0))
+			stop_extension = mini(5, maxi(0, 30 - current_stop_extension))
+			if stop_extension > 0:
+				projected_stop_ledgers[stop_key] = current_stop_extension + stop_extension
+				_prune_generation_dictionary(projected_stop_ledgers)
+				expected_snapshot["stop_extensions_by_generation"] = projected_stop_ledgers
+
+	var accelerate_eligible := (
+		not is_echo
+		and bool(ledger.get("accelerate_eligible", false))
+		and not bool(result.get("recursive_echo", false))
+	)
+	var echo_descriptor: Dictionary = {}
+	if accelerate_eligible:
+		var accelerate_generation := int(ledger.get("accelerate_generation", 0))
+		if accelerate_generation > 0:
+			var accelerate_key := str(accelerate_generation)
+			var projected_accelerate_ledgers := (
+				expected_snapshot.get("accelerate_hits_by_generation", {}) as Dictionary
+			).duplicate(true)
+			var hit_count := int(projected_accelerate_ledgers.get(accelerate_key, 0)) + 1
+			projected_accelerate_ledgers[accelerate_key] = hit_count
+			_prune_generation_dictionary(projected_accelerate_ledgers)
+			expected_snapshot["accelerate_hits_by_generation"] = projected_accelerate_ledgers
+			if hit_count % 3 == 0:
+				echo_descriptor = _accelerate_echo_descriptor(ledger)
+
+	ledger["last_outcome_id"] = str(outcome_value)
+	ledger["last_target_id"] = int(target_value)
+	var projected_action_ledgers := source_ledgers.duplicate(true)
+	projected_action_ledgers[token_key] = ledger
+	expected_snapshot["action_ledgers"] = projected_action_ledgers
+
+	var combo_snapshot := (projected_combo.call("snapshot") as Dictionary).duplicate(true)
+	expected_snapshot["combo_state"] = combo_snapshot
+	expected_snapshot["chain_step"] = int(combo_snapshot.get("chain_step", 0))
+	expected_snapshot["combo_count"] = int(combo_snapshot.get("combo_count", 0))
+	expected_snapshot["combo_remaining_frames"] = int(
+		combo_snapshot.get("combo_timeout_frames_remaining", 0)
+	)
+	var tier := (projected_combo.call("tier_snapshot") as Dictionary).duplicate(true)
+	if bool((tier.get("slow_aura", {}) as Dictionary).get("enabled", false)):
+		expected_snapshot["aura_source_generation"] = generation
+	elif int(expected_snapshot.get("aura_source_generation", 0)) > 0:
+		expected_snapshot["aura_source_generation"] = 0
+
+	return _payload_replay_projection_success(
+		expected_snapshot,
+		int(combo_result.get("combo_gain", 0)),
+		energy_return,
+		stop_extension,
+		echo_descriptor,
+		tier
+	)
+
+
+func _valid_payload_replay_projection_snapshot(value: Dictionary) -> bool:
+	return (
+		_has_exact_fields(value, RUNTIME_SNAPSHOT_FIELDS)
+		and int(value.get("schema_version", -1)) == SNAPSHOT_SCHEMA_VERSION
+		and bool(value.get("configured", false))
+		and str(value.get("profile_id", "")) == PROFILE_ID
+		and int(value.get("profile_version", 0)) == PROFILE_VERSION
+		and value.get("combo_state") is Dictionary
+		and value.get("stop_extensions_by_generation") is Dictionary
+		and value.get("accelerate_hits_by_generation") is Dictionary
+		and value.get("action_ledgers") is Dictionary
+		and typeof(value.get("action_token_floor")) == TYPE_INT
+		and int(value.get("action_token_floor", -1)) >= 0
+		and _variant_numbers_are_finite(value)
+	)
+
+
+func _payload_replay_projection_success(
+	expected_snapshot: Dictionary,
+	combo_gain: int,
+	energy_return: int,
+	stop_extension_frames: int,
+	echo_descriptor: Dictionary,
+	tier: Dictionary
+) -> Dictionary:
+	return {
+		"ok": true,
+		"code": &"OK",
+		"runtime_snapshot": expected_snapshot.duplicate(true),
+		"context": {
+			"combo_gain": combo_gain,
+			"energy_return": energy_return,
+			"stop_extension_frames": stop_extension_frames,
+			"echo_descriptor": echo_descriptor.duplicate(true),
+			"tier": tier.duplicate(true),
+		},
 	}
 
 
@@ -394,63 +582,45 @@ func snapshot() -> Dictionary:
 		"active_plan": _active_plan.duplicate(true), "modifier_snapshot": _modifier_snapshot.duplicate(true),
 		"committed_definition": _committed_definition.duplicate(true), "live_hold_context": _live_hold_context.duplicate(true),
 		"adapter_active": bool(_adapter.call("is_profile_action_active")) if _adapter != null else false,
+		"adapter": (_adapter.call("runtime_snapshot") as Dictionary).duplicate(true) if _adapter != null else {},
 	}
 
 
 func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
-	if (
-		not _is_configured()
-		or _active_phase not in [&"READY", &"HOLD", &"WINDUP"]
-		or not _valid_restore_snapshot(runtime_snapshot)
-	):
+	if not _is_configured() or not _valid_restore_snapshot(runtime_snapshot):
 		return false
-	if snapshot() == runtime_snapshot:
+	var previous := snapshot()
+	if previous == runtime_snapshot:
 		return true
+	if not _apply_restore_snapshot(runtime_snapshot):
+		if not _apply_restore_snapshot(previous):
+			reset_runtime_state(&"snapshot_restore_rollback_failure")
+		return false
+	if snapshot() != runtime_snapshot:
+		if not _apply_restore_snapshot(previous):
+			reset_runtime_state(&"snapshot_restore_mismatch_rollback_failure")
+		return false
+	return true
+
+
+func _apply_restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 	var staged_combo: RefCounted = GauntletsComboStateScript.new()
 	if not bool(staged_combo.call("restore_snapshot", runtime_snapshot["combo_state"])):
 		return false
-	var current_adapter_active := bool(_adapter.call("is_profile_action_active"))
-	var current_definition := _committed_definition.duplicate(true)
-	var target_adapter_active := bool(runtime_snapshot["adapter_active"])
-	var target_definition := (runtime_snapshot["committed_definition"] as Dictionary).duplicate(true)
-	if not _transition_adapter_action(
-		current_adapter_active,
-		current_definition,
-		target_adapter_active,
-		target_definition
-	):
-		if not _install_adapter_action(current_adapter_active, current_definition):
-			reset_runtime_state(&"snapshot_restore_adapter_failure")
+	if not bool(_adapter.call(
+		"restore_runtime_snapshot",
+		(runtime_snapshot["adapter"] as Dictionary).duplicate(true)
+	)):
 		return false
-	var previous_aura_source_generation := _aura_source_generation
 	var target_aura_source_generation := int(runtime_snapshot["aura_source_generation"])
 	var aura_transition := _transition_combo_aura(
-		previous_aura_source_generation,
+		_aura_source_generation,
 		target_aura_source_generation
 	)
 	if not bool(aura_transition.get("ok", false)):
-		var adapter_rollback_ok := _transition_adapter_action(
-			target_adapter_active,
-			target_definition,
-			current_adapter_active,
-			current_definition
-		)
-		if not bool(aura_transition.get("restored", false)) or not adapter_rollback_ok:
-			reset_runtime_state(&"snapshot_restore_aura_failure")
 		return false
+	_aura_source_generation = target_aura_source_generation
 	if not bool(_combo_state.call("restore_snapshot", runtime_snapshot["combo_state"])):
-		var aura_rollback := _transition_combo_aura(
-			target_aura_source_generation,
-			previous_aura_source_generation
-		)
-		var adapter_rollback_ok := _transition_adapter_action(
-			target_adapter_active,
-			target_definition,
-			current_adapter_active,
-			current_definition
-		)
-		if not bool(aura_rollback.get("ok", false)) or not adapter_rollback_ok:
-			reset_runtime_state(&"snapshot_restore_combo_failure")
 		return false
 	_clear_active_action()
 	_last_runtime_frame = int(runtime_snapshot["last_runtime_frame"])
@@ -466,7 +636,6 @@ func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
 	_committed_definition = (runtime_snapshot["committed_definition"] as Dictionary).duplicate(true)
 	_live_hold_context = (runtime_snapshot["live_hold_context"] as Dictionary).duplicate(true)
-	_aura_source_generation = target_aura_source_generation
 	return true
 
 
@@ -859,17 +1028,32 @@ func _action_ledger(plan: Dictionary, token: int) -> Dictionary:
 	}
 
 
-func _apply_stop_extension(token: int, stop_generation: int) -> int:
-	if stop_generation <= 0:
+func _apply_stop_extension(
+	action_token: int,
+	payload_generation: int,
+	stop_generation: int
+) -> int:
+	if (
+		action_token <= 0
+		or payload_generation != action_token
+		or stop_generation <= 0
+		or _owner == null
+		or not is_instance_valid(_owner)
+		or not _owner.has_method("extend_weapon_time_stop_for_payload_result")
+	):
 		return 0
 	var key := str(stop_generation)
 	var current := int(_stop_extensions_by_generation.get(key, 0))
 	var granted := mini(5, maxi(0, 30 - current))
 	if granted <= 0:
 		return 0
-	if _owner != null and _owner.has_method("extend_weapon_time_stop"):
-		if not bool(_owner.call("extend_weapon_time_stop", token, granted)):
-			return 0
+	if not bool(_owner.call(
+		"extend_weapon_time_stop_for_payload_result",
+		action_token,
+		payload_generation,
+		granted
+	)):
+		return 0
 	_stop_extensions_by_generation[key] = current + granted
 	_prune_generation_dictionary(_stop_extensions_by_generation)
 	return granted
@@ -984,6 +1168,10 @@ func _advance_accelerate(generation: int, ledger: Dictionary) -> Dictionary:
 	_prune_generation_dictionary(_accelerate_hits_by_generation)
 	if hit_count % 3 != 0:
 		return {}
+	return _accelerate_echo_descriptor(ledger)
+
+
+func _accelerate_echo_descriptor(ledger: Dictionary) -> Dictionary:
 	var payload_id := StringName(str(ledger.get("payload_id", "")))
 	var action_id := StringName(str(ledger.get("action_id", "")))
 	var multiplier := float(ledger.get("damage_multiplier", 0.0)) * 0.5
@@ -1289,6 +1477,8 @@ func _prune_generation_dictionary(values: Dictionary) -> void:
 
 
 func _valid_restore_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, RUNTIME_SNAPSHOT_FIELDS):
+		return false
 	if (
 		int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
 		or not bool(value.get("configured", false))
@@ -1319,6 +1509,11 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 		or not value.get("committed_definition") is Dictionary
 		or not value.get("live_hold_context") is Dictionary
 		or typeof(value.get("adapter_active")) != TYPE_BOOL
+		or not value.get("adapter") is Dictionary
+		or not bool(_adapter.call(
+			"can_restore_runtime_snapshot",
+			(value.get("adapter", {}) as Dictionary).duplicate(true)
+		))
 		or not _variant_numbers_are_finite(value)
 	):
 		return false
@@ -1351,6 +1546,11 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 			if typeof(amount_value) != TYPE_INT or int(amount_value) < 0:
 				return false
 	var active_token := int(value["active_token"])
+	var adapter_snapshot := value["adapter"] as Dictionary
+	var adapter_action := adapter_snapshot.get("profile_action", {}) as Dictionary
+	var adapter_released := bool(adapter_snapshot.get("profile_action_released", false))
+	if bool(value["adapter_active"]) != not adapter_action.is_empty():
+		return false
 	if active_token == 0:
 		return (
 			str(value.get("active_phase", "")) == "READY"
@@ -1360,6 +1560,7 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 			and (value["modifier_snapshot"] as Dictionary).is_empty()
 			and (value["committed_definition"] as Dictionary).is_empty()
 			and (value["live_hold_context"] as Dictionary).is_empty()
+			and adapter_action.is_empty()
 		)
 	if str(value.get("active_phase", "")) == "HOLD":
 		return (
@@ -1368,8 +1569,10 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 			and (value["action_ledgers"] as Dictionary).is_empty()
 			and _is_hold_skeleton(value["active_plan"])
 			and (value["committed_definition"] as Dictionary).is_empty()
+			and adapter_action.is_empty()
 		)
-	if str(value.get("active_phase", "")) == "WINDUP":
+	var active_phase := str(value.get("active_phase", ""))
+	if active_phase in ["WINDUP", "ACTIVE", "RECOVERY"]:
 		var expected_definition := _action_definition(value["active_plan"], active_token)
 		var expected_ledger := _action_ledger(value["active_plan"], active_token)
 		var ledger_value: Variant = (value["action_ledgers"] as Dictionary).get(str(active_token))
@@ -1379,16 +1582,41 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 			and active_token > _retired_action_token_floor
 			and (value["action_ledgers"] as Dictionary).size() == 1
 			and ledger_value is Dictionary
-			and (ledger_value as Dictionary) == expected_ledger
+			and _valid_restored_action_ledger(ledger_value as Dictionary, expected_ledger)
 			and not (value["committed_definition"] as Dictionary).is_empty()
 			and int((value["committed_definition"] as Dictionary).get("token", 0)) == active_token
 			and bool(WeaponActionContractScript.validate_plan(value["active_plan"], WEAPON_ID).get("ok", false))
 			and not expected_definition.is_empty()
 			and expected_definition == value["committed_definition"]
+			and adapter_action == value["committed_definition"]
+			and adapter_released == (active_phase in ["ACTIVE", "RECOVERY"])
 		)
-	# A staged or released payload has world consequences that a runtime-only
-	# snapshot cannot safely reconstruct. HOLD and staged WINDUP remain reversible.
 	return false
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func _valid_restored_action_ledger(value: Dictionary, expected: Dictionary) -> bool:
+	if value == expected:
+		return true
+	if value.size() != expected.size() + 2:
+		return false
+	for key: Variant in expected.keys():
+		if not value.has(key) or value[key] != expected[key]:
+			return false
+	return (
+		typeof(value.get("last_outcome_id")) in [TYPE_STRING, TYPE_STRING_NAME]
+		and not str(value.get("last_outcome_id", "")).is_empty()
+		and typeof(value.get("last_target_id")) == TYPE_INT
+		and int(value.get("last_target_id", 0)) > 0
+	)
 
 
 func _matches_frozen_profile(profile: Dictionary, indexes: Dictionary) -> bool:

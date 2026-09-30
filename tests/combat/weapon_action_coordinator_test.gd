@@ -12,6 +12,9 @@ class FakeResourceProvider extends RefCounted:
 	var revision: int = 1
 	var spend_calls: int = 0
 	var reject_commit: bool = false
+	var fail_restore: bool = false
+	var fail_restore_on_calls: Array[int] = []
+	var restore_calls: int = 0
 
 
 	func resource_state(resource_id: StringName) -> Dictionary:
@@ -54,6 +57,27 @@ class FakeResourceProvider extends RefCounted:
 		}
 
 
+	func restore_resource_state(resource_id: StringName, state: Dictionary) -> bool:
+		restore_calls += 1
+		if (
+			resource_id != &"time_energy"
+			or str(state.get("resource_id", "")) != "time_energy"
+			or typeof(state.get("current")) not in [TYPE_INT, TYPE_FLOAT]
+			or float(state.get("current", -1.0)) < 0.0
+			or float(state.get("current", -1.0)) > 100.0
+			or float(state.get("minimum", -1.0)) != 0.0
+			or float(state.get("maximum", -1.0)) != 100.0
+			or typeof(state.get("revision")) != TYPE_INT
+			or int(state.get("revision", 0)) <= 0
+		):
+			return false
+		if fail_restore or fail_restore_on_calls.has(restore_calls):
+			return false
+		current = float(state["current"])
+		revision = int(state["revision"])
+		return true
+
+
 class FakeWeaponRuntime:
 	extends WeaponRuntimeScript
 
@@ -63,6 +87,8 @@ class FakeWeaponRuntime:
 	var reject_secondary: bool = false
 	var fail_commit_action: StringName = &""
 	var fail_restore: bool = false
+	var fail_restore_on_calls: Array[int] = []
+	var drift_restore_on_calls: Array[int] = []
 	var fail_active_entry: bool = false
 	var fail_phase_entry: StringName = &""
 	var tamper_finalized_field: StringName = &""
@@ -84,6 +110,9 @@ class FakeWeaponRuntime:
 	var live_confirm_phase: StringName = &""
 	var live_confirm_frame: int = -1
 	var runtime_tick_frames: Array[int] = []
+	var restore_calls: int = 0
+	var reset_calls: int = 0
+	var last_reset_reason: StringName = &""
 
 
 	func weapon_id() -> StringName:
@@ -236,7 +265,9 @@ class FakeWeaponRuntime:
 		active_action = &""
 
 
-	func reset_runtime_state(_reason: StringName) -> void:
+	func reset_runtime_state(reason: StringName) -> void:
+		reset_calls += 1
+		last_reset_reason = reason
 		resource = 8
 		active_token = 0
 		active_action = &""
@@ -251,7 +282,8 @@ class FakeWeaponRuntime:
 
 
 	func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
-		if fail_restore:
+		restore_calls += 1
+		if fail_restore or fail_restore_on_calls.has(restore_calls):
 			return false
 		if (
 			typeof(runtime_snapshot.get("resource")) != TYPE_INT
@@ -262,6 +294,8 @@ class FakeWeaponRuntime:
 		resource = int(runtime_snapshot["resource"])
 		active_token = int(runtime_snapshot["active_token"])
 		active_action = StringName(str(runtime_snapshot["active_action"]))
+		if drift_restore_on_calls.has(restore_calls):
+			resource += 1
 		return true
 
 
@@ -408,6 +442,13 @@ func _run() -> void:
 	_test_short_buffer_expires_before_cancel_window()
 	_test_cancel_invalidates_stale_tokens_idempotently()
 	_test_snapshot_is_isolated_and_safe_restore_is_generation_safe()
+	_test_runtime_snapshot_restores_ready_and_active_state_exactly()
+	_test_runtime_snapshot_restore_rejects_stale_token_resurrection()
+	_test_runtime_snapshot_restore_rejects_inconsistent_resource_ledger_atomically()
+	_test_runtime_restore_failure_rolls_back_without_touching_resources()
+	_test_runtime_rollback_failure_forces_fail_closed_ready_state()
+	_test_final_snapshot_mismatch_rolls_back_exactly()
+	_test_resource_rollback_failure_forces_fail_closed_ready_state()
 	_test_hold_edges_keep_one_action_token_and_one_commit()
 	_test_hold_releases_automatically_once_at_maximum()
 	_test_under_minimum_hold_release_cancels_without_payload_or_cue()
@@ -659,6 +700,157 @@ func _test_snapshot_is_isolated_and_safe_restore_is_generation_safe() -> void:
 		not coordinator.is_action_token_current(int(committed.get("token", 0)), generation_before_restore),
 		"safe restore cannot revive a prior action token"
 	)
+
+
+func _test_runtime_snapshot_restores_ready_and_active_state_exactly() -> void:
+	var source := _fixture()
+	var source_coordinator: RefCounted = source["coordinator"]
+	var committed: Dictionary = source_coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{"aim_direction": Vector2(0.25, -0.75)}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "runtime restore fixture commits a representative action")
+	_advance(source_coordinator, 3)
+	var active_snapshot: Dictionary = source_coordinator.snapshot()
+
+	var target := _fixture()
+	var target_coordinator: RefCounted = target["coordinator"]
+	_suite.assert_true(target_coordinator.restore_snapshot(active_snapshot), "strict runtime restore accepts a valid active action")
+	_suite.assert_equal(target_coordinator.snapshot(), active_snapshot, "active restore reinstalls phase, frame, plan, context, token, runtime, and resources exactly")
+
+	_advance(source_coordinator, 2)
+	_advance(target_coordinator, 2)
+	_suite.assert_equal(target_coordinator.snapshot(), source_coordinator.snapshot(), "restored active action advances deterministically")
+
+	source_coordinator.cancel(&"ready_restore_fixture")
+	source_coordinator.advance_frame()
+	var ready_snapshot: Dictionary = source_coordinator.snapshot()
+	_suite.assert_true(target_coordinator.restore_snapshot(ready_snapshot), "strict runtime restore accepts a later READY state")
+	_suite.assert_equal(target_coordinator.snapshot(), ready_snapshot, "READY restore reinstalls the authoritative terminal state exactly")
+	var next: Dictionary = target_coordinator.submit_intent({"id": "weapon_secondary", "edge": "pressed"}, {})
+	_suite.assert_true(bool(next.get("ok", false)), "restored READY state accepts the next action")
+	_suite.assert_true(int(next.get("token", 0)) > int(committed.get("token", 0)), "restored READY state preserves the token floor")
+
+
+func _test_runtime_snapshot_restore_rejects_stale_token_resurrection() -> void:
+	var source := _fixture()
+	var source_coordinator: RefCounted = source["coordinator"]
+	source_coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	source_coordinator.advance_frame()
+	var active_snapshot: Dictionary = source_coordinator.snapshot()
+	source_coordinator.cancel(&"token_resurrection_fixture")
+	source_coordinator.advance_frame()
+	var ready_snapshot: Dictionary = source_coordinator.snapshot()
+
+	var target := _fixture()
+	var target_coordinator: RefCounted = target["coordinator"]
+	_suite.assert_true(target_coordinator.restore_snapshot(active_snapshot), "token resurrection fixture restores the active state once")
+	_suite.assert_true(target_coordinator.restore_snapshot(ready_snapshot), "token resurrection fixture advances to READY")
+	var before: Dictionary = target_coordinator.snapshot()
+	_suite.assert_true(not target_coordinator.restore_snapshot(active_snapshot), "READY token floor rejects resurrection of the completed action")
+	_suite.assert_equal(target_coordinator.snapshot(), before, "stale token resurrection rejection is atomic")
+
+
+func _test_runtime_snapshot_restore_rejects_inconsistent_resource_ledger_atomically() -> void:
+	var source := _fixture()
+	var source_coordinator: RefCounted = source["coordinator"]
+	source_coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	source_coordinator.advance_frame()
+	var inconsistent: Dictionary = source_coordinator.snapshot()
+	var token := int(inconsistent.get("token", 0))
+	inconsistent["resource_transaction"]["committed_tokens"][token]["ticket"]["action_id"] = "forged_action"
+
+	var target := _fixture()
+	var target_coordinator: RefCounted = target["coordinator"]
+	var before: Dictionary = target_coordinator.snapshot()
+	_suite.assert_true(not target_coordinator.restore_snapshot(inconsistent), "coordinator rejects an inconsistent resource transaction ledger")
+	_suite.assert_equal(target_coordinator.snapshot(), before, "resource-ledger restore rejection preserves coordinator, runtime, and provider state")
+
+
+func _test_runtime_restore_failure_rolls_back_without_touching_resources() -> void:
+	var source := _fixture()
+	var source_coordinator: RefCounted = source["coordinator"]
+	source_coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	source_coordinator.advance_frame()
+	var target_snapshot: Dictionary = source_coordinator.snapshot()
+
+	var target := _fixture()
+	var coordinator: RefCounted = target["coordinator"]
+	var runtime: FakeWeaponRuntime = target["runtime"]
+	var provider: FakeResourceProvider = target["provider"]
+	var before: Dictionary = coordinator.snapshot()
+	runtime.fail_restore_on_calls = [1]
+
+	_suite.assert_true(not coordinator.restore_snapshot(target_snapshot), "runtime target restore failure rejects the replay snapshot")
+	_suite.assert_equal(coordinator.snapshot(), before, "runtime target failure restores the exact prior coordinator snapshot")
+	_suite.assert_equal(runtime.restore_calls, 2, "failed target restore is followed by one checked runtime rollback")
+	_suite.assert_equal(provider.restore_calls, 0, "runtime failure occurs before any external account is modified")
+
+
+func _test_runtime_rollback_failure_forces_fail_closed_ready_state() -> void:
+	var source := _fixture()
+	var source_coordinator: RefCounted = source["coordinator"]
+	source_coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	source_coordinator.advance_frame()
+	var target_snapshot: Dictionary = source_coordinator.snapshot()
+
+	var target := _fixture()
+	var coordinator: RefCounted = target["coordinator"]
+	var runtime: FakeWeaponRuntime = target["runtime"]
+	var provider: FakeResourceProvider = target["provider"]
+	var transaction: RefCounted = target["resource_transaction"]
+	runtime.fail_restore_on_calls = [2]
+	provider.fail_restore_on_calls = [1]
+
+	_suite.assert_true(not coordinator.restore_snapshot(target_snapshot), "resource failure with runtime rollback failure rejects restore")
+	_suite.assert_equal(runtime.restore_calls, 2, "runtime target and rollback are each attempted once")
+	_suite.assert_equal(runtime.reset_calls, 1, "runtime rollback failure triggers one explicit safe reset")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "failed rollback cannot leave the coordinator ACTIVE")
+	_suite.assert_equal(coordinator.current_token(), 0, "failed rollback clears the action token")
+	_suite.assert_true(not bool(transaction.snapshot().get("configured", true)), "failed rollback closes the resource transaction")
+
+
+func _test_final_snapshot_mismatch_rolls_back_exactly() -> void:
+	var source := _fixture()
+	var source_coordinator: RefCounted = source["coordinator"]
+	source_coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	source_coordinator.advance_frame()
+	var target_snapshot: Dictionary = source_coordinator.snapshot()
+
+	var target := _fixture()
+	var coordinator: RefCounted = target["coordinator"]
+	var runtime: FakeWeaponRuntime = target["runtime"]
+	var before: Dictionary = coordinator.snapshot()
+	runtime.drift_restore_on_calls = [1]
+
+	_suite.assert_true(not coordinator.restore_snapshot(target_snapshot), "post-restore snapshot mismatch rejects replay state")
+	_suite.assert_equal(coordinator.snapshot(), before, "final mismatch strictly restores runtime, resource, and coordinator state")
+	_suite.assert_equal(runtime.restore_calls, 2, "final mismatch performs one checked runtime rollback")
+	_suite.assert_equal(runtime.reset_calls, 0, "successful mismatch rollback does not require a safe reset")
+
+
+func _test_resource_rollback_failure_forces_fail_closed_ready_state() -> void:
+	var source := _fixture()
+	var source_runtime: FakeWeaponRuntime = source["runtime"]
+	var source_coordinator: RefCounted = source["coordinator"]
+	source_runtime.external_resource_cost = 20.0
+	source_coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	source_coordinator.advance_frame()
+	var target_snapshot: Dictionary = source_coordinator.snapshot()
+
+	var target := _fixture()
+	var coordinator: RefCounted = target["coordinator"]
+	var runtime: FakeWeaponRuntime = target["runtime"]
+	var provider: FakeResourceProvider = target["provider"]
+	var transaction: RefCounted = target["resource_transaction"]
+	runtime.drift_restore_on_calls = [1]
+	provider.fail_restore_on_calls = [2]
+
+	_suite.assert_true(not coordinator.restore_snapshot(target_snapshot), "resource rollback failure rejects the mismatched replay snapshot")
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "resource rollback failure cannot retain ACTIVE state")
+	_suite.assert_equal(coordinator.current_token(), 0, "resource rollback failure clears the action token")
+	_suite.assert_equal(runtime.active_token, 0, "safe reset clears the runtime action token")
+	_suite.assert_true(not bool(transaction.snapshot().get("configured", true)), "resource rollback failure leaves the transaction fail closed")
 
 
 func _test_hold_edges_keep_one_action_token_and_one_commit() -> void:

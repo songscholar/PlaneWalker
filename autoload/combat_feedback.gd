@@ -4,6 +4,20 @@ const PixelProxyScript := preload("res://scripts/presentation/pixel_proxy_actor.
 const AudioSynthScript := preload("res://scripts/presentation/combat_audio_synth.gd")
 const OverlayScript := preload("res://scripts/presentation/combat_feedback_overlay.gd")
 const MAX_TRACKED_WEAPON_CUES := 256
+const FEEDBACK_BUDGET_WINDOW_SECONDS := 1.0
+const MAX_WEAPON_CUES_PER_WINDOW := 12
+const MAX_CAMERA_EVENTS_PER_WINDOW := 8
+const MAX_CAMERA_TRAUMA := 8.0
+const MAX_SCREEN_FLASHES_PER_WINDOW := 3
+const MAX_HIT_PAUSES_PER_WINDOW := 8
+const MAX_HIT_AUDIO_CUES_PER_WINDOW := 12
+const KNOWN_WEAPON_IDS: Array[StringName] = [
+	&"sword",
+	&"bow",
+	&"gun",
+	&"staff",
+	&"gauntlets",
+]
 
 var _restore_scale: float = 1.0
 var _pause_token: int = 0
@@ -26,6 +40,18 @@ var _cached_player: Node2D
 var _cached_player_health: HealthComponent
 var _played_weapon_cues: Dictionary = {}
 var _played_weapon_cue_order: Array[String] = []
+var _feedback_budget_elapsed: float = 0.0
+var _feedback_budget_window_started_usec: int = 0
+var _weapon_cues_accepted: int = 0
+var _weapon_cues_rejected: int = 0
+var _camera_events_accepted: int = 0
+var _camera_events_rejected: int = 0
+var _screen_flashes_accepted: int = 0
+var _screen_flashes_rejected: int = 0
+var _hit_pauses_accepted: int = 0
+var _hit_pauses_rejected: int = 0
+var _hit_audio_accepted: int = 0
+var _hit_audio_rejected: int = 0
 
 
 const HIT_PROFILES := {
@@ -89,6 +115,7 @@ func _process(delta: float) -> void:
 	# physics. A low Engine.time_scale can delay physics ticks past the real-time
 	# deadline, while this check never derives duration from render frame counts.
 	_update_hit_pause()
+	_update_feedback_budget_window()
 	_scan_remaining = maxf(0.0, _scan_remaining - delta)
 	if _scan_remaining <= 0.0:
 		_scan_remaining = 0.25
@@ -163,7 +190,7 @@ func preview_time_feedback_for_test(skill_id: StringName) -> void:
 
 
 func preview_hit_feedback_for_test(target_is_player: bool) -> void:
-	if _overlay != null and _hit_flash_enabled:
+	if _overlay != null and _hit_flash_enabled and _consume_feedback_budget(&"screen_flash"):
 		_overlay.show_hit(target_is_player)
 
 
@@ -173,6 +200,38 @@ func get_overlay_snapshot_for_test() -> Dictionary:
 
 func get_camera_feedback_snapshot_for_test() -> Dictionary:
 	return {"trauma": _camera_trauma}
+
+
+func get_feedback_budget_snapshot_for_test() -> Dictionary:
+	return {
+		"window_seconds": FEEDBACK_BUDGET_WINDOW_SECONDS,
+		"window_elapsed": _feedback_budget_elapsed,
+		"window_started_usec": _feedback_budget_window_started_usec,
+		"weapon_cues_accepted": _weapon_cues_accepted,
+		"weapon_cues_rejected": _weapon_cues_rejected,
+		"camera_events_accepted": _camera_events_accepted,
+		"camera_events_rejected": _camera_events_rejected,
+		"screen_flashes_accepted": _screen_flashes_accepted,
+		"screen_flashes_rejected": _screen_flashes_rejected,
+		"hit_pauses_accepted": _hit_pauses_accepted,
+		"hit_pauses_rejected": _hit_pauses_rejected,
+		"hit_audio_accepted": _hit_audio_accepted,
+		"hit_audio_rejected": _hit_audio_rejected,
+		"max_weapon_cues": MAX_WEAPON_CUES_PER_WINDOW,
+		"max_camera_events": MAX_CAMERA_EVENTS_PER_WINDOW,
+		"max_camera_trauma": MAX_CAMERA_TRAUMA,
+		"max_screen_flashes": MAX_SCREEN_FLASHES_PER_WINDOW,
+		"max_hit_pauses": MAX_HIT_PAUSES_PER_WINDOW,
+		"max_hit_audio": MAX_HIT_AUDIO_CUES_PER_WINDOW,
+	}
+
+
+func advance_feedback_budget_for_test(delta: float) -> void:
+	_advance_feedback_budget(maxf(0.0, delta))
+
+
+func update_feedback_budget_clock_for_test(now_usec: int) -> void:
+	_update_feedback_budget_window(now_usec)
 
 
 func get_feedback_options_for_test() -> Dictionary:
@@ -238,8 +297,6 @@ func reset_transient_feedback() -> void:
 func _connect_event_bus() -> void:
 	if not EventBus.hit_confirmed.is_connected(_on_hit_confirmed):
 		EventBus.hit_confirmed.connect(_on_hit_confirmed)
-	if not EventBus.player_attacked.is_connected(_on_player_attacked):
-		EventBus.player_attacked.connect(_on_player_attacked)
 	if not EventBus.weapon_cue_requested.is_connected(_on_weapon_cue_requested):
 		EventBus.weapon_cue_requested.connect(_on_weapon_cue_requested)
 	if not EventBus.player_dashed.is_connected(_on_player_dashed):
@@ -301,11 +358,12 @@ func _on_hit_confirmed(damage_info: Variant, target: Node, final_amount: float) 
 		return
 	var target_is_player := target.is_in_group("player")
 	var profile := _hit_profile(damage_info, target_is_player)
-	request_hit_pause(float(profile["pause_frames"]) / maxf(1.0, Engine.physics_ticks_per_second))
+	if _consume_feedback_budget(&"hit_pause"):
+		request_hit_pause(float(profile["pause_frames"]) / maxf(1.0, Engine.physics_ticks_per_second))
 	add_camera_trauma(float(profile["camera_trauma"]))
-	if _audio != null:
+	if _audio != null and _consume_feedback_budget(&"hit_audio"):
 		_audio.play_cue(profile["audio_cue"])
-	if _overlay != null and _hit_flash_enabled:
+	if _overlay != null and _hit_flash_enabled and _consume_feedback_budget(&"screen_flash"):
 		_overlay.show_hit(target_is_player, float(profile["flash_duration"]))
 	if target is Node2D:
 		var proxy := _ensure_actor_proxy(target as Node2D)
@@ -326,21 +384,6 @@ func _hit_profile(damage_info: Variant, target_is_player: bool) -> Dictionary:
 	return (HIT_PROFILES["generic"] as Dictionary).duplicate(true)
 
 
-func _on_player_attacked(weapon_id: StringName, _context: Dictionary) -> void:
-	# Coordinator-backed weapons publish their feedback through Profile cues.
-	# Their compatibility player_attacked fact must not trigger the legacy Sword fallback.
-	if weapon_id in [&"sword", &"bow", &"gun", &"staff", &"gauntlets"]:
-		return
-	var player := _first_player()
-	if player == null:
-		return
-	var proxy := _ensure_actor_proxy(player)
-	if proxy != null:
-		proxy.play_action(&"attack")
-	if _audio != null:
-		_audio.play_cue(&"sword_swing", 0.8)
-
-
 func _on_weapon_cue_requested(
 	weapon_id: StringName,
 	action_id: StringName,
@@ -348,7 +391,12 @@ func _on_weapon_cue_requested(
 	cue: Dictionary
 ) -> void:
 	var cue_id := StringName(str(cue.get("cue_id", "")))
-	if weapon_id == &"" or action_id == &"" or token <= 0 or cue_id == &"":
+	if (
+		weapon_id not in KNOWN_WEAPON_IDS
+		or action_id == &""
+		or token <= 0
+		or cue_id == &""
+	):
 		return
 	var deduplication_key := "%s|%s|%d|%s" % [weapon_id, action_id, token, cue_id]
 	if _played_weapon_cues.has(deduplication_key):
@@ -357,6 +405,8 @@ func _on_weapon_cue_requested(
 	_played_weapon_cue_order.append(deduplication_key)
 	if _played_weapon_cue_order.size() > MAX_TRACKED_WEAPON_CUES:
 		_played_weapon_cues.erase(_played_weapon_cue_order.pop_front())
+	if not _consume_feedback_budget(&"weapon_cue"):
+		return
 
 	var player := _first_player()
 	if player != null:
@@ -467,9 +517,87 @@ func _cleanup_if_no_combat_actors() -> void:
 
 
 func add_camera_trauma(amount: float) -> void:
-	if not _camera_shake_enabled or _reduced_motion:
+	if amount <= 0.0 or not _camera_shake_enabled or _reduced_motion:
 		return
-	_camera_trauma = maxf(_camera_trauma, maxf(0.0, amount))
+	if not _consume_feedback_budget(&"camera"):
+		return
+	_camera_trauma = minf(MAX_CAMERA_TRAUMA, maxf(_camera_trauma, amount))
+
+
+func _advance_feedback_budget(delta: float) -> void:
+	var base_usec := _feedback_budget_window_started_usec
+	if base_usec <= 0:
+		base_usec = Time.get_ticks_usec()
+		_feedback_budget_window_started_usec = base_usec
+	var simulated_now_usec := base_usec + maxi(
+		0,
+		roundi((_feedback_budget_elapsed + maxf(0.0, delta)) * 1000000.0)
+	)
+	_update_feedback_budget_window(simulated_now_usec)
+
+
+func _update_feedback_budget_window(now_usec: int = -1) -> void:
+	var current_usec := Time.get_ticks_usec() if now_usec < 0 else now_usec
+	if _feedback_budget_window_started_usec <= 0:
+		_feedback_budget_window_started_usec = current_usec
+		_feedback_budget_elapsed = 0.0
+		return
+	var elapsed_usec := maxi(0, current_usec - _feedback_budget_window_started_usec)
+	var window_usec := maxi(1, roundi(FEEDBACK_BUDGET_WINDOW_SECONDS * 1000000.0))
+	_feedback_budget_elapsed = float(elapsed_usec % window_usec) / 1000000.0
+	if elapsed_usec < window_usec:
+		return
+	var completed_windows := floori(float(elapsed_usec) / float(window_usec))
+	_feedback_budget_window_started_usec += completed_windows * window_usec
+	_reset_feedback_budget_counts()
+
+
+func _consume_feedback_budget(kind: StringName) -> bool:
+	match kind:
+		&"weapon_cue":
+			if _weapon_cues_accepted >= MAX_WEAPON_CUES_PER_WINDOW:
+				_weapon_cues_rejected += 1
+				return false
+			_weapon_cues_accepted += 1
+			return true
+		&"camera":
+			if _camera_events_accepted >= MAX_CAMERA_EVENTS_PER_WINDOW:
+				_camera_events_rejected += 1
+				return false
+			_camera_events_accepted += 1
+			return true
+		&"screen_flash":
+			if _screen_flashes_accepted >= MAX_SCREEN_FLASHES_PER_WINDOW:
+				_screen_flashes_rejected += 1
+				return false
+			_screen_flashes_accepted += 1
+			return true
+		&"hit_pause":
+			if _hit_pauses_accepted >= MAX_HIT_PAUSES_PER_WINDOW:
+				_hit_pauses_rejected += 1
+				return false
+			_hit_pauses_accepted += 1
+			return true
+		&"hit_audio":
+			if _hit_audio_accepted >= MAX_HIT_AUDIO_CUES_PER_WINDOW:
+				_hit_audio_rejected += 1
+				return false
+			_hit_audio_accepted += 1
+			return true
+	return false
+
+
+func _reset_feedback_budget_counts() -> void:
+	_weapon_cues_accepted = 0
+	_weapon_cues_rejected = 0
+	_camera_events_accepted = 0
+	_camera_events_rejected = 0
+	_screen_flashes_accepted = 0
+	_screen_flashes_rejected = 0
+	_hit_pauses_accepted = 0
+	_hit_pauses_rejected = 0
+	_hit_audio_accepted = 0
+	_hit_audio_rejected = 0
 
 
 func _update_camera_feedback(delta: float) -> void:
@@ -529,6 +657,9 @@ func _reset_feedback() -> void:
 		Engine.time_scale = _restore_scale
 	_restore_scale = 1.0
 	_camera_trauma = 0.0
+	_feedback_budget_elapsed = 0.0
+	_feedback_budget_window_started_usec = Time.get_ticks_usec()
+	_reset_feedback_budget_counts()
 	_played_weapon_cues.clear()
 	_played_weapon_cue_order.clear()
 	_restore_camera_offset()

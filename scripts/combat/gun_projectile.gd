@@ -7,6 +7,7 @@ signal resource_reward_requested(action_token: int, reward_id: StringName, amoun
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const PIXELS_PER_TILE := 64.0
+const EXECUTION_SNAPSHOT_SCHEMA_VERSION := 1
 const VALID_ACTION_IDS: Array[String] = [
 	"normal_fire",
 	"aimed_fire",
@@ -59,6 +60,7 @@ var _lifetime_remaining: float = 0.0
 var _flight_complete: bool = false
 var _last_configuration_error: String = ""
 var _execution_active: bool = false
+var _restored_released_attachment: bool = false
 
 
 func _ready() -> void:
@@ -70,10 +72,17 @@ func _ready() -> void:
 		set_physics_process(false)
 		return
 	rotation = direction.angle()
-	_start_position = global_position
-	_lifetime_remaining = lifetime
-	if trail_duration_frames > 0:
-		_append_trail_point(global_position)
+	if _restored_released_attachment:
+		_restored_released_attachment = false
+	else:
+		_start_position = global_position
+		_lifetime_remaining = lifetime
+		if trail_duration_frames > 0:
+			_append_trail_point(global_position)
+	monitoring = not _flight_complete
+	set_physics_process(true)
+	if is_instance_valid(visual):
+		visual.visible = not _flight_complete
 
 
 func _physics_process(delta: float) -> void:
@@ -100,7 +109,9 @@ func _physics_process(delta: float) -> void:
 
 func configure_execution(execution: Dictionary) -> bool:
 	_execution_active = false
+	_restored_released_attachment = false
 	_clear_transient_state()
+	action_claims = {}
 	_last_configuration_error = ""
 	if is_queued_for_deletion():
 		_last_configuration_error = "queued_for_deletion"
@@ -258,6 +269,7 @@ func configuration_error_for_test() -> String:
 
 func execution_snapshot() -> Dictionary:
 	return {
+		"schema_version": EXECUTION_SNAPSHOT_SCHEMA_VERSION,
 		"action_token": action_token,
 		"source_action_id": source_action_id,
 		"descriptor_id": descriptor_id,
@@ -281,6 +293,25 @@ func execution_snapshot() -> Dictionary:
 		"trail_width_pixels": trail_width_pixels,
 		"trail_tick_damage_multiplier": trail_tick_damage_multiplier,
 		"trail_damage_type": trail_damage_type,
+		"trail": {
+			"duration_frames": trail_duration_frames,
+			"tick_interval_frames": trail_tick_interval_frames,
+			"width_pixels": trail_width_pixels,
+			"tick_damage_multiplier": trail_tick_damage_multiplier,
+			"damage_type": trail_damage_type,
+		} if trail_duration_frames > 0 else {},
+		"direction": direction,
+		"start_position": _start_position,
+		"distance_travelled": _distance_travelled,
+		"execution_frame": _execution_frame,
+		"lifetime": lifetime,
+		"lifetime_remaining": _lifetime_remaining,
+		"flight_complete": _flight_complete,
+		"trail_points": _trail_points.duplicate(true),
+		"hit_target_ids": _sorted_integer_keys(_hit_targets),
+		"trail_target_ids": _sorted_integer_keys(_trail_targets),
+		"action_claims": action_claims.duplicate(true),
+		"execution_active": _execution_active,
 		"trail_point_count": _trail_points.size(),
 		"trail_target_count": _trail_targets.size(),
 		"hit_target_count": _hit_targets.size(),
@@ -291,8 +322,147 @@ func execution_snapshot() -> Dictionary:
 	}
 
 
+func can_restore_execution_snapshot(value: Dictionary) -> bool:
+	var expected_fields: Array[String] = [
+		"schema_version", "action_token", "source_action_id", "descriptor_id", "outcome_index",
+		"deterministic_seed", "damage", "base_attack", "speed", "max_range_pixels", "pierce",
+		"pierce_mode", "damage_type", "time_damage_ratio", "critical_chance_bonus",
+		"knockback_pixels", "penetration_explosion", "vulnerability", "aimed_time_burst",
+		"trail_duration_frames", "trail_tick_interval_frames", "trail_width_pixels",
+		"trail_tick_damage_multiplier", "trail_damage_type", "trail", "direction",
+		"start_position", "distance_travelled", "execution_frame", "lifetime",
+		"lifetime_remaining", "flight_complete", "trail_points", "hit_target_ids", "trail_target_ids",
+		"action_claims", "execution_active", "trail_point_count", "trail_target_count",
+		"hit_target_count", "time_interactions", "boss_conversion", "resource_reward", "tags",
+	]
+	if not _has_exact_fields(value, expected_fields):
+		return false
+	if int(value.get("schema_version", -1)) != EXECUTION_SNAPSHOT_SCHEMA_VERSION:
+		return false
+	var trail_value: Variant = value.get("trail")
+	if not trail_value is Dictionary:
+		return false
+	var trail := trail_value as Dictionary
+	if (
+		(not trail.is_empty() and not _has_exact_fields(trail, ["duration_frames", "tick_interval_frames", "width_pixels", "tick_damage_multiplier", "damage_type"]))
+		or (int(value.get("trail_duration_frames", 0)) == 0 and not trail.is_empty())
+		or (int(value.get("trail_duration_frames", 0)) > 0 and trail.is_empty())
+	):
+		return false
+	var staged := GunProjectile.new()
+	var configured := staged.configure_execution(value)
+	if not configured:
+		staged.free()
+		return false
+	var direction_value: Variant = value.get("direction")
+	var start_value: Variant = value.get("start_position")
+	var distance_value: Variant = value.get("distance_travelled")
+	var frame_value: Variant = value.get("execution_frame")
+	var lifetime_value: Variant = value.get("lifetime")
+	var remaining_value: Variant = value.get("lifetime_remaining")
+	var trail_points_value: Variant = value.get("trail_points")
+	var hit_ids_value: Variant = value.get("hit_target_ids")
+	var trail_target_ids_value: Variant = value.get("trail_target_ids")
+	var claims_value: Variant = value.get("action_claims")
+	var valid := (
+		direction_value is Vector2
+		and _finite_vector(direction_value as Vector2)
+		and (direction_value as Vector2).length_squared() > 0.001
+		and start_value is Vector2
+		and _finite_vector(start_value as Vector2)
+		and _non_negative_number(distance_value)
+		and float(distance_value) <= staged.max_range_pixels + 0.001
+		and typeof(frame_value) == TYPE_INT
+		and int(frame_value) >= 0
+		and _positive_number(lifetime_value)
+		and is_equal_approx(float(lifetime_value), staged.lifetime)
+		and _positive_number(remaining_value)
+		and float(remaining_value) <= float(lifetime_value) + 0.001
+		and typeof(value.get("flight_complete")) == TYPE_BOOL
+		and _valid_trail_points(trail_points_value, int(frame_value))
+		and _valid_positive_integer_array(hit_ids_value)
+		and _valid_positive_integer_array(trail_target_ids_value)
+		and _valid_claim_dictionary(claims_value)
+		and typeof(value.get("execution_active")) == TYPE_BOOL
+		and bool(value.get("execution_active", false))
+		and int(value.get("trail_point_count", -1)) == (trail_points_value as Array).size()
+		and int(value.get("trail_target_count", -1)) == (trail_target_ids_value as Array).size()
+		and int(value.get("hit_target_count", -1)) == (hit_ids_value as Array).size()
+	)
+	var expected_flight_complete := (
+		staged.max_range_pixels > 0.0
+		and float(distance_value) >= staged.max_range_pixels - 0.001
+	)
+	if valid and bool(value.get("flight_complete", false)) != expected_flight_complete:
+		valid = false
+	if valid and staged.trail_duration_frames == 0 and not (trail_points_value as Array).is_empty():
+		valid = false
+	staged.free()
+	return valid
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func restore_execution_snapshot(value: Dictionary) -> bool:
+	if is_queued_for_deletion() or not can_restore_execution_snapshot(value):
+		return false
+	var rollback := execution_snapshot() if _execution_active else {}
+	if _apply_validated_execution_snapshot(value) and execution_snapshot() == value:
+		return true
+	if not rollback.is_empty() and can_restore_execution_snapshot(rollback):
+		_apply_validated_execution_snapshot(rollback)
+	else:
+		reset_execution_state()
+	return false
+
+
+func prepare_restored_tree_attachment(released: bool) -> void:
+	_restored_released_attachment = released
+
+
+func bind_action_claims(shared_claims: Dictionary) -> void:
+	action_claims = shared_claims
+
+
+func _apply_validated_execution_snapshot(value: Dictionary) -> bool:
+	if not configure_execution(value):
+		return false
+	direction = (value["direction"] as Vector2).normalized()
+	_start_position = value["start_position"] as Vector2
+	_distance_travelled = float(value["distance_travelled"])
+	_execution_frame = int(value["execution_frame"])
+	lifetime = float(value["lifetime"])
+	_lifetime_remaining = float(value["lifetime_remaining"])
+	_flight_complete = bool(value["flight_complete"])
+	_trail_points = (value["trail_points"] as Array).duplicate(true)
+	_trail_targets.clear()
+	for target_id_value: Variant in value["trail_target_ids"] as Array:
+		_trail_targets[int(target_id_value)] = null
+	_hit_targets.clear()
+	for target_id_value: Variant in value["hit_target_ids"] as Array:
+		_hit_targets[int(target_id_value)] = true
+	action_claims = (value["action_claims"] as Dictionary).duplicate(true)
+	_execution_active = true
+	_restored_released_attachment = true
+	rotation = direction.angle()
+	monitoring = is_inside_tree() and not _flight_complete
+	set_physics_process(is_inside_tree())
+	if is_instance_valid(visual):
+		visual.visible = not _flight_complete
+	return true
+
+
 func reset_execution_state() -> void:
 	_clear_transient_state()
+	action_claims = {}
+	_restored_released_attachment = false
 	_retire_execution()
 
 
@@ -318,7 +488,7 @@ func _on_area_entered(area: Area2D) -> void:
 	var target := area.get_parent()
 	if target == null or not target.is_in_group("enemies"):
 		return
-	var target_id := target.get_instance_id()
+	var target_id := _stable_target_id(target)
 	if _hit_targets.has(target_id):
 		return
 	_hit_targets[target_id] = true
@@ -416,7 +586,7 @@ func _refresh_trail_targets() -> void:
 			continue
 		for child: Node in enemy.get_children():
 			if child is Area2D and child.has_method("receive_hit") and _area_is_on_trail(child):
-				active_targets[enemy.get_instance_id()] = child
+				active_targets[_stable_target_id(enemy)] = child
 				break
 	_trail_targets = active_targets
 
@@ -449,6 +619,7 @@ func _tick_trail_targets() -> void:
 		)
 	for target_id: int in stale_ids:
 		_trail_targets.erase(target_id)
+	_trail_targets.clear()
 
 
 func _area_is_on_trail(area: Area2D) -> bool:
@@ -525,13 +696,13 @@ func _apply_penetration_explosion(impact_target: Node) -> void:
 		if impact_target is Node2D
 		else global_position
 	)
-	var impact_id := impact_target.get_instance_id()
+	var impact_id := _stable_target_id(impact_target)
 	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		if (enemy as Node2D).global_position.distance_to(center) > radius:
 			continue
-		var claim_key := "%d:explosion:%d:%d" % [action_token, impact_id, enemy.get_instance_id()]
+		var claim_key := "%d:explosion:%d:%d" % [action_token, impact_id, _stable_target_id(enemy)]
 		if action_claims.has(claim_key):
 			continue
 		for child: Node in enemy.get_children():
@@ -621,10 +792,9 @@ func _parse_trail(
 	var tick_interval_frames := int(trail.get("tick_interval_frames", 0))
 	var width_pixels := float(trail.get("width_pixels", 0.0))
 	var tick_damage_multiplier := float(trail.get("tick_damage_multiplier", 0.0))
-	var parsed_damage_type := _damage_type_from_name(str(trail.get(
-		"damage_type",
-		"void" if action_id == "void_penetration" else "time"
-	)))
+	var parsed_damage_type := _parse_damage_type(
+		trail.get("damage_type", "void" if action_id == "void_penetration" else "time")
+	)
 	if (
 		not trail_is_authorized
 		or duration_frames <= 0
@@ -685,7 +855,7 @@ func _parse_explosion(value: Dictionary) -> Dictionary:
 		return {"ok": true, "value": {}}
 	var radius_pixels := float(value.get("radius_pixels", 0.0))
 	var damage_multiplier := float(value.get("damage_multiplier", 0.0))
-	var parsed_damage_type := _damage_type_from_name(str(value.get("damage_type", "void")))
+	var parsed_damage_type := _parse_damage_type(value.get("damage_type", "void"))
 	if (
 		not is_finite(radius_pixels)
 		or radius_pixels <= 0.0
@@ -736,6 +906,33 @@ func _damage_type_from_name(value: String) -> int:
 			return -1
 
 
+func _parse_damage_type(value: Variant) -> int:
+	if typeof(value) == TYPE_INT:
+		var parsed := int(value)
+		return parsed if parsed >= DamageInfoScript.DamageType.PHYSICAL and parsed <= DamageInfoScript.DamageType.LIGHTNING else -1
+	return _damage_type_from_name(str(value))
+
+
+func _stable_target_id(target: Node) -> int:
+	if target == null or not is_instance_valid(target):
+		return 0
+	if target.has_meta("stable_target_id"):
+		var explicit_value: Variant = target.get_meta("stable_target_id")
+		if typeof(explicit_value) == TYPE_INT and int(explicit_value) > 0:
+			return int(explicit_value)
+	var stable_key := ""
+	if target.has_method("stable_entity_key"):
+		stable_key = str(target.call("stable_entity_key"))
+	elif target.has_meta("stable_entity_key"):
+		stable_key = str(target.get_meta("stable_entity_key"))
+	elif target.is_inside_tree():
+		stable_key = str(target.get_path())
+	if not stable_key.is_empty():
+		var stable_hash := absi(stable_key.hash())
+		return stable_hash if stable_hash > 0 else 1
+	return int(target.get_instance_id())
+
+
 func _clear_transient_state() -> void:
 	_hit_targets.clear()
 	_trail_points.clear()
@@ -762,3 +959,55 @@ func _positive_number(value: Variant) -> bool:
 
 func _non_negative_number(value: Variant) -> bool:
 	return typeof(value) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(value)) and float(value) >= 0.0
+
+
+func _finite_vector(value: Vector2) -> bool:
+	return is_finite(value.x) and is_finite(value.y)
+
+
+func _sorted_integer_keys(value: Dictionary) -> Array[int]:
+	var result: Array[int] = []
+	for key_value: Variant in value.keys():
+		result.append(int(key_value))
+	result.sort()
+	return result
+
+
+func _valid_positive_integer_array(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var previous := 0
+	for item: Variant in value as Array:
+		if typeof(item) != TYPE_INT or int(item) <= previous:
+			return false
+		previous = int(item)
+	return true
+
+
+func _valid_claim_dictionary(value: Variant) -> bool:
+	if not value is Dictionary:
+		return false
+	for key_value: Variant in value as Dictionary:
+		if typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME] or str(key_value).is_empty():
+			return false
+		if (value as Dictionary)[key_value] != true:
+			return false
+	return true
+
+
+func _valid_trail_points(value: Variant, execution_frame: int) -> bool:
+	if not value is Array:
+		return false
+	for point_value: Variant in value as Array:
+		if not point_value is Dictionary:
+			return false
+		var point := point_value as Dictionary
+		var position_value: Variant = point.get("position")
+		if (
+			not position_value is Vector2
+			or not _finite_vector(position_value as Vector2)
+			or typeof(point.get("expires_at")) != TYPE_INT
+			or int(point.get("expires_at", 0)) <= execution_frame
+		):
+			return false
+	return true

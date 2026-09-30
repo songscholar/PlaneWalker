@@ -66,11 +66,14 @@ func _run() -> void:
 		},
 	})
 
-	_assert_close(player.stats.attack, 45.0, "reward attack")
-	_assert_close(sword.base_attack, 45.0, "reward sword attack")
-	_assert_close(bow.base_attack, 45.0, "reward bow attack")
-	_assert_close(sword.attack_speed, 1.2, "reward sword speed")
-	_assert_close(bow.attack_speed, 1.2, "reward bow speed")
+	_assert_close(player.stats.attack, 30.0, "weapon rewards leave character attack authority unchanged")
+	_assert_close(sword.base_attack, 30.0, "weapon rewards leave Sword base attack unchanged")
+	_assert_close(bow.base_attack, 30.0, "weapon rewards leave Bow base attack unchanged")
+	_assert_close(sword.attack_speed, 1.0, "weapon rewards leave Sword adapter speed unchanged")
+	_assert_close(bow.attack_speed, 1.0, "weapon rewards leave Bow adapter speed unchanged")
+	var weapon_modifiers: Dictionary = player.weapon_modifier_state.snapshot()
+	_assert_close(weapon_modifiers.get("weapon.damage", 0.0), 1.5, "reward damage reaches equipped weapon capability authority")
+	_assert_close(weapon_modifiers.get("weapon.attack_speed", 0.0), 1.2, "reward speed reaches equipped weapon capability authority")
 	_assert_close(health.max_hp, 220.0, "reward max hp")
 	_assert_close(health.defense, 2.0, "reward defense")
 	_assert_close(time_manager.max_energy, 125.0, "reward max time energy")
@@ -207,7 +210,12 @@ func _run() -> void:
 	})
 	recorded_state.record_curse({"id": "test_curse", "effects": {}})
 	_assert_true(recorded_state.to_dictionary().get("curses", []).has("test_curse"), "build state records active curse")
-	_assert_close(sword.base_attack, 56.25, "curse applies attack upside")
+	_assert_close(
+		player.weapon_modifier_state.snapshot().get("weapon.damage", 0.0),
+		1.875,
+		"curse multiplies the equipped weapon damage capability"
+	)
+	_assert_close(sword.base_attack, 30.0, "curse leaves Sword adapter base attack unchanged")
 	_assert_close(health.max_hp, 176.0, "curse applies max hp risk")
 	_assert_close(time_manager.energy_regen, 1.625, "curse applies time regen risk")
 	_assert_close(time_manager.time_stop_self_damage, 12.0, "curse applies time stop hp cost")

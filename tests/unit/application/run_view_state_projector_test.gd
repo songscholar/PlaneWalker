@@ -108,6 +108,35 @@ func _test_weapon_presentations_project_to_union(suite) -> void:
 		suite.assert_equal(bow_state["meter_max"], 48.0, "Bow union projects maximum charge")
 		suite.assert_equal(bow_state["status_id"], "charging", "Bow hold projects charging status")
 		suite.assert_equal(bow_state["secondary_id"], "hold", "Bow exposes bounded hold progress")
+	for neutral_phase: String in ["ACTIVE", "RECOVERY"]:
+		var neutral_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+		neutral_authoritative["run_id"] = "bow-neutral-%s-view-run" % neutral_phase.to_lower()
+		var neutral_bow_player := _player_snapshot()
+		var neutral_bow := _bow_weapon_presentation()
+		neutral_bow["action_id"] = "temporal_arrow"
+		neutral_bow["phase"] = neutral_phase
+		neutral_bow["charge_frames"] = 0.0
+		neutral_bow["full_charge"] = false
+		neutral_bow["runtime"]["action_id"] = "temporal_arrow"
+		neutral_bow["runtime"]["phase"] = neutral_phase
+		neutral_bow["runtime"]["charge_frames"] = 0.0
+		neutral_bow["runtime"]["full_charge"] = false
+		neutral_bow_player["weapon"] = neutral_bow
+		var neutral_result = projector.project(
+			neutral_authoritative,
+			_room_definition(1, "combat"),
+			neutral_bow_player,
+			null,
+			2,
+			{}
+		)
+		suite.assert_true(neutral_result.ok, "Bow %s presentation projects through RunViewState" % neutral_phase)
+		if neutral_result.ok:
+			var neutral_view: Dictionary = neutral_result.context["view_state"]
+			var neutral_state: Dictionary = neutral_view["weapon_state"]
+			suite.assert_equal(neutral_state["status_id"], "acting", "Bow %s uses neutral acting status" % neutral_phase)
+			suite.assert_equal(neutral_state["status_stacks"], 0, "Bow %s neutral acting status has zero stacks" % neutral_phase)
+			suite.assert_true(RunViewStateScript.validate(neutral_view).ok, "Bow %s output satisfies the RunViewState contract" % neutral_phase)
 
 	var sword_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
 	sword_authoritative["run_id"] = "sword-view-run"

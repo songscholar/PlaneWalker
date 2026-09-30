@@ -8,6 +8,13 @@ const PIXELS_PER_TILE := 64.0
 
 const VALID_ACTION_IDS: Array[String] = ["arcane_bolt", "charged_element"]
 const VALID_ELEMENTS: Array[String] = ["arcane", "fire", "ice", "lightning"]
+const EXECUTION_SNAPSHOT_FIELDS: Array[String] = [
+	"action_token", "generation", "source_action_id", "descriptor_id", "outcome_index",
+	"deterministic_seed", "element_id", "damage", "base_attack", "speed",
+	"max_range_pixels", "target_deduplication", "effect_descriptor", "combination", "chain",
+	"status_source_id", "boss_conversion", "direction", "distance_travelled", "hit_target_ids",
+	"damage_claims", "terminal_emitted", "execution_active",
+]
 
 @export var speed: float = 560.0
 @export var max_range_pixels: float = 768.0
@@ -166,10 +173,77 @@ func execution_snapshot() -> Dictionary:
 		"chain": chain.duplicate(true),
 		"status_source_id": status_source_id,
 		"boss_conversion": boss_conversion.duplicate(true),
+		"direction": direction,
+		"distance_travelled": _distance_travelled,
 		"hit_target_ids": _sorted_integer_keys(_hit_targets),
+		"damage_claims": _sorted_string_keys(_damage_claims),
 		"terminal_emitted": _terminal_emitted,
 		"execution_active": _execution_active,
 	}
+
+
+func can_restore_execution_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, EXECUTION_SNAPSHOT_FIELDS):
+		return false
+	var staged := StaffProjectile.new()
+	var configured := staged.configure_execution(value)
+	if not configured:
+		staged.free()
+		return false
+	var hit_ids_value: Variant = value.get("hit_target_ids")
+	var damage_claims_value: Variant = value.get("damage_claims")
+	var direction_value: Variant = value.get("direction")
+	var distance_value: Variant = value.get("distance_travelled")
+	var valid := (
+		hit_ids_value is Array
+		and damage_claims_value is Array
+		and direction_value is Vector2
+		and typeof(distance_value) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(distance_value))
+		and float(distance_value) >= 0.0
+		and float(distance_value) <= float(value.get("max_range_pixels", 0.0)) + 0.001
+		and typeof(value.get("terminal_emitted")) == TYPE_BOOL
+		and typeof(value.get("execution_active")) == TYPE_BOOL
+		and bool(value.get("execution_active", false)) != bool(value.get("terminal_emitted", false))
+		and _valid_positive_integer_array(hit_ids_value)
+		and _valid_claim_array(damage_claims_value)
+	)
+	if valid and not (hit_ids_value as Array).is_empty() and not bool(value.get("terminal_emitted", false)):
+		valid = false
+	if valid and bool(value.get("execution_active", false)) and float(distance_value) >= float(value.get("max_range_pixels", 0.0)):
+		valid = false
+	staged.free()
+	return valid
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func restore_execution_snapshot(value: Dictionary) -> bool:
+	if not can_restore_execution_snapshot(value):
+		return false
+	if not configure_execution(value):
+		return false
+	direction = (value["direction"] as Vector2).normalized()
+	_distance_travelled = float(value["distance_travelled"])
+	_hit_targets.clear()
+	for target_id_value: Variant in value["hit_target_ids"] as Array:
+		_hit_targets[int(target_id_value)] = true
+	_damage_claims.clear()
+	for claim_value: Variant in value["damage_claims"] as Array:
+		_damage_claims[str(claim_value)] = true
+	_terminal_emitted = bool(value["terminal_emitted"])
+	_execution_active = bool(value["execution_active"])
+	rotation = direction.angle()
+	monitoring = _execution_active and is_inside_tree()
+	set_physics_process(_execution_active and is_inside_tree())
+	return execution_snapshot() == value
 
 
 func hit_for_test(target_id: int, candidates: Array = []) -> Dictionary:
@@ -533,6 +607,8 @@ func _deliver_damage_to_target(
 			damage_type = DamageInfoScript.DamageType.LIGHTNING
 	var damage_info := DamageInfoScript.new(amount, damage_type, source, owner_entity)
 	damage_info.tags = ["weapon:staff", "action:%s" % source_action_id, "element:%s" % damage_element]
+	damage_info.action_token = action_token
+	damage_info.source_generation = generation
 	damage_info.knockback = knockback
 	var hurtbox := target.get_node_or_null("Hurtbox")
 	if hurtbox != null and hurtbox.has_method("receive_hit"):
@@ -718,6 +794,45 @@ func _sorted_integer_keys(values: Dictionary) -> Array[int]:
 		result.append(int(value))
 	result.sort()
 	return result
+
+
+func _sorted_string_keys(values: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	for value: Variant in values:
+		result.append(str(value))
+	result.sort()
+	return result
+
+
+func _valid_positive_integer_array(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var seen: Dictionary = {}
+	var previous := 0
+	for item: Variant in value as Array:
+		if typeof(item) != TYPE_INT or int(item) <= 0 or seen.has(int(item)):
+			return false
+		if not seen.is_empty() and int(item) <= previous:
+			return false
+		seen[int(item)] = true
+		previous = int(item)
+	return true
+
+
+func _valid_claim_array(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var seen: Dictionary = {}
+	var previous := ""
+	for item: Variant in value as Array:
+		if typeof(item) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var claim := str(item)
+		if claim.is_empty() or seen.has(claim) or (not previous.is_empty() and claim <= previous):
+			return false
+		seen[claim] = true
+		previous = claim
+	return true
 
 
 func _positive_number(value: Variant) -> bool:

@@ -6,6 +6,20 @@ const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_id
 
 const REWIND_WEAPON_WINDOW_DURATION := 2.0
 const MAX_WEAPON_STOP_EXTENSION_FRAMES := 60
+const WEAPON_REPLAY_SNAPSHOT_SCHEMA_VERSION := 2
+const WEAPON_REPLAY_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version",
+	"time_energy_state",
+	"stop_active",
+	"stop_source_sequence",
+	"stop_source_id",
+	"stop_remaining",
+	"stop_extension_frames",
+	"stop_extension_tokens",
+	"rewind_window_remaining",
+	"rewind_window_generation",
+	"rewind_window_claimed",
+]
 
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
@@ -72,6 +86,10 @@ var _rewind_weapon_window_remaining: float = 0.0
 var _rewind_weapon_window_generation: int = 0
 var _rewind_weapon_window_claimed: bool = false
 var _resource_revision: int = 1
+var _weapon_replay_restore_transaction_active: bool = false
+var _weapon_replay_restore_transaction_token: int = 0
+var _next_weapon_replay_restore_transaction_token: int = 1
+var _weapon_replay_restore_transaction_before: Dictionary = {}
 
 
 func _ready() -> void:
@@ -329,6 +347,7 @@ func cancel_all_time_effects(_reason: StringName) -> void:
 
 
 func reset_runtime_state() -> void:
+	_clear_weapon_replay_restore_transaction()
 	_end_time_stop(false)
 	_end_time_accelerate(_time_accelerate_token, false)
 	_clear_rewind_weapon_window()
@@ -389,6 +408,214 @@ func weapon_interaction_context() -> Dictionary:
 	}
 
 
+func weapon_replay_snapshot() -> Dictionary:
+	return {
+		"schema_version": WEAPON_REPLAY_SNAPSHOT_SCHEMA_VERSION,
+		"time_energy_state": resource_state(&"time_energy"),
+		"stop_active": _time_stop_active,
+		"stop_source_sequence": _time_stop_source_sequence,
+		"stop_source_id": str(_time_stop_source_id),
+		"stop_remaining": _time_stop_remaining,
+		"stop_extension_frames": _weapon_stop_extension_frames,
+		"stop_extension_tokens": _weapon_stop_extension_tokens.duplicate(true),
+		"rewind_window_remaining": _rewind_weapon_window_remaining,
+		"rewind_window_generation": _rewind_weapon_window_generation,
+		"rewind_window_claimed": _rewind_weapon_window_claimed,
+	}
+
+
+func begin_weapon_replay_restore_transaction() -> int:
+	if _weapon_replay_restore_transaction_active:
+		return 0
+	var before := weapon_replay_snapshot()
+	if not can_restore_weapon_replay_snapshot(before):
+		return 0
+	var transaction_token := _next_weapon_replay_restore_transaction_token
+	_next_weapon_replay_restore_transaction_token += 1
+	_weapon_replay_restore_transaction_active = true
+	_weapon_replay_restore_transaction_token = transaction_token
+	_weapon_replay_restore_transaction_before = before.duplicate(true)
+	return transaction_token
+
+
+func commit_weapon_replay_restore_transaction(transaction_token: int) -> bool:
+	if (
+		not _weapon_replay_restore_transaction_active
+		or transaction_token <= 0
+		or transaction_token != _weapon_replay_restore_transaction_token
+	):
+		return false
+	var before := _weapon_replay_restore_transaction_before.duplicate(true)
+	var after := weapon_replay_snapshot()
+	if (
+		before.is_empty()
+		or after.is_empty()
+		or not can_restore_weapon_replay_snapshot(before)
+		or not can_restore_weapon_replay_snapshot(after)
+	):
+		if can_restore_weapon_replay_snapshot(before):
+			_install_weapon_replay_snapshot_state(before)
+		_clear_weapon_replay_restore_transaction()
+		return false
+	var previous_stop_source_id := StringName(str(before.get("stop_source_id", "")))
+	var stop_projection_changed := _weapon_replay_stop_projection(before) != (
+		_weapon_replay_stop_projection(after)
+	)
+	var energy_changed_during_transaction := float(
+		(before.get("time_energy_state", {}) as Dictionary).get("current", energy)
+	) != energy
+	_clear_weapon_replay_restore_transaction()
+	if stop_projection_changed:
+		_reconcile_replay_time_stop_targets(previous_stop_source_id)
+	if energy_changed_during_transaction:
+		energy_changed.emit(energy, max_energy)
+	return true
+
+
+func rollback_weapon_replay_restore_transaction(transaction_token: int) -> bool:
+	if (
+		not _weapon_replay_restore_transaction_active
+		or transaction_token <= 0
+		or transaction_token != _weapon_replay_restore_transaction_token
+	):
+		return false
+	var before := _weapon_replay_restore_transaction_before.duplicate(true)
+	if not can_restore_weapon_replay_snapshot(before):
+		_clear_weapon_replay_restore_transaction()
+		return false
+	var restored := _install_weapon_replay_snapshot_state(before)
+	_clear_weapon_replay_restore_transaction()
+	return restored and weapon_replay_snapshot() == before
+
+
+func can_restore_weapon_replay_snapshot(value: Dictionary) -> bool:
+	if value.size() != WEAPON_REPLAY_SNAPSHOT_FIELDS.size():
+		return false
+	for field: String in WEAPON_REPLAY_SNAPSHOT_FIELDS:
+		if not value.has(field):
+			return false
+	if (
+		typeof(value["schema_version"]) != TYPE_INT
+		or int(value["schema_version"]) != WEAPON_REPLAY_SNAPSHOT_SCHEMA_VERSION
+		or not value["time_energy_state"] is Dictionary
+		or not can_restore_resource_state(
+			&"time_energy",
+			(value["time_energy_state"] as Dictionary).duplicate(true)
+		)
+		or typeof(value["stop_active"]) != TYPE_BOOL
+		or typeof(value["stop_source_sequence"]) != TYPE_INT
+		or int(value["stop_source_sequence"]) < 0
+		or typeof(value["stop_source_id"]) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or typeof(value["stop_remaining"]) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(value["stop_remaining"]))
+		or float(value["stop_remaining"]) < 0.0
+		or typeof(value["stop_extension_frames"]) != TYPE_INT
+		or int(value["stop_extension_frames"]) < 0
+		or int(value["stop_extension_frames"]) > MAX_WEAPON_STOP_EXTENSION_FRAMES
+		or not value["stop_extension_tokens"] is Dictionary
+		or typeof(value["rewind_window_remaining"]) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(value["rewind_window_remaining"]))
+		or float(value["rewind_window_remaining"]) < 0.0
+		or typeof(value["rewind_window_generation"]) != TYPE_INT
+		or int(value["rewind_window_generation"]) < 0
+		or typeof(value["rewind_window_claimed"]) != TYPE_BOOL
+	):
+		return false
+	var stop_active := bool(value["stop_active"])
+	if stop_active != (not str(value["stop_source_id"]).is_empty()):
+		return false
+	if stop_active:
+		if int(value["stop_source_sequence"]) <= 0 or float(value["stop_remaining"]) <= 0.0:
+			return false
+	elif not is_zero_approx(float(value["stop_remaining"])):
+		return false
+	var stop_tokens := value["stop_extension_tokens"] as Dictionary
+	for token_value: Variant in stop_tokens.keys():
+		if (
+			typeof(token_value) != TYPE_INT
+			or int(token_value) <= 0
+			or typeof(stop_tokens[token_value]) != TYPE_BOOL
+			or not bool(stop_tokens[token_value])
+		):
+			return false
+	if not stop_active and (int(value["stop_extension_frames"]) != 0 or not stop_tokens.is_empty()):
+		return false
+	var rewind_remaining := float(value["rewind_window_remaining"])
+	var rewind_generation := int(value["rewind_window_generation"])
+	var rewind_claimed := bool(value["rewind_window_claimed"])
+	if rewind_remaining > 0.0 and (rewind_generation <= 0 or rewind_claimed):
+		return false
+	if rewind_claimed and (rewind_generation <= 0 or not is_zero_approx(rewind_remaining)):
+		return false
+	if rewind_generation == 0 and (not is_zero_approx(rewind_remaining) or rewind_claimed):
+		return false
+	return true
+
+
+func restore_weapon_replay_snapshot(value: Dictionary) -> bool:
+	if not can_restore_weapon_replay_snapshot(value):
+		return false
+	var before := weapon_replay_snapshot()
+	if before == value:
+		return true
+	var energy_before := energy
+	var previous_stop_source_id := _time_stop_source_id
+	if not _install_weapon_replay_snapshot_state(value):
+		_install_weapon_replay_snapshot_state(before)
+		return false
+	if not _weapon_replay_restore_transaction_active:
+		_reconcile_replay_time_stop_targets(previous_stop_source_id)
+	if energy != energy_before and not _weapon_replay_restore_transaction_active:
+		energy_changed.emit(energy, max_energy)
+	return true
+
+
+func _install_weapon_replay_snapshot_state(value: Dictionary) -> bool:
+	var time_energy_state := value["time_energy_state"] as Dictionary
+	energy = float(time_energy_state["current"])
+	_resource_revision = int(time_energy_state["revision"])
+	_time_stop_active = bool(value["stop_active"])
+	_time_stop_source_sequence = int(value["stop_source_sequence"])
+	_time_stop_source_id = StringName(str(value["stop_source_id"]))
+	_time_stop_remaining = float(value["stop_remaining"])
+	_weapon_stop_extension_frames = int(value["stop_extension_frames"])
+	_weapon_stop_extension_tokens = (value["stop_extension_tokens"] as Dictionary).duplicate(true)
+	_rewind_weapon_window_remaining = float(value["rewind_window_remaining"])
+	_rewind_weapon_window_generation = int(value["rewind_window_generation"])
+	_rewind_weapon_window_claimed = bool(value["rewind_window_claimed"])
+	return weapon_replay_snapshot() == value
+
+
+func _weapon_replay_stop_projection(value: Dictionary) -> Dictionary:
+	return {
+		"active": bool(value.get("stop_active", false)),
+		"source_id": str(value.get("stop_source_id", "")),
+		"remaining": float(value.get("stop_remaining", 0.0)),
+	}
+
+
+func _clear_weapon_replay_restore_transaction() -> void:
+	_weapon_replay_restore_transaction_active = false
+	_weapon_replay_restore_transaction_token = 0
+	_weapon_replay_restore_transaction_before.clear()
+
+
+func _reconcile_replay_time_stop_targets(previous_source_id: StringName) -> void:
+	if previous_source_id != &"":
+		for target: Node in _time_stop_targets.duplicate():
+			if is_instance_valid(target) and target.has_method("clear_time_stop_source"):
+				target.clear_time_stop_source(previous_source_id)
+	_time_stop_targets.clear()
+	if not _time_stop_active or _time_stop_source_id == &"" or _time_stop_remaining <= 0.0:
+		return
+	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
+		if node.has_method("apply_time_stop_source"):
+			node.apply_time_stop_source(_time_stop_source_id, _time_stop_remaining)
+			_time_stop_targets.append(node)
+		elif node.has_method("apply_time_stop"):
+			node.apply_time_stop(_time_stop_remaining)
+
+
 func extend_stop_for_weapon(action_token: int, extension_frames: int) -> bool:
 	if (
 		not _time_stop_active
@@ -439,6 +666,44 @@ func resource_state(resource_id: StringName) -> Dictionary:
 		"revision": _resource_revision,
 		"context": {},
 	}
+
+
+func can_restore_resource_state(resource_id: StringName, state: Dictionary) -> bool:
+	const RESOURCE_STATE_FIELDS: Array[String] = [
+		"ok",
+		"code",
+		"resource_id",
+		"current",
+		"minimum",
+		"maximum",
+		"revision",
+		"context",
+	]
+	if resource_id != &"time_energy" or state.size() != RESOURCE_STATE_FIELDS.size():
+		return false
+	for field: String in RESOURCE_STATE_FIELDS:
+		if not state.has(field):
+			return false
+	for field: String in ["current", "minimum", "maximum"]:
+		var value: Variant = state[field]
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
+			return false
+	return (
+		typeof(state["ok"]) == TYPE_BOOL
+		and bool(state["ok"])
+		and typeof(state["code"]) in [TYPE_STRING, TYPE_STRING_NAME]
+		and str(state["code"]) == "OK"
+		and typeof(state["resource_id"]) in [TYPE_STRING, TYPE_STRING_NAME]
+		and str(state["resource_id"]) == "time_energy"
+		and float(state["minimum"]) == 0.0
+		and float(state["maximum"]) == max_energy
+		and float(state["current"]) >= 0.0
+		and float(state["current"]) <= max_energy
+		and typeof(state["revision"]) == TYPE_INT
+		and int(state["revision"]) > 0
+		and state["context"] is Dictionary
+		and (state["context"] as Dictionary).is_empty()
+	)
 
 
 func try_spend_resource(
@@ -494,6 +759,17 @@ func try_spend_resource(
 		"reason": str(reason),
 		"context": {},
 	}
+
+
+func restore_resource_state(resource_id: StringName, state: Dictionary) -> bool:
+	if not can_restore_resource_state(resource_id, state):
+		return false
+	var energy_before := energy
+	energy = float(state["current"])
+	_resource_revision = int(state["revision"])
+	if energy != energy_before and not _weapon_replay_restore_transaction_active:
+		energy_changed.emit(energy, max_energy)
+	return true
 
 
 func get_cooldown(skill_id: StringName) -> float:

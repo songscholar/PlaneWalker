@@ -14,7 +14,7 @@ var _suite
 
 class EventRecorder extends RefCounted:
 	var commits: Array[Dictionary] = []
-	var releases: Array[Dictionary] = []
+	var cues: Array[Dictionary] = []
 
 
 	func on_weapon_action_committed(
@@ -31,10 +31,17 @@ class EventRecorder extends RefCounted:
 		})
 
 
-	func on_player_attacked(weapon_id: StringName, context: Dictionary) -> void:
-		releases.append({
+	func on_weapon_cue_requested(
+		weapon_id: StringName,
+		action_id: StringName,
+		token: int,
+		cue: Dictionary
+	) -> void:
+		cues.append({
 			"weapon_id": weapon_id,
-			"context": context.duplicate(true),
+			"action_id": action_id,
+			"token": token,
+			"cue": cue.duplicate(true),
 		})
 
 
@@ -100,11 +107,11 @@ func _test_coordinator_owns_phases_and_event_timing() -> void:
 
 	var recorder := EventRecorder.new()
 	EventBus.weapon_action_committed.connect(recorder.on_weapon_action_committed)
-	EventBus.player_attacked.connect(recorder.on_player_attacked)
+	EventBus.weapon_cue_requested.connect(recorder.on_weapon_cue_requested)
 
 	_suite.assert_true(player.try_action(&"attack"), "default Sword primary commits through the coordinator")
 	_suite.assert_equal(recorder.commits.size(), 1, "EventBus publishes exactly one typed weapon commit at transaction commit")
-	_suite.assert_equal(recorder.releases.size(), 0, "legacy release fact is silent during windup")
+	_suite.assert_equal(recorder.cues.size(), 0, "typed release cue is silent during windup")
 	if recorder.commits.size() == 1:
 		var committed: Dictionary = recorder.commits[0]
 		_suite.assert_equal(committed.get("weapon_id"), &"sword", "typed commit identifies Sword")
@@ -122,7 +129,7 @@ func _test_coordinator_owns_phases_and_event_timing() -> void:
 
 	_advance(player, LIGHT_1_WINDUP_FRAMES - 1)
 	_suite.assert_equal(_weapon_presentation(player).get("phase"), "WINDUP", "coordinator retains windup before its final frame")
-	_suite.assert_equal(recorder.releases.size(), 0, "pre-active frame publishes no legacy release fact")
+	_suite.assert_equal(recorder.cues.size(), 0, "pre-active frame publishes no release cue")
 	_suite.assert_equal(recorder.commits.size(), 1, "phase advancement never duplicates the typed commit")
 
 	player.advance_action_frame()
@@ -133,7 +140,7 @@ func _test_coordinator_owns_phases_and_event_timing() -> void:
 		PlayerActionStateScript.State.ATTACK_ACTIVE,
 		"legacy action_state projects the coordinator active phase"
 	)
-	_suite.assert_equal(recorder.releases.size(), 1, "legacy player_attacked publishes exactly once on ACTIVE")
+	_suite.assert_equal(recorder.cues.size(), 1, "typed weapon cue publishes exactly once on ACTIVE")
 	_suite.assert_equal(recorder.commits.size(), 1, "ACTIVE entry does not republish the typed commit")
 
 	_advance(player, LIGHT_1_ACTIVE_FRAMES)
@@ -143,7 +150,7 @@ func _test_coordinator_owns_phases_and_event_timing() -> void:
 		PlayerActionStateScript.State.ATTACK_RECOVERY,
 		"legacy action_state projects the coordinator recovery phase"
 	)
-	_suite.assert_equal(recorder.releases.size(), 1, "recovery never duplicates the legacy release fact")
+	_suite.assert_equal(recorder.cues.size(), 1, "recovery never duplicates the typed release cue")
 	_suite.assert_equal(recorder.commits.size(), 1, "recovery never duplicates the typed commit fact")
 
 	_disconnect_recorder(recorder)
@@ -407,7 +414,7 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 
 	var recorder := EventRecorder.new()
 	EventBus.weapon_action_committed.connect(recorder.on_weapon_action_committed)
-	EventBus.player_attacked.connect(recorder.on_player_attacked)
+	EventBus.weapon_cue_requested.connect(recorder.on_weapon_cue_requested)
 
 	_suite.assert_true(player.try_action(&"ranged_attack"), "Bow press reserves the charge transaction")
 	var hold := _weapon_presentation(player)
@@ -416,7 +423,7 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 	_suite.assert_equal(hold.get("phase"), "HOLD", "Bow press enters coordinator-owned HOLD")
 	_suite.assert_true(hold_token > 0, "Bow HOLD owns a coordinator action token")
 	_suite.assert_equal(recorder.commits.size(), 0, "Bow press publishes no typed commit before release")
-	_suite.assert_equal(recorder.releases.size(), 0, "Bow HOLD publishes no projectile release")
+	_suite.assert_equal(recorder.cues.size(), 0, "Bow HOLD publishes no release cue")
 
 	_advance(player, 9)
 	_suite.assert_true(player.try_action(&"ranged_release"), "threshold release resolves the active HOLD")
@@ -425,10 +432,10 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 	_suite.assert_equal(int(released.get("token", 0)), hold_token, "release preserves the original action token")
 	_suite.assert_equal(int(released.get("generation", 0)), hold_generation, "release does not create a replacement generation")
 	_suite.assert_equal(recorder.commits.size(), 1, "release publishes exactly one typed commit")
-	_suite.assert_equal(recorder.releases.size(), 0, "Bow release waits for ACTIVE before projectile publication")
+	_suite.assert_equal(recorder.cues.size(), 0, "Bow release waits for ACTIVE before its release cue")
 
 	player.cancel_transient_actions()
-	var releases_before_cancelled_hold := recorder.releases.size()
+	var cues_before_cancelled_hold := recorder.cues.size()
 	_suite.assert_true(
 		not player.try_action(&"ranged_attack"),
 		"cancelling recovery cannot bypass the committed Bow cooldown"
@@ -450,9 +457,9 @@ func _test_bow_candidate_uses_shared_hold_transaction() -> void:
 		"stale release cannot resolve the cancelled Bow token"
 	)
 	_suite.assert_equal(
-		recorder.releases.size(),
-		releases_before_cancelled_hold,
-		"cancelled Bow HOLD publishes no additional projectile release"
+		recorder.cues.size(),
+		cues_before_cancelled_hold,
+		"cancelled Bow HOLD publishes no additional release cue"
 	)
 	_suite.assert_true(cancelled_token > hold_token, "fresh Bow HOLD uses a monotonic token")
 
@@ -469,7 +476,7 @@ func _test_bow_undercharge_and_time_cancel_are_atomic() -> void:
 	_suite.assert_true(player.configure_loadout(bow_config), "Bow atomic-cancel fixture configures")
 	var recorder := EventRecorder.new()
 	EventBus.weapon_action_committed.connect(recorder.on_weapon_action_committed)
-	EventBus.player_attacked.connect(recorder.on_player_attacked)
+	EventBus.weapon_cue_requested.connect(recorder.on_weapon_cue_requested)
 
 	_suite.assert_true(player.try_action(&"ranged_attack"), "undercharge fixture begins HOLD")
 	var undercharge_hold := _weapon_presentation(player)
@@ -487,7 +494,7 @@ func _test_bow_undercharge_and_time_cancel_are_atomic() -> void:
 		"undercharge rejection invalidates the prior generation"
 	)
 	_suite.assert_equal(recorder.commits.size(), 0, "undercharge publishes no typed commit")
-	_suite.assert_equal(recorder.releases.size(), 0, "undercharge publishes no projectile release")
+	_suite.assert_equal(recorder.cues.size(), 0, "undercharge publishes no release cue")
 
 	_suite.assert_true(player.try_action(&"ranged_attack"), "time-cancel fixture begins a fresh HOLD")
 	var time_hold := _weapon_presentation(player)
@@ -499,7 +506,7 @@ func _test_bow_undercharge_and_time_cancel_are_atomic() -> void:
 	_suite.assert_equal(time_cancelled.get("phase"), "READY", "Time Cast clears Bow HOLD authority")
 	_suite.assert_true(time_manager.energy < energy_before, "winning Time Cast spends energy exactly once")
 	_suite.assert_true(not player.try_action(&"ranged_release"), "stale release cannot revive a Time-cancelled HOLD")
-	_suite.assert_equal(recorder.releases.size(), 0, "Time-cancelled HOLD publishes no projectile release")
+	_suite.assert_equal(recorder.cues.size(), 0, "Time-cancelled HOLD publishes no release cue")
 	_suite.assert_true(time_token > int(undercharge_hold.get("token", 0)), "replacement HOLD uses a monotonic token")
 
 	_disconnect_recorder(recorder)
@@ -584,8 +591,8 @@ func _profile_definition(profile_id: String) -> Dictionary:
 func _disconnect_recorder(recorder: EventRecorder) -> void:
 	if EventBus.weapon_action_committed.is_connected(recorder.on_weapon_action_committed):
 		EventBus.weapon_action_committed.disconnect(recorder.on_weapon_action_committed)
-	if EventBus.player_attacked.is_connected(recorder.on_player_attacked):
-		EventBus.player_attacked.disconnect(recorder.on_player_attacked)
+	if EventBus.weapon_cue_requested.is_connected(recorder.on_weapon_cue_requested):
+		EventBus.weapon_cue_requested.disconnect(recorder.on_weapon_cue_requested)
 
 
 func _spawn_player() -> Node:

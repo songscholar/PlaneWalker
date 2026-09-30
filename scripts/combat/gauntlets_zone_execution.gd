@@ -11,6 +11,12 @@ const VALID_MODES: Array[String] = [
 	"charged_heavy_shockwave",
 	"rewind_counter_shockwave",
 ]
+const EXECUTION_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "action_token", "generation", "source_action_id", "descriptor_id",
+	"outcome_id", "outcome_index", "deterministic_seed", "mode", "parameters", "base_attack",
+	"source_id", "execution_frame", "duration_frames", "remaining_frames", "tick_interval_frames",
+	"fractional_frames", "execution_active", "damage_claim_keys",
+]
 
 var action_token: int = 0
 var generation: int = 0
@@ -125,6 +131,7 @@ func advance_execution_for_test(frames: int) -> void:
 
 func execution_snapshot() -> Dictionary:
 	return {
+		"schema_version": 1,
 		"action_token": action_token,
 		"generation": generation,
 		"source_action_id": source_action_id,
@@ -138,9 +145,100 @@ func execution_snapshot() -> Dictionary:
 		"source_id": _source_id,
 		"execution_frame": _execution_frame,
 		"duration_frames": _duration_frames,
+		"remaining_frames": maxi(0, _duration_frames - _execution_frame),
 		"tick_interval_frames": _tick_interval_frames,
+		"fractional_frames": _fractional_frames,
 		"execution_active": _execution_active,
+		"damage_claim_keys": _sorted_string_keys(_damage_claims),
 	}
+
+
+func can_restore_execution_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, EXECUTION_SNAPSHOT_FIELDS):
+		return false
+	if (
+		int(value.get("schema_version", -1)) != 1
+		or typeof(value.get("action_token")) != TYPE_INT
+		or int(value.get("action_token", 0)) <= 0
+		or typeof(value.get("generation")) != TYPE_INT
+		or int(value.get("generation", 0)) <= 0
+		or str(value.get("source_action_id", "")).is_empty()
+		or str(value.get("descriptor_id", "")).is_empty()
+		or str(value.get("outcome_id", "")).is_empty()
+		or typeof(value.get("outcome_index")) != TYPE_INT
+		or int(value.get("outcome_index", -1)) < 0
+		or typeof(value.get("deterministic_seed")) != TYPE_INT
+		or str(value.get("mode", "")) not in VALID_MODES
+		or not value.get("parameters") is Dictionary
+		or not _positive_number(value.get("base_attack"))
+		or typeof(value.get("execution_frame")) != TYPE_INT
+		or typeof(value.get("duration_frames")) != TYPE_INT
+		or typeof(value.get("remaining_frames")) != TYPE_INT
+		or typeof(value.get("tick_interval_frames")) != TYPE_INT
+		or typeof(value.get("fractional_frames")) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(value.get("fractional_frames", NAN)))
+		or float(value.get("fractional_frames", -1.0)) < 0.0
+		or float(value.get("fractional_frames", 1.0)) >= 1.0
+		or typeof(value.get("execution_active")) != TYPE_BOOL
+		or not bool(value.get("execution_active", false))
+		or not value.get("damage_claim_keys") is Array
+	):
+		return false
+	var parsed := value["parameters"] as Dictionary
+	if not _parameters_are_valid(parsed):
+		return false
+	var execution_frame := int(value["execution_frame"])
+	var duration_frames := int(parsed["duration_frames"])
+	var tick_interval_frames := int(parsed["tick_interval_frames"])
+	if (
+		int(value["duration_frames"]) != duration_frames
+		or int(value["tick_interval_frames"]) != tick_interval_frames
+		or execution_frame < 0
+		or execution_frame >= duration_frames
+		or int(value["remaining_frames"]) != duration_frames - execution_frame
+		or str(value.get("source_id", "")) != "gauntlets_zone:%d:%d:%s" % [
+			int(value["action_token"]), int(value["generation"]), str(value["descriptor_id"])
+		]
+		or not _valid_sorted_claim_keys(value["damage_claim_keys"])
+	):
+		return false
+	return _variant_numbers_are_finite(value)
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func restore_execution_snapshot(value: Dictionary, dependencies: Dictionary) -> bool:
+	if not can_restore_execution_snapshot(value):
+		return false
+	var execution := {
+		"action_token": int(value["action_token"]),
+		"generation": int(value["generation"]),
+		"source_action_id": str(value["source_action_id"]),
+		"descriptor_id": str(value["descriptor_id"]),
+		"outcome_id": str(value["outcome_id"]),
+		"outcome_index": int(value["outcome_index"]),
+		"deterministic_seed": int(value["deterministic_seed"]),
+		"mode": str(value["mode"]),
+		"parameters": (value["parameters"] as Dictionary).duplicate(true),
+		"base_attack": float(value["base_attack"]),
+		"source": dependencies.get("source"),
+		"owner_entity": dependencies.get("owner_entity"),
+	}
+	if not configure_execution(execution):
+		return false
+	_execution_frame = int(value["execution_frame"])
+	_fractional_frames = float(value["fractional_frames"])
+	_damage_claims.clear()
+	for claim_key: Variant in value["damage_claim_keys"]:
+		_damage_claims[str(claim_key)] = true
+	return execution_snapshot() == value
 
 
 func reset_execution_state() -> void:
@@ -352,3 +450,38 @@ func _positive_number(value: Variant) -> bool:
 
 func _non_negative_number(value: Variant) -> bool:
 	return typeof(value) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(value)) and float(value) >= 0.0
+
+
+func _sorted_string_keys(values: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	for key: Variant in values.keys():
+		result.append(str(key))
+	result.sort()
+	return result
+
+
+func _valid_sorted_claim_keys(value: Array) -> bool:
+	var previous := ""
+	for claim_key: Variant in value:
+		if typeof(claim_key) != TYPE_STRING or str(claim_key).is_empty():
+			return false
+		if not previous.is_empty() and str(claim_key) <= previous:
+			return false
+		previous = str(claim_key)
+	return true
+
+
+func _variant_numbers_are_finite(value: Variant) -> bool:
+	if typeof(value) in [TYPE_FLOAT, TYPE_VECTOR2]:
+		if value is Vector2:
+			return is_finite((value as Vector2).x) and is_finite((value as Vector2).y)
+		return is_finite(float(value))
+	if value is Dictionary:
+		for child: Variant in (value as Dictionary).values():
+			if not _variant_numbers_are_finite(child):
+				return false
+	if value is Array:
+		for child: Variant in value:
+			if not _variant_numbers_are_finite(child):
+				return false
+	return true

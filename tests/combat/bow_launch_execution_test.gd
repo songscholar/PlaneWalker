@@ -118,6 +118,10 @@ func _run() -> void:
 	await _test_trail_and_starfall_statuses_cleanup_without_timers()
 	await _test_time_interactions_and_boss_conversion_are_consumed_safely()
 	await _test_real_runtime_packet_executes_through_adapter()
+	await _test_prepared_runtime_snapshot_restores_exactly()
+	await _test_live_arrow_snapshot_restores_targets_without_duplicate_damage()
+	await _test_malformed_and_missing_target_restore_are_atomic()
+	await _test_starfall_snapshot_resumes_without_duplicate_wave()
 	_suite.finish(get_tree())
 
 
@@ -804,6 +808,168 @@ func _test_real_runtime_packet_executes_through_adapter() -> void:
 		primary_outcomes.append(int(arrow.outcome_index))
 	_suite.assert_equal(primary_outcomes, [0, 1, 2, 3], "real Runtime keeps full-charge Rewind outcomes unique")
 	runtime.finish_action(803)
+	await _cleanup_fixture(fixture)
+
+
+func _test_prepared_runtime_snapshot_restores_exactly() -> void:
+	var fixture := await _bow_fixture()
+	var bow: Node = fixture["bow"]
+	var definition := _launch_definition("scatter_shot", [
+		_arrow_descriptor(
+			"bow_scatter_restore",
+			0,
+			9201,
+			Vector2.RIGHT,
+			{"damage_multiplier": 0.6, "speed_cells_per_second": 18.0, "range_cells": 8.0}
+		),
+	])
+	_suite.assert_equal(bow.begin_profile_action(definition), definition, "prepared restore fixture stages the committed Bow definition")
+	var snapshot: Dictionary = bow.runtime_snapshot()
+	bow.finish_profile_action()
+	_suite.assert_true(bow.restore_runtime_snapshot(snapshot), "prepared Bow payload restores before release")
+	_suite.assert_equal(bow.runtime_snapshot(), snapshot, "prepared Bow payload round-trips exactly")
+	_suite.assert_true(_arrows_for_token(701).is_empty(), "prepared restore does not ghost-release an arrow")
+	await _cleanup_fixture(fixture)
+
+
+func _test_live_arrow_snapshot_restores_targets_without_duplicate_damage() -> void:
+	var fixture := await _bow_fixture()
+	var bow: Node = fixture["bow"]
+	var target := _recording_enemy_target(1)
+	target["enemy"].set_meta("stable_target_id", 9301)
+	add_child(target["enemy"])
+	var descriptor := _arrow_descriptor(
+		"bow_temporal_restore",
+		0,
+		9302,
+		Vector2.RIGHT,
+		{
+			"damage_multiplier": 5.0,
+			"time_damage_ratio": 1.0,
+			"speed_cells_per_second": 10.0,
+			"range_cells": 20.0,
+			"pierce_mode": "unlimited",
+			"trail": {"duration_frames": 300, "width_cells": 0.8, "tick_interval_frames": 30, "tick_damage_multiplier": 0.2, "slow_ratio": 0.3},
+			"first_hit_control": {"duration_frames": 90},
+		}
+	)
+	bow.begin_profile_action(_launch_definition("temporal_arrow", [descriptor]))
+	_suite.assert_true(bow.release_profile_action(), "live-arrow restore fixture releases Temporal Arrow")
+	var arrow: Node = _arrows_for_token(701)[0]
+	var area: RecordingHitArea = target["areas"][0]
+	arrow.global_position = Vector2(173.0, 41.0)
+	arrow.call("_on_area_entered", area)
+	arrow.call("_on_trail_area_entered", area)
+	arrow.call("_tick_trail_targets")
+	arrow.advance_execution_for_test(7)
+	var snapshot: Dictionary = bow.runtime_snapshot()
+	var original_instance_id: int = int(target["enemy"].get_instance_id())
+	_suite.assert_true(not snapshot.is_empty(), "live Bow adapter emits an authoritative runtime snapshot")
+	bow.reset_runtime_state()
+	await get_tree().process_frame
+	_suite.assert_true(target["enemy"].slow_sources.is_empty(), "reset clears the original trail slow before restore")
+	_suite.assert_true(target["enemy"].stop_sources.is_empty(), "reset clears the original time-stop source before restore")
+	target["enemy"].queue_free()
+	await get_tree().process_frame
+	var replacement := _recording_enemy_target(1)
+	replacement["enemy"].set_meta("stable_target_id", 9301)
+	add_child(replacement["enemy"])
+	_suite.assert_true(replacement["enemy"].get_instance_id() != original_instance_id, "restore fixture recreates the target with a different local instance id")
+	_suite.assert_true(bow.restore_runtime_snapshot(snapshot), "live Bow arrow restores with transient target bindings")
+	_suite.assert_equal(bow.runtime_snapshot(), snapshot, "live arrow world position, lifetime, distance and trail state round-trip exactly")
+	var restored: Node = _arrows_for_token(701)[0]
+	_suite.assert_equal(restored.global_position, Vector2(173.0, 41.0), "restored arrow preserves its authoritative world position")
+	_suite.assert_equal(replacement["enemy"].slow_sources.size(), 1, "restored trail rebinds its source-aware slow to the rebuilt target")
+	_suite.assert_equal(replacement["enemy"].stop_sources.size(), 1, "restored first-hit control rebinds to the rebuilt target")
+	var replacement_area: RecordingHitArea = replacement["areas"][0]
+	restored.call("_on_area_entered", replacement_area)
+	_suite.assert_true(replacement_area.received.is_empty(), "stable hit claims prevent duplicate damage after target instance-id drift")
+	replacement["enemy"].queue_free()
+	await _cleanup_fixture(fixture)
+
+
+func _test_malformed_and_missing_target_restore_are_atomic() -> void:
+	var fixture := await _bow_fixture()
+	var bow: Node = fixture["bow"]
+	var descriptor := _arrow_descriptor(
+		"bow_restore_validation",
+		0,
+		9401,
+		Vector2.RIGHT,
+		{"damage_multiplier": 1.0, "speed_cells_per_second": 12.0, "range_cells": 8.0, "pierce_mode": "unlimited"}
+	)
+	bow.begin_profile_action(_launch_definition("precision_draw", [descriptor]))
+	bow.release_profile_action()
+	var current: Dictionary = bow.runtime_snapshot()
+	var malformed := current.duplicate(true)
+	(malformed["arrows"][0]["execution"] as Dictionary).erase("damage_type_value")
+	_suite.assert_true(not bow.can_restore_runtime_snapshot(malformed), "missing arrow damage type is rejected during preflight")
+	_suite.assert_true(not bow.restore_runtime_snapshot(malformed), "malformed arrow payload is rejected atomically")
+	_suite.assert_equal(bow.runtime_snapshot(), current, "malformed restore leaves the current Bow runtime untouched")
+	var extra_top_level := current.duplicate(true)
+	extra_top_level["future_field"] = true
+	_suite.assert_true(not bow.can_restore_runtime_snapshot(extra_top_level), "unknown Bow snapshot fields fail closed")
+	var extra_execution := current.duplicate(true)
+	(extra_execution["arrows"][0]["execution"] as Dictionary)["future_field"] = true
+	_suite.assert_true(not bow.can_restore_runtime_snapshot(extra_execution), "unknown arrow execution fields fail closed")
+
+	var target := _recording_enemy_target(1)
+	target["enemy"].set_meta("stable_target_id", 9402)
+	add_child(target["enemy"])
+	var arrow: Node = _arrows_for_token(701)[0]
+	arrow.trail_duration_frames = 120
+	arrow.trail_tick_interval_frames = 30
+	arrow.trail_width_pixels = 64.0
+	arrow.trail_tick_damage_multiplier = 0.2
+	arrow.trail_slow_ratio = 0.3
+	arrow.call("_append_trail_point", arrow.global_position)
+	arrow.call("_on_trail_area_entered", target["areas"][0])
+	arrow.call("_tick_trail_targets")
+	var missing_target_snapshot: Dictionary = bow.runtime_snapshot()
+	bow.reset_runtime_state()
+	await get_tree().process_frame
+	target["enemy"].queue_free()
+	await get_tree().process_frame
+	var idle_before: Dictionary = bow.runtime_snapshot()
+	_suite.assert_true(not bow.restore_runtime_snapshot(missing_target_snapshot), "missing transient trail target rejects the live-arrow install")
+	_suite.assert_equal(bow.runtime_snapshot(), idle_before, "failed transient-target install rolls back to the exact prior adapter state")
+	await _cleanup_fixture(fixture)
+
+
+func _test_starfall_snapshot_resumes_without_duplicate_wave() -> void:
+	var fixture := await _bow_fixture()
+	var player: TestPlayer = fixture["player"]
+	var health := HealthComponentScript.new()
+	health.name = "HealthComponent"
+	player.add_child(health)
+	var bow: Node = fixture["bow"]
+	var target := _recording_enemy_target(1)
+	target["enemy"].set_meta("stable_target_id", 9501)
+	target["enemy"].global_position = Vector2(320.0, 0.0)
+	add_child(target["enemy"])
+	var definition := _starfall_definition()
+	bow.begin_profile_action(definition)
+	_suite.assert_true(bow.release_profile_action(), "Starfall restore fixture starts its wave schedule")
+	bow.advance_profile_action_for_test(35)
+	var snapshot: Dictionary = bow.runtime_snapshot()
+	var restored_wave_count := (snapshot["arrows"] as Array).size()
+	var frames_until_next := int((snapshot["starfall_schedule"] as Dictionary)["frames_until_next"])
+	var erosion_before := int(((snapshot["starfall_targets"] as Array)[0] as Dictionary)["erosion_stacks"])
+	bow.reset_runtime_state()
+	await get_tree().process_frame
+	_suite.assert_true(bow.restore_runtime_snapshot(snapshot), "Starfall schedule, arrows and area state restore together")
+	_suite.assert_equal(bow.runtime_snapshot(), snapshot, "Starfall authoritative state round-trips exactly")
+	_suite.assert_true(health.invulnerable, "restored Starfall reacquires its owned invulnerability source")
+	_suite.assert_equal(target["enemy"].slow_sources.size(), 1, "restored Starfall reapplies its area slow")
+	var sources: Dictionary = target["enemy"].get_meta("bow_time_erosion_sources", {})
+	_suite.assert_equal(sources.values(), [erosion_before], "restored Starfall preserves erosion stacks")
+	bow.advance_profile_action_for_test(maxi(1, frames_until_next))
+	_suite.assert_equal(_arrows_for_token(701).size(), restored_wave_count + 3, "restored Starfall releases only the next scheduled wave")
+	var outcomes: Dictionary = {}
+	for arrow: Node in _arrows_for_token(701):
+		outcomes[int(arrow.outcome_index)] = true
+	_suite.assert_equal(outcomes.size(), _arrows_for_token(701).size(), "restored Starfall never duplicates an already released outcome")
+	target["enemy"].queue_free()
 	await _cleanup_fixture(fixture)
 
 

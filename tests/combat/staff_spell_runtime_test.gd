@@ -38,6 +38,56 @@ class RuntimeResultSink extends RefCounted:
 		return response.duplicate(true)
 
 
+class ReportStateObserver extends RefCounted:
+	var weapon: Node
+	var runtime_sink: RefCounted
+	var records: Array[Dictionary] = []
+
+
+	func _init(configured_weapon: Node, configured_runtime_sink: RefCounted) -> void:
+		weapon = configured_weapon
+		runtime_sink = configured_runtime_sink
+
+
+	func handle_payload_result(token: int, generation: int, result: Dictionary) -> void:
+		records.append({
+			"token": token,
+			"generation": generation,
+			"result": result.duplicate(true),
+			"runtime_result_count": runtime_sink.results.size(),
+			"runtime_snapshot": weapon.runtime_snapshot(),
+		})
+
+
+class ZoneCompletionObserver extends RefCounted:
+	var zone: Node
+	var records: Array[Dictionary] = []
+
+
+	func _init(configured_zone: Node) -> void:
+		zone = configured_zone
+
+
+	func handle_payload_result(_token: int, _generation: int, result: Dictionary) -> void:
+		if str(result.get("type", "")) != "zone_complete":
+			return
+		var snapshot: Dictionary = zone.execution_snapshot()
+		records.append({
+			"result": result.duplicate(true),
+			"snapshot": snapshot,
+			"restorable": zone.can_restore_execution_snapshot(snapshot),
+		})
+
+
+class RecordingDamageTarget extends Node2D:
+	var received: Array[RefCounted] = []
+
+
+	func receive_hit(damage_info: RefCounted) -> float:
+		received.append(damage_info)
+		return float(damage_info.amount)
+
+
 class RewardOwner extends Node2D:
 	var reward_claims: Dictionary = {}
 
@@ -83,6 +133,7 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_test_basic_projectile_confirms_once()
 	_test_adapter_normalizes_runtime_result()
+	_test_reported_result_observes_complete_authoritative_state()
 	_test_real_derived_damage_returns_mana_from_resolved_amounts()
 	_test_adapter_requires_runtime_combo_confirmation()
 	_test_real_adapter_near_expiry_late_hit_refunds_without_zone()
@@ -104,11 +155,17 @@ func _run() -> void:
 	_test_ultimate_invulnerability_and_per_tick_time_energy()
 	_test_construction_failure_reports_once_and_is_atomic()
 	_test_terminal_results_are_exactly_once()
+	_test_zone_completion_snapshot_is_terminal_before_emit()
+	_test_staff_damage_info_freezes_action_identity()
 	_test_seeded_ultimate_has_twenty_repeatable_ticks()
 	_test_adapter_reset_clears_persistent_projectile_statuses()
 	_test_cancel_scans_only_matching_staff_status_source()
 	_test_runtime_bookkeeping_remains_bounded_across_long_session()
 	_test_reset_rejects_stale_payload_callbacks()
+	_test_payload_execution_snapshot_restore_preserves_progress_and_claims()
+	_test_runtime_snapshot_restore_is_atomic_with_real_adapter()
+	_test_released_derived_payload_snapshot_restores()
+	_test_transient_status_restore_fails_when_target_is_missing()
 	await get_tree().create_timer(0.25).timeout
 	_suite.finish(get_tree())
 
@@ -181,6 +238,68 @@ func _test_adapter_normalizes_runtime_result() -> void:
 		_suite.assert_true(bool(normalized.get("terminal", false)), "projectile hit is terminal for its outcome")
 		_suite.assert_true(not bool(normalized.get("hit", true)), "zero resolved primary damage preserves the actual miss flag")
 		_suite.assert_close(float(normalized.get("damage", -1.0)), 0.0, "terminal runtime result never substitutes configured projectile damage")
+	_free_fixture(fixture)
+
+
+func _test_reported_result_observes_complete_authoritative_state() -> void:
+	var fixture := _weapon_fixture()
+	var weapon: Node = fixture["weapon"]
+	var runtime_sink: RuntimeResultSink = fixture["runtime_sink"]
+	runtime_sink.response = {
+		"ok": true,
+		"combo": {
+			"combo_id": "steam_burst",
+			"kind": "explosion",
+			"parameters": {
+				"radius_tiles": 3.5,
+				"damage_multiplier": 2.0,
+				"damage_split": {"fire": 0.5, "ice": 0.5},
+				"blind_duration_frames": 90,
+				"blind_miss_chance": 0.25,
+			},
+		},
+	}
+	var observer := ReportStateObserver.new(weapon, runtime_sink)
+	weapon.payload_result_reported.connect(observer.handle_payload_result)
+	var ice := {
+		"element_id": "ice",
+		"damage_multiplier": 2.5,
+		"zone_radius_tiles": 3.0,
+		"zone_duration_frames": 300,
+		"zone_tick_interval_frames": 30,
+		"zone_damage_multiplier": 0.08,
+		"move_speed_multiplier": 0.5,
+		"attack_speed_multiplier": 0.7,
+		"freeze_duration_frames": 60,
+	}
+	var definition := _definition(
+		"charged_element",
+		[_projectile_descriptor("staff_observable_ice", ice, "typed_element")]
+	)
+	_suite.assert_true(not weapon.begin_profile_action(definition).is_empty(), "observable Staff result fixture constructs")
+	_suite.assert_true(weapon.release_profile_action(), "observable Staff result fixture releases")
+	var projectile := _first_payload(weapon, "StaffProjectile")
+	if projectile != null:
+		projectile.hit_for_test(152, [])
+	_suite.assert_equal(observer.records.size(), 1, "terminal Staff hit reports one observable result")
+	if observer.records.size() == 1:
+		var record: Dictionary = observer.records[0]
+		var snapshot: Dictionary = record.get("runtime_snapshot", {})
+		_suite.assert_equal(record.get("runtime_result_count"), 1, "runtime reducer completes before the public result signal")
+		_suite.assert_true(
+			(snapshot.get("callback_claims", {}) as Dictionary).has("77:4:hit:0:152"),
+			"callback claim is committed before the public result signal"
+		)
+		var modes: Array[String] = []
+		var kinds: Array[String] = []
+		for payload_value: Variant in snapshot.get("owned_payloads", []):
+			var payload_snapshot := payload_value as Dictionary
+			kinds.append(str(payload_snapshot.get("kind", "")))
+			var execution := payload_snapshot.get("execution", {}) as Dictionary
+			modes.append(str(execution.get("mode", "")))
+		modes.sort()
+		_suite.assert_equal(kinds, ["zone", "zone"], "terminal projectile cleanup precedes the public result signal")
+		_suite.assert_equal(modes, ["combination", "ice_zone"], "result and confirmed combination zones exist before the public result signal")
 	_free_fixture(fixture)
 
 
@@ -1090,6 +1209,19 @@ func _test_ultimate_invulnerability_and_per_tick_time_energy() -> void:
 		zone.advance_execution_for_test(12)
 	_suite.assert_close(time_manager.energy, 4.0, "two ultimate ticks restore exactly four Time Energy")
 	_suite.assert_equal(owner.reward_claims.size(), 2, "ultimate ticks use distinct exactly-once reward claims")
+	var reward_snapshot: Dictionary = weapon.runtime_snapshot()
+	if zone != null:
+		zone.advance_execution_for_test(6)
+	_suite.assert_close(time_manager.energy, 6.0, "third ultimate tick restores one additional reward")
+	_suite.assert_true(weapon.restore_runtime_snapshot(reward_snapshot), "ultimate adapter restores the two-tick payload state")
+	var restored_zone := _zone_by_mode(weapon, "seeded_sequence")
+	if restored_zone != null:
+		restored_zone.advance_execution_for_test(6)
+	_suite.assert_close(time_manager.energy, 6.0, "restoring before an already claimed reward cannot grant it twice")
+	_suite.assert_equal(owner.reward_claims.size(), 3, "owner reward claims remain the final exactly-once authority")
+	if restored_zone != null:
+		restored_zone.advance_execution_for_test(6)
+	_suite.assert_close(time_manager.energy, 8.0, "restored ultimate continues with the next unclaimed reward")
 	weapon.finish_profile_action()
 	_suite.assert_true(not health.invulnerable, "finishing Primordial Wrath releases cast invulnerability")
 	weapon.reset_runtime_state()
@@ -1137,6 +1269,67 @@ func _test_terminal_results_are_exactly_once() -> void:
 	zone.advance_execution_for_test(60)
 	_suite.assert_equal(_results_of_type(zone_sink, "zone_complete").size(), 1, "zone_complete emits exactly once")
 	zone.free()
+
+
+func _test_zone_completion_snapshot_is_terminal_before_emit() -> void:
+	var zone: Node = StaffSpellZoneScene.instantiate()
+	add_child(zone)
+	var observer := ZoneCompletionObserver.new(zone)
+	zone.payload_result.connect(observer.handle_payload_result)
+	_suite.assert_true(zone.configure_execution(_zone_execution(303, "ice_zone", {
+		"duration_frames": 1,
+		"tick_interval_frames": 1,
+		"radius_tiles": 2.0,
+		"damage_multiplier": 0.1,
+	})), "terminal snapshot zone configures")
+	zone.advance_execution_for_test(1)
+	_suite.assert_equal(observer.records.size(), 1, "zone completion exposes one terminal snapshot")
+	if observer.records.size() == 1:
+		var record: Dictionary = observer.records[0]
+		var snapshot: Dictionary = record.get("snapshot", {})
+		_suite.assert_true(not bool(snapshot.get("execution_active", true)), "zone is inactive before completion is observed")
+		_suite.assert_true(bool(snapshot.get("completion_emitted", false)), "zone completion claim is committed before it is observed")
+		_suite.assert_true(bool(record.get("restorable", false)), "completion observer never captures an unrecoverable active/completed state")
+		_suite.assert_true(bool((record.get("result", {}) as Dictionary).get("terminal", false)), "zone completion is marked terminal for adapter cleanup")
+	if is_instance_valid(zone):
+		zone.free()
+
+
+func _test_staff_damage_info_freezes_action_identity() -> void:
+	var projectile: Node = StaffProjectileScene.instantiate()
+	_suite.assert_true(
+		projectile.configure_execution(_projectile_execution(304, "arcane", {})),
+		"identity projectile configures"
+	)
+	add_child(projectile)
+	var projectile_target := RecordingDamageTarget.new()
+	projectile_target.set_meta("stable_target_id", 30401)
+	add_child(projectile_target)
+	projectile.call("_execute_target_hit", projectile_target)
+	_suite.assert_equal(projectile_target.received.size(), 1, "projectile delivers one typed DamageInfo")
+	if projectile_target.received.size() == 1:
+		_suite.assert_equal(projectile_target.received[0].action_token, 88, "projectile DamageInfo freezes action token")
+		_suite.assert_equal(projectile_target.received[0].source_generation, 5, "projectile DamageInfo freezes source generation")
+
+	var zone: Node = StaffSpellZoneScene.instantiate()
+	_suite.assert_true(zone.configure_execution(_zone_execution(305, "ice_zone", {
+		"duration_frames": 30,
+		"tick_interval_frames": 30,
+		"radius_tiles": 2.0,
+		"damage_multiplier": 0.1,
+	})), "identity zone configures")
+	add_child(zone)
+	var zone_target := RecordingDamageTarget.new()
+	zone_target.set_meta("stable_target_id", 30501)
+	add_child(zone_target)
+	zone.call("_damage_target", zone_target, 3.0, "ice")
+	_suite.assert_equal(zone_target.received.size(), 1, "zone delivers one typed DamageInfo")
+	if zone_target.received.size() == 1:
+		_suite.assert_equal(zone_target.received[0].action_token, 99, "zone DamageInfo freezes action token")
+		_suite.assert_equal(zone_target.received[0].source_generation, 6, "zone DamageInfo freezes source generation")
+	for node: Node in [projectile, projectile_target, zone, zone_target]:
+		if is_instance_valid(node):
+			node.free()
 
 
 func _test_seeded_ultimate_has_twenty_repeatable_ticks() -> void:
@@ -1268,6 +1461,310 @@ func _test_reset_rejects_stale_payload_callbacks() -> void:
 		projectile.complete_without_hit_for_test()
 	_suite.assert_equal(sink.results.size(), before, "reset-owned stale payload cannot report into the next runtime generation")
 	_suite.assert_equal(weapon.owned_payload_count_for_test(), 0, "reset clears all owned Staff payloads")
+	_free_fixture(fixture)
+
+
+func _test_payload_execution_snapshot_restore_preserves_progress_and_claims() -> void:
+	var projectile_sink := ResultSink.new()
+	var projectile: Node = StaffProjectileScene.instantiate()
+	add_child(projectile)
+	projectile.payload_result.connect(projectile_sink.handle_payload_result)
+	_suite.assert_true(projectile.configure_execution(_projectile_execution(17001, "arcane", {})), "projectile snapshot fixture configures")
+	projectile.global_position = Vector2(96.0, 48.0)
+	projectile.call("_physics_process", 0.25)
+	var projectile_snapshot: Dictionary = projectile.execution_snapshot()
+	var forged_projectile_snapshot := projectile_snapshot.duplicate(true)
+	forged_projectile_snapshot["unexpected_authority"] = true
+	_suite.assert_true(
+		not projectile.can_restore_execution_snapshot(forged_projectile_snapshot),
+		"projectile snapshot rejects unknown authoritative fields"
+	)
+	_suite.assert_true(
+		not projectile.restore_execution_snapshot(forged_projectile_snapshot),
+		"projectile restore rejects an unknown authoritative field"
+	)
+	_suite.assert_equal(
+		projectile.execution_snapshot(),
+		projectile_snapshot,
+		"projectile unknown-field rejection is atomic"
+	)
+	var restored_projectile: Node = StaffProjectileScene.instantiate()
+	add_child(restored_projectile)
+	_suite.assert_true(restored_projectile.restore_execution_snapshot(projectile_snapshot), "projectile restores authoritative execution state")
+	_suite.assert_equal(restored_projectile.execution_snapshot(), projectile_snapshot, "projectile restore preserves direction, distance and claims exactly")
+	var terminal_sink := ResultSink.new()
+	restored_projectile.payload_result.connect(terminal_sink.handle_payload_result)
+	restored_projectile.hit_for_test(17003, [])
+	var terminal_snapshot: Dictionary = restored_projectile.execution_snapshot()
+	var terminal_restore: Node = StaffProjectileScene.instantiate()
+	add_child(terminal_restore)
+	terminal_restore.payload_result.connect(terminal_sink.handle_payload_result)
+	_suite.assert_true(terminal_restore.restore_execution_snapshot(terminal_snapshot), "terminal projectile restores its hit claim")
+	var terminal_count := terminal_sink.results.size()
+	terminal_restore.hit_for_test(17003, [])
+	_suite.assert_equal(terminal_sink.results.size(), terminal_count, "restored terminal projectile cannot repeat its claimed hit")
+	projectile.reset_execution_state()
+	projectile.free()
+	if is_instance_valid(restored_projectile):
+		restored_projectile.reset_execution_state()
+		restored_projectile.free()
+	terminal_restore.reset_execution_state()
+	terminal_restore.free()
+
+	var zone_sink := ResultSink.new()
+	var zone: Node = StaffSpellZoneScene.instantiate()
+	add_child(zone)
+	zone.payload_result.connect(zone_sink.handle_payload_result)
+	_suite.assert_true(zone.configure_execution(_zone_execution(17002, "seeded_sequence", {
+		"damage_multiplier": 0.9,
+		"count": 20,
+		"tick_interval_frames": 6,
+		"radius_tiles": 5.0,
+		"time_energy_return_per_tick": 2.0,
+		"elements": ["fire", "ice", "lightning"],
+	})), "zone snapshot fixture configures")
+	zone.call("_physics_process", 0.1)
+	zone.advance_execution_for_test(6)
+	var zone_snapshot: Dictionary = zone.execution_snapshot()
+	var forged_zone_snapshot := zone_snapshot.duplicate(true)
+	forged_zone_snapshot["unexpected_authority"] = true
+	_suite.assert_true(
+		not zone.can_restore_execution_snapshot(forged_zone_snapshot),
+		"zone snapshot rejects unknown authoritative fields"
+	)
+	_suite.assert_true(
+		not zone.restore_execution_snapshot(forged_zone_snapshot),
+		"zone restore rejects an unknown authoritative field"
+	)
+	_suite.assert_equal(
+		zone.execution_snapshot(),
+		zone_snapshot,
+		"zone unknown-field rejection is atomic"
+	)
+	var restored_zone: Node = StaffSpellZoneScene.instantiate()
+	add_child(restored_zone)
+	restored_zone.payload_result.connect(zone_sink.handle_payload_result)
+	_suite.assert_true(restored_zone.restore_execution_snapshot(zone_snapshot), "zone restores authoritative execution state")
+	_suite.assert_equal(restored_zone.execution_snapshot(), zone_snapshot, "zone restore preserves frames, fractional progress and claims exactly")
+	var result_count_before := zone_sink.results.size()
+	restored_zone.advance_execution_for_test(6)
+	_suite.assert_equal(zone_sink.results.size(), result_count_before + 1, "restored zone emits only its next deterministic tick")
+	zone.reset_execution_state()
+	zone.free()
+	restored_zone.reset_execution_state()
+	restored_zone.free()
+
+
+func _test_runtime_snapshot_restore_is_atomic_with_real_adapter() -> void:
+	var fixture := _runtime_weapon_fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var weapon: Node = fixture["weapon"]
+	var plan: Dictionary = runtime.plan_intent(
+		{"id": "weapon_primary", "edge": "released", "held_frames": 30},
+		_staff_runtime_context(17101)
+	).get("plan", {})
+	_suite.assert_true(bool(runtime.commit_action(plan, 17110).get("ok", false)), "real Staff restore fixture commits")
+	var windup_snapshot: Dictionary = runtime.snapshot()
+	_suite.assert_equal(weapon.prepared_payload_count_for_test(), 1, "WINDUP owns one prepared payload")
+	_suite.assert_equal(runtime.on_phase_enter(plan, &"ACTIVE", 17110).size(), 2, "real Staff restore fixture releases")
+	var projectile := _latest_projectile(weapon)
+	if projectile != null:
+		projectile.call("_physics_process", 0.2)
+	var active_snapshot: Dictionary = runtime.snapshot()
+	var active_adapter: Dictionary = active_snapshot.get("adapter_snapshot", {})
+	_suite.assert_equal((active_adapter.get("owned_payloads", []) as Array).size(), 1, "ACTIVE snapshot contains the live projectile")
+	var forged_runtime_top_level := active_snapshot.duplicate(true)
+	forged_runtime_top_level["unexpected_authority"] = true
+	_suite.assert_true(
+		not runtime.restore_snapshot(forged_runtime_top_level),
+		"Staff Runtime rejects an unknown top-level snapshot field"
+	)
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "Staff Runtime top-level rejection is atomic")
+	var forged_adapter_top_level := active_adapter.duplicate(true)
+	forged_adapter_top_level["unexpected_authority"] = true
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_adapter_top_level),
+		"Staff Adapter rejects an unknown top-level snapshot field"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_adapter_top_level),
+		"Staff Adapter restore rejects an unknown top-level snapshot field"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), active_adapter, "Staff Adapter top-level rejection is atomic")
+	var forged_adapter_wrapper := active_adapter.duplicate(true)
+	forged_adapter_wrapper["owned_payloads"][0]["unexpected_authority"] = true
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_adapter_wrapper),
+		"Staff Adapter rejects an unknown payload-wrapper field"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_adapter_wrapper),
+		"Staff Adapter restore rejects an unknown payload-wrapper field"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), active_adapter, "Staff Adapter wrapper rejection is atomic")
+	var forged_windup: Dictionary = windup_snapshot.duplicate(true)
+	forged_windup["adapter_snapshot"]["prepared_payloads"][0]["execution"]["damage"] = 9999.0
+	_suite.assert_true(not runtime.restore_snapshot(forged_windup), "prepared payload must match its committed descriptor exactly")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "forged prepared payload rejection is atomic")
+	var forged_windup_position: Dictionary = windup_snapshot.duplicate(true)
+	forged_windup_position["adapter_snapshot"]["prepared_payloads"][0]["global_position"] += Vector2(512.0, -256.0)
+	_suite.assert_true(
+		not runtime.restore_snapshot(forged_windup_position),
+		"prepared payload position must match the authoritative committed payload position"
+	)
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "forged prepared position rejection is atomic")
+	var forged_owned_identity := active_adapter.duplicate(true)
+	forged_owned_identity["owned_payloads"][0]["execution"]["descriptor_id"] = "forged_staff_payload"
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_owned_identity),
+		"released payload identity must belong to a committed descriptor"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_owned_identity),
+		"released payload restore rejects an uncommitted descriptor identity"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), active_adapter, "forged released identity rejection is atomic")
+	var forged_owned_execution := active_adapter.duplicate(true)
+	forged_owned_execution["owned_payloads"][0]["execution"]["damage"] = 9999.0
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_owned_execution),
+		"released payload execution must remain bound to its committed descriptor"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_owned_execution),
+		"released payload restore rejects forged committed execution parameters"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), active_adapter, "forged released execution rejection is atomic")
+	var forged_owned_count := active_adapter.duplicate(true)
+	var injected_payload := (forged_owned_count["owned_payloads"][0] as Dictionary).duplicate(true)
+	injected_payload["execution"]["descriptor_id"] = "injected_staff_payload"
+	forged_owned_count["owned_payloads"].append(injected_payload)
+	_suite.assert_true(
+		not weapon.can_restore_runtime_snapshot(forged_owned_count),
+		"released payload count is bounded by committed descriptor lineages"
+	)
+	_suite.assert_true(
+		not weapon.restore_runtime_snapshot(forged_owned_count),
+		"released payload restore rejects an injected additional payload"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), active_adapter, "forged released count rejection is atomic")
+	_suite.assert_true(runtime.restore_snapshot(windup_snapshot), "ACTIVE restores the exact prepared WINDUP state")
+	_suite.assert_equal(runtime.snapshot(), windup_snapshot, "WINDUP restore is deterministic")
+	_suite.assert_equal(weapon.prepared_payload_count_for_test(), 1, "restored WINDUP recreates its prepared payload")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "WINDUP restores the exact ACTIVE payload state")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "ACTIVE restore is deterministic")
+	_suite.assert_equal(weapon.owned_payload_count_for_test(), 1, "restored ACTIVE recreates its live projectile")
+
+	runtime.on_phase_enter(plan, &"RECOVERY", 17110)
+	var recovery_snapshot: Dictionary = runtime.snapshot()
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "RECOVERY restores the exact ACTIVE payload state")
+	_suite.assert_true(runtime.restore_snapshot(recovery_snapshot), "ACTIVE restores the exact RECOVERY payload state")
+	_suite.assert_equal(runtime.snapshot(), recovery_snapshot, "RECOVERY restore preserves the live projectile")
+
+	var before_malformed: Dictionary = runtime.snapshot()
+	var malformed := before_malformed.duplicate(true)
+	malformed["adapter_snapshot"]["owned_payloads"][0]["execution"]["distance_travelled"] = -1.0
+	_suite.assert_true(not runtime.restore_snapshot(malformed), "malformed adapter payload snapshot fails closed")
+	_suite.assert_equal(runtime.snapshot(), before_malformed, "malformed restore leaves runtime and live payload unchanged")
+	var install_failure: Dictionary = weapon.runtime_snapshot()
+	install_failure["profile_action"]["invulnerable_during_cast"] = true
+	_suite.assert_true(weapon.can_restore_runtime_snapshot(install_failure), "application-failure fixture passes structural prevalidation")
+	_suite.assert_true(not weapon.restore_runtime_snapshot(install_failure), "failed restored invulnerability acquisition rolls back")
+	_suite.assert_equal(weapon.runtime_snapshot(), before_malformed["adapter_snapshot"], "application failure restores the exact prior adapter state")
+
+	var enemy := _real_enemy(Vector2(256.0, 0.0), 1000.0, 17120)
+	var restored_projectile := _latest_projectile(weapon)
+	if restored_projectile != null:
+		restored_projectile.call("_on_area_entered", enemy.get_node("Hurtbox"))
+	_suite.assert_true(float(enemy.health.current_hp) < 1000.0, "restored projectile callback still executes real damage")
+	var ledger: Dictionary = (runtime.snapshot().get("cast_ledgers", {}) as Dictionary).get("17110", {})
+	_suite.assert_true(bool(ledger.get("confirmed_hit", false)), "restored projectile callback still reaches the runtime ledger")
+	runtime.finish_action(17110)
+	_free_real_enemies([enemy])
+	_free_runtime_weapon_fixture(fixture)
+
+
+func _test_transient_status_restore_fails_when_target_is_missing() -> void:
+	var fixture := _weapon_fixture()
+	var weapon: Node = fixture["weapon"]
+	var enemy := _real_enemy(Vector2.ZERO, 1000.0, 17201)
+	var execution := _zone_execution(17202, "ice_zone", {
+		"duration_frames": 300,
+		"tick_interval_frames": 30,
+		"radius_tiles": 3.0,
+		"damage_multiplier": 0.08,
+		"move_speed_multiplier": 0.5,
+		"attack_speed_multiplier": 0.7,
+		"freeze_duration_frames": 60,
+	})
+	weapon.call("_attach_dynamic_zone", execution, Vector2.ZERO)
+	var zone := _zone_by_mode(weapon, "ice_zone")
+	_suite.assert_true(zone != null, "transient restore fixture owns an ice zone")
+	if zone != null:
+		zone.advance_execution_for_test(1)
+	var target_snapshot: Dictionary = weapon.runtime_snapshot()
+	var owned_snapshots := target_snapshot.get("owned_payloads", []) as Array
+	var zone_execution := (owned_snapshots[0] as Dictionary).get("execution", {}) as Dictionary
+	var transient_ids := zone_execution.get("transient_status_target_ids", {}) as Dictionary
+	_suite.assert_equal(
+		transient_ids.get("slow", []),
+		[17201],
+		"ice zone snapshot freezes the transient slow target identity"
+	)
+	_free_real_enemies([enemy])
+	weapon.reset_runtime_state()
+	var before: Dictionary = weapon.runtime_snapshot()
+	_suite.assert_true(not weapon.restore_runtime_snapshot(target_snapshot), "missing transient target rejects payload restore")
+	_suite.assert_equal(weapon.runtime_snapshot(), before, "missing transient target failure rolls back atomically")
+	_free_fixture(fixture)
+
+
+func _test_released_derived_payload_snapshot_restores() -> void:
+	var fixture := _weapon_fixture()
+	var weapon: Node = fixture["weapon"]
+	var ice_parameters := {
+		"element_id": "ice",
+		"damage_multiplier": 2.5,
+		"speed_tiles_per_second": 14.0,
+		"maximum_range_tiles": 8.0,
+		"hit_width_tiles": 0.6,
+		"zone_radius_tiles": 3.0,
+		"zone_duration_frames": 300,
+		"zone_tick_interval_frames": 30,
+		"zone_damage_multiplier": 0.08,
+		"move_speed_multiplier": 0.5,
+		"attack_speed_multiplier": 0.7,
+		"freeze_duration_frames": 60,
+	}
+	var definition := _definition(
+		"charged_element",
+		[_projectile_descriptor("staff_ice_restore", ice_parameters, "typed_element")]
+	)
+	_suite.assert_true(not weapon.begin_profile_action(definition).is_empty(), "derived Staff restore fixture constructs")
+	_suite.assert_true(weapon.release_profile_action(), "derived Staff restore fixture releases")
+	var projectile := _first_payload(weapon, "StaffProjectile")
+	_suite.assert_true(projectile != null, "derived Staff restore fixture owns its committed projectile")
+	if projectile != null:
+		projectile.hit_for_test(17301, [])
+	var derived_snapshot: Dictionary = weapon.runtime_snapshot()
+	var owned_payloads := derived_snapshot.get("owned_payloads", []) as Array
+	_suite.assert_equal(owned_payloads.size(), 1, "terminal ice projectile is replaced by one derived zone")
+	if owned_payloads.size() == 1:
+		_suite.assert_equal(
+			((owned_payloads[0] as Dictionary).get("execution", {}) as Dictionary).get("descriptor_id"),
+			"staff_ice_restore:ice_zone",
+			"derived zone retains its deterministic committed lineage identity"
+		)
+	_suite.assert_true(
+		weapon.can_restore_runtime_snapshot(derived_snapshot),
+		"released derived payload passes committed-lineage prevalidation"
+	)
+	weapon.reset_runtime_state()
+	_suite.assert_true(
+		weapon.restore_runtime_snapshot(derived_snapshot),
+		"released derived payload restores through its committed descriptor lineage"
+	)
+	_suite.assert_equal(weapon.runtime_snapshot(), derived_snapshot, "derived payload restore is deterministic")
 	_free_fixture(fixture)
 
 

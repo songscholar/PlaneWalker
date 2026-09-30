@@ -88,6 +88,7 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_test_configuration_contract_covers_launch_projectiles()
+	await _test_execution_snapshot_restores_live_flight_and_claims_atomically()
 	await _test_shotgun_deduplicates_per_pellet_and_rewards_per_action()
 	await _test_time_load_damage_is_an_additive_time_split()
 	await _test_stop_aimed_fire_applies_one_time_burst_and_extension_per_action()
@@ -126,6 +127,79 @@ func _test_configuration_contract_covers_launch_projectiles() -> void:
 	invalid_execution["time_interactions"] = [{"interaction_id": "gun_rift_trail"}]
 	_suite.assert_true(not invalid.configure_execution(invalid_execution), "malformed Rift trail timing fails closed")
 	invalid.free()
+
+
+func _test_execution_snapshot_restores_live_flight_and_claims_atomically() -> void:
+	var projectile = GunProjectileScene.instantiate()
+	var shared_claims: Dictionary = {}
+	var execution := _execution("void_penetration", 99)
+	execution["damage"] = 90.0
+	execution["damage_type"] = DamageInfoScript.DamageType.VOID
+	execution["pierce_mode"] = "unlimited"
+	execution["resource_reward"] = {"reward_id": "gun_restore_reward", "amount": 1.0}
+	execution["action_claims"] = shared_claims
+	execution["trail"] = {
+		"duration_frames": 90,
+		"width_pixels": 64.0,
+		"tick_interval_frames": 30,
+		"tick_damage_multiplier": 0.2,
+		"damage_type": "void",
+	}
+	_suite.assert_true(projectile.configure_execution(execution), "restorable Gun projectile configures")
+	projectile.direction = Vector2(0.8, 0.6)
+	add_child(projectile)
+	await get_tree().process_frame
+	projectile.global_position = Vector2(144.0, 72.0)
+	projectile.call("_append_trail_point", Vector2(80.0, 48.0))
+	var first := _enemy_target(1)
+	first["enemy"].set_meta("stable_target_id", 9911)
+	add_child(first["enemy"])
+	projectile.call("_on_area_entered", first["areas"][0])
+	projectile.advance_execution_for_test(7)
+	projectile.call("_refresh_trail_targets")
+	var authoritative: Dictionary = projectile.execution_snapshot()
+	_suite.assert_equal(authoritative.get("trail_target_ids"), [9911], "Gun trail snapshot preserves stable target membership")
+
+	var restored = GunProjectileScene.instantiate()
+	_suite.assert_true(restored.restore_execution_snapshot(authoritative), "live Gun projectile execution restores off-tree")
+	_suite.assert_equal(restored.execution_snapshot(), authoritative, "restored projectile preserves direction, progress, trail, hit, and action claims")
+	add_child(restored)
+	_suite.assert_equal(restored.execution_snapshot(), authoritative, "tree attachment preserves restored remaining lifetime and execution progress")
+	_suite.assert_true(restored.is_physics_processing(), "restored live projectile resumes authoritative flight processing")
+	var first_instance_id: int = int(first["enemy"].get_instance_id())
+	first["enemy"].queue_free()
+	await get_tree().process_frame
+	var rebuilt := _enemy_target(1)
+	rebuilt["enemy"].set_meta("stable_target_id", 9911)
+	add_child(rebuilt["enemy"])
+	_suite.assert_true(int(rebuilt["enemy"].get_instance_id()) != first_instance_id, "restored hit fixture rebuilds the target with a different instance id")
+	restored.call("_on_area_entered", rebuilt["areas"][0])
+	_suite.assert_true((rebuilt["areas"][0] as RecordingHitArea).received.is_empty(), "stable restored hit claim prevents duplicate damage after instance-id drift")
+	var before_trail_tick := (rebuilt["areas"][0] as RecordingHitArea).received.size()
+	restored.advance_execution_for_test(23)
+	_suite.assert_true((rebuilt["areas"][0] as RecordingHitArea).received.size() > before_trail_tick, "restored Gun trail rebinds to the rebuilt target on its next tick")
+	var reward_events := [0]
+	restored.resource_reward_requested.connect(func(_token: int, _reward_id: StringName, _amount: float) -> void: reward_events[0] += 1)
+	var second := _enemy_target(1)
+	add_child(second["enemy"])
+	restored.call("_on_area_entered", second["areas"][0])
+	_suite.assert_equal(second["areas"][0].received.size(), 1, "restored projectile remains live for a new target")
+	_suite.assert_equal(reward_events[0], 0, "restored resource claim cannot pay the same action twice")
+
+	var stable: Dictionary = restored.execution_snapshot()
+	var malformed := stable.duplicate(true)
+	malformed["lifetime_remaining"] = -1.0
+	_suite.assert_true(not restored.restore_execution_snapshot(malformed), "malformed remaining lifetime fails closed")
+	_suite.assert_equal(restored.execution_snapshot(), stable, "malformed projectile restore is atomic")
+	var extra_field := stable.duplicate(true)
+	extra_field["future_field"] = true
+	_suite.assert_true(not restored.can_restore_execution_snapshot(extra_field), "unknown projectile execution fields fail closed")
+	_suite.assert_equal(restored.execution_snapshot(), stable, "unknown-field preflight leaves the projectile untouched")
+	projectile.queue_free()
+	restored.queue_free()
+	rebuilt["enemy"].queue_free()
+	second["enemy"].queue_free()
+	await get_tree().process_frame
 
 
 func _test_shotgun_deduplicates_per_pellet_and_rewards_per_action() -> void:

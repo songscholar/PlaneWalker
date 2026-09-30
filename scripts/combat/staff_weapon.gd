@@ -11,6 +11,7 @@ signal resource_reward_requested(
 
 const StaffProjectileScene := preload("res://scenes/combat/staff_projectile.tscn")
 const StaffSpellZoneScene := preload("res://scenes/combat/staff_spell_zone.tscn")
+const WEAPON_ID := &"staff"
 
 const PIXELS_PER_TILE := 64.0
 const PROFILE_ID := "staff_launch_v1"
@@ -23,8 +24,17 @@ const VALID_ACTION_IDS: Array[String] = [
 ]
 const PROJECTILE_KINDS: Array[String] = ["projectile", "typed_element"]
 const ZONE_KINDS: Array[String] = ["zone", "seeded_sequence"]
+const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 1
 const CALLBACK_CLAIM_LIMIT := 512
 const RESOURCE_REWARD_CLAIM_LIMIT := 128
+const RUNTIME_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "profile_action", "profile_action_released", "phase_state",
+	"prepared_payloads", "owned_payloads", "callback_claims", "callback_claim_order",
+	"resource_reward_claims", "resource_reward_claim_order",
+]
+const PAYLOAD_SNAPSHOT_FIELDS: Array[String] = [
+	"kind", "global_position", "token", "generation", "execution",
+]
 
 @export var owner_path: NodePath
 @export var base_attack: float = 9.0
@@ -43,6 +53,10 @@ var _resource_reward_claim_order: Array[String] = []
 var _payload_prune_scheduled: bool = false
 var _invulnerability_health: Node
 var _invulnerability_source_id: StringName = &""
+
+
+func weapon_id() -> StringName:
+	return WEAPON_ID
 
 
 func configure_result_sink(sink: Object) -> bool:
@@ -175,6 +189,609 @@ func runtime_bookkeeping_snapshot_for_test() -> Dictionary:
 		"callback_claim_count": _callback_claims.size(),
 		"resource_reward_claim_count": _resource_reward_claims.size(),
 	}
+
+
+func runtime_snapshot() -> Dictionary:
+	_prune_owned_payloads()
+	var prepared_payloads: Array[Dictionary] = []
+	for prepared: Dictionary in _prepared_payloads:
+		var snapshot := _prepared_payload_snapshot(prepared)
+		if snapshot.is_empty():
+			return {}
+		prepared_payloads.append(snapshot)
+	var owned_payloads: Array[Dictionary] = []
+	for payload: Node in _owned_payloads:
+		var snapshot := _owned_payload_snapshot(payload)
+		if snapshot.is_empty():
+			return {}
+		owned_payloads.append(snapshot)
+	return {
+		"schema_version": RUNTIME_SNAPSHOT_SCHEMA_VERSION,
+		"profile_action": _profile_action.duplicate(true),
+		"profile_action_released": _profile_action_released,
+		"phase_state": (
+			"idle"
+			if _profile_action.is_empty()
+			else ("released" if _profile_action_released else "prepared")
+		),
+		"prepared_payloads": prepared_payloads,
+		"owned_payloads": owned_payloads,
+		"callback_claims": _callback_claims.duplicate(true),
+		"callback_claim_order": _callback_claim_order.duplicate(),
+		"resource_reward_claims": _resource_reward_claims.duplicate(true),
+		"resource_reward_claim_order": _resource_reward_claim_order.duplicate(),
+	}
+
+
+func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+	var staged := _stage_runtime_snapshot(value)
+	if not bool(staged.get("ok", false)):
+		return false
+	_free_staged_runtime_payloads(staged)
+	return true
+
+
+func restore_runtime_snapshot(value: Dictionary) -> bool:
+	var target_staged := _stage_runtime_snapshot(value)
+	if not bool(target_staged.get("ok", false)):
+		return false
+	var current := runtime_snapshot()
+	if current.is_empty():
+		_free_staged_runtime_payloads(target_staged)
+		return false
+	if current == value:
+		_free_staged_runtime_payloads(target_staged)
+		return true
+	var rollback_staged := _stage_runtime_snapshot(current)
+	if not bool(rollback_staged.get("ok", false)):
+		_free_staged_runtime_payloads(target_staged)
+		return false
+	if _install_staged_runtime_snapshot(value, target_staged) and runtime_snapshot() == value:
+		_free_staged_runtime_payloads(rollback_staged)
+		return true
+	_discard_current_runtime_payloads()
+	if _install_staged_runtime_snapshot(current, rollback_staged) and runtime_snapshot() == current:
+		return false
+	_free_staged_runtime_payloads(rollback_staged)
+	reset_runtime_state()
+	return false
+
+
+func _prepared_payload_snapshot(prepared: Dictionary) -> Dictionary:
+	var node_value: Variant = prepared.get("node")
+	var position_value: Variant = prepared.get("global_position")
+	if not node_value is Node or not is_instance_valid(node_value) or not position_value is Vector2:
+		return {}
+	var node := node_value as Node
+	var kind := _payload_snapshot_kind(node, bool(prepared.get("passive", false)))
+	if kind.is_empty():
+		return {}
+	var result := {
+		"kind": kind,
+		"global_position": position_value,
+		"token": int(prepared.get("token", 0)),
+		"generation": int(prepared.get("generation", 0)),
+		"execution": {},
+	}
+	if kind != "passive":
+		if not node.has_method("execution_snapshot"):
+			return {}
+		result["execution"] = (node.call("execution_snapshot") as Dictionary).duplicate(true)
+	return result
+
+
+func _owned_payload_snapshot(payload: Node) -> Dictionary:
+	if payload == null or not is_instance_valid(payload) or not payload is Node2D:
+		return {}
+	var identity_value: Variant = _owned_payload_identity.get(payload.get_instance_id())
+	if not identity_value is Dictionary or not payload.has_method("execution_snapshot"):
+		return {}
+	var kind := _payload_snapshot_kind(payload, false)
+	if kind.is_empty():
+		return {}
+	var identity := identity_value as Dictionary
+	return {
+		"kind": kind,
+		"global_position": (payload as Node2D).global_position,
+		"token": int(identity.get("token", 0)),
+		"generation": int(identity.get("generation", 0)),
+		"execution": (payload.call("execution_snapshot") as Dictionary).duplicate(true),
+	}
+
+
+func _payload_snapshot_kind(payload: Node, passive: bool) -> String:
+	if passive:
+		return "passive"
+	var global_name := str(payload.get_script().get_global_name()) if payload.get_script() != null else ""
+	if global_name == "StaffProjectile":
+		return "projectile"
+	if global_name == "StaffSpellZone":
+		return "zone"
+	return ""
+
+
+func _stage_runtime_snapshot(value: Dictionary) -> Dictionary:
+	if not _runtime_snapshot_shape_is_valid(value):
+		return {"ok": false}
+	var prepared: Array[Dictionary] = []
+	var owned: Array[Dictionary] = []
+	for payload_value: Variant in value["prepared_payloads"] as Array:
+		var staged_payload := _stage_payload_snapshot(payload_value, true)
+		if staged_payload.is_empty():
+			_free_prepared(prepared)
+			return {"ok": false}
+		prepared.append(staged_payload)
+	for payload_value: Variant in value["owned_payloads"] as Array:
+		var staged_payload := _stage_payload_snapshot(payload_value, false)
+		if staged_payload.is_empty():
+			_free_prepared(prepared)
+			_free_prepared(owned)
+			return {"ok": false}
+		owned.append(staged_payload)
+	return {"ok": true, "prepared": prepared, "owned": owned}
+
+
+func _stage_payload_snapshot(value: Variant, allow_passive: bool) -> Dictionary:
+	if not value is Dictionary:
+		return {}
+	var payload_snapshot := value as Dictionary
+	if not _has_exact_fields(payload_snapshot, PAYLOAD_SNAPSHOT_FIELDS):
+		return {}
+	var kind := str(payload_snapshot.get("kind", ""))
+	var position_value: Variant = payload_snapshot.get("global_position")
+	var token_value: Variant = payload_snapshot.get("token")
+	var generation_value: Variant = payload_snapshot.get("generation")
+	if (
+		kind not in ["projectile", "zone", "passive"]
+		or (kind == "passive" and not allow_passive)
+		or not position_value is Vector2
+		or not _finite_vector(position_value as Vector2)
+		or typeof(token_value) != TYPE_INT
+		or int(token_value) <= 0
+		or typeof(generation_value) != TYPE_INT
+		or int(generation_value) <= 0
+	):
+		return {}
+	if kind == "passive":
+		var passive_execution: Variant = payload_snapshot.get("execution", {})
+		if not passive_execution is Dictionary or not (passive_execution as Dictionary).is_empty():
+			return {}
+		return {
+			"node": Node.new(),
+			"passive": true,
+			"global_position": position_value,
+			"token": int(token_value),
+			"generation": int(generation_value),
+		}
+	var execution_value: Variant = payload_snapshot.get("execution")
+	if not execution_value is Dictionary:
+		return {}
+	if not allow_passive and not bool((execution_value as Dictionary).get("execution_active", false)):
+		return {}
+	var payload := StaffProjectileScene.instantiate() if kind == "projectile" else StaffSpellZoneScene.instantiate()
+	if not payload.has_method("restore_execution_snapshot") or not bool(payload.call("restore_execution_snapshot", execution_value)):
+		payload.free()
+		return {}
+	if int(payload.get("action_token")) != int(token_value) or int(payload.get("generation")) != int(generation_value):
+		payload.call("reset_execution_state")
+		payload.free()
+		return {}
+	payload.set("source", self)
+	payload.set("owner_entity", _owner_player())
+	payload.connect("payload_result", _on_payload_result.bind(payload))
+	if kind == "projectile":
+		var execution := execution_value as Dictionary
+		var effect_descriptor := execution.get("effect_descriptor", {}) as Dictionary
+		_configure_projectile_width(payload, float(effect_descriptor.get("hit_width_tiles", 0.3)))
+	else:
+		payload.connect("resource_reward_requested", _on_zone_resource_reward_requested.bind(payload))
+		_configure_zone_radius(payload, _execution_radius_tiles(execution_value as Dictionary))
+	return {
+		"node": payload,
+		"passive": false,
+		"global_position": position_value,
+		"token": int(token_value),
+		"generation": int(generation_value),
+	}
+
+
+func _runtime_snapshot_shape_is_valid(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, RUNTIME_SNAPSHOT_FIELDS):
+		return false
+	if (
+		int(value.get("schema_version", -1)) != RUNTIME_SNAPSHOT_SCHEMA_VERSION
+		or not value.get("profile_action") is Dictionary
+		or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		or str(value.get("phase_state", "")) not in ["idle", "prepared", "released"]
+		or not value.get("prepared_payloads") is Array
+		or not value.get("owned_payloads") is Array
+		or not _valid_claim_store(value.get("callback_claims"), value.get("callback_claim_order"), CALLBACK_CLAIM_LIMIT)
+		or not _valid_claim_store(value.get("resource_reward_claims"), value.get("resource_reward_claim_order"), RESOURCE_REWARD_CLAIM_LIMIT)
+	):
+		return false
+	var action := value["profile_action"] as Dictionary
+	var phase_state := str(value["phase_state"])
+	var released := bool(value["profile_action_released"])
+	if not action.is_empty() and not _definition_is_valid(action):
+		return false
+	match phase_state:
+		"idle":
+			if not action.is_empty() or released or not (value["prepared_payloads"] as Array).is_empty():
+				return false
+		"prepared":
+			if action.is_empty() or released:
+				return false
+			if (value["prepared_payloads"] as Array).size() != (action.get("payload_descriptors", []) as Array).size():
+				return false
+		"released":
+			if action.is_empty() or not released or not (value["prepared_payloads"] as Array).is_empty():
+				return false
+	var seen: Dictionary = {}
+	for collection_value: Variant in [value["prepared_payloads"], value["owned_payloads"]]:
+		for payload_value: Variant in collection_value as Array:
+			if not payload_value is Dictionary:
+				return false
+			var payload := payload_value as Dictionary
+			var execution_value: Variant = payload.get("execution", {})
+			var descriptor_id := str((execution_value as Dictionary).get("descriptor_id", "")) if execution_value is Dictionary else "passive"
+			var outcome_index := int((execution_value as Dictionary).get("outcome_index", -1)) if execution_value is Dictionary else -1
+			var identity := "%s:%d:%d:%s:%d" % [
+				str(payload.get("kind", "")),
+				int(payload.get("token", 0)),
+				int(payload.get("generation", 0)),
+				descriptor_id,
+				outcome_index,
+			]
+			if seen.has(identity):
+				return false
+			seen[identity] = true
+	if phase_state == "prepared":
+		var descriptors := action.get("payload_descriptors", []) as Array
+		var prepared_payloads := value["prepared_payloads"] as Array
+		for index: int in range(prepared_payloads.size()):
+			var payload_value: Variant = prepared_payloads[index]
+			var payload := payload_value as Dictionary
+			if int(payload.get("token", 0)) != int(action.get("token", 0)) or int(payload.get("generation", 0)) != int(action.get("generation", 0)):
+				return false
+			var expected := _prepare_payload(descriptors[index] as Dictionary, action)
+			if expected.is_empty():
+				return false
+			var expected_snapshot := _prepared_payload_snapshot(expected)
+			var expected_payloads: Array[Dictionary] = [expected]
+			_free_prepared(expected_payloads)
+			if (
+				str(payload.get("kind", "")) != str(expected_snapshot.get("kind", ""))
+				or payload.get("global_position") != expected_snapshot.get("global_position")
+				or payload.get("execution", {}) != expected_snapshot.get("execution", {})
+			):
+				return false
+	elif phase_state == "released":
+		if not _released_payloads_match_committed_descriptors(
+			action,
+			value["owned_payloads"] as Array
+		):
+			return false
+	return true
+
+
+func _released_payloads_match_committed_descriptors(
+	action: Dictionary,
+	payload_values: Array
+) -> bool:
+	var lineages: Array = []
+	for descriptor_value: Variant in action.get("payload_descriptors", []) as Array:
+		var expected := _prepare_payload(descriptor_value as Dictionary, action)
+		if expected.is_empty():
+			return false
+		var expected_snapshot := _prepared_payload_snapshot(expected)
+		var expected_payloads: Array[Dictionary] = [expected]
+		_free_prepared(expected_payloads)
+		if expected_snapshot.is_empty():
+			return false
+		if str(expected_snapshot.get("kind", "")) == "passive":
+			continue
+		var templates: Array[Dictionary] = [{
+			"snapshot": expected_snapshot,
+			"derived": false,
+		}]
+		for derived_snapshot: Dictionary in _derived_payload_snapshots(expected_snapshot):
+			templates.append({
+				"snapshot": derived_snapshot,
+				"derived": true,
+			})
+		lineages.append(templates)
+
+	var matched_templates: Dictionary = {}
+	var primary_lineages: Dictionary = {}
+	var derived_lineages: Dictionary = {}
+	for payload_value: Variant in payload_values:
+		if not payload_value is Dictionary:
+			return false
+		var payload := payload_value as Dictionary
+		var matched_lineage := -1
+		var matched_template := -1
+		var matched_derived := false
+		for lineage_index: int in range(lineages.size()):
+			var templates := lineages[lineage_index] as Array
+			for template_index: int in range(templates.size()):
+				var template := templates[template_index] as Dictionary
+				if _payload_matches_committed_template(
+					payload,
+					template.get("snapshot", {}) as Dictionary
+				):
+					matched_lineage = lineage_index
+					matched_template = template_index
+					matched_derived = bool(template.get("derived", false))
+					break
+			if matched_lineage >= 0:
+				break
+		if matched_lineage < 0:
+			return false
+		var template_key := "%d:%d" % [matched_lineage, matched_template]
+		if matched_templates.has(template_key):
+			return false
+		if matched_derived:
+			if primary_lineages.has(matched_lineage):
+				return false
+			derived_lineages[matched_lineage] = true
+		else:
+			if derived_lineages.has(matched_lineage):
+				return false
+			primary_lineages[matched_lineage] = true
+		matched_templates[template_key] = true
+	return true
+
+
+func _payload_matches_committed_template(
+	payload: Dictionary,
+	template: Dictionary
+) -> bool:
+	var kind := str(payload.get("kind", ""))
+	if (
+		kind != str(template.get("kind", ""))
+		or int(payload.get("token", 0)) != int(template.get("token", 0))
+		or int(payload.get("generation", 0)) != int(template.get("generation", 0))
+	):
+		return false
+	var execution_value: Variant = payload.get("execution")
+	var template_execution_value: Variant = template.get("execution")
+	if not execution_value is Dictionary or not template_execution_value is Dictionary:
+		return false
+	var execution := execution_value as Dictionary
+	var template_execution := template_execution_value as Dictionary
+	var runtime_fields: Array = (
+		[
+			"distance_travelled", "hit_target_ids", "damage_claims",
+			"terminal_emitted", "execution_active",
+		]
+		if kind == "projectile"
+		else [
+			"execution_frame", "fractional_frames", "claims",
+			"transient_status_target_ids", "execution_active", "completion_emitted",
+		]
+	)
+	for field_value: Variant in template_execution:
+		var field := str(field_value)
+		if field in runtime_fields:
+			continue
+		if not execution.has(field_value) or execution[field_value] != template_execution[field_value]:
+			return false
+	return true
+
+
+func _derived_payload_snapshots(primary_snapshot: Dictionary) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if str(primary_snapshot.get("kind", "")) != "projectile":
+		return result
+	var execution_value: Variant = primary_snapshot.get("execution")
+	if not execution_value is Dictionary:
+		return result
+	var execution := execution_value as Dictionary
+	if str(execution.get("element_id", "")) == "ice":
+		var effect := execution.get("effect_descriptor", {}) as Dictionary
+		var ice_execution := _derived_zone_execution(execution, {
+			"descriptor_id": "%s:ice_zone" % str(execution.get("descriptor_id", "")),
+			"mode": "ice_zone",
+			"parameters": {
+				"radius_tiles": float(effect.get("zone_radius_tiles", 0.0)),
+				"duration_frames": int(effect.get("zone_duration_frames", 0)),
+				"tick_interval_frames": int(effect.get("zone_tick_interval_frames", 0)),
+				"damage_multiplier": float(effect.get("zone_damage_multiplier", 0.0)),
+				"move_speed_multiplier": float(effect.get("move_speed_multiplier", 1.0)),
+				"attack_speed_multiplier": float(effect.get("attack_speed_multiplier", 1.0)),
+				"freeze_duration_frames": int(effect.get("freeze_duration_frames", 0)),
+			},
+		})
+		var ice_snapshot := _zone_payload_template(primary_snapshot, ice_execution)
+		if not ice_snapshot.is_empty():
+			result.append(ice_snapshot)
+	var combination_value: Variant = execution.get("combination", {})
+	if combination_value is Dictionary and not (combination_value as Dictionary).is_empty():
+		var combination := combination_value as Dictionary
+		var parameters_value: Variant = combination.get("parameters", {})
+		if parameters_value is Dictionary:
+			var combo_parameters := (parameters_value as Dictionary).duplicate(true)
+			var rift_value: Variant = combination.get("rift_interaction", {})
+			if rift_value is Dictionary and not (rift_value as Dictionary).is_empty():
+				var rift := rift_value as Dictionary
+				_scale_combo_radii(combo_parameters, float(rift.get("area_multiplier", 1.0)))
+				combo_parameters["time_damage_multiplier"] = float(rift.get("time_damage_multiplier", 0.0))
+				combo_parameters["rift_source_generation"] = int(rift.get("source_generation", 0))
+			var combo_id := str(combination.get("combo_id", ""))
+			var combo_execution := _derived_zone_execution(execution, {
+				"descriptor_id": "%s:%s" % [
+					str(execution.get("descriptor_id", "")),
+					combo_id,
+				],
+				"mode": "combination",
+				"parameters": {
+					"combo_id": combo_id,
+					"combo_kind": str(combination.get("kind", "")),
+					"combo_parameters": combo_parameters,
+				},
+			})
+			var combo_snapshot := _zone_payload_template(primary_snapshot, combo_execution)
+			if not combo_snapshot.is_empty():
+				result.append(combo_snapshot)
+	return result
+
+
+func _derived_zone_execution(
+	primary_execution: Dictionary,
+	descriptor: Dictionary
+) -> Dictionary:
+	var descriptor_id := str(descriptor.get("descriptor_id", ""))
+	var outcome_index := int(primary_execution.get("outcome_index", -1))
+	return {
+		"action_token": int(primary_execution.get("action_token", 0)),
+		"generation": int(primary_execution.get("generation", 0)),
+		"source_action_id": str(primary_execution.get("source_action_id", "")),
+		"descriptor_id": descriptor_id,
+		"outcome_index": outcome_index,
+		"deterministic_seed": int(primary_execution.get("deterministic_seed", 0)),
+		"mode": str(descriptor.get("mode", "")),
+		"base_attack": float(primary_execution.get("base_attack", 0.0)),
+		"boss_conversion": (primary_execution.get("boss_conversion", {}) as Dictionary).duplicate(true),
+		"status_source_id": _status_source_id(
+			int(primary_execution.get("action_token", 0)),
+			descriptor_id,
+			outcome_index
+		),
+		"parameters": (descriptor.get("parameters", {}) as Dictionary).duplicate(true),
+	}
+
+
+func _zone_payload_template(
+	primary_snapshot: Dictionary,
+	execution: Dictionary
+) -> Dictionary:
+	var zone := StaffSpellZoneScene.instantiate()
+	if execution.is_empty() or not bool(zone.call("configure_execution", execution)):
+		zone.free()
+		return {}
+	var result := {
+		"kind": "zone",
+		"global_position": primary_snapshot.get("global_position", Vector2.ZERO),
+		"token": int(primary_snapshot.get("token", 0)),
+		"generation": int(primary_snapshot.get("generation", 0)),
+		"execution": (zone.call("execution_snapshot") as Dictionary).duplicate(true),
+	}
+	zone.call("reset_execution_state")
+	zone.free()
+	return result
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func _valid_claim_store(store_value: Variant, order_value: Variant, maximum: int) -> bool:
+	if not store_value is Dictionary or not order_value is Array:
+		return false
+	var store := store_value as Dictionary
+	var order := order_value as Array
+	if store.size() > maximum or order.size() != store.size():
+		return false
+	var seen: Dictionary = {}
+	for key_value: Variant in order:
+		if typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var key := str(key_value)
+		if key.is_empty() or seen.has(key) or not store.has(key) or store[key] != true:
+			return false
+		seen[key] = true
+	for key_value: Variant in store:
+		if not seen.has(str(key_value)) or store[key_value] != true:
+			return false
+	return true
+
+
+func _install_staged_runtime_snapshot(value: Dictionary, staged: Dictionary) -> bool:
+	var owned := staged.get("owned", []) as Array
+	var parent := get_tree().current_scene if is_inside_tree() else null
+	if not owned.is_empty() and parent == null:
+		return false
+	_discard_current_runtime_payloads()
+	_profile_action = (value["profile_action"] as Dictionary).duplicate(true)
+	_profile_action_released = bool(value["profile_action_released"])
+	_prepared_payloads = _dictionary_array(staged.get("prepared", []))
+	_callback_claims = (value["callback_claims"] as Dictionary).duplicate(true)
+	_callback_claim_order = _string_array(value["callback_claim_order"])
+	_resource_reward_claims = (value["resource_reward_claims"] as Dictionary).duplicate(true)
+	_resource_reward_claim_order = _string_array(value["resource_reward_claim_order"])
+	for prepared_value: Variant in owned:
+		var prepared := prepared_value as Dictionary
+		_attach_payload(prepared, parent)
+		var node := prepared["node"] as Node
+		if node.has_method("activate_restored_execution_state"):
+			var activation_value: Variant = node.call("activate_restored_execution_state")
+			if typeof(activation_value) != TYPE_BOOL or not bool(activation_value):
+				return false
+	if not _profile_action.is_empty() and bool(_profile_action.get("invulnerable_during_cast", false)):
+		if not _acquire_cast_invulnerability(int(_profile_action.get("token", 0))):
+			return false
+	staged["prepared"] = []
+	staged["owned"] = []
+	return true
+
+
+func _discard_current_runtime_payloads() -> void:
+	for prepared: Dictionary in _prepared_payloads:
+		var node_value: Variant = prepared.get("node")
+		if node_value is Node and is_instance_valid(node_value):
+			if (node_value as Node).has_method("reset_execution_state"):
+				(node_value as Node).call("reset_execution_state")
+			(node_value as Node).free()
+	_prepared_payloads.clear()
+	for payload: Node in _owned_payloads:
+		if payload != null and is_instance_valid(payload):
+			if payload.has_method("reset_execution_state"):
+				payload.call("reset_execution_state")
+			payload.free()
+	_owned_payloads.clear()
+	_owned_payload_identity.clear()
+	_callback_claims.clear()
+	_callback_claim_order.clear()
+	_resource_reward_claims.clear()
+	_resource_reward_claim_order.clear()
+	_clear_profile_action()
+
+
+func _free_staged_runtime_payloads(staged: Dictionary) -> void:
+	var prepared_value: Variant = staged.get("prepared", [])
+	if prepared_value is Array:
+		_free_prepared(_dictionary_array(prepared_value))
+	var owned_value: Variant = staged.get("owned", [])
+	if owned_value is Array:
+		_free_prepared(_dictionary_array(owned_value))
+	staged["prepared"] = []
+	staged["owned"] = []
+
+
+func _string_array(value: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if value is Array:
+		for item: Variant in value as Array:
+			result.append(str(item))
+	return result
+
+
+func _dictionary_array(value: Variant) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if value is Array:
+		for item: Variant in value as Array:
+			if item is Dictionary:
+				result.append(item as Dictionary)
+	return result
+
+
+func _finite_vector(value: Vector2) -> bool:
+	return is_finite(value.x) and is_finite(value.y)
 
 
 func _prepare_payload(descriptor: Dictionary, definition: Dictionary) -> Dictionary:
@@ -359,10 +976,14 @@ func _on_payload_result(
 ) -> void:
 	if not _payload_callback_is_live(payload, action_token, generation):
 		return
+	var report := _report_result(action_token, generation, result, payload, false)
+	if not bool(report.get("accepted", false)):
+		return
+	var runtime_response := report.get("runtime_response", {}) as Dictionary
+	var frozen := report.get("result", {}) as Dictionary
 	var spawn_zone_value: Variant = result.get("spawn_zone", {})
 	if spawn_zone_value is Dictionary and not (spawn_zone_value as Dictionary).is_empty():
 		_spawn_result_zone(action_token, generation, result, spawn_zone_value as Dictionary, payload)
-	var runtime_response := _report_result(action_token, generation, result, payload)
 	var confirmed_combo_value: Variant = runtime_response.get("combo", {})
 	if confirmed_combo_value is Dictionary and not (confirmed_combo_value as Dictionary).is_empty():
 		var confirmed_combo := (confirmed_combo_value as Dictionary).duplicate(true)
@@ -380,6 +1001,7 @@ func _on_payload_result(
 				confirmed_combo["rift_interaction"] = rift
 		_spawn_combination_zone(action_token, generation, result, confirmed_combo, payload)
 	_schedule_owned_payload_prune()
+	payload_result_reported.emit(action_token, generation, frozen)
 
 
 func _spawn_result_zone(
@@ -551,11 +1173,12 @@ func _report_result(
 	action_token: int,
 	generation: int,
 	result: Dictionary,
-	payload: Node = null
+	payload: Node = null,
+	emit_public_signal: bool = true
 ) -> Dictionary:
 	var claim_id := str(result.get("claim_id", ""))
 	if claim_id.is_empty():
-		return {}
+		return {"accepted": false}
 	var key := "%d:%d:%s" % [action_token, generation, claim_id]
 	if not _record_bounded_claim(
 		_callback_claims,
@@ -563,7 +1186,7 @@ func _report_result(
 		key,
 		CALLBACK_CLAIM_LIMIT
 	):
-		return {}
+		return {"accepted": false}
 	var frozen := result.duplicate(true)
 	var runtime_response: Dictionary = {}
 	if _result_sink != null and is_instance_valid(_result_sink):
@@ -577,8 +1200,21 @@ func _report_result(
 			)
 			if response_value is Dictionary:
 				runtime_response = (response_value as Dictionary).duplicate(true)
-	payload_result_reported.emit(action_token, generation, frozen)
-	return runtime_response
+	var result_type := str(frozen.get("type", ""))
+	var terminal := bool(frozen.get(
+		"terminal",
+		result_type in ["hit_confirmed", "terminal_miss"]
+	))
+	if terminal and payload != null and is_instance_valid(payload):
+		_owned_payload_identity.erase(payload.get_instance_id())
+		_owned_payloads.erase(payload)
+	if emit_public_signal:
+		payload_result_reported.emit(action_token, generation, frozen)
+	return {
+		"accepted": true,
+		"runtime_response": runtime_response,
+		"result": frozen,
+	}
 
 
 func _normalized_runtime_result(result: Dictionary, payload: Node) -> Dictionary:

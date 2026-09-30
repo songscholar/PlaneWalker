@@ -27,6 +27,8 @@ func _run() -> void:
 	await _test_construction_failure_rolls_back_every_prepared_projectile()
 	await _test_void_penetration_resolves_split_trail_and_cast_invulnerability()
 	await _test_rewind_free_shot_claims_window_before_release()
+	await _test_runtime_snapshot_restores_prepared_and_released_projectiles()
+	await _test_runtime_restore_rolls_back_and_fails_closed_without_health()
 	await _test_reset_clears_released_projectiles_and_transient_state()
 	_suite.finish(get_tree())
 
@@ -228,6 +230,113 @@ func _test_reset_clears_released_projectiles_and_transient_state() -> void:
 	await get_tree().process_frame
 
 
+func _test_runtime_snapshot_restores_prepared_and_released_projectiles() -> void:
+	var fixture := _fixture()
+	var gun: Node = fixture["gun"]
+	var descriptor := _projectile_descriptor("gun_normal_bullet", 0, 9500, {
+		"direction": Vector2(0.6, 0.8),
+		"damage_multiplier": 1.0,
+		"speed_tiles_per_second": 40.0,
+		"maximum_range_tiles": 15.0,
+		"pierce": 1,
+		"hit_width_tiles": 0.2,
+		"knockback_tiles": 0.3,
+	})
+	var definition := _definition("normal_fire", 95, [descriptor])
+	_suite.assert_equal(gun.begin_profile_action(definition), definition, "prepared restore fixture stages a projectile")
+	var prepared: Dictionary = gun.runtime_snapshot()
+	gun.cancel_profile_action()
+	_suite.assert_true(gun.restore_runtime_snapshot(prepared), "prepared Gun adapter snapshot restores")
+	_suite.assert_equal(gun.runtime_snapshot(), prepared, "prepared Gun adapter round-trips exactly")
+	_suite.assert_equal(gun.prepared_projectile_count_for_test(), 1, "prepared restore recreates the off-tree projectile")
+
+	_suite.assert_true(gun.release_profile_action(), "restored prepared projectile releases")
+	await get_tree().process_frame
+	var owned: Array[Node] = gun.owned_projectiles_for_test()
+	_suite.assert_equal(owned.size(), 1, "released restore fixture owns one real projectile")
+	if owned.is_empty():
+		_free_fixture(fixture)
+		await get_tree().process_frame
+		return
+	owned[0].global_position = Vector2(220.0, 96.0)
+	owned[0].advance_execution_for_test(11)
+	var released: Dictionary = gun.runtime_snapshot()
+	gun.cancel_profile_action()
+	await get_tree().process_frame
+	_suite.assert_true(gun.restore_runtime_snapshot(released), "released Gun adapter snapshot restores")
+	_suite.assert_equal(gun.runtime_snapshot(), released, "released Gun adapter preserves world position and execution progress exactly")
+	owned = gun.owned_projectiles_for_test()
+	_suite.assert_equal(owned.size(), 1, "released restore recreates one live projectile")
+	var forwarded := [0]
+	gun.action_hit_confirmed.connect(func(_token: int, _target: Node) -> void: forwarded[0] += 1)
+	if not owned.is_empty():
+		owned[0].action_hit_confirmed.emit(95, fixture["owner"])
+	_suite.assert_equal(forwarded[0], 1, "restored projectile callback remains connected to the adapter")
+
+	var stable: Dictionary = gun.runtime_snapshot()
+	var malformed := stable.duplicate(true)
+	malformed["owned_projectiles"][0]["execution"]["descriptor_id"] = "forged_descriptor"
+	_suite.assert_true(not gun.restore_runtime_snapshot(malformed), "forged adapter payload identity fails closed")
+	_suite.assert_equal(gun.runtime_snapshot(), stable, "forged adapter restore preserves the current live payload atomically")
+	var extra_top_level := stable.duplicate(true)
+	extra_top_level["future_field"] = true
+	_suite.assert_true(not gun.can_restore_runtime_snapshot(extra_top_level), "unknown Gun adapter snapshot fields fail closed")
+	var extra_payload := stable.duplicate(true)
+	extra_payload["owned_projectiles"][0]["future_field"] = true
+	_suite.assert_true(not gun.can_restore_runtime_snapshot(extra_payload), "unknown Gun payload wrapper fields fail closed")
+	_free_fixture(fixture)
+	await get_tree().process_frame
+
+
+func _test_runtime_restore_rolls_back_and_fails_closed_without_health() -> void:
+	var source_fixture := _fixture()
+	var source_gun: Node = source_fixture["gun"]
+	var target_definition := _void_definition(96, 9600)
+	_suite.assert_equal(source_gun.begin_profile_action(target_definition), target_definition, "atomic restore target stages an invulnerable action")
+	var target: Dictionary = source_gun.runtime_snapshot()
+	_free_fixture(source_fixture)
+	await get_tree().process_frame
+
+	var rollback_fixture := _fixture()
+	var rollback_owner: Node = rollback_fixture["owner"]
+	var rollback_health: Node = rollback_fixture["health"]
+	rollback_owner.remove_child(rollback_health)
+	var rollback_gun: Node = rollback_fixture["gun"]
+	var normal_descriptor := _projectile_descriptor("gun_normal_bullet", 0, 9700, {
+		"direction": Vector2.RIGHT,
+		"damage_multiplier": 1.0,
+		"speed_tiles_per_second": 40.0,
+		"maximum_range_tiles": 15.0,
+		"pierce": 0,
+		"hit_width_tiles": 0.2,
+		"knockback_tiles": 0.3,
+	})
+	var normal_definition := _definition("normal_fire", 97, [normal_descriptor])
+	_suite.assert_equal(rollback_gun.begin_profile_action(normal_definition), normal_definition, "rollback fixture stages a non-invulnerable action")
+	var current: Dictionary = rollback_gun.runtime_snapshot()
+	_suite.assert_true(not rollback_gun.restore_runtime_snapshot(target), "failed invulnerability acquisition rejects the target adapter snapshot")
+	_suite.assert_equal(rollback_gun.runtime_snapshot(), current, "failed target application restores the prior live adapter state exactly")
+	_free_fixture(rollback_fixture)
+	rollback_health.free()
+	await get_tree().process_frame
+
+	var fail_closed_fixture := _fixture()
+	var fail_closed_gun: Node = fail_closed_fixture["gun"]
+	var current_definition := _void_definition(98, 9800)
+	_suite.assert_equal(fail_closed_gun.begin_profile_action(current_definition), current_definition, "double-failure fixture stages its rollback action")
+	var fail_closed_owner: Node = fail_closed_fixture["owner"]
+	var fail_closed_health: Node = fail_closed_fixture["health"]
+	fail_closed_owner.remove_child(fail_closed_health)
+	_suite.assert_true(not fail_closed_gun.restore_runtime_snapshot(target), "target and rollback application failure returns false")
+	var failed_closed: Dictionary = fail_closed_gun.runtime_snapshot()
+	_suite.assert_equal(failed_closed.get("phase_state"), "idle", "double restore failure resets the adapter to idle")
+	_suite.assert_equal(fail_closed_gun.prepared_projectile_count_for_test(), 0, "double restore failure clears prepared projectiles")
+	_suite.assert_equal(fail_closed_gun.owned_projectile_count_for_test(), 0, "double restore failure clears owned projectiles")
+	_free_fixture(fail_closed_fixture)
+	fail_closed_health.free()
+	await get_tree().process_frame
+
+
 func _fixture() -> Dictionary:
 	var owner := RecordingOwner.new()
 	owner.name = "GunOwner"
@@ -270,6 +379,25 @@ func _definition(action_id: String, token: int, descriptors: Array) -> Dictionar
 		},
 		"invulnerable_during_cast": false,
 	}
+
+
+func _void_definition(token: int, seed: int) -> Dictionary:
+	var descriptor := _projectile_descriptor("gun_void_round", 0, seed, {
+		"direction": Vector2.RIGHT,
+		"damage_multiplier": 15.0,
+		"void_damage_ratio": 0.6,
+		"time_damage_ratio": 0.4,
+		"speed_tiles_per_second": 60.0,
+		"maximum_range_tiles": 30.0,
+		"pierce": -1,
+		"unlimited_pierce": true,
+		"hit_width_tiles": 1.5,
+		"knockback_tiles": 0.0,
+	})
+	var definition := _definition("void_penetration", token, [descriptor])
+	definition["semantic_action"] = "weapon_ultimate"
+	definition["invulnerable_during_cast"] = true
+	return definition
 
 
 func _projectile_descriptor(

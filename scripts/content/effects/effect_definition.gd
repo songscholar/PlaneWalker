@@ -5,6 +5,9 @@ const ID_PATTERN := "^[a-z][a-z0-9_]{0,63}$"
 const VALUE_TYPES: Array[String] = ["boolean", "integer", "number"]
 const STACK_RULES: Array[String] = ["add", "maximum", "multiply", "replace", "set_true", "trigger"]
 const CONTENT_CATEGORIES: Array[String] = ["blessing", "curse", "item", "talent"]
+const WEAPON_CAPABILITY_PATTERN := "^weapon\\.[a-z][a-z0-9_]{0,63}$"
+const WEAPON_CAPABILITY_STACK_RULES: Array[String] = ["add", "maximum", "multiply", "replace"]
+const WEAPON_CAPABILITY_FIELDS: Array[String] = ["weapon_id", "capability", "base_value"]
 const REQUIRED_FIELDS: Array[String] = [
 	"effect_id",
 	"value_type",
@@ -13,6 +16,7 @@ const REQUIRED_FIELDS: Array[String] = [
 	"stack_rule",
 	"allowed_categories",
 ]
+const OPTIONAL_FIELDS: Array[String] = ["weapon_capabilities"]
 
 var effect_id: String = ""
 var value_type: String = ""
@@ -20,6 +24,7 @@ var minimum: Variant = null
 var maximum: Variant = null
 var stack_rule: String = ""
 var allowed_categories: Array[String] = []
+var weapon_capabilities: Array[Dictionary] = []
 
 
 func configure(source: Dictionary) -> Dictionary:
@@ -28,7 +33,7 @@ func configure(source: Dictionary) -> Dictionary:
 			return _failure(field, "missing")
 	for field_value: Variant in source.keys():
 		var field := str(field_value)
-		if not REQUIRED_FIELDS.has(field):
+		if not REQUIRED_FIELDS.has(field) and not OPTIONAL_FIELDS.has(field):
 			return _failure(field, "unknown")
 
 	var source_id: Variant = source["effect_id"]
@@ -51,6 +56,13 @@ func configure(source: Dictionary) -> Dictionary:
 	)
 	if not bool(bounds_result.get("ok", false)):
 		return bounds_result
+	var weapon_capabilities_result := _normalize_weapon_capabilities(
+		source.get("weapon_capabilities", []),
+		str(source_value_type),
+		str(source_stack_rule)
+	)
+	if not bool(weapon_capabilities_result.get("ok", false)):
+		return weapon_capabilities_result
 
 	effect_id = str(source_id)
 	value_type = str(source_value_type)
@@ -58,6 +70,9 @@ func configure(source: Dictionary) -> Dictionary:
 	maximum = source["maximum"]
 	stack_rule = str(source_stack_rule)
 	allowed_categories = categories_result["categories"]
+	weapon_capabilities.clear()
+	for mapping_value: Variant in weapon_capabilities_result["weapon_capabilities"]:
+		weapon_capabilities.append((mapping_value as Dictionary).duplicate(true))
 	return {"ok": true, "context": {}}
 
 
@@ -105,7 +120,7 @@ func normalize_value(value: Variant) -> Variant:
 
 
 func snapshot() -> Dictionary:
-	return {
+	var result := {
 		"effect_id": effect_id,
 		"value_type": value_type,
 		"minimum": minimum,
@@ -113,6 +128,13 @@ func snapshot() -> Dictionary:
 		"stack_rule": stack_rule,
 		"allowed_categories": allowed_categories.duplicate(),
 	}
+	if not weapon_capabilities.is_empty():
+		result["weapon_capabilities"] = weapon_capabilities.duplicate(true)
+	return result
+
+
+func weapon_capability_snapshot() -> Array[Dictionary]:
+	return weapon_capabilities.duplicate(true)
 
 
 static func _validate_bounds(type_id: String, minimum_value: Variant, maximum_value: Variant) -> Dictionary:
@@ -157,9 +179,67 @@ static func _normalize_categories(value: Variant) -> Dictionary:
 	return {"ok": true, "categories": categories, "context": {}}
 
 
+static func _normalize_weapon_capabilities(
+	value: Variant,
+	value_type_id: String,
+	stack_rule_id: String
+) -> Dictionary:
+	if not value is Array:
+		return _failure("weapon_capabilities", "expected_array")
+	if (value as Array).is_empty():
+		return {"ok": true, "weapon_capabilities": [], "context": {}}
+	if value_type_id not in ["integer", "number"]:
+		return _failure("weapon_capabilities", "numeric_effect_required")
+	if not WEAPON_CAPABILITY_STACK_RULES.has(stack_rule_id):
+		return _failure("weapon_capabilities", "unsupported_stack_rule")
+	var seen_weapons: Dictionary = {}
+	var mappings: Array[Dictionary] = []
+	for mapping_value: Variant in value:
+		if not mapping_value is Dictionary:
+			return _failure("weapon_capabilities", "entry_type")
+		var mapping: Dictionary = mapping_value
+		if not _has_exact_fields(mapping, WEAPON_CAPABILITY_FIELDS):
+			return _failure("weapon_capabilities", "entry_fields")
+		if typeof(mapping["weapon_id"]) != TYPE_STRING or not _matches(ID_PATTERN, str(mapping["weapon_id"])):
+			return _failure("weapon_capabilities.weapon_id", "invalid")
+		var weapon_id := str(mapping["weapon_id"])
+		if seen_weapons.has(weapon_id):
+			return _failure("weapon_capabilities.weapon_id", "duplicate")
+		if typeof(mapping["capability"]) != TYPE_STRING or not _matches(
+			WEAPON_CAPABILITY_PATTERN,
+			str(mapping["capability"])
+		):
+			return _failure("weapon_capabilities.capability", "invalid")
+		if typeof(mapping["base_value"]) not in [TYPE_INT, TYPE_FLOAT]:
+			return _failure("weapon_capabilities.base_value", "expected_number")
+		var base_value := float(mapping["base_value"])
+		if not is_finite(base_value):
+			return _failure("weapon_capabilities.base_value", "non_finite")
+		seen_weapons[weapon_id] = true
+		mappings.append({
+			"weapon_id": weapon_id,
+			"capability": str(mapping["capability"]),
+			"base_value": base_value,
+		})
+	mappings.sort_custom(
+		func(left: Dictionary, right: Dictionary) -> bool:
+			return str(left["weapon_id"]) < str(right["weapon_id"])
+	)
+	return {"ok": true, "weapon_capabilities": mappings, "context": {}}
+
+
 static func _matches(pattern: String, value: String) -> bool:
 	var regex := RegEx.new()
 	return regex.compile(pattern) == OK and regex.search(value) != null
+
+
+static func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
 
 
 static func _failure(field: String, reason: String) -> Dictionary:

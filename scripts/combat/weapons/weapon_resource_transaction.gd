@@ -1,7 +1,8 @@
 class_name WeaponResourceTransaction
 extends RefCounted
 
-const SNAPSHOT_SCHEMA_VERSION := 1
+const SNAPSHOT_SCHEMA_VERSION := 2
+const TICKET_SCHEMA_VERSION := 1
 
 const CODE_OK := &"OK"
 const CODE_ALREADY_COMMITTED := &"ALREADY_COMMITTED"
@@ -25,6 +26,7 @@ var _configured: bool = false
 var _weapon_id: StringName = &""
 var _runtime_owned_resource_ids: Dictionary = {}
 var _external_accounts: Dictionary = {}
+var _external_account_order: Array[String] = []
 var _cooldowns: Dictionary = {}
 var _committed_tokens: Dictionary = {}
 
@@ -44,6 +46,7 @@ func configure(
 		next_runtime_owned[str(resource_id)] = true
 
 	var next_external: Dictionary = {}
+	var next_external_order: Array[String] = []
 	for resource_key: Variant in external_accounts.keys():
 		if typeof(resource_key) not in [TYPE_STRING, TYPE_STRING_NAME]:
 			return false
@@ -57,10 +60,12 @@ func configure(
 		if not is_instance_valid(provider) or not _has_methods(provider, REQUIRED_PROVIDER_METHODS):
 			return false
 		next_external[str(resource_id)] = provider
+		next_external_order.append(str(resource_id))
 
 	_weapon_id = weapon_id
 	_runtime_owned_resource_ids = next_runtime_owned
 	_external_accounts = next_external
+	_external_account_order = next_external_order
 	_cooldowns.clear()
 	_committed_tokens.clear()
 	_configured = true
@@ -128,7 +133,7 @@ func prepare(plan: Dictionary, token: int) -> Dictionary:
 		})
 
 	var ticket := {
-		"schema_version": SNAPSHOT_SCHEMA_VERSION,
+		"schema_version": TICKET_SCHEMA_VERSION,
 		"weapon_id": str(_weapon_id),
 		"action_id": str(action_id),
 		"token": token,
@@ -176,6 +181,18 @@ func commit(ticket: Dictionary) -> Dictionary:
 		if provider == null or not is_instance_valid(provider):
 			_restore_cooldown(cooldown_key, had_cooldown, cooldown_before)
 			return _failure(CODE_RESOURCE_PROVIDER_INVALID, {"resource_id": str(resource_id)})
+		var provider_before := _external_account_snapshot()
+		if not _valid_external_account_snapshot(provider_before):
+			_restore_cooldown(cooldown_key, had_cooldown, cooldown_before)
+			return _failure(CODE_RESOURCE_PROVIDER_INVALID, {"resource_id": str(resource_id)})
+		var before_state := provider_before[str(resource_id)] as Dictionary
+		if int(before_state["revision"]) != int(debit["revision"]):
+			_restore_cooldown(cooldown_key, had_cooldown, cooldown_before)
+			return _failure(&"RESOURCE_REVISION_MISMATCH", {
+				"resource_id": str(resource_id),
+				"expected_revision": int(debit["revision"]),
+				"actual_revision": int(before_state["revision"]),
+			})
 		var spend_value: Variant = provider.call(
 			"try_spend_resource",
 			resource_id,
@@ -185,9 +202,28 @@ func commit(ticket: Dictionary) -> Dictionary:
 		)
 		if not spend_value is Dictionary or not bool((spend_value as Dictionary).get("ok", false)):
 			_restore_cooldown(cooldown_key, had_cooldown, cooldown_before)
+			if not _rollback_external_accounts(provider_before, [str(resource_id)]):
+				fail_closed(&"resource_commit_failure_compensation_failed")
 			if spend_value is Dictionary:
 				return _provider_failure(spend_value as Dictionary, CODE_RESOURCE_COMMIT_FAILED, resource_id)
 			return _failure(CODE_RESOURCE_COMMIT_FAILED, {"resource_id": str(resource_id)})
+		var after_state_value: Variant = provider.call("resource_state", resource_id)
+		if (
+			not after_state_value is Dictionary
+			or not _valid_provider_success_contract(
+				spend_value as Dictionary,
+				debit,
+				before_state,
+				after_state_value as Dictionary
+			)
+		):
+			_restore_cooldown(cooldown_key, had_cooldown, cooldown_before)
+			if not _rollback_external_accounts(provider_before, [str(resource_id)]):
+				fail_closed(&"resource_commit_compensation_failed")
+			return _failure(CODE_RESOURCE_COMMIT_FAILED, {
+				"resource_id": str(resource_id),
+				"reason": "provider_success_contract",
+			})
 		external_results.append((spend_value as Dictionary).duplicate(true))
 
 	var context := {
@@ -226,9 +262,52 @@ func snapshot() -> Dictionary:
 		"schema_version": SNAPSHOT_SCHEMA_VERSION,
 		"configured": _configured,
 		"weapon_id": str(_weapon_id),
+		"runtime_owned_resource_ids": _sorted_dictionary_keys(_runtime_owned_resource_ids),
+		"external_accounts": _external_account_snapshot(),
 		"cooldowns": _cooldowns.duplicate(true),
 		"committed_tokens": _committed_tokens.duplicate(true),
 	}
+
+
+func restore_snapshot(value: Dictionary) -> bool:
+	if not _configured or not _valid_restore_snapshot(value):
+		return false
+	var provider_before := _external_account_snapshot()
+	if not _valid_external_account_snapshot(provider_before):
+		return false
+	var cooldowns_before := _cooldowns.duplicate(true)
+	var committed_tokens_before := _committed_tokens.duplicate(true)
+	var attempted_resource_ids: Array[String] = []
+	var target_accounts := value["external_accounts"] as Dictionary
+	if not _preflight_external_restore(target_accounts, provider_before):
+		return false
+	for resource_id: String in _external_account_order:
+		var provider := _external_accounts[resource_id] as Object
+		attempted_resource_ids.append(resource_id)
+		if not bool(provider.call(
+			"restore_resource_state",
+			StringName(resource_id),
+			(target_accounts[resource_id] as Dictionary).duplicate(true)
+		)):
+			if not _rollback_external_accounts(provider_before, attempted_resource_ids):
+				fail_closed(&"external_restore_rollback_failed")
+			return false
+
+	_cooldowns = (value["cooldowns"] as Dictionary).duplicate(true)
+	_committed_tokens = (value["committed_tokens"] as Dictionary).duplicate(true)
+	if snapshot() != value:
+		_cooldowns = cooldowns_before
+		_committed_tokens = committed_tokens_before
+		if not _rollback_external_accounts(provider_before, attempted_resource_ids):
+			fail_closed(&"external_restore_verification_rollback_failed")
+		return false
+	return true
+
+
+func fail_closed(_reason: StringName = &"restore_failed") -> void:
+	_configured = false
+	_cooldowns.clear()
+	_committed_tokens.clear()
 
 
 func rewind_safe_reset() -> void:
@@ -295,7 +374,7 @@ func _normalize_plan(plan: Dictionary) -> Dictionary:
 
 
 func _valid_ticket(ticket: Dictionary) -> bool:
-	if int(ticket.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION:
+	if int(ticket.get("schema_version", -1)) != TICKET_SCHEMA_VERSION:
 		return false
 	if str(ticket.get("weapon_id", "")) != str(_weapon_id):
 		return false
@@ -350,8 +429,156 @@ func _valid_ticket(ticket: Dictionary) -> bool:
 	return str(ticket.get("fingerprint", "")) == _fingerprint(normalized_result["plan"])
 
 
+func _valid_restore_snapshot(value: Dictionary) -> bool:
+	if (
+		int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
+		or typeof(value.get("configured")) != TYPE_BOOL
+		or not bool(value.get("configured", false))
+		or str(value.get("weapon_id", "")) != str(_weapon_id)
+		or not value.get("runtime_owned_resource_ids") is Array
+		or not value.get("external_accounts") is Dictionary
+		or not value.get("cooldowns") is Dictionary
+		or not value.get("committed_tokens") is Dictionary
+	):
+		return false
+	var target_runtime_owned: Array[String] = []
+	for resource_value: Variant in value["runtime_owned_resource_ids"] as Array:
+		if typeof(resource_value) != TYPE_STRING or str(resource_value).is_empty():
+			return false
+		target_runtime_owned.append(str(resource_value))
+	target_runtime_owned.sort()
+	if target_runtime_owned != _sorted_dictionary_keys(_runtime_owned_resource_ids):
+		return false
+
+	var target_accounts := value["external_accounts"] as Dictionary
+	if _sorted_dictionary_keys(target_accounts) != _sorted_dictionary_keys(_external_accounts):
+		return false
+	for resource_id: String in _sorted_dictionary_keys(_external_accounts):
+		var provider := _external_accounts[resource_id] as Object
+		if not provider.has_method("restore_resource_state"):
+			return false
+		var state_value: Variant = target_accounts.get(resource_id)
+		if not state_value is Dictionary or not _valid_resource_state(
+			state_value as Dictionary,
+			StringName(resource_id)
+		):
+			return false
+
+	for action_value: Variant in (value["cooldowns"] as Dictionary).keys():
+		if (
+			typeof(action_value) != TYPE_STRING
+			or str(action_value).is_empty()
+			or typeof((value["cooldowns"] as Dictionary)[action_value]) != TYPE_INT
+			or int((value["cooldowns"] as Dictionary)[action_value]) < 0
+		):
+			return false
+
+	for token_value: Variant in (value["committed_tokens"] as Dictionary).keys():
+		if typeof(token_value) != TYPE_INT or int(token_value) <= 0:
+			return false
+		var ledger_value: Variant = (value["committed_tokens"] as Dictionary)[token_value]
+		if not ledger_value is Dictionary or not _valid_committed_ledger(
+			int(token_value),
+			ledger_value as Dictionary
+		):
+			return false
+	return true
+
+
+func _valid_external_account_snapshot(value: Dictionary) -> bool:
+	if _sorted_dictionary_keys(value) != _sorted_dictionary_keys(_external_accounts):
+		return false
+	for resource_id: String in _sorted_dictionary_keys(_external_accounts):
+		var state_value: Variant = value.get(resource_id)
+		if not state_value is Dictionary or not _valid_resource_state(
+			state_value as Dictionary,
+			StringName(resource_id)
+		):
+			return false
+	return true
+
+
+func _preflight_external_restore(target: Dictionary, current: Dictionary) -> bool:
+	for resource_id: String in _external_account_order:
+		var target_value: Variant = target.get(resource_id)
+		var current_value: Variant = current.get(resource_id)
+		if not target_value is Dictionary or not current_value is Dictionary:
+			return false
+		var target_state := target_value as Dictionary
+		var current_state := current_value as Dictionary
+		if (
+			float(target_state.get("minimum", NAN)) != float(current_state.get("minimum", NAN))
+			or float(target_state.get("maximum", NAN)) != float(current_state.get("maximum", NAN))
+		):
+			return false
+		var provider := _external_accounts[resource_id] as Object
+		if provider.has_method("can_restore_resource_state"):
+			var preflight_value: Variant = provider.call(
+				"can_restore_resource_state",
+				StringName(resource_id),
+				target_state.duplicate(true)
+			)
+			if typeof(preflight_value) != TYPE_BOOL or not bool(preflight_value):
+				return false
+	return true
+
+
+func _valid_committed_ledger(token: int, ledger: Dictionary) -> bool:
+	if (
+		typeof(ledger.get("fingerprint")) != TYPE_STRING
+		or not ledger.get("ticket") is Dictionary
+		or not ledger.get("context") is Dictionary
+	):
+		return false
+	var ticket := ledger["ticket"] as Dictionary
+	var context := ledger["context"] as Dictionary
+	if (
+		int(ticket.get("token", 0)) != token
+		or str(ledger["fingerprint"]) != str(ticket.get("fingerprint", ""))
+		or not _valid_ticket(ticket)
+	):
+		return false
+	if (
+		str(context.get("weapon_id", "")) != str(_weapon_id)
+		or str(context.get("action_id", "")) != str(ticket.get("action_id", ""))
+		or int(context.get("token", 0)) != token
+		or typeof(context.get("cooldown_frames")) != TYPE_INT
+		or int(context.get("cooldown_frames", -1)) != int(ticket.get("cooldown_frames", -2))
+		or context.get("resource_costs") != ticket.get("resource_costs")
+		or not context.get("external_results") is Array
+		or typeof(context.get("idempotent")) != TYPE_BOOL
+		or bool(context.get("idempotent", true))
+	):
+		return false
+	var external_results := context["external_results"] as Array
+	var external_debits := ticket["external_debits"] as Array
+	if external_results.size() != external_debits.size():
+		return false
+	for index: int in range(external_debits.size()):
+		var debit := external_debits[index] as Dictionary
+		var result_value: Variant = external_results[index]
+		if not result_value is Dictionary:
+			return false
+		var result := result_value as Dictionary
+		if (
+			str(result.get("resource_id", "")) != str(debit.get("resource_id", ""))
+			or typeof(result.get("before")) not in [TYPE_INT, TYPE_FLOAT]
+			or typeof(result.get("after")) not in [TYPE_INT, TYPE_FLOAT]
+			or typeof(result.get("revision")) != TYPE_INT
+			or not is_finite(float(result.get("before", NAN)))
+			or not is_finite(float(result.get("after", NAN)))
+			or not is_equal_approx(
+				float(result.get("before", 0.0)) - float(debit.get("amount", 0.0)),
+				float(result.get("after", 0.0))
+			)
+			or int(result.get("revision", 0)) != int(debit.get("revision", 0)) + 1
+		):
+			return false
+	return true
+
+
 func _valid_resource_state(state: Dictionary, resource_id: StringName) -> bool:
-	if str(state.get("resource_id", "")) != str(resource_id):
+	if not bool(state.get("ok", false)) or str(state.get("resource_id", "")) != str(resource_id):
 		return false
 	for field: String in ["current", "minimum", "maximum"]:
 		var value: Variant = state.get(field)
@@ -362,6 +589,42 @@ func _valid_resource_state(state: Dictionary, resource_id: StringName) -> bool:
 	if float(state["current"]) < float(state["minimum"]) or float(state["current"]) > float(state["maximum"]):
 		return false
 	return typeof(state.get("revision")) == TYPE_INT and int(state["revision"]) > 0
+
+
+func _valid_provider_success_contract(
+	provider_result: Dictionary,
+	debit: Dictionary,
+	before_state: Dictionary,
+	after_state: Dictionary
+) -> bool:
+	var resource_id := StringName(str(debit.get("resource_id", "")))
+	if not _valid_resource_state(before_state, resource_id) or not _valid_resource_state(
+		after_state,
+		resource_id
+	):
+		return false
+	var result_before: Variant = provider_result.get("before")
+	var result_after: Variant = provider_result.get("after")
+	if (
+		str(provider_result.get("resource_id", "")) != str(resource_id)
+		or typeof(result_before) not in [TYPE_INT, TYPE_FLOAT]
+		or typeof(result_after) not in [TYPE_INT, TYPE_FLOAT]
+		or typeof(provider_result.get("revision")) != TYPE_INT
+		or not is_finite(float(result_before))
+		or not is_finite(float(result_after))
+	):
+		return false
+	var expected_revision := int(debit["revision"]) + 1
+	var expected_after := float(before_state["current"]) - float(debit["amount"])
+	return (
+		is_equal_approx(float(result_before), float(before_state["current"]))
+		and is_equal_approx(float(result_after), expected_after)
+		and int(provider_result["revision"]) == expected_revision
+		and is_equal_approx(float(after_state["current"]), expected_after)
+		and int(after_state["revision"]) == expected_revision
+		and float(after_state["minimum"]) == float(before_state["minimum"])
+		and float(after_state["maximum"]) == float(before_state["maximum"])
+	)
 
 
 func _fingerprint(plan: Dictionary) -> String:
@@ -403,6 +666,49 @@ func _has_methods(provider: Object, methods: Array[StringName]) -> bool:
 		if not provider.has_method(method_name):
 			return false
 	return true
+
+
+func _external_account_snapshot() -> Dictionary:
+	var result: Dictionary = {}
+	for resource_id: String in _sorted_dictionary_keys(_external_accounts):
+		var provider := _external_accounts[resource_id] as Object
+		var state_value: Variant = provider.call("resource_state", StringName(resource_id))
+		if state_value is Dictionary:
+			result[resource_id] = (state_value as Dictionary).duplicate(true)
+	return result
+
+
+func _rollback_external_accounts(snapshot_value: Dictionary, resource_ids: Array[String]) -> bool:
+	var restored := true
+	var current := _external_account_snapshot()
+	for index: int in range(resource_ids.size() - 1, -1, -1):
+		var resource_id := resource_ids[index]
+		if current.get(resource_id) == snapshot_value.get(resource_id):
+			continue
+		var provider := _external_accounts[resource_id] as Object
+		var state_value: Variant = snapshot_value.get(resource_id)
+		if (
+			not state_value is Dictionary
+			or not provider.has_method("restore_resource_state")
+			or not bool(provider.call(
+				"restore_resource_state",
+				StringName(resource_id),
+				(state_value as Dictionary).duplicate(true)
+			))
+		):
+			restored = false
+		current = _external_account_snapshot()
+	return restored and current == snapshot_value
+
+
+func _sorted_dictionary_keys(value: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	for key: Variant in value.keys():
+		if typeof(key) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return []
+		result.append(str(key))
+	result.sort()
+	return result
 
 
 func _success(code: StringName, context: Dictionary = {}) -> Dictionary:

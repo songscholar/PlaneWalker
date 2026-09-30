@@ -5,7 +5,7 @@ const PlayerScene := preload("res://scenes/player/player.tscn")
 const RewindRecorderScript := preload("res://scripts/time_system/rewind_recorder.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
-var _player_attack_events: int = 0
+var _weapon_cue_events: int = 0
 
 
 class RewindTarget extends Node2D:
@@ -55,20 +55,20 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
-	EventBus.player_attacked.connect(_on_player_attacked)
+	EventBus.weapon_cue_requested.connect(_on_weapon_cue_requested)
 	await _test_bow_hold_cancellation(suite)
 	await _test_rewind_cancels_before_restoring(suite)
 	await _test_player_cancellation_is_idempotent(suite)
 	await _test_rewind_cancels_each_transient_phase(suite)
 	await _test_dead_player_rewind_is_rejected(suite)
-	EventBus.player_attacked.disconnect(_on_player_attacked)
+	EventBus.weapon_cue_requested.disconnect(_on_weapon_cue_requested)
 	suite.finish(get_tree())
 
 
 func _test_bow_hold_cancellation(suite) -> void:
 	var player := await _spawn_player()
 	suite.assert_true(player.configure_loadout(_bow_loadout()), "cancellation fixture equips profile-backed Bow")
-	var attacks_before := _player_attack_events
+	var cues_before := _weapon_cue_events
 	suite.assert_true(player.try_action(&"ranged_attack"), "Bow begins a coordinator-owned HOLD")
 	var hold: Dictionary = player.weapon_presentation_snapshot()
 	var hold_token := int(hold.get("token", 0))
@@ -81,7 +81,7 @@ func _test_bow_hold_cancellation(suite) -> void:
 	suite.assert_equal(cancelled.get("phase"), "READY", "cancel closes Bow HOLD immediately")
 	suite.assert_true(int(cancelled.get("generation", 0)) > hold_generation, "cancel invalidates the HOLD generation")
 	suite.assert_true(not player.try_action(&"ranged_release"), "stale release cannot resolve a cancelled HOLD")
-	suite.assert_equal(_player_attack_events, attacks_before, "cancelled HOLD publishes no projectile release")
+	suite.assert_equal(_weapon_cue_events, cues_before, "cancelled HOLD publishes no release cue")
 	suite.assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "cancelled HOLD spawns no arrow")
 	suite.assert_true(hold_token > 0, "cancelled HOLD owned a real action token")
 
@@ -148,7 +148,7 @@ func _test_player_cancellation_is_idempotent(suite) -> void:
 	var sword: Node = player.get_node("SwordWeapon")
 	var hitbox: Node = sword.get_node("Hitbox")
 	var definition: Dictionary = sword.attack_definition(false)
-	var attacks_before: int = _player_attack_events
+	var cues_before: int = _weapon_cue_events
 
 	suite.assert_true(player.try_action(&"attack"), "player commits a cancellable sword windup")
 	suite.assert_true(player.try_action(&"dash"), "dash can buffer before cancellation")
@@ -163,7 +163,7 @@ func _test_player_cancellation_is_idempotent(suite) -> void:
 	suite.assert_equal(player._dash_velocity, Vector2.ZERO, "cancellation clears dash velocity")
 
 	_advance(player, int(definition["windup_frames"]) + int(definition["active_frames"]) + int(definition["recovery_frames"]) + 2)
-	suite.assert_equal(_player_attack_events, attacks_before, "cancelled windup emits no delayed sword attack")
+	suite.assert_equal(_weapon_cue_events, cues_before, "cancelled windup emits no delayed sword cue")
 	suite.assert_true(not hitbox.is_active(), "cancelled windup cannot reopen the hitbox later")
 
 	suite.assert_true(player.try_action(&"attack"), "player can start another attack after cancellation")
@@ -173,12 +173,12 @@ func _test_player_cancellation_is_idempotent(suite) -> void:
 	var receiver := HitReceiver.new()
 	receiver.name = "Receiver"
 	add_child(receiver)
-	var active_attack_count: int = _player_attack_events
+	var active_cue_count: int = _weapon_cue_events
 	player.cancel_transient_actions()
 	hitbox._on_area_entered(receiver)
 	_advance(player, int(next_definition["active_frames"]) + int(next_definition["recovery_frames"]) + 2)
 	suite.assert_equal(receiver.hit_count, 0, "cancelled active hitbox cannot deal a ghost hit")
-	suite.assert_equal(_player_attack_events, active_attack_count, "cancelled active phase emits no later attack signal")
+	suite.assert_equal(_weapon_cue_events, active_cue_count, "cancelled active phase emits no later weapon cue")
 	suite.assert_true(not hitbox.is_active(), "cancelled active hitbox stays closed")
 	receiver.queue_free()
 
@@ -209,11 +209,11 @@ func _test_rewind_cancels_each_transient_phase(suite) -> void:
 	var windup_recorder: Node = windup_player.get_node("RewindRecorder")
 	windup_recorder.clear_snapshots()
 	windup_recorder._record_snapshot()
-	var windup_attacks_before: int = _player_attack_events
+	var windup_cues_before: int = _weapon_cue_events
 	windup_player.try_action(&"attack")
 	suite.assert_true(windup_player.get_node("TimeManager").try_rewind(windup_recorder), "rewind succeeds during sword windup")
 	_advance(windup_player, int(windup_definition["windup_frames"]) + int(windup_definition["active_frames"]) + 2)
-	suite.assert_equal(_player_attack_events, windup_attacks_before, "rewound windup emits no abandoned-timeline attack")
+	suite.assert_equal(_weapon_cue_events, windup_cues_before, "rewound windup emits no abandoned-timeline cue")
 	suite.assert_equal(windup_player.action_state.current_state, PlayerActionStateScript.State.FREE, "rewind resets windup to safe free state")
 
 	var active_player := await _spawn_player()
@@ -226,7 +226,7 @@ func _test_rewind_cancels_each_transient_phase(suite) -> void:
 	active_recorder._record_snapshot()
 	suite.assert_true(active_player.try_action(&"attack"), "active-phase rewind setup commits sword attack")
 	_advance(active_player, int(active_definition["windup_frames"]))
-	var active_attacks_before_rewind: int = _player_attack_events
+	var active_cues_before_rewind: int = _weapon_cue_events
 	suite.assert_equal(active_player.action_state.current_state, PlayerActionStateScript.State.ATTACK_ACTIVE, "setup enters active action state before rewind")
 	suite.assert_true(active_hitbox._active_damage_info != null, "setup reaches active damage phase before rewind")
 	suite.assert_true(active_player.get_node("TimeManager").try_rewind(active_recorder), "rewind succeeds during active sword phase")
@@ -236,7 +236,7 @@ func _test_rewind_cancels_each_transient_phase(suite) -> void:
 	active_hitbox._on_area_entered(rewind_receiver)
 	_advance(active_player, int(active_definition["active_frames"]) + int(active_definition["recovery_frames"]) + 2)
 	suite.assert_equal(rewind_receiver.hit_count, 0, "rewound active phase cannot deal a ghost hit")
-	suite.assert_equal(_player_attack_events, active_attacks_before_rewind, "rewound active phase emits no later attack signal")
+	suite.assert_equal(_weapon_cue_events, active_cues_before_rewind, "rewound active phase emits no later weapon cue")
 	suite.assert_true(not active_hitbox.is_active(), "rewind closes the active hitbox immediately")
 	rewind_receiver.queue_free()
 
@@ -257,7 +257,7 @@ func _test_rewind_cancels_each_transient_phase(suite) -> void:
 	var bow_recorder: Node = bow_player.get_node("RewindRecorder")
 	bow_recorder.clear_snapshots()
 	bow_recorder._record_snapshot()
-	var bow_attacks_before := _player_attack_events
+	var bow_cues_before: int = _weapon_cue_events
 	suite.assert_true(bow_player.try_action(&"ranged_attack"), "rewind setup begins Bow HOLD")
 	_advance(bow_player, 9)
 	var bow_hold: Dictionary = bow_player.weapon_presentation_snapshot()
@@ -267,7 +267,7 @@ func _test_rewind_cancels_each_transient_phase(suite) -> void:
 	suite.assert_equal(rewound_bow.get("phase"), "READY", "rewind cancels Bow HOLD")
 	suite.assert_true(int(rewound_bow.get("generation", 0)) > bow_generation, "rewind invalidates the abandoned HOLD generation")
 	suite.assert_true(not bow_player.try_action(&"ranged_release"), "rewound stale release cannot fire")
-	suite.assert_equal(_player_attack_events, bow_attacks_before, "rewound HOLD publishes no attack fact")
+	suite.assert_equal(_weapon_cue_events, bow_cues_before, "rewound HOLD publishes no weapon cue")
 	suite.assert_true(get_tree().get_nodes_in_group("player_arrows").is_empty(), "rewound HOLD spawns no arrow")
 
 	await get_tree().create_timer(0.55).timeout
@@ -341,5 +341,10 @@ func _bow_loadout() -> Dictionary:
 	}
 
 
-func _on_player_attacked(_weapon_id: StringName, _context: Dictionary) -> void:
-	_player_attack_events += 1
+func _on_weapon_cue_requested(
+	_weapon_id: StringName,
+	_action_id: StringName,
+	_token: int,
+	_cue: Dictionary
+) -> void:
+	_weapon_cue_events += 1

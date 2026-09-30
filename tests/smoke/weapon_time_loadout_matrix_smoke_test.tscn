@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/smoke/weapon_time_loadout_matrix_smoke_test.gd" id="1_matrix"]
+
+[node name="WeaponTimeLoadoutMatrixSmokeTest" type="Node"]
+process_mode = 3
+script = ExtResource("1_matrix")

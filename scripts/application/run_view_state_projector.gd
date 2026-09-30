@@ -195,7 +195,7 @@ func _bow_weapon_view(
 			charge_current,
 			charge_maximum,
 			status_id,
-			0 if status_id == "ready" else 1,
+			0 if status_id in ["ready", "acting"] else 1,
 			0,
 			"hold" if holding else "",
 			charge_current if holding else 0

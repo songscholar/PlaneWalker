@@ -60,6 +60,8 @@ func _run() -> void:
 	await _assert_gun_feedback_contract()
 	await _assert_staff_feedback_contract()
 	await _assert_gauntlets_feedback_contract()
+	await _assert_high_frequency_feedback_budget()
+	await _assert_unknown_weapon_fails_closed()
 	await _assert_audio_cleanup_contract()
 	_assert_overlay_contract()
 	await _assert_feedback_runtime_gates()
@@ -504,7 +506,6 @@ func _assert_bow_feedback_contract() -> void:
 	)
 	CombatFeedback.reset_feedback_for_test()
 
-	EventBus.player_attacked.emit(&"bow", {"token": 701})
 	EventBus.weapon_cue_requested.emit(
 		&"bow",
 		&"bow.primary",
@@ -602,7 +603,6 @@ func _assert_gun_feedback_contract() -> void:
 	_suite.assert_true(proxy != null, "Gun feedback probe receives a player proxy")
 	CombatFeedback.reset_feedback_for_test()
 
-	EventBus.player_attacked.emit(&"gun", {"token": 801})
 	EventBus.weapon_cue_requested.emit(
 		&"gun",
 		&"normal_fire",
@@ -702,7 +702,6 @@ func _assert_staff_feedback_contract() -> void:
 	CombatFeedback.reset_feedback_for_test()
 
 
-	EventBus.player_attacked.emit(&"staff", {"token": 901})
 	EventBus.weapon_cue_requested.emit(
 		&"staff",
 		&"charged_element",
@@ -797,7 +796,6 @@ func _assert_gauntlets_feedback_contract() -> void:
 			"Gauntlets never exposes the Sword slash primitive"
 		)
 
-	EventBus.player_attacked.emit(&"gauntlets", {"token": 1001})
 	EventBus.weapon_cue_requested.emit(
 		&"gauntlets",
 		&"dodge_counter",
@@ -889,6 +887,162 @@ func _assert_gauntlets_feedback_contract() -> void:
 	player.queue_free()
 	await get_tree().process_frame
 	CombatFeedback.reset_feedback_for_test()
+
+
+func _assert_high_frequency_feedback_budget() -> void:
+	var player := SnapshotPlayer.new()
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "feedback budget probe receives a player proxy")
+	CombatFeedback.reset_feedback_for_test()
+	var wall_clock_start := int(
+		CombatFeedback.get_feedback_budget_snapshot_for_test().get("window_started_usec", 0)
+	)
+	Engine.time_scale = 0.01
+	EventBus.weapon_cue_requested.emit(
+		&"sword",
+		&"light_chain",
+		1999,
+		{
+			"cue_id": "sword_wall_clock_probe",
+			"animation_id": "sword_light",
+			"vfx_id": "sword_slash",
+			"audio_id": "sword_swing",
+			"camera_id": "",
+		}
+	)
+	CombatFeedback.call("update_feedback_budget_clock_for_test", wall_clock_start + 1_010_000)
+	var wall_clock_budget: Dictionary = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(
+		wall_clock_budget.get("weapon_cues_accepted"),
+		0,
+		"feedback budget window follows monotonic wall time while gameplay time is slowed"
+	)
+	Engine.time_scale = 1.0
+	CombatFeedback.reset_feedback_for_test()
+
+	var patterns: Array[Dictionary] = [
+		{"weapon": &"bow", "action": &"bow.primary", "cue": "bow_tension_high", "audio": "bow_tension_high"},
+		{"weapon": &"gun", "action": &"reload", "cue": "gun_perfect_reload", "audio": "gun_reload"},
+		{"weapon": &"staff", "action": &"charged_element", "cue": "staff_element_cast", "audio": "staff_element_cast"},
+		{"weapon": &"gauntlets", "action": &"punch_1", "cue": "gauntlets_combo", "audio": "gauntlets_jab"},
+	]
+	for index: int in range(16):
+		var pattern: Dictionary = patterns[index % patterns.size()]
+		EventBus.weapon_cue_requested.emit(
+			pattern["weapon"],
+			pattern["action"],
+			2000 + index,
+			{
+				"cue_id": pattern["cue"],
+				"animation_id": pattern["cue"],
+				"vfx_id": pattern["cue"],
+				"audio_id": pattern["audio"],
+				"camera_id": "",
+			}
+		)
+	var budget: Dictionary = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(budget.get("weapon_cues_accepted"), 12, "high-frequency weapon feedback is capped per second")
+	_suite.assert_equal(budget.get("weapon_cues_rejected"), 4, "excess weapon feedback is rejected deterministically")
+
+	for _index: int in range(12):
+		CombatFeedback.add_camera_trauma(20.0)
+	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(budget.get("camera_events_accepted"), 8, "camera feedback has a per-second event budget")
+	_suite.assert_equal(budget.get("camera_events_rejected"), 4, "excess camera requests are suppressed")
+	_suite.assert_true(
+		float(CombatFeedback.get_camera_feedback_snapshot_for_test().get("trauma", 0.0)) <= 8.0,
+		"camera trauma intensity remains capped"
+	)
+
+	if proxy != null:
+		for _index: int in range(5):
+			proxy.play_action(&"hit")
+		var flash_snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(flash_snapshot.get("flash_events_accepted"), 3, "actor flashes stay at or below three per second")
+		_suite.assert_equal(flash_snapshot.get("flash_events_rejected"), 2, "excess actor flashes are suppressed")
+
+	var target := VelocityActor.new()
+	add_child(target)
+	await get_tree().process_frame
+	var rapid_hit := DamageInfoScript.new(8.0, DamageInfoScript.DamageType.PHYSICAL)
+	rapid_hit.tags.append("weapon:gauntlets")
+	for _index: int in range(14):
+		EventBus.hit_confirmed.emit(rapid_hit, target, 8.0)
+	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(budget.get("hit_pauses_accepted"), 8, "rapid multi-hit pause is capped per second")
+	_suite.assert_equal(budget.get("hit_pauses_rejected"), 6, "excess rapid hit pauses are suppressed")
+	_suite.assert_equal(budget.get("hit_audio_accepted"), 12, "rapid multi-hit audio is capped per second")
+	_suite.assert_equal(budget.get("hit_audio_rejected"), 2, "excess rapid hit audio is suppressed")
+	_suite.assert_equal(budget.get("screen_flashes_accepted"), 3, "full-screen hit flashes remain capped during rapid hits")
+	_suite.assert_equal(budget.get("screen_flashes_rejected"), 11, "excess full-screen hit flashes are suppressed")
+	var hit_audio_history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(hit_audio_history.count(&"hit_light"), 12, "audio history contains only the accepted rapid-hit cues")
+	target.queue_free()
+	await get_tree().process_frame
+
+	CombatFeedback.advance_feedback_budget_for_test(1.01)
+	EventBus.weapon_cue_requested.emit(
+		&"gauntlets",
+		&"punch_2",
+		3000,
+		{
+			"cue_id": "gauntlets_combo_next_window",
+			"animation_id": "gauntlets_right_jab",
+			"vfx_id": "gauntlets_jab_wind",
+			"audio_id": "gauntlets_jab",
+			"camera_id": "",
+		}
+	)
+	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(budget.get("weapon_cues_accepted"), 1, "feedback budget reopens after its one-second window")
+	_suite.assert_equal(budget.get("weapon_cues_rejected"), 0, "new window starts without stale rejections")
+	_suite.assert_equal(budget.get("hit_pauses_accepted"), 0, "new window clears rapid-hit pause accounting")
+	_suite.assert_equal(budget.get("hit_audio_accepted"), 0, "new window clears rapid-hit audio accounting")
+
+	player.queue_free()
+	await get_tree().process_frame
+	CombatFeedback.reset_feedback_for_test()
+
+
+func _assert_unknown_weapon_fails_closed() -> void:
+	CombatFeedback.reset_feedback_for_test()
+	var player := SnapshotPlayer.new()
+	player.weapon_snapshot = {
+		"weapon_id": "unknown_weapon",
+		"action_id": "unknown.primary",
+		"phase": "ACTIVE",
+		"token": 4001,
+		"facing": Vector2.RIGHT,
+	}
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "unknown-weapon probe receives a player proxy")
+	if proxy != null:
+		proxy.advance_animation_for_test(0.01)
+		var snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(snapshot.get("weapon_visual"), "", "unknown weapon presentation fails closed")
+		_suite.assert_true(not bool(snapshot.get("melee_slash_visible", true)), "unknown weapon never renders the Sword slash")
+	EventBus.weapon_cue_requested.emit(
+		&"unknown_weapon",
+		&"unknown.primary",
+		4001,
+		{
+			"cue_id": "forged_unknown_weapon_cue",
+			"animation_id": "sword_light",
+			"vfx_id": "sword_slash",
+			"audio_id": "sword_swing",
+			"camera_id": "impact_ultimate",
+		}
+	)
+	var audio_history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_equal(audio_history.count(&"sword_swing"), 0, "unknown weapon cues cannot trigger known weapon audio")
+	var budget: Dictionary = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(budget.get("weapon_cues_accepted"), 0, "unknown weapon cues do not consume the shared feedback budget")
+	player.queue_free()
+	await get_tree().process_frame
 
 
 func _assert_audio_cleanup_contract() -> void:

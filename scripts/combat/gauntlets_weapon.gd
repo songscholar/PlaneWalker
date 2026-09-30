@@ -7,6 +7,8 @@ signal impact_feedback_requested(action_token: int, generation: int, fact: Dicti
 const GauntletsHitExecutionScript := preload("res://scripts/combat/gauntlets_hit_execution.gd")
 const GauntletsZoneExecutionScript := preload("res://scripts/combat/gauntlets_zone_execution.gd")
 const GauntletsComboAuraScript := preload("res://scripts/combat/gauntlets_combo_aura.gd")
+const WEAPON_ID := &"gauntlets"
+const SNAPSHOT_SCHEMA_VERSION := 1
 const PROFILE_ID := "gauntlets_launch_v1"
 const VALID_ACTION_IDS: Array[String] = [
 	"punch_1",
@@ -22,6 +24,15 @@ const VALID_ACTION_IDS: Array[String] = [
 const VALID_KINDS: Array[String] = ["hitbox", "shockwave"]
 const FEEDBACK_FACT_LIMIT := 256
 const CALLBACK_CLAIM_LIMIT := 512
+const RUNTIME_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "profile_action", "profile_action_released", "prepared_payloads",
+	"owned_payloads", "progress_claims", "progress_claim_order", "damage_claims",
+	"damage_claim_order", "reported_claims", "reported_claim_order", "feedback_facts",
+	"invulnerability_active", "invulnerability_source_id",
+]
+const PAYLOAD_SNAPSHOT_FIELDS: Array[String] = [
+	"payload_type", "token", "generation", "global_position", "snapshot",
+]
 
 @export var owner_path: NodePath
 @export var base_attack: float = 6.0
@@ -43,6 +54,10 @@ var _feedback_facts: Array[Dictionary] = []
 var _invulnerability_health: Node
 var _invulnerability_source_id: StringName = &""
 var _combo_slow_aura: Node
+
+
+func weapon_id() -> StringName:
+	return WEAPON_ID
 
 
 func _ready() -> void:
@@ -178,6 +193,107 @@ func feedback_facts_for_test() -> Array[Dictionary]:
 	return _feedback_facts.duplicate(true)
 
 
+func runtime_snapshot() -> Dictionary:
+	_prune_owned_payloads()
+	var prepared_payloads: Array[Dictionary] = []
+	for prepared: Dictionary in _prepared_payloads:
+		var entry := _payload_snapshot_entry(prepared.get("node"), prepared.get("global_position", Vector2.ZERO), "hit")
+		if not entry.is_empty():
+			prepared_payloads.append(entry)
+	var owned_payloads: Array[Dictionary] = []
+	for payload: Node in _owned_payloads:
+		var payload_type := "zone" if payload.is_in_group("gauntlets_zones") else "hit"
+		var entry := _payload_snapshot_entry(payload, (payload as Node2D).global_position if payload is Node2D else Vector2.ZERO, payload_type)
+		if not entry.is_empty():
+			owned_payloads.append(entry)
+	return {
+		"schema_version": SNAPSHOT_SCHEMA_VERSION,
+		"profile_action": _profile_action.duplicate(true),
+		"profile_action_released": _profile_action_released,
+		"prepared_payloads": prepared_payloads,
+		"owned_payloads": owned_payloads,
+		"progress_claims": _progress_claims.duplicate(true),
+		"progress_claim_order": _progress_claim_order.duplicate(),
+		"damage_claims": _damage_claims.duplicate(true),
+		"damage_claim_order": _damage_claim_order.duplicate(),
+		"reported_claims": _reported_claims.duplicate(true),
+		"reported_claim_order": _reported_claim_order.duplicate(),
+		"feedback_facts": _feedback_facts.duplicate(true),
+		"invulnerability_active": _invulnerability_source_id != &"",
+		"invulnerability_source_id": str(_invulnerability_source_id),
+	}
+
+
+func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, RUNTIME_SNAPSHOT_FIELDS):
+		return false
+	if (
+		int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
+		or not value.get("profile_action") is Dictionary
+		or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		or not value.get("prepared_payloads") is Array
+		or not value.get("owned_payloads") is Array
+		or not value.get("progress_claims") is Dictionary
+		or not value.get("progress_claim_order") is Array
+		or not value.get("damage_claims") is Dictionary
+		or not value.get("damage_claim_order") is Array
+		or not value.get("reported_claims") is Dictionary
+		or not value.get("reported_claim_order") is Array
+		or not value.get("feedback_facts") is Array
+		or (value.get("feedback_facts") as Array).size() > FEEDBACK_FACT_LIMIT
+		or typeof(value.get("invulnerability_active")) != TYPE_BOOL
+		or typeof(value.get("invulnerability_source_id")) != TYPE_STRING
+		or not _variant_numbers_are_finite(value)
+	):
+		return false
+	if (
+		not _valid_claim_snapshot(value["progress_claims"], value["progress_claim_order"], CALLBACK_CLAIM_LIMIT)
+		or not _valid_claim_snapshot(value["damage_claims"], value["damage_claim_order"], CALLBACK_CLAIM_LIMIT)
+		or not _valid_claim_snapshot(value["reported_claims"], value["reported_claim_order"], CALLBACK_CLAIM_LIMIT)
+	):
+		return false
+	var profile_action := value["profile_action"] as Dictionary
+	var released := bool(value["profile_action_released"])
+	if profile_action.is_empty():
+		if released or not (value["prepared_payloads"] as Array).is_empty():
+			return false
+	elif not _definition_is_valid(profile_action):
+		return false
+	if released and not (value["prepared_payloads"] as Array).is_empty():
+		return false
+	if not released and not profile_action.is_empty() and (value["prepared_payloads"] as Array).size() != (profile_action["payload_descriptors"] as Array).size():
+		return false
+	for prepared_value: Variant in value["prepared_payloads"]:
+		if not _valid_payload_snapshot_entry(prepared_value, "hit"):
+			return false
+	for owned_value: Variant in value["owned_payloads"]:
+		if not _valid_payload_snapshot_entry(owned_value):
+			return false
+	var invulnerability_active := bool(value["invulnerability_active"])
+	var source_id := str(value["invulnerability_source_id"])
+	if invulnerability_active != not source_id.is_empty():
+		return false
+	if invulnerability_active:
+		if profile_action.is_empty() or source_id != "gauntlets_cast:%d:%d" % [int(profile_action["token"]), int(profile_action["generation"])]:
+			return false
+	return true
+
+
+func restore_runtime_snapshot(value: Dictionary) -> bool:
+	if not can_restore_runtime_snapshot(value):
+		return false
+	var previous := runtime_snapshot()
+	if previous == value:
+		return true
+	if not _apply_runtime_snapshot(value):
+		_apply_runtime_snapshot(previous)
+		return false
+	if runtime_snapshot() != value:
+		_apply_runtime_snapshot(previous)
+		return false
+	return true
+
+
 func set_combo_slow_aura(active: bool, source_generation: int) -> bool:
 	if not active:
 		if _combo_slow_aura == null or not is_instance_valid(_combo_slow_aura):
@@ -289,11 +405,11 @@ func _on_payload_result(
 		if response_value is Dictionary:
 			runtime_response = (response_value as Dictionary).duplicate(true)
 	_record_feedback_fact(action_token, generation, frozen, payload)
-	payload_result_reported.emit(action_token, generation, frozen)
 	if not bool(frozen.get("is_echo", false)):
 		var echo_value: Variant = runtime_response.get("echo_descriptor", {})
 		if echo_value is Dictionary and not (echo_value as Dictionary).is_empty():
 			_spawn_echo(action_token, generation, frozen, echo_value as Dictionary, payload)
+	payload_result_reported.emit(action_token, generation, frozen)
 
 
 func _on_hit_execution_finished(action_token: int, generation: int, payload: Node) -> void:
@@ -584,6 +700,192 @@ func _prune_owned_payloads() -> void:
 			identities[instance_id] = _owned_payload_identity[instance_id]
 	_owned_payloads = survivors
 	_owned_payload_identity = identities
+
+
+func _payload_snapshot_entry(payload_value: Variant, world_position: Variant, payload_type: String) -> Dictionary:
+	if (
+		not payload_value is Node
+		or not is_instance_valid(payload_value)
+		or not (payload_value as Node).has_method("execution_snapshot")
+		or not world_position is Vector2
+	):
+		return {}
+	var payload := payload_value as Node
+	var snapshot_value: Variant = payload.call("execution_snapshot")
+	if not snapshot_value is Dictionary:
+		return {}
+	return {
+		"payload_type": payload_type,
+		"token": int(payload.get("action_token")),
+		"generation": int(payload.get("generation")),
+		"global_position": world_position,
+		"snapshot": (snapshot_value as Dictionary).duplicate(true),
+	}
+
+
+func _valid_payload_snapshot_entry(value: Variant, expected_type: String = "") -> bool:
+	if not value is Dictionary:
+		return false
+	var entry := value as Dictionary
+	if not _has_exact_fields(entry, PAYLOAD_SNAPSHOT_FIELDS):
+		return false
+	var payload_type := str(entry.get("payload_type", ""))
+	if (
+		payload_type not in ["hit", "zone"]
+		or (not expected_type.is_empty() and payload_type != expected_type)
+		or typeof(entry.get("token")) != TYPE_INT
+		or int(entry.get("token", 0)) <= 0
+		or typeof(entry.get("generation")) != TYPE_INT
+		or int(entry.get("generation", 0)) <= 0
+		or not entry.get("global_position") is Vector2
+		or not entry.get("snapshot") is Dictionary
+	):
+		return false
+	var payload_snapshot := entry["snapshot"] as Dictionary
+	if (
+		int(entry["token"]) != int(payload_snapshot.get("action_token", 0))
+		or int(entry["generation"]) != int(payload_snapshot.get("generation", 0))
+	):
+		return false
+	var payload = GauntletsZoneExecutionScript.new() if payload_type == "zone" else GauntletsHitExecutionScript.new()
+	var valid := bool(payload.call("can_restore_execution_snapshot", payload_snapshot.duplicate(true)))
+	payload.free()
+	return valid
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func _apply_runtime_snapshot(value: Dictionary) -> bool:
+	if not can_restore_runtime_snapshot(value):
+		return false
+	var parent := get_tree().current_scene if is_inside_tree() else null
+	if not (value["owned_payloads"] as Array).is_empty() and parent == null:
+		return false
+	var next_progress_claims := (value["progress_claims"] as Dictionary).duplicate(true)
+	var next_progress_order: Array = (value["progress_claim_order"] as Array).duplicate()
+	var next_damage_claims := (value["damage_claims"] as Dictionary).duplicate(true)
+	var next_damage_order: Array = (value["damage_claim_order"] as Array).duplicate()
+	var dependencies := {
+		"source": self,
+		"owner_entity": _owner_player(),
+		"progress_claims": next_progress_claims,
+		"progress_claim_order": next_progress_order,
+		"damage_claims": next_damage_claims,
+		"damage_claim_order": next_damage_order,
+	}
+	var staged_prepared: Array[Dictionary] = []
+	for entry_value: Variant in value["prepared_payloads"]:
+		var restored := _restore_payload_entry(entry_value as Dictionary, dependencies)
+		if restored.is_empty():
+			_free_prepared(staged_prepared)
+			return false
+		staged_prepared.append(restored)
+	var staged_owned: Array[Dictionary] = []
+	for entry_value: Variant in value["owned_payloads"]:
+		var restored := _restore_payload_entry(entry_value as Dictionary, dependencies)
+		if restored.is_empty():
+			_free_prepared(staged_prepared)
+			_free_prepared(staged_owned)
+			return false
+		staged_owned.append(restored)
+	var wants_invulnerability := bool(value["invulnerability_active"])
+	var desired_source_id := StringName(str(value["invulnerability_source_id"]))
+	var keep_invulnerability := wants_invulnerability and desired_source_id == _invulnerability_source_id
+	var staged_invulnerability_health: Node = null
+	if wants_invulnerability and not keep_invulnerability:
+		staged_invulnerability_health = _owner_health()
+		if (
+			staged_invulnerability_health == null
+			or not staged_invulnerability_health.has_method("acquire_invulnerability_source")
+			or not bool(staged_invulnerability_health.call("acquire_invulnerability_source", desired_source_id))
+		):
+			_free_prepared(staged_prepared)
+			_free_prepared(staged_owned)
+			return false
+	_free_prepared(_prepared_payloads)
+	_prepared_payloads.clear()
+	_clear_owned_payloads()
+	if not keep_invulnerability:
+		_release_cast_invulnerability()
+		if wants_invulnerability:
+			_invulnerability_health = staged_invulnerability_health
+			_invulnerability_source_id = desired_source_id
+	_progress_claims = next_progress_claims
+	_progress_claim_order = next_progress_order
+	_damage_claims = next_damage_claims
+	_damage_claim_order = next_damage_order
+	_reported_claims = (value["reported_claims"] as Dictionary).duplicate(true)
+	_reported_claim_order = (value["reported_claim_order"] as Array).duplicate()
+	_feedback_facts = (value["feedback_facts"] as Array).duplicate(true)
+	_profile_action = (value["profile_action"] as Dictionary).duplicate(true)
+	_profile_action_released = bool(value["profile_action_released"])
+	_prepared_payloads = staged_prepared
+	for prepared: Dictionary in staged_owned:
+		_attach_payload(prepared, parent)
+	return true
+
+
+func _restore_payload_entry(entry: Dictionary, dependencies: Dictionary) -> Dictionary:
+	var payload_type := str(entry["payload_type"])
+	var payload = GauntletsZoneExecutionScript.new() if payload_type == "zone" else GauntletsHitExecutionScript.new()
+	if payload is Node2D:
+		(payload as Node2D).global_position = entry["global_position"]
+	if not bool(payload.call(
+		"restore_execution_snapshot",
+		(entry["snapshot"] as Dictionary).duplicate(true),
+		dependencies
+	)):
+		payload.free()
+		return {}
+	payload.payload_result.connect(_on_payload_result.bind(payload))
+	if payload_type == "hit":
+		payload.execution_finished.connect(_on_hit_execution_finished.bind(payload))
+	return {
+		"node": payload,
+		"global_position": entry["global_position"],
+		"token": int(entry["token"]),
+		"generation": int(entry["generation"]),
+	}
+
+
+func _valid_claim_snapshot(claims_value: Variant, order_value: Variant, limit: int) -> bool:
+	if not claims_value is Dictionary or not order_value is Array:
+		return false
+	var claims := claims_value as Dictionary
+	var order := order_value as Array
+	if claims.size() != order.size() or order.size() > limit:
+		return false
+	var seen: Dictionary = {}
+	for key_value: Variant in order:
+		if typeof(key_value) != TYPE_STRING or str(key_value).is_empty() or seen.has(str(key_value)) or not claims.has(str(key_value)):
+			return false
+		if typeof(claims[str(key_value)]) != TYPE_BOOL or not bool(claims[str(key_value)]):
+			return false
+		seen[str(key_value)] = true
+	return true
+
+
+func _variant_numbers_are_finite(value: Variant) -> bool:
+	if value is Vector2:
+		return is_finite((value as Vector2).x) and is_finite((value as Vector2).y)
+	if typeof(value) == TYPE_FLOAT:
+		return is_finite(float(value))
+	if value is Dictionary:
+		for child: Variant in (value as Dictionary).values():
+			if not _variant_numbers_are_finite(child):
+				return false
+	if value is Array:
+		for child: Variant in value:
+			if not _variant_numbers_are_finite(child):
+				return false
+	return true
 
 
 func _free_prepared(prepared_payloads: Array) -> void:

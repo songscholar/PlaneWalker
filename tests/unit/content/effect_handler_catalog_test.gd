@@ -1,6 +1,7 @@
 extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const EffectDefinitionScript := preload("res://scripts/content/effects/effect_definition.gd")
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 
 const SOURCE_PATHS: Array[String] = [
@@ -28,6 +29,8 @@ func _run() -> void:
 	_test_known_effects_and_context(suite, catalog)
 	_test_script_like_and_unknown_ids(suite, catalog)
 	_test_scalar_types_and_numeric_bounds(suite, catalog)
+	_test_weapon_capability_mappings(suite, catalog)
+	_test_weapon_capability_schema_fails_closed(suite)
 	_test_deterministic_normalization(suite, catalog)
 	_test_snapshot_isolation(suite, catalog)
 	_test_missing_catalog_fails_closed(suite)
@@ -150,6 +153,111 @@ func _test_scalar_types_and_numeric_bounds(suite, catalog) -> void:
 	suite.assert_true(
 		catalog.validate_effects({"defense_bonus": -2.0}, {"category": "curse"}).blocking_errors.is_empty(),
 		"signed defense bonus preserves the current curse"
+	)
+
+
+func _test_weapon_capability_mappings(suite, catalog) -> void:
+	var damage_routes: Array[Dictionary] = catalog.weapon_capability_routes({"attack_multiplier": 1.25})
+	suite.assert_equal(damage_routes.size(), 5, "generic damage effects declare one route per launch weapon")
+	var routed_weapons: Array[String] = []
+	for route: Dictionary in damage_routes:
+		routed_weapons.append(str(route.get("weapon_id", "")))
+		suite.assert_equal(route.get("capability"), "weapon.damage", "generic damage targets the damage capability")
+		suite.assert_close(float(route.get("base_value", NAN)), 1.0, "generic damage starts from identity")
+		suite.assert_equal(route.get("stack_rule"), "multiply", "generic damage preserves multiplicative stacking")
+	suite.assert_equal(
+		routed_weapons,
+		["bow", "gauntlets", "gun", "staff", "sword"],
+		"five-weapon routes are deterministic"
+	)
+	var sword_routes: Array[Dictionary] = catalog.weapon_capability_routes({
+		"combo_finisher_multiplier_bonus": 0.35,
+		"heavy_execute_threshold": 0.3,
+	})
+	suite.assert_equal(
+		sword_routes,
+		[
+			{
+				"effect_id": "combo_finisher_multiplier_bonus",
+				"weapon_id": "sword",
+				"capability": "weapon.combo_finisher_damage",
+				"base_value": 0.0,
+				"stack_rule": "add",
+				"value": 0.35,
+			},
+			{
+				"effect_id": "heavy_execute_threshold",
+				"weapon_id": "sword",
+				"capability": "weapon.heavy_execute_threshold",
+				"base_value": 0.3,
+				"stack_rule": "replace",
+				"value": 0.3,
+			},
+		],
+		"Sword reward semantics are represented by declared capabilities"
+	)
+	suite.assert_true(
+		catalog.weapon_capability_routes({"attack_multiplier": 6.0}).is_empty(),
+		"invalid effect values cannot produce executable routes"
+	)
+
+
+func _test_weapon_capability_schema_fails_closed(suite) -> void:
+	var source := {
+		"effect_id": "fixture_weapon_bonus",
+		"value_type": "number",
+		"minimum": 0.0,
+		"maximum": 5.0,
+		"stack_rule": "add",
+		"allowed_categories": ["item"],
+		"weapon_capabilities": [
+			{"weapon_id": "sword", "capability": "weapon.damage", "base_value": 1.0},
+		],
+	}
+	var valid = EffectDefinitionScript.new()
+	suite.assert_true(
+		bool(valid.configure(source).get("ok", false)),
+		"numeric stackable effects accept explicit weapon capability mappings"
+	)
+
+	var duplicate_weapon: Dictionary = source.duplicate(true)
+	duplicate_weapon["weapon_capabilities"].append(
+		{"weapon_id": "sword", "capability": "weapon.attack_speed", "base_value": 1.0}
+	)
+	var duplicate_result: Dictionary = EffectDefinitionScript.new().configure(duplicate_weapon)
+	suite.assert_equal(
+		duplicate_result.get("context", {}).get("reason"),
+		"duplicate",
+		"one effect cannot ambiguously route twice to the same weapon"
+	)
+
+	var boolean_mapping: Dictionary = source.duplicate(true)
+	boolean_mapping["value_type"] = "boolean"
+	boolean_mapping["minimum"] = null
+	boolean_mapping["maximum"] = null
+	var boolean_result: Dictionary = EffectDefinitionScript.new().configure(boolean_mapping)
+	suite.assert_equal(
+		boolean_result.get("context", {}).get("reason"),
+		"numeric_effect_required",
+		"boolean effects cannot become numeric weapon modifiers"
+	)
+
+	var trigger_mapping: Dictionary = source.duplicate(true)
+	trigger_mapping["stack_rule"] = "trigger"
+	var trigger_result: Dictionary = EffectDefinitionScript.new().configure(trigger_mapping)
+	suite.assert_equal(
+		trigger_result.get("context", {}).get("reason"),
+		"unsupported_stack_rule",
+		"trigger effects cannot declare persistent weapon capabilities"
+	)
+
+	var invalid_base: Dictionary = source.duplicate(true)
+	invalid_base["weapon_capabilities"][0]["base_value"] = INF
+	var base_result: Dictionary = EffectDefinitionScript.new().configure(invalid_base)
+	suite.assert_equal(
+		base_result.get("context", {}).get("reason"),
+		"non_finite",
+		"weapon capability bases reject non-finite values"
 	)
 
 

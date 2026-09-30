@@ -40,6 +40,7 @@ func _run() -> void:
 	_test_wrong_categories(suite)
 	_test_milestone_availability(suite)
 	_test_next_candidate_presets(suite)
+	_test_launch_weapon_time_matrix(suite)
 	_test_result_definitions_are_deep_copies(suite)
 	suite.finish(get_tree())
 
@@ -128,6 +129,32 @@ func _test_next_candidate_presets(suite) -> void:
 		var expected_profile := "bow_candidate_v1" if str(preset["weapon_id"]) == "bow" else "sword_launch_v1"
 		suite.assert_equal(str(loadout.get("weapon_profile", {}).get("id", "")), expected_profile, "%s resolves its milestone profile" % str(preset["label"]))
 		suite.assert_equal(_definition_ids(loadout.get("time_abilities", [])), preset["skills"], "%s resolves both ability slots" % str(preset["label"]))
+
+
+func _test_launch_weapon_time_matrix(suite) -> void:
+	var weapons: Array[String] = ["sword", "bow", "gun", "staff", "gauntlets"]
+	var time_pairs: Array[Array] = [
+		["stop", "rewind"],
+		["stop", "rift"],
+		["stop", "accelerate"],
+		["rewind", "rift"],
+		["rewind", "accelerate"],
+		["rift", "accelerate"],
+	]
+	for weapon_id: String in weapons:
+		for pair: Array in time_pairs:
+			var label := "%s / %s" % [weapon_id, "+".join(pair)]
+			var result = _policy.validate(_config(weapon_id, pair, "LAUNCH"), _registry)
+			suite.assert_true(result.ok, "%s validates through the player-facing Launch matrix" % label)
+			if not result.ok:
+				continue
+			var loadout: Dictionary = result.context.get("loadout", {})
+			suite.assert_equal(str(loadout.get("weapon", {}).get("id", "")), weapon_id, "%s resolves its weapon" % label)
+			suite.assert_equal(_definition_ids(loadout.get("time_abilities", [])), pair, "%s preserves its ordered time pair" % label)
+			suite.assert_true(
+				not str(loadout.get("weapon_profile", {}).get("id", "")).is_empty(),
+				"%s resolves one authoritative runtime Profile" % label
+			)
 
 
 func _test_result_definitions_are_deep_copies(suite) -> void:

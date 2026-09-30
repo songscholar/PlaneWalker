@@ -99,6 +99,11 @@ const WEAPON_RUNTIME_PROFILE_FIELDS: Array[String] = [
 
 var _definitions: Dictionary = {}
 var _active_packs: Array[Dictionary] = []
+var _effect_catalog_path: String = EffectHandlerCatalogScript.DEFAULT_CATALOG_PATH
+
+
+func _init(effect_catalog_path: String = EffectHandlerCatalogScript.DEFAULT_CATALOG_PATH) -> void:
+	_effect_catalog_path = effect_catalog_path
 
 
 func load_packs(
@@ -159,7 +164,7 @@ func load_packs(
 		report.set_activation_summary(0, _sorted_string_keys(isolated_ids), {}, {})
 		return report
 
-	var effect_catalog = EffectHandlerCatalogScript.new()
+	var effect_catalog = EffectHandlerCatalogScript.new(_effect_catalog_path)
 	var effect_report = effect_catalog.load_report()
 	report.merge(effect_report)
 	if report.has_blocking_errors():
@@ -234,6 +239,19 @@ func load_packs(
 		if not reference_error.is_empty():
 			reference_error["pack_id"] = pack_id
 			report.add_error("Content reference is unavailable", reference_error, blocking)
+			isolated_ids[pack_id] = true
+			continue
+		var effect_capability_error := _first_effect_capability_error(
+			pack_definitions,
+			effect_catalog
+		)
+		if not effect_capability_error.is_empty():
+			effect_capability_error["pack_id"] = pack_id
+			report.add_error(
+				"Effect capability is unsupported by a weapon runtime profile",
+				effect_capability_error,
+				blocking
+			)
 			isolated_ids[pack_id] = true
 			continue
 		for definition: Dictionary in pack_definitions:
@@ -942,6 +960,99 @@ func _first_reference_error(
 		if not (weapon_value as Dictionary).get("references", []).has(str(definition["id"])):
 			return {"content_id": str(definition["id"]), "reference_id": weapon_id, "reason": "weapon_back_reference"}
 	return {}
+
+
+func _first_effect_capability_error(
+	pack_definitions: Array[Dictionary],
+	effect_catalog
+) -> Dictionary:
+	var definitions: Array[Dictionary] = []
+	for existing_value: Variant in _definitions.values():
+		if existing_value is Dictionary:
+			definitions.append(existing_value as Dictionary)
+	definitions.append_array(pack_definitions)
+	var profiles_by_weapon: Dictionary = {}
+	for definition: Dictionary in definitions:
+		if str(definition.get("category", "")) != "weapon_runtime_profile":
+			continue
+		var weapon_id := str(definition.get("weapon_id", ""))
+		if not profiles_by_weapon.has(weapon_id):
+			profiles_by_weapon[weapon_id] = []
+		(profiles_by_weapon[weapon_id] as Array).append(definition)
+	for definition: Dictionary in definitions:
+		if not EFFECT_BEARING_CATEGORIES.has(str(definition.get("category", ""))):
+			continue
+		var content_availability: Array = definition.get("availability", [])
+		var compatibility_value: Variant = definition.get("compatibility", {})
+		var compatible_weapons: Array = []
+		if compatibility_value is Dictionary:
+			var weapon_ids_value: Variant = (compatibility_value as Dictionary).get("weapon_ids", [])
+			if weapon_ids_value is Array:
+				compatible_weapons = weapon_ids_value
+		var routes: Array[Dictionary] = effect_catalog.weapon_capability_routes(
+			definition.get("effects", {})
+		)
+		var applicable_routes_by_weapon: Dictionary = {}
+		for route: Dictionary in routes:
+			var weapon_id := str(route.get("weapon_id", ""))
+			if not compatible_weapons.is_empty() and not compatible_weapons.has(weapon_id):
+				continue
+			if not applicable_routes_by_weapon.has(weapon_id):
+				applicable_routes_by_weapon[weapon_id] = []
+			(applicable_routes_by_weapon[weapon_id] as Array).append(route)
+		if not compatible_weapons.is_empty():
+			for compatible_weapon_value: Variant in compatible_weapons:
+				var compatible_weapon_id := str(compatible_weapon_value)
+				var compatible_routes: Array = applicable_routes_by_weapon.get(compatible_weapon_id, [])
+				if not routes.is_empty() and compatible_routes.is_empty():
+					return {
+						"content_id": str(definition.get("id", "")),
+						"weapon_id": compatible_weapon_id,
+						"reason": "no_executable_route",
+					}
+				var overlapping_profiles: Array[Dictionary] = []
+				for profile_value: Variant in profiles_by_weapon.get(compatible_weapon_id, []):
+					if (
+						profile_value is Dictionary
+						and _arrays_overlap(content_availability, (profile_value as Dictionary).get("availability", []))
+					):
+						overlapping_profiles.append(profile_value as Dictionary)
+				if overlapping_profiles.is_empty():
+					return {
+						"content_id": str(definition.get("id", "")),
+						"weapon_id": compatible_weapon_id,
+						"reason": "compatible_profile_missing",
+					}
+		for weapon_id_value: Variant in applicable_routes_by_weapon.keys():
+			var weapon_id := str(weapon_id_value)
+			for route_value: Variant in applicable_routes_by_weapon[weapon_id_value]:
+				if not route_value is Dictionary:
+					continue
+				var route: Dictionary = route_value
+				var capability := str(route.get("capability", ""))
+				for profile_value: Variant in profiles_by_weapon.get(weapon_id, []):
+					if not profile_value is Dictionary:
+						continue
+					var profile: Dictionary = profile_value
+					if not _arrays_overlap(content_availability, profile.get("availability", [])):
+						continue
+					if not (profile.get("capabilities", []) as Array).has(capability):
+						return {
+							"content_id": str(definition.get("id", "")),
+							"effect_id": str(route.get("effect_id", "")),
+							"weapon_id": weapon_id,
+							"profile_id": str(profile.get("id", "")),
+							"capability": capability,
+							"reason": "unsupported_capability",
+						}
+	return {}
+
+
+func _arrays_overlap(left: Array, right: Array) -> bool:
+	for value: Variant in left:
+		if right.has(value):
+			return true
+	return false
 
 
 func _first_isolated_dependency(descriptor: Dictionary, isolated_ids: Dictionary) -> String:

@@ -41,7 +41,16 @@ func _test_profile_snapshot_and_capabilities_are_isolated() -> void:
 	var profile: RefCounted = fixture["profile"]
 	_suite.assert_equal(
 		_sorted_strings(runtime.capabilities()),
-		["weapon.attack_speed", "weapon.charge_rate", "weapon.damage"],
+		[
+			"weapon.attack_speed",
+			"weapon.charge_rate",
+			"weapon.combo_finisher_damage",
+			"weapon.damage",
+			"weapon.heavy_damage",
+			"weapon.heavy_execute_damage",
+			"weapon.heavy_execute_threshold",
+			"weapon.low_hp_damage",
+		],
 		"runtime exposes the configured profile capabilities"
 	)
 
@@ -224,11 +233,11 @@ func _test_payload_adapter_preserves_damage_knockback_tags_and_reward_hooks() ->
 	var sword: Node = fixture["sword"]
 	var runtime: RefCounted = fixture["runtime"]
 	player.health.current_hp = player.health.max_hp * 0.25
-	sword.combo_finisher_multiplier_bonus = 0.35
-	sword.heavy_damage_multiplier_bonus = 0.40
-	sword.heavy_execute_multiplier_bonus = 0.50
-	sword.heavy_execute_threshold = 0.30
-	sword.low_hp_damage_multiplier_bonus = 0.45
+	_suite.assert_true(runtime.apply_modifier(&"weapon.combo_finisher_damage", 0.35), "finisher reward routes through its capability")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.heavy_damage", 0.40), "heavy reward routes through its capability")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.heavy_execute_damage", 0.50), "execute reward routes through its capability")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.heavy_execute_threshold", 0.30), "execute threshold routes through its capability")
+	_suite.assert_true(runtime.apply_modifier(&"weapon.low_hp_damage", 0.45), "low-HP reward routes through its capability")
 	_suite.assert_true(runtime.apply_modifier(&"weapon.damage", 1.5), "runtime accepts a declared damage capability")
 	_suite.assert_true(not runtime.apply_modifier(&"weapon.ammo_capacity", 2.0), "runtime rejects an undeclared modifier capability")
 
@@ -422,16 +431,34 @@ func _fixture() -> Dictionary:
 	var modifiers = WeaponModifierStateScript.new()
 	_suite.assert_true(
 		modifiers.configure(
-			PackedStringArray(["weapon.attack_speed", "weapon.charge_rate", "weapon.damage"]),
+			PackedStringArray([
+				"weapon.attack_speed",
+				"weapon.charge_rate",
+				"weapon.combo_finisher_damage",
+				"weapon.damage",
+				"weapon.heavy_damage",
+				"weapon.heavy_execute_damage",
+				"weapon.heavy_execute_threshold",
+				"weapon.low_hp_damage",
+			]),
 			{
 				"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
-				"weapon.charge_rate": {"minimum": 0.0, "maximum": 5.0},
+				"weapon.charge_rate": {"minimum": 0.0, "maximum": 6.0},
+				"weapon.combo_finisher_damage": {"minimum": 0.0, "maximum": 10.0},
 				"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+				"weapon.heavy_damage": {"minimum": 0.0, "maximum": 10.0},
+				"weapon.heavy_execute_damage": {"minimum": 0.0, "maximum": 10.0},
+				"weapon.heavy_execute_threshold": {"minimum": 0.0, "maximum": 1.0},
+				"weapon.low_hp_damage": {"minimum": 0.0, "maximum": 10.0},
 			}
 		),
 		"Sword modifier state configures from profile capabilities"
 	)
 	var runtime = SwordWeaponRuntimeScript.new()
+	_suite.assert_true(
+		runtime.bind_adapter(player.get_node("SwordWeapon")),
+		"Sword runtime accepts the explicit real payload adapter"
+	)
 	_suite.assert_true(runtime.configure(player, profile, modifiers), "Sword runtime configures with real payload adapter")
 	return {
 		"player": player,
@@ -467,6 +494,10 @@ func _assert_profile_drift_rejected(
 	if not bool(profile_result.get("ok", false)):
 		return
 	var runtime = SwordWeaponRuntimeScript.new()
+	_suite.assert_true(
+		runtime.bind_adapter(player.get_node("SwordWeapon")),
+		"drift fixture binds the payload adapter explicitly"
+	)
 	_suite.assert_true(
 		not runtime.configure(player, profile, modifiers),
 		"Sword runtime rejects parser-valid %s drift" % label

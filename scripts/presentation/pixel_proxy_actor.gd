@@ -6,6 +6,8 @@ signal cue_requested(cue_id: StringName, world_position: Vector2, intensity: flo
 const AfterimageScript := preload("res://scripts/presentation/pixel_proxy_afterimage.gd")
 const PIXEL_UNIT := 2
 const SCREEN_PIXEL_UNIT := 2.0
+const FLASH_BUDGET_WINDOW_SECONDS := 1.0
+const MAX_FLASH_EVENTS_PER_WINDOW := 3
 
 const PALETTES := {
 	"player": {
@@ -83,6 +85,9 @@ var _state: StringName = &"idle"
 var _action_remaining: float = 0.0
 var _phase_clock: float = 0.0
 var _flash_remaining: float = 0.0
+var _flash_budget_elapsed: float = 0.0
+var _flash_events_accepted: int = 0
+var _flash_events_rejected: int = 0
 var _bound: bool = false
 var _last_boss_action: String = "NONE"
 var _last_boss_phase: String = "IDLE"
@@ -168,7 +173,7 @@ func play_action(action_id: StringName, duration: float = -1.0) -> void:
 		_state = normalized
 		_action_remaining = float(ACTION_DURATIONS.get(normalized, 0.2)) if duration <= 0.0 else duration
 	if normalized == &"hit" and _hit_flash_enabled:
-		_flash_remaining = maxf(_flash_remaining, 0.10)
+		_request_hit_flash()
 	_refresh_player_weapon_presentation()
 	_update_presentation_facing()
 	_apply_pixel_transform()
@@ -245,6 +250,8 @@ func get_snapshot_for_test() -> Dictionary:
 		"screen_action_offset": _screen_action_offset,
 		"action_scale": _action_scale,
 		"flash_active": _flash_remaining > 0.0,
+		"flash_events_accepted": _flash_events_accepted,
+		"flash_events_rejected": _flash_events_rejected,
 		"reduced_motion": _reduced_motion,
 		"velocity_capability_cached": _has_velocity_property,
 		"weapon_snapshot_available": _weapon_snapshot_available,
@@ -283,6 +290,7 @@ func _process(delta: float) -> void:
 
 
 func _advance_animation(delta: float) -> void:
+	_advance_flash_budget(delta)
 	if not _reduced_motion:
 		_phase_clock += delta
 	_flash_remaining = maxf(0.0, _flash_remaining - delta)
@@ -426,6 +434,8 @@ func _player_weapon_action_is_presented() -> bool:
 
 func _weapon_visual_kind() -> String:
 	match _weapon_id:
+		"sword":
+			return "sword"
 		"bow":
 			return "bow"
 		"gun":
@@ -435,7 +445,25 @@ func _weapon_visual_kind() -> String:
 		"gauntlets":
 			return "gauntlets"
 		_:
-			return "sword"
+			return ""
+
+
+func _request_hit_flash() -> bool:
+	if _flash_events_accepted >= MAX_FLASH_EVENTS_PER_WINDOW:
+		_flash_events_rejected += 1
+		return false
+	_flash_events_accepted += 1
+	_flash_remaining = maxf(_flash_remaining, 0.10)
+	return true
+
+
+func _advance_flash_budget(delta: float) -> void:
+	_flash_budget_elapsed += maxf(0.0, delta)
+	if _flash_budget_elapsed < FLASH_BUDGET_WINDOW_SECONDS:
+		return
+	_flash_budget_elapsed = fmod(_flash_budget_elapsed, FLASH_BUDGET_WINDOW_SECONDS)
+	_flash_events_accepted = 0
+	_flash_events_rejected = 0
 
 
 func _weapon_cue_duration() -> float:
@@ -653,7 +681,7 @@ func _apply_pixel_transform() -> void:
 				offset = _facing * (4.0 if _presentation_animation_id == "gauntlets_counter" else 2.0)
 				if not _reduced_motion:
 					target_scale = Vector2(1.1, 0.92) if absf(_facing.x) > 0.0 else Vector2(0.92, 1.1)
-			else:
+			elif _weapon_visual_kind() in ["sword", "staff"]:
 				offset = _facing * 2.0
 				target_scale = Vector2(1.08, 0.94) if absf(_facing.x) > 0.0 else Vector2(0.94, 1.08)
 		&"dash":
@@ -737,10 +765,10 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 		_draw_player_staff(accent)
 	elif _weapon_visual_kind() == "gauntlets":
 		_draw_player_gauntlets(accent)
-	elif _state == &"attack":
+	elif _weapon_visual_kind() == "sword" and _state == &"attack":
 		draw_rect(Rect2(10, -4, 18, 4), accent, true)
 		draw_rect(Rect2(24, -8, 4, 12), Color.WHITE, true)
-	else:
+	elif _weapon_visual_kind() == "sword":
 		draw_rect(Rect2(10, 2, 14, 4), accent.darkened(0.15), true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 

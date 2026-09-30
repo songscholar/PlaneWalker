@@ -4,7 +4,7 @@ extends "res://scripts/combat/weapons/weapon_runtime.gd"
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 
-const SNAPSHOT_SCHEMA_VERSION := 1
+const SNAPSHOT_SCHEMA_VERSION := 2
 const PROFILE_ID := "bow_candidate_v1"
 const WEAPON_ID := &"bow"
 const ACTION_ID := &"candidate_draw"
@@ -216,6 +216,9 @@ const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
 	&"cancel_profile_shot",
 	&"finish_profile_shot",
 	&"reset_runtime_state",
+	&"runtime_snapshot",
+	&"can_restore_runtime_snapshot",
+	&"restore_runtime_snapshot",
 ]
 const REQUIRED_LAUNCH_ADAPTER_METHODS: Array[StringName] = [
 	&"begin_profile_action",
@@ -225,6 +228,9 @@ const REQUIRED_LAUNCH_ADAPTER_METHODS: Array[StringName] = [
 	&"finish_profile_action",
 	&"advance_profile_action_frames",
 	&"reset_runtime_state",
+	&"runtime_snapshot",
+	&"can_restore_runtime_snapshot",
+	&"restore_runtime_snapshot",
 ]
 const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"apply",
@@ -628,6 +634,11 @@ func reset_runtime_state(_reason: StringName) -> void:
 
 
 func snapshot() -> Dictionary:
+	var adapter_snapshot: Dictionary = {}
+	if _adapter != null:
+		var adapter_value: Variant = _adapter.call("runtime_snapshot")
+		if adapter_value is Dictionary:
+			adapter_snapshot = (adapter_value as Dictionary).duplicate(true)
 	return {
 		"schema_version": SNAPSHOT_SCHEMA_VERSION,
 		"configured": _is_configured(),
@@ -640,6 +651,7 @@ func snapshot() -> Dictionary:
 		"committed_launch_definition": _committed_launch_definition.duplicate(true),
 		"live_launch_time_context": _live_launch_time_context.duplicate(true),
 		"adapter_active": bool(_adapter.call("is_profile_action_active")) if _adapter != null else false,
+		"adapter_snapshot": adapter_snapshot,
 		"reward_eligible_tokens": _reward_eligible_tokens.duplicate(),
 		"reward_claimed_tokens": _reward_claimed_tokens.duplicate(),
 	}
@@ -652,15 +664,38 @@ func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 		return _restore_launch_snapshot(runtime_snapshot)
 	if not _valid_restore_snapshot(runtime_snapshot):
 		return false
-	_adapter.call("cancel_profile_shot")
-	_clear_active_action()
+	return _restore_snapshot_atomic(runtime_snapshot)
+
+
+func _restore_snapshot_atomic(runtime_snapshot: Dictionary) -> bool:
+	var current := snapshot()
+	if current == runtime_snapshot:
+		return true
+	if not bool(_adapter.call("restore_runtime_snapshot", runtime_snapshot["adapter_snapshot"])):
+		var adapter_after_value: Variant = _adapter.call("runtime_snapshot")
+		if not adapter_after_value is Dictionary or (adapter_after_value as Dictionary) != current["adapter_snapshot"]:
+			reset_runtime_state(&"adapter_restore_failed_closed")
+		return false
+	_apply_snapshot_fields(runtime_snapshot)
+	if snapshot() == runtime_snapshot:
+		return true
+	var rollback_ok := bool(_adapter.call("restore_runtime_snapshot", current["adapter_snapshot"]))
+	_apply_snapshot_fields(current)
+	if rollback_ok and snapshot() == current:
+		return false
+	reset_runtime_state(&"restore_rollback_failed")
+	return false
+
+
+func _apply_snapshot_fields(runtime_snapshot: Dictionary) -> void:
 	_active_token = int(runtime_snapshot["active_token"])
 	_active_phase = StringName(str(runtime_snapshot["active_phase"]))
 	_active_plan = (runtime_snapshot["active_plan"] as Dictionary).duplicate(true)
 	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
+	_committed_launch_definition = (runtime_snapshot["committed_launch_definition"] as Dictionary).duplicate(true)
+	_live_launch_time_context = (runtime_snapshot["live_launch_time_context"] as Dictionary).duplicate(true)
 	_reward_eligible_tokens = _int_array(runtime_snapshot["reward_eligible_tokens"])
 	_reward_claimed_tokens = _int_array(runtime_snapshot["reward_claimed_tokens"])
-	return true
 
 
 func presentation_snapshot() -> Dictionary:
@@ -1522,22 +1557,13 @@ func _launch_charge_tier(effective_frames: float) -> Dictionary:
 func _restore_launch_snapshot(runtime_snapshot: Dictionary) -> bool:
 	if not _valid_launch_restore_snapshot(runtime_snapshot):
 		return false
-	_adapter.call("cancel_profile_action")
-	_clear_active_action()
-	_active_token = int(runtime_snapshot["active_token"])
-	_active_phase = StringName(str(runtime_snapshot["active_phase"]))
-	_active_plan = (runtime_snapshot["active_plan"] as Dictionary).duplicate(true)
-	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
-	_committed_launch_definition = (runtime_snapshot["committed_launch_definition"] as Dictionary).duplicate(true)
-	_live_launch_time_context = (runtime_snapshot["live_launch_time_context"] as Dictionary).duplicate(true)
-	_reward_eligible_tokens = _int_array(runtime_snapshot["reward_eligible_tokens"])
-	_reward_claimed_tokens = _int_array(runtime_snapshot["reward_claimed_tokens"])
-	return true
+	return _restore_snapshot_atomic(runtime_snapshot)
 
 
 func _valid_launch_restore_snapshot(value: Dictionary) -> bool:
 	if (
-		int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
+		not _runtime_snapshot_has_exact_fields(value)
+		or int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
 		or not bool(value.get("configured", false))
 		or str(value.get("profile_id", "")) != LAUNCH_PROFILE_ID
 		or int(value.get("profile_version", 0)) != 1
@@ -1548,14 +1574,19 @@ func _valid_launch_restore_snapshot(value: Dictionary) -> bool:
 		or not value.get("committed_launch_definition") is Dictionary
 		or not value.get("live_launch_time_context") is Dictionary
 		or typeof(value.get("adapter_active")) != TYPE_BOOL
-		or bool(value["adapter_active"])
+		or not value.get("adapter_snapshot") is Dictionary
 	):
+		return false
+	var adapter_snapshot := value["adapter_snapshot"] as Dictionary
+	if not bool(_adapter.call("can_restore_runtime_snapshot", adapter_snapshot)):
 		return false
 	var active_token := int(value["active_token"])
 	var active_phase := str(value.get("active_phase", ""))
 	if active_token == 0:
 		if (
 			active_phase != "READY"
+			or bool(value["adapter_active"])
+			or str(adapter_snapshot.get("phase_state", "")) != "idle"
 			or not (value["active_plan"] as Dictionary).is_empty()
 			or not (value["modifier_snapshot"] as Dictionary).is_empty()
 			or not (value["committed_launch_definition"] as Dictionary).is_empty()
@@ -1566,10 +1597,9 @@ func _valid_launch_restore_snapshot(value: Dictionary) -> bool:
 		var live_context: Dictionary = value["live_launch_time_context"]
 		var normalized_live := _normalize_launch_time_context(live_context)
 		if (
-			active_phase != "HOLD"
+			active_phase not in ["HOLD", "WINDUP", "ACTIVE", "RECOVERY"]
 			or not bool(_validate_launch_plan(value["active_plan"]).get("ok", false))
 			or value["modifier_snapshot"] != (value["active_plan"] as Dictionary).get("modifier_snapshot", {})
-			or not (value["committed_launch_definition"] as Dictionary).is_empty()
 			or not bool(normalized_live.get("ok", false))
 			or normalized_live.get("context", {}) != live_context
 			or bool(live_context.get("accelerate_active", false)) != bool(
@@ -1580,6 +1610,20 @@ func _valid_launch_restore_snapshot(value: Dictionary) -> bool:
 			)
 		):
 			return false
+		var committed := value["committed_launch_definition"] as Dictionary
+		if active_phase == "HOLD":
+			if bool(value["adapter_active"]) or str(adapter_snapshot.get("phase_state", "")) != "idle" or not committed.is_empty():
+				return false
+		else:
+			var expected_state := "action_prepared" if active_phase == "WINDUP" else "action_released"
+			if (
+				not bool(value["adapter_active"])
+				or str(adapter_snapshot.get("phase_state", "")) != expected_state
+				or committed.is_empty()
+				or int(committed.get("token", 0)) != active_token
+				or adapter_snapshot.get("profile_action", {}) != committed
+			):
+				return false
 	if (
 		not _valid_token_array(value.get("reward_eligible_tokens"))
 		or not _valid_token_array(value.get("reward_claimed_tokens"))
@@ -2328,6 +2372,8 @@ func _normalized_direction(value: Variant) -> Dictionary:
 
 
 func _valid_restore_snapshot(value: Dictionary) -> bool:
+	if not _runtime_snapshot_has_exact_fields(value):
+		return false
 	if int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION:
 		return false
 	if typeof(value.get("configured")) != TYPE_BOOL or not bool(value["configured"]):
@@ -2340,20 +2386,41 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if not value.get("modifier_snapshot") is Dictionary:
 		return false
-	if typeof(value.get("adapter_active")) != TYPE_BOOL or bool(value["adapter_active"]):
+	if (
+		not value.get("committed_launch_definition") is Dictionary
+		or not (value["committed_launch_definition"] as Dictionary).is_empty()
+		or not value.get("live_launch_time_context") is Dictionary
+		or not (value["live_launch_time_context"] as Dictionary).is_empty()
+	):
+		return false
+	if typeof(value.get("adapter_active")) != TYPE_BOOL or not value.get("adapter_snapshot") is Dictionary:
+		return false
+	var adapter_snapshot := value["adapter_snapshot"] as Dictionary
+	if not bool(_adapter.call("can_restore_runtime_snapshot", adapter_snapshot)):
 		return false
 	var active_token := int(value["active_token"])
 	var active_phase := str(value.get("active_phase", ""))
 	var active_plan: Dictionary = value["active_plan"]
 	var modifier_snapshot: Dictionary = value["modifier_snapshot"]
 	if active_token == 0:
-		if active_phase != "READY" or not active_plan.is_empty() or not modifier_snapshot.is_empty():
+		if active_phase != "READY" or bool(value["adapter_active"]) or str(adapter_snapshot.get("phase_state", "")) != "idle" or not active_plan.is_empty() or not modifier_snapshot.is_empty():
 			return false
 	else:
-		if active_phase != "HOLD" or active_plan.is_empty():
+		if active_phase not in ["HOLD", "WINDUP", "ACTIVE", "RECOVERY"] or active_plan.is_empty():
 			return false
-		if not bool(_validate_hold_skeleton(active_plan).get("ok", false)):
-			return false
+		if active_phase == "HOLD":
+			if bool(value["adapter_active"]) or str(adapter_snapshot.get("phase_state", "")) != "idle" or not bool(_validate_hold_skeleton(active_plan).get("ok", false)):
+				return false
+		else:
+			var expected_state := "shot_prepared" if active_phase == "WINDUP" else "shot_released"
+			var expected_shot := _profile_shot_definition(active_plan, active_token)
+			if (
+				not bool(value["adapter_active"])
+				or str(adapter_snapshot.get("phase_state", "")) != expected_state
+				or expected_shot.is_empty()
+				or adapter_snapshot.get("profile_shot", {}) != expected_shot
+			):
+				return false
 		if modifier_snapshot != active_plan.get("modifier_snapshot", {}):
 			return false
 	if not _valid_token_array(value.get("reward_eligible_tokens")):
@@ -2365,6 +2432,21 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 		if not eligible.has(token):
 			return false
 	return _variant_numbers_are_finite(value)
+
+
+func _runtime_snapshot_has_exact_fields(value: Dictionary) -> bool:
+	var fields: Array[String] = [
+		"schema_version", "configured", "profile_id", "profile_version", "active_token",
+		"active_phase", "active_plan", "modifier_snapshot", "committed_launch_definition",
+		"live_launch_time_context", "adapter_active", "adapter_snapshot",
+		"reward_eligible_tokens", "reward_claimed_tokens",
+	]
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
 
 
 func _valid_token_array(value: Variant) -> bool:

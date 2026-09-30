@@ -8,6 +8,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var start_menu: CanvasLayer = $StartMenu
 @onready var start_button: Button = $StartMenu/Panel/Margin/VBox/StartButton
 @onready var candidate_button: Button = $StartMenu/Panel/Margin/VBox/CandidateButton
+@onready var launch_button: Button = $StartMenu/Panel/Margin/VBox/LaunchButton
 @onready var last_run_label: Label = $StartMenu/Panel/Margin/VBox/LastRunLabel
 @onready var title_label: Label = $StartMenu/Panel/Margin/VBox/Title
 @onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
@@ -17,6 +18,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var input_remap_panel: Control = $InputRemapLayer/InputRemapPanel
 @onready var accessibility_settings_panel: Control = $AccessibilitySettingsLayer/AccessibilitySettingsPanel
 @onready var candidate_loadout_panel: Control = $CandidateLabLayer/CandidateLoadoutPanel
+@onready var launch_loadout_panel: Control = $LaunchLoadoutLayer/LaunchLoadoutPanel
 
 var _lang_button: Button
 
@@ -27,7 +29,9 @@ func _ready() -> void:
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
 	candidate_button.pressed.connect(_open_candidate_lab)
+	launch_button.pressed.connect(_open_launch_loadout)
 	candidate_loadout_panel.connect("candidate_requested", _start_candidate_run)
+	launch_loadout_panel.connect("launch_requested", _start_launch_run)
 	pause_menu.resume_requested.connect(_resume_run)
 	pause_menu.remap_requested.connect(_open_input_remap)
 	pause_menu.accessibility_requested.connect(_open_accessibility_settings)
@@ -50,7 +54,7 @@ func _setup_language_button() -> void:
 		return
 	_lang_button = Button.new()
 	_lang_button.name = "LanguageButton"
-	_lang_button.custom_minimum_size = Vector2(360, 40)
+	_lang_button.custom_minimum_size = Vector2(360, 34)
 	_lang_button.focus_mode = Control.FOCUS_ALL
 	_lang_button.pressed.connect(_toggle_language)
 	start_button.get_parent().add_child(_lang_button)
@@ -69,13 +73,20 @@ func _apply_localization() -> void:
 	subtitle_label.text = tr("UI_SUBTITLE")
 	start_button.text = tr("UI_QUICK_START")
 	candidate_button.text = tr("UI_CANDIDATE_LAB")
+	launch_button.text = tr("UI_LAUNCH_LOADOUT")
 	if _lang_button != null:
 		_lang_button.text = tr("UI_LANG_EN") if str(TranslationServer.get_locale()) == "zh_CN" else tr("UI_LANG_ZH")
 	candidate_loadout_panel.call("refresh_localization")
+	launch_loadout_panel.call("refresh_localization")
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if input_remap_panel.visible or accessibility_settings_panel.visible or candidate_loadout_panel.visible:
+	if (
+		input_remap_panel.visible
+		or accessibility_settings_panel.visible
+		or candidate_loadout_panel.visible
+		or launch_loadout_panel.visible
+	):
 		return
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
@@ -101,6 +112,12 @@ func _open_candidate_lab() -> void:
 	candidate_loadout_panel.call("open_panel", candidate_button)
 
 
+func _open_launch_loadout() -> void:
+	if not start_menu.visible:
+		return
+	launch_loadout_panel.call("open_panel", launch_button)
+
+
 func _start_candidate_run(candidate_config: Dictionary) -> void:
 	if not start_menu.visible or not candidate_loadout_panel.visible:
 		return
@@ -110,7 +127,16 @@ func _start_candidate_run(candidate_config: Dictionary) -> void:
 	_launch_run(config, true)
 
 
-func _launch_run(config: Dictionary, from_candidate: bool) -> bool:
+func _start_launch_run(launch_config: Dictionary) -> void:
+	if not start_menu.visible or not launch_loadout_panel.visible:
+		return
+	var config := launch_config.duplicate(true)
+	config["seed"] = int(Time.get_unix_time_from_system())
+	config["accessibility_assists"] = _accessibility_assists()
+	_launch_run(config, false, true)
+
+
+func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = false) -> bool:
 	get_tree().paused = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -120,9 +146,13 @@ func _launch_run(config: Dictionary, from_candidate: bool) -> bool:
 		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 		if from_candidate:
 			candidate_loadout_panel.call("show_start_rejected")
+		elif from_launch:
+			launch_loadout_panel.call("show_start_rejected")
 		return false
 	if candidate_loadout_panel.visible:
 		candidate_loadout_panel.call("close_panel")
+	if launch_loadout_panel.visible:
+		launch_loadout_panel.call("close_panel")
 	FocusCoordinator.close_scope(start_menu)
 	start_menu.visible = false
 	_on_run_started(config)
@@ -152,7 +182,7 @@ func _accessibility_assists() -> Dictionary:
 
 func _show_start_menu() -> void:
 	start_menu.visible = true
-	FocusCoordinator.link_ring([start_button, candidate_button, _lang_button], false)
+	FocusCoordinator.link_ring([start_button, candidate_button, launch_button, _lang_button], false)
 	FocusCoordinator.open_scope(start_menu, start_button)
 	var summary: Dictionary = GameState.persistent.get("last_run_summary", {})
 	if summary.is_empty():

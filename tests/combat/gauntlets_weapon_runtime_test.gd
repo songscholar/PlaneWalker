@@ -102,11 +102,72 @@ class FakeGauntletsAdapter extends Node2D:
 		aura_source_generation = 0
 
 
+	func runtime_snapshot() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"profile_action": staged_definition.duplicate(true) if _active else {},
+			"profile_action_released": _released,
+		}
+
+
+	func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+		if (
+			int(value.get("schema_version", -1)) != 1
+			or not value.get("profile_action") is Dictionary
+			or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		):
+			return false
+		var definition := value["profile_action"] as Dictionary
+		return not (definition.is_empty() and bool(value["profile_action_released"]))
+
+
+	func restore_runtime_snapshot(value: Dictionary) -> bool:
+		if not can_restore_runtime_snapshot(value):
+			return false
+		var definition := value["profile_action"] as Dictionary
+		if definition.is_empty():
+			_clear_action()
+			return runtime_snapshot() == value
+		var outcome: StringName = begin_outcomes.pop_front() if not begin_outcomes.is_empty() else &"success"
+		if fail_begin or outcome == &"fail":
+			return false
+		staged_definition = definition.duplicate(true)
+		_active = true
+		_released = bool(value["profile_action_released"])
+		released_definition = staged_definition.duplicate(true) if _released else {}
+		if corrupt_begin or outcome == &"corrupt":
+			staged_definition["action_id"] = "corrupt_action"
+		return runtime_snapshot() == value
+
+
 	func _clear_action() -> void:
 		_active = false
 		_released = false
 		staged_definition.clear()
 		released_definition.clear()
+
+
+class FakeGauntletsOwner extends Node2D:
+	var stop_extension_calls: Array[Dictionary] = []
+
+
+	func extend_weapon_time_stop_for_payload_result(
+		action_token: int,
+		payload_generation: int,
+		extension_frames: int
+	) -> bool:
+		if (
+			action_token <= 0
+			or payload_generation != action_token
+			or extension_frames <= 0
+		):
+			return false
+		stop_extension_calls.append({
+			"action_token": action_token,
+			"payload_generation": payload_generation,
+			"extension_frames": extension_frames,
+		})
+		return true
 
 
 var _suite
@@ -127,6 +188,7 @@ func _run() -> void:
 	_test_rift_near_far_materialization_and_capabilities()
 	_test_rift_generation_ownership_fails_closed()
 	_test_echo_is_non_recursive()
+	_test_replay_payload_transition_projector()
 	_test_mid_action_restore_fails_closed_without_side_effects()
 	_test_snapshot_aura_invariants_and_restore_atomicity()
 	_test_adapter_restore_rollback_and_safe_reset()
@@ -385,21 +447,20 @@ func _test_mid_action_restore_fails_closed_without_side_effects() -> void:
 	runtime.on_phase_enter(plan, &"ACTIVE", 1750)
 	var active_snapshot: Dictionary = runtime.snapshot()
 	var active_definition := adapter.released_definition.duplicate(true)
-	var cancel_before_active_restore := adapter.cancel_count
-	_suite.assert_true(not runtime.restore_snapshot(windup_snapshot), "ACTIVE cannot rewind to an older WINDUP snapshot")
-	_suite.assert_equal(runtime.snapshot(), active_snapshot, "ACTIVE to old WINDUP rejection preserves Runtime state")
-	_suite.assert_equal(adapter.released_definition, active_definition, "ACTIVE to old WINDUP rejection preserves released payload")
-	_suite.assert_equal(adapter.cancel_count, cancel_before_active_restore, "ACTIVE to old WINDUP rejection never cancels the Adapter")
-	_suite.assert_true(not runtime.restore_snapshot(active_snapshot), "released ACTIVE snapshot fails closed")
-	_suite.assert_equal(runtime.snapshot(), active_snapshot, "rejected ACTIVE restore has no side effect")
+	_suite.assert_true(runtime.restore_snapshot(windup_snapshot), "ACTIVE reconstructs an older authoritative WINDUP snapshot")
+	_suite.assert_equal(runtime.snapshot(), windup_snapshot, "ACTIVE to WINDUP restore is deterministic")
+	_suite.assert_equal(adapter.released_definition, {}, "ACTIVE to WINDUP removes released payload state")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "WINDUP reconstructs the released ACTIVE snapshot")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "WINDUP to ACTIVE restore is deterministic")
+	_suite.assert_equal(adapter.released_definition, active_definition, "ACTIVE restore reconstructs released payload state")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "released ACTIVE snapshot is idempotent")
 	runtime.on_phase_enter(plan, &"RECOVERY", 1750)
 	var recovery_snapshot: Dictionary = runtime.snapshot()
-	var cancel_before_recovery_restore := adapter.cancel_count
-	_suite.assert_true(not runtime.restore_snapshot(windup_snapshot), "RECOVERY cannot rewind to an older WINDUP snapshot")
-	_suite.assert_equal(runtime.snapshot(), recovery_snapshot, "RECOVERY to old WINDUP rejection preserves Runtime state")
-	_suite.assert_equal(adapter.cancel_count, cancel_before_recovery_restore, "RECOVERY to old WINDUP rejection never cancels the Adapter")
-	_suite.assert_true(not runtime.restore_snapshot(recovery_snapshot), "RECOVERY snapshot with world consequences fails closed")
-	_suite.assert_equal(runtime.snapshot(), recovery_snapshot, "rejected RECOVERY restore has no side effect")
+	_suite.assert_true(runtime.restore_snapshot(windup_snapshot), "RECOVERY reconstructs an older authoritative WINDUP snapshot")
+	_suite.assert_equal(runtime.snapshot(), windup_snapshot, "RECOVERY to WINDUP restore is deterministic")
+	_suite.assert_true(runtime.restore_snapshot(recovery_snapshot), "WINDUP reconstructs the released RECOVERY snapshot")
+	_suite.assert_equal(runtime.snapshot(), recovery_snapshot, "WINDUP to RECOVERY restore is deterministic")
+	_suite.assert_true(runtime.restore_snapshot(recovery_snapshot), "RECOVERY snapshot is idempotent")
 	_free_fixture(fixture)
 
 
@@ -641,6 +702,11 @@ func _test_stop_accelerate_rewind_and_rift_interactions() -> void:
 		stop_total += int(result.get("stop_extension_frames", 0))
 		runtime.finish_action(token)
 	_suite.assert_equal(stop_total, 30, "one Stop source is capped at thirty extension frames")
+	var stop_calls := (fixture["owner"] as FakeGauntletsOwner).stop_extension_calls
+	_suite.assert_equal(stop_calls.size(), 6, "Stop fixture invokes the payload-scoped owner interface only until the cap")
+	for call: Dictionary in stop_calls:
+		_suite.assert_equal(call.get("payload_generation"), call.get("action_token"), "Stop owner receives matching action token and payload generation")
+		_suite.assert_equal(call.get("extension_frames"), 5, "Stop owner receives the exact five-frame payload extension")
 
 	var accelerate_context := _context(6100)
 	accelerate_context["time_interactions"] = {"accelerate_active": true, "accelerate_generation": 82}
@@ -705,6 +771,206 @@ func _test_echo_is_non_recursive() -> void:
 	_free_fixture(fixture)
 
 
+func _test_replay_payload_transition_projector() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var normal_token := 725
+	var normal_plan := _primary_plan(runtime, _context(7250))
+	_suite.assert_true(
+		bool(runtime.commit_action(normal_plan, normal_token).get("ok", false)),
+		"Replay projector normal-hit fixture commits"
+	)
+	var normal_result := {
+		"type": "damage_resolved", "target_id": 9725, "outcome_id": "projector:normal",
+		"damage": 4.0, "hit_confirmed": true, "terminal": true,
+	}
+	var normal_before: Dictionary = runtime.snapshot()
+	var miss_result := normal_result.duplicate(true)
+	miss_result["outcome_id"] = "projector:miss"
+	miss_result["hit_confirmed"] = false
+	var miss_projection: Dictionary = runtime.project_payload_result_replay_transition(
+		normal_before, normal_token, normal_token, miss_result
+	)
+	_suite.assert_true(bool(miss_projection.get("ok", false)), "Replay projector accepts a non-hit result")
+	_suite.assert_equal(miss_projection.get("runtime_snapshot"), normal_before, "Replay projector leaves runtime state unchanged for a non-hit")
+	_suite.assert_equal(miss_projection.get("context", {}).get("combo_gain"), 0, "Replay projector exposes zero Combo for a non-hit")
+	_suite.assert_equal(miss_projection.get("context", {}).get("energy_return"), 0, "Replay projector exposes zero Energy for a non-hit")
+	_suite.assert_equal(miss_projection.get("context", {}).get("stop_extension_frames"), 0, "Replay projector exposes zero Stop extension for a non-hit")
+	_suite.assert_true((miss_projection.get("context", {}).get("echo_descriptor", {}) as Dictionary).is_empty(), "Replay projector exposes no echo for a non-hit")
+	_suite.assert_equal(runtime.snapshot(), normal_before, "non-hit projection is side-effect free")
+	var normal_before_copy := normal_before.duplicate(true)
+	var normal_projection: Dictionary = runtime.project_payload_result_replay_transition(
+		normal_before, normal_token, normal_token, normal_result
+	)
+	_suite.assert_true(bool(normal_projection.get("ok", false)), "Replay projector accepts a normal hit")
+	_suite.assert_equal(normal_before, normal_before_copy, "Replay projector never mutates its input snapshot")
+	_suite.assert_equal(runtime.snapshot(), normal_before_copy, "Replay projector never mutates live Runtime state")
+	_suite.assert_equal(
+		normal_projection.get("runtime_snapshot", {}).get("adapter"),
+		normal_before.get("adapter"),
+		"Replay projector preserves the adapter subtree"
+	)
+	var normal_live: Dictionary = runtime.handle_payload_result(normal_token, normal_token, normal_result)
+	_assert_projected_payload_matches_live(runtime, normal_projection, normal_live, "normal hit")
+	_suite.assert_equal(
+		normal_projection.get("context", {}).get("combo_gain"),
+		1,
+		"Replay projector records the normal hit Combo gain"
+	)
+
+	var duplicate_before: Dictionary = runtime.snapshot()
+	var duplicate_projection: Dictionary = runtime.project_payload_result_replay_transition(
+		duplicate_before, normal_token, normal_token, normal_result
+	)
+	_suite.assert_true(not bool(duplicate_projection.get("ok", true)), "Replay projector rejects a duplicate target")
+	_suite.assert_equal(duplicate_projection.get("code"), &"DUPLICATE_TARGET", "duplicate target uses the authoritative rejection code")
+	_suite.assert_equal(runtime.snapshot(), duplicate_before, "duplicate projection is side-effect free")
+	var stale_projection: Dictionary = runtime.project_payload_result_replay_transition(
+		duplicate_before, normal_token, normal_token + 1, normal_result
+	)
+	_suite.assert_true(not bool(stale_projection.get("ok", true)), "Replay projector rejects a stale generation")
+	_suite.assert_equal(stale_projection.get("code"), &"STALE_GENERATION", "stale generation uses the authoritative rejection code")
+	_suite.assert_equal(runtime.snapshot(), duplicate_before, "stale projection is side-effect free")
+	runtime.finish_action(normal_token)
+	_free_fixture(fixture)
+
+	var high_fixture := _fixture()
+	var high_runtime: RefCounted = high_fixture["runtime"]
+	_grant_combo(high_runtime, 30, 7300)
+	var high_token := 7400
+	var high_plan := _primary_plan(high_runtime, _context(7400))
+	_suite.assert_true(bool(high_runtime.commit_action(high_plan, high_token).get("ok", false)), "Replay projector high-Combo fixture commits")
+	var high_result := {
+		"type": "damage_resolved", "target_id": 9740, "outcome_id": "projector:high_combo",
+		"damage": 4.0, "hit_confirmed": true, "terminal": true,
+	}
+	var high_before: Dictionary = high_runtime.snapshot()
+	var high_projection: Dictionary = high_runtime.project_payload_result_replay_transition(
+		high_before, high_token, high_token, high_result
+	)
+	var high_live: Dictionary = high_runtime.handle_payload_result(high_token, high_token, high_result)
+	_assert_projected_payload_matches_live(high_runtime, high_projection, high_live, "high-Combo hit")
+	_suite.assert_equal(high_projection.get("context", {}).get("energy_return"), 3, "Replay projector exposes exact frozen-tier Energy return")
+	_suite.assert_equal(high_projection.get("runtime_snapshot", {}).get("aura_source_generation"), high_token, "Replay projector advances the high-Combo aura source")
+	high_runtime.finish_action(high_token)
+	_free_fixture(high_fixture)
+
+	var stop_fixture := _fixture()
+	var stop_runtime: RefCounted = stop_fixture["runtime"]
+	var stop_context := _context(7500)
+	stop_context["time_interactions"] = {"stop_active": true, "stop_generation": 175}
+	var stop_token := 7500
+	var stop_plan := _primary_plan(stop_runtime, stop_context)
+	_suite.assert_true(bool(stop_runtime.commit_action(stop_plan, stop_token).get("ok", false)), "Replay projector Stop fixture commits")
+	var stop_result := {
+		"type": "damage_resolved", "target_id": 9750, "outcome_id": "projector:stop",
+		"damage": 4.0, "hit_confirmed": true, "terminal": true,
+	}
+	var stop_projection: Dictionary = stop_runtime.project_payload_result_replay_transition(
+		stop_runtime.snapshot(), stop_token, stop_token, stop_result
+	)
+	var stop_live: Dictionary = stop_runtime.handle_payload_result(stop_token, stop_token, stop_result)
+	_assert_projected_payload_matches_live(stop_runtime, stop_projection, stop_live, "Stop hit")
+	_suite.assert_equal(stop_projection.get("context", {}).get("stop_extension_frames"), 5, "Replay projector exposes exact Stop extension")
+	_suite.assert_equal(stop_projection.get("runtime_snapshot", {}).get("stop_extensions_by_generation", {}).get("175"), 5, "Replay projector advances only the owned Stop ledger")
+	var stop_owner_calls := (stop_fixture["owner"] as FakeGauntletsOwner).stop_extension_calls
+	_suite.assert_equal(stop_owner_calls.size(), 1, "live Stop hit invokes the payload-scoped owner interface once")
+	if not stop_owner_calls.is_empty():
+		_suite.assert_equal(stop_owner_calls[0].get("action_token"), stop_token, "live Stop hit forwards the authoritative action token")
+		_suite.assert_equal(stop_owner_calls[0].get("payload_generation"), stop_token, "live Stop hit forwards the authoritative payload generation")
+		_suite.assert_equal(stop_owner_calls[0].get("extension_frames"), 5, "live Stop hit forwards the projected five-frame extension")
+	stop_runtime.finish_action(stop_token)
+	_free_fixture(stop_fixture)
+
+	var accelerate_fixture := _fixture()
+	var accelerate_runtime: RefCounted = accelerate_fixture["runtime"]
+	var accelerate_context := _context(7600)
+	accelerate_context["time_interactions"] = {"accelerate_active": true, "accelerate_generation": 176}
+	for index: int in range(3):
+		var token := 7600 + index
+		var plan := _primary_plan(accelerate_runtime, accelerate_context)
+		_suite.assert_true(bool(accelerate_runtime.commit_action(plan, token).get("ok", false)), "Replay projector Accelerate fixture %d commits" % (index + 1))
+		var result := {
+			"type": "damage_resolved", "target_id": 9760 + index,
+			"outcome_id": "projector:accelerate:%d" % (index + 1),
+			"damage": 4.0, "hit_confirmed": true, "terminal": true,
+		}
+		var projection: Dictionary = accelerate_runtime.project_payload_result_replay_transition(
+			accelerate_runtime.snapshot(), token, token, result
+		)
+		var live: Dictionary = accelerate_runtime.handle_payload_result(token, token, result)
+		_assert_projected_payload_matches_live(accelerate_runtime, projection, live, "Accelerate hit %d" % (index + 1))
+		_suite.assert_equal(
+			(projection.get("runtime_snapshot", {}).get("accelerate_hits_by_generation", {}) as Dictionary).get("176"),
+			index + 1,
+			"Replay projector advances Accelerate hit %d exactly once" % (index + 1)
+		)
+		_suite.assert_equal(
+			(projection.get("context", {}).get("echo_descriptor", {}) as Dictionary).is_empty(),
+			index < 2,
+			"Replay projector creates an echo only on Accelerate hit %d" % (index + 1)
+		)
+		accelerate_runtime.finish_action(token)
+
+	var echo_token := 7610
+	var echo_plan := _primary_plan(accelerate_runtime, accelerate_context)
+	_suite.assert_true(bool(accelerate_runtime.commit_action(echo_plan, echo_token).get("ok", false)), "Replay projector echo fixture commits")
+	var echo_result := {
+		"type": "damage_resolved", "target_id": 9770, "outcome_id": "projector:echo",
+		"damage": 2.0, "hit_confirmed": true, "terminal": true, "is_echo": true,
+		"combo_eligible": false, "energy_eligible": false, "stop_extension_eligible": false,
+		"recursive_echo": false,
+	}
+	var echo_before: Dictionary = accelerate_runtime.snapshot()
+	var echo_projection: Dictionary = accelerate_runtime.project_payload_result_replay_transition(
+		echo_before, echo_token, echo_token, echo_result
+	)
+	var echo_live: Dictionary = accelerate_runtime.handle_payload_result(echo_token, echo_token, echo_result)
+	_assert_projected_payload_matches_live(accelerate_runtime, echo_projection, echo_live, "echo hit")
+	_suite.assert_equal(
+		echo_projection.get("runtime_snapshot", {}).get("accelerate_hits_by_generation"),
+		echo_before.get("accelerate_hits_by_generation"),
+		"Replay projector never advances Accelerate for an echo"
+	)
+	_suite.assert_true((echo_projection.get("context", {}).get("echo_descriptor", {}) as Dictionary).is_empty(), "Replay projector never creates a recursive echo")
+	accelerate_runtime.finish_action(echo_token)
+	_free_fixture(accelerate_fixture)
+
+	var zone_fixture := _fixture()
+	var zone_runtime: RefCounted = zone_fixture["runtime"]
+	var zone_token := 7700
+	var zone_plan: Dictionary = zone_runtime.plan_intent(
+		_press_intent(&"weapon_skill"), _context(7700)
+	).get("plan", {})
+	_suite.assert_true(bool(zone_runtime.commit_action(zone_plan, zone_token).get("ok", false)), "Replay projector zone fixture commits")
+	var zone_result := {
+		"type": "damage_resolved", "payload_kind": "zone", "target_id": 9771,
+		"outcome_id": "projector:zone", "damage": 1.0, "hit_confirmed": true,
+		"terminal": false,
+	}
+	var zone_projection: Dictionary = zone_runtime.project_payload_result_replay_transition(
+		zone_runtime.snapshot(), zone_token, zone_token, zone_result
+	)
+	var zone_live: Dictionary = zone_runtime.handle_payload_result(zone_token, zone_token, zone_result)
+	_assert_projected_payload_matches_live(zone_runtime, zone_projection, zone_live, "zone hit")
+	_suite.assert_equal(zone_projection.get("context", {}).get("combo_gain"), 0, "Replay projector preserves a zone action's frozen zero Combo gain")
+	zone_runtime.finish_action(zone_token)
+	_free_fixture(zone_fixture)
+
+
+func _assert_projected_payload_matches_live(
+	runtime: RefCounted,
+	projection: Dictionary,
+	live_result: Dictionary,
+	label: String
+) -> void:
+	_suite.assert_true(bool(projection.get("ok", false)), "%s projection succeeds" % label)
+	_suite.assert_equal(projection.get("runtime_snapshot"), runtime.snapshot(), "%s projection matches the live runtime transition" % label)
+	var context := projection.get("context", {}) as Dictionary
+	for field: String in ["combo_gain", "energy_return", "stop_extension_frames", "echo_descriptor", "tier"]:
+		_suite.assert_equal(context.get(field), live_result.get(field), "%s projects exact %s" % [label, field])
+
+
 func _test_snapshot_reset_determinism_and_bounded_ledgers() -> void:
 	var fixture := _fixture()
 	var runtime: RefCounted = fixture["runtime"]
@@ -742,7 +1008,7 @@ func _test_snapshot_reset_determinism_and_bounded_ledgers() -> void:
 
 
 func _fixture() -> Dictionary:
-	var owner := Node2D.new()
+	var owner := FakeGauntletsOwner.new()
 	var adapter := FakeGauntletsAdapter.new()
 	adapter.name = "GauntletsWeapon"
 	owner.add_child(adapter)

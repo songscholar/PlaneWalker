@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://tests/replay/weapon_gauntlets_external_fact_variants_test.gd" type="Script" id="1"]
+
+[node name="WeaponGauntletsExternalFactVariantsTest" type="Node"]
+script = ExtResource("1")

@@ -4,7 +4,7 @@ extends "res://scripts/combat/weapons/weapon_runtime.gd"
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 
-const SNAPSHOT_SCHEMA_VERSION := 1
+const SNAPSHOT_SCHEMA_VERSION := 2
 const PROFILE_ID := "staff_launch_v1"
 const PROFILE_VERSION := 1
 const PROFILE_FINGERPRINT := "9126a54f29a730d47b736bff1aafcf2198abb1ff6ef1d736f0c80cdbf4692b6c"
@@ -30,6 +30,19 @@ const MANA_RETURN_RATIO := 0.02
 const MANA_RETURN_CAP_PER_OUTCOME := 5.0
 const MAX_TRACKED_CAST_LEDGERS := 256
 const MAX_CLAIMED_REWIND_GENERATIONS := 256
+const ADAPTER_ONLY_REPLAY_DESCRIPTOR_IDS: Array[String] = [
+	"staff_arcane_bolt",
+	"staff_planar_collapse",
+	"staff_primordial_wrath",
+]
+const RUNTIME_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "configured", "profile_id", "profile_version", "mana", "current_element",
+	"combo_element", "combo_remaining_frames", "combo_source_context", "pending_combo",
+	"pending_combos", "last_runtime_frame", "claimed_rewind_generations",
+	"claimed_rewind_generation_floor", "cast_ledgers", "mana_return_by_outcome", "active_token",
+	"active_phase", "active_plan", "modifier_snapshot", "committed_definition", "live_hold_context",
+	"adapter_active", "adapter_snapshot",
+]
 const ELEMENT_SEQUENCE: Array[String] = ["fire", "ice", "lightning"]
 const FROZEN_CAPABILITIES: Array[String] = [
 	"weapon.attack_speed",
@@ -50,6 +63,9 @@ const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
 	&"cancel_profile_action",
 	&"finish_profile_action",
 	&"reset_runtime_state",
+	&"runtime_snapshot",
+	&"can_restore_runtime_snapshot",
+	&"restore_runtime_snapshot",
 ]
 const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"apply",
@@ -306,7 +322,8 @@ func handle_payload_result(token: int, generation: int, result: Dictionary) -> D
 		bool(terminal_value),
 		float(damage_value),
 		bool(hit_value),
-		normalized_payload_context
+		normalized_payload_context,
+		result
 	)
 
 
@@ -333,6 +350,52 @@ func payload_result(
 	)
 
 
+func project_replay_payload_result(
+	runtime_snapshot: Dictionary,
+	token: int,
+	generation: int,
+	result: Dictionary
+) -> Dictionary:
+	if not _is_configured() or not _valid_restore_snapshot(runtime_snapshot):
+		return _failure(&"INVALID_RUNTIME_SNAPSHOT")
+	var outcome_value: Variant = result.get("outcome_id")
+	var element_value: Variant = result.get("element")
+	var target_value: Variant = result.get("target_id")
+	var terminal_value: Variant = result.get("terminal")
+	var damage_value: Variant = result.get("damage", 0.0)
+	var hit_value: Variant = result.get("hit", true)
+	if typeof(outcome_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+		return _failure(&"INVALID_OUTCOME")
+	if typeof(element_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+		return _failure(&"INVALID_ELEMENT")
+	if typeof(target_value) != TYPE_INT:
+		return _failure(&"INVALID_TARGET")
+	if typeof(terminal_value) != TYPE_BOOL or typeof(hit_value) != TYPE_BOOL:
+		return _failure(&"INVALID_PAYLOAD_RESULT")
+	if typeof(damage_value) not in [TYPE_INT, TYPE_FLOAT]:
+		return _failure(&"INVALID_DAMAGE")
+	var payload_context := _payload_combo_source_context(result)
+	if not bool(payload_context.get("ok", false)):
+		return payload_context
+	var normalized_context := (payload_context.get("context", {}) as Dictionary).duplicate(true)
+	if bool(result.get("resource_only", false)):
+		normalized_context["resource_only"] = true
+	return _project_payload_result_transition(
+		runtime_snapshot,
+		token,
+		generation,
+		StringName(str(outcome_value)),
+		StringName(str(element_value)),
+		int(target_value),
+		bool(terminal_value),
+		float(damage_value),
+		bool(hit_value),
+		normalized_context,
+		result,
+		true
+	)
+
+
 func _payload_result_with_context(
 	token: int,
 	generation: int,
@@ -342,7 +405,55 @@ func _payload_result_with_context(
 	terminal: bool,
 	damage: float,
 	hit: bool,
-	payload_context: Dictionary
+	payload_context: Dictionary,
+	normalized_source: Dictionary = {}
+) -> Dictionary:
+	var normalized_result := normalized_source.duplicate(true)
+	if payload_context.has("origin_target_ids"):
+		normalized_result["chain_target_ids"] = (payload_context.get("origin_target_ids", []) as Array).duplicate()
+	if payload_context.has("origin_positions"):
+		normalized_result["chain_origin_positions"] = (payload_context.get("origin_positions", []) as Array).duplicate()
+	if bool(payload_context.get("resource_only", false)):
+		normalized_result["resource_only"] = true
+	normalized_result["outcome_id"] = str(outcome_id)
+	normalized_result["element"] = str(element)
+	normalized_result["target_id"] = target_id
+	normalized_result["terminal"] = terminal
+	normalized_result["damage"] = damage
+	normalized_result["hit"] = hit
+	var projection := _project_payload_result_transition(
+		snapshot(),
+		token,
+		generation,
+		outcome_id,
+		element,
+		target_id,
+		terminal,
+		damage,
+		hit,
+		payload_context,
+		normalized_result,
+		false
+	)
+	if not bool(projection.get("ok", false)):
+		return projection
+	_apply_snapshot_fields(projection.get("snapshot", {}) as Dictionary)
+	return (projection.get("payload_result", {}) as Dictionary).duplicate(true)
+
+
+func _project_payload_result_transition(
+	runtime_snapshot: Dictionary,
+	token: int,
+	generation: int,
+	outcome_id: StringName,
+	element: StringName,
+	target_id: int,
+	terminal: bool,
+	damage: float,
+	hit: bool,
+	payload_context: Dictionary,
+	normalized_result: Dictionary,
+	require_verified_snapshot: bool
 ) -> Dictionary:
 	if token <= 0 or generation <= 0 or outcome_id == &"":
 		return _failure(&"INVALID_PAYLOAD_RESULT")
@@ -353,10 +464,14 @@ func _payload_result_with_context(
 	var resource_only := bool(payload_context.get("resource_only", false))
 	if not hit and not terminal and not resource_only:
 		return _failure(&"NON_TERMINAL_MISS")
+	var projected := runtime_snapshot.duplicate(true)
+	var cast_ledgers := (projected.get("cast_ledgers", {}) as Dictionary).duplicate(true)
 	var token_key := str(token)
-	if not _cast_ledgers.has(token_key):
-		return _failure(&"STALE_TOKEN")
-	var cast := (_cast_ledgers[token_key] as Dictionary).duplicate(true)
+	if not cast_ledgers.has(token_key):
+		if not _is_adapter_only_replay_payload_result(normalized_result):
+			return _failure(&"STALE_TOKEN")
+		return _replay_projection_success(projected, {}, 0.0, 0.0, terminal)
+	var cast := (cast_ledgers[token_key] as Dictionary).duplicate(true)
 	var expected_element := StringName(str(cast.get("element", "")))
 	if not resource_only and (expected_element == &"" or element != expected_element):
 		return _failure(&"ELEMENT_MISMATCH")
@@ -385,32 +500,50 @@ func _payload_result_with_context(
 		outcome_targets[str(target_id)] = true
 		outcome["targets"] = outcome_targets
 
+	var pending_combos := (projected.get("pending_combos", {}) as Dictionary).duplicate(true)
 	var combo_result: Dictionary = {}
 	var refunded_mana := 0.0
 	if hit and not resource_only and not bool(cast.get("confirmed_hit", false)):
 		cast["confirmed_hit"] = true
 		var combo := (cast.get("combo", {}) as Dictionary).duplicate(true)
-		var pending_combo := _pending_combo_for(token)
+		var pending_combo_value: Variant = pending_combos.get(token_key, {})
+		var pending_combo := (
+			(pending_combo_value as Dictionary).duplicate(true)
+			if pending_combo_value is Dictionary
+			else {}
+		)
 		var pending_combo_is_live := not pending_combo.is_empty() and int(pending_combo.get("remaining_frames", 0)) > 0
 		if not combo.is_empty() and pending_combo_is_live:
 			combo_result = _materialized_combo_result(
 				combo,
 				cast.get("combo_source_context", {}) as Dictionary
 			)
-			_confirm_pending_combo(token)
+			pending_combos.erase(token_key)
 			cast["combo"] = {}
 			cast["combo_window_remaining_frames"] = 0
 			cast["combo_source_context"] = {}
-			_combo_element = &""
-			_combo_remaining_frames = 0
-			_combo_source_context.clear()
+			projected["combo_element"] = ""
+			projected["combo_remaining_frames"] = 0
+			projected["combo_source_context"] = {}
 		else:
 			cast["combo"] = {}
 			cast["combo_window_remaining_frames"] = 0
 			cast["combo_source_context"] = {}
-			_open_or_preserve_combo_window(element, payload_context)
+			if str(projected.get("combo_element", "")).is_empty() or int(projected.get("combo_remaining_frames", 0)) <= 0:
+				projected["combo_element"] = str(element)
+				projected["combo_remaining_frames"] = COMBO_WINDOW_FRAMES
+				projected["combo_source_context"] = payload_context.duplicate(true)
 	elif not resource_only and not hit and terminal:
-		refunded_mana = _refund_pending_combo(token)
+		var pending_value: Variant = pending_combos.get(token_key, {})
+		if pending_value is Dictionary and not (pending_value as Dictionary).is_empty():
+			var pending := (pending_value as Dictionary).duplicate(true)
+			if not bool(pending.get("refunded", false)):
+				refunded_mana = float(pending.get("extra_mana", 0.0))
+				projected["mana"] = minf(
+					_mana_maximum(),
+					float(projected.get("mana", 0.0)) + refunded_mana
+				)
+		pending_combos.erase(token_key)
 		cast["combo"] = {}
 		cast["combo_window_remaining_frames"] = 0
 		cast["combo_source_context"] = {}
@@ -419,27 +552,75 @@ func _payload_result_with_context(
 	if hit and damage > 0.0:
 		var prior_return := float(outcome.get("mana_return", 0.0))
 		var available_for_outcome := maxf(0.0, MANA_RETURN_CAP_PER_OUTCOME - prior_return)
-		var available_for_mana := maxf(0.0, _mana_maximum() - _mana)
+		var available_for_mana := maxf(0.0, _mana_maximum() - float(projected.get("mana", 0.0)))
 		mana_return = minf(damage * MANA_RETURN_RATIO, minf(available_for_outcome, available_for_mana))
 		if mana_return > 0.0:
-			_mana += mana_return
+			projected["mana"] = float(projected.get("mana", 0.0)) + mana_return
 			outcome["mana_return"] = prior_return + mana_return
-			_mana_return_by_outcome[outcome_key] = float(outcome["mana_return"])
+			var mana_returns := (projected.get("mana_return_by_outcome", {}) as Dictionary).duplicate(true)
+			mana_returns[outcome_key] = float(outcome["mana_return"])
+			projected["mana_return_by_outcome"] = mana_returns
 	if terminal:
 		outcome["terminal"] = true
 	outcomes[outcome_key] = outcome
 	cast["targets"] = targets
 	cast["outcomes"] = outcomes
-	_cast_ledgers[token_key] = cast
+	cast_ledgers[token_key] = cast
+	projected["cast_ledgers"] = cast_ledgers
+	projected["pending_combos"] = pending_combos
+	projected["pending_combo"] = _first_pending_combo_from(pending_combos)
+	if require_verified_snapshot and not _valid_restore_snapshot(projected):
+		return _failure(&"INVALID_PROJECTED_RUNTIME_SNAPSHOT")
+	return _replay_projection_success(
+		projected,
+		combo_result,
+		mana_return,
+		refunded_mana,
+		terminal
+	)
+
+
+func _replay_projection_success(
+	projected: Dictionary,
+	combo_result: Dictionary,
+	mana_return: float,
+	refunded_mana: float,
+	terminal: bool
+) -> Dictionary:
 	return {
 		"ok": true,
 		"code": &"OK",
-		"combo": combo_result,
-		"mana_return": mana_return,
-		"refunded_mana": refunded_mana,
-		"terminal": terminal,
+		"snapshot": projected.duplicate(true),
+		"payload_result": {
+			"ok": true,
+			"code": &"OK",
+			"combo": combo_result.duplicate(true),
+			"mana_return": mana_return,
+			"refunded_mana": refunded_mana,
+			"terminal": terminal,
+			"context": {},
+		},
 		"context": {},
 	}
+
+
+func _is_adapter_only_replay_payload_result(result: Dictionary) -> bool:
+	return ADAPTER_ONLY_REPLAY_DESCRIPTOR_IDS.has(str(result.get("descriptor_id", "")))
+
+
+func _first_pending_combo_from(pending_combos: Dictionary) -> Dictionary:
+	if pending_combos.is_empty():
+		return {}
+	var tokens: Array[int] = []
+	for token_value: Variant in pending_combos.keys():
+		var token := int(str(token_value))
+		if token > 0:
+			tokens.append(token)
+	tokens.sort()
+	if tokens.is_empty():
+		return {}
+	var value: Variant = pending_combos.get(str(tokens[0]), {})
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 
 func advance_runtime_frame(coordinator_frame: int) -> Array[Dictionary]:
@@ -513,6 +694,11 @@ func reset_runtime_state(_reason: StringName) -> void:
 
 
 func snapshot() -> Dictionary:
+	var adapter_snapshot: Dictionary = {}
+	if _adapter != null:
+		var adapter_value: Variant = _adapter.call("runtime_snapshot")
+		if adapter_value is Dictionary:
+			adapter_snapshot = (adapter_value as Dictionary).duplicate(true)
 	return {
 		"schema_version": SNAPSHOT_SCHEMA_VERSION,
 		"configured": _is_configured(),
@@ -537,19 +723,33 @@ func snapshot() -> Dictionary:
 		"committed_definition": _committed_definition.duplicate(true),
 		"live_hold_context": _live_hold_context.duplicate(true),
 		"adapter_active": bool(_adapter.call("is_profile_action_active")) if _adapter != null else false,
+		"adapter_snapshot": adapter_snapshot,
 	}
 
 
 func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 	if not _is_configured() or not _valid_restore_snapshot(runtime_snapshot):
 		return false
-	_adapter.call("cancel_profile_action")
-	if bool(runtime_snapshot["adapter_active"]):
-		var restored_definition := (runtime_snapshot["committed_definition"] as Dictionary).duplicate(true)
-		var restored_value: Variant = _adapter.call("begin_profile_action", restored_definition.duplicate(true))
-		if not restored_value is Dictionary or (restored_value as Dictionary) != restored_definition:
-			_adapter.call("cancel_profile_action")
-			return false
+	var current := snapshot()
+	if current == runtime_snapshot:
+		return true
+	if not bool(_adapter.call("restore_runtime_snapshot", runtime_snapshot["adapter_snapshot"])):
+		var adapter_after_value: Variant = _adapter.call("runtime_snapshot")
+		if not adapter_after_value is Dictionary or (adapter_after_value as Dictionary) != current["adapter_snapshot"]:
+			reset_runtime_state(&"adapter_restore_failed_closed")
+		return false
+	_apply_snapshot_fields(runtime_snapshot)
+	if snapshot() == runtime_snapshot:
+		return true
+	var adapter_rollback_ok := bool(_adapter.call("restore_runtime_snapshot", current["adapter_snapshot"]))
+	_apply_snapshot_fields(current)
+	if adapter_rollback_ok and snapshot() == current:
+		return false
+	reset_runtime_state(&"restore_rollback_failed")
+	return false
+
+
+func _apply_snapshot_fields(runtime_snapshot: Dictionary) -> void:
 	_mana = float(runtime_snapshot["mana"])
 	_current_element = StringName(str(runtime_snapshot["current_element"]))
 	_combo_element = StringName(str(runtime_snapshot["combo_element"]))
@@ -567,7 +767,6 @@ func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
 	_committed_definition = (runtime_snapshot["committed_definition"] as Dictionary).duplicate(true)
 	_live_hold_context = (runtime_snapshot["live_hold_context"] as Dictionary).duplicate(true)
-	return true
 
 
 func presentation_snapshot() -> Dictionary:
@@ -1418,6 +1617,8 @@ func _build_profile_indexes(profile: Dictionary) -> Dictionary:
 
 
 func _valid_restore_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, RUNTIME_SNAPSHOT_FIELDS):
+		return false
 	if (
 		int(value.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION
 		or not bool(value.get("configured", false))
@@ -1451,7 +1652,18 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 		or not value.get("committed_definition") is Dictionary
 		or not value.get("live_hold_context") is Dictionary
 		or typeof(value.get("adapter_active")) != TYPE_BOOL
+		or not value.get("adapter_snapshot") is Dictionary
 		or not _variant_numbers_are_finite(value)
+	):
+		return false
+	var adapter_snapshot := value["adapter_snapshot"] as Dictionary
+	var adapter_action_value: Variant = adapter_snapshot.get("profile_action", {})
+	if not adapter_action_value is Dictionary:
+		return false
+	var adapter_action := adapter_action_value as Dictionary
+	if (
+		not bool(_adapter.call("can_restore_runtime_snapshot", adapter_snapshot))
+		or bool(value["adapter_active"]) != (not adapter_action.is_empty())
 	):
 		return false
 	if int(value["combo_remaining_frames"]) == 0 and not str(value["combo_element"]).is_empty():
@@ -1474,6 +1686,7 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 		return (
 			str(value.get("active_phase", "")) == "READY"
 			and not bool(value["adapter_active"])
+			and str(adapter_snapshot.get("phase_state", "")) == "idle"
 			and (value["active_plan"] as Dictionary).is_empty()
 			and (value["modifier_snapshot"] as Dictionary).is_empty()
 			and (value["committed_definition"] as Dictionary).is_empty()
@@ -1482,16 +1695,32 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 	if str(value.get("active_phase", "")) == "HOLD":
 		return (
 			not bool(value["adapter_active"])
+			and str(adapter_snapshot.get("phase_state", "")) == "idle"
 			and _is_hold_skeleton(value["active_plan"])
 			and (value["committed_definition"] as Dictionary).is_empty()
 		)
+	var active_phase := str(value.get("active_phase", ""))
+	var expected_adapter_phase := "prepared" if active_phase == "WINDUP" else "released"
+	if active_phase not in ["WINDUP", "ACTIVE", "RECOVERY"]:
+		return false
+	var committed := value["committed_definition"] as Dictionary
 	return (
 		bool(value["adapter_active"])
-		and str(value.get("active_phase", "")) == "WINDUP"
-		and not (value["committed_definition"] as Dictionary).is_empty()
-		and int((value["committed_definition"] as Dictionary).get("token", 0)) == active_token
+		and str(adapter_snapshot.get("phase_state", "")) == expected_adapter_phase
+		and not committed.is_empty()
+		and int(committed.get("token", 0)) == active_token
+		and committed == adapter_action
 		and bool(WeaponActionContractScript.validate_plan(value["active_plan"], WEAPON_ID).get("ok", false))
 	)
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
 
 
 func _prune_cast_ledgers() -> void:

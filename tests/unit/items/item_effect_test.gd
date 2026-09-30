@@ -7,56 +7,34 @@ const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_
 const ITEM_EFFECT_SOURCE_PATH := "res://scripts/items/item_effect.gd"
 const PLAYER_CONTROLLER_SOURCE_PATH := "res://scripts/player/player_controller.gd"
 
-const LEGACY_WEAPON_EFFECTS := {
-	"combo_finisher_multiplier_bonus": 0.35,
-	"heavy_damage_multiplier_bonus": 0.4,
-	"heavy_execute_multiplier_bonus": 0.5,
-	"heavy_execute_threshold": 0.3,
-	"low_hp_damage_multiplier_bonus": 0.45,
-	"bow_charge_rate_bonus": 0.25,
-	"bow_full_charge_damage_multiplier_bonus": 0.35,
-	"bow_pierce_bonus": 1,
-}
-
 var _suite
 
 
-class WeaponEffectPlayer extends Node:
-	var routed_effects: Dictionary = {}
-	var routed_modifier_bonuses: Array[Dictionary] = []
-	var modifier_values: Dictionary = {}
-	var stats_sync_count: int = 0
+class CapabilityRoutePlayer extends Node:
+	var equipped_weapon_id: StringName = &"sword"
+	var routed_effects: Array[Dictionary] = []
 
 
-	func apply_weapon_effect(effect_id: StringName, value: Variant) -> bool:
-		routed_effects[str(effect_id)] = value
-		return true
-
-
-	func apply_weapon_modifier_bonus(
+	func apply_weapon_capability_effect(
 		capability: StringName,
 		value: Variant,
 		base_value: float,
-		required_weapon_id: StringName = &""
+		stack_rule: StringName,
+		required_weapon_id: StringName
 	) -> bool:
-		var capability_id := str(capability)
-		routed_modifier_bonuses.append({
-			"capability": capability_id,
+		if required_weapon_id != equipped_weapon_id:
+			return false
+		routed_effects.append({
+			"capability": str(capability),
 			"value": value,
 			"base_value": base_value,
+			"stack_rule": str(stack_rule),
 			"weapon_id": str(required_weapon_id),
 		})
-		modifier_values[capability_id] = (
-			float(modifier_values.get(capability_id, base_value)) + float(value)
-		)
 		return true
 
 
-	func _apply_stats_to_components(_preserve_current: bool) -> void:
-		stats_sync_count += 1
-
-
-class PlayerWithoutWeaponEffectApi extends Node:
+class PlayerWithoutWeaponCapabilityApi extends Node:
 	var stats_sync_count: int = 0
 
 
@@ -72,185 +50,354 @@ class FakeLoadoutRuntime extends Node:
 		return id != &"" and id == equipped_weapon_id
 
 
+class FakeWeaponRuntime extends RefCounted:
+	var modifiers: RefCounted
+
+
+	func _init(next_modifiers: RefCounted) -> void:
+		modifiers = next_modifiers
+
+
+	func apply_modifier(capability: StringName, value: Variant) -> bool:
+		return bool(modifiers.call("apply", capability, value))
+
+
+class FailingSyncWeaponRuntime extends RefCounted:
+	var modifiers: RefCounted
+	var fail_on_capability: StringName
+	var synchronized_values: Dictionary = {}
+
+
+	func _init(next_modifiers: RefCounted, next_fail_on_capability: StringName) -> void:
+		modifiers = next_modifiers
+		fail_on_capability = next_fail_on_capability
+
+
+	func apply_modifier(capability: StringName, value: Variant) -> bool:
+		if capability == fail_on_capability:
+			return false
+		if not bool(modifiers.call("apply", capability, value)):
+			return false
+		synchronized_values[str(capability)] = float(value)
+		return true
+
+
 func _ready() -> void:
 	call_deferred("_run")
 
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
-	_test_legacy_weapon_effects_use_player_api()
-	_test_bow_add_stack_effects_accumulate_capabilities()
-	_test_player_bow_capability_bridge_accumulates()
-	_test_player_rejects_bow_capabilities_for_non_bow_loadout()
+	_test_five_weapon_effects_route_to_capabilities()
+	_test_stack_rules_and_bounds_are_atomic()
+	_test_multiple_capability_routes_are_atomic()
+	_test_runtime_sync_failure_rolls_back_batch()
+	_test_weapon_capability_ownership_tracks_equipment()
 	_test_missing_player_api_fails_safely()
-	_test_item_effect_does_not_reach_weapon_nodes()
+	_test_legacy_weapon_write_apis_are_removed()
 	_suite.finish(get_tree())
 
 
-func _test_legacy_weapon_effects_use_player_api() -> void:
-	var player := WeaponEffectPlayer.new()
-	ItemEffectScript.apply_to_player(player, LEGACY_WEAPON_EFFECTS)
-	_suite.assert_equal(
-		player.routed_effects,
+func _test_five_weapon_effects_route_to_capabilities() -> void:
+	var cases: Array[Dictionary] = [
 		{
-			"combo_finisher_multiplier_bonus": 0.35,
-			"heavy_damage_multiplier_bonus": 0.4,
-			"heavy_execute_multiplier_bonus": 0.5,
-			"heavy_execute_threshold": 0.3,
-			"low_hp_damage_multiplier_bonus": 0.45,
+			"weapon_id": &"sword",
+			"effects": {"combo_finisher_multiplier_bonus": 0.35},
+			"expected": {
+				"capability": "weapon.combo_finisher_damage",
+				"value": 0.35,
+				"base_value": 0.0,
+				"stack_rule": "add",
+				"weapon_id": "sword",
+			},
 		},
-		"legacy sword reward hooks retain the player weapon-effect API"
-	)
-	_suite.assert_equal(
-		player.routed_modifier_bonuses,
-		[
-			{"capability": "weapon.charge_rate", "value": 0.25, "base_value": 1.0, "weapon_id": "bow"},
-			{"capability": "weapon.full_charge_damage", "value": 0.35, "base_value": 1.0, "weapon_id": "bow"},
-			{"capability": "weapon.pierce", "value": 1, "base_value": 0.0, "weapon_id": "bow"},
-		],
-		"legacy bow effects map to declared modifier capabilities"
-	)
-	_suite.assert_equal(player.stats_sync_count, 1, "weapon effects retain component stat synchronization")
-	player.free()
-
-
-func _test_bow_add_stack_effects_accumulate_capabilities() -> void:
-	var player := WeaponEffectPlayer.new()
-	ItemEffectScript.apply_to_player(player, {
-		"bow_charge_rate_bonus": 0.25,
-		"bow_full_charge_damage_multiplier_bonus": 0.35,
-		"bow_pierce_bonus": 1,
-	})
-	ItemEffectScript.apply_to_player(player, {
-		"bow_charge_rate_bonus": 0.15,
-		"bow_full_charge_damage_multiplier_bonus": 0.20,
-		"bow_pierce_bonus": 2,
-	})
-	_suite.assert_equal(
-		player.modifier_values,
 		{
-			"weapon.charge_rate": 1.4,
-			"weapon.full_charge_damage": 1.55,
-			"weapon.pierce": 3.0,
+			"weapon_id": &"bow",
+			"effects": {"bow_charge_rate_bonus": 0.25},
+			"expected": {
+				"capability": "weapon.charge_rate",
+				"value": 0.25,
+				"base_value": 1.0,
+				"stack_rule": "add",
+				"weapon_id": "bow",
+			},
 		},
-		"multiple additive bow items preserve every bonus instead of replacing the prior item"
-	)
-	player.free()
-
-
-func _test_player_bow_capability_bridge_accumulates() -> void:
-	var player = PlayerControllerScript.new()
-	var loadout := FakeLoadoutRuntime.new()
-	loadout.equipped_weapon_id = &"bow"
-	player.loadout_runtime = loadout
-	var capabilities := PackedStringArray([
-		"weapon.charge_rate",
-		"weapon.full_charge_damage",
-		"weapon.pierce",
-	])
-	var bounds: Dictionary = player.call("_modifier_bounds_for", capabilities)
-	_suite.assert_equal(
-		bounds,
 		{
-			"weapon.charge_rate": {"minimum": 0.0, "maximum": 6.0},
-			"weapon.full_charge_damage": {"minimum": 0.0, "maximum": 11.0},
-			"weapon.pierce": {"minimum": 0.0, "maximum": 20.0},
+			"weapon_id": &"gun",
+			"effects": {"attack_multiplier": 1.2},
+			"expected": {
+				"capability": "weapon.damage",
+				"value": 1.2,
+				"base_value": 1.0,
+				"stack_rule": "multiply",
+				"weapon_id": "gun",
+			},
 		},
-		"player declares bounds for every migrated bow capability"
+		{
+			"weapon_id": &"staff",
+			"effects": {"attack_speed_multiplier": 1.15},
+			"expected": {
+				"capability": "weapon.attack_speed",
+				"value": 1.15,
+				"base_value": 1.0,
+				"stack_rule": "multiply",
+				"weapon_id": "staff",
+			},
+		},
+		{
+			"weapon_id": &"gauntlets",
+			"effects": {"attack_multiplier": 1.25},
+			"expected": {
+				"capability": "weapon.damage",
+				"value": 1.25,
+				"base_value": 1.0,
+				"stack_rule": "multiply",
+				"weapon_id": "gauntlets",
+			},
+		},
+	]
+	for case: Dictionary in cases:
+		var player := CapabilityRoutePlayer.new()
+		player.equipped_weapon_id = case["weapon_id"]
+		ItemEffectScript._apply_weapon_effects(player, case["effects"])
+		_suite.assert_equal(
+			player.routed_effects,
+			[case["expected"]],
+			"%s weapon effects route through their declared capability" % str(case["weapon_id"])
+		)
+		player.free()
+
+
+func _test_stack_rules_and_bounds_are_atomic() -> void:
+	var fixture := _player_fixture(
+		&"sword",
+		PackedStringArray([
+			"weapon.combo_finisher_damage",
+			"weapon.damage",
+			"weapon.heavy_damage",
+			"weapon.heavy_execute_threshold",
+		]),
+		{
+			"weapon.combo_finisher_damage": {"minimum": 0.0, "maximum": 10.0},
+			"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+			"weapon.heavy_damage": {"minimum": 0.0, "maximum": 10.0},
+			"weapon.heavy_execute_threshold": {"minimum": 0.0, "maximum": 1.0},
+		}
 	)
-	var modifiers = WeaponModifierStateScript.new()
+	var player: Node = fixture["player"]
+	var modifiers: RefCounted = fixture["modifiers"]
 	_suite.assert_true(
-		modifiers.configure(capabilities, bounds),
-		"player bow capability bridge fixture configures"
+		player.call("apply_weapon_capability_effect", &"weapon.damage", 1.5, 1.0, &"multiply", &"sword"),
+		"first multiplier applies"
 	)
-	player.weapon_modifier_state = modifiers
-	for _item_index: int in range(2):
-		ItemEffectScript._apply_weapon_effects(player, {
-			"bow_charge_rate_bonus": 0.25,
-			"bow_full_charge_damage_multiplier_bonus": 0.35,
-			"bow_pierce_bonus": 1,
-		})
-	var snapshot: Dictionary = modifiers.snapshot()
-	_suite.assert_close(
-		float(snapshot.get("weapon.charge_rate", NAN)),
-		1.5,
-		"player accumulates repeated charge-rate bonuses"
-	)
-	_suite.assert_close(
-		float(snapshot.get("weapon.full_charge_damage", NAN)),
-		1.7,
-		"player accumulates repeated full-charge damage bonuses"
-	)
-	_suite.assert_close(
-		float(snapshot.get("weapon.pierce", NAN)),
-		2.0,
-		"player accumulates repeated pierce bonuses"
-	)
-	loadout.free()
-	player.free()
-
-
-func _test_player_rejects_bow_capabilities_for_non_bow_loadout() -> void:
-	var player = PlayerControllerScript.new()
-	var loadout := FakeLoadoutRuntime.new()
-	loadout.equipped_weapon_id = &"sword"
-	player.loadout_runtime = loadout
-	var capabilities := PackedStringArray([
-		"weapon.charge_rate",
-		"weapon.full_charge_damage",
-		"weapon.pierce",
-	])
-	var modifiers = WeaponModifierStateScript.new()
 	_suite.assert_true(
-		modifiers.configure(capabilities, player.call("_modifier_bounds_for", capabilities)),
-		"non-Bow gating fixture configures"
+		player.call("apply_weapon_capability_effect", &"weapon.damage", 1.2, 1.0, &"multiply", &"sword"),
+		"second multiplier stacks"
 	)
-	_suite.assert_true(modifiers.apply(&"weapon.charge_rate", 1.1), "gating fixture seeds charge rate")
-	_suite.assert_true(modifiers.apply(&"weapon.full_charge_damage", 1.2), "gating fixture seeds full-charge damage")
-	_suite.assert_true(modifiers.apply(&"weapon.pierce", 2.0), "gating fixture seeds pierce")
-	player.weapon_modifier_state = modifiers
-	var before: Dictionary = modifiers.snapshot()
+	_suite.assert_true(
+		player.call("apply_weapon_capability_effect", &"weapon.combo_finisher_damage", 0.35, 0.0, &"add", &"sword"),
+		"first additive bonus applies"
+	)
+	_suite.assert_true(
+		player.call("apply_weapon_capability_effect", &"weapon.combo_finisher_damage", 0.20, 0.0, &"add", &"sword"),
+		"second additive bonus stacks"
+	)
+	_suite.assert_true(
+		player.call("apply_weapon_capability_effect", &"weapon.heavy_execute_threshold", 0.3, 0.3, &"replace", &"sword"),
+		"replace rule applies"
+	)
+	var before_rejection: Dictionary = modifiers.call("snapshot")
+	_suite.assert_true(
+		not player.call("apply_weapon_capability_effect", &"weapon.damage", 20.0, 1.0, &"multiply", &"sword"),
+		"combined values outside capability bounds are rejected"
+	)
+	_suite.assert_equal(modifiers.call("snapshot"), before_rejection, "range rejection is atomic")
+	_suite.assert_true(
+		not player.call("apply_weapon_capability_effect", &"weapon.heavy_damage", 1.0, -1.0, &"add", &"sword"),
+		"out-of-range capability bases are rejected even when the combined value would be valid"
+	)
+	_suite.assert_equal(modifiers.call("snapshot"), before_rejection, "base rejection is atomic")
+	_suite.assert_close(float(before_rejection.get("weapon.damage", NAN)), 1.8, "multipliers compose multiplicatively")
+	_suite.assert_close(
+		float(before_rejection.get("weapon.combo_finisher_damage", NAN)),
+		0.55,
+		"bonuses compose additively"
+	)
+	_suite.assert_close(
+		float(before_rejection.get("weapon.heavy_execute_threshold", NAN)),
+		0.3,
+		"replacement effects store the normalized value"
+	)
+	_free_player_fixture(fixture)
+
+
+func _test_multiple_capability_routes_are_atomic() -> void:
+	var fixture := _player_fixture(
+		&"sword",
+		PackedStringArray(["weapon.combo_finisher_damage", "weapon.damage"]),
+		{
+			"weapon.combo_finisher_damage": {"minimum": 0.0, "maximum": 10.0},
+			"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+		}
+	)
+	var player: Node = fixture["player"]
+	var modifiers: RefCounted = fixture["modifiers"]
+	_suite.assert_true(
+		player.call("apply_weapon_capability_effect", &"weapon.combo_finisher_damage", 1.0, 0.0, &"add", &"sword"),
+		"atomic multi-route fixture establishes a prior combo bonus"
+	)
+	var before: Dictionary = modifiers.call("snapshot")
 	ItemEffectScript._apply_weapon_effects(player, {
-		"bow_charge_rate_bonus": 0.25,
-		"bow_full_charge_damage_multiplier_bonus": 0.35,
-		"bow_pierce_bonus": 1,
+		"attack_multiplier": 1.2,
+		"combo_finisher_multiplier_bonus": 10.0,
 	})
 	_suite.assert_equal(
-		modifiers.snapshot(),
+		modifiers.call("snapshot"),
 		before,
-		"Bow-specific item effects cannot mutate the modifier state while Sword is equipped"
+		"a later invalid capability route rolls the entire item effect batch back"
 	)
-	loadout.free()
-	player.free()
+	_free_player_fixture(fixture)
+
+
+func _test_runtime_sync_failure_rolls_back_batch() -> void:
+	var fixture := _player_fixture(
+		&"sword",
+		PackedStringArray(["weapon.damage", "weapon.combo_finisher_damage"]),
+		{
+			"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+			"weapon.combo_finisher_damage": {"minimum": 0.0, "maximum": 10.0},
+		}
+	)
+	var player: Node = fixture["player"]
+	var modifiers: RefCounted = fixture["modifiers"]
+	_suite.assert_true(
+		modifiers.call("apply", &"weapon.damage", 1.1),
+		"runtime-sync rollback fixture seeds a prior modifier"
+	)
+	var runtime := FailingSyncWeaponRuntime.new(modifiers, &"weapon.combo_finisher_damage")
+	player.set("weapon_runtime", runtime)
+	var before: Dictionary = modifiers.call("snapshot")
+	_suite.assert_true(
+		not player.call("apply_weapon_capability_effects", [
+			{
+				"capability": "weapon.damage",
+				"value": 1.2,
+				"base_value": 1.0,
+				"stack_rule": "multiply",
+				"weapon_id": "sword",
+			},
+			{
+				"capability": "weapon.combo_finisher_damage",
+				"value": 0.35,
+				"base_value": 0.0,
+				"stack_rule": "add",
+				"weapon_id": "sword",
+			},
+		]),
+		"a runtime synchronization rejection fails the whole item batch"
+	)
+	_suite.assert_equal(
+		modifiers.call("snapshot"),
+		before,
+		"runtime synchronization failure restores the exact modifier snapshot"
+	)
+	_suite.assert_close(
+		float(runtime.synchronized_values.get("weapon.damage", NAN)),
+		1.1,
+		"runtime synchronization side effects are compensated to the prior value"
+	)
+	_free_player_fixture(fixture)
+
+
+func _test_weapon_capability_ownership_tracks_equipment() -> void:
+	var fixture := _player_fixture(
+		&"sword",
+		PackedStringArray(["weapon.combo_finisher_damage", "weapon.damage"]),
+		{
+			"weapon.combo_finisher_damage": {"minimum": 0.0, "maximum": 10.0},
+			"weapon.damage": {"minimum": 0.0, "maximum": 10.0},
+		}
+	)
+	var player: Node = fixture["player"]
+	var loadout: Node = fixture["loadout"]
+	var modifiers: RefCounted = fixture["modifiers"]
+	ItemEffectScript._apply_weapon_effects(player, {"combo_finisher_multiplier_bonus": 0.35})
+	var sword_snapshot: Dictionary = modifiers.call("snapshot")
+	_suite.assert_close(
+		float(sword_snapshot.get("weapon.combo_finisher_damage", NAN)),
+		0.35,
+		"equipped Sword owns its capability bonus"
+	)
+	loadout.equipped_weapon_id = &"bow"
+	ItemEffectScript._apply_weapon_effects(player, {"combo_finisher_multiplier_bonus": 0.20})
+	_suite.assert_equal(
+		modifiers.call("snapshot"),
+		sword_snapshot,
+		"switching away prevents stale Sword capability mutation"
+	)
+	ItemEffectScript._apply_weapon_effects(player, {"attack_multiplier": 1.25})
+	_suite.assert_close(
+		float((modifiers.call("snapshot") as Dictionary).get("weapon.damage", NAN)),
+		1.25,
+		"generic weapon effects follow the newly equipped weapon"
+	)
+	_free_player_fixture(fixture)
 
 
 func _test_missing_player_api_fails_safely() -> void:
-	var player := PlayerWithoutWeaponEffectApi.new()
-	ItemEffectScript.apply_to_player(player, LEGACY_WEAPON_EFFECTS)
-	_suite.assert_equal(player.stats_sync_count, 1, "missing weapon API leaves the remaining item pipeline usable")
+	var player := PlayerWithoutWeaponCapabilityApi.new()
+	ItemEffectScript.apply_to_player(player, {"bow_charge_rate_bonus": 0.25})
+	_suite.assert_equal(player.stats_sync_count, 1, "missing capability API leaves the remaining item pipeline usable")
 	player.free()
 
 
-func _test_item_effect_does_not_reach_weapon_nodes() -> void:
-	var source := FileAccess.get_file_as_string(ITEM_EFFECT_SOURCE_PATH)
-	_suite.assert_true(not source.is_empty(), "item effect source is readable")
+func _test_legacy_weapon_write_apis_are_removed() -> void:
+	var item_source := FileAccess.get_file_as_string(ITEM_EFFECT_SOURCE_PATH)
+	_suite.assert_true(not item_source.is_empty(), "item effect source is readable")
+	_suite.assert_true(not item_source.contains("LEGACY_"), "item effects no longer maintain hard-coded legacy maps")
 	_suite.assert_true(
-		not source.contains("player.sword_weapon"),
-		"item effects do not directly access the sword presentation node"
-	)
-	_suite.assert_true(
-		not source.contains("player.bow_weapon"),
-		"item effects do not directly access the bow presentation node"
+		not item_source.contains("\"apply_weapon_effect\"")
+		and not item_source.contains(".apply_weapon_effect("),
+		"item effects no longer call the legacy weapon-effect API"
 	)
 	var player_source := FileAccess.get_file_as_string(PLAYER_CONTROLLER_SOURCE_PATH)
 	_suite.assert_true(not player_source.is_empty(), "player controller source is readable")
+	_suite.assert_true(
+		not player_source.contains("func apply_weapon_effect("),
+		"player controller removes the legacy weapon-effect API"
+	)
 	for direct_write: String in [
+		"sword_weapon.combo_finisher_multiplier_bonus",
+		"sword_weapon.heavy_damage_multiplier_bonus",
+		"sword_weapon.heavy_execute_multiplier_bonus",
+		"sword_weapon.heavy_execute_threshold",
+		"sword_weapon.low_hp_damage_multiplier_bonus",
 		"bow_weapon.charge_rate_bonus",
 		"bow_weapon.full_charge_damage_multiplier_bonus",
 		"bow_weapon.pierce_bonus",
-		"bow_weapon.cancel_charge",
 	]:
 		_suite.assert_true(
 			not player_source.contains(direct_write),
-			"legacy bow effects do not write presentation state: %s" % direct_write
+			"Player does not write presentation-owned weapon fields: %s" % direct_write
 		)
+
+
+func _player_fixture(
+	weapon_id: StringName,
+	capabilities: PackedStringArray,
+	bounds: Dictionary
+) -> Dictionary:
+	var player = PlayerControllerScript.new()
+	var loadout := FakeLoadoutRuntime.new()
+	loadout.equipped_weapon_id = weapon_id
+	var modifiers = WeaponModifierStateScript.new()
+	_suite.assert_true(modifiers.configure(capabilities, bounds), "modifier fixture configures")
+	player.loadout_runtime = loadout
+	player.weapon_modifier_state = modifiers
+	player.weapon_runtime = FakeWeaponRuntime.new(modifiers)
+	return {"player": player, "loadout": loadout, "modifiers": modifiers}
+
+
+func _free_player_fixture(fixture: Dictionary) -> void:
+	(fixture["loadout"] as Node).free()
+	(fixture["player"] as Node).free()

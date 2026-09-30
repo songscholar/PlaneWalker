@@ -59,6 +59,42 @@ func apply_additive(capability: StringName, value: Variant, base_value: Variant)
 	return _store_bounded(capability, current + numeric)
 
 
+func apply_batch(values: Dictionary) -> bool:
+	var next_values := _values.duplicate(true)
+	for capability_value: Variant in values.keys():
+		if typeof(capability_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var capability := StringName(str(capability_value))
+		var value: Variant = values[capability_value]
+		if (
+			not _capabilities.has(capability)
+			or typeof(value) not in [TYPE_INT, TYPE_FLOAT]
+			or not _value_is_bounded(capability, float(value))
+		):
+			return false
+		next_values[str(capability)] = float(value)
+	_values = next_values
+	return true
+
+
+func restore_snapshot(values: Dictionary) -> bool:
+	var restored_values: Dictionary = {}
+	for capability_value: Variant in values.keys():
+		if typeof(capability_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var capability := StringName(str(capability_value))
+		var value: Variant = values[capability_value]
+		if (
+			not _capabilities.has(capability)
+			or typeof(value) not in [TYPE_INT, TYPE_FLOAT]
+			or not _value_is_bounded(capability, float(value))
+		):
+			return false
+		restored_values[str(capability)] = float(value)
+	_values = restored_values
+	return true
+
+
 func _store_bounded(capability: StringName, numeric: float) -> bool:
 	if not _value_is_bounded(capability, numeric):
 		return false

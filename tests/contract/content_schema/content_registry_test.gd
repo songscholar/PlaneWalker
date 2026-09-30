@@ -27,6 +27,7 @@ func _run() -> void:
 	_test_required_fields(suite)
 	_test_next_content_isolation(suite)
 	_test_identity_effect_boundary(suite)
+	_test_effect_capability_profile_validation(suite)
 	suite.finish(get_tree())
 
 
@@ -187,6 +188,165 @@ func _test_identity_effect_boundary(suite) -> void:
 	)
 	suite.assert_equal(error.get("field"), "effects", "identity content rejects effect execution")
 	suite.assert_equal(error.get("reason"), "unsupported_category", "identity effect rejection is explicit")
+
+
+func _test_effect_capability_profile_validation(suite) -> void:
+	var effect_catalog = EffectHandlerCatalogScript.new()
+	var unsupported_profile := {
+		"id": "sword_fixture_v1",
+		"category": "weapon_runtime_profile",
+		"availability": ["LAUNCH"],
+		"weapon_id": "sword",
+		"capabilities": ["weapon.damage"],
+	}
+	var existing_item := {
+		"id": "fixture_sword_combo",
+		"category": "item",
+		"availability": ["LAUNCH"],
+		"compatibility": {"weapon_ids": ["sword"]},
+		"effects": {"combo_finisher_multiplier_bonus": 0.35},
+	}
+	var registry = ContentRegistryScript.new()
+	registry.set("_definitions", {"fixture_sword_combo": existing_item})
+	var unsupported_profiles: Array[Dictionary] = [unsupported_profile]
+	var unsupported_error: Dictionary = registry.call(
+		"_first_effect_capability_error",
+		unsupported_profiles,
+		effect_catalog
+	)
+	suite.assert_equal(
+		unsupported_error.get("reason"),
+		"unsupported_capability",
+		"a newly activated profile is checked against effects from already active packs"
+	)
+	suite.assert_equal(
+		unsupported_error.get("profile_id"),
+		"sword_fixture_v1",
+		"capability activation errors identify the incompatible profile"
+	)
+	suite.assert_equal(
+		unsupported_error.get("capability"),
+		"weapon.combo_finisher_damage",
+		"capability activation errors identify the missing contract"
+	)
+
+	var supported_profile: Dictionary = unsupported_profile.duplicate(true)
+	supported_profile["capabilities"] = ["weapon.combo_finisher_damage", "weapon.damage"]
+	var supported_profiles: Array[Dictionary] = [supported_profile]
+	suite.assert_equal(
+		registry.call(
+			"_first_effect_capability_error",
+			supported_profiles,
+			effect_catalog
+		),
+		{},
+		"profiles declaring every applicable capability pass activation"
+	)
+
+	var bow_only_item := {
+		"id": "fixture_bow_damage",
+		"category": "item",
+		"availability": ["LAUNCH"],
+		"compatibility": {"weapon_ids": ["bow"]},
+		"effects": {"attack_multiplier": 1.2},
+	}
+	registry.set("_definitions", {"fixture_bow_damage": bow_only_item})
+	var bow_profile := {
+		"id": "bow_fixture_v1",
+		"category": "weapon_runtime_profile",
+		"availability": ["LAUNCH"],
+		"weapon_id": "bow",
+		"capabilities": ["weapon.damage"],
+	}
+	var incompatible_profiles: Array[Dictionary] = [unsupported_profile, bow_profile]
+	suite.assert_equal(
+		registry.call(
+			"_first_effect_capability_error",
+			incompatible_profiles,
+			effect_catalog
+		),
+		{},
+		"weapon compatibility excludes capability routes that cannot be selected"
+	)
+
+	var zero_route_item := {
+		"id": "fixture_bow_sword_only_effect",
+		"category": "item",
+		"availability": ["LAUNCH"],
+		"compatibility": {"weapon_ids": ["bow"]},
+		"effects": {"combo_finisher_multiplier_bonus": 0.35},
+	}
+	registry.set("_definitions", {"fixture_bow_sword_only_effect": zero_route_item})
+	var zero_route_error: Dictionary = registry.call(
+		"_first_effect_capability_error",
+		incompatible_profiles,
+		effect_catalog
+	)
+	suite.assert_equal(
+		zero_route_error.get("reason"),
+		"no_executable_route",
+		"declared weapon compatibility cannot activate when every effect route targets another weapon"
+	)
+	suite.assert_equal(
+		zero_route_error.get("weapon_id"),
+		"bow",
+		"zero-route activation identifies the unsupported declared weapon"
+	)
+
+	registry.set("_definitions", {"fixture_bow_damage": bow_only_item})
+	var missing_profiles: Array[Dictionary] = [unsupported_profile]
+	var missing_profile_error: Dictionary = registry.call(
+		"_first_effect_capability_error",
+		missing_profiles,
+		effect_catalog
+	)
+	suite.assert_equal(
+		missing_profile_error.get("reason"),
+		"compatible_profile_missing",
+		"declared weapon compatibility requires an overlapping milestone runtime profile"
+	)
+	suite.assert_equal(
+		missing_profile_error.get("weapon_id"),
+		"bow",
+		"missing-profile activation identifies the declared weapon"
+	)
+
+	var generic_bow_item := {
+		"id": "fixture_bow_defense",
+		"category": "item",
+		"availability": ["LAUNCH"],
+		"compatibility": {"weapon_ids": ["bow"]},
+		"effects": {"defense_bonus": 4.0},
+	}
+	var next_only_bow_profile: Dictionary = bow_profile.duplicate(true)
+	next_only_bow_profile["availability"] = ["NEXT"]
+	registry.set("_definitions", {"fixture_bow_defense": generic_bow_item})
+	var generic_missing_profiles: Array[Dictionary] = [unsupported_profile, next_only_bow_profile]
+	var generic_missing_error: Dictionary = registry.call(
+		"_first_effect_capability_error",
+		generic_missing_profiles,
+		effect_catalog
+	)
+	suite.assert_equal(
+		generic_missing_error.get("reason"),
+		"compatible_profile_missing",
+		"generic effects still require a same-milestone profile for every explicitly compatible weapon"
+	)
+	suite.assert_equal(
+		generic_missing_error.get("weapon_id"),
+		"bow",
+		"generic-effect profile errors identify the declared weapon"
+	)
+	var generic_supported_profiles: Array[Dictionary] = [unsupported_profile, bow_profile]
+	suite.assert_equal(
+		registry.call(
+			"_first_effect_capability_error",
+			generic_supported_profiles,
+			effect_catalog
+		),
+		{},
+		"generic effects pass when the explicitly compatible weapon has a same-milestone profile"
+	)
 
 
 func _action_by_id(profile: Dictionary, action_id: String) -> Dictionary:

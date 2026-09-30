@@ -29,6 +29,7 @@ class FakeStaffAdapter extends Node2D:
 	var fail_begin: bool = false
 	var corrupt_begin: bool = false
 	var fail_release: bool = false
+	var fail_restore_and_reset: bool = false
 	var begin_count: int = 0
 	var release_count: int = 0
 	var cancel_count: int = 0
@@ -79,6 +80,51 @@ class FakeStaffAdapter extends Node2D:
 	func reset_runtime_state() -> void:
 		reset_count += 1
 		_clear_action()
+
+
+	func runtime_snapshot() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"profile_action": staged_definition.duplicate(true),
+			"profile_action_released": _released,
+			"phase_state": "released" if _released else ("prepared" if _active else "idle"),
+			"prepared_payloads": [],
+			"owned_payloads": [],
+			"callback_claims": {},
+			"callback_claim_order": [],
+			"resource_reward_claims": {},
+			"resource_reward_claim_order": [],
+		}
+
+
+	func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+		if (
+			int(value.get("schema_version", -1)) != 1
+			or not value.get("profile_action") is Dictionary
+			or typeof(value.get("profile_action_released")) != TYPE_BOOL
+			or str(value.get("phase_state", "")) not in ["idle", "prepared", "released"]
+		):
+			return false
+		var action := value.get("profile_action", {}) as Dictionary
+		var state := str(value.get("phase_state", ""))
+		return (
+			(state == "idle" and action.is_empty() and not bool(value["profile_action_released"]))
+			or (state == "prepared" and not action.is_empty() and not bool(value["profile_action_released"]))
+			or (state == "released" and not action.is_empty() and bool(value["profile_action_released"]))
+		)
+
+
+	func restore_runtime_snapshot(value: Dictionary) -> bool:
+		if not can_restore_runtime_snapshot(value):
+			return false
+		if fail_restore_and_reset:
+			_clear_action()
+			return false
+		staged_definition = (value["profile_action"] as Dictionary).duplicate(true)
+		_active = not staged_definition.is_empty()
+		_released = bool(value["profile_action_released"])
+		released_definition = staged_definition.duplicate(true) if _released else {}
+		return runtime_snapshot() == value
 
 
 	func _clear_action() -> void:
@@ -154,6 +200,7 @@ func _run() -> void:
 	_test_skill_ultimate_and_boss_descriptors()
 	_test_coordinator_hold_snapshot_and_reset_boundaries()
 	_test_cast_ledgers_are_bounded()
+	_test_replay_payload_transition_projector()
 	_suite.finish(get_tree())
 
 
@@ -732,6 +779,7 @@ func _test_coordinator_hold_snapshot_and_reset_boundaries() -> void:
 	_coordinator_facts.clear()
 	var fixture := _coordinator_fixture()
 	var runtime: RefCounted = fixture["runtime"]
+	var adapter: FakeStaffAdapter = fixture["adapter"]
 	var coordinator: RefCounted = fixture["coordinator"]
 	_suite.assert_true(bool(coordinator.submit_intent(_press_intent(&"weapon_primary"), _context(9801)).get("ok", false)), "Coordinator accepts Staff primary HOLD")
 	for _frame: int in range(30):
@@ -757,8 +805,15 @@ func _test_coordinator_hold_snapshot_and_reset_boundaries() -> void:
 	_suite.assert_equal(runtime.on_phase_enter(active_plan, &"ACTIVE", 2002).size(), 2, "active snapshot fixture releases the payload")
 	var active_snapshot: Dictionary = runtime.snapshot()
 	runtime.cancel_action(2002, &"active_snapshot_fixture")
-	_suite.assert_true(not runtime.restore_snapshot(active_snapshot), "released ACTIVE payload snapshots fail closed")
-	_suite.assert_equal(runtime.snapshot().get("active_phase"), "READY", "failed ACTIVE restore preserves a safe ready state")
+	_suite.assert_true(runtime.restore_snapshot(active_snapshot), "released ACTIVE payload snapshots restore authoritatively")
+	_suite.assert_equal(runtime.snapshot(), active_snapshot, "released ACTIVE restore preserves the exact runtime and adapter state")
+	var failed_closed := active_snapshot.duplicate(true)
+	failed_closed["mana"] = maxf(0.0, float(failed_closed["mana"]) - 1.0)
+	adapter.fail_restore_and_reset = true
+	_suite.assert_true(not runtime.restore_snapshot(failed_closed), "adapter reset during failed restore is reported")
+	_suite.assert_equal(runtime.snapshot().get("active_phase"), "READY", "adapter/runtime split fails closed to READY")
+	_suite.assert_true(not adapter.is_profile_action_active(), "failed-closed restore leaves the adapter idle")
+	adapter.fail_restore_and_reset = false
 
 	runtime.reset_runtime_state(&"new_run")
 	var reset: Dictionary = runtime.snapshot()
@@ -791,6 +846,198 @@ func _test_cast_ledgers_are_bounded() -> void:
 	_suite.assert_true(not ledgers.has(str(first_token)), "Staff prunes the oldest completed cast ledger")
 	_suite.assert_true(ledgers.has(str(first_token + 259)), "Staff retains the newest completed cast ledger")
 	_free_fixture(fixture)
+
+
+func _test_replay_payload_transition_projector() -> void:
+	var hit_fixture := _fixture()
+	var hit_runtime: RefCounted = hit_fixture["runtime"]
+	var hit_plan: Dictionary = hit_runtime.plan_intent(
+		_release_intent(&"weapon_primary", 30),
+		_context(12001)
+	).get("plan", {})
+	_suite.assert_true(bool(hit_runtime.commit_action(hit_plan, 5001).get("ok", false)), "replay projector hit fixture commits")
+	var hit_before: Dictionary = hit_runtime.snapshot()
+	var hit_result := {
+		"type": "hit_confirmed",
+		"descriptor_id": "staff_element_cast",
+		"outcome_id": "replay_hit",
+		"element": "fire",
+		"target_id": 500101,
+		"terminal": false,
+		"damage": 100.0,
+		"hit": true,
+		"resource_only": false,
+	}
+	var hit_projection: Dictionary = hit_runtime.project_replay_payload_result(
+		hit_before,
+		5001,
+		5001,
+		hit_result
+	)
+	_suite.assert_true(bool(hit_projection.get("ok", false)), "replay projector accepts a valid Staff hit")
+	_suite.assert_equal(hit_runtime.snapshot(), hit_before, "replay projector is pure and leaves the live runtime unchanged")
+	_suite.assert_close(
+		float((hit_projection.get("payload_result", {}) as Dictionary).get("mana_return", 0.0)),
+		2.0,
+		"replay projector applies the authoritative two-percent Mana return"
+	)
+	var hit_actual: Dictionary = hit_runtime.handle_payload_result(5001, 5001, hit_result)
+	_suite.assert_equal(hit_actual, hit_projection.get("payload_result", {}), "replay projector returns the same hit result as live mutation")
+	_suite.assert_equal(hit_runtime.snapshot(), hit_projection.get("snapshot", {}), "replay projector exactly predicts hit ledger and Mana state")
+	_suite.assert_equal(
+		hit_runtime.project_replay_payload_result(hit_runtime.snapshot(), 5001, 5001, hit_result).get("code"),
+		&"DUPLICATE_TARGET",
+		"replay projector rejects a duplicate target without trusting an after snapshot"
+	)
+	_suite.assert_equal(
+		hit_runtime.project_replay_payload_result(hit_before, 5001, 5002, hit_result).get("code"),
+		&"STALE_GENERATION",
+		"replay projector rejects a stale payload generation"
+	)
+	_suite.assert_equal(
+		hit_runtime.project_replay_payload_result(hit_before, 5999, 5999, hit_result).get("code"),
+		&"STALE_TOKEN",
+		"replay projector rejects a charged payload without a cast ledger"
+	)
+	_free_fixture(hit_fixture)
+
+	var combo_fixture := _fixture()
+	var combo_runtime: RefCounted = combo_fixture["runtime"]
+	_commit_confirmed_element(combo_runtime, &"fire", 5101, 12101)
+	_set_element(combo_runtime, &"ice", 5102)
+	var combo_plan: Dictionary = combo_runtime.plan_intent(
+		_release_intent(&"weapon_primary", 30),
+		_context(12102)
+	).get("plan", {})
+	_suite.assert_true(bool(combo_runtime.commit_action(combo_plan, 5105).get("ok", false)), "replay projector combo fixture commits")
+	var combo_before: Dictionary = combo_runtime.snapshot()
+	var combo_result := {
+		"type": "hit_confirmed",
+		"descriptor_id": "staff_element_cast",
+		"outcome_id": "replay_combo",
+		"element": "ice",
+		"target_id": 510501,
+		"terminal": true,
+		"damage": 0.0,
+		"hit": true,
+		"resource_only": false,
+	}
+	var combo_projection: Dictionary = combo_runtime.project_replay_payload_result(
+		combo_before,
+		5105,
+		5105,
+		combo_result
+	)
+	_suite.assert_equal(
+		((combo_projection.get("payload_result", {}) as Dictionary).get("combo", {}) as Dictionary).get("combo_id"),
+		"steam_burst",
+		"replay projector confirms the reserved ordered combination"
+	)
+	var combo_actual: Dictionary = combo_runtime.handle_payload_result(5105, 5105, combo_result)
+	_suite.assert_equal(combo_actual, combo_projection.get("payload_result", {}), "replay projector returns the same combo confirmation")
+	_suite.assert_equal(combo_runtime.snapshot(), combo_projection.get("snapshot", {}), "replay projector exactly predicts combo consumption")
+	_free_fixture(combo_fixture)
+
+	var miss_fixture := _fixture()
+	var miss_runtime: RefCounted = miss_fixture["runtime"]
+	_commit_confirmed_element(miss_runtime, &"fire", 5201, 12201)
+	_set_element(miss_runtime, &"ice", 5202)
+	var miss_plan: Dictionary = miss_runtime.plan_intent(
+		_release_intent(&"weapon_primary", 30),
+		_context(12202)
+	).get("plan", {})
+	_suite.assert_true(bool(miss_runtime.commit_action(miss_plan, 5205).get("ok", false)), "replay projector miss fixture commits")
+	var miss_before: Dictionary = miss_runtime.snapshot()
+	var miss_result := {
+		"type": "terminal_miss",
+		"descriptor_id": "staff_element_cast",
+		"outcome_id": "replay_miss",
+		"element": "ice",
+		"target_id": -1,
+		"terminal": true,
+		"damage": 0.0,
+		"hit": false,
+		"resource_only": false,
+	}
+	var miss_projection: Dictionary = miss_runtime.project_replay_payload_result(
+		miss_before,
+		5205,
+		5205,
+		miss_result
+	)
+	_suite.assert_close(
+		float((miss_projection.get("payload_result", {}) as Dictionary).get("refunded_mana", 0.0)),
+		15.0,
+		"replay projector refunds the pending combo surcharge on terminal miss"
+	)
+	var miss_actual: Dictionary = miss_runtime.handle_payload_result(5205, 5205, miss_result)
+	_suite.assert_equal(miss_actual, miss_projection.get("payload_result", {}), "replay projector returns the same terminal-miss refund")
+	_suite.assert_equal(miss_runtime.snapshot(), miss_projection.get("snapshot", {}), "replay projector exactly predicts terminal-miss state")
+	_free_fixture(miss_fixture)
+
+	var resource_fixture := _fixture()
+	var resource_runtime: RefCounted = resource_fixture["runtime"]
+	var resource_plan: Dictionary = resource_runtime.plan_intent(
+		_release_intent(&"weapon_primary", 30),
+		_context(12301)
+	).get("plan", {})
+	_suite.assert_true(bool(resource_runtime.commit_action(resource_plan, 5301).get("ok", false)), "replay projector resource-only fixture commits")
+	var resource_before: Dictionary = resource_runtime.snapshot()
+	var resource_result := {
+		"type": "damage_resolved",
+		"descriptor_id": "staff_element_cast",
+		"outcome_id": "replay_resource_only",
+		"element": "void",
+		"target_id": 530101,
+		"terminal": false,
+		"damage": 50.0,
+		"hit": true,
+		"resource_only": true,
+	}
+	var resource_projection: Dictionary = resource_runtime.project_replay_payload_result(
+		resource_before,
+		5301,
+		5301,
+		resource_result
+	)
+	_suite.assert_close(
+		float((resource_projection.get("payload_result", {}) as Dictionary).get("mana_return", 0.0)),
+		1.0,
+		"damage_resolved replay returns Mana without confirming the element cast"
+	)
+	_suite.assert_true(
+		not bool((((resource_projection.get("snapshot", {}) as Dictionary).get("cast_ledgers", {}) as Dictionary).get("5301", {}) as Dictionary).get("confirmed_hit", true)),
+		"resource-only replay does not open or confirm combo state"
+	)
+	var resource_actual: Dictionary = resource_runtime.handle_payload_result(5301, 5301, resource_result)
+	_suite.assert_equal(resource_actual, resource_projection.get("payload_result", {}), "replay projector returns the same resource-only result")
+	_suite.assert_equal(resource_runtime.snapshot(), resource_projection.get("snapshot", {}), "replay projector exactly predicts resource-only ledgers")
+
+	for adapter_only_case: Dictionary in [
+		{"descriptor_id": "staff_planar_collapse", "outcome_id": "collapse:frame:1:void", "token": 5401},
+		{"descriptor_id": "staff_primordial_wrath", "outcome_id": "ultimate:frame:1:fire", "token": 5402},
+	]:
+		var adapter_only_result := {
+			"type": "damage_resolved",
+			"descriptor_id": adapter_only_case["descriptor_id"],
+			"outcome_id": adapter_only_case["outcome_id"],
+			"element": "void",
+			"target_id": 530102,
+			"terminal": false,
+			"damage": 25.0,
+			"hit": true,
+			"resource_only": true,
+		}
+		var adapter_token := int(adapter_only_case["token"])
+		var adapter_only_projection: Dictionary = resource_runtime.project_replay_payload_result(
+			resource_runtime.snapshot(),
+			adapter_token,
+			adapter_token,
+			adapter_only_result
+		)
+		_suite.assert_true(bool(adapter_only_projection.get("ok", false)), "%s replay is accepted without a cast ledger" % adapter_only_case["descriptor_id"])
+		_suite.assert_equal(adapter_only_projection.get("snapshot", {}), resource_runtime.snapshot(), "%s replay leaves the Staff runtime domain unchanged" % adapter_only_case["descriptor_id"])
+	_free_fixture(resource_fixture)
 
 
 func _fixture() -> Dictionary:

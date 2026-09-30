@@ -19,7 +19,7 @@
       {"action_id": "heavy", "semantic_action": "weapon_secondary", "activation_mode": "press", "windup_frames": 21, "active_frames": 8, "recovery_frames": 27, "cancel_from_frame": 15, "buffer_frames": 12, "movement_multiplier": 0.2, "resource_costs": {}, "payload_id": "sword_heavy_hitbox", "cue_id": "sword_heavy_active"}
     ],
     "resources": [{"resource_id": "combo_step", "minimum": 0.0, "maximum": 2.0, "initial": 0.0, "regen_per_second": 0.0}],
-    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage"],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.combo_finisher_damage", "weapon.damage", "weapon.heavy_damage", "weapon.heavy_execute_damage", "weapon.heavy_execute_threshold", "weapon.low_hp_damage"],
     "payloads": [
       {"payload_id": "sword_light_1_hitbox", "kind": "hitbox", "parameters": {"damage_multiplier": 0.8, "knockback": 120.0, "tags": ["weapon:sword"]}},
       {"payload_id": "sword_light_2_hitbox", "kind": "hitbox", "parameters": {"damage_multiplier": 1.0, "knockback": 120.0, "tags": ["weapon:sword"]}},
@@ -56,7 +56,7 @@
     "actions": [
       {"action_id": "light_chain", "semantic_action": "weapon_primary", "activation_mode": "press", "windup_frames": 5, "active_frames": 5, "recovery_frames": 10, "cancel_from_frame": 5, "buffer_frames": 12, "movement_multiplier": 0.58, "resource_costs": {}, "payload_id": "sword_launch_light", "cue_id": "sword_launch_light_active"},
       {"action_id": "charged_slash", "semantic_action": "weapon_primary", "activation_mode": "release", "hold_threshold_frames": 30, "windup_frames": 4, "active_frames": 8, "recovery_frames": 22, "cancel_from_frame": 13, "buffer_frames": 12, "movement_multiplier": 0.2, "resource_costs": {}, "payload_id": "sword_launch_charge", "cue_id": "sword_launch_charge_active"},
-      {"action_id": "guard", "semantic_action": "weapon_secondary", "activation_mode": "hold", "windup_frames": 2, "active_frames": 1, "recovery_frames": 8, "cancel_from_frame": 4, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"guard": 10.0}, "payload_id": "sword_guard", "cue_id": "sword_guard_start"},
+      {"action_id": "guard", "semantic_action": "weapon_secondary", "activation_mode": "press", "windup_frames": 2, "active_frames": 12, "recovery_frames": 8, "cancel_from_frame": 4, "buffer_frames": 8, "movement_multiplier": 0.45, "resource_costs": {"guard": 10.0}, "payload_id": "sword_guard", "cue_id": "sword_guard_start"},
       {"action_id": "counter", "semantic_action": "weapon_utility", "activation_mode": "press", "windup_frames": 3, "active_frames": 6, "recovery_frames": 12, "cancel_from_frame": 7, "buffer_frames": 8, "movement_multiplier": 0.35, "resource_costs": {"intent": 25.0}, "payload_id": "sword_counter", "cue_id": "sword_counter_active"},
       {"action_id": "temporal_judgment", "semantic_action": "weapon_skill", "activation_mode": "press", "windup_frames": 10, "active_frames": 8, "recovery_frames": 18, "cancel_from_frame": 12, "buffer_frames": 8, "movement_multiplier": 0.2, "resource_costs": {"time_energy": 20.0}, "payload_id": "sword_skill_zone", "cue_id": "sword_skill_active"},
       {"action_id": "primordial_edge", "semantic_action": "weapon_ultimate", "activation_mode": "release", "hold_threshold_frames": 60, "windup_frames": 18, "active_frames": 12, "recovery_frames": 30, "cancel_from_frame": null, "buffer_frames": 8, "movement_multiplier": 0.0, "resource_costs": {"time_energy": 55.0}, "payload_id": "sword_ultimate_wave", "cue_id": "sword_ultimate_active"}
@@ -65,14 +65,14 @@
       {"resource_id": "guard", "minimum": 0.0, "maximum": 100.0, "initial": 100.0, "regen_per_second": 8.0},
       {"resource_id": "intent", "minimum": 0.0, "maximum": 100.0, "initial": 0.0, "regen_per_second": 0.0}
     ],
-    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.damage", "weapon.status_duration"],
+    "capabilities": ["weapon.attack_speed", "weapon.charge_rate", "weapon.combo_finisher_damage", "weapon.damage", "weapon.heavy_damage", "weapon.heavy_execute_damage", "weapon.heavy_execute_threshold", "weapon.low_hp_damage", "weapon.status_duration"],
     "payloads": [
       {"payload_id": "sword_launch_light", "kind": "hitbox", "parameters": {"damage_multiplier": 1.0, "knockback": 130.0}},
       {"payload_id": "sword_launch_charge", "kind": "hitbox", "parameters": {"damage_multiplier": 2.6, "knockback": 280.0}},
-      {"payload_id": "sword_guard", "kind": "guard", "parameters": {"block_multiplier": 0.5}},
+      {"payload_id": "sword_guard", "kind": "guard", "parameters": {"block_multiplier": 0.5, "perfect_window_frames": 3, "perfect_block_multiplier": 0.0, "intent_per_blocked_damage": 1.0, "perfect_intent_bonus": 10.0}},
       {"payload_id": "sword_counter", "kind": "hitbox", "parameters": {"damage_multiplier": 2.2, "knockback": 240.0}},
-      {"payload_id": "sword_skill_zone", "kind": "zone", "parameters": {"damage_multiplier": 2.8, "duration_frames": 90}},
-      {"payload_id": "sword_ultimate_wave", "kind": "wave", "parameters": {"damage_multiplier": 9.0, "knockback": 320.0}}
+      {"payload_id": "sword_skill_zone", "kind": "zone", "parameters": {"damage_multiplier": 2.8, "duration_frames": 90, "radius_pixels": 192.0}},
+      {"payload_id": "sword_ultimate_wave", "kind": "wave", "parameters": {"damage_multiplier": 9.0, "knockback": 320.0, "duration_frames": 12, "range_pixels": 640.0, "width_pixels": 96.0, "thickness_pixels": 64.0}}
     ],
     "cues": [
       {"cue_id": "sword_launch_light_active", "animation_id": "sword_launch_light", "vfx_id": "sword_light_arc", "audio_id": "sword_swing", "camera_id": "impact_light"},

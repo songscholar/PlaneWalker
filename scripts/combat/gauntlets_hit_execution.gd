@@ -19,6 +19,14 @@ const VALID_ACTION_IDS: Array[String] = [
 ]
 const VALID_KINDS: Array[String] = ["hitbox", "shockwave"]
 const PROGRESS_CLAIM_LIMIT := 512
+const EXECUTION_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "action_token", "generation", "source_action_id", "descriptor_id",
+	"outcome_id", "outcome_index", "deterministic_seed", "kind", "parameters", "base_attack",
+	"direction", "target_deduplication", "boss_conversion", "combo_eligible", "energy_eligible",
+	"stop_extension_eligible", "recursive_echo", "is_echo", "execution_frame", "active_frames",
+	"remaining_frames", "fractional_frames", "execution_active", "completion_emitted",
+	"hit_target_ids", "spatial_context",
+]
 const DEFAULT_GEOMETRY := {
 	"punch_1": {"shape": "rectangle", "range_tiles": 1.5, "width_tiles": 1.0},
 	"punch_2": {"shape": "rectangle", "range_tiles": 1.5, "width_tiles": 1.0},
@@ -187,6 +195,7 @@ func advance_execution_for_test(frames: int) -> void:
 
 func execution_snapshot() -> Dictionary:
 	return {
+		"schema_version": 1,
 		"action_token": action_token,
 		"generation": generation,
 		"source_action_id": source_action_id,
@@ -207,11 +216,118 @@ func execution_snapshot() -> Dictionary:
 		"is_echo": bool(parameters.get("is_echo", false)),
 		"execution_frame": _execution_frame,
 		"active_frames": _active_frames,
+		"remaining_frames": maxi(0, _active_frames - _execution_frame),
+		"fractional_frames": _fractional_frames,
 		"execution_active": _execution_active,
 		"completion_emitted": _completion_emitted,
 		"hit_target_ids": _sorted_integer_keys(_hit_targets),
 		"spatial_context": _spatial_context(global_position),
 	}
+
+
+func can_restore_execution_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, EXECUTION_SNAPSHOT_FIELDS):
+		return false
+	if (
+		int(value.get("schema_version", -1)) != 1
+		or typeof(value.get("action_token")) != TYPE_INT
+		or int(value.get("action_token", 0)) <= 0
+		or typeof(value.get("generation")) != TYPE_INT
+		or int(value.get("generation", 0)) <= 0
+		or str(value.get("source_action_id", "")) not in VALID_ACTION_IDS
+		or str(value.get("descriptor_id", "")).is_empty()
+		or str(value.get("outcome_id", "")).is_empty()
+		or typeof(value.get("outcome_index")) != TYPE_INT
+		or int(value.get("outcome_index", -1)) < 0
+		or typeof(value.get("deterministic_seed")) != TYPE_INT
+		or str(value.get("kind", "")) not in VALID_KINDS
+		or not value.get("parameters") is Dictionary
+		or not _positive_number(value.get("base_attack"))
+		or not value.get("direction") is Vector2
+		or (value.get("direction") as Vector2).is_zero_approx()
+		or str(value.get("target_deduplication", "")) != "per_action_target"
+		or not value.get("boss_conversion", {}) is Dictionary
+		or typeof(value.get("execution_frame")) != TYPE_INT
+		or typeof(value.get("active_frames")) != TYPE_INT
+		or typeof(value.get("remaining_frames")) != TYPE_INT
+		or typeof(value.get("fractional_frames")) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(value.get("fractional_frames", NAN)))
+		or float(value.get("fractional_frames", -1.0)) < 0.0
+		or float(value.get("fractional_frames", 1.0)) >= 1.0
+		or typeof(value.get("execution_active")) != TYPE_BOOL
+		or not bool(value.get("execution_active", false))
+		or typeof(value.get("completion_emitted")) != TYPE_BOOL
+		or bool(value.get("completion_emitted", true))
+		or not value.get("hit_target_ids") is Array
+		or not value.get("spatial_context") is Dictionary
+	):
+		return false
+	var parsed_parameters := value["parameters"] as Dictionary
+	if not _parameters_are_valid(parsed_parameters, str(value["source_action_id"])):
+		return false
+	var expected_active_frames := int(parsed_parameters.get(
+		"active_frames", DEFAULT_ACTIVE_FRAMES[str(value["source_action_id"])]
+	))
+	var execution_frame := int(value["execution_frame"])
+	if (
+		int(value["active_frames"]) != expected_active_frames
+		or execution_frame < 0
+		or execution_frame >= expected_active_frames
+		or int(value["remaining_frames"]) != expected_active_frames - execution_frame
+		or not _valid_sorted_positive_ids(value["hit_target_ids"])
+	):
+		return false
+	return _variant_numbers_are_finite(value)
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func restore_execution_snapshot(value: Dictionary, dependencies: Dictionary) -> bool:
+	if (
+		not can_restore_execution_snapshot(value)
+		or not dependencies.get("progress_claims") is Dictionary
+		or not dependencies.get("progress_claim_order") is Array
+		or not dependencies.get("damage_claims") is Dictionary
+		or not dependencies.get("damage_claim_order") is Array
+	):
+		return false
+	var execution := {
+		"action_token": int(value["action_token"]),
+		"generation": int(value["generation"]),
+		"source_action_id": str(value["source_action_id"]),
+		"descriptor_id": str(value["descriptor_id"]),
+		"outcome_id": str(value["outcome_id"]),
+		"outcome_index": int(value["outcome_index"]),
+		"deterministic_seed": int(value["deterministic_seed"]),
+		"kind": str(value["kind"]),
+		"parameters": (value["parameters"] as Dictionary).duplicate(true),
+		"base_attack": float(value["base_attack"]),
+		"direction": value["direction"],
+		"target_deduplication": str(value["target_deduplication"]),
+		"boss_conversion": (value["boss_conversion"] as Dictionary).duplicate(true),
+		"source": dependencies.get("source"),
+		"owner_entity": dependencies.get("owner_entity"),
+		"progress_claims": dependencies["progress_claims"],
+		"progress_claim_order": dependencies["progress_claim_order"],
+		"damage_claims": dependencies["damage_claims"],
+		"damage_claim_order": dependencies["damage_claim_order"],
+	}
+	if not configure_execution(execution):
+		return false
+	_execution_frame = int(value["execution_frame"])
+	_fractional_frames = float(value["fractional_frames"])
+	_completion_emitted = false
+	_hit_targets.clear()
+	for target_id: Variant in value["hit_target_ids"]:
+		_hit_targets[int(target_id)] = true
+	return execution_snapshot() == value
 
 
 func reset_execution_state() -> void:
@@ -639,3 +755,28 @@ func _positive_number(value: Variant) -> bool:
 
 func _non_negative_number(value: Variant) -> bool:
 	return typeof(value) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(value)) and float(value) >= 0.0
+
+
+func _valid_sorted_positive_ids(value: Array) -> bool:
+	var previous := 0
+	for target_id: Variant in value:
+		if typeof(target_id) != TYPE_INT or int(target_id) <= previous:
+			return false
+		previous = int(target_id)
+	return true
+
+
+func _variant_numbers_are_finite(value: Variant) -> bool:
+	if typeof(value) in [TYPE_FLOAT, TYPE_VECTOR2]:
+		if value is Vector2:
+			return is_finite((value as Vector2).x) and is_finite((value as Vector2).y)
+		return is_finite(float(value))
+	if value is Dictionary:
+		for child: Variant in (value as Dictionary).values():
+			if not _variant_numbers_are_finite(child):
+				return false
+	if value is Array:
+		for child: Variant in value:
+			if not _variant_numbers_are_finite(child):
+				return false
+	return true

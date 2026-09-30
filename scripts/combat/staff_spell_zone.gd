@@ -30,6 +30,13 @@ const VALID_COMBINATION_KINDS: Array[String] = [
 	"chain_delayed_explosions",
 	"chain_delayed_crystals",
 ]
+const EXECUTION_SNAPSHOT_FIELDS: Array[String] = [
+	"action_token", "generation", "source_action_id", "descriptor_id", "outcome_index",
+	"deterministic_seed", "mode", "parameters", "base_attack", "status_source_id",
+	"boss_conversion", "execution_frame", "duration_frames", "tick_interval_frames",
+	"fractional_frames", "claims", "transient_status_target_ids", "execution_active",
+	"completion_emitted",
+]
 
 var action_token: int = 0
 var generation: int = 0
@@ -53,6 +60,7 @@ var _completion_emitted: bool = false
 var _claims: Dictionary = {}
 var _fractional_frames: float = 0.0
 var _transient_status_targets: Dictionary = {}
+var _transient_status_target_ids: Dictionary = {}
 
 
 func _ready() -> void:
@@ -174,9 +182,87 @@ func execution_snapshot() -> Dictionary:
 		"execution_frame": _execution_frame,
 		"duration_frames": _duration_frames,
 		"tick_interval_frames": _tick_interval_frames,
+		"fractional_frames": _fractional_frames,
+		"claims": _sorted_string_keys(_claims),
+		"transient_status_target_ids": _transient_status_ids_snapshot(),
 		"execution_active": _execution_active,
 		"completion_emitted": _completion_emitted,
 	}
+
+
+func can_restore_execution_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, EXECUTION_SNAPSHOT_FIELDS):
+		return false
+	var staged := StaffSpellZone.new()
+	var configured := staged.configure_execution(value)
+	if not configured:
+		staged.free()
+		return false
+	var frame_value: Variant = value.get("execution_frame")
+	var duration_value: Variant = value.get("duration_frames")
+	var interval_value: Variant = value.get("tick_interval_frames")
+	var fractional_value: Variant = value.get("fractional_frames")
+	var claims_value: Variant = value.get("claims")
+	var transient_value: Variant = value.get("transient_status_target_ids")
+	var valid := (
+		typeof(frame_value) == TYPE_INT
+		and int(frame_value) >= 0
+		and int(frame_value) <= staged._duration_frames
+		and typeof(duration_value) == TYPE_INT
+		and int(duration_value) == staged._duration_frames
+		and typeof(interval_value) == TYPE_INT
+		and int(interval_value) == staged._tick_interval_frames
+		and typeof(fractional_value) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(fractional_value))
+		and float(fractional_value) >= 0.0
+		and float(fractional_value) < 1.0
+		and _valid_claim_array(claims_value)
+		and _valid_transient_status_snapshot(transient_value)
+		and typeof(value.get("execution_active")) == TYPE_BOOL
+		and typeof(value.get("completion_emitted")) == TYPE_BOOL
+		and bool(value.get("execution_active", false)) != bool(value.get("completion_emitted", false))
+	)
+	if valid and bool(value.get("execution_active", false)) and int(frame_value) >= int(duration_value):
+		valid = false
+	if valid and bool(value.get("completion_emitted", false)) and int(frame_value) < int(duration_value):
+		valid = false
+	staged.free()
+	return valid
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func restore_execution_snapshot(value: Dictionary) -> bool:
+	if not can_restore_execution_snapshot(value):
+		return false
+	if not configure_execution(value):
+		return false
+	_execution_frame = int(value["execution_frame"])
+	_fractional_frames = float(value["fractional_frames"])
+	_claims.clear()
+	for claim_value: Variant in value["claims"] as Array:
+		_claims[str(claim_value)] = true
+	_transient_status_target_ids = (value["transient_status_target_ids"] as Dictionary).duplicate(true)
+	_execution_active = bool(value["execution_active"])
+	_completion_emitted = bool(value["completion_emitted"])
+	set_physics_process(_execution_active and is_inside_tree())
+	return execution_snapshot() == value
+
+
+func activate_restored_execution_state() -> bool:
+	if not _execution_active or not is_inside_tree():
+		return false
+	if not _reapply_restored_transient_statuses():
+		return false
+	set_physics_process(true)
+	return true
 
 
 func reset_execution_state() -> void:
@@ -185,6 +271,7 @@ func reset_execution_state() -> void:
 	_completion_emitted = false
 	_claims.clear()
 	_fractional_frames = 0.0
+	_transient_status_target_ids.clear()
 	_execution_frame = 0
 	_duration_frames = 0
 	_tick_interval_frames = 0
@@ -388,7 +475,9 @@ func _complete_zone() -> void:
 	if _completion_emitted:
 		return
 	_completion_emitted = true
+	_execution_active = false
 	_clear_all_transient_statuses()
+	set_physics_process(false)
 	_emit_once(
 		"zone_complete",
 		{
@@ -398,10 +487,9 @@ func _complete_zone() -> void:
 			"outcome_index": outcome_index,
 			"execution_frame": _execution_frame,
 			"mode": mode,
+			"terminal": true,
 		}
 	)
-	_execution_active = false
-	set_physics_process(false)
 	if is_inside_tree() and not is_queued_for_deletion():
 		queue_free()
 
@@ -637,6 +725,11 @@ func _maintain_transient_status(
 			continue
 		_clear_status(previous[target_id_value] as Node, effect_id)
 	_transient_status_targets[effect_key] = current
+	var current_ids: Array[int] = []
+	for target_id_value: Variant in current:
+		current_ids.append(int(target_id_value))
+	current_ids.sort()
+	_transient_status_target_ids[effect_key] = current_ids
 
 
 func _clear_transient_status(effect_id: StringName) -> void:
@@ -645,15 +738,133 @@ func _clear_transient_status(effect_id: StringName) -> void:
 	if targets_value is Dictionary:
 		for target_value: Variant in targets_value as Dictionary:
 			var target: Variant = (targets_value as Dictionary).get(target_value)
-			if target is Node:
+			if typeof(target) == TYPE_OBJECT and is_instance_valid(target):
 				_clear_status(target as Node, effect_id)
 	_transient_status_targets.erase(effect_key)
+	_transient_status_target_ids.erase(effect_key)
 
 
 func _clear_all_transient_statuses() -> void:
-	var effects := _transient_status_targets.keys()
+	var effects := _transient_status_target_ids.keys()
+	for effect_value: Variant in _transient_status_targets.keys():
+		if effect_value not in effects:
+			effects.append(effect_value)
 	for effect_value: Variant in effects:
 		_clear_transient_status(StringName(str(effect_value)))
+
+
+func _reapply_restored_transient_statuses() -> bool:
+	_transient_status_targets.clear()
+	for effect_value: Variant in _transient_status_target_ids:
+		var effect_id := StringName(str(effect_value))
+		var targets: Dictionary = {}
+		for target_id_value: Variant in _transient_status_target_ids[effect_value] as Array:
+			var target := _target_by_stable_id(int(target_id_value))
+			if target == null:
+				_rollback_restored_transient_statuses()
+				return false
+			targets[int(target_id_value)] = target
+			var magnitude := 1.0
+			var attack_speed_multiplier := 1.0
+			if effect_id == &"slow" and mode == "ice_zone":
+				magnitude = float(parameters.get("move_speed_multiplier", 1.0))
+				attack_speed_multiplier = float(parameters.get("attack_speed_multiplier", 1.0))
+			elif effect_id == &"slow" and mode == "combination":
+				var combo_parameters := parameters.get("combo_parameters", {}) as Dictionary
+				magnitude = float(combo_parameters.get("ice_surface_move_speed_multiplier", 1.0))
+				attack_speed_multiplier = magnitude
+			if not _apply_status(target, effect_id, 2, magnitude, 30, attack_speed_multiplier):
+				_transient_status_targets[str(effect_id)] = targets
+				_rollback_restored_transient_statuses()
+				return false
+		_transient_status_targets[str(effect_id)] = targets
+	return true
+
+
+func _rollback_restored_transient_statuses() -> void:
+	for effect_value: Variant in _transient_status_targets:
+		var effect_id := StringName(str(effect_value))
+		var targets_value: Variant = _transient_status_targets[effect_value]
+		if not targets_value is Dictionary:
+			continue
+		for target_value: Variant in targets_value as Dictionary:
+			var target: Variant = (targets_value as Dictionary)[target_value]
+			if typeof(target) == TYPE_OBJECT and is_instance_valid(target):
+				_clear_status(target as Node, effect_id)
+	_transient_status_targets.clear()
+	_transient_status_target_ids.clear()
+
+
+func _target_by_stable_id(target_id: int) -> Node:
+	if target_id <= 0 or not is_inside_tree():
+		return null
+	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+		if candidate != null and is_instance_valid(candidate) and _stable_target_id(candidate) == target_id:
+			return candidate
+	return null
+
+
+func _transient_status_ids_snapshot() -> Dictionary:
+	var result: Dictionary = {}
+	var effects: Array[String] = []
+	for effect_value: Variant in _transient_status_target_ids:
+		effects.append(str(effect_value))
+	effects.sort()
+	for effect: String in effects:
+		var ids: Array[int] = []
+		var ids_value: Variant = _transient_status_target_ids.get(effect, [])
+		if ids_value is Array:
+			for id_value: Variant in ids_value as Array:
+				ids.append(int(id_value))
+		ids.sort()
+		result[effect] = ids
+	return result
+
+
+func _sorted_string_keys(values: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	for value: Variant in values:
+		result.append(str(value))
+	result.sort()
+	return result
+
+
+func _valid_claim_array(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var seen: Dictionary = {}
+	var previous := ""
+	for item: Variant in value as Array:
+		if typeof(item) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var claim := str(item)
+		if claim.is_empty() or seen.has(claim) or (not previous.is_empty() and claim <= previous):
+			return false
+		seen[claim] = true
+		previous = claim
+	return true
+
+
+func _valid_transient_status_snapshot(value: Variant) -> bool:
+	if not value is Dictionary:
+		return false
+	for effect_value: Variant in value as Dictionary:
+		var effect := str(effect_value)
+		if effect.is_empty() or effect != "slow":
+			return false
+		var ids_value: Variant = (value as Dictionary)[effect_value]
+		if not ids_value is Array:
+			return false
+		var seen: Dictionary = {}
+		var previous := 0
+		for id_value: Variant in ids_value as Array:
+			if typeof(id_value) != TYPE_INT or int(id_value) <= 0 or seen.has(int(id_value)):
+				return false
+			if not seen.is_empty() and int(id_value) <= previous:
+				return false
+			seen[int(id_value)] = true
+			previous = int(id_value)
+	return true
 
 
 func _apply_status_to_targets(
@@ -808,6 +1019,8 @@ func _damage_target(
 			damage_type = DamageInfoScript.DamageType.VOID
 	var damage_info := DamageInfoScript.new(amount, damage_type, source, owner_entity)
 	damage_info.tags = ["weapon:staff", "action:%s" % source_action_id, "element:%s" % damage_element]
+	damage_info.action_token = action_token
+	damage_info.source_generation = generation
 	var resolved_damage := 0.0
 	var hurtbox := target.get_node_or_null("Hurtbox")
 	if hurtbox != null and hurtbox.has_method("receive_hit"):

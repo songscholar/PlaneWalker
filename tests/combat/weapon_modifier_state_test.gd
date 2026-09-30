@@ -16,6 +16,7 @@ func _run() -> void:
 	_test_values_must_be_finite_and_bounded()
 	_test_additive_values_accumulate_from_explicit_identity()
 	_test_additive_rejection_is_atomic()
+	_test_batch_apply_and_snapshot_restore_are_atomic()
 	_test_invalid_configuration_is_rejected_atomically()
 	_test_freeze_for_action_returns_an_isolated_snapshot()
 	_suite.finish(get_tree())
@@ -144,6 +145,44 @@ func _test_additive_rejection_is_atomic() -> void:
 			{"weapon.charge_rate": 2.0},
 			"additive rejection preserves the last valid state"
 		)
+
+
+func _test_batch_apply_and_snapshot_restore_are_atomic() -> void:
+	var modifiers = WeaponModifierStateScript.new()
+	_suite.assert_true(
+		modifiers.configure(
+			PackedStringArray(["weapon.damage", "weapon.pierce"]),
+			{
+				"weapon.damage": {"minimum": 0.0, "maximum": 4.0},
+				"weapon.pierce": {"minimum": 0.0, "maximum": 8.0},
+			}
+		),
+		"batch restore fixture configures"
+	)
+	_suite.assert_true(modifiers.apply(&"weapon.damage", 1.25), "batch restore fixture seeds damage")
+	var before: Dictionary = modifiers.snapshot()
+	_suite.assert_true(
+		modifiers.apply_batch({"weapon.damage": 2.0, "weapon.pierce": 3.0}),
+		"valid capability batch applies atomically"
+	)
+	_suite.assert_equal(
+		modifiers.snapshot(),
+		{"weapon.damage": 2.0, "weapon.pierce": 3.0},
+		"valid capability batch stores every value"
+	)
+	_suite.assert_true(modifiers.restore_snapshot(before), "a prior exact snapshot can be restored")
+	_suite.assert_equal(modifiers.snapshot(), before, "snapshot restore removes values absent from the snapshot")
+
+	for invalid_snapshot: Dictionary in [
+		{"weapon.damage": NAN},
+		{"weapon.damage": 5.0},
+		{"weapon.unknown": 1.0},
+	]:
+		_suite.assert_true(
+			not modifiers.restore_snapshot(invalid_snapshot),
+			"invalid snapshot restore is rejected: %s" % invalid_snapshot
+		)
+		_suite.assert_equal(modifiers.snapshot(), before, "invalid restore preserves the prior state")
 
 
 func _test_invalid_configuration_is_rejected_atomically() -> void:

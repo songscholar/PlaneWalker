@@ -68,6 +68,41 @@ class FakeGunAdapter extends Node2D:
 		_clear_action()
 
 
+	func runtime_snapshot() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"profile_action": staged_definition.duplicate(true) if _active else {},
+			"profile_action_released": _released,
+			"phase_state": "idle" if not _active else ("released" if _released else "prepared"),
+			"prepared_projectiles": [],
+			"owned_projectiles": [],
+			"action_claims_by_token": {},
+		}
+
+
+	func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+		return (
+			int(value.get("schema_version", -1)) == 1
+			and value.get("profile_action") is Dictionary
+			and typeof(value.get("profile_action_released")) == TYPE_BOOL
+			and str(value.get("phase_state", "")) in ["idle", "prepared", "released"]
+			and value.get("prepared_projectiles") is Array
+			and value.get("owned_projectiles") is Array
+			and value.get("action_claims_by_token") is Dictionary
+		)
+
+
+	func restore_runtime_snapshot(value: Dictionary) -> bool:
+		if not can_restore_runtime_snapshot(value):
+			return false
+		var action := value["profile_action"] as Dictionary
+		_active = not action.is_empty()
+		_released = bool(value["profile_action_released"])
+		staged_definition = action.duplicate(true)
+		released_definition = action.duplicate(true) if _released else {}
+		return runtime_snapshot() == value
+
+
 	func _clear_action() -> void:
 		_active = false
 		_released = false
@@ -735,9 +770,25 @@ func _test_snapshot_restore_reset_and_modifier_boundaries() -> void:
 	_suite.assert_true(runtime.restore_snapshot(hold_snapshot), "quiescent ultimate HOLD snapshot restores")
 	_suite.assert_equal(runtime.snapshot().get("active_phase"), "HOLD", "restored Gun snapshot returns to HOLD")
 	_suite.assert_true(bool(runtime.release_hold(hold, 93, 60).get("ok", false)), "restored HOLD releases on its original token")
-	var unsafe: Dictionary = runtime.snapshot()
-	_suite.assert_true(not runtime.restore_snapshot(unsafe), "active constructed projectile snapshot rejects unsafe restore")
-	_suite.assert_equal(runtime.snapshot(), unsafe, "unsafe restore rejection is atomic")
+	var active: Dictionary = runtime.snapshot()
+	_suite.assert_true(runtime.restore_snapshot(active), "active constructed projectile snapshot restores")
+	_suite.assert_equal(runtime.snapshot(), active, "active Gun snapshot round-trips adapter phase and payload authority")
+	runtime.on_phase_enter(active["active_plan"], &"ACTIVE", 93)
+	var released: Dictionary = runtime.snapshot()
+	_suite.assert_true(runtime.restore_snapshot(released), "released ACTIVE Gun snapshot restores")
+	_suite.assert_equal(runtime.snapshot(), released, "released ACTIVE Gun snapshot round-trips exactly")
+	runtime.on_phase_enter(released["active_plan"], &"RECOVERY", 93)
+	var recovery: Dictionary = runtime.snapshot()
+	_suite.assert_true(runtime.restore_snapshot(recovery), "released RECOVERY Gun snapshot restores")
+	_suite.assert_equal(runtime.snapshot(), recovery, "released RECOVERY Gun snapshot round-trips exactly")
+	var malformed := recovery.duplicate(true)
+	malformed["adapter_snapshot"]["phase_state"] = "prepared"
+	_suite.assert_true(not runtime.restore_snapshot(malformed), "Gun runtime rejects adapter phase drift")
+	_suite.assert_equal(runtime.snapshot(), recovery, "invalid Gun runtime restore is atomic")
+	var extra_field := recovery.duplicate(true)
+	extra_field["future_field"] = true
+	_suite.assert_true(not runtime.restore_snapshot(extra_field), "unknown Gun runtime snapshot fields fail closed")
+	_suite.assert_equal(runtime.snapshot(), recovery, "unknown-field Gun runtime rejection is atomic")
 	runtime.cancel_action(93, &"cleanup")
 
 	runtime.reset_runtime_state(&"new_run")

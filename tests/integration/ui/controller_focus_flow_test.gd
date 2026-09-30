@@ -98,7 +98,9 @@ func _run() -> void:
 
 	var start_button := main.get_node("StartMenu/Panel/Margin/VBox/StartButton") as Button
 	var candidate_button := main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton") as Button
+	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var candidate_panel := main.get_node("CandidateLabLayer/CandidateLoadoutPanel") as Control
+	var launch_panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), start_button, "start flow enters on Quick Start")
 	_send_action(&"ui_down")
 	await _frames(2)
@@ -147,10 +149,29 @@ func _run() -> void:
 	await _frames(3)
 	suite.assert_true(not candidate_panel.visible, "candidate cancel closes the panel")
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), candidate_button, "candidate cancel restores Candidate Lab focus")
+	_send_action(&"ui_down")
+	await _frames(2)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), launch_button, "start flow reaches Launch Loadout after Candidate Lab")
+	_send_action(&"ui_accept")
+	await _frames(3)
+	suite.assert_true(launch_panel.visible, "controller opens Launch Loadout")
+	suite.assert_equal(
+		get_viewport().gui_get_focus_owner(),
+		launch_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/WeaponOption"),
+		"Launch flow enters on the weapon selector"
+	)
+	_send_action(&"interact")
+	await _frames(2)
+	suite.assert_true(launch_panel.visible, "interact cannot bypass Launch Loadout into Quick Start")
+	suite.assert_true(main.get_node("StartMenu").visible, "Launch modal preserves Start until a loadout is confirmed")
+	_send_action(&"ui_cancel")
+	await _frames(3)
+	suite.assert_true(not launch_panel.visible, "Launch cancel closes the panel")
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), launch_button, "Launch cancel restores Launch button focus")
 	var language_button := main.get("_lang_button") as Button
 	_send_action(&"ui_down")
 	await _frames(2)
-	suite.assert_equal(get_viewport().gui_get_focus_owner(), language_button, "start flow reaches Language after Candidate Lab")
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), language_button, "start flow reaches Language after Launch Loadout")
 	_send_action(&"ui_down")
 	await _frames(2)
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), start_button, "start focus ring wraps Language to Quick Start")

@@ -3,8 +3,10 @@ extends Node2D
 
 const ArrowScene := preload("res://scenes/combat/player_arrow.tscn")
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const WEAPON_ID := &"bow"
 const PIXELS_PER_CELL := 64.0
 const LAUNCH_PROFILE_ID := "bow_launch_v1"
+const RUNTIME_SNAPSHOT_SCHEMA_VERSION := 1
 const LAUNCH_ACTION_IDS: Array[String] = [
 	"precision_draw",
 	"scatter_shot",
@@ -30,6 +32,10 @@ var _starfall_source_id: StringName = &""
 var _starfall_elapsed_frames: int = 0
 var _starfall_invulnerability_health: Node
 var _starfall_invulnerability_source_id: StringName = &""
+
+
+func weapon_id() -> StringName:
+	return WEAPON_ID
 
 
 func reset_runtime_state() -> void:
@@ -196,6 +202,386 @@ func advance_profile_action_frames(frames: int) -> void:
 
 func advance_profile_action_for_test(frames: int) -> void:
 	advance_profile_action_frames(frames)
+
+
+func runtime_snapshot() -> Dictionary:
+	var arrows: Array[Dictionary] = []
+	if is_inside_tree():
+		for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+			if (
+				arrow == null
+				or not is_instance_valid(arrow)
+				or arrow.is_queued_for_deletion()
+				or arrow.get("source") != self
+				or not arrow is Node2D
+				or not arrow.has_method("execution_snapshot")
+			):
+				continue
+			arrows.append({
+				"global_position": (arrow as Node2D).global_position,
+				"execution": (arrow.call("execution_snapshot") as Dictionary).duplicate(true),
+			})
+	arrows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_execution := left["execution"] as Dictionary
+		var right_execution := right["execution"] as Dictionary
+		var left_key := "%012d:%08d:%s" % [int(left_execution.get("action_token", 0)), int(left_execution.get("outcome_index", 0)), str(left_execution.get("descriptor_id", ""))]
+		var right_key := "%012d:%08d:%s" % [int(right_execution.get("action_token", 0)), int(right_execution.get("outcome_index", 0)), str(right_execution.get("descriptor_id", ""))]
+		return left_key < right_key
+	)
+	var claims_by_token: Dictionary = {}
+	for arrow_snapshot: Dictionary in arrows:
+		var execution := arrow_snapshot["execution"] as Dictionary
+		var token_key := str(int(execution.get("action_token", 0)))
+		var claims := (execution.get("interaction_claims", {}) as Dictionary).duplicate(true)
+		if claims_by_token.has(token_key) and claims_by_token[token_key] != claims:
+			return {}
+		claims_by_token[token_key] = claims
+	if not _profile_action.is_empty():
+		claims_by_token[str(int(_profile_action.get("token", 0)))] = _profile_action_shared_claims.duplicate(true)
+	return {
+		"schema_version": RUNTIME_SNAPSHOT_SCHEMA_VERSION,
+		"phase_state": _runtime_phase_state(),
+		"profile_shot": _profile_shot.duplicate(true),
+		"profile_shot_released": _profile_shot_released,
+		"profile_action": _profile_action.duplicate(true),
+		"profile_action_released": _profile_action_released,
+		"shared_claims": _profile_action_shared_claims.duplicate(true),
+		"claims_by_token": claims_by_token,
+		"starfall_schedule": _starfall_schedule.duplicate(true),
+		"starfall_source_id": str(_starfall_source_id),
+		"starfall_elapsed_frames": _starfall_elapsed_frames,
+		"starfall_targets": _starfall_target_snapshot(),
+		"starfall_invulnerability_active": _starfall_invulnerability_source_id != &"",
+		"arrows": arrows,
+	}
+
+
+func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+	var staged := _stage_runtime_snapshot(value)
+	if not bool(staged.get("ok", false)):
+		return false
+	_free_staged_arrows(staged)
+	return true
+
+
+func restore_runtime_snapshot(value: Dictionary) -> bool:
+	var target_staged := _stage_runtime_snapshot(value)
+	if not bool(target_staged.get("ok", false)):
+		return false
+	var current := runtime_snapshot()
+	if current.is_empty():
+		_free_staged_arrows(target_staged)
+		return false
+	if current == value:
+		_free_staged_arrows(target_staged)
+		return true
+	var rollback_staged := _stage_runtime_snapshot(current)
+	if not bool(rollback_staged.get("ok", false)):
+		_free_staged_arrows(target_staged)
+		return false
+	if _install_runtime_snapshot(value, target_staged) and runtime_snapshot() == value:
+		_free_staged_arrows(rollback_staged)
+		return true
+	_discard_runtime_state()
+	if _install_runtime_snapshot(current, rollback_staged) and runtime_snapshot() == current:
+		return false
+	_free_staged_arrows(rollback_staged)
+	reset_runtime_state()
+	return false
+
+
+func _runtime_phase_state() -> String:
+	if not _profile_action.is_empty():
+		return "action_released" if _profile_action_released else "action_prepared"
+	if not _profile_shot.is_empty():
+		return "shot_released" if _profile_shot_released else "shot_prepared"
+	return "idle"
+
+
+func _stage_runtime_snapshot(value: Dictionary) -> Dictionary:
+	if not _runtime_snapshot_shape_is_valid(value):
+		return {"ok": false}
+	var arrows: Array[Dictionary] = []
+	for arrow_value: Variant in value["arrows"] as Array:
+		if not arrow_value is Dictionary:
+			_free_prepared_projectiles(arrows)
+			return {"ok": false}
+		var arrow_snapshot := arrow_value as Dictionary
+		var position_value: Variant = arrow_snapshot.get("global_position")
+		var execution_value: Variant = arrow_snapshot.get("execution")
+		if not position_value is Vector2 or not _finite_vector(position_value as Vector2) or not execution_value is Dictionary:
+			_free_prepared_projectiles(arrows)
+			return {"ok": false}
+		var arrow := ArrowScene.instantiate()
+		if not arrow.has_method("restore_execution_snapshot") or not bool(arrow.call("restore_execution_snapshot", execution_value)):
+			arrow.free()
+			_free_prepared_projectiles(arrows)
+			return {"ok": false}
+		arrow.set("source", self)
+		arrow.set("owner_entity", owner_player)
+		arrows.append({"node": arrow, "global_position": position_value})
+	return {"ok": true, "arrows": arrows}
+
+
+func _runtime_snapshot_shape_is_valid(value: Dictionary) -> bool:
+	var expected_fields: Array[String] = [
+		"schema_version", "phase_state", "profile_shot", "profile_shot_released",
+		"profile_action", "profile_action_released", "shared_claims", "claims_by_token",
+		"starfall_schedule", "starfall_source_id", "starfall_elapsed_frames",
+		"starfall_targets", "starfall_invulnerability_active", "arrows",
+	]
+	if (
+		not _has_exact_fields(value, expected_fields)
+		or int(value.get("schema_version", -1)) != RUNTIME_SNAPSHOT_SCHEMA_VERSION
+		or str(value.get("phase_state", "")) not in ["idle", "shot_prepared", "shot_released", "action_prepared", "action_released"]
+		or not value.get("profile_shot") is Dictionary
+		or typeof(value.get("profile_shot_released")) != TYPE_BOOL
+		or not value.get("profile_action") is Dictionary
+		or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		or not value.get("shared_claims") is Dictionary
+		or not value.get("claims_by_token") is Dictionary
+		or not value.get("starfall_schedule") is Dictionary
+		or typeof(value.get("starfall_source_id")) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or typeof(value.get("starfall_elapsed_frames")) != TYPE_INT
+		or int(value.get("starfall_elapsed_frames", -1)) < 0
+		or not value.get("starfall_targets") is Array
+		or typeof(value.get("starfall_invulnerability_active")) != TYPE_BOOL
+		or not value.get("arrows") is Array
+	):
+		return false
+	var shot := value["profile_shot"] as Dictionary
+	var action := value["profile_action"] as Dictionary
+	if not shot.is_empty() and not _profile_definition_is_valid(shot):
+		return false
+	if not action.is_empty() and not _launch_definition_is_valid(action):
+		return false
+	var state := str(value["phase_state"])
+	if state == "idle" and (not shot.is_empty() or not action.is_empty() or bool(value["profile_shot_released"]) or bool(value["profile_action_released"])):
+		return false
+	if state.begins_with("shot_") and (shot.is_empty() or not action.is_empty() or bool(value["profile_shot_released"]) != state.ends_with("released")):
+		return false
+	if state.begins_with("action_") and (action.is_empty() or not shot.is_empty() or bool(value["profile_action_released"]) != state.ends_with("released")):
+		return false
+	if state != "idle" and not state.begins_with("shot_") and not state.begins_with("action_"):
+		return false
+	var schedule := value["starfall_schedule"] as Dictionary
+	if not schedule.is_empty():
+		if action.is_empty() or str(action.get("action_id", "")) != "starfall_arrow_rain" or not bool(value["profile_action_released"]):
+			return false
+		if not _has_exact_fields(schedule, ["descriptor", "definition", "next_wave_index", "frames_until_next", "wave_count", "wave_interval_frames"]):
+			return false
+		if schedule["definition"] != action or not schedule["descriptor"] is Dictionary:
+			return false
+		if int(schedule["next_wave_index"]) < 1 or int(schedule["next_wave_index"]) > int(schedule["wave_count"]):
+			return false
+		if str(value["starfall_source_id"]).is_empty():
+			return false
+	elif not (value["starfall_targets"] as Array).is_empty() or not str(value["starfall_source_id"]).is_empty() or int(value["starfall_elapsed_frames"]) != 0 or bool(value["starfall_invulnerability_active"]):
+		return false
+	if not _valid_claims_by_token(value["claims_by_token"]):
+		return false
+	if not _valid_starfall_target_snapshot(value["starfall_targets"]):
+		return false
+	var claims_by_token := value["claims_by_token"] as Dictionary
+	if not action.is_empty():
+		var action_token_key := str(int(action.get("token", 0)))
+		if not claims_by_token.has(action_token_key) or claims_by_token[action_token_key] != value["shared_claims"]:
+			return false
+	elif not (value["shared_claims"] as Dictionary).is_empty():
+		return false
+	for arrow_value: Variant in value["arrows"] as Array:
+		if not arrow_value is Dictionary:
+			return false
+		var arrow_snapshot := arrow_value as Dictionary
+		if not _has_exact_fields(arrow_snapshot, ["global_position", "execution"]):
+			return false
+		var execution_value: Variant = arrow_snapshot["execution"]
+		if not execution_value is Dictionary:
+			return false
+		var execution := execution_value as Dictionary
+		var token_key := str(int(execution.get("action_token", 0)))
+		if (
+			not claims_by_token.has(token_key)
+			or not execution.get("interaction_claims") is Dictionary
+			or claims_by_token[token_key] != execution["interaction_claims"]
+		):
+			return false
+	return true
+
+
+func _install_runtime_snapshot(value: Dictionary, staged: Dictionary) -> bool:
+	var arrows := staged.get("arrows", []) as Array
+	var parent := get_tree().current_scene if is_inside_tree() else null
+	if not arrows.is_empty() and parent == null:
+		return false
+	_discard_runtime_state()
+	_profile_shot = (value["profile_shot"] as Dictionary).duplicate(true)
+	_profile_shot_released = bool(value["profile_shot_released"])
+	_profile_action = (value["profile_action"] as Dictionary).duplicate(true)
+	_profile_action_released = bool(value["profile_action_released"])
+	var claims_by_token := (value["claims_by_token"] as Dictionary).duplicate(true)
+	_profile_action_shared_claims = (
+		(claims_by_token.get(str(int(_profile_action.get("token", 0))), {}) as Dictionary).duplicate(true)
+		if not _profile_action.is_empty()
+		else (value["shared_claims"] as Dictionary).duplicate(true)
+	)
+	for prepared_value: Variant in arrows:
+		var prepared := prepared_value as Dictionary
+		var arrow := prepared["node"] as Node2D
+		parent.add_child(arrow)
+		arrow.global_position = prepared["global_position"]
+		var token_claims := claims_by_token.get(str(int(arrow.get("action_token"))), {}) as Dictionary
+		if not bool(arrow.call("activate_restored_execution_state", token_claims)):
+			return false
+	_starfall_schedule = (value["starfall_schedule"] as Dictionary).duplicate(true)
+	_starfall_source_id = StringName(str(value["starfall_source_id"]))
+	_starfall_elapsed_frames = int(value["starfall_elapsed_frames"])
+	if not _starfall_schedule.is_empty():
+		_connect_starfall_damage_hook()
+		if not _restore_starfall_targets(value["starfall_targets"]):
+			return false
+		if bool(value["starfall_invulnerability_active"]):
+			var parameters := ((_starfall_schedule["descriptor"] as Dictionary)["parameters"] as Dictionary)
+			_apply_starfall_invulnerability(parameters)
+			if _starfall_invulnerability_source_id == &"":
+				return false
+	staged["arrows"] = []
+	return true
+
+
+func _discard_runtime_state() -> void:
+	_clear_starfall_schedule()
+	_clear_spawned_projectiles_immediately()
+	_profile_shot.clear()
+	_profile_shot_released = false
+	_profile_action.clear()
+	_profile_action_released = false
+	_profile_action_shared_claims.clear()
+
+
+func _clear_spawned_projectiles_immediately() -> void:
+	if not is_inside_tree():
+		return
+	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+		if arrow != null and is_instance_valid(arrow) and arrow.get("source") == self:
+			if arrow.has_method("reset_execution_state"):
+				arrow.call("reset_execution_state")
+			arrow.free()
+
+
+func _free_staged_arrows(staged: Dictionary) -> void:
+	var arrows_value: Variant = staged.get("arrows", [])
+	if arrows_value is Array:
+		_free_prepared_projectiles(_dictionary_array(arrows_value))
+	staged["arrows"] = []
+
+
+func _starfall_target_snapshot() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for state_value: Variant in _starfall_targets.values():
+		if not state_value is Dictionary:
+			return []
+		var state := state_value as Dictionary
+		var target_value: Variant = state.get("target")
+		if typeof(target_value) != TYPE_OBJECT or not is_instance_valid(target_value):
+			return []
+		result.append({
+			"target_id": _stable_target_id(target_value as Node),
+			"erosion_stacks": int(state.get("erosion_stacks", 0)),
+		})
+	result.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return int(left["target_id"]) < int(right["target_id"]))
+	return result
+
+
+func _restore_starfall_targets(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	_starfall_targets.clear()
+	var parameters := ((_starfall_schedule["descriptor"] as Dictionary)["parameters"] as Dictionary)
+	var slow_ratio := clampf(float(parameters.get("slow_ratio", 0.0)), 0.0, 0.9)
+	for state_value: Variant in value as Array:
+		var state := state_value as Dictionary
+		var target := _target_by_stable_id(int(state["target_id"]))
+		if target == null:
+			return false
+		if slow_ratio > 0.0:
+			if not target.has_method("apply_time_rift"):
+				return false
+			target.call("apply_time_rift", _starfall_source_id, 1.0 - slow_ratio)
+		_starfall_targets[target.get_instance_id()] = {"target": target, "erosion_stacks": int(state["erosion_stacks"])}
+		_set_starfall_erosion_meta(target, int(state["erosion_stacks"]))
+	return true
+
+
+func _valid_claims_by_token(value: Variant) -> bool:
+	if not value is Dictionary:
+		return false
+	for token_value: Variant in value as Dictionary:
+		if int(str(token_value)) <= 0 or not (value as Dictionary)[token_value] is Dictionary:
+			return false
+		for claim_value: Variant in ((value as Dictionary)[token_value] as Dictionary):
+			if str(claim_value).is_empty() or ((value as Dictionary)[token_value] as Dictionary)[claim_value] != true:
+				return false
+	return true
+
+
+func _valid_starfall_target_snapshot(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var previous := 0
+	for state_value: Variant in value as Array:
+		if not state_value is Dictionary:
+			return false
+		var state := state_value as Dictionary
+		if (
+			not _has_exact_fields(state, ["target_id", "erosion_stacks"])
+			or typeof(state.get("target_id")) != TYPE_INT
+			or typeof(state.get("erosion_stacks")) != TYPE_INT
+			or int(state["target_id"]) <= previous
+			or int(state.get("erosion_stacks", -1)) < 0
+		):
+			return false
+		previous = int(state["target_id"])
+	return true
+
+
+func _dictionary_array(value: Variant) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if value is Array:
+		for item: Variant in value as Array:
+			if item is Dictionary:
+				result.append(item as Dictionary)
+	return result
+
+
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func _finite_vector(value: Vector2) -> bool:
+	return is_finite(value.x) and is_finite(value.y)
+
+
+func _stable_target_id(target: Node) -> int:
+	if target.has_meta("stable_target_id"):
+		return int(target.get_meta("stable_target_id"))
+	if target.has_meta("encounter_spawn_id"):
+		return maxi(1, str(target.get_meta("encounter_spawn_id")).hash())
+	return target.get_instance_id()
+
+
+func _target_by_stable_id(target_id: int) -> Node:
+	if target_id <= 0 or not is_inside_tree():
+		return null
+	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+		if candidate != null and is_instance_valid(candidate) and _stable_target_id(candidate) == target_id:
+			return candidate
+	return null
 
 
 func _spawn_projectile(descriptor: Dictionary, definition: Dictionary) -> bool:

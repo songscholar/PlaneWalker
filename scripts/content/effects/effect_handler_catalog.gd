@@ -97,6 +97,41 @@ func normalize_effects(effects: Variant) -> Dictionary:
 	return normalized
 
 
+func weapon_capability_routes(effects: Variant) -> Array[Dictionary]:
+	var routes: Array[Dictionary] = []
+	if not _load_errors.is_empty() or not effects is Dictionary:
+		return routes
+	var effect_ids: Array[String] = []
+	var source_keys: Dictionary = {}
+	for effect_id_value: Variant in (effects as Dictionary).keys():
+		if typeof(effect_id_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return []
+		var effect_id := str(effect_id_value)
+		if _is_script_like(effect_id) or not _definitions.has(effect_id) or source_keys.has(effect_id):
+			return []
+		var definition = _definitions[effect_id]
+		if not definition.value_error((effects as Dictionary)[effect_id_value]).is_empty():
+			return []
+		effect_ids.append(effect_id)
+		source_keys[effect_id] = effect_id_value
+	effect_ids.sort()
+	for effect_id: String in effect_ids:
+		var definition = _definitions[effect_id]
+		var normalized_value: Variant = definition.normalize_value(
+			(effects as Dictionary)[source_keys[effect_id]]
+		)
+		for mapping: Dictionary in definition.weapon_capability_snapshot():
+			routes.append({
+				"effect_id": effect_id,
+				"weapon_id": str(mapping["weapon_id"]),
+				"capability": str(mapping["capability"]),
+				"base_value": float(mapping["base_value"]),
+				"stack_rule": str(definition.stack_rule),
+				"value": normalized_value,
+			})
+	return routes
+
+
 func snapshot() -> Array[Dictionary]:
 	var effect_ids: Array[String] = []
 	for effect_id_value: Variant in _definitions.keys():
