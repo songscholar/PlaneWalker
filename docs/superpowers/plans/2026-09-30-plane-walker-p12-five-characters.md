@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-09-30
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Gameplay Rewind committed at `87eb931`; Task 2B remains active
+- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Gameplay Rewind committed at `87eb931`; Task 2B fixed-frame transactional authority certified at `bc6e9eb`; Task 2C is next
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -538,7 +538,7 @@ Completed in `87eb931` (`fix(time): make gameplay rewind rollback-safe`). The co
 - Consumes: `PlayerController` frame/run identity and owner-character generation, authoritative energy/cooldown state, Rewind prepare context, and typed payload descriptors.
 - Produces: the no-op-safe base `CharacterActionCoordinator`, `TimeManager.advance_frame(runtime_frame)`, TimeAction prepare/commit/rollback, `time_skill_committed(ability_id, token, generation, frame, run_id, context)`, and `WorldPayloadAuthority` gameplay-Rewind/Replay/reset semantics.
 
-- [ ] **Step 1: Write failing unified-frame tests**
+- [x] **Step 1: Write failing unified-frame tests**
 
 ```gdscript
 const PlayerScene := preload("res://scenes/player/player.tscn")
@@ -567,7 +567,7 @@ func _empty_replay_frame(frame: int) -> Dictionary:
 
 Cover Stop duration, Accelerate duration, Rift duration/ticks, fixed-point energy regeneration, four cooldowns, Rewind samples exactly every six frames, character windows, and exact 60-frame = one-second behavior. Tests must call the same `PlayerController.advance_action_frame(frame_intents)` path for live and Replay.
 
-- [ ] **Step 2: Write failing TimeAction and world-payload tests**
+- [x] **Step 2: Write failing TimeAction and world-payload tests**
 
 ```gdscript
 func test_rewind_prepare_freezes_pre_return_position() -> void:
@@ -619,7 +619,7 @@ func _apply_gameplay_rewind() -> void:
 
 Reject duplicate token/generation, wrong run/frame, commit without prepare, stale rollback, malformed descriptor, unknown payload factory, generation reuse after reset, and partial Rift restore. `TimeManager.replay_snapshot()` must include Stop, Accelerate, Rewind window, four cooldowns, energy revision, Rift source sequence, and complete active-Rift descriptors.
 
-- [ ] **Step 3: Run focused tests and confirm RED**
+- [x] **Step 3: Run focused tests and confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter time_manager_fixed_frame
@@ -631,19 +631,19 @@ Reject duplicate token/generation, wrong run/frame, commit without prepare, stal
 
 Expected: FAIL because TimeManager still mutates from `_process()`, no unified committed fact exists, and active Rifts are absent from the Replay snapshot.
 
-- [ ] **Step 4: Create the base coordinator and move gameplay clocks to the fixed frame pump**
+- [x] **Step 4: Create the base coordinator and move gameplay clocks to the fixed frame pump**
 
 Create `CharacterActionContract` and a no-op-safe `CharacterActionCoordinator` before wiring the pump; Task 2C adds profile strategies without changing this frame interface. `PlayerController` owns `owner_character_generation`, initializes it to one, and advances it only when an atomic character activation commits, so WorldPayloadAuthority never depends on a later runtime class. `TimeManager.advance_frame(runtime_frame)` uses an integer frame and fixed-point regeneration remainder; it owns cooldowns, Stop, Accelerate, Rewind windows, and Rift lifetime. `PlayerController.advance_action_frame(frame_intents)` then advances PlayerActionState, TimeActionTransaction, CharacterActionCoordinator, WeaponActionCoordinator, and deterministic payload lifetimes in the specified order. `RewindRecorder.advance_frame(runtime_frame)` samples only when the frame reaches the six-frame cadence. `_process()` methods may update interpolation/visuals only and are asserted gameplay-pure.
 
-- [ ] **Step 5: Implement TimeAction exactly-once and fact publication**
+- [x] **Step 5: Implement TimeAction exactly-once and fact publication**
 
 Prepare validates ability selection and freezes immutable pre-context plus the complete participant snapshot. Commit spends energy, starts cooldown, applies the ability, then publishes exactly one `time_skill_committed`; failure rolls back every resource, cooldown, payload, and Replay prefix. `rollback(ticket)` returns `{ok, restored_snapshot, code}` and the restored snapshot must equal `ticket.prepared_snapshot` exactly. Rewind commits the prepared pre-return position and never recaptures it after movement.
 
-- [ ] **Step 6: Implement WorldPayloadAuthority and Rift Replay reconstruction**
+- [x] **Step 6: Implement WorldPayloadAuthority and Rift Replay reconstruction**
 
 Stable payload IDs use `run_id:owner_character_generation:payload_family:source_token:payload_generation`. Descriptors freeze handler ID, owner, source action/time token and generation, transform, gameplay geometry, remaining frames, hit/claim set, non-recursive tags, and deterministic parameters. Gameplay Rewind preserves committed descriptors/nodes and never installs the Replay snapshot. Replay restore validates and stages all descriptors off-tree before atomically replacing nodes. Reset/loadout/death calls `invalidate_generation(outgoing_run_id, outgoing_character_generation, reason)` and clears only that exact owner generation, including its Rifts; it rejects stale callbacks without touching another run or generation and returns removed stable IDs plus the new invalidation revision.
 
-- [ ] **Step 7: Run time, Replay, and matrix regressions**
+- [x] **Step 7: Run time, Replay, and matrix regressions**
 
 ```bash
 ./tools/run_tests.sh --filter time_manager_fixed_frame
@@ -656,12 +656,26 @@ Stable payload IDs use `run_id:owner_character_generation:payload_family:source_
 
 Expected: PASS with identical live/Replay terminal digests and exact active-Rift reconstruction.
 
-- [ ] **Step 8: Commit**
+Certification evidence recorded on 2026-09-30:
+
+- Full Player Replay records semantic movement/aim/action intents, active Rift checkpoints, committed TimeAction facts, exact terminal snapshots, and failure-atomic playback rollback.
+- Fixed-frame movement uses an explicit `1 / 60` integration step and Replay identity seals `move_speed`, so nonzero movement replays exactly and rejects mismatched movement profiles.
+- Health, Time, and Weapon observer publications prepare/finalize together and publish only after World commit; rejected or lethal self-damage frames restore HP, death state, irreversible ledgers, TimeAction cursors, and all participant snapshots without leaking observer prefixes.
+- World invalidation tombstones compact to one generation watermark per run while preserving permanent stale-generation rejection, monotonic invalidation revision, transaction rollback, and Replay restore.
+- Legacy P11 schema-v6 Replay snapshots missing `energy_regen_remainder` authenticate before migration, migrate to the strict current Time snapshot, rebuild event/prefix/frame/terminal hashes, and remain tamper-evident.
+- `./tools/run_tests.sh --filter replay`: `6 passed, 0 failed`, `0` leak warnings.
+- Task 2B focused matrix (`time_manager_fixed_frame`, `time_action_transaction`, `world_payload_authority`, `player_fixed_frame_authority`, `health_component`, `rewind`, `player_action_runtime`, `player_loadout_runtime`, `time_loadout_runtime`, `run_runtime_host`, `player_semantic_weapon_input`, and `sword_launch_runtime`): all passed with `0` leak warnings.
+- `./tools/run_tests.sh`: `123 passed, 0 failed`; only the pre-existing `reward_system_smoke` ObjectDB leak remains.
+- Full-run log scan found no GDScript `SCRIPT ERROR` or script parse error; `git diff --check` passed.
+
+- [x] **Step 8: Commit**
 
 ```bash
 git add -- scripts/time_system/time_action_transaction.gd scripts/combat/world_payload_authority.gd scripts/player/characters/character_action_contract.gd scripts/player/characters/character_action_coordinator.gd scripts/time_system/time_manager.gd scripts/time_system/rewind_recorder.gd scripts/time_system/time_rift.gd scripts/player/player_controller.gd scripts/replay/replay_recorder.gd scripts/replay/replay_player.gd autoload/event_bus.gd tests/time/time_manager_fixed_frame_test.gd tests/time/time_manager_fixed_frame_test.tscn tests/time/time_action_transaction_test.gd tests/time/time_action_transaction_test.tscn tests/combat/world_payload_authority_test.gd tests/combat/world_payload_authority_test.tscn tests/characters/character_action_coordinator_test.gd tests/characters/character_action_coordinator_test.tscn tests/time/time_loadout_runtime_test.gd tests/time/rewind_transaction_test.gd tests/replay/weapon_restore_observable_atomicity_test.gd
 git commit -m "feat(time): unify fixed-frame transactional authority"
 ```
+
+Committed as `bc6e9eb` (`feat(time): unify fixed-frame transactional authority`).
 
 ### Task 2C: P12B runtime shell, fresh Stats, and atomic assembly
 
