@@ -95,6 +95,31 @@ class FakeBowAdapter extends Node2D:
 		reset_count += 1
 		_clear_action()
 
+	func cancel_for_gameplay_rewind() -> bool:
+		_clear_action()
+		return true
+
+	func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+		if (
+			not value.get("profile_shot") is Dictionary
+			or typeof(value.get("profile_shot_released")) != TYPE_BOOL
+			or not value.get("profile_action") is Dictionary
+			or typeof(value.get("profile_action_released")) != TYPE_BOOL
+			or not value.get("shared_claims") is Dictionary
+			or value.get("committed_payload_guard") != gameplay_rewind_committed_payload_guard()
+		):
+			return false
+		staged_definition = (value["profile_shot"] as Dictionary).duplicate(true)
+		staged_action_definition = (value["profile_action"] as Dictionary).duplicate(true)
+		_active = not staged_definition.is_empty() or not staged_action_definition.is_empty()
+		_released = bool(value["profile_shot_released"]) or bool(value["profile_action_released"])
+		released_definition = staged_definition.duplicate(true) if not staged_definition.is_empty() and _released else {}
+		released_action_definition = staged_action_definition.duplicate(true) if not staged_action_definition.is_empty() and _released else {}
+		return true
+
+	func gameplay_rewind_committed_payload_guard() -> Dictionary:
+		return {}
+
 	func runtime_snapshot() -> Dictionary:
 		var shot_active := not staged_definition.is_empty()
 		var action_active := not staged_action_definition.is_empty()

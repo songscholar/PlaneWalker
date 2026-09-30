@@ -13,6 +13,7 @@ const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon
 const WeaponResourceTransactionScript := preload("res://scripts/combat/weapons/weapon_resource_transaction.gd")
 
 const SNAPSHOT_SCHEMA_VERSION := 1
+const GAMEPLAY_REWIND_SNAPSHOT_SCHEMA_VERSION := 1
 const PHASE_READY := &"READY"
 
 var _runtime: RefCounted
@@ -191,11 +192,95 @@ func reset_runtime_state(reason: StringName = &"reset") -> void:
 
 
 func restore_rewind_safe_state(reason: StringName = &"rewind_restore") -> void:
-	cancel(reason)
-	if _runtime != null:
-		_runtime.call("reset_runtime_state", reason)
+	cancel_for_gameplay_rewind(reason)
+
+
+func cancel_for_gameplay_rewind(reason: StringName = &"gameplay_rewind") -> bool:
+	if _runtime == null or _resource_transaction == null:
+		return false
+	var before := gameplay_rewind_snapshot()
+	if before.is_empty():
+		return false
+	var hold_snapshot := (
+		_hold_runtime_snapshot.duplicate(true)
+		if _phase == &"HOLD" and not _hold_runtime_snapshot.is_empty()
+		else {}
+	)
+	var cancelled_value: Variant = _runtime.call(
+		"cancel_for_gameplay_rewind",
+		_token,
+		reason,
+		hold_snapshot
+	)
+	if typeof(cancelled_value) != TYPE_BOOL or not bool(cancelled_value):
+		if not _restore_gameplay_runtime_after_failed_cancel(before):
+			_force_restore_fail_closed(&"gameplay_rewind_cancel_rollback_failed", before, before)
+		return false
+	if (
+		_gameplay_rewind_payload_guard() != before["committed_payload_guard"]
+		or _resource_transaction.call("snapshot") != before["resource_transaction"]
+	):
+		if not _restore_gameplay_runtime_after_failed_cancel(before):
+			_force_restore_fail_closed(&"gameplay_rewind_guard_rollback_failed", before, before)
+		return false
+	_generation += 1
+	_buffered_submission.clear()
+	_clear_action_state()
 	if _resource_transaction != null:
 		_resource_transaction.call("rewind_safe_reset")
+	return (
+		_gameplay_rewind_payload_guard() == before["committed_payload_guard"]
+		and _resource_transaction.call("snapshot") == before["resource_transaction"]
+	)
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	if _runtime == null or _resource_transaction == null:
+		return {}
+	var full := snapshot()
+	var gameplay_runtime_value: Variant = _runtime.call("gameplay_rewind_snapshot")
+	var payload_guard := _gameplay_rewind_payload_guard()
+	if not gameplay_runtime_value is Dictionary:
+		return {}
+	full["gameplay_rewind_schema_version"] = GAMEPLAY_REWIND_SNAPSHOT_SCHEMA_VERSION
+	full["gameplay_runtime"] = (gameplay_runtime_value as Dictionary).duplicate(true)
+	full["committed_payload_guard"] = payload_guard
+	return full
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+	if (
+		_runtime == null
+		or _resource_transaction == null
+		or not _validate_gameplay_rewind_snapshot(value)
+		or _gameplay_rewind_payload_guard() != value["committed_payload_guard"]
+		or _resource_transaction.call("snapshot") != value["resource_transaction"]
+	):
+		return false
+	var before := gameplay_rewind_snapshot()
+	if before.is_empty():
+		return false
+	var restored_value: Variant = _runtime.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		(value["gameplay_runtime"] as Dictionary).duplicate(true)
+	)
+	if typeof(restored_value) != TYPE_BOOL or not bool(restored_value):
+		if not _restore_gameplay_runtime_after_failed_cancel(before):
+			_force_restore_fail_closed(&"gameplay_rewind_restore_rollback_failed", before, value)
+		return false
+	_install_snapshot_state(value)
+	if gameplay_rewind_snapshot() == value:
+		return true
+	var runtime_rollback_value: Variant = _runtime.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		(before["gameplay_runtime"] as Dictionary).duplicate(true)
+	)
+	if typeof(runtime_rollback_value) == TYPE_BOOL and bool(runtime_rollback_value):
+		_install_snapshot_state(before)
+		if gameplay_rewind_snapshot() == before:
+			return false
+	_force_restore_fail_closed(&"gameplay_rewind_verification_rollback_failed", before, value)
+	return false
 
 
 func phase_name() -> StringName:
@@ -956,6 +1041,41 @@ func _clear_action_state() -> void:
 	_hold_live_context.clear()
 
 
+func _gameplay_rewind_payload_guard() -> Dictionary:
+	if _runtime == null:
+		return {}
+	var value: Variant = _runtime.call("gameplay_rewind_committed_payload_guard")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func committed_payload_guard() -> Dictionary:
+	return _gameplay_rewind_payload_guard()
+
+
+func _validate_gameplay_rewind_snapshot(value: Dictionary) -> bool:
+	return (
+		int(value.get("gameplay_rewind_schema_version", -1))
+			== GAMEPLAY_REWIND_SNAPSHOT_SCHEMA_VERSION
+		and value.get("gameplay_runtime") is Dictionary
+		and value.get("committed_payload_guard") is Dictionary
+		and _validate_runtime_snapshot(value)
+	)
+
+
+func _restore_gameplay_runtime_after_failed_cancel(before: Dictionary) -> bool:
+	if _runtime == null or not before.get("gameplay_runtime") is Dictionary:
+		return false
+	var restored_value: Variant = _runtime.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		(before["gameplay_runtime"] as Dictionary).duplicate(true)
+	)
+	return (
+		typeof(restored_value) == TYPE_BOOL
+		and bool(restored_value)
+		and gameplay_rewind_snapshot() == before
+	)
+
+
 func _validate_safe_snapshot(safe_snapshot: Dictionary) -> bool:
 	if int(safe_snapshot.get("schema_version", -1)) != SNAPSHOT_SCHEMA_VERSION:
 		return false
@@ -1477,6 +1597,10 @@ func _runtime_has_contract(runtime: RefCounted) -> bool:
 		&"on_action_frame",
 		&"release_hold",
 		&"cancel_action",
+		&"cancel_for_gameplay_rewind",
+		&"gameplay_rewind_snapshot",
+		&"restore_gameplay_rewind_snapshot_for_rollback",
+		&"gameplay_rewind_committed_payload_guard",
 		&"finish_action",
 		&"apply_modifier",
 		&"reset_runtime_state",

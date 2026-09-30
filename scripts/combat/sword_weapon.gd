@@ -230,6 +230,48 @@ func cancel_attack() -> void:
 	finish_attack()
 
 
+func cancel_for_gameplay_rewind() -> bool:
+	var guard := gameplay_rewind_committed_payload_guard()
+	cancel_attack()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	return {
+		"profile": _profile_runtime_snapshot(),
+		"committed_payload_guard": gameplay_rewind_committed_payload_guard(),
+	}
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+	if (
+		not value.get("profile") is Dictionary
+		or not value.get("committed_payload_guard") is Dictionary
+		or value["committed_payload_guard"] != gameplay_rewind_committed_payload_guard()
+	):
+		return false
+	var before := gameplay_rewind_snapshot()
+	if not restore_profile_runtime_snapshot((value["profile"] as Dictionary).duplicate(true)):
+		return false
+	if gameplay_rewind_snapshot() == value:
+		return true
+	restore_profile_runtime_snapshot((before["profile"] as Dictionary).duplicate(true))
+	return false
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	var instance_ids: Array[int] = []
+	for state: Dictionary in _launch_payloads:
+		var node_value: Variant = state.get("node")
+		if node_value is Node and is_instance_valid(node_value):
+			instance_ids.append((node_value as Node).get_instance_id())
+	return {
+		"instance_ids": instance_ids,
+		"launch": launch_runtime_snapshot(),
+		"effect_events": _launch_effect_events.duplicate(true),
+	}
+
+
 func reset_combo() -> void:
 	_combo_index = 0
 
@@ -338,6 +380,17 @@ func restore_profile_runtime_snapshot(value: Dictionary) -> bool:
 			return false
 		hitbox.activate(restored_damage)
 	return true
+
+
+func _profile_runtime_snapshot() -> Dictionary:
+	return {
+		"combo_index": _combo_index,
+		"attacking": _attacking,
+		"active": _active,
+		"current_attack": _current_attack.duplicate(true),
+		"damage_attack_generation": _active_damage_attack_generation,
+		"damage_action_token": _active_damage_action_token,
+	}
 
 
 func _seconds_to_frames(seconds: float) -> int:

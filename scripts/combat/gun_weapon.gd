@@ -110,6 +110,93 @@ func cancel_profile_action() -> void:
 	_clear_profile_action()
 
 
+func cancel_for_gameplay_rewind() -> bool:
+	var guard := gameplay_rewind_committed_payload_guard()
+	_free_prepared(_prepared_projectiles)
+	_prepared_projectiles.clear()
+	_clear_profile_action()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	var full := runtime_snapshot()
+	if full.is_empty():
+		return {}
+	return {
+		"profile_action": (full["profile_action"] as Dictionary).duplicate(true),
+		"profile_action_released": bool(full["profile_action_released"]),
+		"prepared_projectiles": (full["prepared_projectiles"] as Array).duplicate(true),
+		"action_claims_by_token": (full["action_claims_by_token"] as Dictionary).duplicate(true),
+		"committed_payload_guard": gameplay_rewind_committed_payload_guard(),
+	}
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+	if (
+		not value.get("profile_action") is Dictionary
+		or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		or not value.get("prepared_projectiles") is Array
+		or not value.get("action_claims_by_token") is Dictionary
+		or not value.get("committed_payload_guard") is Dictionary
+		or value["committed_payload_guard"] != gameplay_rewind_committed_payload_guard()
+	):
+		return false
+	var target_full := runtime_snapshot()
+	if target_full.is_empty():
+		return false
+	target_full["profile_action"] = (value["profile_action"] as Dictionary).duplicate(true)
+	target_full["profile_action_released"] = bool(value["profile_action_released"])
+	target_full["phase_state"] = (
+		"idle"
+		if (value["profile_action"] as Dictionary).is_empty()
+		else ("released" if bool(value["profile_action_released"]) else "prepared")
+	)
+	target_full["prepared_projectiles"] = (value["prepared_projectiles"] as Array).duplicate(true)
+	target_full["action_claims_by_token"] = (value["action_claims_by_token"] as Dictionary).duplicate(true)
+	if not _runtime_snapshot_shape_is_valid(target_full):
+		return false
+	var claims := _duplicate_claims_by_token(value["action_claims_by_token"] as Dictionary)
+	var staged: Array[Dictionary] = []
+	for payload_value: Variant in value["prepared_projectiles"] as Array:
+		var prepared := _stage_projectile_snapshot(payload_value, claims, false)
+		if prepared.is_empty():
+			_free_prepared(staged)
+			return false
+		staged.append(prepared)
+	var action := value["profile_action"] as Dictionary
+	if (
+		not action.is_empty()
+		and bool(action.get("invulnerable_during_cast", false))
+		and not _acquire_cast_invulnerability(int(action.get("token", 0)))
+	):
+		_free_prepared(staged)
+		return false
+	_free_prepared(_prepared_projectiles)
+	_prepared_projectiles = staged
+	_profile_action = action.duplicate(true)
+	_profile_action_released = bool(value["profile_action_released"])
+	_profile_action_shared_claims = claims.get(str(int(action.get("token", 0))), {})
+	return gameplay_rewind_snapshot() == value
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	_prune_owned_projectiles()
+	var instance_ids: Array[int] = []
+	var payloads: Array[Dictionary] = []
+	var claims_by_token: Dictionary = {}
+	for projectile: Node in _owned_projectiles:
+		var payload := _owned_projectile_runtime_snapshot(projectile)
+		if payload.is_empty() or not _merge_action_claims_snapshot(claims_by_token, payload):
+			return {}
+		instance_ids.append(projectile.get_instance_id())
+		payloads.append(payload)
+	return {
+		"instance_ids": instance_ids,
+		"owned_projectiles": payloads,
+		"action_claims_by_token": claims_by_token,
+	}
+
+
 func finish_profile_action() -> void:
 	_free_prepared(_prepared_projectiles)
 	_clear_profile_action()

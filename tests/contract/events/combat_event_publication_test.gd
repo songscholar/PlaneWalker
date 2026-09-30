@@ -23,14 +23,36 @@ class RewindRecorderStub:
 	extends Node
 
 	var _snapshot_available := true
+	var commit_succeeds := true
+	var commit_calls: int = 0
+	var rollback_calls: int = 0
+	var legacy_restore_calls: int = 0
 
 	func has_snapshot() -> bool:
 		return _snapshot_available
 
 	func prepare_rewind_transaction() -> Dictionary:
-		return {"target_snapshot": {"position": Vector2.ZERO}} if _snapshot_available else {}
+		return {
+			"schema_version": 1,
+			"ticket_id": 1,
+			"target_snapshot": {"position": Vector2.ZERO},
+		} if _snapshot_available else {}
+
+	func commit_rewind_transaction(_ticket: Dictionary) -> bool:
+		commit_calls += 1
+		if not _snapshot_available or not commit_succeeds:
+			return false
+		_snapshot_available = false
+		EventBus.time_skill_started.emit(&"time_rewind", {})
+		EventBus.time_skill_ended.emit(&"time_rewind", {})
+		return true
+
+	func rollback_rewind_transaction(_ticket: Dictionary) -> Dictionary:
+		rollback_calls += 1
+		return {"ok": true, "code": &"ROLLED_BACK"}
 
 	func restore_player_state(_snapshot: Dictionary) -> bool:
+		legacy_restore_calls += 1
 		return _snapshot_available
 
 	func consume_oldest_snapshot() -> Dictionary:
@@ -358,6 +380,28 @@ func _test_time_skill_lifecycle_and_rejections() -> void:
 	_suite.assert_equal(_recorder.time_started.get(&"time_accelerate", 0), 1, "successful Time Accelerate starts once")
 	_suite.assert_equal(_recorder.time_ended.get(&"time_accelerate", 0), 1, "successful Time Accelerate ends once")
 	_suite.assert_equal(_recorder.rejected_skill_events, 0, "rejected skills publish nothing")
+	_suite.assert_equal(rewind_recorder.commit_calls, 1, "Time Rewind delegates one atomic commit to its recorder")
+	_suite.assert_equal(rewind_recorder.rollback_calls, 0, "successful Time Rewind needs no explicit rollback")
+	_suite.assert_equal(rewind_recorder.legacy_restore_calls, 0, "Time Rewind retires the legacy direct restore path")
+
+	manager.reset_runtime_state()
+	var rejected_rewind := RewindRecorderStub.new()
+	rejected_rewind.commit_succeeds = false
+	player.add_child(rejected_rewind)
+	var rewind_starts_before_rejection := int(_recorder.time_started.get(&"time_rewind", 0))
+	var rewind_ends_before_rejection := int(_recorder.time_ended.get(&"time_rewind", 0))
+	_suite.assert_true(not manager.try_rewind(rejected_rewind), "failed atomic Rewind commit is rejected")
+	_suite.assert_equal(rejected_rewind.commit_calls, 1, "failed Time Rewind attempts one recorder commit")
+	_suite.assert_equal(
+		int(_recorder.time_started.get(&"time_rewind", 0)),
+		rewind_starts_before_rejection,
+		"failed Rewind commit publishes no start event"
+	)
+	_suite.assert_equal(
+		int(_recorder.time_ended.get(&"time_rewind", 0)),
+		rewind_ends_before_rejection,
+		"failed Rewind commit publishes no end event"
+	)
 	var rift_contexts: Array = _recorder.time_start_contexts.get(&"time_rift", [])
 	_suite.assert_equal(rift_contexts.size(), 1, "Time Rift has one start context")
 	if rift_contexts.size() == 1:

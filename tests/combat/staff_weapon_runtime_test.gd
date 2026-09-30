@@ -82,6 +82,30 @@ class FakeStaffAdapter extends Node2D:
 		_clear_action()
 
 
+	func cancel_for_gameplay_rewind() -> bool:
+		_clear_action()
+		return true
+
+
+	func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+		if (
+			not value.get("profile_action") is Dictionary
+			or typeof(value.get("profile_action_released")) != TYPE_BOOL
+			or not value.get("prepared_payloads") is Array
+			or value.get("committed_payload_guard") != gameplay_rewind_committed_payload_guard()
+		):
+			return false
+		staged_definition = (value["profile_action"] as Dictionary).duplicate(true)
+		_active = not staged_definition.is_empty()
+		_released = bool(value["profile_action_released"])
+		released_definition = staged_definition.duplicate(true) if _released else {}
+		return true
+
+
+	func gameplay_rewind_committed_payload_guard() -> Dictionary:
+		return {}
+
+
 	func runtime_snapshot() -> Dictionary:
 		return {
 			"schema_version": 1,

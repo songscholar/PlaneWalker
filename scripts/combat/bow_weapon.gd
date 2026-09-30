@@ -187,6 +187,114 @@ func cancel_profile_action() -> void:
 	_clear_starfall_schedule()
 
 
+func cancel_for_gameplay_rewind() -> bool:
+	var guard := gameplay_rewind_committed_payload_guard()
+	cancel_profile_shot()
+	if _profile_action_released:
+		_profile_action.clear()
+		_profile_action_released = false
+		_profile_action_shared_claims = {}
+	else:
+		cancel_profile_action()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	return {
+		"profile_shot": _profile_shot.duplicate(true),
+		"profile_shot_released": _profile_shot_released,
+		"profile_action": _profile_action.duplicate(true),
+		"profile_action_released": _profile_action_released,
+		"shared_claims": _profile_action_shared_claims.duplicate(true),
+		"committed_payload_guard": gameplay_rewind_committed_payload_guard(),
+	}
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+	if (
+		not value.get("profile_shot") is Dictionary
+		or typeof(value.get("profile_shot_released")) != TYPE_BOOL
+		or not value.get("profile_action") is Dictionary
+		or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		or not value.get("shared_claims") is Dictionary
+		or not value.get("committed_payload_guard") is Dictionary
+		or value["committed_payload_guard"] != gameplay_rewind_committed_payload_guard()
+	):
+		return false
+	var shot := value["profile_shot"] as Dictionary
+	var action := value["profile_action"] as Dictionary
+	if (
+		(not shot.is_empty() and not _profile_definition_is_valid(shot))
+		or (not action.is_empty() and not _launch_definition_is_valid(action))
+		or (not shot.is_empty() and not action.is_empty())
+		or (bool(value["profile_shot_released"]) and shot.is_empty())
+		or (bool(value["profile_action_released"]) and action.is_empty())
+	):
+		return false
+	_profile_shot = shot.duplicate(true)
+	_profile_shot_released = bool(value["profile_shot_released"])
+	_profile_action = action.duplicate(true)
+	_profile_action_released = bool(value["profile_action_released"])
+	_profile_action_shared_claims = _live_arrow_claims_for_action(
+		int(action.get("token", 0)),
+		value["shared_claims"] as Dictionary
+	)
+	return gameplay_rewind_committed_payload_guard() == value["committed_payload_guard"]
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	var full := runtime_snapshot()
+	if full.is_empty():
+		return {}
+	var instance_ids: Array[int] = []
+	if is_inside_tree():
+		for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+			if (
+				arrow != null
+				and is_instance_valid(arrow)
+				and not arrow.is_queued_for_deletion()
+				and arrow.get("source") == self
+			):
+				instance_ids.append(arrow.get_instance_id())
+	instance_ids.sort()
+	var committed_claims: Dictionary = {}
+	for arrow_value: Variant in full["arrows"] as Array:
+		var execution := ((arrow_value as Dictionary)["execution"] as Dictionary)
+		committed_claims[str(int(execution.get("action_token", 0)))] = (
+			(execution.get("interaction_claims", {}) as Dictionary).duplicate(true)
+		)
+	return {
+		"instance_ids": instance_ids,
+		"arrows": (full["arrows"] as Array).duplicate(true),
+		"claims_by_token": committed_claims,
+		"starfall_schedule": (full["starfall_schedule"] as Dictionary).duplicate(true),
+		"starfall_source_id": str(full["starfall_source_id"]),
+		"starfall_elapsed_frames": int(full["starfall_elapsed_frames"]),
+		"starfall_targets": (full["starfall_targets"] as Array).duplicate(true),
+		"starfall_invulnerability_active": bool(full["starfall_invulnerability_active"]),
+	}
+
+
+func has_committed_starfall_schedule() -> bool:
+	return not _starfall_schedule.is_empty()
+
+
+func _live_arrow_claims_for_action(token: int, expected: Dictionary) -> Dictionary:
+	if token > 0 and is_inside_tree():
+		for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+			if (
+				arrow != null
+				and is_instance_valid(arrow)
+				and not arrow.is_queued_for_deletion()
+				and arrow.get("source") == self
+				and int(arrow.get("action_token")) == token
+				and arrow.get("interaction_claims") is Dictionary
+				and (arrow.get("interaction_claims") as Dictionary) == expected
+			):
+				return arrow.get("interaction_claims") as Dictionary
+	return expected.duplicate(true)
+
+
 func finish_profile_action() -> void:
 	_profile_action.clear()
 	_profile_action_released = false
@@ -365,11 +473,22 @@ func _runtime_snapshot_shape_is_valid(value: Dictionary) -> bool:
 		return false
 	var schedule := value["starfall_schedule"] as Dictionary
 	if not schedule.is_empty():
-		if action.is_empty() or str(action.get("action_id", "")) != "starfall_arrow_rain" or not bool(value["profile_action_released"]):
+		var schedule_definition := schedule.get("definition", {}) as Dictionary
+		if (
+			not _launch_definition_is_valid(schedule_definition)
+			or str(schedule_definition.get("action_id", "")) != "starfall_arrow_rain"
+			or (
+				not action.is_empty()
+				and (
+					action != schedule_definition
+					or not bool(value["profile_action_released"])
+				)
+			)
+		):
 			return false
 		if not _has_exact_fields(schedule, ["descriptor", "definition", "next_wave_index", "frames_until_next", "wave_count", "wave_interval_frames"]):
 			return false
-		if schedule["definition"] != action or not schedule["descriptor"] is Dictionary:
+		if not schedule["descriptor"] is Dictionary:
 			return false
 		if int(schedule["next_wave_index"]) < 1 or int(schedule["next_wave_index"]) > int(schedule["wave_count"]):
 			return false

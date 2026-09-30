@@ -50,6 +50,8 @@ const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
 	&"is_profile_action_active", &"cancel_profile_action", &"finish_profile_action",
 	&"reset_runtime_state", &"set_combo_slow_aura", &"runtime_snapshot",
 	&"can_restore_runtime_snapshot", &"restore_runtime_snapshot",
+	&"cancel_for_gameplay_rewind", &"restore_gameplay_rewind_snapshot_for_rollback",
+	&"gameplay_rewind_committed_payload_guard",
 ]
 const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"apply", &"freeze_for_action", &"snapshot", &"reset",
@@ -528,6 +530,71 @@ func cancel_action(token: int, _reason: StringName) -> void:
 		_adapter.call("cancel_profile_action")
 		_retire_action_token(token)
 		_clear_active_action()
+
+
+func cancel_for_gameplay_rewind(
+	token: int,
+	_reason: StringName,
+	_hold_runtime_snapshot: Dictionary = {}
+) -> bool:
+	if token > 0 and token != _active_token:
+		return false
+	var guard := gameplay_rewind_committed_payload_guard()
+	if not bool(_adapter.call("cancel_for_gameplay_rewind")):
+		return false
+	_clear_active_action()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	return snapshot()
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(runtime_snapshot: Dictionary) -> bool:
+	if not _is_configured() or not _valid_restore_snapshot(runtime_snapshot):
+		return false
+	var adapter_snapshot := runtime_snapshot["adapter"] as Dictionary
+	var adapter_target := {
+		"profile_action": (adapter_snapshot["profile_action"] as Dictionary).duplicate(true),
+		"profile_action_released": bool(adapter_snapshot["profile_action_released"]),
+		"prepared_payloads": (adapter_snapshot["prepared_payloads"] as Array).duplicate(true),
+		"committed_payload_guard": gameplay_rewind_committed_payload_guard()["adapter"],
+	}
+	var before := snapshot()
+	if not bool(_adapter.call("restore_gameplay_rewind_snapshot_for_rollback", adapter_target)):
+		return false
+	_active_token = int(runtime_snapshot["active_token"])
+	_active_phase = StringName(str(runtime_snapshot["active_phase"]))
+	_active_plan = (runtime_snapshot["active_plan"] as Dictionary).duplicate(true)
+	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
+	_committed_definition = (runtime_snapshot["committed_definition"] as Dictionary).duplicate(true)
+	_live_hold_context = (runtime_snapshot["live_hold_context"] as Dictionary).duplicate(true)
+	if snapshot() == runtime_snapshot:
+		return true
+	_active_token = int(before["active_token"])
+	_active_phase = StringName(str(before["active_phase"]))
+	_active_plan = (before["active_plan"] as Dictionary).duplicate(true)
+	_modifier_snapshot = (before["modifier_snapshot"] as Dictionary).duplicate(true)
+	_committed_definition = (before["committed_definition"] as Dictionary).duplicate(true)
+	_live_hold_context = (before["live_hold_context"] as Dictionary).duplicate(true)
+	return false
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	var adapter_value: Variant = _adapter.call("gameplay_rewind_committed_payload_guard")
+	return {
+		"adapter": (adapter_value as Dictionary).duplicate(true) if adapter_value is Dictionary else {},
+		"combo_state": (_combo_state.call("snapshot") as Dictionary).duplicate(true),
+		"last_runtime_frame": _last_runtime_frame,
+		"stop_extensions_by_generation": _stop_extensions_by_generation.duplicate(true),
+		"accelerate_hits_by_generation": _accelerate_hits_by_generation.duplicate(true),
+		"claimed_rewind_generations": _claimed_rewind_generations.duplicate(),
+		"claimed_rewind_generation_floor": _claimed_rewind_generation_floor,
+		"action_ledgers": _action_ledgers.duplicate(true),
+		"action_token_floor": _action_token_floor,
+		"retired_action_token_floor": _retired_action_token_floor,
+		"aura_source_generation": _aura_source_generation,
+	}
 
 
 func finish_action(token: int) -> void:

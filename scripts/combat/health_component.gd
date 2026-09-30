@@ -97,6 +97,17 @@ func irreversible_ledger_snapshot() -> Dictionary:
 	return (_irreversible_ledger.call("snapshot") as Dictionary).duplicate(true)
 
 
+func runtime_state_snapshot() -> Dictionary:
+	return {
+		"run_id": irreversible_run_id(),
+		"current_hp": current_hp,
+		"max_hp": max_hp,
+		"healing_multiplier": healing_multiplier,
+		"dead": dead,
+		"ledger": irreversible_ledger_snapshot(),
+	}
+
+
 func restore_irreversible_replay_snapshot(value: Dictionary) -> bool:
 	return bool(_irreversible_ledger.call("restore_replay_snapshot", value.duplicate(true)))
 
@@ -128,6 +139,91 @@ func discard_transaction_snapshot(value: Dictionary) -> bool:
 		"discard_transaction_snapshot",
 		(value["ledger"] as Dictionary).duplicate(true)
 	))
+
+
+func install_rewind_transaction_state(
+	target_hp: float,
+	self_damage: float,
+	reason: StringName,
+	source_token: int,
+	source_generation: int,
+	heal_amount: float,
+	claim_run_id: StringName
+) -> Dictionary:
+	if (
+		dead
+		or claim_run_id != irreversible_run_id()
+		or not is_finite(target_hp)
+		or target_hp < 0.0
+		or target_hp > max_hp
+		or not is_finite(self_damage)
+		or self_damage < 0.0
+		or not is_finite(heal_amount)
+		or heal_amount < 0.0
+	):
+		return {"ok": false, "code": &"INVALID_REWIND_HEALTH_PLAN"}
+
+	current_hp = target_hp
+	var publication := {
+		"ok": true,
+		"damaged_amount": 0.0,
+		"hp_after_damage": current_hp,
+		"healed_amount": 0.0,
+		"hp_after_heal": current_hp,
+		"died": false,
+		"killer": reason,
+		"final_hp": current_hp,
+	}
+	if current_hp <= 0.0:
+		dead = true
+		publication["died"] = true
+		return publication
+
+	if self_damage > 0.0:
+		var actual_loss := minf(current_hp, self_damage)
+		var claim_result := _record_irreversible_loss(
+			actual_loss,
+			reason,
+			source_token,
+			source_generation,
+			claim_run_id
+		)
+		if not bool(claim_result.get("ok", false)):
+			return {
+				"ok": false,
+				"code": claim_result.get("code", &"IRREVERSIBLE_CLAIM_REJECTED"),
+			}
+		current_hp = maxf(0.0, current_hp - actual_loss)
+		publication["damaged_amount"] = actual_loss
+		publication["hp_after_damage"] = current_hp
+		if current_hp <= 0.0:
+			dead = true
+			publication["died"] = true
+
+	if not dead and heal_amount > 0.0:
+		var previous_hp := current_hp
+		current_hp = minf(max_hp, current_hp + heal_amount * healing_multiplier)
+		publication["healed_amount"] = current_hp - previous_hp
+	publication["hp_after_heal"] = current_hp
+	publication["final_hp"] = current_hp
+	return publication
+
+
+func publish_rewind_transaction_state(publication: Dictionary) -> bool:
+	if not bool(publication.get("ok", false)):
+		return false
+	var damaged_amount := float(publication.get("damaged_amount", 0.0))
+	var healed_amount := float(publication.get("healed_amount", 0.0))
+	if damaged_amount > 0.0:
+		damaged.emit(damaged_amount, float(publication.get("hp_after_damage", current_hp)))
+	if healed_amount > 0.0:
+		healed.emit(healed_amount, float(publication.get("hp_after_heal", current_hp)))
+	if bool(publication.get("died", false)):
+		clear_invulnerability_sources()
+		var killer: Variant = publication.get("killer")
+		EventBus.entity_died.emit(get_parent(), killer)
+		died.emit(killer)
+	return true
 
 
 func take_damage(damage_info: RefCounted) -> float:

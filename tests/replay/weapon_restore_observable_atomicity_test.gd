@@ -46,6 +46,8 @@ func _run() -> void:
 	var profile := _load_profile(suite, "gun_launch_v1")
 	if not profile.is_empty():
 		await _test_restore_observers_see_only_complete_snapshots(suite, profile)
+		await _test_failed_gameplay_rewind_is_observably_atomic(suite, profile)
+		await _test_successful_gameplay_rewind_marks_replay_boundary(suite, profile)
 	suite.finish(get_tree())
 
 
@@ -156,6 +158,172 @@ func _test_restore_observers_see_only_complete_snapshots(suite, profile: Diction
 	await _free_player(target)
 
 
+func _test_failed_gameplay_rewind_is_observably_atomic(suite, profile: Dictionary) -> void:
+	var player := await _spawn_player(suite, profile, "GameplayRewindAtomicity")
+	if player == null:
+		return
+	suite.assert_true(
+		player.configure_run(&"gameplay-rewind-observable-run"),
+		"observable Gameplay Rewind fixture installs one run identity"
+	)
+	var health: Node = player.get_node("HealthComponent")
+	var manager: Node = player.get_node("TimeManager")
+	var recorder: Node = player.get_node("RewindRecorder")
+	player.global_position = Vector2(16.0, 28.0)
+	player.velocity = Vector2(2.0, -1.0)
+	health.current_hp = 92.0
+	recorder.clear_snapshots()
+	recorder._record_snapshot()
+
+	player.global_position = Vector2(224.0, 156.0)
+	player.velocity = Vector2(-5.0, 3.0)
+	health.current_hp = 61.0
+	_set_time_energy(player, 78.0)
+	suite.assert_true(await _drive_to_active(player), "observable Gameplay Rewind fixture reaches Gun ACTIVE")
+	var before_player: Dictionary = player.weapon_replay_snapshot()
+	var before_history := _snapshot_rewind_history(recorder)
+	var before_position: Vector2 = player.global_position
+	var before_velocity: Vector2 = player.velocity
+	var before_hp: float = health.current_hp
+	var before_ledger: Dictionary = health.irreversible_ledger_snapshot()
+	var before_cooldowns: Dictionary = manager._cooldowns.duplicate(true)
+	suite.assert_true(manager.can_rewind(recorder), "observable Gameplay Rewind fixture is resource-eligible")
+	var preflight_ticket: Dictionary = recorder.prepare_rewind_transaction()
+	suite.assert_true(not preflight_ticket.is_empty(), "observable Gameplay Rewind fixture prepares a real ticket")
+	if not preflight_ticket.is_empty():
+		var preflight_rollback: Dictionary = recorder.rollback_rewind_transaction(preflight_ticket)
+		suite.assert_true(
+			bool(preflight_rollback.get("ok", false)),
+			"observable Gameplay Rewind preflight ticket releases without mutation"
+		)
+	var energy_observations: Array[Dictionary] = []
+	var cooldown_observations: Array[Dictionary] = []
+	manager.energy_changed.connect(func(current: float, maximum: float) -> void:
+		energy_observations.append({"current": current, "maximum": maximum})
+	)
+	manager.cooldown_changed.connect(func(skill_id: StringName, remaining: float) -> void:
+		cooldown_observations.append({"skill_id": skill_id, "remaining": remaining})
+	)
+
+	suite.assert_true(
+		recorder.has_method("set_restore_fault_for_test"),
+		"observable Gameplay Rewind exposes deterministic restore fault injection"
+	)
+	if recorder.has_method("set_restore_fault_for_test"):
+		recorder.call("set_restore_fault_for_test", &"after_time_install")
+		suite.assert_true(
+			not manager.try_rewind(recorder),
+			"faulted Gameplay Rewind rejects the partially installed transaction"
+		)
+		suite.assert_equal(
+			player.weapon_replay_snapshot(),
+			before_player,
+			"failed Gameplay Rewind restores the exact observable Player snapshot"
+		)
+		suite.assert_equal(
+			_snapshot_rewind_history(recorder),
+			before_history,
+			"failed Gameplay Rewind restores the exact snapshot history"
+		)
+		suite.assert_equal(player.global_position, before_position, "failed Gameplay Rewind restores position")
+		suite.assert_equal(player.velocity, before_velocity, "failed Gameplay Rewind restores velocity")
+		suite.assert_close(health.current_hp, before_hp, "failed Gameplay Rewind restores hp")
+		suite.assert_equal(
+			health.irreversible_ledger_snapshot(),
+			before_ledger,
+			"failed Gameplay Rewind restores the exact irreversible ledger"
+		)
+		suite.assert_equal(manager._cooldowns, before_cooldowns, "failed Gameplay Rewind restores cooldowns")
+		suite.assert_true(
+			energy_observations.is_empty(),
+			"failed Gameplay Rewind publishes no transient or rollback energy observation"
+		)
+		suite.assert_true(
+			cooldown_observations.is_empty(),
+			"failed Gameplay Rewind publishes no transient or rollback cooldown observation"
+		)
+
+	await _free_player(player)
+
+
+func _test_successful_gameplay_rewind_marks_replay_boundary(suite, profile: Dictionary) -> void:
+	var player := await _spawn_player(suite, profile, "GameplayRewindReplayBoundary")
+	if player == null:
+		return
+	suite.assert_true(
+		player.configure_run(&"gameplay-rewind-replay-boundary-run"),
+		"successful Gameplay Rewind boundary fixture installs one run identity"
+	)
+	var manager: Node = player.get_node("TimeManager")
+	var recorder: Node = player.get_node("RewindRecorder")
+	player.global_position = Vector2(20.0, 36.0)
+	recorder.clear_snapshots()
+	recorder._record_snapshot()
+	player.global_position = Vector2(220.0, 148.0)
+	suite.assert_true(
+		await _drive_to_active(player),
+		"successful Gameplay Rewind boundary fixture commits one Gun payload"
+	)
+	var projectiles_before: Array[Node] = player.gun_weapon.call("owned_projectiles_for_test")
+	suite.assert_equal(
+		projectiles_before.size(),
+		1,
+		"successful Gameplay Rewind boundary fixture owns one committed projectile"
+	)
+	var committed_projectile: Node = (
+		projectiles_before[0]
+		if projectiles_before.size() == 1
+		else null
+	)
+	manager.rewind_cost = 0.0
+	manager.rewind_self_damage = 0.0
+	manager.rewind_heal = 0.0
+	suite.assert_true(
+		manager.try_rewind(recorder),
+		"successful Gameplay Rewind commits before Replay boundary invalidation"
+	)
+	var projectiles_after: Array[Node] = player.gun_weapon.call("owned_projectiles_for_test")
+	suite.assert_equal(
+		projectiles_after.size(),
+		1,
+		"successful Gameplay Rewind preserves the committed projectile"
+	)
+	if projectiles_after.size() == 1 and committed_projectile != null:
+		suite.assert_true(
+			projectiles_after[0] == committed_projectile,
+			"successful Gameplay Rewind preserves projectile object identity"
+		)
+	var capture_status: Dictionary = player.weapon_replay_capture_status()
+	suite.assert_true(
+		not bool(capture_status.get("ok", true)),
+		"successful Gameplay Rewind explicitly invalidates Replay capture"
+	)
+	suite.assert_equal(
+		capture_status.get("code"),
+		&"GAMEPLAY_REWIND_UNSUPPORTED",
+		"successful Gameplay Rewind exposes the unsupported Replay boundary reason"
+	)
+	suite.assert_true(
+		player.weapon_replay_snapshot().is_empty(),
+		"unsupported Gameplay Rewind boundary exposes no recordable Replay checkpoint"
+	)
+	var replay_recorder = ReplayRecorderScript.new()
+	var replay_profile: Dictionary = player.loadout_runtime.weapon_profile_snapshot()
+	suite.assert_true(
+		bool(replay_recorder.start_recording(replay_profile, 919191).get("ok", false)),
+		"Replay recorder starts for explicit boundary rejection"
+	)
+	var record_result: Dictionary = replay_recorder.record_snapshot(
+		player.weapon_replay_snapshot()
+	)
+	suite.assert_true(
+		not bool(record_result.get("ok", true)),
+		"Replay recorder explicitly rejects the unsupported post-Rewind checkpoint"
+	)
+
+	await _free_player(player)
+
+
 func _set_time_energy(player: Node, current: float) -> void:
 	var state: Dictionary = player.time_manager.resource_state(&"time_energy")
 	state["current"] = current
@@ -211,9 +379,19 @@ func _free_player(player: Node) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	player.cancel_transient_actions()
+	var health: Node = player.get_node("HealthComponent")
+	if not (health.get("_active_invulnerability_tokens") as Dictionary).is_empty():
+		await get_tree().create_timer(0.55).timeout
 	player.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
+
+
+func _snapshot_rewind_history(recorder: Node) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for snapshot: Dictionary in recorder._snapshots:
+		result.append(snapshot.duplicate(true))
+	return result
 
 
 func _load_profile(suite, profile_id: String) -> Dictionary:

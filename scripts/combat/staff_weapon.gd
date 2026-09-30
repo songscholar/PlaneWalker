@@ -130,6 +130,91 @@ func cancel_profile_action() -> void:
 	_clear_profile_action()
 
 
+func cancel_for_gameplay_rewind() -> bool:
+	var guard := gameplay_rewind_committed_payload_guard()
+	_free_prepared(_prepared_payloads)
+	_prepared_payloads.clear()
+	_clear_profile_action()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	var full := runtime_snapshot()
+	if full.is_empty():
+		return {}
+	return {
+		"profile_action": (full["profile_action"] as Dictionary).duplicate(true),
+		"profile_action_released": bool(full["profile_action_released"]),
+		"prepared_payloads": (full["prepared_payloads"] as Array).duplicate(true),
+		"committed_payload_guard": gameplay_rewind_committed_payload_guard(),
+	}
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+	if (
+		not value.get("profile_action") is Dictionary
+		or typeof(value.get("profile_action_released")) != TYPE_BOOL
+		or not value.get("prepared_payloads") is Array
+		or not value.get("committed_payload_guard") is Dictionary
+		or value["committed_payload_guard"] != gameplay_rewind_committed_payload_guard()
+	):
+		return false
+	var current := runtime_snapshot()
+	if current.is_empty():
+		return false
+	var target := current.duplicate(true)
+	target["profile_action"] = (value["profile_action"] as Dictionary).duplicate(true)
+	target["profile_action_released"] = bool(value["profile_action_released"])
+	target["phase_state"] = (
+		"idle"
+		if (value["profile_action"] as Dictionary).is_empty()
+		else ("released" if bool(value["profile_action_released"]) else "prepared")
+	)
+	target["prepared_payloads"] = (value["prepared_payloads"] as Array).duplicate(true)
+	if not _runtime_snapshot_shape_is_valid(target):
+		return false
+	var staged: Array[Dictionary] = []
+	for payload_value: Variant in value["prepared_payloads"] as Array:
+		var prepared := _stage_payload_snapshot(payload_value, true)
+		if prepared.is_empty():
+			_free_prepared(staged)
+			return false
+		staged.append(prepared)
+	var action := value["profile_action"] as Dictionary
+	if (
+		not action.is_empty()
+		and bool(action.get("invulnerable_during_cast", false))
+		and not _acquire_cast_invulnerability(int(action.get("token", 0)))
+	):
+		_free_prepared(staged)
+		return false
+	_free_prepared(_prepared_payloads)
+	_prepared_payloads = staged
+	_profile_action = action.duplicate(true)
+	_profile_action_released = bool(value["profile_action_released"])
+	return gameplay_rewind_snapshot() == value
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	_prune_owned_payloads()
+	var instance_ids: Array[int] = []
+	var payloads: Array[Dictionary] = []
+	for payload: Node in _owned_payloads:
+		var snapshot := _owned_payload_snapshot(payload)
+		if snapshot.is_empty():
+			return {}
+		instance_ids.append(payload.get_instance_id())
+		payloads.append(snapshot)
+	return {
+		"instance_ids": instance_ids,
+		"owned_payloads": payloads,
+		"callback_claims": _callback_claims.duplicate(true),
+		"callback_claim_order": _callback_claim_order.duplicate(),
+		"resource_reward_claims": _resource_reward_claims.duplicate(true),
+		"resource_reward_claim_order": _resource_reward_claim_order.duplicate(),
+	}
+
+
 func finish_profile_action() -> void:
 	_free_prepared(_prepared_payloads)
 	_prepared_payloads.clear()

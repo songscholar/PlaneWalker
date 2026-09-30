@@ -20,6 +20,17 @@ const WEAPON_REPLAY_SNAPSHOT_FIELDS: Array[String] = [
 	"rewind_window_generation",
 	"rewind_window_claimed",
 ]
+const GAMEPLAY_REWIND_TRANSACTION_FIELDS: Array[String] = [
+	"energy",
+	"max_energy",
+	"cooldowns",
+	"resource_revision",
+	"rewind_window_remaining",
+	"rewind_window_generation",
+	"rewind_window_claimed",
+	"self_damage_generation",
+	"next_self_damage_token",
+]
 
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
@@ -215,36 +226,20 @@ func can_rewind(recorder: Node) -> bool:
 	var effective_cost := rewind_cost * rewind_cost_multiplier
 	if not _can_pay(&"time_rewind", effective_cost):
 		return false
-	return recorder.has_method("prepare_rewind_transaction") and recorder.has_method("consume_oldest_snapshot") and recorder.has_method("restore_player_state")
+	return (
+		recorder.has_method("prepare_rewind_transaction")
+		and recorder.has_method("commit_rewind_transaction")
+		and recorder.has_method("rollback_rewind_transaction")
+	)
 
 
 func try_rewind(recorder: Node) -> bool:
-	var effective_cost := rewind_cost * rewind_cost_multiplier
 	if not can_rewind(recorder):
 		return false
 	var transaction: Dictionary = recorder.prepare_rewind_transaction()
 	if transaction.is_empty():
 		return false
-	var target_snapshot: Dictionary = transaction.get("target_snapshot", {})
-	if target_snapshot.is_empty() or not recorder.restore_player_state(target_snapshot):
-		return false
-	recorder.consume_oldest_snapshot()
-	if recorder.has_method("clear_snapshots"):
-		recorder.clear_snapshots()
-	EventBus.time_skill_started.emit(&"time_rewind", {})
-	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
-	if not _take_self_damage(rewind_self_damage, &"curse:rewind"):
-		push_error("Rewind irreversible self-damage claim failed")
-	if rewind_heal > 0.0:
-		var health_component := get_parent().get_node_or_null("HealthComponent")
-		if health_component != null and health_component.has_method("heal"):
-			health_component.heal(rewind_heal)
-	_rewind_weapon_window_generation += 1
-	_rewind_weapon_window_remaining = REWIND_WEAPON_WINDOW_DURATION
-	_rewind_weapon_window_claimed = false
-	rewind_committed.emit(transaction.duplicate(true))
-	EventBus.time_skill_ended.emit(&"time_rewind", {})
-	return true
+	return bool(recorder.commit_rewind_transaction(transaction))
 
 
 func can_time_rift(_rift_position: Vector2 = Vector2.ZERO) -> bool:
@@ -380,6 +375,156 @@ func restore_energy(amount: float) -> void:
 	if energy != energy_before:
 		_resource_revision += 1
 	energy_changed.emit(energy, max_energy)
+
+
+func gameplay_rewind_transaction_snapshot() -> Dictionary:
+	return {
+		"energy": energy,
+		"max_energy": max_energy,
+		"cooldowns": _cooldowns.duplicate(true),
+		"resource_revision": _resource_revision,
+		"rewind_window_remaining": _rewind_weapon_window_remaining,
+		"rewind_window_generation": _rewind_weapon_window_generation,
+		"rewind_window_claimed": _rewind_weapon_window_claimed,
+		"self_damage_generation": _irreversible_self_damage_generation,
+		"next_self_damage_token": _next_irreversible_self_damage_token,
+	}
+
+
+func prepare_gameplay_rewind_settlement_context() -> Dictionary:
+	var effective_cost := rewind_cost * rewind_cost_multiplier
+	var health_component := get_parent().get_node_or_null("HealthComponent")
+	if (
+		health_component == null
+		or not health_component.has_method("irreversible_run_id")
+		or not is_finite(effective_cost)
+		or effective_cost < 0.0
+		or not is_finite(rewind_cooldown)
+		or rewind_cooldown < 0.0
+		or not is_finite(rewind_self_damage)
+		or rewind_self_damage < 0.0
+		or not is_finite(rewind_heal)
+		or rewind_heal < 0.0
+		or not _can_pay(&"time_rewind", effective_cost)
+	):
+		return {}
+	var run_id := StringName(str(health_component.call("irreversible_run_id")))
+	if run_id == &"":
+		return {}
+	return {
+		"run_id": run_id,
+		"cost": effective_cost,
+		"cooldown": rewind_cooldown,
+		"self_damage": rewind_self_damage,
+		"heal": rewind_heal,
+		"self_damage_token": _next_irreversible_self_damage_token,
+		"self_damage_generation": _irreversible_self_damage_generation,
+	}
+
+
+func install_gameplay_rewind_settlement(context: Dictionary, before: Dictionary) -> bool:
+	if (
+		not _valid_gameplay_rewind_transaction_snapshot(before)
+		or gameplay_rewind_transaction_snapshot() != before
+		or not _valid_gameplay_rewind_settlement_context(context)
+	):
+		return false
+	var health_component := get_parent().get_node_or_null("HealthComponent")
+	if (
+		health_component == null
+		or not health_component.has_method("irreversible_run_id")
+		or StringName(str(health_component.call("irreversible_run_id"))) != context["run_id"]
+	):
+		return false
+	energy = maxf(0.0, energy - float(context["cost"]))
+	_cooldowns[&"time_rewind"] = float(context["cooldown"])
+	_resource_revision += 1
+	if float(context["self_damage"]) > 0.0:
+		_next_irreversible_self_damage_token += 1
+	_rewind_weapon_window_generation += 1
+	_rewind_weapon_window_remaining = REWIND_WEAPON_WINDOW_DURATION
+	_rewind_weapon_window_claimed = false
+	return true
+
+
+func restore_gameplay_rewind_transaction_snapshot(value: Dictionary) -> bool:
+	if not _valid_gameplay_rewind_transaction_snapshot(value):
+		return false
+	energy = float(value["energy"])
+	max_energy = float(value["max_energy"])
+	_cooldowns = (value["cooldowns"] as Dictionary).duplicate(true)
+	_resource_revision = int(value["resource_revision"])
+	_rewind_weapon_window_remaining = float(value["rewind_window_remaining"])
+	_rewind_weapon_window_generation = int(value["rewind_window_generation"])
+	_rewind_weapon_window_claimed = bool(value["rewind_window_claimed"])
+	_irreversible_self_damage_generation = int(value["self_damage_generation"])
+	_next_irreversible_self_damage_token = int(value["next_self_damage_token"])
+	return gameplay_rewind_transaction_snapshot() == value
+
+
+func publish_gameplay_rewind_commit(transaction: Dictionary, before: Dictionary) -> bool:
+	if not _valid_gameplay_rewind_transaction_snapshot(before):
+		return false
+	if float(before["energy"]) != energy:
+		energy_changed.emit(energy, max_energy)
+	cooldown_changed.emit(&"time_rewind", get_cooldown(&"time_rewind"))
+	rewind_committed.emit(transaction.duplicate(true))
+	return true
+
+
+func _valid_gameplay_rewind_settlement_context(value: Dictionary) -> bool:
+	if value.size() != 7:
+		return false
+	for field: String in [
+		"run_id", "cost", "cooldown", "self_damage", "heal",
+		"self_damage_token", "self_damage_generation",
+	]:
+		if not value.has(field):
+			return false
+	if typeof(value["run_id"]) not in [TYPE_STRING, TYPE_STRING_NAME] or str(value["run_id"]).is_empty():
+		return false
+	for field: String in ["cost", "cooldown", "self_damage", "heal"]:
+		if typeof(value[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value[field])) or float(value[field]) < 0.0:
+			return false
+	return (
+		typeof(value["self_damage_token"]) == TYPE_INT
+		and int(value["self_damage_token"]) == _next_irreversible_self_damage_token
+		and typeof(value["self_damage_generation"]) == TYPE_INT
+		and int(value["self_damage_generation"]) == _irreversible_self_damage_generation
+		and _can_pay(&"time_rewind", float(value["cost"]))
+	)
+
+
+func _valid_gameplay_rewind_transaction_snapshot(value: Dictionary) -> bool:
+	if value.size() != GAMEPLAY_REWIND_TRANSACTION_FIELDS.size():
+		return false
+	for field: String in GAMEPLAY_REWIND_TRANSACTION_FIELDS:
+		if not value.has(field):
+			return false
+	for field: String in ["energy", "max_energy", "rewind_window_remaining"]:
+		if typeof(value[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value[field])) or float(value[field]) < 0.0:
+			return false
+	if float(value["energy"]) > float(value["max_energy"]):
+		return false
+	if not value["cooldowns"] is Dictionary:
+		return false
+	var cooldowns := value["cooldowns"] as Dictionary
+	if cooldowns.size() != _cooldowns.size():
+		return false
+	for skill_id: StringName in _cooldowns.keys():
+		if not cooldowns.has(skill_id) or typeof(cooldowns[skill_id]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(cooldowns[skill_id])) or float(cooldowns[skill_id]) < 0.0:
+			return false
+	return (
+		typeof(value["resource_revision"]) == TYPE_INT
+		and int(value["resource_revision"]) > 0
+		and typeof(value["rewind_window_generation"]) == TYPE_INT
+		and int(value["rewind_window_generation"]) >= 0
+		and typeof(value["rewind_window_claimed"]) == TYPE_BOOL
+		and typeof(value["self_damage_generation"]) == TYPE_INT
+		and int(value["self_damage_generation"]) > 0
+		and typeof(value["next_self_damage_token"]) == TYPE_INT
+		and int(value["next_self_damage_token"]) > 0
+	)
 
 
 func weapon_interaction_context() -> Dictionary:

@@ -66,6 +66,27 @@ func cancel_action(_token: int, _reason: StringName) -> void:
 	pass
 
 
+func cancel_for_gameplay_rewind(
+	token: int,
+	reason: StringName,
+	_hold_runtime_snapshot: Dictionary = {}
+) -> bool:
+	cancel_action(token, reason)
+	return true
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	return snapshot()
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(runtime_snapshot: Dictionary) -> bool:
+	return restore_snapshot(runtime_snapshot)
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	return {}
+
+
 func finish_action(_token: int) -> void:
 	pass
 

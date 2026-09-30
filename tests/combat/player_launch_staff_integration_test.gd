@@ -230,6 +230,17 @@ func _test_adapter_construction_release_and_payload_feedback() -> void:
 	_suite.assert_equal(player.weapon_presentation_snapshot().get("phase"), "ACTIVE", "charged cast enters ACTIVE after exact windup")
 	_suite.assert_equal(staff.call("prepared_payload_count_for_test"), 0, "ACTIVE consumes the prepared payload")
 	_suite.assert_equal(staff.call("owned_payload_count_for_test"), 1, "ACTIVE releases one Staff projectile")
+	var committed_staff_payload: Node = (staff.call("owned_payloads_for_test") as Array[Node])[0]
+	var rewind_before: Dictionary = player.weapon_runtime.gameplay_rewind_snapshot()
+	var payload_guard_before: Dictionary = player.weapon_runtime.gameplay_rewind_committed_payload_guard()
+	var active_token := int(player.weapon_runtime.snapshot().get("active_token", 0))
+	_suite.assert_true(player.weapon_runtime.cancel_for_gameplay_rewind(active_token, &"test_gameplay_rewind"), "Gameplay Rewind cancels Staff action-local state")
+	_suite.assert_equal(player.weapon_runtime.gameplay_rewind_committed_payload_guard(), payload_guard_before, "Gameplay Rewind preserves the released Staff projectile and claims")
+	_suite.assert_true((staff.call("owned_payloads_for_test") as Array[Node])[0] == committed_staff_payload, "Staff cancel preserves the exact released projectile instance")
+	_suite.assert_true(player.weapon_runtime.restore_gameplay_rewind_snapshot_for_rollback(rewind_before), "Staff rollback restores action-local state")
+	_suite.assert_equal(player.weapon_runtime.gameplay_rewind_snapshot(), rewind_before, "Staff rollback restores exact runtime bytes")
+	_suite.assert_equal(player.weapon_runtime.gameplay_rewind_committed_payload_guard(), payload_guard_before, "Staff rollback preserves the same projectile instance")
+	_suite.assert_true((staff.call("owned_payloads_for_test") as Array[Node])[0] == committed_staff_payload, "Staff rollback retains the exact same projectile object")
 
 	var payloads: Array[Node] = staff.call("owned_payloads_for_test")
 	var payload: Node = payloads[0] if not payloads.is_empty() else null
@@ -296,7 +307,8 @@ func _test_staff_lifecycle_cleanup_boundaries() -> void:
 
 	await _release_charged_payload(player)
 	_suite.assert_true(player.restore_rewind_safe_action_state({"action_state": "FREE"}), "rewind-safe restore succeeds for Staff")
-	_suite.assert_equal(staff.call("owned_payload_count_for_test"), 0, "rewind restore clears released Staff payloads")
+	_suite.assert_equal(staff.call("owned_payload_count_for_test"), 1, "rewind-safe restore preserves released Staff payloads")
+	player.reset_runtime_state()
 	await get_tree().process_frame
 
 	await _release_charged_payload(player)

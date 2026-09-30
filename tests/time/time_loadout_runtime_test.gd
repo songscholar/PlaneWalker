@@ -23,20 +23,71 @@ const LOADOUTS := [
 class RewindRecorderStub:
 	extends Node
 
+	var _snapshot_available := true
+	var _next_ticket_id: int = 1
+	var _active_transaction: Dictionary = {}
+
 	func has_snapshot() -> bool:
-		return true
+		return _snapshot_available
 
 	func prepare_rewind_transaction() -> Dictionary:
-		return {"target_snapshot": {"position": Vector2.ZERO}}
+		if not _snapshot_available or not _active_transaction.is_empty():
+			return {}
+		var manager := get_parent().get_node_or_null("TimeManager")
+		if (
+			manager == null
+			or not manager.has_method("gameplay_rewind_transaction_snapshot")
+			or not manager.has_method("prepare_gameplay_rewind_settlement_context")
+		):
+			return {}
+		var before: Dictionary = manager.gameplay_rewind_transaction_snapshot()
+		var settlement: Dictionary = manager.prepare_gameplay_rewind_settlement_context()
+		if before.is_empty() or settlement.is_empty():
+			return {}
+		var ticket := {
+			"schema_version": 1,
+			"ticket_id": _next_ticket_id,
+			"target_snapshot": {"position": Vector2.ZERO},
+		}
+		_next_ticket_id += 1
+		_active_transaction = {
+			"ticket": ticket.duplicate(true),
+			"before": before.duplicate(true),
+			"settlement": settlement.duplicate(true),
+		}
+		return ticket.duplicate(true)
 
-	func restore_player_state(_snapshot: Dictionary) -> bool:
+	func commit_rewind_transaction(ticket: Dictionary) -> bool:
+		if _active_transaction.is_empty() or ticket != _active_transaction["ticket"]:
+			return false
+		var manager := get_parent().get_node_or_null("TimeManager")
+		var before := (_active_transaction["before"] as Dictionary).duplicate(true)
+		var settlement := (_active_transaction["settlement"] as Dictionary).duplicate(true)
+		var committed_ticket := (_active_transaction["ticket"] as Dictionary).duplicate(true)
+		if (
+			manager == null
+			or not manager.has_method("install_gameplay_rewind_settlement")
+			or not manager.has_method("publish_gameplay_rewind_commit")
+			or not manager.install_gameplay_rewind_settlement(settlement, before)
+		):
+			_active_transaction.clear()
+			return false
+		_snapshot_available = false
+		_active_transaction.clear()
+		EventBus.time_skill_started.emit(&"time_rewind", {})
+		manager.publish_gameplay_rewind_commit(committed_ticket, before)
+		EventBus.time_skill_ended.emit(&"time_rewind", {})
 		return true
 
-	func consume_oldest_snapshot() -> Dictionary:
-		return {"position": Vector2.ZERO}
+	func rollback_rewind_transaction(ticket: Dictionary) -> Dictionary:
+		if _active_transaction.is_empty() or ticket != _active_transaction["ticket"]:
+			return {"ok": false, "code": &"INVALID_TICKET"}
+		_active_transaction.clear()
+		return {"ok": true, "code": &"ROLLED_BACK"}
 
 	func clear_snapshots() -> void:
-		pass
+		_snapshot_available = false
+		_active_transaction.clear()
 
 
 class ReplayStopTarget extends Node:

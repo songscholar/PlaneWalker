@@ -113,6 +113,16 @@ class FakeWeaponRuntime:
 	var restore_calls: int = 0
 	var reset_calls: int = 0
 	var last_reset_reason: StringName = &""
+	var gameplay_rewind_cancel_calls: int = 0
+	var gameplay_rewind_restore_calls: int = 0
+	var fail_gameplay_rewind_cancel: bool = false
+	var fail_gameplay_rewind_restore: bool = false
+	var mutate_before_failed_gameplay_rewind_cancel: bool = false
+	var mutate_before_failed_gameplay_rewind_restore: bool = false
+	var committed_payload_guard: Dictionary = {
+		"instance_ids": [101],
+		"snapshots": [{"payload_id": "committed_fixture", "hit_claims": ["enemy:a"]}],
+	}
 
 
 	func weapon_id() -> StringName:
@@ -255,6 +265,61 @@ class FakeWeaponRuntime:
 		cancel_calls += 1
 		active_token = 0
 		active_action = &""
+
+
+	func cancel_for_gameplay_rewind(
+		token: int,
+		_reason: StringName,
+		hold_runtime_snapshot: Dictionary = {}
+	) -> bool:
+		gameplay_rewind_cancel_calls += 1
+		if mutate_before_failed_gameplay_rewind_cancel:
+			resource = -1
+			active_token = 0
+			active_action = &""
+		if fail_gameplay_rewind_cancel:
+			return false
+		if token > 0 and active_token != token:
+			return false
+		if not hold_runtime_snapshot.is_empty():
+			resource = int(hold_runtime_snapshot.get("resource", resource))
+		active_token = 0
+		active_action = &""
+		return true
+
+
+	func gameplay_rewind_snapshot() -> Dictionary:
+		return {
+			"resource": resource,
+			"active_token": active_token,
+			"active_action": str(active_action),
+			"committed_payload_guard": committed_payload_guard.duplicate(true),
+		}
+
+
+	func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+		gameplay_rewind_restore_calls += 1
+		if mutate_before_failed_gameplay_rewind_restore:
+			resource = -2
+			active_token = 0
+			active_action = &""
+		if (
+			fail_gameplay_rewind_restore
+			or not value.get("committed_payload_guard") is Dictionary
+			or value["committed_payload_guard"] != committed_payload_guard
+			or typeof(value.get("resource")) != TYPE_INT
+			or typeof(value.get("active_token")) != TYPE_INT
+			or typeof(value.get("active_action")) != TYPE_STRING
+		):
+			return false
+		resource = int(value["resource"])
+		active_token = int(value["active_token"])
+		active_action = StringName(str(value["active_action"]))
+		return gameplay_rewind_snapshot() == value
+
+
+	func gameplay_rewind_committed_payload_guard() -> Dictionary:
+		return committed_payload_guard.duplicate(true)
 
 
 	func finish_action(token: int) -> void:
@@ -478,6 +543,12 @@ func _run() -> void:
 	_test_runtime_tick_uses_coordinator_frame_while_ready_and_busy()
 	_test_busy_unsupported_sword_semantics_preserve_existing_buffer()
 	_test_rewind_safe_reset_preserves_committed_resources()
+	_test_gameplay_rewind_cancel_preserves_committed_payload_guard()
+	_test_gameplay_rewind_rollback_restores_windup_local_state_exactly()
+	_test_gameplay_rewind_rollback_restores_hold_without_refunding_authority()
+	_test_gameplay_rewind_rejects_payload_identity_drift()
+	_test_gameplay_rewind_cancel_rollback_failure_forces_fail_closed()
+	_test_gameplay_rewind_restore_rollback_failure_forces_fail_closed()
 	_test_contract_rejects_non_finite_plans()
 	_test_contract_rejects_non_finite_plan_metadata()
 	_suite.finish(get_tree())
@@ -1673,6 +1744,166 @@ func _test_rewind_safe_reset_preserves_committed_resources() -> void:
 	_suite.assert_true(coordinator.generation() > generation_before, "rewind-safe reset invalidates the action generation")
 	_suite.assert_close(provider.current, 80.0, "rewind-safe reset does not refund external resource")
 	_suite.assert_equal(coordinator.cooldown_remaining(&"primary_test"), 30, "rewind-safe reset preserves committed cooldown")
+
+
+func _test_gameplay_rewind_cancel_preserves_committed_payload_guard() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 30
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "gameplay rewind fixture commits")
+	var payload_guard_before := runtime.gameplay_rewind_committed_payload_guard()
+	_suite.assert_true(
+		bool(coordinator.cancel_for_gameplay_rewind()),
+		"gameplay rewind cancel succeeds"
+	)
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "gameplay rewind clears action-local phase")
+	_suite.assert_equal(runtime.gameplay_rewind_cancel_calls, 1, "runtime receives the payload-preserving cancel")
+	_suite.assert_equal(
+		runtime.gameplay_rewind_committed_payload_guard(),
+		payload_guard_before,
+		"committed payload identity, snapshot, and hit claims remain exact"
+	)
+	_suite.assert_close(provider.current, 80.0, "gameplay rewind cancel preserves committed external cost")
+	_suite.assert_equal(coordinator.cooldown_remaining(&"primary_test"), 30, "gameplay rewind cancel preserves cooldown")
+
+
+func _test_gameplay_rewind_rollback_restores_windup_local_state_exactly() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "rollback fixture commits")
+	var before: Dictionary = coordinator.gameplay_rewind_snapshot()
+	_suite.assert_true(bool(coordinator.cancel_for_gameplay_rewind()), "rollback fixture cancels")
+	_suite.assert_true(
+		bool(coordinator.restore_gameplay_rewind_snapshot_for_rollback(before)),
+		"rollback restores the cancelled action"
+	)
+	_suite.assert_equal(
+		coordinator.gameplay_rewind_snapshot(),
+		before,
+		"rollback restores coordinator and runtime action-local bytes exactly"
+	)
+	_suite.assert_equal(runtime.gameplay_rewind_restore_calls, 1, "runtime local state restores once")
+
+
+func _test_gameplay_rewind_rollback_restores_hold_without_refunding_authority() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	var started: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_ultimate", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(started.get("ok", false)), "HOLD rollback fixture starts")
+	_suite.assert_equal(runtime.resource, 7, "fixture exposes provisional HOLD runtime state")
+	var before: Dictionary = coordinator.gameplay_rewind_snapshot()
+	_suite.assert_true(bool(coordinator.cancel_for_gameplay_rewind()), "HOLD cancel succeeds")
+	_suite.assert_equal(runtime.resource, 8, "unreleased HOLD cancel restores its press snapshot")
+	_suite.assert_close(provider.current, 100.0, "unreleased HOLD never spends external authority")
+	_suite.assert_true(
+		bool(coordinator.restore_gameplay_rewind_snapshot_for_rollback(before)),
+		"transaction rollback restores the exact pre-cancel HOLD"
+	)
+	_suite.assert_equal(runtime.resource, 7, "rollback restores provisional HOLD runtime state exactly")
+	_suite.assert_close(provider.current, 100.0, "rollback cannot mint or spend external authority")
+
+
+func _test_gameplay_rewind_rejects_payload_identity_drift() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	coordinator.submit_intent({"id": "weapon_primary", "edge": "pressed"}, {})
+	var before: Dictionary = coordinator.gameplay_rewind_snapshot()
+	_suite.assert_true(bool(coordinator.cancel_for_gameplay_rewind()), "identity drift fixture cancels")
+	runtime.committed_payload_guard["instance_ids"] = [202]
+	var cancelled_state: Dictionary = coordinator.gameplay_rewind_snapshot()
+	_suite.assert_true(
+		not bool(coordinator.restore_gameplay_rewind_snapshot_for_rollback(before)),
+		"rollback rejects replaced committed payload identity"
+	)
+	_suite.assert_equal(
+		coordinator.gameplay_rewind_snapshot(),
+		cancelled_state,
+		"rejected rollback cannot mutate cancelled local state"
+	)
+
+
+func _test_gameplay_rewind_cancel_rollback_failure_forces_fail_closed() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	var transaction: RefCounted = fixture["resource_transaction"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 30
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	var generation_before := int(committed.get("generation", 0))
+	runtime.mutate_before_failed_gameplay_rewind_cancel = true
+	runtime.fail_gameplay_rewind_cancel = true
+	runtime.fail_gameplay_rewind_restore = true
+
+	_suite.assert_true(
+		not bool(coordinator.cancel_for_gameplay_rewind()),
+		"failed Gameplay Rewind cancel reports failure"
+	)
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "unrecoverable cancel clears the coordinator action")
+	_suite.assert_equal(coordinator.current_token(), 0, "unrecoverable cancel clears the coordinator token")
+	_suite.assert_true(coordinator.generation() > generation_before, "unrecoverable cancel invalidates the action generation")
+	_suite.assert_equal(runtime.reset_calls, 1, "unrecoverable cancel resets the divergent runtime once")
+	_suite.assert_true(
+		not bool(transaction.snapshot().get("configured", true)),
+		"unrecoverable cancel fails the resource transaction closed"
+	)
+	_suite.assert_close(provider.current, 80.0, "fail-closed cancel cannot refund a committed external cost")
+
+
+func _test_gameplay_rewind_restore_rollback_failure_forces_fail_closed() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var runtime: FakeWeaponRuntime = fixture["runtime"]
+	var provider: FakeResourceProvider = fixture["provider"]
+	var transaction: RefCounted = fixture["resource_transaction"]
+	runtime.external_resource_cost = 20.0
+	runtime.action_cooldown_frames = 30
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	var target: Dictionary = coordinator.gameplay_rewind_snapshot()
+	_suite.assert_true(bool(coordinator.cancel_for_gameplay_rewind()), "restore failure fixture cancels normally")
+	var cancelled_generation: int = int(coordinator.generation())
+	runtime.mutate_before_failed_gameplay_rewind_restore = true
+	runtime.fail_gameplay_rewind_restore = true
+
+	_suite.assert_true(
+		not bool(coordinator.restore_gameplay_rewind_snapshot_for_rollback(target)),
+		"failed Gameplay Rewind restore reports failure"
+	)
+	_suite.assert_equal(coordinator.phase_name(), &"READY", "unrecoverable restore leaves no active coordinator action")
+	_suite.assert_equal(coordinator.current_token(), 0, "unrecoverable restore leaves no active token")
+	_suite.assert_true(coordinator.generation() > cancelled_generation, "unrecoverable restore advances the generation floor")
+	_suite.assert_equal(runtime.reset_calls, 1, "unrecoverable restore resets the divergent runtime once")
+	_suite.assert_true(
+		not bool(transaction.snapshot().get("configured", true)),
+		"unrecoverable restore fails the resource transaction closed"
+	)
+	_suite.assert_close(provider.current, 80.0, "fail-closed restore cannot refund a committed external cost")
+	_suite.assert_true(bool(committed.get("ok", false)), "restore failure fixture committed before cancellation")
 
 
 func _extended_hold_plan() -> Dictionary:

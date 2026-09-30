@@ -133,10 +133,12 @@ func _test_player_lifecycle_clears_only_owned_arrows() -> void:
 	owned = _arrow_fixture(player, player.get_node("BowWeapon"))
 	_suite.assert_true(
 		player.restore_rewind_safe_action_state({"action_state": "FREE"}),
-		"rewind-safe restore succeeds for arrow cleanup coverage"
+		"rewind-safe restore succeeds while preserving committed arrows"
 	)
-	_suite.assert_true(owned.is_queued_for_deletion(), "rewind restore clears the player's already-generated Bow arrows")
+	_suite.assert_true(not owned.is_queued_for_deletion(), "rewind restore preserves the player's already-generated Bow arrows")
 	_suite.assert_true(not unrelated.is_queued_for_deletion(), "rewind restore still preserves unrelated arrows")
+	await get_tree().process_frame
+	owned.queue_free()
 	await get_tree().process_frame
 
 	owned = _arrow_fixture(player, player.get_node("BowWeapon"))

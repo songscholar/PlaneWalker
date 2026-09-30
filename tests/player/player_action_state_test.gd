@@ -34,6 +34,10 @@ func _run() -> void:
 	_test_priority_interrupts()
 	_test_dead_is_terminal()
 	_test_duration_and_frame_queries()
+	_test_revision_tracks_only_real_mutations()
+	_test_transaction_snapshot_is_complete_and_isolated()
+	_test_transaction_snapshot_round_trip_restores_frozen_revision()
+	_test_transaction_snapshot_validation_fails_closed()
 	_suite.finish(get_tree())
 
 
@@ -376,3 +380,175 @@ func _test_duration_and_frame_queries() -> void:
 	_suite.assert_equal(action_state.current_state, PlayerActionStateScript.State.FREE, "duration completion returns non-terminal state to free")
 	_suite.assert_equal(action_state.elapsed_state_frames(), 0, "free resets elapsed state frames")
 	_suite.assert_equal(action_state.remaining_state_frames(), 0, "free has no remaining state duration")
+
+
+func _test_revision_tracks_only_real_mutations() -> void:
+	var action_state = PlayerActionStateScript.new()
+	_suite.assert_equal(action_state.revision(), 0, "new action state begins at revision zero")
+	action_state.buffer_input(&"")
+	_suite.assert_equal(action_state.revision(), 0, "rejected empty buffer input does not advance revision")
+	action_state.buffer_input(&"attack")
+	_suite.assert_equal(action_state.revision(), 1, "new buffered input advances revision")
+	action_state.buffer_input(&"attack")
+	_suite.assert_equal(action_state.revision(), 1, "idempotent buffer refresh at the same frame does not advance revision")
+	_suite.assert_true(action_state.consume_buffered_input(&"attack"), "setup consumes the buffered input")
+	_suite.assert_equal(action_state.revision(), 2, "consuming a buffered input advances revision")
+	_suite.assert_true(not action_state.consume_buffered_input(&"attack"), "missing input cannot be consumed twice")
+	_suite.assert_equal(action_state.revision(), 2, "failed buffer consumption does not advance revision")
+	_suite.assert_true(action_state.transition_to(PlayerActionStateScript.State.TIME_CAST, 3), "setup enters time cast")
+	_suite.assert_equal(action_state.revision(), 3, "state transition advances revision")
+	_suite.assert_true(
+		not action_state.transition_to(PlayerActionStateScript.State.TIME_CAST, 3),
+		"same-state transition is rejected"
+	)
+	_suite.assert_equal(action_state.revision(), 3, "rejected transition does not advance revision")
+	action_state.advance_frame()
+	_suite.assert_equal(action_state.revision(), 4, "combined buffer and phase advancement is one authoritative mutation")
+	_suite.assert_true(action_state.force_safe_reset(), "live state can be reset")
+	_suite.assert_equal(action_state.revision(), 5, "safe reset advances revision when it changes state")
+	_suite.assert_true(action_state.force_safe_reset(), "already-safe state accepts an idempotent reset")
+	_suite.assert_equal(action_state.revision(), 5, "idempotent safe reset does not advance revision")
+	_suite.assert_true(action_state.project_weapon_phase(&"WINDUP", 1, 4), "weapon phase projects")
+	_suite.assert_equal(action_state.revision(), 6, "new weapon projection advances revision")
+	_suite.assert_true(action_state.project_weapon_phase(&"WINDUP", 1, 4), "same projection remains valid")
+	_suite.assert_equal(action_state.revision(), 6, "identical weapon projection does not advance revision")
+	_suite.assert_true(action_state.clear_weapon_projection(), "projected state clears")
+	_suite.assert_equal(action_state.revision(), 7, "clearing a projection advances revision")
+	_suite.assert_true(action_state.clear_weapon_projection(), "already-free compatibility view accepts clear")
+	_suite.assert_equal(action_state.revision(), 7, "idempotent projection clear does not advance revision")
+	action_state.buffer_input(&"dash")
+	_suite.assert_equal(action_state.revision(), 8, "second buffered input advances revision")
+	action_state.clear_buffered_inputs()
+	_suite.assert_equal(action_state.revision(), 9, "clearing non-empty buffers advances revision")
+	action_state.clear_buffered_inputs()
+	_suite.assert_equal(action_state.revision(), 9, "clearing empty buffers is revision-neutral")
+	action_state.reset_runtime_state()
+	_suite.assert_equal(action_state.revision(), 10, "runtime reset advances revision when it resets the global frame")
+	action_state.reset_runtime_state()
+	_suite.assert_equal(action_state.revision(), 10, "idempotent runtime reset is revision-neutral")
+	action_state.advance_buffer_frame()
+	_suite.assert_equal(action_state.revision(), 11, "buffer-only clock advancement advances revision")
+
+
+func _test_transaction_snapshot_is_complete_and_isolated() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.buffer_input(&"dash", 4)
+	_suite.assert_true(
+		action_state.project_weapon_phase(&"RESOURCE_ACTION", 2, 9, 5),
+		"setup creates a projected action with a cancel boundary"
+	)
+	var snapshot: Dictionary = action_state.snapshot()
+	var actual_fields: Array[String] = []
+	for field: Variant in snapshot.keys():
+		actual_fields.append(str(field))
+	actual_fields.sort()
+	var expected_fields: Array[String] = [
+		"buffers",
+		"cancel_from_frame",
+		"current_state",
+		"frame",
+		"revision",
+		"schema_version",
+		"state_duration_frames",
+		"state_frame",
+		"weapon_phase",
+		"weapon_projection_active",
+	]
+	expected_fields.sort()
+	_suite.assert_equal(actual_fields, expected_fields, "transaction snapshot has the exact complete field set")
+	_suite.assert_equal(snapshot.get("schema_version"), 1, "snapshot declares its schema")
+	_suite.assert_equal(snapshot.get("revision"), 2, "snapshot carries the participant revision")
+	_suite.assert_equal(snapshot.get("frame"), 0, "snapshot carries the input-buffer clock")
+	_suite.assert_equal(
+		snapshot.get("current_state"),
+		PlayerActionStateScript.State.ATTACK_RECOVERY,
+		"snapshot carries the projected compatibility state"
+	)
+	_suite.assert_equal(snapshot.get("state_frame"), 2, "snapshot carries phase elapsed frames")
+	_suite.assert_equal(snapshot.get("state_duration_frames"), 9, "snapshot carries phase duration")
+	_suite.assert_equal(snapshot.get("cancel_from_frame"), 5, "snapshot carries the cancel boundary")
+	_suite.assert_equal(snapshot.get("weapon_projection_active"), true, "snapshot carries projection ownership")
+	_suite.assert_equal(snapshot.get("weapon_phase"), &"RESOURCE_ACTION", "snapshot carries exact weapon phase")
+	(snapshot["buffers"] as Dictionary).clear()
+	snapshot["state_frame"] = 8
+	_suite.assert_true(action_state.has_buffered_input(&"dash"), "mutating snapshot buffers cannot mutate live buffers")
+	_suite.assert_equal(action_state.elapsed_state_frames(), 2, "mutating snapshot timing cannot mutate live timing")
+
+
+func _test_transaction_snapshot_round_trip_restores_frozen_revision() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.buffer_input(&"dash", 6)
+	_suite.assert_true(action_state.project_weapon_phase(&"HOLD", 1, 5), "setup projects an interruptible hold")
+	var frozen: Dictionary = action_state.snapshot()
+	var frozen_revision: int = action_state.revision()
+	action_state.advance_buffer_frame()
+	_suite.assert_true(action_state.project_weapon_phase(&"WINDUP", 3, 6), "live state drifts after freeze")
+	_suite.assert_true(action_state.consume_buffered_input(&"dash"), "live buffer drifts after freeze")
+	_suite.assert_true(action_state.revision() > frozen_revision, "setup advances beyond the frozen participant revision")
+	_suite.assert_true(action_state.can_restore_snapshot(frozen), "exact earlier transaction snapshot validates before install")
+	_suite.assert_true(action_state.restore_transaction_snapshot(frozen), "transaction rollback installs the complete frozen state")
+	_suite.assert_equal(action_state.snapshot(), frozen, "rollback restores every field byte-for-byte")
+	_suite.assert_equal(action_state.revision(), frozen_revision, "rollback restores the exact frozen revision without incrementing")
+	action_state.advance_buffer_frame()
+	_suite.assert_equal(
+		action_state.revision(),
+		frozen_revision + 1,
+		"the next real mutation continues from the restored revision"
+	)
+
+
+func _test_transaction_snapshot_validation_fails_closed() -> void:
+	var action_state = PlayerActionStateScript.new()
+	action_state.buffer_input(&"dash", 5)
+	_suite.assert_true(action_state.project_weapon_phase(&"RECOVERY", 2, 8, 4), "setup creates a complete valid snapshot")
+	var valid: Dictionary = action_state.snapshot()
+	var invalid_snapshots: Array[Dictionary] = []
+
+	var missing_field := valid.duplicate(true)
+	missing_field.erase("buffers")
+	invalid_snapshots.append(missing_field)
+	var unknown_field := valid.duplicate(true)
+	unknown_field["unexpected"] = true
+	invalid_snapshots.append(unknown_field)
+	var wrong_schema := valid.duplicate(true)
+	wrong_schema["schema_version"] = 2
+	invalid_snapshots.append(wrong_schema)
+	var invalid_revision := valid.duplicate(true)
+	invalid_revision["revision"] = -1
+	invalid_snapshots.append(invalid_revision)
+	var future_revision := valid.duplicate(true)
+	future_revision["revision"] = action_state.revision() + 1
+	invalid_snapshots.append(future_revision)
+	var invalid_frame := valid.duplicate(true)
+	invalid_frame["frame"] = -1
+	invalid_snapshots.append(invalid_frame)
+	var invalid_buffers := valid.duplicate(true)
+	invalid_buffers["buffers"] = {&"dash": int(valid["frame"])}
+	invalid_snapshots.append(invalid_buffers)
+	var invalid_state := valid.duplicate(true)
+	invalid_state["current_state"] = 999
+	invalid_snapshots.append(invalid_state)
+	var invalid_timing := valid.duplicate(true)
+	invalid_timing["state_frame"] = int(valid["state_duration_frames"])
+	invalid_snapshots.append(invalid_timing)
+	var invalid_cancel := valid.duplicate(true)
+	invalid_cancel["cancel_from_frame"] = int(valid["state_duration_frames"])
+	invalid_snapshots.append(invalid_cancel)
+	var invalid_projection := valid.duplicate(true)
+	invalid_projection["weapon_phase"] = &"ACTIVE"
+	invalid_snapshots.append(invalid_projection)
+	var invalid_projection_type := valid.duplicate(true)
+	invalid_projection_type["weapon_projection_active"] = 1
+	invalid_snapshots.append(invalid_projection_type)
+
+	for index: int in range(invalid_snapshots.size()):
+		var before: Dictionary = action_state.snapshot()
+		_suite.assert_true(
+			not action_state.can_restore_snapshot(invalid_snapshots[index]),
+			"invalid transaction snapshot %d fails preflight" % index
+		)
+		_suite.assert_true(
+			not action_state.restore_transaction_snapshot(invalid_snapshots[index]),
+			"invalid transaction snapshot %d fails restore" % index
+		)
+		_suite.assert_equal(action_state.snapshot(), before, "failed transaction restore %d has no side effect" % index)

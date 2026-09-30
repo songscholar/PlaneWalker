@@ -131,6 +131,44 @@ func reset_all() -> void:
 	_held_frames.clear()
 
 
+func runtime_snapshot() -> Dictionary:
+	return {
+		"active_actions": _active_actions.duplicate(true),
+		"held_frames": _held_frames.duplicate(true),
+	}
+
+
+func restore_runtime_snapshot(value: Dictionary) -> bool:
+	if not _valid_runtime_snapshot(value):
+		return false
+	_active_actions = (value["active_actions"] as Dictionary).duplicate(true)
+	_held_frames = (value["held_frames"] as Dictionary).duplicate(true)
+	return runtime_snapshot() == value
+
+
+func _valid_runtime_snapshot(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, ["active_actions", "held_frames"]):
+		return false
+	if not value["active_actions"] is Dictionary or not value["held_frames"] is Dictionary:
+		return false
+	var active_actions := value["active_actions"] as Dictionary
+	var held_frames := value["held_frames"] as Dictionary
+	if active_actions.size() != held_frames.size():
+		return false
+	for action_value: Variant in active_actions.keys():
+		var action_id := StringName(str(action_value))
+		if (
+			not SEMANTIC_ACTIONS.has(action_id)
+			or typeof(active_actions[action_value]) != TYPE_BOOL
+			or not bool(active_actions[action_value])
+			or not held_frames.has(action_value)
+			or typeof(held_frames[action_value]) != TYPE_INT
+			or int(held_frames[action_value]) < 0
+		):
+			return false
+	return true
+
+
 func _normalize_press_edge(action_id: StringName, raw_edge: StringName) -> Dictionary:
 	if raw_edge != &"pressed":
 		return {}

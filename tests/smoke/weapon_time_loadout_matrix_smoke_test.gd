@@ -33,32 +33,6 @@ const TIME_PAIRS := [
 const MAX_ACTION_FRAMES := 240
 
 
-class RewindRecorderStub:
-	extends Node
-
-	var _snapshot_available := true
-
-	func has_snapshot() -> bool:
-		return _snapshot_available
-
-	func prepare_rewind_transaction() -> Dictionary:
-		if not _snapshot_available:
-			return {}
-		return {"target_snapshot": {"position": Vector2.ZERO}}
-
-	func restore_player_state(_snapshot: Dictionary) -> bool:
-		return _snapshot_available
-
-	func consume_oldest_snapshot() -> Dictionary:
-		if not _snapshot_available:
-			return {}
-		_snapshot_available = false
-		return {"position": Vector2.ZERO}
-
-	func clear_snapshots() -> void:
-		_snapshot_available = false
-
-
 var _suite
 var _profiles: Dictionary = {}
 var _time_started: Dictionary = {}
@@ -123,9 +97,8 @@ func _run_case(
 	manager.time_rift_duration = 0.02
 	manager.time_accelerate_duration = 0.02
 	if time_pair.has("rewind"):
-		var recorder := RewindRecorderStub.new()
-		player.add_child(recorder)
-		player.rewind_recorder = recorder
+		player.rewind_recorder.clear_snapshots()
+		player.rewind_recorder._record_snapshot()
 
 	var ready_presentation: Dictionary = player.weapon_presentation_snapshot()
 	_suite.assert_equal(ready_presentation.get("weapon_id"), weapon_id, "%s presentation exposes the equipped weapon" % label)
@@ -725,6 +698,9 @@ func _case_label(weapon_id: String, time_pair: Array) -> String:
 func _free_player(player: Node) -> void:
 	if player != null and is_instance_valid(player):
 		player.cancel_transient_actions()
+		var health: Node = player.get_node("HealthComponent")
+		if not (health.get("_active_invulnerability_tokens") as Dictionary).is_empty():
+			await get_tree().create_timer(0.55).timeout
 		player.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame

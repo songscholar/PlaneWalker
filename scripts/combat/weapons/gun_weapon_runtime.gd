@@ -42,6 +42,9 @@ const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
 	&"runtime_snapshot",
 	&"can_restore_runtime_snapshot",
 	&"restore_runtime_snapshot",
+	&"cancel_for_gameplay_rewind",
+	&"restore_gameplay_rewind_snapshot_for_rollback",
+	&"gameplay_rewind_committed_payload_guard",
 ]
 const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"apply",
@@ -490,6 +493,85 @@ func cancel_action(token: int, _reason: StringName) -> void:
 		return
 	_adapter.call("cancel_profile_action")
 	_clear_active_action()
+
+
+func cancel_for_gameplay_rewind(
+	token: int,
+	_reason: StringName,
+	_hold_runtime_snapshot: Dictionary = {}
+) -> bool:
+	if token > 0 and token != _active_token:
+		return false
+	var guard := gameplay_rewind_committed_payload_guard()
+	if not bool(_adapter.call("cancel_for_gameplay_rewind")):
+		return false
+	_clear_active_action()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	return snapshot()
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(runtime_snapshot: Dictionary) -> bool:
+	if not _is_configured() or not _valid_restore_snapshot(runtime_snapshot):
+		return false
+	var payload_guard := gameplay_rewind_committed_payload_guard()
+	if not payload_guard.get("adapter") is Dictionary:
+		return false
+	var adapter_snapshot := runtime_snapshot["adapter_snapshot"] as Dictionary
+	var before := snapshot()
+	var adapter_target := _gameplay_rewind_adapter_target(
+		adapter_snapshot,
+		payload_guard["adapter"] as Dictionary
+	)
+	if not bool(_adapter.call("restore_gameplay_rewind_snapshot_for_rollback", adapter_target)):
+		return false
+	_active_token = int(runtime_snapshot["active_token"])
+	_active_phase = StringName(str(runtime_snapshot["active_phase"]))
+	_active_plan = (runtime_snapshot["active_plan"] as Dictionary).duplicate(true)
+	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
+	_committed_definition = (runtime_snapshot["committed_definition"] as Dictionary).duplicate(true)
+	_live_hold_context = (runtime_snapshot["live_hold_context"] as Dictionary).duplicate(true)
+	_reload_confirmed = bool(runtime_snapshot["reload_confirmed"])
+	_reload_perfect = bool(runtime_snapshot["reload_perfect"])
+	_reload_frame = int(runtime_snapshot["reload_frame"])
+	if snapshot() == runtime_snapshot:
+		return true
+	_adapter.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		_gameplay_rewind_adapter_target(
+			before["adapter_snapshot"] as Dictionary,
+			payload_guard["adapter"] as Dictionary
+		)
+	)
+	_apply_snapshot_fields(before)
+	return false
+
+
+func _gameplay_rewind_adapter_target(
+	adapter_snapshot: Dictionary,
+	committed_payload_guard: Dictionary
+) -> Dictionary:
+	return {
+		"profile_action": (adapter_snapshot["profile_action"] as Dictionary).duplicate(true),
+		"profile_action_released": bool(adapter_snapshot["profile_action_released"]),
+		"prepared_projectiles": (adapter_snapshot["prepared_projectiles"] as Array).duplicate(true),
+		"action_claims_by_token": (adapter_snapshot["action_claims_by_token"] as Dictionary).duplicate(true),
+		"committed_payload_guard": committed_payload_guard.duplicate(true),
+	}
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	var adapter_value: Variant = _adapter.call("gameplay_rewind_committed_payload_guard")
+	return {
+		"adapter": (adapter_value as Dictionary).duplicate(true) if adapter_value is Dictionary else {},
+		"ammo": _ammo,
+		"time_load_source": str(_time_load_source),
+		"time_load_remaining_frames": _time_load_remaining_frames,
+		"last_runtime_frame": _last_runtime_frame,
+		"claimed_rewind_generations": _claimed_rewind_generations.duplicate(),
+	}
 
 
 func finish_action(token: int) -> void:

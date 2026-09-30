@@ -15,32 +15,6 @@ const LOADOUTS := [
 ]
 
 
-class RewindRecorderStub:
-	extends Node
-
-	var _snapshot_available := true
-
-	func has_snapshot() -> bool:
-		return _snapshot_available
-
-	func prepare_rewind_transaction() -> Dictionary:
-		if not _snapshot_available:
-			return {}
-		return {"target_snapshot": {"position": Vector2.ZERO}}
-
-	func restore_player_state(_snapshot: Dictionary) -> bool:
-		return _snapshot_available
-
-	func consume_oldest_snapshot() -> Dictionary:
-		if not _snapshot_available:
-			return {}
-		_snapshot_available = false
-		return {"position": Vector2.ZERO}
-
-	func clear_snapshots() -> void:
-		_snapshot_available = false
-
-
 var _suite
 var _time_started: Dictionary = {}
 var _time_ended: Dictionary = {}
@@ -122,9 +96,8 @@ func _certify_pair(pair: Array) -> void:
 	manager.time_rift_duration = 0.04
 	manager.time_accelerate_duration = 0.04
 	if pair.has("rewind"):
-		var recorder := RewindRecorderStub.new()
-		player.add_child(recorder)
-		player.rewind_recorder = recorder
+		player.rewind_recorder.clear_snapshots()
+		player.rewind_recorder._record_snapshot()
 
 	var baselines: Dictionary = {}
 	for ability_id: String in ABILITY_IDS:
@@ -206,6 +179,9 @@ func _certify_pair(pair: Array) -> void:
 	_suite.assert_true(get_tree().get_nodes_in_group("time_rifts").is_empty(), "%s leaves no Rift node" % label)
 
 	var counts_before_free := _fact_total()
+	var health: Node = player.get_node("HealthComponent")
+	if not (health.get("_active_invulnerability_tokens") as Dictionary).is_empty():
+		await get_tree().create_timer(0.55).timeout
 	player.queue_free()
 	await get_tree().process_frame
 	await get_tree().create_timer(0.08).timeout

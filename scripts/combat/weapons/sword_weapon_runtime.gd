@@ -130,6 +130,9 @@ const REQUIRED_ADAPTER_METHODS: Array[StringName] = [
 	&"finish_attack",
 	&"cancel_attack",
 	&"reset_combo",
+	&"cancel_for_gameplay_rewind",
+	&"restore_gameplay_rewind_snapshot_for_rollback",
+	&"gameplay_rewind_committed_payload_guard",
 ]
 const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"apply",
@@ -484,6 +487,65 @@ func cancel_action(token: int, _reason: StringName) -> void:
 		return
 	_adapter.call("cancel_attack")
 	_clear_active_action()
+
+
+func cancel_for_gameplay_rewind(
+	token: int,
+	_reason: StringName,
+	_hold_runtime_snapshot: Dictionary = {}
+) -> bool:
+	if token > 0 and token != _active_token:
+		return false
+	var guard := gameplay_rewind_committed_payload_guard()
+	if not bool(_adapter.call("cancel_for_gameplay_rewind")):
+		return false
+	_clear_active_action()
+	return gameplay_rewind_committed_payload_guard() == guard
+
+
+func gameplay_rewind_snapshot() -> Dictionary:
+	return snapshot()
+
+
+func restore_gameplay_rewind_snapshot_for_rollback(runtime_snapshot: Dictionary) -> bool:
+	if (
+		not _is_configured()
+		or not _valid_restore_snapshot(runtime_snapshot)
+	):
+		return false
+	var before := snapshot()
+	var adapter_snapshot := (runtime_snapshot["adapter"] as Dictionary).duplicate(true)
+	if not bool(_adapter.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		{
+			"profile": adapter_snapshot,
+			"committed_payload_guard": gameplay_rewind_committed_payload_guard(),
+		}
+	)):
+		return false
+	_active_token = int(runtime_snapshot["active_token"])
+	_active_phase = StringName(str(runtime_snapshot["active_phase"]))
+	_active_plan = (runtime_snapshot["active_plan"] as Dictionary).duplicate(true)
+	_modifier_snapshot = (runtime_snapshot["modifier_snapshot"] as Dictionary).duplicate(true)
+	if snapshot() == runtime_snapshot:
+		return true
+	_adapter.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		{
+			"profile": (before["adapter"] as Dictionary).duplicate(true),
+			"committed_payload_guard": gameplay_rewind_committed_payload_guard(),
+		}
+	)
+	_active_token = int(before["active_token"])
+	_active_phase = StringName(str(before["active_phase"]))
+	_active_plan = (before["active_plan"] as Dictionary).duplicate(true)
+	_modifier_snapshot = (before["modifier_snapshot"] as Dictionary).duplicate(true)
+	return false
+
+
+func gameplay_rewind_committed_payload_guard() -> Dictionary:
+	var value: Variant = _adapter.call("gameplay_rewind_committed_payload_guard")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 
 func finish_action(token: int) -> void:

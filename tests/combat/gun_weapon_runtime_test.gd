@@ -1,6 +1,8 @@
 extends Node
 
 const GunWeaponRuntimeScript := preload("res://scripts/combat/weapons/gun_weapon_runtime.gd")
+const GunWeaponScript := preload("res://scripts/combat/gun_weapon.gd")
+const HealthComponentScript := preload("res://scripts/combat/health_component.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const WeaponActionCoordinatorScript := preload("res://scripts/combat/weapons/weapon_action_coordinator.gd")
 const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_modifier_state.gd")
@@ -21,6 +23,8 @@ class FakeGunAdapter extends Node2D:
 	var cancel_count: int = 0
 	var finish_count: int = 0
 	var reset_count: int = 0
+	var gameplay_rewind_restore_calls: int = 0
+	var drift_gameplay_rewind_restore_on_calls: Array[int] = []
 	var staged_definition: Dictionary = {}
 	var released_definition: Dictionary = {}
 	var _active: bool = false
@@ -66,6 +70,35 @@ class FakeGunAdapter extends Node2D:
 	func reset_runtime_state() -> void:
 		reset_count += 1
 		_clear_action()
+
+
+	func cancel_for_gameplay_rewind() -> bool:
+		_clear_action()
+		return true
+
+
+	func restore_gameplay_rewind_snapshot_for_rollback(value: Dictionary) -> bool:
+		gameplay_rewind_restore_calls += 1
+		if (
+			not value.get("profile_action") is Dictionary
+			or typeof(value.get("profile_action_released")) != TYPE_BOOL
+			or not value.get("prepared_projectiles") is Array
+			or not value.get("action_claims_by_token") is Dictionary
+			or value.get("committed_payload_guard") != gameplay_rewind_committed_payload_guard()
+		):
+			return false
+		var action := value["profile_action"] as Dictionary
+		_active = not action.is_empty()
+		_released = bool(value["profile_action_released"])
+		staged_definition = action.duplicate(true)
+		released_definition = action.duplicate(true) if _released else {}
+		if drift_gameplay_rewind_restore_on_calls.has(gameplay_rewind_restore_calls):
+			staged_definition["restore_drift"] = true
+		return true
+
+
+	func gameplay_rewind_committed_payload_guard() -> Dictionary:
+		return {}
 
 
 	func runtime_snapshot() -> Dictionary:
@@ -174,10 +207,21 @@ func _run() -> void:
 	_test_ultimate_hold_boundary_and_time_load_amplification()
 	_test_four_time_interactions_and_chrono_warden_conversion()
 	_test_snapshot_restore_reset_and_modifier_boundaries()
+	_test_failed_gameplay_rewind_restore_compensates_adapter_and_runtime()
+	await _test_real_adapter_gameplay_rewind_preserves_committed_projectile_identity()
 	_suite.finish(get_tree())
 
 
 func _test_catalog_profile_is_strict() -> void:
+	for method_name: StringName in [
+		&"cancel_for_gameplay_rewind",
+		&"restore_gameplay_rewind_snapshot_for_rollback",
+		&"gameplay_rewind_committed_payload_guard",
+	]:
+		_suite.assert_true(
+			GunWeaponRuntimeScript.REQUIRED_ADAPTER_METHODS.has(method_name),
+			"Gun Runtime configuration requires %s" % method_name
+		)
 	var fixture := _fixture()
 	_suite.assert_true(bool(fixture.get("configured", false)), "authoritative gun_launch_v1 fixture configures")
 	var runtime: RefCounted = fixture["runtime"]
@@ -799,6 +843,120 @@ func _test_snapshot_restore_reset_and_modifier_boundaries() -> void:
 	_suite.assert_equal(reset.get("claimed_rewind_generations"), [], "reset clears one-shot Rewind claims")
 	_free_fixture(fixture)
 
+
+func _test_failed_gameplay_rewind_restore_compensates_adapter_and_runtime() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var adapter: FakeGunAdapter = fixture["gun"]
+	var target_plan: Dictionary = runtime.plan_intent(
+		_release_intent(&"weapon_primary", 0),
+		_context(8801)
+	).get("plan", {})
+	_suite.assert_true(
+		bool(runtime.commit_action(target_plan, 101).get("ok", false)),
+		"Gameplay Rewind failure fixture stages one target action"
+	)
+	var target: Dictionary = runtime.gameplay_rewind_snapshot()
+	runtime.cancel_action(101, &"gameplay_rewind_failure_fixture")
+	var before: Dictionary = runtime.gameplay_rewind_snapshot()
+	adapter.drift_gameplay_rewind_restore_on_calls = [1]
+	_suite.assert_true(
+		not runtime.restore_gameplay_rewind_snapshot_for_rollback(target),
+		"adapter post-restore drift rejects the Gameplay Rewind target"
+	)
+	_suite.assert_equal(
+		adapter.gameplay_rewind_restore_calls,
+		2,
+		"failed Gameplay Rewind restore compensates the adapter exactly once"
+	)
+	_suite.assert_equal(
+		runtime.gameplay_rewind_snapshot(),
+		before,
+		"failed Gameplay Rewind restore preserves the exact pre-call runtime and adapter state"
+	)
+	_free_fixture(fixture)
+
+
+func _test_real_adapter_gameplay_rewind_preserves_committed_projectile_identity() -> void:
+	var fixture := _real_adapter_fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var gun: Node = fixture["gun"]
+	_suite.assert_true(bool(fixture["configured"]), "real Gun Runtime and adapter fixture configures")
+	if not bool(fixture["configured"]):
+		runtime.reset_runtime_state(&"real_adapter_fixture_cleanup")
+		_free_fixture(fixture)
+		await get_tree().process_frame
+		return
+	var committed_plan: Dictionary = runtime.plan_intent(
+		_release_intent(&"weapon_primary", 0),
+		_context(8802)
+	).get("plan", {})
+	_suite.assert_true(
+		bool(runtime.commit_action(committed_plan, 102).get("ok", false)),
+		"real Gun Runtime stages the committed projectile fixture"
+	)
+	runtime.on_phase_enter(committed_plan, &"WINDUP", 102)
+	runtime.on_phase_enter(committed_plan, &"ACTIVE", 102)
+	await get_tree().process_frame
+	var committed_nodes: Array[Node] = gun.owned_projectiles_for_test()
+	_suite.assert_equal(committed_nodes.size(), 1, "real Gun adapter owns one committed projectile")
+	if committed_nodes.is_empty():
+		runtime.reset_runtime_state(&"real_adapter_fixture_cleanup")
+		_free_fixture(fixture)
+		await get_tree().process_frame
+		return
+	var committed_projectile := committed_nodes[0]
+	var committed_instance_id := committed_projectile.get_instance_id()
+	runtime.finish_action(102)
+
+	var prepared_plan: Dictionary = runtime.plan_intent(
+		_release_intent(&"weapon_primary", 0),
+		_context(8803)
+	).get("plan", {})
+	_suite.assert_true(
+		bool(runtime.commit_action(prepared_plan, 103).get("ok", false)),
+		"real Gun Runtime stages a second action-local projectile"
+	)
+	_suite.assert_equal(gun.prepared_projectile_count_for_test(), 1, "rollback fixture owns one prepared projectile")
+	var before: Dictionary = runtime.gameplay_rewind_snapshot()
+	var guard_before: Dictionary = runtime.gameplay_rewind_committed_payload_guard()
+	_suite.assert_true(
+		runtime.cancel_for_gameplay_rewind(103, &"real_adapter_gameplay_rewind"),
+		"real Gun Gameplay Rewind cancel succeeds"
+	)
+	_suite.assert_equal(gun.prepared_projectile_count_for_test(), 0, "Gameplay Rewind cancel clears only prepared action-local state")
+	committed_nodes = gun.owned_projectiles_for_test()
+	_suite.assert_true(
+		committed_nodes.size() == 1 and committed_nodes[0] == committed_projectile,
+		"Gameplay Rewind cancel preserves the identical committed projectile Node"
+	)
+	_suite.assert_equal(
+		runtime.gameplay_rewind_committed_payload_guard(),
+		guard_before,
+		"Gameplay Rewind cancel preserves committed Gun identity, execution, and claims"
+	)
+	_suite.assert_true(
+		runtime.restore_gameplay_rewind_snapshot_for_rollback(before),
+		"real Gun Gameplay Rewind rollback restores action-local state"
+	)
+	_suite.assert_equal(runtime.gameplay_rewind_snapshot(), before, "real Gun rollback restores exact runtime and adapter bytes")
+	_suite.assert_equal(gun.prepared_projectile_count_for_test(), 1, "real Gun rollback recreates the prepared action-local projectile")
+	committed_nodes = gun.owned_projectiles_for_test()
+	_suite.assert_true(
+		committed_nodes.size() == 1
+		and committed_nodes[0] == committed_projectile
+		and committed_nodes[0].get_instance_id() == committed_instance_id,
+		"real Gun rollback never respawns or replaces the committed projectile"
+	)
+	_suite.assert_equal(
+		runtime.gameplay_rewind_committed_payload_guard(),
+		guard_before,
+		"real Gun rollback preserves the committed payload guard exactly"
+	)
+	runtime.reset_runtime_state(&"real_adapter_fixture_cleanup")
+	_free_fixture(fixture)
+	await get_tree().process_frame
+
 func _fixture() -> Dictionary:
 	var owner := Node2D.new()
 	var gun := FakeGunAdapter.new()
@@ -815,6 +973,37 @@ func _fixture() -> Dictionary:
 	return {
 		"owner": owner,
 		"gun": gun,
+		"profile": profile,
+		"modifiers": modifiers,
+		"runtime": runtime,
+		"configured": configured,
+	}
+
+
+func _real_adapter_fixture() -> Dictionary:
+	var owner := Node2D.new()
+	owner.name = "RealGunRuntimeOwner"
+	add_child(owner)
+	var health = HealthComponentScript.new()
+	health.name = "HealthComponent"
+	health.max_hp = 100.0
+	owner.add_child(health)
+	var gun = GunWeaponScript.new()
+	gun.name = "GunWeapon"
+	gun.owner_path = NodePath("..")
+	owner.add_child(gun)
+	var definition := _catalog_profile("gun_launch_v1")
+	var profile = WeaponRuntimeProfileScript.new()
+	var parsed: Dictionary = profile.configure(definition)
+	var modifiers = WeaponModifierStateScript.new()
+	var capabilities := PackedStringArray(definition.get("capabilities", []))
+	var configured_modifiers := modifiers.configure(capabilities, _modifier_bounds(capabilities))
+	var runtime = GunWeaponRuntimeScript.new()
+	var configured := bool(parsed.get("ok", false)) and configured_modifiers and runtime.configure(owner, profile, modifiers)
+	return {
+		"owner": owner,
+		"gun": gun,
+		"health": health,
 		"profile": profile,
 		"modifiers": modifiers,
 		"runtime": runtime,

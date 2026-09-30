@@ -260,6 +260,13 @@ func _test_runtime_snapshot_restores_prepared_and_released_projectiles() -> void
 		return
 	owned[0].global_position = Vector2(220.0, 96.0)
 	owned[0].advance_execution_for_test(11)
+	var gameplay_rewind_before: Dictionary = gun.gameplay_rewind_snapshot()
+	var payload_guard_before: Dictionary = gun.gameplay_rewind_committed_payload_guard()
+	_suite.assert_true(gun.cancel_for_gameplay_rewind(), "Gameplay Rewind cancels Gun action-local state")
+	_suite.assert_equal(gun.gameplay_rewind_committed_payload_guard(), payload_guard_before, "Gameplay Rewind preserves the released Gun projectile identity and claims")
+	_suite.assert_true(gun.restore_gameplay_rewind_snapshot_for_rollback(gameplay_rewind_before), "Gun rollback restores action-local state")
+	_suite.assert_equal(gun.gameplay_rewind_snapshot(), gameplay_rewind_before, "Gun rollback restores exact adapter bytes")
+	_suite.assert_equal(gun.gameplay_rewind_committed_payload_guard(), payload_guard_before, "Gun rollback preserves the same projectile instance")
 	var released: Dictionary = gun.runtime_snapshot()
 	gun.cancel_profile_action()
 	await get_tree().process_frame

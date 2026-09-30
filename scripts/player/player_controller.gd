@@ -97,6 +97,7 @@ var _weapon_replay_events: Array[Dictionary] = []
 var _weapon_replay_capture_sequence: int = 0
 var _applying_weapon_replay_event: bool = false
 var _weapon_replay_fact_baseline: Dictionary = {}
+var _weapon_replay_capture_invalid_reason: StringName = &""
 var _weapon_intent_router: RefCounted = WeaponIntentRouterScript.new()
 var _run_id: StringName = &""
 
@@ -636,6 +637,7 @@ func reset_runtime_state() -> void:
 	_weapon_replay_capture_sequence = 0
 	_applying_weapon_replay_event = false
 	_weapon_replay_fact_baseline.clear()
+	_weapon_replay_capture_invalid_reason = &""
 	_weapon_intent_router.call("reset_all")
 	_buffered_time_skill = &""
 	_dash_cooldown_remaining = 0.0
@@ -755,11 +757,168 @@ func restore_rewind_safe_action_state(state: Dictionary) -> bool:
 	_dash_velocity = Vector2.ZERO
 	_buffered_time_skill = &""
 	_weapon_intent_router.call("reset_all")
-	_clear_owned_player_arrows()
-	_clear_owned_player_projectiles()
-	_clear_owned_staff_payloads()
-	_clear_owned_gauntlets_payloads()
 	return action_state.force_safe_reset()
+
+
+func rewind_transaction_snapshot() -> Dictionary:
+	if (
+		not action_state.has_method("snapshot")
+		or weapon_action_coordinator == null
+		or not weapon_action_coordinator.has_method("gameplay_rewind_snapshot")
+		or not _weapon_intent_router.has_method("runtime_snapshot")
+	):
+		return {}
+	var action_value: Variant = action_state.call("snapshot")
+	var coordinator_value: Variant = weapon_action_coordinator.call("gameplay_rewind_snapshot")
+	var intent_value: Variant = _weapon_intent_router.call("runtime_snapshot")
+	if not action_value is Dictionary or not coordinator_value is Dictionary or not intent_value is Dictionary:
+		return {}
+	return {
+		"run_id": _run_id,
+		"position": global_position,
+		"velocity": velocity,
+		"facing": _last_move_direction,
+		"dash_velocity": _dash_velocity,
+		"knockback_velocity": _knockback_velocity,
+		"buffered_time_skill": _buffered_time_skill,
+		"combo_timeout_frames": _weapon_combo_timeout_frames,
+		"runtime_frame": _runtime_frame,
+		"action_state": (action_value as Dictionary).duplicate(true),
+		"coordinator": (coordinator_value as Dictionary).duplicate(true),
+		"intent_router": (intent_value as Dictionary).duplicate(true),
+	}
+
+
+func can_prepare_gameplay_rewind() -> bool:
+	return (
+		_run_id != &""
+		and not health.dead
+		and action_state.current_state != PlayerActionStateScript.State.DEAD
+		and weapon_action_coordinator != null
+		and weapon_action_coordinator.has_method("cancel_for_gameplay_rewind")
+		and weapon_action_coordinator.has_method("gameplay_rewind_snapshot")
+		and weapon_action_coordinator.has_method("restore_gameplay_rewind_snapshot_for_rollback")
+	)
+
+
+func install_gameplay_rewind_state(target_snapshot: Dictionary) -> bool:
+	if not can_prepare_gameplay_rewind() or not _valid_rewind_target_snapshot(target_snapshot):
+		return false
+	if not bool(weapon_action_coordinator.call("cancel_for_gameplay_rewind")):
+		return false
+	if not action_state.force_safe_reset():
+		return false
+	_weapon_combo_timeout_frames = 0
+	_dash_velocity = Vector2.ZERO
+	_knockback_velocity = Vector2.ZERO
+	_buffered_time_skill = &""
+	_weapon_intent_router.call("reset_all")
+	global_position = target_snapshot["position"]
+	velocity = target_snapshot["velocity"]
+	restore_rewind_facing(target_snapshot["facing"])
+	return (
+		global_position == target_snapshot["position"]
+		and velocity == target_snapshot["velocity"]
+		and _last_move_direction == (target_snapshot["facing"] as Vector2).normalized()
+		and action_state.current_state == PlayerActionStateScript.State.FREE
+	)
+
+
+func restore_rewind_transaction_snapshot(value: Dictionary) -> bool:
+	if not _valid_rewind_transaction_snapshot(value):
+		return false
+	if not bool(weapon_action_coordinator.call(
+		"restore_gameplay_rewind_snapshot_for_rollback",
+		(value["coordinator"] as Dictionary).duplicate(true)
+	)):
+		return false
+	if not bool(action_state.call(
+		"restore_transaction_snapshot",
+		(value["action_state"] as Dictionary).duplicate(true)
+	)):
+		return false
+	if not bool(_weapon_intent_router.call(
+		"restore_runtime_snapshot",
+		(value["intent_router"] as Dictionary).duplicate(true)
+	)):
+		return false
+	global_position = value["position"]
+	velocity = value["velocity"]
+	_last_move_direction = value["facing"]
+	_dash_velocity = value["dash_velocity"]
+	_knockback_velocity = value["knockback_velocity"]
+	_buffered_time_skill = StringName(str(value["buffered_time_skill"]))
+	_weapon_combo_timeout_frames = int(value["combo_timeout_frames"])
+	_runtime_frame = int(value["runtime_frame"])
+	return rewind_transaction_snapshot() == value
+
+
+func gameplay_rewind_payload_guard() -> Dictionary:
+	if weapon_action_coordinator == null or not weapon_action_coordinator.has_method("committed_payload_guard"):
+		return {}
+	var value: Variant = weapon_action_coordinator.call("committed_payload_guard")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func gameplay_rewind_commit_matches(
+	target_snapshot: Dictionary,
+	committed_payload_guard: Dictionary
+) -> bool:
+	return (
+		_valid_rewind_target_snapshot(target_snapshot)
+		and global_position == target_snapshot["position"]
+		and velocity == target_snapshot["velocity"]
+		and action_state.current_state == PlayerActionStateScript.State.FREE
+		and gameplay_rewind_payload_guard() == committed_payload_guard
+	)
+
+
+func _valid_rewind_target_snapshot(value: Dictionary) -> bool:
+	if (
+		StringName(str(value.get("run_id", ""))) != _run_id
+		or not value.get("position") is Vector2
+		or not value.get("velocity") is Vector2
+		or not value.get("facing") is Vector2
+		or (value.get("facing") as Vector2).length_squared() <= 0.001
+	):
+		return false
+	return true
+
+
+func _valid_rewind_transaction_snapshot(value: Dictionary) -> bool:
+	if value.size() != 12:
+		return false
+	for field: String in [
+		"run_id", "position", "velocity", "facing", "dash_velocity",
+		"knockback_velocity", "buffered_time_skill", "combo_timeout_frames",
+		"runtime_frame", "action_state", "coordinator", "intent_router",
+	]:
+		if not value.has(field):
+			return false
+	if (
+		not value["action_state"] is Dictionary
+		or not action_state.has_method("can_restore_snapshot")
+		or not bool(action_state.call(
+			"can_restore_snapshot",
+			(value["action_state"] as Dictionary).duplicate(true)
+		))
+	):
+		return false
+	return (
+		StringName(str(value["run_id"])) == _run_id
+		and value["position"] is Vector2
+		and value["velocity"] is Vector2
+		and value["facing"] is Vector2
+		and value["dash_velocity"] is Vector2
+		and value["knockback_velocity"] is Vector2
+		and typeof(value["buffered_time_skill"]) in [TYPE_STRING, TYPE_STRING_NAME]
+		and typeof(value["combo_timeout_frames"]) == TYPE_INT
+		and int(value["combo_timeout_frames"]) >= 0
+		and typeof(value["runtime_frame"]) == TYPE_INT
+		and int(value["runtime_frame"]) >= 0
+		and value["coordinator"] is Dictionary
+		and value["intent_router"] is Dictionary
+	)
 
 
 func get_rewind_facing() -> Vector2:
@@ -827,7 +986,8 @@ func weapon_presentation_snapshot() -> Dictionary:
 
 func weapon_replay_snapshot() -> Dictionary:
 	if (
-		weapon_action_coordinator == null
+		_weapon_replay_capture_invalid_reason != &""
+		or weapon_action_coordinator == null
 		or not weapon_action_coordinator.has_method("snapshot")
 		or loadout_runtime == null
 		or not loadout_runtime.has_method("weapon_profile_snapshot")
@@ -881,7 +1041,24 @@ func weapon_replay_snapshot() -> Dictionary:
 	}
 
 
+func weapon_replay_capture_status() -> Dictionary:
+	if _weapon_replay_capture_invalid_reason == &"":
+		return {"ok": true, "code": &"OK"}
+	return {
+		"ok": false,
+		"code": _weapon_replay_capture_invalid_reason,
+	}
+
+
+func mark_gameplay_rewind_replay_boundary() -> void:
+	_weapon_replay_capture_invalid_reason = &"GAMEPLAY_REWIND_UNSUPPORTED"
+	_weapon_replay_fact_baseline.clear()
+
+
 func _refresh_weapon_replay_fact_baseline() -> void:
+	if _weapon_replay_capture_invalid_reason != &"":
+		_weapon_replay_fact_baseline.clear()
+		return
 	var snapshot := weapon_replay_snapshot()
 	_weapon_replay_fact_baseline = snapshot.duplicate(true) if not snapshot.is_empty() else {}
 

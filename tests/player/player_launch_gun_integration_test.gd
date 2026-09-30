@@ -240,8 +240,10 @@ func _test_lifecycle_clears_only_owned_gun_projectiles() -> void:
 
 	owned = _projectile_fixture(player, gun)
 	_suite.assert_true(player.restore_rewind_safe_action_state({"action_state": "FREE"}), "rewind-safe restore succeeds")
-	_suite.assert_true(owned.is_queued_for_deletion(), "rewind restore clears owned Gun projectiles")
+	_suite.assert_true(not owned.is_queued_for_deletion(), "rewind restore preserves owned Gun projectiles")
 	_suite.assert_true(not unrelated.is_queued_for_deletion(), "rewind restore preserves unrelated projectiles")
+	await get_tree().process_frame
+	owned.queue_free()
 	await get_tree().process_frame
 
 	owned = _projectile_fixture(player, gun)
