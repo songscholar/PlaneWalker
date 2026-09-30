@@ -6,8 +6,8 @@
 - Applies To: Shared weapon action authority, Sword, Bow, Gun, Staff, Gauntlets, semantic input, profiles, facts, HUD, presentation, time interactions, Boss integration, simulations, and certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`, `docs/superpowers/plans/2026-09-29-plane-walker-p10-candidate-loadouts.md`
-- Last Verified: 2026-09-29
-- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; P11D Launch Gun is locally certified through `e92e7f4`; P11E Launch Staff is locally certified through `f1f022d`; P11F and later gates remain active
+- Last Verified: 2026-09-30
+- Implementation Status: P11A and P11B are locally certified; P11C Bow Candidate is certified through `0cf27da`; Launch Bow L2 is locally certified through `372455d`; P11D Launch Gun is locally certified through `e92e7f4`; P11E Launch Staff is locally certified through `f1f022d`; P11F Launch Gauntlets is locally certified through `2cfd31c`; P11G and later gates remain active
 - Exit Gate: Five coordinator-owned weapons, M1/Bow parity, 30 loadout combinations, deterministic simulations, full repository validation, and honest local evidence all pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use test-first implementation, one integration owner for shared files, focused commits, and a two-stage correctness/regression review for each task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -525,28 +525,30 @@ Implementation commit `f1f022d` completed the authoritative Staff Profile, Mana 
 - Consumes: `gauntlets_launch_v1`, Dash completion token, hit confirmations, damage notifications, time context, and Boss poise boundary.
 - Produces: five-hit chain, cross-chain Combo tiers, heavy/counter/skill/ultimate, controlled launch/poise, HUD, facts, feedback, and snapshots.
 
-- [ ] **Step 1: Write chain/Combo separation and boundary tests**
+- [x] **Step 1: Write chain/Combo separation and boundary tests**
 
 Cover five action definitions, 120-frame Combo timeout, tier edges 4/5, 9/10, 14/15, 19/20, 29/30, damage reset, Dash retention, counter 7/8/9, action-token target deduplication, and non-recursive echoes.
 
-- [ ] **Step 2: Implement combo state and action runtime**
+- [x] **Step 2: Implement combo state and action runtime**
 
 Attack-speed tiers affect only future plans. Critical/time-damage/resource modifiers are frozen at commit. Unsupported Boss launch becomes deterministic displacement or poise contribution.
 
-- [ ] **Step 3: Implement four time interactions and cleanup**
+- [x] **Step 3: Implement four time interactions and cleanup**
 
 Stop extensions cap at 30 frames per source; Rewind counter window lasts 120 frames; Accelerate echoes every third eligible primary hit without recursion; Rift consumes immutable high-Combo modifiers.
 
-- [ ] **Step 4: Run Gauntlets, damage, Boss, feedback, reset, and replay gates**
+- [x] **Step 4: Run Gauntlets, damage, Boss, feedback, reset, and replay gates**
 
 Run: `./tools/run_tests.sh --filter "gauntlets|damage_info|health_component|chrono_warden|combat_feedback|rewind|replay"`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -- scripts/combat/weapons/gauntlets_weapon_runtime.gd scripts/combat/weapons/gauntlets_combo_state.gd tests/combat/gauntlets_weapon_runtime_test.gd tests/combat/gauntlets_weapon_runtime_test.tscn tests/combat/gauntlets_combo_state_test.gd tests/combat/gauntlets_combo_state_test.tscn scripts/combat/damage_info.gd scripts/combat/health_component.gd scripts/enemies autoload/combat_feedback.gd
 git commit -m "feat(weapon): add complete gauntlets runtime"
 ```
+
+Execution record: P11F Launch Gauntlets is certified at implementation commit `2cfd31c`. The final Gauntlets gate passed `6 / 6` with zero leak warnings at `planewalker-tests.gKEXxs`. The final repository gate passed at `planewalker-validation.vp6gcQ`, including `103 / 103` Godot scenes, documentation `30 / 30` with zero violations, localization `8 / 8`, playtest data `13 / 13`, M1 release gate `27 / 27`, coverage contracts `5 / 5`, export contracts `37 / 37` in contract mode, and clean bootstrap/import checks. The only registered suite warning is `reward_system_smoke`. Final reviews reported no P0/P1 blocker. Formal product status remains `M1 Candidate — External Validation Pending`, authentic external playtests remain `0 / 20`, and replay plus cross-weapon player-entry UI remain P11G scope.
 
 ### Task 9: P11G cross-weapon UI, modifiers, replay, accessibility, and legacy removal
 
