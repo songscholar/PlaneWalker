@@ -8,6 +8,7 @@ const SwordWeaponRuntimeScript := preload("res://scripts/combat/weapons/sword_we
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_modifier_state.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
+const PlayerScene := preload("res://scenes/player/player.tscn")
 
 const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runtime_profiles.json"
 const PROFILE_ID := "sword_launch_v1"
@@ -37,6 +38,47 @@ class PayloadTarget:
 			received_tags.append(str(tag))
 
 
+class GuardOwner:
+	extends Node2D
+	var active_adapter: Node
+	var character_decision: Dictionary = {}
+
+	func damage_defense_decisions(damage_info: RefCounted) -> Dictionary:
+		var weapon_decision: Dictionary = {}
+		if active_adapter != null and active_adapter.has_method("plan_damage_defense"):
+			var decision_value: Variant = active_adapter.call("plan_damage_defense", damage_info)
+			if decision_value is Dictionary:
+				weapon_decision = (decision_value as Dictionary).duplicate(true)
+		return {
+			"weapon": weapon_decision,
+			"character": character_decision.duplicate(true),
+		}
+
+	func commit_damage_defense(decisions: Dictionary, resolution: RefCounted) -> bool:
+		if (
+			active_adapter == null
+			or not active_adapter.has_method("can_commit_damage_defense")
+			or not active_adapter.has_method("commit_damage_defense")
+			or not decisions.get("weapon", {}) is Dictionary
+			or not decisions.get("character", {}) is Dictionary
+		):
+			return false
+		var weapon_decision: Dictionary = decisions["weapon"]
+		if weapon_decision.is_empty():
+			return not (decisions["character"] as Dictionary).is_empty()
+		if not bool(active_adapter.call(
+			"can_commit_damage_defense",
+			weapon_decision.duplicate(true),
+			resolution
+		)):
+			return false
+		return bool(active_adapter.call(
+			"commit_damage_defense",
+			weapon_decision.duplicate(true),
+			resolution
+		))
+
+
 func _ready() -> void:
 	call_deferred("_run")
 
@@ -45,11 +87,18 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	await _test_launch_profile_identity_and_primary_hold_release()
 	await _test_launch_resources_guard_and_counter_transaction()
+	await _test_guard_commit_is_bound_and_exactly_once()
+	await _test_normal_guard_composes_with_character_defense()
+	await _test_player_sword_guard_commits_through_health()
+	await _test_guard_commit_rejects_stale_context()
+	await _test_player_rejects_guard_commit_after_weapon_switch()
+	await _test_player_ignores_unequipped_sword_guard()
 	await _test_launch_resource_exhaustion_is_atomic()
 	await _test_launch_light_chain_progresses_and_wraps()
 	await _test_all_launch_semantic_slots_commit_and_release()
 	await _test_launch_zone_and_wave_execute_distinct_payloads()
 	await _test_launch_all_active_phases_restore_exactly()
+	await _test_player_active_hitbox_restore_preserves_damage_identity()
 	await _test_launch_cancel_reset_snapshot_restore_and_presentation()
 	_suite.finish(get_tree())
 
@@ -106,7 +155,7 @@ func _test_all_launch_semantic_slots_commit_and_release() -> void:
 	_suite.assert_true(bool(runtime.commit_action(guard_plan, 201).get("ok", false)), "guard commits")
 	runtime.on_phase_enter(guard_plan, &"WINDUP", 201)
 	runtime.on_phase_enter(guard_plan, &"ACTIVE", 201)
-	var guard_damage := DamageInfoScript.new(50.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	var guard_damage := _damage_plan(50.0, 201)
 	fixture["health"].take_damage(guard_damage)
 	runtime.on_phase_enter(guard_plan, &"RECOVERY", 201)
 	runtime.finish_action(201)
@@ -165,7 +214,29 @@ func _test_launch_resources_guard_and_counter_transaction() -> void:
 	runtime.on_phase_enter(guard_plan, &"ACTIVE", 401)
 	runtime.advance_runtime_frame(3)
 	var hp_before := float(health.current_hp)
-	var incoming := DamageInfoScript.new(50.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	var incoming := _damage_plan(50.0, 401)
+	var guard_result_before: Dictionary = sword.call("last_guard_result_for_test")
+	var first_decision: Dictionary = sword.call("plan_damage_defense", incoming)
+	var second_decision: Dictionary = sword.call("plan_damage_defense", incoming)
+	var decision_fields: Array[String] = []
+	for key: Variant in first_decision.keys():
+		decision_fields.append(str(key))
+	decision_fields.sort()
+	_suite.assert_equal(
+		decision_fields,
+		["commit_context", "guard_kind", "multiplier", "prevent_reason", "prevented"],
+		"Guard defense plan exposes only the closed five-field envelope"
+	)
+	_suite.assert_equal(first_decision, second_decision, "Guard defense planning is deterministic")
+	_suite.assert_equal(
+		sword.call("last_guard_result_for_test"),
+		guard_result_before,
+		"Guard defense planning does not commit the last result"
+	)
+	_suite.assert_true(
+		(sword.call("drain_launch_effect_events") as Array).is_empty(),
+		"Guard defense planning enqueues no Intent event"
+	)
 	var applied: float = health.take_damage(incoming)
 	_suite.assert_close(applied, 25.0, "active Guard applies the authored 0.5 block multiplier")
 	_suite.assert_close(float(health.current_hp), hp_before - 25.0, "Guard changes authoritative player HP")
@@ -207,14 +278,328 @@ func _test_launch_resources_guard_and_counter_transaction() -> void:
 	_suite.assert_true(bool(runtime.commit_action(perfect_plan, 403).get("ok", false)), "Perfect Guard commits from reset resources")
 	runtime.on_phase_enter(perfect_plan, &"ACTIVE", 403)
 	var perfect_hp_before := float(health.current_hp)
-	var perfect_damage := DamageInfoScript.new(50.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	health.take_damage(perfect_damage)
-	_suite.assert_close(float(health.current_hp), perfect_hp_before, "Perfect Guard refunds the engine damage floor and preserves HP")
+	var perfect_damage := _damage_plan(50.0, 403)
+	var perfect_applied: float = health.take_damage(perfect_damage)
+	_suite.assert_close(perfect_applied, 0.0, "Perfect Guard prevents the hit before the engine damage floor")
+	_suite.assert_close(float(health.current_hp), perfect_hp_before, "Perfect Guard preserves HP without a refund")
 	var perfect_result: Dictionary = sword.call("last_guard_result_for_test")
 	_suite.assert_true(bool(perfect_result.get("perfect", false)), "first active Guard frame is a real perfect block window")
 	_suite.assert_close(float(perfect_result.get("blocked_damage", 0.0)), 50.0, "Perfect Guard blocks the full authored hit")
+	_suite.assert_true(not perfect_result.has("refunded_damage"), "Perfect Guard never records damage-then-heal compensation")
 	_suite.assert_close(float((runtime.snapshot().get("resources", {}).get("intent", {}) as Dictionary).get("current", -1.0)), 60.0, "Perfect Guard grants blocked damage plus authored Intent bonus")
 	runtime.finish_action(403)
+	await _free_player(player)
+
+
+func _test_guard_commit_is_bound_and_exactly_once() -> void:
+	var fixture := await _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var health: Node = fixture["health"]
+	var sword: Node = fixture["sword"]
+	if not fixture["configured"]:
+		await _free_player(fixture["player"])
+		return
+
+	var guard_plan: Dictionary = runtime.plan_intent(
+		_intent(&"weapon_secondary", &"pressed"),
+		{}
+	).get("plan", {})
+	_suite.assert_true(
+		bool(runtime.commit_action(guard_plan, 405).get("ok", false)),
+		"identity-bound Guard commits"
+	)
+	runtime.on_phase_enter(guard_plan, &"ACTIVE", 405)
+	runtime.advance_runtime_frame(3)
+	var incoming := _damage_plan(50.0, 405)
+	var decision: Dictionary = sword.call("plan_damage_defense", incoming)
+	var mismatched_inputs: Array[RefCounted] = [
+		_damage_plan_with_identity(50.0, &"other-run", &"player", &"sword-launch-enemy", 405, 405, ["enemy:melee"]),
+		_damage_plan_with_identity(50.0, &"sword-launch-test", &"other-player", &"sword-launch-enemy", 405, 405, ["enemy:melee"]),
+		_damage_plan_with_identity(50.0, &"sword-launch-test", &"player", &"other-enemy", 405, 405, ["enemy:melee"]),
+		_damage_plan_with_identity(50.0, &"sword-launch-test", &"player", &"sword-launch-enemy", 406, 405, ["enemy:melee"]),
+		_damage_plan_with_identity(50.0, &"sword-launch-test", &"player", &"sword-launch-enemy", 405, 406, ["enemy:melee"]),
+		_damage_plan_with_identity(50.0, &"sword-launch-test", &"player", &"sword-launch-enemy", 405, 405, ["enemy:melee", "variant:other"]),
+	]
+	for index: int in range(mismatched_inputs.size()):
+		var mismatched_resolution: RefCounted = health.call(
+			"_resolve_damage",
+			mismatched_inputs[index],
+			decision,
+			{}
+		)
+		_suite.assert_true(
+			not bool(sword.call("commit_damage_defense", decision, mismatched_resolution)),
+			"Guard rejects mismatched damage identity field %d" % index
+		)
+	_suite.assert_equal(
+		sword.call("last_guard_result_for_test"),
+		{},
+		"mismatched damage transactions commit no Guard result"
+	)
+	_suite.assert_true(
+		(sword.call("drain_launch_effect_events") as Array).is_empty(),
+		"mismatched damage transactions emit no Guard event"
+	)
+
+	var resolution: RefCounted = health.call(
+		"_resolve_damage",
+		incoming,
+		decision,
+		{}
+	)
+	_suite.assert_true(
+		bool(sword.call("commit_damage_defense", decision, resolution)),
+		"Guard accepts its exact damage transaction"
+	)
+	_suite.assert_true(
+		not bool(sword.call("commit_damage_defense", decision, resolution)),
+		"Guard consumes one resolution exactly once"
+	)
+	_suite.assert_equal(
+		(sword.call("drain_launch_effect_events") as Array).size(),
+		1,
+		"duplicate Guard commit enqueues exactly one event"
+	)
+	runtime.on_phase_enter(guard_plan, &"RECOVERY", 405)
+	runtime.finish_action(405)
+	await _free_player(fixture["player"])
+
+
+func _test_normal_guard_composes_with_character_defense() -> void:
+	var cases: Array[Dictionary] = [
+		{
+			"name": "character multiplier",
+			"decision": {"multiplier": 0.5, "guard_kind": &"guardian_normal"},
+			"expected_damage": 12.5,
+		},
+		{
+			"name": "character prevention",
+			"decision": {
+				"prevented": true,
+				"multiplier": 1.0,
+				"prevent_reason": &"guardian_perfect",
+				"guard_kind": &"guardian_perfect",
+				"commit_context": {},
+			},
+			"expected_damage": 0.0,
+		},
+	]
+	for index: int in range(cases.size()):
+		var fixture := await _fixture()
+		var runtime: RefCounted = fixture["runtime"]
+		var player: GuardOwner = fixture["player"]
+		var health: Node = fixture["health"]
+		var sword: Node = fixture["sword"]
+		if not fixture["configured"]:
+			await _free_player(player)
+			continue
+		var token := 410 + index
+		var guard_plan: Dictionary = runtime.plan_intent(
+			_intent(&"weapon_secondary", &"pressed"),
+			{}
+		).get("plan", {})
+		runtime.commit_action(guard_plan, token)
+		runtime.on_phase_enter(guard_plan, &"ACTIVE", token)
+		runtime.advance_runtime_frame(3)
+		player.character_decision = (cases[index]["decision"] as Dictionary).duplicate(true)
+		var applied := float(health.take_damage(_damage_plan(50.0, token)))
+		_suite.assert_close(
+			applied,
+			float(cases[index]["expected_damage"]),
+			"normal Sword Guard composes with %s" % cases[index]["name"]
+		)
+		var result: Dictionary = sword.call("last_guard_result_for_test")
+		_suite.assert_close(
+			float(result.get("blocked_damage", -1.0)),
+			25.0,
+			"Sword commits its own stage before %s" % cases[index]["name"]
+		)
+		_suite.assert_equal(
+			(sword.call("drain_launch_effect_events") as Array).size(),
+			1,
+			"Sword emits one Guard event with %s" % cases[index]["name"]
+		)
+		runtime.on_phase_enter(guard_plan, &"RECOVERY", token)
+		runtime.finish_action(token)
+		await _free_player(player)
+
+
+func _test_player_sword_guard_commits_through_health() -> void:
+	var player := PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	await get_tree().process_frame
+	_suite.assert_true(
+		player.configure_loadout(_loadout_config("sword", PROFILE_ID)),
+		"real Player defense fixture equips Sword"
+	)
+	var sword: Node = player.get_node("SwordWeapon")
+	var guard_definition := _guard_adapter_definition()
+	sword.call("begin_profile_attack", guard_definition)
+	sword.call("enter_profile_active_phase", guard_definition)
+	sword.call("advance_launch_state", 3)
+	var health: Node = player.get_node("HealthComponent")
+	var hp_before := float(health.current_hp)
+	var applied := float(health.take_damage(_damage_plan(50.0, 419)))
+	_suite.assert_close(applied, 25.0, "real Player normal Guard applies the committed Sword multiplier")
+	_suite.assert_close(float(health.current_hp), hp_before - 25.0, "real Player normal Guard subtracts finalized damage once")
+	_suite.assert_close(
+		float((sword.call("last_guard_result_for_test") as Dictionary).get("blocked_damage", -1.0)),
+		25.0,
+		"real Player normal Guard commits its Intent-producing result"
+	)
+	var runtime_snapshot: Dictionary = player.weapon_runtime.snapshot()
+	_suite.assert_close(
+		float((runtime_snapshot.get("resources", {}).get("intent", {}) as Dictionary).get("current", -1.0)),
+		25.0,
+		"real Player normal Guard converts its single committed event into Intent"
+	)
+	_suite.assert_true(
+		(sword.call("drain_launch_effect_events") as Array).is_empty(),
+		"real Player runtime consumes the committed Guard event exactly once"
+	)
+	await _free_player(player)
+
+
+func _test_guard_commit_rejects_stale_context() -> void:
+	var fixture := await _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var health: Node = fixture["health"]
+	var sword: Node = fixture["sword"]
+	if not fixture["configured"]:
+		await _free_player(fixture["player"])
+		return
+
+	var guard_plan: Dictionary = runtime.plan_intent(
+		_intent(&"weapon_secondary", &"pressed"),
+		{}
+	).get("plan", {})
+	_suite.assert_true(
+		bool(runtime.commit_action(guard_plan, 420).get("ok", false)),
+		"stale-context Guard commits"
+	)
+	runtime.on_phase_enter(guard_plan, &"ACTIVE", 420)
+	runtime.advance_runtime_frame(3)
+	var incoming := _damage_plan(50.0, 420)
+	var decision: Dictionary = sword.call("plan_damage_defense", incoming)
+	var resolution: RefCounted = health.call(
+		"_resolve_damage",
+		incoming,
+		decision,
+		{}
+	)
+	_suite.assert_true(resolution != null, "stale-context probe produces a typed resolution")
+	var guard_snapshot: Dictionary = runtime.snapshot()
+	runtime.reset_runtime_state(&"stale_guard_probe")
+	_suite.assert_true(runtime.restore_snapshot(guard_snapshot), "Guard snapshot restores the same generation and frame")
+	_suite.assert_equal(runtime.snapshot(), guard_snapshot, "Guard gameplay snapshot restores exactly")
+	_suite.assert_true(
+		not bool(sword.call("commit_damage_defense", decision, resolution)),
+		"Guard rejects a pre-restore decision at the same generation and frame"
+	)
+	_suite.assert_equal(
+		sword.call("last_guard_result_for_test"),
+		{},
+		"rejected stale Guard commit changes no result state"
+	)
+	_suite.assert_true(
+		(sword.call("drain_launch_effect_events") as Array).is_empty(),
+		"rejected stale Guard commit emits no Intent event"
+	)
+	runtime.on_phase_enter(guard_plan, &"RECOVERY", 420)
+	runtime.finish_action(420)
+	await _free_player(fixture["player"])
+
+
+func _test_player_rejects_guard_commit_after_weapon_switch() -> void:
+	var player := PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	await get_tree().process_frame
+	_suite.assert_true(
+		player.configure_loadout(_loadout_config("sword", PROFILE_ID)),
+		"weapon-switch fixture equips Sword"
+	)
+	var sword: Node = player.get_node("SwordWeapon")
+	var guard_definition := _guard_adapter_definition()
+	sword.call("begin_profile_attack", guard_definition)
+	sword.call("enter_profile_active_phase", guard_definition)
+	sword.call("advance_launch_state", 3)
+	var incoming := _damage_plan(50.0, 430)
+	var decisions: Dictionary = player.damage_defense_decisions(incoming)
+	var health: Node = player.get_node("HealthComponent")
+	var resolution: RefCounted = health.call(
+		"_resolve_damage",
+		incoming,
+		decisions.get("weapon", {}),
+		decisions.get("character", {})
+	)
+	var mixed_decisions := decisions.duplicate(true)
+	mixed_decisions["character"] = {
+		"prevented": false,
+		"multiplier": 0.5,
+		"prevent_reason": &"",
+		"guard_kind": &"guardian_normal",
+		"commit_context": {"character_id": &"time_guardian"},
+	}
+	_suite.assert_true(
+		not bool(player.commit_damage_defense(mixed_decisions, resolution)),
+		"Player rejects an unbound character defense before committing Sword state"
+	)
+	_suite.assert_equal(
+		sword.call("last_guard_result_for_test"),
+		{},
+		"unbound character defense cannot partially commit Sword Guard"
+	)
+	_suite.assert_true(
+		player.loadout_runtime.configure(_loadout_config("bow", "bow_launch_v1")),
+		"weapon-switch probe changes the equipped weapon after planning"
+	)
+	_suite.assert_true(
+		not bool(player.commit_damage_defense(decisions, resolution)),
+		"Player rejects a Sword defense commit after switching to Bow"
+	)
+	_suite.assert_equal(
+		sword.call("last_guard_result_for_test"),
+		{},
+		"plan-then-switch commits no Sword Guard result"
+	)
+	_suite.assert_true(
+		(sword.call("drain_launch_effect_events") as Array).is_empty(),
+		"plan-then-switch emits no Sword Guard event"
+	)
+	await _free_player(player)
+
+
+func _test_player_ignores_unequipped_sword_guard() -> void:
+	var player := PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	await get_tree().process_frame
+	_suite.assert_true(
+		player.configure_loadout(_loadout_config("bow", "bow_launch_v1")),
+		"unequipped-Sword fixture equips the authoritative Launch Bow"
+	)
+	var sword: Node = player.get_node("SwordWeapon")
+	var guard_definition := _guard_adapter_definition()
+	_suite.assert_true(
+		not sword.call("begin_profile_attack", guard_definition).is_empty(),
+		"permanent Sword adapter can hold dirty Guard state while unequipped"
+	)
+	_suite.assert_true(
+		bool(sword.call("enter_profile_active_phase", guard_definition)),
+		"dirty unequipped Sword enters its Guard active phase"
+	)
+	var health: Node = player.get_node("HealthComponent")
+	var hp_before := float(health.current_hp)
+	var applied := float(health.take_damage(_damage_plan(50.0, 404)))
+	_suite.assert_close(applied, 50.0, "Player ignores defense from the unequipped permanent Sword node")
+	_suite.assert_close(float(health.current_hp), hp_before - 50.0, "unequipped Sword changes no incoming damage")
+	_suite.assert_equal(
+		sword.call("last_guard_result_for_test"),
+		{},
+		"unequipped Sword commits no Guard result"
+	)
 	await _free_player(player)
 
 
@@ -431,6 +816,99 @@ func _test_launch_all_active_phases_restore_exactly() -> void:
 	await _free_player(fixture["player"])
 
 
+func _test_player_active_hitbox_restore_preserves_damage_identity() -> void:
+	var source := await _spawn_launch_player("SwordIdentityRestoreSource")
+	var target := await _spawn_launch_player("SwordIdentityRestoreTarget")
+	if source == null or target == null:
+		await _free_player(source)
+		await _free_player(target)
+		return
+
+	_suite.assert_true(
+		await _drive_player_hitbox_action(source),
+		"identity source reaches its first ACTIVE Sword hitbox"
+	)
+	await _drive_player_to_ready(source)
+	_suite.assert_true(
+		await _drive_player_hitbox_action(source),
+		"identity source reaches a second ACTIVE Sword hitbox"
+	)
+	var source_damage: RefCounted = source.get_node("SwordWeapon/Hitbox").get("_active_damage_info")
+	_suite.assert_true(source_damage != null, "identity source exposes active immutable damage")
+	var expected_action_token := int(source_damage.get("action_token")) if source_damage != null else 0
+	var expected_attack_generation := int(source_damage.get("attack_generation")) if source_damage != null else 0
+	_suite.assert_true(expected_action_token > 1, "identity fixture captures a non-initial action token")
+	_suite.assert_true(expected_attack_generation > 1, "identity fixture captures a non-initial attack generation")
+	var active_snapshot: Dictionary = source.weapon_action_coordinator.snapshot()
+
+	_suite.assert_true(
+		target.weapon_action_coordinator.restore_snapshot(active_snapshot),
+		"target coordinator restores the authoritative ACTIVE Sword snapshot"
+	)
+	_suite.assert_equal(
+		target.weapon_action_coordinator.snapshot(),
+		active_snapshot,
+		"ACTIVE Sword coordinator restore remains exact"
+	)
+	var restored_damage: RefCounted = target.get_node("SwordWeapon/Hitbox").get("_active_damage_info")
+	_suite.assert_true(restored_damage != null, "restored ACTIVE Sword recreates immutable damage")
+	if restored_damage != null:
+		_suite.assert_equal(
+			int(restored_damage.get("action_token")),
+			expected_action_token,
+			"restored ACTIVE Sword preserves the captured action token"
+		)
+		_suite.assert_equal(
+			int(restored_damage.get("attack_generation")),
+			expected_attack_generation,
+			"restored ACTIVE Sword preserves the captured attack generation"
+		)
+	var before_rejected_restore: Dictionary = target.weapon_action_coordinator.snapshot()
+	var malformed := active_snapshot.duplicate(true)
+	var malformed_runtime: Dictionary = malformed["runtime"]
+	var malformed_adapter: Dictionary = malformed_runtime["adapter"]
+	malformed_adapter["damage_action_token"] = 0
+	_suite.assert_true(
+		not target.weapon_action_coordinator.restore_snapshot(malformed),
+		"ACTIVE Sword restore rejects a missing frozen damage token"
+	)
+	_suite.assert_equal(
+		target.weapon_action_coordinator.snapshot(),
+		before_rejected_restore,
+		"rejected frozen damage identity restore remains atomic"
+	)
+	for mismatch_field: String in ["damage_action_token", "damage_attack_generation"]:
+		var positive_mismatch := active_snapshot.duplicate(true)
+		var mismatch_runtime: Dictionary = positive_mismatch["runtime"]
+		var mismatch_adapter: Dictionary = mismatch_runtime["adapter"]
+		mismatch_adapter[mismatch_field] = int(mismatch_adapter[mismatch_field]) + 97
+		_suite.assert_true(
+			not target.weapon_action_coordinator.restore_snapshot(positive_mismatch),
+			"ACTIVE Sword restore rejects positive mismatched %s" % mismatch_field
+		)
+		_suite.assert_equal(
+			target.weapon_action_coordinator.snapshot(),
+			before_rejected_restore,
+			"positive mismatched %s rejection remains atomic" % mismatch_field
+		)
+	var damage_after_rejection: RefCounted = target.get_node("SwordWeapon/Hitbox").get("_active_damage_info")
+	_suite.assert_true(damage_after_rejection != null, "rejected restore keeps the active damage payload")
+	if damage_after_rejection != null:
+		_suite.assert_equal(
+			int(damage_after_rejection.get("action_token")),
+			expected_action_token,
+			"rejected restore preserves the installed damage token"
+		)
+		_suite.assert_equal(
+			int(damage_after_rejection.get("attack_generation")),
+			expected_attack_generation,
+			"rejected restore preserves the installed attack generation"
+		)
+
+	await _free_player(source)
+	await _free_player(target)
+
+
 func _test_launch_cancel_reset_snapshot_restore_and_presentation() -> void:
 	var fixture := await _fixture()
 	var runtime: RefCounted = fixture["runtime"]
@@ -493,7 +971,7 @@ func _assert_action_lifecycle(runtime: RefCounted, plan: Dictionary, token: int,
 
 
 func _fixture() -> Dictionary:
-	var player := Node2D.new()
+	var player := GuardOwner.new()
 	player.name = "SwordLaunchTestOwner"
 	player.add_to_group("player")
 	var health = HealthComponentScript.new()
@@ -507,6 +985,7 @@ func _fixture() -> Dictionary:
 	hitbox.name = "Hitbox"
 	sword.add_child(hitbox)
 	player.add_child(sword)
+	player.active_adapter = sword
 	add_child(player)
 	await get_tree().process_frame
 	var profile = WeaponRuntimeProfileScript.new()
@@ -528,14 +1007,123 @@ func _fixture() -> Dictionary:
 	}
 
 
-func _profile_definition() -> Dictionary:
+func _spawn_launch_player(node_name: String) -> Node:
+	var player := PlayerScene.instantiate()
+	player.name = node_name
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	await get_tree().process_frame
+	var configured: bool = bool(player.configure_loadout(_loadout_config("sword", PROFILE_ID)))
+	_suite.assert_true(configured, "%s configures the authoritative Launch Sword" % node_name)
+	if configured:
+		return player
+	await _free_player(player)
+	return null
+
+
+func _drive_player_hitbox_action(player: Node) -> bool:
+	if not player.try_action(&"weapon_primary"):
+		return false
+	if not bool(player.call("_submit_weapon_intent", &"weapon_primary", &"released")):
+		return false
+	var guard := 512
+	while player.weapon_action_coordinator.phase_name() != &"ACTIVE" and guard > 0:
+		player.advance_action_frame()
+		guard -= 1
+	return guard > 0 and player.get_node("SwordWeapon/Hitbox").is_active()
+
+
+func _drive_player_to_ready(player: Node) -> void:
+	var guard := 512
+	while player.weapon_action_coordinator.phase_name() != &"READY" and guard > 0:
+		player.advance_action_frame()
+		guard -= 1
+	_suite.assert_true(guard > 0, "Sword identity fixture returns to READY")
+
+
+func _profile_definition(profile_id: String = PROFILE_ID) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PROFILE_CATALOG_PATH))
 	if not parsed is Array:
 		return {}
 	for definition_value: Variant in parsed as Array:
-		if definition_value is Dictionary and str((definition_value as Dictionary).get("id", "")) == PROFILE_ID:
+		if definition_value is Dictionary and str((definition_value as Dictionary).get("id", "")) == profile_id:
 			return (definition_value as Dictionary).duplicate(true)
 	return {}
+
+
+func _loadout_config(weapon_id: String, profile_id: String) -> Dictionary:
+	return {
+		"schema_version": 1,
+		"milestone": "LAUNCH",
+		"character_id": "wanderer",
+		"weapon_id": weapon_id,
+		"enabled_time_skills": ["stop", "rewind"],
+		"difficulty": "normal",
+		"seed": 20260930,
+		"weapon_profile": _profile_definition(profile_id),
+	}
+
+
+func _guard_adapter_definition() -> Dictionary:
+	var profile := _profile_definition(PROFILE_ID)
+	for action_value: Variant in profile.get("actions", []):
+		if not action_value is Dictionary or str((action_value as Dictionary).get("action_id", "")) != "guard":
+			continue
+		var payload_id := str((action_value as Dictionary).get("payload_id", ""))
+		if payload_id.is_empty():
+			return {}
+		for payload_value: Variant in profile.get("payloads", []):
+			if not payload_value is Dictionary or str((payload_value as Dictionary).get("payload_id", "")) != payload_id:
+				continue
+			var payload: Dictionary = payload_value
+			var parameters: Dictionary = (payload.get("parameters", {}) as Dictionary).duplicate(true)
+			return {
+				"heavy": false,
+				"finisher": false,
+				"multiplier": 0.0,
+				"knockback": 0.0,
+				"tags": ["weapon:sword", "action:guard", "payload:guard"],
+				"damaging": false,
+				"advance_combo": false,
+				"payload_kind": "guard",
+				"payload_parameters": parameters,
+			}
+	return {}
+
+
+func _damage_plan(amount: float, token: int) -> RefCounted:
+	return _damage_plan_with_identity(
+		amount,
+		&"sword-launch-test",
+		&"player",
+		&"sword-launch-enemy",
+		token,
+		token,
+		["enemy:melee"]
+	)
+
+
+func _damage_plan_with_identity(
+	amount: float,
+	run_id: StringName,
+	target_id: StringName,
+	hostile_source_id: StringName,
+	attack_generation: int,
+	action_token: int,
+	tags: Array
+) -> RefCounted:
+	return DamageInfoScript.from_plan({
+		"run_id": run_id,
+		"target_id": target_id,
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": attack_generation,
+		"action_token": action_token,
+		"amount": amount,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": self,
+		"tags": tags.duplicate(),
+	})
 
 
 func _intent(semantic: StringName, edge: StringName, held_frames: int = 0) -> Dictionary:

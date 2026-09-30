@@ -136,10 +136,35 @@ func _apply_damage(enemy: Node, amount: float, damage_tag: String) -> void:
 		return
 	if enemy_health.has_method("is_alive") and not enemy_health.is_alive():
 		return
-	var damage_info := DamageInfoScript.new(amount, DamageInfoScript.DamageType.TIME, self, owner_entity)
-	damage_info.can_crit = false
-	damage_info.tags.append(damage_tag)
+	var damage_info = DamageInfoScript.from_plan({
+		"run_id": &"runtime",
+		"target_id": _damage_target_id(enemy),
+		"hostile_source_id": StringName("player:rewind_echo:%d" % maxi(1, _echo_start_count)),
+		"attack_generation": maxi(1, _echo_start_count * 100000 + int(roundf(_elapsed * 60.0))),
+		"hit_index": maxi(0, int(roundf(_elapsed * 60.0))),
+		"action_token": maxi(1, _echo_start_count),
+		"amount": amount,
+		"damage_type": DamageInfoScript.DamageType.TIME,
+		"source": self,
+		"attacker": owner_entity,
+		"can_crit": false,
+		"tags": [damage_tag],
+	})
+	if damage_info == null:
+		return
 	enemy_health.take_damage(damage_info)
+
+
+func _damage_target_id(target: Node) -> StringName:
+	if target != null and target.has_meta("stable_target_id"):
+		var value: Variant = target.get_meta("stable_target_id")
+		if typeof(value) == TYPE_INT and int(value) > 0:
+			return StringName("target:%d" % int(value))
+	if target != null and target.has_meta("encounter_spawn_id"):
+		var spawn_id := str(target.get_meta("encounter_spawn_id")).strip_edges()
+		if not spawn_id.is_empty() and spawn_id.length() <= 56:
+			return StringName("target:%s" % spawn_id)
+	return &"pending_target"
 
 
 func _enemies_near_path() -> Array[Node]:

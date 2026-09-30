@@ -336,18 +336,30 @@ func _deliver_damage(target: Node) -> float:
 		var ratio := float(split.get(damage_name, 0.0))
 		if ratio <= 0.0:
 			continue
-		var info := DamageInfoScript.new(base_attack * multiplier * ratio, _damage_type_from_name(damage_name), source, owner_entity)
-		info.action_token = action_token
-		info.source_generation = generation
-		info.can_crit = false
-		info.tags = [
-			"weapon:gauntlets",
-			"action:%s" % source_action_id,
-			"attack:gauntlets_zone",
-			"non_recursive:combo",
-			"non_recursive:energy",
-			"non_recursive:stop_extension",
-		]
+		var info = DamageInfoScript.from_plan({
+			"run_id": &"runtime",
+			"target_id": _damage_target_id(target),
+			"hostile_source_id": StringName("player:gauntlets_zone:%d:%d" % [action_token, generation]),
+			"attack_generation": maxi(1, generation + _execution_frame),
+			"hit_index": outcome_index,
+			"action_token": action_token,
+			"amount": base_attack * multiplier * ratio,
+			"damage_type": _damage_type_from_name(damage_name),
+			"source": source,
+			"attacker": owner_entity,
+			"can_crit": false,
+			"tags": [
+				"weapon:gauntlets",
+				"action:%s" % source_action_id,
+				"attack:gauntlets_zone",
+				"non_recursive:combo",
+				"non_recursive:energy",
+				"non_recursive:stop_extension",
+			],
+			"source_generation": generation,
+		})
+		if info == null:
+			continue
 		total += _deliver_to_target(target, info)
 	return total
 
@@ -429,6 +441,14 @@ func _stable_target_id(target: Node) -> int:
 		if typeof(value) == TYPE_INT and int(value) > 0:
 			return int(value)
 	return target.get_instance_id()
+
+
+func _damage_target_id(target: Node) -> StringName:
+	if target != null and target.has_meta("stable_target_id"):
+		var value: Variant = target.get_meta("stable_target_id")
+		if typeof(value) == TYPE_INT and int(value) > 0:
+			return StringName("target:%d" % int(value))
+	return &"pending_target"
 
 
 func _target_position(target: Node) -> Vector2:

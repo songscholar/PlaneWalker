@@ -188,6 +188,96 @@ func _weapon_adapter(weapon_id: StringName) -> Node:
 	return _weapon_adapters.get(weapon_id) as Node
 
 
+func weapon_damage_action_identity() -> Dictionary:
+	if weapon_action_coordinator == null or loadout_runtime == null:
+		return {}
+	var action_token := int(weapon_action_coordinator.current_token())
+	var attack_generation := int(_weapon_action_generations_by_token.get(action_token, 0))
+	if action_token <= 0 or attack_generation <= 0:
+		return {}
+	return {
+		"weapon_id": loadout_runtime.weapon_id(),
+		"attack_generation": attack_generation,
+		"action_token": action_token,
+	}
+
+
+func damage_defense_decisions(damage_info: RefCounted) -> Dictionary:
+	var weapon_decision: Dictionary = {}
+	if damage_info != null and loadout_runtime != null:
+		var equipped_weapon_id: StringName = loadout_runtime.weapon_id()
+		var equipped_adapter := _weapon_adapter(equipped_weapon_id)
+		if equipped_adapter != null and equipped_adapter.has_method("plan_damage_defense"):
+			var decision_value: Variant = equipped_adapter.call("plan_damage_defense", damage_info)
+			if decision_value is Dictionary:
+				weapon_decision = (decision_value as Dictionary).duplicate(true)
+				if (
+					not weapon_decision.is_empty()
+					and _planned_defense_weapon_id(weapon_decision) != equipped_weapon_id
+				):
+					weapon_decision = {"invalid_adapter_decision": true}
+			else:
+				weapon_decision = {"invalid_adapter_decision": true}
+	return {
+		"weapon": weapon_decision,
+		"character": {},
+	}
+
+
+func commit_damage_defense(decisions: Dictionary, resolution: RefCounted) -> bool:
+	if (
+		resolution == null
+		or decisions.size() != 2
+		or not decisions.has("weapon")
+		or not decisions.has("character")
+		or not decisions["weapon"] is Dictionary
+		or not decisions["character"] is Dictionary
+		or loadout_runtime == null
+	):
+		return false
+	var weapon_decision: Dictionary = decisions["weapon"]
+	var character_decision: Dictionary = decisions["character"]
+	# P12B installs the character defense runtime in a later isolated gate. Until
+	# that owner exists, a non-empty character stage must fail before any weapon
+	# resource or mastery state is committed.
+	if not character_decision.is_empty():
+		return false
+	if weapon_decision.is_empty():
+		return true
+	var planned_weapon_id := _planned_defense_weapon_id(weapon_decision)
+	var equipped_weapon_id: StringName = loadout_runtime.weapon_id()
+	if planned_weapon_id == &"" or planned_weapon_id != equipped_weapon_id:
+		return false
+	var equipped_adapter := _weapon_adapter(equipped_weapon_id)
+	if (
+		equipped_adapter == null
+		or not equipped_adapter.has_method("can_commit_damage_defense")
+		or not equipped_adapter.has_method("commit_damage_defense")
+	):
+		return false
+	if not bool(equipped_adapter.call(
+		"can_commit_damage_defense",
+		weapon_decision.duplicate(true),
+		resolution
+	)):
+		return false
+	return bool(equipped_adapter.call(
+		"commit_damage_defense",
+		weapon_decision.duplicate(true),
+		resolution
+	))
+
+
+func _planned_defense_weapon_id(decision: Dictionary) -> StringName:
+	var context_value: Variant = decision.get("commit_context", {})
+	if not context_value is Dictionary:
+		return &""
+	var weapon_id_value: Variant = (context_value as Dictionary).get("weapon_id", &"")
+	if typeof(weapon_id_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+		return &""
+	return StringName(str(weapon_id_value))
+
+
 func _reset_weapon_adapters() -> void:
 	for adapter_value: Variant in _weapon_adapters.values():
 		if adapter_value is Node and (adapter_value as Node).has_method("reset_runtime_state"):

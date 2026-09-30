@@ -395,10 +395,13 @@ func _resolve_slam() -> void:
 	if target != null and is_instance_valid(target) and global_position.distance_to(target.global_position) <= slam_radius:
 		var health_component := target.get_node_or_null("HealthComponent")
 		if health_component != null:
-			var damage_info := DamageInfoScript.new(attack * 1.6, DamageInfoScript.DamageType.PHYSICAL, self, self)
-			damage_info.tags = ["boss:slam", "enemy:melee"]
-			damage_info.knockback = _committed_aim_direction * 260.0
-			health_component.take_damage(damage_info)
+			var damage_info := _boss_damage_plan(
+				attack * 1.6,
+				["boss:slam", "enemy:melee"],
+				_committed_aim_direction * 260.0
+			)
+			if damage_info != null:
+				health_component.take_damage(damage_info)
 
 
 func _resolve_melee() -> void:
@@ -410,10 +413,42 @@ func _resolve_melee() -> void:
 	if health_component == null:
 		return
 	_attack_cooldown_remaining = attack_cooldown
-	var damage_info := DamageInfoScript.new(attack, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	damage_info.tags = ["enemy:melee", "boss:melee"]
-	damage_info.knockback = _committed_aim_direction * 180.0
-	health_component.take_damage(damage_info)
+	var damage_info := _boss_damage_plan(
+		attack,
+		["enemy:melee", "boss:melee"],
+		_committed_aim_direction * 180.0
+	)
+	if damage_info != null:
+		health_component.take_damage(damage_info)
+
+
+func _boss_damage_plan(amount: float, tags: Array[String], knockback: Vector2) -> RefCounted:
+	var action_id := _action_name(_action)
+	var generation := maxi(1, int(_action_resolution_counts.get(action_id, 1)))
+	return DamageInfoScript.from_plan({
+		"run_id": "legacy-runtime",
+		"target_id": _boss_damage_identity(target, "player"),
+		"hostile_source_id": _boss_damage_identity(self, "chrono-warden"),
+		"attack_generation": generation,
+		"hit_index": 0,
+		"action_token": generation,
+		"amount": amount,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": self,
+		"can_crit": true,
+		"crit_chance": 0.0,
+		"crit_multiplier": 1.5,
+		"knockback": knockback,
+		"tags": tags,
+		"source_generation": generation,
+		"control_effect": {},
+	})
+
+
+func _boss_damage_identity(node: Node, prefix: String) -> StringName:
+	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
+	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
 
 
 func _summon_fragments() -> void:

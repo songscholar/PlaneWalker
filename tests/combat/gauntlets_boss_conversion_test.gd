@@ -35,10 +35,22 @@ func _test_damage_info_copy_preserves_control_contract() -> void:
 		"DamageInfo copies the Boss conversion identity"
 	)
 	(copied.get("control_effect") as Dictionary)["poise_damage"] = 99.0
+	var copied_tags: Array[String] = copied.get("tags")
+	copied_tags.append("mutated:test")
 	_suite.assert_close(
 		float((original.get("control_effect") as Dictionary).get("poise_damage")),
 		10.0,
 		"copied control payload cannot mutate the committed original"
+	)
+	_suite.assert_equal(
+		copied.get("tags"),
+		["weapon:gauntlets", "action:punch_5", "control:launch"],
+		"copied tag getter cannot mutate the copied DamageInfo"
+	)
+	_suite.assert_equal(
+		original.get("tags"),
+		["weapon:gauntlets", "action:punch_5", "control:launch"],
+		"copied tag mutation cannot alter the committed original"
 	)
 
 
@@ -169,9 +181,6 @@ func _test_dead_target_clears_control_ownership_and_rejects_callbacks() -> void:
 
 
 func _launch_damage(action_token: int, source_generation: int, overrides: Dictionary = {}) -> RefCounted:
-	var damage_info := DamageInfoScript.new(8.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	damage_info.action_token = action_token
-	damage_info.source_generation = source_generation
 	var effect := {
 		"kind": "launch",
 		"conversion_id": "gauntlets_poised_launch",
@@ -185,9 +194,20 @@ func _launch_damage(action_token: int, source_generation: int, overrides: Dictio
 	}
 	for key: Variant in overrides.keys():
 		effect[key] = overrides[key]
-	damage_info.control_effect = effect
-	damage_info.tags = ["weapon:gauntlets", "action:punch_5", "control:launch"]
-	return damage_info
+	return DamageInfoScript.from_plan({
+		"run_id": &"test_run",
+		"target_id": &"boss_fixture",
+		"hostile_source_id": StringName("test:gauntlets:%d:%d" % [action_token, source_generation]),
+		"attack_generation": source_generation,
+		"action_token": action_token,
+		"amount": 8.0,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": self,
+		"tags": ["weapon:gauntlets", "action:punch_5", "control:launch"],
+		"source_generation": source_generation,
+		"control_effect": effect,
+	})
 
 
 func _boss_fixture() -> Dictionary:

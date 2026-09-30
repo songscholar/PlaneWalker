@@ -26,6 +26,7 @@ class RunResultSignalCounter:
 var _failed := false
 var _original_save_path := ""
 var _test_storage_root := ""
+var _damage_plan_sequence := 0
 
 
 func _ready() -> void:
@@ -256,9 +257,15 @@ func _run_hit_feedback_check() -> void:
 
 	var enemy: Node = _nodes_in_group(room.get_node("Enemies").get_children(), "enemies")[0]
 	var floating_layer: CanvasLayer = room.get_node("FloatingTextLayer")
-	var damage_info := DamageInfoScript.new(12.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	damage_info.tags = ["weapon:sword", "attack:heavy"]
-	damage_info.knockback = Vector2.RIGHT * 80.0
+	var damage_info := _test_damage_plan(
+		12.0,
+		DamageInfoScript.DamageType.PHYSICAL,
+		self,
+		self,
+		enemy,
+		["weapon:sword", "attack:heavy"],
+		Vector2.RIGHT * 80.0
+	)
 	enemy.get_node("HealthComponent").take_damage(damage_info)
 	await get_tree().process_frame
 
@@ -289,8 +296,14 @@ func _run_blessing_talent_damage_check() -> void:
 	enemy_health.defense = 0.0
 
 	enemy.apply_weakpoint(0.2, 0.35)
-	var weakpoint_hit := DamageInfoScript.new(10.0, DamageInfoScript.DamageType.PHYSICAL, sword, room_player)
-	weakpoint_hit.tags = ["weapon:sword", "attack:heavy"]
+	var weakpoint_hit := _test_damage_plan(
+		10.0,
+		DamageInfoScript.DamageType.PHYSICAL,
+		sword,
+		room_player,
+		enemy,
+		["weapon:sword", "attack:heavy"]
+	)
 	var weakpoint_damage: float = enemy_health.take_damage(weakpoint_hit)
 	_assert_close(weakpoint_damage, 13.5, "time stop weakpoint increases heavy damage")
 	await get_tree().create_timer(0.22).timeout
@@ -298,8 +311,14 @@ func _run_blessing_talent_damage_check() -> void:
 	sword.heavy_execute_multiplier_bonus = 0.5
 	sword.heavy_execute_threshold = 0.3
 	enemy_health.current_hp = 20.0
-	var execute_hit := DamageInfoScript.new(10.0, DamageInfoScript.DamageType.PHYSICAL, sword, room_player)
-	execute_hit.tags = ["weapon:sword", "attack:heavy", "talent:ruin_execute"]
+	var execute_hit := _test_damage_plan(
+		10.0,
+		DamageInfoScript.DamageType.PHYSICAL,
+		sword,
+		room_player,
+		enemy,
+		["weapon:sword", "attack:heavy", "talent:ruin_execute"]
+	)
 	var execute_damage: float = enemy_health.take_damage(execute_hit)
 	_assert_close(execute_damage, 15.0, "ruin talent increases heavy damage against low hp enemies")
 
@@ -449,7 +468,14 @@ func _run_death_check() -> void:
 	EventBus.run_ended.connect(result_counter.record)
 
 	var room_player: Node = room.get_node("Player")
-	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	var fatal_damage := _test_damage_plan(
+		9999.0,
+		DamageInfoScript.DamageType.PHYSICAL,
+		self,
+		self,
+		room_player,
+		["test:fatal"]
+	)
 	room_player.get_node("HealthComponent").take_damage(fatal_damage)
 	await get_tree().process_frame
 
@@ -486,7 +512,14 @@ func _run_death_overlay_check() -> void:
 	await get_tree().process_frame
 
 	var room_player: Node = main.get_node("CombatRoom01/Player")
-	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
+	var fatal_damage := _test_damage_plan(
+		9999.0,
+		DamageInfoScript.DamageType.PHYSICAL,
+		self,
+		self,
+		room_player,
+		["test:fatal"]
+	)
 	room_player.get_node("HealthComponent").take_damage(fatal_damage)
 	await get_tree().process_frame
 
@@ -577,8 +610,16 @@ func _run_pause_menu_check() -> void:
 	_assert_true(not bool((host.call("runtime_snapshot") as Dictionary).get("suspended", true)), "resume restores the authoritative run")
 	_assert_true(not pause_menu.visible, "resume hides pause menu")
 
-	var fatal_damage := DamageInfoScript.new(9999.0, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	main.get_node("CombatRoom01/Player/HealthComponent").take_damage(fatal_damage)
+	var terminal_player: Node = main.get_node("CombatRoom01/Player")
+	var fatal_damage := _test_damage_plan(
+		9999.0,
+		DamageInfoScript.DamageType.PHYSICAL,
+		self,
+		self,
+		terminal_player,
+		["test:fatal"]
+	)
+	terminal_player.get_node("HealthComponent").take_damage(fatal_damage)
 	await get_tree().process_frame
 	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.DEFEAT, "player death terminates the authoritative run")
 	main._pause_run()
@@ -827,6 +868,44 @@ func _host_option_buttons(host: Node) -> Array[Button]:
 		if child is Button:
 			buttons.append(child as Button)
 	return buttons
+
+
+func _test_damage_plan(
+	amount: float,
+	damage_type: int,
+	source: Node,
+	attacker: Node,
+	target: Node,
+	tags: Array[String],
+	knockback: Vector2 = Vector2.ZERO
+) -> RefCounted:
+	_damage_plan_sequence += 1
+	return DamageInfoScript.from_plan({
+		"run_id": "reward-smoke",
+		"target_id": _test_damage_identity(target, "target"),
+		"hostile_source_id": _test_damage_identity(source, "source"),
+		"attack_generation": _damage_plan_sequence,
+		"hit_index": 0,
+		"action_token": _damage_plan_sequence,
+		"amount": amount,
+		"damage_type": damage_type,
+		"source": source,
+		"attacker": attacker,
+		"can_crit": true,
+		"crit_chance": 0.0,
+		"crit_multiplier": 1.5,
+		"knockback": knockback,
+		"tags": tags,
+		"source_generation": _damage_plan_sequence,
+		"control_effect": {},
+	})
+
+
+func _test_damage_identity(node: Node, prefix: String) -> StringName:
+	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
+	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
+
+
 func _assert_true(value: bool, label: String) -> void:
 	if value:
 		return

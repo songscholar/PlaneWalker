@@ -60,8 +60,28 @@ func _on_body_entered(body: Node2D) -> void:
 func _try_hit_player(target: Node) -> void:
 	if _resolved or target == null:
 		return
-	var damage_info := DamageInfoScript.new(damage, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	damage_info.tags = ["enemy:projectile"]
+	var damage_target := target.get_parent() if target is Area2D else target
+	var damage_info := DamageInfoScript.from_plan({
+		"run_id": "legacy-runtime",
+		"target_id": _damage_identity(damage_target, "player"),
+		"hostile_source_id": _damage_identity(self, "enemy-projectile"),
+		"attack_generation": 1,
+		"hit_index": 0,
+		"action_token": 1,
+		"amount": damage,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": self,
+		"can_crit": true,
+		"crit_chance": 0.0,
+		"crit_multiplier": 1.5,
+		"knockback": Vector2.ZERO,
+		"tags": ["enemy:projectile"],
+		"source_generation": 1,
+		"control_effect": {},
+	})
+	if damage_info == null:
+		return
 	if target.has_method("receive_hit"):
 		_resolved = true
 		target.receive_hit(damage_info)
@@ -71,6 +91,11 @@ func _try_hit_player(target: Node) -> void:
 	else:
 		return
 	queue_free()
+
+
+func _damage_identity(node: Node, prefix: String) -> StringName:
+	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
+	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
 
 
 func apply_time_stop(duration: float) -> void:

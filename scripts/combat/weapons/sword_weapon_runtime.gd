@@ -588,6 +588,31 @@ func restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 	return true
 
 
+func validate_coordinator_snapshot(coordinator_snapshot: Dictionary) -> bool:
+	if (
+		typeof(coordinator_snapshot.get("token")) != TYPE_INT
+		or typeof(coordinator_snapshot.get("generation")) != TYPE_INT
+		or not coordinator_snapshot.get("runtime") is Dictionary
+	):
+		return false
+	var token := int(coordinator_snapshot["token"])
+	var generation := int(coordinator_snapshot["generation"])
+	var runtime_snapshot: Dictionary = coordinator_snapshot["runtime"]
+	if int(runtime_snapshot.get("active_token", -1)) != token:
+		return false
+	var adapter_value: Variant = runtime_snapshot.get("adapter")
+	if not adapter_value is Dictionary:
+		return false
+	var adapter: Dictionary = adapter_value
+	var damage_token := int(adapter.get("damage_action_token", 0))
+	var damage_generation := int(adapter.get("damage_attack_generation", 0))
+	if (damage_token == 0) != (damage_generation == 0):
+		return false
+	if damage_token > 0 and (damage_token != token or damage_generation != generation):
+		return false
+	return true
+
+
 func _apply_restore_snapshot(runtime_snapshot: Dictionary) -> bool:
 	var next_adapter: Dictionary = runtime_snapshot["adapter"]
 	var launch_adapter: Dictionary = runtime_snapshot.get("launch_adapter", {})
@@ -1614,6 +1639,8 @@ func _adapter_snapshot() -> Dictionary:
 		"attacking": bool(_adapter.get("_attacking")),
 		"active": bool(_adapter.get("_active")),
 		"current_attack": (_adapter.get("_current_attack") as Dictionary).duplicate(true),
+		"damage_attack_generation": int(_adapter.get("_active_damage_attack_generation")),
+		"damage_action_token": int(_adapter.get("_active_damage_action_token")),
 	}
 
 
@@ -1623,6 +1650,8 @@ func _restore_adapter_snapshot(adapter_snapshot: Dictionary) -> void:
 	_adapter.set("_attacking", bool(adapter_snapshot.get("attacking", false)))
 	_adapter.set("_active", false)
 	_adapter.set("_current_attack", (adapter_snapshot.get("current_attack", {}) as Dictionary).duplicate(true))
+	_adapter.set("_active_damage_attack_generation", 0)
+	_adapter.set("_active_damage_action_token", 0)
 
 
 func _legacy_reward_snapshot() -> Dictionary:

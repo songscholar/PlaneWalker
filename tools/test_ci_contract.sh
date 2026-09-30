@@ -118,6 +118,25 @@ cd "${PROJECT_ROOT}"
 bash -n tools/run_tests.sh
 bash -n tools/validate_project.sh
 
+legacy_damage_constructors="$(
+	grep -R -n -E --include='*.gd' --exclude='damage_info.gd' \
+		'DamageInfo(Script)?\.new\(' scripts tests || true
+)"
+if [[ -n "${legacy_damage_constructors}" ]]; then
+	printf '%s\n' "${legacy_damage_constructors}" >&2
+	fail "runtime and tests must construct immutable damage through DamageInfo.from_plan"
+fi
+
+damage_input_mutations="$(
+	grep -R -n -E --include='*.gd' \
+		'(damage_info\.amount[[:space:]]*=|damage_info\.set\("amount"|\.tags\.(append|clear|erase|push_back)\()' \
+		scripts tests || true
+)"
+if [[ -n "${damage_input_mutations}" ]]; then
+	printf '%s\n' "${damage_input_mutations}" >&2
+	fail "immutable DamageInfo fields and returned tag copies must not be mutated"
+fi
+
 readonly TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/planewalker-ci-contract.XXXXXX")"
 trap 'rm -rf -- "${TEMP_DIR}"' EXIT
 

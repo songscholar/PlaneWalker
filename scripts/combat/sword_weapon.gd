@@ -3,6 +3,8 @@ extends Node2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const WEAPON_ID := &"sword"
+const MAX_COMMITTED_GUARD_RESOLUTION_IDS := 512
+const MAX_RESOLUTION_ID_LENGTH := 96
 
 @export var owner_path: NodePath
 @export var base_attack: float = 30.0
@@ -28,7 +30,12 @@ var _last_guard_result: Dictionary = {}
 var _launch_effect_events: Array[Dictionary] = []
 var _launch_payloads: Array[Dictionary] = []
 var _next_launch_payload_id: int = 1
-var _perfect_guard_damage_ids: Dictionary = {}
+var _guard_generation: int = 0
+var _guard_commit_epoch: int = 0
+var _committed_guard_resolution_ids: Dictionary = {}
+var _next_fallback_attack_generation: int = 1
+var _active_damage_attack_generation: int = 0
+var _active_damage_action_token: int = 0
 
 const LIGHT_COMBO: Array[Dictionary] = [
 	{"multiplier": 0.8, "windup": 0.10, "active": 0.08, "recovery": 0.18, "finisher": false},
@@ -37,18 +44,7 @@ const LIGHT_COMBO: Array[Dictionary] = [
 ]
 
 
-func _ready() -> void:
-	if not EventBus.damage_about_to_apply.is_connected(_on_damage_about_to_apply):
-		EventBus.damage_about_to_apply.connect(_on_damage_about_to_apply)
-	if not EventBus.damage_applied.is_connected(_on_damage_applied):
-		EventBus.damage_applied.connect(_on_damage_applied)
-
-
 func _exit_tree() -> void:
-	if EventBus.damage_about_to_apply.is_connected(_on_damage_about_to_apply):
-		EventBus.damage_about_to_apply.disconnect(_on_damage_about_to_apply)
-	if EventBus.damage_applied.is_connected(_on_damage_applied):
-		EventBus.damage_applied.disconnect(_on_damage_applied)
 	_clear_launch_payloads()
 
 
@@ -61,7 +57,10 @@ func reset_runtime_state() -> void:
 	reset_combo()
 	_last_guard_result.clear()
 	_launch_effect_events.clear()
-	_perfect_guard_damage_ids.clear()
+	_guard_generation = 0
+	_guard_commit_epoch += 1
+	_committed_guard_resolution_ids.clear()
+	_next_fallback_attack_generation = 1
 	_clear_launch_payloads()
 
 
@@ -121,21 +120,35 @@ func enter_profile_active_phase(definition: Dictionary) -> bool:
 	var payload_kind := str(_current_attack.get("payload_kind", "hitbox"))
 	if payload_kind == "guard":
 		_guard_active = true
+		_guard_generation += 1
+		_guard_commit_epoch += 1
+		_committed_guard_resolution_ids.clear()
 		_guard_elapsed_frames = 0
 		_guard_parameters = (_current_attack.get("payload_parameters", {}) as Dictionary).duplicate(true)
 		return true
 	if not bool(_current_attack.get("damaging", true)):
 		return true
-	var damage_info := _build_damage_info(_current_attack)
+	var action_identity := _damage_action_identity()
+	var damage_info := _build_damage_info(_current_attack, action_identity)
 	if damage_info == null:
 		return false
 	if payload_kind in ["zone", "wave"]:
 		return _spawn_launch_payload(payload_kind, _current_attack, damage_info)
+	_active_damage_attack_generation = int(action_identity["attack_generation"])
+	_active_damage_action_token = int(action_identity["action_token"])
 	hitbox.activate(damage_info)
 	return true
 
 
-func _build_damage_info(definition: Dictionary) -> RefCounted:
+func _build_damage_info(
+	definition: Dictionary,
+	action_identity: Dictionary = {}
+) -> RefCounted:
+	var frozen_identity := action_identity.duplicate(true)
+	if frozen_identity.is_empty():
+		frozen_identity = _damage_action_identity()
+	if not _valid_damage_action_identity(frozen_identity):
+		return null
 	var effective_multiplier := float(definition["multiplier"])
 	var heavy := bool(definition["heavy"])
 	var finisher := bool(definition["finisher"])
@@ -146,20 +159,61 @@ func _build_damage_info(definition: Dictionary) -> RefCounted:
 	if low_hp_damage_multiplier_bonus > 0.0 and _owner_hp_ratio() <= low_hp_threshold:
 		effective_multiplier *= 1.0 + low_hp_damage_multiplier_bonus
 
-	var damage_info := DamageInfoScript.new(base_attack * effective_multiplier, DamageInfoScript.DamageType.PHYSICAL, self, owner_player)
 	var profile_tags: Array[String] = []
 	for tag: Variant in definition["tags"] as Array:
 		profile_tags.append(str(tag))
-	damage_info.tags = profile_tags
-	damage_info.knockback = Vector2.RIGHT.rotated(global_rotation) * float(definition["knockback"])
 	if heavy:
 		if heavy_execute_multiplier_bonus > 0.0:
-			damage_info.tags.append("talent:ruin_execute")
-	return damage_info
+			profile_tags.append("talent:ruin_execute")
+	return DamageInfoScript.from_plan({
+		"run_id": &"legacy_run",
+		"target_id": &"pending_target",
+		"hostile_source_id": &"player_sword",
+		"attack_generation": int(frozen_identity["attack_generation"]),
+		"action_token": int(frozen_identity["action_token"]),
+		"amount": base_attack * effective_multiplier,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": owner_player,
+		"knockback": Vector2.RIGHT.rotated(global_rotation) * float(definition["knockback"]),
+		"tags": profile_tags,
+	})
+
+
+func _damage_action_identity() -> Dictionary:
+	if owner_player != null and owner_player.has_method("weapon_damage_action_identity"):
+		var identity_value: Variant = owner_player.call("weapon_damage_action_identity")
+		if identity_value is Dictionary:
+			var identity: Dictionary = identity_value
+			if (
+				StringName(str(identity.get("weapon_id", ""))) == WEAPON_ID
+				and _valid_damage_action_identity(identity)
+			):
+				return {
+					"attack_generation": int(identity["attack_generation"]),
+					"action_token": int(identity["action_token"]),
+				}
+	var fallback_generation := _next_fallback_attack_generation
+	_next_fallback_attack_generation += 1
+	return {
+		"attack_generation": fallback_generation,
+		"action_token": fallback_generation,
+	}
+
+
+func _valid_damage_action_identity(value: Dictionary) -> bool:
+	return (
+		typeof(value.get("attack_generation")) == TYPE_INT
+		and int(value["attack_generation"]) > 0
+		and typeof(value.get("action_token")) == TYPE_INT
+		and int(value["action_token"]) > 0
+	)
 
 
 func leave_active_phase() -> void:
 	_active = false
+	_active_damage_attack_generation = 0
+	_active_damage_action_token = 0
 	_guard_active = false
 	_guard_elapsed_frames = 0
 	_guard_parameters.clear()
@@ -213,9 +267,14 @@ func launch_payload_snapshots_for_test() -> Array[Dictionary]:
 func launch_runtime_snapshot() -> Dictionary:
 	return {
 		"guard_active": _guard_active,
+		"guard_generation": _guard_generation,
 		"guard_elapsed_frames": _guard_elapsed_frames,
 		"guard_parameters": _guard_parameters.duplicate(true),
 		"last_guard_result": _last_guard_result.duplicate(true),
+		"committed_guard_resolution_ids": _sorted_dictionary_keys(
+			_committed_guard_resolution_ids
+		),
+		"next_fallback_attack_generation": _next_fallback_attack_generation,
 		"payloads": _launch_payload_snapshots(),
 	}
 
@@ -223,11 +282,17 @@ func launch_runtime_snapshot() -> Dictionary:
 func restore_launch_runtime_snapshot(value: Dictionary) -> bool:
 	if not _valid_launch_runtime_snapshot(value):
 		return false
+	_guard_commit_epoch += 1
 	_clear_launch_payloads()
 	_guard_active = bool(value["guard_active"])
+	_guard_generation = int(value["guard_generation"])
 	_guard_elapsed_frames = int(value["guard_elapsed_frames"])
 	_guard_parameters = (value["guard_parameters"] as Dictionary).duplicate(true)
 	_last_guard_result = (value["last_guard_result"] as Dictionary).duplicate(true)
+	_committed_guard_resolution_ids.clear()
+	for resolution_id: String in _string_array(value["committed_guard_resolution_ids"]):
+		_committed_guard_resolution_ids[resolution_id] = true
+	_next_fallback_attack_generation = int(value["next_fallback_attack_generation"])
 	_launch_effect_events.clear()
 	for payload_value: Variant in value["payloads"] as Array:
 		var payload: Dictionary = payload_value
@@ -235,7 +300,12 @@ func restore_launch_runtime_snapshot(value: Dictionary) -> bool:
 		if not restored:
 			_clear_launch_payloads()
 			_guard_active = false
+			_guard_generation = 0
+			_guard_elapsed_frames = 0
 			_guard_parameters.clear()
+			_last_guard_result.clear()
+			_committed_guard_resolution_ids.clear()
+			_next_fallback_attack_generation = 1
 			return false
 	return true
 
@@ -256,8 +326,13 @@ func restore_profile_runtime_snapshot(value: Dictionary) -> bool:
 	_attacking = bool(value["attacking"])
 	_active = bool(value["active"])
 	_current_attack = (value["current_attack"] as Dictionary).duplicate(true)
+	_active_damage_attack_generation = int(value["damage_attack_generation"])
+	_active_damage_action_token = int(value["damage_action_token"])
 	if _attacking and _active and str(_current_attack.get("payload_kind", "hitbox")) == "hitbox":
-		var restored_damage := _build_damage_info(_current_attack)
+		var restored_damage := _build_damage_info(_current_attack, {
+			"attack_generation": _active_damage_attack_generation,
+			"action_token": _active_damage_action_token,
+		})
 		if restored_damage == null:
 			cancel_attack()
 			return false
@@ -301,12 +376,109 @@ func _valid_profile_attack(definition: Dictionary) -> bool:
 	return true
 
 
-func _on_damage_about_to_apply(damage_info: Variant, target: Node) -> void:
-	if not _guard_active or target != owner_player or not damage_info is RefCounted:
-		return
-	var original_amount := float((damage_info as RefCounted).get("amount"))
-	if not is_finite(original_amount) or original_amount <= 0.0:
-		return
+func plan_damage_defense(damage_info: RefCounted) -> Dictionary:
+	if damage_info == null:
+		return {}
+	var damage_identity := _guard_damage_identity(damage_info)
+	if damage_identity.is_empty():
+		return {}
+	return _guard_decision_for_context(float(damage_info.amount), damage_identity)
+
+
+func commit_damage_defense(decision: Dictionary, resolution: RefCounted) -> bool:
+	if not can_commit_damage_defense(decision, resolution):
+		return false
+	var context: Dictionary = decision["commit_context"]
+	var resolution_snapshot: Dictionary = resolution.call("snapshot")
+	_committed_guard_resolution_ids[str(resolution_snapshot["resolution_id"])] = true
+	_trim_committed_guard_resolution_ids()
+	_last_guard_result = {
+		"blocked_damage": float(context["blocked_damage"]),
+		"block_multiplier": float(context["block_multiplier"]),
+		"perfect": bool(context["perfect"]),
+		"intent_gain": float(context["intent_gain"]),
+	}
+	_launch_effect_events.append({
+		"type": "guard_resolved",
+		"blocked_damage": float(context["blocked_damage"]),
+		"block_multiplier": float(context["block_multiplier"]),
+		"perfect": bool(context["perfect"]),
+		"intent_gain": float(context["intent_gain"]),
+	})
+	return true
+
+
+func can_commit_damage_defense(decision: Dictionary, resolution: RefCounted) -> bool:
+	return _valid_damage_defense_commit(decision, resolution)
+
+
+func _valid_damage_defense_commit(decision: Dictionary, resolution: RefCounted) -> bool:
+	if (
+		not _guard_active
+		or resolution == null
+		or not resolution.has_method("snapshot")
+		or not _has_exact_dictionary_fields(decision, [
+			"prevented", "multiplier", "prevent_reason", "guard_kind", "commit_context",
+		])
+		or not decision["commit_context"] is Dictionary
+	):
+		return false
+	var context: Dictionary = decision["commit_context"]
+	if not _has_exact_dictionary_fields(context, [
+		"weapon_id",
+		"guard_commit_epoch",
+		"guard_generation",
+		"guard_elapsed_frames",
+		"run_id",
+		"target_id",
+		"hostile_source_id",
+		"attack_generation",
+		"action_token",
+		"tags",
+		"original_amount",
+		"blocked_damage",
+		"block_multiplier",
+		"perfect",
+		"intent_gain",
+	]):
+		return false
+	if (
+		typeof(context["weapon_id"]) != TYPE_STRING_NAME
+		or context["weapon_id"] != WEAPON_ID
+		or typeof(context["guard_commit_epoch"]) != TYPE_INT
+		or int(context["guard_commit_epoch"]) != _guard_commit_epoch
+		or typeof(context["guard_generation"]) != TYPE_INT
+		or int(context["guard_generation"]) != _guard_generation
+		or typeof(context["guard_elapsed_frames"]) != TYPE_INT
+		or int(context["guard_elapsed_frames"]) != _guard_elapsed_frames
+		or typeof(context["perfect"]) != TYPE_BOOL
+	):
+		return false
+	for field: String in ["original_amount", "blocked_damage", "block_multiplier", "intent_gain"]:
+		if typeof(context[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(context[field])):
+			return false
+	var original_amount := float(context["original_amount"])
+	var damage_identity := _guard_identity_from_context(context)
+	if original_amount <= 0.0 or damage_identity.is_empty():
+		return false
+	var expected := _guard_decision_for_context(original_amount, damage_identity)
+	if expected != decision:
+		return false
+	var snapshot_value: Variant = resolution.call("snapshot")
+	if not snapshot_value is Dictionary:
+		return false
+	return _resolution_matches_guard_decision(snapshot_value as Dictionary, decision, context)
+
+
+func _guard_decision_for_context(original_amount: float, damage_identity: Dictionary) -> Dictionary:
+	if (
+		not _guard_active
+		or _guard_generation <= 0
+		or not is_finite(original_amount)
+		or original_amount <= 0.0
+		or not _valid_guard_damage_identity(damage_identity)
+	):
+		return {}
 	var perfect_window := maxi(0, int(_guard_parameters.get("perfect_window_frames", 0)))
 	var perfect := _guard_elapsed_frames < perfect_window
 	var block_multiplier := clampf(
@@ -314,40 +486,158 @@ func _on_damage_about_to_apply(damage_info: Variant, target: Node) -> void:
 		0.0,
 		1.0
 	)
-	var reduced_amount := original_amount * block_multiplier
-	(damage_info as RefCounted).set("amount", reduced_amount)
-	var blocked_damage := original_amount - reduced_amount
+	var blocked_damage := original_amount - original_amount * block_multiplier
 	var intent_gain := (
 		blocked_damage * maxf(0.0, float(_guard_parameters.get("intent_per_blocked_damage", 1.0)))
 		+ (maxf(0.0, float(_guard_parameters.get("perfect_intent_bonus", 0.0))) if perfect else 0.0)
 	)
-	_last_guard_result = {
-		"blocked_damage": blocked_damage,
-		"block_multiplier": block_multiplier,
-		"perfect": perfect,
-		"intent_gain": intent_gain,
+	return {
+		"prevented": perfect,
+		"multiplier": 1.0 if perfect else block_multiplier,
+		"prevent_reason": &"sword_perfect" if perfect else &"",
+		"guard_kind": &"sword_perfect" if perfect else &"sword_normal",
+		"commit_context": {
+			"weapon_id": WEAPON_ID,
+			"guard_commit_epoch": _guard_commit_epoch,
+			"guard_generation": _guard_generation,
+			"guard_elapsed_frames": _guard_elapsed_frames,
+			"run_id": damage_identity["run_id"],
+			"target_id": damage_identity["target_id"],
+			"hostile_source_id": damage_identity["hostile_source_id"],
+			"attack_generation": damage_identity["attack_generation"],
+			"action_token": damage_identity["action_token"],
+			"tags": (damage_identity["tags"] as Array).duplicate(),
+			"original_amount": original_amount,
+			"blocked_damage": blocked_damage,
+			"block_multiplier": block_multiplier,
+			"perfect": perfect,
+			"intent_gain": intent_gain,
+		},
 	}
-	if perfect:
-		_perfect_guard_damage_ids[(damage_info as RefCounted).get_instance_id()] = true
-	_launch_effect_events.append({
-		"type": "guard_resolved",
-		"blocked_damage": blocked_damage,
-		"block_multiplier": block_multiplier,
-		"perfect": perfect,
-		"intent_gain": intent_gain,
-	})
 
 
-func _on_damage_applied(damage_info: Variant, target: Node, final_amount: float) -> void:
-	if target != owner_player or not damage_info is RefCounted:
-		return
-	var damage_id := (damage_info as RefCounted).get_instance_id()
-	if not _perfect_guard_damage_ids.erase(damage_id):
-		return
-	var health := owner_player.get_node_or_null("HealthComponent")
-	if health != null and final_amount > 0.0:
-		health.call("heal", final_amount)
-	_last_guard_result["refunded_damage"] = final_amount
+func _guard_damage_identity(damage_info: RefCounted) -> Dictionary:
+	var run_id := StringName(str(damage_info.run_id))
+	if run_id == &"":
+		run_id = &"legacy"
+	var target_id := _canonical_guard_target_id(StringName(str(damage_info.target_id)))
+	var hostile_source_id := StringName(str(damage_info.hostile_source_id))
+	if hostile_source_id == &"":
+		hostile_source_id = &"legacy_source"
+	return {
+		"run_id": run_id,
+		"target_id": target_id,
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": maxi(1, int(damage_info.attack_generation)),
+		"action_token": maxi(1, int(damage_info.action_token)),
+		"tags": (damage_info.tags as Array).duplicate(),
+	}
+
+
+func _canonical_guard_target_id(target_id: StringName) -> StringName:
+	if target_id == &"pending_target" and owner_player != null:
+		for key: StringName in [&"stable_target_id", &"stable_target_key", &"encounter_spawn_id"]:
+			if owner_player.has_meta(key):
+				var value := str(owner_player.get_meta(key)).strip_edges()
+				if not value.is_empty():
+					return StringName(value)
+	if target_id != &"":
+		return target_id
+	return StringName(owner_player.name if owner_player != null else "legacy_target")
+
+
+func _guard_identity_from_context(context: Dictionary) -> Dictionary:
+	var identity := {
+		"run_id": context.get("run_id"),
+		"target_id": context.get("target_id"),
+		"hostile_source_id": context.get("hostile_source_id"),
+		"attack_generation": context.get("attack_generation"),
+		"action_token": context.get("action_token"),
+		"tags": (context.get("tags", []) as Array).duplicate() if context.get("tags", []) is Array else [],
+	}
+	return identity if _valid_guard_damage_identity(identity) else {}
+
+
+func _valid_guard_damage_identity(value: Dictionary) -> bool:
+	if not _has_exact_dictionary_fields(value, [
+		"run_id", "target_id", "hostile_source_id", "attack_generation", "action_token", "tags",
+	]):
+		return false
+	for field: String in ["run_id", "target_id", "hostile_source_id"]:
+		if typeof(value[field]) != TYPE_STRING_NAME or StringName(value[field]) == &"":
+			return false
+	if (
+		typeof(value["attack_generation"]) != TYPE_INT
+		or int(value["attack_generation"]) <= 0
+		or typeof(value["action_token"]) != TYPE_INT
+		or int(value["action_token"]) <= 0
+		or not value["tags"] is Array
+	):
+		return false
+	for tag: Variant in value["tags"] as Array:
+		if typeof(tag) not in [TYPE_STRING, TYPE_STRING_NAME] or str(tag).is_empty():
+			return false
+	return true
+
+
+func _resolution_matches_guard_decision(
+	snapshot: Dictionary,
+	decision: Dictionary,
+	context: Dictionary
+) -> bool:
+	var resolution_id := str(snapshot.get("resolution_id", ""))
+	if (
+		resolution_id.is_empty()
+		or resolution_id.length() > MAX_RESOLUTION_ID_LENGTH
+		or _committed_guard_resolution_ids.has(resolution_id)
+	):
+		return false
+	for field: String in ["run_id", "target_id", "hostile_source_id"]:
+		if StringName(str(snapshot.get(field, ""))) != StringName(context[field]):
+			return false
+	for field: String in ["attack_generation", "action_token"]:
+		if typeof(snapshot.get(field)) != TYPE_INT or int(snapshot[field]) != int(context[field]):
+			return false
+	if (
+		not snapshot.get("tags", []) is Array
+		or (snapshot.get("tags", []) as Array) != (context["tags"] as Array)
+		or not is_equal_approx(
+			float(snapshot.get("original_amount", -1.0)),
+			float(context["original_amount"])
+		)
+		or not is_equal_approx(
+			float(snapshot.get("post_weapon_defense_amount", -1.0)),
+			0.0 if bool(context["perfect"]) else (
+				float(context["original_amount"]) * float(decision["multiplier"])
+			)
+		)
+	):
+		return false
+	if not bool(context["perfect"]):
+		return true
+	return (
+		bool(snapshot.get("prevented", false))
+		and StringName(str(snapshot.get("prevent_reason", ""))) == &"sword_perfect"
+		and StringName(str(snapshot.get("guard_kind", ""))) == &"sword_perfect"
+		and is_zero_approx(float(snapshot.get("finalized_damage", -1.0)))
+	)
+
+
+func _trim_committed_guard_resolution_ids() -> void:
+	while _committed_guard_resolution_ids.size() > MAX_COMMITTED_GUARD_RESOLUTION_IDS:
+		var keys := _committed_guard_resolution_ids.keys()
+		if keys.is_empty():
+			return
+		_committed_guard_resolution_ids.erase(keys[0])
+
+
+func _has_exact_dictionary_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
 
 
 func _spawn_launch_payload(
@@ -419,14 +709,21 @@ func _spawn_launch_payload_from_snapshot(snapshot_value: Dictionary) -> bool:
 		"payload_parameters": (snapshot_value.get("parameters", {}) as Dictionary).duplicate(true),
 	}
 	var damage_snapshot: Dictionary = snapshot_value.get("damage", {})
-	var damage_info := DamageInfoScript.new(
-		float(damage_snapshot.get("amount", 0.0)),
-		int(damage_snapshot.get("damage_type", DamageInfoScript.DamageType.PHYSICAL)),
-		self,
-		owner_player
-	)
-	damage_info.tags = Array(damage_snapshot.get("tags", []), TYPE_STRING, "", null)
-	damage_info.knockback = damage_snapshot.get("knockback", Vector2.ZERO)
+	var damage_info := DamageInfoScript.from_plan({
+		"run_id": damage_snapshot.get("run_id", &""),
+		"target_id": damage_snapshot.get("target_id", &""),
+		"hostile_source_id": damage_snapshot.get("hostile_source_id", &""),
+		"attack_generation": damage_snapshot.get("attack_generation", 0),
+		"action_token": damage_snapshot.get("action_token", 0),
+		"amount": float(damage_snapshot.get("amount", 0.0)),
+		"damage_type": int(damage_snapshot.get("damage_type", DamageInfoScript.DamageType.PHYSICAL)),
+		"source": self,
+		"attacker": owner_player,
+		"tags": Array(damage_snapshot.get("tags", []), TYPE_STRING, "", null),
+		"knockback": damage_snapshot.get("knockback", Vector2.ZERO),
+	})
+	if damage_info == null:
+		return false
 	return _spawn_launch_payload(
 		str(snapshot_value.get("kind", "")),
 		definition,
@@ -471,6 +768,11 @@ func _launch_payload_snapshots() -> Array[Dictionary]:
 			"world_direction": state.get("world_direction", Vector2.RIGHT),
 			"hit_target_keys": (state.get("hit_target_keys", []) as Array).duplicate(),
 			"damage": {
+				"run_id": damage_info.get("run_id"),
+				"target_id": damage_info.get("target_id"),
+				"hostile_source_id": damage_info.get("hostile_source_id"),
+				"attack_generation": int(damage_info.get("attack_generation")),
+				"action_token": int(damage_info.get("action_token")),
 				"amount": float(damage_info.get("amount")),
 				"damage_type": int(damage_info.get("damage_type")),
 				"tags": (damage_info.get("tags") as Array).duplicate(),
@@ -483,10 +785,19 @@ func _launch_payload_snapshots() -> Array[Dictionary]:
 func _valid_launch_runtime_snapshot(value: Dictionary) -> bool:
 	if (
 		typeof(value.get("guard_active")) != TYPE_BOOL
+		or typeof(value.get("guard_generation")) != TYPE_INT
+		or int(value.get("guard_generation", -1)) < 0
 		or typeof(value.get("guard_elapsed_frames")) != TYPE_INT
 		or int(value.get("guard_elapsed_frames", -1)) < 0
 		or not value.get("guard_parameters") is Dictionary
 		or not value.get("last_guard_result") is Dictionary
+		or not _valid_string_array(
+			value.get("committed_guard_resolution_ids"),
+			MAX_COMMITTED_GUARD_RESOLUTION_IDS,
+			MAX_RESOLUTION_ID_LENGTH
+		)
+		or typeof(value.get("next_fallback_attack_generation")) != TYPE_INT
+		or int(value.get("next_fallback_attack_generation", 0)) <= 0
 		or not value.get("payloads") is Array
 	):
 		return false
@@ -504,10 +815,41 @@ func _valid_launch_runtime_snapshot(value: Dictionary) -> bool:
 			or not payload.get("world_direction") is Vector2
 			or not _valid_string_array(payload.get("hit_target_keys"))
 			or not payload.get("parameters") is Dictionary
-			or not payload.get("damage") is Dictionary
+			or not _valid_launch_damage_snapshot(payload.get("damage"))
 		):
 			return false
 	return true
+
+
+func _valid_launch_damage_snapshot(value: Variant) -> bool:
+	if not value is Dictionary:
+		return false
+	var damage: Dictionary = value
+	if not _has_exact_dictionary_fields(damage, [
+		"run_id",
+		"target_id",
+		"hostile_source_id",
+		"attack_generation",
+		"action_token",
+		"amount",
+		"damage_type",
+		"tags",
+		"knockback",
+	]):
+		return false
+	return DamageInfoScript.from_plan({
+		"run_id": damage["run_id"],
+		"target_id": damage["target_id"],
+		"hostile_source_id": damage["hostile_source_id"],
+		"attack_generation": damage["attack_generation"],
+		"action_token": damage["action_token"],
+		"amount": damage["amount"],
+		"damage_type": damage["damage_type"],
+		"source": self,
+		"attacker": owner_player,
+		"tags": damage["tags"],
+		"knockback": damage["knockback"],
+	}) != null
 
 
 func _update_launch_payload_transform(state: Dictionary) -> void:
@@ -549,22 +891,49 @@ func _valid_profile_runtime_snapshot(value: Dictionary) -> bool:
 		or typeof(value.get("attacking")) != TYPE_BOOL
 		or typeof(value.get("active")) != TYPE_BOOL
 		or not value.get("current_attack") is Dictionary
+		or typeof(value.get("damage_attack_generation")) != TYPE_INT
+		or typeof(value.get("damage_action_token")) != TYPE_INT
+	):
+		return false
+	var current_attack: Dictionary = value["current_attack"]
+	var requires_damage_identity := (
+		bool(value["attacking"])
+		and bool(value["active"])
+		and str(current_attack.get("payload_kind", "hitbox")) == "hitbox"
+		and bool(current_attack.get("damaging", true))
+	)
+	var damage_identity := {
+		"attack_generation": int(value["damage_attack_generation"]),
+		"action_token": int(value["damage_action_token"]),
+	}
+	if requires_damage_identity != _valid_damage_action_identity(damage_identity):
+		return false
+	if not requires_damage_identity and (
+		int(value["damage_attack_generation"]) != 0
+		or int(value["damage_action_token"]) != 0
 	):
 		return false
 	if not bool(value["attacking"]):
-		return not bool(value["active"]) and (value["current_attack"] as Dictionary).is_empty()
+		return not bool(value["active"]) and current_attack.is_empty()
 	return (
-		not (value["current_attack"] as Dictionary).is_empty()
-		and _valid_profile_attack(value["current_attack"])
+		not current_attack.is_empty()
+		and _valid_profile_attack(current_attack)
 	)
 
 
-func _valid_string_array(value: Variant) -> bool:
+func _valid_string_array(value: Variant, maximum_size: int = -1, maximum_length: int = -1) -> bool:
 	if not value is Array:
+		return false
+	if maximum_size >= 0 and (value as Array).size() > maximum_size:
 		return false
 	var seen: Dictionary = {}
 	for child: Variant in value as Array:
-		if typeof(child) not in [TYPE_STRING, TYPE_STRING_NAME] or str(child).is_empty() or seen.has(str(child)):
+		if (
+			typeof(child) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(child).is_empty()
+			or (maximum_length >= 0 and str(child).length() > maximum_length)
+			or seen.has(str(child))
+		):
 			return false
 		seen[str(child)] = true
 	return true
@@ -575,6 +944,14 @@ func _string_array(value: Variant) -> Array[String]:
 	if value is Array:
 		for child: Variant in value as Array:
 			result.append(str(child))
+	return result
+
+
+func _sorted_dictionary_keys(value: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	for key: Variant in value.keys():
+		result.append(str(key))
+	result.sort()
 	return result
 
 

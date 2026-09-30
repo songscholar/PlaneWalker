@@ -92,6 +92,7 @@ func _resolve_primary_attack() -> void:
 func _resolve_overload_pulse() -> void:
 	_overload_resolution_count += 1
 	combat_telegraph.clear_telegraph()
+	var hit_index := 0
 	for candidate: Node in get_tree().get_nodes_in_group("player"):
 		if not candidate is Node2D:
 			continue
@@ -100,11 +101,35 @@ func _resolve_overload_pulse() -> void:
 		var health_component := candidate.get_node_or_null("HealthComponent")
 		if health_component == null:
 			continue
-		var damage_info := DamageInfoScript.new(attack * overload_damage_multiplier, DamageInfoScript.DamageType.PHYSICAL, self, self)
-		damage_info.tags = ["enemy:area", "elite:overload_pulse"]
-		damage_info.knockback = global_position.direction_to((candidate as Node2D).global_position) * 240.0
+		var damage_info := DamageInfoScript.from_plan({
+			"run_id": "legacy-runtime",
+			"target_id": _tank_damage_identity(candidate, "player"),
+			"hostile_source_id": _tank_damage_identity(self, "elite-tank"),
+			"attack_generation": _overload_resolution_count,
+			"hit_index": hit_index,
+			"action_token": _overload_resolution_count,
+			"amount": attack * overload_damage_multiplier,
+			"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+			"source": self,
+			"attacker": self,
+			"can_crit": true,
+			"crit_chance": 0.0,
+			"crit_multiplier": 1.5,
+			"knockback": global_position.direction_to((candidate as Node2D).global_position) * 240.0,
+			"tags": ["enemy:area", "elite:overload_pulse"],
+			"source_generation": _overload_resolution_count,
+			"control_effect": {},
+		})
+		if damage_info == null:
+			continue
 		health_component.take_damage(damage_info)
+		hit_index += 1
 	_schedule_next_overload_cooldown()
+
+
+func _tank_damage_identity(node: Node, prefix: String) -> StringName:
+	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
+	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
 
 
 func _active_attack_recovery_duration() -> float:

@@ -1033,6 +1033,14 @@ func _validate_runtime_snapshot(value: Dictionary) -> bool:
 		return false
 	if runtime_snapshot.has("active_phase") and str(runtime_snapshot.get("active_phase", "")) != str(value["phase"]):
 		return false
+	if (
+		_runtime.has_method("validate_coordinator_snapshot")
+		and not bool(_runtime.call(
+			"validate_coordinator_snapshot",
+			value.duplicate(true)
+		))
+	):
+		return false
 
 	var phase := StringName(str(value["phase"]))
 	var plan := value["plan"] as Dictionary

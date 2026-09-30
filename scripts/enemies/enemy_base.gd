@@ -43,6 +43,7 @@ var _committed_attack_direction: Vector2 = Vector2.RIGHT
 var _time_stop_token_sequence: int = 0
 var _time_stop_sources: Dictionary = {}
 var _damage_vulnerability_sources: Dictionary = {}
+var _damage_action_sequence: int = 0
 var _weapon_hit_control_claims: Dictionary = {}
 var _weapon_hit_control_claim_order: Array[int] = []
 var elemental_status_runtime: RefCounted = ElementalStatusRuntimeScript.new()
@@ -167,9 +168,18 @@ func _deal_melee_damage() -> void:
 		return
 	if not target.has_node("HealthComponent"):
 		return
-	var damage_info := DamageInfoScript.new(attack, DamageInfoScript.DamageType.PHYSICAL, self, self)
-	damage_info.tags = ["enemy:melee"]
-	damage_info.knockback = _committed_attack_direction * 180.0
+	var damage_info := _damage_info_from_plan(
+		attack,
+		DamageInfoScript.DamageType.PHYSICAL,
+		target,
+		&"melee",
+		["enemy:melee"],
+		_committed_attack_direction * 180.0,
+		self,
+		self
+	)
+	if damage_info == null:
+		return
 	target.get_node("HealthComponent").take_damage(damage_info)
 
 
@@ -415,6 +425,35 @@ func get_damage_taken_multiplier() -> float:
 	return clampf(1.0 + total_bonus, 1.0, 3.0)
 
 
+func get_damage_taken_multiplier_for(damage_info: RefCounted) -> float:
+	var base_multiplier := get_damage_taken_multiplier()
+	if damage_info == null or int(damage_info.damage_type) != DamageInfoScript.DamageType.TIME:
+		return base_multiplier
+	var sources_value: Variant = get_meta("bow_time_erosion_sources", {})
+	if not sources_value is Dictionary:
+		return base_multiplier
+	var erosion_multiplier := 1.0
+	for source_value: Variant in (sources_value as Dictionary).values():
+		if not source_value is Dictionary:
+			continue
+		var source := source_value as Dictionary
+		if source.size() != 2 or not source.has("stacks") or not source.has("time_damage_taken_per_stack"):
+			continue
+		var stacks_value: Variant = source["stacks"]
+		var per_stack_value: Variant = source["time_damage_taken_per_stack"]
+		if typeof(stacks_value) != TYPE_INT or int(stacks_value) < 0:
+			continue
+		if typeof(per_stack_value) not in [TYPE_INT, TYPE_FLOAT]:
+			continue
+		var per_stack := float(per_stack_value)
+		if not is_finite(per_stack) or per_stack < 0.0 or per_stack > 1.0:
+			continue
+		erosion_multiplier *= 1.0 + float(int(stacks_value)) * per_stack
+		if not is_finite(erosion_multiplier):
+			return base_multiplier
+	return base_multiplier * erosion_multiplier
+
+
 func apply_elemental_status(
 	effect_id: StringName,
 	source_id: StringName,
@@ -508,20 +547,25 @@ func _tick_elemental_status_runtime() -> void:
 			continue
 		var damage_source := _live_node_or_null(tick.get("damage_source"))
 		var damage_attacker := _live_node_or_null(tick.get("damage_attacker"))
-		var damage_info := DamageInfoScript.new(
+		var damage_info := _damage_info_from_plan(
 			tick_damage,
 			DamageInfoScript.DamageType.FIRE,
-			damage_source,
-			damage_attacker
-		)
-		damage_info.can_crit = false
-		damage_info.tags = [
+			self,
+			StringName("burn:%s:%d" % [str(tick.get("source_id", "")), int(tick.get("generation", 0))]),
+			[
 			"weapon:staff",
 			"element:fire",
 			"status:burn",
 			"status_source:%s" % str(tick.get("source_id", "")),
 			"status_generation:%d" % int(tick.get("generation", -1)),
-		]
+			],
+			Vector2.ZERO,
+			damage_source,
+			damage_attacker,
+			false
+		)
+		if damage_info == null:
+			continue
 		health.take_damage(damage_info)
 	if not (events.get("expired", []) as Array).is_empty():
 		_refresh_control_visual()
@@ -531,6 +575,57 @@ func _live_node_or_null(value: Variant) -> Node:
 	if value is Node and is_instance_valid(value):
 		return value as Node
 	return null
+
+
+func _damage_info_from_plan(
+	amount: float,
+	damage_type: int,
+	damage_target: Node,
+	channel: StringName,
+	tags: Array[String],
+	knockback: Vector2,
+	damage_source: Node,
+	damage_attacker: Node,
+	can_crit: bool = true
+) -> RefCounted:
+	_damage_action_sequence += 1
+	var source_id := _stable_damage_identity(self, "enemy")
+	return DamageInfoScript.from_plan({
+		"run_id": _damage_run_id(),
+		"target_id": _stable_damage_identity(damage_target, "pending_target"),
+		"hostile_source_id": StringName("%s:%s" % [str(source_id), str(channel)]),
+		"attack_generation": _damage_action_sequence,
+		"action_token": _damage_action_sequence,
+		"amount": amount,
+		"damage_type": damage_type,
+		"source": damage_source,
+		"attacker": damage_attacker,
+		"can_crit": can_crit,
+		"knockback": knockback,
+		"tags": tags,
+	})
+
+
+func _damage_run_id() -> StringName:
+	for key: StringName in [&"run_id", &"authoritative_run_id"]:
+		if has_meta(key):
+			var value := str(get_meta(key)).strip_edges()
+			if not value.is_empty():
+				return StringName(value)
+	return &"runtime"
+
+
+func _stable_damage_identity(node: Node, fallback: String) -> StringName:
+	if node != null and is_instance_valid(node):
+		for key: StringName in [&"stable_target_id", &"stable_target_key", &"encounter_spawn_id"]:
+			if node.has_meta(key):
+				var value := str(node.get_meta(key)).strip_edges()
+				if not value.is_empty():
+					return StringName(value)
+		var node_name := str(node.name).strip_edges()
+		if not node_name.is_empty() and not node_name.begins_with("@"):
+			return StringName(node_name)
+	return StringName(fallback)
 
 
 func _should_elemental_blind_miss() -> bool:

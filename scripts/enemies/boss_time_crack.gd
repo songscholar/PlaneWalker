@@ -94,13 +94,38 @@ func _explode() -> void:
 	monitoring = true
 	if _visual != null:
 		_visual.color = Color(0.7, 0.95, 1.0, 0.95)
+	var hit_index := 0
 	for player: Node in get_tree().get_nodes_in_group("player"):
 		if player is Node2D and player.global_position.distance_to(global_position) <= radius:
 			var health := player.get_node_or_null("HealthComponent")
 			if health != null:
-				var damage_info := DamageInfoScript.new(damage, DamageInfoScript.DamageType.TIME, self, self)
-				damage_info.tags = ["boss:time_crack", "time:hazard"]
-				health.take_damage(damage_info)
+				var damage_info := DamageInfoScript.from_plan({
+					"run_id": "legacy-runtime",
+					"target_id": _crack_damage_identity(player, "player"),
+					"hostile_source_id": _crack_damage_identity(self, "time-crack"),
+					"attack_generation": 1,
+					"hit_index": hit_index,
+					"action_token": 1,
+					"amount": damage,
+					"damage_type": DamageInfoScript.DamageType.TIME,
+					"source": self,
+					"attacker": self,
+					"can_crit": true,
+					"crit_chance": 0.0,
+					"crit_multiplier": 1.5,
+					"knockback": Vector2.ZERO,
+					"tags": ["boss:time_crack", "time:hazard"],
+					"source_generation": 1,
+					"control_effect": {},
+				})
+				if damage_info != null:
+					health.take_damage(damage_info)
+					hit_index += 1
 	await get_tree().create_timer(0.18).timeout
 	if is_inside_tree():
 		queue_free()
+
+
+func _crack_damage_identity(node: Node, prefix: String) -> StringName:
+	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
+	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])

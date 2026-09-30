@@ -199,13 +199,27 @@ func _deal_projectile_damage(area: Area2D) -> void:
 
 
 func _deliver_damage(area: Area2D, amount: float, type: int, time_component: bool) -> void:
-	var damage_info := DamageInfoScript.new(amount, type, source, owner_entity)
-	damage_info.tags = attack_tags.duplicate()
-	if full_charge and not damage_info.tags.has("attack:full_charge"):
-		damage_info.tags.append("attack:full_charge")
-	if time_component and not damage_info.tags.has("damage:time_component"):
-		damage_info.tags.append("damage:time_component")
-	damage_info.knockback = direction.normalized() * 90.0 if not time_component else Vector2.ZERO
+	var resolved_tags: Array[String] = attack_tags.duplicate()
+	if full_charge and not resolved_tags.has("attack:full_charge"):
+		resolved_tags.append("attack:full_charge")
+	if time_component and not resolved_tags.has("damage:time_component"):
+		resolved_tags.append("damage:time_component")
+	var damage_info = DamageInfoScript.from_plan({
+		"run_id": &"runtime",
+		"target_id": _damage_target_id(area.get_parent()),
+		"hostile_source_id": StringName("player:bow:%d:%d" % [action_token, outcome_index]),
+		"attack_generation": maxi(1, action_token),
+		"hit_index": outcome_index,
+		"action_token": maxi(1, action_token),
+		"amount": amount,
+		"damage_type": type,
+		"source": source,
+		"attacker": owner_entity,
+		"knockback": direction.normalized() * 90.0 if not time_component else Vector2.ZERO,
+		"tags": resolved_tags,
+	})
+	if damage_info == null:
+		return
 	area.receive_hit(damage_info)
 
 
@@ -498,15 +512,24 @@ func _tick_trail_targets() -> void:
 		var tick_damage := maxf(0.0, base_attack * trail_tick_damage_multiplier)
 		if tick_damage <= 0.0:
 			continue
-		var damage_info := DamageInfoScript.new(
-			tick_damage,
-			DamageInfoScript.DamageType.TIME,
-			source,
-			owner_entity
-		)
-		damage_info.tags = attack_tags.duplicate()
-		damage_info.tags.append("attack:temporal_trail")
-		damage_info.tags.append("non_recursive:resource_reward")
+		var resolved_tags: Array[String] = attack_tags.duplicate()
+		resolved_tags.append("attack:temporal_trail")
+		resolved_tags.append("non_recursive:resource_reward")
+		var damage_info = DamageInfoScript.from_plan({
+			"run_id": &"runtime",
+			"target_id": _damage_target_id(area.get_parent()),
+			"hostile_source_id": StringName("player:bow_trail:%d:%d" % [action_token, outcome_index]),
+			"attack_generation": maxi(1, _execution_frame),
+			"hit_index": outcome_index,
+			"action_token": maxi(1, action_token),
+			"amount": tick_damage,
+			"damage_type": DamageInfoScript.DamageType.TIME,
+			"source": source,
+			"attacker": owner_entity,
+			"tags": resolved_tags,
+		})
+		if damage_info == null:
+			continue
 		area.receive_hit(damage_info)
 		_apply_trail_slow(area.get_parent())
 	for target_id: int in stale_ids:
@@ -813,6 +836,18 @@ func _stable_target_id(target: Node) -> int:
 	return target.get_instance_id()
 
 
+func _damage_target_id(target: Node) -> StringName:
+	if target != null and target.has_meta("stable_target_id"):
+		var value: Variant = target.get_meta("stable_target_id")
+		if typeof(value) == TYPE_INT and int(value) > 0:
+			return StringName("target:%d" % int(value))
+	if target != null and target.has_meta("encounter_spawn_id"):
+		var spawn_id := str(target.get_meta("encounter_spawn_id")).strip_edges()
+		if not spawn_id.is_empty() and spawn_id.length() <= 56:
+			return StringName("target:%s" % spawn_id)
+	return &"pending_target"
+
+
 func _target_by_stable_id(target_id: int) -> Node:
 	if target_id <= 0 or not is_inside_tree():
 		return null
@@ -873,10 +908,24 @@ func _deal_radial_time_damage(center: Vector2, radius: float, amount: float, tag
 				and child.global_position.distance_to(center) <= radius
 			):
 				hit_ids[enemy.get_instance_id()] = true
-				var damage_info := DamageInfoScript.new(amount, DamageInfoScript.DamageType.TIME, source, owner_entity)
-				damage_info.tags = attack_tags.duplicate()
-				damage_info.tags.append(tag)
-				damage_info.tags.append("non_recursive:time_interaction")
+				var resolved_tags: Array[String] = attack_tags.duplicate()
+				resolved_tags.append(tag)
+				resolved_tags.append("non_recursive:time_interaction")
+				var damage_info = DamageInfoScript.from_plan({
+					"run_id": &"runtime",
+					"target_id": _damage_target_id(enemy),
+					"hostile_source_id": StringName("player:bow_interaction:%d:%d" % [action_token, outcome_index]),
+					"attack_generation": maxi(1, action_token),
+					"hit_index": outcome_index,
+					"action_token": maxi(1, action_token),
+					"amount": amount,
+					"damage_type": DamageInfoScript.DamageType.TIME,
+					"source": source,
+					"attacker": owner_entity,
+					"tags": resolved_tags,
+				})
+				if damage_info == null:
+					continue
 				child.call("receive_hit", damage_info)
 				break
 

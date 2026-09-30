@@ -520,13 +520,28 @@ func _deliver_damage(
 ) -> void:
 	if amount <= 0.0:
 		return
-	var damage_info := DamageInfoScript.new(amount, type, source, owner_entity)
-	damage_info.crit_chance = critical_chance_bonus if type == damage_type else 0.0
-	damage_info.tags = attack_tags.duplicate()
+	var resolved_tags: Array[String] = attack_tags.duplicate()
 	for tag: String in extra_tags:
-		if not damage_info.tags.has(tag):
-			damage_info.tags.append(tag)
-	damage_info.knockback = direction.normalized() * knockback_pixels if type == damage_type else Vector2.ZERO
+		if not resolved_tags.has(tag):
+			resolved_tags.append(tag)
+	var target := area.get_parent()
+	var damage_info = DamageInfoScript.from_plan({
+		"run_id": &"runtime",
+		"target_id": _damage_target_id(target),
+		"hostile_source_id": StringName("player:gun:%d:%d" % [action_token, outcome_index]),
+		"attack_generation": maxi(1, action_token),
+		"hit_index": outcome_index,
+		"action_token": maxi(1, action_token),
+		"amount": amount,
+		"damage_type": type,
+		"source": source,
+		"attacker": owner_entity,
+		"crit_chance": critical_chance_bonus if type == damage_type else 0.0,
+		"knockback": direction.normalized() * knockback_pixels if type == damage_type else Vector2.ZERO,
+		"tags": resolved_tags,
+	})
+	if damage_info == null:
+		return
 	area.call("receive_hit", damage_info)
 
 
@@ -931,6 +946,14 @@ func _stable_target_id(target: Node) -> int:
 		var stable_hash := absi(stable_key.hash())
 		return stable_hash if stable_hash > 0 else 1
 	return int(target.get_instance_id())
+
+
+func _damage_target_id(target: Node) -> StringName:
+	if target != null and target.has_meta("stable_target_id"):
+		var value: Variant = target.get_meta("stable_target_id")
+		if typeof(value) == TYPE_INT and int(value) > 0:
+			return StringName("target:%d" % int(value))
+	return &"pending_target"
 
 
 func _clear_transient_state() -> void:

@@ -393,18 +393,11 @@ func _assert_hit_pause_duration_contract() -> void:
 
 
 func _assert_hit_feedback_profiles() -> void:
-	var light := DamageInfoScript.new(10.0, DamageInfoScript.DamageType.PHYSICAL)
-	light.tags.append("weapon:sword")
-	var finisher := light.copy_for_source(self)
-	finisher.tags.append("attack:finisher")
-	var heavy := light.copy_for_source(self)
-	heavy.tags.append("attack:heavy")
-	var hostile := light.copy_for_source(self)
-	hostile.tags.clear()
-	hostile.tags.append("enemy:melee")
-	var gauntlets := light.copy_for_source(self)
-	gauntlets.tags.clear()
-	gauntlets.tags.append("weapon:gauntlets")
+	var light := _feedback_damage(10.0, ["weapon:sword"], 1)
+	var finisher := _feedback_damage(10.0, ["weapon:sword", "attack:finisher"], 2)
+	var heavy := _feedback_damage(10.0, ["weapon:sword", "attack:heavy"], 3)
+	var hostile := _feedback_damage(10.0, ["enemy:melee"], 4)
+	var gauntlets := _feedback_damage(10.0, ["weapon:gauntlets"], 5)
 
 	var light_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(light, false)
 	var finisher_profile: Dictionary = CombatFeedback.get_hit_profile_for_test(finisher, false)
@@ -966,8 +959,7 @@ func _assert_high_frequency_feedback_budget() -> void:
 	var target := VelocityActor.new()
 	add_child(target)
 	await get_tree().process_frame
-	var rapid_hit := DamageInfoScript.new(8.0, DamageInfoScript.DamageType.PHYSICAL)
-	rapid_hit.tags.append("weapon:gauntlets")
+	var rapid_hit := _feedback_damage(8.0, ["weapon:gauntlets"], 6)
 	for _index: int in range(14):
 		EventBus.hit_confirmed.emit(rapid_hit, target, 8.0)
 	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
@@ -1185,9 +1177,7 @@ func _assert_floating_text_contract() -> void:
 	add_child(target)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var heavy := DamageInfoScript.new(42.0, DamageInfoScript.DamageType.PHYSICAL)
-	heavy.tags.append("weapon:sword")
-	heavy.tags.append("attack:heavy")
+	var heavy := _feedback_damage(42.0, ["weapon:sword", "attack:heavy"], 7)
 	var expected_anchor := target.get_viewport().get_canvas_transform() * target.global_position
 	var expected_start := Vector2(roundf(expected_anchor.x - 18.0), roundf(expected_anchor.y - 42.0))
 	EventBus.hit_confirmed.emit(heavy, target, 42.0)
@@ -1215,6 +1205,22 @@ func _assert_floating_text_contract() -> void:
 	CombatFeedback.reset_transient_feedback()
 	for _frame: int in range(6):
 		await get_tree().process_frame
+
+
+func _feedback_damage(amount: float, tags: Array[String], token: int) -> RefCounted:
+	return DamageInfoScript.from_plan({
+		"run_id": &"feedback_test",
+		"target_id": &"feedback_target",
+		"hostile_source_id": StringName("test:feedback:%d" % token),
+		"attack_generation": token,
+		"action_token": token,
+		"amount": amount,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": self,
+		"tags": tags,
+		"source_generation": token,
+	})
 
 
 func _luminance(color: Color) -> float:

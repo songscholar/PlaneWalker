@@ -2,7 +2,6 @@ class_name BowWeapon
 extends Node2D
 
 const ArrowScene := preload("res://scenes/combat/player_arrow.tscn")
-const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const WEAPON_ID := &"bow"
 const PIXELS_PER_CELL := 64.0
 const LAUNCH_PROFILE_ID := "bow_launch_v1"
@@ -437,7 +436,6 @@ func _install_runtime_snapshot(value: Dictionary, staged: Dictionary) -> bool:
 	_starfall_source_id = StringName(str(value["starfall_source_id"]))
 	_starfall_elapsed_frames = int(value["starfall_elapsed_frames"])
 	if not _starfall_schedule.is_empty():
-		_connect_starfall_damage_hook()
 		if not _restore_starfall_targets(value["starfall_targets"]):
 			return false
 		if bool(value["starfall_invulnerability_active"]):
@@ -509,7 +507,11 @@ func _restore_starfall_targets(value: Variant) -> bool:
 				return false
 			target.call("apply_time_rift", _starfall_source_id, 1.0 - slow_ratio)
 		_starfall_targets[target.get_instance_id()] = {"target": target, "erosion_stacks": int(state["erosion_stacks"])}
-		_set_starfall_erosion_meta(target, int(state["erosion_stacks"]))
+		_set_starfall_erosion_meta(
+			target,
+			int(state["erosion_stacks"]),
+			_starfall_time_damage_per_stack(parameters)
+		)
 	return true
 
 
@@ -698,7 +700,6 @@ func _start_starfall_schedule(descriptor: Dictionary, definition: Dictionary) ->
 		int(descriptor["outcome_index"]),
 	])
 	_starfall_elapsed_frames = 0
-	_connect_starfall_damage_hook()
 	_apply_starfall_invulnerability(parameters)
 	_refresh_starfall_targets()
 	if not _release_next_starfall_wave():
@@ -1000,6 +1001,7 @@ func _advance_starfall_erosion() -> void:
 	var erosion: Dictionary = erosion_value
 	var interval := int(erosion.get("stack_interval_frames", 0))
 	var maximum := int(erosion.get("maximum_stacks", 0))
+	var per_stack := _starfall_time_damage_per_stack(parameters)
 	if interval <= 0 or maximum <= 0 or _starfall_elapsed_frames % interval != 0:
 		return
 	for enemy_id: Variant in _starfall_targets.keys():
@@ -1010,14 +1012,27 @@ func _advance_starfall_erosion() -> void:
 			continue
 		state["erosion_stacks"] = mini(maximum, int(state.get("erosion_stacks", 0)) + 1)
 		_starfall_targets[enemy_id] = state
-		_set_starfall_erosion_meta(target_value, int(state["erosion_stacks"]))
+		_set_starfall_erosion_meta(target_value, int(state["erosion_stacks"]), per_stack)
 
 
-func _set_starfall_erosion_meta(target: Node, stacks: int) -> void:
+func _set_starfall_erosion_meta(target: Node, stacks: int, per_stack: float) -> void:
 	var sources_value: Variant = target.get_meta("bow_time_erosion_sources", {})
-	var sources: Dictionary = (sources_value as Dictionary).duplicate() if sources_value is Dictionary else {}
-	sources[str(_starfall_source_id)] = stacks
+	var sources: Dictionary = (sources_value as Dictionary).duplicate(true) if sources_value is Dictionary else {}
+	sources[str(_starfall_source_id)] = {
+		"stacks": maxi(0, stacks),
+		"time_damage_taken_per_stack": maxf(0.0, per_stack),
+	}
 	target.set_meta("bow_time_erosion_sources", sources)
+
+
+func _starfall_time_damage_per_stack(parameters: Dictionary) -> float:
+	var erosion_value: Variant = parameters.get("time_erosion", {})
+	if not erosion_value is Dictionary:
+		return 0.0
+	var value: Variant = (erosion_value as Dictionary).get("time_damage_taken_per_stack", 0.0)
+	if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
+		return 0.0
+	return maxf(0.0, float(value))
 
 
 func _clear_starfall_target(enemy_id: int) -> void:
@@ -1033,7 +1048,7 @@ func _clear_starfall_target(enemy_id: int) -> void:
 		target.call("clear_time_rift", _starfall_source_id)
 	var sources_value: Variant = target.get_meta("bow_time_erosion_sources", {})
 	if sources_value is Dictionary:
-		var sources: Dictionary = (sources_value as Dictionary).duplicate()
+		var sources: Dictionary = (sources_value as Dictionary).duplicate(true)
 		sources.erase(str(_starfall_source_id))
 		if sources.is_empty():
 			target.remove_meta("bow_time_erosion_sources")
@@ -1041,35 +1056,7 @@ func _clear_starfall_target(enemy_id: int) -> void:
 			target.set_meta("bow_time_erosion_sources", sources)
 
 
-func _connect_starfall_damage_hook() -> void:
-	if not EventBus.damage_about_to_apply.is_connected(_on_starfall_damage_about_to_apply):
-		EventBus.damage_about_to_apply.connect(_on_starfall_damage_about_to_apply)
-
-
-func _disconnect_starfall_damage_hook() -> void:
-	if EventBus.damage_about_to_apply.is_connected(_on_starfall_damage_about_to_apply):
-		EventBus.damage_about_to_apply.disconnect(_on_starfall_damage_about_to_apply)
-
-
-func _on_starfall_damage_about_to_apply(damage_info: RefCounted, target: Node) -> void:
-	if (
-		_starfall_schedule.is_empty()
-		or damage_info == null
-		or target == null
-		or int(damage_info.get("damage_type")) != DamageInfoScript.DamageType.TIME
-		or not _starfall_targets.has(target.get_instance_id())
-	):
-		return
-	var parameters: Dictionary = (_starfall_schedule["descriptor"] as Dictionary)["parameters"]
-	var erosion: Dictionary = _dictionary_copy(parameters.get("time_erosion", {}))
-	var stacks := int((_starfall_targets[target.get_instance_id()] as Dictionary).get("erosion_stacks", 0))
-	var per_stack := maxf(0.0, float(erosion.get("time_damage_taken_per_stack", 0.0)))
-	if stacks > 0 and per_stack > 0.0:
-		damage_info.set("amount", float(damage_info.get("amount")) * (1.0 + per_stack * float(stacks)))
-
-
 func _clear_starfall_schedule() -> void:
-	_disconnect_starfall_damage_hook()
 	_clear_starfall_invulnerability()
 	for enemy_id: Variant in _starfall_targets.keys():
 		_clear_starfall_target(int(enemy_id))

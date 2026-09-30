@@ -542,6 +542,21 @@ func _assert_player_attack(
 	var damage_info: RefCounted = hitbox.get("_active_damage_info")
 	_suite.assert_true(damage_info != null, "%s active phase owns DamageInfo" % expected["id"])
 	if damage_info != null:
+		var action_identity: Dictionary = player.weapon_damage_action_identity()
+		_suite.assert_true(
+			not action_identity.is_empty(),
+			"%s exposes its committed coordinator identity" % expected["id"]
+		)
+		_suite.assert_equal(
+			damage_info.action_token,
+			int(action_identity.get("action_token", 0)),
+			"%s damage uses the committed coordinator token" % expected["id"]
+		)
+		_suite.assert_equal(
+			damage_info.attack_generation,
+			int(action_identity.get("attack_generation", 0)),
+			"%s damage uses the committed action generation" % expected["id"]
+		)
 		_suite.assert_close(
 			float(damage_info.amount),
 			30.0 * float(expected["multiplier"]),

@@ -605,11 +605,23 @@ func _deliver_damage_to_target(
 			damage_type = DamageInfoScript.DamageType.ICE
 		"lightning":
 			damage_type = DamageInfoScript.DamageType.LIGHTNING
-	var damage_info := DamageInfoScript.new(amount, damage_type, source, owner_entity)
-	damage_info.tags = ["weapon:staff", "action:%s" % source_action_id, "element:%s" % damage_element]
-	damage_info.action_token = action_token
-	damage_info.source_generation = generation
-	damage_info.knockback = knockback
+	var damage_info = DamageInfoScript.from_plan({
+		"run_id": &"runtime",
+		"target_id": _damage_target_id(target),
+		"hostile_source_id": StringName("player:staff:%d:%d" % [action_token, generation]),
+		"attack_generation": generation,
+		"hit_index": outcome_index,
+		"action_token": action_token,
+		"amount": amount,
+		"damage_type": damage_type,
+		"source": source,
+		"attacker": owner_entity,
+		"knockback": knockback,
+		"tags": ["weapon:staff", "action:%s" % source_action_id, "element:%s" % damage_element],
+		"source_generation": generation,
+	})
+	if damage_info == null:
+		return 0.0
 	var hurtbox := target.get_node_or_null("Hurtbox")
 	if hurtbox != null and hurtbox.has_method("receive_hit"):
 		return float(hurtbox.call("receive_hit", damage_info))
@@ -737,6 +749,19 @@ func _stable_target_id(target: Node) -> int:
 	if not stable_key.is_empty():
 		return maxi(1, _stable_hash(stable_key))
 	return target.get_instance_id()
+
+
+func _damage_target_id(target: Node) -> StringName:
+	if target != null and target.has_meta("stable_target_id"):
+		var value: Variant = target.get_meta("stable_target_id")
+		if typeof(value) == TYPE_INT and int(value) > 0:
+			return StringName("target:%d" % int(value))
+	for metadata_key: String in ["encounter_spawn_id", "spawn_id"]:
+		if target != null and target.has_meta(metadata_key):
+			var metadata_value := str(target.get_meta(metadata_key, "")).strip_edges()
+			if not metadata_value.is_empty() and metadata_value.length() <= 56:
+				return StringName("target:%s" % metadata_value)
+	return &"pending_target"
 
 
 func _ensure_elemental_blind_seed(target: Node) -> bool:

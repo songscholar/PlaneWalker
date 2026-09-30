@@ -152,12 +152,25 @@ func _test_damage_and_death_publish_once() -> void:
 	add_child(entity)
 	await get_tree().process_frame
 
-	var damage_info := DamageInfoScript.new(
-		25.0,
-		DamageInfoScript.DamageType.PHYSICAL,
-		self,
-		self
-	)
+	var damage_info := DamageInfoScript.from_plan({
+		"run_id": "combat-event-test",
+		"target_id": "event-test-target",
+		"hostile_source_id": "event-test-source",
+		"attack_generation": 1,
+		"hit_index": 0,
+		"action_token": 1,
+		"amount": 25.0,
+		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
+		"source": self,
+		"attacker": self,
+		"can_crit": false,
+		"crit_chance": 0.0,
+		"crit_multiplier": 1.5,
+		"knockback": Vector2.ZERO,
+		"tags": ["test:lethal"],
+		"source_generation": 1,
+		"control_effect": {},
+	})
 	_suite.assert_close(health.take_damage(damage_info), 25.0, "lethal hit commits its calculated damage")
 	_suite.assert_close(health.take_damage(damage_info), 0.0, "dead target rejects duplicate damage")
 	_suite.assert_equal(_recorder.damage_about_count, 1, "one hit announces one pending damage")

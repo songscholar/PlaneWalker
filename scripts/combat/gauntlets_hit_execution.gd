@@ -480,23 +480,31 @@ func _deliver_component(target: Node, component: Dictionary) -> float:
 	var amount := float(component.get("amount", 0.0))
 	if amount <= 0.0:
 		return 0.0
-	var damage_info := DamageInfoScript.new(
-		amount,
-		int(component["type"]),
-		source,
-		owner_entity
-	)
-	damage_info.action_token = action_token
-	damage_info.source_generation = generation
-	damage_info.crit_chance = float(parameters.get(
+	var primary := bool(component.get("primary", false))
+	var crit_chance := float(parameters.get(
 		"critical_chance_bonus",
 		parameters.get("critical_bonus", 0.0)
-	)) if bool(component.get("primary", false)) else 0.0
-	damage_info.can_crit = bool(component.get("primary", false))
-	damage_info.tags = _damage_tags(component)
-	if bool(component.get("primary", false)):
-		damage_info.knockback = direction * _knockback_pixels()
-		damage_info.control_effect = _control_effect()
+	)) if primary else 0.0
+	var damage_info = DamageInfoScript.from_plan({
+		"run_id": &"runtime",
+		"target_id": _damage_target_id(target),
+		"hostile_source_id": StringName("player:gauntlets:%d:%d" % [action_token, generation]),
+		"attack_generation": generation,
+		"hit_index": outcome_index,
+		"action_token": action_token,
+		"amount": amount,
+		"damage_type": int(component["type"]),
+		"source": source,
+		"attacker": owner_entity,
+		"can_crit": primary,
+		"crit_chance": crit_chance,
+		"knockback": direction * _knockback_pixels() if primary else Vector2.ZERO,
+		"tags": _damage_tags(component),
+		"source_generation": generation,
+		"control_effect": _control_effect() if primary else {},
+	})
+	if damage_info == null:
+		return 0.0
 	return _deliver_to_target(target, damage_info)
 
 
@@ -705,6 +713,14 @@ func _stable_target_id(target: Node) -> int:
 		if typeof(value) == TYPE_INT and int(value) > 0:
 			return int(value)
 	return target.get_instance_id()
+
+
+func _damage_target_id(target: Node) -> StringName:
+	if target != null and target.has_meta("stable_target_id"):
+		var value: Variant = target.get_meta("stable_target_id")
+		if typeof(value) == TYPE_INT and int(value) > 0:
+			return StringName("target:%d" % int(value))
+	return &"pending_target"
 
 
 func _target_position(target: Node) -> Vector2:

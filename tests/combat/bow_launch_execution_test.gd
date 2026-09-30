@@ -558,6 +558,13 @@ func _test_trail_and_starfall_statuses_cleanup_without_timers() -> void:
 	var target := _recording_enemy_target(1)
 	add_child(target["enemy"])
 	target["enemy"].global_position = Vector2(320.0, 0.0)
+	var external_erosion := {
+		"external_starfall": {
+			"stacks": 2,
+			"time_damage_taken_per_stack": 0.05,
+		},
+	}
+	target["enemy"].set_meta("bow_time_erosion_sources", external_erosion.duplicate(true))
 	var starfall := _starfall_definition()
 	bow.begin_profile_action(starfall)
 	_suite.assert_true(bow.release_profile_action(), "Starfall starts its source-aware area lifecycle")
@@ -565,12 +572,18 @@ func _test_trail_and_starfall_statuses_cleanup_without_timers() -> void:
 	_suite.assert_equal(target["enemy"].slow_sources.size(), 1, "Starfall applies one source-aware area slow")
 	bow.advance_profile_action_for_test(30)
 	var erosion_sources: Dictionary = target["enemy"].get_meta("bow_time_erosion_sources", {})
-	_suite.assert_equal(erosion_sources.values(), [1], "Starfall adds one erosion stack at frame 30")
+	_suite.assert_equal(erosion_sources.size(), 2, "Starfall adds one source without replacing unrelated erosion")
+	var owned_erosion: Dictionary = {}
+	for source_id: Variant in erosion_sources:
+		if str(source_id) != "external_starfall":
+			owned_erosion = erosion_sources[source_id]
+	_suite.assert_equal(owned_erosion, {"stacks": 1, "time_damage_taken_per_stack": 0.03}, "Starfall stores one source-owned erosion stack and its multiplier at frame 30")
 	health.apply_invulnerability(0.05)
 	bow.cancel_profile_action()
 	_suite.assert_true(health.invulnerable, "Starfall cancellation releases only its source while timed Dash invulnerability remains active")
 	_suite.assert_true(target["enemy"].slow_sources.is_empty(), "Starfall cancellation clears its slow source")
-	_suite.assert_true(not target["enemy"].has_meta("bow_time_erosion_sources"), "Starfall cancellation clears erosion metadata")
+	_suite.assert_equal(target["enemy"].get_meta("bow_time_erosion_sources", {}), external_erosion, "Starfall cancellation clears only its owned erosion metadata")
+	target["enemy"].remove_meta("bow_time_erosion_sources")
 	await get_tree().create_timer(0.07).timeout
 	_suite.assert_true(not health.invulnerable, "invulnerability ends when the overlapping Dash timer expires")
 	_suite.assert_true(health.acquire_invulnerability_source(&"manual_source"), "source-aware invulnerability acquisition succeeds")
@@ -962,7 +975,8 @@ func _test_starfall_snapshot_resumes_without_duplicate_wave() -> void:
 	_suite.assert_true(health.invulnerable, "restored Starfall reacquires its owned invulnerability source")
 	_suite.assert_equal(target["enemy"].slow_sources.size(), 1, "restored Starfall reapplies its area slow")
 	var sources: Dictionary = target["enemy"].get_meta("bow_time_erosion_sources", {})
-	_suite.assert_equal(sources.values(), [erosion_before], "restored Starfall preserves erosion stacks")
+	_suite.assert_equal(sources.size(), 1, "restored Starfall recreates exactly one owned erosion source")
+	_suite.assert_equal(sources.values()[0], {"stacks": erosion_before, "time_damage_taken_per_stack": 0.03}, "restored Starfall preserves erosion stacks and multiplier")
 	bow.advance_profile_action_for_test(maxi(1, frames_until_next))
 	_suite.assert_equal(_arrows_for_token(701).size(), restored_wave_count + 3, "restored Starfall releases only the next scheduled wave")
 	var outcomes: Dictionary = {}
