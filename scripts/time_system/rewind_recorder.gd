@@ -13,6 +13,7 @@ extends Node
 
 var _snapshots: Array[Dictionary] = []
 var _sample_timer: float = 0.0
+var _run_id: StringName = &""
 
 
 func _process(delta: float) -> void:
@@ -26,6 +27,22 @@ func _process(delta: float) -> void:
 
 func has_snapshot() -> bool:
 	return not _snapshots.is_empty()
+
+
+func configure_run(run_id: StringName) -> bool:
+	var normalized := StringName(str(run_id).strip_edges())
+	if normalized == &"" or str(normalized).contains(":"):
+		return false
+	if _run_id == normalized:
+		return true
+	_run_id = normalized
+	clear_snapshots()
+	_sample_timer = 0.0
+	return true
+
+
+func current_run_id() -> StringName:
+	return _run_id
 
 
 func rewind_to_oldest_snapshot() -> void:
@@ -98,11 +115,19 @@ func clear_snapshots() -> void:
 
 
 func _record_snapshot() -> void:
+	var hp_loss_state: Dictionary = (
+		health_component.call("hp_loss_state")
+		if health_component != null and health_component.has_method("hp_loss_state")
+		else {"irreversible_hp_loss_total": 0.0, "revision": 0}
+	)
 	_snapshots.append({
+		"run_id": _run_id,
 		"position": target.global_position,
 		"facing": _capture_facing(),
 		"velocity": target.get("velocity") if _has_property(target, &"velocity") else Vector2.ZERO,
 		"hp": health_component.current_hp,
+		"irreversible_hp_loss_total": float(hp_loss_state.get("irreversible_hp_loss_total", 0.0)),
+		"irreversible_hp_loss_revision": int(hp_loss_state.get("revision", 0)),
 		"safe_action": _capture_safe_action(),
 	})
 	var max_samples := int(record_seconds * samples_per_second)

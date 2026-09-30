@@ -3,6 +3,7 @@ extends Node
 
 const DamageCalculatorScript := preload("res://scripts/combat/damage_calculator.gd")
 const DamageResolutionScript := preload("res://scripts/combat/damage_resolution.gd")
+const IrreversibleCharacterLedgerScript := preload("res://scripts/player/characters/irreversible_character_ledger.gd")
 
 const DEFENSE_DECISION_KEYS := {
 	"prevented": true,
@@ -35,6 +36,7 @@ var healing_multiplier: float = 1.0
 var _invulnerability_token: int = 0
 var _active_invulnerability_tokens: Dictionary = {}
 var _active_invulnerability_sources: Dictionary = {}
+var _irreversible_ledger: RefCounted = IrreversibleCharacterLedgerScript.new()
 
 
 func _ready() -> void:
@@ -67,6 +69,65 @@ func configure_accessibility_assists(assists: Dictionary) -> void:
 		damage_received_multiplier = 1.0
 		return
 	damage_received_multiplier = clampf(float(multiplier), 0.0, 1.0)
+
+
+func configure_run(run_id: StringName) -> bool:
+	var normalized := StringName(str(run_id).strip_edges())
+	if normalized == &"" or str(normalized).contains(":"):
+		return false
+	var current_run := irreversible_run_id()
+	if current_run == &"":
+		return bool(_irreversible_ledger.call("configure_run", normalized))
+	if current_run == normalized:
+		return true
+	_irreversible_ledger.call("reset_for_run", normalized)
+	return irreversible_run_id() == normalized
+
+
+func irreversible_run_id() -> StringName:
+	var value: Dictionary = _irreversible_ledger.call("snapshot")
+	return StringName(str(value.get("run_id", "")))
+
+
+func hp_loss_state() -> Dictionary:
+	return (_irreversible_ledger.call("hp_loss_state") as Dictionary).duplicate(true)
+
+
+func irreversible_ledger_snapshot() -> Dictionary:
+	return (_irreversible_ledger.call("snapshot") as Dictionary).duplicate(true)
+
+
+func restore_irreversible_replay_snapshot(value: Dictionary) -> bool:
+	return bool(_irreversible_ledger.call("restore_replay_snapshot", value.duplicate(true)))
+
+
+func transaction_snapshot() -> Dictionary:
+	return {
+		"run_id": irreversible_run_id(),
+		"current_hp": current_hp,
+		"dead": dead,
+		"ledger": (_irreversible_ledger.call("freeze_transaction_snapshot") as Dictionary).duplicate(true),
+	}
+
+
+func restore_transaction_snapshot(value: Dictionary) -> bool:
+	if not _valid_health_transaction_snapshot(value):
+		return false
+	var ledger_snapshot := (value["ledger"] as Dictionary).duplicate(true)
+	if not bool(_irreversible_ledger.call("restore_transaction_snapshot", ledger_snapshot)):
+		return false
+	current_hp = float(value["current_hp"])
+	dead = bool(value["dead"])
+	return true
+
+
+func discard_transaction_snapshot(value: Dictionary) -> bool:
+	if not _valid_health_transaction_snapshot(value):
+		return false
+	return bool(_irreversible_ledger.call(
+		"discard_transaction_snapshot",
+		(value["ledger"] as Dictionary).duplicate(true)
+	))
 
 
 func take_damage(damage_info: RefCounted) -> float:
@@ -257,6 +318,23 @@ func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -
 	var final_amount := float(resolution.finalized_damage())
 	if not is_finite(final_amount) or final_amount <= 0.0:
 		return _prevented_resolution(damage_info, &"invalid_resolution")
+	if bool(snapshot.get("irreversible", false)):
+		var actual_loss := minf(current_hp, final_amount)
+		var claim_result := _record_irreversible_loss(
+			actual_loss,
+			_irreversible_reason_from_tags(snapshot.get("tags", [])),
+			int(snapshot.get("action_token", 0)),
+			maxi(
+				1,
+				int(snapshot.get("source_generation", snapshot.get("attack_generation", 0)))
+			),
+			StringName(str(snapshot.get("run_id", "")))
+		)
+		if not bool(claim_result.get("ok", false)):
+			return _prevented_resolution(
+				damage_info,
+				StringName(str(claim_result.get("code", "irreversible_claim_rejected")).to_lower())
+			)
 	_emit_damage_observation(damage_info)
 	current_hp = maxf(0.0, current_hp - final_amount)
 	damaged.emit(final_amount, current_hp)
@@ -503,6 +581,140 @@ func lose_health(amount: float, source: Variant = null) -> float:
 	if current_hp <= 0.0:
 		_die(source)
 	return final_amount
+
+
+func lose_health_irreversible(
+	amount: float,
+	reason: StringName,
+	source_token: int,
+	source_generation: int,
+	claim_run_id: StringName = &""
+) -> RefCounted:
+	if not is_finite(amount) or amount <= 0.0:
+		return null
+	var effective_run_id := irreversible_run_id() if claim_run_id == &"" else claim_run_id
+	var actual_loss := minf(current_hp, amount)
+	var context := _irreversible_resolution_context(
+		amount,
+		actual_loss,
+		reason,
+		source_token,
+		source_generation,
+		effective_run_id
+	)
+	if context.is_empty():
+		return null
+	if dead or actual_loss <= 0.0:
+		return DamageResolutionScript.prevented(&"target_dead", context)
+	var planned_resolution: RefCounted = DamageResolutionScript.applied(actual_loss, context)
+	if planned_resolution == null:
+		return null
+	var claim_result := _record_irreversible_loss(
+		actual_loss,
+		reason,
+		source_token,
+		source_generation,
+		effective_run_id
+	)
+	if not bool(claim_result.get("ok", false)):
+		return DamageResolutionScript.prevented(
+			StringName(str(claim_result.get("code", "irreversible_claim_rejected")).to_lower()),
+			context
+		)
+	current_hp = maxf(0.0, current_hp - actual_loss)
+	damaged.emit(actual_loss, current_hp)
+	if current_hp <= 0.0:
+		_die(reason)
+	return planned_resolution
+
+
+func _record_irreversible_loss(
+	actual_loss: float,
+	reason: StringName,
+	source_token: int,
+	source_generation: int,
+	claim_run_id: StringName
+) -> Dictionary:
+	if irreversible_run_id() == &"":
+		return {"ok": false, "code": &"RUN_NOT_CONFIGURED"}
+	return _irreversible_ledger.call(
+		"record_hp_loss",
+		actual_loss,
+		reason,
+		source_token,
+		source_generation,
+		claim_run_id
+	)
+
+
+func _irreversible_resolution_context(
+	requested_amount: float,
+	actual_loss: float,
+	reason: StringName,
+	source_token: int,
+	source_generation: int,
+	run_id: StringName
+) -> Dictionary:
+	if (
+		run_id == &""
+		or str(reason).strip_edges().is_empty()
+		or source_token <= 0
+		or source_generation <= 0
+		or not is_finite(requested_amount)
+		or requested_amount <= 0.0
+		or not is_finite(actual_loss)
+		or actual_loss < 0.0
+	):
+		return {}
+	return {
+		"run_id": run_id,
+		"target_id": _authoritative_target_id(
+			StringName(get_parent().name if get_parent() != null else "player")
+		),
+		"hostile_source_id": StringName(str(reason).substr(0, 64)),
+		"attack_generation": source_generation,
+		"hit_index": 0,
+		"action_token": source_token,
+		"source_generation": source_generation,
+		"original_amount": requested_amount,
+		"post_weapon_defense_amount": actual_loss,
+		"post_character_defense_amount": actual_loss,
+		"post_accessibility_amount": actual_loss,
+		"post_defense_amount": actual_loss,
+		"guard_kind": &"",
+		"irreversible": true,
+		"tags": ["damage:irreversible", str(reason)],
+	}
+
+
+func _irreversible_reason_from_tags(tags: Variant) -> StringName:
+	if tags is Array or tags is PackedStringArray:
+		for tag_value: Variant in tags:
+			var tag := str(tag_value).strip_edges()
+			var semantic := _tag_semantic(tag)
+			if semantic in ["self_cost", "corruption", "terminal"] or tag.begins_with("curse:"):
+				return StringName(tag)
+	return &"damage:irreversible"
+
+
+func _valid_health_transaction_snapshot(value: Dictionary) -> bool:
+	if value.size() != 4:
+		return false
+	for field: String in ["run_id", "current_hp", "dead", "ledger"]:
+		if not value.has(field):
+			return false
+	if StringName(str(value["run_id"])) != irreversible_run_id():
+		return false
+	if typeof(value["current_hp"]) not in [TYPE_INT, TYPE_FLOAT]:
+		return false
+	var restored_hp := float(value["current_hp"])
+	if not is_finite(restored_hp) or restored_hp < 0.0 or restored_hp > max_hp:
+		return false
+	if typeof(value["dead"]) != TYPE_BOOL or not value["ledger"] is Dictionary:
+		return false
+	if bool(value["dead"]) and restored_hp > 0.0:
+		return false
+	return StringName(str((value["ledger"] as Dictionary).get("run_id", ""))) == irreversible_run_id()
 
 
 func _apply_target_damage_modifiers(damage_info: RefCounted, starting_amount: float) -> float:

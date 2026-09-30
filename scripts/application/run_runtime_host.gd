@@ -104,11 +104,17 @@ func start_run(config: Dictionary) -> Variant:
 	if (
 		_player == null
 		or not is_instance_valid(_player)
+		or not _player.has_method("configure_run")
 		or not _player.has_method("configure_loadout")
 		or not config_value is Dictionary
 		or not accepted_loadout_value is Dictionary
 	):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
+	if not bool(_player.call("configure_run", StringName(run_id))):
+		return _fail_start(
+			&"LOADOUT_APPLY_FAILED",
+			{"configured": false, "reason": "run_identity_rejected"}
+		)
 	var accepted_config := (config_value as Dictionary).duplicate(true)
 	var accepted_loadout := accepted_loadout_value as Dictionary
 	var weapon_profile_value: Variant = accepted_loadout.get("weapon_profile", {})

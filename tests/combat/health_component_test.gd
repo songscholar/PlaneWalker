@@ -43,6 +43,9 @@ var _damage_about_count: int = 0
 var _damage_applied_count: int = 0
 var _hit_confirmed_count: int = 0
 var _damaged_signal_count: int = 0
+var _capture_irreversible_order: bool = false
+var _irreversible_order: Array[Dictionary] = []
+var _observed_health: Node
 
 
 func _ready() -> void:
@@ -70,6 +73,7 @@ func _run() -> void:
 	_test_invalid_and_bypass_skip_owner_planning(owner, health)
 	_test_rejected_defense_commit_is_atomic(owner, health)
 	_test_take_damage_queries_and_commits_owner_decisions(owner, health)
+	_test_irreversible_loss_is_actual_atomic_and_published_before_death(health)
 
 	_disconnect_damage_facts()
 	if health.damaged.is_connected(_on_health_damaged):
@@ -90,6 +94,7 @@ func _create_fixture() -> Dictionary:
 	owner.add_child(health)
 	add_child(owner)
 	await get_tree().process_frame
+	_suite.assert_true(health.configure_run(&"health-pipeline-run"), "health fixture installs the authoritative run")
 	return {"owner": owner, "health": health}
 
 
@@ -276,6 +281,7 @@ func _test_unguardable_and_irreversible_damage_bypass_defense(owner: DamageOwner
 		{"tag": "damage:irreversible", "token": 61, "irreversible": true},
 	]:
 		health.current_hp = 100.0
+		var hp_loss_before: Dictionary = health.hp_loss_state()
 		var resolution: RefCounted = health.resolve_and_apply_damage(
 			_damage_plan(20.0, [case_value["tag"]], int(case_value["token"])),
 			{"prevented": true, "guard_kind": "sword_perfect"},
@@ -287,6 +293,20 @@ func _test_unguardable_and_irreversible_damage_bypass_defense(owner: DamageOwner
 		_suite.assert_close(float(snapshot["post_character_defense_amount"]), 20.0, "%s bypasses character defense" % case_value["tag"])
 		_suite.assert_equal(snapshot["irreversible"], case_value["irreversible"], "%s records irreversible semantics" % case_value["tag"])
 		_suite.assert_close(health.current_hp, 80.0, "%s still applies damage" % case_value["tag"])
+		var hp_loss_after: Dictionary = health.hp_loss_state()
+		if bool(case_value["irreversible"]):
+			_suite.assert_close(
+				float(hp_loss_after.get("irreversible_hp_loss_total", -1.0)),
+				float(hp_loss_before.get("irreversible_hp_loss_total", 0.0)) + 20.0,
+				"irreversible DamageInfo records the actual finalized loss"
+			)
+			_suite.assert_equal(
+				int(hp_loss_after.get("revision", -1)),
+				int(hp_loss_before.get("revision", 0)) + 1,
+				"irreversible DamageInfo commits one stable ledger claim"
+			)
+		else:
+			_suite.assert_equal(hp_loss_after, hp_loss_before, "unguardable-only damage does not enter the irreversible ledger")
 	owner.commit_count = 0
 
 
@@ -371,6 +391,86 @@ func _test_take_damage_queries_and_commits_owner_decisions(owner: DamageOwner, h
 	_suite.assert_equal(owner.commit_count, 2, "compatibility wrapper commits a valid prevented guard once")
 	owner.weapon_decision = {}
 	owner.character_decision = {}
+
+
+func _test_irreversible_loss_is_actual_atomic_and_published_before_death(health: HealthComponent) -> void:
+	_suite.assert_true(health.configure_run(&"health-irrev-run"), "health can install a new authoritative run")
+	health.current_hp = 20.0
+	health.dead = false
+	_reset_damage_facts()
+
+	var first: RefCounted = health.lose_health_irreversible(
+		6.0,
+		&"curse:time_stop",
+		801,
+		9,
+		&"health-irrev-run"
+	)
+	_suite.assert_true(first != null and not first.is_prevented(), "first irreversible claim applies")
+	if first != null:
+		_suite.assert_close(first.finalized_damage(), 6.0, "first irreversible resolution reports actual loss")
+	var after_first: Dictionary = health.hp_loss_state()
+	_suite.assert_equal(
+		after_first,
+		{"irreversible_hp_loss_total": 6.0, "revision": 1},
+		"first irreversible claim updates total and revision once"
+	)
+	var damaged_after_first := _damaged_signal_count
+
+	var duplicate: RefCounted = health.lose_health_irreversible(
+		99.0,
+		&"curse:time_stop",
+		801,
+		9,
+		&"health-irrev-run"
+	)
+	_suite.assert_true(duplicate != null and duplicate.is_prevented(), "duplicate irreversible claim is rejected")
+	if duplicate != null:
+		_suite.assert_close(duplicate.finalized_damage(), 0.0, "duplicate irreversible claim finalizes zero damage")
+	_suite.assert_close(health.current_hp, 14.0, "duplicate irreversible claim cannot change HP")
+	_suite.assert_equal(health.hp_loss_state(), after_first, "duplicate irreversible claim cannot change ledger state")
+	_suite.assert_equal(_damaged_signal_count, damaged_after_first, "duplicate irreversible claim emits no damaged signal")
+
+	_irreversible_order.clear()
+	_observed_health = health
+	_capture_irreversible_order = true
+	EventBus.entity_died.connect(_on_irreversible_entity_died)
+	health.died.connect(_on_irreversible_died)
+	var terminal: RefCounted = health.lose_health_irreversible(
+		100.0,
+		&"terminal_cost",
+		802,
+		9,
+		&"health-irrev-run"
+	)
+	_capture_irreversible_order = false
+	if EventBus.entity_died.is_connected(_on_irreversible_entity_died):
+		EventBus.entity_died.disconnect(_on_irreversible_entity_died)
+	if health.died.is_connected(_on_irreversible_died):
+		health.died.disconnect(_on_irreversible_died)
+
+	_suite.assert_true(terminal != null and not terminal.is_prevented(), "terminal irreversible claim applies")
+	if terminal != null:
+		_suite.assert_close(terminal.finalized_damage(), 14.0, "overkill records and reports only actual HP removed")
+	_suite.assert_close(health.current_hp, 0.0, "terminal irreversible loss reaches zero HP")
+	_suite.assert_true(health.dead, "terminal irreversible loss marks the target dead")
+	_suite.assert_equal(
+		health.hp_loss_state(),
+		{"irreversible_hp_loss_total": 20.0, "revision": 2},
+		"terminal overkill adds only the remaining fourteen HP"
+	)
+	var observed_events: Array[String] = []
+	for observation: Dictionary in _irreversible_order:
+		observed_events.append(str(observation.get("event", "")))
+		_suite.assert_equal(
+			observation.get("hp_loss_state", {}),
+			{"irreversible_hp_loss_total": 20.0, "revision": 2},
+			"%s observes the committed terminal ledger claim" % str(observation.get("event", "death callback"))
+		)
+	_suite.assert_equal(observed_events.count("damaged"), 1, "terminal irreversible loss emits one damaged callback")
+	_suite.assert_equal(observed_events.count("entity_died"), 1, "entity_died observes one terminal publication")
+	_suite.assert_equal(observed_events.count("died"), 1, "died observes one terminal publication")
+	_observed_health = null
 
 
 func _damage_plan(amount: float, tags: Array[String], token: int) -> RefCounted:
@@ -461,7 +561,26 @@ func _on_damage_about_to_apply(_damage_info: Variant, _target: Node) -> void:
 
 func _on_health_damaged(_amount: float, _current_hp: float) -> void:
 	_damaged_signal_count += 1
+	if _capture_irreversible_order:
+		_capture_irreversible_observation("damaged")
 
 
 func _on_hit_confirmed(_damage_info: Variant, _target: Node, _amount: float) -> void:
 	_hit_confirmed_count += 1
+
+
+func _on_irreversible_entity_died(_entity: Node, _killer: Variant) -> void:
+	_capture_irreversible_observation("entity_died")
+
+
+func _on_irreversible_died(_killer: Variant) -> void:
+	_capture_irreversible_observation("died")
+
+
+func _capture_irreversible_observation(event_name: String) -> void:
+	if _observed_health == null or not _observed_health.has_method("hp_loss_state"):
+		return
+	_irreversible_order.append({
+		"event": event_name,
+		"hp_loss_state": (_observed_health.call("hp_loss_state") as Dictionary).duplicate(true),
+	})

@@ -90,6 +90,8 @@ var _weapon_replay_restore_transaction_active: bool = false
 var _weapon_replay_restore_transaction_token: int = 0
 var _next_weapon_replay_restore_transaction_token: int = 1
 var _weapon_replay_restore_transaction_before: Dictionary = {}
+var _irreversible_self_damage_generation: int = 1
+var _next_irreversible_self_damage_token: int = 1
 
 
 func _ready() -> void:
@@ -182,7 +184,8 @@ func try_time_stop() -> bool:
 		if node.has_method("apply_weakpoint"):
 			node.apply_weakpoint(time_stop_weakpoint_duration, time_stop_weakpoint_damage_bonus)
 	EventBus.time_skill_started.emit(&"time_stop", {})
-	_take_self_damage(time_stop_self_damage, &"curse:time_stop")
+	if not _take_self_damage(time_stop_self_damage, &"curse:time_stop"):
+		push_error("Time Stop irreversible self-damage claim failed")
 	if _time_stop_remaining <= 0.0:
 		_end_time_stop(true)
 	return true
@@ -230,7 +233,8 @@ func try_rewind(recorder: Node) -> bool:
 		recorder.clear_snapshots()
 	EventBus.time_skill_started.emit(&"time_rewind", {})
 	_pay_cost(&"time_rewind", effective_cost, rewind_cooldown)
-	_take_self_damage(rewind_self_damage, &"curse:rewind")
+	if not _take_self_damage(rewind_self_damage, &"curse:rewind"):
+		push_error("Rewind irreversible self-damage claim failed")
 	if rewind_heal > 0.0:
 		var health_component := get_parent().get_node_or_null("HealthComponent")
 		if health_component != null and health_component.has_method("heal"):
@@ -831,15 +835,27 @@ func _pay_cost(skill_id: StringName, cost: float, cooldown: float) -> void:
 	cooldown_changed.emit(skill_id, cooldown)
 
 
-func _take_self_damage(amount: float, source_tag: StringName) -> void:
+func _take_self_damage(amount: float, source_tag: StringName) -> bool:
 	if amount <= 0.0:
-		return
+		return true
 	var owner_entity := get_parent()
 	var health_component := owner_entity.get_node_or_null("HealthComponent")
-	if health_component == null:
-		return
-	if health_component.has_method("lose_health"):
-		health_component.lose_health(amount, source_tag)
+	if health_component == null or not health_component.has_method("lose_health_irreversible"):
+		return false
+	var claim_token := _next_irreversible_self_damage_token
+	_next_irreversible_self_damage_token += 1
+	var resolution: Variant = health_component.call(
+		"lose_health_irreversible",
+		amount,
+		source_tag,
+		claim_token,
+		_irreversible_self_damage_generation
+	)
+	return (
+		resolution is RefCounted
+		and not bool((resolution as RefCounted).call("is_prevented"))
+		and float((resolution as RefCounted).call("finalized_damage")) > 0.0
+	)
 
 
 func _prune_active_rifts() -> void:

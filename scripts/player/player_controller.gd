@@ -98,6 +98,7 @@ var _weapon_replay_capture_sequence: int = 0
 var _applying_weapon_replay_event: bool = false
 var _weapon_replay_fact_baseline: Dictionary = {}
 var _weapon_intent_router: RefCounted = WeaponIntentRouterScript.new()
+var _run_id: StringName = &""
 
 const DASH_DURATION := 0.28
 const DASH_COOLDOWN := 0.45
@@ -317,6 +318,9 @@ func _ready() -> void:
 		return
 	if stats == null:
 		stats = StatsResource.new()
+	if not configure_run(&"standalone"):
+		push_error("Player run identity configuration failed")
+		return
 	_apply_stats_to_components(true)
 	configure_loadout(DEFAULT_LOADOUT_CONFIG)
 	health.damaged.connect(_on_damaged)
@@ -595,6 +599,28 @@ func configure_loadout(config: Dictionary) -> bool:
 	_connect_weapon_coordinator()
 	reset_runtime_state()
 	return true
+
+
+func configure_run(run_id: StringName) -> bool:
+	var normalized := StringName(str(run_id).strip_edges())
+	if normalized == &"" or str(normalized).contains(":"):
+		return false
+	if _run_id == normalized:
+		return true
+	if health == null or not health.has_method("configure_run"):
+		return false
+	if rewind_recorder == null or not rewind_recorder.has_method("configure_run"):
+		return false
+	if not bool(health.call("configure_run", normalized)):
+		return false
+	if not bool(rewind_recorder.call("configure_run", normalized)):
+		return false
+	_run_id = normalized
+	return true
+
+
+func current_run_id() -> StringName:
+	return _run_id
 
 
 func reset_runtime_state() -> void:

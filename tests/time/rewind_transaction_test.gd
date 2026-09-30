@@ -24,6 +24,8 @@ func _run() -> void:
 	var health: Node = player.get_node("HealthComponent")
 	var time_manager: Node = player.get_node("TimeManager")
 	var recorder: Node = player.get_node("RewindRecorder")
+	_suite.assert_true(player.configure_run(&"rewind-transaction-run"), "rewind fixture installs one authoritative run")
+	_suite.assert_equal(str(recorder.current_run_id()), "rewind-transaction-run", "player injects the same run identity into Rewind")
 
 	player.global_position = Vector2(48.0, 72.0)
 	player.velocity = Vector2(12.0, -4.0)
@@ -33,10 +35,22 @@ func _run() -> void:
 	recorder._record_snapshot()
 	player.global_position = Vector2(56.0, 80.0)
 	recorder._record_snapshot()
+	var oldest_snapshot: Dictionary = recorder.peek_oldest_snapshot()
 
 	_suite.assert_true(recorder.has_snapshot(), "rewind recorder captures a snapshot")
-	_suite.assert_true(not recorder._snapshots.front().has("energy"), "rewind snapshot excludes energy")
-	_suite.assert_true(not recorder._snapshots.front().has("cooldowns"), "rewind snapshot excludes cooldowns")
+	_suite.assert_true(not oldest_snapshot.has("energy"), "rewind snapshot excludes energy")
+	_suite.assert_true(not oldest_snapshot.has("cooldowns"), "rewind snapshot excludes cooldowns")
+	_suite.assert_equal(str(oldest_snapshot.get("run_id", "")), "rewind-transaction-run", "rewind snapshot carries authoritative run identity")
+	_suite.assert_close(
+		float(oldest_snapshot.get("irreversible_hp_loss_total", -1.0)),
+		0.0,
+		"rewind snapshot carries the irreversible loss total"
+	)
+	_suite.assert_equal(
+		int(oldest_snapshot.get("irreversible_hp_loss_revision", -1)),
+		0,
+		"rewind snapshot carries the irreversible loss revision"
+	)
 
 	player.global_position = Vector2(260.0, 180.0)
 	player.velocity = Vector2.ZERO
@@ -58,6 +72,11 @@ func _run() -> void:
 	_suite.assert_equal(_started_count, 1, "successful rewind emits one start event")
 	_suite.assert_equal(_ended_count, 1, "successful rewind emits one end event")
 	_suite.assert_true(not recorder.has_snapshot(), "successful rewind discards the invalidated timeline")
+	_suite.assert_equal(
+		health.hp_loss_state(),
+		{"irreversible_hp_loss_total": 18.0, "revision": 1},
+		"successful legacy rewind cannot refund its irreversible self-cost"
+	)
 
 	var energy_before_empty: float = time_manager.energy
 	var cooldown_before_empty: float = time_manager.get_cooldown(&"time_rewind")
@@ -70,6 +89,17 @@ func _run() -> void:
 
 	recorder._record_snapshot()
 	_suite.assert_true(recorder.has_snapshot(), "recorder can capture after rewind")
+	var post_rewind_snapshot: Dictionary = recorder.peek_oldest_snapshot()
+	_suite.assert_close(
+		float(post_rewind_snapshot.get("irreversible_hp_loss_total", -1.0)),
+		18.0,
+		"post-rewind snapshots carry the live irreversible loss total"
+	)
+	_suite.assert_equal(
+		int(post_rewind_snapshot.get("irreversible_hp_loss_revision", -1)),
+		1,
+		"post-rewind snapshots carry the live irreversible loss revision"
+	)
 	recorder.clear_snapshots()
 	_suite.assert_true(not recorder.has_snapshot(), "clear snapshots removes recorded history")
 
@@ -78,11 +108,13 @@ func _run() -> void:
 	var invalid_snapshot_count: int = recorder._snapshots.size()
 	var energy_before_invalid: float = time_manager.energy
 	var cooldown_before_invalid: float = time_manager.get_cooldown(&"time_rewind")
+	var hp_loss_before_invalid: Dictionary = health.hp_loss_state()
 	var invalid_result: bool = time_manager.try_rewind(recorder)
 	_suite.assert_true(not invalid_result, "invalid snapshot fails without committing")
 	_suite.assert_equal(recorder._snapshots.size(), invalid_snapshot_count, "failed rewind retains snapshot history")
 	_suite.assert_close(time_manager.energy, energy_before_invalid, "failed rewind keeps energy")
 	_suite.assert_close(time_manager.get_cooldown(&"time_rewind"), cooldown_before_invalid, "failed rewind keeps cooldown")
+	_suite.assert_equal(health.hp_loss_state(), hp_loss_before_invalid, "failed rewind cannot mutate irreversible loss state")
 	recorder.clear_snapshots()
 
 	EventBus.time_skill_started.disconnect(_on_time_skill_started)

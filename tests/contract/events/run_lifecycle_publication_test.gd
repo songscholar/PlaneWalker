@@ -29,7 +29,15 @@ class WeaponProfileFixture:
 class RejectingLoadoutPlayer:
 	extends Node
 
+	var _run_id: StringName = &""
 	var configure_calls: int = 0
+
+	func configure_run(run_id: StringName) -> bool:
+		_run_id = run_id
+		return true
+
+	func current_run_id() -> StringName:
+		return _run_id
 
 	func configure_loadout(_config: Dictionary) -> bool:
 		configure_calls += 1
@@ -39,7 +47,15 @@ class RejectingLoadoutPlayer:
 class AcceptingLoadoutPlayer:
 	extends Node
 
+	var _run_id: StringName = &""
 	var configure_calls: int = 0
+
+	func configure_run(run_id: StringName) -> bool:
+		_run_id = run_id
+		return true
+
+	func current_run_id() -> StringName:
+		return _run_id
 
 	func configure_loadout(_config: Dictionary) -> bool:
 		configure_calls += 1

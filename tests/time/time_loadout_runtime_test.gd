@@ -73,6 +73,7 @@ func _run() -> void:
 	EventBus.time_skill_started.connect(_on_time_skill_started)
 	EventBus.time_skill_ended.connect(_on_time_skill_ended)
 	await _test_time_manager_generic_contract()
+	await _test_time_self_damage_uses_unique_claims_and_survives_same_run_reset()
 	await _test_active_stop_and_accelerate_reject_reapply()
 	await _test_cancel_clears_real_time_stop_targets()
 	await _test_replay_restore_reconciles_real_time_stop_targets()
@@ -102,6 +103,56 @@ func _test_time_manager_generic_contract() -> void:
 	_suite.assert_equal(_method_argument_count(manager, &"can_use"), 2, "time manager exposes can_use(skill_id, context)")
 	_suite.assert_equal(_method_argument_count(manager, &"try_use"), 2, "time manager exposes try_use(skill_id, context)")
 	_suite.assert_equal(_method_argument_count(manager, &"cancel_all_time_effects"), 1, "time manager exposes cancel_all_time_effects(reason)")
+	await _free_player(player)
+
+
+func _test_time_self_damage_uses_unique_claims_and_survives_same_run_reset() -> void:
+	var player := await _spawn_player()
+	_suite.assert_true(player.configure_run(&"time-self-damage-run"), "self-damage fixture installs one authoritative run")
+	var manager: Node = player.get_node("TimeManager")
+	var health: Node = player.get_node("HealthComponent")
+	health.current_hp = health.max_hp
+
+	_suite.assert_true(
+		bool(manager.call("_take_self_damage", 4.0, &"curse:time_stop")),
+		"first Stop self-damage compatibility claim commits"
+	)
+	_suite.assert_true(
+		bool(manager.call("_take_self_damage", 4.0, &"curse:time_stop")),
+		"second Stop self-damage compatibility claim commits"
+	)
+	_suite.assert_equal(
+		health.hp_loss_state(),
+		{"irreversible_hp_loss_total": 8.0, "revision": 2},
+		"repeated Stop self-damage uses a unique compatibility claim each time"
+	)
+	_suite.assert_close(health.current_hp, health.max_hp - 8.0, "two Stop costs each remove HP once")
+
+	player.reset_runtime_state()
+	_suite.assert_equal(
+		health.hp_loss_state(),
+		{"irreversible_hp_loss_total": 8.0, "revision": 2},
+		"same-run runtime reset cannot refund irreversible self-damage"
+	)
+	_suite.assert_true(
+		bool(manager.call("_take_self_damage", 4.0, &"curse:time_stop")),
+		"same-run reset preserves a fresh Stop compatibility identity"
+	)
+	_suite.assert_true(
+		bool(manager.call("_take_self_damage", 5.0, &"curse:rewind")),
+		"Rewind self-damage compatibility claim commits"
+	)
+	_suite.assert_equal(
+		health.hp_loss_state(),
+		{"irreversible_hp_loss_total": 17.0, "revision": 4},
+		"same-run reset preserves the token floor and Rewind receives its own unique claim"
+	)
+	_suite.assert_close(
+		health.current_hp,
+		health.max_hp - 9.0,
+		"post-reset Stop and Rewind costs both apply without duplicate-claim rejection"
+	)
+	_suite.assert_equal(str(player.current_run_id()), "time-self-damage-run", "same-run reset preserves the authoritative run id")
 	await _free_player(player)
 
 

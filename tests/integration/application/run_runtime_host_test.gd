@@ -10,12 +10,22 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 class LoadoutSpy:
 	extends Node
 
+	var configure_run_calls: int = 0
 	var configure_calls: int = 0
+	var received_run_ids: Array[String] = []
 	var received_configs: Array[Dictionary] = []
+	var call_order: Array[String] = []
+
+	func configure_run(run_id: StringName) -> bool:
+		configure_run_calls += 1
+		received_run_ids.append(str(run_id))
+		call_order.append("configure_run")
+		return true
 
 	func configure_loadout(config: Dictionary) -> bool:
 		configure_calls += 1
 		received_configs.append(config)
+		call_order.append("configure_loadout")
 		return true
 
 
@@ -83,7 +93,11 @@ func _run() -> void:
 	var started = host.call("start_run", caller_config)
 	suite.assert_true(started.ok, "host starts one run")
 	var snapshot: Dictionary = host.call("runtime_snapshot")
+	suite.assert_equal(loadout_spy.configure_run_calls, 1, "host injects one authoritative run id per run")
 	suite.assert_equal(loadout_spy.configure_calls, 1, "host applies the accepted loadout exactly once per run")
+	suite.assert_equal(loadout_spy.call_order, ["configure_run", "configure_loadout"], "host installs run identity before loadout reset signals")
+	if not loadout_spy.received_run_ids.is_empty():
+		suite.assert_equal(loadout_spy.received_run_ids[0], str(snapshot.get("run_id", "")), "host injects the facade-authoritative run id")
 	if not loadout_spy.received_configs.is_empty():
 		var player_config: Dictionary = loadout_spy.received_configs[0]
 		suite.assert_equal(str(player_config.get("weapon_id", "")), str(snapshot.get("config", {}).get("weapon_id", "")), "host applies the authoritative weapon id")
@@ -104,6 +118,43 @@ func _run() -> void:
 	suite.assert_equal(isolated_snapshot.get("config", {}).get("enabled_time_skills", []), ["stop", "rewind"], "nested Player input mutation cannot alter authority")
 	host.set("_player", actual_player)
 	loadout_spy.free()
+
+	var actual_started = host.call("start_run", _config())
+	suite.assert_true(actual_started.ok, "host starts a run through the real Player authority path")
+	var actual_snapshot: Dictionary = host.call("runtime_snapshot")
+	var actual_run_id := str(actual_snapshot.get("run_id", ""))
+	var actual_health: Node = actual_player.get_node("HealthComponent")
+	var actual_rewind: Node = actual_player.get_node("RewindRecorder")
+	suite.assert_equal(str(actual_player.current_run_id()), actual_run_id, "Player receives the host run id")
+	suite.assert_equal(str(actual_health.irreversible_ledger_snapshot().get("run_id", "")), actual_run_id, "Health ledger receives the host run id")
+	suite.assert_equal(str(actual_rewind.current_run_id()), actual_run_id, "Rewind receives the host run id")
+	actual_health.current_hp = actual_health.max_hp
+	var actual_loss: RefCounted = actual_health.lose_health_irreversible(
+		7.0,
+		&"host_run_fixture",
+		901,
+		11,
+		StringName(actual_run_id)
+	)
+	suite.assert_true(actual_loss != null and not actual_loss.is_prevented(), "real run records an irreversible claim before rollover")
+	actual_rewind.call("_record_snapshot")
+	suite.assert_true(actual_rewind.has_snapshot(), "real run owns rewind history before rollover")
+
+	var replacement_started = host.call("start_run", _config())
+	suite.assert_true(replacement_started.ok, "host starts a replacement run through the real Player")
+	var replacement_snapshot: Dictionary = host.call("runtime_snapshot")
+	var replacement_run_id := str(replacement_snapshot.get("run_id", ""))
+	suite.assert_true(replacement_run_id != actual_run_id, "replacement run receives a distinct identity")
+	suite.assert_equal(str(actual_player.current_run_id()), replacement_run_id, "Player advances to the replacement run id")
+	suite.assert_equal(str(actual_health.irreversible_ledger_snapshot().get("run_id", "")), replacement_run_id, "Health ledger advances to the replacement run id")
+	suite.assert_equal(str(actual_rewind.current_run_id()), replacement_run_id, "Rewind advances to the replacement run id")
+	suite.assert_equal(
+		actual_health.hp_loss_state(),
+		{"irreversible_hp_loss_total": 0.0, "revision": 0},
+		"replacement run starts with an empty irreversible ledger"
+	)
+	suite.assert_true(not actual_rewind.has_snapshot(), "replacement run invalidates prior-run rewind history")
+
 	suite.assert_true(not str(snapshot.get("run_id", "")).is_empty(), "host exposes authoritative run id")
 	suite.assert_equal(int(snapshot.get("phase", -1)), RunPhaseScript.Value.COMBAT_ACTIVE, "host begins the first room")
 	suite.assert_equal(host.call("room_plan").size(), 5, "host owns the five-room plan")
