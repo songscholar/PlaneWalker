@@ -176,7 +176,7 @@ func _test_rift_context_tracks_live_spatial_generations() -> void:
 	_suite.assert_equal(int(fallback.get("rift_generation", 0)), first_generation, "Rift generation falls back to the remaining source")
 	_suite.assert_equal((fallback.get("active_rifts", []) as Array).size(), 1, "ending one Rift removes only its descriptor")
 
-	first_rift.call("_process", 11.0)
+	_advance_frames(player, 601)
 	var expired: Dictionary = player.call("weapon_time_interaction_context")
 	_suite.assert_true(not bool(expired.get("rift_active", true)), "expired Rifts clear the active context")
 	_suite.assert_equal(int(expired.get("rift_generation", -1)), 0, "expired Rifts expose no live generation")
@@ -220,4 +220,9 @@ func _free_player(player: Node) -> void:
 
 func _advance_time_cast(player: Node) -> void:
 	for _frame: int in range(12):
+		player.advance_action_frame()
+
+
+func _advance_frames(player: Node, frame_count: int) -> void:
+	for _frame: int in range(maxi(0, frame_count)):
 		player.advance_action_frame()

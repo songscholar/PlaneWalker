@@ -2,6 +2,9 @@ class_name RewindRecorder
 extends Node
 
 const TICKET_SCHEMA_VERSION := 1
+const GAMEPLAY_FRAMES_PER_SECOND := 60
+const SAMPLE_CADENCE_FRAMES := 6
+const REQUIRED_SAMPLES_PER_SECOND := 10.0
 
 @export var target_path: NodePath
 @export var health_component_path: NodePath
@@ -21,15 +24,28 @@ var _next_sample_sequence: int = 1
 var _next_ticket_id: int = 1
 var _active_transaction: Dictionary = {}
 var _restore_fault_for_test: StringName = &""
+var _last_runtime_frame: int = 0
 
 
-func _process(delta: float) -> void:
-	_sample_timer += delta
-	var sample_interval := 1.0 / samples_per_second
-	if _sample_timer < sample_interval:
-		return
-	_sample_timer -= sample_interval
-	_record_snapshot()
+func _process(_delta: float) -> void:
+	# Authoritative sampling is driven by PlayerController.advance_action_frame().
+	pass
+
+
+func advance_frame(runtime_frame: int) -> bool:
+	if (
+		not is_finite(samples_per_second)
+		or samples_per_second != REQUIRED_SAMPLES_PER_SECOND
+		or not is_finite(record_seconds)
+		or record_seconds <= 0.0
+	):
+		return false
+	if runtime_frame <= 0 or runtime_frame != _last_runtime_frame + 1:
+		return false
+	_last_runtime_frame = runtime_frame
+	if runtime_frame % SAMPLE_CADENCE_FRAMES == 0:
+		_record_snapshot()
+	return true
 
 
 func has_snapshot() -> bool:
@@ -45,6 +61,7 @@ func configure_run(run_id: StringName) -> bool:
 	_run_id = normalized
 	clear_snapshots()
 	_sample_timer = 0.0
+	_last_runtime_frame = 0
 	_active_transaction.clear()
 	return true
 
@@ -73,9 +90,14 @@ func peek_oldest_snapshot() -> Dictionary:
 	return _snapshots.front().duplicate(true)
 
 
-func prepare_rewind_transaction() -> Dictionary:
+func prepare_rewind_transaction(pre_return_position: Variant = null) -> Dictionary:
 	if not _active_transaction.is_empty() or not _transaction_contract_ready():
 		return {}
+	var origin: Vector2 = target.global_position
+	if pre_return_position != null:
+		if not _finite_vector(pre_return_position):
+			return {}
+		origin = pre_return_position as Vector2
 	var target_snapshot := _validated_recorded_snapshot(peek_oldest_snapshot())
 	if target_snapshot.is_empty() or StringName(str(target_snapshot["run_id"])) != _run_id:
 		return {}
@@ -147,7 +169,6 @@ func prepare_rewind_transaction() -> Dictionary:
 	if not health_transaction_value is Dictionary or (health_transaction_value as Dictionary).is_empty():
 		return {}
 	var health_transaction := (health_transaction_value as Dictionary).duplicate(true)
-	var origin: Vector2 = target.global_position
 	var destination: Vector2 = target_snapshot["position"]
 	var path_samples := _rewind_path_samples(origin, destination)
 	var before := {
@@ -341,6 +362,17 @@ func clear_snapshots() -> void:
 	_history_revision += 1
 
 
+func reset_runtime_state() -> bool:
+	if _consume_restore_fault(&"reset_runtime_state"):
+		return false
+	if not _active_transaction.is_empty():
+		return false
+	clear_snapshots()
+	_sample_timer = 0.0
+	_last_runtime_frame = 0
+	return true
+
+
 func _record_snapshot() -> void:
 	var hp_loss_state: Dictionary = (
 		health_component.call("hp_loss_state")
@@ -478,12 +510,29 @@ func _participants_match_before(before: Dictionary) -> bool:
 	if (
 		_history_revision != int(before.get("history_revision", -1))
 		or _snapshots != before.get("history", [])
-		or target.call("rewind_transaction_snapshot") != before.get("player", {})
+		or not _player_participant_matches_before(before.get("player", {}))
 		or health_component.call("runtime_state_snapshot") != before.get("health", {})
 		or time_manager.call("gameplay_rewind_transaction_snapshot") != before.get("time", {})
 	):
 		return false
 	return true
+
+
+func _player_participant_matches_before(before_value: Variant) -> bool:
+	if not before_value is Dictionary:
+		return false
+	var current_value: Variant = target.call("rewind_transaction_snapshot")
+	if not current_value is Dictionary:
+		return false
+	var before := before_value as Dictionary
+	var current := (current_value as Dictionary).duplicate(true)
+	if not before.get("position") is Vector2 or not current.get("position") is Vector2:
+		return false
+	# The prepared transaction owns the rewind origin, so movement after prepare
+	# may change only the live position. Every other player participant field
+	# remains drift-protected.
+	current["position"] = before["position"]
+	return current == before
 
 
 func _verify_committed_state(health_publication: Dictionary) -> bool:

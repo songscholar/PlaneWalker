@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/time/time_manager_fixed_frame_test.gd" id="1_time_manager_fixed_frame"]
+
+[node name="TimeManagerFixedFrameTest" type="Node"]
+script = ExtResource("1_time_manager_fixed_frame")

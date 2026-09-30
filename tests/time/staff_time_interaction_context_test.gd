@@ -156,7 +156,7 @@ func _test_rift_generation_tracks_the_live_source() -> void:
 	if fallback_descriptors.size() == 1:
 		_suite.assert_equal(int((fallback_descriptors[0] as Dictionary).get("generation", 0)), first_generation, "remaining descriptor keeps the older live generation")
 
-	first_rift.call("_process", 31.0)
+	_advance_frames(player, 1801)
 	var expired := _weapon_context(player)
 	_suite.assert_true(not bool(expired.get("rift_active", true)), "ending every Rift clears the active context")
 	_suite.assert_equal(int(expired.get("rift_generation", -1)), 0, "no live Rift exposes no source generation")
@@ -261,6 +261,11 @@ func _release_intent(action_id: StringName, held_frames: int) -> Dictionary:
 
 func _advance_time_cast(player: Node) -> void:
 	for _frame: int in range(12):
+		player.advance_action_frame()
+
+
+func _advance_frames(player: Node, frame_count: int) -> void:
+	for _frame: int in range(maxi(0, frame_count)):
 		player.advance_action_frame()
 
 

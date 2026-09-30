@@ -262,6 +262,19 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	var validated := _validated_snapshot(value)
 	if validated.is_empty() or int(validated["revision"]) > _revision:
 		return false
+	_install_validated_snapshot(validated)
+	return true
+
+
+func restore_replay_snapshot(value: Dictionary) -> bool:
+	var validated := _validated_snapshot(value)
+	if validated.is_empty():
+		return false
+	_install_validated_snapshot(validated)
+	return snapshot() == validated
+
+
+func _install_validated_snapshot(validated: Dictionary) -> void:
 	_revision = int(validated["revision"])
 	_frame = int(validated["frame"])
 	_buffers = (validated["buffers"] as Dictionary).duplicate(true)
@@ -271,7 +284,6 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	_cancel_from_frame = int(validated["cancel_from_frame"])
 	_weapon_projection_active = bool(validated["weapon_projection_active"])
 	_weapon_phase = validated["weapon_phase"] as StringName
-	return true
 
 
 func elapsed_state_frames() -> int:

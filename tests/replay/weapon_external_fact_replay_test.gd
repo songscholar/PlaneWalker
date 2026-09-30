@@ -282,7 +282,9 @@ func _test_record_time_external_fact_validation_is_atomic(
 	var genuine_reward_data := genuine_reward_payload.get("data", {}) as Dictionary
 	suite.assert_true(
 		source.restore_weapon_replay_snapshot(state_before_reward),
-		"record-time projector fixture restores the genuine fact pre-state"
+		"record-time projector fixture restores the genuine fact pre-state: %s" % str(
+			source.weapon_replay_restore_status()
+		)
 	)
 	suite.assert_true(
 		source.apply_weapon_replay_event(genuine_reward_event),
@@ -295,7 +297,9 @@ func _test_record_time_external_fact_validation_is_atomic(
 	)
 	suite.assert_true(
 		source.restore_weapon_replay_snapshot(state_before_reward),
-		"record-time projector fixture restores the pre-state after parity proof"
+		"record-time projector fixture restores the pre-state after parity proof: %s" % str(
+			source.weapon_replay_restore_status()
+		)
 	)
 
 	_assert_rejected_record_fact_is_atomic(
@@ -1233,13 +1237,19 @@ func _test_time_external_facts(suite, profile: Dictionary) -> void:
 	var token := int(active_before_facts.get("token", 0))
 	suite.assert_true(source.claim_weapon_time_interaction(&"bow_rewind_echo", 7), "source claims the rewind interaction")
 	suite.assert_true(source.extend_weapon_time_stop(token, 30), "source extends active Time Stop")
-	var expected_time_after: Dictionary = source.time_manager.weapon_replay_snapshot()
+	var expected_time_after_facts: Dictionary = source.time_manager.weapon_replay_snapshot()
 	var finished := _finish_external_source(suite, source, recorder, "time facts")
 	var events: Array = finished.get("events", [])
 	suite.assert_equal(_fact_count(events, "time_interaction_claim"), 1, "records one rewind interaction claim fact")
 	suite.assert_equal(_fact_count(events, "time_stop_extension"), 1, "records one Time Stop extension fact")
 	var replay: Dictionary = finished.get("replay", {})
 	var terminal: Dictionary = finished.get("terminal", {})
+	var expected_terminal_time := terminal.get("time_manager_state", {}) as Dictionary
+	suite.assert_equal(
+		expected_time_after_facts.get("stop_remaining"),
+		1.5,
+		"time facts extend the source Time Stop before terminal fixed-frame evolution"
+	)
 	await _free_player(source)
 
 	var replay_target := await _spawn_player(suite, profile, "gun")
@@ -1306,6 +1316,43 @@ func _test_time_external_facts(suite, profile: Dictionary) -> void:
 		"rejected rewind Stop smuggling leaves the complete Player snapshot unchanged"
 	)
 
+	var forged_remainder_claim := claim_event.duplicate(true)
+	var forged_remainder_claim_data := (
+		(forged_remainder_claim.get("payload", {}) as Dictionary).get("data", {})
+		as Dictionary
+	)
+	var forged_remainder_claim_after := (
+		forged_remainder_claim_data.get("state_after", {}) as Dictionary
+	)
+	forged_remainder_claim_after["energy_regen_remainder"] = (
+		int(forged_remainder_claim_after.get("energy_regen_remainder", 0)) + 1
+	) % 60
+	suite.assert_true(
+		ReplayRecorderScript.validate_event(
+			forged_remainder_claim,
+			ReplayRecorderScript.profile_identity(profile)
+		).is_empty(),
+		"rewind claim rejects smuggled fixed-point Energy regeneration remainder"
+	)
+	var before_remainder_claim: Dictionary = replay_target.weapon_replay_snapshot()
+	var before_remainder_claim_digest := ReplayRecorderScript.value_digest(
+		before_remainder_claim
+	)
+	suite.assert_true(
+		not replay_target.apply_weapon_replay_event(forged_remainder_claim),
+		"rewind claim application rejects regeneration-remainder drift"
+	)
+	suite.assert_equal(
+		replay_target.weapon_replay_snapshot(),
+		before_remainder_claim,
+		"rejected rewind remainder drift is byte-for-byte state preserving"
+	)
+	suite.assert_equal(
+		ReplayRecorderScript.value_digest(replay_target.weapon_replay_snapshot()),
+		before_remainder_claim_digest,
+		"rejected rewind remainder drift preserves the authoritative digest"
+	)
+
 	suite.assert_true(
 		replay_target.apply_weapon_replay_event(claim_event),
 		"Stop-extension smuggling fixture first applies the genuine rewind claim"
@@ -1333,6 +1380,43 @@ func _test_time_external_facts(suite, profile: Dictionary) -> void:
 		before_rewind_smuggle,
 		"rejected Stop-extension rewind smuggling leaves the complete Player snapshot unchanged"
 	)
+
+	var forged_remainder_extension := extension_event.duplicate(true)
+	var forged_remainder_extension_data := (
+		(forged_remainder_extension.get("payload", {}) as Dictionary).get("data", {})
+		as Dictionary
+	)
+	var forged_remainder_extension_after := (
+		forged_remainder_extension_data.get("state_after", {}) as Dictionary
+	)
+	forged_remainder_extension_after["energy_regen_remainder"] = (
+		int(forged_remainder_extension_after.get("energy_regen_remainder", 0)) + 1
+	) % 60
+	suite.assert_true(
+		ReplayRecorderScript.validate_event(
+			forged_remainder_extension,
+			ReplayRecorderScript.profile_identity(profile)
+		).is_empty(),
+		"Time Stop extension rejects smuggled Energy regeneration remainder"
+	)
+	var before_remainder_extension: Dictionary = replay_target.weapon_replay_snapshot()
+	var before_remainder_extension_digest := ReplayRecorderScript.value_digest(
+		before_remainder_extension
+	)
+	suite.assert_true(
+		not replay_target.apply_weapon_replay_event(forged_remainder_extension),
+		"Time Stop extension application rejects regeneration-remainder drift"
+	)
+	suite.assert_equal(
+		replay_target.weapon_replay_snapshot(),
+		before_remainder_extension,
+		"rejected Stop-extension remainder drift is byte-for-byte state preserving"
+	)
+	suite.assert_equal(
+		ReplayRecorderScript.value_digest(replay_target.weapon_replay_snapshot()),
+		before_remainder_extension_digest,
+		"rejected Stop-extension remainder drift preserves the authoritative digest"
+	)
 	restored = player.restore_frame(replay_target, 1)
 	suite.assert_true(bool(restored.get("ok", false)), "time-fact checkpoint restores after field-smuggling regressions")
 	var drift_state: Dictionary = replay_target.time_manager.resource_state(&"time_energy")
@@ -1357,11 +1441,19 @@ func _test_time_external_facts(suite, profile: Dictionary) -> void:
 	suite.assert_true(bool(restored.get("ok", false)), "time-fact checkpoint restores after the drift rejection")
 	var replayed: Dictionary = player.replay_to_terminal(replay_target, 1)
 	suite.assert_true(bool(replayed.get("ok", false)), "rewind claim and Stop extension replay: %s" % str(replayed))
-	suite.assert_equal(replay_target.time_manager.weapon_replay_snapshot(), expected_time_after, "time facts reproduce exact state_before/state_after transition")
+	suite.assert_equal(
+		replay_target.time_manager.weapon_replay_snapshot(),
+		expected_terminal_time,
+		"time facts and fixed-frame continuation reproduce the terminal TimeManager state"
+	)
 	var terminal_digest := ReplayRecorderScript.value_digest(terminal)
 	suite.assert_equal(ReplayRecorderScript.value_digest(replay_target.weapon_replay_snapshot()), terminal_digest, "time fact replay reaches terminal digest")
 	suite.assert_true(bool(player.replay_to_terminal(replay_target, 1).get("ok", false)), "repeated time fact replay succeeds")
-	suite.assert_equal(replay_target.time_manager.weapon_replay_snapshot(), expected_time_after, "repeated time fact replay is idempotent")
+	suite.assert_equal(
+		replay_target.time_manager.weapon_replay_snapshot(),
+		expected_terminal_time,
+		"repeated time fact replay is idempotent"
+	)
 	await _free_player(replay_target)
 
 
@@ -1695,6 +1787,7 @@ func _spawn_player(suite, profile: Dictionary, weapon_id: String) -> Node:
 	if not configured:
 		await _free_player(player)
 		return null
+	player.time_manager.energy_regen = 0.0
 	return player
 
 

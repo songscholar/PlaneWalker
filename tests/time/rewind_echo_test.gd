@@ -212,8 +212,10 @@ func _test_death_cancels_delayed_damage() -> void:
 
 func _spawn_player() -> Node:
 	var player := PlayerScene.instantiate()
+	player.set_physics_process(false)
 	add_child(player)
 	await get_tree().process_frame
+	player.reset_runtime_state()
 	return player
 
 

@@ -14,6 +14,7 @@ const WeaponResourceTransactionScript := preload("res://scripts/combat/weapons/w
 
 const SNAPSHOT_SCHEMA_VERSION := 1
 const GAMEPLAY_REWIND_SNAPSHOT_SCHEMA_VERSION := 1
+const FRAME_EVENT_PUBLICATION_SCHEMA_VERSION := 1
 const PHASE_READY := &"READY"
 
 var _runtime: RefCounted
@@ -32,6 +33,16 @@ var _buffered_submission: Dictionary = {}
 var _hold_intent_id: StringName = &""
 var _hold_runtime_snapshot: Dictionary = {}
 var _hold_live_context: Dictionary = {}
+var _frame_event_buffer_active: bool = false
+var _frame_event_buffer: Array[Dictionary] = []
+var _frame_event_commit_fault_for_test: bool = false
+var _next_frame_event_buffer_id: int = 1
+var _active_frame_event_buffer_id: int = 0
+var _next_frame_event_publication_id: int = 1
+var _prepared_frame_event_publication: Dictionary = {}
+var _finalized_frame_event_publication: Dictionary = {}
+var _frame_event_publication_in_progress: bool = false
+var _post_publication_frame_events: Array[Dictionary] = []
 
 
 func configure(runtime: RefCounted, resource_transaction: RefCounted = null) -> bool:
@@ -130,33 +141,212 @@ func submit_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 	return _commit_intent(intent, context, _phase != PHASE_READY)
 
 
-func advance_frame(consume_buffered: bool = true) -> void:
+func advance_frame(consume_buffered: bool = true) -> bool:
 	if _resource_transaction != null:
 		_resource_transaction.call("advance_frame")
 	_frame += 1
 	if not _advance_runtime_tick():
-		return
+		return false
 	_prune_expired_buffer()
 	if _phase == PHASE_READY:
 		if consume_buffered:
 			_consume_buffered_submission()
-		return
+		return true
 
 	_phase_frame += 1
 	var phase_data := _current_phase_data()
 	if phase_data.is_empty():
 		cancel(&"invalid_phase_state")
-		return
+		return false
 	if not _emit_action_frame_events():
-		return
+		return false
 	if _phase == &"HOLD":
 		if _phase_frame >= int(phase_data["duration_frames"]):
 			_release_hold(true)
-		return
+		return true
 	if _phase_frame >= int(phase_data["duration_frames"]):
 		_advance_phase(consume_buffered)
 	if consume_buffered and _phase != PHASE_READY and _recovery_cancel_is_open():
 		_consume_buffered_submission()
+	return true
+
+
+func begin_frame_event_buffer() -> bool:
+	if (
+		_frame_event_buffer_active
+		or not _prepared_frame_event_publication.is_empty()
+		or not _finalized_frame_event_publication.is_empty()
+		or _frame_event_publication_in_progress
+	):
+		return false
+	_frame_event_buffer.clear()
+	_frame_event_buffer_active = true
+	_active_frame_event_buffer_id = _next_frame_event_buffer_id
+	_next_frame_event_buffer_id += 1
+	return true
+
+
+func frame_event_buffer_is_active() -> bool:
+	return _frame_event_buffer_active
+
+
+func can_commit_frame_event_buffer() -> bool:
+	return (
+		_frame_event_buffer_active
+		and _active_frame_event_buffer_id > 0
+		and _finalized_frame_event_publication.is_empty()
+		and not _frame_event_publication_in_progress
+		and not _frame_event_commit_fault_for_test
+	)
+
+
+func prepare_frame_event_publication() -> Dictionary:
+	if not can_commit_frame_event_buffer():
+		return {}
+	if not _prepared_frame_event_publication.is_empty():
+		return _prepared_frame_event_publication.duplicate(true)
+	var publication := {
+		"schema_version": FRAME_EVENT_PUBLICATION_SCHEMA_VERSION,
+		"publication_id": _next_frame_event_publication_id,
+		"owner_instance_id": get_instance_id(),
+		"buffer_id": _active_frame_event_buffer_id,
+		"events": _frame_event_buffer.duplicate(true),
+	}
+	_next_frame_event_publication_id += 1
+	publication["fingerprint"] = _frame_event_publication_fingerprint(publication)
+	_prepared_frame_event_publication = publication.duplicate(true)
+	return publication.duplicate(true)
+
+
+func finalize_frame_event_publication(publication: Dictionary) -> bool:
+	if (
+		not _frame_event_buffer_active
+		or _active_frame_event_buffer_id <= 0
+		or not _finalized_frame_event_publication.is_empty()
+		or _frame_event_publication_in_progress
+		or not _frame_event_publication_matches(publication)
+		or _frame_event_buffer != publication.get("events", [])
+	):
+		return false
+	_frame_event_buffer.clear()
+	_frame_event_buffer_active = false
+	_active_frame_event_buffer_id = 0
+	_finalized_frame_event_publication = _prepared_frame_event_publication.duplicate(true)
+	_prepared_frame_event_publication.clear()
+	return true
+
+
+func discard_finalized_frame_event_publication(publication: Dictionary) -> bool:
+	if (
+		_frame_event_publication_in_progress
+		or not _finalized_frame_event_publication_matches(publication)
+	):
+		return false
+	_finalized_frame_event_publication.clear()
+	return true
+
+
+func publish_prepared_frame_events() -> void:
+	if _finalized_frame_event_publication.is_empty() or _frame_event_publication_in_progress:
+		return
+	var events: Array = (
+		_finalized_frame_event_publication.get("events", []) as Array
+	).duplicate(true)
+	_finalized_frame_event_publication.clear()
+	_frame_event_publication_in_progress = true
+	_flush_frame_event_entries(events)
+	while not _post_publication_frame_events.is_empty():
+		var deferred: Array = _post_publication_frame_events.duplicate(true)
+		_post_publication_frame_events.clear()
+		_flush_frame_event_entries(deferred)
+	_frame_event_publication_in_progress = false
+
+
+func commit_frame_event_buffer() -> bool:
+	var publication := prepare_frame_event_publication()
+	if publication.is_empty() or not finalize_frame_event_publication(publication):
+		return false
+	publish_prepared_frame_events()
+	return true
+
+
+func rollback_frame_event_buffer() -> bool:
+	if not _frame_event_buffer_active:
+		return false
+	_frame_event_buffer.clear()
+	_frame_event_buffer_active = false
+	_active_frame_event_buffer_id = 0
+	_prepared_frame_event_publication.clear()
+	return true
+
+
+func _frame_event_publication_matches(publication: Dictionary) -> bool:
+	if (
+		_prepared_frame_event_publication.is_empty()
+		or publication.size() != 6
+		or typeof(publication.get("schema_version")) != TYPE_INT
+		or int(publication.get("schema_version", -1))
+		!= FRAME_EVENT_PUBLICATION_SCHEMA_VERSION
+		or typeof(publication.get("publication_id")) != TYPE_INT
+		or int(publication.get("publication_id", 0)) <= 0
+		or typeof(publication.get("owner_instance_id")) != TYPE_INT
+		or int(publication.get("owner_instance_id", 0)) != get_instance_id()
+		or typeof(publication.get("buffer_id")) != TYPE_INT
+		or int(publication.get("buffer_id", 0)) != _active_frame_event_buffer_id
+		or not publication.get("events") is Array
+		or typeof(publication.get("fingerprint")) != TYPE_STRING
+		or str(publication.get("fingerprint", ""))
+		!= _frame_event_publication_fingerprint(publication)
+	):
+		return false
+	return publication == _prepared_frame_event_publication
+
+
+func _finalized_frame_event_publication_matches(publication: Dictionary) -> bool:
+	if (
+		_finalized_frame_event_publication.is_empty()
+		or publication.size() != 6
+		or typeof(publication.get("schema_version")) != TYPE_INT
+		or int(publication.get("schema_version", -1))
+		!= FRAME_EVENT_PUBLICATION_SCHEMA_VERSION
+		or typeof(publication.get("publication_id")) != TYPE_INT
+		or int(publication.get("publication_id", 0)) <= 0
+		or typeof(publication.get("owner_instance_id")) != TYPE_INT
+		or int(publication.get("owner_instance_id", 0)) != get_instance_id()
+		or typeof(publication.get("buffer_id")) != TYPE_INT
+		or int(publication.get("buffer_id", 0)) <= 0
+		or not publication.get("events") is Array
+		or typeof(publication.get("fingerprint")) != TYPE_STRING
+		or str(publication.get("fingerprint", ""))
+		!= _frame_event_publication_fingerprint(publication)
+	):
+		return false
+	return publication == _finalized_frame_event_publication
+
+
+func _frame_event_publication_fingerprint(publication: Dictionary) -> String:
+	var signed := publication.duplicate(true)
+	signed.erase("fingerprint")
+	return var_to_bytes(signed).hex_encode().sha256_text()
+
+
+func _flush_frame_event_entries(entries: Array) -> void:
+	for entry_value: Variant in entries:
+		if not entry_value is Dictionary:
+			continue
+		var entry := entry_value as Dictionary
+		match StringName(str(entry.get("type", ""))):
+			&"runtime_event":
+				weapon_runtime_event.emit(
+					(entry.get("event", {}) as Dictionary).duplicate(true)
+				)
+			&"action_committed":
+				weapon_action_committed.emit(
+					StringName(str(entry.get("weapon_id", ""))),
+					StringName(str(entry.get("action_id", ""))),
+					int(entry.get("token", 0)),
+					(entry.get("context", {}) as Dictionary).duplicate(true)
+				)
 
 
 func consume_buffered_intent() -> bool:
@@ -184,7 +374,12 @@ func cancel(reason: StringName = &"cancelled") -> void:
 
 
 func reset_runtime_state(reason: StringName = &"reset") -> void:
+	var generation_before := _generation
+	var had_active_token := _token > 0
 	cancel(reason)
+	if not had_active_token:
+		_generation = generation_before
+	_frame = 0
 	if _runtime != null:
 		_runtime.call("reset_runtime_state", reason)
 	if _resource_transaction != null:
@@ -648,7 +843,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 			{},
 			resource_context
 		)
-		weapon_action_committed.emit(
+		_publish_weapon_action_committed(
 			_weapon_id,
 			StringName(str(_plan["action_id"])),
 			_token,
@@ -813,7 +1008,7 @@ func _release_hold(automatic: bool) -> Dictionary:
 		(resource_commit.get("context", {}) as Dictionary).duplicate(true)
 	)
 	_hold_runtime_snapshot.clear()
-	weapon_action_committed.emit(
+	_publish_weapon_action_committed(
 		_weapon_id,
 		StringName(str(_plan["action_id"])),
 		released_token,
@@ -928,7 +1123,7 @@ func _enter_current_phase() -> void:
 		if str(event.get("type", "")) == "phase_failed":
 			cancel(StringName(str(event.get("reason", "phase_failed"))))
 			return
-		weapon_runtime_event.emit(event)
+		_publish_weapon_runtime_event(event)
 
 
 func _emit_action_frame_events() -> bool:
@@ -952,7 +1147,7 @@ func _emit_action_frame_events() -> bool:
 		if str(event.get("type", "")) == "phase_failed":
 			cancel(StringName(str(event.get("reason", "action_frame_failed"))))
 			return false
-		weapon_runtime_event.emit(event)
+		_publish_weapon_runtime_event(event)
 	return true
 
 
@@ -1432,8 +1627,56 @@ func _advance_runtime_tick() -> bool:
 		if str(event.get("type", "")) in ["phase_failed", "runtime_failed"]:
 			_force_runtime_safe_reset(StringName(str(event.get("reason", "runtime_tick_failed"))))
 			return false
-		weapon_runtime_event.emit(event)
+		_publish_weapon_runtime_event(event)
 	return true
+
+
+func _publish_weapon_runtime_event(event: Dictionary) -> void:
+	if _frame_event_buffer_active:
+		_frame_event_buffer.append({
+			"type": &"runtime_event",
+			"event": event.duplicate(true),
+		})
+		return
+	if not _finalized_frame_event_publication.is_empty() or _frame_event_publication_in_progress:
+		_post_publication_frame_events.append({
+			"type": &"runtime_event",
+			"event": event.duplicate(true),
+		})
+		return
+	weapon_runtime_event.emit(event.duplicate(true))
+
+
+func _publish_weapon_action_committed(
+	weapon_id: StringName,
+	action_id: StringName,
+	token: int,
+	context: Dictionary
+) -> void:
+	if _frame_event_buffer_active:
+		_frame_event_buffer.append({
+			"type": &"action_committed",
+			"weapon_id": weapon_id,
+			"action_id": action_id,
+			"token": token,
+			"context": context.duplicate(true),
+		})
+		return
+	if not _finalized_frame_event_publication.is_empty() or _frame_event_publication_in_progress:
+		_post_publication_frame_events.append({
+			"type": &"action_committed",
+			"weapon_id": weapon_id,
+			"action_id": action_id,
+			"token": token,
+			"context": context.duplicate(true),
+		})
+		return
+	weapon_action_committed.emit(
+		weapon_id,
+		action_id,
+		token,
+		context.duplicate(true)
+	)
 
 
 func _plan_busy_submission(intent: Dictionary, context: Dictionary) -> Dictionary:

@@ -19,6 +19,16 @@ const DEFENSE_BYPASS_TAGS := {
 	"unguardable": true,
 	"irreversible": true,
 }
+const REPLAY_SNAPSHOT_FIELDS: Array[String] = [
+	"run_id",
+	"current_hp",
+	"max_hp",
+	"healing_multiplier",
+	"dead",
+	"ledger",
+]
+const FRAME_SIGNAL_TRANSACTION_SCHEMA_VERSION := 1
+const FRAME_SIGNAL_PUBLICATION_SCHEMA_VERSION := 1
 
 signal damaged(amount: float, current_hp: float)
 signal healed(amount: float, current_hp: float)
@@ -37,6 +47,13 @@ var _invulnerability_token: int = 0
 var _active_invulnerability_tokens: Dictionary = {}
 var _active_invulnerability_sources: Dictionary = {}
 var _irreversible_ledger: RefCounted = IrreversibleCharacterLedgerScript.new()
+var _next_frame_signal_transaction_ticket_id: int = 1
+var _active_frame_signal_transaction: Dictionary = {}
+var _next_frame_signal_publication_id: int = 1
+var _prepared_frame_signal_publication: Dictionary = {}
+var _finalized_frame_signal_publication: Dictionary = {}
+var _frame_signal_publication_in_progress: bool = false
+var _post_publication_frame_signal_events: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -106,6 +123,276 @@ func runtime_state_snapshot() -> Dictionary:
 		"dead": dead,
 		"ledger": irreversible_ledger_snapshot(),
 	}
+
+
+func begin_frame_signal_transaction(runtime_frame: int) -> Dictionary:
+	if (
+		not _active_frame_signal_transaction.is_empty()
+		or not _prepared_frame_signal_publication.is_empty()
+		or not _finalized_frame_signal_publication.is_empty()
+		or _frame_signal_publication_in_progress
+		or runtime_frame <= 0
+	):
+		return {}
+	var ticket := {
+		"schema_version": FRAME_SIGNAL_TRANSACTION_SCHEMA_VERSION,
+		"ticket_id": _next_frame_signal_transaction_ticket_id,
+		"owner_instance_id": get_instance_id(),
+		"runtime_frame": runtime_frame,
+	}
+	_next_frame_signal_transaction_ticket_id += 1
+	ticket["fingerprint"] = _frame_signal_transaction_ticket_fingerprint(ticket)
+	_active_frame_signal_transaction = {
+		"ticket": ticket.duplicate(true),
+		"events": [],
+	}
+	return ticket.duplicate(true)
+
+
+func can_commit_frame_signal_transaction(ticket: Dictionary) -> bool:
+	return (
+		_frame_signal_transaction_ticket_matches(ticket)
+		and _finalized_frame_signal_publication.is_empty()
+		and not _frame_signal_publication_in_progress
+	)
+
+
+func prepare_frame_signal_publication(ticket: Dictionary) -> Dictionary:
+	if not can_commit_frame_signal_transaction(ticket):
+		return {}
+	if not _prepared_frame_signal_publication.is_empty():
+		if ticket == _prepared_frame_signal_publication.get("transaction_ticket", {}):
+			return _prepared_frame_signal_publication.duplicate(true)
+		return {}
+	var publication := {
+		"schema_version": FRAME_SIGNAL_PUBLICATION_SCHEMA_VERSION,
+		"publication_id": _next_frame_signal_publication_id,
+		"owner_instance_id": get_instance_id(),
+		"runtime_frame": int(ticket.get("runtime_frame", -1)),
+		"transaction_ticket": ticket.duplicate(true),
+		"events": (
+			_active_frame_signal_transaction.get("events", []) as Array
+		).duplicate(true),
+	}
+	_next_frame_signal_publication_id += 1
+	publication["fingerprint"] = _frame_signal_publication_fingerprint(publication)
+	_prepared_frame_signal_publication = publication.duplicate(true)
+	return publication.duplicate(true)
+
+
+func finalize_frame_signal_publication(publication: Dictionary) -> bool:
+	var transaction_ticket_value: Variant = publication.get("transaction_ticket")
+	if not transaction_ticket_value is Dictionary:
+		return false
+	var transaction_ticket := transaction_ticket_value as Dictionary
+	if (
+		not _frame_signal_publication_matches(publication)
+		or not _frame_signal_transaction_ticket_matches(transaction_ticket)
+		or not _finalized_frame_signal_publication.is_empty()
+		or _frame_signal_publication_in_progress
+		or _active_frame_signal_transaction.get("events", [])
+		!= publication.get("events", [])
+	):
+		return false
+	_active_frame_signal_transaction.clear()
+	_finalized_frame_signal_publication = _prepared_frame_signal_publication.duplicate(true)
+	_prepared_frame_signal_publication.clear()
+	return true
+
+
+func discard_finalized_frame_signal_publication(publication: Dictionary) -> bool:
+	if (
+		_frame_signal_publication_in_progress
+		or not _finalized_frame_signal_publication_matches(publication)
+	):
+		return false
+	_finalized_frame_signal_publication.clear()
+	return true
+
+
+func publish_prepared_frame_signals() -> void:
+	if _finalized_frame_signal_publication.is_empty() or _frame_signal_publication_in_progress:
+		return
+	var events: Array = (
+		_finalized_frame_signal_publication.get("events", []) as Array
+	).duplicate(true)
+	_finalized_frame_signal_publication.clear()
+	_frame_signal_publication_in_progress = true
+	_flush_frame_signal_events(events)
+	while not _post_publication_frame_signal_events.is_empty():
+		var deferred: Array = _post_publication_frame_signal_events.duplicate(true)
+		_post_publication_frame_signal_events.clear()
+		_flush_frame_signal_events(deferred)
+	_frame_signal_publication_in_progress = false
+
+
+func rollback_frame_signal_transaction(ticket: Dictionary) -> bool:
+	if not _frame_signal_transaction_ticket_matches(ticket):
+		return false
+	_active_frame_signal_transaction.clear()
+	_prepared_frame_signal_publication.clear()
+	return true
+
+
+func frame_signal_transaction_is_active() -> bool:
+	return not _active_frame_signal_transaction.is_empty()
+
+
+func _frame_signal_publication_matches(publication: Dictionary) -> bool:
+	if (
+		_prepared_frame_signal_publication.is_empty()
+		or publication.size() != 7
+		or typeof(publication.get("schema_version")) != TYPE_INT
+		or int(publication.get("schema_version", -1))
+		!= FRAME_SIGNAL_PUBLICATION_SCHEMA_VERSION
+		or typeof(publication.get("publication_id")) != TYPE_INT
+		or int(publication.get("publication_id", 0)) <= 0
+		or typeof(publication.get("owner_instance_id")) != TYPE_INT
+		or int(publication.get("owner_instance_id", 0)) != get_instance_id()
+		or typeof(publication.get("runtime_frame")) != TYPE_INT
+		or int(publication.get("runtime_frame", -1)) <= 0
+		or not publication.get("transaction_ticket") is Dictionary
+		or not publication.get("events") is Array
+		or typeof(publication.get("fingerprint")) != TYPE_STRING
+		or str(publication.get("fingerprint", ""))
+		!= _frame_signal_publication_fingerprint(publication)
+	):
+		return false
+	return publication == _prepared_frame_signal_publication
+
+
+func _finalized_frame_signal_publication_matches(publication: Dictionary) -> bool:
+	if (
+		_finalized_frame_signal_publication.is_empty()
+		or publication.size() != 7
+		or typeof(publication.get("schema_version")) != TYPE_INT
+		or int(publication.get("schema_version", -1))
+		!= FRAME_SIGNAL_PUBLICATION_SCHEMA_VERSION
+		or typeof(publication.get("publication_id")) != TYPE_INT
+		or int(publication.get("publication_id", 0)) <= 0
+		or typeof(publication.get("owner_instance_id")) != TYPE_INT
+		or int(publication.get("owner_instance_id", 0)) != get_instance_id()
+		or typeof(publication.get("runtime_frame")) != TYPE_INT
+		or int(publication.get("runtime_frame", -1)) <= 0
+		or not publication.get("transaction_ticket") is Dictionary
+		or not publication.get("events") is Array
+		or typeof(publication.get("fingerprint")) != TYPE_STRING
+		or str(publication.get("fingerprint", ""))
+		!= _frame_signal_publication_fingerprint(publication)
+	):
+		return false
+	var ticket := publication.get("transaction_ticket") as Dictionary
+	if not _frame_signal_transaction_ticket_is_authentic(
+		ticket,
+		int(publication.get("runtime_frame", -1))
+	):
+		return false
+	return publication == _finalized_frame_signal_publication
+
+
+func _frame_signal_transaction_ticket_matches(ticket: Dictionary) -> bool:
+	if (
+		_active_frame_signal_transaction.is_empty()
+		or not _active_frame_signal_transaction.get("ticket") is Dictionary
+	):
+		return false
+	var active_ticket := _active_frame_signal_transaction.get("ticket") as Dictionary
+	return (
+		_frame_signal_transaction_ticket_is_authentic(
+			ticket,
+			int(active_ticket.get("runtime_frame", -1))
+		)
+		and ticket == active_ticket
+	)
+
+
+func _frame_signal_transaction_ticket_is_authentic(
+	ticket: Dictionary,
+	expected_runtime_frame: int
+) -> bool:
+	return (
+		ticket.size() == 5
+		and typeof(ticket.get("schema_version")) == TYPE_INT
+		and int(ticket.get("schema_version", -1))
+		== FRAME_SIGNAL_TRANSACTION_SCHEMA_VERSION
+		and typeof(ticket.get("ticket_id")) == TYPE_INT
+		and int(ticket.get("ticket_id", 0)) > 0
+		and typeof(ticket.get("owner_instance_id")) == TYPE_INT
+		and int(ticket.get("owner_instance_id", 0)) == get_instance_id()
+		and typeof(ticket.get("runtime_frame")) == TYPE_INT
+		and int(ticket.get("runtime_frame", -1)) == expected_runtime_frame
+		and expected_runtime_frame > 0
+		and typeof(ticket.get("fingerprint")) == TYPE_STRING
+		and str(ticket.get("fingerprint", ""))
+		== _frame_signal_transaction_ticket_fingerprint(ticket)
+	)
+
+
+func _frame_signal_transaction_ticket_fingerprint(ticket: Dictionary) -> String:
+	var signed := ticket.duplicate(true)
+	signed.erase("fingerprint")
+	return var_to_bytes(signed).hex_encode().sha256_text()
+
+
+func _frame_signal_publication_fingerprint(publication: Dictionary) -> String:
+	var signed := publication.duplicate(true)
+	signed.erase("fingerprint")
+	return var_to_bytes(signed).hex_encode().sha256_text()
+
+
+func _queue_or_flush_frame_signal_event(kind: StringName, arguments: Array) -> void:
+	var event := {
+		"kind": kind,
+		"arguments": arguments.duplicate(true),
+	}
+	if _active_frame_signal_transaction.is_empty():
+		if not _finalized_frame_signal_publication.is_empty() or _frame_signal_publication_in_progress:
+			_post_publication_frame_signal_events.append(event)
+			return
+		_flush_frame_signal_event(event)
+		return
+	var events := _active_frame_signal_transaction.get("events", []) as Array
+	events.append(event)
+	_active_frame_signal_transaction["events"] = events
+
+
+func _flush_frame_signal_events(events: Array) -> void:
+	for event_value: Variant in events:
+		if event_value is Dictionary:
+			_flush_frame_signal_event(event_value as Dictionary)
+
+
+func _flush_frame_signal_event(event: Dictionary) -> void:
+	var kind := StringName(str(event.get("kind", "")))
+	var arguments := event.get("arguments", []) as Array
+	match kind:
+		&"damaged":
+			damaged.emit(float(arguments[0]), float(arguments[1]))
+		&"healed":
+			healed.emit(float(arguments[0]), float(arguments[1]))
+		&"died":
+			var killer: Variant = arguments[0] if not arguments.is_empty() else null
+			clear_invulnerability_sources()
+			EventBus.entity_died.emit(get_parent(), killer)
+			died.emit(killer)
+
+
+func can_restore_replay_snapshot(value: Dictionary) -> bool:
+	return not _validated_health_replay_snapshot(value).is_empty()
+
+
+func restore_replay_snapshot(value: Dictionary) -> bool:
+	var validated := _validated_health_replay_snapshot(value)
+	if validated.is_empty():
+		return false
+	var before := runtime_state_snapshot()
+	if before == validated:
+		return true
+	if _install_health_replay_snapshot(validated):
+		return true
+	if not _install_health_replay_snapshot(before):
+		push_error("Health Replay restore rollback failed")
+	return false
 
 
 func restore_irreversible_replay_snapshot(value: Dictionary) -> bool:
@@ -215,14 +502,17 @@ func publish_rewind_transaction_state(publication: Dictionary) -> bool:
 	var damaged_amount := float(publication.get("damaged_amount", 0.0))
 	var healed_amount := float(publication.get("healed_amount", 0.0))
 	if damaged_amount > 0.0:
-		damaged.emit(damaged_amount, float(publication.get("hp_after_damage", current_hp)))
+		_queue_or_flush_frame_signal_event(
+			&"damaged",
+			[damaged_amount, float(publication.get("hp_after_damage", current_hp))]
+		)
 	if healed_amount > 0.0:
-		healed.emit(healed_amount, float(publication.get("hp_after_heal", current_hp)))
+		_queue_or_flush_frame_signal_event(
+			&"healed",
+			[healed_amount, float(publication.get("hp_after_heal", current_hp))]
+		)
 	if bool(publication.get("died", false)):
-		clear_invulnerability_sources()
-		var killer: Variant = publication.get("killer")
-		EventBus.entity_died.emit(get_parent(), killer)
-		died.emit(killer)
+		_queue_or_flush_frame_signal_event(&"died", [publication.get("killer")])
 	return true
 
 
@@ -433,7 +723,7 @@ func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -
 			)
 	_emit_damage_observation(damage_info)
 	current_hp = maxf(0.0, current_hp - final_amount)
-	damaged.emit(final_amount, current_hp)
+	_queue_or_flush_frame_signal_event(&"damaged", [final_amount, current_hp])
 	_apply_hit_reaction(damage_info, final_amount)
 	EventBus.damage_applied.emit(damage_info, get_parent(), final_amount)
 	if current_hp <= 0.0:
@@ -664,7 +954,7 @@ func heal(amount: float) -> float:
 	current_hp = minf(max_hp, current_hp + amount * healing_multiplier)
 	var healed_amount := current_hp - previous_hp
 	if healed_amount > 0.0:
-		healed.emit(healed_amount, current_hp)
+		_queue_or_flush_frame_signal_event(&"healed", [healed_amount, current_hp])
 	return healed_amount
 
 
@@ -673,7 +963,7 @@ func lose_health(amount: float, source: Variant = null) -> float:
 		return 0.0
 	var final_amount := minf(current_hp, amount)
 	current_hp = maxf(0.0, current_hp - final_amount)
-	damaged.emit(final_amount, current_hp)
+	_queue_or_flush_frame_signal_event(&"damaged", [final_amount, current_hp])
 	if current_hp <= 0.0:
 		_die(source)
 	return final_amount
@@ -718,7 +1008,7 @@ func lose_health_irreversible(
 			context
 		)
 	current_hp = maxf(0.0, current_hp - actual_loss)
-	damaged.emit(actual_loss, current_hp)
+	_queue_or_flush_frame_signal_event(&"damaged", [actual_loss, current_hp])
 	if current_hp <= 0.0:
 		_die(reason)
 	return planned_resolution
@@ -811,6 +1101,71 @@ func _valid_health_transaction_snapshot(value: Dictionary) -> bool:
 	if bool(value["dead"]) and restored_hp > 0.0:
 		return false
 	return StringName(str((value["ledger"] as Dictionary).get("run_id", ""))) == irreversible_run_id()
+
+
+func _validated_health_replay_snapshot(value: Dictionary) -> Dictionary:
+	if value.size() != REPLAY_SNAPSHOT_FIELDS.size():
+		return {}
+	for field: String in REPLAY_SNAPSHOT_FIELDS:
+		if not value.has(field):
+			return {}
+	for key_value: Variant in value.keys():
+		if (
+			typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(key_value) not in REPLAY_SNAPSHOT_FIELDS
+		):
+			return {}
+	if typeof(value["run_id"]) not in [TYPE_STRING, TYPE_STRING_NAME]:
+		return {}
+	var run_id := StringName(str(value["run_id"]))
+	if run_id == &"" or run_id != irreversible_run_id():
+		return {}
+	for field: String in ["current_hp", "max_hp", "healing_multiplier"]:
+		if typeof(value[field]) not in [TYPE_INT, TYPE_FLOAT]:
+			return {}
+	var restored_hp := float(value["current_hp"])
+	var restored_max_hp := float(value["max_hp"])
+	var restored_healing_multiplier := float(value["healing_multiplier"])
+	if (
+		not is_finite(restored_hp)
+		or not is_finite(restored_max_hp)
+		or restored_max_hp <= 0.0
+		or restored_hp < 0.0
+		or restored_hp > restored_max_hp
+		or not is_finite(restored_healing_multiplier)
+		or restored_healing_multiplier < 0.0
+		or typeof(value["dead"]) != TYPE_BOOL
+		or bool(value["dead"]) != is_zero_approx(restored_hp)
+		or not value["ledger"] is Dictionary
+	):
+		return {}
+	var ledger := (value["ledger"] as Dictionary).duplicate(true)
+	if (
+		StringName(str(ledger.get("run_id", ""))) != run_id
+		or not _irreversible_ledger.has_method("can_restore_replay_snapshot")
+		or not bool(_irreversible_ledger.call("can_restore_replay_snapshot", ledger))
+	):
+		return {}
+	return {
+		"run_id": run_id,
+		"current_hp": restored_hp,
+		"max_hp": restored_max_hp,
+		"healing_multiplier": restored_healing_multiplier,
+		"dead": bool(value["dead"]),
+		"ledger": ledger,
+	}
+
+
+func _install_health_replay_snapshot(value: Dictionary) -> bool:
+	var ledger_target := (value["ledger"] as Dictionary).duplicate(true)
+	if irreversible_ledger_snapshot() != ledger_target:
+		if not bool(_irreversible_ledger.call("restore_replay_snapshot", ledger_target)):
+			return false
+	max_hp = float(value["max_hp"])
+	current_hp = float(value["current_hp"])
+	healing_multiplier = float(value["healing_multiplier"])
+	dead = bool(value["dead"])
+	return runtime_state_snapshot() == value
 
 
 func _apply_target_damage_modifiers(damage_info: RefCounted, starting_amount: float) -> float:
@@ -910,6 +1265,4 @@ func _die(killer: Variant) -> void:
 	if dead:
 		return
 	dead = true
-	clear_invulnerability_sources()
-	EventBus.entity_died.emit(get_parent(), killer)
-	died.emit(killer)
+	_queue_or_flush_frame_signal_event(&"died", [killer])

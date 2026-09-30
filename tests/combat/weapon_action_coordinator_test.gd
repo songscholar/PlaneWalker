@@ -490,6 +490,11 @@ class FakeWeaponRuntime:
 var _suite
 var _committed_facts: Array[Dictionary] = []
 var _runtime_events: Array[Dictionary] = []
+var _published_event_order: Array[String] = []
+var _publication_observer_coordinator: RefCounted
+var _publication_observer_begin_results: Array[bool] = []
+var _publication_observer_discard_publication: Dictionary = {}
+var _publication_observer_discard_results: Array[bool] = []
 
 
 func _ready() -> void:
@@ -542,6 +547,11 @@ func _run() -> void:
 	_test_malformed_live_intent_tail_rolls_back_runtime_only()
 	_test_runtime_tick_uses_coordinator_frame_while_ready_and_busy()
 	_test_busy_unsupported_sword_semantics_preserve_existing_buffer()
+	_test_frame_event_buffer_rollback_discards_all_events()
+	_test_frame_event_buffer_commit_publishes_once_in_original_order()
+	_test_frame_event_publication_is_two_phase_and_observer_atomic()
+	_test_finalized_frame_event_publication_discard_is_authenticated_and_exactly_once()
+	_test_finalized_frame_event_publication_discard_rejects_publish_reentry()
 	_test_rewind_safe_reset_preserves_committed_resources()
 	_test_gameplay_rewind_cancel_preserves_committed_payload_guard()
 	_test_gameplay_rewind_rollback_restores_windup_local_state_exactly()
@@ -1727,6 +1737,235 @@ func _test_busy_unsupported_sword_semantics_preserve_existing_buffer() -> void:
 			_suite.assert_equal(coordinator.current_token(), token_before, "%s cannot mutate the active token" % label)
 
 
+func _test_frame_event_buffer_rollback_discards_all_events() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "frame event rollback fixture opens one buffer")
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "frame event rollback fixture commits one action")
+	_advance(coordinator, 6)
+	_suite.assert_equal(_committed_facts, [], "buffered action commit is not observable before settlement")
+	_suite.assert_equal(_runtime_events, [], "buffered runtime events are not observable before settlement")
+	_suite.assert_equal(_published_event_order, [], "buffered mixed events publish no partial prefix")
+	_suite.assert_true(coordinator.rollback_frame_event_buffer(), "matching rollback discards the complete frame buffer")
+	_suite.assert_equal(_committed_facts, [], "rollback never publishes the action commit")
+	_suite.assert_equal(_runtime_events, [], "rollback never publishes runtime events")
+	_suite.assert_equal(_published_event_order, [], "rollback leaves no observable event order")
+	_suite.assert_true(not coordinator.rollback_frame_event_buffer(), "frame event rollback is exactly once")
+	_suite.assert_true(not coordinator.commit_frame_event_buffer(), "rolled-back frame buffer cannot commit later")
+
+
+func _test_frame_event_buffer_commit_publishes_once_in_original_order() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "frame event commit fixture opens one buffer")
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "frame event commit fixture commits one action")
+	_advance(coordinator, 6)
+	_suite.assert_equal(_published_event_order, [], "commit fixture remains externally silent until settlement")
+	_suite.assert_true(coordinator.commit_frame_event_buffer(), "matching commit flushes the frame buffer")
+	_suite.assert_equal(_committed_facts.size(), 1, "frame buffer publishes the action commit exactly once")
+	_suite.assert_equal(_runtime_events.size(), 2, "frame buffer publishes both runtime events exactly once")
+	_suite.assert_equal(
+		_published_event_order,
+		[
+			"commit:primary_test",
+			"runtime:payload_released",
+			"runtime:cue_requested",
+		],
+		"frame buffer preserves the original mixed-signal publication order"
+	)
+	_suite.assert_true(not coordinator.commit_frame_event_buffer(), "frame event commit is exactly once")
+	_suite.assert_true(not coordinator.rollback_frame_event_buffer(), "committed frame buffer cannot roll back later")
+	_suite.assert_equal(_committed_facts.size(), 1, "duplicate settlement cannot republish the action commit")
+	_suite.assert_equal(_runtime_events.size(), 2, "duplicate settlement cannot republish runtime events")
+
+
+func _test_frame_event_publication_is_two_phase_and_observer_atomic() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "two-phase fixture opens one frame buffer")
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{}
+	)
+	_suite.assert_true(bool(committed.get("ok", false)), "two-phase fixture commits one action")
+	_advance(coordinator, 6)
+	var publication: Dictionary = coordinator.prepare_frame_event_publication()
+	_suite.assert_true(not publication.is_empty(), "prepare returns an authenticated publication ticket")
+	_suite.assert_equal(
+		(publication.get("events", []) as Array).size(),
+		3,
+		"publication ticket freezes every buffered event without emitting"
+	)
+	_suite.assert_equal(_published_event_order, [], "prepare remains externally silent")
+
+	var isolated_copy := publication.duplicate(true)
+	(isolated_copy["events"] as Array).clear()
+	_suite.assert_equal(
+		(coordinator.prepare_frame_event_publication().get("events", []) as Array).size(),
+		3,
+		"caller mutation cannot alter the authoritative prepared publication"
+	)
+	var forged := publication.duplicate(true)
+	forged["fingerprint"] = "forged"
+	_suite.assert_true(
+		not coordinator.finalize_frame_event_publication(forged),
+		"finalize rejects a forged publication without consuming the buffer"
+	)
+	_suite.assert_true(coordinator.frame_event_buffer_is_active(), "forged finalize preserves the live buffer")
+	coordinator.set("_frame_event_commit_fault_for_test", true)
+	_suite.assert_true(
+		coordinator.finalize_frame_event_publication(publication),
+		"a successful prepare freezes commit eligibility before fault injection"
+	)
+	coordinator.set("_frame_event_commit_fault_for_test", false)
+	_suite.assert_true(not coordinator.frame_event_buffer_is_active(), "finalize closes the internal frame buffer")
+	_suite.assert_equal(_published_event_order, [], "finalize remains externally silent")
+	_suite.assert_true(
+		not coordinator.begin_frame_event_buffer(),
+		"a finalized unpublished batch blocks a replacement buffer"
+	)
+	_suite.assert_true(
+		not coordinator.rollback_frame_event_buffer(),
+		"finalized publication cannot be discarded through the old rollback path"
+	)
+
+	_publication_observer_coordinator = coordinator
+	_publication_observer_begin_results.clear()
+	coordinator.weapon_action_committed.connect(_on_weapon_publication_observer)
+	coordinator.publish_prepared_frame_events()
+	coordinator.weapon_action_committed.disconnect(_on_weapon_publication_observer)
+	_publication_observer_coordinator = null
+	_suite.assert_equal(
+		_publication_observer_begin_results,
+		[false],
+		"observer re-entry cannot replace the batch while publication is in progress"
+	)
+	_suite.assert_equal(
+		_published_event_order,
+		[
+			"commit:primary_test",
+			"runtime:payload_released",
+			"runtime:cue_requested",
+		],
+		"prepared publication emits once in original mixed-event order"
+	)
+	coordinator.publish_prepared_frame_events()
+	_suite.assert_equal(_committed_facts.size(), 1, "duplicate publish cannot repeat the committed fact")
+	_suite.assert_equal(_runtime_events.size(), 2, "duplicate publish cannot repeat runtime events")
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "a new frame buffer may begin after publication")
+	_suite.assert_true(coordinator.rollback_frame_event_buffer(), "post-publication buffer remains independently reversible")
+
+
+func _test_finalized_frame_event_publication_discard_is_authenticated_and_exactly_once() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "discard fixture opens one frame buffer")
+	_suite.assert_true(
+		bool(coordinator.submit_intent(
+			{"id": "weapon_primary", "edge": "pressed"},
+			{}
+		).get("ok", false)),
+		"discard fixture commits one buffered action"
+	)
+	_advance(coordinator, 6)
+	var publication: Dictionary = coordinator.prepare_frame_event_publication()
+	_suite.assert_true(
+		coordinator.finalize_frame_event_publication(publication),
+		"discard fixture finalizes an observer-invisible publication"
+	)
+
+	var forged := publication.duplicate(true)
+	forged["fingerprint"] = "forged"
+	_suite.assert_true(
+		not coordinator.discard_finalized_frame_event_publication(forged),
+		"forged finalized event publication cannot be discarded"
+	)
+	_suite.assert_true(
+		not coordinator.begin_frame_event_buffer(),
+		"forged discard preserves the authoritative finalized batch"
+	)
+	coordinator.call(
+		"_publish_weapon_runtime_event",
+		{"type": &"survives_discard"}
+	)
+	_suite.assert_true(
+		coordinator.discard_finalized_frame_event_publication(publication),
+		"authentic finalized event publication is discarded before observers see it"
+	)
+	_suite.assert_equal(_published_event_order, [], "discard remains completely observer-silent")
+	_suite.assert_true(
+		not coordinator.discard_finalized_frame_event_publication(publication),
+		"finalized event publication discard is exactly once"
+	)
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "successful discard releases the next frame buffer")
+	var replacement_publication: Dictionary = coordinator.prepare_frame_event_publication()
+	_suite.assert_true(
+		coordinator.finalize_frame_event_publication(replacement_publication),
+		"replacement frame buffer can finalize after discard"
+	)
+	coordinator.publish_prepared_frame_events()
+	_suite.assert_equal(
+		_published_event_order,
+		["runtime:survives_discard"],
+		"successful discard preserves the independent post-publication event queue"
+	)
+
+
+func _test_finalized_frame_event_publication_discard_rejects_publish_reentry() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	_suite.assert_true(coordinator.begin_frame_event_buffer(), "reentrant discard fixture opens one frame buffer")
+	_suite.assert_true(
+		bool(coordinator.submit_intent(
+			{"id": "weapon_primary", "edge": "pressed"},
+			{}
+		).get("ok", false)),
+		"reentrant discard fixture commits one buffered action"
+	)
+	_advance(coordinator, 6)
+	var publication: Dictionary = coordinator.prepare_frame_event_publication()
+	_suite.assert_true(
+		coordinator.finalize_frame_event_publication(publication),
+		"reentrant discard fixture finalizes one publication"
+	)
+
+	_publication_observer_coordinator = coordinator
+	_publication_observer_discard_publication = publication.duplicate(true)
+	_publication_observer_discard_results.clear()
+	coordinator.weapon_action_committed.connect(_on_weapon_publication_discard_observer)
+	coordinator.publish_prepared_frame_events()
+	coordinator.weapon_action_committed.disconnect(_on_weapon_publication_discard_observer)
+	_publication_observer_coordinator = null
+	_publication_observer_discard_publication.clear()
+	_suite.assert_equal(
+		_publication_observer_discard_results,
+		[false],
+		"observer re-entry cannot discard a publication already in progress"
+	)
+	_suite.assert_equal(
+		_published_event_order,
+		[
+			"commit:primary_test",
+			"runtime:payload_released",
+			"runtime:cue_requested",
+			"runtime:observer_deferred",
+		],
+		"reentrant discard cannot remove the observer-seen batch or its post-publication queue"
+	)
+	_suite.assert_true(
+		not coordinator.discard_finalized_frame_event_publication(publication),
+		"an already published event batch cannot be discarded afterward"
+	)
+
+
 func _test_rewind_safe_reset_preserves_committed_resources() -> void:
 	var fixture := _fixture()
 	var coordinator: RefCounted = fixture["coordinator"]
@@ -1955,6 +2194,7 @@ func _test_contract_rejects_non_finite_plan_metadata() -> void:
 func _fixture() -> Dictionary:
 	_committed_facts.clear()
 	_runtime_events.clear()
+	_published_event_order.clear()
 	var runtime := FakeWeaponRuntime.new()
 	var provider := FakeResourceProvider.new()
 	var resource_transaction = WeaponResourceTransactionScript.new()
@@ -1999,6 +2239,7 @@ func _on_weapon_action_committed(
 	token: int,
 	context: Dictionary
 ) -> void:
+	_published_event_order.append("commit:%s" % str(action_id))
 	_committed_facts.append({
 		"weapon_id": str(weapon_id),
 		"action_id": str(action_id),
@@ -2008,4 +2249,37 @@ func _on_weapon_action_committed(
 
 
 func _on_weapon_runtime_event(event: Dictionary) -> void:
+	_published_event_order.append("runtime:%s" % str(event.get("type", "")))
 	_runtime_events.append(event.duplicate(true))
+
+
+func _on_weapon_publication_observer(
+	_weapon_id: StringName,
+	_action_id: StringName,
+	_token: int,
+	_context: Dictionary
+) -> void:
+	_publication_observer_begin_results.append(
+		_publication_observer_coordinator != null
+		and bool(_publication_observer_coordinator.call("begin_frame_event_buffer"))
+	)
+
+
+func _on_weapon_publication_discard_observer(
+	_weapon_id: StringName,
+	_action_id: StringName,
+	_token: int,
+	_context: Dictionary
+) -> void:
+	if _publication_observer_coordinator == null:
+		return
+	_publication_observer_coordinator.call(
+		"_publish_weapon_runtime_event",
+		{"type": &"observer_deferred"}
+	)
+	_publication_observer_discard_results.append(bool(
+		_publication_observer_coordinator.call(
+			"discard_finalized_frame_event_publication",
+			_publication_observer_discard_publication.duplicate(true)
+		)
+	))

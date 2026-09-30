@@ -838,6 +838,10 @@ func _test_player_active_hitbox_restore_preserves_damage_identity() -> void:
 		await _free_player(target)
 		return
 
+	# This fixture needs a non-initial generation, but must not depend on an
+	# unrelated idle runtime reset advancing the action identity implicitly.
+	source.weapon_action_coordinator.cancel(&"identity_generation_fixture")
+
 	_suite.assert_true(
 		await _drive_player_hitbox_action(source),
 		"identity source reaches its first ACTIVE Sword hitbox"

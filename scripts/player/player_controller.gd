@@ -5,6 +5,9 @@ const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
+const CharacterActionCoordinatorScript := preload(
+	"res://scripts/player/characters/character_action_coordinator.gd"
+)
 const BowWeaponRuntimeScript := preload("res://scripts/combat/weapons/bow_weapon_runtime.gd")
 const GauntletsWeaponRuntimeScript := preload("res://scripts/combat/weapons/gauntlets_weapon_runtime.gd")
 const GunWeaponRuntimeScript := preload("res://scripts/combat/weapons/gun_weapon_runtime.gd")
@@ -46,6 +49,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 @onready var health: Node = $HealthComponent
 @onready var loadout_runtime: Node = $PlayerLoadoutRuntime
 @onready var time_manager: Node = $TimeManager
+@onready var world_payload_authority: Node = $WorldPayloadAuthority
 @onready var rewind_recorder: Node = $RewindRecorder
 @onready var visual: Polygon2D = $Visual
 
@@ -66,10 +70,11 @@ var gauntlets_weapon: Node:
 	get:
 		return _weapon_adapter(&"gauntlets")
 
-var _dash_cooldown_remaining: float = 0.0
+var _dash_cooldown_remaining_frames: int = 0
 var _dash_velocity: Vector2 = Vector2.ZERO
 var _knockback_velocity: Vector2 = Vector2.ZERO
 var _last_move_direction: Vector2 = Vector2.RIGHT
+var _last_weapon_aim_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
 var _runtime_frame: int = 0
 var _dash_completion_token: int = 0
@@ -79,6 +84,7 @@ var _time_acceleration_multiplier: float = 1.0
 var _time_acceleration_token: int = 0
 var _time_acceleration_remaining: float = 0.0
 var action_state = PlayerActionStateScript.new()
+var character_action_coordinator: RefCounted = CharacterActionCoordinatorScript.new()
 var weapon_action_coordinator: RefCounted
 var weapon_runtime: RefCounted
 var weapon_runtime_profile: RefCounted
@@ -86,6 +92,8 @@ var weapon_modifier_state: RefCounted
 var _weapon_combo_timeout_frames: int = 0
 var _weapon_profile_compatibility_fallback: bool = false
 var _buffered_time_skill: StringName = &""
+var _next_time_action_token: int = 1
+var _time_action_generation: int = 1
 var _weapon_action_reward_claims: Dictionary = {}
 var _weapon_action_ids_by_token: Dictionary = {}
 var _weapon_action_generations_by_token: Dictionary = {}
@@ -98,14 +106,24 @@ var _weapon_replay_capture_sequence: int = 0
 var _applying_weapon_replay_event: bool = false
 var _weapon_replay_fact_baseline: Dictionary = {}
 var _weapon_replay_capture_invalid_reason: StringName = &""
+var _weapon_replay_restore_invalid_reason: StringName = &""
 var _weapon_intent_router: RefCounted = WeaponIntentRouterScript.new()
 var _run_id: StringName = &""
+var _owner_character_generation: int = 0
+var _active_time_frame_signal_ticket: Dictionary = {}
+var _active_health_frame_signal_ticket: Dictionary = {}
+var _active_world_frame_ticket: Dictionary = {}
 
 const DASH_DURATION := 0.28
-const DASH_COOLDOWN := 0.45
+const DASH_COOLDOWN_FRAMES := 27
 const DASH_SPEED := 520.0
 const DASH_INVULNERABLE_TIME := 0.20
-const KNOCKBACK_DECAY := 12.0
+const KNOCKBACK_RETAINED_PER_FRAME := 0.8
+const FIXED_FRAME_SECONDS := 1.0 / 60.0
+const MAX_FIXED_FRAME_SLIDES := 4
+const FRAME_INTENT_CATEGORIES: Array[String] = ["dash", "time", "weapon", "character"]
+const FRAME_INTENT_EDGES: Array[StringName] = [&"pressed", &"held", &"released"]
+const FRAME_INTENT_MODES: Array[StringName] = [&"press", &"hold", &"toggle"]
 const BASE_COLOR := Color(0.2, 0.85, 0.95)
 const TIME_CAST_DURATION := 0.18
 const HITSTUN_DURATION := 0.18
@@ -120,6 +138,7 @@ const STAFF_ATTACK_SPEED := 0.85
 const MAX_TRACKED_WEAPON_FACT_TOKENS := 256
 const WEAPON_REPLAY_SNAPSHOT_SCHEMA_VERSION := 3
 const WEAPON_REPLAY_EVENT_SCHEMA_VERSION := 3
+const FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION := 1
 const WEAPON_REPLAY_EVENT_FIELDS: Array[String] = [
 	"schema_version",
 	"frame",
@@ -348,25 +367,24 @@ func _ready() -> void:
 		EventBus.hit_confirmed.connect(_on_weapon_replay_hit_confirmed)
 
 
-func _physics_process(delta: float) -> void:
-	_update_timers(delta)
-	advance_action_frame()
-	_update_weapon_aim()
-	_handle_priority_action_input()
-	_handle_movement(delta)
+func _physics_process(_delta: float) -> void:
+	advance_action_frame(_collect_live_frame_intents())
 
 
-func _update_timers(delta: float) -> void:
-	_dash_cooldown_remaining = maxf(0.0, _dash_cooldown_remaining - delta)
-	_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() * delta)
+func _advance_player_fixed_timers() -> void:
+	if _dash_cooldown_remaining_frames > 0:
+		_dash_cooldown_remaining_frames -= 1
+	if _knockback_velocity.length_squared() <= 0.000001:
+		_knockback_velocity = Vector2.ZERO
+	else:
+		_knockback_velocity *= KNOCKBACK_RETAINED_PER_FRAME
 
 
 func _update_weapon_aim() -> void:
-	var aim_direction := _resolve_weapon_aim_direction(
+	_apply_weapon_aim_direction(_resolve_weapon_aim_direction(
 		_right_stick_aim_direction(),
 		global_position.direction_to(get_global_mouse_position())
-	)
-	_apply_weapon_aim_direction(aim_direction)
+	))
 
 
 func _right_stick_aim_direction() -> Vector2:
@@ -399,6 +417,7 @@ func _resolve_weapon_aim_direction(
 func _apply_weapon_aim_direction(direction: Vector2) -> void:
 	if direction.length_squared() <= 0.001:
 		return
+	_last_weapon_aim_direction = direction.normalized()
 	var rotation_value := direction.angle()
 	for adapter_value: Variant in _weapon_adapters.values():
 		if adapter_value is Node2D:
@@ -406,33 +425,275 @@ func _apply_weapon_aim_direction(direction: Vector2) -> void:
 
 
 func _handle_priority_action_input() -> void:
-	var time_actions: Array[StringName] = []
+	advance_action_frame(_collect_live_frame_intents())
+
+
+func _collect_live_frame_intents() -> Dictionary:
+	var result := _empty_frame_intents()
+	result["movement"] = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	result["aim"] = _resolve_weapon_aim_direction(
+		_right_stick_aim_direction(),
+		global_position.direction_to(get_global_mouse_position())
+	)
+	if Input.is_action_just_pressed("dash"):
+		(result["dash"] as Array).append(_frame_intent(&"dash", &"pressed", 0, &"press"))
+
+	var queued_time_abilities: Dictionary = {}
 	for slot_action: StringName in [&"time_slot_1", &"time_slot_2"]:
-		if Input.is_action_just_pressed(slot_action):
-			time_actions.append(slot_action)
+		if not Input.is_action_just_pressed(slot_action):
+			continue
+		var canonical_slot := _canonical_time_action_id(slot_action)
+		if canonical_slot != &"":
+			queued_time_abilities[canonical_slot] = true
+		(result["time"] as Array).append(_frame_intent(slot_action, &"pressed", 0, &"press"))
 	for action_id: StringName in [&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate"]:
-		if Input.is_action_just_pressed(action_id):
-			var canonical_id: StringName = time_manager.canonical_skill_id(action_id)
-			var duplicate := false
-			for queued_action: StringName in time_actions:
-				if _canonical_time_action_id(queued_action) == canonical_id:
-					duplicate = true
-					break
-			if not duplicate:
-				time_actions.append(action_id)
-	if _submit_priority_action_edges(
-		Input.is_action_just_pressed("dash"),
-		time_actions,
-		[]
+		if not Input.is_action_just_pressed(action_id):
+			continue
+		var canonical_id: StringName = time_manager.canonical_skill_id(action_id)
+		if canonical_id == &"" or queued_time_abilities.has(canonical_id):
+			continue
+		queued_time_abilities[canonical_id] = true
+		(result["time"] as Array).append(_frame_intent(action_id, &"pressed", 0, &"press"))
+
+	for intent: Dictionary in _collect_raw_weapon_frame_intents():
+		(result["weapon"] as Array).append(intent)
+	return result
+
+
+func _collect_raw_weapon_frame_intents() -> Array[Dictionary]:
+	var intents: Array[Dictionary] = []
+	for semantic_action: StringName in [
+		&"weapon_primary",
+		&"weapon_secondary",
+		&"weapon_utility",
+		&"weapon_skill",
+		&"weapon_ultimate",
+	]:
+		var aliases := _weapon_input_aliases(semantic_action)
+		var just_pressed := false
+		var just_released := false
+		var alias_still_pressed := false
+		for action_id: StringName in aliases:
+			just_pressed = just_pressed or Input.is_action_just_pressed(action_id)
+			just_released = just_released or Input.is_action_just_released(action_id)
+			alias_still_pressed = alias_still_pressed or Input.is_action_pressed(action_id)
+		var mode := _weapon_semantic_input_mode(semantic_action)
+		var raw_edge := &""
+		if just_pressed:
+			raw_edge = &"pressed"
+		elif just_released and not alias_still_pressed and mode == &"hold":
+			raw_edge = &"released"
+		elif alias_still_pressed and mode in [&"hold", &"toggle"]:
+			raw_edge = &"held"
+		if raw_edge != &"":
+			intents.append(_frame_intent(
+				semantic_action,
+				raw_edge,
+				_current_weapon_hold_frames(),
+				mode
+			))
+	return intents
+
+
+func _empty_frame_intents() -> Dictionary:
+	return {
+		"dash": [],
+		"time": [],
+		"weapon": [],
+		"character": [],
+		"movement": Vector2.ZERO,
+		"aim": _last_weapon_aim_direction,
+		"meta": {},
+	}
+
+
+func _frame_intent(
+	action_id: StringName,
+	edge: StringName,
+	held_frames: int,
+	mode: StringName
+) -> Dictionary:
+	return {
+		"id": action_id,
+		"edge": edge,
+		"held_frames": held_frames,
+		"mode": mode,
+	}
+
+
+func _validated_frame_intents(value: Dictionary) -> Dictionary:
+	var grouped := _empty_frame_intents()
+	if value.is_empty():
+		return grouped
+	var action_envelope := value.duplicate(true)
+	for vector_key: String in ["movement", "aim"]:
+		if not action_envelope.has(vector_key):
+			continue
+		if not action_envelope[vector_key] is Vector2:
+			return {}
+		var vector_value := action_envelope[vector_key] as Vector2
+		if not is_finite(vector_value.x) or not is_finite(vector_value.y):
+			return {}
+		if vector_key == "movement" and vector_value.length_squared() > 1.0001:
+			vector_value = vector_value.normalized()
+		if vector_key == "aim" and vector_value.length_squared() > 0.001:
+			vector_value = vector_value.normalized()
+		grouped[vector_key] = vector_value
+		action_envelope.erase(vector_key)
+	if action_envelope.has("meta"):
+		if not action_envelope["meta"] is Dictionary:
+			return {}
+		for meta_key_value: Variant in (action_envelope["meta"] as Dictionary).keys():
+			if str(meta_key_value) not in ["source", "target_frame", "frame"]:
+				return {}
+		var nested_meta := action_envelope["meta"] as Dictionary
+		if nested_meta.has("source"):
+			if typeof(nested_meta["source"]) not in [TYPE_STRING, TYPE_STRING_NAME]:
+				return {}
+			(grouped["meta"] as Dictionary)["source"] = str(nested_meta["source"])
+		for frame_key: String in ["target_frame", "frame"]:
+			if not nested_meta.has(frame_key):
+				continue
+			if typeof(nested_meta[frame_key]) != TYPE_INT or int(nested_meta[frame_key]) < 0:
+				return {}
+			(grouped["meta"] as Dictionary)[frame_key] = int(nested_meta[frame_key])
+		action_envelope.erase("meta")
+	if action_envelope.has("source"):
+		if typeof(action_envelope["source"]) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return {}
+		(grouped["meta"] as Dictionary)["source"] = str(action_envelope["source"])
+		action_envelope.erase("source")
+	if action_envelope.has("target_frame"):
+		if typeof(action_envelope["target_frame"]) != TYPE_INT or int(action_envelope["target_frame"]) < 0:
+			return {}
+		(grouped["meta"] as Dictionary)["target_frame"] = int(action_envelope["target_frame"])
+		action_envelope.erase("target_frame")
+	if action_envelope.has("frame"):
+		if typeof(action_envelope["frame"]) != TYPE_INT or int(action_envelope["frame"]) < 0:
+			return {}
+		(grouped["meta"] as Dictionary)["frame"] = int(action_envelope["frame"])
+		action_envelope.erase("frame")
+	if action_envelope.is_empty():
+		return grouped
+	var uses_grouped_envelope := false
+	for category: String in FRAME_INTENT_CATEGORIES:
+		if action_envelope.has(category):
+			uses_grouped_envelope = true
+			break
+	if uses_grouped_envelope:
+		for key_value: Variant in action_envelope.keys():
+			if typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+				return {}
+			var category := str(key_value)
+			if category not in FRAME_INTENT_CATEGORIES or not action_envelope[key_value] is Array:
+				return {}
+			for entry_value: Variant in action_envelope[key_value] as Array:
+				var entry := _validated_frame_intent_entry(entry_value, category)
+				if entry.is_empty():
+					return {}
+				(grouped[category] as Array).append(entry)
+		return grouped if _frame_intents_have_unique_edges(grouped) else {}
+
+	for action_value: Variant in action_envelope.keys():
+		if typeof(action_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return {}
+		var action_id := StringName(str(action_value))
+		var category := _frame_intent_category(action_id)
+		if category == &"" or not action_envelope[action_value] is Dictionary:
+			return {}
+		var shorthand := (action_envelope[action_value] as Dictionary).duplicate(true)
+		shorthand["id"] = action_id
+		var entry := _validated_frame_intent_entry(shorthand, str(category))
+		if entry.is_empty():
+			return {}
+		(grouped[str(category)] as Array).append(entry)
+	return grouped if _frame_intents_have_unique_edges(grouped) else {}
+
+
+func _validated_frame_intent_entry(value: Variant, category: String) -> Dictionary:
+	if not value is Dictionary:
+		return {}
+	var source := value as Dictionary
+	for key_value: Variant in source.keys():
+		if typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return {}
+		if str(key_value) not in ["id", "edge", "held_frames", "mode"]:
+			return {}
+	if typeof(source.get("id")) not in [TYPE_STRING, TYPE_STRING_NAME]:
+		return {}
+	var action_id := StringName(str(source.get("id", "")))
+	var edge := StringName(str(source.get("edge", "pressed")))
+	var held_frames_value: Variant = source.get("held_frames", 0)
+	var mode := StringName(str(source.get("mode", (
+		_weapon_semantic_input_mode(action_id)
+		if category == "weapon"
+		else "press"
+	))))
+	if (
+		action_id == &""
+		or _frame_intent_category(action_id) != StringName(category)
+		or edge not in FRAME_INTENT_EDGES
+		or typeof(held_frames_value) != TYPE_INT
+		or int(held_frames_value) < 0
+		or mode not in FRAME_INTENT_MODES
 	):
-		return
-	var weapon_intents := _collect_weapon_input_intents()
+		return {}
+	return _frame_intent(action_id, edge, int(held_frames_value), mode)
+
+
+func _frame_intent_category(action_id: StringName) -> StringName:
+	if action_id == &"dash":
+		return &"dash"
+	if action_id in [
+		&"time_slot_1", &"time_slot_2", &"time_stop", &"time_rewind",
+		&"time_rift", &"time_accelerate",
+	]:
+		return &"time"
+	if action_id in [
+		&"weapon_primary", &"weapon_secondary", &"weapon_utility",
+		&"weapon_skill", &"weapon_ultimate",
+	]:
+		return &"weapon"
+	if str(action_id).begins_with("character_") or str(action_id).begins_with("character."):
+		return &"character"
+	return &""
+
+
+func _frame_intents_have_unique_edges(value: Dictionary) -> bool:
+	var seen: Dictionary = {}
+	for category: String in FRAME_INTENT_CATEGORIES:
+		for entry: Dictionary in value.get(category, []) as Array:
+			var key := "%s:%s:%s" % [category, str(entry["id"]), str(entry["edge"])]
+			if seen.has(key):
+				return false
+			seen[key] = true
+	return true
+
+
+func _apply_frame_intents(value: Dictionary) -> bool:
+	for dash_intent: Dictionary in value.get("dash", []) as Array:
+		if StringName(str(dash_intent.get("edge", ""))) == &"pressed" and try_action(&"dash"):
+			return true
+	for time_intent: Dictionary in value.get("time", []) as Array:
+		if StringName(str(time_intent.get("edge", ""))) != &"pressed":
+			continue
+		if try_action(StringName(str(time_intent.get("id", "")))):
+			return true
+	var weapon_intents := value.get("weapon", []) as Array
 	for index: int in range(weapon_intents.size()):
-		var intent: Dictionary = weapon_intents[index]
-		if _submit_normalized_weapon_intent(intent):
-			for pending_index: int in range(index + 1, weapon_intents.size()):
-				_reset_weapon_intent_latch(weapon_intents[pending_index])
-			return
+		var raw_intent := weapon_intents[index] as Dictionary
+		var normalized: Dictionary = _weapon_intent_router.call(
+			"normalize_edge",
+			StringName(str(raw_intent.get("id", ""))),
+			StringName(str(raw_intent.get("edge", ""))),
+			int(raw_intent.get("held_frames", 0)),
+			StringName(str(raw_intent.get("mode", "press")))
+		)
+		if normalized.is_empty():
+			continue
+		if _submit_normalized_weapon_intent(normalized):
+			return true
+	return true
 
 
 func _submit_priority_action_edges(
@@ -486,7 +747,10 @@ func _commit_ranged_input(action_id: StringName) -> bool:
 
 
 func _handle_movement(_delta: float) -> void:
-	var input_vector := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	_apply_frame_movement(Input.get_vector("move_left", "move_right", "move_up", "move_down"))
+
+
+func _apply_frame_movement(input_vector: Vector2) -> void:
 	if input_vector.length_squared() > 0.001:
 		_last_move_direction = input_vector.normalized()
 
@@ -494,7 +758,16 @@ func _handle_movement(_delta: float) -> void:
 		velocity = _dash_velocity + _knockback_velocity
 	else:
 		velocity = input_vector * stats.move_speed * _time_acceleration_multiplier * get_action_movement_multiplier() + _knockback_velocity
-	move_and_slide()
+	var remaining_motion := velocity * FIXED_FRAME_SECONDS
+	for _slide_index: int in range(MAX_FIXED_FRAME_SLIDES):
+		if remaining_motion.is_zero_approx():
+			break
+		var collision := move_and_collide(remaining_motion)
+		if collision == null:
+			break
+		var collision_normal := collision.get_normal()
+		velocity = velocity.slide(collision_normal)
+		remaining_motion = collision.get_remainder().slide(collision_normal)
 
 
 func try_action(action_id: StringName) -> bool:
@@ -526,9 +799,8 @@ func try_action(action_id: StringName) -> bool:
 
 
 func configure_loadout(config: Dictionary) -> bool:
-	if loadout_runtime == null:
+	if loadout_runtime == null or not _runtime_reset_preflight():
 		return false
-	_capture_next_weapon_action_token_floor()
 	var next_config := config.duplicate(true)
 	var next_weapon_id := StringName(str(next_config.get("weapon_id", "")))
 	var explicit_weapon_profile := next_config.has("weapon_profile")
@@ -571,12 +843,10 @@ func configure_loadout(config: Dictionary) -> bool:
 	var assembly := _assemble_weapon_runtime(next_config)
 	if not bool(assembly.get("ok", false)):
 		return false
-	var loadout_before: Dictionary = (
-		(loadout_runtime.call("snapshot") as Dictionary).duplicate(true)
-		if loadout_runtime.has_method("snapshot")
-		else {}
-	)
+	var transaction_before := _loadout_configuration_transaction_snapshot()
+	_capture_next_weapon_action_token_floor()
 	if not loadout_runtime.configure(next_config):
+		_rollback_loadout_configuration(transaction_before)
 		return false
 	var assembled_runtime := assembly.get("runtime") as RefCounted
 	if (
@@ -587,8 +857,7 @@ func configure_loadout(config: Dictionary) -> bool:
 			or not bool(assembled_runtime.call("activate_adapter"))
 		)
 	):
-		if not loadout_before.is_empty():
-			loadout_runtime.configure(loadout_before)
+		_rollback_loadout_configuration(transaction_before)
 		return false
 
 	_disconnect_weapon_coordinator()
@@ -598,8 +867,63 @@ func configure_loadout(config: Dictionary) -> bool:
 	weapon_action_coordinator = assembly.get("coordinator") as RefCounted
 	_weapon_profile_compatibility_fallback = used_compatibility_profile
 	_connect_weapon_coordinator()
-	reset_runtime_state()
+	if not reset_runtime_state():
+		if not _rollback_loadout_configuration(transaction_before):
+			set_physics_process(false)
+			push_error("Loadout runtime reset rollback failed closed")
+		return false
 	return true
+
+
+func _loadout_configuration_transaction_snapshot() -> Dictionary:
+	var loadout: Dictionary = (
+		(loadout_runtime.call("snapshot") as Dictionary).duplicate(true)
+		if loadout_runtime != null and loadout_runtime.has_method("snapshot")
+		else {}
+	)
+	return {
+		"loadout": loadout,
+		"full_player": full_player_replay_snapshot(),
+		"weapon_runtime_profile": weapon_runtime_profile,
+		"weapon_modifier_state": weapon_modifier_state,
+		"weapon_runtime": weapon_runtime,
+		"weapon_action_coordinator": weapon_action_coordinator,
+		"compatibility_fallback": _weapon_profile_compatibility_fallback,
+		"physics_processing": is_physics_processing(),
+	}
+
+
+func _rollback_loadout_configuration(before: Dictionary) -> bool:
+	var loadout_value: Variant = before.get("loadout")
+	if not loadout_value is Dictionary or not loadout_runtime.configure(
+		(loadout_value as Dictionary).duplicate(true)
+	):
+		return false
+	_disconnect_weapon_coordinator()
+	weapon_runtime_profile = before.get("weapon_runtime_profile") as RefCounted
+	weapon_modifier_state = before.get("weapon_modifier_state") as RefCounted
+	weapon_runtime = before.get("weapon_runtime") as RefCounted
+	weapon_action_coordinator = before.get("weapon_action_coordinator") as RefCounted
+	_weapon_profile_compatibility_fallback = bool(before.get("compatibility_fallback", false))
+	_connect_weapon_coordinator()
+	var full_player_value: Variant = before.get("full_player")
+	if (
+		full_player_value is Dictionary
+		and not (full_player_value as Dictionary).is_empty()
+		and not restore_full_player_replay_snapshot(
+			(full_player_value as Dictionary).duplicate(true)
+		)
+	):
+		return false
+	set_physics_process(bool(before.get("physics_processing", false)))
+	return (
+		loadout_runtime.snapshot() == loadout_value
+		and (
+			not full_player_value is Dictionary
+			or (full_player_value as Dictionary).is_empty()
+			or full_player_replay_snapshot() == full_player_value
+		)
+	)
 
 
 func configure_run(run_id: StringName) -> bool:
@@ -608,15 +932,40 @@ func configure_run(run_id: StringName) -> bool:
 		return false
 	if _run_id == normalized:
 		return true
-	if health == null or not health.has_method("configure_run"):
+	if (
+		health == null
+		or not health.has_method("configure_run")
+		or not health.has_method("irreversible_run_id")
+		or rewind_recorder == null
+		or not rewind_recorder.has_method("configure_run")
+		or not rewind_recorder.has_method("current_run_id")
+	):
 		return false
-	if rewind_recorder == null or not rewind_recorder.has_method("configure_run"):
+	if (
+		StringName(str(health.call("irreversible_run_id"))) != _run_id
+		or StringName(str(rewind_recorder.call("current_run_id"))) != _run_id
+	):
 		return false
-	if not bool(health.call("configure_run", normalized)):
+	if not _can_replace_world_payload_generation():
+		return false
+	var target_generation := _first_available_world_payload_generation(normalized, 1)
+	if target_generation <= 0:
+		return false
+	var recorder_before := _rewind_run_configuration_snapshot()
+	if recorder_before.is_empty():
 		return false
 	if not bool(rewind_recorder.call("configure_run", normalized)):
 		return false
+	if not bool(health.call("configure_run", normalized)):
+		_restore_rewind_run_configuration_snapshot(recorder_before)
+		return false
+	if not _run_id.is_empty() and _owner_character_generation > 0:
+		if not _invalidate_world_payload_generation(&"run_replacement"):
+			set_physics_process(false)
+			push_error("Run replacement generation invalidation violated its preflight")
+			return false
 	_run_id = normalized
+	_owner_character_generation = target_generation
 	return true
 
 
@@ -624,8 +973,159 @@ func current_run_id() -> StringName:
 	return _run_id
 
 
-func reset_runtime_state() -> void:
+func owner_character_generation() -> int:
+	return _owner_character_generation
+
+
+func _can_replace_world_payload_generation() -> bool:
+	if _run_id == &"" or _owner_character_generation <= 0 or world_payload_authority == null:
+		return true
+	if (
+		world_payload_authority.has_method("generation_is_invalidated")
+		and bool(world_payload_authority.call(
+			"generation_is_invalidated",
+			_run_id,
+			_owner_character_generation
+		))
+	):
+		return true
+	return (
+		world_payload_authority.has_method("can_invalidate_generation")
+		and bool(world_payload_authority.call(
+			"can_invalidate_generation",
+			_run_id,
+			_owner_character_generation,
+			&"run_replacement"
+		))
+	)
+
+
+func _invalidate_world_payload_generation(reason: StringName) -> bool:
+	if world_payload_authority == null:
+		return true
+	if _run_id != &"" and _owner_character_generation > 0:
+		var invalidated_value: Variant = world_payload_authority.call(
+			"invalidate_generation",
+			_run_id,
+			_owner_character_generation,
+			reason
+		)
+		if not invalidated_value is Dictionary:
+			return false
+		var invalidated := invalidated_value as Dictionary
+		if (
+			not bool(invalidated.get("ok", false))
+			and StringName(str(invalidated.get("code", ""))) != &"GENERATION_ALREADY_INVALIDATED"
+		):
+			return false
+	return true
+
+
+func _activate_next_world_payload_generation() -> bool:
+	if _run_id == &"":
+		return false
+	var minimum_generation := maxi(1, _owner_character_generation + 1)
+	var next_generation := _first_available_world_payload_generation(
+		_run_id,
+		minimum_generation
+	)
+	if next_generation <= 0:
+		return false
+	_owner_character_generation = next_generation
+	return true
+
+
+func _first_available_world_payload_generation(
+	run_id: StringName,
+	minimum_generation: int
+) -> int:
+	if run_id == &"" or minimum_generation <= 0:
+		return 0
+	if world_payload_authority == null:
+		return minimum_generation
+	if not world_payload_authority.has_method("first_available_generation"):
+		return 0
+	var generation_value: Variant = world_payload_authority.call(
+		"first_available_generation",
+		run_id,
+		minimum_generation
+	)
+	return int(generation_value) if typeof(generation_value) == TYPE_INT else 0
+
+
+func _runtime_reset_preflight() -> bool:
+	if _run_id == &"" or _owner_character_generation <= 0:
+		return false
+	if world_payload_authority == null:
+		return true
+	return (
+		world_payload_authority.has_method("can_reset_generation_runtime")
+		and bool(world_payload_authority.call(
+			"can_reset_generation_runtime",
+			_run_id,
+			_owner_character_generation,
+			&"player_runtime_reset"
+		))
+	)
+
+
+func reset_runtime_state() -> bool:
+	var pending_world_rollback_ok := true
+	if not _active_world_frame_ticket.is_empty():
+		pending_world_rollback_ok = (
+			world_payload_authority != null
+			and world_payload_authority.has_method("rollback_frame_transaction")
+			and bool(world_payload_authority.call(
+				"rollback_frame_transaction",
+				_active_world_frame_ticket.duplicate(true)
+			))
+		)
+	_active_world_frame_ticket.clear()
+	var pending_event_rollback_ok := true
+	if not _active_time_frame_signal_ticket.is_empty():
+		pending_event_rollback_ok = (
+			time_manager != null
+			and time_manager.has_method("rollback_frame_signal_transaction")
+			and bool(time_manager.call(
+				"rollback_frame_signal_transaction",
+				_active_time_frame_signal_ticket.duplicate(true)
+			))
+		)
+	_active_time_frame_signal_ticket.clear()
+	if not _active_health_frame_signal_ticket.is_empty():
+		pending_event_rollback_ok = (
+			health != null
+			and health.has_method("rollback_frame_signal_transaction")
+			and bool(health.call(
+				"rollback_frame_signal_transaction",
+				_active_health_frame_signal_ticket.duplicate(true)
+			))
+			and pending_event_rollback_ok
+		)
+	_active_health_frame_signal_ticket.clear()
+	if (
+		weapon_action_coordinator != null
+		and weapon_action_coordinator.has_method("frame_event_buffer_is_active")
+		and bool(weapon_action_coordinator.call("frame_event_buffer_is_active"))
+	):
+		pending_event_rollback_ok = (
+			bool(weapon_action_coordinator.call("rollback_frame_event_buffer"))
+			and pending_event_rollback_ok
+		)
+	if not pending_world_rollback_ok or not pending_event_rollback_ok:
+		set_physics_process(false)
+		push_error("Fixed-frame transaction rollback failed closed during runtime reset")
+		return false
+	if not _runtime_reset_preflight():
+		set_physics_process(false)
+		push_error("WorldPayloadAuthority runtime reset preflight failed closed")
+		return false
 	action_state.reset_runtime_state()
+	if character_action_coordinator != null:
+		if not bool(character_action_coordinator.call("reset_runtime_state", &"player_runtime_reset")):
+			set_physics_process(false)
+			push_error("CharacterActionCoordinator runtime reset failed")
+			return false
 	_weapon_combo_timeout_frames = 0
 	_weapon_action_reward_claims.clear()
 	_weapon_action_ids_by_token.clear()
@@ -638,9 +1138,12 @@ func reset_runtime_state() -> void:
 	_applying_weapon_replay_event = false
 	_weapon_replay_fact_baseline.clear()
 	_weapon_replay_capture_invalid_reason = &""
+	_weapon_replay_restore_invalid_reason = &""
 	_weapon_intent_router.call("reset_all")
 	_buffered_time_skill = &""
-	_dash_cooldown_remaining = 0.0
+	_next_time_action_token = 1
+	_time_action_generation += 1
+	_dash_cooldown_remaining_frames = 0
 	_dash_velocity = Vector2.ZERO
 	_runtime_frame = 0
 	_dash_completion_token = 0
@@ -656,21 +1159,67 @@ func reset_runtime_state() -> void:
 	_sync_weapon_resource_facts(&"runtime_reset")
 	_clear_owned_player_arrows()
 	_clear_owned_player_projectiles()
-	time_manager.reset_runtime_state()
+	time_manager.reset_runtime_state(true)
 	_force_clear_time_acceleration()
 	_apply_stats_to_components(true)
 	health.invulnerable = false
-	if rewind_recorder.has_method("clear_snapshots"):
+	if rewind_recorder.has_method("reset_runtime_state"):
+		if not bool(rewind_recorder.call("reset_runtime_state")):
+			set_physics_process(false)
+			push_error("RewindRecorder runtime reset failed")
+			return false
+	elif rewind_recorder.has_method("clear_snapshots"):
 		rewind_recorder.clear_snapshots()
+	if not _invalidate_world_payload_generation(&"player_runtime_reset"):
+		set_physics_process(false)
+		push_error("WorldPayloadAuthority runtime reset failed closed")
+		return false
+	elif (
+		world_payload_authority != null
+		and world_payload_authority.has_method("reset_runtime_clock")
+		and not bool(world_payload_authority.call("reset_runtime_clock"))
+	):
+		set_physics_process(false)
+		push_error("WorldPayloadAuthority runtime clock reset failed closed")
+		return false
+	elif not _activate_next_world_payload_generation():
+		set_physics_process(false)
+		push_error("WorldPayloadAuthority generation activation failed closed")
+		return false
 	_refresh_weapon_replay_fact_baseline()
+	return true
 
 
-func advance_action_frame() -> void:
-	_runtime_frame += 1
+func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
+	# Live play and Replay share this single fixed-frame transaction boundary.
+	var normalized_frame_intents := _validated_frame_intents(frame_intents)
+	if normalized_frame_intents.is_empty():
+		return false
+	if not _fixed_frame_preflight():
+		return false
+	var frame_before := _fixed_frame_transaction_snapshot()
+	if frame_before.is_empty():
+		return false
+	var next_runtime_frame := _runtime_frame + 1
+	if not _begin_fixed_frame_event_buffers(next_runtime_frame):
+		return false
+
+	_runtime_frame = next_runtime_frame
+	if not bool(time_manager.call("advance_frame", _runtime_frame)):
+		return _reject_fixed_frame(
+			frame_before,
+			"TimeManager rejected authoritative runtime frame %d" % _runtime_frame
+		)
+	if not _fixed_frame_event_buffers_can_commit():
+		return _reject_fixed_frame(
+			frame_before,
+			"Fixed-frame event buffer preflight rejected runtime frame %d" % _runtime_frame
+		)
 	if _weapon_combo_timeout_frames > 0:
 		_weapon_combo_timeout_frames -= 1
 		if _weapon_combo_timeout_frames == 0 and weapon_runtime != null and weapon_runtime.has_method("reset_combo"):
 			weapon_runtime.call("reset_combo")
+	_advance_player_fixed_timers()
 
 	var previous_action_state: int = action_state.current_state
 	action_state.advance_frame()
@@ -680,16 +1229,90 @@ func advance_action_frame() -> void:
 	):
 		_dash_completion_token += 1
 		_dash_completed_at_runtime_frame = _runtime_frame
+	var character_prepare_value: Variant = character_action_coordinator.call(
+		"prepare_frame_advance",
+		_runtime_frame,
+		{
+			"run_id": str(_run_id),
+			"owner_character_generation": _owner_character_generation,
+			"frame_intents": normalized_frame_intents.duplicate(true),
+		}
+	)
+	if (
+		not character_prepare_value is Dictionary
+		or not bool((character_prepare_value as Dictionary).get("ok", false))
+	):
+		if (
+			character_prepare_value is Dictionary
+			and StringName(str((character_prepare_value as Dictionary).get("code", "")))
+			== &"ROLLBACK_FAILED"
+		):
+			set_physics_process(false)
+		return _reject_fixed_frame(
+			frame_before,
+			"CharacterActionCoordinator rejected authoritative runtime frame %d" % _runtime_frame
+		)
 	if weapon_action_coordinator != null:
 		var held_semantic := _active_hold_semantic_action()
 		if held_semantic != &"" and weapon_action_coordinator.has_method("update_live_context"):
 			weapon_action_coordinator.update_live_context(_weapon_submission_context())
-		weapon_action_coordinator.advance_frame(false)
+		var weapon_advance_value: Variant = weapon_action_coordinator.call(
+			"advance_frame",
+			false
+		)
+		if typeof(weapon_advance_value) != TYPE_BOOL or not bool(weapon_advance_value):
+			return _reject_fixed_frame(
+				frame_before,
+				"WeaponActionCoordinator rejected authoritative runtime frame %d" % _runtime_frame
+			)
 		if held_semantic != &"" and weapon_action_coordinator.phase_name() != &"HOLD":
 			_weapon_intent_router.call("reset_action", held_semantic)
 		_sync_weapon_action_projection()
 		_sync_weapon_resource_facts(&"runtime_frame")
-
+		if int((weapon_action_coordinator.call("snapshot") as Dictionary).get("frame", -1)) != _runtime_frame:
+			return _reject_fixed_frame(
+				frame_before,
+				"WeaponActionCoordinator frame verification failed at %d" % _runtime_frame
+			)
+	var character_commit_value: Variant = character_action_coordinator.call(
+		"commit_prepared_frame"
+	)
+	if (
+		not character_commit_value is Dictionary
+		or not bool((character_commit_value as Dictionary).get("ok", false))
+	):
+		return _reject_fixed_frame(
+			frame_before,
+			"CharacterActionCoordinator failed to commit runtime frame %d" % _runtime_frame
+		)
+	if world_payload_authority != null and world_payload_authority.has_method("advance_frame"):
+		var payload_advance_value: Variant = world_payload_authority.call(
+			"advance_frame",
+			_runtime_frame
+		)
+		if (
+			not payload_advance_value is Dictionary
+			or not bool((payload_advance_value as Dictionary).get("ok", false))
+		):
+			return _reject_fixed_frame(
+				frame_before,
+				"WorldPayloadAuthority rejected authoritative runtime frame %d" % _runtime_frame
+			)
+	if rewind_recorder != null and rewind_recorder.has_method("advance_frame"):
+		if not bool(rewind_recorder.call("advance_frame", _runtime_frame)):
+			return _reject_fixed_frame(
+				frame_before,
+			"RewindRecorder rejected authoritative runtime frame %d" % _runtime_frame
+			)
+	_apply_weapon_aim_direction(normalized_frame_intents.get(
+		"aim",
+		_last_weapon_aim_direction
+	) as Vector2)
+	if not _apply_frame_intents(normalized_frame_intents):
+		return _reject_fixed_frame(
+			frame_before,
+			"Frame intent application rejected authoritative runtime frame %d" % _runtime_frame
+		)
 	var external_action_consumed := _consume_buffered_action()
 	if (
 		not external_action_consumed
@@ -697,7 +1320,587 @@ func advance_action_frame() -> void:
 		and weapon_action_coordinator.consume_buffered_intent()
 	):
 		_sync_weapon_action_projection()
+	_apply_frame_movement(normalized_frame_intents.get("movement", Vector2.ZERO) as Vector2)
+	if not _commit_fixed_frame_event_buffers():
+		return _reject_fixed_frame(
+			frame_before,
+			"Fixed-frame event buffer settlement rejected runtime frame %d" % _runtime_frame
+		)
+
 	_refresh_weapon_replay_fact_baseline()
+	return true
+
+
+func _fixed_frame_preflight() -> bool:
+	if (
+		_runtime_frame < 0
+		or time_manager == null
+		or not time_manager.has_method("replay_snapshot")
+		or not time_manager.has_method("restore_replay_snapshot")
+		or not time_manager.has_method("fixed_frame_transaction_snapshot")
+		or not time_manager.has_method("restore_fixed_frame_transaction_snapshot")
+		or not time_manager.has_method("advance_frame")
+		or not time_manager.has_method("begin_frame_signal_transaction")
+		or not time_manager.has_method("can_commit_frame_signal_transaction")
+		or not time_manager.has_method("prepare_frame_signal_publication")
+		or not time_manager.has_method("finalize_frame_signal_publication")
+		or not time_manager.has_method("discard_finalized_frame_signal_publication")
+		or not time_manager.has_method("publish_prepared_frame_signals")
+		or not time_manager.has_method("rollback_frame_signal_transaction")
+		or health == null
+		or not health.has_method("runtime_state_snapshot")
+		or not health.has_method("restore_replay_snapshot")
+		or not health.has_method("begin_frame_signal_transaction")
+		or not health.has_method("can_commit_frame_signal_transaction")
+		or not health.has_method("prepare_frame_signal_publication")
+		or not health.has_method("finalize_frame_signal_publication")
+		or not health.has_method("discard_finalized_frame_signal_publication")
+		or not health.has_method("publish_prepared_frame_signals")
+		or not health.has_method("rollback_frame_signal_transaction")
+		or not health.has_method("frame_signal_transaction_is_active")
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("prepare_frame_advance")
+		or not character_action_coordinator.has_method("commit_prepared_frame")
+		or not character_action_coordinator.has_method("rollback_prepared_frame")
+		or weapon_action_coordinator == null
+		or not weapon_action_coordinator.has_method("snapshot")
+		or not weapon_action_coordinator.has_method("restore_snapshot_for_rollback")
+		or not weapon_action_coordinator.has_method("begin_frame_event_buffer")
+		or not weapon_action_coordinator.has_method("can_commit_frame_event_buffer")
+		or not weapon_action_coordinator.has_method("prepare_frame_event_publication")
+		or not weapon_action_coordinator.has_method("finalize_frame_event_publication")
+		or not weapon_action_coordinator.has_method("discard_finalized_frame_event_publication")
+		or not weapon_action_coordinator.has_method("publish_prepared_frame_events")
+		or not weapon_action_coordinator.has_method("rollback_frame_event_buffer")
+		or not weapon_action_coordinator.has_method("frame_event_buffer_is_active")
+		or world_payload_authority == null
+		or not world_payload_authority.has_method("replay_snapshot")
+		or not world_payload_authority.has_method("begin_frame_transaction")
+		or not world_payload_authority.has_method("can_commit_frame_transaction")
+		or not world_payload_authority.has_method("commit_frame_transaction")
+		or not world_payload_authority.has_method("rollback_frame_transaction")
+		or rewind_recorder == null
+		or not rewind_recorder.has_method("advance_frame")
+	):
+		return false
+	var time_value: Variant = time_manager.call("replay_snapshot")
+	var weapon_value: Variant = weapon_action_coordinator.call("snapshot")
+	var character_value: Variant = character_action_coordinator.call("snapshot")
+	var world_value: Variant = world_payload_authority.call("replay_snapshot")
+	if (
+		not time_value is Dictionary
+		or not weapon_value is Dictionary
+		or not character_value is Dictionary
+		or not world_value is Dictionary
+	):
+		return false
+	var world_frame := int((world_value as Dictionary).get("last_runtime_frame", -2))
+	var character_frame := int((character_value as Dictionary).get("last_runtime_frame", -2))
+	var samples_value: Variant = rewind_recorder.get("samples_per_second")
+	var record_seconds_value: Variant = rewind_recorder.get("record_seconds")
+	var active_rewind_transaction_value: Variant = rewind_recorder.get("_active_transaction")
+	return (
+		int((time_value as Dictionary).get("runtime_frame", -1)) == _runtime_frame
+		and int((weapon_value as Dictionary).get("frame", -1)) == _runtime_frame
+		and int(action_state.snapshot().get("frame", -1)) == _runtime_frame
+		and (character_frame == _runtime_frame or (_runtime_frame == 0 and character_frame == -1))
+		and (world_frame == _runtime_frame or (_runtime_frame == 0 and world_frame == -1))
+		and int(rewind_recorder.get("_last_runtime_frame")) == _runtime_frame
+		and typeof(samples_value) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(samples_value))
+		and float(samples_value) == 10.0
+		and typeof(record_seconds_value) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(record_seconds_value))
+		and float(record_seconds_value) > 0.0
+		and active_rewind_transaction_value is Dictionary
+		and (active_rewind_transaction_value as Dictionary).is_empty()
+		and _active_time_frame_signal_ticket.is_empty()
+		and _active_health_frame_signal_ticket.is_empty()
+		and _active_world_frame_ticket.is_empty()
+		and not bool(health.call("frame_signal_transaction_is_active"))
+		and not bool(weapon_action_coordinator.call("frame_event_buffer_is_active"))
+	)
+
+
+func _fixed_frame_transaction_snapshot() -> Dictionary:
+	var time_value: Variant = time_manager.call("replay_snapshot")
+	var time_transaction_value: Variant = time_manager.call("fixed_frame_transaction_snapshot")
+	var health_value: Variant = health.call("runtime_state_snapshot")
+	var character_value: Variant = character_action_coordinator.call("snapshot")
+	var weapon_value: Variant = weapon_action_coordinator.call("snapshot")
+	var world_value: Variant = world_payload_authority.call("replay_snapshot")
+	var intent_value: Variant = _weapon_intent_router.call("runtime_snapshot")
+	var rewind_value := _rewind_frame_transaction_snapshot()
+	if (
+		not time_value is Dictionary
+		or not time_transaction_value is Dictionary
+		or not health_value is Dictionary
+		or not character_value is Dictionary
+		or not weapon_value is Dictionary
+		or not world_value is Dictionary
+		or not intent_value is Dictionary
+		or rewind_value.is_empty()
+	):
+		return {}
+	return {
+		"runtime_frame": _runtime_frame,
+		"position": global_position,
+		"velocity": velocity,
+		"facing": _last_move_direction,
+		"weapon_aim_direction": _last_weapon_aim_direction,
+		"combo_timeout_frames": _weapon_combo_timeout_frames,
+		"dash_cooldown_remaining_frames": _dash_cooldown_remaining_frames,
+		"dash_velocity": _dash_velocity,
+		"dash_direction": _dash_direction,
+		"knockback_velocity": _knockback_velocity,
+		"buffered_time_skill": _buffered_time_skill,
+		"dash_completion_token": _dash_completion_token,
+			"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
+			"next_time_action_token": _next_time_action_token,
+			"action": action_state.snapshot(),
+		"character": (character_value as Dictionary).duplicate(true),
+		"weapon": (weapon_value as Dictionary).duplicate(true),
+			"time": (time_value as Dictionary).duplicate(true),
+			"time_transaction": (time_transaction_value as Dictionary).duplicate(true),
+			"health": (health_value as Dictionary).duplicate(true),
+			"world": (world_value as Dictionary).duplicate(true),
+		"rewind": rewind_value,
+		"intent_router": (intent_value as Dictionary).duplicate(true),
+		"player_weapon_state": {
+			"action_reward_claims": _weapon_action_reward_claims.duplicate(true),
+			"action_ids_by_token": _weapon_action_ids_by_token.duplicate(true),
+			"action_generations_by_token": _weapon_action_generations_by_token.duplicate(true),
+			"action_token_order": _weapon_action_token_order.duplicate(),
+			"hit_fact_claims": _weapon_hit_fact_claims.duplicate(true),
+			"resource_fact_state": _weapon_resource_fact_state.duplicate(true),
+			"next_token_floor": _next_weapon_action_token_floor,
+			"combo_timeout_frames": _weapon_combo_timeout_frames,
+		},
+		"replay_events": _weapon_replay_events.duplicate(true),
+		"replay_capture_sequence": _weapon_replay_capture_sequence,
+		"replay_fact_baseline": _weapon_replay_fact_baseline.duplicate(true),
+		"replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
+		"replay_restore_invalid_reason": _weapon_replay_restore_invalid_reason,
+	}
+
+
+func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
+	var prepared_rollback_ok := bool(character_action_coordinator.call(
+		"rollback_prepared_frame"
+	))
+	var time_ok := bool(time_manager.call(
+		"restore_replay_snapshot",
+		(value.get("time", {}) as Dictionary).duplicate(true)
+	))
+	var time_transaction_ok := bool(time_manager.call(
+		"restore_fixed_frame_transaction_snapshot",
+		(value.get("time_transaction", {}) as Dictionary).duplicate(true)
+	))
+	var health_ok := bool(health.call(
+		"restore_replay_snapshot",
+		(value.get("health", {}) as Dictionary).duplicate(true)
+	))
+	var action_ok := bool(action_state.call(
+		"restore_transaction_snapshot",
+		(value.get("action", {}) as Dictionary).duplicate(true)
+	))
+	var character_ok := bool(character_action_coordinator.call(
+		"restore_snapshot",
+		(value.get("character", {}) as Dictionary).duplicate(true)
+	))
+	var weapon_ok := bool(weapon_action_coordinator.call(
+		"restore_snapshot_for_rollback",
+		(value.get("weapon", {}) as Dictionary).duplicate(true)
+	))
+	var intent_ok := bool(_weapon_intent_router.call(
+		"restore_runtime_snapshot",
+		(value.get("intent_router", {}) as Dictionary).duplicate(true)
+	))
+	var rewind_ok := _restore_rewind_frame_transaction_snapshot(
+		value.get("rewind", {}) as Dictionary
+	)
+	_runtime_frame = int(value.get("runtime_frame", _runtime_frame))
+	global_position = value.get("position", global_position) as Vector2
+	velocity = value.get("velocity", velocity) as Vector2
+	_last_move_direction = value.get("facing", _last_move_direction) as Vector2
+	_last_weapon_aim_direction = value.get(
+		"weapon_aim_direction",
+		_last_weapon_aim_direction
+	) as Vector2
+	_apply_weapon_aim_direction(_last_weapon_aim_direction)
+	_weapon_combo_timeout_frames = int(value.get(
+		"combo_timeout_frames",
+		_weapon_combo_timeout_frames
+	))
+	_dash_cooldown_remaining_frames = int(value.get(
+		"dash_cooldown_remaining_frames",
+		_dash_cooldown_remaining_frames
+	))
+	_dash_velocity = value.get("dash_velocity", _dash_velocity) as Vector2
+	_dash_direction = value.get("dash_direction", _dash_direction) as Vector2
+	_knockback_velocity = value.get("knockback_velocity", _knockback_velocity) as Vector2
+	_buffered_time_skill = StringName(str(value.get(
+		"buffered_time_skill",
+		_buffered_time_skill
+	)))
+	_dash_completion_token = int(value.get("dash_completion_token", _dash_completion_token))
+	_dash_completed_at_runtime_frame = int(value.get(
+		"dash_completed_at_runtime_frame",
+		_dash_completed_at_runtime_frame
+	))
+	_next_time_action_token = int(value.get(
+		"next_time_action_token",
+		_next_time_action_token
+	))
+	_install_player_weapon_replay_state(value.get("player_weapon_state", {}) as Dictionary)
+	var replay_events: Array[Dictionary] = []
+	for event_value: Variant in value.get("replay_events", []) as Array:
+		if event_value is Dictionary:
+			replay_events.append((event_value as Dictionary).duplicate(true))
+	_restore_weapon_replay_event_log(replay_events, int(value.get(
+		"replay_capture_sequence",
+		_weapon_replay_capture_sequence
+	)))
+	_weapon_replay_fact_baseline = (value.get(
+		"replay_fact_baseline",
+		{}
+	) as Dictionary).duplicate(true)
+	_weapon_replay_capture_invalid_reason = StringName(str(value.get(
+		"replay_capture_invalid_reason",
+		_weapon_replay_capture_invalid_reason
+	)))
+	_weapon_replay_restore_invalid_reason = StringName(str(value.get(
+		"replay_restore_invalid_reason",
+		_weapon_replay_restore_invalid_reason
+	)))
+	return (
+		prepared_rollback_ok
+		and time_ok
+		and time_transaction_ok
+		and health_ok
+		and action_ok
+		and character_ok
+		and weapon_ok
+		and intent_ok
+		and rewind_ok
+		and time_manager.call("replay_snapshot") == value.get("time", {})
+		and time_manager.call("fixed_frame_transaction_snapshot")
+		== value.get("time_transaction", {})
+		and health.call("runtime_state_snapshot") == value.get("health", {})
+		and _next_time_action_token == int(value.get("next_time_action_token", -1))
+		and action_state.snapshot() == value.get("action", {})
+		and character_action_coordinator.call("snapshot") == value.get("character", {})
+		and weapon_action_coordinator.call("snapshot") == value.get("weapon", {})
+		and world_payload_authority.call("replay_snapshot") == value.get("world", {})
+		and _rewind_frame_transaction_snapshot() == value.get("rewind", {})
+	)
+
+
+func _reject_fixed_frame(value: Dictionary, reason: String) -> bool:
+	var world_rollback_ok := _rollback_fixed_frame_world_transaction()
+	var state_rollback_ok := _restore_fixed_frame_transaction(value)
+	var event_rollback_ok := _rollback_fixed_frame_event_buffers()
+	if not world_rollback_ok or not state_rollback_ok or not event_rollback_ok:
+		set_physics_process(false)
+		push_error("Fixed-frame rollback failed closed after: %s" % reason)
+	else:
+		push_error(reason)
+	return false
+
+
+func _begin_fixed_frame_event_buffers(runtime_frame: int) -> bool:
+	if not bool(weapon_action_coordinator.call("begin_frame_event_buffer")):
+		return false
+	var time_ticket_value: Variant = time_manager.call(
+		"begin_frame_signal_transaction",
+		runtime_frame
+	)
+	if not time_ticket_value is Dictionary or (time_ticket_value as Dictionary).is_empty():
+		if not bool(weapon_action_coordinator.call("rollback_frame_event_buffer")):
+			set_physics_process(false)
+			push_error("Weapon frame event rollback failed after Time signal begin rejection")
+			return false
+	_active_time_frame_signal_ticket = (time_ticket_value as Dictionary).duplicate(true)
+	var health_ticket_value: Variant = health.call(
+		"begin_frame_signal_transaction",
+		runtime_frame
+	)
+	if not health_ticket_value is Dictionary or (health_ticket_value as Dictionary).is_empty():
+		var time_rollback_ok := bool(time_manager.call(
+			"rollback_frame_signal_transaction",
+			_active_time_frame_signal_ticket.duplicate(true)
+		))
+		_active_time_frame_signal_ticket.clear()
+		var weapon_rollback_ok := bool(weapon_action_coordinator.call(
+			"rollback_frame_event_buffer"
+		))
+		if not time_rollback_ok or not weapon_rollback_ok:
+			set_physics_process(false)
+			push_error("Fixed-frame begin rollback failed after Health signal rejection")
+		return false
+	_active_health_frame_signal_ticket = (health_ticket_value as Dictionary).duplicate(true)
+	var world_ticket_value: Variant = world_payload_authority.call(
+		"begin_frame_transaction",
+		runtime_frame
+	)
+	if not world_ticket_value is Dictionary or (world_ticket_value as Dictionary).is_empty():
+		var health_rollback_ok := bool(health.call(
+			"rollback_frame_signal_transaction",
+			_active_health_frame_signal_ticket.duplicate(true)
+		))
+		_active_health_frame_signal_ticket.clear()
+		var time_rollback_ok := bool(time_manager.call(
+			"rollback_frame_signal_transaction",
+			_active_time_frame_signal_ticket.duplicate(true)
+		))
+		_active_time_frame_signal_ticket.clear()
+		var weapon_rollback_ok := bool(weapon_action_coordinator.call(
+			"rollback_frame_event_buffer"
+		))
+		if not health_rollback_ok or not time_rollback_ok or not weapon_rollback_ok:
+			set_physics_process(false)
+			push_error("Fixed-frame begin rollback failed after World rejection")
+		return false
+	_active_world_frame_ticket = (world_ticket_value as Dictionary).duplicate(true)
+	return true
+
+
+func _commit_fixed_frame_event_buffers() -> bool:
+	if (
+		_active_time_frame_signal_ticket.is_empty()
+		or _active_health_frame_signal_ticket.is_empty()
+		or _active_world_frame_ticket.is_empty()
+	):
+		return false
+	var time_ticket := _active_time_frame_signal_ticket.duplicate(true)
+	var health_ticket := _active_health_frame_signal_ticket.duplicate(true)
+	var world_ticket := _active_world_frame_ticket.duplicate(true)
+	var time_publication_value: Variant = time_manager.call(
+		"prepare_frame_signal_publication",
+		time_ticket
+	)
+	var weapon_publication_value: Variant = weapon_action_coordinator.call(
+		"prepare_frame_event_publication"
+	)
+	var health_publication_value: Variant = health.call(
+		"prepare_frame_signal_publication",
+		health_ticket
+	)
+	if (
+		not time_publication_value is Dictionary
+		or (time_publication_value as Dictionary).is_empty()
+		or not weapon_publication_value is Dictionary
+		or (weapon_publication_value as Dictionary).is_empty()
+		or not health_publication_value is Dictionary
+		or (health_publication_value as Dictionary).is_empty()
+		or not bool(world_payload_authority.call(
+			"can_commit_frame_transaction",
+			world_ticket
+		))
+	):
+		return false
+	var time_publication := (time_publication_value as Dictionary).duplicate(true)
+	var weapon_publication := (weapon_publication_value as Dictionary).duplicate(true)
+	var health_publication := (health_publication_value as Dictionary).duplicate(true)
+	if not bool(weapon_action_coordinator.call(
+		"finalize_frame_event_publication",
+		weapon_publication
+	)):
+		return false
+	if not bool(time_manager.call(
+		"finalize_frame_signal_publication",
+		time_publication
+	)):
+		weapon_action_coordinator.call(
+			"discard_finalized_frame_event_publication",
+			weapon_publication
+		)
+		return false
+	if not bool(health.call(
+		"finalize_frame_signal_publication",
+		health_publication
+	)):
+		var time_discard_ok := bool(time_manager.call(
+			"discard_finalized_frame_signal_publication",
+			time_publication
+		))
+		var weapon_discard_ok := bool(weapon_action_coordinator.call(
+			"discard_finalized_frame_event_publication",
+			weapon_publication
+		))
+		_active_time_frame_signal_ticket.clear()
+		if not time_discard_ok or not weapon_discard_ok:
+			set_physics_process(false)
+			push_error("Finalized frame publication discard failed after Health rejection")
+		return false
+	if not bool(world_payload_authority.call(
+		"commit_frame_transaction",
+		world_ticket
+	)):
+		var time_discard_ok := bool(time_manager.call(
+			"discard_finalized_frame_signal_publication",
+			time_publication
+		))
+		var weapon_discard_ok := bool(weapon_action_coordinator.call(
+			"discard_finalized_frame_event_publication",
+			weapon_publication
+		))
+		var health_discard_ok := bool(health.call(
+			"discard_finalized_frame_signal_publication",
+			health_publication
+		))
+		_active_time_frame_signal_ticket.clear()
+		_active_health_frame_signal_ticket.clear()
+		if not time_discard_ok or not weapon_discard_ok or not health_discard_ok:
+			set_physics_process(false)
+			push_error("Finalized frame publication discard failed closed")
+		return false
+	_active_world_frame_ticket.clear()
+	_active_time_frame_signal_ticket.clear()
+	_active_health_frame_signal_ticket.clear()
+	# All complete batches are now irreversible and detached from their live
+	# transactions; observers cannot invalidate sibling publication.
+	time_manager.call("publish_prepared_frame_signals")
+	weapon_action_coordinator.call("publish_prepared_frame_events")
+	health.call("publish_prepared_frame_signals")
+	return true
+
+
+func _fixed_frame_event_buffers_can_commit() -> bool:
+	if (
+		_active_time_frame_signal_ticket.is_empty()
+		or _active_health_frame_signal_ticket.is_empty()
+	):
+		return false
+	return (
+		bool(time_manager.call(
+			"can_commit_frame_signal_transaction",
+			_active_time_frame_signal_ticket.duplicate(true)
+		))
+		and bool(health.call(
+			"can_commit_frame_signal_transaction",
+			_active_health_frame_signal_ticket.duplicate(true)
+		))
+		and bool(weapon_action_coordinator.call("can_commit_frame_event_buffer"))
+	)
+
+
+func _rollback_fixed_frame_event_buffers() -> bool:
+	var time_ok := true
+	if not _active_time_frame_signal_ticket.is_empty():
+		time_ok = bool(time_manager.call(
+			"rollback_frame_signal_transaction",
+			_active_time_frame_signal_ticket.duplicate(true)
+		))
+	_active_time_frame_signal_ticket.clear()
+	var health_ok := true
+	if not _active_health_frame_signal_ticket.is_empty():
+		health_ok = bool(health.call(
+			"rollback_frame_signal_transaction",
+			_active_health_frame_signal_ticket.duplicate(true)
+		))
+	_active_health_frame_signal_ticket.clear()
+	var weapon_ok := true
+	if bool(weapon_action_coordinator.call("frame_event_buffer_is_active")):
+		weapon_ok = bool(weapon_action_coordinator.call(
+			"rollback_frame_event_buffer"
+		))
+	return time_ok and health_ok and weapon_ok
+
+
+func _rollback_fixed_frame_world_transaction() -> bool:
+	if _active_world_frame_ticket.is_empty():
+		return true
+	var ticket := _active_world_frame_ticket.duplicate(true)
+	var rolled_back := bool(world_payload_authority.call(
+		"rollback_frame_transaction",
+		ticket
+	))
+	_active_world_frame_ticket.clear()
+	return rolled_back
+
+
+func _rewind_frame_transaction_snapshot() -> Dictionary:
+	if rewind_recorder == null:
+		return {}
+	var snapshots_value: Variant = rewind_recorder.get("_snapshots")
+	var active_transaction_value: Variant = rewind_recorder.get("_active_transaction")
+	if not snapshots_value is Array or not active_transaction_value is Dictionary:
+		return {}
+	return {
+		"snapshots": (snapshots_value as Array).duplicate(true),
+		"sample_timer": float(rewind_recorder.get("_sample_timer")),
+		"history_revision": int(rewind_recorder.get("_history_revision")),
+		"next_sample_sequence": int(rewind_recorder.get("_next_sample_sequence")),
+		"last_runtime_frame": int(rewind_recorder.get("_last_runtime_frame")),
+		"active_transaction": (active_transaction_value as Dictionary).duplicate(true),
+	}
+
+
+func _restore_rewind_frame_transaction_snapshot(value: Dictionary) -> bool:
+	if (
+		value.size() != 6
+		or not value.get("snapshots") is Array
+		or typeof(value.get("sample_timer")) != TYPE_FLOAT
+		or typeof(value.get("history_revision")) != TYPE_INT
+		or typeof(value.get("next_sample_sequence")) != TYPE_INT
+		or typeof(value.get("last_runtime_frame")) != TYPE_INT
+		or not value.get("active_transaction") is Dictionary
+	):
+		return false
+	var restored_snapshots: Array[Dictionary] = []
+	for snapshot_value: Variant in value["snapshots"] as Array:
+		if not snapshot_value is Dictionary:
+			return false
+		restored_snapshots.append((snapshot_value as Dictionary).duplicate(true))
+	rewind_recorder.set("_snapshots", restored_snapshots)
+	rewind_recorder.set("_sample_timer", float(value["sample_timer"]))
+	rewind_recorder.set("_history_revision", int(value["history_revision"]))
+	rewind_recorder.set("_next_sample_sequence", int(value["next_sample_sequence"]))
+	rewind_recorder.set("_last_runtime_frame", int(value["last_runtime_frame"]))
+	rewind_recorder.set(
+		"_active_transaction",
+		(value["active_transaction"] as Dictionary).duplicate(true)
+	)
+	return _rewind_frame_transaction_snapshot() == value
+
+
+func _rewind_run_configuration_snapshot() -> Dictionary:
+	var frame_state := _rewind_frame_transaction_snapshot()
+	if frame_state.is_empty():
+		return {}
+	frame_state["run_id"] = StringName(str(rewind_recorder.get("_run_id")))
+	frame_state["next_ticket_id"] = int(rewind_recorder.get("_next_ticket_id"))
+	frame_state["restore_fault_for_test"] = StringName(str(
+		rewind_recorder.get("_restore_fault_for_test")
+	))
+	return frame_state
+
+
+func _restore_rewind_run_configuration_snapshot(value: Dictionary) -> bool:
+	if (
+		value.size() != 9
+		or typeof(value.get("run_id")) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or typeof(value.get("next_ticket_id")) != TYPE_INT
+		or typeof(value.get("restore_fault_for_test")) not in [
+			TYPE_STRING,
+			TYPE_STRING_NAME,
+		]
+	):
+		return false
+	var frame_state := value.duplicate(true)
+	frame_state.erase("run_id")
+	frame_state.erase("next_ticket_id")
+	frame_state.erase("restore_fault_for_test")
+	if not _restore_rewind_frame_transaction_snapshot(frame_state):
+		return false
+	rewind_recorder.set("_run_id", StringName(str(value["run_id"])))
+	rewind_recorder.set("_next_ticket_id", int(value["next_ticket_id"]))
+	rewind_recorder.set(
+		"_restore_fault_for_test",
+		StringName(str(value["restore_fault_for_test"]))
+	)
+	return _rewind_run_configuration_snapshot() == value
 
 
 func get_action_movement_multiplier() -> float:
@@ -786,6 +1989,13 @@ func rewind_transaction_snapshot() -> Dictionary:
 		"action_state": (action_value as Dictionary).duplicate(true),
 		"coordinator": (coordinator_value as Dictionary).duplicate(true),
 		"intent_router": (intent_value as Dictionary).duplicate(true),
+		"next_time_action_token": _next_time_action_token,
+		"time_action_generation": _time_action_generation,
+		"replay_events": _weapon_replay_events.duplicate(true),
+		"replay_capture_sequence": _weapon_replay_capture_sequence,
+		"replay_fact_baseline": _weapon_replay_fact_baseline.duplicate(true),
+		"replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
+		"replay_restore_invalid_reason": _weapon_replay_restore_invalid_reason,
 	}
 
 
@@ -850,6 +2060,15 @@ func restore_rewind_transaction_snapshot(value: Dictionary) -> bool:
 	_buffered_time_skill = StringName(str(value["buffered_time_skill"]))
 	_weapon_combo_timeout_frames = int(value["combo_timeout_frames"])
 	_runtime_frame = int(value["runtime_frame"])
+	_next_time_action_token = int(value["next_time_action_token"])
+	_time_action_generation = int(value["time_action_generation"])
+	var replay_events: Array[Dictionary] = []
+	for event_value: Variant in value["replay_events"] as Array:
+		replay_events.append((event_value as Dictionary).duplicate(true))
+	_restore_weapon_replay_event_log(replay_events, int(value["replay_capture_sequence"]))
+	_weapon_replay_fact_baseline = (value["replay_fact_baseline"] as Dictionary).duplicate(true)
+	_weapon_replay_capture_invalid_reason = StringName(str(value["replay_capture_invalid_reason"]))
+	_weapon_replay_restore_invalid_reason = StringName(str(value["replay_restore_invalid_reason"]))
 	return rewind_transaction_snapshot() == value
 
 
@@ -886,12 +2105,15 @@ func _valid_rewind_target_snapshot(value: Dictionary) -> bool:
 
 
 func _valid_rewind_transaction_snapshot(value: Dictionary) -> bool:
-	if value.size() != 12:
+	if value.size() != 19:
 		return false
 	for field: String in [
 		"run_id", "position", "velocity", "facing", "dash_velocity",
 		"knockback_velocity", "buffered_time_skill", "combo_timeout_frames",
 		"runtime_frame", "action_state", "coordinator", "intent_router",
+		"next_time_action_token", "time_action_generation", "replay_events",
+		"replay_capture_sequence", "replay_fact_baseline",
+		"replay_capture_invalid_reason", "replay_restore_invalid_reason",
 	]:
 		if not value.has(field):
 			return false
@@ -918,6 +2140,16 @@ func _valid_rewind_transaction_snapshot(value: Dictionary) -> bool:
 		and int(value["runtime_frame"]) >= 0
 		and value["coordinator"] is Dictionary
 		and value["intent_router"] is Dictionary
+		and typeof(value["next_time_action_token"]) == TYPE_INT
+		and int(value["next_time_action_token"]) > 0
+		and typeof(value["time_action_generation"]) == TYPE_INT
+		and int(value["time_action_generation"]) > 0
+		and value["replay_events"] is Array
+		and typeof(value["replay_capture_sequence"]) == TYPE_INT
+		and int(value["replay_capture_sequence"]) >= 0
+		and value["replay_fact_baseline"] is Dictionary
+		and typeof(value["replay_capture_invalid_reason"]) in [TYPE_STRING, TYPE_STRING_NAME]
+		and typeof(value["replay_restore_invalid_reason"]) in [TYPE_STRING, TYPE_STRING_NAME]
 	)
 
 
@@ -984,7 +2216,281 @@ func weapon_presentation_snapshot() -> Dictionary:
 	return result.duplicate(true)
 
 
+func full_player_replay_identity() -> Dictionary:
+	if (
+		_run_id == &""
+		or _owner_character_generation <= 0
+		or loadout_runtime == null
+		or stats == null
+		or not is_finite(float(stats.move_speed))
+		or float(stats.move_speed) <= 0.0
+	):
+		return {}
+	var loadout: Dictionary = loadout_runtime.call("snapshot")
+	var character_id := str(loadout.get("character_id", "wanderer"))
+	if character_id.is_empty():
+		return {}
+	var time_abilities: Array[String] = []
+	for ability_value: Variant in loadout_runtime.call("time_ability_ids"):
+		time_abilities.append(str(ability_value))
+	return {
+		"run_id": str(_run_id),
+		"owner_character_generation": _owner_character_generation,
+		"character_id": character_id,
+		"weapon_id": str(loadout_runtime.call("weapon_id")),
+		"weapon_profile_id": str(loadout_runtime.call("weapon_profile_id")),
+		"time_ability_ids": time_abilities,
+		"move_speed": float(stats.move_speed),
+	}
+
+
+func full_player_replay_snapshot() -> Dictionary:
+	var identity := full_player_replay_identity()
+	var rewind_state := _rewind_frame_transaction_snapshot()
+	if (
+		identity.is_empty()
+		or rewind_state.is_empty()
+		or health == null
+		or not health.has_method("runtime_state_snapshot")
+		or not health.has_method("can_restore_replay_snapshot")
+		or not health.has_method("restore_replay_snapshot")
+		or weapon_action_coordinator == null
+		or time_manager == null
+		or world_payload_authority == null
+	):
+		return {}
+	return {
+		"schema_version": FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION,
+		"frame": _runtime_frame,
+		"identity": identity,
+		"player_state": {
+			"position": global_position,
+			"velocity": velocity,
+			"facing": _last_move_direction,
+			"weapon_aim_direction": _last_weapon_aim_direction,
+			"dash_cooldown_remaining_frames": _dash_cooldown_remaining_frames,
+			"dash_velocity": _dash_velocity,
+			"dash_direction": _dash_direction,
+			"knockback_velocity": _knockback_velocity,
+			"combo_timeout_frames": _weapon_combo_timeout_frames,
+			"buffered_time_skill": _buffered_time_skill,
+			"dash_completion_token": _dash_completion_token,
+			"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
+			"next_time_action_token": _next_time_action_token,
+			"time_action_generation": _time_action_generation,
+		},
+		"health_state": health.call("runtime_state_snapshot"),
+		"action_state": action_state.snapshot(),
+		"character_state": character_action_coordinator.call("snapshot"),
+		"weapon_state": weapon_action_coordinator.call("snapshot"),
+		"time_manager_state": time_manager.call("replay_snapshot"),
+		"world_payload_state": world_payload_authority.call("replay_snapshot"),
+		"rewind_state": rewind_state,
+		"intent_router_state": _weapon_intent_router.call("runtime_snapshot"),
+		"player_weapon_state": {
+			"action_reward_claims": _weapon_action_reward_claims.duplicate(true),
+			"action_ids_by_token": _weapon_action_ids_by_token.duplicate(true),
+			"action_generations_by_token": _weapon_action_generations_by_token.duplicate(true),
+			"action_token_order": _weapon_action_token_order.duplicate(),
+			"hit_fact_claims": _weapon_hit_fact_claims.duplicate(true),
+			"resource_fact_state": _weapon_resource_fact_state.duplicate(true),
+			"next_token_floor": _next_weapon_action_token_floor,
+			"combo_timeout_frames": _weapon_combo_timeout_frames,
+		},
+		"weapon_replay_events": _weapon_replay_events.duplicate(true),
+		"weapon_replay_capture_sequence": _weapon_replay_capture_sequence,
+		"weapon_replay_fact_baseline": _weapon_replay_fact_baseline.duplicate(true),
+		"weapon_replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
+		"weapon_replay_restore_invalid_reason": _weapon_replay_restore_invalid_reason,
+	}
+
+
+func restore_full_player_replay_snapshot(snapshot: Dictionary) -> bool:
+	var normalized := _validated_full_player_replay_snapshot(snapshot)
+	if normalized.is_empty() or normalized["identity"] != full_player_replay_identity():
+		return false
+	var before := full_player_replay_snapshot()
+	if before.is_empty():
+		return false
+	if before == normalized:
+		return true
+	if _install_full_player_replay_snapshot(normalized, false):
+		return true
+	if not _install_full_player_replay_snapshot(before, true):
+		set_physics_process(false)
+		push_error("Full Player Replay restore rollback failed closed")
+	return false
+
+
+func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool) -> bool:
+	var health_target := (value.get("health_state", {}) as Dictionary).duplicate(true)
+	if not bool(health.call("can_restore_replay_snapshot", health_target)):
+		return false
+	if not bool(health.call("restore_replay_snapshot", health_target)):
+		return false
+	var world_target := (value.get("world_payload_state", {}) as Dictionary).duplicate(true)
+	if not bool(world_payload_authority.call("restore_replay_snapshot", world_target)):
+		return false
+	var time_target := (value.get("time_manager_state", {}) as Dictionary).duplicate(true)
+	if not bool(time_manager.call("restore_replay_snapshot", time_target)):
+		return false
+	var action_target := (value.get("action_state", {}) as Dictionary).duplicate(true)
+	if not bool(action_state.call("restore_replay_snapshot", action_target)):
+		return false
+	var character_target := (value.get("character_state", {}) as Dictionary).duplicate(true)
+	if not bool(character_action_coordinator.call("restore_replay_snapshot", character_target)):
+		return false
+	var weapon_target := (value.get("weapon_state", {}) as Dictionary).duplicate(true)
+	# Full Replay checkpoints are allowed to move generation/token state backward.
+	# The coordinator's ordinary restore enforces live monotonicity, while this
+	# exact restore path is already protected by the outer all-participant rollback.
+	if not bool(weapon_action_coordinator.call(
+		"restore_snapshot_for_rollback",
+		weapon_target
+	)):
+		return false
+	if not bool(_weapon_intent_router.call(
+		"restore_runtime_snapshot",
+		(value.get("intent_router_state", {}) as Dictionary).duplicate(true)
+	)):
+		return false
+	if not _restore_rewind_frame_transaction_snapshot(
+		(value.get("rewind_state", {}) as Dictionary).duplicate(true)
+	):
+		return false
+	_install_player_weapon_replay_state(
+		(value.get("player_weapon_state", {}) as Dictionary).duplicate(true)
+	)
+	var replay_events: Array[Dictionary] = []
+	for event_value: Variant in value.get("weapon_replay_events", []) as Array:
+		replay_events.append((event_value as Dictionary).duplicate(true))
+	_restore_weapon_replay_event_log(
+		replay_events,
+		int(value.get("weapon_replay_capture_sequence", 0))
+	)
+	_weapon_replay_fact_baseline = (
+		value.get("weapon_replay_fact_baseline", {}) as Dictionary
+	).duplicate(true)
+	_weapon_replay_capture_invalid_reason = StringName(str(
+		value.get("weapon_replay_capture_invalid_reason", "")
+	))
+	_weapon_replay_restore_invalid_reason = StringName(str(
+		value.get("weapon_replay_restore_invalid_reason", "")
+	))
+
+	var player_state := value.get("player_state", {}) as Dictionary
+	_runtime_frame = int(value.get("frame", 0))
+	global_position = player_state.get("position", global_position) as Vector2
+	velocity = player_state.get("velocity", velocity) as Vector2
+	_last_move_direction = player_state.get("facing", _last_move_direction) as Vector2
+	_last_weapon_aim_direction = player_state.get(
+		"weapon_aim_direction",
+		_last_weapon_aim_direction
+	) as Vector2
+	_apply_weapon_aim_direction(_last_weapon_aim_direction)
+	_dash_cooldown_remaining_frames = int(player_state.get(
+		"dash_cooldown_remaining_frames",
+		0
+	))
+	_dash_velocity = player_state.get("dash_velocity", Vector2.ZERO) as Vector2
+	_dash_direction = player_state.get("dash_direction", Vector2.RIGHT) as Vector2
+	_knockback_velocity = player_state.get("knockback_velocity", Vector2.ZERO) as Vector2
+	_weapon_combo_timeout_frames = int(player_state.get("combo_timeout_frames", 0))
+	_buffered_time_skill = StringName(str(player_state.get("buffered_time_skill", "")))
+	_dash_completion_token = int(player_state.get("dash_completion_token", 0))
+	_dash_completed_at_runtime_frame = int(player_state.get(
+		"dash_completed_at_runtime_frame",
+		-1
+	))
+	_next_time_action_token = int(player_state.get("next_time_action_token", 1))
+	_time_action_generation = int(player_state.get("time_action_generation", 1))
+	_sync_weapon_action_projection()
+	return full_player_replay_snapshot() == value
+
+
+func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
+	var fields: Array[String] = [
+		"schema_version", "frame", "identity", "player_state", "health_state",
+		"action_state", "character_state", "weapon_state", "time_manager_state",
+		"world_payload_state", "rewind_state", "intent_router_state",
+		"player_weapon_state", "weapon_replay_events",
+		"weapon_replay_capture_sequence", "weapon_replay_fact_baseline",
+		"weapon_replay_capture_invalid_reason", "weapon_replay_restore_invalid_reason",
+	]
+	if value.size() != fields.size():
+		return {}
+	for field: String in fields:
+		if not value.has(field):
+			return {}
+	if (
+		typeof(value.get("schema_version")) != TYPE_INT
+		or int(value["schema_version"]) != FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION
+		or typeof(value.get("frame")) != TYPE_INT
+		or int(value["frame"]) < 0
+		or not value["identity"] is Dictionary
+		or not value["player_state"] is Dictionary
+		or not value["health_state"] is Dictionary
+		or not value["action_state"] is Dictionary
+		or not value["character_state"] is Dictionary
+		or not value["weapon_state"] is Dictionary
+		or not value["time_manager_state"] is Dictionary
+		or not value["world_payload_state"] is Dictionary
+		or not value["rewind_state"] is Dictionary
+		or not value["intent_router_state"] is Dictionary
+		or not value["player_weapon_state"] is Dictionary
+		or not value["weapon_replay_events"] is Array
+		or typeof(value.get("weapon_replay_capture_sequence")) != TYPE_INT
+		or int(value["weapon_replay_capture_sequence"]) < 0
+		or not value["weapon_replay_fact_baseline"] is Dictionary
+		or typeof(value.get("weapon_replay_capture_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or typeof(value.get("weapon_replay_restore_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
+	):
+		return {}
+	var player_state := value["player_state"] as Dictionary
+	for vector_field: String in [
+		"position", "velocity", "facing", "dash_velocity", "dash_direction",
+		"knockback_velocity", "weapon_aim_direction",
+	]:
+		if not player_state.get(vector_field) is Vector2:
+			return {}
+	for integer_field: String in [
+		"dash_cooldown_remaining_frames", "combo_timeout_frames",
+		"dash_completion_token", "dash_completed_at_runtime_frame",
+		"next_time_action_token", "time_action_generation",
+	]:
+		if typeof(player_state.get(integer_field)) != TYPE_INT:
+			return {}
+	if (
+		int(player_state["dash_cooldown_remaining_frames"]) < 0
+		or int(player_state["combo_timeout_frames"]) < 0
+		or int(player_state["dash_completion_token"]) < 0
+		or int(player_state["dash_completed_at_runtime_frame"]) < -1
+		or int(player_state["next_time_action_token"]) <= 0
+		or int(player_state["time_action_generation"]) <= 0
+		or typeof(player_state.get("buffered_time_skill")) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or health == null
+		or not health.has_method("can_restore_replay_snapshot")
+		or not bool(health.call(
+			"can_restore_replay_snapshot",
+			(value["health_state"] as Dictionary).duplicate(true)
+		))
+		or int((value["time_manager_state"] as Dictionary).get("runtime_frame", -1)) != int(value["frame"])
+		or int((value["action_state"] as Dictionary).get("frame", -1)) != int(value["frame"])
+		or int((value["weapon_state"] as Dictionary).get("frame", -1)) != int(value["frame"])
+		or int((value["world_payload_state"] as Dictionary).get("last_runtime_frame", -2)) != int(value["frame"])
+		or int((value["rewind_state"] as Dictionary).get("last_runtime_frame", -1)) != int(value["frame"])
+	):
+		return {}
+	for event_value: Variant in value["weapon_replay_events"] as Array:
+		if not event_value is Dictionary:
+			return {}
+	return value.duplicate(true)
+
+
 func weapon_replay_snapshot() -> Dictionary:
+	if _weapon_replay_capture_invalid_reason == &"" and _has_active_current_rift_payload():
+		_weapon_replay_capture_invalid_reason = &"ACTIVE_RIFT_REPLAY_UNSUPPORTED"
+		_weapon_replay_fact_baseline.clear()
 	if (
 		_weapon_replay_capture_invalid_reason != &""
 		or weapon_action_coordinator == null
@@ -1050,6 +2556,15 @@ func weapon_replay_capture_status() -> Dictionary:
 	}
 
 
+func weapon_replay_restore_status() -> Dictionary:
+	if _weapon_replay_restore_invalid_reason == &"":
+		return {"ok": true, "code": &"OK"}
+	return {
+		"ok": false,
+		"code": _weapon_replay_restore_invalid_reason,
+	}
+
+
 func mark_gameplay_rewind_replay_boundary() -> void:
 	_weapon_replay_capture_invalid_reason = &"GAMEPLAY_REWIND_UNSUPPORTED"
 	_weapon_replay_fact_baseline.clear()
@@ -1064,9 +2579,16 @@ func _refresh_weapon_replay_fact_baseline() -> void:
 
 
 func restore_weapon_replay_snapshot(snapshot: Dictionary) -> bool:
+	_weapon_replay_restore_invalid_reason = &"RESTORE_REJECTED"
 	var normalized := _validated_weapon_replay_snapshot(snapshot)
+	var world_snapshot := _world_payload_replay_snapshot()
+	if not (world_snapshot.get("descriptors", []) as Array).is_empty():
+		_weapon_replay_restore_invalid_reason = &"ACTIVE_WORLD_PAYLOAD_REPLAY_UNSUPPORTED"
+		return false
+	var target_frame := int(normalized.get("frame", -1))
 	if (
 		normalized.is_empty()
+		or not _can_reanchor_weapon_replay_clocks(target_frame)
 		or not _weapon_action_state_can_restore_replay()
 		or time_manager == null
 		or not time_manager.has_method("begin_weapon_replay_restore_transaction")
@@ -1074,14 +2596,23 @@ func restore_weapon_replay_snapshot(snapshot: Dictionary) -> bool:
 		or not time_manager.has_method("rollback_weapon_replay_restore_transaction")
 		or not ReplayRecorderScript.event_prefix_matches(normalized, _weapon_replay_events)
 	):
+		_weapon_replay_restore_invalid_reason = &"RESTORE_PRECONDITION_REJECTED"
 		return false
 	var target_event_prefix_count := int(normalized["event_prefix_count"])
 	var before := weapon_replay_snapshot()
 	if before.is_empty():
 		return false
+	if before == normalized:
+		_refresh_weapon_replay_fact_baseline()
+		_weapon_replay_restore_invalid_reason = &""
+		return true
 	var before_events: Array[Dictionary] = _weapon_replay_events.duplicate(true)
 	var before_capture_sequence := _weapon_replay_capture_sequence
 	var before_coordinator := (before.get("coordinator", {}) as Dictionary).duplicate(true)
+	var clock_before := _weapon_replay_clock_snapshot()
+	if clock_before.is_empty():
+		_weapon_replay_restore_invalid_reason = &"CLOCK_SNAPSHOT_REJECTED"
+		return false
 	var time_restore_transaction_token := int(time_manager.call(
 		"begin_weapon_replay_restore_transaction"
 	))
@@ -1125,14 +2656,44 @@ func restore_weapon_replay_snapshot(snapshot: Dictionary) -> bool:
 	action_state.force_safe_reset()
 	_sync_weapon_action_projection()
 	_sync_weapon_replay_intent_latch()
+	if not _reanchor_weapon_replay_clocks(target_frame):
+		var coordinator_rollback_after_clock_failure := (
+			not before_coordinator.is_empty()
+			and _rollback_weapon_coordinator_replay_snapshot(before_coordinator)
+		)
+		_install_player_weapon_replay_state(before.get("player_weapon_state", {}) as Dictionary)
+		_restore_weapon_replay_event_log(before_events, before_capture_sequence)
+		var time_rollback_after_clock_failure := bool(time_manager.call(
+			"rollback_weapon_replay_restore_transaction",
+			time_restore_transaction_token
+		))
+		var clock_rollback_after_failure := _restore_weapon_replay_clocks(clock_before)
+		if (
+			not coordinator_rollback_after_clock_failure
+			or not time_rollback_after_clock_failure
+			or not clock_rollback_after_failure
+		):
+			_fail_closed_weapon_replay_restore(&"clock_reanchor_rollback_failed")
+		_weapon_replay_restore_invalid_reason = &"CLOCK_REANCHOR_REJECTED"
+		return false
 	if weapon_replay_snapshot() == normalized:
 		if bool(time_manager.call(
 			"commit_weapon_replay_restore_transaction",
 			time_restore_transaction_token
 		)):
 			_refresh_weapon_replay_fact_baseline()
+			_weapon_replay_restore_invalid_reason = &""
 			return true
-		_fail_closed_weapon_replay_restore(&"time_restore_commit_failed")
+		var coordinator_rollback_after_commit_failure := (
+			not before_coordinator.is_empty()
+			and _rollback_weapon_coordinator_replay_snapshot(before_coordinator)
+		)
+		_install_player_weapon_replay_state(before.get("player_weapon_state", {}) as Dictionary)
+		_restore_weapon_replay_event_log(before_events, before_capture_sequence)
+		var clock_rollback_after_commit_failure := _restore_weapon_replay_clocks(clock_before)
+		if not coordinator_rollback_after_commit_failure or not clock_rollback_after_commit_failure:
+			_fail_closed_weapon_replay_restore(&"time_restore_commit_failed")
+		_weapon_replay_restore_invalid_reason = &"TIME_RESTORE_COMMIT_REJECTED"
 		return false
 
 	var coordinator_rollback_ok := (
@@ -1145,15 +2706,177 @@ func restore_weapon_replay_snapshot(snapshot: Dictionary) -> bool:
 		"rollback_weapon_replay_restore_transaction",
 		time_restore_transaction_token
 	))
-	if not coordinator_rollback_ok or not time_rollback_ok:
+	var clock_rollback_ok := _restore_weapon_replay_clocks(clock_before)
+	if not coordinator_rollback_ok or not time_rollback_ok or not clock_rollback_ok:
 		_fail_closed_weapon_replay_restore(&"coordinator_rollback_failed")
 		return false
-	action_state.force_safe_reset()
-	_sync_weapon_action_projection()
-	_sync_weapon_replay_intent_latch()
 	if weapon_replay_snapshot() != before or _weapon_replay_events != before_events:
 		_fail_closed_weapon_replay_restore(&"rollback_verification_failed")
 	return false
+
+
+func _has_active_current_rift_payload() -> bool:
+	if world_payload_authority == null or not world_payload_authority.has_method("replay_snapshot"):
+		return false
+	var snapshot := _world_payload_replay_snapshot()
+	for descriptor_value: Variant in snapshot.get("descriptors", []) as Array:
+		if not descriptor_value is Dictionary:
+			continue
+		var descriptor := descriptor_value as Dictionary
+		if (
+			StringName(str(descriptor.get("handler_id", ""))) == &"time_rift"
+			and StringName(str(descriptor.get("run_id", ""))) == _run_id
+			and int(descriptor.get("owner_character_generation", 0))
+			== _owner_character_generation
+		):
+			return true
+	return false
+
+
+func _world_payload_replay_snapshot() -> Dictionary:
+	if world_payload_authority == null or not world_payload_authority.has_method("replay_snapshot"):
+		return {}
+	var value: Variant = world_payload_authority.call("replay_snapshot")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func _can_reanchor_weapon_replay_clocks(target_frame: int) -> bool:
+	if _weapon_replay_clocks_match(target_frame):
+		return true
+	return (
+		target_frame >= 0
+		and character_action_coordinator != null
+		and not bool(character_action_coordinator.call("is_configured"))
+		and character_action_coordinator.has_method("reanchor_unconfigured_runtime_frame")
+		and world_payload_authority != null
+		and world_payload_authority.has_method("reanchor_empty_runtime_clock")
+		and world_payload_authority.has_method("restore_transaction_snapshot")
+		and (_world_payload_replay_snapshot().get("descriptors", []) as Array).is_empty()
+		and rewind_recorder != null
+		and not bool(rewind_recorder.call("has_snapshot"))
+		and time_manager != null
+		and time_manager.has_method("replay_snapshot")
+		and time_manager.has_method("restore_replay_snapshot")
+	)
+
+
+func _weapon_replay_clocks_match(target_frame: int) -> bool:
+	if (
+		target_frame < 0
+		or time_manager == null
+		or not time_manager.has_method("replay_snapshot")
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("snapshot")
+		or world_payload_authority == null
+		or not world_payload_authority.has_method("replay_snapshot")
+		or rewind_recorder == null
+	):
+		return false
+	var time_value: Variant = time_manager.call("replay_snapshot")
+	var character_value: Variant = character_action_coordinator.call("snapshot")
+	var world_value: Variant = world_payload_authority.call("replay_snapshot")
+	return (
+		time_value is Dictionary
+		and character_value is Dictionary
+		and world_value is Dictionary
+		and _runtime_frame == target_frame
+		and int((time_value as Dictionary).get("runtime_frame", -1)) == target_frame
+		and int(action_state.snapshot().get("frame", -1)) == target_frame
+		and int((character_value as Dictionary).get("last_runtime_frame", -1)) == target_frame
+		and int((world_value as Dictionary).get("last_runtime_frame", -1)) == target_frame
+		and int(rewind_recorder.get("_last_runtime_frame")) == target_frame
+	)
+
+
+func _weapon_replay_clock_snapshot() -> Dictionary:
+	var time_value: Variant = time_manager.call("replay_snapshot")
+	var character_value: Variant = character_action_coordinator.call("snapshot")
+	var world_value: Variant = world_payload_authority.call("replay_snapshot")
+	var intent_value: Variant = _weapon_intent_router.call("runtime_snapshot")
+	if (
+		not time_value is Dictionary
+		or not character_value is Dictionary
+		or not world_value is Dictionary
+		or not intent_value is Dictionary
+	):
+		return {}
+	return {
+		"runtime_frame": _runtime_frame,
+		"time": (time_value as Dictionary).duplicate(true),
+		"action": action_state.snapshot(),
+		"character": (character_value as Dictionary).duplicate(true),
+		"world": (world_value as Dictionary).duplicate(true),
+		"intent_router": (intent_value as Dictionary).duplicate(true),
+		"rewind_runtime_frame": int(rewind_recorder.get("_last_runtime_frame")),
+	}
+
+
+func _reanchor_weapon_replay_clocks(target_frame: int) -> bool:
+	if _weapon_replay_clocks_match(target_frame):
+		return true
+	var time_target := time_manager.call("replay_snapshot") as Dictionary
+	time_target["runtime_frame"] = target_frame
+	if not bool(time_manager.call("restore_replay_snapshot", time_target)):
+		return false
+	var action_target := action_state.snapshot()
+	action_target["frame"] = target_frame
+	if not bool(action_state.call("restore_transaction_snapshot", action_target)):
+		return false
+	if not bool(character_action_coordinator.call(
+		"reanchor_unconfigured_runtime_frame",
+		target_frame
+	)):
+		return false
+	if not bool(world_payload_authority.call(
+		"reanchor_empty_runtime_clock",
+		target_frame
+	)):
+		return false
+	rewind_recorder.set("_last_runtime_frame", target_frame)
+	_runtime_frame = target_frame
+	return (
+		int((time_manager.call("replay_snapshot") as Dictionary).get("runtime_frame", -1))
+		== target_frame
+		and int(action_state.snapshot().get("frame", -1)) == target_frame
+		and int((character_action_coordinator.call("snapshot") as Dictionary).get(
+			"last_runtime_frame",
+			-1
+		)) == target_frame
+		and int((world_payload_authority.call("replay_snapshot") as Dictionary).get(
+			"last_runtime_frame",
+			-1
+		)) == target_frame
+		and int(rewind_recorder.get("_last_runtime_frame")) == target_frame
+	)
+
+
+func _restore_weapon_replay_clocks(value: Dictionary) -> bool:
+	var time_ok := bool(time_manager.call(
+		"restore_replay_snapshot",
+		(value.get("time", {}) as Dictionary).duplicate(true)
+	))
+	var action_ok := bool(action_state.call(
+		"restore_transaction_snapshot",
+		(value.get("action", {}) as Dictionary).duplicate(true)
+	))
+	var character_ok := bool(character_action_coordinator.call(
+		"restore_snapshot",
+		(value.get("character", {}) as Dictionary).duplicate(true)
+	))
+	var world_ok := bool(world_payload_authority.call(
+		"restore_transaction_snapshot",
+		(value.get("world", {}) as Dictionary).duplicate(true)
+	))
+	var intent_ok := bool(_weapon_intent_router.call(
+		"restore_runtime_snapshot",
+		(value.get("intent_router", {}) as Dictionary).duplicate(true)
+	))
+	rewind_recorder.set(
+		"_last_runtime_frame",
+		int(value.get("rewind_runtime_frame", 0))
+	)
+	_runtime_frame = int(value.get("runtime_frame", 0))
+	return time_ok and action_ok and character_ok and world_ok and intent_ok
 
 
 func restore_weapon_replay_snapshot_with_event_prefix(
@@ -4543,7 +6266,7 @@ func _request_dash() -> bool:
 
 
 func _begin_dash() -> bool:
-	if _dash_cooldown_remaining > 0.0 or not action_state.can_transition_to(PlayerActionStateScript.State.DASH):
+	if _dash_cooldown_remaining_frames > 0 or not action_state.can_transition_to(PlayerActionStateScript.State.DASH):
 		return false
 	if (
 		action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY
@@ -4552,7 +6275,7 @@ func _begin_dash() -> bool:
 		_cancel_weapon_action(&"dash_cancel")
 	if not action_state.transition_to(PlayerActionStateScript.State.DASH, _seconds_to_frames(DASH_DURATION)):
 		return false
-	_dash_cooldown_remaining = DASH_COOLDOWN
+	_dash_cooldown_remaining_frames = DASH_COOLDOWN_FRAMES
 	_dash_direction = _last_move_direction.normalized()
 	_dash_velocity = _dash_direction * DASH_SPEED
 	health.apply_invulnerability(DASH_INVULNERABLE_TIME + _dash_invulnerable_bonus)
@@ -4579,16 +6302,48 @@ func _begin_time_skill(skill_id: StringName, context: Dictionary = {}) -> bool:
 	var committed_context := context if not context.is_empty() else _time_skill_context(skill_id)
 	if not time_manager.can_use(skill_id, committed_context):
 		return false
+	var canonical_id: StringName = time_manager.canonical_skill_id(skill_id)
+	var transaction_context := committed_context.duplicate(true)
+	transaction_context.erase("recorder")
+	if canonical_id == &"rewind":
+		transaction_context["pre_return_position"] = global_position
+	var player_before_time_cast := rewind_transaction_snapshot()
+	if player_before_time_cast.is_empty():
+		return false
 	if (
 		action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY
 		or _weapon_hold_is_active()
 	):
 		_cancel_weapon_action(&"time_cast_cancel")
-	if not action_state.transition_to(PlayerActionStateScript.State.TIME_CAST, _seconds_to_frames(TIME_CAST_DURATION)):
+	if not action_state.transition_to(
+		PlayerActionStateScript.State.TIME_CAST,
+		_seconds_to_frames(TIME_CAST_DURATION)
+	):
+		if not restore_rewind_transaction_snapshot(player_before_time_cast):
+			set_physics_process(false)
+			push_error("Player time-cast transition rollback failed closed")
 		return false
-	var committed: bool = time_manager.try_use(skill_id, committed_context)
-	if not committed and action_state.current_state == PlayerActionStateScript.State.TIME_CAST:
-		action_state.force_safe_reset()
+	var time_action_token := _next_time_action_token
+	var transaction: Dictionary = time_manager.prepare_time_action(
+		time_action_token,
+		_time_action_generation,
+		_runtime_frame,
+		_run_id,
+		canonical_id,
+		transaction_context
+	)
+	if transaction.is_empty():
+		if not restore_rewind_transaction_snapshot(player_before_time_cast):
+			set_physics_process(false)
+			push_error("Player time-cast prepare rollback failed closed")
+		return false
+	var commit_result: Dictionary = time_manager.commit_time_action(transaction)
+	var committed := bool(commit_result.get("ok", false))
+	if committed:
+		_next_time_action_token += 1
+	elif not restore_rewind_transaction_snapshot(player_before_time_cast):
+		set_physics_process(false)
+		push_error("Player time-cast commit rollback failed closed")
 	return committed
 
 
@@ -5738,6 +7493,8 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 
 func _on_died(_killer: Variant) -> void:
 	if action_state.transition_to(PlayerActionStateScript.State.DEAD, 0):
+		if not _invalidate_world_payload_generation(&"player_died"):
+			push_error("WorldPayloadAuthority death invalidation failed")
 		action_state.clear_buffered_inputs()
 		_clear_transient_effects()
 		_clear_owned_player_arrows()

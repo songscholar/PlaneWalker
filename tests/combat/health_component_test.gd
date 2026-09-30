@@ -74,6 +74,7 @@ func _run() -> void:
 	_test_rejected_defense_commit_is_atomic(owner, health)
 	_test_take_damage_queries_and_commits_owner_decisions(owner, health)
 	_test_irreversible_loss_is_actual_atomic_and_published_before_death(health)
+	_test_full_player_replay_restore_is_validated_and_atomic(health)
 
 	_disconnect_damage_facts()
 	if health.damaged.is_connected(_on_health_damaged):
@@ -471,6 +472,154 @@ func _test_irreversible_loss_is_actual_atomic_and_published_before_death(health:
 	_suite.assert_equal(observed_events.count("entity_died"), 1, "entity_died observes one terminal publication")
 	_suite.assert_equal(observed_events.count("died"), 1, "died observes one terminal publication")
 	_observed_health = null
+
+
+func _test_full_player_replay_restore_is_validated_and_atomic(health: HealthComponent) -> void:
+	_suite.assert_true(
+		health.configure_run(&"health-replay-run"),
+		"Health Replay fixture installs a fresh authoritative run"
+	)
+	health.max_hp = 140.0
+	health.current_hp = 110.0
+	health.healing_multiplier = 0.75
+	health.dead = false
+	var recorded_loss: RefCounted = health.lose_health_irreversible(
+		8.0,
+		&"curse:time_stop",
+		901,
+		12,
+		&"health-replay-run"
+	)
+	_suite.assert_true(
+		recorded_loss != null and not recorded_loss.is_prevented(),
+		"Health Replay fixture records one authoritative irreversible claim"
+	)
+	var checkpoint: Dictionary = health.runtime_state_snapshot()
+	var state_before_validation: Dictionary = health.runtime_state_snapshot()
+	_suite.assert_true(
+		health.can_restore_replay_snapshot(checkpoint),
+		"Health accepts its complete validated Replay snapshot"
+	)
+	_suite.assert_equal(
+		health.runtime_state_snapshot(),
+		state_before_validation,
+		"Health Replay preflight is pure"
+	)
+
+	health.max_hp = 220.0
+	health.current_hp = 73.0
+	health.healing_multiplier = 1.8
+	health.dead = false
+	var later_loss: RefCounted = health.lose_health_irreversible(
+		5.0,
+		&"corruption_tick",
+		902,
+		12,
+		&"health-replay-run"
+	)
+	_suite.assert_true(
+		later_loss != null and not later_loss.is_prevented(),
+		"Health Replay mutation fixture advances the irreversible ledger"
+	)
+	_suite.assert_true(
+		health.restore_replay_snapshot(checkpoint),
+		"Health restores the full validated Replay checkpoint"
+	)
+	_suite.assert_equal(
+		health.runtime_state_snapshot(),
+		checkpoint,
+		"Health Replay restore installs HP, maximum, healing, death, and ledger exactly"
+	)
+	var hp_before_duplicate := health.current_hp
+	var replayed_duplicate: RefCounted = health.lose_health_irreversible(
+		99.0,
+		&"curse:time_stop",
+		901,
+		12,
+		&"health-replay-run"
+	)
+	_suite.assert_true(
+		replayed_duplicate != null and replayed_duplicate.is_prevented(),
+		"Health Replay restore preserves irreversible duplicate-claim protection"
+	)
+	_suite.assert_close(
+		health.current_hp,
+		hp_before_duplicate,
+		"restored irreversible claims cannot be charged twice"
+	)
+	_suite.assert_equal(
+		health.runtime_state_snapshot(),
+		checkpoint,
+		"duplicate irreversible rejection leaves the restored checkpoint exact"
+	)
+
+	var dead_checkpoint := checkpoint.duplicate(true)
+	dead_checkpoint["current_hp"] = 0.0
+	dead_checkpoint["dead"] = true
+	_suite.assert_true(
+		health.can_restore_replay_snapshot(dead_checkpoint),
+		"Health accepts a coherent terminal Replay state"
+	)
+	_suite.assert_true(
+		health.restore_replay_snapshot(dead_checkpoint),
+		"Health restores the recorded death state without publishing gameplay events"
+	)
+	_suite.assert_equal(
+		health.runtime_state_snapshot(),
+		dead_checkpoint,
+		"Health Replay restore preserves the exact terminal snapshot"
+	)
+
+	var missing_field := dead_checkpoint.duplicate(true)
+	missing_field.erase("healing_multiplier")
+	var unknown_field := dead_checkpoint.duplicate(true)
+	unknown_field["unexpected"] = true
+	var non_finite_hp := dead_checkpoint.duplicate(true)
+	non_finite_hp["current_hp"] = NAN
+	var invalid_maximum := dead_checkpoint.duplicate(true)
+	invalid_maximum["max_hp"] = 0.0
+	var hp_above_maximum := dead_checkpoint.duplicate(true)
+	hp_above_maximum["current_hp"] = 141.0
+	hp_above_maximum["dead"] = false
+	var invalid_healing := dead_checkpoint.duplicate(true)
+	invalid_healing["healing_multiplier"] = -0.1
+	var incoherent_death := dead_checkpoint.duplicate(true)
+	incoherent_death["current_hp"] = 10.0
+	var incoherent_living := dead_checkpoint.duplicate(true)
+	incoherent_living["dead"] = false
+	var stale_run := dead_checkpoint.duplicate(true)
+	stale_run["run_id"] = &"another-run"
+	var forged_ledger := dead_checkpoint.duplicate(true)
+	var forged_ledger_value := (forged_ledger["ledger"] as Dictionary).duplicate(true)
+	forged_ledger_value["claim_root"] = "0".repeat(64)
+	forged_ledger["ledger"] = forged_ledger_value
+	var invalid_snapshots: Array[Dictionary] = [
+		missing_field,
+		unknown_field,
+		non_finite_hp,
+		invalid_maximum,
+		hp_above_maximum,
+		invalid_healing,
+		incoherent_death,
+		incoherent_living,
+		stale_run,
+		forged_ledger,
+	]
+	var before_rejections: Dictionary = health.runtime_state_snapshot()
+	for index: int in range(invalid_snapshots.size()):
+		_suite.assert_true(
+			not health.can_restore_replay_snapshot(invalid_snapshots[index]),
+			"invalid Health Replay snapshot %d fails pure preflight" % index
+		)
+		_suite.assert_true(
+			not health.restore_replay_snapshot(invalid_snapshots[index]),
+			"invalid Health Replay snapshot %d is rejected" % index
+		)
+		_suite.assert_equal(
+			health.runtime_state_snapshot(),
+			before_rejections,
+			"failed Health Replay restore %d is atomic" % index
+		)
 
 
 func _damage_plan(amount: float, tags: Array[String], token: int) -> RefCounted:

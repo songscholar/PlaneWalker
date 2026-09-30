@@ -158,12 +158,20 @@ func _test_ui_snapshot_uses_equipped_time_slots() -> void:
 		player.configure_loadout({"weapon_id": "sword", "enabled_time_skills": ["stop", "rift"]}),
 		"candidate Stop/Rift loadout configures for UI projection"
 	)
-	time_manager.set("_cooldowns", {
-		&"time_stop": 1.25,
-		&"time_rewind": 2.0,
-		&"time_rift": 4.5,
-		&"time_accelerate": 3.0,
-	})
+	for cooldown: Dictionary in [
+		{"skill_id": &"time_stop", "seconds": 1.25},
+		{"skill_id": &"time_rewind", "seconds": 2.0},
+		{"skill_id": &"time_rift", "seconds": 4.5},
+		{"skill_id": &"time_accelerate", "seconds": 3.0},
+	]:
+		_suite.assert_true(
+			bool(time_manager.call(
+				"_set_cooldown_seconds",
+				cooldown["skill_id"],
+				cooldown["seconds"]
+			)),
+			"candidate UI fixture installs %s cooldown" % str(cooldown["skill_id"])
+		)
 	var candidate_snapshot: Dictionary = player.get_player_ui_snapshot()
 	_suite.assert_equal(
 		candidate_snapshot.get("time_slots", []),
@@ -192,12 +200,20 @@ func _test_ui_snapshot_uses_equipped_time_slots() -> void:
 		player.configure_loadout({"weapon_id": "sword", "enabled_time_skills": ["accelerate", "rewind"]}),
 		"candidate Accelerate/Rewind loadout configures for UI projection"
 	)
-	time_manager.set("_cooldowns", {
-		&"time_stop": 1.0,
-		&"time_rewind": 2.5,
-		&"time_rift": 3.0,
-		&"time_accelerate": 6.75,
-	})
+	for cooldown: Dictionary in [
+		{"skill_id": &"time_stop", "seconds": 1.0},
+		{"skill_id": &"time_rewind", "seconds": 2.5},
+		{"skill_id": &"time_rift", "seconds": 3.0},
+		{"skill_id": &"time_accelerate", "seconds": 6.75},
+	]:
+		_suite.assert_true(
+			bool(time_manager.call(
+				"_set_cooldown_seconds",
+				cooldown["skill_id"],
+				cooldown["seconds"]
+			)),
+			"alternate UI fixture installs %s cooldown" % str(cooldown["skill_id"])
+		)
 	_suite.assert_equal(
 		player.get_player_ui_snapshot().get("time_slots", []),
 		[

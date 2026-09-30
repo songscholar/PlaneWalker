@@ -138,7 +138,7 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rift"], "NEXT")), "dirty-state setup equips Bow")
 	_suite.assert_true(player.try_action(&"ranged_attack"), "dirty-state setup begins Bow charge")
 	var bow_hold: Dictionary = player.weapon_presentation_snapshot()
-	player.set("_dash_cooldown_remaining", 2.0)
+	player.set("_dash_cooldown_remaining_frames", 120)
 	player.action_state.buffer_input(&"attack", 30)
 	player.apply_knockback(Vector2(90.0, -30.0))
 	player.velocity = Vector2(120.0, 40.0)
@@ -146,12 +146,20 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 	time_manager.time_accelerate_duration = 0.1
 	_suite.assert_true(time_manager.try_time_rift(Vector2.ZERO), "dirty-state setup creates Rift")
 	_suite.assert_true(time_manager.try_time_accelerate(), "dirty-state setup enables acceleration")
-	time_manager.set("_cooldowns", {
-		&"time_stop": 3.0,
-		&"time_rewind": 4.0,
-		&"time_rift": 5.0,
-		&"time_accelerate": 6.0,
-	})
+	for cooldown: Dictionary in [
+		{"skill_id": &"time_stop", "seconds": 3.0},
+		{"skill_id": &"time_rewind", "seconds": 4.0},
+		{"skill_id": &"time_rift", "seconds": 5.0},
+		{"skill_id": &"time_accelerate", "seconds": 6.0},
+	]:
+		_suite.assert_true(
+			bool(time_manager.call(
+				"_set_cooldown_seconds",
+				cooldown["skill_id"],
+				cooldown["seconds"]
+			)),
+			"successful reconfigure fixture installs %s cooldown" % str(cooldown["skill_id"])
+		)
 	_suite.assert_equal(bow_hold.get("phase"), "HOLD", "coordinator Bow charge exists before successful reconfigure")
 	_suite.assert_true(int(bow_hold.get("token", 0)) > 0, "coordinator Bow charge owns a token before reconfigure")
 	_suite.assert_equal(
@@ -175,7 +183,7 @@ func _test_successful_reconfigure_resets_runtime_state() -> void:
 	_suite.assert_true(not player.is_time_accelerated(), "successful reconfigure clears acceleration")
 	_suite.assert_equal(player.action_state.current_state, PlayerActionStateScript.State.FREE, "successful reconfigure resets the action state")
 	_suite.assert_true(not player.action_state.has_buffered_input(&"attack"), "successful reconfigure clears buffered actions")
-	_suite.assert_close(float(player.get("_dash_cooldown_remaining")), 0.0, "successful reconfigure clears dash cooldown")
+	_suite.assert_equal(int(player.get("_dash_cooldown_remaining_frames")), 0, "successful reconfigure clears dash cooldown")
 	_suite.assert_equal(player.get("_dash_velocity"), Vector2.ZERO, "successful reconfigure clears dash velocity")
 	_suite.assert_equal(player.get("_knockback_velocity"), Vector2.ZERO, "successful reconfigure clears knockback")
 	_suite.assert_equal(player.velocity, Vector2.ZERO, "successful reconfigure clears body velocity")
@@ -188,24 +196,32 @@ func _test_invalid_reconfigure_preserves_runtime_state() -> void:
 	_suite.assert_true(player.configure_loadout(_config("bow", ["stop", "rewind"], "NEXT")), "invalid reset setup equips Bow")
 	_suite.assert_true(player.try_action(&"ranged_attack"), "invalid reset setup begins Bow charge")
 	var bow_before: Dictionary = player.weapon_presentation_snapshot()
-	player.set("_dash_cooldown_remaining", 2.0)
+	player.set("_dash_cooldown_remaining_frames", 120)
 	player.action_state.buffer_input(&"attack", 30)
 	player.apply_knockback(Vector2(60.0, 15.0))
 	player.apply_time_acceleration(1.5, 0.1)
 	time_manager.energy = 17.0
-	time_manager.set("_cooldowns", {
-		&"time_stop": 3.0,
-		&"time_rewind": 4.0,
-		&"time_rift": 5.0,
-		&"time_accelerate": 6.0,
-	})
+	for cooldown: Dictionary in [
+		{"skill_id": &"time_stop", "seconds": 3.0},
+		{"skill_id": &"time_rewind", "seconds": 4.0},
+		{"skill_id": &"time_rift", "seconds": 5.0},
+		{"skill_id": &"time_accelerate", "seconds": 6.0},
+	]:
+		_suite.assert_true(
+			bool(time_manager.call(
+				"_set_cooldown_seconds",
+				cooldown["skill_id"],
+				cooldown["seconds"]
+			)),
+			"invalid reconfigure fixture installs %s cooldown" % str(cooldown["skill_id"])
+		)
 
 	_suite.assert_true(not player.configure_loadout(_config("sword", ["stop"])), "invalid reconfigure fails")
 	var bow_after: Dictionary = player.weapon_presentation_snapshot()
 	_suite.assert_equal(bow_after.get("phase"), "HOLD", "invalid reconfigure preserves coordinator Bow charge")
 	_suite.assert_equal(bow_after.get("token"), bow_before.get("token"), "invalid reconfigure preserves Bow token")
 	_suite.assert_equal(bow_after.get("generation"), bow_before.get("generation"), "invalid reconfigure preserves Bow generation")
-	_suite.assert_close(float(player.get("_dash_cooldown_remaining")), 2.0, "invalid reconfigure preserves dash cooldown")
+	_suite.assert_equal(int(player.get("_dash_cooldown_remaining_frames")), 120, "invalid reconfigure preserves dash cooldown")
 	_suite.assert_close(time_manager.energy, 17.0, "invalid reconfigure preserves time energy")
 	_suite.assert_close(time_manager.get_cooldown(&"time_rift"), 5.0, "invalid reconfigure preserves time cooldowns")
 	_suite.assert_true(player.is_time_accelerated(), "invalid reconfigure preserves acceleration")

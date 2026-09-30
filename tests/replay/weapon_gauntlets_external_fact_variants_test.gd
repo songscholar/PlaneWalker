@@ -60,6 +60,7 @@ func _test_high_combo_primary_with_energy_return(suite, profile: Dictionary) -> 
 	var combo_before := _combo_count(source)
 	suite.assert_true(combo_before >= 30, "high-Combo replay fixture reaches the time-storm tier")
 	_set_time_energy(source, 40.0)
+	source.time_manager.energy_regen = 0.0
 	_reset_replay_capture(source)
 
 	var recorder = ReplayRecorderScript.new()
@@ -118,7 +119,8 @@ func _test_high_combo_primary_with_energy_return(suite, profile: Dictionary) -> 
 		terminal,
 		target,
 		expected_hp,
-		"high-Combo primary"
+		"high-Combo primary",
+		true
 	)
 	if replay_target != null:
 		suite.assert_true(
@@ -528,7 +530,8 @@ func _replay_and_assert(
 	expected_terminal: Dictionary,
 	target: Node2D,
 	expected_hp: float,
-	label: String
+	label: String,
+	disable_energy_regen: bool = false
 ) -> Node:
 	if replay.is_empty():
 		suite.assert_true(false, "%s produces a non-empty replay" % label)
@@ -536,6 +539,8 @@ func _replay_and_assert(
 	var replay_target := await _spawn_player(suite, profile)
 	if replay_target == null:
 		return null
+	if disable_energy_regen:
+		replay_target.time_manager.energy_regen = 0.0
 	var player = ReplayPlayerScript.new()
 	var loaded: Dictionary = player.load_replay(replay, profile)
 	suite.assert_true(bool(loaded.get("ok", false)), "%s replay loads: %s" % [label, str(loaded)])

@@ -107,16 +107,22 @@ func freeze_transaction_snapshot() -> Dictionary:
 	return value
 
 
-func restore_replay_snapshot(value: Dictionary) -> bool:
+func can_restore_replay_snapshot(value: Dictionary) -> bool:
 	var validated := _validated_snapshot(value)
 	if validated.is_empty():
 		return false
 	var restored_run_id := validated["run_id"] as StringName
-	if _run_id != &"" and restored_run_id != _run_id:
+	return _run_id == &"" or restored_run_id == _run_id
+
+
+func restore_replay_snapshot(value: Dictionary) -> bool:
+	if not can_restore_replay_snapshot(value):
 		return false
+	var validated := _validated_snapshot(value)
+	var restored_run_id := validated["run_id"] as StringName
 	_install_snapshot(validated)
 	_frozen_transaction_snapshot_digest = ""
-	return true
+	return _run_id == restored_run_id and _snapshot_value() == validated
 
 
 func restore_transaction_snapshot(value: Dictionary) -> bool:

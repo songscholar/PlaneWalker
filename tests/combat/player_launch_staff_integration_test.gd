@@ -155,6 +155,7 @@ func _test_staff_ultimate_time_energy_rewards_are_live_and_exactly_once() -> voi
 	var player := await _spawn_staff()
 	var staff: Node = player.get_node("StaffWeapon")
 	var time_manager: Node = player.get_node("TimeManager")
+	time_manager.energy_regen = 0.0
 	_resource_facts.clear()
 	_suite.assert_true(player.try_action(&"weapon_ultimate"), "Staff reward fixture enters ultimate HOLD")
 	for _frame: int in range(60):

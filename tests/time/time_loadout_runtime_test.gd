@@ -30,7 +30,7 @@ class RewindRecorderStub:
 	func has_snapshot() -> bool:
 		return _snapshot_available
 
-	func prepare_rewind_transaction() -> Dictionary:
+	func prepare_rewind_transaction(_pre_return_position: Variant = null) -> Dictionary:
 		if not _snapshot_available or not _active_transaction.is_empty():
 			return {}
 		var manager := get_parent().get_node_or_null("TimeManager")
@@ -216,7 +216,7 @@ func _test_active_stop_and_accelerate_reject_reapply() -> void:
 	var stop_starts_before := _start_count(&"time_stop")
 	var stop_ends_before := _end_count(&"time_stop")
 	_suite.assert_true(manager.try_use(&"time_stop", {}), "long Stop commits once")
-	manager.call("_process", 0.03)
+	_advance(player, 2)
 	var stop_energy_before_retry: float = manager.energy
 	_suite.assert_true(not manager.can_use(&"time_stop", {}), "active Stop remains unavailable after its shorter cooldown ends")
 	_suite.assert_true(not manager.try_use(&"time_stop", {}), "active Stop rejects reapplication")
@@ -232,7 +232,7 @@ func _test_active_stop_and_accelerate_reject_reapply() -> void:
 	var accelerate_starts_before := _start_count(&"time_accelerate")
 	var accelerate_ends_before := _end_count(&"time_accelerate")
 	_suite.assert_true(manager.try_use(&"time_accelerate", {}), "long Accelerate commits once")
-	manager.call("_process", 0.03)
+	_advance(player, 2)
 	var accelerate_energy_before_retry: float = manager.energy
 	_suite.assert_true(not manager.can_use(&"time_accelerate", {}), "active Accelerate remains unavailable after its shorter cooldown ends")
 	_suite.assert_true(not manager.try_use(&"time_accelerate", {}), "active Accelerate rejects reapplication")
@@ -403,12 +403,14 @@ func _test_manager_stop_honors_real_elite_resistance() -> void:
 	_suite.assert_true(elite_enemy.is_time_stopped(), "elite target receives manager Stop")
 	_suite.assert_equal(_start_count(&"time_stop"), starts_before + 1, "manager Stop publishes one start")
 	await get_tree().create_timer(0.13).timeout
+	_advance(player, 8)
 	_suite.assert_true(not elite_enemy.is_time_stopped(), "elite target recovers after its resisted half duration")
 	_suite.assert_true(normal_enemy.is_time_stopped(), "normal target remains stopped after elite recovery")
 	_suite.assert_true(bool(manager.get("_time_stop_active")), "manager remains active for the full Stop duration")
 	_suite.assert_equal(_end_count(&"time_stop"), ends_before, "elite recovery does not end the manager effect early")
 
 	await get_tree().create_timer(0.13).timeout
+	_advance(player, 8)
 	_suite.assert_true(not normal_enemy.is_time_stopped(), "normal target recovers at the full duration")
 	_suite.assert_true(not elite_enemy.is_time_stopped(), "elite target remains recovered at final cleanup")
 	_suite.assert_true(not bool(manager.get("_time_stop_active")), "manager ends after the full Stop duration")
@@ -477,12 +479,20 @@ func _test_rejections_are_atomic() -> void:
 
 	player.reset_runtime_state()
 	manager.energy_regen = 0.0
-	manager.set("_cooldowns", {
-		&"time_stop": 0.0,
-		&"time_rewind": 0.0,
-		&"time_rift": 0.0,
-		&"time_accelerate": 2.0,
-	})
+	for cooldown: Dictionary in [
+		{"skill_id": &"time_stop", "seconds": 0.0},
+		{"skill_id": &"time_rewind", "seconds": 0.0},
+		{"skill_id": &"time_rift", "seconds": 0.0},
+		{"skill_id": &"time_accelerate", "seconds": 2.0},
+	]:
+		_suite.assert_true(
+			bool(manager.call(
+				"_set_cooldown_seconds",
+				cooldown["skill_id"],
+				cooldown["seconds"]
+			)),
+			"cooldown rejection fixture installs %s cooldown" % str(cooldown["skill_id"])
+		)
 	facts_before = _fact_total()
 	energy_before = manager.energy
 	_suite.assert_true(not player.try_action(&"time_accelerate"), "cooldown rejects equipped Accelerate")
@@ -562,12 +572,16 @@ func _test_accelerate_cancel_ignores_stale_expiry() -> void:
 	_suite.assert_true(not player.is_time_accelerated(), "explicit cancellation clears first Accelerate")
 	player.cancel_transient_actions()
 	manager.energy = manager.max_energy
-	manager.set("_cooldowns", {
-		&"time_stop": 0.0,
-		&"time_rewind": 0.0,
-		&"time_rift": 0.0,
-		&"time_accelerate": 0.0,
-	})
+	for skill_id: StringName in [
+		&"time_stop",
+		&"time_rewind",
+		&"time_rift",
+		&"time_accelerate",
+	]:
+		_suite.assert_true(
+			bool(manager.call("_set_cooldown_seconds", skill_id, 0.0)),
+			"replacement Accelerate fixture clears %s cooldown" % str(skill_id)
+		)
 	manager.time_accelerate_duration = 0.20
 	_suite.assert_true(player.try_action(&"time_accelerate"), "second Accelerate commits after cancellation")
 	_suite.assert_true(player.is_time_accelerated(), "second Accelerate applies its effect")
@@ -602,7 +616,7 @@ func _test_pause_freezes_active_duration() -> void:
 	_suite.assert_true(player.is_time_accelerated(), "pause preserves active acceleration")
 	_suite.assert_close(float(manager.get("_time_accelerate_remaining")), manager_remaining_before, "pause does not advance manager effect duration", 0.01)
 	get_tree().paused = false
-	await get_tree().create_timer(0.12).timeout
+	_advance(player, 8)
 	_suite.assert_true(not player.is_time_accelerated(), "effect expires after gameplay resumes")
 	await _free_player(player)
 
@@ -624,7 +638,7 @@ func _test_disabled_player_freezes_inherited_time_clock() -> void:
 	_suite.assert_true(player.is_time_accelerated(), "disabled Player preserves the active effect during selection")
 
 	player.process_mode = Node.PROCESS_MODE_PAUSABLE
-	await get_tree().create_timer(0.12).timeout
+	_advance(player, 8)
 	_suite.assert_true(not player.is_time_accelerated(), "restoring Player processing lets the effect finish")
 	await _free_player(player)
 

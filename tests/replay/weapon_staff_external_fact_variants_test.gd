@@ -243,7 +243,9 @@ func _test_sequential_staff_actions_share_generation_and_restore(
 	var before_restore_digest := ReplayRecorderScript.value_digest(snapshot)
 	suite.assert_true(
 		player.restore_weapon_replay_snapshot(snapshot),
-		"Staff replay restores a valid snapshot with equal adjacent generations"
+		"Staff replay restores a valid snapshot with equal adjacent generations: %s" % str(
+			player.weapon_replay_restore_status()
+		)
 	)
 	suite.assert_equal(
 		ReplayRecorderScript.value_digest(player.weapon_replay_snapshot()),

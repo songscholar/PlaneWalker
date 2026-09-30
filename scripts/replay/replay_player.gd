@@ -5,6 +5,8 @@ const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 
 var _replay: Dictionary = {}
 var _cursor := -1
+var _full_player_replay: Dictionary = {}
+var _full_player_cursor := -1
 
 
 func load_replay(replay: Dictionary, expected_profile: Dictionary) -> Dictionary:
@@ -21,7 +23,13 @@ func load_replay(replay: Dictionary, expected_profile: Dictionary) -> Dictionary
 	var validation := _validate_replay(replay, expected_identity)
 	if not bool(validation.get("ok", false)):
 		return validation
-	_replay = replay.duplicate(true)
+	var migrated := ReplayRecorderScript.migrate_legacy_v6_time_snapshots(replay)
+	var migrated_validation := _validate_replay(migrated, expected_identity)
+	if not bool(migrated_validation.get("ok", false)):
+		return _failure(&"REPLAY_MIGRATION_INVALID", {
+			"reason": migrated_validation.get("code", &"INVALID_REPLAY"),
+		})
+	_replay = migrated.duplicate(true)
 	_cursor = -1
 	return _success({"summary": summary()})
 
@@ -93,6 +101,289 @@ func summary() -> Dictionary:
 
 func replay_snapshot() -> Dictionary:
 	return _replay.duplicate(true)
+
+
+func load_full_player_replay(
+	replay: Dictionary,
+	expected_identity: Dictionary
+) -> Dictionary:
+	reset_full_player_replay()
+	var identity := ReplayRecorderScript.validate_full_player_identity(expected_identity)
+	if identity.is_empty():
+		return _failure(&"FULL_PLAYER_EXPECTED_IDENTITY_INVALID")
+	var validation := _validate_full_player_replay(replay, identity)
+	if not bool(validation.get("ok", false)):
+		return validation
+	_full_player_replay = replay.duplicate(true)
+	_full_player_cursor = -1
+	return _success({"summary": full_player_summary()})
+
+
+func load_full_player_replay_json(
+	encoded_json: String,
+	expected_identity: Dictionary
+) -> Dictionary:
+	reset_full_player_replay()
+	var decoded: Dictionary = ReplayRecorderScript.decode_replay_json(encoded_json)
+	if not bool(decoded.get("ok", false)):
+		return decoded
+	return load_full_player_replay(
+		(decoded.get("replay", {}) as Dictionary).duplicate(true),
+		expected_identity
+	)
+
+
+func reset_full_player_replay() -> void:
+	_full_player_replay.clear()
+	_full_player_cursor = -1
+
+
+func is_full_player_replay_loaded() -> bool:
+	return not _full_player_replay.is_empty()
+
+
+func full_player_frame_count() -> int:
+	return int(_full_player_replay.get("frame_count", 0)) if is_full_player_replay_loaded() else 0
+
+
+func full_player_frame_at(index: int) -> Dictionary:
+	if index < 0 or index >= full_player_frame_count():
+		return {}
+	var frames := _full_player_replay.get("frames", []) as Array
+	return (frames[index] as Dictionary).duplicate(true)
+
+
+func full_player_summary() -> Dictionary:
+	return ReplayRecorderScript.full_player_replay_summary(_full_player_replay)
+
+
+func full_player_replay_snapshot() -> Dictionary:
+	return _full_player_replay.duplicate(true)
+
+
+func restore_full_player_frame(target: Object, index: int = -1) -> Dictionary:
+	if not is_full_player_replay_loaded():
+		return _failure(&"FULL_PLAYER_REPLAY_NOT_LOADED")
+	var target_validation := _validate_full_player_target(target)
+	if not bool(target_validation.get("ok", false)):
+		return target_validation
+	var frame_index := _full_player_cursor if index < 0 else index
+	var frame_entry := full_player_frame_at(frame_index)
+	if frame_entry.is_empty():
+		return _failure(&"FULL_PLAYER_REPLAY_FRAME_NOT_FOUND", {"index": frame_index})
+	var expected_snapshot := (
+		frame_entry.get("snapshot", {}) as Dictionary
+	).duplicate(true)
+	var before_value: Variant = target.call("full_player_replay_snapshot")
+	if not before_value is Dictionary:
+		return _failure(&"FULL_PLAYER_REPLAY_TARGET_INVALID")
+	var before := (before_value as Dictionary).duplicate(true)
+	if not bool(target.call(
+		"restore_full_player_replay_snapshot",
+		expected_snapshot.duplicate(true)
+	)):
+		return _failure(&"FULL_PLAYER_REPLAY_RESTORE_REJECTED", {"index": frame_index})
+	var actual_value: Variant = target.call("full_player_replay_snapshot")
+	if not actual_value is Dictionary or actual_value != expected_snapshot:
+		var rolled_back := _rollback_full_player_target(target, before)
+		return _failure(
+			&"FULL_PLAYER_REPLAY_RESTORE_MISMATCH" if rolled_back
+			else &"FULL_PLAYER_REPLAY_ROLLBACK_FAILED",
+			{"index": frame_index}
+		)
+	_full_player_cursor = frame_index
+	return _success({
+		"index": frame_index,
+		"digest": str(frame_entry.get("digest", "")),
+	})
+
+
+func replay_full_player_to_terminal(
+	target: Object,
+	checkpoint_index: int = -1
+) -> Dictionary:
+	if not is_full_player_replay_loaded():
+		return _failure(&"FULL_PLAYER_REPLAY_NOT_LOADED")
+	var target_validation := _validate_full_player_target(target)
+	if not bool(target_validation.get("ok", false)):
+		return target_validation
+	var before_value: Variant = target.call("full_player_replay_snapshot")
+	if not before_value is Dictionary:
+		return _failure(&"FULL_PLAYER_REPLAY_TARGET_INVALID")
+	var before := (before_value as Dictionary).duplicate(true)
+	var cursor_before := _full_player_cursor
+	var frame_index := _full_player_cursor if checkpoint_index < 0 else checkpoint_index
+	var restored := restore_full_player_frame(target, frame_index)
+	if not bool(restored.get("ok", false)):
+		return restored
+	for next_index: int in range(frame_index + 1, full_player_frame_count()):
+		var expected_entry := full_player_frame_at(next_index)
+		var expected_frame := int(expected_entry.get("frame", -1))
+		var advance_result := _advance_full_player_target(
+			target,
+			expected_entry.get("frame_intents", {}) as Dictionary
+		)
+		if not bool(advance_result.get("ok", false)):
+				return _full_player_playback_failure(
+					target,
+					before,
+					cursor_before,
+					&"FULL_PLAYER_REPLAY_FRAME_REJECTED",
+				{"index": next_index, "frame": expected_frame}
+			)
+		var observed_facts := advance_result.get("verification_facts", []) as Array
+		var expected_facts := expected_entry.get("verification_facts", []) as Array
+		if observed_facts != expected_facts:
+				return _full_player_playback_failure(
+					target,
+					before,
+					cursor_before,
+					&"FULL_PLAYER_REPLAY_VERIFICATION_FACT_MISMATCH",
+				{
+					"index": next_index,
+					"frame": expected_frame,
+					"expected_digest": ReplayRecorderScript.value_digest(expected_facts),
+					"actual_digest": ReplayRecorderScript.value_digest(observed_facts),
+				}
+			)
+		var actual_value: Variant = target.call("full_player_replay_snapshot")
+		var expected_snapshot := expected_entry.get("snapshot", {}) as Dictionary
+		if not actual_value is Dictionary or actual_value != expected_snapshot:
+			var actual_snapshot := actual_value as Dictionary if actual_value is Dictionary else {}
+			var drift_fields := _full_player_snapshot_drift_fields(
+				expected_snapshot,
+				actual_snapshot
+			)
+			var player_state_drift_fields: Array[String] = []
+			if "player_state" in drift_fields:
+				player_state_drift_fields = _full_player_snapshot_drift_fields(
+					expected_snapshot.get("player_state", {}) as Dictionary,
+					actual_snapshot.get("player_state", {}) as Dictionary
+				)
+				return _full_player_playback_failure(
+					target,
+					before,
+					cursor_before,
+					&"FULL_PLAYER_REPLAY_CHECKPOINT_MISMATCH",
+				{
+					"index": next_index,
+					"frame": expected_frame,
+					"expected_digest": ReplayRecorderScript.value_digest(expected_snapshot),
+					"actual_digest": ReplayRecorderScript.value_digest(actual_value),
+					"drift_fields": drift_fields,
+					"player_state_drift_fields": player_state_drift_fields,
+				}
+			)
+	_full_player_cursor = full_player_frame_count() - 1
+	var terminal := full_player_frame_at(_full_player_cursor)
+	var terminal_snapshot_value: Variant = target.call("full_player_replay_snapshot")
+	if (
+		not terminal_snapshot_value is Dictionary
+		or ReplayRecorderScript.value_digest(terminal_snapshot_value)
+			!= str(_full_player_replay.get("terminal_snapshot_digest", ""))
+	):
+		return _full_player_playback_failure(
+			target,
+			before,
+			cursor_before,
+			&"FULL_PLAYER_REPLAY_TERMINAL_DIGEST_MISMATCH",
+			{}
+		)
+	return _success({
+		"index": _full_player_cursor,
+		"digest": str(terminal.get("digest", "")),
+		"terminal_snapshot_digest": str(
+			_full_player_replay.get("terminal_snapshot_digest", "")
+		),
+	})
+
+
+func _advance_full_player_target(
+	target: Object,
+	frame_intents: Dictionary
+) -> Dictionary:
+	var observed_facts: Array[Dictionary] = []
+	var observer := func(
+		ability_id: StringName,
+		token: int,
+		generation: int,
+		frame: int,
+		run_id: StringName,
+		context: Dictionary
+	) -> void:
+		observed_facts.append({
+			"ability_id": ability_id,
+			"token": token,
+			"generation": generation,
+			"frame": frame,
+			"run_id": run_id,
+			"context": context.duplicate(true),
+		})
+	EventBus.time_skill_committed.connect(observer)
+	var result_value: Variant = target.call(
+		"advance_action_frame",
+		frame_intents.duplicate(true)
+	)
+	if EventBus.time_skill_committed.is_connected(observer):
+		EventBus.time_skill_committed.disconnect(observer)
+	return {
+		"ok": typeof(result_value) == TYPE_BOOL and bool(result_value),
+		"verification_facts": observed_facts,
+	}
+
+
+func _validate_full_player_target(target: Object) -> Dictionary:
+	if (
+		target == null
+		or not target.has_method("full_player_replay_identity")
+		or not target.has_method("full_player_replay_snapshot")
+		or not target.has_method("restore_full_player_replay_snapshot")
+		or not target.has_method("advance_action_frame")
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_TARGET_INVALID")
+	var identity_value: Variant = target.call("full_player_replay_identity")
+	if not identity_value is Dictionary:
+		return _failure(&"FULL_PLAYER_REPLAY_TARGET_INVALID")
+	if identity_value != _full_player_replay.get("identity", {}):
+		return _failure(&"FULL_PLAYER_REPLAY_TARGET_IDENTITY_MISMATCH")
+	return _success()
+
+
+func _rollback_full_player_target(target: Object, before: Dictionary) -> bool:
+	return (
+		bool(target.call("restore_full_player_replay_snapshot", before.duplicate(true)))
+		and target.call("full_player_replay_snapshot") == before
+	)
+
+
+func _full_player_snapshot_drift_fields(
+	expected: Dictionary,
+	actual: Dictionary
+) -> Array[String]:
+	var fields: Array[String] = []
+	for key_value: Variant in expected.keys():
+		var key := str(key_value)
+		if not actual.has(key_value) or actual[key_value] != expected[key_value]:
+			fields.append(key)
+	for key_value: Variant in actual.keys():
+		var key := str(key_value)
+		if not expected.has(key_value) and key not in fields:
+			fields.append(key)
+	fields.sort()
+	return fields
+
+
+func _full_player_playback_failure(
+	target: Object,
+	before: Dictionary,
+	cursor_before: int,
+	code: StringName,
+	context: Dictionary
+) -> Dictionary:
+	if not _rollback_full_player_target(target, before):
+		return _failure(&"FULL_PLAYER_REPLAY_ROLLBACK_FAILED", context)
+	_full_player_cursor = cursor_before
+	return _failure(code, context)
 
 
 func replay_to_terminal(target: Object, checkpoint_index: int = -1) -> Dictionary:
@@ -213,7 +504,8 @@ func _advance_replay_target_to_frame(target: Object, expected_frame: int) -> Dic
 	if current_frame > expected_frame:
 		return {"ok": false}
 	while current_frame < expected_frame:
-		target.call("advance_action_frame")
+		if not _advance_target_frame(target, current_frame + 1):
+			return {"ok": false}
 		snapshot_value = target.call("weapon_replay_snapshot")
 		if not snapshot_value is Dictionary:
 			return {"ok": false}
@@ -225,6 +517,38 @@ func _advance_replay_target_to_frame(target: Object, expected_frame: int) -> Dic
 	if current_frame != expected_frame:
 		return {"ok": false}
 	return {"ok": true, "snapshot": snapshot.duplicate(true)}
+
+
+func _advance_target_frame(target: Object, _target_frame: int) -> bool:
+	if not target.has_method("advance_action_frame"):
+		return false
+	var method_signature: Dictionary = {}
+	for method_value: Variant in target.get_method_list():
+		if (
+			method_value is Dictionary
+			and str((method_value as Dictionary).get("name", "")) == "advance_action_frame"
+		):
+			method_signature = (method_value as Dictionary).duplicate(true)
+			break
+	if method_signature.is_empty():
+		return false
+	var arguments_value: Variant = method_signature.get("args", [])
+	var default_arguments_value: Variant = method_signature.get("default_args", [])
+	if not arguments_value is Array or not default_arguments_value is Array:
+		return false
+	var arguments := arguments_value as Array
+	var default_arguments := default_arguments_value as Array
+	var required_argument_count := maxi(arguments.size() - default_arguments.size(), 0)
+	var call_result: Variant = null
+	if arguments.is_empty():
+		call_result = target.call("advance_action_frame")
+	elif required_argument_count <= 1:
+		call_result = target.call("advance_action_frame", {})
+	else:
+		return false
+	if typeof(call_result) == TYPE_BOOL:
+		return bool(call_result)
+	return true
 
 
 func restore_frame(target: Object, index: int = -1) -> Dictionary:
@@ -310,6 +634,20 @@ func _validate_replay(replay: Dictionary, expected_identity: Dictionary) -> Dict
 		or int(replay.get("event_count", -1)) != events.size()
 	):
 		return _failure(&"REPLAY_EVENT_COUNT_MISMATCH")
+	var validation_replay := ReplayRecorderScript.migrate_legacy_v6_time_snapshots(
+		replay
+	)
+	var validation_frames_value: Variant = validation_replay.get("frames")
+	var validation_events_value: Variant = validation_replay.get("events")
+	if (
+		not validation_frames_value is Array
+		or not validation_events_value is Array
+		or (validation_frames_value as Array).size() != frames.size()
+		or (validation_events_value as Array).size() != events.size()
+	):
+		return _failure(&"REPLAY_MIGRATION_INVALID")
+	var validation_frames := validation_frames_value as Array
+	var validation_events := validation_events_value as Array
 
 	var last_frame := -1
 	var last_positive_token := 0
@@ -326,8 +664,29 @@ func _validate_replay(replay: Dictionary, expected_identity: Dictionary) -> Dict
 		if not snapshot_value is Dictionary:
 			return _failure(&"INVALID_REPLAY_SNAPSHOT", {"index": index})
 		var snapshot := snapshot_value as Dictionary
-		var snapshot_validation := ReplayRecorderScript.validate_snapshot(snapshot, expected_identity)
+		var validation_frame_value: Variant = validation_frames[index]
+		if not validation_frame_value is Dictionary:
+			return _failure(&"INVALID_REPLAY_FRAME", {"index": index})
+		var validation_snapshot_value: Variant = (
+			validation_frame_value as Dictionary
+		).get("snapshot")
+		if not validation_snapshot_value is Dictionary:
+			return _failure(&"INVALID_REPLAY_SNAPSHOT", {"index": index})
+		var snapshot_validation := ReplayRecorderScript.validate_snapshot(
+			validation_snapshot_value as Dictionary,
+			expected_identity
+		)
 		if not bool(snapshot_validation.get("ok", false)):
+			var validation_code := snapshot_validation.get("code", &"") as StringName
+			if validation_code in [
+				&"REPLAY_TIME_SNAPSHOT_INVALID",
+				&"REPLAY_TIME_SNAPSHOT_SCHEMA_UNSUPPORTED",
+			]:
+				var validation_context := (
+					snapshot_validation.get("context", {}) as Dictionary
+				).duplicate(true)
+				validation_context["index"] = index
+				return _failure(validation_code, validation_context)
 			return _failure(
 				&"INVALID_REPLAY_SNAPSHOT",
 				{"index": index, "reason": snapshot_validation.get("code")}
@@ -366,7 +725,10 @@ func _validate_replay(replay: Dictionary, expected_identity: Dictionary) -> Dict
 		var event := event_value as Dictionary
 		if not _has_exact_fields(event, ReplayRecorderScript.EVENT_FIELDS):
 			return _failure(&"REPLAY_EVENT_FIELDS_MISMATCH", {"index": index})
-		var normalized := event.duplicate(true)
+		var validation_event_value: Variant = validation_events[index]
+		if not validation_event_value is Dictionary:
+			return _failure(&"INVALID_REPLAY_EVENT", {"index": index})
+		var normalized := (validation_event_value as Dictionary).duplicate(true)
 		normalized.erase("digest")
 		if ReplayRecorderScript.validate_event(normalized, expected_identity).is_empty():
 			return _failure(&"INVALID_REPLAY_EVENT", {"index": index})
@@ -449,6 +811,150 @@ func _validate_replay(replay: Dictionary, expected_identity: Dictionary) -> Dict
 		return _failure(&"INVALID_TERMINAL_DIGEST")
 	if str(replay["terminal_digest"]) != ReplayRecorderScript.terminal_digest(replay):
 		return _failure(&"TERMINAL_DIGEST_MISMATCH")
+	return _success()
+
+
+func _validate_full_player_replay(
+	replay: Dictionary,
+	expected_identity: Dictionary
+) -> Dictionary:
+	if replay.is_empty() or not ReplayRecorderScript.replay_value_is_safe(replay):
+		return _failure(&"FULL_PLAYER_REPLAY_UNSAFE")
+	if not _has_exact_fields(replay, ReplayRecorderScript.FULL_PLAYER_REPLAY_FIELDS):
+		return _failure(&"FULL_PLAYER_REPLAY_FIELDS_MISMATCH")
+	if replay.get("schema_id") != ReplayRecorderScript.FULL_PLAYER_SCHEMA_ID:
+		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_ID_MISMATCH")
+	if (
+		not ReplayRecorderScript._is_positive_integer(replay.get("schema_version"))
+		or int(replay["schema_version"]) != ReplayRecorderScript.FULL_PLAYER_SCHEMA_VERSION
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH")
+	if not ReplayRecorderScript._is_non_negative_integer(replay.get("seed")):
+		return _failure(&"FULL_PLAYER_REPLAY_SEED_INVALID")
+	var identity_value: Variant = replay.get("identity")
+	if not identity_value is Dictionary:
+		return _failure(&"FULL_PLAYER_REPLAY_IDENTITY_INVALID")
+	var identity := ReplayRecorderScript.validate_full_player_identity(
+		identity_value as Dictionary
+	)
+	if identity.is_empty() or identity != expected_identity:
+		return _failure(&"FULL_PLAYER_REPLAY_IDENTITY_MISMATCH")
+	if (
+		not ReplayRecorderScript._is_sha256(replay.get("identity_digest"))
+		or str(replay["identity_digest"])
+			!= ReplayRecorderScript.value_digest(identity)
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_IDENTITY_DIGEST_MISMATCH")
+	var frames_value: Variant = replay.get("frames")
+	if not frames_value is Array or (frames_value as Array).is_empty():
+		return _failure(&"FULL_PLAYER_REPLAY_FRAMES_INVALID")
+	var frames := frames_value as Array
+	if (
+		not ReplayRecorderScript._is_positive_integer(replay.get("frame_count"))
+		or int(replay["frame_count"]) != frames.size()
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_FRAME_COUNT_MISMATCH")
+	var previous_frame := -1
+	var previous_snapshot: Dictionary = {}
+	for index: int in range(frames.size()):
+		var frame_value: Variant = frames[index]
+		if not frame_value is Dictionary:
+			return _failure(&"FULL_PLAYER_REPLAY_FRAME_INVALID", {"index": index})
+		var entry := frame_value as Dictionary
+		if not _has_exact_fields(entry, ReplayRecorderScript.FULL_PLAYER_FRAME_FIELDS):
+			return _failure(&"FULL_PLAYER_REPLAY_FRAME_FIELDS_MISMATCH", {"index": index})
+		if (
+			not ReplayRecorderScript._is_positive_integer(entry.get("schema_version"))
+			or int(entry["schema_version"])
+				!= ReplayRecorderScript.FULL_PLAYER_FRAME_SCHEMA_VERSION
+			or not ReplayRecorderScript._is_non_negative_integer(entry.get("frame"))
+		):
+			return _failure(&"FULL_PLAYER_REPLAY_FRAME_INVALID", {"index": index})
+		var frame := int(entry["frame"])
+		if previous_frame >= 0 and frame != previous_frame + 1:
+			return _failure(&"FULL_PLAYER_FRAME_GAP", {
+				"index": index,
+				"frame": frame,
+				"expected": previous_frame + 1,
+			})
+		var intents_value: Variant = entry.get("frame_intents")
+		if (
+			not intents_value is Dictionary
+			or not ReplayRecorderScript.validate_full_player_frame_intents(
+				intents_value as Dictionary
+			)
+		):
+			return _failure(&"FULL_PLAYER_FRAME_INTENTS_INVALID", {"index": index})
+		var meta := (intents_value as Dictionary).get("meta", {}) as Dictionary
+		for frame_key: String in ["frame", "target_frame"]:
+			if meta.has(frame_key) and int(meta[frame_key]) != frame:
+				return _failure(&"FULL_PLAYER_FRAME_INTENTS_INVALID", {
+					"index": index,
+					"field": frame_key,
+				})
+		var snapshot_value: Variant = entry.get("snapshot")
+		if not snapshot_value is Dictionary:
+			return _failure(&"FULL_PLAYER_REPLAY_SNAPSHOT_INVALID", {"index": index})
+		var snapshot := snapshot_value as Dictionary
+		var snapshot_validation := ReplayRecorderScript.validate_full_player_snapshot(
+			snapshot,
+			expected_identity
+		)
+		if not bool(snapshot_validation.get("ok", false)):
+			return _failure(
+				snapshot_validation.get("code", &"FULL_PLAYER_REPLAY_SNAPSHOT_INVALID") as StringName,
+				{"index": index}
+			)
+		if int(snapshot.get("frame", -1)) != frame:
+			return _failure(&"FULL_PLAYER_REPLAY_FRAME_SNAPSHOT_MISMATCH", {"index": index})
+		var facts_value: Variant = entry.get("verification_facts")
+		if not facts_value is Array or (facts_value as Array).size() > 1:
+			return _failure(&"FULL_PLAYER_VERIFICATION_FACT_INVALID", {"index": index})
+		for fact_value: Variant in facts_value as Array:
+			if (
+				not fact_value is Dictionary
+				or not ReplayRecorderScript.validate_full_player_time_skill_fact(
+					fact_value as Dictionary,
+					snapshot,
+					expected_identity,
+					intents_value as Dictionary,
+					previous_snapshot
+				)
+			):
+				return _failure(&"FULL_PLAYER_VERIFICATION_FACT_INVALID", {"index": index})
+		if (
+			not ReplayRecorderScript._is_sha256(entry.get("digest"))
+			or str(entry["digest"])
+				!= ReplayRecorderScript.full_player_frame_digest(entry)
+		):
+			return _failure(&"FULL_PLAYER_FRAME_DIGEST_MISMATCH", {"index": index})
+		previous_frame = frame
+		previous_snapshot = snapshot.duplicate(true)
+	if (
+		not ReplayRecorderScript._is_non_negative_integer(replay.get("first_frame"))
+		or int(replay["first_frame"]) != int((frames[0] as Dictionary)["frame"])
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_FIRST_FRAME_MISMATCH")
+	if (
+		not ReplayRecorderScript._is_non_negative_integer(replay.get("last_frame"))
+		or int(replay["last_frame"]) != int((frames[-1] as Dictionary)["frame"])
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_LAST_FRAME_MISMATCH")
+	var terminal_snapshot := (
+		(frames[-1] as Dictionary).get("snapshot", {}) as Dictionary
+	)
+	if (
+		not ReplayRecorderScript._is_sha256(replay.get("terminal_snapshot_digest"))
+		or str(replay["terminal_snapshot_digest"])
+			!= ReplayRecorderScript.value_digest(terminal_snapshot)
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_TERMINAL_SNAPSHOT_DIGEST_MISMATCH")
+	if (
+		not ReplayRecorderScript._is_sha256(replay.get("terminal_digest"))
+		or str(replay["terminal_digest"])
+			!= ReplayRecorderScript.full_player_terminal_digest(replay)
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_TERMINAL_DIGEST_MISMATCH")
 	return _success()
 
 

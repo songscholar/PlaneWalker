@@ -26,12 +26,54 @@ class CheckpointDriftTarget extends RefCounted:
 	var snapshots_by_frame: Dictionary = {}
 	var current: Dictionary = {}
 	var drift_frame: int = -1
+	var reject_frame: int = -1
+	var observed_frame_intents: Array[Dictionary] = []
 
-	func configure(snapshots: Array[Dictionary], next_drift_frame: int) -> void:
+	func configure(
+		snapshots: Array[Dictionary],
+		next_drift_frame: int,
+		next_reject_frame: int = -1
+	) -> void:
 		snapshots_by_frame.clear()
+		observed_frame_intents.clear()
 		for snapshot: Dictionary in snapshots:
 			snapshots_by_frame[int(snapshot.get("frame", -1))] = snapshot.duplicate(true)
 		drift_frame = next_drift_frame
+		reject_frame = next_reject_frame
+
+	func restore_weapon_replay_snapshot(snapshot: Dictionary) -> bool:
+		current = snapshot.duplicate(true)
+		return true
+
+	func weapon_replay_snapshot() -> Dictionary:
+		return current.duplicate(true)
+
+	func apply_weapon_replay_event(_event: Dictionary) -> bool:
+		return true
+
+	func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
+		observed_frame_intents.append(frame_intents.duplicate(true))
+		var next_frame := int(current.get("frame", -1)) + 1
+		if next_frame == reject_frame:
+			return false
+		if not snapshots_by_frame.has(next_frame):
+			return false
+		current = (snapshots_by_frame[next_frame] as Dictionary).duplicate(true)
+		if next_frame == drift_frame:
+			current["runtime"]["state"]["value"] = 999
+		return true
+
+
+class ZeroArgumentCheckpointTarget extends RefCounted:
+	var snapshots_by_frame: Dictionary = {}
+	var current: Dictionary = {}
+	var advance_calls: int = 0
+
+	func configure(snapshots: Array[Dictionary]) -> void:
+		snapshots_by_frame.clear()
+		advance_calls = 0
+		for snapshot: Dictionary in snapshots:
+			snapshots_by_frame[int(snapshot.get("frame", -1))] = snapshot.duplicate(true)
 
 	func restore_weapon_replay_snapshot(snapshot: Dictionary) -> bool:
 		current = snapshot.duplicate(true)
@@ -44,12 +86,10 @@ class CheckpointDriftTarget extends RefCounted:
 		return true
 
 	func advance_action_frame() -> void:
+		advance_calls += 1
 		var next_frame := int(current.get("frame", -1)) + 1
-		if not snapshots_by_frame.has(next_frame):
-			return
-		current = (snapshots_by_frame[next_frame] as Dictionary).duplicate(true)
-		if next_frame == drift_frame:
-			current["runtime"]["state"]["value"] = 999
+		if snapshots_by_frame.has(next_frame):
+			current = (snapshots_by_frame[next_frame] as Dictionary).duplicate(true)
 
 
 func _ready() -> void:
@@ -166,6 +206,27 @@ func _test_profile_identity_and_digest(suite, profiles: Dictionary) -> void:
 		&"SNAPSHOT_SCHEMA_MISMATCH",
 		"legacy frame snapshot uses the stable schema refusal code"
 	)
+	var incomplete_current_snapshot := _snapshot(profile, 2, 1, 1, {})
+	(incomplete_current_snapshot["time_manager_state"] as Dictionary).erase(
+		"energy_regen_remainder"
+	)
+	var incomplete_current_result: Dictionary = recorder.record_snapshot(
+		incomplete_current_snapshot
+	)
+	suite.assert_true(
+		not bool(incomplete_current_result.get("ok", false)),
+		"new recordings reject a v3 TimeManager snapshot missing regen remainder"
+	)
+	suite.assert_equal(
+		incomplete_current_result.get("code"),
+		&"REPLAY_TIME_SNAPSHOT_INVALID",
+		"new recordings keep strict current TimeManager snapshot validation"
+	)
+	suite.assert_equal(
+		recorder.recorded_frame_count(),
+		0,
+		"rejected incomplete current snapshot appends no frame"
+	)
 
 
 func _test_corruption_and_incompatibility_fail_closed(suite, profiles: Dictionary) -> void:
@@ -181,6 +242,73 @@ func _test_corruption_and_incompatibility_fail_closed(suite, profiles: Dictionar
 		return
 	var player = ReplayPlayerScript.new()
 	suite.assert_true(bool(player.load_replay(replay, profile).get("ok", false)), "valid corruption fixture loads")
+
+	var legacy_v6_v3_replay := replay.duplicate(true)
+	for frame_value: Variant in legacy_v6_v3_replay.get("frames", []):
+		if frame_value is Dictionary:
+			var frame_snapshot := (frame_value as Dictionary).get("snapshot", {}) as Dictionary
+			var time_snapshot := frame_snapshot.get("time_manager_state", {}) as Dictionary
+			time_snapshot.erase("energy_regen_remainder")
+	_rehash_replay(legacy_v6_v3_replay)
+	var legacy_v6_v3_terminal_digest := str(
+		legacy_v6_v3_replay.get("terminal_digest", "")
+	)
+	var legacy_v6_v3_result: Dictionary = player.load_replay(
+		legacy_v6_v3_replay,
+		profile
+	)
+	suite.assert_true(
+		bool(legacy_v6_v3_result.get("ok", false)),
+		"legacy v6 Replay loads when legal v3 TimeManager snapshots omit regen remainder"
+	)
+	var migrated_replay := player.replay_snapshot()
+	for frame_value: Variant in migrated_replay.get("frames", []):
+		if not frame_value is Dictionary:
+			continue
+		var frame_snapshot := (frame_value as Dictionary).get("snapshot", {}) as Dictionary
+		var time_snapshot := frame_snapshot.get("time_manager_state", {}) as Dictionary
+		suite.assert_equal(
+			time_snapshot.get("energy_regen_remainder"),
+			0,
+			"legacy v6/v3 TimeManager snapshot migrates regen remainder to zero"
+		)
+	suite.assert_true(
+		not (
+			(legacy_v6_v3_replay["frames"][0]["snapshot"]["time_manager_state"] as Dictionary)
+		).has("energy_regen_remainder"),
+		"legacy Replay input remains unmodified during migration"
+	)
+	suite.assert_true(
+		str(migrated_replay.get("terminal_digest", "")) != legacy_v6_v3_terminal_digest,
+		"migrated Replay receives hashes for its normalized current representation"
+	)
+	suite.assert_equal(
+		migrated_replay.get("terminal_digest"),
+		ReplayRecorderScript.terminal_digest(migrated_replay),
+		"migrated Replay terminal digest validates after normalization"
+	)
+	var tampered_legacy_v6_v3 := legacy_v6_v3_replay.duplicate(true)
+	(
+		tampered_legacy_v6_v3["frames"][0]["snapshot"]["runtime"]["state"]
+		as Dictionary
+	)["mana"] = 999
+	var tampered_legacy_result: Dictionary = player.load_replay(
+		tampered_legacy_v6_v3,
+		profile
+	)
+	suite.assert_true(
+		not bool(tampered_legacy_result.get("ok", false)),
+		"legacy migration authenticates the original Replay before rehashing"
+	)
+	suite.assert_equal(
+		tampered_legacy_result.get("code"),
+		&"FRAME_DIGEST_MISMATCH",
+		"tampered legacy Replay keeps the precise pre-migration digest failure"
+	)
+	suite.assert_true(
+		not player.is_loaded(),
+		"tampered legacy Replay leaves no migrated state installed"
+	)
 
 	var corrupt := replay.duplicate(true)
 	corrupt["frames"][0]["snapshot"]["runtime"]["state"]["mana"] = 999
@@ -204,6 +332,59 @@ func _test_corruption_and_incompatibility_fail_closed(suite, profiles: Dictionar
 		legacy_schema_result.get("code"),
 		&"REPLAY_SCHEMA_VERSION_MISMATCH",
 		"legacy v5 replay envelope uses the stable schema refusal code"
+	)
+
+	var legacy_time_replay := _build_replay(profile, [
+		_snapshot(profile, 20, 4, 8, {"mana": 80, "element": "fire"}),
+		_snapshot(profile, 21, 4, 8, {"mana": 80, "element": "fire"}),
+	])
+	for frame_value: Variant in legacy_time_replay.get("frames", []):
+		if frame_value is Dictionary:
+			var frame_snapshot := (frame_value as Dictionary).get("snapshot", {}) as Dictionary
+			frame_snapshot["time_manager_state"] = _legacy_time_replay_snapshot_v2()
+	_rehash_replay(legacy_time_replay)
+	var legacy_time_result: Dictionary = player.load_replay(legacy_time_replay, profile)
+	suite.assert_true(
+		not bool(legacy_time_result.get("ok", false)),
+		"legacy nested TimeManager schema is rejected before Replay installation"
+	)
+	suite.assert_equal(
+		legacy_time_result.get("code"),
+		&"REPLAY_TIME_SNAPSHOT_SCHEMA_UNSUPPORTED",
+		"legacy nested TimeManager schema uses a precise load-time refusal code"
+	)
+	suite.assert_true(
+		not player.is_loaded(),
+		"unsupported nested TimeManager schema leaves no partially loaded Replay"
+	)
+
+	var missing_time_replay := _build_replay(profile, [
+		_snapshot(profile, 20, 4, 8, {"mana": 80, "element": "fire"}),
+		_snapshot(profile, 21, 4, 8, {"mana": 80, "element": "fire"}),
+		_snapshot(profile, 22, 4, 8, {"mana": 80, "element": "fire"}),
+	])
+	(missing_time_replay["frames"][1]["snapshot"] as Dictionary).erase(
+		"time_manager_state"
+	)
+	_rehash_replay(missing_time_replay)
+	var missing_time_result: Dictionary = player.load_replay(missing_time_replay, profile)
+	suite.assert_true(
+		not bool(missing_time_result.get("ok", false)),
+		"current Replay rejects a missing intermediate TimeManager checkpoint"
+	)
+	suite.assert_equal(
+		missing_time_result.get("code"),
+		&"REPLAY_TIME_SNAPSHOT_INVALID",
+		"missing current TimeManager checkpoint uses the precise refusal code"
+	)
+	suite.assert_equal(
+		(missing_time_result.get("context", {}) as Dictionary).get("index"),
+		1,
+		"missing TimeManager checkpoint reports its exact frame index"
+	)
+	suite.assert_true(
+		not player.is_loaded(),
+		"missing intermediate TimeManager checkpoint leaves no loaded Replay"
 	)
 
 	var wrong_profile_version := profile.duplicate(true)
@@ -494,6 +675,76 @@ func _test_external_fact_event_validation(suite, profiles: Dictionary) -> void:
 	var player = ReplayPlayerScript.new()
 	suite.assert_true(bool(player.load_replay(replay, profile).get("ok", false)), "strict external combat fact loads")
 
+	var incomplete_current_event := fact_event.duplicate(true)
+	(
+		incomplete_current_event["payload"]["data"]["state_after"]["time_manager_state"]
+		as Dictionary
+	).erase("energy_regen_remainder")
+	var strict_event_recorder = ReplayRecorderScript.new()
+	strict_event_recorder.start_recording(profile, 9012)
+	var incomplete_current_event_result: Dictionary = strict_event_recorder.record_event(
+		incomplete_current_event
+	)
+	suite.assert_true(
+		not bool(incomplete_current_event_result.get("ok", false)),
+		"new recordings reject external facts with incomplete current time snapshots"
+	)
+	suite.assert_equal(
+		incomplete_current_event_result.get("code"),
+		&"INVALID_REPLAY_EVENT",
+		"new external facts keep strict current TimeManager snapshot validation"
+	)
+
+	var legacy_nested_time_replay := replay.duplicate(true)
+	for frame_value: Variant in legacy_nested_time_replay.get("frames", []):
+		if frame_value is Dictionary:
+			var frame_snapshot := (frame_value as Dictionary).get("snapshot", {}) as Dictionary
+			(frame_snapshot.get("time_manager_state", {}) as Dictionary).erase(
+				"energy_regen_remainder"
+			)
+	var legacy_nested_events := legacy_nested_time_replay.get("events", []) as Array
+	var legacy_state_after := (
+		legacy_nested_events[0]["payload"]["data"]["state_after"] as Dictionary
+	)
+	(legacy_state_after.get("time_manager_state", {}) as Dictionary).erase(
+		"energy_regen_remainder"
+	)
+	var legacy_terminal_snapshot := (
+		legacy_nested_time_replay["frames"][1]["snapshot"] as Dictionary
+	)
+	legacy_terminal_snapshot["event_prefix_root"] = ReplayRecorderScript.event_prefix_root(
+		legacy_nested_events,
+		1
+	)
+	_rehash_replay(legacy_nested_time_replay)
+	var legacy_nested_result: Dictionary = player.load_replay(
+		legacy_nested_time_replay,
+		profile
+	)
+	suite.assert_true(
+		bool(legacy_nested_result.get("ok", false)),
+		"legacy v6/v3 migration covers external-fact state_after snapshots"
+	)
+	var migrated_nested_replay := player.replay_snapshot()
+	var migrated_nested_events := migrated_nested_replay.get("events", []) as Array
+	var migrated_state_after := (
+		migrated_nested_events[0]["payload"]["data"]["state_after"] as Dictionary
+	)
+	suite.assert_equal(
+		(migrated_state_after["time_manager_state"] as Dictionary).get(
+			"energy_regen_remainder"
+		),
+		0,
+		"nested legacy time snapshot migrates regen remainder to zero"
+	)
+	suite.assert_true(
+		ReplayRecorderScript.event_state_after_prefix_matches(
+			migrated_nested_events[0] as Dictionary,
+			migrated_nested_events
+		),
+		"migration rebinds nested event-prefix roots to normalized event payloads"
+	)
+
 	var forged_nested_prefix := replay.duplicate(true)
 	forged_nested_prefix["events"][0]["payload"]["data"]["state_after"]["event_prefix_root"] = "0".repeat(64)
 	_rehash_replay(forged_nested_prefix)
@@ -718,6 +969,58 @@ func _test_replay_to_terminal_validates_each_checkpoint(suite, profiles: Diction
 	var result: Dictionary = replay_player.replay_to_terminal(target, 0)
 	suite.assert_true(not bool(result.get("ok", false)), "intermediate checkpoint drift fails even when terminal state would converge")
 	suite.assert_equal(result.get("code"), &"REPLAY_CHECKPOINT_MISMATCH", "checkpoint drift has a stable refusal code")
+	suite.assert_equal(
+		target.observed_frame_intents,
+		[{}],
+		"legacy P11 Replay passes an empty semantic frame-intent envelope"
+	)
+
+	var clean_target := CheckpointDriftTarget.new()
+	clean_target.configure(snapshots, -1)
+	var terminal_result: Dictionary = replay_player.replay_to_terminal(clean_target, 0)
+	suite.assert_true(
+		bool(terminal_result.get("ok", false)),
+		"legacy P11 empty-intent fixture reaches terminal"
+	)
+	suite.assert_equal(
+		clean_target.observed_frame_intents,
+		[{}, {}],
+		"every legacy P11 Replay frame passes the exact empty semantic envelope"
+	)
+
+	var rejecting_target := CheckpointDriftTarget.new()
+	rejecting_target.configure(snapshots, -1, 1)
+	var rejected_result: Dictionary = replay_player.replay_to_terminal(rejecting_target, 0)
+	suite.assert_true(
+		not bool(rejected_result.get("ok", false)),
+		"Replay propagates a semantic frame target's boolean rejection"
+	)
+	suite.assert_equal(
+		rejected_result.get("code"),
+		&"REPLAY_CHECKPOINT_FRAME_MISMATCH",
+		"boolean frame rejection uses the stable checkpoint refusal code"
+	)
+	suite.assert_equal(
+		rejecting_target.observed_frame_intents,
+		[{}],
+		"boolean frame rejection still receives the empty semantic envelope"
+	)
+
+	var zero_argument_target := ZeroArgumentCheckpointTarget.new()
+	zero_argument_target.configure(snapshots)
+	var zero_argument_result: Dictionary = replay_player.replay_to_terminal(
+		zero_argument_target,
+		0
+	)
+	suite.assert_true(
+		bool(zero_argument_result.get("ok", false)),
+		"legacy zero-argument Replay target remains compatible"
+	)
+	suite.assert_equal(
+		zero_argument_target.advance_calls,
+		2,
+		"legacy zero-argument Replay target advances every required frame"
+	)
 
 
 func _test_capture_prefix_root_is_canonical(suite) -> void:
@@ -1347,6 +1650,7 @@ func _snapshot(
 			"profile_version": int(profile.get("profile_version", 0)),
 			"state": state.duplicate(true),
 		},
+		"time_manager_state": _time_replay_snapshot_v3(),
 	}
 
 
@@ -1359,6 +1663,39 @@ func _snapshot_with_event_prefix(
 	result["event_prefix_count"] = count
 	result["event_prefix_root"] = ReplayRecorderScript.event_prefix_root(events, count)
 	return result
+
+
+func _time_replay_snapshot_v3() -> Dictionary:
+	return {
+		"schema_version": 3,
+		"time_energy_state": {
+			"ok": true,
+			"code": &"OK",
+			"resource_id": "time_energy",
+			"current": 100.0,
+			"minimum": 0.0,
+			"maximum": 100.0,
+			"revision": 1,
+			"context": {},
+		},
+		"energy_regen_remainder": 0,
+		"stop_active": false,
+		"stop_source_sequence": 0,
+		"stop_source_id": "",
+		"stop_remaining": 0.0,
+		"stop_extension_frames": 0,
+		"stop_extension_tokens": {},
+		"rewind_window_remaining": 0.0,
+		"rewind_window_generation": 0,
+		"rewind_window_claimed": false,
+	}
+
+
+func _legacy_time_replay_snapshot_v2() -> Dictionary:
+	var snapshot := _time_replay_snapshot_v3()
+	snapshot["schema_version"] = 2
+	snapshot.erase("energy_regen_remainder")
+	return snapshot
 
 
 func _load_profiles(suite) -> Dictionary:

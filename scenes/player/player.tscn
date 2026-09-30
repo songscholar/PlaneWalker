@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player_controller"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health_component"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://scripts/combat/gun_weapon.gd" id="11_gun_weapon"]
 [ext_resource type="Script" path="res://scripts/combat/staff_weapon.gd" id="12_staff_weapon"]
 [ext_resource type="Script" path="res://scripts/combat/gauntlets_weapon.gd" id="13_gauntlets_weapon"]
+[ext_resource type="Script" path="res://scripts/combat/world_payload_authority.gd" id="14_world_payload_authority"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 14.0
@@ -40,6 +41,9 @@ max_hp = 200.0
 
 [node name="TimeManager" type="Node" parent="."]
 script = ExtResource("6_time_manager")
+
+[node name="WorldPayloadAuthority" type="Node" parent="."]
+script = ExtResource("14_world_payload_authority")
 
 [node name="RewindRecorder" type="Node" parent="."]
 script = ExtResource("7_rewind_recorder")

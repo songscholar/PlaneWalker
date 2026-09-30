@@ -70,7 +70,8 @@ func _test_expired_rift_cleanup_paths() -> void:
 	var active_rifts := get_tree().get_nodes_in_group("time_rifts")
 	_suite.assert_equal(active_rifts.size(), 1, "expired-Rift fixture owns one Rift")
 	if active_rifts.size() == 1:
-		active_rifts[0].call("_process", 0.03)
+		player.advance_action_frame()
+		player.advance_action_frame()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_suite.assert_true(get_tree().get_nodes_in_group("time_rifts").is_empty(), "expired Rift leaves the scene tree")
