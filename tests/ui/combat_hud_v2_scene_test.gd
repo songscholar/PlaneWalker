@@ -56,12 +56,18 @@ func _run() -> void:
 	var character_meter_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterMeterLabel") as Label
 	var character_status_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterStatusLabel") as Label
 	var character_cooldown_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterCooldownLabel") as Label
+	var active_item_panel := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/ActiveItemPanel") as PanelContainer
+	var active_item_name_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent/ActiveItemNameLabel") as Label
+	var active_item_status_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent/ActiveItemStatusLabel") as Label
 	_suite.assert_true(character_panel != null, "generic character panel exists")
 	_suite.assert_true(character_name_label != null, "generic character name label exists")
 	_suite.assert_true(character_meter_bar != null, "generic character meter bar exists")
 	_suite.assert_true(character_meter_label != null, "generic character meter label exists")
 	_suite.assert_true(character_status_label != null, "generic character status label exists")
 	_suite.assert_true(character_cooldown_label != null, "generic character cooldown label exists")
+	_suite.assert_true(active_item_panel != null, "active item panel exists")
+	_suite.assert_true(active_item_name_label != null, "active item localized name label exists")
+	_suite.assert_true(active_item_status_label != null, "active item cooldown label exists")
 	var hud_source := _read_text(HUD_VIEW_PATH)
 	_suite.assert_true(
 		hud_source.contains('archetype.to_upper() + "_NAME"'),
@@ -80,6 +86,11 @@ func _run() -> void:
 	_suite.assert_equal(hud.room_label.text, "1 / 5", "room progress renders")
 	_suite.assert_true(hud.build_label.text.contains(tr("ARCHETYPE_FREEZE_BURST_NAME")), "build label uses the localized archetype name")
 	_suite.assert_true(not hud.build_label.text.contains("freeze_burst"), "build label never exposes the raw archetype id")
+	if active_item_panel != null and active_item_name_label != null and active_item_status_label != null:
+		_suite.assert_true(active_item_panel.visible, "equipped active item shows its HUD panel")
+		_suite.assert_equal(active_item_name_label.text, tr("ABSOLUTE_ZERO_DEVICE_NAME"), "active item name is localized")
+		_suite.assert_true(active_item_status_label.text.contains("7.0"), "active item cooldown renders in seconds")
+		_suite.assert_true(not active_item_name_label.text.contains("absolute_zero_device"), "active HUD never leaks stable ids")
 	if weapon_name_label != null and weapon_meter_bar != null and weapon_meter_label != null and weapon_status_label != null:
 		_suite.assert_equal(weapon_name_label.text, tr("WEAPON_GUN_NAME"), "Gun name is localized")
 		_suite.assert_close(weapon_meter_bar.max_value, 6.0, "Gun ammo maximum renders")
@@ -122,6 +133,8 @@ func _run() -> void:
 		_assert_control_fits(hud.hud_root, weapon_panel, "weapon panel fits 640x360")
 	if character_panel != null:
 		_assert_control_fits(hud.hud_root, character_panel, "character panel fits 640x360")
+	if active_item_panel != null:
+		_assert_control_fits(hud.hud_root, active_item_panel, "active item panel fits 640x360")
 
 	var cached_archetype_id := str(hud.latest_state()["build"]["dominant_archetype"])
 	TranslationServer.set_locale("zh_CN")

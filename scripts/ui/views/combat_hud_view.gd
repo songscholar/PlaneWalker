@@ -28,6 +28,9 @@ const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_id
 @onready var character_meter_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterMeterLabel
 @onready var character_status_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterStatusLabel
 @onready var character_cooldown_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterCooldownLabel
+@onready var active_item_panel: PanelContainer = $HudRoot/SafeArea/HudLayout/ActiveItemPanel
+@onready var active_item_name_label: Label = $HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent/ActiveItemNameLabel
+@onready var active_item_status_label: Label = $HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent/ActiveItemStatusLabel
 @onready var skill_slot_labels: Array[Label] = [
 	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot1Label,
 	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot2Label,
@@ -47,6 +50,7 @@ func _ready() -> void:
 	boss_panel.visible = false
 	pause_indicator.visible = false
 	character_panel.visible = false
+	active_item_panel.visible = false
 
 
 func _notification(what: int) -> void:
@@ -116,6 +120,7 @@ func _render_state(state: Dictionary) -> void:
 
 	_render_weapon(state["weapon_state"] as Dictionary)
 	_render_character(state["character_state"])
+	_render_active_item(state["active_item_state"])
 
 	var build := state["build"] as Dictionary
 	var archetype := str(build["dominant_archetype"])
@@ -137,6 +142,20 @@ func _format_skill(ability_id: String, cooldown: float) -> String:
 	if cooldown <= 0.0:
 		return "%s  %s" % [label, tr("HUD_WEAPON_READY")]
 	return "%s  %s" % [label, tr("HUD_WEAPON_COOLDOWN_FMT") % cooldown]
+
+
+func _render_active_item(value: Variant) -> void:
+	active_item_panel.visible = value is Dictionary
+	if not value is Dictionary:
+		return
+	var active := value as Dictionary
+	active_item_name_label.text = tr(str(active["name_key"]))
+	var cooldown_frames := int(active["cooldown_current"])
+	active_item_status_label.text = (
+		tr("HUD_WEAPON_READY")
+		if bool(active["ready"])
+		else tr("HUD_WEAPON_COOLDOWN_FMT") % (float(cooldown_frames) / 60.0)
+	)
 
 
 func _render_character(value: Variant) -> void:

@@ -3518,6 +3518,8 @@ func get_player_ui_snapshot() -> Dictionary:
 		"max_energy": maxf(1.0, float(time_manager.max_energy)),
 		"action_state": state_name,
 		"weapon": weapon_presentation_snapshot(),
+		"character": character_presentation_snapshot(),
+		"active_item": active_item_presentation_snapshot(),
 		"time_slots": time_slots.duplicate(true),
 	}
 

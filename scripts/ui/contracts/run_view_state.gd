@@ -11,7 +11,7 @@ const M1_ARCHETYPE_IDS: Array[String] = [
 ]
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
-const SCHEMA_VERSION := 4
+const SCHEMA_VERSION := 5
 const PHASES: Array[String] = [
 	"BOOT",
 	"HUB",
@@ -68,6 +68,15 @@ const CHARACTER_STATE_FIELDS: Array[String] = [
 	"status_remaining",
 	"secondary_id",
 	"secondary_value",
+]
+const ACTIVE_ITEM_STATE_FIELDS: Array[String] = [
+	"content_id",
+	"name_key",
+	"icon_id",
+	"archetype",
+	"cooldown_current",
+	"cooldown_max",
+	"ready",
 ]
 const CHARACTER_CONTRACTS := {
 	"wanderer": {
@@ -231,6 +240,11 @@ static func validate(value: Variant):
 	var character_result = _validate_character_state(state["character_state"], revision)
 	if not character_result.ok:
 		return character_result
+	if not state.has("active_item_state"):
+		return _failure(revision, "active_item_state", "missing field")
+	var active_item_result = _validate_active_item_state(state["active_item_state"], revision)
+	if not active_item_result.ok:
+		return active_item_result
 	var build_result = _validate_build(state.get("build"), revision)
 	if not build_result.ok:
 		return build_result
@@ -246,6 +260,39 @@ static func validate(value: Variant):
 		if optional_value != null and typeof(optional_value) != TYPE_DICTIONARY:
 			return _failure(revision, optional_key, "expected dictionary or null")
 
+	return CommandResultScript.success(revision)
+
+
+static func _validate_active_item_state(value: Variant, revision: int):
+	if value == null:
+		return CommandResultScript.success(revision)
+	if typeof(value) != TYPE_DICTIONARY:
+		return _failure(revision, "active_item_state", "expected dictionary or null")
+	var active := value as Dictionary
+	if active.size() != ACTIVE_ITEM_STATE_FIELDS.size():
+		return _failure(revision, "active_item_state", "unexpected field count")
+	for field: String in ACTIVE_ITEM_STATE_FIELDS:
+		if not active.has(field):
+			return _failure(revision, "active_item_state.%s" % field, "missing field")
+	for field: String in ["content_id", "name_key", "icon_id"]:
+		if not _is_non_empty_string(active[field]):
+			return _failure(revision, "active_item_state.%s" % field, "expected non-empty string")
+	var archetype := str(active.get("archetype", ""))
+	if not ArchetypeProfileScript.ARCHETYPE_IDS.has(archetype):
+		return _failure(revision, "active_item_state.archetype", "unknown archetype")
+	if (
+		not _is_integer(active.get("cooldown_current"))
+		or not _is_integer(active.get("cooldown_max"))
+	):
+		return _failure(revision, "active_item_state.cooldown_current", "expected integer frames")
+	var cooldown_current := int(active["cooldown_current"])
+	var cooldown_max := int(active["cooldown_max"])
+	if cooldown_max <= 0 or cooldown_current < 0 or cooldown_current > cooldown_max:
+		return _failure(revision, "active_item_state.cooldown_current", "cooldown outside maximum")
+	if typeof(active.get("ready")) != TYPE_BOOL:
+		return _failure(revision, "active_item_state.ready", "expected boolean")
+	if bool(active["ready"]) != (cooldown_current == 0):
+		return _failure(revision, "active_item_state.ready", "ready must match cooldown")
 	return CommandResultScript.success(revision)
 
 

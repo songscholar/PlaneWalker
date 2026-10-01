@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "revision": 3,
   "run_id": "fixture-run",
   "phase": "BOSS_ACTIVE",
@@ -58,6 +58,7 @@
     "secondary_id": "",
     "secondary_value": 0
   },
+  "active_item_state": null,
   "build": {
     "items": ["frozen_burst", "rewind_echo"],
     "blessings": ["bls_stop_weakpoint"],

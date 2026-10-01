@@ -33,7 +33,21 @@ func _run() -> void:
 	_set_build_domain(combat, M1_ARCHETYPE_SCORES, "freeze_burst")
 	_suite.assert_true(not combat.is_empty(), "combat fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(combat).ok, "combat fixture validates")
-	_suite.assert_equal(RunViewStateScript.SCHEMA_VERSION, 4, "character union uses view-state schema 4")
+	_suite.assert_equal(RunViewStateScript.SCHEMA_VERSION, 5, "active item union uses view-state schema 5")
+	_suite.assert_equal(
+		combat.get("active_item_state", {}).get("content_id"),
+		"absolute_zero_device",
+		"combat fixture carries the equipped active identity"
+	)
+	var missing_active_state := combat.duplicate(true)
+	missing_active_state.erase("active_item_state")
+	_suite.assert_true(not RunViewStateScript.validate(missing_active_state).ok, "active item state key is required")
+	var cooldown_overflow := combat.duplicate(true)
+	cooldown_overflow["active_item_state"]["cooldown_current"] = 901
+	_suite.assert_true(not RunViewStateScript.validate(cooldown_overflow).ok, "active cooldown cannot exceed its maximum")
+	var ready_with_cooldown := combat.duplicate(true)
+	ready_with_cooldown["active_item_state"]["ready"] = true
+	_suite.assert_true(not RunViewStateScript.validate(ready_with_cooldown).ok, "ready active cannot retain cooldown")
 
 	var low_hp := _load_json("res://tests/fixtures/ui/hud_low_hp.json")
 	_set_build_domain(low_hp, M1_ARCHETYPE_SCORES, "freeze_burst")
@@ -79,7 +93,7 @@ func _run() -> void:
 	_suite.assert_true(not RunViewStateScript.validate(expired_staff_sequence).ok, "Staff sequence-ready status requires remaining time")
 
 	_assert_invalid(combat, "schema_version", null, "missing schema version is rejected", true)
-	_assert_invalid(combat, "schema_version", 3, "pre-character-union schema is rejected")
+	_assert_invalid(combat, "schema_version", 4, "pre-active-item schema is rejected")
 	_assert_invalid(combat, "schema_version", 99, "unknown schema version is rejected")
 	_assert_invalid(combat, "revision", -1, "negative revision is rejected")
 	_assert_invalid(combat, "run_id", "", "empty run id is rejected")

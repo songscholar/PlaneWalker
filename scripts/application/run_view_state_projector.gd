@@ -81,8 +81,16 @@ func project(
 			maxi(0, _view_revision),
 			{"field": str(character_projection.get("field", "player.character"))}
 		)
+	var active_item_projection := _active_item_view(player_view.get("active_item"))
+	if not bool(active_item_projection.get("ok", false)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			maxi(0, _view_revision),
+			{"field": str(active_item_projection.get("field", "player.active_item"))}
+		)
 	player_view.erase("weapon")
 	player_view.erase("character")
+	player_view.erase("active_item")
 	var view_state := {
 		"schema_version": RunViewStateScript.SCHEMA_VERSION,
 		"revision": next_revision,
@@ -101,6 +109,11 @@ func project(
 		"character_state": (
 			(character_projection["character_state"] as Dictionary).duplicate(true)
 			if character_projection.get("character_state") is Dictionary
+			else null
+		),
+		"active_item_state": (
+			(active_item_projection["active_item_state"] as Dictionary).duplicate(true)
+			if active_item_projection.get("active_item_state") is Dictionary
 			else null
 		),
 		"build": _build_view(build),
@@ -128,6 +141,34 @@ func project(
 
 func latest_view_state() -> Dictionary:
 	return _latest_view_state.duplicate(true)
+
+
+func _active_item_view(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "active_item_state": null}
+	if not value is Dictionary:
+		return {"ok": false, "field": "player.active_item"}
+	var source := value as Dictionary
+	if not bool(source.get("equipped", false)):
+		return {"ok": true, "active_item_state": null}
+	for field: String in ["content_id", "name_key", "icon_id", "archetype"]:
+		if typeof(source.get(field)) != TYPE_STRING or str(source.get(field, "")).is_empty():
+			return {"ok": false, "field": "player.active_item.%s" % field}
+	for field: String in ["cooldown_remaining_frames", "cooldown_max_frames"]:
+		if typeof(source.get(field)) != TYPE_INT:
+			return {"ok": false, "field": "player.active_item.%s" % field}
+	return {
+		"ok": true,
+		"active_item_state": {
+			"content_id": str(source["content_id"]),
+			"name_key": str(source["name_key"]),
+			"icon_id": str(source["icon_id"]),
+			"archetype": str(source["archetype"]),
+			"cooldown_current": int(source["cooldown_remaining_frames"]),
+			"cooldown_max": int(source["cooldown_max_frames"]),
+			"ready": bool(source.get("ready", false)),
+		},
+	}
 
 
 func _validate_build_domain(build: Dictionary, config_value: Variant) -> Dictionary:

@@ -243,6 +243,35 @@ theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
 
+[node name="ActiveItemPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
+visible = false
+layout_mode = 0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -220.0
+offset_right = 300.0
+offset_bottom = -160.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="ActiveItemContent" type="VBoxContainer" parent="HudRoot/SafeArea/HudLayout/ActiveItemPanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ActiveItemNameLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
+
+[node name="ActiveItemStatusLabel" type="Label" parent="HudRoot/SafeArea/HudLayout/ActiveItemPanel/ActiveItemContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = ""
+horizontal_alignment = 1
+
 [node name="PlayerPanel" type="PanelContainer" parent="HudRoot/SafeArea/HudLayout"]
 layout_mode = 0
 anchor_top = 1.0
