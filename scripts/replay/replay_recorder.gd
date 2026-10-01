@@ -9,6 +9,9 @@ const FULL_PLAYER_SCHEMA_ID := "planewalker.full_player_replay"
 const FULL_PLAYER_SCHEMA_VERSION := 2
 const FULL_PLAYER_FRAME_SCHEMA_VERSION := 2
 const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 2
+const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 4
+const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 4
+const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 4
 const EVENT_PREFIX_SCHEMA_ID := "planewalker.weapon_runtime_replay.event_prefix"
 const EVENT_PREFIX_SCHEMA_VERSION := 1
 const SHA256_LENGTH := 64
@@ -260,6 +263,8 @@ var _full_player_seed := 0
 var _full_player_frames: Array[Dictionary] = []
 var _full_player_last_frame := -1
 var _finished_full_player_replay: Dictionary = {}
+var _full_player_schema_version := FULL_PLAYER_SCHEMA_VERSION
+var _full_player_frame_schema_version := FULL_PLAYER_FRAME_SCHEMA_VERSION
 
 
 func start_recording(profile: Dictionary, seed: int = 0) -> Dictionary:
@@ -537,6 +542,8 @@ func start_full_player_recording(identity: Dictionary, seed: int = 0) -> Diction
 		return _failure(&"INVALID_SEED")
 	_full_player_identity = normalized
 	_full_player_seed = seed
+	_full_player_schema_version = full_player_schema_version_for_identity(normalized)
+	_full_player_frame_schema_version = full_player_frame_schema_version_for_identity(normalized)
 	_full_player_recording = true
 	return _success({"identity": normalized.duplicate(true)})
 
@@ -592,7 +599,7 @@ func record_full_player_frame(
 			"reason": "multiple_time_skill_commits",
 		})
 	var entry := {
-		"schema_version": FULL_PLAYER_FRAME_SCHEMA_VERSION,
+		"schema_version": _full_player_frame_schema_version,
 		"frame": frame,
 		"frame_intents": frame_intents.duplicate(true),
 		"verification_facts": normalized_facts,
@@ -622,7 +629,7 @@ func finish_full_player_recording() -> Dictionary:
 	).duplicate(true)
 	var replay := {
 		"schema_id": FULL_PLAYER_SCHEMA_ID,
-		"schema_version": FULL_PLAYER_SCHEMA_VERSION,
+		"schema_version": _full_player_schema_version,
 		"seed": _full_player_seed,
 		"identity": _full_player_identity.duplicate(true),
 		"identity_digest": value_digest(_full_player_identity),
@@ -653,6 +660,8 @@ func reset_full_player_recording() -> void:
 	_full_player_frames.clear()
 	_full_player_last_frame = -1
 	_finished_full_player_replay.clear()
+	_full_player_schema_version = FULL_PLAYER_SCHEMA_VERSION
+	_full_player_frame_schema_version = FULL_PLAYER_FRAME_SCHEMA_VERSION
 
 
 func full_player_recorded_frame_count() -> int:
@@ -750,6 +759,30 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 	}
 
 
+static func full_player_schema_version_for_identity(identity: Dictionary) -> int:
+	return (
+		FULL_PLAYER_SCHEMA_VERSION
+		if str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
+		else FULL_PLAYER_LAUNCH_SCHEMA_VERSION
+	)
+
+
+static func full_player_frame_schema_version_for_identity(identity: Dictionary) -> int:
+	return (
+		FULL_PLAYER_FRAME_SCHEMA_VERSION
+		if str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
+		else FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION
+	)
+
+
+static func full_player_snapshot_schema_version_for_identity(identity: Dictionary) -> int:
+	return (
+		FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION
+		if str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
+		else FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+	)
+
+
 static func _validated_full_player_stats(value: Dictionary) -> Dictionary:
 	if not _has_exact_fields_static(value, FULL_PLAYER_STATS_FIELDS):
 		return {}
@@ -817,7 +850,8 @@ static func validate_full_player_snapshot(
 		return _failure(&"FULL_PLAYER_SNAPSHOT_FIELDS_MISMATCH")
 	if (
 		not _is_positive_integer(snapshot.get("schema_version"))
-		or int(snapshot["schema_version"]) != FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION
+		or int(snapshot["schema_version"])
+			!= full_player_snapshot_schema_version_for_identity(expected_identity)
 	):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_SCHEMA_MISMATCH")
 	if not _is_non_negative_integer(snapshot.get("frame")):

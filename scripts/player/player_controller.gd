@@ -335,7 +335,6 @@ const STAFF_BASE_ATTACK := 9.0
 const MAX_TRACKED_WEAPON_FACT_TOKENS := 256
 const WEAPON_REPLAY_SNAPSHOT_SCHEMA_VERSION := 3
 const WEAPON_REPLAY_EVENT_SCHEMA_VERSION := 3
-const FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION := 2
 const WEAPON_REPLAY_EVENT_FIELDS: Array[String] = [
 	"schema_version",
 	"frame",
@@ -3573,7 +3572,9 @@ func full_player_replay_snapshot() -> Dictionary:
 	):
 		return {}
 	return {
-		"schema_version": FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION,
+		"schema_version": ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(
+			identity
+		),
 		"frame": _runtime_frame,
 		"identity": identity,
 		"player_state": {
@@ -3763,7 +3764,6 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 			return {}
 	if (
 		typeof(value.get("schema_version")) != TYPE_INT
-		or int(value["schema_version"]) != FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION
 		or typeof(value.get("frame")) != TYPE_INT
 		or int(value["frame"]) < 0
 		or not value["identity"] is Dictionary
@@ -3784,6 +3784,17 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or not value["weapon_replay_fact_baseline"] is Dictionary
 		or typeof(value.get("weapon_replay_capture_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
 		or typeof(value.get("weapon_replay_restore_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
+	):
+		return {}
+	var normalized_identity := ReplayRecorderScript.validate_full_player_identity(
+		value["identity"] as Dictionary
+	)
+	if (
+		normalized_identity.is_empty()
+		or int(value["schema_version"])
+		!= ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(
+			normalized_identity
+		)
 	):
 		return {}
 	var player_state := value["player_state"] as Dictionary
@@ -6814,13 +6825,22 @@ func _valid_weapon_replay_player_state(state: Dictionary, coordinator: Dictionar
 			or not mastery_contexts.has(token)
 		):
 			return false
+		var mastery_context_value: Variant = mastery_contexts[token]
+		if not mastery_context_value is Dictionary:
+			return false
+		var mastery_context := mastery_context_value as Dictionary
+		if (
+			not _dictionary_has_exact_fields(mastery_context, ["context", "plan"])
+			or not mastery_context["context"] is Dictionary
+			or not mastery_context["plan"] is Dictionary
+			or not ReplaySafeValueScript.is_supported(mastery_context)
+		):
+			return false
 		if (
 			typeof(action_ids[token]) not in [TYPE_STRING, TYPE_STRING_NAME]
 			or str(action_ids[token]).is_empty()
 			or typeof(generations[token]) != TYPE_INT
 			or int(generations[token]) <= 0
-			or not mastery_contexts[token] is Dictionary
-			or not ReplaySafeValueScript.is_supported(mastery_contexts[token])
 			or int(generations[token]) < previous_generation
 			or int(generations[token]) > coordinator_generation
 		):
@@ -8303,10 +8323,10 @@ func _track_weapon_action_token(
 		_weapon_action_token_order.append(token)
 	_weapon_action_ids_by_token[token] = action_id
 	_weapon_action_generations_by_token[token] = generation
-	_weapon_action_mastery_contexts_by_token[token] = {
-		"context": context.duplicate(true),
-		"plan": plan.duplicate(true),
-	}
+	_weapon_action_mastery_contexts_by_token[token] = _weapon_mastery_action_source_snapshot(
+		context,
+		plan
+	)
 	while _weapon_action_token_order.size() > MAX_TRACKED_WEAPON_FACT_TOKENS:
 		var expired_token: int = int(_weapon_action_token_order.pop_front())
 		_weapon_action_ids_by_token.erase(expired_token)
@@ -8315,6 +8335,33 @@ func _track_weapon_action_token(
 		_weapon_hit_fact_claims.erase(expired_token)
 		_weapon_mastery_target_ids_by_token.erase(expired_token)
 		_clear_weapon_action_reward_claims(expired_token)
+
+
+func _weapon_mastery_action_source_snapshot(
+	context: Dictionary,
+	plan: Dictionary
+) -> Dictionary:
+	var committed_context: Dictionary = {}
+	for field: String in ["held_frames", "full_charge", "charge_tier"]:
+		if context.has(field):
+			committed_context[field] = context[field]
+	var committed_plan: Dictionary = {}
+	for field: String in ["held_frames", "ammo_cost", "time_load_active"]:
+		if plan.has(field):
+			committed_plan[field] = plan[field]
+	var payloads_value: Variant = plan.get("payloads")
+	if payloads_value is Array and not (payloads_value as Array).is_empty():
+		var payload_value: Variant = (payloads_value as Array)[0]
+		if payload_value is Dictionary:
+			var parameters_value: Variant = (payload_value as Dictionary).get("parameters")
+			if parameters_value is Dictionary and (parameters_value as Dictionary).has("full_charge"):
+				committed_plan["payload_full_charge"] = (
+					(parameters_value as Dictionary)["full_charge"]
+				)
+	return {
+		"context": committed_context,
+		"plan": committed_plan,
+	}
 
 
 func _clear_weapon_action_reward_claims(action_token: int) -> void:
@@ -8837,9 +8884,7 @@ func _confirm_weapon_hit_mastery(
 			var full_charge := (
 				bool(committed_context.get("full_charge", false))
 				or str(committed_context.get("charge_tier", "")) == "full"
-				or bool((plan.get("payloads", [{}]) as Array)[0].get(
-					"parameters", {}
-				).get("full_charge", false))
+				or bool(plan.get("payload_full_charge", false))
 			)
 			if not full_charge:
 				return

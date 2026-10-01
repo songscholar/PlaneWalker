@@ -838,11 +838,6 @@ func _validate_full_player_replay(
 		return _failure(&"FULL_PLAYER_REPLAY_FIELDS_MISMATCH")
 	if replay.get("schema_id") != ReplayRecorderScript.FULL_PLAYER_SCHEMA_ID:
 		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_ID_MISMATCH")
-	if (
-		not ReplayRecorderScript._is_positive_integer(replay.get("schema_version"))
-		or int(replay["schema_version"]) != ReplayRecorderScript.FULL_PLAYER_SCHEMA_VERSION
-	):
-		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH")
 	if not ReplayRecorderScript._is_non_negative_integer(replay.get("seed")):
 		return _failure(&"FULL_PLAYER_REPLAY_SEED_INVALID")
 	var identity_value: Variant = replay.get("identity")
@@ -853,6 +848,12 @@ func _validate_full_player_replay(
 	)
 	if identity.is_empty() or identity != expected_identity:
 		return _failure(&"FULL_PLAYER_REPLAY_IDENTITY_MISMATCH")
+	if (
+		not ReplayRecorderScript._is_positive_integer(replay.get("schema_version"))
+		or int(replay["schema_version"])
+			!= ReplayRecorderScript.full_player_schema_version_for_identity(identity)
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH")
 	if (
 		not ReplayRecorderScript._is_sha256(replay.get("identity_digest"))
 		or str(replay["identity_digest"])
@@ -880,7 +881,7 @@ func _validate_full_player_replay(
 		if (
 			not ReplayRecorderScript._is_positive_integer(entry.get("schema_version"))
 			or int(entry["schema_version"])
-				!= ReplayRecorderScript.FULL_PLAYER_FRAME_SCHEMA_VERSION
+				!= ReplayRecorderScript.full_player_frame_schema_version_for_identity(identity)
 			or not ReplayRecorderScript._is_non_negative_integer(entry.get("frame"))
 		):
 			return _failure(&"FULL_PLAYER_REPLAY_FRAME_INVALID", {"index": index})
