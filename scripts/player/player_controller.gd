@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
+const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const EffectHandlerCatalogScript := preload(
 	"res://scripts/content/effects/effect_handler_catalog.gd"
 )
@@ -261,6 +262,9 @@ var _reward_effect_publication_active: bool = false
 var _reward_effect_publication_in_progress: bool = false
 var _reward_effect_pending_health_signal: Dictionary = {}
 var _reward_effect_pending_time_signal: Dictionary = {}
+var active_item_runtime: RefCounted = ActiveItemRuntimeScript.new()
+var _active_item_last_activation: Dictionary = {}
+var _active_item_last_events: Array[Dictionary] = []
 var _dash_completion_token: int = 0
 var _dash_completed_at_runtime_frame: int = -1
 var _dash_direction: Vector2 = Vector2.RIGHT
@@ -328,7 +332,7 @@ var _mobility_profile: Dictionary = DEFAULT_MOBILITY_PROFILE.duplicate(true)
 const KNOCKBACK_RETAINED_PER_FRAME := 0.8
 const FIXED_FRAME_SECONDS := 1.0 / 60.0
 const MAX_FIXED_FRAME_SLIDES := 4
-const FRAME_INTENT_CATEGORIES: Array[String] = ["dash", "time", "character", "weapon"]
+const FRAME_INTENT_CATEGORIES: Array[String] = ["dash", "time", "active", "character", "weapon"]
 const FRAME_INTENT_EDGES: Array[StringName] = [&"pressed", &"held", &"released"]
 const FRAME_INTENT_MODES: Array[StringName] = [&"press", &"hold", &"toggle"]
 const BASE_COLOR := Color(0.2, 0.85, 0.95)
@@ -1184,6 +1188,13 @@ func _collect_live_frame_intents() -> Dictionary:
 			continue
 		queued_time_abilities[canonical_id] = true
 		(result["time"] as Array).append(_frame_intent(action_id, &"pressed", 0, &"press"))
+	if InputMap.has_action("active_item") and Input.is_action_just_pressed("active_item"):
+		(result["active"] as Array).append(_frame_intent(
+			&"active_item",
+			&"pressed",
+			0,
+			&"press"
+		))
 
 	for intent: Dictionary in _collect_live_character_frame_intents():
 		(result["character"] as Array).append(intent)
@@ -1270,6 +1281,7 @@ func _empty_frame_intents() -> Dictionary:
 	return {
 		"dash": [],
 		"time": [],
+		"active": [],
 		"weapon": [],
 		"character": [],
 		"movement": Vector2.ZERO,
@@ -1420,6 +1432,8 @@ func _frame_intent_category(action_id: StringName) -> StringName:
 		&"time_rift", &"time_accelerate",
 	]:
 		return &"time"
+	if action_id == &"active_item":
+		return &"active"
 	if action_id in [
 		&"weapon_primary", &"weapon_secondary", &"weapon_utility",
 		&"weapon_skill", &"weapon_ultimate",
@@ -1511,6 +1525,8 @@ func _frame_intent_priority_rank(category: String, intent: Dictionary) -> int:
 					return 5
 		"character":
 			return 0
+		"active":
+			return 0
 		"weapon":
 			var declaration_order := _weapon_semantic_priority_order()
 			var declaration_index := declaration_order.find(action_id)
@@ -1563,6 +1579,8 @@ func _attempt_frame_intent(intent: Dictionary, frame_intents: Dictionary) -> Dic
 		&"dash":
 			return _frame_attempt_result(edge == &"pressed" and try_action(&"dash"))
 		&"time":
+			return _frame_attempt_result(edge == &"pressed" and try_action(action_id))
+		&"active":
 			return _frame_attempt_result(edge == &"pressed" and try_action(action_id))
 		&"character":
 			return _submit_character_frame_intent(intent, frame_intents)
@@ -1895,6 +1913,8 @@ func try_action(action_id: StringName) -> bool:
 			if canonical_id == &"" or not loadout_runtime.has_time_ability(canonical_id):
 				return false
 			return _request_time_skill(action_id)
+		&"active_item":
+			return bool(activate_equipped_active_item().get("ok", false))
 		_:
 			return false
 
@@ -2403,6 +2423,10 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 			frame_before,
 			"TimeManager rejected authoritative runtime frame %d" % _runtime_frame
 		)
+	_active_item_last_events = active_item_runtime.call(
+		"advance_frame",
+		{"runtime_frame": _runtime_frame}
+	)
 	if not _fixed_frame_event_buffers_can_commit():
 		return _reject_fixed_frame(
 			frame_before,
@@ -2549,6 +2573,10 @@ func _fixed_frame_preflight() -> bool:
 		or not time_manager.has_method("discard_finalized_frame_signal_publication")
 		or not time_manager.has_method("publish_prepared_frame_signals")
 		or not time_manager.has_method("rollback_frame_signal_transaction")
+		or active_item_runtime == null
+		or not active_item_runtime.has_method("snapshot")
+		or not active_item_runtime.has_method("restore_snapshot")
+		or not active_item_runtime.has_method("advance_frame")
 		or health == null
 		or not health.has_method("runtime_state_snapshot")
 		or not health.has_method("restore_replay_snapshot")
@@ -2633,6 +2661,7 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 	var weapon_value: Variant = weapon_action_coordinator.call("snapshot")
 	var world_value: Variant = world_payload_authority.call("replay_snapshot")
 	var intent_value: Variant = _weapon_intent_router.call("runtime_snapshot")
+	var active_item_value: Variant = active_item_runtime.call("snapshot")
 	var rewind_value := _rewind_frame_transaction_snapshot()
 	if (
 		not time_value is Dictionary
@@ -2643,6 +2672,7 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 		or not weapon_value is Dictionary
 		or not world_value is Dictionary
 		or not intent_value is Dictionary
+		or not active_item_value is Dictionary
 		or rewind_value.is_empty()
 	):
 		return {}
@@ -2663,6 +2693,9 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 		"next_time_action_token": _next_time_action_token,
 		"character_input_owner": character_input_owner_snapshot(),
 		"priority_arbitration": priority_arbitration_snapshot(),
+		"active_item": (active_item_value as Dictionary).duplicate(true),
+		"active_item_last_activation": _active_item_last_activation.duplicate(true),
+		"active_item_last_events": _active_item_last_events.duplicate(true),
 		"action": action_state.snapshot(),
 		"character": (character_value as Dictionary).duplicate(true),
 		"character_action": (character_action_value as Dictionary).duplicate(true),
@@ -2729,6 +2762,10 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		"restore_runtime_snapshot",
 		(value.get("intent_router", {}) as Dictionary).duplicate(true)
 	))
+	var active_item_ok := bool(active_item_runtime.call(
+		"restore_snapshot",
+		(value.get("active_item", {}) as Dictionary).duplicate(true)
+	))
 	var rewind_ok := _restore_rewind_frame_transaction_snapshot(
 		value.get("rewind", {}) as Dictionary
 	)
@@ -2771,6 +2808,13 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 	_last_priority_arbitration = (
 		value.get("priority_arbitration", _last_priority_arbitration) as Dictionary
 	).duplicate(true)
+	_active_item_last_activation = (
+		value.get("active_item_last_activation", {}) as Dictionary
+	).duplicate(true)
+	_active_item_last_events.clear()
+	for event_value: Variant in value.get("active_item_last_events", []) as Array:
+		if event_value is Dictionary:
+			_active_item_last_events.append((event_value as Dictionary).duplicate(true))
 	_install_player_weapon_replay_state(value.get("player_weapon_state", {}) as Dictionary)
 	var replay_events: Array[Dictionary] = []
 	for event_value: Variant in value.get("replay_events", []) as Array:
@@ -2803,6 +2847,7 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and character_input_ok
 		and weapon_ok
 		and intent_ok
+		and active_item_ok
 		and rewind_ok
 		and time_manager.call("replay_snapshot") == value.get("time", {})
 		and time_manager.call("fixed_frame_transaction_snapshot")
@@ -2815,6 +2860,9 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		== value.get("character_action", {})
 		and character_input_owner_snapshot() == value.get("character_input_owner", {})
 		and priority_arbitration_snapshot() == value.get("priority_arbitration", {})
+		and active_item_runtime.call("snapshot") == value.get("active_item", {})
+		and _active_item_last_activation == value.get("active_item_last_activation", {})
+		and _active_item_last_events == value.get("active_item_last_events", [])
 		and weapon_action_coordinator.call("snapshot") == value.get("weapon", {})
 		and world_payload_authority.call("replay_snapshot") == value.get("world", {})
 		and _rewind_frame_transaction_snapshot() == value.get("rewind", {})
@@ -9715,6 +9763,168 @@ func _clear_owned_gauntlets_payloads() -> void:
 
 func _seconds_to_frames(seconds: float) -> int:
 	return maxi(1, ceili(seconds * Engine.physics_ticks_per_second))
+
+
+func equip_active_item(definition: Dictionary, replace_existing: bool = false) -> Dictionary:
+	if active_item_runtime == null or not active_item_runtime.has_method("configure"):
+		return {"ok": false, "code": &"RUNTIME_UNAVAILABLE", "context": {}}
+	var current: Dictionary = active_item_runtime.call("snapshot")
+	if bool(current.get("configured", false)) and not replace_existing:
+		return {
+			"ok": false,
+			"code": &"REPLACEMENT_REQUIRED",
+			"context": {
+				"equipped_content_id": str((current.get("definition", {}) as Dictionary).get("id", "")),
+				"offered_content_id": str(definition.get("id", "")),
+			},
+		}
+	var candidate: RefCounted = ActiveItemRuntimeScript.new()
+	if not bool(candidate.call("configure", definition.duplicate(true))):
+		return {"ok": false, "code": &"INVALID_DEFINITION", "context": {}}
+	var previous_content_id := str((current.get("definition", {}) as Dictionary).get("id", ""))
+	active_item_runtime = candidate
+	_active_item_last_activation.clear()
+	_active_item_last_events.clear()
+	return {
+		"ok": true,
+		"code": &"REPLACED" if not previous_content_id.is_empty() else &"OK",
+		"content_id": str(definition.get("id", "")),
+		"previous_content_id": previous_content_id,
+		"context": {},
+	}
+
+
+func active_item_snapshot() -> Dictionary:
+	if active_item_runtime == null or not active_item_runtime.has_method("snapshot"):
+		return {}
+	return (active_item_runtime.call("snapshot") as Dictionary).duplicate(true)
+
+
+func active_item_presentation_snapshot() -> Dictionary:
+	var snapshot := active_item_snapshot()
+	var configured := bool(snapshot.get("configured", false))
+	if not configured:
+		return {
+			"equipped": false,
+			"content_id": "",
+			"name_key": "",
+			"icon_id": "",
+			"archetype": "",
+			"cooldown_remaining_frames": 0,
+			"cooldown_max_frames": 0,
+			"ready": false,
+			"generation": int(snapshot.get("generation", 0)),
+			"next_token": int(snapshot.get("next_token", 1)),
+		}
+	var definition := snapshot.get("definition", {}) as Dictionary
+	var content_id := str(definition.get("id", ""))
+	var cooldown_remaining := int(active_item_runtime.call("cooldown_remaining"))
+	return {
+		"equipped": true,
+		"content_id": content_id,
+		"name_key": "%s_NAME" % content_id.to_upper(),
+		"icon_id": "content_%s" % content_id,
+		"archetype": str(definition.get("archetype", "")),
+		"cooldown_remaining_frames": cooldown_remaining,
+		"cooldown_max_frames": int(definition.get("cooldown_frames", 0)),
+		"ready": cooldown_remaining <= 0,
+		"generation": int(snapshot.get("generation", 0)),
+		"next_token": int(snapshot.get("next_token", 1)),
+	}
+
+
+func activate_equipped_active_item(context_override: Dictionary = {}) -> Dictionary:
+	if (
+		active_item_runtime == null
+		or not active_item_runtime.has_method("plan_activate")
+		or not active_item_runtime.has_method("commit_activate")
+		or time_manager == null
+		or health == null
+	):
+		return {"ok": false, "code": &"RUNTIME_UNAVAILABLE", "context": {}}
+	var context := {
+		"runtime_frame": _runtime_frame,
+		"energy_current": float(time_manager.get("energy")),
+		"health_current": float(health.get("current_hp")),
+		"health_maximum": float(health.get("max_hp")),
+		"is_boss_target": _active_item_has_boss_target(),
+	}
+	if context_override.has("is_boss_target"):
+		context["is_boss_target"] = bool(context_override["is_boss_target"])
+	var prepared_value: Variant = active_item_runtime.call("plan_activate", context)
+	var prepared := (prepared_value as Dictionary) if prepared_value is Dictionary else {}
+	if not bool(prepared.get("ok", false)):
+		return prepared.duplicate(true)
+	var plan := (prepared.get("plan", {}) as Dictionary).duplicate(true)
+	var runtime_before := active_item_snapshot()
+	var health_before: Dictionary = health.call("reward_effect_snapshot")
+	var time_before: Dictionary = time_manager.call("resource_state", &"time_energy")
+	var committed_value: Variant = active_item_runtime.call(
+		"commit_activate",
+		plan.duplicate(true),
+		int(plan.get("token", 0))
+	)
+	var committed := (committed_value as Dictionary) if committed_value is Dictionary else {}
+	if not bool(committed.get("ok", false)):
+		return committed.duplicate(true)
+	var claims := committed.get("resource_claims", {}) as Dictionary
+	var settlement := _settle_active_item_claims(claims, time_before, health_before)
+	if not bool(settlement.get("ok", false)):
+		if not bool(active_item_runtime.call("restore_snapshot", runtime_before)):
+			set_physics_process(false)
+			return {"ok": false, "code": &"ROLLBACK_FAILED", "context": settlement}
+		return settlement
+	var definition := runtime_before.get("definition", {}) as Dictionary
+	var result := committed.duplicate(true)
+	result["content_id"] = str(definition.get("id", ""))
+	result["handler_id"] = str(definition.get("active_handler_id", ""))
+	result["runtime_frame"] = _runtime_frame
+	_active_item_last_activation = result.duplicate(true)
+	return result
+
+
+func _settle_active_item_claims(
+	claims: Dictionary,
+	time_before: Dictionary,
+	health_before: Dictionary
+) -> Dictionary:
+	if claims.has("time_energy"):
+		var spent_value: Variant = time_manager.call(
+			"try_spend_resource",
+			&"time_energy",
+			float(claims["time_energy"]),
+			int(time_before.get("revision", 0)),
+			&"active_item"
+		)
+		if not spent_value is Dictionary or not bool((spent_value as Dictionary).get("ok", false)):
+			return (
+				(spent_value as Dictionary).duplicate(true)
+				if spent_value is Dictionary
+				else {"ok": false, "code": &"RESOURCE_COMMIT_FAILED", "context": {}}
+			)
+	if claims.has("health"):
+		var expected_loss := float(claims["health"])
+		var actual_loss := float(health.call("lose_health", expected_loss, self))
+		if not is_equal_approx(actual_loss, expected_loss) or not bool(health.call("is_alive")):
+			var restored := bool(health.call(
+				"restore_reward_effect_snapshot",
+				health_before.duplicate(true)
+			))
+			return {
+				"ok": false,
+				"code": &"RESOURCE_COMMIT_FAILED" if restored else &"ROLLBACK_FAILED",
+				"context": {"resource_id": "health"},
+			}
+	return {"ok": true, "code": &"OK", "context": {}}
+
+
+func _active_item_has_boss_target() -> bool:
+	if not is_inside_tree():
+		return false
+	for candidate: Node in get_tree().get_nodes_in_group("bosses"):
+		if is_instance_valid(candidate) and not candidate.is_queued_for_deletion():
+			return true
+	return false
 
 
 func apply_reward(reward_data: Dictionary) -> Dictionary:
