@@ -111,7 +111,7 @@ func load_full_player_replay(
 	var identity := ReplayRecorderScript.validate_full_player_identity(expected_identity)
 	if identity.is_empty():
 		return _failure(&"FULL_PLAYER_EXPECTED_IDENTITY_INVALID")
-	var validation := _validate_full_player_replay(replay, identity)
+	var validation := _validate_full_player_replay(replay, identity, true)
 	if not bool(validation.get("ok", false)):
 		return validation
 	var normalization := ReplayRecorderScript.normalize_full_player_replay(replay)
@@ -830,7 +830,8 @@ func _validate_replay(replay: Dictionary, expected_identity: Dictionary) -> Dict
 
 func _validate_full_player_replay(
 	replay: Dictionary,
-	expected_identity: Dictionary
+	expected_identity: Dictionary,
+	allow_legacy_launch: bool = false
 ) -> Dictionary:
 	if replay.is_empty() or not ReplayRecorderScript.replay_value_is_safe(replay):
 		return _failure(&"FULL_PLAYER_REPLAY_UNSAFE")
@@ -848,12 +849,30 @@ func _validate_full_player_replay(
 	)
 	if identity.is_empty() or identity != expected_identity:
 		return _failure(&"FULL_PLAYER_REPLAY_IDENTITY_MISMATCH")
-	if (
-		not ReplayRecorderScript._is_positive_integer(replay.get("schema_version"))
-		or int(replay["schema_version"])
-			!= ReplayRecorderScript.full_player_schema_version_for_identity(identity)
-	):
+	if not ReplayRecorderScript._is_positive_integer(replay.get("schema_version")):
 		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH")
+	var replay_schema_version := int(replay["schema_version"])
+	var current_schema_version := ReplayRecorderScript.full_player_schema_version_for_identity(
+		identity
+	)
+	var is_legacy_launch := (
+		allow_legacy_launch
+		and current_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SCHEMA_VERSION
+		and replay_schema_version
+			== ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION
+	)
+	if replay_schema_version != current_schema_version and not is_legacy_launch:
+		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH")
+	var expected_frame_schema_version := (
+		ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_FRAME_SCHEMA_VERSION
+		if is_legacy_launch
+		else ReplayRecorderScript.full_player_frame_schema_version_for_identity(identity)
+	)
+	var expected_snapshot_schema_version := (
+		ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		if is_legacy_launch
+		else ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(identity)
+	)
 	if (
 		not ReplayRecorderScript._is_sha256(replay.get("identity_digest"))
 		or str(replay["identity_digest"])
@@ -880,8 +899,7 @@ func _validate_full_player_replay(
 			return _failure(&"FULL_PLAYER_REPLAY_FRAME_FIELDS_MISMATCH", {"index": index})
 		if (
 			not ReplayRecorderScript._is_positive_integer(entry.get("schema_version"))
-			or int(entry["schema_version"])
-				!= ReplayRecorderScript.full_player_frame_schema_version_for_identity(identity)
+			or int(entry["schema_version"]) != expected_frame_schema_version
 			or not ReplayRecorderScript._is_non_negative_integer(entry.get("frame"))
 		):
 			return _failure(&"FULL_PLAYER_REPLAY_FRAME_INVALID", {"index": index})
@@ -913,7 +931,8 @@ func _validate_full_player_replay(
 		var snapshot := snapshot_value as Dictionary
 		var snapshot_validation := ReplayRecorderScript.validate_full_player_snapshot(
 			snapshot,
-			expected_identity
+			expected_identity,
+			expected_snapshot_schema_version
 		)
 		if not bool(snapshot_validation.get("ok", false)):
 			return _failure(

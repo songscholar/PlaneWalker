@@ -3,15 +3,19 @@ extends RefCounted
 
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SaveMigrationV0ToV1Script := preload("res://scripts/save/migrations/save_migration_v0_to_v1.gd")
+const SaveMigrationV1ToV2Script := preload("res://scripts/save/migrations/save_migration_v1_to_v2.gd")
 
 var _migrations: Dictionary = {}
-var _default_migrator: RefCounted
+var _default_migrators: Array[RefCounted] = []
 
 
 func _init(register_defaults: bool = true) -> void:
 	if register_defaults:
-		_default_migrator = SaveMigrationV0ToV1Script.new()
-		register_migration(0, 1, Callable(_default_migrator, "migrate"))
+		var v0_to_v1: RefCounted = SaveMigrationV0ToV1Script.new()
+		var v1_to_v2: RefCounted = SaveMigrationV1ToV2Script.new()
+		_default_migrators.assign([v0_to_v1, v1_to_v2])
+		register_migration(0, 1, Callable(v0_to_v1, "migrate"))
+		register_migration(1, 2, Callable(v1_to_v2, "migrate"))
 
 
 func register_migration(from_version: int, to_version: int, migration: Callable):

@@ -22,6 +22,10 @@ func _run() -> void:
 	_test_nondeterministic_steps_fail_closed(suite)
 	_test_missing_and_forward_paths_are_rejected(suite)
 	_test_legacy_v0_migrates_to_v1(suite)
+	_test_legacy_v0_migrates_through_v2_defaults(suite)
+	_test_default_v1_to_v2_adds_runtime_defaults(suite)
+	_test_default_v1_to_v2_preserves_valid_runtime_state(suite)
+	_test_default_v1_to_v2_rejects_malformed_runtime_state(suite)
 	suite.finish(get_tree())
 
 
@@ -141,6 +145,126 @@ func _test_legacy_v0_migrates_to_v1(suite) -> void:
 		"legacy global settings are separated and expanded with Current defaults"
 	)
 	suite.assert_true(not result.payload.get("payload", {}).has("settings"), "profile payload excludes global settings")
+
+
+func _test_default_v1_to_v2_adds_runtime_defaults(suite) -> void:
+	var source := {
+		"schema_version": 1,
+		"payload": {
+			"profile_id": "slot_1",
+			"progress": {"runs_completed": 3},
+		},
+	}
+	var original := source.duplicate(true)
+	var registry = SaveMigrationRegistryScript.new()
+
+	var first = registry.migrate(source, 2)
+	var second = registry.migrate(source, 2)
+	_suite_result_ok(suite, first, "schema v1 profile migrates to v2")
+	_suite_result_ok(suite, second, "schema v1 migration is repeatable")
+	suite.assert_equal(source, original, "schema v1 migration preserves the caller-owned document")
+	if not first.ok or not second.ok:
+		return
+	suite.assert_equal(first.to_dictionary(), second.to_dictionary(), "schema v1 migration is deterministic")
+	suite.assert_equal(first.payload.get("schema_version"), 2, "schema v1 migration emits schema v2")
+	var payload := first.payload.get("payload", {}) as Dictionary
+	suite.assert_equal(
+		payload.get("active_item_state"),
+		_empty_active_item_state(),
+		"schema v2 adds an explicit empty active-item state"
+	)
+	suite.assert_equal(
+		payload.get("reward_effect_state"),
+		{},
+		"schema v2 adds an explicit empty reward-effect state"
+	)
+	suite.assert_equal(
+		payload.get("progress"),
+		{"runs_completed": 3},
+		"schema v2 preserves unrelated profile progress"
+	)
+
+
+func _test_legacy_v0_migrates_through_v2_defaults(suite) -> void:
+	var legacy := _read_json(LEGACY_FIXTURE_PATH, suite)
+	if legacy.is_empty():
+		return
+	var original := legacy.duplicate(true)
+	var result = SaveMigrationRegistryScript.new().migrate(legacy, 2)
+	_suite_result_ok(suite, result, "legacy v0 profile migrates through schema v2")
+	suite.assert_equal(legacy, original, "multi-step default migration preserves legacy source")
+	if not result.ok:
+		return
+	suite.assert_equal(result.migrated_from, 0, "multi-step default migration records v0 source")
+	suite.assert_equal(result.migrated_to, 2, "multi-step default migration records v2 target")
+	var payload := result.payload.get("payload", {}) as Dictionary
+	suite.assert_equal(
+		payload.get("active_item_state"),
+		_empty_active_item_state(),
+		"legacy chain receives the explicit empty active-item default"
+	)
+	suite.assert_equal(payload.get("reward_effect_state"), {}, "legacy chain receives reward defaults")
+
+
+func _test_default_v1_to_v2_preserves_valid_runtime_state(suite) -> void:
+	var active_state := _empty_active_item_state()
+	var reward_state := {
+		"schema_version": 1,
+		"effects": {"attack_multiplier": 1.25},
+	}
+	var source := {
+		"schema_version": 1,
+		"payload": {
+			"active_item_state": active_state.duplicate(true),
+			"reward_effect_state": reward_state.duplicate(true),
+		},
+	}
+	var result = SaveMigrationRegistryScript.new().migrate(source, 2)
+	_suite_result_ok(suite, result, "schema v1 preserves valid explicit runtime fields")
+	if not result.ok:
+		return
+	var payload := result.payload.get("payload", {}) as Dictionary
+	suite.assert_equal(payload.get("active_item_state"), active_state, "valid active state is preserved")
+	suite.assert_equal(payload.get("reward_effect_state"), reward_state, "valid reward state is preserved")
+	(payload["reward_effect_state"] as Dictionary)["mutated"] = true
+	suite.assert_true(
+		not (source["payload"] as Dictionary)["reward_effect_state"].has("mutated"),
+		"migrated runtime defaults do not alias caller-owned dictionaries"
+	)
+
+
+func _test_default_v1_to_v2_rejects_malformed_runtime_state(suite) -> void:
+	for invalid_case: Dictionary in [
+		{"label": "active item wrong type", "field": "active_item_state", "value": []},
+		{"label": "active item malformed dictionary", "field": "active_item_state", "value": {}},
+		{"label": "reward effect wrong type", "field": "reward_effect_state", "value": []},
+	]:
+		var payload := {}
+		payload[invalid_case["field"]] = invalid_case["value"]
+		var source := {"schema_version": 1, "payload": payload}
+		var original := source.duplicate(true)
+		var result = SaveMigrationRegistryScript.new().migrate(source, 2)
+		suite.assert_true(not result.ok, "%s fails closed" % invalid_case["label"])
+		suite.assert_equal(result.code, &"MIGRATION_FAILED", "%s has a typed migration failure" % invalid_case["label"])
+		suite.assert_equal(source, original, "%s preserves the source document" % invalid_case["label"])
+
+
+func _empty_active_item_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"configured": false,
+		"definition": {},
+		"generation": 0,
+		"next_token": 1,
+		"current_frame": -1,
+		"cooldown_end_frame": -1,
+		"handler_state": {},
+		"committed_receipts": {},
+	}
+
+
+func _suite_result_ok(suite, result, message: String) -> void:
+	suite.assert_true(result.ok, "%s: %s" % [message, str(result.to_dictionary())])
 
 
 func _step_zero_to_one(document: Dictionary, _context: Dictionary):

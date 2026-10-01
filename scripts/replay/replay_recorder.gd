@@ -1,6 +1,8 @@
 class_name ReplayRecorder
 extends RefCounted
 
+const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
+
 const SCHEMA_ID := "planewalker.weapon_runtime_replay"
 const SCHEMA_VERSION := 6
 const SNAPSHOT_SCHEMA_VERSION := 3
@@ -9,9 +11,12 @@ const FULL_PLAYER_SCHEMA_ID := "planewalker.full_player_replay"
 const FULL_PLAYER_SCHEMA_VERSION := 2
 const FULL_PLAYER_FRAME_SCHEMA_VERSION := 2
 const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 2
-const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 4
-const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 4
-const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 4
+const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 5
+const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 5
+const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 5
+const FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION := 4
+const FULL_PLAYER_LEGACY_LAUNCH_FRAME_SCHEMA_VERSION := 4
+const FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 4
 const EVENT_PREFIX_SCHEMA_ID := "planewalker.weapon_runtime_replay.event_prefix"
 const EVENT_PREFIX_SCHEMA_VERSION := 1
 const SHA256_LENGTH := 64
@@ -201,6 +206,28 @@ const FULL_PLAYER_SNAPSHOT_FIELDS: Array[String] = [
 	"weapon_replay_fact_baseline",
 	"weapon_replay_capture_invalid_reason",
 	"weapon_replay_restore_invalid_reason",
+]
+const FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version",
+	"frame",
+	"identity",
+	"player_state",
+	"health_state",
+	"action_state",
+	"character_state",
+	"character_action_state",
+	"weapon_state",
+	"time_manager_state",
+	"world_payload_state",
+	"rewind_state",
+	"intent_router_state",
+	"player_weapon_state",
+	"weapon_replay_events",
+	"weapon_replay_capture_sequence",
+	"weapon_replay_fact_baseline",
+	"weapon_replay_capture_invalid_reason",
+	"weapon_replay_restore_invalid_reason",
+	"active_item_state",
 ]
 const LEGACY_CHARACTER_ACTION_SNAPSHOT_V1_FIELDS: Array[String] = [
 	"schema_version",
@@ -842,16 +869,25 @@ static func _validated_full_player_mobility(value: Dictionary) -> Dictionary:
 
 static func validate_full_player_snapshot(
 	snapshot: Dictionary,
-	expected_identity: Dictionary
+	expected_identity: Dictionary,
+	expected_schema_version: int = -1
 ) -> Dictionary:
 	if snapshot.is_empty() or not replay_value_is_safe(snapshot):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_UNSAFE")
-	if not _has_exact_fields_static(snapshot, FULL_PLAYER_SNAPSHOT_FIELDS):
+	var snapshot_schema_version := (
+		full_player_snapshot_schema_version_for_identity(expected_identity)
+		if expected_schema_version < 0
+		else expected_schema_version
+	)
+	var expected_fields := _full_player_snapshot_fields_for_schema(
+		expected_identity,
+		snapshot_schema_version
+	)
+	if expected_fields.is_empty() or not _has_exact_fields_static(snapshot, expected_fields):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_FIELDS_MISMATCH")
 	if (
 		not _is_positive_integer(snapshot.get("schema_version"))
-		or int(snapshot["schema_version"])
-			!= full_player_snapshot_schema_version_for_identity(expected_identity)
+		or int(snapshot["schema_version"]) != snapshot_schema_version
 	):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_SCHEMA_MISMATCH")
 	if not _is_non_negative_integer(snapshot.get("frame")):
@@ -880,6 +916,17 @@ static func validate_full_player_snapshot(
 			not in [TYPE_STRING, TYPE_STRING_NAME]
 	):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_FIELDS_MISMATCH")
+	if (
+		snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		and (
+			not snapshot.get("active_item_state") is Dictionary
+			or not validate_full_player_active_item_state(
+				snapshot.get("active_item_state", {}) as Dictionary,
+				int(snapshot.get("frame", -1))
+			)
+		)
+	):
+		return _failure(&"FULL_PLAYER_ACTIVE_ITEM_STATE_INVALID")
 	var frame := int(snapshot["frame"])
 	var character_frame_value: Variant = (
 		snapshot["character_state"] as Dictionary
@@ -939,6 +986,82 @@ static func validate_full_player_snapshot(
 		):
 			return _failure(&"FULL_PLAYER_RIFT_DESCRIPTOR_INVALID")
 	return _success()
+
+
+static func empty_active_item_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"configured": false,
+		"definition": {},
+		"generation": 0,
+		"next_token": 1,
+		"current_frame": -1,
+		"cooldown_end_frame": -1,
+		"handler_state": {},
+		"committed_receipts": {},
+	}
+
+
+static func validate_full_player_active_item_state(
+	value: Dictionary,
+	snapshot_frame: int
+) -> bool:
+	if snapshot_frame < 0:
+		return false
+	var runtime: RefCounted = ActiveItemRuntimeScript.new()
+	if not bool(runtime.call("can_restore_snapshot", value.duplicate(true))):
+		return false
+	if not bool(value.get("configured", false)):
+		return value == empty_active_item_state()
+	var current_frame := int(value.get("current_frame", -1))
+	if current_frame > snapshot_frame or (current_frame >= 0 and current_frame != snapshot_frame):
+		return false
+	var next_token := int(value.get("next_token", 0))
+	var receipts := value.get("committed_receipts", {}) as Dictionary
+	if next_token == 1:
+		return (
+			receipts.is_empty()
+			and int(value.get("cooldown_end_frame", -1)) == -1
+			and (value.get("handler_state", {}) as Dictionary).is_empty()
+		)
+	if receipts.size() != next_token - 1:
+		return false
+	for token: int in range(1, next_token):
+		if not receipts.has(str(token)):
+			return false
+	var latest_receipt := receipts.get(str(next_token - 1), {}) as Dictionary
+	var latest_plan := latest_receipt.get("plan", {}) as Dictionary
+	var plan_frame := int(latest_plan.get("runtime_frame", -1))
+	if plan_frame < 0 or current_frame < plan_frame:
+		return false
+	var definition := value.get("definition", {}) as Dictionary
+	var expected_cooldown_end := plan_frame + int(definition.get("cooldown_frames", 0))
+	if current_frame >= expected_cooldown_end:
+		expected_cooldown_end = -1
+	if int(value.get("cooldown_end_frame", -2)) != expected_cooldown_end:
+		return false
+	var expected_handler_state := latest_plan.get("handler_state", {}) as Dictionary
+	var expires_at := int(expected_handler_state.get("expires_at_frame", -1))
+	if expires_at >= 0 and current_frame >= expires_at:
+		expected_handler_state = {}
+	return value.get("handler_state", {}) == expected_handler_state
+
+
+static func _full_player_snapshot_fields_for_schema(
+	identity: Dictionary,
+	schema_version: int
+) -> Array[String]:
+	var is_m1 := str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
+	if is_m1 and schema_version == FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION:
+		return FULL_PLAYER_SNAPSHOT_FIELDS
+	if (
+		not is_m1
+		and schema_version == FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+	):
+		return FULL_PLAYER_SNAPSHOT_FIELDS
+	if not is_m1 and schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		return FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS
+	return []
 
 
 static func validate_full_player_frame_intents(value: Dictionary) -> bool:
@@ -1205,7 +1328,22 @@ static func normalize_full_player_character_action_state(value: Dictionary) -> D
 
 
 static func normalize_full_player_snapshot(snapshot: Dictionary) -> Dictionary:
-	var action_value: Variant = snapshot.get("character_action_state")
+	var normalized := snapshot.duplicate(true)
+	var migrated := false
+	var identity_value: Variant = normalized.get("identity")
+	if identity_value is Dictionary:
+		var identity := validate_full_player_identity(identity_value as Dictionary)
+		if (
+			not identity.is_empty()
+			and str(identity.get("character_profile_id", "")) != "wanderer_m1_v1"
+			and int(normalized.get("schema_version", 0))
+				== FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+			and _has_exact_fields_static(normalized, FULL_PLAYER_SNAPSHOT_FIELDS)
+		):
+			normalized["schema_version"] = FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+			normalized["active_item_state"] = empty_active_item_state()
+			migrated = true
+	var action_value: Variant = normalized.get("character_action_state")
 	if not action_value is Dictionary:
 		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_INVALID")
 	var action_result := normalize_full_player_character_action_state(
@@ -1213,19 +1351,30 @@ static func normalize_full_player_snapshot(snapshot: Dictionary) -> Dictionary:
 	)
 	if not bool(action_result.get("ok", false)):
 		return action_result
-	var normalized := snapshot.duplicate(true)
 	var action_context := action_result.get("context", {}) as Dictionary
 	normalized["character_action_state"] = (
 		action_context.get("snapshot", {}) as Dictionary
 	).duplicate(true)
 	return _success({
 		"snapshot": normalized,
-		"migrated": bool(action_context.get("migrated", false)),
+		"migrated": migrated or bool(action_context.get("migrated", false)),
 	})
 
 
 static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
 	var normalized := replay.duplicate(true)
+	var identity_value: Variant = normalized.get("identity")
+	var identity := (
+		validate_full_player_identity(identity_value as Dictionary)
+		if identity_value is Dictionary
+		else {}
+	)
+	var migrates_legacy_launch := (
+		not identity.is_empty()
+		and str(identity.get("character_profile_id", "")) != "wanderer_m1_v1"
+		and int(normalized.get("schema_version", 0))
+			== FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION
+	)
 	var frames_value: Variant = normalized.get("frames")
 	if not frames_value is Array or (frames_value as Array).is_empty():
 		return _failure(&"FULL_PLAYER_REPLAY_FRAMES_INVALID")
@@ -1256,11 +1405,16 @@ static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
 		frame["snapshot"] = (
 			snapshot_context.get("snapshot", {}) as Dictionary
 		).duplicate(true)
+		if migrates_legacy_launch:
+			frame["schema_version"] = FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION
 		migrated = migrated or bool(snapshot_context.get("migrated", false))
 		frame["digest"] = full_player_frame_digest(frame)
 		if not _is_sha256(frame["digest"]):
 			return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID", {"index": index})
 	var terminal_snapshot := (frames[-1] as Dictionary).get("snapshot", {}) as Dictionary
+	if migrates_legacy_launch:
+		normalized["schema_version"] = FULL_PLAYER_LAUNCH_SCHEMA_VERSION
+		migrated = true
 	normalized["terminal_snapshot_digest"] = value_digest(terminal_snapshot)
 	normalized["terminal_digest"] = full_player_terminal_digest(normalized)
 	if (

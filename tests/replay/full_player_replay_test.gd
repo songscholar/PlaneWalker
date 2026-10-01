@@ -99,6 +99,10 @@ func _test_full_player_v1_schema_is_explicitly_rejected() -> void:
 		2,
 		"full-player snapshot schema advances for character action state"
 	)
+	_suite.assert_true(
+		not snapshot.has("active_item_state"),
+		"M1 schema v2 keeps its exact legacy snapshot field set"
+	)
 
 	var legacy_replay := replay.duplicate(true)
 	legacy_replay["schema_version"] = 1

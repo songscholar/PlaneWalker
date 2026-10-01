@@ -7,7 +7,7 @@ const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
 const M1_SCHEMA_VERSION := 2
-const LAUNCH_SCHEMA_VERSION := 4
+const LAUNCH_SCHEMA_VERSION := 5
 
 var _suite
 var _registry: RefCounted
@@ -311,7 +311,7 @@ func _test_launch_and_m1_replay_identities_are_strictly_isolated() -> void:
 	_suite.assert_equal(
 		launch_on_m1.get("code"),
 		&"FULL_PLAYER_REPLAY_IDENTITY_MISMATCH",
-		"Launch schema 4 Replay cannot load into the M1 schema 2 identity"
+		"Launch schema 5 Replay cannot load into the M1 schema 2 identity"
 	)
 	var m1_on_launch: Dictionary = ReplayPlayerScript.new().call(
 		"load_full_player_replay",
@@ -321,7 +321,7 @@ func _test_launch_and_m1_replay_identities_are_strictly_isolated() -> void:
 	_suite.assert_equal(
 		m1_on_launch.get("code"),
 		&"FULL_PLAYER_REPLAY_IDENTITY_MISMATCH",
-		"M1 schema 2 Replay cannot load into the Launch schema 4 identity"
+		"M1 schema 2 Replay cannot load into the Launch schema 5 identity"
 	)
 
 	var m1_before: Dictionary = m1_player.call("full_player_replay_snapshot")

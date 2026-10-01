@@ -3628,7 +3628,7 @@ func full_player_replay_snapshot() -> Dictionary:
 		or world_payload_authority == null
 	):
 		return {}
-	return {
+	var snapshot := {
 		"schema_version": ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(
 			identity
 		),
@@ -3679,6 +3679,12 @@ func full_player_replay_snapshot() -> Dictionary:
 		"weapon_replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
 		"weapon_replay_restore_invalid_reason": _weapon_replay_restore_invalid_reason,
 	}
+	if (
+		int(snapshot["schema_version"])
+		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+	):
+		snapshot["active_item_state"] = active_item_snapshot()
+	return snapshot
 
 
 func restore_full_player_replay_snapshot(snapshot: Dictionary) -> bool:
@@ -3699,6 +3705,20 @@ func restore_full_player_replay_snapshot(snapshot: Dictionary) -> bool:
 
 
 func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool) -> bool:
+	var active_item_target: Dictionary = {}
+	if value.has("active_item_state"):
+		if (
+			active_item_runtime == null
+			or not active_item_runtime.has_method("can_restore_snapshot")
+			or not active_item_runtime.has_method("restore_snapshot")
+			or not value.get("active_item_state") is Dictionary
+		):
+			return false
+		active_item_target = (
+			value.get("active_item_state", {}) as Dictionary
+		).duplicate(true)
+		if not bool(active_item_runtime.call("can_restore_snapshot", active_item_target)):
+			return false
 	var health_target := (value.get("health_state", {}) as Dictionary).duplicate(true)
 	if not bool(health.call("can_restore_replay_snapshot", health_target)):
 		return false
@@ -3723,6 +3743,11 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 		"restore_action_snapshot",
 		character_action_target
 	)):
+		return false
+	if (
+		value.has("active_item_state")
+		and not bool(active_item_runtime.call("restore_snapshot", active_item_target))
+	):
 		return false
 	var weapon_target := (value.get("weapon_state", {}) as Dictionary).duplicate(true)
 	# Full Replay checkpoints are allowed to move generation/token state backward.
@@ -3806,6 +3831,19 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 	value = (
 		(normalization.get("context", {}) as Dictionary).get("snapshot", {}) as Dictionary
 	).duplicate(true)
+	var normalized_identity_value: Variant = value.get("identity")
+	if not normalized_identity_value is Dictionary:
+		return {}
+	var normalized_identity := ReplayRecorderScript.validate_full_player_identity(
+		normalized_identity_value as Dictionary
+	)
+	if normalized_identity.is_empty():
+		return {}
+	var expected_schema_version := (
+		ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(
+			normalized_identity
+		)
+	)
 	var fields: Array[String] = [
 		"schema_version", "frame", "identity", "player_state", "health_state",
 		"action_state", "character_state", "character_action_state", "weapon_state", "time_manager_state",
@@ -3814,6 +3852,8 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		"weapon_replay_capture_sequence", "weapon_replay_fact_baseline",
 		"weapon_replay_capture_invalid_reason", "weapon_replay_restore_invalid_reason",
 	]
+	if expected_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		fields.append("active_item_state")
 	if value.size() != fields.size():
 		return {}
 	for field: String in fields:
@@ -3841,19 +3881,32 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or not value["weapon_replay_fact_baseline"] is Dictionary
 		or typeof(value.get("weapon_replay_capture_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
 		or typeof(value.get("weapon_replay_restore_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
-	):
-		return {}
-	var normalized_identity := ReplayRecorderScript.validate_full_player_identity(
-		value["identity"] as Dictionary
-	)
-	if (
-		normalized_identity.is_empty()
-		or int(value["schema_version"])
-		!= ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(
-			normalized_identity
+		or (
+			expected_schema_version
+				== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+			and not value.get("active_item_state") is Dictionary
 		)
 	):
 		return {}
+	if (
+		int(value["schema_version"]) != expected_schema_version
+	):
+		return {}
+	if expected_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		var active_item_state := value.get("active_item_state", {}) as Dictionary
+		if (
+			active_item_runtime == null
+			or not active_item_runtime.has_method("can_restore_snapshot")
+			or not bool(active_item_runtime.call(
+				"can_restore_snapshot",
+				active_item_state.duplicate(true)
+			))
+			or not ReplayRecorderScript.validate_full_player_active_item_state(
+				active_item_state,
+				int(value["frame"])
+			)
+		):
+			return {}
 	var player_state := value["player_state"] as Dictionary
 	for vector_field: String in [
 		"position", "velocity", "facing", "dash_velocity", "dash_direction",
