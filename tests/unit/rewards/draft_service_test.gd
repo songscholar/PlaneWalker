@@ -57,6 +57,7 @@ func _run() -> void:
 	_test_talent_offer(suite, service, registry, rooms[2])
 	_test_real_talent_offer(suite, rooms[2])
 	_test_real_m1_pool_build_compatibility(suite, rooms)
+	_test_compatible_milestone_candidate_domains(suite)
 	_test_contract_offer(suite, service, registry, rooms[3])
 	_test_no_boss_reward(suite, service, registry, rooms[4])
 	_test_resolution(suite, service, registry, rooms[0])
@@ -165,6 +166,36 @@ func _test_real_m1_pool_build_compatibility(suite, rooms: Array[Dictionary]) -> 
 						str(definition.get("id", "")),
 					]
 				)
+
+
+func _test_compatible_milestone_candidate_domains(suite) -> void:
+	var service = DraftServiceScript.new()
+	for milestone: String in ["CURRENT", "NEXT"]:
+		var candidates: Array[Dictionary] = []
+		for archetype: String in DraftServiceScript.M1_ARCHETYPES + ["perfect_guard", "piercing_barrage"]:
+			candidates.append({
+				"id": "%s_%s" % [milestone.to_lower(), archetype],
+				"availability": [milestone],
+				"archetype": archetype,
+			})
+		candidates.append({
+			"id": "%s_utility" % milestone.to_lower(),
+			"availability": [milestone],
+			"archetype": "",
+		})
+		var filtered: Array[Dictionary] = service.call(
+			"_filter_candidates",
+			candidates,
+			{},
+			milestone
+		)
+		suite.assert_equal(filtered.size(), 4, "%s keeps three M1 routes plus utility" % milestone)
+		for definition: Dictionary in filtered:
+			var archetype := str(definition.get("archetype", ""))
+			suite.assert_true(
+				archetype.is_empty() or DraftServiceScript.M1_ARCHETYPES.has(archetype),
+				"%s candidate filtering rejects Launch-only archetypes" % milestone
+			)
 
 
 func _test_contract_offer(suite, service, registry, room: Dictionary) -> void:
