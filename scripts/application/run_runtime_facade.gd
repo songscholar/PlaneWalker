@@ -6,6 +6,9 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
 const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunLoadoutPolicyScript := preload("res://scripts/application/run_loadout_policy.gd")
+const RunRewardReplaySealScript := preload(
+	"res://scripts/application/run_reward_replay_seal.gd"
+)
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
@@ -27,6 +30,7 @@ var _booted: bool = false
 var _selection_reservations: Dictionary = {}
 var _next_selection_reservation_id: int = 1
 var _last_atomic_transition_revision: int = -1
+var _reward_replay_seal: RefCounted
 
 
 func boot(
@@ -43,6 +47,7 @@ func boot(
 	_selection_reservations.clear()
 	_next_selection_reservation_id = 1
 	_last_atomic_transition_revision = -1
+	_reward_replay_seal = RunRewardReplaySealScript.new()
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -375,6 +380,60 @@ func snapshot() -> Dictionary:
 	if _orchestrator == null:
 		return {}
 	return _orchestrator.snapshot()
+
+
+func reward_replay_snapshot() -> Dictionary:
+	if (
+		not _booted
+		or _registry == null
+		or _orchestrator == null
+		or _reward_replay_seal == null
+	):
+		return {}
+	var build_state_value: Dictionary = _orchestrator.reward_replay_build_snapshot()
+	if build_state_value.is_empty():
+		return {}
+	return _reward_replay_seal.call(
+		"capture", _registry, build_state_value.duplicate(true)
+	)
+
+
+func can_restore_reward_replay_snapshot(value: Dictionary) -> bool:
+	if (
+		not _booted
+		or _registry == null
+		or _orchestrator == null
+		or _reward_replay_seal == null
+	):
+		return false
+	var current: Dictionary = reward_replay_snapshot()
+	if current.is_empty():
+		return false
+	var milestone := str(_orchestrator.snapshot().get("config", {}).get("milestone", ""))
+	var validated: Dictionary = _reward_replay_seal.call(
+		"validate", value.duplicate(true), _registry, milestone
+	)
+	if not bool(validated.get("ok", false)):
+		return false
+	return bool(_reward_replay_seal.call(
+		"prefix_matches",
+		(value.get("reward_prefix", {}) as Dictionary).duplicate(true),
+		(current.get("reward_facts", []) as Array).duplicate(true)
+	))
+
+
+func restore_reward_replay_snapshot(value: Dictionary) -> bool:
+	if not can_restore_reward_replay_snapshot(value):
+		return false
+	var before: Dictionary = _orchestrator.reward_replay_build_snapshot()
+	var target_build := (value.get("build_state", {}) as Dictionary).duplicate(true)
+	if not _orchestrator.restore_reward_replay_build_snapshot(target_build):
+		return false
+	if reward_replay_snapshot() == value:
+		return true
+	if not _orchestrator.restore_reward_replay_build_snapshot(before):
+		push_error("RunRuntimeFacade failed to roll back a rejected reward Replay restore")
+	return false
 
 
 func active_loadout() -> Dictionary:

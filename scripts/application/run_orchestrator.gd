@@ -42,6 +42,18 @@ func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 	return _state.restore_selection_transaction_snapshot(value.duplicate(true))
 
 
+func reward_replay_build_snapshot() -> Dictionary:
+	return _state.reward_replay_build_snapshot().duplicate(true)
+
+
+func can_restore_reward_replay_build_snapshot(value: Dictionary) -> bool:
+	return _state.can_restore_reward_replay_build_snapshot(value.duplicate(true))
+
+
+func restore_reward_replay_build_snapshot(value: Dictionary) -> bool:
+	return _state.restore_reward_replay_build_snapshot(value.duplicate(true))
+
+
 func enter_hub():
 	if _state.phase != RunPhaseScript.Value.BOOT:
 		return _reject_phase()

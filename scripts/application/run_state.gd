@@ -5,6 +5,8 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
 
+const REWARD_REPLAY_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
+
 var run_id: String = ""
 var revision: int = 0
 var phase: int = RunPhaseScript.Value.BOOT
@@ -136,6 +138,35 @@ func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 	open_offer = (value["open_offer"] as Dictionary).duplicate(true)
 	consumed_offer_ids = (value["consumed_offer_ids"] as Dictionary).duplicate(true)
 	return selection_transaction_snapshot() == value
+
+
+func reward_replay_build_snapshot() -> Dictionary:
+	if not REWARD_REPLAY_MILESTONES.has(str(config.get("milestone", ""))):
+		return {}
+	return build_state.transaction_snapshot().duplicate(true)
+
+
+func can_restore_reward_replay_build_snapshot(value: Dictionary) -> bool:
+	var milestone := str(config.get("milestone", ""))
+	return (
+		REWARD_REPLAY_MILESTONES.has(milestone)
+		and str(value.get("milestone", "")) == milestone
+		and build_state.can_restore_transaction_snapshot(value)
+	)
+
+
+func restore_reward_replay_build_snapshot(value: Dictionary) -> bool:
+	if not can_restore_reward_replay_build_snapshot(value):
+		return false
+	var before: Dictionary = build_state.transaction_snapshot()
+	if (
+		build_state.restore_transaction_snapshot(value)
+		and build_state.transaction_snapshot() == value
+	):
+		return true
+	if not build_state.restore_transaction_snapshot(before):
+		push_error("RunState failed to roll back a rejected reward Replay checkpoint")
+	return false
 
 
 func snapshot() -> Dictionary:
