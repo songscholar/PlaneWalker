@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/0_深度收敛与系统职责设计.md`, `docs/contracts/content-pack-v2.md`, `docs/current/2026-09-30-p12-five-characters-evidence.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Planned after P12 certification commit `f2137ff`; no P13A implementation commit exists yet
+- Implementation Status: Task 1 complete locally; Task 2 ContentRegistry integration is next
 - Exit Gate: Exactly eight versioned Launch archetype profiles resolve through ContentRegistry, every non-empty content archetype reference is validated, M1 drafting remains byte-for-byte compatible, Launch drafting is milestone-aware, build/UI state rejects unknown archetypes, and the complete repository gate remains green
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -48,7 +48,7 @@
 - Consumes: the eight IDs and Boss-response rows in the approved Full Product Completion Design.
 - Produces: `ArchetypeProfile.configure(definition) -> Dictionary`, `snapshot() -> Dictionary`, `ARCHETYPE_IDS`, and eight closed content definitions.
 
-- [ ] **Step 1: Write failing Python schema tests**
+- [x] **Step 1: Write failing Python schema tests**
 
 Add a Draft 2020-12 contract that requires exactly these scalar/profile fields:
 
@@ -72,7 +72,7 @@ def test_exact_catalog_and_closed_values(self):
 
 Mutations for unknown root fields, a ninth ID, duplicate mechanic tags, missing Boss response, non-integer minimums, minimums below the required values, unknown conversion IDs, M1 availability, arbitrary effects, and 65-character IDs must fail.
 
-- [ ] **Step 2: Write failing GDScript parser tests**
+- [x] **Step 2: Write failing GDScript parser tests**
 
 The scene test asserts exact ordered IDs and these Boss conversion IDs:
 
@@ -91,7 +91,7 @@ const BOSS_CONVERSIONS := {
 
 `snapshot()` must deep-copy `mechanic_tags`, preserve authored order, strip pack provenance, and reject mutations that omit `starter`, `payoff`, or `risk` coverage.
 
-- [ ] **Step 3: Run tests and confirm RED**
+- [x] **Step 3: Run tests and confirm RED**
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.content_schema.test_archetype_profile_schema
@@ -100,7 +100,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.content_schema.test
 
 Expected: FAIL because the schema, parser, and catalog do not exist.
 
-- [ ] **Step 4: Implement schema, parser, catalog, and localization**
+- [x] **Step 4: Implement schema, parser, catalog, and localization**
 
 `ArchetypeProfile` exposes this exact snapshot:
 
@@ -121,7 +121,7 @@ Expected: FAIL because the schema, parser, and catalog do not exist.
 
 The eight rows use localized name, description, and Boss-response keys in both catalogs. `effects` is an empty object and the root schema uses `additionalProperties: false`.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.content_schema.test_archetype_profile_schema

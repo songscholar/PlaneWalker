@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/archetype-profile/1.0.0",
+  "title": "Plane Walker Archetype Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "category",
+    "availability",
+    "name_key",
+    "description_key",
+    "tags",
+    "compatibility",
+    "effects",
+    "references",
+    "profile_version",
+    "archetype_id",
+    "mechanic_tags",
+    "starter_min",
+    "payoff_min",
+    "risk_min",
+    "boss_conversion_id",
+    "boss_response_key"
+  ],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "category": { "const": "archetype_profile" },
+    "availability": { "const": ["LAUNCH", "EXPANSION"] },
+    "name_key": { "$ref": "#/$defs/localization_key" },
+    "description_key": { "$ref": "#/$defs/localization_key" },
+    "tags": { "$ref": "#/$defs/id_list" },
+    "compatibility": { "$ref": "#/$defs/compatibility" },
+    "effects": {
+      "type": "object",
+      "maxProperties": 0,
+      "additionalProperties": false
+    },
+    "references": { "$ref": "#/$defs/id_list" },
+    "profile_version": { "type": "integer", "const": 1 },
+    "archetype_id": {
+      "type": "string",
+      "enum": [
+        "freeze_burst",
+        "rewind_echo",
+        "rift_trap",
+        "accelerated_combo",
+        "low_hp_void",
+        "perfect_guard",
+        "piercing_barrage",
+        "echo_legion"
+      ]
+    },
+    "mechanic_tags": {
+      "allOf": [
+        { "$ref": "#/$defs/id_list" },
+        { "minItems": 4 }
+      ]
+    },
+    "starter_min": { "type": "integer", "const": 3 },
+    "payoff_min": { "type": "integer", "const": 2 },
+    "risk_min": { "type": "integer", "const": 1 },
+    "boss_conversion_id": {
+      "type": "string",
+      "enum": [
+        "boss_weakpoint_exposure",
+        "boss_rewind_path_strike",
+        "boss_projectile_window",
+        "boss_combo_break",
+        "boss_execute_warning",
+        "boss_counter_window",
+        "boss_weakpoint_ammo_refund",
+        "boss_facing_lure"
+      ]
+    },
+    "boss_response_key": {
+      "type": "string",
+      "enum": [
+        "ARCHETYPE_FREEZE_BURST_BOSS_RESPONSE",
+        "ARCHETYPE_REWIND_ECHO_BOSS_RESPONSE",
+        "ARCHETYPE_RIFT_TRAP_BOSS_RESPONSE",
+        "ARCHETYPE_ACCELERATED_COMBO_BOSS_RESPONSE",
+        "ARCHETYPE_LOW_HP_VOID_BOSS_RESPONSE",
+        "ARCHETYPE_PERFECT_GUARD_BOSS_RESPONSE",
+        "ARCHETYPE_PIERCING_BARRAGE_BOSS_RESPONSE",
+        "ARCHETYPE_ECHO_LEGION_BOSS_RESPONSE"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "archetype_id": { "const": "freeze_burst" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_weakpoint_exposure" },
+          "boss_response_key": { "const": "ARCHETYPE_FREEZE_BURST_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "rewind_echo" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_rewind_path_strike" },
+          "boss_response_key": { "const": "ARCHETYPE_REWIND_ECHO_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "rift_trap" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_projectile_window" },
+          "boss_response_key": { "const": "ARCHETYPE_RIFT_TRAP_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "accelerated_combo" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_combo_break" },
+          "boss_response_key": { "const": "ARCHETYPE_ACCELERATED_COMBO_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "low_hp_void" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_execute_warning" },
+          "boss_response_key": { "const": "ARCHETYPE_LOW_HP_VOID_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "perfect_guard" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_counter_window" },
+          "boss_response_key": { "const": "ARCHETYPE_PERFECT_GUARD_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "piercing_barrage" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_weakpoint_ammo_refund" },
+          "boss_response_key": { "const": "ARCHETYPE_PIERCING_BARRAGE_BOSS_RESPONSE" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "archetype_id": { "const": "echo_legion" } }, "required": ["archetype_id"] },
+      "then": {
+        "properties": {
+          "boss_conversion_id": { "const": "boss_facing_lure" },
+          "boss_response_key": { "const": "ARCHETYPE_ECHO_LEGION_BOSS_RESPONSE" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "localization_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "id_list": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "character_ids": { "$ref": "#/$defs/id_list" },
+        "weapon_ids": { "$ref": "#/$defs/id_list" },
+        "time_ability_ids": { "$ref": "#/$defs/id_list" },
+        "archetype_ids": { "$ref": "#/$defs/id_list" },
+        "modes": { "$ref": "#/$defs/id_list" }
+      }
+    }
+  }
+}
