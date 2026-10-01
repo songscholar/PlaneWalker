@@ -78,7 +78,11 @@ func _test_project_base_pack(suite) -> void:
 		for entry_value: Variant in parsed:
 			if entry_value is Dictionary:
 				entries.append((entry_value as Dictionary).duplicate(true))
-	suite.assert_equal(entries.size(), 80, "project base pack preserves existing content and eight Launch archetype profiles")
+	suite.assert_equal(
+		entries.size(),
+		152,
+		"project base pack contains the complete Launch reward pools and eight archetype profiles"
+	)
 	var allowed_archetypes: Array[String] = [
 		"",
 		"accelerated_combo",

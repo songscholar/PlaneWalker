@@ -15,8 +15,8 @@ const EXPECTED_BASE_CATEGORY_COUNTS := {
 	"archetype_profile": 8,
 	"time_ability": 4,
 	"item": 50,
-	"blessing": 4,
-	"curse": 6,
+	"blessing": 28,
+	"curse": 24,
 	"talent": 15,
 }
 
@@ -651,6 +651,16 @@ func _test_project_manifest(suite) -> void:
 
 	suite.assert_true(registry.get_content(&"piercing_draw")["availability"].has("NEXT"), "bow content is preserved as next")
 	suite.assert_true(registry.get_content(&"rift_snare")["availability"].has("NEXT"), "rift content is preserved as next")
+	var launch_only_item: Dictionary = registry.get_content(&"stasis_lens")
+	suite.assert_equal(
+		launch_only_item.get("availability"),
+		["LAUNCH", "EXPANSION"],
+		"legacy item rows preserve explicit multi-milestone availability"
+	)
+	suite.assert_true(
+		not launch_only_item.get("availability", []).has("NEXT"),
+		"Launch-only legacy rows do not inherit the source NEXT default"
+	)
 	var m1_items: Array[Dictionary] = registry.get_by_category(&"item", &"M1")
 	suite.assert_true(m1_items.all(func(entry): return not str(entry["id"]).contains("piercing")), "M1 item query excludes bow route")
 	var m1_talents: Array[Dictionary] = registry.get_by_category(&"talent", &"M1")
@@ -677,9 +687,18 @@ func _test_fixture_manifest(suite) -> void:
 	var registry = ContentRegistryScript.new()
 	var report = registry.load_manifest("res://tests/fixtures/content/test_manifest.json")
 	suite.assert_true(not report.has_blocking_errors(), "fixture manifest loads")
-	suite.assert_equal(report.loaded_count, 2, "fixture manifest counts loaded definitions")
+	suite.assert_equal(report.loaded_count, 3, "fixture manifest counts loaded definitions")
 	suite.assert_true(registry.get_content(&"fixture_starter")["availability"].has("M1"), "fixture M1 id is enabled")
-	suite.assert_true(registry.get_content(&"fixture_utility")["availability"].has("NEXT"), "fixture default remains next")
+	suite.assert_equal(
+		registry.get_content(&"fixture_utility")["availability"],
+		["LAUNCH", "EXPANSION"],
+		"entry availability takes priority over the source default"
+	)
+	suite.assert_equal(
+		registry.get_content(&"fixture_default")["availability"],
+		["NEXT"],
+		"entries without availability continue to use the source default"
+	)
 
 
 func _test_file_and_root_errors(suite) -> void:
@@ -725,6 +744,19 @@ func _test_manifest_validation(suite) -> void:
 	)
 	suite.assert_true(category_report.has_blocking_errors(), "unknown content category is rejected")
 	suite.assert_true(category_registry.all_content().is_empty(), "misspelled category is not indexed")
+
+	var invalid_availability := {
+		"id": "invalid_availability",
+		"name": "INVALID_AVAILABILITY_NAME",
+		"description": "INVALID_AVAILABILITY_DESC",
+		"availability": ["LAUNCH", "LAUNCH"],
+		"effects": {},
+	}
+	suite.assert_equal(
+		source_registry.call("_first_invalid_field", invalid_availability),
+		"availability",
+		"legacy row availability rejects duplicate or malformed milestones"
+	)
 
 
 func _test_m1_source_failures_are_blocking(suite) -> void:

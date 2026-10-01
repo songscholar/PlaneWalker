@@ -13,6 +13,14 @@
     "name": "FIXTURE_UTILITY_NAME",
     "description": "FIXTURE_UTILITY_DESC",
     "kind": "survival",
+    "availability": ["LAUNCH", "EXPANSION"],
     "effects": {"max_hp_bonus": 10.0}
+  },
+  {
+    "id": "fixture_default",
+    "name": "FIXTURE_DEFAULT_NAME",
+    "description": "FIXTURE_DEFAULT_DESC",
+    "kind": "time",
+    "effects": {"time_energy_max_bonus": 5.0}
   }
 ]

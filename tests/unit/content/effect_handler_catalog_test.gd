@@ -225,7 +225,7 @@ func _test_known_effects_and_context(suite, catalog) -> void:
 	)
 	suite.assert_true(not blessing_report.has_blocking_errors(), "known blessing effects validate")
 
-	var wrong_category = catalog.validate_effects({"bow_pierce_bonus": 1}, {"category": "curse"})
+	var wrong_category = catalog.validate_effects({"heal": 20.0}, {"category": "curse"})
 	suite.assert_true(wrong_category.has_blocking_errors(), "effect category compatibility fails closed")
 
 	var missing_category = catalog.validate_effects({"heal": 20.0}, {})

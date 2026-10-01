@@ -651,6 +651,11 @@ func _first_invalid_field(entry_value: Variant) -> String:
 			return field
 	if typeof(entry.get("effects")) != TYPE_DICTIONARY:
 		return "effects"
+	if (
+		entry.has("availability")
+		and not _id_array_error(entry["availability"], VALID_AVAILABILITY, false, false).is_empty()
+	):
+		return "availability"
 	return ""
 
 
@@ -662,12 +667,18 @@ func _normalize_entry(
 	overrides: Dictionary
 ) -> Dictionary:
 	var entry_id := str(entry["id"])
-	var availability := "M1" if str(default_availability) == "M1" or m1_ids.has(entry_id) else str(default_availability)
+	var availability: Array = (
+		(entry["availability"] as Array).duplicate()
+		if entry.has("availability")
+		else [str(default_availability)]
+	)
+	if m1_ids.has(entry_id) and not availability.has("M1"):
+		availability.append("M1")
 	var normalized := {
 		"schema_version": 1,
 		"id": entry_id,
 		"category": str(category),
-		"availability": [availability],
+		"availability": availability,
 		"name_key": str(entry["name"]),
 		"description_key": str(entry["description"]),
 		"kind": str(entry.get("kind", "")),

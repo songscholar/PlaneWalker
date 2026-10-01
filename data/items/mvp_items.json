@@ -1,6 +1,11 @@
 [
   {
     "id": "frozen_burst",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "FROZEN_BURST_NAME",
     "kind": "time",
     "archetype": "freeze_burst",
@@ -14,6 +19,10 @@
   },
   {
     "id": "stasis_lens",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "STASIS_LENS_NAME",
     "kind": "time",
     "archetype": "freeze_burst",
@@ -27,6 +36,10 @@
   },
   {
     "id": "brittle_clock",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "BRITTLE_CLOCK_NAME",
     "kind": "time",
     "archetype": "freeze_burst",
@@ -40,6 +53,10 @@
   },
   {
     "id": "weakpoint_prism",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "WEAKPOINT_PRISM_NAME",
     "kind": "weapon",
     "archetype": "freeze_burst",
@@ -53,6 +70,10 @@
   },
   {
     "id": "frozen_afterimage",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "FROZEN_AFTERIMAGE_NAME",
     "kind": "time",
     "archetype": "freeze_burst",
@@ -66,6 +87,10 @@
   },
   {
     "id": "absolute_zero_device",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ABSOLUTE_ZERO_DEVICE_NAME",
     "kind": "time",
     "archetype": "freeze_burst",
@@ -84,6 +109,11 @@
   },
   {
     "id": "rewind_echo",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "REWIND_ECHO_NAME",
     "kind": "time",
     "archetype": "rewind_echo",
@@ -97,6 +127,10 @@
   },
   {
     "id": "anchor_thread",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ANCHOR_THREAD_NAME",
     "kind": "survival",
     "archetype": "rewind_echo",
@@ -110,6 +144,10 @@
   },
   {
     "id": "history_blade",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "HISTORY_BLADE_NAME",
     "kind": "weapon",
     "archetype": "rewind_echo",
@@ -123,6 +161,10 @@
   },
   {
     "id": "echo_reservoir",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ECHO_RESERVOIR_NAME",
     "kind": "time",
     "archetype": "rewind_echo",
@@ -136,6 +178,10 @@
   },
   {
     "id": "pathbreaker_lens",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "PATHBREAKER_LENS_NAME",
     "kind": "weapon",
     "archetype": "rewind_echo",
@@ -149,6 +195,10 @@
   },
   {
     "id": "paradox_beacon",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "PARADOX_BEACON_NAME",
     "kind": "time",
     "archetype": "rewind_echo",
@@ -166,6 +216,11 @@
   },
   {
     "id": "rift_engine",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RIFT_ENGINE_NAME",
     "kind": "time",
     "archetype": "rift_trap",
@@ -179,6 +234,10 @@
   },
   {
     "id": "rift_anchor",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RIFT_ANCHOR_NAME",
     "kind": "time",
     "archetype": "rift_trap",
@@ -192,6 +251,10 @@
   },
   {
     "id": "folded_corridor",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "FOLDED_CORRIDOR_NAME",
     "kind": "time",
     "archetype": "rift_trap",
@@ -205,6 +268,11 @@
   },
   {
     "id": "rift_conductor",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RIFT_CONDUCTOR_NAME",
     "kind": "time",
     "archetype": "rift_trap",
@@ -218,6 +286,11 @@
   },
   {
     "id": "rift_snare",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RIFT_SNARE_NAME",
     "kind": "time",
     "archetype": "rift_trap",
@@ -232,6 +305,10 @@
   },
   {
     "id": "gravity_snare_device",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "GRAVITY_SNARE_DEVICE_NAME",
     "kind": "time",
     "archetype": "rift_trap",
@@ -250,6 +327,11 @@
   },
   {
     "id": "accelerated_combo",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ACCELERATED_COMBO_NAME",
     "kind": "weapon",
     "archetype": "accelerated_combo",
@@ -263,6 +345,10 @@
   },
   {
     "id": "cadence_core",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "CADENCE_CORE_NAME",
     "kind": "weapon",
     "archetype": "accelerated_combo",
@@ -276,6 +362,10 @@
   },
   {
     "id": "overdrive_heart",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "OVERDRIVE_HEART_NAME",
     "kind": "time",
     "archetype": "accelerated_combo",
@@ -289,6 +379,11 @@
   },
   {
     "id": "accelerant_window",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ACCELERANT_WINDOW_NAME",
     "kind": "time",
     "archetype": "accelerated_combo",
@@ -302,6 +397,11 @@
   },
   {
     "id": "efficient_overdrive",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "EFFICIENT_OVERDRIVE_NAME",
     "kind": "time",
     "archetype": "accelerated_combo",
@@ -315,6 +415,10 @@
   },
   {
     "id": "redline_injector",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "REDLINE_INJECTOR_NAME",
     "kind": "risk",
     "archetype": "accelerated_combo",
@@ -332,6 +436,11 @@
   },
   {
     "id": "void_brink",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "VOID_BRINK_NAME",
     "kind": "risk",
     "archetype": "low_hp_void",
@@ -344,6 +453,10 @@
   },
   {
     "id": "void_contract",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "VOID_CONTRACT_NAME",
     "kind": "risk",
     "archetype": "low_hp_void",
@@ -357,6 +470,10 @@
   },
   {
     "id": "hunger_edge",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "HUNGER_EDGE_NAME",
     "kind": "weapon",
     "archetype": "low_hp_void",
@@ -370,6 +487,10 @@
   },
   {
     "id": "abyssal_siphon",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ABYSSAL_SIPHON_NAME",
     "kind": "weapon",
     "archetype": "low_hp_void",
@@ -383,6 +504,10 @@
   },
   {
     "id": "blood_price_relic",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "BLOOD_PRICE_RELIC_NAME",
     "kind": "risk",
     "archetype": "low_hp_void",
@@ -400,6 +525,11 @@
   },
   {
     "id": "cleaving_moment",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "CLEAVING_MOMENT_NAME",
     "kind": "weapon",
     "archetype": "perfect_guard",
@@ -412,6 +542,11 @@
   },
   {
     "id": "evasive_guard_route",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "EVASIVE_GUARD_ROUTE_NAME",
     "kind": "survival",
     "archetype": "perfect_guard",
@@ -425,6 +560,10 @@
   },
   {
     "id": "counter_battery",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "COUNTER_BATTERY_NAME",
     "kind": "survival",
     "archetype": "perfect_guard",
@@ -438,6 +577,10 @@
   },
   {
     "id": "warded_edge",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "WARDED_EDGE_NAME",
     "kind": "weapon",
     "archetype": "perfect_guard",
@@ -451,6 +594,10 @@
   },
   {
     "id": "aegis_reversal",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "AEGIS_REVERSAL_NAME",
     "kind": "survival",
     "archetype": "perfect_guard",
@@ -468,6 +615,11 @@
   },
   {
     "id": "piercing_draw",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "PIERCING_DRAW_NAME",
     "kind": "weapon",
     "archetype": "piercing_barrage",
@@ -481,6 +633,11 @@
   },
   {
     "id": "tempo_barrage",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "TEMPO_BARRAGE_NAME",
     "kind": "weapon",
     "archetype": "piercing_barrage",
@@ -494,6 +651,11 @@
   },
   {
     "id": "focused_draw",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "FOCUSED_DRAW_NAME",
     "kind": "weapon",
     "archetype": "piercing_barrage",
@@ -507,6 +669,10 @@
   },
   {
     "id": "ricochet_matrix",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RICOCHET_MATRIX_NAME",
     "kind": "weapon",
     "archetype": "piercing_barrage",
@@ -520,6 +686,10 @@
   },
   {
     "id": "railshot_module",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RAILSHOT_MODULE_NAME",
     "kind": "weapon",
     "archetype": "piercing_barrage",
@@ -537,6 +707,10 @@
   },
   {
     "id": "mirror_seed",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "MIRROR_SEED_NAME",
     "kind": "weapon",
     "archetype": "echo_legion",
@@ -550,6 +724,10 @@
   },
   {
     "id": "phantom_lens",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "PHANTOM_LENS_NAME",
     "kind": "survival",
     "archetype": "echo_legion",
@@ -563,6 +741,10 @@
   },
   {
     "id": "legion_core",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "LEGION_CORE_NAME",
     "kind": "weapon",
     "archetype": "echo_legion",
@@ -576,6 +758,10 @@
   },
   {
     "id": "decoy_crown",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "DECOY_CROWN_NAME",
     "kind": "survival",
     "archetype": "echo_legion",
@@ -589,6 +775,10 @@
   },
   {
     "id": "army_of_yesterday",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "ARMY_OF_YESTERDAY_NAME",
     "kind": "time",
     "archetype": "echo_legion",
@@ -607,6 +797,11 @@
   },
   {
     "id": "chronal_battery",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "CHRONAL_BATTERY_NAME",
     "kind": "time",
     "archetype": "",
@@ -620,6 +815,11 @@
   },
   {
     "id": "quickened_blade",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "QUICKENED_BLADE_NAME",
     "kind": "weapon",
     "archetype": "",
@@ -632,6 +832,11 @@
   },
   {
     "id": "rewind_salve",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "REWIND_SALVE_NAME",
     "kind": "survival",
     "archetype": "",
@@ -645,6 +850,11 @@
   },
   {
     "id": "rift_current",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "RIFT_CURRENT_NAME",
     "kind": "time",
     "archetype": "",
@@ -657,6 +867,11 @@
   },
   {
     "id": "sword_edge",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "SWORD_EDGE_NAME",
     "kind": "weapon",
     "archetype": "",
@@ -669,6 +884,11 @@
   },
   {
     "id": "tempered_guard",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
     "name": "TEMPERED_GUARD_NAME",
     "kind": "survival",
     "archetype": "",

@@ -378,7 +378,7 @@ func _rows_by_id(rows: Array) -> Dictionary:
 
 func _assert_legacy_item_semantics(suite, legacy_items: Array, base_items: Array) -> void:
 	var mirrored_fields: Array[String] = [
-		"id", "kind", "archetype", "role", "item_mode", "effects",
+		"id", "availability", "kind", "archetype", "role", "item_mode", "effects",
 	]
 	var active_fields: Array[String] = [
 		"active_handler_id", "cooldown_frames", "active_parameters",

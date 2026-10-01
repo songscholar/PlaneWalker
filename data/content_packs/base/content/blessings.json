@@ -3,7 +3,9 @@
     "id": "bls_rewind_path",
     "category": "blessing",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "BLS_REWIND_PATH_NAME",
     "description_key": "BLS_REWIND_PATH_DESC",
@@ -12,7 +14,11 @@
       "rewind_echo",
       "time"
     ],
-    "compatibility": {},
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
     "effects": {
       "rewind_cost_multiplier": 0.9,
       "rewind_heal": 18.0,
@@ -28,7 +34,9 @@
     "id": "bls_stop_weakpoint",
     "category": "blessing",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "BLS_STOP_WEAKPOINT_NAME",
     "description_key": "BLS_STOP_WEAKPOINT_DESC",
@@ -37,7 +45,11 @@
       "payoff",
       "time"
     ],
-    "compatibility": {},
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
     "effects": {
       "time_stop_weakpoint_damage_bonus": 0.35,
       "time_stop_weakpoint_duration": 3.0
@@ -52,7 +64,9 @@
     "id": "bls_survive_thread",
     "category": "blessing",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "BLS_SURVIVE_THREAD_NAME",
     "description_key": "BLS_SURVIVE_THREAD_DESC",
@@ -77,7 +91,9 @@
     "id": "bls_sword_tempo",
     "category": "blessing",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "BLS_SWORD_TEMPO_NAME",
     "description_key": "BLS_SWORD_TEMPO_DESC",
@@ -86,7 +102,11 @@
       "payoff",
       "weapon"
     ],
-    "compatibility": {},
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ]
+    },
     "effects": {
       "attack_speed_multiplier": 1.08,
       "combo_finisher_multiplier_bonus": 0.2
@@ -96,5 +116,381 @@
     "role": "payoff",
     "rarity": "common",
     "icon_id": "content_bls_sword_tempo"
+  },
+  {
+    "id": "bls_stasis_shatter",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_STASIS_SHATTER_NAME",
+    "description_key": "BLS_STASIS_SHATTER_DESC",
+    "tags": ["freeze_burst", "starter", "time"],
+    "compatibility": {"archetype_ids": ["freeze_burst"]},
+    "effects": {
+      "time_stop_duration_bonus": 0.6,
+      "time_stop_weakpoint_damage_bonus": 0.18
+    },
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_stasis_shatter"
+  },
+  {
+    "id": "bls_cold_execution",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_COLD_EXECUTION_NAME",
+    "description_key": "BLS_COLD_EXECUTION_DESC",
+    "tags": ["freeze_burst", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["freeze_burst"]},
+    "effects": {
+      "attack_multiplier": 1.15,
+      "time_stop_weakpoint_damage_bonus": 0.25
+    },
+    "kind": "weapon",
+    "archetype": "freeze_burst",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_cold_execution"
+  },
+  {
+    "id": "bls_anchor_memory",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_ANCHOR_MEMORY_NAME",
+    "description_key": "BLS_ANCHOR_MEMORY_DESC",
+    "tags": ["rewind_echo", "starter", "survival"],
+    "compatibility": {"archetype_ids": ["rewind_echo"]},
+    "effects": {"max_hp_bonus": 12.0, "rewind_cost_multiplier": 0.88},
+    "kind": "survival",
+    "archetype": "rewind_echo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_anchor_memory"
+  },
+  {
+    "id": "bls_echo_harvest",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_ECHO_HARVEST_NAME",
+    "description_key": "BLS_ECHO_HARVEST_DESC",
+    "tags": ["rewind_echo", "payoff", "time"],
+    "compatibility": {"archetype_ids": ["rewind_echo"]},
+    "effects": {"rewind_heal": 24.0, "rewind_path_hit_multiplier": 0.75},
+    "kind": "time",
+    "archetype": "rewind_echo",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_echo_harvest"
+  },
+  {
+    "id": "bls_folded_ground",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_FOLDED_GROUND_NAME",
+    "description_key": "BLS_FOLDED_GROUND_DESC",
+    "tags": ["rift_trap", "starter", "time"],
+    "compatibility": {"archetype_ids": ["rift_trap"]},
+    "effects": {"time_rift_duration_bonus": 0.75, "time_rift_radius_bonus": 18.0},
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_folded_ground"
+  },
+  {
+    "id": "bls_projectile_slow",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_PROJECTILE_SLOW_NAME",
+    "description_key": "BLS_PROJECTILE_SLOW_DESC",
+    "tags": ["rift_trap", "payoff", "time"],
+    "compatibility": {"archetype_ids": ["rift_trap"]},
+    "effects": {"time_rift_radius_bonus": 12.0, "time_rift_slow_bonus": 0.08},
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_projectile_slow"
+  },
+  {
+    "id": "bls_rift_bloom",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_RIFT_BLOOM_NAME",
+    "description_key": "BLS_RIFT_BLOOM_DESC",
+    "tags": ["rift_trap", "payoff", "time"],
+    "compatibility": {"archetype_ids": ["rift_trap"]},
+    "effects": {
+      "time_rift_cost_multiplier": 0.85,
+      "time_rift_duration_bonus": 0.6,
+      "time_rift_radius_bonus": 24.0
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "payoff",
+    "rarity": "rare",
+    "icon_id": "content_bls_rift_bloom"
+  },
+  {
+    "id": "bls_cadence_chain",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_CADENCE_CHAIN_NAME",
+    "description_key": "BLS_CADENCE_CHAIN_DESC",
+    "tags": ["accelerated_combo", "starter", "weapon"],
+    "compatibility": {"archetype_ids": ["accelerated_combo"]},
+    "effects": {"attack_speed_multiplier": 1.1, "combo_finisher_multiplier_bonus": 0.25},
+    "kind": "weapon",
+    "archetype": "accelerated_combo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_cadence_chain"
+  },
+  {
+    "id": "bls_overdrive_refund",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_OVERDRIVE_REFUND_NAME",
+    "description_key": "BLS_OVERDRIVE_REFUND_DESC",
+    "tags": ["accelerated_combo", "payoff", "time"],
+    "compatibility": {"archetype_ids": ["accelerated_combo"]},
+    "effects": {
+      "time_accelerate_cost_multiplier": 0.85,
+      "time_accelerate_duration_bonus": 0.75
+    },
+    "kind": "time",
+    "archetype": "accelerated_combo",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_overdrive_refund"
+  },
+  {
+    "id": "bls_void_threshold",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_VOID_THRESHOLD_NAME",
+    "description_key": "BLS_VOID_THRESHOLD_DESC",
+    "tags": ["low_hp_void", "starter", "survival"],
+    "compatibility": {"archetype_ids": ["low_hp_void"]},
+    "effects": {"low_hp_damage_multiplier_bonus": 0.3, "max_hp_bonus": 15.0},
+    "kind": "survival",
+    "archetype": "low_hp_void",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_void_threshold"
+  },
+  {
+    "id": "bls_hunger_conversion",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_HUNGER_CONVERSION_NAME",
+    "description_key": "BLS_HUNGER_CONVERSION_DESC",
+    "tags": ["low_hp_void", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["low_hp_void"]},
+    "effects": {"attack_speed_multiplier": 1.08, "low_hp_damage_multiplier_bonus": 0.45},
+    "kind": "weapon",
+    "archetype": "low_hp_void",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_hunger_conversion"
+  },
+  {
+    "id": "bls_bloodless_focus",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_BLOODLESS_FOCUS_NAME",
+    "description_key": "BLS_BLOODLESS_FOCUS_DESC",
+    "tags": ["low_hp_void", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["low_hp_void"]},
+    "effects": {"attack_multiplier": 1.12, "low_hp_damage_multiplier_bonus": 0.35},
+    "kind": "weapon",
+    "archetype": "low_hp_void",
+    "role": "payoff",
+    "rarity": "rare",
+    "icon_id": "content_bls_bloodless_focus"
+  },
+  {
+    "id": "bls_counter_window",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_COUNTER_WINDOW_NAME",
+    "description_key": "BLS_COUNTER_WINDOW_DESC",
+    "tags": ["perfect_guard", "starter", "weapon"],
+    "compatibility": {"archetype_ids": ["perfect_guard"]},
+    "effects": {"defense_bonus": 2.0, "heavy_damage_multiplier_bonus": 0.2},
+    "kind": "weapon",
+    "archetype": "perfect_guard",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_counter_window"
+  },
+  {
+    "id": "bls_guard_reserve",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_GUARD_RESERVE_NAME",
+    "description_key": "BLS_GUARD_RESERVE_DESC",
+    "tags": ["perfect_guard", "payoff", "survival"],
+    "compatibility": {"archetype_ids": ["perfect_guard"]},
+    "effects": {"defense_bonus": 2.0, "time_energy_max_bonus": 20.0},
+    "kind": "survival",
+    "archetype": "perfect_guard",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_guard_reserve"
+  },
+  {
+    "id": "bls_aegis_tempo",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_AEGIS_TEMPO_NAME",
+    "description_key": "BLS_AEGIS_TEMPO_DESC",
+    "tags": ["perfect_guard", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["perfect_guard"]},
+    "effects": {"attack_speed_multiplier": 1.08, "heavy_damage_multiplier_bonus": 0.3},
+    "kind": "weapon",
+    "archetype": "perfect_guard",
+    "role": "payoff",
+    "rarity": "rare",
+    "icon_id": "content_bls_aegis_tempo"
+  },
+  {
+    "id": "bls_piercing_line",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_PIERCING_LINE_NAME",
+    "description_key": "BLS_PIERCING_LINE_DESC",
+    "tags": ["piercing_barrage", "starter", "weapon"],
+    "compatibility": {"archetype_ids": ["piercing_barrage"]},
+    "effects": {"bow_charge_rate_bonus": 0.15, "bow_pierce_bonus": 1},
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_piercing_line"
+  },
+  {
+    "id": "bls_weakpoint_refund",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_WEAKPOINT_REFUND_NAME",
+    "description_key": "BLS_WEAKPOINT_REFUND_DESC",
+    "tags": ["piercing_barrage", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["piercing_barrage"]},
+    "effects": {"bow_charge_rate_bonus": 0.2, "time_energy_max_bonus": 15.0},
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_weakpoint_refund"
+  },
+  {
+    "id": "bls_ballistic_clock",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_BALLISTIC_CLOCK_NAME",
+    "description_key": "BLS_BALLISTIC_CLOCK_DESC",
+    "tags": ["piercing_barrage", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["piercing_barrage"]},
+    "effects": {
+      "attack_speed_multiplier": 1.06,
+      "bow_full_charge_damage_multiplier_bonus": 0.25
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "payoff",
+    "rarity": "rare",
+    "icon_id": "content_bls_ballistic_clock"
+  },
+  {
+    "id": "bls_mirror_action",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_MIRROR_ACTION_NAME",
+    "description_key": "BLS_MIRROR_ACTION_DESC",
+    "tags": ["echo_legion", "starter", "positioning"],
+    "compatibility": {"archetype_ids": ["echo_legion"]},
+    "effects": {"attack_speed_multiplier": 1.08, "dash_invulnerable_bonus": 0.04},
+    "kind": "positioning",
+    "archetype": "echo_legion",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_bls_mirror_action"
+  },
+  {
+    "id": "bls_legion_focus",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_LEGION_FOCUS_NAME",
+    "description_key": "BLS_LEGION_FOCUS_DESC",
+    "tags": ["echo_legion", "payoff", "weapon"],
+    "compatibility": {"archetype_ids": ["echo_legion"]},
+    "effects": {"attack_multiplier": 1.12, "time_energy_max_bonus": 15.0},
+    "kind": "weapon",
+    "archetype": "echo_legion",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_legion_focus"
+  },
+  {
+    "id": "bls_decoy_stride",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_DECOY_STRIDE_NAME",
+    "description_key": "BLS_DECOY_STRIDE_DESC",
+    "tags": ["echo_legion", "payoff", "positioning"],
+    "compatibility": {"archetype_ids": ["echo_legion"]},
+    "effects": {"dash_invulnerable_bonus": 0.06, "defense_bonus": 2.0},
+    "kind": "positioning",
+    "archetype": "echo_legion",
+    "role": "payoff",
+    "rarity": "rare",
+    "icon_id": "content_bls_decoy_stride"
+  },
+  {
+    "id": "bls_chronal_reserve",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_CHRONAL_RESERVE_NAME",
+    "description_key": "BLS_CHRONAL_RESERVE_DESC",
+    "tags": ["economy", "generalist", "utility"],
+    "compatibility": {},
+    "effects": {"time_energy_max_bonus": 25.0, "time_energy_regen_bonus": 2.0},
+    "kind": "economy",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_bls_chronal_reserve"
+  },
+  {
+    "id": "bls_wayfinder_mercy",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_WAYFINDER_MERCY_NAME",
+    "description_key": "BLS_WAYFINDER_MERCY_DESC",
+    "tags": ["generalist", "survival", "utility"],
+    "compatibility": {},
+    "effects": {"invulnerable_duration": 0.5, "max_hp_bonus": 15.0},
+    "kind": "survival",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "common",
+    "icon_id": "content_bls_wayfinder_mercy"
+  },
+  {
+    "id": "bls_adaptive_arsenal",
+    "category": "blessing",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "name_key": "BLS_ADAPTIVE_ARSENAL_NAME",
+    "description_key": "BLS_ADAPTIVE_ARSENAL_DESC",
+    "tags": ["generalist", "utility", "weapon"],
+    "compatibility": {},
+    "effects": {"attack_multiplier": 1.08, "attack_speed_multiplier": 1.06},
+    "kind": "weapon",
+    "archetype": "",
+    "role": "utility",
+    "rarity": "uncommon",
+    "icon_id": "content_bls_adaptive_arsenal"
   }
 ]
