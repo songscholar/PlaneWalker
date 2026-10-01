@@ -6,8 +6,8 @@
 - Applies To: Character runtime profiles, fresh Stats, character actions, weapon mastery, five character mechanics, fifteen talents, Launch selection, HUD, presentation, replay, 150 loadouts, simulations, and certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
-- Last Verified: 2026-09-30
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Gameplay Rewind committed at `87eb931`; Task 2B fixed-frame transactional authority certified at `bc6e9eb`; Task 2C is next
+- Last Verified: 2026-10-01
+- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Gameplay Rewind committed at `87eb931`; Task 2B fixed-frame transactional authority certified at `bc6e9eb`; Task 2C atomic character runtime shell committed at `3d2c6de`; Task 2D is next
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -717,7 +717,7 @@ Committed as `bc6e9eb` (`feat(time): unify fixed-frame transactional authority`)
 - Consumes: authoritative character profile, selected talents, Player owner, and Player frame/lifecycle hooks.
 - Produces: atomic `configure_character(profile, talents)`, `Stats.apply_profile(base_stats)`, `PlayerController.apply_mobility_profile(mobility)`, `advance_frame(context)`, `try_character_skill(intent, context)`, lifecycle hooks, `snapshot()`, `restore_snapshot()`, and `presentation_snapshot()`.
 
-- [ ] **Step 1: Write failing fresh-state and rollback tests**
+- [x] **Step 1: Write failing fresh-state and rollback tests**
 
 ```gdscript
 func test_failed_character_swap_preserves_complete_prior_runtime() -> void:
@@ -763,7 +763,7 @@ func _config_with_forged_character_profile() -> Dictionary:
 
 Cover all six exact profile rows, including attack speed, critical chance/multiplier, Time max/regen, and every Dash field. Cover health/current HP, energy/max/regen, weapon runtime, PlayerActionState, character runtime, presentation, and Replay-prefix rollback. Reject missing numeric keys instead of falling back to `Stats` or Player constants.
 
-- [ ] **Step 2: Confirm RED**
+- [x] **Step 2: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter player_character_runtime
@@ -772,7 +772,7 @@ Cover all six exact profile rows, including attack speed, critical chance/multip
 ./tools/run_tests.sh --filter sword_m1_parity
 ```
 
-- [ ] **Step 3: Implement the runtime shell**
+- [x] **Step 3: Implement the runtime shell**
 
 ```gdscript
 class_name CharacterRuntime
@@ -799,15 +799,15 @@ func presentation_snapshot() -> Dictionary: return {}
 
 The coordinator deep-copies committed plans, uses generation/token floors, never advances from `_process()`, and publishes nothing on rejection.
 
-- [ ] **Step 4: Add fresh Stats and mobility reconstruction plus universal weapon scaling**
+- [x] **Step 4: Add fresh Stats and mobility reconstruction plus universal weapon scaling**
 
 Add `Stats.apply_profile(base_stats)` and `Stats.snapshot()`. Replace Player Dash constants as gameplay authority with an installed mobility snapshot containing integer `dash_duration_frames`, `dash_cooldown_frames`, `dash_invulnerable_frames`, finite `dash_speed`, and the explicit P12 pair `dash_cost_kind: "none"` / `dash_cost: 0`. Rebuild Stats and mobility before health/energy sync and before run-local rewards. Freeze `character_attack_scale = stats.attack / 30.0`, attack speed, critical chance, and critical multiplier into every weapon plan/payload so Wanderer remains exact and all five weapons respond consistently.
 
-- [ ] **Step 5: Install character and weapon atomically**
+- [x] **Step 5: Install character and weapon atomically**
 
 The Host injects both profiles. `PlayerController.configure_loadout()` validates and assembles both runtimes before disconnecting the prior runtime. Candidate assembly does not change `owner_character_generation`; successful atomic activation increments it exactly once and injects the committed run ID/generation into Character Runtime and WorldPayloadAuthority. Failed character activation, weapon activation, adapter activation, health sync, or energy sync restores the exact prior generation and state.
 
-- [ ] **Step 6: Run shell and parity gates**
+- [x] **Step 6: Run shell and parity gates**
 
 ```bash
 ./tools/run_tests.sh --filter character_action_coordinator
@@ -825,12 +825,23 @@ The Host injects both profiles. `PlayerController.configure_loadout()` validates
 
 Expected: M1 and the certified P11 30-loadout matrix remain green; each Launch profile reports the exact stats/mobility row above after two fresh-run reconstructions.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- scripts/player/characters/character_runtime.gd scripts/player/characters/player_character_runtime.gd scripts/player/characters/character_runtime_factory.gd scripts/player/characters/character_action_contract.gd scripts/player/characters/character_action_coordinator.gd scripts/core/stats.gd scripts/combat/sword_weapon.gd scripts/combat/bow_weapon.gd scripts/combat/gun_weapon.gd scripts/combat/staff_weapon.gd scripts/combat/gauntlets_weapon.gd scripts/combat/weapons/sword_weapon_runtime.gd scripts/combat/weapons/bow_weapon_runtime.gd scripts/combat/weapons/gun_weapon_runtime.gd scripts/combat/weapons/staff_weapon_runtime.gd scripts/combat/weapons/gauntlets_weapon_runtime.gd scripts/player/player_loadout_runtime.gd scripts/player/player_controller.gd scripts/application/run_runtime_host.gd scripts/player/player_action_state.gd tests/characters/character_action_coordinator_test.gd tests/characters/character_action_coordinator_test.tscn tests/characters/player_character_runtime_test.gd tests/characters/player_character_runtime_test.tscn tests/player/player_loadout_runtime_test.gd tests/integration/application/run_runtime_host_test.gd tests/combat/sword_m1_parity_test.gd tests/combat/sword_weapon_runtime_test.gd tests/combat/bow_weapon_runtime_test.gd tests/combat/gun_weapon_runtime_test.gd tests/combat/staff_weapon_runtime_test.gd tests/combat/gauntlets_weapon_runtime_test.gd
 git commit -m "feat(characters): add atomic character runtime shell"
 ```
+
+**Task 2C evidence — 2026-10-01:**
+
+- Commit: `3d2c6de feat(characters): add atomic character runtime shell`.
+- Added six-kind Character Runtime construction, strict strategy snapshots, lifecycle hooks, generation/token authority, and fail-closed restore integrity.
+- Rebuilt `Stats`, mobility, Health, Time Energy, Character Runtime, and five weapon adapters from the authoritative milestone-aware Character Profile on every accepted activation.
+- Sealed Character Profile, talents, Stats, mobility, and Character action authority into Full Player Replay schema v2; legacy v1 Replay/frame/snapshot inputs reject explicitly.
+- Preserved Weapon Replay through a narrow replay-neutral allowlist for talent-free, resource-initial Wanderer M1/Launch shells; every other Profile, talent, resource drift, action token/plan, invalid frame, or restore-integrity fault rejects without mutation.
+- Certified fixed-at-press character combat attributes through Sword, Bow, Gun, Staff, and Gauntlets, including Hold-to-Release live-context refresh and Sword M1 plan-integrity rejection.
+- Full repository scene gate: `125 passed, 0 failed, 125 total`; one pre-existing `reward_system_smoke` ObjectDB leak warning remains allowlisted.
+- Godot headless launch exited `0`; no `SCRIPT ERROR`, `Parse Error`, unexpected ObjectDB leak, or RID leak was detected. `git diff --check` passed before commit.
 
 ### Task 2D: P12B semantic input, mastery families, and deterministic hooks
 
