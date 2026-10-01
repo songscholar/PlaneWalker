@@ -341,7 +341,7 @@ func _validate_and_normalize(source: Dictionary) -> Dictionary:
 		return handler_identity_error
 
 	var normalized := source.duplicate(true)
-	for field: String in ["availability", "tags", "references", "capabilities", "talent_ids"]:
+	for field: String in ["availability", "tags", "references", "capabilities"]:
 		var values: Array = normalized[field]
 		values.sort()
 		normalized[field] = values
@@ -481,7 +481,10 @@ func _handler_identity_error(source: Dictionary) -> Dictionary:
 
 
 func _exact_talents_error(value: Array, expected: Array[String]) -> Dictionary:
-	if _sorted_strings(value) != _sorted_strings(expected):
+	var actual: Array[String] = []
+	for talent_id: Variant in value:
+		actual.append(str(talent_id))
+	if actual != expected:
 		return _failure("talent_ids", "character_talent_mismatch")
 	return {}
 

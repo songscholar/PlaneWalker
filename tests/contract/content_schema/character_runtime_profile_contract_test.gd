@@ -97,6 +97,11 @@ func _test_catalog(suite, definitions: Array[Dictionary]) -> void:
 		if not bool(result.get("ok", false)):
 			continue
 		var snapshot := parser.snapshot()
+		suite.assert_equal(
+			snapshot.get("talent_ids", []),
+			definition.get("talent_ids", []),
+			"%s preserves authored canonical talent order" % definition["id"]
+		)
 		var expected: Array = EXPECTED_NUMBERS[str(definition["id"])]
 		var stats: Dictionary = snapshot.get("base_stats", {})
 		var mobility: Dictionary = snapshot.get("mobility", {})
@@ -232,6 +237,7 @@ func _test_fail_closed_and_deep_copy(suite, definitions: Array[Dictionary]) -> v
 		_case("unknown time handler", func(value: Dictionary): value["time_interactions"]["stop"]["handler_id"] = "hostile"),
 		_case("unknown talent", func(value: Dictionary): value["talent_ids"] = ["unknown_talent"]),
 		_case("cross-character talent", func(value: Dictionary): value["talent_ids"] = ["widened_guard", "fortress_core", "temporal_rebuke"]),
+		_case("shuffled talent order", func(value: Dictionary): value["talent_ids"].reverse()),
 		_case("missing weapon coverage", func(value: Dictionary): value["weapon_mastery"].erase("bow")),
 		_case("missing time coverage", func(value: Dictionary): value["time_interactions"].erase("rift")),
 		_case("unknown weapon reference", func(value: Dictionary): value["references"][1] = "unknown_weapon"),
