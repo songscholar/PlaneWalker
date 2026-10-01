@@ -30,6 +30,17 @@ class FixtureRegistry:
 			matches.append(entry.duplicate(true))
 		return matches
 
+	func get_archetype_profiles(availability: StringName = &"") -> Array[Dictionary]:
+		return get_by_category(&"archetype_profile", availability)
+
+	func get_archetype_profile(archetype_id: StringName) -> Dictionary:
+		for entry: Dictionary in entries:
+			if str(entry.get("category", "")) != "archetype_profile":
+				continue
+			if str(entry.get("archetype_id", "")) == str(archetype_id):
+				return entry.duplicate(true)
+		return {}
+
 
 func _ready() -> void:
 	call_deferred("_run")

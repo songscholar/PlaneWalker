@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/0_深度收敛与系统职责设计.md`, `docs/contracts/content-pack-v2.md`, `docs/current/2026-09-30-p12-five-characters-evidence.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Tasks 1-2 complete locally; Task 3 milestone-aware drafting is next
+- Implementation Status: Tasks 1-3 complete locally; Task 4 build-state and HUD contracts are next
 - Exit Gate: Exactly eight versioned Launch archetype profiles resolve through ContentRegistry, every non-empty content archetype reference is validated, M1 drafting remains byte-for-byte compatible, Launch drafting is milestone-aware, build/UI state rejects unknown archetypes, and the complete repository gate remains green
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -221,7 +221,7 @@ git commit -m "feat(content): validate launch archetype references"
 - Consumes: `state_snapshot.config.milestone`, Registry archetype profiles, and milestone-filtered reward definitions.
 - Produces: deterministic M1 three-route drafts, Launch eight-route starter/reinforcement policy, and fail-closed insufficient-pool diagnostics.
 
-- [ ] **Step 1: Write failing M1 parity and Launch routing tests**
+- [x] **Step 1: Write failing M1 parity and Launch routing tests**
 
 Keep the existing 1000-seed M1 starter assertion unchanged. Add an eight-route fixture with three starters, two payoffs, and one risk row per archetype. For every canonical seed `20260901..20260930`, assert:
 
@@ -240,7 +240,7 @@ suite.assert_true(
 
 Reinforcement requires one dominant payoff, one alternative starter, and one utility/safety option. Unknown milestone, unknown dominant archetype, unavailable profile, insufficient coverage, owned-content exhaustion, and noncanonical cached offer identity fail without altering the offer cache.
 
-- [ ] **Step 2: Run DraftService tests and confirm RED**
+- [x] **Step 2: Run DraftService tests and confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter draft_service
@@ -249,7 +249,7 @@ Reinforcement requires one dominant payoff, one alternative starter, and one uti
 
 Expected: M1 remains green and the Launch tests fail because drafting is hard-coded to M1 and three routes.
 
-- [ ] **Step 3: Implement milestone routing**
+- [x] **Step 3: Implement milestone routing**
 
 Read the milestone from `state_snapshot.config.milestone`, defaulting to `M1` only when the field is absent for legacy tests. Query reward categories and archetype profiles at that milestone. Replace `STARTER_ARCHETYPES` with:
 
@@ -267,7 +267,7 @@ func _allowed_archetypes(registry, milestone: StringName) -> Array[String]:
 
 The public offer remains exactly three options. Seed channels include milestone and profile digest so M1 sequences remain unchanged and Launch sequences are deterministic.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 ```bash
 ./tools/run_tests.sh --filter draft_service
