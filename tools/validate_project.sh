@@ -184,7 +184,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_v
 PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_localization.py
 
 printf '\n== Playtest data contracts ==\n'
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.playtest.test_playtest_data
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+	tests.contract.playtest.test_playtest_data \
+	tests.contract.playtest.test_weapon_simulation_report \
+	tests.contract.playtest.test_character_weapon_simulation_report
 
 printf '\n== M1 release gate contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.m1.test_m1_gate
