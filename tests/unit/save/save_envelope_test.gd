@@ -4,7 +4,8 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
-const PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v1.json"
+const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
+const PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v2.json"
 const SNAPSHOT_FIXTURE_PATH := "res://tests/fixtures/save/pack_snapshots/base_a.json"
 
 
@@ -20,6 +21,8 @@ func _run() -> void:
 	_test_relative_path_policy(suite)
 	_test_canonical_json_and_digest(suite)
 	_test_profile_envelope_round_trip(suite)
+	_test_native_v2_profile_runtime_fields_are_strict(suite)
+	_test_native_v2_runtime_state_survives_json_round_trip(suite)
 	_test_settings_envelope_round_trip(suite)
 	_test_settings_v1_backward_compatibility(suite)
 	_test_accessibility_settings_validation(suite)
@@ -135,7 +138,22 @@ func _test_profile_envelope_round_trip(suite) -> void:
 	var envelope: Dictionary = created.payload
 	suite.assert_equal(envelope, expected, "profile creation reproduces the frozen deterministic fixture")
 	suite.assert_equal(envelope.get("magic"), "PWSAVE", "envelope uses the frozen magic value")
-	suite.assert_equal(envelope.get("schema_version"), 1, "envelope uses schema version one")
+	suite.assert_equal(envelope.get("schema_version"), 2, "envelope uses schema version two")
+	suite.assert_equal(
+		(SaveEnvelopeScript.validate(
+			envelope,
+			&"profile",
+			"slot_1",
+			"base"
+		).payload.get("payload", {}) as Dictionary).get("active_item_state"),
+		SaveEnvelopeScript.empty_active_item_state(),
+		"native v2 profile includes explicit empty active-item state"
+	)
+	suite.assert_equal(
+		envelope.get("payload", {}).get("reward_effect_state"),
+		{},
+		"native v2 profile includes explicit empty reward-effect state"
+	)
 	suite.assert_equal(envelope.get("document_kind"), "profile", "envelope records its document kind")
 	suite.assert_equal(envelope.get("profile_id"), "slot_1", "profile envelope records its profile id")
 	suite.assert_equal(envelope.get("save_domain"), "base", "profile envelope records its save domain")
@@ -165,6 +183,151 @@ func _test_profile_envelope_round_trip(suite) -> void:
 	for key: Variant in keys:
 		reordered_copy[key] = reordered[key]
 	suite.assert_true(SaveEnvelopeScript.validate(reordered_copy, &"profile", "slot_1", "base").ok, "envelope validation is independent of dictionary insertion order")
+
+
+func _test_native_v2_profile_runtime_fields_are_strict(suite) -> void:
+	var valid := _read_json(PROFILE_FIXTURE_PATH, suite)
+	for malformed: Dictionary in [
+		{"field": "active_item_state", "value": null},
+		{"field": "active_item_state", "value": {}},
+		{"field": "active_item_state", "value": {"unknown": true}},
+		{"field": "reward_effect_state", "value": null},
+		{"field": "reward_effect_state", "value": {"unknown": true}},
+	]:
+		var candidate := valid.duplicate(true)
+		candidate["payload"][malformed["field"]] = malformed["value"]
+		suite.assert_equal(
+			SaveEnvelopeScript.validate(candidate, &"profile", "slot_1", "base").code,
+			&"CORRUPT",
+			"native v2 rejects malformed %s" % str(malformed["field"])
+		)
+	for missing_field: String in ["active_item_state", "reward_effect_state"]:
+		var missing := valid.duplicate(true)
+		missing["payload"].erase(missing_field)
+		suite.assert_equal(
+			SaveEnvelopeScript.validate(missing, &"profile", "slot_1", "base").code,
+			&"CORRUPT",
+			"native v2 requires %s" % missing_field
+		)
+
+
+func _test_native_v2_runtime_state_survives_json_round_trip(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var runtime = ActiveItemRuntimeScript.new()
+	suite.assert_true(runtime.configure(_configured_active_definition()), "configured active fixture is valid")
+	var active_state: Dictionary = runtime.snapshot()
+	var reward_state := _non_empty_reward_state()
+	var payload := {
+		"active_item_state": active_state,
+		"reward_effect_state": reward_state,
+	}
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 13, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:05:00Z",
+		fixture.get("content_snapshot", {}), payload
+	)
+	suite.assert_true(
+		created.ok,
+		"configured runtime v2 envelope creates: %s" % str(created.to_dictionary())
+	)
+	if not created.ok:
+		return
+	var parsed: Variant = JSON.parse_string(JSON.stringify(created.payload, "", true, true))
+	var validated = SaveEnvelopeScript.validate(parsed, &"profile", "slot_1", "base")
+	suite.assert_true(validated.ok, "configured runtime v2 validates after actual JSON round trip")
+	if validated.ok:
+		suite.assert_equal(validated.payload["payload"]["active_item_state"], active_state, "configured active integers normalize losslessly")
+		suite.assert_equal(validated.payload["payload"]["reward_effect_state"], reward_state, "non-empty reward integers normalize losslessly")
+
+
+func _configured_active_definition() -> Dictionary:
+	return {
+		"id": "absolute_zero_device",
+		"category": "item",
+		"availability": ["LAUNCH"],
+		"name_key": "ACTIVE_NAME",
+		"description_key": "ACTIVE_DESC",
+		"tags": ["active", "risk", "freeze_burst"],
+		"compatibility": {"archetype_ids": ["freeze_burst"]},
+		"effects": {},
+		"kind": "time",
+		"archetype": "freeze_burst",
+		"role": "risk",
+		"rarity": "rare",
+		"icon_id": "content_absolute_zero_device",
+		"item_mode": "active",
+		"active_handler_id": "absolute_zero",
+		"cooldown_frames": 900,
+		"active_parameters": {
+			"radius": 180.0,
+			"duration_frames": 180,
+			"weakpoint_bonus": 0.5,
+			"energy_cost": 35.0,
+		},
+	}
+
+
+func _non_empty_reward_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"stats": {
+			"max_hp": 100.0, "attack": 10.0, "defense": 0.0,
+			"move_speed": 200.0, "attack_speed": 1.0, "crit_chance": 0.05,
+			"crit_multiplier": 1.5, "time_energy_max": 100.0,
+			"time_energy_regen": 2.0,
+		},
+		"health": {
+			"current_hp": 100.0, "max_hp": 100.0, "defense": 0.0,
+			"healing_multiplier": 1.0, "dead": false, "invulnerable": true,
+			"invulnerability_token": 1, "reward_invulnerability_tokens": [1],
+			"reward_invulnerability_remaining": {"1": 45},
+		},
+		"time": {
+			"energy": 100.0, "max_energy": 100.0, "resource_revision": 1,
+			"time_stop_duration_bonus": 0.0, "time_stop_cost_multiplier": 1.0,
+			"time_stop_weakpoint_damage_bonus": 0.0, "time_stop_weakpoint_duration": 0.0,
+			"time_stop_self_damage": 0.0, "rewind_cost_multiplier": 1.0,
+			"rewind_heal": 0.0, "rewind_echo_enabled": false,
+			"rewind_path_hit_multiplier": 0.0, "rewind_self_damage": 0.0,
+			"time_rift_cost_multiplier": 1.0, "time_rift_duration_bonus": 0.0,
+			"time_rift_radius_bonus": 0.0, "time_rift_slow_bonus": 0.0,
+			"time_accelerate_cost_multiplier": 1.0,
+			"time_accelerate_duration_bonus": 0.0,
+			"time_accelerate_multiplier_bonus": 0.0,
+			"low_energy_regen_multiplier": 1.0, "low_energy_threshold": 30.0,
+		},
+		"weapon": {
+			"modifiers": {},
+			"runtime": {
+				"sword": {
+					"schema_version": 1, "combo_step": 2,
+					"combo_timeout_remaining": 18, "last_runtime_frame": 40,
+					"active_token": 3, "adapter": {"combo_index": 2},
+				},
+				"bow": {
+					"schema_version": 1, "active_token": 4,
+					"reward_eligible_tokens": [2, 4],
+					"adapter_snapshot": {"last_runtime_frame": 40},
+				},
+				"gun": {
+					"schema_version": 1, "ammo": 8,
+					"time_load_remaining_frames": 12, "reload_frame": 40,
+					"active_token": 5,
+				},
+				"staff": {
+					"schema_version": 1, "combo_remaining_frames": 24,
+					"claimed_rewind_generations": [1, 3],
+					"claimed_rewind_generation_floor": 3, "active_token": 6,
+				},
+				"gauntlets": {
+					"schema_version": 1, "chain_step": 3, "combo_count": 5,
+					"combo_remaining_frames": 20, "action_token_floor": 7,
+					"aura_source_generation": 2, "active_token": 8,
+				},
+			},
+		},
+		"character": {"dash_invulnerable_bonus": 0.0},
+	}
 
 
 func _test_settings_envelope_round_trip(suite) -> void:
@@ -306,7 +469,7 @@ func _test_envelope_rejects_invalid_documents(suite) -> void:
 	var profile := _read_json(PROFILE_FIXTURE_PATH, suite)
 
 	var forward := profile.duplicate(true)
-	forward["schema_version"] = 2
+	forward["schema_version"] = 3
 	suite.assert_equal(SaveEnvelopeScript.validate(forward).code, &"FORWARD_VERSION", "forward save schema is refused explicitly")
 
 	var wrong_kind: RefCounted = SaveEnvelopeScript.validate(profile, &"settings")

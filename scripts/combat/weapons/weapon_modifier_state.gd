@@ -78,7 +78,18 @@ func apply_batch(values: Dictionary) -> bool:
 
 
 func restore_snapshot(values: Dictionary) -> bool:
+	if not can_restore_snapshot(values):
+		return false
 	var restored_values: Dictionary = {}
+	for capability_value: Variant in values.keys():
+		var capability := StringName(str(capability_value))
+		var value: Variant = values[capability_value]
+		restored_values[str(capability)] = float(value)
+	_values = restored_values
+	return true
+
+
+func can_restore_snapshot(values: Dictionary) -> bool:
 	for capability_value: Variant in values.keys():
 		if typeof(capability_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
 			return false
@@ -90,8 +101,6 @@ func restore_snapshot(values: Dictionary) -> bool:
 			or not _value_is_bounded(capability, float(value))
 		):
 			return false
-		restored_values[str(capability)] = float(value)
-	_values = restored_values
 	return true
 
 

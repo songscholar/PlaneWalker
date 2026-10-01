@@ -4,6 +4,24 @@ const PlayerScene := preload("res://scenes/player/player.tscn")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const ReplayPlayerScript := preload("res://scripts/replay/replay_player.gd")
+const M1_PLAYER_STATE_FIELDS: Array[String] = [
+	"buffered_time_skill",
+	"character_input_owner",
+	"combo_timeout_frames",
+	"dash_completed_at_runtime_frame",
+	"dash_completion_token",
+	"dash_cooldown_remaining_frames",
+	"dash_direction",
+	"dash_velocity",
+	"facing",
+	"knockback_velocity",
+	"next_time_action_token",
+	"position",
+	"priority_arbitration",
+	"time_action_generation",
+	"velocity",
+	"weapon_aim_direction",
+]
 
 var _suite
 var _captured_time_facts: Array[Dictionary] = []
@@ -108,6 +126,38 @@ func _test_full_player_v1_schema_is_explicitly_rejected() -> void:
 		and not snapshot.has("live_talent_state"),
 		"M1 schema v2 excludes Launch reward and live-talent sealing fields"
 	)
+	var player_state_fields: Array = (snapshot.get("player_state", {}) as Dictionary).keys()
+	player_state_fields.sort()
+	_suite.assert_equal(
+		player_state_fields,
+		M1_PLAYER_STATE_FIELDS,
+		"M1 schema v2 preserves the exact historical player-state field set"
+	)
+	var historical_target := await _spawn_player()
+	_suite.assert_true(
+		historical_target.restore_full_player_replay_snapshot(snapshot),
+		"fresh M1 target restores the frozen schema-v2 checkpoint"
+	)
+	_suite.assert_equal(
+		historical_target.full_player_replay_snapshot(),
+		snapshot,
+		"M1 schema-v2 checkpoint remains byte-exact after a real Player round trip"
+	)
+	var forged_m1 := snapshot.duplicate(true)
+	(forged_m1.get("player_state", {}) as Dictionary)["invulnerability_state"] = (
+		source.get("health").call("invulnerability_replay_snapshot") as Dictionary
+	).duplicate(true)
+	var historical_before: Dictionary = historical_target.full_player_replay_snapshot()
+	_suite.assert_true(
+		not historical_target.restore_full_player_replay_snapshot(forged_m1),
+		"M1 schema v2 rejects a Launch-only player-state field"
+	)
+	_suite.assert_equal(
+		historical_target.full_player_replay_snapshot(),
+		historical_before,
+		"M1 extra-field rejection preserves the target atomically"
+	)
+	await _free_player(historical_target)
 
 	var legacy_replay := replay.duplicate(true)
 	legacy_replay["schema_version"] = 1

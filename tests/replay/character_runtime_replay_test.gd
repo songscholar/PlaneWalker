@@ -15,6 +15,29 @@ const CHARACTER_IDS: Array[StringName] = [
 	&"time_lord",
 ]
 
+class FailOnceActiveItemRuntime:
+	extends RefCounted
+
+	var _snapshot: Dictionary
+	var _fail_next_restore: bool = true
+
+	func _init(snapshot: Dictionary) -> void:
+		_snapshot = snapshot.duplicate(true)
+
+	func snapshot() -> Dictionary:
+		return _snapshot.duplicate(true)
+
+	func can_restore_snapshot(value: Dictionary) -> bool:
+		return value.size() == _snapshot.size()
+
+	func restore_snapshot(value: Dictionary) -> bool:
+		if _fail_next_restore:
+			_fail_next_restore = false
+			return false
+		_snapshot = value.duplicate(true)
+		return true
+
+
 var _suite
 var _registry: RefCounted
 
@@ -34,7 +57,8 @@ func _run() -> void:
 		await _test_five_character_round_trips()
 		await _test_passive_and_live_talent_round_trip_and_drift_rejection()
 		await _test_active_item_round_trip_and_tamper_rejection()
-		await _test_legacy_launch_v4_and_v5_migrate_after_authentication()
+		await _test_dash_and_reward_invulnerability_round_trip_and_rollback()
+		await _test_legacy_launch_v4_and_v5_fail_closed_after_authentication()
 	_suite.finish(get_tree())
 
 
@@ -61,6 +85,12 @@ func _test_five_character_round_trips() -> void:
 		_suite.assert_true(
 			initial.get("live_talent_state") is Dictionary,
 			"%s Launch snapshot seals live talent definitions and modifiers" % label
+		)
+		_suite.assert_true(
+			(initial.get("player_state", {}) as Dictionary).get(
+				"invulnerability_state"
+			) is Dictionary,
+			"%s Launch schema 6 seals non-reward invulnerability state" % label
 		)
 
 		var recorder = ReplayRecorderScript.new()
@@ -150,17 +180,78 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 	var passive_definition := {
 		"id": "replay_passive_fixture",
 		"category": "item",
-		"effects": {"max_hp_bonus": 12.0},
+		"effects": {
+			"max_hp_bonus": 12.0,
+			"time_stop_duration_bonus": 0.75,
+			"invulnerable_duration": 1.0,
+		},
 	}
+	var active_definition: Dictionary = _registry.call(
+		"get_content",
+		&"absolute_zero_device"
+	)
+	var identity: Dictionary = source.full_player_replay_identity()
+	var identity_digest := ReplayRecorderScript.value_digest(identity)
+	var recorder = ReplayRecorderScript.new()
 	_suite.assert_true(
-		source.install_character_talent(talent_definition),
-		"Launch Replay fixture installs a live content-driven talent"
+		bool(recorder.start_full_player_recording(identity, 5151).get("ok", false)),
+		"sealed Launch Replay recording starts before live rewards"
+	)
+	var initial: Dictionary = source.full_player_replay_snapshot()
+	_suite.assert_true(
+		bool(recorder.record_full_player_frame(
+			initial,
+			_frame_intents(int(initial.get("frame", 0))),
+			[]
+		).get("ok", false)),
+		"sealed Launch Replay records the reward-free initial checkpoint"
 	)
 	_suite.assert_true(
 		bool(source.apply_reward(passive_definition).get("ok", false)),
-		"Launch Replay fixture applies a passive reward effect"
+		"Launch Replay fixture applies a passive reward after recording starts"
 	)
-	var identity: Dictionary = source.full_player_replay_identity()
+	var reward_before_rejected_frame: Dictionary = source.reward_effect_snapshot()
+	source.get("weapon_action_coordinator").set("_frame_event_commit_fault_for_test", true)
+	_suite.assert_true(
+		not source.advance_action_frame({}),
+		"rejected fixed frame reaches post-decrement rollback"
+	)
+	source.get("weapon_action_coordinator").set("_frame_event_commit_fault_for_test", false)
+	_suite.assert_equal(
+		source.reward_effect_snapshot(),
+		reward_before_rejected_frame,
+		"rejected fixed frame preserves reward invulnerability remaining frames"
+	)
+	_suite.assert_equal(
+		ReplayRecorderScript.value_digest(source.full_player_replay_identity()),
+		identity_digest,
+		"passive rewards do not mutate the frozen Launch Replay identity"
+	)
+	_suite.assert_true(
+		source.install_character_talent(talent_definition),
+		"Launch Replay fixture installs a live talent after the passive reward"
+	)
+	_suite.assert_equal(
+		ReplayRecorderScript.value_digest(source.full_player_replay_identity()),
+		identity_digest,
+		"live talents do not mutate the frozen Launch Replay identity"
+	)
+	_suite.assert_true(
+		bool(source.equip_active_item(active_definition).get("ok", false)),
+		"Launch Replay fixture equips an active item after the live talent"
+	)
+	var source_time_manager: Node = source.get_node("TimeManager")
+	source_time_manager.set("energy", float(source_time_manager.get("max_energy")))
+	_suite.assert_true(
+		bool(source.activate_equipped_active_item({"is_boss_target": true}).get("ok", false)),
+		"Launch Replay fixture activates the equipped active item"
+	)
+	_suite.assert_equal(
+		ReplayRecorderScript.value_digest(source.full_player_replay_identity()),
+		identity_digest,
+		"active-item changes do not mutate the frozen Launch Replay identity"
+	)
+	_suite.assert_true(source.advance_action_frame({}), "sealed Launch fixture advances one frame")
 	var snapshot: Dictionary = source.full_player_replay_snapshot()
 	var live_talent := snapshot.get("live_talent_state", {}) as Dictionary
 	_suite.assert_equal(
@@ -178,10 +269,10 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 		ReplayRecorderScript.value_digest(live_talent.get("modifiers", {})),
 		"Launch Replay seals the exact live talent modifiers"
 	)
-	var recorder = ReplayRecorderScript.new()
-	_suite.assert_true(
-		bool(recorder.start_full_player_recording(identity, 5151).get("ok", false)),
-		"sealed Launch Replay recording starts"
+	_suite.assert_equal(
+		(live_talent.get("talent_definitions", []) as Array)[0],
+		talent_definition,
+		"live Replay keeps the authoritative registry talent definition"
 	)
 	_suite.assert_true(
 		bool(recorder.record_full_player_frame(
@@ -189,19 +280,23 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 			_frame_intents(int(snapshot.get("frame", 0))),
 			[]
 		).get("ok", false)),
-		"sealed Launch Replay records passive and live-talent state"
+		"sealed Launch Replay keeps recording after passive, talent, and active-item changes"
 	)
 	var finished: Dictionary = recorder.finish_full_player_recording()
 	_suite.assert_true(bool(finished.get("ok", false)), "sealed Launch Replay finishes")
 	var replay := (finished.get("replay", {}) as Dictionary).duplicate(true)
-	await _free_player(source)
-
+	for legacy_version: int in [4, 5]:
+		var reward_bearing_legacy := _legacy_launch_replay(replay, legacy_version)
+		var reward_bearing_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+			reward_bearing_legacy,
+			identity
+		)
+		_suite.assert_equal(
+			reward_bearing_rejected.get("code"),
+			&"FULL_PLAYER_REPLAY_MIGRATION_INVALID",
+			"reward-bearing legacy Launch v%d Replay fails closed" % legacy_version
+		)
 	var target := await _spawn_launch_player(&"wanderer", 5151)
-	_suite.assert_true(target.install_character_talent(talent_definition), "target installs the same live talent")
-	_suite.assert_true(
-		bool(target.apply_reward(passive_definition).get("ok", false)),
-		"target installs the same passive reward state"
-	)
 	var replay_player = ReplayPlayerScript.new()
 	_suite.assert_true(
 		bool(replay_player.load_full_player_replay(
@@ -211,19 +306,59 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 		"sealed Launch Replay loads against matching content"
 	)
 	_suite.assert_true(
-		bool(replay_player.restore_full_player_frame(target, 0).get("ok", false)),
-		"sealed Launch Replay restores passive and live-talent state"
+		bool(target.call(
+			"_full_player_talent_definitions_match_authority",
+			snapshot.get("live_talent_state", {}),
+			snapshot.get("identity", {})
+		)),
+		"post-start talent definitions match local Base Pack authority"
+	)
+	_suite.assert_true(
+		bool(target.get("active_item_runtime").call(
+			"can_restore_snapshot",
+			(snapshot.get("active_item_state", {}) as Dictionary).duplicate(true)
+		)),
+		"post-start active-item state passes pure target validation"
+	)
+	_suite.assert_true(
+		not (target.call(
+			"_validated_full_player_replay_snapshot",
+			snapshot.duplicate(true)
+		) as Dictionary).is_empty(),
+		"post-start Launch checkpoint passes target-side authority validation"
+	)
+	_suite.assert_true(
+		bool(replay_player.restore_full_player_frame(target, 1).get("ok", false)),
+		"sealed Launch Replay restores passive, live-talent, and active-item state"
 	)
 	_suite.assert_equal(
 		target.reward_effect_snapshot(),
 		snapshot.get("reward_effect_state"),
 		"passive reward-effect state round-trips exactly"
 	)
+	_suite.assert_equal(
+		target.active_item_snapshot(),
+		snapshot.get("active_item_state"),
+		"active-item state round-trips from the post-start checkpoint"
+	)
+	_suite.assert_true(
+		bool(target.get_node("HealthComponent").get("invulnerable")),
+		"fresh Replay target reconstructs active reward invulnerability"
+	)
+	for offset: int in range(3):
+		_suite.assert_true(source.advance_action_frame({}), "source advances reward frame %d" % offset)
+		_suite.assert_true(target.advance_action_frame({}), "target advances reward frame %d" % offset)
+		_suite.assert_equal(
+			target.reward_effect_snapshot(),
+			source.reward_effect_snapshot(),
+			"reward invulnerability remaining frames stay deterministic at offset %d" % offset
+		)
+	await _free_player(source)
 	await _free_player(target)
 
 	var unknown_reward := replay.duplicate(true)
 	var unknown_reward_state := (
-		((unknown_reward["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+		((unknown_reward["frames"] as Array)[1] as Dictionary)["snapshot"] as Dictionary
 	)["reward_effect_state"] as Dictionary
 	unknown_reward_state["unknown"] = true
 	_rehash_full_player_replay(unknown_reward)
@@ -239,7 +374,7 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 
 	var forged_modifier := replay.duplicate(true)
 	var forged_live := (
-		((forged_modifier["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+		((forged_modifier["frames"] as Array)[1] as Dictionary)["snapshot"] as Dictionary
 	)["live_talent_state"] as Dictionary
 	(forged_live["modifiers"] as Dictionary)["low_energy_threshold"] = 29
 	forged_live["modifier_digest"] = ReplayRecorderScript.value_digest(forged_live["modifiers"])
@@ -256,7 +391,7 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 
 	var changed_bounds := replay.duplicate(true)
 	var changed_bounds_live := (
-		((changed_bounds["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+		((changed_bounds["frames"] as Array)[1] as Dictionary)["snapshot"] as Dictionary
 	)["live_talent_state"] as Dictionary
 	var changed_definition := (changed_bounds_live["talent_definitions"] as Array)[0] as Dictionary
 	(changed_definition["effects"] as Dictionary)["low_energy_regen_multiplier"] = -1.0
@@ -275,20 +410,20 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 	)
 
 	var content_drift := replay.duplicate(true)
-	var drift_live := (
-		((content_drift["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
-	)["live_talent_state"] as Dictionary
+	var drift_snapshot := (
+		((content_drift["frames"] as Array)[1] as Dictionary)["snapshot"] as Dictionary
+	)
+	var drift_live := drift_snapshot["live_talent_state"] as Dictionary
 	((drift_live["talent_definitions"] as Array)[0] as Dictionary)["name_key"] = "content.drift"
 	drift_live["definitions_digest"] = ReplayRecorderScript.value_digest(
 		drift_live["talent_definitions"]
 	)
+	var drift_character_runtime := (
+		(drift_snapshot["character_state"] as Dictionary)["runtime"] as Dictionary
+	)
+	((drift_character_runtime["talent_definitions"] as Array)[0] as Dictionary)["name_key"] = "content.drift"
 	_rehash_full_player_replay(content_drift)
 	var drift_target := await _spawn_launch_player(&"wanderer", 5151)
-	_suite.assert_true(drift_target.install_character_talent(talent_definition), "drift target installs authoritative talent content")
-	_suite.assert_true(
-		bool(drift_target.apply_reward(passive_definition).get("ok", false)),
-		"drift target installs the matching passive state"
-	)
 	var drift_before: Dictionary = drift_target.full_player_replay_snapshot()
 	var drift_player = ReplayPlayerScript.new()
 	_suite.assert_true(
@@ -299,9 +434,9 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 		"semantically valid but drifted content reaches target validation"
 	)
 	_suite.assert_equal(
-		drift_player.restore_full_player_frame(drift_target, 0).get("code"),
+		drift_player.restore_full_player_frame(drift_target, 1).get("code"),
 		&"FULL_PLAYER_REPLAY_RESTORE_REJECTED",
-		"target authority rejects drifted live talent definitions"
+		"target authority rejects synchronized drift in both talent-definition copies"
 	)
 	_suite.assert_equal(
 		drift_target.full_player_replay_snapshot(),
@@ -437,8 +572,6 @@ func _test_active_item_round_trip_and_tamper_rejection() -> void:
 	await _free_player(atomic_target)
 
 	var rollback_replay := replay.duplicate(true)
-	((rollback_replay["frames"] as Array)[1] as Dictionary)["snapshot"]["weapon_state"]["schema_version"] = 99
-	_rehash_full_player_replay(rollback_replay)
 	var rollback_target := await _spawn_launch_player(&"wanderer", 5201)
 	_suite.assert_true(
 		bool(rollback_target.equip_active_item(
@@ -446,7 +579,52 @@ func _test_active_item_round_trip_and_tamper_rejection() -> void:
 		).get("ok", false)),
 		"rollback fixture equips a distinct active item"
 	)
+	var rollback_manager: Node = rollback_target.get_node("TimeManager")
+	rollback_manager.set("time_rift_cost", 0.0)
+	rollback_manager.set("time_rift_cooldown", 0.0)
+	_suite.assert_true(
+		bool(rollback_manager.call("try_time_rift", Vector2(96.0, 64.0))),
+		"rollback fixture commits a world payload before the late failure"
+	)
+	var rollback_authority: Node = rollback_target.get_node("WorldPayloadAuthority")
+	var rollback_descriptors := (
+		(rollback_authority.call("replay_snapshot") as Dictionary).get("descriptors", [])
+		as Array
+	)
+	var rollback_payload_id := StringName(str(
+		(rollback_descriptors[-1] as Dictionary).get("payload_id", "")
+	))
+	var rollback_payload_node: Node = rollback_authority.call(
+		"payload_node",
+		rollback_payload_id
+	)
 	var rollback_before: Dictionary = rollback_target.full_player_replay_snapshot()
+	rollback_target.set(
+		"active_item_runtime",
+		FailOnceActiveItemRuntime.new(rollback_target.active_item_snapshot())
+	)
+	var failed_restore_signals := {
+		"energy": 0,
+		"healed": 0,
+		"weapon_resource": 0,
+	}
+	var energy_listener := func(_current: float, _maximum: float) -> void:
+		failed_restore_signals["energy"] = int(failed_restore_signals["energy"]) + 1
+	var healed_listener := func(_amount: float, _current_hp: float) -> void:
+		failed_restore_signals["healed"] = int(failed_restore_signals["healed"]) + 1
+	var weapon_listener := func(
+		_weapon_id: StringName,
+		_resource_id: StringName,
+		_current: float,
+		_maximum: float,
+		_reason: StringName
+	) -> void:
+		failed_restore_signals["weapon_resource"] = (
+			int(failed_restore_signals["weapon_resource"]) + 1
+		)
+	rollback_target.get_node("TimeManager").energy_changed.connect(energy_listener)
+	rollback_target.get_node("HealthComponent").healed.connect(healed_listener)
+	EventBus.weapon_resource_changed.connect(weapon_listener)
 	var rollback_player = ReplayPlayerScript.new()
 	_suite.assert_true(
 		bool(rollback_player.load_full_player_replay(
@@ -466,10 +644,21 @@ func _test_active_item_round_trip_and_tamper_rejection() -> void:
 		rollback_before,
 		"later participant rejection rolls active-item installation back atomically"
 	)
+	_suite.assert_true(
+		rollback_authority.call("payload_node", rollback_payload_id) == rollback_payload_node,
+		"late participant failure reattaches the exact staged world payload node"
+	)
+	_suite.assert_equal(
+		failed_restore_signals,
+		{"energy": 0, "healed": 0, "weapon_resource": 0},
+		"failed full-player restore publishes no transient health, time, or weapon notifications"
+	)
+	if EventBus.weapon_resource_changed.is_connected(weapon_listener):
+		EventBus.weapon_resource_changed.disconnect(weapon_listener)
 	await _free_player(rollback_target)
 
 
-func _test_legacy_launch_v4_and_v5_migrate_after_authentication() -> void:
+func _test_legacy_launch_v4_and_v5_fail_closed_after_authentication() -> void:
 	var source := await _spawn_launch_player(&"time_guardian", 5301)
 	var identity: Dictionary = source.full_player_replay_identity()
 	var recorder = ReplayRecorderScript.new()
@@ -521,49 +710,87 @@ func _test_legacy_launch_v4_and_v5_migrate_after_authentication() -> void:
 			legacy_case["replay"],
 			target.full_player_replay_identity()
 		)
-		_suite.assert_true(
-			bool(loaded.get("ok", false)),
-			"trusted legacy Launch v%d Replay migrates" % int(legacy_case["version"])
+		_suite.assert_equal(
+			loaded.get("code"),
+			&"FULL_PLAYER_REPLAY_MIGRATION_INVALID",
+			"legacy Launch v%d Replay fails closed because passive state cannot be proven" % int(legacy_case["version"])
 		)
 		_suite.assert_equal(
 			legacy_case["replay"],
 			legacy_case["copy"],
-			"legacy Launch v%d migration preserves caller-owned Replay" % int(legacy_case["version"])
-		)
-		var normalized := replay_player.full_player_replay_snapshot()
-		_suite.assert_equal(normalized.get("schema_version"), 6, "legacy Launch root migrates to schema 6")
-		var normalized_frame := (normalized.get("frames", []) as Array)[0] as Dictionary
-		_suite.assert_equal(normalized_frame.get("schema_version"), 6, "legacy Launch frame migrates to schema 6")
-		var normalized_snapshot := normalized_frame.get("snapshot", {}) as Dictionary
-		_suite.assert_equal(normalized_snapshot.get("schema_version"), 6, "legacy Launch snapshot migrates to schema 6")
-		_suite.assert_equal(
-			normalized_snapshot.get("active_item_state"),
-			_empty_active_item_state(),
-			"legacy Launch snapshot receives the explicit empty active-item default"
-		)
-		_suite.assert_true(
-			normalized_snapshot.get("reward_effect_state") is Dictionary
-			and not (normalized_snapshot.get("reward_effect_state") as Dictionary).is_empty(),
-			"legacy Launch snapshot receives a deterministic passive-state default"
-		)
-		_suite.assert_true(
-			ReplayRecorderScript.validate_full_player_live_talent_state(
-				normalized_snapshot.get("live_talent_state", {}),
-				normalized_snapshot.get("identity", {})
-			),
-			"legacy Launch snapshot receives a verified live-talent seal"
-		)
-		_suite.assert_equal(
-			normalized_frame.get("digest"),
-			ReplayRecorderScript.full_player_frame_digest(normalized_frame),
-			"legacy Launch migration refreshes the frame digest"
-		)
-		_suite.assert_equal(
-			normalized.get("terminal_digest"),
-			ReplayRecorderScript.full_player_terminal_digest(normalized),
-			"legacy Launch migration refreshes the terminal digest"
+			"legacy Launch v%d rejection preserves caller-owned Replay" % int(legacy_case["version"])
 		)
 		await _free_player(target)
+
+
+func _test_dash_and_reward_invulnerability_round_trip_and_rollback() -> void:
+	var dash_source := await _spawn_launch_player(&"wanderer", 5401)
+	_suite.assert_true(bool(dash_source.call("_begin_dash")), "dash Replay fixture starts")
+	var dash_snapshot: Dictionary = dash_source.full_player_replay_snapshot()
+	var dash_target := await _spawn_launch_player(&"wanderer", 5401)
+	_suite.assert_true(
+		dash_target.restore_full_player_replay_snapshot(dash_snapshot),
+		"fresh target restores a dash invulnerability checkpoint"
+	)
+	_suite.assert_equal(
+		dash_target.full_player_replay_snapshot(),
+		dash_snapshot,
+		"fresh dash restore is byte exact"
+	)
+	await _free_player(dash_source)
+	await _free_player(dash_target)
+
+	var overlap_source := await _spawn_launch_player(&"wanderer", 5402)
+	_suite.assert_true(
+		bool(overlap_source.apply_reward({
+			"id": "invulnerability_overlap_fixture",
+			"category": "blessing",
+			"effects": {"invulnerable_duration": 1.0},
+		}).get("ok", false)),
+		"overlap fixture applies reward invulnerability"
+	)
+	_suite.assert_true(bool(overlap_source.call("_begin_dash")), "overlap fixture starts dash")
+	var overlap_snapshot: Dictionary = overlap_source.full_player_replay_snapshot()
+	var overlap_target := await _spawn_launch_player(&"wanderer", 5402)
+	_suite.assert_true(
+		overlap_target.restore_full_player_replay_snapshot(overlap_snapshot),
+		"fresh target restores overlapping reward and dash invulnerability"
+	)
+	_suite.assert_equal(
+		overlap_target.full_player_replay_snapshot(),
+		overlap_snapshot,
+		"overlapping invulnerability domains restore exactly"
+	)
+	await _free_player(overlap_source)
+	await _free_player(overlap_target)
+
+	var rollback_target := await _spawn_launch_player(&"wanderer", 5403)
+	var rollback_before: Dictionary = rollback_target.full_player_replay_snapshot()
+	rollback_target.get("weapon_action_coordinator").set(
+		"_frame_event_commit_fault_for_test",
+		true
+	)
+	var dash_intents := _frame_intents(1)
+	dash_intents["dash"] = [{
+		"id": "dash",
+		"edge": "pressed",
+		"held_frames": 1,
+		"mode": "press",
+	}]
+	_suite.assert_true(
+		not rollback_target.advance_action_frame(dash_intents),
+		"late frame rejection occurs after dash invulnerability creation"
+	)
+	rollback_target.get("weapon_action_coordinator").set(
+		"_frame_event_commit_fault_for_test",
+		false
+	)
+	_suite.assert_equal(
+		rollback_target.full_player_replay_snapshot(),
+		rollback_before,
+		"late dash rejection removes the transaction-created token exactly"
+	)
+	await _free_player(rollback_target)
 
 
 func _spawn_launch_player(character_id: StringName, seed_value: int) -> Node:
@@ -587,7 +814,7 @@ func _spawn_launch_player(character_id: StringName, seed_value: int) -> Node:
 			"weapon_profile": _registry.call(
 				"resolve_weapon_runtime_profile", &"sword", &"LAUNCH"
 			),
-			"enabled_time_skills": [&"stop", &"rewind"],
+			"enabled_time_skills": [&"rift", &"rewind"],
 			"difficulty": "normal",
 			"seed": seed_value,
 		}),
@@ -634,6 +861,7 @@ func _legacy_launch_replay(current: Dictionary, version: int) -> Dictionary:
 		frame["schema_version"] = version
 		var snapshot := frame.get("snapshot", {}) as Dictionary
 		snapshot["schema_version"] = version
+		(snapshot.get("player_state", {}) as Dictionary).erase("invulnerability_state")
 		snapshot.erase("reward_effect_state")
 		snapshot.erase("live_talent_state")
 		if version == 4:

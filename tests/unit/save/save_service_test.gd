@@ -3,6 +3,8 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const SaveServiceScript := preload("res://scripts/save/save_service.gd")
+const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const PlayerScene := preload("res://scenes/player/player.tscn")
 
 const GAME_VERSION := "0.4.0-dev"
 const PROFILE_ID := "slot_1"
@@ -28,6 +30,8 @@ func _run() -> void:
 	_remove_tree(_test_root)
 
 	_test_first_save_and_settings_isolation(suite)
+	_test_v1_profile_and_settings_migrate_on_production_load(suite)
+	await _test_real_launch_player_reward_state_survives_disk_round_trip(suite)
 	_test_profile_and_domain_isolation(suite)
 	_test_three_save_backup_order(suite)
 	_test_all_fault_points_are_stable(suite)
@@ -44,6 +48,180 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
+func _test_real_launch_player_reward_state_survives_disk_round_trip(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report: RefCounted = registry.call("load_packs", [
+		{"path": "res://data/content_packs/base/pack.json", "required": true},
+	], GAME_VERSION, &"LAUNCH")
+	suite.assert_true(
+		not report.call("has_blocking_errors"),
+		"real SaveService fixture loads the Launch Base Pack"
+	)
+	if report.call("has_blocking_errors"):
+		return
+	var source := await _spawn_launch_sword_player(registry, suite, 7101)
+	var active_definition: Dictionary = registry.call(
+		"get_content",
+		&"absolute_zero_device"
+	)
+	suite.assert_true(
+		bool(source.call("equip_active_item", active_definition).get("ok", false)),
+		"real SaveService fixture equips a configured active item"
+	)
+	suite.assert_true(
+		bool(source.call("activate_equipped_active_item").get("ok", false)),
+		"real SaveService fixture commits an active-item receipt"
+	)
+	var active_state: Dictionary = source.call("active_item_snapshot")
+	var committed_receipts := active_state.get("committed_receipts", {}) as Dictionary
+	suite.assert_true(
+		not committed_receipts.is_empty(),
+		"real active-item snapshot contains a committed receipt"
+	)
+	var reward_state: Dictionary = source.call("reward_effect_snapshot")
+	var sword_runtime := (
+		(reward_state.get("weapon", {}) as Dictionary).get("runtime", {}) as Dictionary
+	)
+	var accumulators := sword_runtime.get("resource_regen_frame_accumulators", {}) as Dictionary
+	suite.assert_true(
+		not accumulators.is_empty(),
+		"configured Launch Sword snapshot contains dynamic regen accumulators"
+	)
+	for resource_id: Variant in accumulators.keys():
+		suite.assert_equal(
+			typeof(accumulators[resource_id]),
+			TYPE_INT,
+			"source Sword accumulator %s is an integer" % str(resource_id)
+		)
+
+	var service = _new_service(
+		"real_launch_player_round_trip",
+		_content_snapshot("d"),
+		suite
+	)
+	var saved = service.save_profile(PROFILE_ID, SAVE_DOMAIN, {
+		"active_item_state": active_state,
+		"reward_effect_state": reward_state,
+	})
+	suite.assert_true(
+		saved.ok,
+		"real Launch Player runtime payload writes through SaveService: %s"
+		% str(saved.to_dictionary())
+	)
+	var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_true(
+		loaded.ok,
+		"real Launch Player runtime payload loads from disk: %s"
+		% str(loaded.to_dictionary())
+	)
+	if loaded.ok:
+		var loaded_active := loaded.payload.get("active_item_state", {}) as Dictionary
+		var loaded_reward := loaded.payload.get("reward_effect_state", {}) as Dictionary
+		suite.assert_true(
+			bool(source.get("active_item_runtime").call(
+				"can_restore_snapshot",
+				loaded_active
+			)),
+			"loaded active-item state remains restorable after JSON scalar normalization"
+		)
+		var loaded_receipts := loaded_active.get("committed_receipts", {}) as Dictionary
+		suite.assert_true(
+			not loaded_receipts.is_empty(),
+			"committed active-item receipt survives the physical JSON round trip"
+		)
+		suite.assert_equal(
+			((loaded_receipts.get("1", {}) as Dictionary).get("plan", {}) as Dictionary).get(
+				"digest"
+			),
+			((committed_receipts.get("1", {}) as Dictionary).get("plan", {}) as Dictionary).get(
+				"digest"
+			),
+			"committed active-item receipt preserves its authoritative plan digest"
+		)
+		var loaded_runtime := (
+			(loaded_reward.get("weapon", {}) as Dictionary).get("runtime", {}) as Dictionary
+		)
+		var loaded_accumulators := (
+			loaded_runtime.get("resource_regen_frame_accumulators", {}) as Dictionary
+		)
+		for resource_id: Variant in loaded_accumulators.keys():
+			suite.assert_equal(
+				typeof(loaded_accumulators[resource_id]),
+				TYPE_INT,
+				"loaded Sword accumulator %s is normalized to TYPE_INT" % str(resource_id)
+			)
+		var target := await _spawn_launch_sword_player(registry, suite, 7102)
+		suite.assert_true(
+			target.call("restore_reward_effect_snapshot", loaded_reward),
+			"fresh real Player restores the loaded Sword reward runtime"
+		)
+		suite.assert_equal(
+			target.call("reward_effect_snapshot"),
+			reward_state,
+			"fresh real Player reproduces the exact pre-save reward snapshot"
+		)
+		await _free_player(target)
+	await _free_player(source)
+
+
+func _test_v1_profile_and_settings_migrate_on_production_load(suite) -> void:
+	var service = _new_service("v1_production_migration", _content_snapshot("f"), suite)
+	var profile_saved = service.save_profile(
+		PROFILE_ID,
+		SAVE_DOMAIN,
+		{"runs_completed": 4}
+	)
+	suite.assert_true(profile_saved.ok, "v2 profile fixture saves before downgrade")
+	var legacy_profile := _read_json(
+		_profile_path("v1_production_migration", "primary.json"),
+		suite
+	)
+	legacy_profile["schema_version"] = 1
+	(legacy_profile["payload"] as Dictionary).erase("active_item_state")
+	(legacy_profile["payload"] as Dictionary).erase("reward_effect_state")
+	_resign(legacy_profile)
+	_write_text(
+		_profile_path("v1_production_migration", "primary.json"),
+		JSON.stringify(legacy_profile, "", true, true)
+	)
+	var loaded_profile = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_true(
+		loaded_profile.ok,
+		"SaveService production load migrates schema v1 profile: %s" % str(loaded_profile.to_dictionary())
+	)
+	suite.assert_equal(
+		loaded_profile.payload.get("active_item_state"),
+		_empty_active_item_state(),
+		"production profile migration installs explicit empty active-item state"
+	)
+	suite.assert_equal(
+		loaded_profile.payload.get("reward_effect_state"),
+		{},
+		"production profile migration installs explicit empty reward-effect state"
+	)
+
+	var settings_payload := _settings_payload("en", 0.6)
+	var settings_saved = service.save_settings(settings_payload)
+	suite.assert_true(settings_saved.ok, "v2 settings fixture saves before downgrade")
+	var settings_path := _case_root("v1_production_migration").path_join(
+		"global/settings/primary.json"
+	)
+	var legacy_settings := _read_json(settings_path, suite)
+	legacy_settings["schema_version"] = 1
+	_resign(legacy_settings)
+	_write_text(settings_path, JSON.stringify(legacy_settings, "", true, true))
+	var loaded_settings = service.load_settings()
+	suite.assert_true(
+		loaded_settings.ok,
+		"SaveService production load migrates schema v1 settings: %s" % str(loaded_settings.to_dictionary())
+	)
+	suite.assert_equal(
+		loaded_settings.payload,
+		settings_payload,
+		"settings migration preserves the exact settings payload without profile defaults"
+	)
+
+
 func _test_first_save_and_settings_isolation(suite) -> void:
 	var service = _new_service("first_save", _content_snapshot("1"), suite)
 	var first = service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"runs_completed": 1})
@@ -54,7 +232,11 @@ func _test_first_save_and_settings_isolation(suite) -> void:
 
 	var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
 	suite.assert_true(loaded.ok, "first profile loads")
-	suite.assert_equal(loaded.payload, {"runs_completed": 1.0}, "profile payload round trips through canonical JSON")
+	suite.assert_equal(
+		loaded.payload,
+		_native_profile_payload({"runs_completed": 1.0}),
+		"profile payload round trips through canonical JSON with v2 runtime defaults"
+	)
 
 	var settings_payload := _settings_payload("en", 0.65)
 	settings_payload["text_scale"] = 1.5
@@ -203,7 +385,7 @@ func _test_forward_version_refuses_backup_fallback(suite) -> void:
 	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "backup"})
 	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "primary"})
 	var future := _read_json(_profile_path("forward_refusal", "primary.json"), suite)
-	future["schema_version"] = 2
+	future["schema_version"] = 3
 	_write_text(_profile_path("forward_refusal", "primary.json"), JSON.stringify(future, "", true, true))
 
 	var result = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
@@ -255,6 +437,51 @@ func _new_service(case_name: String, snapshot: Dictionary, suite, fault_injector
 	)
 	suite.assert_true(configured.ok, "%s service configures" % case_name)
 	return service
+
+
+func _spawn_launch_sword_player(
+	registry: RefCounted,
+	suite,
+	seed_value: int
+) -> Node:
+	var player := PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	player.set_physics_process(false)
+	player.get_node("TimeManager").set_process(false)
+	player.get_node("RewindRecorder").set_process(false)
+	await get_tree().process_frame
+	suite.assert_true(
+		player.call("configure_loadout", {
+			"schema_version": 1,
+			"milestone": "LAUNCH",
+			"character_id": "wanderer",
+			"character_profile": registry.call(
+				"resolve_character_runtime_profile",
+				&"wanderer",
+				&"LAUNCH"
+			),
+			"character_talents": [],
+			"weapon_id": "sword",
+			"weapon_profile": registry.call(
+				"resolve_weapon_runtime_profile",
+				&"sword",
+				&"LAUNCH"
+			),
+			"enabled_time_skills": [&"rift", &"rewind"],
+			"difficulty": "normal",
+			"seed": seed_value,
+		}),
+		"real SaveService Launch Sword fixture configures"
+	)
+	return player
+
+
+func _free_player(player: Node) -> void:
+	if player != null and is_instance_valid(player):
+		player.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
 
 
 func _clock() -> String:
@@ -391,6 +618,37 @@ func _read_json(path: String, suite) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(contents)
 	suite.assert_true(parsed is Dictionary, "%s parses as JSON object" % path)
 	return parsed as Dictionary if parsed is Dictionary else {}
+
+
+func _resign(document: Dictionary) -> void:
+	var unsigned := document.duplicate(true)
+	unsigned.erase("integrity")
+	unsigned = JSON.parse_string(JSON.stringify(unsigned, "", true, true))
+	document["integrity"] = {
+		"algorithm": "sha256",
+		"digest": SaveEnvelopeScript.sha256_digest(unsigned),
+	}
+
+
+func _empty_active_item_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"configured": false,
+		"definition": {},
+		"generation": 0,
+		"next_token": 1,
+		"current_frame": -1,
+		"cooldown_end_frame": -1,
+		"handler_state": {},
+		"committed_receipts": {},
+	}
+
+
+func _native_profile_payload(values: Dictionary) -> Dictionary:
+	var payload := values.duplicate(true)
+	payload["active_item_state"] = _empty_active_item_state()
+	payload["reward_effect_state"] = {}
+	return payload
 
 
 func _remove_tree(path: String) -> void:

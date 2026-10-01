@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/save-profile/2.0.0",
+  "title": "Plane Walker Profile Save Envelope v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["magic", "schema_version", "document_kind", "profile_id", "save_domain", "sequence", "game_version", "created_at_utc", "saved_at_utc", "content_snapshot", "payload", "integrity"],
+  "properties": {
+    "magic": { "const": "PWSAVE" },
+    "schema_version": { "const": 2 },
+    "document_kind": { "const": "profile" },
+    "profile_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" },
+    "save_domain": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "game_version": { "type": "string", "minLength": 1 },
+    "created_at_utc": { "type": "string", "format": "date-time" },
+    "saved_at_utc": { "type": "string", "format": "date-time" },
+    "content_snapshot": { "$ref": "#/$defs/content_snapshot" },
+    "payload": {
+      "type": "object",
+      "required": ["active_item_state", "reward_effect_state"],
+      "properties": {
+        "active_item_state": { "$ref": "#/$defs/active_item_state" },
+        "reward_effect_state": {
+          "oneOf": [
+            { "type": "object", "maxProperties": 0 },
+            { "$ref": "#/$defs/reward_effect_state" }
+          ]
+        }
+      }
+    },
+    "integrity": { "$ref": "#/$defs/integrity" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "content_pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack_id", "pack_version", "schema_version", "fingerprint_sha256"],
+      "properties": {
+        "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" },
+        "pack_version": { "type": "string", "minLength": 1 },
+        "schema_version": { "type": "integer", "minimum": 1 },
+        "fingerprint_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "content_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aggregate_sha256", "packs"],
+      "properties": {
+        "aggregate_sha256": { "$ref": "#/$defs/sha256" },
+        "packs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/content_pack" } }
+      }
+    },
+    "active_item_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "configured", "definition", "generation", "next_token", "current_frame", "cooldown_end_frame", "handler_state", "committed_receipts"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "configured": { "type": "boolean" },
+        "definition": { "type": "object" },
+        "generation": { "type": "integer", "minimum": 0 },
+        "next_token": { "type": "integer", "minimum": 1 },
+        "current_frame": { "type": "integer", "minimum": -1 },
+        "cooldown_end_frame": { "type": "integer", "minimum": -1 },
+        "handler_state": { "type": "object" },
+        "committed_receipts": { "type": "object" }
+      }
+    },
+    "reward_effect_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "stats", "health", "time", "weapon", "character"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "stats": { "type": "object" },
+        "health": { "type": "object" },
+        "time": { "type": "object" },
+        "weapon": { "type": "object" },
+        "character": { "type": "object" }
+      }
+    }
+  }
+}

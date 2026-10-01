@@ -3,6 +3,7 @@ extends RefCounted
 
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const SaveFileOpsScript := preload("res://scripts/save/save_file_ops.gd")
+const SaveMigrationRegistryScript := preload("res://scripts/save/save_migration_registry.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 
@@ -165,12 +166,15 @@ func _save_profile_internal(profile_id: String, save_domain: String, payload: Di
 	)
 	if not transaction.ok:
 		return transaction
-	return SaveResultScript.success(payload, {
+	return SaveResultScript.success(
+		payload,
+		{
 		"sequence": sequence,
 		"digest": created.payload.get("integrity", {}).get("digest", ""),
 		"path": directory_path.path_join(PRIMARY_FILE),
 		"source_kind": "primary",
-	})
+		}
+	)
 
 
 func _save_settings_internal(payload: Dictionary):
@@ -385,7 +389,33 @@ func _rotate_verified_candidate(
 func _load_scope(directory_path: String, document_kind: StringName, profile_id: String, save_domain: String):
 	var primary = _inspect_primary(directory_path, document_kind, profile_id, save_domain)
 	if primary.ok:
-		return _payload_result(primary.payload, &"OK", &"primary", primary.diagnostics)
+		var migrated_from := int(primary.metadata.get(
+			"migrated_from",
+			SaveEnvelopeScript.SCHEMA_VERSION
+		))
+		var migrated_to := int(primary.metadata.get("migrated_to", migrated_from))
+		if migrated_from < migrated_to:
+			if _write_active:
+				return _busy("migrate_%s" % str(document_kind))
+			_write_active = true
+			var rewrite = _commit_envelope(
+				directory_path,
+				primary.payload,
+				document_kind,
+				profile_id,
+				save_domain,
+				false
+			)
+			_write_active = false
+			if not rewrite.ok:
+				return rewrite
+		return _payload_result(
+			primary.payload,
+			&"OK",
+			&"primary",
+			primary.diagnostics,
+			primary.metadata
+		)
 	if primary.code != &"CORRUPT":
 		return primary
 	if _write_active:
@@ -437,6 +467,14 @@ func _recover_corrupt_scope(
 				"player_notice_required": true,
 				"sequence": int(validation.payload.get("sequence", 0)),
 				"path": directory_path.path_join(PRIMARY_FILE),
+				"migrated_from": int(validation.metadata.get(
+					"migrated_from",
+					SaveEnvelopeScript.SCHEMA_VERSION
+				)),
+				"migrated_to": int(validation.metadata.get(
+					"migrated_to",
+					SaveEnvelopeScript.SCHEMA_VERSION
+				)),
 			}
 			return SaveResultScript.success(
 				validation.payload.get("payload", {}),
@@ -482,6 +520,29 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 	if not validation.ok:
 		validation.metadata["path"] = path
 		return validation
+	var migrated_from := int(document.get("schema_version", SaveEnvelopeScript.SCHEMA_VERSION))
+	if migrated_from < SaveEnvelopeScript.SCHEMA_VERSION:
+		var migration = SaveMigrationRegistryScript.new().migrate(
+			validation.payload,
+			SaveEnvelopeScript.SCHEMA_VERSION,
+			{"profile_id": profile_id, "save_domain": save_domain}
+		)
+		if not migration.ok:
+			migration.metadata["path"] = path
+			return migration
+		var resealed = SaveEnvelopeScript.reseal_current(migration.payload)
+		if not resealed.ok:
+			resealed.metadata["path"] = path
+			return resealed
+		validation = SaveEnvelopeScript.validate(
+			resealed.payload,
+			document_kind,
+			profile_id,
+			save_domain
+		)
+		if not validation.ok:
+			validation.metadata["path"] = path
+			return validation
 	if document_kind == &"profile" and not _content_snapshot_matches(validation.payload.get("content_snapshot", {})):
 		var actual_snapshot: Dictionary = validation.payload.get("content_snapshot", {})
 		return SaveResultScript.failure(&"CONTENT_MISMATCH", {
@@ -493,6 +554,8 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 		"path": path,
 		"sequence": int(validation.payload.get("sequence", 0)),
 		"digest": _document_digest(validation.payload),
+		"migrated_from": migrated_from,
+		"migrated_to": int(validation.payload.get("schema_version", migrated_from)),
 	})
 
 
@@ -514,14 +577,20 @@ func _quarantine_candidate(
 	)
 
 
-func _payload_result(document: Dictionary, code: StringName, source_kind: StringName, diagnostics: Array[Dictionary] = []):
+func _payload_result(
+	document: Dictionary,
+	code: StringName,
+	source_kind: StringName,
+	diagnostics: Array[Dictionary] = [],
+	source_metadata: Dictionary = {}
+):
+	var metadata := source_metadata.duplicate(true)
+	metadata["source_kind"] = source_kind
+	metadata["sequence"] = int(document.get("sequence", 0))
+	metadata["digest"] = _document_digest(document)
 	return SaveResultScript.success(
 		document.get("payload", {}),
-		{
-			"source_kind": source_kind,
-			"sequence": int(document.get("sequence", 0)),
-			"digest": _document_digest(document),
-		},
+		metadata,
 		diagnostics,
 		code
 	)

@@ -703,6 +703,40 @@ func reward_effect_snapshot() -> Dictionary:
 
 
 func restore_reward_effect_snapshot(value: Dictionary, publish_signal: bool = true) -> bool:
+	if not can_restore_reward_effect_snapshot(value):
+		return false
+	var energy_changed_during_restore := (
+		energy != float(value["energy"])
+		or max_energy != float(value["max_energy"])
+	)
+	energy = float(value["energy"])
+	max_energy = float(value["max_energy"])
+	_resource_revision = int(value["resource_revision"])
+	time_stop_duration_bonus = float(value["time_stop_duration_bonus"])
+	time_stop_cost_multiplier = float(value["time_stop_cost_multiplier"])
+	time_stop_weakpoint_damage_bonus = float(value["time_stop_weakpoint_damage_bonus"])
+	time_stop_weakpoint_duration = float(value["time_stop_weakpoint_duration"])
+	time_stop_self_damage = float(value["time_stop_self_damage"])
+	rewind_cost_multiplier = float(value["rewind_cost_multiplier"])
+	rewind_heal = float(value["rewind_heal"])
+	rewind_echo_enabled = bool(value["rewind_echo_enabled"])
+	rewind_path_hit_multiplier = float(value["rewind_path_hit_multiplier"])
+	rewind_self_damage = float(value["rewind_self_damage"])
+	time_rift_cost_multiplier = float(value["time_rift_cost_multiplier"])
+	time_rift_duration_bonus = float(value["time_rift_duration_bonus"])
+	time_rift_radius_bonus = float(value["time_rift_radius_bonus"])
+	time_rift_slow_bonus = float(value["time_rift_slow_bonus"])
+	time_accelerate_cost_multiplier = float(value["time_accelerate_cost_multiplier"])
+	time_accelerate_duration_bonus = float(value["time_accelerate_duration_bonus"])
+	time_accelerate_multiplier_bonus = float(value["time_accelerate_multiplier_bonus"])
+	low_energy_regen_multiplier = float(value["low_energy_regen_multiplier"])
+	low_energy_threshold = float(value["low_energy_threshold"])
+	if energy_changed_during_restore and publish_signal:
+		_publish_energy_changed(energy, max_energy)
+	return reward_effect_snapshot() == value
+
+
+func can_restore_reward_effect_snapshot(value: Dictionary) -> bool:
 	if value.size() != REWARD_EFFECT_SNAPSHOT_FIELDS.size():
 		return false
 	for field: String in REWARD_EFFECT_SNAPSHOT_FIELDS:
@@ -735,35 +769,7 @@ func restore_reward_effect_snapshot(value: Dictionary, publish_signal: bool = tr
 	]:
 		if float(value[field]) <= 0.0:
 			return false
-	var energy_changed_during_restore := (
-		energy != float(value["energy"])
-		or max_energy != float(value["max_energy"])
-	)
-	energy = float(value["energy"])
-	max_energy = float(value["max_energy"])
-	_resource_revision = int(value["resource_revision"])
-	time_stop_duration_bonus = float(value["time_stop_duration_bonus"])
-	time_stop_cost_multiplier = float(value["time_stop_cost_multiplier"])
-	time_stop_weakpoint_damage_bonus = float(value["time_stop_weakpoint_damage_bonus"])
-	time_stop_weakpoint_duration = float(value["time_stop_weakpoint_duration"])
-	time_stop_self_damage = float(value["time_stop_self_damage"])
-	rewind_cost_multiplier = float(value["rewind_cost_multiplier"])
-	rewind_heal = float(value["rewind_heal"])
-	rewind_echo_enabled = bool(value["rewind_echo_enabled"])
-	rewind_path_hit_multiplier = float(value["rewind_path_hit_multiplier"])
-	rewind_self_damage = float(value["rewind_self_damage"])
-	time_rift_cost_multiplier = float(value["time_rift_cost_multiplier"])
-	time_rift_duration_bonus = float(value["time_rift_duration_bonus"])
-	time_rift_radius_bonus = float(value["time_rift_radius_bonus"])
-	time_rift_slow_bonus = float(value["time_rift_slow_bonus"])
-	time_accelerate_cost_multiplier = float(value["time_accelerate_cost_multiplier"])
-	time_accelerate_duration_bonus = float(value["time_accelerate_duration_bonus"])
-	time_accelerate_multiplier_bonus = float(value["time_accelerate_multiplier_bonus"])
-	low_energy_regen_multiplier = float(value["low_energy_regen_multiplier"])
-	low_energy_threshold = float(value["low_energy_threshold"])
-	if energy_changed_during_restore and publish_signal:
-		_publish_energy_changed(energy, max_energy)
-	return reward_effect_snapshot() == value
+	return true
 
 
 func can_restore_replay_snapshot(value: Dictionary) -> bool:

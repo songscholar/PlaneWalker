@@ -606,6 +606,14 @@ func restore_snapshot_for_rollback(value: Dictionary) -> bool:
 	return _restore_snapshot_internal(value, false)
 
 
+func can_restore_snapshot_for_rollback(value: Dictionary) -> bool:
+	return (
+		_runtime != null
+		and _resource_transaction != null
+		and _validate_runtime_snapshot(value)
+	)
+
+
 func _restore_snapshot_internal(value: Dictionary, enforce_monotonicity: bool) -> bool:
 	if (
 		_runtime == null

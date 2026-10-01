@@ -274,6 +274,10 @@ func restore_replay_snapshot(value: Dictionary) -> bool:
 	return snapshot() == validated
 
 
+func can_restore_replay_snapshot(value: Dictionary) -> bool:
+	return not _validated_snapshot(value).is_empty()
+
+
 func _install_validated_snapshot(validated: Dictionary) -> void:
 	_revision = int(validated["revision"])
 	_frame = int(validated["frame"])

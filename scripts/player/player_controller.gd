@@ -7,6 +7,7 @@ const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtim
 const EffectHandlerCatalogScript := preload(
 	"res://scripts/content/effects/effect_handler_catalog.gd"
 )
+const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
 const CharacterRuntimeProfileScript := preload(
@@ -207,6 +208,8 @@ const DEFAULT_LOADOUT_CONFIG := {
 }
 const WEAPON_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runtime_profiles.json"
 const CHARACTER_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/character_runtime_profiles.json"
+const BASE_CONTENT_PACK_PATH := "res://data/content_packs/base/pack.json"
+const BASE_CONTENT_PACK_GAME_VERSION := "0.4.0-dev"
 const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.ammo_capacity": {"minimum": 0.0, "maximum": 20.0},
 	"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
@@ -301,6 +304,7 @@ var _weapon_replay_restore_invalid_reason: StringName = &""
 var _weapon_intent_router: RefCounted = WeaponIntentRouterScript.new()
 var _run_id: StringName = &""
 var _owner_character_generation: int = 0
+var _launch_replay_identity_baseline: Dictionary = {}
 var _active_time_frame_signal_ticket: Dictionary = {}
 var _active_health_frame_signal_ticket: Dictionary = {}
 var _active_world_frame_ticket: Dictionary = {}
@@ -2042,6 +2046,11 @@ func configure_loadout(config: Dictionary) -> bool:
 			set_physics_process(false)
 			push_error("Loadout runtime reset rollback failed closed")
 		return false
+	if not _capture_launch_replay_identity_baseline():
+		if not _rollback_loadout_configuration(transaction_before):
+			set_physics_process(false)
+			push_error("Loadout Replay identity rollback failed closed")
+		return false
 	return true
 
 
@@ -2059,6 +2068,7 @@ func _loadout_configuration_transaction_snapshot() -> Dictionary:
 		"mobility": mobility_snapshot(),
 		"run_id": _run_id,
 		"owner_character_generation": _owner_character_generation,
+		"launch_replay_identity_baseline": _launch_replay_identity_baseline.duplicate(true),
 		"character_runtime": character_runtime,
 		"character_action_coordinator": character_action_coordinator,
 		"weapon_runtime_profile": weapon_runtime_profile,
@@ -2097,6 +2107,9 @@ func _rollback_loadout_configuration(before: Dictionary) -> bool:
 		"owner_character_generation",
 		_owner_character_generation
 	))
+	_launch_replay_identity_baseline = (
+		before.get("launch_replay_identity_baseline", {}) as Dictionary
+	).duplicate(true)
 	character_runtime = before.get("character_runtime") as RefCounted
 	character_action_coordinator = before.get("character_action_coordinator") as RefCounted
 	_disconnect_weapon_coordinator()
@@ -2123,6 +2136,8 @@ func _rollback_loadout_configuration(before: Dictionary) -> bool:
 		and character_action_coordinator == before.get("character_action_coordinator")
 		and _run_id == StringName(str(before.get("run_id", "")))
 		and _owner_character_generation == int(before.get("owner_character_generation", 0))
+		and _launch_replay_identity_baseline
+		== (before.get("launch_replay_identity_baseline", {}) as Dictionary)
 		and (
 			not full_player_value is Dictionary
 			or (full_player_value as Dictionary).is_empty()
@@ -2171,6 +2186,7 @@ func configure_run(run_id: StringName) -> bool:
 			return false
 	_run_id = normalized
 	_owner_character_generation = target_generation
+	_launch_replay_identity_baseline.clear()
 	return true
 
 
@@ -2418,6 +2434,15 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 		return false
 
 	_runtime_frame = next_runtime_frame
+	if (
+		health == null
+		or not health.has_method("advance_reward_invulnerability_frame")
+		or not bool(health.call("advance_reward_invulnerability_frame"))
+	):
+		return _reject_fixed_frame(
+			frame_before,
+			"HealthComponent rejected authoritative reward frame %d" % _runtime_frame
+		)
 	if not bool(time_manager.call("advance_frame", _runtime_frame)):
 		return _reject_fixed_frame(
 			frame_before,
@@ -2656,6 +2681,10 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 	var time_value: Variant = time_manager.call("replay_snapshot")
 	var time_transaction_value: Variant = time_manager.call("fixed_frame_transaction_snapshot")
 	var health_value: Variant = health.call("runtime_state_snapshot")
+	var health_reward_value: Variant = health.call("reward_effect_snapshot")
+	var health_invulnerability_value: Variant = health.call(
+		"invulnerability_replay_snapshot"
+	)
 	var character_value: Variant = character_action_coordinator.call("snapshot")
 	var character_action_value: Variant = character_action_coordinator.call("action_snapshot")
 	var weapon_value: Variant = weapon_action_coordinator.call("snapshot")
@@ -2667,6 +2696,8 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 		not time_value is Dictionary
 		or not time_transaction_value is Dictionary
 		or not health_value is Dictionary
+		or not health_reward_value is Dictionary
+		or not health_invulnerability_value is Dictionary
 		or not character_value is Dictionary
 		or not character_action_value is Dictionary
 		or not weapon_value is Dictionary
@@ -2703,6 +2734,10 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 			"time": (time_value as Dictionary).duplicate(true),
 			"time_transaction": (time_transaction_value as Dictionary).duplicate(true),
 			"health": (health_value as Dictionary).duplicate(true),
+			"health_reward": (health_reward_value as Dictionary).duplicate(true),
+			"health_invulnerability": (
+				health_invulnerability_value as Dictionary
+			).duplicate(true),
 			"world": (world_value as Dictionary).duplicate(true),
 		"rewind": rewind_value,
 		"intent_router": (intent_value as Dictionary).duplicate(true),
@@ -2741,6 +2776,14 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 	var health_ok := bool(health.call(
 		"restore_replay_snapshot",
 		(value.get("health", {}) as Dictionary).duplicate(true)
+	))
+	var health_invulnerability_ok := bool(health.call(
+		"restore_invulnerability_replay_snapshot",
+		(value.get("health_invulnerability", {}) as Dictionary).duplicate(true)
+	))
+	var health_reward_ok := bool(health.call(
+		"restore_reward_effect_snapshot",
+		(value.get("health_reward", {}) as Dictionary).duplicate(true)
 	))
 	var action_ok := bool(action_state.call(
 		"restore_transaction_snapshot",
@@ -2841,6 +2884,8 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and time_ok
 		and time_transaction_ok
 		and health_ok
+		and health_invulnerability_ok
+		and health_reward_ok
 		and action_ok
 		and character_ok
 		and character_action_ok
@@ -2853,6 +2898,9 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and time_manager.call("fixed_frame_transaction_snapshot")
 		== value.get("time_transaction", {})
 		and health.call("runtime_state_snapshot") == value.get("health", {})
+		and health.call("reward_effect_snapshot") == value.get("health_reward", {})
+		and health.call("invulnerability_replay_snapshot")
+		== value.get("health_invulnerability", {})
 		and _next_time_action_token == int(value.get("next_time_action_token", -1))
 		and action_state.snapshot() == value.get("action", {})
 		and character_action_coordinator.call("snapshot") == value.get("character", {})
@@ -3111,20 +3159,10 @@ func _rewind_frame_transaction_snapshot() -> Dictionary:
 
 
 func _restore_rewind_frame_transaction_snapshot(value: Dictionary) -> bool:
-	if (
-		value.size() != 6
-		or not value.get("snapshots") is Array
-		or typeof(value.get("sample_timer")) != TYPE_FLOAT
-		or typeof(value.get("history_revision")) != TYPE_INT
-		or typeof(value.get("next_sample_sequence")) != TYPE_INT
-		or typeof(value.get("last_runtime_frame")) != TYPE_INT
-		or not value.get("active_transaction") is Dictionary
-	):
+	if not _valid_rewind_frame_transaction_snapshot(value):
 		return false
 	var restored_snapshots: Array[Dictionary] = []
 	for snapshot_value: Variant in value["snapshots"] as Array:
-		if not snapshot_value is Dictionary:
-			return false
 		restored_snapshots.append((snapshot_value as Dictionary).duplicate(true))
 	rewind_recorder.set("_snapshots", restored_snapshots)
 	rewind_recorder.set("_sample_timer", float(value["sample_timer"]))
@@ -3136,6 +3174,23 @@ func _restore_rewind_frame_transaction_snapshot(value: Dictionary) -> bool:
 		(value["active_transaction"] as Dictionary).duplicate(true)
 	)
 	return _rewind_frame_transaction_snapshot() == value
+
+
+func _valid_rewind_frame_transaction_snapshot(value: Dictionary) -> bool:
+	if (
+		value.size() != 6
+		or not value.get("snapshots") is Array
+		or typeof(value.get("sample_timer")) != TYPE_FLOAT
+		or typeof(value.get("history_revision")) != TYPE_INT
+		or typeof(value.get("next_sample_sequence")) != TYPE_INT
+		or typeof(value.get("last_runtime_frame")) != TYPE_INT
+		or not value.get("active_transaction") is Dictionary
+	):
+		return false
+	for snapshot_value: Variant in value["snapshots"] as Array:
+		if not snapshot_value is Dictionary:
+			return false
+	return true
 
 
 func _rewind_run_configuration_snapshot() -> Dictionary:
@@ -3557,6 +3612,19 @@ func weapon_presentation_snapshot() -> Dictionary:
 
 
 func full_player_replay_identity() -> Dictionary:
+	var current := _current_full_player_replay_identity(
+		_launch_replay_identity_baseline.is_empty()
+	)
+	if current.is_empty():
+		return {}
+	if str(current.get("character_profile_id", "")) == "wanderer_m1_v1":
+		return current
+	if _launch_replay_identity_baseline.is_empty():
+		return current
+	return _launch_replay_identity_baseline.duplicate(true)
+
+
+func _current_full_player_replay_identity(require_exact_initial_talents: bool = true) -> Dictionary:
 	if (
 		_run_id == &""
 		or _owner_character_generation <= 0
@@ -3589,7 +3657,7 @@ func full_player_replay_identity() -> Dictionary:
 		or mobility_state.is_empty()
 		or str(character_runtime.call("character_id")) != character_id
 		or str(character_runtime.call("profile_id")) != profile_id
-		or runtime_talents != character_talents
+		or (require_exact_initial_talents and runtime_talents != character_talents)
 		or not character_action_value is Dictionary
 		or int((character_action_value as Dictionary).get("generation", 0))
 		!= _owner_character_generation
@@ -3613,6 +3681,17 @@ func full_player_replay_identity() -> Dictionary:
 	}
 
 
+func _capture_launch_replay_identity_baseline() -> bool:
+	var current := _current_full_player_replay_identity()
+	if current.is_empty():
+		return false
+	if str(current.get("character_profile_id", "")) == "wanderer_m1_v1":
+		_launch_replay_identity_baseline.clear()
+		return true
+	_launch_replay_identity_baseline = current.duplicate(true)
+	return true
+
+
 func full_player_replay_snapshot() -> Dictionary:
 	var identity := full_player_replay_identity()
 	var rewind_state := _rewind_frame_transaction_snapshot()
@@ -3628,30 +3707,42 @@ func full_player_replay_snapshot() -> Dictionary:
 		or world_payload_authority == null
 	):
 		return {}
+	var snapshot_schema_version := (
+		ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(identity)
+	)
+	var player_state := {
+		"position": global_position,
+		"velocity": velocity,
+		"facing": _last_move_direction,
+		"weapon_aim_direction": _last_weapon_aim_direction,
+		"dash_cooldown_remaining_frames": _dash_cooldown_remaining_frames,
+		"dash_velocity": _dash_velocity,
+		"dash_direction": _dash_direction,
+		"knockback_velocity": _knockback_velocity,
+		"combo_timeout_frames": _weapon_combo_timeout_frames,
+		"buffered_time_skill": _buffered_time_skill,
+		"dash_completion_token": _dash_completion_token,
+		"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
+		"next_time_action_token": _next_time_action_token,
+		"time_action_generation": _time_action_generation,
+		"character_input_owner": character_input_owner_snapshot(),
+		"priority_arbitration": priority_arbitration_snapshot(),
+	}
+	if snapshot_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		if (
+			not health.has_method("invulnerability_replay_snapshot")
+			or not health.has_method("can_restore_invulnerability_replay_snapshot")
+			or not health.has_method("restore_invulnerability_replay_snapshot")
+		):
+			return {}
+		player_state["invulnerability_state"] = health.call(
+			"invulnerability_replay_snapshot"
+		)
 	var snapshot := {
-		"schema_version": ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(
-			identity
-		),
+		"schema_version": snapshot_schema_version,
 		"frame": _runtime_frame,
 		"identity": identity,
-		"player_state": {
-			"position": global_position,
-			"velocity": velocity,
-			"facing": _last_move_direction,
-			"weapon_aim_direction": _last_weapon_aim_direction,
-			"dash_cooldown_remaining_frames": _dash_cooldown_remaining_frames,
-			"dash_velocity": _dash_velocity,
-			"dash_direction": _dash_direction,
-			"knockback_velocity": _knockback_velocity,
-			"combo_timeout_frames": _weapon_combo_timeout_frames,
-			"buffered_time_skill": _buffered_time_skill,
-			"dash_completion_token": _dash_completion_token,
-			"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
-			"next_time_action_token": _next_time_action_token,
-			"time_action_generation": _time_action_generation,
-			"character_input_owner": character_input_owner_snapshot(),
-			"priority_arbitration": priority_arbitration_snapshot(),
-		},
+		"player_state": player_state,
 		"health_state": health.call("runtime_state_snapshot"),
 		"action_state": action_state.snapshot(),
 		"character_state": character_action_coordinator.call("snapshot"),
@@ -3740,7 +3831,9 @@ func restore_full_player_replay_snapshot(snapshot: Dictionary) -> bool:
 	return false
 
 
-func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool) -> bool:
+func _install_full_player_replay_snapshot(value: Dictionary, for_rollback: bool) -> bool:
+	if not _can_install_full_player_replay_snapshot(value):
+		return false
 	var active_item_target: Dictionary = {}
 	if value.has("active_item_state"):
 		if (
@@ -3758,26 +3851,36 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 	if (
 		value.has("reward_effect_state")
 		and not restore_reward_effect_snapshot(
-			(value.get("reward_effect_state", {}) as Dictionary).duplicate(true)
+			(value.get("reward_effect_state", {}) as Dictionary).duplicate(true),
+			false
 		)
 	):
 		return false
 	var health_target := (value.get("health_state", {}) as Dictionary).duplicate(true)
 	if not bool(health.call("can_restore_replay_snapshot", health_target)):
 		return false
-	if not bool(health.call("restore_replay_snapshot", health_target)):
-		return false
 	var world_target := (value.get("world_payload_state", {}) as Dictionary).duplicate(true)
-	if not bool(world_payload_authority.call("restore_replay_snapshot", world_target)):
+	var world_ticket_value: Variant = world_payload_authority.call(
+		"begin_transaction_restore",
+		world_target
+	)
+	if not world_ticket_value is Dictionary or (world_ticket_value as Dictionary).is_empty():
+		return false
+	var world_ticket := (world_ticket_value as Dictionary).duplicate(true)
+	if not bool(health.call("restore_replay_snapshot", health_target)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	var time_target := (value.get("time_manager_state", {}) as Dictionary).duplicate(true)
 	if not bool(time_manager.call("restore_replay_snapshot", time_target)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	var action_target := (value.get("action_state", {}) as Dictionary).duplicate(true)
 	if not bool(action_state.call("restore_replay_snapshot", action_target)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	var character_target := (value.get("character_state", {}) as Dictionary).duplicate(true)
 	if not bool(character_action_coordinator.call("restore_replay_snapshot", character_target)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	var character_action_target := (
 		value.get("character_action_state", {}) as Dictionary
@@ -3786,11 +3889,13 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 		"restore_action_snapshot",
 		character_action_target
 	)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	if (
 		value.has("active_item_state")
 		and not bool(active_item_runtime.call("restore_snapshot", active_item_target))
 	):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	var weapon_target := (value.get("weapon_state", {}) as Dictionary).duplicate(true)
 	# Full Replay checkpoints are allowed to move generation/token state backward.
@@ -3800,15 +3905,18 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 		"restore_snapshot_for_rollback",
 		weapon_target
 	)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	if not bool(_weapon_intent_router.call(
 		"restore_runtime_snapshot",
 		(value.get("intent_router_state", {}) as Dictionary).duplicate(true)
 	)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	if not _restore_rewind_frame_transaction_snapshot(
 		(value.get("rewind_state", {}) as Dictionary).duplicate(true)
 	):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	_install_player_weapon_replay_state(
 		(value.get("player_weapon_state", {}) as Dictionary).duplicate(true)
@@ -3859,12 +3967,130 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 	if not _restore_character_input_owner_snapshot(
 		player_state.get("character_input_owner", {}) as Dictionary
 	):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
+		return false
+	if (
+		int(value.get("schema_version", 0))
+		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		and not bool(health.call(
+			"restore_invulnerability_replay_snapshot",
+			(player_state.get("invulnerability_state", {}) as Dictionary).duplicate(true)
+		))
+	):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	_last_priority_arbitration = (
 		player_state.get("priority_arbitration", {}) as Dictionary
 	).duplicate(true)
 	_sync_weapon_action_projection()
-	return full_player_replay_snapshot() == value
+	if full_player_replay_snapshot() != value:
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
+		return false
+	if not bool(world_payload_authority.call(
+		"commit_transaction_restore",
+		world_ticket
+	)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
+		return false
+	return true
+
+
+func _rollback_full_player_world_restore(ticket: Dictionary, for_rollback: bool) -> bool:
+	if bool(world_payload_authority.call("rollback_transaction_restore", ticket)):
+		return true
+	set_physics_process(false)
+	push_error(
+		"Full Player Replay %s world rollback failed closed"
+		% ("compensation" if for_rollback else "restore")
+	)
+	return false
+
+
+func _can_install_full_player_replay_snapshot(value: Dictionary) -> bool:
+	if value.has("active_item_state") and (
+		active_item_runtime == null
+		or not active_item_runtime.has_method("can_restore_snapshot")
+		or not value.get("active_item_state") is Dictionary
+		or not bool(active_item_runtime.call(
+			"can_restore_snapshot",
+			(value["active_item_state"] as Dictionary).duplicate(true)
+		))
+	):
+		return false
+	if value.has("reward_effect_state") and (
+		not value.get("reward_effect_state") is Dictionary
+		or not can_restore_reward_effect_snapshot(
+			(value["reward_effect_state"] as Dictionary).duplicate(true)
+		)
+	):
+		return false
+	var health_target := (value.get("health_state", {}) as Dictionary).duplicate(true)
+	var world_target := (value.get("world_payload_state", {}) as Dictionary).duplicate(true)
+	var time_target := (value.get("time_manager_state", {}) as Dictionary).duplicate(true)
+	var action_target := (value.get("action_state", {}) as Dictionary).duplicate(true)
+	var character_target := (value.get("character_state", {}) as Dictionary).duplicate(true)
+	var character_action_target := (
+		value.get("character_action_state", {}) as Dictionary
+	).duplicate(true)
+	var weapon_target := (value.get("weapon_state", {}) as Dictionary).duplicate(true)
+	var intent_target := (value.get("intent_router_state", {}) as Dictionary).duplicate(true)
+	var rewind_target := (value.get("rewind_state", {}) as Dictionary).duplicate(true)
+	var player_weapon_target := (
+		value.get("player_weapon_state", {}) as Dictionary
+	).duplicate(true)
+	var player_state := value.get("player_state", {}) as Dictionary
+	var is_launch_snapshot := (
+		int(value.get("schema_version", 0))
+		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+	)
+	if is_launch_snapshot and (
+		health == null
+		or not health.has_method("can_restore_invulnerability_replay_snapshot")
+		or not health.has_method("restore_invulnerability_replay_snapshot")
+		or not player_state.get("invulnerability_state") is Dictionary
+		or not bool(health.call(
+			"can_restore_invulnerability_replay_snapshot",
+			(player_state["invulnerability_state"] as Dictionary).duplicate(true)
+		))
+	):
+		return false
+	return (
+		health != null
+		and health.has_method("can_restore_replay_snapshot")
+		and bool(health.call("can_restore_replay_snapshot", health_target))
+		and world_payload_authority != null
+		and world_payload_authority.has_method("can_restore_replay_snapshot")
+		and world_payload_authority.has_method("begin_transaction_restore")
+		and world_payload_authority.has_method("commit_transaction_restore")
+		and world_payload_authority.has_method("rollback_transaction_restore")
+		and bool(world_payload_authority.call("can_restore_replay_snapshot", world_target))
+		and time_manager != null
+		and time_manager.has_method("can_restore_replay_snapshot")
+		and bool(time_manager.call("can_restore_replay_snapshot", time_target))
+		and action_state.has_method("can_restore_replay_snapshot")
+		and bool(action_state.call("can_restore_replay_snapshot", action_target))
+		and character_action_coordinator != null
+		and character_action_coordinator.has_method("can_restore_replay_snapshot")
+		and bool(character_action_coordinator.call(
+			"can_restore_replay_snapshot",
+			character_target
+		))
+		and character_action_coordinator.has_method("can_restore_action_snapshot")
+		and bool(character_action_coordinator.call(
+			"can_restore_action_snapshot",
+			character_action_target
+		))
+		and weapon_action_coordinator != null
+		and weapon_action_coordinator.has_method("can_restore_snapshot_for_rollback")
+		and bool(weapon_action_coordinator.call(
+			"can_restore_snapshot_for_rollback",
+			weapon_target
+		))
+		and _weapon_intent_router.has_method("can_restore_runtime_snapshot")
+		and bool(_weapon_intent_router.call("can_restore_runtime_snapshot", intent_target))
+		and _valid_rewind_frame_transaction_snapshot(rewind_target)
+		and _valid_weapon_replay_player_state(player_weapon_target, weapon_target)
+	)
 
 
 func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
@@ -3976,9 +4202,32 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 				!= live_talent_state.get("selected_talent_ids")
 			or sealed_character_runtime.get("talent_definitions")
 				!= live_talent_state.get("talent_definitions")
+			or not _full_player_talent_definitions_match_authority(
+				live_talent_state,
+				normalized_identity
+			)
 		):
 			return {}
 	var player_state := value["player_state"] as Dictionary
+	var player_state_fields: Array[String] = [
+		"position", "velocity", "facing", "weapon_aim_direction",
+		"dash_cooldown_remaining_frames", "dash_velocity", "dash_direction",
+		"knockback_velocity", "combo_timeout_frames", "buffered_time_skill",
+		"dash_completion_token", "dash_completed_at_runtime_frame",
+		"next_time_action_token", "time_action_generation",
+		"character_input_owner", "priority_arbitration",
+	]
+	var is_launch_snapshot := (
+		expected_schema_version
+		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+	)
+	if is_launch_snapshot:
+		player_state_fields.append("invulnerability_state")
+	if player_state.size() != player_state_fields.size():
+		return {}
+	for player_state_field: String in player_state_fields:
+		if not player_state.has(player_state_field):
+			return {}
 	for vector_field: String in [
 		"position", "velocity", "facing", "dash_velocity", "dash_direction",
 		"knockback_velocity", "weapon_aim_direction",
@@ -4031,10 +4280,78 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or int((value["rewind_state"] as Dictionary).get("last_runtime_frame", -1)) != int(value["frame"])
 	):
 		return {}
+	if is_launch_snapshot and (
+		not player_state.get("invulnerability_state") is Dictionary
+		or health == null
+		or not health.has_method("can_restore_invulnerability_replay_snapshot")
+		or not bool(health.call(
+			"can_restore_invulnerability_replay_snapshot",
+			(player_state["invulnerability_state"] as Dictionary).duplicate(true)
+		))
+	):
+		return {}
 	for event_value: Variant in value["weapon_replay_events"] as Array:
 		if not event_value is Dictionary:
 			return {}
 	return value.duplicate(true)
+
+
+func _full_player_talent_definitions_match_authority(
+	live_talent_state: Dictionary,
+	identity: Dictionary
+) -> bool:
+	var selected_value: Variant = live_talent_state.get("selected_talent_ids")
+	var definitions_value: Variant = live_talent_state.get("talent_definitions")
+	if not selected_value is Array or not definitions_value is Array:
+		return false
+	var selected := selected_value as Array
+	var definitions := definitions_value as Array
+	if selected.size() != definitions.size():
+		return false
+	var registry: RefCounted = ContentRegistryScript.new()
+	var report: RefCounted = registry.call("load_packs", [
+		{"path": BASE_CONTENT_PACK_PATH, "required": true},
+	], BASE_CONTENT_PACK_GAME_VERSION, &"LAUNCH")
+	if report == null or bool(report.call("has_blocking_errors")):
+		return false
+	var definitions_by_id: Dictionary = {}
+	for talent_value: Variant in selected:
+		var definition_id := str(talent_value)
+		var definition: Dictionary = registry.call(
+			"get_content",
+			StringName(definition_id)
+		)
+		if (
+			definition_id.is_empty()
+			or str(definition.get("category", "")) != "talent"
+			or definitions_by_id.has(definition_id)
+		):
+			return false
+		definitions_by_id[definition_id] = definition.duplicate(true)
+	for index: int in range(selected.size()):
+		var talent_id := str(selected[index])
+		if (
+			talent_id.is_empty()
+			or not definitions[index] is Dictionary
+			or not definitions_by_id.has(talent_id)
+			or (definitions[index] as Dictionary) != definitions_by_id[talent_id]
+		):
+			return false
+		var compatibility: Variant = (
+			definitions[index] as Dictionary
+		).get("compatibility", {})
+		if not compatibility is Dictionary:
+			return false
+		var character_ids_value: Variant = (compatibility as Dictionary).get(
+			"character_ids",
+			[]
+		)
+		if (
+			not character_ids_value is Array
+			or not (character_ids_value as Array).has(str(identity.get("character_id", "")))
+		):
+			return false
+	return true
 
 
 func weapon_replay_snapshot() -> Dictionary:
@@ -10341,15 +10658,45 @@ func reward_effect_snapshot() -> Dictionary:
 	}
 
 
-func restore_reward_effect_snapshot(value: Dictionary) -> bool:
+func can_restore_reward_effect_snapshot(value: Dictionary) -> bool:
 	if not _valid_reward_effect_snapshot(value):
+		return false
+	var weapon := value["weapon"] as Dictionary
+	return (
+		_valid_reward_stats_snapshot(value["stats"] as Dictionary)
+		and health != null
+		and health.has_method("can_restore_reward_effect_snapshot")
+		and bool(health.call(
+			"can_restore_reward_effect_snapshot",
+			(value["health"] as Dictionary).duplicate(true)
+		))
+		and time_manager != null
+		and time_manager.has_method("can_restore_reward_effect_snapshot")
+		and bool(time_manager.call(
+			"can_restore_reward_effect_snapshot",
+			(value["time"] as Dictionary).duplicate(true)
+		))
+		and weapon_modifier_state != null
+		and weapon_modifier_state.has_method("can_restore_snapshot")
+		and bool(weapon_modifier_state.call(
+			"can_restore_snapshot",
+			(weapon["modifiers"] as Dictionary).duplicate(true)
+		))
+	)
+
+
+func restore_reward_effect_snapshot(
+	value: Dictionary,
+	publish_signals: bool = true
+) -> bool:
+	if not can_restore_reward_effect_snapshot(value):
 		return false
 	var before := reward_effect_snapshot()
 	if before.is_empty():
 		return false
-	if _install_reward_effect_snapshot(value) and reward_effect_snapshot() == value:
+	if _install_reward_effect_snapshot(value, publish_signals) and reward_effect_snapshot() == value:
 		return true
-	if not _install_reward_effect_snapshot(before) or reward_effect_snapshot() != before:
+	if not _install_reward_effect_snapshot(before, false) or reward_effect_snapshot() != before:
 		push_error("Player reward-effect restore rollback failed")
 	return false
 
@@ -10413,12 +10760,15 @@ func _valid_reward_effect_snapshot(value: Dictionary) -> bool:
 	)
 
 
-func _install_reward_effect_snapshot(value: Dictionary) -> bool:
+func _install_reward_effect_snapshot(value: Dictionary, publish_signals: bool = true) -> bool:
 	var energy_before := float(time_manager.get("energy"))
 	var max_energy_before := float(time_manager.get("max_energy"))
 	if not _restore_reward_stats_snapshot(value["stats"] as Dictionary):
 		return false
-	_apply_stats_to_components(false, not _reward_effect_publication_active)
+	_apply_stats_to_components(
+		false,
+		publish_signals and not _reward_effect_publication_active
+	)
 	if (
 		_reward_effect_publication_active
 		and (
@@ -10435,7 +10785,7 @@ func _install_reward_effect_snapshot(value: Dictionary) -> bool:
 	if not bool(time_manager.call(
 		"restore_reward_effect_snapshot",
 		(value["time"] as Dictionary).duplicate(true),
-		not _reward_effect_publication_active
+		publish_signals and not _reward_effect_publication_active
 	)):
 		return false
 	if (
@@ -10465,6 +10815,17 @@ func _install_reward_effect_snapshot(value: Dictionary) -> bool:
 
 
 func _restore_reward_stats_snapshot(value: Dictionary) -> bool:
+	if not _valid_reward_stats_snapshot(value):
+		return false
+	for field: String in [
+		"max_hp", "attack", "defense", "move_speed", "attack_speed",
+		"crit_chance", "crit_multiplier", "time_energy_max", "time_energy_regen",
+	]:
+		stats.set(field, float(value[field]))
+	return stats.call("snapshot") == value
+
+
+func _valid_reward_stats_snapshot(value: Dictionary) -> bool:
 	const FIELDS: Array[String] = [
 		"max_hp",
 		"attack",
@@ -10493,9 +10854,7 @@ func _restore_reward_stats_snapshot(value: Dictionary) -> bool:
 		or float(value["time_energy_regen"]) < 0.0
 	):
 		return false
-	for field: String in FIELDS:
-		stats.set(field, float(value[field]))
-	return stats.call("snapshot") == value
+	return true
 
 
 func _validated_reward_effect_operation(operation: Dictionary) -> Dictionary:

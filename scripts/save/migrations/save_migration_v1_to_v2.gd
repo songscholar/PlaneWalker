@@ -15,6 +15,14 @@ func migrate(document: Dictionary, _context: Dictionary = {}):
 
 	var migrated := document.duplicate(true)
 	var payload := migrated["payload"] as Dictionary
+	var document_kind := str(migrated.get("document_kind", "profile"))
+	if document_kind == "settings":
+		migrated["schema_version"] = 2
+		return SaveResultScript.success(migrated, {
+			"runtime_defaults_added": false,
+		})
+	if document_kind != "profile":
+		return _failure("document_kind_invalid")
 	var defaults_added := false
 	if payload.has("active_item_state"):
 		var active_value: Variant = payload["active_item_state"]

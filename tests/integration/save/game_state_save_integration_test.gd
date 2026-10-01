@@ -26,6 +26,7 @@ func _run() -> void:
 
 	_test_legacy_import_is_one_time_and_preserves_source()
 	_test_settings_and_profile_statistics_round_trip()
+	_test_v1_profile_loads_through_production_migration()
 	_test_failed_load_preserves_authoritative_memory()
 	_test_profile_and_domain_isolation()
 	_test_old_callers_and_failed_setting_signal_behavior()
@@ -103,6 +104,33 @@ func _test_failed_load_preserves_authoritative_memory() -> void:
 
 	_suite.assert_true(not GameState.load_persistent(), "unrecoverable profile load reports failure")
 	_suite.assert_equal(GameState.persistent, authoritative, "failed load does not replace authoritative in-memory data")
+
+
+func _test_v1_profile_loads_through_production_migration() -> void:
+	var legacy_path := _begin_case("v1_production_migration")
+	GameState.persistent["runs_completed"] = 6
+	_suite.assert_true(GameState.save_persistent(), "GameState writes the v2 migration fixture")
+	var profile_path := _profile_primary_path(legacy_path)
+	var legacy_profile := _read_json(profile_path)
+	legacy_profile["schema_version"] = 1
+	(legacy_profile.get("payload", {}) as Dictionary).erase("active_item_state")
+	(legacy_profile.get("payload", {}) as Dictionary).erase("reward_effect_state")
+	_resign(legacy_profile)
+	_write_text(profile_path, JSON.stringify(legacy_profile, "", true, true))
+
+	GameState.persistent = {"sentinel": "before-v1-load"}
+	_suite.assert_true(GameState.load_persistent(), "GameState production load migrates schema v1")
+	_suite.assert_equal(GameState.persistent.get("runs_completed"), 6.0, "v1 progress survives GameState load")
+	_suite.assert_equal(
+		GameState.persistent.get("active_item_state"),
+		_empty_active_item_state(),
+		"GameState receives explicit active-item migration state"
+	)
+	_suite.assert_equal(
+		GameState.persistent.get("reward_effect_state"),
+		{},
+		"GameState receives explicit reward-effect migration state"
+	)
 
 
 func _test_profile_and_domain_isolation() -> void:
@@ -199,6 +227,35 @@ func _read_text(path: String) -> String:
 	var contents := file.get_as_text()
 	file.close()
 	return contents
+
+
+func _read_json(path: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(_read_text(path))
+	return (parsed as Dictionary).duplicate(true) if parsed is Dictionary else {}
+
+
+func _resign(document: Dictionary) -> void:
+	var unsigned := document.duplicate(true)
+	unsigned.erase("integrity")
+	unsigned = JSON.parse_string(JSON.stringify(unsigned, "", true, true))
+	document["integrity"] = {
+		"algorithm": "sha256",
+		"digest": SaveEnvelopeScript.sha256_digest(unsigned),
+	}
+
+
+func _empty_active_item_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"configured": false,
+		"definition": {},
+		"generation": 0,
+		"next_token": 1,
+		"current_frame": -1,
+		"cooldown_end_frame": -1,
+		"handler_state": {},
+		"committed_receipts": {},
+	}
 
 
 func _write_text(path: String, contents: String) -> void:

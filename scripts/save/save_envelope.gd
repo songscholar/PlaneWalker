@@ -3,9 +3,11 @@ extends RefCounted
 
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
+const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
+const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 
 const MAGIC := "PWSAVE"
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const INTEGRITY_ALGORITHM := "sha256"
 const VALID_DOCUMENT_KINDS: Array[String] = ["profile", "settings"]
 const PROFILE_FIELDS: Array[String] = [
@@ -84,13 +86,32 @@ static func create_profile(
 	var domain_validation = SavePathPolicyScript.validate_id(save_domain, &"save_domain")
 	if not domain_validation.ok:
 		return domain_validation
-	var common_error := _common_create_error(sequence, game_version, created_at_utc, saved_at_utc, payload)
+	var normalized_payload := payload.duplicate(true)
+	if not normalized_payload.has("active_item_state"):
+		normalized_payload["active_item_state"] = empty_active_item_state()
+	if not normalized_payload.has("reward_effect_state"):
+		normalized_payload["reward_effect_state"] = {}
+	normalized_payload = _normalize_profile_payload(normalized_payload, SCHEMA_VERSION)
+	var common_error := _common_create_error(
+		sequence,
+		game_version,
+		created_at_utc,
+		saved_at_utc,
+		normalized_payload
+	)
 	if not common_error.is_empty():
 		return _invalid_create(str(common_error["field"]), str(common_error["reason"]), common_error.get("value"))
 	var snapshot_error := _content_snapshot_error(content_snapshot)
 	if not snapshot_error.is_empty():
 		return _invalid_create(str(snapshot_error["field"]), str(snapshot_error["reason"]), snapshot_error.get("value"))
 
+	var payload_error := _profile_payload_error(normalized_payload, SCHEMA_VERSION)
+	if not payload_error.is_empty():
+		return _invalid_create(
+			str(payload_error["field"]),
+			str(payload_error["reason"]),
+			payload_error.get("value")
+		)
 	var document := {
 		"magic": MAGIC,
 		"schema_version": SCHEMA_VERSION,
@@ -102,7 +123,7 @@ static func create_profile(
 		"created_at_utc": created_at_utc,
 		"saved_at_utc": saved_at_utc,
 		"content_snapshot": content_snapshot.duplicate(true),
-		"payload": payload.duplicate(true),
+		"payload": normalized_payload,
 	}
 	return _finish_create(document)
 
@@ -153,7 +174,7 @@ static func validate(
 			&"FORWARD_VERSION",
 			{"schema_version": schema_version, "supported_version": SCHEMA_VERSION}
 		)
-	if schema_version != SCHEMA_VERSION:
+	if schema_version < 1:
 		return _corrupt("schema_version", "value")
 	if typeof(document.get("document_kind")) != TYPE_STRING:
 		return _corrupt("document_kind", "type")
@@ -194,7 +215,29 @@ static func validate(
 	var integrity_error := _integrity_error(document)
 	if not integrity_error.is_empty():
 		return _corrupt(str(integrity_error["field"]), str(integrity_error["reason"]), {"value": integrity_error.get("value")})
+	if document_kind == "profile":
+		var normalized_payload := _normalize_profile_payload(document["payload"], schema_version)
+		var payload_error := _profile_payload_error(normalized_payload, schema_version)
+		if not payload_error.is_empty():
+			return _corrupt(
+				str(payload_error["field"]),
+				str(payload_error["reason"]),
+				{"value": payload_error.get("value")}
+			)
+		document["payload"] = normalized_payload
 	return SaveResultScript.success(document)
+
+
+static func reseal_current(document: Dictionary):
+	if int(document.get("schema_version", -1)) != SCHEMA_VERSION:
+		return SaveResultScript.failure(&"INVALID_ARGUMENT", {
+			"field": "schema_version",
+			"expected": SCHEMA_VERSION,
+			"actual": document.get("schema_version"),
+		})
+	var unsigned := document.duplicate(true)
+	unsigned.erase("integrity")
+	return _finish_create(unsigned)
 
 
 static func canonical_json(value: Variant) -> String:
@@ -291,6 +334,113 @@ static func _profile_document_error(
 	if typeof(document["content_snapshot"]) != TYPE_DICTIONARY:
 		return {"field": "content_snapshot", "reason": "type", "value": typeof(document["content_snapshot"])}
 	return _content_snapshot_error(document["content_snapshot"])
+
+
+static func _profile_payload_error(payload: Dictionary, schema_version: int) -> Dictionary:
+	if schema_version < 2:
+		return {}
+	if not payload.has("active_item_state"):
+		return {"field": "payload.active_item_state", "reason": "missing"}
+	if not payload["active_item_state"] is Dictionary:
+		return {"field": "payload.active_item_state", "reason": "type"}
+	if not bool(ActiveItemRuntimeScript.new().call(
+		"can_restore_snapshot",
+		(payload["active_item_state"] as Dictionary).duplicate(true)
+	)):
+		return {"field": "payload.active_item_state", "reason": "invalid"}
+	if not payload.has("reward_effect_state"):
+		return {"field": "payload.reward_effect_state", "reason": "missing"}
+	if not payload["reward_effect_state"] is Dictionary:
+		return {"field": "payload.reward_effect_state", "reason": "type"}
+	var reward_state := payload["reward_effect_state"] as Dictionary
+	if (
+		not reward_state.is_empty()
+		and not ReplayRecorderScript.validate_full_player_reward_effect_state(reward_state)
+	):
+		return {"field": "payload.reward_effect_state", "reason": "invalid"}
+	return {}
+
+
+static func _normalize_profile_payload(payload: Dictionary, schema_version: int) -> Dictionary:
+	var normalized := payload.duplicate(true)
+	if schema_version < 2:
+		return normalized
+	for field: String in ["active_item_state", "reward_effect_state"]:
+		if normalized.get(field) is Dictionary:
+			normalized[field] = _normalize_persisted_integer_fields(
+				normalized[field],
+				field
+			)
+	return normalized
+
+
+static func _normalize_persisted_integer_fields(value: Variant, parent_field: String) -> Variant:
+	const INTEGER_FIELDS: Array[String] = [
+		"schema_version", "profile_version", "generation", "next_token",
+		"current_frame", "cooldown_end_frame", "token", "runtime_frame",
+		"activated_at_frame", "expires_at_frame", "resource_revision",
+		"invulnerability_token",
+		"duration_frames", "cooldown_frames", "charges", "max_charges",
+		"combo_step", "launch_combo_step", "combo_timeout_remaining",
+		"last_runtime_frame", "active_token", "combo_index", "ammo",
+		"time_load_remaining_frames", "reload_frame", "combo_remaining_frames",
+		"claimed_rewind_generation_floor", "chain_step", "combo_count",
+		"combo_timeout_frames_remaining", "action_token_floor",
+		"aura_source_generation", "source_token", "payload_generation",
+		"remaining_frames", "capture_sequence", "sequence", "frame",
+		"current_token", "revision", "next_sample_sequence",
+		"cooldown_remaining_frames", "damage_attack_generation",
+		"damage_action_token", "guard_generation", "guard_elapsed_frames",
+		"next_fallback_attack_generation",
+	]
+	const INTEGER_ARRAY_FIELDS: Array[String] = [
+		"reward_invulnerability_tokens", "claimed_rewind_generations",
+		"reward_eligible_tokens", "reward_claimed_tokens",
+	]
+	const INTEGER_MAP_FIELDS: Array[String] = [
+		"resource_regen_frame_accumulators",
+		"reward_invulnerability_remaining",
+	]
+	if typeof(value) == TYPE_STRING_NAME and parent_field == "code":
+		return str(value)
+	if value is Array:
+		var normalized_array: Array = []
+		for child: Variant in value as Array:
+			if INTEGER_ARRAY_FIELDS.has(parent_field) and _is_integer_number(child):
+				normalized_array.append(int(child))
+			else:
+				normalized_array.append(
+					_normalize_persisted_integer_fields(child, parent_field)
+				)
+		return normalized_array
+	if not value is Dictionary:
+		return value
+	var normalized := {}
+	for key_value: Variant in (value as Dictionary).keys():
+		var key := str(key_value)
+		var child: Variant = (value as Dictionary)[key_value]
+		if (
+			(INTEGER_FIELDS.has(key) or INTEGER_MAP_FIELDS.has(parent_field))
+			and _is_integer_number(child)
+		):
+			normalized[key] = int(child)
+		else:
+			normalized[key] = _normalize_persisted_integer_fields(child, key)
+	return normalized
+
+
+static func empty_active_item_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"configured": false,
+		"definition": {},
+		"generation": 0,
+		"next_token": 1,
+		"current_frame": -1,
+		"cooldown_end_frame": -1,
+		"handler_state": {},
+		"committed_receipts": {},
+	}
 
 
 static func _content_snapshot_error(snapshot: Dictionary) -> Dictionary:

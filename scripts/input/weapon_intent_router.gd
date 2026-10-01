@@ -249,11 +249,15 @@ func runtime_snapshot() -> Dictionary:
 
 
 func restore_runtime_snapshot(value: Dictionary) -> bool:
-	if not _valid_runtime_snapshot(value):
+	if not can_restore_runtime_snapshot(value):
 		return false
 	_active_actions = (value["active_actions"] as Dictionary).duplicate(true)
 	_held_frames = (value["held_frames"] as Dictionary).duplicate(true)
 	return runtime_snapshot() == value
+
+
+func can_restore_runtime_snapshot(value: Dictionary) -> bool:
+	return _valid_runtime_snapshot(value)
 
 
 func _valid_runtime_snapshot(value: Dictionary) -> bool:

@@ -284,6 +284,7 @@ func _reward_effect_state() -> Dictionary:
 			"invulnerable": false,
 			"invulnerability_token": 0,
 			"reward_invulnerability_tokens": [],
+			"reward_invulnerability_remaining": {},
 		},
 		"time": {
 			"energy": 100.0,

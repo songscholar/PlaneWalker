@@ -46,11 +46,25 @@ func _run() -> void:
 
 	var frozen_projectile := ProjectileScene.instantiate()
 	frozen_projectile.lifetime = 0.05
+	frozen_projectile.set_physics_process(false)
 	add_child(frozen_projectile)
-	await get_tree().process_frame
-	frozen_projectile.apply_time_stop(0.10)
-	await get_tree().create_timer(0.07).timeout
-	_suite.assert_true(is_instance_valid(frozen_projectile) and not frozen_projectile.is_queued_for_deletion(), "time stop pauses projectile lifetime")
-	await get_tree().create_timer(0.10).timeout
-	_suite.assert_true(not is_instance_valid(frozen_projectile) or frozen_projectile.is_queued_for_deletion(), "projectile lifetime resumes after time stop")
+	frozen_projectile.apply_time_stop_source(&"test", 1.0)
+	frozen_projectile._physics_process(0.07)
+	_suite.assert_true(
+		is_instance_valid(frozen_projectile)
+		and not frozen_projectile.is_queued_for_deletion()
+		and frozen_projectile.is_time_stopped(),
+		"time stop pauses projectile lifetime"
+	)
+	_suite.assert_close(
+		float(frozen_projectile.get("_age")),
+		0.0,
+		"time-stopped projectile age does not advance"
+	)
+	frozen_projectile.clear_time_stop_source(&"test")
+	frozen_projectile._physics_process(0.06)
+	_suite.assert_true(
+		frozen_projectile.is_queued_for_deletion(),
+		"projectile lifetime resumes after time stop"
+	)
 	_suite.finish(get_tree())

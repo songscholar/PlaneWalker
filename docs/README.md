@@ -81,6 +81,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
 | [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
 | [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Current contract |
+| [SaveService v2 Contract](contracts/save-service-v2.md) | Launch 奖励/主动道具运行时状态、v1→v2 迁移、JSON 规范化和生产回写边界 | Approved / Current contract |
 | [Content Pack v2 Contract](contracts/content-pack-v2.md) | Base/更新/Mod/DLC 内容包、完整性与声明式效果边界 | Frozen / Current contract |
 | [M1 Playtest Protocol](current/2026-09-28-m1-playtest-protocol.md) | 真实外部试玩、匿名化、cohort、观察和证明合同 | Approved / Current protocol |
 | [M1 Release Report](current/2026-09-28-m1-release-report.md) | 30 Seed 仓库证据、真实玩家门禁与正式 M1 结论 | External Validation Pending / Current |

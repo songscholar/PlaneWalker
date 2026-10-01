@@ -602,11 +602,9 @@ func replay_snapshot() -> Dictionary:
 
 
 func restore_replay_snapshot(value: Dictionary) -> bool:
-	if _mutation_locked or not _active_frame_transaction.is_empty():
+	if not can_restore_replay_snapshot(value):
 		return false
 	var validated := _validated_replay_snapshot(value)
-	if validated.is_empty():
-		return false
 	if replay_snapshot() == value:
 		return true
 	var candidate_invalidations := validated["invalidated_generations_by_key"] as Dictionary
@@ -666,6 +664,30 @@ func restore_replay_snapshot(value: Dictionary) -> bool:
 	return true
 
 
+func can_restore_replay_snapshot(value: Dictionary) -> bool:
+	if (
+		_mutation_locked
+		or not _active_frame_transaction.is_empty()
+		or not _active_transaction_restore.is_empty()
+	):
+		return false
+	var validated := _validated_replay_snapshot(value)
+	if validated.is_empty():
+		return false
+	var candidate_invalidations := validated["invalidated_generations_by_key"] as Dictionary
+	for current_key: Variant in _invalidated_generations.keys():
+		if (
+			not candidate_invalidations.has(current_key)
+			or candidate_invalidations[current_key] != _invalidated_generations[current_key]
+		):
+			return false
+	for descriptor_value: Variant in validated["descriptors"] as Array:
+		var descriptor := descriptor_value as Dictionary
+		if not _factories.has(str(descriptor["handler_id"])):
+			return false
+	return true
+
+
 func restore_transaction_snapshot(value: Dictionary) -> bool:
 	var ticket := begin_transaction_restore(value)
 	if ticket.is_empty():
@@ -686,42 +708,58 @@ func begin_transaction_restore(value: Dictionary) -> Dictionary:
 	var validated := _validated_replay_snapshot(value)
 	if validated.is_empty():
 		return {}
-	if (
-		int(validated["revision"]) > _revision
-		or int(validated["last_runtime_frame"]) > _last_runtime_frame
-	):
-		return {}
 	var candidate_invalidations := validated["invalidated_generations_by_key"] as Dictionary
-	if candidate_invalidations != _invalidated_generations:
-		return {}
+	for current_key: Variant in _invalidated_generations.keys():
+		if (
+			not candidate_invalidations.has(current_key)
+			or candidate_invalidations[current_key] != _invalidated_generations[current_key]
+		):
+			return {}
 
 	var candidate_descriptors_by_id: Dictionary = {}
 	for descriptor_value: Variant in validated["descriptors"] as Array:
 		var descriptor := descriptor_value as Dictionary
 		var payload_id := str(descriptor["payload_id"])
 		candidate_descriptors_by_id[payload_id] = descriptor
-		var current_descriptor_value: Variant = _descriptors.get(payload_id)
-		var current_node_value: Variant = _nodes.get(payload_id)
-		if (
-			not current_descriptor_value is Dictionary
-			or current_descriptor_value != descriptor
-			or not _is_live_transaction_node(current_node_value)
-		):
+		if not _factories.has(str(descriptor["handler_id"])):
 			return {}
 
-	var added_payload_ids: Array[String] = []
+	var replaced_payload_ids: Array[String] = []
 	for payload_id: String in _sorted_payload_ids():
 		var current_node_value: Variant = _nodes.get(payload_id)
 		if not _is_live_transaction_node(current_node_value):
 			return {}
-		if not candidate_descriptors_by_id.has(payload_id):
-			added_payload_ids.append(payload_id)
+		if (
+			not candidate_descriptors_by_id.has(payload_id)
+			or candidate_descriptors_by_id[payload_id] != _descriptors[payload_id]
+		):
+			replaced_payload_ids.append(payload_id)
 
 	var before := replay_snapshot()
+	var before_invalidated_generations := _invalidated_generations.duplicate(true)
 	var stashed_descriptors: Dictionary = {}
 	var stashed_nodes: Dictionary = {}
+	var spawned_nodes: Dictionary = {}
 	_mutation_locked = true
-	for payload_id: String in added_payload_ids:
+	for payload_id: String in _sorted_dictionary_keys(candidate_descriptors_by_id):
+		var descriptor := candidate_descriptors_by_id[payload_id] as Dictionary
+		if (
+			_descriptors.get(payload_id) is Dictionary
+			and _descriptors[payload_id] == descriptor
+			and _is_live_transaction_node(_nodes.get(payload_id))
+		):
+			continue
+		var staged := _spawn_payload_node(descriptor)
+		if not bool(staged.get("ok", false)):
+			for spawned_value: Variant in spawned_nodes.values():
+				if spawned_value is Node and is_instance_valid(spawned_value):
+					_dispose_detached(spawned_value as Node)
+			_mutation_locked = false
+			return {}
+		var spawned := staged["node"] as Node
+		spawned.set_meta(&"world_payload_id", StringName(payload_id))
+		spawned_nodes[payload_id] = spawned
+	for payload_id: String in replaced_payload_ids:
 		var node := _nodes[payload_id] as Node
 		stashed_descriptors[payload_id] = (
 			_descriptors[payload_id] as Dictionary
@@ -731,6 +769,13 @@ func begin_transaction_restore(value: Dictionary) -> Dictionary:
 		_descriptors.erase(payload_id)
 		if node.get_parent() != null:
 			node.get_parent().remove_child(node)
+	for payload_id: String in _sorted_dictionary_keys(spawned_nodes):
+		var descriptor := candidate_descriptors_by_id[payload_id] as Dictionary
+		var node := spawned_nodes[payload_id] as Node
+		_descriptors[payload_id] = descriptor.duplicate(true)
+		_nodes[payload_id] = node
+		_active_root.add_child(node)
+	_invalidated_generations = candidate_invalidations.duplicate(true)
 	_revision = int(validated["revision"])
 	_invalidation_revision = int(validated["invalidation_revision"])
 	_last_runtime_frame = int(validated["last_runtime_frame"])
@@ -748,6 +793,8 @@ func begin_transaction_restore(value: Dictionary) -> Dictionary:
 		"target": value.duplicate(true),
 		"stashed_descriptors": stashed_descriptors,
 		"stashed_nodes": stashed_nodes,
+		"spawned_nodes": spawned_nodes,
+		"before_invalidated_generations": before_invalidated_generations,
 	}
 	if replay_snapshot() != value:
 		_rollback_active_transaction_restore()
@@ -1131,15 +1178,31 @@ func _frame_transaction_ticket_matches(ticket: Dictionary) -> bool:
 func _rollback_active_transaction_restore() -> bool:
 	if _active_transaction_restore.is_empty():
 		return false
-	if not _active_transaction_target_nodes_are_live():
-		return false
 	var before := _active_transaction_restore["before"] as Dictionary
 	var stashed_descriptors := (
 		_active_transaction_restore["stashed_descriptors"] as Dictionary
 	)
 	var stashed_nodes := _active_transaction_restore["stashed_nodes"] as Dictionary
+	var spawned_nodes := _active_transaction_restore["spawned_nodes"] as Dictionary
 	if stashed_descriptors.size() != stashed_nodes.size():
 		return false
+	for payload_id: String in _sorted_dictionary_keys(spawned_nodes):
+		var node_value: Variant = spawned_nodes[payload_id]
+		if (
+			not _is_live_transaction_node(node_value)
+			or _nodes.get(payload_id) != node_value
+			or (node_value as Node).get_parent() != _active_root
+		):
+			return false
+	for payload_id: String in _sorted_dictionary_keys(spawned_nodes):
+		var node := spawned_nodes[payload_id] as Node
+		_nodes.erase(payload_id)
+		_descriptors.erase(payload_id)
+		if node.get_parent() == _active_root:
+			_active_root.remove_child(node)
+		if node.has_method("retire_world_payload"):
+			node.call("retire_world_payload", &"transaction_rollback")
+		_dispose_detached(node)
 	for payload_id: String in _sorted_dictionary_keys(stashed_nodes):
 		if (
 			_descriptors.has(payload_id)
@@ -1162,6 +1225,9 @@ func _rollback_active_transaction_restore() -> bool:
 	_revision = int(before["revision"])
 	_invalidation_revision = int(before["invalidation_revision"])
 	_last_runtime_frame = int(before["last_runtime_frame"])
+	_invalidated_generations = (
+		_active_transaction_restore["before_invalidated_generations"] as Dictionary
+	).duplicate(true)
 	_active_transaction_restore.clear()
 	_mutation_locked = false
 	return replay_snapshot() == before

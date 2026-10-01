@@ -199,7 +199,7 @@ func action_snapshot() -> Dictionary:
 
 
 func restore_action_snapshot(value: Dictionary) -> bool:
-	if _mastery_prepare_active() or not _valid_action_snapshot(value):
+	if not can_restore_action_snapshot(value):
 		return false
 	_generation = int(value["generation"])
 	_next_token = int(value["next_token"])
@@ -208,6 +208,10 @@ func restore_action_snapshot(value: Dictionary) -> bool:
 	_mastery_claims = _mastery_claim_map(value["mastery_claims"] as Array)
 	_action_revision = int(value["revision"])
 	return action_snapshot() == value
+
+
+func can_restore_action_snapshot(value: Dictionary) -> bool:
+	return not _mastery_prepare_active() and _valid_action_snapshot(value)
 
 
 func try_character_skill(intent: Variant, context: Variant) -> Dictionary:
@@ -678,11 +682,9 @@ func restore_snapshot(value: Dictionary) -> bool:
 
 
 func restore_replay_snapshot(value: Dictionary) -> bool:
-	if _prepared_frame >= 0 or _mastery_prepare_active():
+	if not can_restore_replay_snapshot(value):
 		return false
 	var validated := _validated_snapshot(value)
-	if validated.is_empty() or bool(validated["runtime_configured"]) != (_runtime != null):
-		return false
 	var before := snapshot()
 	if _runtime != null:
 		var restored_value: Variant = _runtime.call(
@@ -697,6 +699,21 @@ func restore_replay_snapshot(value: Dictionary) -> bool:
 		return true
 	_restore_replay_snapshot_unchecked(before)
 	return false
+
+
+func can_restore_replay_snapshot(value: Dictionary) -> bool:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
+		return false
+	var validated := _validated_snapshot(value)
+	if validated.is_empty() or bool(validated["runtime_configured"]) != (_runtime != null):
+		return false
+	if _runtime == null:
+		return true
+	var accepted: Variant = _runtime.call(
+		"can_restore_snapshot",
+		(validated["runtime"] as Dictionary).duplicate(true)
+	)
+	return typeof(accepted) == TYPE_BOOL and bool(accepted)
 
 
 func _restore_replay_snapshot_unchecked(value: Dictionary) -> bool:

@@ -1,6 +1,6 @@
 {
   "magic": "PWSAVE",
-  "schema_version": 2,
+  "schema_version": 3,
   "document_kind": "profile",
   "profile_id": "slot_1",
   "save_domain": "base",
