@@ -7,6 +7,12 @@ const CharacterRuntimeScript := preload(
 const TimeGuardianCharacterRuntimeScript := preload(
 	"res://scripts/player/characters/time_guardian_character_runtime.gd"
 )
+const VoidWalkerCharacterRuntimeScript := preload(
+	"res://scripts/player/characters/void_walker_character_runtime.gd"
+)
+const PrimordialKnightCharacterRuntimeScript := preload(
+	"res://scripts/player/characters/primordial_knight_character_runtime.gd"
+)
 const WandererCharacterRuntimeScript := preload(
 	"res://scripts/player/characters/wanderer_character_runtime.gd"
 )
@@ -30,4 +36,8 @@ static func create(runtime_kind: Variant) -> Variant:
 		return WandererCharacterRuntimeScript.new()
 	if normalized == "time_guardian":
 		return TimeGuardianCharacterRuntimeScript.new()
+	if normalized == "void_walker":
+		return VoidWalkerCharacterRuntimeScript.new()
+	if normalized == "primordial_knight":
+		return PrimordialKnightCharacterRuntimeScript.new()
 	return CharacterRuntimeScript.new(StringName(normalized))
