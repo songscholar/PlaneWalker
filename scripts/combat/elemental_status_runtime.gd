@@ -132,11 +132,13 @@ func advance_frame() -> Dictionary:
 			var interval := maxi(1, int(entry.get("tick_interval_frames", 1)))
 			if int(entry["elapsed_frames"]) % interval == 0:
 				var tick_damage := maxf(0.0, float(entry.get("magnitude", 0.0)))
+				var tick_index := int(entry["elapsed_frames"]) / interval - 1
 				burn_damage += tick_damage
 				burn_ticks.append({
 					"effect_id": entry.get("effect_id"),
 					"source_id": entry.get("source_id"),
 					"generation": entry.get("generation"),
+					"tick_index": tick_index,
 					"damage": tick_damage,
 					"damage_source": entry.get("damage_source"),
 					"damage_attacker": entry.get("damage_attacker"),

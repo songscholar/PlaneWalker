@@ -6,7 +6,7 @@ const HostileTelegraphFactScript := preload("res://scripts/combat/hostile_telegr
 var _facts_by_key: Dictionary = {}
 
 
-func publish(value: Variant) -> bool:
+func register_fact(value: Variant) -> bool:
 	var fact: Dictionary = HostileTelegraphFactScript.create(value)
 	if fact.is_empty():
 		return false

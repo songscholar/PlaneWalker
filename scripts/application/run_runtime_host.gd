@@ -8,6 +8,7 @@ const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_facade.gd")
 const RunViewStateProjectorScript := preload("res://scripts/application/run_view_state_projector.gd")
+const HostileThreatRegistryScript := preload("res://scripts/combat/hostile_threat_registry.gd")
 
 const HUD_RENDER_INTERVAL := 0.1
 
@@ -20,6 +21,7 @@ var _room_runtime: Node
 var _room_controller: Node
 var _player: Node
 var _projector: RefCounted
+var _hostile_threat_registry: RefCounted = HostileThreatRegistryScript.new()
 var _hud_layer: CanvasLayer
 var _choice_layer: CanvasLayer
 var _choice_panel: Control
@@ -150,6 +152,14 @@ func start_run(config: Dictionary) -> Variant:
 	_room_runtime = runtime_value as Node
 	_room_runtime.name = "RoomRuntime"
 	add_child(_room_runtime)
+	if _room_controller.has_method("configure_hostile_threat_authority"):
+		var authority_configured := bool(_room_controller.call(
+			"configure_hostile_threat_authority",
+			hostile_identity_scope(StringName(run_id)),
+			_hostile_threat_registry
+		))
+		if not authority_configured:
+			return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"threat_authority": false})
 	var configured := bool(_room_controller.call(
 		"configure_authored_runtime",
 		_room_runtime,
@@ -219,6 +229,17 @@ func encounter_catalog() -> RefCounted:
 	return _facade.call("encounter_catalog")
 
 
+func hostile_threat_registry() -> RefCounted:
+	return _hostile_threat_registry
+
+
+static func hostile_identity_scope(run_id: StringName) -> Dictionary:
+	var normalized := str(run_id).strip_edges()
+	if normalized.is_empty() or normalized.length() > 64:
+		return {}
+	return {"run_id": StringName(normalized)}
+
+
 func choice_panel() -> Control:
 	return _choice_panel
 
@@ -263,6 +284,7 @@ func _connect_room_runtime() -> void:
 
 
 func _dispose_room_runtime() -> void:
+	_retire_hostile_threats()
 	if _room_runtime == null or not is_instance_valid(_room_runtime):
 		_room_runtime = null
 		return
@@ -315,6 +337,7 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 
 
 func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
+	_retire_hostile_threats()
 	_cancel_player_time_effects(&"run_terminal")
 	_publish_terminal_result(context)
 
@@ -329,6 +352,7 @@ func _on_runtime_failed(context: Dictionary) -> void:
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
+	_retire_hostile_threats()
 	_cancel_player_time_effects(&"runtime_failed")
 	_publish_terminal_result(context)
 
@@ -474,6 +498,13 @@ func _resolve_player_for_start() -> void:
 		return
 	if _room_controller != null and is_instance_valid(_room_controller):
 		_player = _room_controller.get_node_or_null("Player")
+
+
+func _retire_hostile_threats() -> void:
+	if _room_controller != null and is_instance_valid(_room_controller) and _room_controller.has_method("retire_hostile_threats"):
+		_room_controller.call("retire_hostile_threats")
+	elif _hostile_threat_registry != null:
+		_hostile_threat_registry.call("clear")
 
 
 func _publish_pending_initial_room_started(run_id: String) -> void:

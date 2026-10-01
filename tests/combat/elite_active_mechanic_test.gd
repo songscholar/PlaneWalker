@@ -97,6 +97,11 @@ func _assert_overload_telegraphs_and_resolves_once() -> void:
 	var tank: Node = subject["tank"]
 	var health: Node = subject["health"]
 	var damage_events := [0]
+	var observed_damage: Array[Dictionary] = []
+	var observe_damage := func(damage_info: RefCounted, target: Node) -> void:
+		if target == subject["player"] and damage_info.attacker == tank:
+			observed_damage.append(damage_info.snapshot())
+	EventBus.damage_about_to_apply.connect(observe_damage)
 	health.damaged.connect(func(_amount: float, _current_hp: float) -> void: damage_events[0] += 1)
 	var starting_hp: float = health.current_hp
 
@@ -121,9 +126,17 @@ func _assert_overload_telegraphs_and_resolves_once() -> void:
 	_suite.assert_equal(recovery["phase"], "RECOVERY", "overload enters recovery after resolving")
 	_suite.assert_close(float(recovery["phase_remaining"]), 0.65, "overload has a committed recovery window")
 	_suite.assert_equal(recovery["resolution_count"], 1, "overload records one resolution")
+	_suite.assert_equal(observed_damage.size(), 1, "overload publishes one immutable hostile damage plan")
+	if not observed_damage.is_empty():
+		var identity: Dictionary = tank.hostile_identity_snapshot()
+		_suite.assert_equal(observed_damage[0].get("hostile_source_id"), identity.get("hostile_source_id"), "overload damage uses Tank hostile source")
+		_suite.assert_equal(observed_damage[0].get("attack_generation"), 1, "first overload uses generation one")
+		_suite.assert_equal(observed_damage[0].get("hit_index"), 0, "single-target overload authors hit index zero")
 	_suite.assert_true(not bool(recovery["telegraph"].get("visible", true)), "overload clears its telegraph before recovery")
 	tank.advance_action_for_test(0.2)
 	_suite.assert_equal(damage_events[0], 1, "overload recovery cannot deal duplicate damage")
+	if EventBus.damage_about_to_apply.is_connected(observe_damage):
+		EventBus.damage_about_to_apply.disconnect(observe_damage)
 	await _cleanup_subject(subject)
 
 
@@ -205,6 +218,7 @@ func _spawn_subject(make_elite: bool) -> Dictionary:
 	player.global_position = Vector2(48.0, 0.0)
 
 	var tank := TankScene.instantiate()
+	tank.configure_hostile_identity(&"elite-mechanic-tank", 1)
 	add_child(tank)
 	tank.set_physics_process(false)
 	tank.global_position = Vector2.ZERO

@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const ElementalStatusRuntimeScript := preload("res://scripts/combat/elemental_status_runtime.gd")
+const HostileTelegraphFactScript := preload("res://scripts/combat/hostile_telegraph_fact.gd")
 const ELEMENTAL_STATUS_SEED_INITIALIZED_META := &"elemental_status_seed_initialized"
 const ELEMENTAL_STATUS_SEED_MATERIAL_META := &"elemental_status_seed_material"
 const MAX_WEAPON_HIT_CONTROL_CLAIMS := 256
@@ -44,6 +45,13 @@ var _time_stop_token_sequence: int = 0
 var _time_stop_sources: Dictionary = {}
 var _damage_vulnerability_sources: Dictionary = {}
 var _damage_action_sequence: int = 0
+var hostile_source_id: StringName = &""
+var _next_attack_generation: int = 1
+var _committed_attack_generation: int = 0
+var _hostile_identity_active: bool = false
+var _hostile_threat_registry: RefCounted
+var _hostile_runtime_frame_provider: Callable
+var _committed_threat_fact: Dictionary = {}
 var _weapon_hit_control_claims: Dictionary = {}
 var _weapon_hit_control_claim_order: Array[int] = []
 var elemental_status_runtime: RefCounted = ElementalStatusRuntimeScript.new()
@@ -53,6 +61,7 @@ const KNOCKBACK_DECAY := 10.0
 
 
 func _ready() -> void:
+	_ensure_hostile_identity()
 	add_to_group("enemies")
 	add_to_group("time_stoppable")
 	health.max_hp = max_hp
@@ -114,7 +123,12 @@ func _try_begin_primary_attack() -> bool:
 		return false
 	if target == null or not is_instance_valid(target):
 		return false
+	if _commit_hostile_attack().is_empty():
+		return false
 	_committed_attack_direction = global_position.direction_to(target.global_position)
+	if _register_primary_attack_threat().is_empty() and _hostile_threat_registry != null:
+		_committed_attack_generation = 0
+		return false
 	_set_attack_phase(AttackPhase.WINDUP, attack_windup)
 	velocity = Vector2.ZERO
 	return true
@@ -135,6 +149,8 @@ func _tick_attack_phase(delta: float) -> void:
 		return
 	_set_attack_phase(AttackPhase.READY)
 	_on_attack_sequence_completed()
+	_retire_committed_hostile_threat()
+	_committed_attack_generation = 0
 
 
 func _active_attack_recovery_duration() -> float:
@@ -176,7 +192,10 @@ func _deal_melee_damage() -> void:
 		["enemy:melee"],
 		_committed_attack_direction * 180.0,
 		self,
-		self
+		self,
+		true,
+		_committed_attack_generation,
+		0
 	)
 	if damage_info == null:
 		return
@@ -246,6 +265,7 @@ func _on_died(_killer: Variant) -> void:
 	clear_weapon_hit_control_state(&"death")
 	reset_elemental_statuses()
 	cancel_active_attack()
+	retire_hostile_identity(&"death")
 	visual.color = Color(0.25, 0.25, 0.28)
 	set_physics_process(false)
 	await get_tree().create_timer(0.2).timeout
@@ -257,9 +277,214 @@ func _restore_visual_color() -> void:
 
 
 func cancel_active_attack() -> void:
+	_retire_committed_hostile_threat()
 	_attack_phase_remaining = 0.0
 	_set_attack_phase(AttackPhase.READY)
 	_on_attack_runtime_cancelled()
+	_committed_attack_generation = 0
+
+
+func configure_hostile_identity(source_id: StringName, next_generation_floor: int = 1) -> bool:
+	var normalized := str(source_id).strip_edges()
+	if normalized.is_empty() or normalized.length() > 64 or next_generation_floor <= 0:
+		return false
+	var configured_source := StringName(normalized)
+	_retire_committed_hostile_threat()
+	if hostile_source_id != &"" and hostile_source_id != configured_source:
+		_retire_hostile_threat_source(hostile_source_id)
+	if hostile_source_id == configured_source:
+		_next_attack_generation = maxi(_next_attack_generation, next_generation_floor)
+	else:
+		hostile_source_id = configured_source
+		_next_attack_generation = next_generation_floor
+	_committed_attack_generation = 0
+	_hostile_identity_active = true
+	return true
+
+
+func retire_hostile_identity(_reason: StringName = &"retired") -> void:
+	_retire_committed_hostile_threat()
+	_retire_hostile_threat_source(hostile_source_id)
+	_committed_attack_generation = 0
+	_hostile_identity_active = false
+
+
+func configure_hostile_threat_authority(
+	registry: RefCounted,
+	runtime_frame_provider: Callable = Callable()
+) -> bool:
+	if (
+		registry == null
+		or not registry.has_method("register_fact")
+		or not registry.has_method("retire")
+		or not registry.has_method("retire_source")
+		or not runtime_frame_provider.is_valid()
+		or not _committed_threat_fact.is_empty()
+	):
+		return false
+	_hostile_threat_registry = registry
+	_hostile_runtime_frame_provider = runtime_frame_provider
+	return true
+
+
+func hostile_threat_registry() -> RefCounted:
+	return _hostile_threat_registry
+
+
+func hostile_identity_snapshot() -> Dictionary:
+	return {
+		"hostile_source_id": hostile_source_id,
+		"next_generation_floor": _next_attack_generation,
+		"active": _hostile_identity_active,
+	}
+
+
+func restore_hostile_identity_snapshot(value: Dictionary) -> bool:
+	if (
+		value.size() != 3
+		or not value.has("hostile_source_id")
+		or not value.has("next_generation_floor")
+		or not value.has("active")
+		or typeof(value["hostile_source_id"]) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or typeof(value["next_generation_floor"]) != TYPE_INT
+		or typeof(value["active"]) != TYPE_BOOL
+	):
+		return false
+	var source_id := StringName(str(value["hostile_source_id"]).strip_edges())
+	var next_generation_floor := int(value["next_generation_floor"])
+	if source_id == &"" or str(source_id).length() > 64 or next_generation_floor <= 0:
+		return false
+	hostile_source_id = source_id
+	_next_attack_generation = next_generation_floor
+	_committed_attack_generation = 0
+	_hostile_identity_active = bool(value["active"])
+	return true
+
+
+func begin_attack_for_test() -> Dictionary:
+	return _commit_hostile_attack()
+
+
+func _commit_hostile_attack() -> Dictionary:
+	_ensure_hostile_identity()
+	if not _hostile_identity_active or hostile_source_id == &"" or _next_attack_generation <= 0:
+		return {}
+	_committed_attack_generation = _next_attack_generation
+	_next_attack_generation += 1
+	return _hostile_hit_identity(_committed_attack_generation, 0)
+
+
+func _register_primary_attack_threat() -> Dictionary:
+	var geometry := _primary_attack_threat_geometry()
+	return _register_committed_hostile_threat(
+		str(geometry.get("shape", "cone")),
+		geometry.get("origin", global_position) as Vector2,
+		geometry.get("aim_direction", _committed_attack_direction) as Vector2,
+		geometry.get("target_point", target.global_position if target != null else global_position) as Vector2,
+		geometry.get("summon_slots", []) as Array,
+		float(geometry.get("radius", maxf(8.0, attack_range * 0.25))),
+		float(geometry.get("length", maxf(1.0, attack_range))),
+		float(geometry.get("duration", attack_windup + attack_recovery))
+	)
+
+
+func _primary_attack_threat_geometry() -> Dictionary:
+	return {
+		"shape": "cone",
+		"origin": global_position,
+		"aim_direction": _committed_attack_direction,
+		"target_point": target.global_position if target != null and is_instance_valid(target) else global_position,
+		"summon_slots": [],
+		"radius": maxf(8.0, attack_range * 0.25),
+		"length": maxf(1.0, attack_range),
+		"duration": attack_windup + attack_recovery,
+	}
+
+
+func _register_committed_hostile_threat(
+	shape: String,
+	origin: Vector2,
+	aim_direction: Vector2,
+	target_point: Vector2,
+	summon_slots_value: Array,
+	radius: float,
+	length: float,
+	duration_seconds: float
+) -> Dictionary:
+	if _committed_attack_generation <= 0 or hostile_source_id == &"":
+		return {}
+	var active_from := _hostile_runtime_frame()
+	var active_frames := maxi(1, ceili(maxf(0.0, duration_seconds) * 60.0))
+	var fact: Dictionary = HostileTelegraphFactScript.create({
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": _committed_attack_generation,
+		"shape": shape,
+		"origin": origin,
+		"aim_direction": aim_direction,
+		"target_point": target_point,
+		"summon_slots": summon_slots_value.duplicate(),
+		"radius": radius,
+		"length": length,
+		"active_from_frame": active_from,
+		"active_through_frame": active_from + active_frames - 1,
+	})
+	if fact.is_empty():
+		return {}
+	if _hostile_threat_registry != null and not bool(_hostile_threat_registry.call("register_fact", fact)):
+		return {}
+	_committed_threat_fact = fact.duplicate(true)
+	return fact.duplicate(true)
+
+
+func _retire_committed_hostile_threat() -> bool:
+	if _committed_threat_fact.is_empty():
+		return false
+	var source_id := StringName(str(_committed_threat_fact.get("hostile_source_id", "")))
+	var generation := int(_committed_threat_fact.get("attack_generation", 0))
+	_committed_threat_fact.clear()
+	if _hostile_threat_registry == null:
+		return true
+	return bool(_hostile_threat_registry.call("retire", source_id, generation))
+
+
+func _retire_hostile_threat_source(source_id: StringName) -> int:
+	if _hostile_threat_registry == null or source_id == &"":
+		return 0
+	return int(_hostile_threat_registry.call("retire_source", source_id))
+
+
+func _hostile_runtime_frame() -> int:
+	if _hostile_runtime_frame_provider.is_valid():
+		var value: Variant = _hostile_runtime_frame_provider.call()
+		if typeof(value) == TYPE_INT and int(value) >= 0:
+			return int(value)
+	return maxi(0, int(Engine.get_physics_frames()))
+
+
+func _hostile_hit_identity(generation: int, hit_index: int) -> Dictionary:
+	if (
+		not _hostile_identity_active
+		or hostile_source_id == &""
+		or generation <= 0
+		or hit_index < 0
+	):
+		return {}
+	return {
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": generation,
+		"hit_index": hit_index,
+	}
+
+
+func _ensure_hostile_identity() -> void:
+	if hostile_source_id != &"":
+		return
+	for key: StringName in [&"hostile_source_id", &"encounter_spawn_id"]:
+		if has_meta(key):
+			var metadata_source := str(get_meta(key)).strip_edges()
+			if not metadata_source.is_empty():
+				configure_hostile_identity(StringName(metadata_source), _next_attack_generation)
+				return
 
 
 func apply_knockback(knockback: Vector2) -> void:
@@ -547,28 +772,58 @@ func _tick_elemental_status_runtime() -> void:
 			continue
 		var damage_source := _live_node_or_null(tick.get("damage_source"))
 		var damage_attacker := _live_node_or_null(tick.get("damage_attacker"))
-		var damage_info := _damage_info_from_plan(
+		var damage_info := _status_damage_info_from_tick(
+			tick,
 			tick_damage,
-			DamageInfoScript.DamageType.FIRE,
-			self,
-			StringName("burn:%s:%d" % [str(tick.get("source_id", "")), int(tick.get("generation", 0))]),
-			[
-			"weapon:staff",
-			"element:fire",
-			"status:burn",
-			"status_source:%s" % str(tick.get("source_id", "")),
-			"status_generation:%d" % int(tick.get("generation", -1)),
-			],
-			Vector2.ZERO,
 			damage_source,
-			damage_attacker,
-			false
+			damage_attacker
 		)
 		if damage_info == null:
 			continue
 		health.take_damage(damage_info)
 	if not (events.get("expired", []) as Array).is_empty():
 		_refresh_control_visual()
+
+
+func _status_damage_info_from_tick(
+	tick: Dictionary,
+	amount: float,
+	damage_source: Node,
+	damage_attacker: Node
+) -> RefCounted:
+	var status_source_id := StringName(str(tick.get("source_id", "")).strip_edges())
+	var status_generation := int(tick.get("generation", -1))
+	var tick_index := int(tick.get("tick_index", -1))
+	if status_source_id == &"" or status_generation < 0 or tick_index < 0:
+		return null
+	var identity_material := "%s|%d|burn" % [str(status_source_id), status_generation]
+	var status_damage_source_id := StringName(
+		"status:%s" % identity_material.sha256_text().substr(0, 40)
+	)
+	var damage_generation := status_generation + 1
+	return DamageInfoScript.from_plan({
+		"run_id": _damage_run_id(),
+		"target_id": _stable_damage_identity(self, "pending_target"),
+		"hostile_source_id": status_damage_source_id,
+		"attack_generation": damage_generation,
+		"hit_index": tick_index,
+		"action_token": damage_generation,
+		"amount": amount,
+		"damage_type": DamageInfoScript.DamageType.FIRE,
+		"source": damage_source,
+		"attacker": damage_attacker,
+		"can_crit": false,
+		"knockback": Vector2.ZERO,
+		"tags": [
+			"weapon:staff",
+			"element:fire",
+			"status:burn",
+			"status_source:%s" % str(status_source_id),
+			"status_generation:%d" % status_generation,
+		],
+		"source_generation": status_generation,
+		"control_effect": {},
+	})
 
 
 func _live_node_or_null(value: Variant) -> Node:
@@ -586,16 +841,24 @@ func _damage_info_from_plan(
 	knockback: Vector2,
 	damage_source: Node,
 	damage_attacker: Node,
-	can_crit: bool = true
+	can_crit: bool = true,
+	attack_generation: int = -1,
+	hit_index: int = 0
 ) -> RefCounted:
-	_damage_action_sequence += 1
-	var source_id := _stable_damage_identity(self, "enemy")
+	var generation := attack_generation
+	if generation <= 0:
+		var committed := _commit_hostile_attack()
+		generation = int(committed.get("attack_generation", 0))
+	if generation <= 0 or hit_index < 0:
+		return null
+	_damage_action_sequence = maxi(_damage_action_sequence + 1, generation)
 	return DamageInfoScript.from_plan({
 		"run_id": _damage_run_id(),
 		"target_id": _stable_damage_identity(damage_target, "pending_target"),
-		"hostile_source_id": StringName("%s:%s" % [str(source_id), str(channel)]),
-		"attack_generation": _damage_action_sequence,
-		"action_token": _damage_action_sequence,
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": generation,
+		"hit_index": hit_index,
+		"action_token": generation,
 		"amount": amount,
 		"damage_type": damage_type,
 		"source": damage_source,
@@ -603,6 +866,8 @@ func _damage_info_from_plan(
 		"can_crit": can_crit,
 		"knockback": knockback,
 		"tags": tags,
+		"source_generation": generation,
+		"control_effect": {},
 	})
 
 
@@ -635,6 +900,8 @@ func _should_elemental_blind_miss() -> bool:
 
 
 func _exit_tree() -> void:
+	_retire_committed_hostile_threat()
+	_retire_hostile_threat_source(hostile_source_id)
 	elemental_status_runtime.clear_all()
 
 

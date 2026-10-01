@@ -347,6 +347,7 @@ func _boss_fixture() -> Dictionary:
 
 	var boss := BossScene.instantiate()
 	boss.set_physics_process(false)
+	boss.configure_hostile_identity(&"staff-time-boss", 1)
 	add_child(boss)
 	boss.set_physics_process(false)
 	boss.global_position = Vector2.ZERO

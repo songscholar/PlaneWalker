@@ -140,6 +140,7 @@ func _spawn_subject() -> Dictionary:
 
 	var boss := BossScene.instantiate()
 	boss.set_physics_process(false)
+	boss.configure_hostile_identity(&"boss-action-state-warden", 1)
 	add_child(boss)
 	boss.set_physics_process(false)
 	boss.global_position = Vector2.ZERO

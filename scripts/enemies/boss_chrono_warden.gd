@@ -183,12 +183,19 @@ func _next_burst_action() -> int:
 func _try_start_action(action: int) -> bool:
 	if _action != BossAction.NONE or not ACTION_DEFINITIONS.has(action) or not _can_start_action(action):
 		return false
+	if _commit_hostile_attack().is_empty():
+		return false
 	_action = action
 	_action_phase = BossActionPhase.WINDUP
 	_action_time_remaining = _action_windup(action)
 	_action_resolved = false
 	_capture_action_commitment()
-	_show_action_telegraph()
+	if not _show_action_telegraph():
+		_action = BossAction.NONE
+		_action_phase = BossActionPhase.IDLE
+		_action_time_remaining = 0.0
+		_committed_attack_generation = 0
+		return false
 	if action == BossAction.SLAM:
 		visual.scale = Vector2(1.18, 1.18)
 	_restore_visual_color()
@@ -276,6 +283,8 @@ func _complete_action() -> void:
 	_action_phase = BossActionPhase.IDLE
 	_action_time_remaining = 0.0
 	_action_resolved = false
+	_retire_committed_hostile_threat()
+	_committed_attack_generation = 0
 	_committed_aim_direction = Vector2.RIGHT
 	_committed_target_point = global_position
 	_committed_summon_slots.clear()
@@ -309,7 +318,7 @@ func _capture_action_commitment() -> void:
 			_committed_summon_slots.append(global_position + direction * 86.0)
 
 
-func _show_action_telegraph() -> void:
+func _show_action_telegraph() -> bool:
 	var definition: Dictionary = ACTION_DEFINITIONS[_action]
 	var radius := float(definition.get("radius", 0.0))
 	var length := float(definition.get("length", 0.0))
@@ -319,8 +328,10 @@ func _show_action_telegraph() -> void:
 		radius = slam_radius
 	elif _action == BossAction.TIME_CRACK:
 		radius = 58.0 if _phase >= 3 else 50.0
-	combat_telegraph.show_telegraph(
-		str(definition["id"]),
+	var duration := _action_time_remaining + _action_recovery(_action)
+	if _action == BossAction.TIME_CRACK:
+		duration = _action_time_remaining + crack_arm_delay
+	var fact := _register_committed_hostile_threat(
 		str(definition["shape"]),
 		global_position,
 		_committed_aim_direction,
@@ -328,8 +339,15 @@ func _show_action_telegraph() -> void:
 		_committed_summon_slots,
 		radius,
 		length,
-		_action_time_remaining
+		duration
 	)
+	if fact.is_empty():
+		return _hostile_threat_registry == null
+	return bool(combat_telegraph.project_fact(
+		fact,
+		str(definition["id"]),
+		_action_time_remaining
+	))
 
 
 func _update_phase() -> void:
@@ -360,19 +378,28 @@ func _pattern_interval() -> float:
 
 
 func _fire_radial_burst() -> void:
-	if projectile_scene == null:
+	if projectile_scene == null or _committed_attack_generation <= 0:
 		return
 	for index: int in range(radial_projectile_count):
 		var angle := TAU * float(index) / float(radial_projectile_count)
 		var projectile := projectile_scene.instantiate()
-		projectile.global_position = global_position + Vector2.RIGHT.rotated(angle) * 34.0
 		projectile.direction = Vector2.RIGHT.rotated(angle)
 		projectile.damage = attack * 0.65
+		if projectile.has_method("configure_attack_identity"):
+			projectile.call(
+				"configure_attack_identity",
+				_damage_run_id(),
+				hostile_source_id,
+				_committed_attack_generation,
+				index,
+				self
+			)
 		get_parent().add_child(projectile)
+		projectile.global_position = global_position + Vector2.RIGHT.rotated(angle) * 34.0
 
 
 func _fire_aimed_burst() -> void:
-	if projectile_scene == null:
+	if projectile_scene == null or _committed_attack_generation <= 0:
 		return
 	var base_direction := _committed_aim_direction
 	var spread := 0.18 if _phase == 2 else 0.28
@@ -380,11 +407,20 @@ func _fire_aimed_burst() -> void:
 	for index: int in range(shot_count):
 		var centered_index := float(index) - float(shot_count - 1) * 0.5
 		var projectile := projectile_scene.instantiate()
-		projectile.global_position = global_position + base_direction * 34.0
 		projectile.direction = base_direction.rotated(centered_index * spread)
 		projectile.speed = 230.0 if _phase == 2 else 260.0
 		projectile.damage = attack * 0.7
+		if projectile.has_method("configure_attack_identity"):
+			projectile.call(
+				"configure_attack_identity",
+				_damage_run_id(),
+				hostile_source_id,
+				_committed_attack_generation,
+				index,
+				self
+			)
 		get_parent().add_child(projectile)
+		projectile.global_position = global_position + base_direction * 34.0
 
 
 func _start_slam() -> bool:
@@ -423,12 +459,13 @@ func _resolve_melee() -> void:
 
 
 func _boss_damage_plan(amount: float, tags: Array[String], knockback: Vector2) -> RefCounted:
-	var action_id := _action_name(_action)
-	var generation := maxi(1, int(_action_resolution_counts.get(action_id, 1)))
+	var generation := _committed_attack_generation
+	if generation <= 0:
+		return null
 	return DamageInfoScript.from_plan({
-		"run_id": "legacy-runtime",
-		"target_id": _boss_damage_identity(target, "player"),
-		"hostile_source_id": _boss_damage_identity(self, "chrono-warden"),
+		"run_id": _damage_run_id(),
+		"target_id": _stable_damage_identity(target, "player"),
+		"hostile_source_id": hostile_source_id,
 		"attack_generation": generation,
 		"hit_index": 0,
 		"action_token": generation,
@@ -445,12 +482,6 @@ func _boss_damage_plan(amount: float, tags: Array[String], knockback: Vector2) -
 		"control_effect": {},
 	})
 
-
-func _boss_damage_identity(node: Node, prefix: String) -> StringName:
-	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
-	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
-
-
 func _summon_fragments() -> void:
 	var parent := get_parent()
 	if parent == null:
@@ -462,6 +493,12 @@ func _summon_fragments() -> void:
 			summon_slots.append(global_position + direction * 86.0)
 	for index: int in range(summon_slots.size()):
 		var fragment := FragmentScene.instantiate()
+		if fragment.has_method("configure_hostile_identity"):
+			fragment.call(
+				"configure_hostile_identity",
+				_summoned_hostile_source_id(index),
+				1
+			)
 		parent.add_child(fragment)
 		fragment.global_position = summon_slots[index]
 		if fragment.has_method("apply_elite_modifier") and _phase >= 3:
@@ -479,12 +516,48 @@ func _create_time_crack() -> Node:
 	crack.arm_delay = crack_arm_delay
 	crack.radius = 58.0 if _phase >= 3 else 50.0
 	crack.damage = attack * 1.15
+	var generation := _committed_attack_generation
+	if generation <= 0:
+		var committed := _commit_hostile_attack()
+		generation = int(committed.get("attack_generation", 0))
+	if generation <= 0:
+		crack.free()
+		return null
 	parent.add_child(crack)
 	var crack_position := _committed_target_point
 	if _action != BossAction.TIME_CRACK:
 		crack_position = target.global_position if target != null and is_instance_valid(target) else global_position
 	crack.global_position = crack_position
+	_retire_committed_hostile_threat()
+	if (
+		_hostile_threat_registry != null
+		and not crack.configure_hostile_threat_authority(
+			_hostile_threat_registry,
+			_hostile_runtime_frame_provider
+		)
+	):
+		crack.queue_free()
+		return null
+	if not crack.configure_attack_identity(
+		_damage_run_id(), hostile_source_id, generation, self
+	):
+		crack.queue_free()
+		return null
 	return crack
+
+
+func _on_attack_runtime_cancelled() -> void:
+	_action = BossAction.NONE
+	_action_phase = BossActionPhase.IDLE
+	_action_time_remaining = 0.0
+	_action_resolved = false
+	_committed_aim_direction = Vector2.RIGHT
+	_committed_target_point = global_position
+	_committed_summon_slots.clear()
+	if visual != null:
+		visual.scale = Vector2.ONE
+	if combat_telegraph != null:
+		combat_telegraph.clear_telegraph()
 
 
 func force_slam_for_test() -> void:
@@ -492,6 +565,8 @@ func force_slam_for_test() -> void:
 
 
 func force_summon_fragments_for_test() -> void:
+	if _committed_attack_generation <= 0:
+		_commit_hostile_attack()
 	_summon_fragments()
 
 
@@ -525,6 +600,8 @@ func get_active_telegraph_snapshot_for_test() -> Dictionary:
 func get_committed_action_snapshot_for_test() -> Dictionary:
 	return {
 		"action_id": _action_name(_action),
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": _committed_attack_generation,
 		"aim_direction": _committed_aim_direction,
 		"target_point": _committed_target_point,
 		"summon_slots": _committed_summon_slots.duplicate(),
@@ -533,6 +610,28 @@ func get_committed_action_snapshot_for_test() -> Dictionary:
 
 func get_action_resolution_count_for_test(action_name: String) -> int:
 	return int(_action_resolution_counts.get(action_name, 0))
+
+
+func action_identities_for_test(_action_name_value: String, hit_count: int) -> Array[Dictionary]:
+	if hit_count <= 0:
+		return []
+	var committed := _commit_hostile_attack()
+	if committed.is_empty():
+		return []
+	var generation := int(committed["attack_generation"])
+	var result: Array[Dictionary] = []
+	for index: int in range(hit_count):
+		result.append(_hostile_hit_identity(generation, index))
+	return result
+
+
+func _summoned_hostile_source_id(slot_index: int) -> StringName:
+	var material := "%s|%d|summon|%d" % [
+		str(hostile_source_id),
+		maxi(1, _committed_attack_generation),
+		maxi(0, slot_index),
+	]
+	return StringName("hostile:%s" % material.sha256_text().substr(0, 40))
 
 
 func _restore_visual_color() -> void:

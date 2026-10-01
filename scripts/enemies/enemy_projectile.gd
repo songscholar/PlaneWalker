@@ -19,6 +19,12 @@ var _time_stop_token_sequence: int = 0
 var _time_stop_sources: Dictionary = {}
 var _rift_slow_multiplier: float = 1.0
 var _rift_slow_sources: Dictionary = {}
+var _run_id: StringName = &""
+var hostile_source_id: StringName = &""
+var attack_generation: int = 0
+var hit_index: int = 0
+var _attack_owner: Node
+var _attack_identity_locked: bool = false
 
 
 func _ready() -> void:
@@ -58,26 +64,26 @@ func _on_body_entered(body: Node2D) -> void:
 
 
 func _try_hit_player(target: Node) -> void:
-	if _resolved or target == null:
+	if _resolved or target == null or not _attack_identity_locked:
 		return
 	var damage_target := target.get_parent() if target is Area2D else target
 	var damage_info := DamageInfoScript.from_plan({
-		"run_id": "legacy-runtime",
-		"target_id": _damage_identity(damage_target, "player"),
-		"hostile_source_id": _damage_identity(self, "enemy-projectile"),
-		"attack_generation": 1,
-		"hit_index": 0,
-		"action_token": 1,
+		"run_id": _run_id,
+		"target_id": _target_identity(damage_target, "player"),
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": attack_generation,
+		"hit_index": hit_index,
+		"action_token": attack_generation,
 		"amount": damage,
 		"damage_type": DamageInfoScript.DamageType.PHYSICAL,
 		"source": self,
-		"attacker": self,
+		"attacker": _attack_owner if _attack_owner != null and is_instance_valid(_attack_owner) else self,
 		"can_crit": true,
 		"crit_chance": 0.0,
 		"crit_multiplier": 1.5,
 		"knockback": Vector2.ZERO,
 		"tags": ["enemy:projectile"],
-		"source_generation": 1,
+		"source_generation": attack_generation,
 		"control_effect": {},
 	})
 	if damage_info == null:
@@ -93,9 +99,56 @@ func _try_hit_player(target: Node) -> void:
 	queue_free()
 
 
-func _damage_identity(node: Node, prefix: String) -> StringName:
-	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
-	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
+func configure_attack_identity(
+	run_id: StringName,
+	source_id: StringName,
+	generation: int,
+	authored_hit_index: int,
+	attack_owner: Node = null
+) -> bool:
+	var normalized_run_id := str(run_id).strip_edges()
+	var normalized_source_id := str(source_id).strip_edges()
+	if (
+		_attack_identity_locked
+		or normalized_run_id.is_empty()
+		or normalized_run_id.length() > 64
+		or normalized_source_id.is_empty()
+		or normalized_source_id.length() > 64
+		or generation <= 0
+		or authored_hit_index < 0
+	):
+		return false
+	_run_id = StringName(normalized_run_id)
+	hostile_source_id = StringName(normalized_source_id)
+	attack_generation = generation
+	hit_index = authored_hit_index
+	_attack_owner = attack_owner
+	_attack_identity_locked = true
+	return true
+
+
+func attack_identity_snapshot() -> Dictionary:
+	if not _attack_identity_locked:
+		return {}
+	return {
+		"run_id": _run_id,
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": attack_generation,
+		"hit_index": hit_index,
+	}
+
+
+func _target_identity(node: Node, fallback: String) -> StringName:
+	if node != null and is_instance_valid(node):
+		for key: StringName in [&"stable_target_id", &"stable_target_key"]:
+			if node.has_meta(key):
+				var value := str(node.get_meta(key)).strip_edges()
+				if not value.is_empty():
+					return StringName(value)
+		var node_name := str(node.name).strip_edges()
+		if not node_name.is_empty() and not node_name.begins_with("@"):
+			return StringName(node_name)
+	return StringName(fallback)
 
 
 func apply_time_stop(duration: float) -> void:

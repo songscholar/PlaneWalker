@@ -30,6 +30,7 @@ func _run() -> void:
 
 func _assert_chaser_timing(player: Node2D) -> void:
 	var chaser := ChaserScene.instantiate()
+	chaser.configure_hostile_identity(&"timing-chaser", 1)
 	chaser.global_position = Vector2.ZERO
 	player.global_position = Vector2(20.0, 0.0)
 	var phases: Array[int] = []
@@ -72,6 +73,7 @@ func _assert_chaser_timing(player: Node2D) -> void:
 
 func _assert_shooter_timing(player: Node2D) -> void:
 	var shooter := ShooterScene.instantiate()
+	shooter.configure_hostile_identity(&"timing-shooter", 1)
 	shooter.global_position = Vector2.ZERO
 	player.global_position = Vector2(220.0, 0.0)
 	add_child(shooter)

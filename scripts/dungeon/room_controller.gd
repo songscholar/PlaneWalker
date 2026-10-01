@@ -28,6 +28,9 @@ var _encounter_catalog: RefCounted
 var _authored_runtime_enabled: bool = false
 var _authored_runtime_failure: Dictionary = {}
 var _current_room_definition: Dictionary = {}
+var _hostile_identity_scope: Dictionary = {}
+var _hostile_spawn_ordinals: Dictionary = {}
+var _hostile_threat_registry: RefCounted
 var _cleared: bool = false
 var _alive_enemies: int:
 	get:
@@ -51,11 +54,41 @@ func encounter_runner() -> Node:
 	return _encounter_runner
 
 
-func configure_authored_runtime(room_runtime: Node, encounter_catalog: RefCounted) -> bool:
+func configure_hostile_threat_authority(
+	hostile_identity_scope_value: Dictionary,
+	registry: RefCounted
+) -> bool:
+	if (
+		str(hostile_identity_scope_value.get("run_id", "")).strip_edges().is_empty()
+		or registry == null
+		or not registry.has_method("register_fact")
+		or not registry.has_method("retire")
+		or not registry.has_method("retire_source")
+		or not registry.has_method("clear")
+	):
+		return false
+	retire_hostile_threats()
+	_hostile_identity_scope = hostile_identity_scope_value.duplicate(true)
+	_hostile_threat_registry = registry
+	return true
+
+
+func hostile_threat_registry() -> RefCounted:
+	return _hostile_threat_registry
+
+
+func configure_authored_runtime(
+	room_runtime: Node,
+	encounter_catalog: RefCounted,
+	hostile_identity_scope_value: Dictionary = {}
+) -> bool:
 	_disconnect_room_runtime()
 	_authored_runtime_enabled = true
 	_authored_runtime_failure.clear()
 	_current_room_definition.clear()
+	_hostile_spawn_ordinals.clear()
+	if not hostile_identity_scope_value.is_empty():
+		_hostile_identity_scope = hostile_identity_scope_value.duplicate(true)
 	if room_runtime == null or encounter_catalog == null or _encounter_runner == null:
 		_record_runtime_failure({
 			"result": "runtime_error",
@@ -120,6 +153,7 @@ func _disconnect_room_runtime() -> void:
 func _on_runtime_room_started(_active_room_id: StringName, _revision: int) -> void:
 	_cleared = false
 	_authored_runtime_failure.clear()
+	_hostile_spawn_ordinals.clear()
 	if reward_marker != null:
 		reward_marker.visible = false
 	_clear_enemy_nodes()
@@ -136,6 +170,7 @@ func _on_runtime_room_cleared(_active_room_id: StringName, _revision: int) -> vo
 	if _cleared:
 		return
 	_cleared = true
+	retire_hostile_threats()
 	if reward_marker != null:
 		reward_marker.visible = true
 
@@ -175,12 +210,16 @@ func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
 		enemy.free()
 		_reject_authored_spawn(spawn_definition, &"ENEMY_ROOT_NOT_NODE_2D")
 		return
-	enemies_root.add_child(enemy)
-	(enemy as Node2D).global_position = marker.global_position
 	var mechanism_ids: Array = spawn_definition.get("mechanism_ids", []).duplicate()
 	enemy.set_meta("encounter_enemy_id", enemy_id)
 	enemy.set_meta("encounter_spawn_id", str(spawn_definition.get("id", "")))
 	enemy.set_meta("encounter_mechanism_ids", mechanism_ids)
+	if not _configure_spawned_hostile_identity(enemy, spawn_definition):
+		enemy.free()
+		_reject_authored_spawn(spawn_definition, &"HOSTILE_IDENTITY_REJECTED")
+		return
+	enemies_root.add_child(enemy)
+	(enemy as Node2D).global_position = marker.global_position
 	if mechanism_ids.has("overload_pulse") and enemy.has_method("apply_elite_modifier"):
 		enemy.call("apply_elite_modifier")
 	if not bool(_room_runtime.call("register_spawned", enemy, spawn_definition)):
@@ -214,6 +253,9 @@ func _on_enemy_summoned(enemy: Node) -> void:
 	if _room_runtime == null or not is_instance_valid(_room_runtime):
 		enemy.queue_free()
 		return
+	if not _configure_spawned_hostile_identity(enemy, {"id": "summoned", "spawn_slot_id": "summoned"}):
+		enemy.queue_free()
+		return
 	if not bool(_room_runtime.call("register_spawned", enemy, {"summoned": true})):
 		enemy.queue_free()
 		return
@@ -239,6 +281,118 @@ func _spawn_marker_for(spawn_definition: Dictionary) -> Node2D:
 	)
 	var node_path := NodePath(str(slot.get("node_path", "")))
 	return get_node_or_null(node_path) as Node2D
+
+
+static func hostile_source_id_for_spawn(
+	scope: Dictionary,
+	active_room_id: StringName,
+	encounter_id: StringName,
+	spawn_definition: Dictionary,
+	spawn_ordinal: int
+) -> StringName:
+	var run_id := str(scope.get("run_id", "")).strip_edges()
+	var room_value := str(active_room_id).strip_edges()
+	var encounter_value := str(encounter_id).strip_edges()
+	var spawn_id := str(spawn_definition.get("id", "")).strip_edges()
+	var slot_id := str(spawn_definition.get("spawn_slot_id", "")).strip_edges()
+	if (
+		run_id.is_empty()
+		or room_value.is_empty()
+		or encounter_value.is_empty()
+		or spawn_id.is_empty()
+		or slot_id.is_empty()
+		or spawn_ordinal < 0
+	):
+		return &""
+	var material := "%s|%s|%s|%s|%s|%d" % [
+		run_id,
+		room_value,
+		encounter_value,
+		spawn_id,
+		slot_id,
+		spawn_ordinal,
+	]
+	return StringName("hostile:%s" % material.sha256_text().substr(0, 40))
+
+
+func _configure_spawned_hostile_identity(enemy: Node, spawn_definition: Dictionary) -> bool:
+	if enemy == null or not is_instance_valid(enemy) or not enemy.has_method("configure_hostile_identity"):
+		return false
+	if enemy.has_method("hostile_identity_snapshot"):
+		var existing_value: Variant = enemy.call("hostile_identity_snapshot")
+		if (
+			existing_value is Dictionary
+			and bool((existing_value as Dictionary).get("active", false))
+			and StringName(str((existing_value as Dictionary).get("hostile_source_id", ""))) != &""
+		):
+			if not _configure_spawned_hostile_threat_authority(enemy):
+				return false
+			_configure_hostile_run_metadata(enemy)
+			return true
+	var runtime_snapshot: Dictionary = (
+		_room_runtime.call("snapshot")
+		if _room_runtime != null and _room_runtime.has_method("snapshot")
+		else {}
+	)
+	var scope := _hostile_identity_scope.duplicate(true)
+	if str(scope.get("run_id", "")).strip_edges().is_empty():
+		scope["run_id"] = StringName("seed-%d" % int(runtime_snapshot.get("run_seed", 0)))
+	var room_value := StringName(str(runtime_snapshot.get("room_id", room_id)))
+	var encounter_value := StringName(str(_current_room_definition.get("encounter_id", "encounter")))
+	var ordinal := _next_hostile_spawn_ordinal(spawn_definition)
+	var source_id := hostile_source_id_for_spawn(
+		scope,
+		room_value,
+		encounter_value,
+		spawn_definition,
+		ordinal
+	)
+	if source_id == &"" or not bool(enemy.call("configure_hostile_identity", source_id, 1)):
+		return false
+	if not _configure_spawned_hostile_threat_authority(enemy):
+		return false
+	enemy.set_meta("hostile_source_id", source_id)
+	_configure_hostile_run_metadata(enemy, scope)
+	return true
+
+
+func _configure_spawned_hostile_threat_authority(enemy: Node) -> bool:
+	if _hostile_threat_registry == null:
+		return true
+	if not enemy.has_method("configure_hostile_threat_authority"):
+		return false
+	return bool(enemy.call(
+		"configure_hostile_threat_authority",
+		_hostile_threat_registry,
+		Callable(self, "_hostile_runtime_frame")
+	))
+
+
+func _hostile_runtime_frame() -> int:
+	if _player_health != null and is_instance_valid(_player_health):
+		var player := _player_health.get_parent()
+		if player != null:
+			var value: Variant = player.get("_runtime_frame")
+			if typeof(value) == TYPE_INT and int(value) >= 0:
+				return int(value)
+	return maxi(0, int(Engine.get_physics_frames()))
+
+
+func _configure_hostile_run_metadata(enemy: Node, scope: Dictionary = {}) -> void:
+	var source_scope := scope if not scope.is_empty() else _hostile_identity_scope
+	var run_id := str(source_scope.get("run_id", "")).strip_edges()
+	if not run_id.is_empty():
+		enemy.set_meta("run_id", StringName(run_id))
+
+
+func _next_hostile_spawn_ordinal(spawn_definition: Dictionary) -> int:
+	var key := "%s|%s" % [
+		str(spawn_definition.get("id", "summoned")),
+		str(spawn_definition.get("spawn_slot_id", "summoned")),
+	]
+	var ordinal := int(_hostile_spawn_ordinals.get(key, 0))
+	_hostile_spawn_ordinals[key] = ordinal + 1
+	return ordinal
 
 
 func _show_spawn_warning(spawn_position: Vector2, radius: float, duration: float) -> void:
@@ -270,6 +424,20 @@ func _record_runtime_failure(context: Dictionary) -> void:
 
 
 func _clear_enemy_nodes() -> void:
+	if enemies_root == null:
+		if _hostile_threat_registry != null:
+			_hostile_threat_registry.call("clear")
+		return
 	for enemy: Node in enemies_root.get_children():
+		if enemy.has_method("cancel_active_attack"):
+			enemy.call("cancel_active_attack")
+		if enemy.has_method("retire_hostile_identity"):
+			enemy.call("retire_hostile_identity", &"room_teardown")
 		if not enemy.is_queued_for_deletion():
 			enemy.queue_free()
+	if _hostile_threat_registry != null:
+		_hostile_threat_registry.call("clear")
+
+
+func retire_hostile_threats() -> void:
+	_clear_enemy_nodes()

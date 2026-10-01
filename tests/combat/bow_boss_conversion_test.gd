@@ -115,6 +115,7 @@ func _spawn_subject() -> Dictionary:
 	player.global_position = Vector2(48.0, 0.0)
 	var boss := BossScene.instantiate()
 	boss.set_physics_process(false)
+	boss.configure_hostile_identity(&"bow-conversion-boss", 1)
 	add_child(boss)
 	boss.set_physics_process(false)
 	boss.global_position = Vector2.ZERO

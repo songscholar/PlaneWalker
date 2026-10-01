@@ -72,13 +72,18 @@ func _try_begin_overload_pulse(ignore_cooldown: bool = false) -> bool:
 		return false
 	if global_position.distance_to(target.global_position) > overload_radius:
 		return false
+	if _commit_hostile_attack().is_empty():
+		return false
 	_tank_action = TankAction.OVERLOAD_PULSE
 	_committed_attack_direction = global_position.direction_to(target.global_position)
 	if _committed_attack_direction.is_zero_approx():
 		_committed_attack_direction = Vector2.RIGHT
+	if not _show_overload_telegraph():
+		_committed_attack_generation = 0
+		_tank_action = TankAction.NONE
+		return false
 	_set_attack_phase(AttackPhase.WINDUP, overload_windup)
 	velocity = Vector2.ZERO
-	_show_overload_telegraph()
 	return true
 
 
@@ -92,22 +97,29 @@ func _resolve_primary_attack() -> void:
 func _resolve_overload_pulse() -> void:
 	_overload_resolution_count += 1
 	combat_telegraph.clear_telegraph()
-	var hit_index := 0
+	if _committed_attack_generation <= 0:
+		return
+	var candidates: Array[Node] = []
 	for candidate: Node in get_tree().get_nodes_in_group("player"):
-		if not candidate is Node2D:
-			continue
+		if candidate is Node2D:
+			candidates.append(candidate)
+	candidates.sort_custom(func(left: Node, right: Node) -> bool:
+		return str(_stable_damage_identity(left, "player")) < str(_stable_damage_identity(right, "player"))
+	)
+	var hit_index := 0
+	for candidate: Node in candidates:
 		if global_position.distance_to((candidate as Node2D).global_position) > overload_radius:
 			continue
 		var health_component := candidate.get_node_or_null("HealthComponent")
 		if health_component == null:
 			continue
 		var damage_info := DamageInfoScript.from_plan({
-			"run_id": "legacy-runtime",
-			"target_id": _tank_damage_identity(candidate, "player"),
-			"hostile_source_id": _tank_damage_identity(self, "elite-tank"),
-			"attack_generation": _overload_resolution_count,
+			"run_id": _damage_run_id(),
+			"target_id": _stable_damage_identity(candidate, "player"),
+			"hostile_source_id": hostile_source_id,
+			"attack_generation": _committed_attack_generation,
 			"hit_index": hit_index,
-			"action_token": _overload_resolution_count,
+			"action_token": _committed_attack_generation,
 			"amount": attack * overload_damage_multiplier,
 			"damage_type": DamageInfoScript.DamageType.PHYSICAL,
 			"source": self,
@@ -117,7 +129,7 @@ func _resolve_overload_pulse() -> void:
 			"crit_multiplier": 1.5,
 			"knockback": global_position.direction_to((candidate as Node2D).global_position) * 240.0,
 			"tags": ["enemy:area", "elite:overload_pulse"],
-			"source_generation": _overload_resolution_count,
+			"source_generation": _committed_attack_generation,
 			"control_effect": {},
 		})
 		if damage_info == null:
@@ -125,12 +137,6 @@ func _resolve_overload_pulse() -> void:
 		health_component.take_damage(damage_info)
 		hit_index += 1
 	_schedule_next_overload_cooldown()
-
-
-func _tank_damage_identity(node: Node, prefix: String) -> StringName:
-	var material := str(node.get_path()) if node != null and node.is_inside_tree() else prefix
-	return StringName("%s:%s" % [prefix, material.sha256_text().substr(0, 32)])
-
 
 func _active_attack_recovery_duration() -> float:
 	if _tank_action == TankAction.OVERLOAD_PULSE:
@@ -164,27 +170,43 @@ func _schedule_next_overload_cooldown() -> void:
 	_overload_cooldown_index = (_overload_cooldown_index + 1) % OVERLOAD_COOLDOWN_SEQUENCE.size()
 
 
-func _show_overload_telegraph() -> void:
-	var summon_slots: Array[Vector2] = []
-	combat_telegraph.show_telegraph(
-		OVERLOAD_ACTION_ID,
+func _show_overload_telegraph() -> bool:
+	var fact := _register_committed_hostile_threat(
 		"circle",
 		global_position,
 		_committed_attack_direction,
 		target.global_position,
-		summon_slots,
+		[],
 		overload_radius,
 		0.0,
-		overload_windup
+		overload_windup + overload_recovery
 	)
+	if fact.is_empty():
+		return _hostile_threat_registry == null
+	return bool(combat_telegraph.project_fact(fact, OVERLOAD_ACTION_ID, overload_windup))
 
 
 func _exit_tree() -> void:
 	cancel_active_attack()
+	retire_hostile_identity(&"tree_exit")
+	super()
 
 
 func force_overload_pulse_for_test() -> bool:
 	return _try_begin_overload_pulse(true)
+
+
+func pulse_identities_for_test(target_count: int) -> Array[Dictionary]:
+	if target_count <= 0:
+		return []
+	var committed := _commit_hostile_attack()
+	if committed.is_empty():
+		return []
+	var generation := int(committed["attack_generation"])
+	var result: Array[Dictionary] = []
+	for index: int in range(target_count):
+		result.append(_hostile_hit_identity(generation, index))
+	return result
 
 
 func set_overload_cooldown_for_test(value: float) -> void:

@@ -705,6 +705,7 @@ func _test_rift_source_recomputation() -> void:
 
 func _test_boss_rift_exposure_tracks_each_source() -> void:
 	var boss := BossScene.instantiate()
+	boss.configure_hostile_identity(&"time-loadout-boss", 1)
 	add_child(boss)
 	boss.set_physics_process(false)
 	await get_tree().process_frame

@@ -67,12 +67,22 @@ func show_telegraph(
 	queue_redraw()
 
 
-func project_fact(value: Variant) -> bool:
+func project_fact(
+	value: Variant,
+	presentation_action_id: String = "",
+	presentation_duration: float = -1.0
+) -> bool:
 	var fact: Dictionary = HostileTelegraphFactScript.create(value)
 	if fact.is_empty():
 		return false
+	var action_id := presentation_action_id.strip_edges()
+	if action_id.is_empty():
+		action_id = "%s#%d" % [str(fact["hostile_source_id"]), int(fact["attack_generation"])]
+	var duration := presentation_duration
+	if duration < 0.0:
+		duration = float(int(fact["active_through_frame"]) - int(fact["active_from_frame"]) + 1) / 60.0
 	show_telegraph(
-		"%s#%d" % [str(fact["hostile_source_id"]), int(fact["attack_generation"])],
+		action_id,
 		str(fact["shape"]),
 		fact["origin"] as Vector2,
 		fact["aim_direction"] as Vector2,
@@ -80,7 +90,7 @@ func project_fact(value: Variant) -> bool:
 		_typed_vector_array(fact["summon_slots"] as Array),
 		float(fact["radius"]),
 		float(fact["length"]),
-		float(int(fact["active_through_frame"]) - int(fact["active_from_frame"]) + 1) / 60.0
+		duration
 	)
 	_hostile_source_id = StringName(str(fact["hostile_source_id"]))
 	_attack_generation = int(fact["attack_generation"])

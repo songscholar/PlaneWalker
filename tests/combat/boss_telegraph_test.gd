@@ -131,7 +131,7 @@ func _test_action_contract(action_name: String) -> void:
 	_suite.assert_equal(boss.get_action_resolution_count_for_test(action_name), 1, "%s resolves exactly once at the windup boundary" % action_name)
 	_suite.assert_true(_effect_count(action_name, subject, damage_count[0]) > effects_before, "%s produces its gameplay effect at the boundary" % action_name)
 	_suite.assert_true(not bool(boss.get_active_telegraph_snapshot_for_test().get("visible", true)), "%s clears its telegraph before recovery" % action_name)
-	_assert_committed_output(action_name, subject, locked_direction, locked_target, locked_slots)
+	_assert_committed_output(action_name, subject, committed, locked_direction, locked_target, locked_slots)
 
 	_suite.assert_true(not boss.force_action_for_test("SLAM"), "%s recovery blocks replacement actions" % action_name)
 	boss.advance_action_for_test(recovery + 0.001)
@@ -183,25 +183,53 @@ func _has_test_contract(boss: Node) -> bool:
 	return complete
 
 
-func _assert_committed_output(action_name: String, subject: Dictionary, locked_direction: Vector2, locked_target: Vector2, locked_slots: Array) -> void:
+func _assert_committed_output(
+	action_name: String,
+	subject: Dictionary,
+	committed: Dictionary,
+	locked_direction: Vector2,
+	locked_target: Vector2,
+	locked_slots: Array
+) -> void:
 	var boss: Node = subject["boss"]
 	match action_name:
-		"AIMED":
+		"RADIAL", "AIMED":
 			var projectiles := _hostile_projectiles(boss)
-			_suite.assert_true(not projectiles.is_empty(), "aimed burst spawns committed projectiles")
+			_suite.assert_true(not projectiles.is_empty(), "%s burst spawns committed projectiles" % action_name)
 			if not projectiles.is_empty():
-				var middle: Node = projectiles[projectiles.size() / 2]
-				_suite.assert_true(middle.direction.normalized().dot(locked_direction.normalized()) > 0.999, "aimed burst uses the direction captured at action start")
+				projectiles.sort_custom(func(left: Node, right: Node) -> bool:
+					return int(left.attack_identity_snapshot().get("hit_index", -1)) < int(right.attack_identity_snapshot().get("hit_index", -1))
+				)
+				for index: int in range(projectiles.size()):
+					var identity: Dictionary = projectiles[index].attack_identity_snapshot()
+					_suite.assert_equal(identity.get("hostile_source_id"), committed.get("hostile_source_id"), "%s pellet keeps Warden source" % action_name)
+					_suite.assert_equal(identity.get("attack_generation"), committed.get("attack_generation"), "%s pellets share one action generation" % action_name)
+					_suite.assert_equal(identity.get("hit_index"), index, "%s pellet keeps authored hit index" % action_name)
+				if action_name == "AIMED":
+					var middle: Node = projectiles[projectiles.size() / 2]
+					_suite.assert_true(middle.direction.normalized().dot(locked_direction.normalized()) > 0.999, "aimed burst uses the direction captured at action start")
 		"SUMMON":
 			var positions := _summoned_fragment_positions(boss)
 			_suite.assert_equal(positions.size(), locked_slots.size(), "summon creates each committed slot exactly once")
 			for slot: Vector2 in locked_slots:
 				_suite.assert_true(_contains_close_point(positions, slot), "summon resolves at its captured slot")
+			var summoned_sources: Dictionary = {}
+			for fragment: Node in _summoned_fragments(boss):
+				var identity: Dictionary = fragment.hostile_identity_snapshot()
+				var source_id := StringName(str(identity.get("hostile_source_id", "")))
+				_suite.assert_true(source_id != &"", "summoned fragment receives a stable hostile source")
+				_suite.assert_equal(identity.get("next_generation_floor"), 1, "summoned fragment starts at generation one")
+				summoned_sources[source_id] = true
+			_suite.assert_equal(summoned_sources.size(), locked_slots.size(), "summon slots receive distinct hostile sources")
 		"TIME_CRACK":
 			var hazards := get_tree().get_nodes_in_group("boss_hazards")
 			_suite.assert_true(not hazards.is_empty(), "time crack creates its committed hazard")
 			if not hazards.is_empty():
-				_suite.assert_true((hazards.back() as Node2D).global_position.distance_to(locked_target) < 0.01, "time crack resolves at the target point captured at action start")
+				var hazard: Node = hazards.back()
+				_suite.assert_true((hazard as Node2D).global_position.distance_to(locked_target) < 0.01, "time crack resolves at the target point captured at action start")
+				var identity: Dictionary = hazard.attack_identity_snapshot()
+				_suite.assert_equal(identity.get("hostile_source_id"), committed.get("hostile_source_id"), "time crack keeps Warden source")
+				_suite.assert_equal(identity.get("attack_generation"), committed.get("attack_generation"), "time crack keeps committed action generation")
 
 
 func _effect_count(action_name: String, subject: Dictionary, damage_count: int) -> int:
@@ -233,6 +261,14 @@ func _summoned_fragment_positions(boss: Node) -> Array[Vector2]:
 	return result
 
 
+func _summoned_fragments(boss: Node) -> Array[Node]:
+	var result: Array[Node] = []
+	for node: Node in get_tree().get_nodes_in_group("enemies"):
+		if node != boss and str(node.get_script().resource_path).ends_with("enemy_chaser.gd"):
+			result.append(node)
+	return result
+
+
 func _contains_close_point(points: Array[Vector2], expected: Vector2) -> bool:
 	for point: Vector2 in points:
 		if point.distance_to(expected) < 0.01:
@@ -250,6 +286,7 @@ func _spawn_subject() -> Dictionary:
 
 	var boss := BossScene.instantiate()
 	boss.set_physics_process(false)
+	boss.configure_hostile_identity(&"boss-telegraph-warden", 1)
 	host.add_child(boss)
 	boss.set_physics_process(false)
 	boss.global_position = Vector2.ZERO

@@ -16,6 +16,10 @@ func _run() -> void:
 	var player := PlayerScene.instantiate()
 	var projectile := ProjectileScene.instantiate()
 	projectile.lifetime = 1.0
+	_suite.assert_true(
+		projectile.configure_attack_identity(&"projectile-test-run", &"shooter-test", 7, 2, null),
+		"projectile fixture installs an authoritative launch identity"
+	)
 	add_child(player)
 	add_child(projectile)
 	await get_tree().process_frame
@@ -29,6 +33,10 @@ func _run() -> void:
 	projectile._on_area_entered(hurtbox)
 	projectile._on_body_entered(player)
 
+	var identity: Dictionary = projectile.attack_identity_snapshot()
+	_suite.assert_equal(identity.get("hostile_source_id"), &"shooter-test", "projectile damage keeps the shooter source")
+	_suite.assert_equal(identity.get("attack_generation"), 7, "projectile damage keeps the launch generation")
+	_suite.assert_equal(identity.get("hit_index"), 2, "projectile damage keeps the authored pellet index")
 	_suite.assert_close(health.current_hp, starting_hp - projectile.damage, "one projectile contact applies damage once")
 	_suite.assert_equal(damage_events[0], 1, "one projectile contact emits one damage event")
 	_suite.assert_true(projectile._resolved, "projectile resolves atomically before deferred deletion")
