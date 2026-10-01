@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, the complete P11 five-weapon program, the complete P12 five-character program, and P13A Launch archetype authority are certified locally; exact milestone-aware three/eight-route domains, deterministic drafting, build-state scoring, and localized HUD projection are complete; P7/P9 continues with honest coverage/export blockers; the active local product stage is P13B real `50 / 28 / 18 / 15` Launch pools and effect certification; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, P11 five weapons, P12 five characters, P13A eight-archetype authority, and P13B exact `50 / 28 / 18 / 15` Launch pools/effects are certified locally; Replay schema 6, SaveEnvelope schema 2, deterministic formation, active-item UI, and the 150-loadout matrix are complete; P14 five-floor dungeon delivery is active; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -50,8 +50,8 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
-| Full Product Content | Active / Phased program | P11 五武器、P12 五角色完整运行时和 P13A 八流派权威已本地认证，包含统一 Launch UI/HUD、15 角色天赋、确定性 Replay、150 组合、40 Talent 子集、30 pairwise 集成、4500 synthetic samples 与精确三键/八键构筑域；当前进入 P13B 真实 `50 / 28 / 18 / 15` Launch 内容池及效果认证，后续继续五层五 Boss、Hub、叙事与 Expansion 系统 |
-| Launch / Expansion Systems | Preserved / Later program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod 管理、外观和 DLC 内容包继续按阶段实施；P11 已完成武器运行时 Replay 基础，不等同于完整回放产品体验 |
+| Full Product Content | Active / Phased program | P11 五武器、P12 五角色、P13A 八流派权威和 P13B 真实 `50 / 28 / 18 / 15` 内容池/效果已本地认证，包含 8 主动道具 UI、15 天赋、Replay schema 6、Save schema 2、240 synthetic samples 与 150 组合矩阵；当前进入 P14 五层、30 房、经济/商人/事件/UI，后续继续 P15 五 Boss、Hub、叙事与 Expansion 系统 |
+| Launch / Expansion Systems | Active / Phased program | P14 五层地牢是当前仓库阶段；Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod 管理、外观和 DLC 内容包继续按批准顺序实施；现有 Replay 运行时权威不等同于完整回放产品体验 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
 
@@ -113,7 +113,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P13A Launch Archetype Authority Plan](superpowers/plans/2026-10-01-plane-walker-p13a-launch-archetype-authority.md) | 八个顶层 Launch 流派、内容引用、Draft、BuildState 与 HUD 权威的执行记录 | Completed / Historical |
 | [P13A Launch Archetype Authority Evidence](current/2026-10-01-p13a-launch-archetype-authority-evidence.md) | 八流派 Profile、跨引用、里程碑 Draft/Build/UI、哈希、确定性与 156 场景整库认证 | Verified Locally / Current |
 | [P13B Complete Launch Pools Design](superpowers/specs/2026-10-01-plane-walker-p13b-launch-content-design.md) | 精确 `50 / 28 / 18 / 15` 内容目录、效果事务、8 主动道具、Talent 数据权威、UI/Replay 与认证 Gate | Approved / Current authority |
-| [P13B Complete Launch Pools Plan](superpowers/plans/2026-10-01-plane-walker-p13b-launch-content.md) | 内容 Schema、原子效果事务、完整池、主动道具、Talent、UI/Replay、模拟与认证的当前执行计划 | Active / Current |
+| [P13B Complete Launch Pools Plan](superpowers/plans/2026-10-01-plane-walker-p13b-launch-content.md) | 内容 Schema、原子效果事务、完整池、主动道具、Talent、UI/Replay、模拟与认证的执行记录 | Completed / Historical |
+| [P13B Complete Launch Pools Evidence](current/2026-10-01-p13b-launch-content-evidence.md) | `50 / 28 / 18 / 15`、`42 / 8`、62 effects、8 主动、15 Talent、Replay/Save、240 samples、150 组合与 168 场景认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |
 | [P11C Bow Candidate Migration Evidence](current/2026-09-29-p11c-bow-candidate-evidence.md) | Bow Candidate 同 token HOLD/release、道具能力迁移、反馈、legacy 时钟退休及 75 场景全量认证 | Verified Locally / Current |

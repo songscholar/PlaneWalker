@@ -4,7 +4,7 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P2, P3, P4/P5, P6, P8, P10A, P11 five complete weapons, P12 five complete characters, and P13A Launch archetype authority are locally certified; P13B complete `50 / 28 / 18 / 15` Launch pools and effect certification is the active content stage; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
+- Implementation Status: Active; P2, P3, P4/P5, P6, P8, P10A, P11 five complete weapons, P12 five complete characters, P13A Launch archetype authority, and P13B complete `50 / 28 / 18 / 15` Launch pools/effects are locally certified; P14 five-floor dungeon delivery is the active content stage; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
@@ -288,7 +288,7 @@ The foundation is executed as hard-gated phases:
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
 
-Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md), the [P12 five-character program](../../current/2026-09-30-p12-five-characters-evidence.md), and [P13A Launch archetype authority](../../current/2026-10-01-p13a-launch-archetype-authority-evidence.md) is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
+Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md), the [P12 five-character program](../../current/2026-09-30-p12-five-characters-evidence.md), [P13A Launch archetype authority](../../current/2026-10-01-p13a-launch-archetype-authority-evidence.md), and [P13B complete Launch pools](../../current/2026-10-01-p13b-launch-content-evidence.md) is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
 
 ## 10. Delivery Sequence After Foundation
 
@@ -298,9 +298,9 @@ After P0–P9, work continues in dependency order:
 2. Evidence-based Bow/third-time-ability promotion.
 3. Four complete time abilities.
 4. Five complete weapons — `Completed / Certified 2026-09-30`.
-5. Five complete characters and 150 loadout smoke matrix.
-6. Eight archetype mechanics and the complete launch item/blessing/curse/talent pools.
-7. Five-floor dungeon, route/economy/events/merchant budgets, and thirty rooms.
+5. Five complete characters and 150 loadout smoke matrix — `Completed / Certified 2026-10-01`.
+6. Eight archetype mechanics and the complete launch item/blessing/curse/talent pools — `Completed / Certified 2026-10-01`.
+7. Five-floor dungeon, route/economy/events/merchant budgets, and thirty rooms — `Active / P14`.
 8. Twenty-two launch enemies, elite affixes, and five bosses.
 9. Three-district Hub, meta progression, tutorials, narrative, NPC arcs, and endings.
 10. Full art, animation, VFX, audio, music, UI, localization, accessibility, and performance pass.
@@ -314,7 +314,9 @@ P11A–P11H completed delivery step 4 at implementation commit `01c3712` on 2026
 
 P12 completed delivery step 5 at implementation commit `e7b1ef9` on 2026-10-01: five complete Launch character runtimes, fifteen character talents, player-facing character UI/feedback, deterministic Replay, all 150 loadouts, 40 talent subsets, 30 pairwise integrations, and two byte-identical 4500-sample reports are locally certified.
 
-P13A completed the authority half of delivery step 6 at implementation commit `efebc11` on 2026-10-01: exactly eight versioned archetype profiles, milestone-aware Registry references and drafts, authoritative three-key/eight-key build domains, Replay-compatible snapshots, strict ViewState projection, and localized HUD identity pass the `156 / 156` scene gate. P13B remains responsible for the real `50 items / 28 blessings / 18 curses / 15 run talents` pools and typed effect certification. Formal M1, human-playtest, line-coverage, export, signing, and publication status are unchanged.
+P13A completed the authority half of delivery step 6 at implementation commit `efebc11` on 2026-10-01: exactly eight versioned archetype profiles, milestone-aware Registry references and drafts, authoritative three-key/eight-key build domains, Replay-compatible snapshots, strict ViewState projection, and localized HUD identity pass the `156 / 156` scene gate.
+
+P13B completed delivery step 6 at implementation certification commit `9a04639` on 2026-10-01: the exact `50 items / 28 blessings / 18 Launch curses / 15 run talents` pools, `42 passive / 8 active` split, 62-effect catalog, atomic reward transactions, eight active handlers, fifteen data-authoritative talents, Replay schema 6, SaveEnvelope schema 2, two byte-identical 240-sample formation reports, the 150-loadout matrix, and the `168 / 168` repository scene gate are locally certified in `docs/current/2026-10-01-p13b-launch-content-evidence.md`. Formal M1, human-playtest, line-coverage, export, signing, and publication status are unchanged. P14 five-floor dungeon delivery is next and does not claim P15 enemy or Boss behavior completion.
 
 Parallel agents may work on independent lanes, but shared contracts, manifests, autoloads, and assembly scenes have one integration owner.
 

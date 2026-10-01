@@ -8,11 +8,12 @@
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/current/2026-10-01-p13a-launch-archetype-authority-evidence.md`, `docs/contracts/content-pack-v2.md`
 - Supersedes: Legacy content-count and generic-stat recommendations in `docs/3.3_道具系统设计.md` and `docs/3.4_祝福与诅咒系统设计.md` where they conflict with this exact Launch pool
 - Last Verified: 2026-10-01
+- Implementation Status: Locally certified at implementation commit `9a04639`; exact Launch pools, typed effects, atomic rewards, eight active items, fifteen talents, Replay schema 6, SaveEnvelope schema 2, deterministic formation, 150 loadouts, and the `168 / 168` repository gate are recorded in `docs/current/2026-10-01-p13b-launch-content-evidence.md`
 - Contract References: `data/schemas/content_entry_v2.schema.json`, `data/content/effect_catalog.json`, P13A archetype profiles, P12 character runtime profiles
 
 ## 1. Decision
 
-P13B completes delivery step 6 of the Full Product Completion Design without widening or redefining the P13A archetype taxonomy. The Launch Base Pack will expose exactly:
+P13B completes delivery step 6 of the Full Product Completion Design without widening or redefining the P13A archetype taxonomy. The Launch Base Pack exposes exactly:
 
 ```text
 50 items = 42 passive + 8 active
