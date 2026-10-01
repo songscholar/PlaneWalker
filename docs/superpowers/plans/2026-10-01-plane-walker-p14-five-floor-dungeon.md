@@ -172,6 +172,7 @@ git commit -m "feat(dungeon): close p14 content authority"
 - Modify: `scripts/core/seed_service.gd`
 - Create: `scripts/dungeon/floor_plan.gd`
 - Create: `scripts/dungeon/floor_plan_generator.gd`
+- Create: `scripts/dungeon/reward_policy_protocol.gd`
 - Create: `tests/unit/dungeon/floor_plan_test.gd`
 - Create: `tests/unit/dungeon/floor_plan_test.tscn`
 - Create: `tests/unit/dungeon/floor_plan_generator_test.gd`
@@ -182,7 +183,7 @@ git commit -m "feat(dungeon): close p14 content authority"
 - Consumes: normalized floor and room-template definitions.
 - Produces: `SeedService.derive_node_seed(run_seed, floor_id, node_id, channel, roll_index) -> int`, `FloorPlan.configure(snapshot)`, `FloorPlan.select_edge(edge_id, expected_revision)`, and `FloorPlanGenerator.generate(run_seed, floor_definition, room_templates) -> Dictionary`.
 
-- [ ] **Step 1: Write failing seed-isolation and plan-invariant tests**
+- [x] **Step 1: Write failing seed-isolation and plan-invariant tests**
 
 Test node-context isolation explicitly:
 
@@ -196,7 +197,7 @@ suite.assert_true(before != unrelated, "sibling nodes own isolated channels")
 
 For seeds `20261001..20261030`, assert byte-identical plans, exact floor length, one entry/Boss, DAG reachability, equal entry-to-Boss path length, two or three choices at branch layers, no more than three consecutive combat/elite rooms, rest rules, event/shop/treasure guarantees, template compatibility, and stable digest. Mutation tests reject cycles, orphan nodes, backward edges, duplicate IDs, unknown content, mismatched digest, stale revision, repeated selection, and a selected edge whose sibling is not abandoned.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 ./tools/run_tests.sh --filter seed_service
@@ -206,7 +207,7 @@ For seeds `20261001..20261030`, assert byte-identical plans, exact floor length,
 
 Expected: new APIs and tests fail; existing SeedService behavior remains green after adding the failing assertions.
 
-- [ ] **Step 3: Implement immutable plan validation and atomic selection**
+- [x] **Step 3: Implement immutable plan validation and atomic selection**
 
 `FloorPlan.select_edge()` returns a command dictionary and mutates only after complete validation:
 
@@ -226,7 +227,7 @@ func select_edge(edge_id: StringName, expected_revision: int) -> Dictionary:
 
 Validation reconstructs every path and budget from nodes/edges; cached summaries are never trusted without recomputation.
 
-- [ ] **Step 4: Implement deterministic layered generation**
+- [x] **Step 4: Implement deterministic layered generation**
 
 The generator uses explicit node IDs (`entry`, `layer_01_a`, `layer_01_b`, ..., `boss`), node-specific seed channels, bounded retries, and no recursive seed mutation. It first selects route-type budgets, then topology, then compatible templates, then references. It computes the digest from canonical stable data without revision/visited flags.
 
@@ -240,7 +241,7 @@ If a floor cannot be generated in eight deterministic attempts, return:
 }
 ```
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 ```bash
 ./tools/run_tests.sh --filter seed_service

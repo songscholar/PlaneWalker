@@ -27,6 +27,54 @@ func _run() -> void:
 		SeedServiceScript.derive_seed(-123, &"draft", 1, 2, 3),
 		"negative run seeds are deterministic"
 	)
+	var node_seed := SeedServiceScript.derive_node_seed(
+		7001,
+		&"floor_time_rift",
+		&"layer_03_left",
+		&"room_template",
+		0
+	)
+	var sibling_node_seed := SeedServiceScript.derive_node_seed(
+		7001,
+		&"floor_time_rift",
+		&"layer_03_right",
+		&"room_template",
+		0
+	)
+	suite.assert_equal(
+		node_seed,
+		SeedServiceScript.derive_node_seed(
+			7001,
+			&"floor_time_rift",
+			&"layer_03_left",
+			&"room_template",
+			0
+		),
+		"node channel is stable"
+	)
+	suite.assert_true(node_seed != sibling_node_seed, "sibling nodes own isolated channels")
+	suite.assert_equal(
+		node_seed,
+		SeedServiceScript.derive_seed(
+			7001,
+			&"floor_plan_v1:floor_time_rift:layer_03_left:room_template",
+			0,
+			0,
+			0
+		),
+		"node seeds stay inside the floor_plan_v1 floor domain"
+	)
+	suite.assert_true(
+		node_seed
+		!= SeedServiceScript.derive_node_seed(
+			7001,
+			&"floor_time_rift",
+			&"layer_03_left",
+			&"event_reference",
+			0
+		),
+		"node subchannels are isolated"
+	)
 	var action_seed := SeedServiceScript.derive_weapon_action_seed(
 		123,
 		&"bow_launch_v1",

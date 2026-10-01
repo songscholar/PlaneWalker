@@ -31,6 +31,21 @@ static func make_rng(
 	return rng
 
 
+static func derive_node_seed(
+	run_seed: int,
+	floor_id: StringName,
+	node_id: StringName,
+	channel: StringName,
+	roll_index: int = 0
+) -> int:
+	var node_channel := StringName("floor_plan_v1:%s:%s:%s" % [
+		str(floor_id),
+		str(node_id),
+		str(channel),
+	])
+	return derive_seed(run_seed, node_channel, 0, 0, roll_index)
+
+
 static func derive_weapon_action_seed(
 	run_seed: int,
 	profile_id: StringName,
