@@ -19,7 +19,8 @@
     "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
       "low_energy_regen_multiplier": 2.0,
-      "low_energy_threshold": 30.0
+      "low_energy_threshold": 30.0,
+      "talent_wayfarer_energy_restore": 8
     },
     "kind": "eternity",
     "archetype": "",
@@ -47,7 +48,8 @@
     "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
       "heavy_execute_multiplier_bonus": 0.5,
-      "heavy_execute_threshold": 0.3
+      "heavy_execute_threshold": 0.3,
+      "talent_wayfarer_bonus_progress": 1
     },
     "kind": "ruin",
     "archetype": "",
@@ -75,7 +77,8 @@
     "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
       "max_hp_bonus": 20.0,
-      "heal": 20.0
+      "heal": 20.0,
+      "talent_room_clear_heal_per_mark": 3
     },
     "kind": "steel",
     "archetype": "",
@@ -91,7 +94,11 @@
     "description_key": "TAL_WIDENED_GUARD_DESC",
     "tags": ["character", "guard", "time_guardian"],
     "compatibility": {"character_ids": ["time_guardian"]},
-    "effects": {},
+    "effects": {
+      "talent_guard_perfect_last_frame": 11,
+      "talent_guard_normal_last_frame": 26,
+      "talent_guard_close_frame": 27
+    },
     "kind": "time_guardian",
     "archetype": "",
     "role": "route",
@@ -106,7 +113,7 @@
     "description_key": "TAL_FORTRESS_CORE_DESC",
     "tags": ["character", "fortress", "time_guardian"],
     "compatibility": {"character_ids": ["time_guardian"]},
-    "effects": {},
+    "effects": {"talent_fortress_ward_cost": 2},
     "kind": "time_guardian",
     "archetype": "",
     "role": "route",
@@ -121,7 +128,10 @@
     "description_key": "TAL_TEMPORAL_REBUKE_DESC",
     "tags": ["character", "rebuke", "time_guardian"],
     "compatibility": {"character_ids": ["time_guardian"]},
-    "effects": {},
+    "effects": {
+      "talent_rebuke_echo_multiplier": 1.0,
+      "talent_cooldown_reduction_frames": 45
+    },
     "kind": "time_guardian",
     "archetype": "",
     "role": "route",
@@ -136,7 +146,10 @@
     "description_key": "TAL_DEEP_DEBT_DESC",
     "tags": ["character", "void_debt", "void_walker"],
     "compatibility": {"character_ids": ["void_walker"]},
-    "effects": {},
+    "effects": {
+      "talent_debt_cap": 120,
+      "talent_corruption_threshold": 75
+    },
     "kind": "void_walker",
     "archetype": "",
     "role": "route",
@@ -151,7 +164,10 @@
     "description_key": "TAL_BOUNDED_DEVOUR_DESC",
     "tags": ["character", "devour", "void_walker"],
     "compatibility": {"character_ids": ["void_walker"]},
-    "effects": {},
+    "effects": {
+      "talent_devour_heal_ratio": 0.18,
+      "talent_devour_heal_cap_ratio": 0.16
+    },
     "kind": "void_walker",
     "archetype": "",
     "role": "route",
@@ -166,7 +182,10 @@
     "description_key": "TAL_RISK_STEP_DESC",
     "tags": ["character", "risk", "void_walker"],
     "compatibility": {"character_ids": ["void_walker"]},
-    "effects": {},
+    "effects": {
+      "talent_risk_radius": 288,
+      "talent_mastery_conversion_cap": 25
+    },
     "kind": "void_walker",
     "archetype": "",
     "role": "route",
@@ -181,7 +200,7 @@
     "description_key": "TAL_RESONANT_PLATE_DESC",
     "tags": ["armor", "character", "primordial_knight"],
     "compatibility": {"character_ids": ["primordial_knight"]},
-    "effects": {},
+    "effects": {"talent_armor_recovery_extension_frames": 12},
     "kind": "primordial_knight",
     "archetype": "",
     "role": "route",
@@ -196,7 +215,7 @@
     "description_key": "TAL_ECHO_FORGE_DESC",
     "tags": ["character", "echo", "primordial_knight"],
     "compatibility": {"character_ids": ["primordial_knight"]},
-    "effects": {},
+    "effects": {"talent_echo_multiplier": 1.0},
     "kind": "primordial_knight",
     "archetype": "",
     "role": "route",
@@ -211,7 +230,7 @@
     "description_key": "TAL_REALM_COLLAPSE_DESC",
     "tags": ["character", "instability", "primordial_knight"],
     "compatibility": {"character_ids": ["primordial_knight"]},
-    "effects": {},
+    "effects": {"talent_instability_frames": 600},
     "kind": "primordial_knight",
     "archetype": "",
     "role": "route",
@@ -226,7 +245,7 @@
     "description_key": "TAL_CODEX_MARGIN_DESC",
     "tags": ["character", "codex", "time_lord"],
     "compatibility": {"character_ids": ["time_lord"]},
-    "effects": {},
+    "effects": {"talent_pair_window_frames": 420},
     "kind": "time_lord",
     "archetype": "",
     "role": "route",
@@ -241,7 +260,7 @@
     "description_key": "TAL_EFFICIENT_INSCRIPTION_DESC",
     "tags": ["character", "infusion", "time_lord"],
     "compatibility": {"character_ids": ["time_lord"]},
-    "effects": {},
+    "effects": {"talent_infusion_energy_cost": 5},
     "kind": "time_lord",
     "archetype": "",
     "role": "route",
@@ -256,7 +275,10 @@
     "description_key": "TAL_DOMINION_CADENCE_DESC",
     "tags": ["character", "dominion", "time_lord"],
     "compatibility": {"character_ids": ["time_lord"]},
-    "effects": {},
+    "effects": {
+      "talent_dominion_energy_cost": 45,
+      "talent_dominion_cooldown_frames": 360
+    },
     "kind": "time_lord",
     "archetype": "",
     "role": "route",

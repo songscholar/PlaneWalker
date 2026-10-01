@@ -760,27 +760,42 @@ func _event(event_id: StringName, frame: int, token: int, context: Dictionary) -
 
 
 func _resource_maximum() -> int:
-	return 120 if _selected_talent_ids.has("deep_debt") else int((_profile_snapshot.get("resource", {}) as Dictionary).get("maximum", 100))
+	return _talent_modifier_int(
+		"debt_cap",
+		int((_profile_snapshot.get("resource", {}) as Dictionary).get("maximum", 100))
+	)
 
 
 func _corruption_threshold() -> int:
-	return 75 if _selected_talent_ids.has("deep_debt") else _passive_parameter_int("corruption_threshold")
+	return _talent_modifier_int(
+		"corruption_threshold",
+		_passive_parameter_int("corruption_threshold")
+	)
 
 
 func _risk_radius() -> int:
-	return 288 if _selected_talent_ids.has("risk_step") else _passive_parameter_int("risk_radius")
+	return _talent_modifier_int("risk_radius", _passive_parameter_int("risk_radius"))
 
 
 func _conversion_cap() -> int:
-	return 25 if _selected_talent_ids.has("risk_step") else _passive_parameter_int("conversion_cap")
+	return _talent_modifier_int(
+		"mastery_conversion_cap",
+		_passive_parameter_int("conversion_cap")
+	)
 
 
 func _devour_heal_ratio() -> float:
-	return 0.18 if _selected_talent_ids.has("bounded_devour") else _skill_parameter_float("heal_ratio")
+	return _talent_modifier_float(
+		"devour_heal_ratio",
+		_skill_parameter_float("heal_ratio")
+	)
 
 
 func _devour_heal_cap_ratio() -> float:
-	return 0.16 if _selected_talent_ids.has("bounded_devour") else _skill_parameter_float("heal_cap_ratio")
+	return _talent_modifier_float(
+		"devour_heal_cap_ratio",
+		_skill_parameter_float("heal_cap_ratio")
+	)
 
 
 func _time_parameters(ability_id: StringName) -> Dictionary:

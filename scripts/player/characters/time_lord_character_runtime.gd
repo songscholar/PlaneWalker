@@ -4,9 +4,6 @@ extends "res://scripts/player/characters/character_runtime.gd"
 const CharacterPayloadExecutionScript := preload(
 	"res://scripts/combat/character_payload_execution.gd"
 )
-const CharacterTalentStateScript := preload(
-	"res://scripts/player/characters/character_talent_state.gd"
-)
 const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 
 const CHARACTER_ID := &"time_lord"
@@ -70,7 +67,6 @@ var _next_mastery_echo_multiplier: float = 0.0
 var _next_mastery_echo_token: int = 0
 var _skill_cooldown_until_frame: int = -1
 var _next_conversion_generation: int = 1
-var _talent_state = CharacterTalentStateScript.new()
 
 
 func _init() -> void:
@@ -88,12 +84,8 @@ func configure(owner: Node, profile: Variant, talents: PackedStringArray) -> boo
 		or str(((profile_value as Dictionary).get("character_skill", {}) as Dictionary).get("handler_id", "")) != "codex_dominion"
 	):
 		return false
-	var candidate_talents = CharacterTalentStateScript.new()
-	if not candidate_talents.configure(CHARACTER_ID, talents):
-		return false
 	if not super.configure(owner, profile, talents):
 		return false
-	_talent_state = candidate_talents
 	_reset_strategy_state()
 	_revision = 0
 	return true
@@ -103,7 +95,6 @@ func reset_runtime_state(reason: StringName) -> void:
 	if not _configured:
 		return
 	super.reset_runtime_state(reason)
-	_talent_state.reset_runtime_state(reason)
 	_reset_strategy_state()
 
 

@@ -4,6 +4,9 @@ extends RefCounted
 const CharacterRuntimeProfileScript := preload(
 	"res://scripts/player/characters/character_runtime_profile.gd"
 )
+const CharacterTalentStateScript := preload(
+	"res://scripts/player/characters/character_talent_state.gd"
+)
 const SNAPSHOT_SCHEMA_VERSION := 1
 const SNAPSHOT_FIELDS: Array[String] = [
 	"schema_version",
@@ -22,6 +25,7 @@ var _selected_talent_ids: PackedStringArray = PackedStringArray()
 var _last_runtime_frame: int = -1
 var _revision: int = 0
 var _resource_value: Variant = 0
+var _talent_state = CharacterTalentStateScript.new()
 
 
 func _init(runtime_kind_value: StringName = &"") -> void:
@@ -76,6 +80,66 @@ func configure(owner: Node, profile: Variant, talents: PackedStringArray) -> boo
 	return true
 
 
+func configure_talent_definitions(definitions: Variant, initial_install: bool = true) -> bool:
+	if not _configured or not definitions is Array:
+		return false
+	var definition_ids := PackedStringArray()
+	for definition_value: Variant in definitions as Array:
+		if not definition_value is Dictionary:
+			return false
+		definition_ids.append(str((definition_value as Dictionary).get("id", "")))
+	if definition_ids != _selected_talent_ids:
+		return false
+	var candidate = CharacterTalentStateScript.new()
+	if not candidate.configure(
+		StringName(str(_profile_snapshot.get("character_id", ""))),
+		definition_ids,
+		(definitions as Array).duplicate(true)
+	):
+		return false
+	_talent_state = candidate
+	if not initial_install:
+		_revision += 1
+	return true
+
+
+func replace_talent_definitions(definitions: Variant) -> bool:
+	if not _configured or not definitions is Array:
+		return false
+	var allowed: Array = _profile_snapshot.get("talent_ids", [])
+	var by_id: Dictionary = {}
+	for definition_value: Variant in definitions as Array:
+		if not definition_value is Dictionary:
+			return false
+		var definition := (definition_value as Dictionary).duplicate(true)
+		var talent_id := str(definition.get("id", ""))
+		if talent_id.is_empty() or by_id.has(talent_id) or not allowed.has(talent_id):
+			return false
+		by_id[talent_id] = definition
+	var canonical_ids := PackedStringArray()
+	var canonical_definitions: Array[Dictionary] = []
+	for allowed_id_value: Variant in allowed:
+		var allowed_id := str(allowed_id_value)
+		if by_id.has(allowed_id):
+			canonical_ids.append(allowed_id)
+			canonical_definitions.append(
+				(by_id[allowed_id] as Dictionary).duplicate(true)
+			)
+	if canonical_ids.size() != by_id.size():
+		return false
+	var candidate = CharacterTalentStateScript.new()
+	if not candidate.configure(
+		StringName(str(_profile_snapshot.get("character_id", ""))),
+		canonical_ids,
+		canonical_definitions
+	):
+		return false
+	_talent_state = candidate
+	_selected_talent_ids = canonical_ids
+	_revision += 1
+	return true
+
+
 func reset_runtime_state(_reason: StringName) -> void:
 	if not _configured:
 		return
@@ -86,6 +150,7 @@ func reset_runtime_state(_reason: StringName) -> void:
 		if resource is Dictionary
 		else 0
 	)
+	_talent_state.reset_runtime_state(_reason)
 	_revision += 1
 
 
@@ -196,6 +261,22 @@ func presentation_snapshot() -> Dictionary:
 		"runtime_kind": str(_runtime_kind),
 		"resource_value": _resource_value,
 	}
+
+
+func talent_state_snapshot() -> Dictionary:
+	return _talent_state.snapshot()
+
+
+func talent_modifier_snapshot() -> Dictionary:
+	return _talent_state.modifier_snapshot()
+
+
+func _talent_modifier_int(key: String, fallback: int) -> int:
+	return int(_talent_state.modifier_snapshot().get(key, fallback))
+
+
+func _talent_modifier_float(key: String, fallback: float) -> float:
+	return float(_talent_state.modifier_snapshot().get(key, fallback))
 
 
 func can_reanchor_replay_neutral_frame(runtime_frame: int) -> bool:

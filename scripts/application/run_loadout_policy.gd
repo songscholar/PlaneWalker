@@ -131,6 +131,49 @@ func validate(config: Dictionary, registry: RefCounted):
 			return _content_failure(ability_result)
 		abilities.append((ability_result["definition"] as Dictionary).duplicate(true))
 
+	var talent_definitions: Array[Dictionary] = []
+	var requested_talent_ids: Array = normalized.get("character_talents", [])
+	var canonical_talent_ids: Array = character_profile.get("talent_ids", [])
+	for canonical_id_value: Variant in canonical_talent_ids:
+		var canonical_id := str(canonical_id_value)
+		if not requested_talent_ids.has(canonical_id):
+			continue
+		var talent_result := _resolve_definition(
+			registry,
+			canonical_id,
+			"talent",
+			milestone,
+			"character_talents"
+		)
+		if not bool(talent_result.get("ok", false)):
+			return _content_failure(talent_result)
+		var talent_definition := (talent_result["definition"] as Dictionary).duplicate(true)
+		var talent_compatibility: Variant = talent_definition.get("compatibility", {})
+		if (
+			not talent_compatibility is Dictionary
+			or (talent_compatibility as Dictionary).get("character_ids", [])
+			!= [str(normalized["character_id"])]
+		):
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE",
+				0,
+				{
+					"field": "character_talents",
+					"reason": "character_scope",
+					"content_id": canonical_id,
+				}
+			)
+		talent_definitions.append(talent_definition)
+	if talent_definitions.size() != requested_talent_ids.size():
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			0,
+			{
+				"field": "character_talents",
+				"reason": "profile_membership",
+			}
+		)
+
 	var compatibility_result := _validate_compatibility(
 		[
 			(character_result["definition"] as Dictionary),
@@ -151,6 +194,7 @@ func validate(config: Dictionary, registry: RefCounted):
 			"loadout": {
 				"character": (character_result["definition"] as Dictionary).duplicate(true),
 				"character_profile": character_profile.duplicate(true),
+				"character_talents": talent_definitions.duplicate(true),
 				"weapon": (weapon_result["definition"] as Dictionary).duplicate(true),
 				"weapon_profile": weapon_profile.duplicate(true),
 				"time_abilities": abilities,

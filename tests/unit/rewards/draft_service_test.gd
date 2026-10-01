@@ -56,6 +56,7 @@ func _run() -> void:
 	_test_reinforcement_offer(suite, service, registry, rooms[1])
 	_test_talent_offer(suite, service, registry, rooms[2])
 	_test_real_talent_offer(suite, rooms[2])
+	_test_launch_talent_offer_character_scope(suite, rooms[2])
 	_test_real_m1_pool_build_compatibility(suite, rooms)
 	_test_compatible_milestone_candidate_domains(suite)
 	_test_contract_offer(suite, service, registry, rooms[3])
@@ -108,6 +109,8 @@ func _test_reinforcement_offer(suite, service, registry, room: Dictionary) -> vo
 func _test_talent_offer(suite, service, registry, room: Dictionary) -> void:
 	var result = service.create_offer(registry, _state(789, 3), room)
 	suite.assert_true(result.ok, "talent offer succeeds")
+	if not result.ok:
+		return
 	var offer: Dictionary = result.context["offer"]
 	suite.assert_true(SelectionOfferScript.validate(offer).ok, "talent offer satisfies selection contract")
 	suite.assert_equal(offer["category"], "talent", "talent offer category is stable")
@@ -132,6 +135,36 @@ func _test_real_talent_offer(suite, room: Dictionary) -> void:
 			archetype.is_empty() or DraftServiceScript.M1_ARCHETYPES.has(archetype),
 			"real talent offer stays inside the M1 archetype domain"
 		)
+
+
+func _test_launch_talent_offer_character_scope(suite, room: Dictionary) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		"0.4.0-dev",
+		&"LAUNCH"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "real Base Pack loads for Launch talent drafting")
+	if report.has_blocking_errors():
+		return
+	for character_id: String in [
+		"wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord",
+	]:
+		var state := _state(900 + character_id.length(), 3)
+		state["config"] = {"milestone": "LAUNCH", "character_id": character_id}
+		var service = DraftServiceScript.new()
+		var result = service.create_offer(registry, state, room)
+		suite.assert_true(result.ok, "%s receives a Launch talent offer" % character_id)
+		if not result.ok:
+			continue
+		var definitions := _definitions(service, result.context["offer"])
+		suite.assert_equal(definitions.size(), 3, "%s receives exactly its three talents" % character_id)
+		for definition: Dictionary in definitions:
+			suite.assert_equal(
+				definition.get("compatibility", {}).get("character_ids", []),
+				[character_id],
+				"%s offer excludes cross-character talents" % character_id
+			)
 
 
 func _test_real_m1_pool_build_compatibility(suite, rooms: Array[Dictionary]) -> void:

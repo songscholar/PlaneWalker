@@ -17,6 +17,7 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const PROFILE_CATALOG_PATH := (
 	"res://data/content_packs/base/content/character_runtime_profiles.json"
 )
+const TALENT_CATALOG_PATH := "res://data/content_packs/base/content/talents.json"
 const SUPPORTED_RUNTIME_KINDS: Array[String] = [
 	"wanderer_m1_compat",
 	"wanderer",
@@ -173,7 +174,10 @@ func _test_authoritative_profile_and_canonical_talent_installation() -> void:
 	var profile: Variant = _profile("wanderer_launch_v1")
 	var selected := ["tal_steel_recover", "tal_eternity_reserve"]
 	var runtime = PlayerCharacterRuntimeScript.new()
-	_suite.assert_true(runtime.configure(owner, profile, selected), "valid profile and subset configure")
+	_suite.assert_true(
+		runtime.configure(owner, profile, selected, _talent_definitions(selected)),
+		"valid profile and subset configure"
+	)
 	_suite.assert_equal(
 		runtime.selected_talent_ids(),
 		["tal_eternity_reserve", "tal_steel_recover"],
@@ -301,7 +305,12 @@ func _test_snapshot_restore_and_presentation_are_exact_and_isolated() -> void:
 	var launch_owner := Node.new()
 	var launch_runtime = PlayerCharacterRuntimeScript.new()
 	_suite.assert_true(
-		launch_runtime.configure(launch_owner, _profile("time_lord_launch_v1"), ["dominion_cadence"]),
+		launch_runtime.configure(
+			launch_owner,
+			_profile("time_lord_launch_v1"),
+			["dominion_cadence"],
+			_talent_definitions(["dominion_cadence"])
+		),
 		"Launch runtime configures"
 	)
 	var launch_presentation: Dictionary = launch_runtime.presentation_snapshot()
@@ -367,7 +376,8 @@ func _test_replay_neutral_reanchor_is_strictly_scoped() -> void:
 		talented_runtime.configure(
 			owner,
 			_profile("wanderer_launch_v1"),
-			["tal_eternity_reserve"]
+			["tal_eternity_reserve"],
+			_talent_definitions(["tal_eternity_reserve"])
 		),
 		"talented Launch Wanderer fixture configures"
 	)
@@ -552,6 +562,25 @@ func _assert_runtime_reanchor_rejected(runtime, label: String) -> void:
 		before,
 		"%s reanchor rejection is zero-mutation" % label
 	)
+
+
+func _talent_definitions(ids: Array) -> Array[Dictionary]:
+	var parsed: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(TALENT_CATALOG_PATH)
+	)
+	var by_id: Dictionary = {}
+	if parsed is Array:
+		for value: Variant in parsed:
+			if value is Dictionary:
+				by_id[str((value as Dictionary).get("id", ""))] = (
+					value as Dictionary
+				).duplicate(true)
+	var result: Array[Dictionary] = []
+	for id_value: Variant in ids:
+		var talent_id := str(id_value)
+		if by_id.has(talent_id):
+			result.append((by_id[talent_id] as Dictionary).duplicate(true))
+	return result
 
 
 func _test_production_wrapper_propagates_malformed_events_for_exact_rollback() -> void:

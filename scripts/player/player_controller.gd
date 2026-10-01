@@ -7986,11 +7986,15 @@ func character_presentation_snapshot() -> Dictionary:
 
 func _assemble_character_runtime(config: Dictionary) -> Dictionary:
 	var definition_value: Variant = config.get("character_profile", {})
-	var talents_value: Variant = config.get("character_talents", [])
+	var talent_ids_value: Variant = config.get("character_talents", [])
+	var talent_definitions_value: Variant = config.get(
+		"character_talent_definitions", []
+	)
 	if (
 		not definition_value is Dictionary
 		or (definition_value as Dictionary).is_empty()
-		or not talents_value is Array
+		or not talent_ids_value is Array
+		or not talent_definitions_value is Array
 	):
 		return {"ok": false, "reason": "character_profile_missing"}
 	var profile: Variant = CharacterRuntimeProfileScript.from_definition(
@@ -8003,7 +8007,8 @@ func _assemble_character_runtime(config: Dictionary) -> Dictionary:
 		"configure",
 		self,
 		profile,
-		(talents_value as Array).duplicate(true)
+		(talent_ids_value as Array).duplicate(true),
+		(talent_definitions_value as Array).duplicate(true)
 	)):
 		return {"ok": false, "reason": "character_runtime_configuration_failed"}
 	var coordinator = CharacterActionCoordinatorScript.new()
@@ -8026,6 +8031,107 @@ func _assemble_character_runtime(config: Dictionary) -> Dictionary:
 		"runtime": runtime,
 		"coordinator": coordinator,
 	}
+
+
+func install_character_talent(definition: Dictionary) -> bool:
+	if (
+		loadout_runtime == null
+		or character_runtime == null
+		or not loadout_runtime.has_method("install_character_talent")
+		or not character_runtime.has_method("install_talent")
+		or not character_runtime.has_method("snapshot")
+	):
+		return false
+	var loadout_before: Dictionary = loadout_runtime.call("snapshot")
+	var runtime_before_value: Variant = character_runtime.call("snapshot")
+	if not runtime_before_value is Dictionary:
+		return false
+	var runtime_before := (runtime_before_value as Dictionary).duplicate(true)
+	if not bool(loadout_runtime.call(
+		"install_character_talent",
+		definition.duplicate(true)
+	)):
+		return false
+	if not bool(character_runtime.call("install_talent", definition.duplicate(true))):
+		if not bool(loadout_runtime.call("configure", loadout_before.duplicate(true))):
+			set_physics_process(false)
+			push_error("Character talent loadout rollback failed closed")
+		return false
+	var loadout_ids: Array[String] = []
+	for id_value: Variant in loadout_runtime.call("character_talent_ids"):
+		loadout_ids.append(str(id_value))
+	var runtime_ids: Array[String] = []
+	for id_value: Variant in character_runtime.call("selected_talent_ids"):
+		runtime_ids.append(str(id_value))
+	if loadout_ids != runtime_ids:
+		var loadout_rollback_ok := bool(loadout_runtime.call(
+			"configure",
+			loadout_before.duplicate(true)
+		))
+		var runtime_rollback_ok := bool(character_runtime.call(
+			"restore_snapshot",
+			runtime_before.duplicate(true)
+		))
+		if not loadout_rollback_ok or not runtime_rollback_ok:
+			set_physics_process(false)
+			push_error("Character talent identity rollback failed closed")
+		return false
+	return true
+
+
+func character_talent_transaction_snapshot() -> Dictionary:
+	if (
+		loadout_runtime == null
+		or character_runtime == null
+		or not loadout_runtime.has_method("snapshot")
+		or not character_runtime.has_method("snapshot")
+	):
+		return {}
+	var runtime_value: Variant = character_runtime.call("snapshot")
+	if not runtime_value is Dictionary:
+		return {}
+	return {
+		"loadout": (loadout_runtime.call("snapshot") as Dictionary).duplicate(true),
+		"runtime": (runtime_value as Dictionary).duplicate(true),
+	}
+
+
+func restore_character_talent_transaction_snapshot(value: Dictionary) -> bool:
+	if (
+		value.size() != 2
+		or not value.get("loadout") is Dictionary
+		or not value.get("runtime") is Dictionary
+		or loadout_runtime == null
+		or character_runtime == null
+	):
+		return false
+	var before := character_talent_transaction_snapshot()
+	if before.is_empty():
+		return false
+	if (
+		bool(loadout_runtime.call(
+			"configure",
+			(value["loadout"] as Dictionary).duplicate(true)
+		))
+		and bool(character_runtime.call(
+			"restore_snapshot",
+			(value["runtime"] as Dictionary).duplicate(true)
+		))
+		and character_talent_transaction_snapshot() == value
+	):
+		return true
+	var loadout_rollback_ok := bool(loadout_runtime.call(
+		"configure",
+		(before["loadout"] as Dictionary).duplicate(true)
+	))
+	var runtime_rollback_ok := bool(character_runtime.call(
+		"restore_snapshot",
+		(before["runtime"] as Dictionary).duplicate(true)
+	))
+	if not loadout_rollback_ok or not runtime_rollback_ok:
+		set_physics_process(false)
+		push_error("Character talent transaction rollback failed closed")
+	return false
 
 
 func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:

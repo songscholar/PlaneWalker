@@ -1,6 +1,10 @@
 class_name CharacterTalentState
 extends RefCounted
 
+const EffectHandlerCatalogScript := preload(
+	"res://scripts/content/effects/effect_handler_catalog.gd"
+)
+
 const SNAPSHOT_SCHEMA_VERSION := 1
 const SNAPSHOT_FIELDS: Array[String] = [
 	"schema_version",
@@ -24,10 +28,115 @@ const TALENT_CATALOG := {
 	&"primordial_knight": [&"resonant_plate", &"echo_forge", &"realm_collapse"],
 	&"time_lord": [&"codex_margin", &"efficient_inscription", &"dominion_cadence"],
 }
+const BASE_MODIFIERS := {
+	&"wanderer": {
+		"low_energy_threshold": 30,
+		"low_energy_regen_multiplier": 1.0,
+		"wayfarer_energy_restore": 6,
+		"heavy_execute_hp_ratio": 0.30,
+		"heavy_execute_multiplier_bonus": 0.0,
+		"wayfarer_bonus_progress": 0,
+		"max_hp_bonus": 0,
+		"acquisition_heal": 0,
+		"room_clear_hp_per_mark": 2,
+	},
+	&"time_guardian": {
+		"perfect_last_frame": 8,
+		"normal_last_frame": 23,
+		"close_frame": 24,
+		"fortress_ward_cost": 3,
+		"rebuke_echo_multiplier": 0.75,
+		"cooldown_reduction_frames": 30,
+	},
+	&"void_walker": {
+		"debt_cap": 100,
+		"corruption_threshold": 60,
+		"devour_heal_ratio": 0.15,
+		"devour_heal_cap_ratio": 0.12,
+		"risk_radius": 240,
+		"mastery_conversion_cap": 20,
+	},
+	&"primordial_knight": {
+		"armor_recovery_extension_frames": 0,
+		"echo_multiplier": 0.75,
+		"instability_frames": 480,
+	},
+	&"time_lord": {
+		"pair_window_frames": 300,
+		"infusion_energy_cost": 10,
+		"dominion_energy_cost": 60,
+		"dominion_cooldown_frames": 480,
+	},
+}
+const TALENT_EFFECTS := {
+	&"tal_eternity_reserve": [
+		"low_energy_regen_multiplier", "low_energy_threshold",
+		"talent_wayfarer_energy_restore",
+	],
+	&"tal_ruin_execute": [
+		"heavy_execute_multiplier_bonus", "heavy_execute_threshold",
+		"talent_wayfarer_bonus_progress",
+	],
+	&"tal_steel_recover": [
+		"max_hp_bonus", "heal", "talent_room_clear_heal_per_mark",
+	],
+	&"widened_guard": [
+		"talent_guard_perfect_last_frame", "talent_guard_normal_last_frame",
+		"talent_guard_close_frame",
+	],
+	&"fortress_core": ["talent_fortress_ward_cost"],
+	&"temporal_rebuke": [
+		"talent_rebuke_echo_multiplier", "talent_cooldown_reduction_frames",
+	],
+	&"deep_debt": ["talent_debt_cap", "talent_corruption_threshold"],
+	&"bounded_devour": [
+		"talent_devour_heal_ratio", "talent_devour_heal_cap_ratio",
+	],
+	&"risk_step": ["talent_risk_radius", "talent_mastery_conversion_cap"],
+	&"resonant_plate": ["talent_armor_recovery_extension_frames"],
+	&"echo_forge": ["talent_echo_multiplier"],
+	&"realm_collapse": ["talent_instability_frames"],
+	&"codex_margin": ["talent_pair_window_frames"],
+	&"efficient_inscription": ["talent_infusion_energy_cost"],
+	&"dominion_cadence": [
+		"talent_dominion_energy_cost", "talent_dominion_cooldown_frames",
+	],
+}
+const MODIFIER_BY_EFFECT := {
+	"low_energy_regen_multiplier": "low_energy_regen_multiplier",
+	"low_energy_threshold": "low_energy_threshold",
+	"talent_wayfarer_energy_restore": "wayfarer_energy_restore",
+	"heavy_execute_multiplier_bonus": "heavy_execute_multiplier_bonus",
+	"heavy_execute_threshold": "heavy_execute_hp_ratio",
+	"talent_wayfarer_bonus_progress": "wayfarer_bonus_progress",
+	"max_hp_bonus": "max_hp_bonus",
+	"heal": "acquisition_heal",
+	"talent_room_clear_heal_per_mark": "room_clear_hp_per_mark",
+	"talent_guard_perfect_last_frame": "perfect_last_frame",
+	"talent_guard_normal_last_frame": "normal_last_frame",
+	"talent_guard_close_frame": "close_frame",
+	"talent_fortress_ward_cost": "fortress_ward_cost",
+	"talent_rebuke_echo_multiplier": "rebuke_echo_multiplier",
+	"talent_cooldown_reduction_frames": "cooldown_reduction_frames",
+	"talent_debt_cap": "debt_cap",
+	"talent_corruption_threshold": "corruption_threshold",
+	"talent_devour_heal_ratio": "devour_heal_ratio",
+	"talent_devour_heal_cap_ratio": "devour_heal_cap_ratio",
+	"talent_risk_radius": "risk_radius",
+	"talent_mastery_conversion_cap": "mastery_conversion_cap",
+	"talent_armor_recovery_extension_frames": "armor_recovery_extension_frames",
+	"talent_echo_multiplier": "echo_multiplier",
+	"talent_instability_frames": "instability_frames",
+	"talent_pair_window_frames": "pair_window_frames",
+	"talent_infusion_energy_cost": "infusion_energy_cost",
+	"talent_dominion_energy_cost": "dominion_energy_cost",
+	"talent_dominion_cooldown_frames": "dominion_cooldown_frames",
+}
 
 var _configured: bool = false
 var _character_id: StringName = &""
 var _selected_talent_ids: Array[String] = []
+var _definitions: Array[Dictionary] = []
 var _modifiers: Dictionary = {}
 var _revision: int = 0
 
@@ -39,7 +148,11 @@ static func canonical_catalog() -> Dictionary:
 	return result
 
 
-func configure(character_id_value: Variant, talents: Variant) -> bool:
+func configure(
+	character_id_value: Variant,
+	talents: Variant,
+	definitions: Variant = []
+) -> bool:
 	if typeof(character_id_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
 		return false
 	var character_id := StringName(str(character_id_value).strip_edges())
@@ -49,12 +162,17 @@ func configure(character_id_value: Variant, talents: Variant) -> bool:
 	if not bool(canonical.get("ok", false)):
 		return false
 	var selected: Array[String] = canonical.get("talents", [])
-	var modifiers := _modifiers_for(character_id, selected)
+	var normalized_definitions := _normalized_definitions(character_id, selected, definitions)
+	if not bool(normalized_definitions.get("ok", false)):
+		return false
+	var selected_definitions: Array[Dictionary] = normalized_definitions.get("definitions", [])
+	var modifiers := _modifiers_for(character_id, selected, selected_definitions)
 	if modifiers.is_empty():
 		return false
 
 	_character_id = character_id
 	_selected_talent_ids = selected.duplicate()
+	_definitions = selected_definitions.duplicate(true)
 	_modifiers = modifiers.duplicate(true)
 	_configured = true
 	_revision += 1
@@ -71,6 +189,10 @@ func selected_talent_ids() -> Array[String]:
 
 func modifier_snapshot() -> Dictionary:
 	return _modifiers.duplicate(true)
+
+
+func definition_snapshots() -> Array[Dictionary]:
+	return _definitions.duplicate(true)
 
 
 func freeze_for_commit(source_kind_value: Variant, token: int, generation: int) -> Dictionary:
@@ -168,52 +290,85 @@ static func _canonical_subset(character_id: StringName, talents: Variant) -> Dic
 	return {"ok": true, "talents": canonical}
 
 
-static func _modifiers_for(character_id: StringName, selected: Array[String]) -> Dictionary:
-	match character_id:
-		&"wanderer":
-			return {
-				"low_energy_threshold": 30,
-				"low_energy_regen_multiplier": 2.0 if selected.has("tal_eternity_reserve") else 1.0,
-				"wayfarer_energy_restore": 8 if selected.has("tal_eternity_reserve") else 6,
-				"heavy_execute_hp_ratio": 0.30,
-				"heavy_execute_multiplier_bonus": 0.5 if selected.has("tal_ruin_execute") else 0.0,
-				"wayfarer_bonus_progress": 1 if selected.has("tal_ruin_execute") else 0,
-				"max_hp_bonus": 20 if selected.has("tal_steel_recover") else 0,
-				"acquisition_heal": 20 if selected.has("tal_steel_recover") else 0,
-				"room_clear_hp_per_mark": 3 if selected.has("tal_steel_recover") else 2,
-			}
-		&"time_guardian":
-			return {
-				"perfect_last_frame": 11 if selected.has("widened_guard") else 8,
-				"normal_last_frame": 26 if selected.has("widened_guard") else 23,
-				"close_frame": 27 if selected.has("widened_guard") else 24,
-				"fortress_ward_cost": 2 if selected.has("fortress_core") else 3,
-				"rebuke_echo_multiplier": 1.0 if selected.has("temporal_rebuke") else 0.75,
-				"cooldown_reduction_frames": 45 if selected.has("temporal_rebuke") else 30,
-			}
-		&"void_walker":
-			return {
-				"debt_cap": 120 if selected.has("deep_debt") else 100,
-				"corruption_threshold": 75 if selected.has("deep_debt") else 60,
-				"devour_heal_ratio": 0.18 if selected.has("bounded_devour") else 0.15,
-				"devour_heal_cap_ratio": 0.16 if selected.has("bounded_devour") else 0.12,
-				"risk_radius": 288 if selected.has("risk_step") else 240,
-				"mastery_conversion_cap": 25 if selected.has("risk_step") else 20,
-			}
-		&"primordial_knight":
-			return {
-				"armor_recovery_extension_frames": 12 if selected.has("resonant_plate") else 0,
-				"echo_multiplier": 1.0 if selected.has("echo_forge") else 0.75,
-				"instability_frames": 600 if selected.has("realm_collapse") else 480,
-			}
-		&"time_lord":
-			return {
-				"pair_window_frames": 420 if selected.has("codex_margin") else 300,
-				"infusion_energy_cost": 5 if selected.has("efficient_inscription") else 10,
-				"dominion_energy_cost": 45 if selected.has("dominion_cadence") else 60,
-				"dominion_cooldown_frames": 360 if selected.has("dominion_cadence") else 480,
-			}
-	return {}
+static func _normalized_definitions(
+	character_id: StringName,
+	selected: Array[String],
+	definitions: Variant
+) -> Dictionary:
+	if not definitions is Array or (definitions as Array).size() != selected.size():
+		return {"ok": false}
+	var by_id: Dictionary = {}
+	for definition_value: Variant in definitions:
+		if not definition_value is Dictionary:
+			return {"ok": false}
+		var definition := (definition_value as Dictionary).duplicate(true)
+		var talent_id := str(definition.get("id", ""))
+		var compatibility: Variant = definition.get("compatibility", {})
+		if (
+			talent_id.is_empty()
+			or by_id.has(talent_id)
+			or not selected.has(talent_id)
+			or str(definition.get("category", "")) != "talent"
+			or not compatibility is Dictionary
+			or (compatibility as Dictionary).get("character_ids", []) != [str(character_id)]
+			or not definition.get("effects") is Dictionary
+			or (definition.get("effects") as Dictionary).is_empty()
+		):
+			return {"ok": false}
+		var allowed_effects: Array = TALENT_EFFECTS.get(StringName(talent_id), [])
+		var effect_keys: Array = (definition["effects"] as Dictionary).keys()
+		effect_keys.sort()
+		var expected_effects := allowed_effects.duplicate()
+		expected_effects.sort()
+		if effect_keys != expected_effects:
+			return {"ok": false}
+		var catalog = EffectHandlerCatalogScript.new()
+		var report = catalog.validate_effects(definition["effects"], {"category": "talent"})
+		if report.has_blocking_errors():
+			return {"ok": false}
+		definition["effects"] = catalog.normalize_effects(definition["effects"])
+		by_id[talent_id] = definition
+
+	var canonical: Array[Dictionary] = []
+	for talent_id: String in selected:
+		if not by_id.has(talent_id):
+			return {"ok": false}
+		canonical.append((by_id[talent_id] as Dictionary).duplicate(true))
+	return {"ok": true, "definitions": canonical}
+
+
+static func _modifiers_for(
+	character_id: StringName,
+	selected: Array[String],
+	definitions: Array[Dictionary]
+) -> Dictionary:
+	if not BASE_MODIFIERS.has(character_id) or definitions.size() != selected.size():
+		return {}
+	var modifiers: Dictionary = (BASE_MODIFIERS[character_id] as Dictionary).duplicate(true)
+	for index: int in range(selected.size()):
+		if str(definitions[index].get("id", "")) != selected[index]:
+			return {}
+		var effects: Dictionary = definitions[index].get("effects", {})
+		for effect_value: Variant in effects.keys():
+			var effect_id := str(effect_value)
+			if not MODIFIER_BY_EFFECT.has(effect_id):
+				return {}
+			var modifier_id := str(MODIFIER_BY_EFFECT[effect_id])
+			if not modifiers.has(modifier_id):
+				return {}
+			var baseline_value: Variant = modifiers[modifier_id]
+			var selected_value: Variant = effects[effect_value]
+			if typeof(baseline_value) == TYPE_INT:
+				if typeof(selected_value) not in [TYPE_INT, TYPE_FLOAT] or float(selected_value) != floorf(float(selected_value)):
+					return {}
+				modifiers[modifier_id] = int(selected_value)
+			elif typeof(baseline_value) == TYPE_FLOAT:
+				if typeof(selected_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(selected_value)):
+					return {}
+				modifiers[modifier_id] = float(selected_value)
+			else:
+				return {}
+	return modifiers
 
 
 static func _valid_segment(value: Variant) -> bool:

@@ -324,7 +324,10 @@ func on_weapon_mastery_confirmed(mastery_context: Dictionary) -> Array[Dictionar
 			"forgiveness_expiry_frames"
 		)
 		events.append(_event(&"time_energy_restore_requested", runtime_frame, token, {
-			"amount": float(_passive_parameter_int("wayfarer_energy_restore")),
+			"amount": float(_talent_modifier_int(
+				"wayfarer_energy_restore",
+				_passive_parameter_int("wayfarer_energy_restore")
+			)),
 			"reason": &"wayfarer_window",
 		}))
 		events.append(_event(&"health_restore_requested", runtime_frame, token, {
@@ -340,7 +343,7 @@ func on_weapon_mastery_confirmed(mastery_context: Dictionary) -> Array[Dictionar
 		_revision += 1
 		return events
 
-	var progress_gain := 1
+	var progress_gain := 1 + _talent_modifier_int("wayfarer_bonus_progress", 0)
 	var rift_generation_value: Variant = context.get("rift_generation", 0)
 	if (
 		typeof(rift_generation_value) == TYPE_INT
@@ -454,7 +457,10 @@ func on_room_cleared(room_context: Dictionary) -> Array[Dictionary]:
 	_cleared_room_claims.append(claim_key)
 	_cleared_room_claims.sort()
 	_banked_room_completions += 1
-	var heal_amount := int(_resource_value) * _passive_parameter_int("room_clear_heal_per_mark")
+	var heal_amount := int(_resource_value) * _talent_modifier_int(
+		"room_clear_hp_per_mark",
+		_passive_parameter_int("room_clear_heal_per_mark")
+	)
 	_revision += 1
 	var events: Array[Dictionary] = [
 		_event(&"room_completion_banked", max(_last_runtime_frame, 0), 0, {

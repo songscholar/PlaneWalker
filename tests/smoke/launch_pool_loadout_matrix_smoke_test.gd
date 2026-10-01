@@ -123,6 +123,16 @@ func _run_case(
 	if talent_ids.size() != 3:
 		return {}
 	var talent_id := str(talent_ids[case_index % talent_ids.size()])
+	var talent_definition: Dictionary = _registry.call(
+		"get_content",
+		StringName(talent_id)
+	)
+	_suite.assert_true(
+		not talent_definition.is_empty(),
+		"%s resolves representative talent definition %s" % [label, talent_id]
+	)
+	if talent_definition.is_empty():
+		return {}
 	var player: Node = PlayerScene.instantiate()
 	player.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(player)
@@ -136,6 +146,7 @@ func _run_case(
 		"character_id": str(character_id),
 		"character_profile": character_profile,
 		"character_talents": [talent_id],
+		"character_talent_definitions": [talent_definition],
 		"weapon_id": str(weapon_id),
 		"weapon_profile": _registry.call(
 			"resolve_weapon_runtime_profile", weapon_id, &"LAUNCH"

@@ -14,6 +14,7 @@ const SNAPSHOT_FIELDS: Array[String] = [
 	"configured",
 	"profile",
 	"selected_talent_ids",
+	"talent_definitions",
 	"strategy",
 ]
 
@@ -22,12 +23,18 @@ var _owner_ref: WeakRef
 var _profile: RefCounted
 var _profile_snapshot: Dictionary = {}
 var _selected_talent_ids: Array[String] = []
+var _talent_definitions: Array[Dictionary] = []
 var _strategy: RefCounted
 var _restore_integrity_ok: bool = true
 var _restore_failure_reason: StringName = &""
 
 
-func configure(owner: Node, profile: Variant, talents: Variant) -> bool:
+func configure(
+	owner: Node,
+	profile: Variant,
+	talents: Variant,
+	talent_definitions: Variant = []
+) -> bool:
 	if (
 		owner == null
 		or not is_instance_valid(owner)
@@ -48,20 +55,36 @@ func configure(owner: Node, profile: Variant, talents: Variant) -> bool:
 	var candidate_talents := _canonical_talent_subset(candidate_profile, talents)
 	if not bool(candidate_talents.get("ok", false)):
 		return false
+	var selected: Array[String] = candidate_talents.get("talents", [])
+	var candidate_definitions := _canonical_talent_definitions(
+		selected,
+		talent_definitions
+	)
+	if not bool(candidate_definitions.get("ok", false)):
+		return false
 	var runtime_kind := StringName(str(candidate_profile.get("runtime_kind")))
 	var candidate_strategy: Variant = CharacterRuntimeFactoryScript.create(runtime_kind)
 	if candidate_strategy == null or not candidate_strategy is RefCounted:
 		return false
-	var selected := PackedStringArray(candidate_talents.get("talents", []))
-	if not bool(candidate_strategy.call("configure", owner, candidate_profile, selected)):
+	var packed_selected := PackedStringArray(selected)
+	if not bool(candidate_strategy.call("configure", owner, candidate_profile, packed_selected)):
+		return false
+	if not bool(candidate_strategy.call(
+		"configure_talent_definitions",
+		(candidate_definitions.get("definitions", []) as Array).duplicate(true),
+		true
+	)):
 		return false
 
 	_owner_ref = weakref(owner)
 	_profile = candidate_profile as RefCounted
 	_profile_snapshot = (_profile.call("snapshot") as Dictionary).duplicate(true)
 	_selected_talent_ids.clear()
-	for talent_value: Variant in selected:
+	for talent_value: Variant in packed_selected:
 		_selected_talent_ids.append(str(talent_value))
+	_talent_definitions = (
+		candidate_definitions.get("definitions", []) as Array
+	).duplicate(true)
 	_strategy = candidate_strategy as RefCounted
 	_configured = true
 	_restore_integrity_ok = true
@@ -87,6 +110,60 @@ func selected_talent_ids() -> Array[String]:
 
 func profile_snapshot() -> Dictionary:
 	return _profile_snapshot.duplicate(true)
+
+
+func talent_definition_snapshots() -> Array[Dictionary]:
+	return _talent_definitions.duplicate(true)
+
+
+func install_talent(definition: Dictionary) -> bool:
+	if (
+		not _configured
+		or _strategy == null
+		or not _restore_integrity_ok
+		or str(definition.get("category", "")) != "talent"
+		or not definition.get("compatibility") is Dictionary
+		or (definition.get("compatibility") as Dictionary).get(
+			"character_ids", []
+		) != [str(character_id())]
+		or not definition.get("effects") is Dictionary
+		or (definition.get("effects") as Dictionary).is_empty()
+	):
+		return false
+	var talent_id := str(definition.get("id", ""))
+	if talent_id.is_empty() or _selected_talent_ids.has(talent_id):
+		return false
+	var cancellation := character_action_cancellation_state()
+	if bool(cancellation.get("active", false)):
+		return false
+	var candidate_definitions := _talent_definitions.duplicate(true)
+	candidate_definitions.append(definition.duplicate(true))
+	var allowed: Array = _profile_snapshot.get("talent_ids", [])
+	var by_id: Dictionary = {}
+	for candidate: Dictionary in candidate_definitions:
+		var candidate_id := str(candidate.get("id", ""))
+		if candidate_id.is_empty() or by_id.has(candidate_id) or not allowed.has(candidate_id):
+			return false
+		by_id[candidate_id] = candidate.duplicate(true)
+	var canonical_ids: Array[String] = []
+	var canonical_definitions: Array[Dictionary] = []
+	for allowed_id_value: Variant in allowed:
+		var allowed_id := str(allowed_id_value)
+		if by_id.has(allowed_id):
+			canonical_ids.append(allowed_id)
+			canonical_definitions.append(
+				(by_id[allowed_id] as Dictionary).duplicate(true)
+			)
+	if canonical_ids.size() != by_id.size():
+		return false
+	if not bool(_strategy.call(
+		"replace_talent_definitions",
+		canonical_definitions.duplicate(true)
+	)):
+		return false
+	_selected_talent_ids = canonical_ids
+	_talent_definitions = canonical_definitions.duplicate(true)
+	return true
 
 
 func reset_runtime_state(reason: StringName) -> void:
@@ -205,6 +282,7 @@ func snapshot() -> Dictionary:
 		"configured": _configured,
 		"profile": _profile_snapshot.duplicate(true),
 		"selected_talent_ids": _selected_talent_ids.duplicate(),
+		"talent_definitions": _talent_definitions.duplicate(true),
 		"strategy": strategy_snapshot,
 	}
 
@@ -219,6 +297,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		or bool(value["configured"]) != _configured
 		or not value["profile"] is Dictionary
 		or not value["selected_talent_ids"] is Array
+		or not value["talent_definitions"] is Array
 		or not value["strategy"] is Dictionary
 	):
 		return false
@@ -226,20 +305,59 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return (
 			(value["profile"] as Dictionary).is_empty()
 			and (value["selected_talent_ids"] as Array).is_empty()
+			and (value["talent_definitions"] as Array).is_empty()
 			and (value["strategy"] as Dictionary).is_empty()
 		)
 	if (
 		_profile == null
 		or _strategy == null
 		or value["profile"] != _profile_snapshot
-		or value["selected_talent_ids"] != _selected_talent_ids
 	):
 		return false
-	var accepted: Variant = _strategy.call(
+	var target_ids: Array[String] = []
+	for talent_value: Variant in value["selected_talent_ids"] as Array:
+		if typeof(talent_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		target_ids.append(str(talent_value))
+	var normalized_definitions := _canonical_talent_definitions(
+		target_ids,
+		value["talent_definitions"]
+	)
+	if not bool(normalized_definitions.get("ok", false)):
+		return false
+	if (
+		target_ids == _selected_talent_ids
+		and value["talent_definitions"] == _talent_definitions
+	):
+		var accepted: Variant = _strategy.call(
+			"can_restore_snapshot",
+			(value["strategy"] as Dictionary).duplicate(true)
+		)
+		return typeof(accepted) == TYPE_BOOL and bool(accepted)
+	var owner: Node = _owner_ref.get_ref() if _owner_ref != null else null
+	if owner == null or not is_instance_valid(owner):
+		return false
+	var candidate_strategy: Variant = CharacterRuntimeFactoryScript.create(runtime_kind())
+	if candidate_strategy == null or not candidate_strategy is RefCounted:
+		return false
+	if not bool(candidate_strategy.call(
+		"configure",
+		owner,
+		_profile,
+		PackedStringArray(target_ids)
+	)):
+		return false
+	if not bool(candidate_strategy.call(
+		"configure_talent_definitions",
+		(normalized_definitions.get("definitions", []) as Array).duplicate(true),
+		true
+	)):
+		return false
+	var candidate_accepted: Variant = candidate_strategy.call(
 		"can_restore_snapshot",
 		(value["strategy"] as Dictionary).duplicate(true)
 	)
-	return typeof(accepted) == TYPE_BOOL and bool(accepted)
+	return typeof(candidate_accepted) == TYPE_BOOL and bool(candidate_accepted)
 
 
 func restore_snapshot(value: Dictionary) -> bool:
@@ -247,6 +365,14 @@ func restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if not _configured:
 		return snapshot() == value
+	var target_ids: Array[String] = []
+	for talent_value: Variant in value["selected_talent_ids"] as Array:
+		target_ids.append(str(talent_value))
+	var target_definitions: Array[Dictionary] = (
+		value["talent_definitions"] as Array
+	).duplicate(true)
+	if target_ids != _selected_talent_ids or target_definitions != _talent_definitions:
+		return _restore_with_changed_talents(value, target_ids, target_definitions)
 	var before_value: Variant = _strategy.call("snapshot")
 	if not before_value is Dictionary:
 		return false
@@ -273,6 +399,51 @@ func restore_snapshot(value: Dictionary) -> bool:
 	return false
 
 
+func _restore_with_changed_talents(
+	value: Dictionary,
+	target_ids: Array[String],
+	target_definitions: Array[Dictionary]
+) -> bool:
+	var before_strategy_value: Variant = _strategy.call("snapshot")
+	if not before_strategy_value is Dictionary:
+		return false
+	var before_strategy := (before_strategy_value as Dictionary).duplicate(true)
+	var before_ids := _selected_talent_ids.duplicate()
+	var before_definitions := _talent_definitions.duplicate(true)
+	if not bool(_strategy.call(
+		"replace_talent_definitions",
+		target_definitions.duplicate(true)
+	)):
+		return false
+	_selected_talent_ids = target_ids.duplicate()
+	_talent_definitions = target_definitions.duplicate(true)
+	var restored: Variant = _strategy.call(
+		"restore_snapshot",
+		(value["strategy"] as Dictionary).duplicate(true)
+	)
+	if typeof(restored) == TYPE_BOOL and bool(restored) and snapshot() == value:
+		return true
+	var rollback_talents := bool(_strategy.call(
+		"replace_talent_definitions",
+		before_definitions.duplicate(true)
+	))
+	_selected_talent_ids = before_ids
+	_talent_definitions = before_definitions
+	var rollback_strategy: Variant = _strategy.call(
+		"restore_snapshot",
+		before_strategy.duplicate(true)
+	)
+	if (
+		not rollback_talents
+		or typeof(rollback_strategy) != TYPE_BOOL
+		or not bool(rollback_strategy)
+		or not _strategy_snapshot_matches(before_strategy)
+	):
+		_restore_integrity_ok = false
+		_restore_failure_reason = &"strategy_restore_rollback_failed"
+	return false
+
+
 func restore_integrity_ok() -> bool:
 	return _restore_integrity_ok
 
@@ -293,7 +464,7 @@ func presentation_snapshot() -> Dictionary:
 		if strategy_presentation_value is Dictionary
 		else {}
 	)
-	return {
+	var result := {
 		"profile_id": str(_profile_snapshot.get("id", "")),
 		"profile_version": int(_profile_snapshot.get("profile_version", 0)),
 		"character_id": str(_profile_snapshot.get("character_id", "")),
@@ -311,6 +482,11 @@ func presentation_snapshot() -> Dictionary:
 		)),
 		"character_skill_id": str(skill.get("skill_id", "")),
 	}
+	for key_value: Variant in strategy_presentation.keys():
+		var key := str(key_value)
+		if not result.has(key):
+			result[key] = strategy_presentation[key_value]
+	return result
 
 
 func can_reanchor_replay_neutral_frame(runtime_frame: int) -> bool:
@@ -387,6 +563,29 @@ static func _canonical_talent_subset(profile: Variant, talents: Variant) -> Dict
 		if requested.has(talent_id):
 			canonical.append(talent_id)
 	return {"ok": true, "talents": canonical}
+
+
+static func _canonical_talent_definitions(
+	selected: Array[String],
+	definitions: Variant
+) -> Dictionary:
+	if not definitions is Array or (definitions as Array).size() != selected.size():
+		return {"ok": false}
+	var by_id: Dictionary = {}
+	for definition_value: Variant in definitions as Array:
+		if not definition_value is Dictionary:
+			return {"ok": false}
+		var definition := (definition_value as Dictionary).duplicate(true)
+		var talent_id := str(definition.get("id", ""))
+		if talent_id.is_empty() or by_id.has(talent_id) or not selected.has(talent_id):
+			return {"ok": false}
+		by_id[talent_id] = definition
+	var canonical: Array[Dictionary] = []
+	for talent_id: String in selected:
+		if not by_id.has(talent_id):
+			return {"ok": false}
+		canonical.append((by_id[talent_id] as Dictionary).duplicate(true))
+	return {"ok": true, "definitions": canonical}
 
 
 static func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:

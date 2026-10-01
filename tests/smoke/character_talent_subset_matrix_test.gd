@@ -39,6 +39,7 @@ const TALENTS := {
 
 var _suite
 var _profile_definitions: Array[Dictionary] = []
+var _talent_definitions_by_id: Dictionary = {}
 
 
 func _ready() -> void:
@@ -48,6 +49,8 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_profile_definitions = _load_dictionary_array(PROFILE_CATALOG_PATH)
+	for definition: Dictionary in _load_dictionary_array(TALENT_CATALOG_PATH):
+		_talent_definitions_by_id[str(definition.get("id", ""))] = definition.duplicate(true)
 	_test_exact_launch_talent_catalog()
 	_test_all_forty_runtime_subsets()
 	_suite.finish(get_tree())
@@ -85,7 +88,12 @@ func _test_all_forty_runtime_subsets() -> void:
 			var runtime = PlayerCharacterRuntimeScript.new()
 			var label := "%s/%03d" % [str(character_id), mask]
 			_suite.assert_true(
-				runtime.configure(owner, profile, PackedStringArray(supplied)),
+				runtime.configure(
+					owner,
+					profile,
+					PackedStringArray(supplied),
+					_talent_definitions(supplied)
+				),
 				"%s configures the real character runtime" % label
 			)
 			_suite.assert_equal(
@@ -171,4 +179,15 @@ func _load_dictionary_array(path: String) -> Array[Dictionary]:
 		for value: Variant in parsed:
 			if value is Dictionary:
 				result.append((value as Dictionary).duplicate(true))
+	return result
+
+
+func _talent_definitions(ids: Array) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for id_value: Variant in ids:
+		var talent_id := str(id_value)
+		if _talent_definitions_by_id.has(talent_id):
+			result.append(
+				(_talent_definitions_by_id[talent_id] as Dictionary).duplicate(true)
+			)
 	return result

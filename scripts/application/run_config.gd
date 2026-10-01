@@ -9,6 +9,7 @@ const DEFAULTS := {
 	"schema_version": 1,
 	"milestone": "M1",
 	"character_id": "wanderer",
+	"character_talents": [],
 	"weapon_id": "sword",
 	"enabled_time_skills": ["stop", "rewind"],
 	"difficulty": "normal",
@@ -31,6 +32,17 @@ static func validate(value: Dictionary):
 		return _invalid("milestone")
 	if typeof(config["enabled_time_skills"]) != TYPE_ARRAY:
 		return _invalid("enabled_time_skills")
+	if typeof(config["character_talents"]) != TYPE_ARRAY:
+		return _invalid("character_talents")
+	if (config["character_talents"] as Array).size() > 3:
+		return _invalid("character_talents")
+	var seen_talents: Dictionary = {}
+	for talent_id: Variant in config["character_talents"]:
+		if typeof(talent_id) != TYPE_STRING or str(talent_id).is_empty():
+			return _invalid("character_talents")
+		if seen_talents.has(str(talent_id)):
+			return _invalid("character_talents")
+		seen_talents[str(talent_id)] = true
 	if (config["enabled_time_skills"] as Array).size() != 2:
 		return _invalid("enabled_time_skills")
 	var seen_skills: Dictionary = {}

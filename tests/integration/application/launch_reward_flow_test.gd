@@ -93,6 +93,32 @@ class ActivePlayer:
 		)) and full_player_replay_snapshot() == value
 
 
+class TalentPlayer:
+	extends Node
+
+	var selected_definitions: Array[Dictionary] = []
+	var fail_restore: bool = false
+
+	func character_talent_transaction_snapshot() -> Dictionary:
+		return {"selected_definitions": selected_definitions.duplicate(true)}
+
+	func install_character_talent(definition: Dictionary) -> bool:
+		var talent_id := str(definition.get("id", ""))
+		if talent_id.is_empty():
+			return false
+		for selected: Dictionary in selected_definitions:
+			if str(selected.get("id", "")) == talent_id:
+				return false
+		selected_definitions.append(definition.duplicate(true))
+		return true
+
+	func restore_character_talent_transaction_snapshot(value: Dictionary) -> bool:
+		if fail_restore or value.size() != 1 or not value.get("selected_definitions") is Array:
+			return false
+		selected_definitions = (value["selected_definitions"] as Array).duplicate(true)
+		return character_talent_transaction_snapshot() == value
+
+
 func _ready() -> void:
 	call_deferred("_run")
 
@@ -207,6 +233,83 @@ func _run() -> void:
 		"integrity termination leaves the reward surface blocked and visible"
 	)
 
+	var codex_margin := _talent_definition(
+		"codex_margin",
+		{"talent_pair_window_frames": 420}
+	)
+	var efficient_inscription := _talent_definition(
+		"efficient_inscription",
+		{"talent_infusion_energy_cost": 5}
+	)
+	var talent_registry := ActiveRegistry.new()
+	talent_registry.definitions = {
+		"codex_margin": codex_margin,
+		"efficient_inscription": efficient_inscription,
+	}
+	var talent_facade := ActiveFacade.new()
+	talent_facade.registry = talent_registry
+	talent_facade.definitions = talent_registry.definitions.duplicate(true)
+	talent_facade.fail_commit = true
+	var talent_player := TalentPlayer.new()
+	add_child(talent_player)
+	var talent_host = RunRuntimeHostScript.new()
+	add_child(talent_host)
+	talent_host.set("_facade", talent_facade)
+	talent_host.set("_player", talent_player)
+	talent_host.set("_active_run_id", "launch-active-flow")
+	talent_host.set("_published_run_id", "launch-active-flow")
+	talent_host.call("_create_choice_layer")
+	var talent_before := talent_player.character_talent_transaction_snapshot()
+	var talent_offer := _talent_offer(
+		"launch-talent-offer-1",
+		8,
+		codex_margin,
+		efficient_inscription
+	)
+	talent_host.call("_open_offer", talent_offer)
+	await get_tree().process_frame
+	var talent_panel: Control = talent_host.call("choice_panel")
+	var talent_button := _button(talent_panel, "codex_margin")
+	suite.assert_true(talent_button != null, "Launch Talent offer renders its scoped option")
+	if talent_button != null:
+		talent_button.pressed.emit()
+	await get_tree().process_frame
+	suite.assert_equal(talent_facade.commit_count, 1, "Talent authority failure follows one staged install")
+	suite.assert_equal(talent_facade.cancel_count, 1, "Talent authority failure cancels its reservation")
+	suite.assert_equal(
+		talent_player.character_talent_transaction_snapshot(),
+		talent_before,
+		"Talent authority failure restores the exact pre-selection snapshot"
+	)
+	suite.assert_true(
+		talent_panel.visible and talent_panel.error_label.visible,
+		"Talent rollback keeps the offer visible and retryable"
+	)
+	suite.assert_equal(talent_facade.death_count, 0, "exact Talent rollback avoids integrity termination")
+
+	talent_player.fail_restore = true
+	var broken_restore_offer := _talent_offer(
+		"launch-talent-offer-2",
+		9,
+		efficient_inscription,
+		codex_margin
+	)
+	talent_host.call("_open_offer", broken_restore_offer)
+	await get_tree().process_frame
+	var broken_restore_button := _button(talent_panel, "efficient_inscription")
+	if broken_restore_button != null:
+		broken_restore_button.pressed.emit()
+	await get_tree().process_frame
+	suite.assert_equal(talent_facade.commit_count, 2, "Talent restore failure reaches authority commit")
+	suite.assert_equal(talent_facade.cancel_count, 2, "Talent restore failure cancels the reservation")
+	suite.assert_equal(
+		talent_facade.death_count,
+		1,
+		"Talent restore failure enters reward_transaction_integrity"
+	)
+
+	talent_host.queue_free()
+	talent_player.queue_free()
 	host.queue_free()
 	player.queue_free()
 	await get_tree().process_frame
@@ -226,6 +329,33 @@ func _offer(offer_id: String, revision: int, active_definition: Dictionary) -> D
 			_option(active_definition),
 			_option(_passive_definition("fixture_passive_a")),
 			_option(_passive_definition("fixture_passive_b")),
+		],
+	}
+
+
+func _talent_offer(
+	offer_id: String,
+	revision: int,
+	first: Dictionary,
+	second: Dictionary
+) -> Dictionary:
+	return {
+		"schema_version": 1,
+		"offer_id": offer_id,
+		"category": "talent",
+		"title_key": "UI_CHOOSE_TALENT",
+		"revision": revision,
+		"can_skip": false,
+		"options": [
+			_option(first),
+			_option(second),
+			_option(_talent_definition(
+				"dominion_cadence",
+				{
+					"talent_dominion_energy_cost": 45,
+					"talent_dominion_cooldown_frames": 360,
+				}
+			)),
 		],
 	}
 
@@ -279,6 +409,24 @@ func _passive_definition(content_id: String) -> Dictionary:
 		"description_key": "%s_DESC" % content_id.to_upper(),
 		"archetype": "freeze_burst",
 		"role": "starter",
+		"rarity": "common",
+		"icon_id": "content_%s" % content_id,
+	}
+
+
+func _talent_definition(content_id: String, effects: Dictionary) -> Dictionary:
+	return {
+		"id": content_id,
+		"category": "talent",
+		"availability": ["LAUNCH", "EXPANSION"],
+		"name_key": "%s_NAME" % content_id.to_upper(),
+		"description_key": "%s_DESC" % content_id.to_upper(),
+		"tags": ["character", "time_lord"],
+		"compatibility": {"character_ids": ["time_lord"]},
+		"effects": effects.duplicate(true),
+		"kind": "time_lord",
+		"archetype": "",
+		"role": "route",
 		"rarity": "common",
 		"icon_id": "content_%s" % content_id,
 	}

@@ -9,12 +9,14 @@ const SOURCE_PATHS: Array[String] = [
 	"res://data/blessings/mvp_blessings.json",
 	"res://data/curses/mvp_curses.json",
 	"res://data/talents/mvp_talents.json",
+	"res://data/content_packs/base/content/talents.json",
 ]
 const SOURCE_CATEGORIES := {
 	"res://data/items/mvp_items.json": "item",
 	"res://data/blessings/mvp_blessings.json": "blessing",
 	"res://data/curses/mvp_curses.json": "curse",
 	"res://data/talents/mvp_talents.json": "talent",
+	"res://data/content_packs/base/content/talents.json": "talent",
 }
 const RUNTIME_DOMAIN_BY_EFFECT := {
 	"attack_multiplier": "weapon",
@@ -41,6 +43,28 @@ const RUNTIME_DOMAIN_BY_EFFECT := {
 	"rewind_heal": "time",
 	"rewind_path_hit_multiplier": "time",
 	"rewind_self_damage": "time",
+	"talent_armor_recovery_extension_frames": "character",
+	"talent_cooldown_reduction_frames": "character",
+	"talent_corruption_threshold": "character",
+	"talent_debt_cap": "character",
+	"talent_devour_heal_cap_ratio": "character",
+	"talent_devour_heal_ratio": "character",
+	"talent_dominion_cooldown_frames": "character",
+	"talent_dominion_energy_cost": "character",
+	"talent_echo_multiplier": "character",
+	"talent_fortress_ward_cost": "character",
+	"talent_guard_close_frame": "character",
+	"talent_guard_normal_last_frame": "character",
+	"talent_guard_perfect_last_frame": "character",
+	"talent_infusion_energy_cost": "character",
+	"talent_instability_frames": "character",
+	"talent_mastery_conversion_cap": "character",
+	"talent_pair_window_frames": "character",
+	"talent_rebuke_echo_multiplier": "character",
+	"talent_risk_radius": "character",
+	"talent_room_clear_heal_per_mark": "character",
+	"talent_wayfarer_bonus_progress": "character",
+	"talent_wayfarer_energy_restore": "character",
 	"time_accelerate_cost_multiplier": "time",
 	"time_accelerate_duration_bonus": "time",
 	"time_accelerate_multiplier_bonus": "time",
@@ -99,8 +123,8 @@ func _test_catalog_covers_current_effects(suite, catalog) -> void:
 		actual_ids.append(str(row.get("effect_id", "")))
 		for field: String in required_fields:
 			suite.assert_true(row.has(field), "catalog row %s contains %s" % [row.get("effect_id", ""), field])
-	suite.assert_equal(actual_ids, expected_ids, "catalog covers exactly the current M1 effect ids")
-	suite.assert_equal(actual_ids.size(), 40, "current M1 content exposes forty effect ids")
+	suite.assert_equal(actual_ids, expected_ids, "catalog covers exactly the current runtime effect ids")
+	suite.assert_equal(actual_ids.size(), 62, "current runtime content exposes sixty-two effect ids")
 	for path: String in SOURCE_PATHS:
 		var entries := _read_content_entries(path, suite)
 		for entry: Dictionary in entries:

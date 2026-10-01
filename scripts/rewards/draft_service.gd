@@ -119,12 +119,27 @@ func create_offer(registry, state_snapshot: Dictionary, room_definition: Diction
 				rng
 			)
 		"talent":
+			var talent_character_id := _talent_character_id_from_state(state_snapshot)
+			if talent_character_id.is_empty():
+				return CommandResultScript.failure(
+					&"INVALID_ARGUMENT",
+					revision,
+					{"field": "config.character_id"}
+				)
+			var talent_candidates := _filter_candidates(
+				registry.get_by_category(&"talent", StringName(milestone)),
+				owned_ids,
+				milestone
+			).filter(
+				func(definition: Dictionary) -> bool:
+					return _talent_matches_character(
+						definition,
+						talent_character_id,
+						milestone
+					)
+			)
 			definitions = _talent_offer(
-				_filter_candidates(
-					registry.get_by_category(&"talent", StringName(milestone)),
-					owned_ids,
-					milestone
-				),
+				talent_candidates,
 				rng
 			)
 		"contract":
@@ -363,6 +378,35 @@ func _milestone_from_state(state_snapshot: Dictionary) -> Dictionary:
 	if typeof(milestone_value) != TYPE_STRING or not VALID_MILESTONES.has(str(milestone_value)):
 		return {"ok": false, "milestone": ""}
 	return {"ok": true, "milestone": str(milestone_value)}
+
+
+func _talent_character_id_from_state(state_snapshot: Dictionary) -> String:
+	if not state_snapshot.has("config"):
+		return "wanderer"
+	var config_value: Variant = state_snapshot.get("config")
+	if not config_value is Dictionary:
+		return ""
+	var character_value: Variant = (config_value as Dictionary).get(
+		"character_id", "wanderer"
+	)
+	if typeof(character_value) != TYPE_STRING:
+		return ""
+	return str(character_value).strip_edges()
+
+
+func _talent_matches_character(
+	definition: Dictionary,
+	character_id: String,
+	milestone: String
+) -> bool:
+	var compatibility_value: Variant = definition.get("compatibility")
+	if compatibility_value is Dictionary:
+		var character_ids: Variant = (compatibility_value as Dictionary).get(
+			"character_ids", []
+		)
+		if character_ids is Array and not (character_ids as Array).is_empty():
+			return character_ids == [character_id]
+	return M1_COMPATIBLE_MILESTONES.has(milestone) and character_id == "wanderer"
 
 
 func _launch_profiles(registry, milestone: StringName) -> Array[Dictionary]:

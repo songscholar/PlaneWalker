@@ -42,6 +42,7 @@ func _run() -> void:
 	_test_next_candidate_presets(suite)
 	_test_launch_weapon_time_matrix(suite)
 	_test_launch_character_weapon_time_matrix(suite)
+	_test_selected_talent_definitions(suite)
 	_test_result_definitions_are_deep_copies(suite)
 	suite.finish(get_tree())
 
@@ -230,6 +231,28 @@ func _test_result_definitions_are_deep_copies(suite) -> void:
 	suite.assert_true(not fresh["weapon"]["availability"].is_empty(), "weapon definition is isolated")
 	suite.assert_true(not fresh["time_abilities"][0]["compatibility"].has("forged"), "time ability definition is isolated")
 	suite.assert_true(not _registry.get_content(&"wanderer")["tags"].has("forged-character-tag"), "policy result cannot mutate the registry")
+
+
+func _test_selected_talent_definitions(suite) -> void:
+	var config := _config("sword", ["stop", "rewind"], "LAUNCH")
+	config["character_id"] = "time_lord"
+	config["character_talents"] = ["dominion_cadence", "codex_margin"]
+	var result = _policy.validate(config, _registry)
+	suite.assert_true(result.ok, "selected Launch talents resolve through loadout policy")
+	if result.ok:
+		var definitions: Array = result.context.get("loadout", {}).get("character_talents", [])
+		suite.assert_equal(_definition_ids(definitions), ["codex_margin", "dominion_cadence"], "selected talent definitions use profile-canonical order")
+		for definition: Dictionary in definitions:
+			suite.assert_true(not (definition.get("effects", {}) as Dictionary).is_empty(), "resolved talent carries executable effects")
+
+	var cross_character := _config("sword", ["stop", "rewind"], "LAUNCH")
+	cross_character["character_id"] = "time_lord"
+	cross_character["character_talents"] = ["deep_debt"]
+	suite.assert_equal(
+		_policy.validate(cross_character, _registry).code,
+		&"CONTENT_NOT_AVAILABLE",
+		"loadout policy rejects cross-character selected talents"
+	)
 
 
 func _config(

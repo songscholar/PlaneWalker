@@ -4,6 +4,7 @@ const CharacterTalentStateScript := preload(
 	"res://scripts/player/characters/character_talent_state.gd"
 )
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const TALENT_CATALOG_PATH := "res://data/content_packs/base/content/talents.json"
 
 const TALENTS := {
 	&"wanderer": [&"tal_eternity_reserve", &"tal_ruin_execute", &"tal_steel_recover"],
@@ -14,6 +15,7 @@ const TALENTS := {
 }
 
 var _suite
+var _definitions_by_id: Dictionary = {}
 
 
 func _ready() -> void:
@@ -22,6 +24,8 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	_load_definitions()
+	_test_real_definitions_are_scoped_and_effectful()
 	_test_catalog_and_all_forty_subsets()
 	_test_atomic_rejection_and_character_scope()
 	_test_freeze_snapshot_restore_and_reset()
@@ -41,7 +45,10 @@ func _test_catalog_and_all_forty_subsets() -> void:
 			identities.append(str(talent_id))
 		for subset: PackedStringArray in _all_subsets(expected_ids):
 			var state = CharacterTalentStateScript.new()
-			_suite.assert_true(state.configure(character_id, subset), "every canonical talent subset configures")
+			_suite.assert_true(
+				state.configure(character_id, subset, _definitions_for(subset)),
+				"every canonical talent subset configures from content definitions"
+			)
 			var expected_canonical: Array[String] = []
 			for talent_id: StringName in expected_ids:
 				if subset.has(str(talent_id)):
@@ -60,19 +67,26 @@ func _test_catalog_and_all_forty_subsets() -> void:
 
 func _test_atomic_rejection_and_character_scope() -> void:
 	var state = CharacterTalentStateScript.new()
-	_suite.assert_true(state.configure(&"time_lord", PackedStringArray(["dominion_cadence", "codex_margin"])), "unordered Time Lord subset configures")
+	var selected := PackedStringArray(["dominion_cadence", "codex_margin"])
+	_suite.assert_true(state.configure(&"time_lord", selected, _definitions_for(selected)), "unordered Time Lord subset configures")
 	var before: Dictionary = state.snapshot()
-	_suite.assert_true(not state.configure(&"time_lord", PackedStringArray(["codex_margin", "codex_margin"])), "duplicate talent is rejected")
+	_suite.assert_true(not state.configure(&"time_lord", PackedStringArray(["codex_margin", "codex_margin"]), [_definitions_by_id["codex_margin"]]), "duplicate talent is rejected")
 	_suite.assert_equal(state.snapshot(), before, "duplicate rejection is atomic")
-	_suite.assert_true(not state.configure(&"time_lord", PackedStringArray(["deep_debt"])), "cross-character talent is rejected")
+	_suite.assert_true(not state.configure(&"time_lord", PackedStringArray(["deep_debt"]), [_definitions_by_id["deep_debt"]]), "cross-character talent is rejected")
 	_suite.assert_equal(state.snapshot(), before, "cross-character rejection is atomic")
-	_suite.assert_true(not state.configure(&"unknown", PackedStringArray()), "unknown character route is rejected")
+	_suite.assert_true(not state.configure(&"unknown", PackedStringArray(), []), "unknown character route is rejected")
 	_suite.assert_equal(state.snapshot(), before, "unknown route rejection is atomic")
+	var forged := (_definitions_by_id["codex_margin"] as Dictionary).duplicate(true)
+	forged["effects"] = {"talent_unknown_modifier": 999}
+	_suite.assert_true(not state.configure(&"time_lord", PackedStringArray(["codex_margin"]), [forged]), "unknown talent effect is rejected")
+	_suite.assert_equal(state.snapshot(), before, "effect rejection is atomic")
 
 
 func _test_freeze_snapshot_restore_and_reset() -> void:
 	var state = CharacterTalentStateScript.new()
-	_suite.assert_true(state.configure(&"time_lord", PackedStringArray(["codex_margin", "efficient_inscription", "dominion_cadence"])), "full Time Lord talent route configures")
+	var selected := PackedStringArray(["codex_margin", "efficient_inscription", "dominion_cadence"])
+	var definitions := _definitions_for(selected)
+	_suite.assert_true(state.configure(&"time_lord", selected, definitions), "full Time Lord talent route configures")
 	var frozen: Dictionary = state.freeze_for_commit(&"time_action", 9, 4)
 	_suite.assert_equal(frozen.get("selected_talent_ids", []), ["codex_margin", "efficient_inscription", "dominion_cadence"], "commit freeze captures canonical identities")
 	_suite.assert_equal((frozen.get("modifiers", {}) as Dictionary).get("pair_window_frames"), 420, "commit freeze captures applied values")
@@ -87,6 +101,26 @@ func _test_freeze_snapshot_restore_and_reset() -> void:
 	_suite.assert_equal(state.snapshot(), exact, "checkpoint restore is byte-for-byte exact")
 	_suite.assert_equal(state.freeze_for_commit(&"", 9, 4), {}, "invalid commit kind fails closed")
 	_suite.assert_equal(state.freeze_for_commit(&"time_action", 0, 4), {}, "invalid commit token fails closed")
+	(definitions[0]["effects"] as Dictionary).clear()
+	_suite.assert_equal(state.snapshot(), exact, "caller mutation cannot alter installed talent authority")
+
+
+func _test_real_definitions_are_scoped_and_effectful() -> void:
+	_suite.assert_equal(_definitions_by_id.size(), 15, "real Base Pack contains exactly fifteen talents")
+	for character_value: Variant in TALENTS.keys():
+		var character_id := str(character_value)
+		for talent_value: Variant in TALENTS[character_value]:
+			var talent_id := str(talent_value)
+			var definition: Dictionary = _definitions_by_id.get(talent_id, {})
+			_suite.assert_equal(
+				definition.get("compatibility", {}).get("character_ids", []),
+				[character_id],
+				"%s has exact character scope" % talent_id
+			)
+			_suite.assert_true(
+				definition.get("effects", {}) is Dictionary and not (definition.get("effects", {}) as Dictionary).is_empty(),
+				"%s has non-empty data-authoritative effects" % talent_id
+			)
 
 
 func _assert_exact_vector(character_id: StringName, selected: Array[String], modifiers: Dictionary) -> void:
@@ -124,4 +158,23 @@ func _all_subsets(ids: Array) -> Array[PackedStringArray]:
 			if mask & (1 << (2 - bit)):
 				subset.append(str(ids[bit]))
 		result.append(subset)
+	return result
+
+
+func _load_definitions() -> void:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TALENT_CATALOG_PATH))
+	_suite.assert_true(parsed is Array, "real talent catalog parses")
+	if not parsed is Array:
+		return
+	for value: Variant in parsed:
+		if value is Dictionary:
+			_definitions_by_id[str((value as Dictionary).get("id", ""))] = (value as Dictionary).duplicate(true)
+
+
+func _definitions_for(ids: Variant) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for id_value: Variant in ids:
+		var talent_id := str(id_value)
+		if _definitions_by_id.has(talent_id):
+			result.append((_definitions_by_id[talent_id] as Dictionary).duplicate(true))
 	return result

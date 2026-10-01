@@ -152,11 +152,21 @@ func start_run(config: Dictionary) -> Variant:
 	accepted_config["character_profile"] = (
 		character_profile_value as Dictionary
 	).duplicate(true)
-	accepted_config["character_talents"] = (
+	var talent_definitions: Array = (
 		(accepted_loadout.get("character_talents", []) as Array).duplicate(true)
 		if accepted_loadout.get("character_talents", []) is Array
 		else []
 	)
+	var talent_ids: Array[String] = []
+	for talent_value: Variant in talent_definitions:
+		if not talent_value is Dictionary:
+			return _fail_start(
+				&"LOADOUT_APPLY_FAILED",
+				{"configured": false, "reason": "talent_definition_invalid"}
+			)
+		talent_ids.append(str((talent_value as Dictionary).get("id", "")))
+	accepted_config["character_talents"] = talent_ids
+	accepted_config["character_talent_definitions"] = talent_definitions
 	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
 	if not bool(_player.call("configure_loadout", accepted_config)):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
@@ -522,11 +532,40 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 	var reservation_id := str(reserved.context.get("reservation_id", ""))
 	var definition: Dictionary = reserved.context.get("definition", {}).duplicate(true)
 	var is_active_item_selection := str(definition.get("item_mode", "")) == "active"
+	var is_talent_selection := str(definition.get("category", "")) == "talent"
 	var receipt: Dictionary = {}
 	var active_item_before: Dictionary = {}
+	var talent_before: Dictionary = {}
 	var publication_started := false
 	if str(definition.get("id", "")) != "decline_contract":
-		if is_active_item_selection:
+		if is_talent_selection:
+			if (
+				not _player.has_method("character_talent_transaction_snapshot")
+				or not _player.has_method("restore_character_talent_transaction_snapshot")
+				or not _player.has_method("install_character_talent")
+			):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			var talent_before_value: Variant = _player.call(
+				"character_talent_transaction_snapshot"
+			)
+			if (
+				not talent_before_value is Dictionary
+				or (talent_before_value as Dictionary).is_empty()
+			):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			talent_before = (talent_before_value as Dictionary).duplicate(true)
+			if not bool(_player.call(
+				"install_character_talent",
+				definition.duplicate(true)
+			)):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+		elif is_active_item_selection:
 			if (
 				not _player.has_method("active_item_snapshot")
 				or not _player.has_method("equip_active_item")
@@ -645,7 +684,12 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 	if not committed.ok:
 		_facade.call("cancel_reserved_selection", reservation_id)
 		var state_rollback_ok := true
-		if is_active_item_selection and not active_item_before.is_empty():
+		if is_talent_selection and not talent_before.is_empty():
+			state_rollback_ok = bool(_player.call(
+				"restore_character_talent_transaction_snapshot",
+				talent_before.duplicate(true)
+			))
+		elif is_active_item_selection and not active_item_before.is_empty():
 			state_rollback_ok = bool(_player.call(
 				"restore_full_player_replay_snapshot",
 				active_item_before.duplicate(true)

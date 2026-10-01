@@ -178,8 +178,7 @@ func on_weapon_action_committed(action_context: Dictionary) -> Array[Dictionary]
 		return []
 	var release_frame := _last_runtime_frame + int(durations["windup"]) + int(durations["active"]) + int(durations["recovery"])
 	var armor_until_frame := _last_runtime_frame + int(durations["windup"])
-	if _selected_talent_ids.has("resonant_plate"):
-		armor_until_frame = _last_runtime_frame + int(durations["windup"]) + int(durations["active"]) + 12
+	armor_until_frame += _armor_recovery_extension_frames()
 	var origin := action_context["position"] as Vector2
 	var area_scale := 1.0
 	var rift_generation := int(action_context.get("rift_generation", 0))
@@ -879,15 +878,21 @@ func _reservation_cost() -> int:
 
 
 func _echo_multiplier() -> float:
-	return 1.0 if _selected_talent_ids.has("echo_forge") else _passive_parameter_float("echo_multiplier")
+	return _talent_modifier_float(
+		"echo_multiplier",
+		_passive_parameter_float("echo_multiplier")
+	)
 
 
 func _armor_recovery_extension_frames() -> int:
-	return 12 if _selected_talent_ids.has("resonant_plate") else 0
+	return _talent_modifier_int("armor_recovery_extension_frames", 0)
 
 
 func _instability_frames() -> int:
-	return 600 if _selected_talent_ids.has("realm_collapse") else _skill_parameter_int("instability_frames")
+	return _talent_modifier_int(
+		"instability_frames",
+		_skill_parameter_int("instability_frames")
+	)
 
 
 func _passive_parameter_int(key: String) -> int:

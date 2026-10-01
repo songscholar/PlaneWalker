@@ -11,6 +11,7 @@ var _weapon_profile: Dictionary = {}
 var _character_id: StringName = &"wanderer"
 var _character_profile: Dictionary = {}
 var _character_talent_ids: Array[StringName] = []
+var _character_talent_definitions: Array[Dictionary] = []
 
 
 func configure(config: Dictionary) -> bool:
@@ -72,6 +73,39 @@ func configure(config: Dictionary) -> bool:
 			return false
 		next_character_talent_ids = canonical_talent_ids
 
+	var raw_talent_definitions: Variant = config.get("character_talent_definitions", [])
+	if not raw_talent_definitions is Array:
+		return false
+	var talent_definitions_by_id: Dictionary = {}
+	for definition_value: Variant in raw_talent_definitions as Array:
+		if not definition_value is Dictionary:
+			return false
+		var definition := (definition_value as Dictionary).duplicate(true)
+		var definition_id := StringName(str(definition.get("id", "")))
+		if (
+			definition_id == &""
+			or talent_definitions_by_id.has(definition_id)
+			or not next_character_talent_ids.has(definition_id)
+			or str(definition.get("category", "")) != "talent"
+			or not definition.get("effects") is Dictionary
+			or (definition.get("effects") as Dictionary).is_empty()
+			or not definition.get("compatibility") is Dictionary
+			or (definition.get("compatibility") as Dictionary).get(
+				"character_ids", []
+			) != [str(next_character_id)]
+		):
+			return false
+		talent_definitions_by_id[definition_id] = definition
+	if talent_definitions_by_id.size() != next_character_talent_ids.size():
+		return false
+	var next_character_talent_definitions: Array[Dictionary] = []
+	for talent_id: StringName in next_character_talent_ids:
+		if not talent_definitions_by_id.has(talent_id):
+			return false
+		next_character_talent_definitions.append(
+			(talent_definitions_by_id[talent_id] as Dictionary).duplicate(true)
+		)
+
 	var raw_weapon_id: Variant = config.get("weapon_id")
 	if typeof(raw_weapon_id) not in [TYPE_STRING, TYPE_STRING_NAME]:
 		return false
@@ -115,6 +149,7 @@ func configure(config: Dictionary) -> bool:
 	_character_id = next_character_id
 	_character_profile = next_character_profile.duplicate(true)
 	_character_talent_ids = next_character_talent_ids.duplicate()
+	_character_talent_definitions = next_character_talent_definitions.duplicate(true)
 	_weapon_id = next_weapon_id
 	_time_ability_ids = next_time_ability_ids.duplicate()
 	_weapon_profile = next_weapon_profile.duplicate(true)
@@ -143,6 +178,40 @@ func character_profile_snapshot() -> Dictionary:
 
 func character_talent_ids() -> Array:
 	return _character_talent_ids.duplicate(true)
+
+
+func character_talent_definitions() -> Array[Dictionary]:
+	return _character_talent_definitions.duplicate(true)
+
+
+func install_character_talent(definition: Dictionary) -> bool:
+	if _character_profile.is_empty():
+		return false
+	var talent_id := StringName(str(definition.get("id", "")))
+	var allowed: Array = _character_profile.get("talent_ids", [])
+	if (
+		talent_id == &""
+		or _character_talent_ids.has(talent_id)
+		or not allowed.has(str(talent_id))
+		or str(definition.get("category", "")) != "talent"
+		or not definition.get("effects") is Dictionary
+		or (definition.get("effects") as Dictionary).is_empty()
+		or not definition.get("compatibility") is Dictionary
+		or (definition.get("compatibility") as Dictionary).get(
+			"character_ids", []
+		) != [str(_character_id)]
+	):
+		return false
+	var candidate := _config.duplicate(true)
+	var ids: Array = candidate.get("character_talents", []).duplicate()
+	var definitions: Array = candidate.get(
+		"character_talent_definitions", []
+	).duplicate(true)
+	ids.append(str(talent_id))
+	definitions.append(definition.duplicate(true))
+	candidate["character_talents"] = ids
+	candidate["character_talent_definitions"] = definitions
+	return configure(candidate)
 
 
 func weapon_profile_id() -> StringName:

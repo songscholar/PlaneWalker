@@ -281,7 +281,7 @@ func before_damage(damage_context: Dictionary) -> Dictionary:
 		elif held_frame <= _normal_last_frame():
 			guard_kind = &"normal"
 			guard_multiplier = 0.5
-		else:
+		elif held_frame <= _close_frame():
 			guard_kind = &"closed"
 		grant_ward = guard_kind in [&"perfect", &"normal"] and not _ward_claims.has(claim_key)
 
@@ -454,7 +454,10 @@ func on_weapon_mastery_confirmed(mastery_context: Dictionary) -> Array[Dictionar
 			token,
 			origin,
 			0.01,
-			float(context["attack"]) * _passive_parameter_float("rebuke_echo_multiplier"),
+			float(context["attack"]) * _talent_modifier_float(
+				"rebuke_echo_multiplier",
+				_passive_parameter_float("rebuke_echo_multiplier")
+			),
 			{"conversion_id": &"guardian_rebuke"}
 		)
 		if descriptor.is_empty():
@@ -464,7 +467,10 @@ func on_weapon_mastery_confirmed(mastery_context: Dictionary) -> Array[Dictionar
 		}))
 		events.append(_event(&"time_cooldown_reduction_requested", runtime_frame, token, {
 			"selection": &"longer_equipped",
-			"amount_frames": _passive_parameter_int("cooldown_reduction_frames"),
+			"amount_frames": _talent_modifier_int(
+				"cooldown_reduction_frames",
+				_passive_parameter_int("cooldown_reduction_frames")
+			),
 			"equipped_time_abilities": context["equipped_time_abilities"],
 		}))
 		var stop_generation := int(context.get("stop_generation", 0))
@@ -825,11 +831,24 @@ func _event(event_id: StringName, frame: int, token: int, context: Dictionary) -
 
 
 func _perfect_last_frame() -> int:
-	return _skill_parameter_int("perfect_last_frame")
+	return _talent_modifier_int(
+		"perfect_last_frame",
+		_skill_parameter_int("perfect_last_frame")
+	)
 
 
 func _normal_last_frame() -> int:
-	return _skill_parameter_int("normal_last_frame")
+	return _talent_modifier_int(
+		"normal_last_frame",
+		_skill_parameter_int("normal_last_frame")
+	)
+
+
+func _close_frame() -> int:
+	return _talent_modifier_int(
+		"close_frame",
+		_skill_parameter_int("close_frame")
+	)
 
 
 func _hold_threshold_frames() -> int:
@@ -845,7 +864,10 @@ func _skill_energy_cost() -> float:
 
 
 func _fortress_ward_cost() -> int:
-	return _skill_parameter_int("ward_cost")
+	return _talent_modifier_int(
+		"fortress_ward_cost",
+		_skill_parameter_int("ward_cost")
+	)
 
 
 func _passive_parameter_int(key: String) -> int:
