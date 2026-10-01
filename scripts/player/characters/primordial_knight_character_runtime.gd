@@ -585,7 +585,7 @@ func _commit_realm_cleave(commit_frame: int) -> Array[Dictionary]:
 			"radius_tiles": _skill_parameter_int("radius_tiles"),
 			"radius": float(_skill_parameter_int("radius_tiles") * 32),
 		},
-		1,
+		2,
 		[],
 		["character_owned", "no_mastery", "no_resource", "non_recursive", "world_owned"],
 		parameters
@@ -640,7 +640,7 @@ func _planar_echo_descriptor(
 			"area_scale": area_scale,
 			"length_scale": area_scale,
 		},
-		1,
+		2,
 		[],
 		["character_echo", "no_character_facts", "no_mastery", "no_resource", "non_recursive", "world_owned"],
 		{

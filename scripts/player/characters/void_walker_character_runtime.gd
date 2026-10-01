@@ -625,7 +625,7 @@ func _payload_descriptor(
 		handler_id,
 		Transform2D(0.0, origin),
 		geometry,
-		1,
+		2,
 		[],
 		["character_owned", "no_mastery", "no_resource", "non_recursive", "world_owned"],
 		parameters

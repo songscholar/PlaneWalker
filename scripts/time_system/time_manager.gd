@@ -747,9 +747,21 @@ func time_action_snapshot() -> Dictionary:
 		var world_value: Variant = world_payload_authority.call("replay_snapshot")
 		if world_value is Dictionary:
 			world_snapshot = (world_value as Dictionary).duplicate(true)
+	var character_participant: Dictionary = {}
+	var owner_entity := get_parent()
+	if owner_entity != null and owner_entity.has_method(
+		"character_time_action_participant_snapshot"
+	):
+		var participant_value: Variant = owner_entity.call(
+			"character_time_action_participant_snapshot"
+		)
+		if not participant_value is Dictionary or (participant_value as Dictionary).is_empty():
+			return {}
+		character_participant = (participant_value as Dictionary).duplicate(true)
 	return {
 		"time_manager": replay_snapshot(),
 		"world_payloads": world_snapshot,
+		"character_participant": character_participant,
 	}
 
 
@@ -796,6 +808,39 @@ func prepare_time_action(
 	)
 	if settlement.is_empty():
 		return {}
+	var transaction_context := context.duplicate(true)
+	transaction_context["ability_id"] = canonical
+	transaction_context["token"] = token
+	transaction_context["generation"] = generation
+	transaction_context["runtime_frame"] = frame
+	transaction_context["run_id"] = run_id
+	transaction_context["run_revision"] = int(owner_entity.call(
+		"owner_character_generation"
+	)) if owner_entity.has_method("owner_character_generation") else generation
+	transaction_context["owner_character_generation"] = int(owner_entity.call(
+		"owner_character_generation"
+	)) if owner_entity.has_method("owner_character_generation") else generation
+	transaction_context.merge(
+		_time_action_character_facts(frame, owner_entity, settlement),
+		true
+	)
+	var character_decision: Dictionary = {}
+	if owner_entity.has_method("plan_character_time_action"):
+		var plan_value: Variant = owner_entity.call(
+			"plan_character_time_action",
+			transaction_context.duplicate(true)
+		)
+		if not plan_value is Dictionary or not bool((plan_value as Dictionary).get("ok", false)):
+			_rollback_time_action_settlement(settlement)
+			return {}
+		character_decision = (
+			(plan_value as Dictionary).get("decision", {}) as Dictionary
+		).duplicate(true)
+	transaction_context["character_decision"] = character_decision
+	var prepared_snapshot := time_action_snapshot()
+	if prepared_snapshot.is_empty():
+		_rollback_time_action_settlement(settlement)
+		return {}
 	var ticket_value: Variant = _time_action_transaction.call(
 		"prepare",
 		token,
@@ -803,8 +848,8 @@ func prepare_time_action(
 		frame,
 		run_id,
 		canonical,
-		context.duplicate(true),
-		time_action_snapshot()
+		transaction_context,
+		prepared_snapshot
 	)
 	if not ticket_value is Dictionary or (ticket_value as Dictionary).is_empty():
 		_rollback_time_action_settlement(settlement)
@@ -883,6 +928,25 @@ func _commit_time_action_ticket(ticket: Dictionary) -> Dictionary:
 			"code": &"ABILITY_COMMIT_REJECTED",
 			"mutated": time_action_snapshot() != prepared_value,
 		}
+	var owner_entity := get_parent()
+	if owner_entity != null and owner_entity.has_method("commit_character_time_action"):
+		context.merge(
+			_time_action_character_facts(
+				int(ticket.get("frame", _last_runtime_frame)),
+				owner_entity,
+				_prepared_time_action_settlement
+			),
+			true
+		)
+		if not bool(owner_entity.call(
+			"commit_character_time_action",
+			context.duplicate(true)
+		)):
+			return {
+				"ok": false,
+				"code": &"CHARACTER_COMMIT_REJECTED",
+				"mutated": time_action_snapshot() != prepared_value,
+			}
 	return {
 		"ok": true,
 		"code": &"TIME_ACTION_COMMITTED",
@@ -896,7 +960,12 @@ func _restore_time_action_snapshot(value: Dictionary) -> Dictionary:
 		return {"ok": false, "code": &"SETTLEMENT_ROLLBACK_FAILED"}
 	var manager_value: Variant = value.get("time_manager")
 	var world_value: Variant = value.get("world_payloads")
-	if not manager_value is Dictionary or not world_value is Dictionary:
+	var participant_value: Variant = value.get("character_participant")
+	if (
+		not manager_value is Dictionary
+		or not world_value is Dictionary
+		or not participant_value is Dictionary
+	):
 		return {"ok": false, "code": &"INVALID_PREPARED_SNAPSHOT"}
 	var before := time_action_snapshot()
 	if before == value:
@@ -914,6 +983,8 @@ func _restore_time_action_snapshot(value: Dictionary) -> Dictionary:
 	):
 		return {"ok": false, "code": &"INVALID_PREPARED_SNAPSHOT"}
 	var before_manager := before.get("time_manager", {}) as Dictionary
+	var before_participant := before.get("character_participant", {}) as Dictionary
+	var owner_entity := get_parent()
 	var world_ticket_value: Variant = world_payload_authority.call(
 		"begin_transaction_restore",
 		(world_value as Dictionary).duplicate(true)
@@ -935,6 +1006,31 @@ func _restore_time_action_snapshot(value: Dictionary) -> Dictionary:
 				else &"RESTORE_ROLLBACK_FAILED"
 			),
 		}
+	if not _restore_time_action_character_participant(
+		owner_entity,
+		(participant_value as Dictionary).duplicate(true)
+	):
+		var participant_world_rollback_ok := bool(world_payload_authority.call(
+			"rollback_transaction_restore",
+			world_ticket.duplicate(true)
+		))
+		var participant_manager_rollback_ok := restore_replay_snapshot(
+			before_manager.duplicate(true)
+		)
+		var participant_rollback_ok := _restore_time_action_character_participant(
+			owner_entity,
+			before_participant.duplicate(true)
+		)
+		return {
+			"ok": false,
+			"code": (
+				&"RESTORE_FAILED"
+				if participant_world_rollback_ok
+				and participant_manager_rollback_ok
+				and participant_rollback_ok
+				else &"RESTORE_ROLLBACK_FAILED"
+			),
+		}
 	var staged_restored := time_action_snapshot()
 	if staged_restored != value:
 		var mismatch_world_rollback_ok := bool(world_payload_authority.call(
@@ -944,11 +1040,17 @@ func _restore_time_action_snapshot(value: Dictionary) -> Dictionary:
 		var mismatch_manager_rollback_ok := restore_replay_snapshot(
 			before_manager.duplicate(true)
 		)
+		var mismatch_participant_rollback_ok := _restore_time_action_character_participant(
+			owner_entity,
+			before_participant.duplicate(true)
+		)
 		return {
 			"ok": false,
 			"code": (
 				&"RESTORE_MISMATCH"
-				if mismatch_manager_rollback_ok and mismatch_world_rollback_ok
+				if mismatch_manager_rollback_ok
+				and mismatch_world_rollback_ok
+				and mismatch_participant_rollback_ok
 				else &"RESTORE_ROLLBACK_FAILED"
 			),
 			"restored_snapshot": staged_restored,
@@ -964,11 +1066,17 @@ func _restore_time_action_snapshot(value: Dictionary) -> Dictionary:
 		var commit_manager_rollback_ok := restore_replay_snapshot(
 			before_manager.duplicate(true)
 		)
+		var commit_participant_rollback_ok := _restore_time_action_character_participant(
+			owner_entity,
+			before_participant.duplicate(true)
+		)
 		return {
 			"ok": false,
 			"code": (
 				&"RESTORE_FAILED"
-				if commit_manager_rollback_ok and commit_world_rollback_ok
+				if commit_manager_rollback_ok
+				and commit_world_rollback_ok
+				and commit_participant_rollback_ok
 				else &"RESTORE_ROLLBACK_FAILED"
 			),
 		}
@@ -992,6 +1100,44 @@ func _time_action_runtime_context(ability_id: StringName, context: Dictionary) -
 				recorder = owner_entity.get_node_or_null("RewindRecorder")
 		runtime_context["recorder"] = recorder
 	return runtime_context
+
+
+func _time_action_character_facts(
+	frame: int,
+	_owner_entity: Node,
+	settlement: Dictionary
+) -> Dictionary:
+	var result: Dictionary = {}
+	var ability_id := StringName(str(settlement.get("ability_id", "")))
+	match ability_id:
+		&"stop":
+			result["stop_generation"] = int(settlement.get("source_sequence", 0))
+			result["stop_until_frame"] = frame + int(settlement.get("duration_frames", 0))
+		&"rift":
+			result["rift_generation"] = int(settlement.get("source_token", 0))
+			result["rift_center"] = settlement.get("position", Vector2.ZERO)
+			var descriptor := settlement.get("descriptor", {}) as Dictionary
+			var geometry := descriptor.get("geometry", {}) as Dictionary
+			result["rift_radius"] = float(geometry.get("radius", 0.0))
+		&"accelerate":
+			result["shorten_echo_frames"] = 1
+	return result
+
+
+func _restore_time_action_character_participant(
+	owner_entity: Node,
+	value: Dictionary
+) -> bool:
+	if value.is_empty():
+		return false
+	return (
+		owner_entity != null
+		and owner_entity.has_method("restore_character_time_action_participant_snapshot")
+		and bool(owner_entity.call(
+			"restore_character_time_action_participant_snapshot",
+			value.duplicate(true)
+		))
+	)
 
 
 func _prepare_time_action_settlement(
@@ -2465,6 +2611,86 @@ func restore_resource_state(resource_id: StringName, state: Dictionary) -> bool:
 func get_cooldown(skill_id: StringName) -> float:
 	_refresh_cooldown_seconds_projection()
 	return float(_cooldowns.get(skill_id, 0.0))
+
+
+func reduce_longer_equipped_cooldown_frames(
+	equipped_time_abilities: Array,
+	amount_frames: int
+) -> bool:
+	if equipped_time_abilities.size() != 2 or amount_frames <= 0:
+		return false
+	var canonical_ids: Array[StringName] = []
+	for ability_value: Variant in equipped_time_abilities:
+		if typeof(ability_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var canonical := canonical_skill_id(StringName(str(ability_value)))
+		var cooldown_id := action_skill_id(canonical)
+		if cooldown_id == &"" or canonical_ids.has(cooldown_id):
+			return false
+		canonical_ids.append(cooldown_id)
+	var selected := canonical_ids[0]
+	if int(_cooldown_frames.get(canonical_ids[1], 0)) > int(
+		_cooldown_frames.get(selected, 0)
+	):
+		selected = canonical_ids[1]
+	var before := int(_cooldown_frames.get(selected, -1))
+	if before < 0:
+		return false
+	var after := maxi(0, before - amount_frames)
+	if not _set_cooldown_frames(selected, after):
+		return false
+	if after != before:
+		_publish_cooldown_changed(selected, _frames_to_seconds(after))
+	return true
+
+
+func extend_boss_exposure_frames(
+	stop_generation: int,
+	amount_frames: int,
+	target_identity: Dictionary = {}
+) -> bool:
+	if stop_generation <= 0 or amount_frames <= 0 or get_tree() == null:
+		return false
+	var bosses := _active_character_boss_exposure_targets(target_identity)
+	if bosses.size() != 1:
+		return false
+	return bool(bosses[0].call(
+		"extend_character_boss_exposure",
+		stop_generation,
+		amount_frames
+	))
+
+
+func active_boss_exposure_identity() -> Dictionary:
+	var bosses := _active_character_boss_exposure_targets({})
+	if bosses.size() != 1:
+		return {}
+	return (bosses[0].call("character_boss_exposure_identity") as Dictionary).duplicate(true)
+
+
+func _active_character_boss_exposure_targets(target_identity: Dictionary) -> Array[Node]:
+	var bosses: Array[Node] = []
+	if get_tree() == null:
+		return bosses
+	for candidate: Node in get_tree().get_nodes_in_group("bosses"):
+		if (
+			not is_instance_valid(candidate)
+			or candidate.is_queued_for_deletion()
+			or not candidate.has_method("extend_character_boss_exposure")
+			or not candidate.has_method("character_boss_exposure_identity")
+		):
+			continue
+		var health := candidate.get_node_or_null("HealthComponent")
+		if health == null or not health.has_method("is_alive") or not bool(health.call("is_alive")):
+			continue
+		var identity_value: Variant = candidate.call("character_boss_exposure_identity")
+		if not identity_value is Dictionary or (identity_value as Dictionary).is_empty():
+			continue
+		var identity := identity_value as Dictionary
+		if not target_identity.is_empty() and identity != target_identity:
+			continue
+		bosses.append(candidate)
+	return bosses
 
 
 func _regen_energy(delta: float) -> void:

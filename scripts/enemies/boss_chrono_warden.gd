@@ -9,6 +9,34 @@ const STAFF_FREEZE_DELAY_FRAMES := 12
 const STAFF_BLIND_DELAY_FRAMES := 8
 const GAUNTLETS_CONVERSION_ID := "gauntlets_poised_launch"
 const GAUNTLETS_POISE_MULTIPLIER := 1.4
+const CHARACTER_BOSS_EXPOSURE_SCHEMA_VERSION := 1
+const CHARACTER_BOSS_EXPOSURE_MAX_EXTENSION_FRAMES := 30
+const CHARACTER_BOSS_EXPOSURE_MAX_ACTIVE_CLAIMS := 32
+const CHARACTER_BOSS_EXPOSURE_SOURCE_ID := &"character_stop_exposure_extension"
+const CHARACTER_BOSS_EXPOSURE_SNAPSHOT_FIELDS := [
+	"schema_version",
+	"identity",
+	"claimed_stop_generation_floor",
+	"tail_state",
+	"remaining_tail_frames",
+	"claims",
+]
+const CHARACTER_BOSS_EXPOSURE_IDENTITY_FIELDS := [
+	"run_id",
+	"room_id",
+	"encounter_id",
+	"encounter_spawn_id",
+	"encounter_enemy_id",
+	"hostile_source_id",
+	"hostile_next_generation_floor",
+	"committed_attack_generation",
+]
+const CHARACTER_BOSS_EXPOSURE_CLAIM_FIELDS := [
+	"stop_generation",
+	"granted_frames",
+	"remaining_frames",
+	"state",
+]
 
 enum BossAction { NONE, MELEE, SLAM, RADIAL, AIMED, SUMMON, TIME_CRACK }
 enum BossActionPhase { IDLE, WINDUP, RECOVERY }
@@ -93,6 +121,10 @@ var _action_resolution_counts: Dictionary = {}
 var _exposure_sources: Dictionary = {}
 var _weapon_control_sources: Dictionary = {}
 var _weapon_poise: float = 0.0
+var _character_boss_exposure_generation_floor: int = 0
+var _character_boss_exposure_claims: Array[Dictionary] = []
+var _character_boss_exposure_runtime_frame_anchor: int = -1
+var _character_boss_exposure_replay_authority: RefCounted
 var slam_windup: float:
 	get:
 		return _action_windup(BossAction.SLAM)
@@ -146,6 +178,10 @@ func _hold_position() -> void:
 	move_and_slide()
 	if _action_phase == BossActionPhase.WINDUP:
 		combat_telegraph.update_origin_global(global_position)
+
+
+func _tick_unscaled_runtime_frame(runtime_frame: int) -> void:
+	_advance_character_boss_exposure_to_runtime_frame(runtime_frame)
 
 
 func _run_next_pattern() -> bool:
@@ -266,6 +302,7 @@ func _resolve_action() -> void:
 func _enter_action_recovery() -> void:
 	_action_phase = BossActionPhase.RECOVERY
 	_action_time_remaining = _action_recovery(_action)
+	_suspend_character_boss_exposure_tail()
 	if _action == BossAction.SLAM:
 		visual.scale = Vector2.ONE
 		_add_exposure_source(&"slam_recovery")
@@ -289,6 +326,7 @@ func _complete_action() -> void:
 	_committed_target_point = global_position
 	_committed_summon_slots.clear()
 	combat_telegraph.clear_telegraph()
+	_activate_character_boss_exposure_tail_if_ready()
 	_restore_visual_color()
 
 
@@ -547,6 +585,9 @@ func _create_time_crack() -> Node:
 
 
 func _on_attack_runtime_cancelled() -> void:
+	_clear_character_boss_exposure_claim_lifecycle()
+	if _action == BossAction.SLAM:
+		_remove_exposure_source(&"slam_recovery")
 	_action = BossAction.NONE
 	_action_phase = BossActionPhase.IDLE
 	_action_time_remaining = 0.0
@@ -583,6 +624,10 @@ func force_action_for_test(action_name: String) -> bool:
 
 func advance_action_for_test(delta: float) -> bool:
 	return _tick_action(maxf(0.0, delta))
+
+
+func advance_character_boss_exposure_for_test(frames: int) -> void:
+	_advance_character_boss_exposure_frames(maxi(0, frames))
 
 
 func get_action_definitions_for_test() -> Dictionary:
@@ -677,6 +722,132 @@ func clear_time_stop_source(source_id: StringName) -> void:
 		return
 	_time_stop_sources.erase(source_id)
 	_remove_exposure_source(source_id)
+	_activate_character_boss_exposure_tail_if_ready()
+
+
+func extend_character_boss_exposure(stop_generation: int, frames: int) -> bool:
+	if (
+		stop_generation <= _character_boss_exposure_generation_floor
+		or frames <= 0
+		or frames > CHARACTER_BOSS_EXPOSURE_MAX_EXTENSION_FRAMES
+		or _character_boss_exposure_claims.size() >= CHARACTER_BOSS_EXPOSURE_MAX_ACTIVE_CLAIMS
+		or not _has_character_boss_exposure_window()
+	):
+		return false
+	var state := "pending" if _character_boss_exposure_tail_must_wait() else "active"
+	var had_claims := not _character_boss_exposure_claims.is_empty()
+	_character_boss_exposure_generation_floor = stop_generation
+	_character_boss_exposure_claims.append({
+		"stop_generation": stop_generation,
+		"granted_frames": frames,
+		"remaining_frames": frames,
+		"state": state,
+	})
+	if state == "active":
+		_ensure_character_boss_exposure_source()
+		if not had_claims:
+			_character_boss_exposure_runtime_frame_anchor = -1
+	return true
+
+
+func character_boss_exposure_snapshot() -> Dictionary:
+	var identity := character_boss_exposure_identity()
+	if identity.is_empty():
+		return {}
+	return {
+		"schema_version": CHARACTER_BOSS_EXPOSURE_SCHEMA_VERSION,
+		"identity": identity,
+		"claimed_stop_generation_floor": _character_boss_exposure_generation_floor,
+		"tail_state": _character_boss_exposure_tail_state(),
+		"remaining_tail_frames": _character_boss_exposure_remaining_frames(),
+		"claims": _character_boss_exposure_claims.duplicate(true),
+	}
+
+
+func character_boss_exposure_identity() -> Dictionary:
+	var run_id := str(get_meta("run_id", "")).strip_edges()
+	var room_id := str(get_meta("room_id", "")).strip_edges()
+	var encounter_id := str(get_meta("encounter_id", "")).strip_edges()
+	var encounter_spawn_id := str(get_meta("encounter_spawn_id", "")).strip_edges()
+	var encounter_enemy_id := str(get_meta("encounter_enemy_id", "")).strip_edges()
+	var source_id := str(hostile_source_id).strip_edges()
+	if (
+		run_id.is_empty()
+		or room_id.is_empty()
+		or encounter_id.is_empty()
+		or encounter_spawn_id.is_empty()
+		or encounter_enemy_id.is_empty()
+		or source_id.is_empty()
+		or _next_attack_generation <= 0
+	):
+		return {}
+	return {
+		"run_id": run_id,
+		"room_id": room_id,
+		"encounter_id": encounter_id,
+		"encounter_spawn_id": encounter_spawn_id,
+		"encounter_enemy_id": encounter_enemy_id,
+		"hostile_source_id": source_id,
+		"hostile_next_generation_floor": _next_attack_generation,
+		"committed_attack_generation": _committed_attack_generation,
+	}
+
+
+func can_restore_character_boss_exposure_snapshot(value: Dictionary) -> bool:
+	return not _validated_character_boss_exposure_snapshot(value, false).is_empty()
+
+
+func restore_character_boss_exposure_snapshot(value: Dictionary) -> bool:
+	var normalized := _validated_character_boss_exposure_snapshot(value, false)
+	if normalized.is_empty():
+		return false
+	var before := character_boss_exposure_snapshot()
+	_install_character_boss_exposure_snapshot(normalized)
+	if character_boss_exposure_snapshot() == normalized:
+		return true
+	_install_character_boss_exposure_snapshot(before)
+	return false
+
+
+func configure_character_boss_exposure_replay_authority(authority: RefCounted) -> bool:
+	if authority == null:
+		return false
+	if _character_boss_exposure_replay_authority != null:
+		return _character_boss_exposure_replay_authority == authority
+	_character_boss_exposure_replay_authority = authority
+	return true
+
+
+func can_restore_character_boss_exposure_replay_snapshot(
+	value: Dictionary,
+	authority: RefCounted
+) -> bool:
+	return (
+		authority != null
+		and authority == _character_boss_exposure_replay_authority
+		and not _validated_character_boss_exposure_snapshot(value, true).is_empty()
+	)
+
+
+func restore_character_boss_exposure_replay_snapshot(
+	value: Dictionary,
+	authority: RefCounted
+) -> bool:
+	if authority == null or authority != _character_boss_exposure_replay_authority:
+		return false
+	var normalized := _validated_character_boss_exposure_snapshot(value, true)
+	if normalized.is_empty():
+		return false
+	var before := character_boss_exposure_snapshot()
+	_install_character_boss_exposure_snapshot(normalized)
+	if character_boss_exposure_snapshot() == normalized:
+		return true
+	_install_character_boss_exposure_snapshot(before)
+	return false
+
+
+func reset_character_boss_exposure_state() -> void:
+	_clear_character_boss_exposure_claim_lifecycle()
 
 
 func get_boss_ui_snapshot() -> Dictionary:
@@ -735,6 +906,7 @@ func clear_time_rift(source_id: StringName) -> void:
 	super.clear_time_rift(source_id)
 	if source_was_active:
 		_remove_exposure_source(source_id)
+	_activate_character_boss_exposure_tail_if_ready()
 
 
 func apply_elemental_status(
@@ -922,6 +1094,8 @@ func clear_weapon_hit_control_state(reason: StringName = &"reset") -> void:
 
 
 func _add_exposure_source(source_id: StringName) -> void:
+	if source_id != CHARACTER_BOSS_EXPOSURE_SOURCE_ID:
+		_suspend_character_boss_exposure_tail()
 	_exposure_sources[source_id] = int(_exposure_sources.get(source_id, 0)) + 1
 	_refresh_exposed_state()
 
@@ -935,6 +1109,289 @@ func _remove_exposure_source(source_id: StringName) -> void:
 	else:
 		_exposure_sources[source_id] = remaining
 	_refresh_exposed_state()
+	if source_id != CHARACTER_BOSS_EXPOSURE_SOURCE_ID:
+		_activate_character_boss_exposure_tail_if_ready()
+
+
+func _has_character_boss_exposure_window() -> bool:
+	return _exposed or (
+		_action != BossAction.NONE
+		and _action_phase == BossActionPhase.RECOVERY
+		and _committed_attack_generation > 0
+	)
+
+
+func _character_boss_exposure_tail_must_wait() -> bool:
+	return (
+		_action != BossAction.NONE
+		and _action_phase == BossActionPhase.RECOVERY
+		and _committed_attack_generation > 0
+	) or _has_non_character_exposure_source()
+
+
+func _has_non_character_exposure_source() -> bool:
+	for source_value: Variant in _exposure_sources.keys():
+		if StringName(str(source_value)) != CHARACTER_BOSS_EXPOSURE_SOURCE_ID:
+			return true
+	return false
+
+
+func _character_boss_exposure_tail_state() -> String:
+	if _character_boss_exposure_claims.is_empty():
+		return "idle"
+	return str(_character_boss_exposure_claims[0].get("state", ""))
+
+
+func _character_boss_exposure_remaining_frames() -> int:
+	var total := 0
+	for claim: Dictionary in _character_boss_exposure_claims:
+		total += int(claim.get("remaining_frames", 0))
+	return maxi(0, total)
+
+
+func _suspend_character_boss_exposure_tail() -> void:
+	if _character_boss_exposure_claims.is_empty():
+		return
+	for index: int in range(_character_boss_exposure_claims.size()):
+		var claim := _character_boss_exposure_claims[index].duplicate(true)
+		claim["state"] = "pending"
+		_character_boss_exposure_claims[index] = claim
+	_character_boss_exposure_runtime_frame_anchor = -1
+	if _exposure_sources.has(CHARACTER_BOSS_EXPOSURE_SOURCE_ID):
+		_exposure_sources.erase(CHARACTER_BOSS_EXPOSURE_SOURCE_ID)
+		_refresh_exposed_state()
+
+
+func _activate_character_boss_exposure_tail_if_ready() -> void:
+	if _character_boss_exposure_claims.is_empty():
+		if _exposure_sources.has(CHARACTER_BOSS_EXPOSURE_SOURCE_ID):
+			_exposure_sources.erase(CHARACTER_BOSS_EXPOSURE_SOURCE_ID)
+			_refresh_exposed_state()
+		return
+	if _character_boss_exposure_tail_must_wait():
+		_suspend_character_boss_exposure_tail()
+		return
+	var was_active := _character_boss_exposure_tail_state() == "active"
+	for index: int in range(_character_boss_exposure_claims.size()):
+		var claim := _character_boss_exposure_claims[index].duplicate(true)
+		claim["state"] = "active"
+		_character_boss_exposure_claims[index] = claim
+	if not was_active:
+		_character_boss_exposure_runtime_frame_anchor = -1
+	_ensure_character_boss_exposure_source()
+
+
+func _ensure_character_boss_exposure_source() -> void:
+	if _exposure_sources.has(CHARACTER_BOSS_EXPOSURE_SOURCE_ID):
+		return
+	_exposure_sources[CHARACTER_BOSS_EXPOSURE_SOURCE_ID] = 1
+	_refresh_exposed_state()
+
+
+func _advance_character_boss_exposure_to_runtime_frame(runtime_frame: int) -> void:
+	if runtime_frame < 0:
+		return
+	_activate_character_boss_exposure_tail_if_ready()
+	if _character_boss_exposure_tail_state() != "active":
+		_character_boss_exposure_runtime_frame_anchor = runtime_frame
+		return
+	if _character_boss_exposure_runtime_frame_anchor < 0:
+		_character_boss_exposure_runtime_frame_anchor = runtime_frame
+		return
+	if runtime_frame <= _character_boss_exposure_runtime_frame_anchor:
+		return
+	var elapsed_frames := runtime_frame - _character_boss_exposure_runtime_frame_anchor
+	_character_boss_exposure_runtime_frame_anchor = runtime_frame
+	_advance_character_boss_exposure_frames(elapsed_frames)
+
+
+func _advance_character_boss_exposure_frames(frames: int) -> void:
+	if frames <= 0 or _character_boss_exposure_claims.is_empty():
+		return
+	_activate_character_boss_exposure_tail_if_ready()
+	if _character_boss_exposure_tail_state() != "active":
+		return
+	var remaining_advance := frames
+	while remaining_advance > 0 and not _character_boss_exposure_claims.is_empty():
+		var claim := _character_boss_exposure_claims[0].duplicate(true)
+		var claim_remaining := int(claim.get("remaining_frames", 0))
+		if remaining_advance < claim_remaining:
+			claim["remaining_frames"] = claim_remaining - remaining_advance
+			_character_boss_exposure_claims[0] = claim
+			remaining_advance = 0
+		else:
+			remaining_advance = maxi(0, remaining_advance - claim_remaining)
+			_character_boss_exposure_claims.pop_front()
+	if _character_boss_exposure_claims.is_empty():
+		_character_boss_exposure_runtime_frame_anchor = -1
+		if _exposure_sources.has(CHARACTER_BOSS_EXPOSURE_SOURCE_ID):
+			_exposure_sources.erase(CHARACTER_BOSS_EXPOSURE_SOURCE_ID)
+			_refresh_exposed_state()
+
+
+func _clear_character_boss_exposure_claim_lifecycle() -> void:
+	_character_boss_exposure_claims.clear()
+	_character_boss_exposure_runtime_frame_anchor = -1
+	if _exposure_sources.has(CHARACTER_BOSS_EXPOSURE_SOURCE_ID):
+		_exposure_sources.erase(CHARACTER_BOSS_EXPOSURE_SOURCE_ID)
+		_refresh_exposed_state()
+
+
+func _validated_character_boss_exposure_snapshot(
+	value: Dictionary,
+	allow_generation_regression: bool
+) -> Dictionary:
+	if not _dictionary_has_exact_fields(value, CHARACTER_BOSS_EXPOSURE_SNAPSHOT_FIELDS):
+		return {}
+	var identity_value: Variant = value.get("identity")
+	if (
+		typeof(value.get("schema_version")) != TYPE_INT
+		or int(value["schema_version"]) != CHARACTER_BOSS_EXPOSURE_SCHEMA_VERSION
+		or not identity_value is Dictionary
+		or not _character_boss_exposure_identity_is_valid(
+			identity_value as Dictionary,
+			allow_generation_regression
+		)
+		or typeof(value.get("claimed_stop_generation_floor")) != TYPE_INT
+		or (
+			not allow_generation_regression
+			and int(value["claimed_stop_generation_floor"]) < _character_boss_exposure_generation_floor
+		)
+		or typeof(value.get("tail_state")) != TYPE_STRING
+		or str(value["tail_state"]) not in ["idle", "pending", "active"]
+		or typeof(value.get("remaining_tail_frames")) != TYPE_INT
+		or int(value["remaining_tail_frames"]) < 0
+		or not value.get("claims") is Array
+	):
+		return {}
+	var floor := int(value["claimed_stop_generation_floor"])
+	var state := str(value["tail_state"])
+	var claims_value := value["claims"] as Array
+	if claims_value.size() > CHARACTER_BOSS_EXPOSURE_MAX_ACTIVE_CLAIMS:
+		return {}
+	if claims_value.is_empty():
+		if state != "idle" or int(value["remaining_tail_frames"]) != 0:
+			return {}
+		return value.duplicate(true)
+	if state == "idle":
+		return {}
+	if state == "pending" and not _character_boss_exposure_tail_must_wait():
+		return {}
+	if state == "active" and _character_boss_exposure_tail_must_wait():
+		return {}
+	var normalized_claims: Array[Dictionary] = []
+	var previous_generation := 0
+	var total_remaining := 0
+	for claim_value: Variant in claims_value:
+		if not claim_value is Dictionary:
+			return {}
+		var claim := claim_value as Dictionary
+		if not _dictionary_has_exact_fields(claim, CHARACTER_BOSS_EXPOSURE_CLAIM_FIELDS):
+			return {}
+		var granted_value: Variant = claim.get("granted_frames")
+		var remaining_value: Variant = claim.get("remaining_frames")
+		if (
+			typeof(claim.get("stop_generation")) != TYPE_INT
+			or int(claim["stop_generation"]) <= previous_generation
+			or int(claim["stop_generation"]) > floor
+			or typeof(granted_value) != TYPE_INT
+			or int(granted_value) <= 0
+			or int(granted_value) > CHARACTER_BOSS_EXPOSURE_MAX_EXTENSION_FRAMES
+			or typeof(remaining_value) != TYPE_INT
+			or int(remaining_value) <= 0
+			or int(remaining_value) > int(granted_value)
+			or typeof(claim.get("state")) != TYPE_STRING
+			or str(claim["state"]) != state
+		):
+			return {}
+		previous_generation = int(claim["stop_generation"])
+		total_remaining += int(remaining_value)
+		normalized_claims.append(claim.duplicate(true))
+	if previous_generation != floor:
+		return {}
+	if maxi(0, total_remaining) != int(value["remaining_tail_frames"]):
+		return {}
+	if (
+		not allow_generation_regression
+		and floor == _character_boss_exposure_generation_floor
+		and int(value["remaining_tail_frames"]) > _character_boss_exposure_remaining_frames()
+	):
+		return {}
+	var normalized := value.duplicate(true)
+	normalized["claims"] = normalized_claims
+	return normalized
+
+
+func _install_character_boss_exposure_snapshot(value: Dictionary) -> void:
+	if _exposure_sources.has(CHARACTER_BOSS_EXPOSURE_SOURCE_ID):
+		_exposure_sources.erase(CHARACTER_BOSS_EXPOSURE_SOURCE_ID)
+	_character_boss_exposure_generation_floor = int(value["claimed_stop_generation_floor"])
+	_next_attack_generation = int((value["identity"] as Dictionary)["hostile_next_generation_floor"])
+	_character_boss_exposure_claims.clear()
+	_character_boss_exposure_runtime_frame_anchor = -1
+	for claim_value: Variant in value["claims"] as Array:
+		_character_boss_exposure_claims.append((claim_value as Dictionary).duplicate(true))
+	if str(value["tail_state"]) == "active" and not _character_boss_exposure_claims.is_empty():
+		_exposure_sources[CHARACTER_BOSS_EXPOSURE_SOURCE_ID] = 1
+	_refresh_exposed_state()
+
+
+func _character_boss_exposure_identity_is_valid(
+	value: Dictionary,
+	allow_generation_restore: bool
+) -> bool:
+	if not _dictionary_has_exact_fields(value, CHARACTER_BOSS_EXPOSURE_IDENTITY_FIELDS):
+		return false
+	for field: String in [
+		"run_id",
+		"room_id",
+		"encounter_id",
+		"encounter_spawn_id",
+		"encounter_enemy_id",
+		"hostile_source_id",
+	]:
+		if (
+			typeof(value.get(field)) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(value[field]).strip_edges().is_empty()
+			or str(value[field]).length() > 128
+		):
+			return false
+	if (
+		typeof(value.get("hostile_next_generation_floor")) != TYPE_INT
+		or int(value["hostile_next_generation_floor"]) <= 0
+		or typeof(value.get("committed_attack_generation")) != TYPE_INT
+		or int(value["committed_attack_generation"]) < 0
+	):
+		return false
+	var current := character_boss_exposure_identity()
+	if current.is_empty():
+		return false
+	for field: String in [
+		"run_id",
+		"room_id",
+		"encounter_id",
+		"encounter_spawn_id",
+		"encounter_enemy_id",
+		"hostile_source_id",
+	]:
+		if str(value[field]) != str(current[field]):
+			return false
+	if int(value["committed_attack_generation"]) != int(current["committed_attack_generation"]):
+		return false
+	return (
+		allow_generation_restore
+		or int(value["hostile_next_generation_floor"])
+		== int(current["hostile_next_generation_floor"])
+	)
+
+
+func _dictionary_has_exact_fields(value: Dictionary, expected_fields: Array) -> bool:
+	if value.size() != expected_fields.size():
+		return false
+	for field_value: Variant in expected_fields:
+		if not value.has(str(field_value)):
+			return false
+	return true
 
 
 func _refresh_exposed_state() -> void:

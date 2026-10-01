@@ -73,6 +73,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_tick_unscaled_runtime_frame(_hostile_runtime_frame())
 	_tick_damage_vulnerability_sources()
 	if not health.is_alive():
 		return
@@ -105,6 +106,10 @@ func _tick_ai(_delta: float) -> void:
 
 
 func _tick_additional_action_timers(_delta: float) -> void:
+	pass
+
+
+func _tick_unscaled_runtime_frame(_runtime_frame: int) -> void:
 	pass
 
 

@@ -840,7 +840,7 @@ func _commit_intent(intent: Dictionary, context: Dictionary, replacing_action: b
 			_plan,
 			_token,
 			_generation,
-			{},
+			commit_context,
 			resource_context
 		)
 		_publish_weapon_action_committed(

@@ -3,6 +3,14 @@ extends Node2D
 
 signal authored_runtime_failed(context: Dictionary)
 
+const CHARACTER_BOSS_EXPOSURE_REPLAY_SCHEMA_VERSION := 1
+const CHARACTER_BOSS_EXPOSURE_REPLAY_FIELDS := ["schema_version", "participants"]
+const CHARACTER_BOSS_EXPOSURE_PARTICIPANT_FIELDS := [
+	"hostile_source_id",
+	"hostile_identity",
+	"snapshot",
+]
+
 @export var room_id: StringName = &"combat_room_01"
 @export var enemy_scenes: Array[PackedScene] = []
 @export var boss_scene: PackedScene
@@ -31,6 +39,7 @@ var _current_room_definition: Dictionary = {}
 var _hostile_identity_scope: Dictionary = {}
 var _hostile_spawn_ordinals: Dictionary = {}
 var _hostile_threat_registry: RefCounted
+var _character_boss_exposure_replay_authority: RefCounted
 var _cleared: bool = false
 var _alive_enemies: int:
 	get:
@@ -75,6 +84,104 @@ func configure_hostile_threat_authority(
 
 func hostile_threat_registry() -> RefCounted:
 	return _hostile_threat_registry
+
+
+func configure_character_boss_exposure_replay_authority(authority: RefCounted) -> bool:
+	if authority == null:
+		return false
+	if (
+		_character_boss_exposure_replay_authority != null
+		and _character_boss_exposure_replay_authority != authority
+	):
+		return false
+	_character_boss_exposure_replay_authority = authority
+	var participants := _character_boss_exposure_participants()
+	if not bool(participants.get("ok", false)):
+		return false
+	for participant_value: Variant in (participants.get("participants", {}) as Dictionary).values():
+		var participant := participant_value as Node
+		if not bool(participant.call(
+			"configure_character_boss_exposure_replay_authority",
+			authority
+		)):
+			return false
+	return true
+
+
+func character_boss_exposure_runtime_frame() -> int:
+	return _hostile_runtime_frame()
+
+
+func capture_character_boss_exposure_replay_state() -> Dictionary:
+	if _character_boss_exposure_replay_authority == null:
+		return {}
+	var resolved := _character_boss_exposure_participants()
+	if not bool(resolved.get("ok", false)):
+		return {}
+	var participants_by_id := resolved.get("participants", {}) as Dictionary
+	var source_ids: Array[String] = []
+	for source_value: Variant in participants_by_id.keys():
+		source_ids.append(str(source_value))
+	source_ids.sort()
+	var snapshots: Array[Dictionary] = []
+	for source_value: String in source_ids:
+		var participant := participants_by_id.get(source_value) as Node
+		var snapshot_value: Variant = participant.call("character_boss_exposure_snapshot")
+		var hostile_identity_value: Variant = participant.call("hostile_identity_snapshot")
+		if (
+			not snapshot_value is Dictionary
+			or (snapshot_value as Dictionary).is_empty()
+			or not hostile_identity_value is Dictionary
+			or (hostile_identity_value as Dictionary).is_empty()
+		):
+			return {}
+		snapshots.append({
+			"hostile_source_id": source_value,
+			"hostile_identity": (hostile_identity_value as Dictionary).duplicate(true),
+			"snapshot": (snapshot_value as Dictionary).duplicate(true),
+		})
+	return {
+		"schema_version": CHARACTER_BOSS_EXPOSURE_REPLAY_SCHEMA_VERSION,
+		"participants": snapshots,
+	}
+
+
+func can_restore_character_boss_exposure_replay_state(
+	value: Dictionary,
+	authority: RefCounted
+) -> bool:
+	return not _validated_character_boss_exposure_replay_state(value, authority).is_empty()
+
+
+func restore_character_boss_exposure_replay_state(
+	value: Dictionary,
+	authority: RefCounted
+) -> bool:
+	var normalized := _validated_character_boss_exposure_replay_state(value, authority)
+	if normalized.is_empty():
+		return false
+	var before := capture_character_boss_exposure_replay_state()
+	if before.is_empty():
+		return false
+	var resolved := _character_boss_exposure_participants()
+	if not bool(resolved.get("ok", false)):
+		return false
+	var participants_by_id := resolved.get("participants", {}) as Dictionary
+	for entry_value: Variant in normalized["participants"] as Array:
+		var entry := entry_value as Dictionary
+		var source_id := str(entry["hostile_source_id"])
+		var participant := participants_by_id.get(source_id) as Node
+		if not bool(participant.call(
+			"restore_character_boss_exposure_replay_snapshot",
+			(entry["snapshot"] as Dictionary).duplicate(true),
+			authority
+		)):
+			_restore_character_boss_exposure_replay_state_unchecked(before, authority)
+			return false
+	if capture_character_boss_exposure_replay_state() == normalized:
+		return true
+	_restore_character_boss_exposure_replay_state_unchecked(before, authority)
+	return false
 
 
 func configure_authored_runtime(
@@ -327,6 +434,8 @@ func _configure_spawned_hostile_identity(enemy: Node, spawn_definition: Dictiona
 		):
 			if not _configure_spawned_hostile_threat_authority(enemy):
 				return false
+			if not _configure_character_boss_exposure_participant(enemy):
+				return false
 			_configure_hostile_run_metadata(enemy)
 			return true
 	var runtime_snapshot: Dictionary = (
@@ -351,6 +460,8 @@ func _configure_spawned_hostile_identity(enemy: Node, spawn_definition: Dictiona
 		return false
 	if not _configure_spawned_hostile_threat_authority(enemy):
 		return false
+	if not _configure_character_boss_exposure_participant(enemy):
+		return false
 	enemy.set_meta("hostile_source_id", source_id)
 	_configure_hostile_run_metadata(enemy, scope)
 	return true
@@ -368,6 +479,168 @@ func _configure_spawned_hostile_threat_authority(enemy: Node) -> bool:
 	))
 
 
+func _configure_character_boss_exposure_participant(enemy: Node) -> bool:
+	if not enemy.has_method("character_boss_exposure_snapshot"):
+		return true
+	if (
+		_character_boss_exposure_replay_authority == null
+		or not enemy.has_method("configure_character_boss_exposure_replay_authority")
+		or not enemy.has_method("can_restore_character_boss_exposure_replay_snapshot")
+		or not enemy.has_method("restore_character_boss_exposure_replay_snapshot")
+	):
+		return false
+	return bool(enemy.call(
+		"configure_character_boss_exposure_replay_authority",
+		_character_boss_exposure_replay_authority
+	))
+
+
+func _character_boss_exposure_participants() -> Dictionary:
+	var participants: Dictionary = {}
+	if enemies_root == null:
+		return {"ok": true, "participants": participants}
+	for enemy: Node in enemies_root.get_children():
+		if not enemy.has_method("character_boss_exposure_snapshot"):
+			continue
+		if (
+			not enemy.has_method("hostile_identity_snapshot")
+			or not enemy.has_method("restore_hostile_identity_snapshot")
+			or not enemy.has_method("configure_character_boss_exposure_replay_authority")
+			or not enemy.has_method("can_restore_character_boss_exposure_replay_snapshot")
+			or not enemy.has_method("restore_character_boss_exposure_replay_snapshot")
+		):
+			return {"ok": false, "participants": {}}
+		var identity_value: Variant = enemy.call("hostile_identity_snapshot")
+		if not identity_value is Dictionary:
+			return {"ok": false, "participants": {}}
+		var identity := identity_value as Dictionary
+		var source_id := str(identity.get("hostile_source_id", "")).strip_edges()
+		if source_id.is_empty() or not bool(identity.get("active", false)) or participants.has(source_id):
+			return {"ok": false, "participants": {}}
+		participants[source_id] = enemy
+	return {"ok": true, "participants": participants}
+
+
+func _validated_character_boss_exposure_replay_state(
+	value: Dictionary,
+	authority: RefCounted
+) -> Dictionary:
+	if (
+		authority == null
+		or authority != _character_boss_exposure_replay_authority
+		or not _dictionary_has_exact_fields(value, CHARACTER_BOSS_EXPOSURE_REPLAY_FIELDS)
+		or typeof(value.get("schema_version")) != TYPE_INT
+		or int(value["schema_version"]) != CHARACTER_BOSS_EXPOSURE_REPLAY_SCHEMA_VERSION
+		or not value.get("participants") is Array
+	):
+		return {}
+	var resolved := _character_boss_exposure_participants()
+	if not bool(resolved.get("ok", false)):
+		return {}
+	var participants_by_id := resolved.get("participants", {}) as Dictionary
+	var entries := value["participants"] as Array
+	if entries.size() != participants_by_id.size():
+		return {}
+	var normalized_entries: Array[Dictionary] = []
+	var previous_source_id := ""
+	for entry_value: Variant in entries:
+		if not entry_value is Dictionary:
+			return {}
+		var entry := entry_value as Dictionary
+		if (
+			not _dictionary_has_exact_fields(entry, CHARACTER_BOSS_EXPOSURE_PARTICIPANT_FIELDS)
+			or typeof(entry.get("hostile_source_id")) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or not entry.get("hostile_identity") is Dictionary
+			or not entry.get("snapshot") is Dictionary
+		):
+			return {}
+		var source_id := str(entry["hostile_source_id"]).strip_edges()
+		if (
+			source_id.is_empty()
+			or (not previous_source_id.is_empty() and source_id <= previous_source_id)
+			or not participants_by_id.has(source_id)
+		):
+			return {}
+		var participant := participants_by_id.get(source_id) as Node
+		var hostile_identity := entry["hostile_identity"] as Dictionary
+		if (
+			hostile_identity.size() != 3
+			or typeof(hostile_identity.get("hostile_source_id")) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(hostile_identity.get("hostile_source_id", "")) != source_id
+			or typeof(hostile_identity.get("next_generation_floor")) != TYPE_INT
+			or int(hostile_identity.get("next_generation_floor", 0)) <= 0
+			or typeof(hostile_identity.get("active")) != TYPE_BOOL
+			or not bool(hostile_identity.get("active", false))
+		):
+			return {}
+		var current_identity := participant.call("hostile_identity_snapshot") as Dictionary
+		if (
+			str(current_identity.get("hostile_source_id", "")) != source_id
+			or not bool(current_identity.get("active", false))
+		):
+			return {}
+		var exposure_snapshot := (entry["snapshot"] as Dictionary).duplicate(true)
+		var exposure_identity := exposure_snapshot.get("identity", {}) as Dictionary
+		if (
+			str(exposure_identity.get("hostile_source_id", "")) != source_id
+			or int(exposure_identity.get("hostile_next_generation_floor", 0))
+			!= int(hostile_identity["next_generation_floor"])
+		):
+			return {}
+		if not bool(participant.call(
+			"can_restore_character_boss_exposure_replay_snapshot",
+			exposure_snapshot,
+			authority
+		)):
+			return {}
+		previous_source_id = source_id
+		normalized_entries.append({
+			"hostile_source_id": source_id,
+			"hostile_identity": hostile_identity.duplicate(true),
+			"snapshot": exposure_snapshot,
+		})
+	return {
+		"schema_version": CHARACTER_BOSS_EXPOSURE_REPLAY_SCHEMA_VERSION,
+		"participants": normalized_entries,
+	}
+
+
+func _restore_character_boss_exposure_replay_state_unchecked(
+	value: Dictionary,
+	authority: RefCounted
+) -> bool:
+	var resolved := _character_boss_exposure_participants()
+	if not bool(resolved.get("ok", false)):
+		return false
+	var participants_by_id := resolved.get("participants", {}) as Dictionary
+	var restored := true
+	for entry_value: Variant in value.get("participants", []) as Array:
+		if not entry_value is Dictionary:
+			restored = false
+			continue
+		var entry := entry_value as Dictionary
+		var participant := participants_by_id.get(str(entry.get("hostile_source_id", ""))) as Node
+		if (
+			participant == null
+			or not bool(participant.call(
+				"restore_character_boss_exposure_replay_snapshot",
+				(entry.get("snapshot", {}) as Dictionary).duplicate(true),
+				authority
+			))
+		):
+			restored = false
+	return restored
+
+
+func _dictionary_has_exact_fields(value: Dictionary, expected_fields: Array) -> bool:
+	if value.size() != expected_fields.size():
+		return false
+	for field_value: Variant in expected_fields:
+		if not value.has(str(field_value)):
+			return false
+	return true
+
+
 func _hostile_runtime_frame() -> int:
 	if _player_health != null and is_instance_valid(_player_health):
 		var player := _player_health.get_parent()
@@ -383,6 +656,17 @@ func _configure_hostile_run_metadata(enemy: Node, scope: Dictionary = {}) -> voi
 	var run_id := str(source_scope.get("run_id", "")).strip_edges()
 	if not run_id.is_empty():
 		enemy.set_meta("run_id", StringName(run_id))
+	var runtime_snapshot: Dictionary = (
+		_room_runtime.call("snapshot")
+		if _room_runtime != null and _room_runtime.has_method("snapshot")
+		else {}
+	)
+	var active_room_id := str(runtime_snapshot.get("room_id", room_id)).strip_edges()
+	var encounter_id := str(_current_room_definition.get("encounter_id", "encounter")).strip_edges()
+	if not active_room_id.is_empty():
+		enemy.set_meta("room_id", StringName(active_room_id))
+	if not encounter_id.is_empty():
+		enemy.set_meta("encounter_id", StringName(encounter_id))
 
 
 func _next_hostile_spawn_ordinal(spawn_definition: Dictionary) -> int:

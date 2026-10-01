@@ -26,6 +26,176 @@ const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_
 const WeaponResourceTransactionScript := preload("res://scripts/combat/weapons/weapon_resource_transaction.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
+
+const CHARACTER_WORLD_PAYLOAD_HANDLERS: Array[StringName] = [
+	&"character_time_echo",
+	&"character_time_shockwave",
+	&"character_void_echo",
+	&"void_devour_cone",
+	&"realm_cleave_execution",
+	&"planar_echo_execution",
+]
+
+
+class CharacterWorldPayloadNode extends Node2D:
+	const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+
+	var _descriptor: Dictionary = {}
+	var _owner_ref: WeakRef
+	var _last_runtime_frame: int = -1
+	var _resolved: bool = false
+
+
+	func configure(descriptor: Dictionary, owner_entity: Node) -> bool:
+		if (
+			descriptor.is_empty()
+			or owner_entity == null
+			or not is_instance_valid(owner_entity)
+			or not descriptor.get("geometry") is Dictionary
+			or not descriptor.get("parameters") is Dictionary
+		):
+			return false
+		_descriptor = descriptor.duplicate(true)
+		_owner_ref = weakref(owner_entity)
+		transform = descriptor.get("transform", Transform2D.IDENTITY)
+		return true
+
+
+	func advance_frame(runtime_frame: int) -> bool:
+		if runtime_frame < 0 or (_last_runtime_frame >= 0 and runtime_frame <= _last_runtime_frame):
+			return false
+		_last_runtime_frame = runtime_frame
+		return true
+
+
+	func world_payload_frame_snapshot() -> Dictionary:
+		return {
+			"last_runtime_frame": _last_runtime_frame,
+			"resolved": _resolved,
+		}
+
+
+	func restore_world_payload_frame_snapshot(value: Dictionary) -> bool:
+		if (
+			value.size() != 2
+			or typeof(value.get("last_runtime_frame")) != TYPE_INT
+			or int(value.get("last_runtime_frame", -2)) < -1
+			or typeof(value.get("resolved")) != TYPE_BOOL
+		):
+			return false
+		_last_runtime_frame = int(value["last_runtime_frame"])
+		_resolved = bool(value["resolved"])
+		return world_payload_frame_snapshot() == value
+
+
+	func retire_world_payload(reason: StringName) -> void:
+		if reason == &"expired" and not _resolved:
+			_resolved = true
+			_apply_payload_damage()
+
+
+	func _apply_payload_damage() -> void:
+		var owner_entity: Node = _owner_ref.get_ref() as Node if _owner_ref != null else null
+		if owner_entity == null or not is_instance_valid(owner_entity):
+			return
+		var scene_tree := owner_entity.get_tree()
+		if scene_tree == null:
+			return
+		var geometry := _descriptor.get("geometry", {}) as Dictionary
+		var parameters := _descriptor.get("parameters", {}) as Dictionary
+		var damage := float(parameters.get("damage", 0.0))
+		if not is_finite(damage) or damage <= 0.0:
+			return
+		var targets_by_identity: Dictionary = {}
+		for candidate: Node in scene_tree.get_nodes_in_group("enemies"):
+			if not candidate is Node2D or not is_instance_valid(candidate):
+				continue
+			if not _geometry_contains_point(geometry, (candidate as Node2D).global_position):
+				continue
+			var target_identity := _target_id(candidate)
+			if target_identity == &"" or targets_by_identity.has(target_identity):
+				continue
+			targets_by_identity[target_identity] = candidate
+		var target_identities: Array = targets_by_identity.keys()
+		target_identities.sort_custom(func(left: Variant, right: Variant) -> bool:
+			return str(left) < str(right)
+		)
+		for target_identity_value: Variant in target_identities:
+			var target := targets_by_identity[target_identity_value] as Node
+			var target_health := target.get_node_or_null("HealthComponent")
+			if target_health == null or not target_health.has_method("take_damage"):
+				continue
+			var info := DamageInfoScript.from_plan({
+				"run_id": StringName(str(_descriptor.get("run_id", ""))),
+				"target_id": StringName(str(target_identity_value)),
+				"hostile_source_id": StringName("character_payload_%s" % str(
+					_descriptor.get("payload_generation", 1)
+				)),
+				"attack_generation": maxi(1, int(_descriptor.get("payload_generation", 1))),
+				"hit_index": 0,
+				"action_token": maxi(1, int(_descriptor.get("source_token", 1))),
+				"amount": damage,
+				"damage_type": DamageInfoScript.DamageType.TIME,
+				"source": self,
+				"attacker": owner_entity,
+				"can_crit": false,
+				"knockback": Vector2.ZERO,
+				"tags": (_descriptor.get("tags", []) as Array).duplicate(),
+				"source_generation": maxi(1, int(_descriptor.get("owner_character_generation", 1))),
+			})
+			if info != null:
+				target_health.call("take_damage", info)
+
+
+	func _target_id(target: Node) -> StringName:
+		if target == null or not is_instance_valid(target):
+			return &""
+		for key: StringName in [&"stable_target_id", &"stable_target_key", &"encounter_spawn_id"]:
+			if not target.has_meta(key):
+				continue
+			var stable_value := str(target.get_meta(key)).strip_edges()
+			if not stable_value.is_empty():
+				return StringName(stable_value)
+		return &""
+
+
+	func _geometry_contains_point(geometry: Dictionary, point: Vector2) -> bool:
+		match StringName(str(geometry.get("shape", ""))):
+			&"circle":
+				var center_value: Variant = geometry.get("center")
+				var radius := float(geometry.get("radius", 0.0))
+				return (
+					center_value is Vector2
+					and is_finite(radius)
+					and radius > 0.0
+					and point.distance_to(center_value as Vector2) <= radius
+				)
+			&"cone":
+				var origin_value: Variant = geometry.get("origin")
+				var aim_value: Variant = geometry.get("aim_direction")
+				var length := float(geometry.get("length", 0.0))
+				var degrees := float(geometry.get("degrees", 0.0))
+				if (
+					not origin_value is Vector2
+					or not aim_value is Vector2
+					or not is_finite(length)
+					or length <= 0.0
+					or not is_finite(degrees)
+					or degrees <= 0.0
+					or degrees > 360.0
+				):
+					return false
+				var offset := point - (origin_value as Vector2)
+				if offset.length_squared() <= 0.000001:
+					return true
+				var aim := (aim_value as Vector2).normalized()
+				return (
+					aim.length_squared() > 0.000001
+					and offset.length() <= length
+					and absf(aim.angle_to(offset.normalized())) <= deg_to_rad(degrees * 0.5)
+				)
+		return false
 
 const DEFAULT_LOADOUT_CONFIG := {
 	"weapon_id": "sword",
@@ -105,8 +275,10 @@ var _time_action_generation: int = 1
 var _weapon_action_reward_claims: Dictionary = {}
 var _weapon_action_ids_by_token: Dictionary = {}
 var _weapon_action_generations_by_token: Dictionary = {}
+var _weapon_action_mastery_contexts_by_token: Dictionary = {}
 var _weapon_action_token_order: Array[int] = []
 var _weapon_hit_fact_claims: Dictionary = {}
+var _weapon_mastery_target_ids_by_token: Dictionary = {}
 var _weapon_resource_fact_state: Dictionary = {}
 var _next_weapon_action_token_floor: int = 1
 var _weapon_replay_events: Array[Dictionary] = []
@@ -176,8 +348,10 @@ const WEAPON_REPLAY_STATE_FIELDS: Array[String] = [
 	"action_reward_claims",
 	"action_ids_by_token",
 	"action_generations_by_token",
+	"action_mastery_contexts_by_token",
 	"action_token_order",
 	"hit_fact_claims",
+	"mastery_target_ids_by_token",
 	"resource_fact_state",
 	"next_token_floor",
 	"combo_timeout_frames",
@@ -264,9 +438,10 @@ func damage_defense_decisions(damage_info: RefCounted) -> Dictionary:
 					weapon_decision = {"invalid_adapter_decision": true}
 			else:
 				weapon_decision = {"invalid_adapter_decision": true}
+	var character_decision := _plan_character_damage_defense(damage_info)
 	return {
 		"weapon": weapon_decision,
-		"character": {},
+		"character": character_decision,
 	}
 
 
@@ -283,35 +458,237 @@ func commit_damage_defense(decisions: Dictionary, resolution: RefCounted) -> boo
 		return false
 	var weapon_decision: Dictionary = decisions["weapon"]
 	var character_decision: Dictionary = decisions["character"]
-	# P12B installs the character defense runtime in a later isolated gate. Until
-	# that owner exists, a non-empty character stage must fail before any weapon
-	# resource or mastery state is committed.
+	var equipped_adapter: Node = null
+	if not weapon_decision.is_empty():
+		var planned_weapon_id := _planned_defense_weapon_id(weapon_decision)
+		var equipped_weapon_id: StringName = loadout_runtime.weapon_id()
+		if planned_weapon_id == &"" or planned_weapon_id != equipped_weapon_id:
+			return false
+		equipped_adapter = _weapon_adapter(equipped_weapon_id)
+		if (
+			equipped_adapter == null
+			or not equipped_adapter.has_method("can_commit_damage_defense")
+			or not equipped_adapter.has_method("commit_damage_defense")
+			or not bool(equipped_adapter.call(
+				"can_commit_damage_defense",
+				weapon_decision.duplicate(true),
+				resolution
+			))
+		):
+			return false
+
+	var character_before: Dictionary = {}
+	var character_action_before: Dictionary = {}
 	if not character_decision.is_empty():
-		return false
-	if weapon_decision.is_empty():
+		if (
+			character_action_coordinator == null
+			or not character_action_coordinator.has_method("snapshot")
+			or not character_action_coordinator.has_method("action_snapshot")
+			or not character_action_coordinator.has_method("after_damage")
+			or not _character_damage_commit_is_current(character_decision, resolution)
+		):
+			return false
+		character_before = character_action_coordinator.call("snapshot")
+		character_action_before = character_action_coordinator.call("action_snapshot")
+		if character_before.is_empty() or character_action_before.is_empty():
+			return false
+		var commit_context := character_decision.get("commit_context", {}) as Dictionary
+		var damage_context := (
+			commit_context.get("damage_context", {}) as Dictionary
+		).duplicate(true)
+		var resolution_snapshot: Dictionary = resolution.call("snapshot")
+		damage_context["decision"] = (
+			commit_context.get("character_decision", {}) as Dictionary
+		).duplicate(true)
+		damage_context["finalized_damage"] = float(resolution.call("finalized_damage"))
+		damage_context["prevented"] = bool(resolution.call("is_prevented"))
+		damage_context["irreversible"] = bool(resolution_snapshot.get("irreversible", false))
+		damage_context["applied"] = true
+		var character_result: Variant = character_action_coordinator.call(
+			"after_damage",
+			damage_context
+		)
+		if (
+			not character_result is Dictionary
+			or not bool((character_result as Dictionary).get("ok", false))
+			or not _apply_character_result_events(character_result as Dictionary)
+		):
+			_restore_character_coordinator_pair(character_before, character_action_before)
+			return false
+
+	if equipped_adapter == null:
 		return true
-	var planned_weapon_id := _planned_defense_weapon_id(weapon_decision)
-	var equipped_weapon_id: StringName = loadout_runtime.weapon_id()
-	if planned_weapon_id == &"" or planned_weapon_id != equipped_weapon_id:
-		return false
-	var equipped_adapter := _weapon_adapter(equipped_weapon_id)
-	if (
-		equipped_adapter == null
-		or not equipped_adapter.has_method("can_commit_damage_defense")
-		or not equipped_adapter.has_method("commit_damage_defense")
-	):
-		return false
-	if not bool(equipped_adapter.call(
-		"can_commit_damage_defense",
-		weapon_decision.duplicate(true),
-		resolution
-	)):
-		return false
-	return bool(equipped_adapter.call(
+	if bool(equipped_adapter.call(
 		"commit_damage_defense",
 		weapon_decision.duplicate(true),
 		resolution
-	))
+	)):
+		_confirm_sword_guard_mastery(weapon_decision, resolution)
+		return true
+	if not character_before.is_empty():
+		_restore_character_coordinator_pair(character_before, character_action_before)
+	return false
+
+
+func _plan_character_damage_defense(damage_info: RefCounted) -> Dictionary:
+	if (
+		damage_info == null
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("before_damage")
+	):
+		return {}
+	var damage_context := _character_damage_context(damage_info)
+	if damage_context.is_empty():
+		return {}
+	var result_value: Variant = character_action_coordinator.call(
+		"before_damage",
+		damage_context.duplicate(true)
+	)
+	if not result_value is Dictionary or not bool((result_value as Dictionary).get("ok", false)):
+		return {"invalid_character_decision": true}
+	var result_context := (result_value as Dictionary).get("context", {}) as Dictionary
+	var raw_decision := result_context.get("decision", {}) as Dictionary
+	var prevented := bool(raw_decision.get("prevented", false))
+	var multiplier := float(raw_decision.get("combined_multiplier", 1.0))
+	if not is_finite(multiplier) or multiplier < 0.0 or multiplier > 1.0:
+		return {"invalid_character_decision": true}
+	var guard_kind := StringName(str(raw_decision.get("guard_kind", "")))
+	if guard_kind == &"none":
+		guard_kind = &""
+	var coordinator_snapshot: Dictionary = character_action_coordinator.call("snapshot")
+	var action_snapshot: Dictionary = character_action_coordinator.call("action_snapshot")
+	if coordinator_snapshot.is_empty() or action_snapshot.is_empty():
+		return {"invalid_character_decision": true}
+	return {
+		"prevented": prevented,
+		"multiplier": 1.0 if prevented else multiplier,
+		"prevent_reason": &"character_guard" if prevented else &"",
+		"guard_kind": guard_kind,
+		"commit_context": {
+			"character_decision": raw_decision.duplicate(true),
+			"damage_context": damage_context.duplicate(true),
+			"binding": {
+				"run_id": _run_id,
+				"runtime_frame": _runtime_frame,
+				"owner_character_generation": _owner_character_generation,
+				"character_id": StringName(str(character_runtime.call("character_id"))) if character_runtime != null else &"",
+				"coordinator_revision": int(coordinator_snapshot.get("revision", -1)),
+				"action_revision": int(action_snapshot.get("revision", -1)),
+				"damage_run_id": StringName(str(damage_context.get("damage_run_id", ""))),
+				"hostile_source_id": StringName(str(damage_context.get("hostile_source_id", ""))),
+				"attack_generation": int(damage_context.get("attack_generation", 0)),
+				"original_amount": float(damage_context.get("original_amount", -1.0)),
+			},
+		},
+	}
+
+
+func _character_damage_commit_is_current(
+	character_decision: Dictionary,
+	resolution: RefCounted
+) -> bool:
+	if resolution == null or not resolution.has_method("snapshot"):
+		return false
+	var commit_context_value: Variant = character_decision.get("commit_context")
+	if not commit_context_value is Dictionary:
+		return false
+	var commit_context := commit_context_value as Dictionary
+	var raw_decision_value: Variant = commit_context.get("character_decision")
+	var damage_context_value: Variant = commit_context.get("damage_context")
+	var binding_value: Variant = commit_context.get("binding")
+	if (
+		not raw_decision_value is Dictionary
+		or not damage_context_value is Dictionary
+		or not binding_value is Dictionary
+	):
+		return false
+	var raw_decision := raw_decision_value as Dictionary
+	var damage_context := damage_context_value as Dictionary
+	var binding := binding_value as Dictionary
+	var coordinator_snapshot: Dictionary = character_action_coordinator.call("snapshot")
+	var action_snapshot: Dictionary = character_action_coordinator.call("action_snapshot")
+	var resolution_snapshot: Dictionary = resolution.call("snapshot")
+	var expected_guard_kind := StringName(str(raw_decision.get("guard_kind", "")))
+	if expected_guard_kind == &"none":
+		expected_guard_kind = &""
+	var expected_prevented := bool(raw_decision.get("prevented", false))
+	var expected_multiplier := float(raw_decision.get("combined_multiplier", 1.0))
+	return (
+		binding.size() == 10
+		and StringName(str(binding.get("run_id", ""))) == _run_id
+		and int(binding.get("runtime_frame", -1)) == _runtime_frame
+		and int(binding.get("owner_character_generation", 0)) == _owner_character_generation
+		and character_runtime != null
+		and StringName(str(binding.get("character_id", "")))
+		== StringName(str(character_runtime.call("character_id")))
+		and int(binding.get("coordinator_revision", -1))
+		== int(coordinator_snapshot.get("revision", -2))
+		and int(binding.get("action_revision", -1))
+		== int(action_snapshot.get("revision", -2))
+		and bool(character_decision.get("prevented", false)) == expected_prevented
+		and is_equal_approx(
+			float(character_decision.get("multiplier", -1.0)),
+			1.0 if expected_prevented else expected_multiplier
+		)
+		and StringName(str(character_decision.get("guard_kind", ""))) == expected_guard_kind
+		and StringName(str(binding.get("hostile_source_id", "")))
+		== StringName(str(damage_context.get("hostile_source_id", "")))
+		and int(binding.get("attack_generation", 0))
+		== int(damage_context.get("attack_generation", -1))
+		and is_equal_approx(
+			float(binding.get("original_amount", -1.0)),
+			float(damage_context.get("original_amount", -2.0))
+		)
+		and StringName(str(resolution_snapshot.get("run_id", "")))
+		== StringName(str(binding.get("damage_run_id", "")))
+		and StringName(str(resolution_snapshot.get("hostile_source_id", "")))
+		== StringName(str(binding.get("hostile_source_id", "")))
+		and int(resolution_snapshot.get("attack_generation", -1))
+		== int(binding.get("attack_generation", -2))
+		and is_equal_approx(
+			float(resolution_snapshot.get("original_amount", -1.0)),
+			float(binding.get("original_amount", -2.0))
+		)
+	)
+
+
+func _character_damage_context(damage_info: RefCounted) -> Dictionary:
+	if damage_info == null or not damage_info.has_method("snapshot"):
+		return {}
+	var snapshot_value: Variant = damage_info.call("snapshot")
+	if not snapshot_value is Dictionary or (snapshot_value as Dictionary).is_empty():
+		return {}
+	var snapshot := snapshot_value as Dictionary
+	var incoming_direction := Vector2.ZERO
+	var attacker_value: Variant = snapshot.get("attacker")
+	if attacker_value is Node2D and is_instance_valid(attacker_value):
+		incoming_direction = global_position.direction_to((attacker_value as Node2D).global_position)
+	var knockback := snapshot.get("knockback", Vector2.ZERO) as Vector2
+	if incoming_direction.length_squared() <= 0.000001 and knockback.length_squared() > 0.000001:
+		incoming_direction = -knockback.normalized()
+	var tags: Array[String] = []
+	for tag_value: Variant in snapshot.get("tags", []) as Array:
+		tags.append(str(tag_value))
+	var hostile_source_id := StringName(str(snapshot.get("hostile_source_id", "")))
+	var attack_generation := int(snapshot.get("attack_generation", 0))
+	return {
+		"runtime_frame": _runtime_frame,
+		"run_id": _run_id,
+		"damage_run_id": StringName(str(snapshot.get("run_id", ""))),
+		"run_revision": _owner_character_generation,
+		"owner_character_generation": _owner_character_generation,
+		"hostile_source_id": hostile_source_id,
+		"attack_generation": attack_generation,
+		"original_amount": float(snapshot.get("amount", 0.0)),
+		"tags": tags,
+		"facing_direction": _last_move_direction,
+		"incoming_direction": incoming_direction,
+		"source_kind": (
+			&"enemy"
+			if hostile_source_id != &"" and attack_generation > 0 and not tags.has("self_cost")
+			else &"other"
+		),
+	}
 
 
 func _planned_defense_weapon_id(decision: Dictionary) -> StringName:
@@ -322,6 +699,250 @@ func _planned_defense_weapon_id(decision: Dictionary) -> StringName:
 	if typeof(weapon_id_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
 		return &""
 	return StringName(str(weapon_id_value))
+
+
+func _restore_character_coordinator_pair(
+	coordinator_snapshot: Dictionary,
+	action_snapshot: Dictionary
+) -> bool:
+	return (
+		character_action_coordinator != null
+		and character_action_coordinator.has_method("restore_snapshot")
+		and character_action_coordinator.has_method("restore_action_snapshot")
+		and bool(character_action_coordinator.call(
+			"restore_snapshot",
+			coordinator_snapshot.duplicate(true)
+		))
+		and bool(character_action_coordinator.call(
+			"restore_action_snapshot",
+			action_snapshot.duplicate(true)
+		))
+	)
+
+
+func _apply_character_result_events(result: Dictionary) -> bool:
+	var events_value: Variant = result.get("events", [])
+	if not events_value is Array:
+		return false
+	for event_value: Variant in events_value as Array:
+		if not event_value is Dictionary or not _apply_character_event(event_value as Dictionary):
+			return false
+	return true
+
+
+func apply_character_runtime_events(events: Array) -> bool:
+	for event_value: Variant in events:
+		if not event_value is Dictionary or not _apply_character_event(event_value as Dictionary):
+			return false
+	return true
+
+
+func character_time_action_participant_snapshot() -> Dictionary:
+	if (
+		character_action_coordinator == null
+		or not character_action_coordinator.has_method("snapshot")
+		or not character_action_coordinator.has_method("action_snapshot")
+		or health == null
+		or not health.has_method("runtime_state_snapshot")
+	):
+		return {}
+	var coordinator_value: Variant = character_action_coordinator.call("snapshot")
+	var action_value: Variant = character_action_coordinator.call("action_snapshot")
+	var health_value: Variant = health.call("runtime_state_snapshot")
+	if (
+		not coordinator_value is Dictionary
+		or not action_value is Dictionary
+		or not health_value is Dictionary
+	):
+		return {}
+	return {
+		"character": (coordinator_value as Dictionary).duplicate(true),
+		"character_action": (action_value as Dictionary).duplicate(true),
+		"health": (health_value as Dictionary).duplicate(true),
+	}
+
+
+func restore_character_time_action_participant_snapshot(value: Dictionary) -> bool:
+	if (
+		value.size() != 3
+		or not value.get("character") is Dictionary
+		or not value.get("character_action") is Dictionary
+		or not value.get("health") is Dictionary
+	):
+		return false
+	var before := character_time_action_participant_snapshot()
+	if before.is_empty():
+		return false
+	if before == value:
+		return true
+	var character_ok := _restore_character_coordinator_pair(
+		(value["character"] as Dictionary).duplicate(true),
+		(value["character_action"] as Dictionary).duplicate(true)
+	)
+	var health_ok := bool(health.call(
+		"restore_replay_snapshot",
+		(value["health"] as Dictionary).duplicate(true)
+	))
+	if character_ok and health_ok and character_time_action_participant_snapshot() == value:
+		return true
+	_restore_character_coordinator_pair(
+		(before["character"] as Dictionary).duplicate(true),
+		(before["character_action"] as Dictionary).duplicate(true)
+	)
+	health.call("restore_replay_snapshot", (before["health"] as Dictionary).duplicate(true))
+	return false
+
+
+func plan_character_time_action(context: Dictionary) -> Dictionary:
+	if (
+		character_action_coordinator == null
+		or not character_action_coordinator.has_method("before_time_skill")
+	):
+		return {"ok": true, "decision": {}}
+	var before := character_action_coordinator.call("snapshot") as Dictionary
+	var action_before := character_action_coordinator.call("action_snapshot") as Dictionary
+	var result_value: Variant = character_action_coordinator.call(
+		"before_time_skill",
+		context.duplicate(true)
+	)
+	if not result_value is Dictionary or not bool((result_value as Dictionary).get("ok", false)):
+		_restore_character_coordinator_pair(before, action_before)
+		return {"ok": false, "decision": {}}
+	var after := character_action_coordinator.call("snapshot") as Dictionary
+	var action_after := character_action_coordinator.call("action_snapshot") as Dictionary
+	if after != before or action_after != action_before:
+		_restore_character_coordinator_pair(before, action_before)
+		return {"ok": false, "decision": {}}
+	var result_context := (result_value as Dictionary).get("context", {}) as Dictionary
+	return {
+		"ok": true,
+		"decision": (result_context.get("decision", {}) as Dictionary).duplicate(true),
+	}
+
+
+func commit_character_time_action(context: Dictionary) -> bool:
+	if (
+		character_action_coordinator == null
+		or not character_action_coordinator.has_method("after_time_skill")
+	):
+		return true
+	var result_value: Variant = character_action_coordinator.call(
+		"after_time_skill",
+		context.duplicate(true)
+	)
+	return (
+		result_value is Dictionary
+		and bool((result_value as Dictionary).get("ok", false))
+		and _apply_character_result_events(result_value as Dictionary)
+	)
+
+
+func _apply_character_event(event: Dictionary) -> bool:
+	var event_id := StringName(str(event.get("event_id", "")))
+	var context_value: Variant = event.get("context", {})
+	if event_id == &"" or not context_value is Dictionary:
+		return false
+	var context := context_value as Dictionary
+	match event_id:
+		&"time_energy_spend_requested":
+			var amount := float(context.get("amount", -1.0))
+			if not is_finite(amount) or amount < 0.0 or time_manager == null:
+				return false
+			var resource_state_value: Variant = time_manager.call("resource_state", &"time_energy")
+			if not resource_state_value is Dictionary:
+				return false
+			var resource_state := resource_state_value as Dictionary
+			var spend_value: Variant = time_manager.call(
+				"try_spend_resource",
+				&"time_energy",
+				amount,
+				int(resource_state.get("revision", 0)),
+				StringName(str(context.get("reason", event_id)))
+			)
+			return spend_value is Dictionary and bool((spend_value as Dictionary).get("ok", false))
+		&"time_energy_restore_requested":
+			var amount := float(context.get("amount", -1.0))
+			if not is_finite(amount) or amount < 0.0 or time_manager == null:
+				return false
+			time_manager.call("restore_energy", amount)
+			return true
+		&"health_restore_requested":
+			var amount := float(context.get("amount", -1.0))
+			if not is_finite(amount) or amount < 0.0 or health == null:
+				return false
+			health.call("heal", amount)
+			return true
+		&"irreversible_health_loss_requested":
+			var amount := float(context.get("amount", -1.0))
+			var source_token := int(context.get("source_token", 0))
+			var source_generation := int(context.get("source_generation", 0))
+			var reason := StringName(str(context.get("reason", event_id)))
+			if (
+				not is_finite(amount)
+				or amount <= 0.0
+				or source_token <= 0
+				or source_generation <= 0
+				or reason == &""
+				or health == null
+				or not health.has_method("lose_health_irreversible")
+			):
+				return false
+			var resolution_value: Variant = health.call(
+				"lose_health_irreversible",
+				amount,
+				reason,
+				source_token,
+				source_generation,
+				_run_id
+			)
+			return (
+				resolution_value is RefCounted
+				and not bool((resolution_value as RefCounted).call("is_prevented"))
+			)
+		&"waypoint_recall_requested":
+			var target_value: Variant = context.get("target_position")
+			var heal_amount := float(context.get("heal_amount", -1.0))
+			if (
+				not target_value is Vector2
+				or not is_finite((target_value as Vector2).x)
+				or not is_finite((target_value as Vector2).y)
+				or not is_finite(heal_amount)
+				or heal_amount < 0.0
+				or health == null
+			):
+				return false
+			global_position = target_value as Vector2
+			health.call("heal", heal_amount)
+			return true
+		&"world_payload_requested":
+			var descriptor_value: Variant = context.get("descriptor")
+			if not descriptor_value is Dictionary or world_payload_authority == null:
+				return false
+			var committed_value: Variant = world_payload_authority.call(
+				"commit_payload",
+				(descriptor_value as Dictionary).duplicate(true)
+			)
+			return committed_value is Dictionary and bool((committed_value as Dictionary).get("ok", false))
+		&"time_cooldown_reduction_requested":
+			if time_manager == null or not time_manager.has_method(
+				"reduce_longer_equipped_cooldown_frames"
+			):
+				return false
+			return bool(time_manager.call(
+				"reduce_longer_equipped_cooldown_frames",
+				(context.get("equipped_time_abilities", []) as Array).duplicate(),
+				int(context.get("amount_frames", 0))
+			))
+		&"boss_exposure_extension_requested":
+			if time_manager == null or not time_manager.has_method("extend_boss_exposure_frames"):
+				return false
+			return bool(time_manager.call(
+				"extend_boss_exposure_frames",
+				int(context.get("stop_generation", 0)),
+				int(context.get("amount_frames", 0))
+			))
+		_:
+			return true
 
 
 func _reset_weapon_adapters() -> void:
@@ -422,6 +1043,13 @@ func _ready() -> void:
 	if not configure_run(&"standalone"):
 		push_error("Player run identity configuration failed")
 		return
+	for handler_id: StringName in CHARACTER_WORLD_PAYLOAD_HANDLERS:
+		if not world_payload_authority.register_factory(
+			handler_id,
+			Callable(self, "_spawn_character_world_payload")
+		):
+			push_error("WorldPayloadAuthority rejected Character payload factory %s" % handler_id)
+			return
 	_apply_stats_to_components(true)
 	configure_loadout(DEFAULT_LOADOUT_CONFIG)
 	health.damaged.connect(_on_damaged)
@@ -446,6 +1074,21 @@ func _ready() -> void:
 		gauntlets_weapon.payload_result_reported.connect(_on_gauntlets_payload_result_reported)
 	if not EventBus.hit_confirmed.is_connected(_on_weapon_replay_hit_confirmed):
 		EventBus.hit_confirmed.connect(_on_weapon_replay_hit_confirmed)
+	if not EventBus.room_started.is_connected(_on_character_room_started):
+		EventBus.room_started.connect(_on_character_room_started)
+	if not EventBus.room_cleared.is_connected(_on_character_room_cleared):
+		EventBus.room_cleared.connect(_on_character_room_cleared)
+
+
+func _spawn_character_world_payload(descriptor: Dictionary) -> Node:
+	var handler_id := StringName(str(descriptor.get("handler_id", "")))
+	if handler_id not in CHARACTER_WORLD_PAYLOAD_HANDLERS:
+		return null
+	var payload := CharacterWorldPayloadNode.new()
+	if not payload.configure(descriptor, self):
+		payload.free()
+		return null
+	return payload
 
 
 func _physics_process(_delta: float) -> void:
@@ -943,20 +1586,39 @@ func _submit_character_frame_intent(
 	frame_intents: Dictionary
 ) -> Dictionary:
 	var edge := StringName(str(intent.get("edge", "")))
+	var mode := StringName(str(intent.get("mode", "press")))
 	if edge in [&"held", &"released"] and not _character_input_owner_is_current():
 		if edge == &"released":
 			_clear_character_input_owner()
 		return _frame_attempt_result(false, &"unowned_edge")
+	if edge == &"held" and _character_input_owner_is_pending():
+		return _frame_attempt_result(true, &"hold_pending")
 	if character_action_coordinator == null or not character_action_coordinator.has_method(
 		"try_character_skill"
 	):
 		if edge == &"released":
 			_clear_character_input_owner()
 		return _frame_attempt_result(false)
+	var coordinator_before: Dictionary = {}
+	var action_before: Dictionary = {}
+	if (
+		character_action_coordinator.has_method("snapshot")
+		and character_action_coordinator.has_method("action_snapshot")
+	):
+		coordinator_before = character_action_coordinator.call("snapshot")
+		action_before = character_action_coordinator.call("action_snapshot")
 	var context := {
 		"run_id": str(_run_id),
+		"run_revision": _owner_character_generation,
 		"owner_character_generation": _owner_character_generation,
 		"runtime_frame": _runtime_frame,
+		"alive": health != null and bool(health.call("is_alive")),
+		"position": global_position,
+		"current_hp": float(health.get("current_hp")) if health != null else 0.0,
+		"maximum_hp": float(health.get("max_hp")) if health != null else 0.0,
+		"attack": float(stats.attack) if stats != null else 0.0,
+		"aim_direction": _last_weapon_aim_direction.normalized(),
+		"time_energy": float(time_manager.get("energy")) if time_manager != null else 0.0,
 		"movement": frame_intents.get("movement", Vector2.ZERO),
 		"aim": frame_intents.get("aim", _last_weapon_aim_direction),
 		"owner_token": int(_character_skill_input_owner.get("token", 0)),
@@ -969,7 +1631,24 @@ func _submit_character_frame_intent(
 	)
 	var result := (result_value as Dictionary) if result_value is Dictionary else {}
 	var accepted := bool(result.get("ok", false))
-	if accepted and edge == &"pressed" and StringName(str(intent.get("mode", "press"))) == &"hold":
+	if not accepted and edge == &"pressed" and mode == &"hold":
+		var pending_generation := int(action_before.get("generation", 0))
+		var pending_token := int(action_before.get("next_token", 0))
+		if pending_generation > 0 and pending_token > 0:
+			_character_skill_input_owner = {
+				"generation": pending_generation,
+				"token": pending_token,
+			}
+			return _frame_attempt_result(true, &"hold_pending")
+	if accepted and not _apply_character_result_events(result):
+		if (
+			coordinator_before.is_empty()
+			or action_before.is_empty()
+			or not _restore_character_coordinator_pair(coordinator_before, action_before)
+		):
+			set_physics_process(false)
+		return _frame_attempt_result(false, &"character_event_rejected")
+	if accepted and edge == &"pressed" and mode == &"hold":
 		var result_context := result.get("context", {}) as Dictionary
 		var generation := int(result_context.get("generation", 0))
 		var token := int(result_context.get("token", 0))
@@ -1058,14 +1737,37 @@ func _character_input_owner_is_current() -> bool:
 	if (
 		_character_skill_input_owner.is_empty()
 		or character_action_coordinator == null
-		or not character_action_coordinator.has_method("owns_action")
 	):
 		return false
-	return bool(character_action_coordinator.call(
-		"owns_action",
-		int(_character_skill_input_owner.get("generation", 0)),
-		int(_character_skill_input_owner.get("token", 0))
-	))
+	var generation := int(_character_skill_input_owner.get("generation", 0))
+	var token := int(_character_skill_input_owner.get("token", 0))
+	if (
+		character_action_coordinator.has_method("owns_action")
+		and bool(character_action_coordinator.call("owns_action", generation, token))
+	):
+		return true
+	return _character_input_owner_is_pending()
+
+
+func _character_input_owner_is_pending() -> bool:
+	if (
+		_character_skill_input_owner.is_empty()
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("action_snapshot")
+	):
+		return false
+	var action_value: Variant = character_action_coordinator.call("action_snapshot")
+	if not action_value is Dictionary:
+		return false
+	var action := action_value as Dictionary
+	return (
+		int(action.get("generation", 0))
+		== int(_character_skill_input_owner.get("generation", 0))
+		and int(action.get("next_token", 0))
+		== int(_character_skill_input_owner.get("token", 0))
+		and int(action.get("current_token", 0)) == 0
+		and (action.get("committed_plan", {}) as Dictionary).is_empty()
+	)
 
 
 func _clear_character_input_owner() -> void:
@@ -1611,8 +2313,10 @@ func reset_runtime_state() -> bool:
 	_weapon_action_reward_claims.clear()
 	_weapon_action_ids_by_token.clear()
 	_weapon_action_generations_by_token.clear()
+	_weapon_action_mastery_contexts_by_token.clear()
 	_weapon_action_token_order.clear()
 	_weapon_hit_fact_claims.clear()
+	_weapon_mastery_target_ids_by_token.clear()
 	_weapon_resource_fact_state.clear()
 	_weapon_replay_events.clear()
 	_weapon_replay_capture_sequence = 0
@@ -1717,7 +2421,11 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 		_runtime_frame,
 		{
 			"run_id": str(_run_id),
+			"run_revision": _owner_character_generation,
 			"owner_character_generation": _owner_character_generation,
+			"alive": health != null and bool(health.call("is_alive")),
+			"position": global_position,
+			"time_energy": float(time_manager.get("energy")) if time_manager != null else 0.0,
 			"frame_intents": normalized_frame_intents.duplicate(true),
 		}
 	)
@@ -1767,6 +2475,11 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 		return _reject_fixed_frame(
 			frame_before,
 			"CharacterActionCoordinator failed to commit runtime frame %d" % _runtime_frame
+		)
+	if not _apply_character_result_events(character_commit_value as Dictionary):
+		return _reject_fixed_frame(
+			frame_before,
+			"Character runtime event settlement failed at frame %d" % _runtime_frame
 		)
 	if world_payload_authority != null and world_payload_authority.has_method("advance_frame"):
 		var payload_advance_value: Variant = world_payload_authority.call(
@@ -1958,8 +2671,10 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 			"action_reward_claims": _weapon_action_reward_claims.duplicate(true),
 			"action_ids_by_token": _weapon_action_ids_by_token.duplicate(true),
 			"action_generations_by_token": _weapon_action_generations_by_token.duplicate(true),
+			"action_mastery_contexts_by_token": _weapon_action_mastery_contexts_by_token.duplicate(true),
 			"action_token_order": _weapon_action_token_order.duplicate(),
 			"hit_fact_claims": _weapon_hit_fact_claims.duplicate(true),
+			"mastery_target_ids_by_token": _weapon_mastery_target_ids_by_token.duplicate(true),
 			"resource_fact_state": _weapon_resource_fact_state.duplicate(true),
 			"next_token_floor": _next_weapon_action_token_floor,
 			"combo_timeout_frames": _weapon_combo_timeout_frames,
@@ -2408,17 +3123,37 @@ func _restore_rewind_run_configuration_snapshot(value: Dictionary) -> bool:
 
 
 func get_action_movement_multiplier() -> float:
+	var character_multiplier := _character_movement_multiplier()
 	if weapon_action_coordinator != null and weapon_action_coordinator.phase_name() != &"READY":
-		return weapon_action_coordinator.movement_multiplier()
+		return weapon_action_coordinator.movement_multiplier() * character_multiplier
 	match action_state.current_state:
 		PlayerActionStateScript.State.DASH:
 			return float(_mobility_profile["dash_speed"]) / maxf(1.0, float(stats.move_speed))
 		PlayerActionStateScript.State.TIME_CAST:
-			return TIME_CAST_MOVEMENT_MULTIPLIER
+			return TIME_CAST_MOVEMENT_MULTIPLIER * character_multiplier
 		PlayerActionStateScript.State.HITSTUN, PlayerActionStateScript.State.DEAD:
 			return 0.0
 		_:
-			return 1.0
+			return character_multiplier
+
+
+func _character_movement_multiplier() -> float:
+	if character_runtime == null or not character_runtime.has_method("presentation_snapshot"):
+		return 1.0
+	var presentation_value: Variant = character_runtime.call("presentation_snapshot")
+	if not presentation_value is Dictionary:
+		return 1.0
+	var multiplier_value: Variant = (presentation_value as Dictionary).get(
+		"movement_multiplier",
+		1.0
+	)
+	if (
+		typeof(multiplier_value) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(multiplier_value))
+		or float(multiplier_value) < 0.0
+	):
+		return 1.0
+	return float(multiplier_value)
 
 
 func apply_hitstun_frames(duration_frames: int) -> bool:
@@ -2872,8 +3607,10 @@ func full_player_replay_snapshot() -> Dictionary:
 			"action_reward_claims": _weapon_action_reward_claims.duplicate(true),
 			"action_ids_by_token": _weapon_action_ids_by_token.duplicate(true),
 			"action_generations_by_token": _weapon_action_generations_by_token.duplicate(true),
+			"action_mastery_contexts_by_token": _weapon_action_mastery_contexts_by_token.duplicate(true),
 			"action_token_order": _weapon_action_token_order.duplicate(),
 			"hit_fact_claims": _weapon_hit_fact_claims.duplicate(true),
+			"mastery_target_ids_by_token": _weapon_mastery_target_ids_by_token.duplicate(true),
 			"resource_fact_state": _weapon_resource_fact_state.duplicate(true),
 			"next_token_floor": _next_weapon_action_token_floor,
 			"combo_timeout_frames": _weapon_combo_timeout_frames,
@@ -3159,8 +3896,10 @@ func weapon_replay_snapshot() -> Dictionary:
 			"action_reward_claims": _weapon_action_reward_claims.duplicate(true),
 			"action_ids_by_token": _weapon_action_ids_by_token.duplicate(true),
 			"action_generations_by_token": _weapon_action_generations_by_token.duplicate(true),
+			"action_mastery_contexts_by_token": _weapon_action_mastery_contexts_by_token.duplicate(true),
 			"action_token_order": _weapon_action_token_order.duplicate(),
 			"hit_fact_claims": _weapon_hit_fact_claims.duplicate(true),
+			"mastery_target_ids_by_token": _weapon_mastery_target_ids_by_token.duplicate(true),
 			"resource_fact_state": _weapon_resource_fact_state.duplicate(true),
 			"next_token_floor": _next_weapon_action_token_floor,
 			"combo_timeout_frames": _weapon_combo_timeout_frames,
@@ -6028,8 +6767,10 @@ func _valid_weapon_replay_player_state(state: Dictionary, coordinator: Dictionar
 		not state.get("action_reward_claims") is Dictionary
 		or not state.get("action_ids_by_token") is Dictionary
 		or not state.get("action_generations_by_token") is Dictionary
+		or not state.get("action_mastery_contexts_by_token") is Dictionary
 		or not state.get("action_token_order") is Array
 		or not state.get("hit_fact_claims") is Dictionary
+		or not state.get("mastery_target_ids_by_token") is Dictionary
 		or not state.get("resource_fact_state") is Dictionary
 		or typeof(state.get("next_token_floor")) != TYPE_INT
 		or int(state["next_token_floor"]) <= 0
@@ -6045,9 +6786,12 @@ func _valid_weapon_replay_player_state(state: Dictionary, coordinator: Dictionar
 		return false
 	var action_ids := state["action_ids_by_token"] as Dictionary
 	var generations := state["action_generations_by_token"] as Dictionary
+	var mastery_contexts := state["action_mastery_contexts_by_token"] as Dictionary
+	var mastery_targets := state["mastery_target_ids_by_token"] as Dictionary
 	var token_order := state["action_token_order"] as Array
 	if (
 		action_ids.size() != generations.size()
+		or action_ids.size() != mastery_contexts.size()
 		or action_ids.size() != token_order.size()
 		or token_order.size() > MAX_TRACKED_WEAPON_FACT_TOKENS
 	):
@@ -6067,6 +6811,7 @@ func _valid_weapon_replay_player_state(state: Dictionary, coordinator: Dictionar
 			or seen_tokens.has(token)
 			or not action_ids.has(token)
 			or not generations.has(token)
+			or not mastery_contexts.has(token)
 		):
 			return false
 		if (
@@ -6074,6 +6819,8 @@ func _valid_weapon_replay_player_state(state: Dictionary, coordinator: Dictionar
 			or str(action_ids[token]).is_empty()
 			or typeof(generations[token]) != TYPE_INT
 			or int(generations[token]) <= 0
+			or not mastery_contexts[token] is Dictionary
+			or not ReplaySafeValueScript.is_supported(mastery_contexts[token])
 			or int(generations[token]) < previous_generation
 			or int(generations[token]) > coordinator_generation
 		):
@@ -6081,6 +6828,17 @@ func _valid_weapon_replay_player_state(state: Dictionary, coordinator: Dictionar
 		seen_tokens[token] = true
 		previous_token = token
 		previous_generation = int(generations[token])
+	for token_value: Variant in mastery_targets.keys():
+		if typeof(token_value) != TYPE_INT or not action_ids.has(int(token_value)):
+			return false
+		var targets_value: Variant = mastery_targets[token_value]
+		if not targets_value is Array:
+			return false
+		var previous_target := 0
+		for target_value: Variant in targets_value as Array:
+			if typeof(target_value) != TYPE_INT or int(target_value) <= previous_target:
+				return false
+			previous_target = int(target_value)
 	var coordinator_token := int(coordinator.get("token", 0))
 	if coordinator_token > 0 and seen_tokens.has(coordinator_token):
 		var plan := coordinator.get("plan", {}) as Dictionary
@@ -6140,10 +6898,16 @@ func _install_player_weapon_replay_state(state: Dictionary) -> void:
 	_weapon_action_reward_claims = (state.get("action_reward_claims", {}) as Dictionary).duplicate(true)
 	_weapon_action_ids_by_token = (state.get("action_ids_by_token", {}) as Dictionary).duplicate(true)
 	_weapon_action_generations_by_token = (state.get("action_generations_by_token", {}) as Dictionary).duplicate(true)
+	_weapon_action_mastery_contexts_by_token = (
+		state.get("action_mastery_contexts_by_token", {}) as Dictionary
+	).duplicate(true)
 	_weapon_action_token_order.clear()
 	for token_value: Variant in state.get("action_token_order", []):
 		_weapon_action_token_order.append(int(token_value))
 	_weapon_hit_fact_claims = (state.get("hit_fact_claims", {}) as Dictionary).duplicate(true)
+	_weapon_mastery_target_ids_by_token = (
+		state.get("mastery_target_ids_by_token", {}) as Dictionary
+	).duplicate(true)
 	_weapon_resource_fact_state = (state.get("resource_fact_state", {}) as Dictionary).duplicate(true)
 	_next_weapon_action_token_floor = int(state.get("next_token_floor", 1))
 	_weapon_combo_timeout_frames = int(state.get("combo_timeout_frames", 0))
@@ -6227,8 +6991,10 @@ func _fail_closed_weapon_replay_restore(reason: StringName) -> void:
 	_weapon_action_reward_claims.clear()
 	_weapon_action_ids_by_token.clear()
 	_weapon_action_generations_by_token.clear()
+	_weapon_action_mastery_contexts_by_token.clear()
 	_weapon_action_token_order.clear()
 	_weapon_hit_fact_claims.clear()
+	_weapon_mastery_target_ids_by_token.clear()
 	_weapon_resource_fact_state.clear()
 	_weapon_combo_timeout_frames = 0
 	_weapon_replay_events.clear()
@@ -6752,6 +7518,7 @@ func _submit_normalized_weapon_intent_with_context(
 	if not bool(result.get("ok", false)):
 		_reset_weapon_intent_latch(intent)
 		return false
+	_confirm_live_weapon_intent_mastery(result)
 	if record_replay_event:
 		_record_weapon_replay_event(submitted_intent, submission_context)
 	return true
@@ -7048,7 +7815,43 @@ func character_presentation_snapshot() -> Dictionary:
 	if character_runtime == null:
 		return {}
 	var value: Variant = character_runtime.call("presentation_snapshot")
-	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+	if not value is Dictionary:
+		return {}
+	var result := (value as Dictionary).duplicate(true)
+	var runtime_value: Variant = character_runtime.call("snapshot")
+	if not runtime_value is Dictionary:
+		return result
+	var strategy := (runtime_value as Dictionary).get("strategy", {}) as Dictionary
+	var runtime_kind := StringName(str(strategy.get("runtime_kind", "")))
+	match runtime_kind:
+		&"wanderer":
+			result["path_progress"] = int(strategy.get("path_progress", 0))
+			result["wayfarer_active"] = int(strategy.get("wayfarer_until_frame", -1)) > _runtime_frame
+			result["wayfarer_until_frame"] = int(strategy.get("wayfarer_until_frame", -1))
+			result["anchor_active"] = bool(strategy.get("anchor_active", false))
+			result["anchor_expires_frame"] = int(strategy.get("anchor_expires_frame", -1))
+			result["skill_cooldown_until_frame"] = int(strategy.get("skill_cooldown_until_frame", -1))
+		&"time_guardian":
+			var skill_action := strategy.get("skill_action", {}) as Dictionary
+			var fortress_until_frame := int(strategy.get("fortress_until_frame", -1))
+			var fortress_active := fortress_until_frame > _runtime_frame
+			result["guard_active"] = (
+				not skill_action.is_empty()
+				and not bool(skill_action.get("committed", false))
+			)
+			result["fortress_active"] = fortress_active
+			result["fortress_until_frame"] = fortress_until_frame
+			result["fortress_shockwave_armed"] = bool(strategy.get("fortress_shockwave_armed", false))
+			result["rebuke_active"] = int(strategy.get("rebuke_until_frame", -1)) > _runtime_frame
+			result["rebuke_until_frame"] = int(strategy.get("rebuke_until_frame", -1))
+			result["skill_cooldown_until_frame"] = int(strategy.get("skill_cooldown_until_frame", -1))
+			result["movement_multiplier"] = 1.0
+			if fortress_active and character_runtime.has_method("profile_snapshot"):
+				var profile := character_runtime.call("profile_snapshot") as Dictionary
+				var skill := profile.get("character_skill", {}) as Dictionary
+				var parameters := skill.get("parameters", {}) as Dictionary
+				result["movement_multiplier"] = float(parameters.get("movement_multiplier", 1.0))
+	return result
 
 
 func _assemble_character_runtime(config: Dictionary) -> Dictionary:
@@ -7389,15 +8192,32 @@ func _on_weapon_action_committed(
 			_next_weapon_action_token_floor,
 			token + 1
 		)
-	_track_weapon_action_token(token, action_id, int(context.get("action_generation", 0)))
+	var committed_plan: Dictionary = {}
 	if weapon_action_coordinator != null:
 		var coordinator_snapshot: Dictionary = weapon_action_coordinator.snapshot()
 		var plan_value: Variant = coordinator_snapshot.get("plan", {})
 		if plan_value is Dictionary:
+			committed_plan = (plan_value as Dictionary).duplicate(true)
 			_weapon_combo_timeout_frames = maxi(
 				0,
 				int((plan_value as Dictionary).get("combo_reset_frames", 0))
 			)
+		_settle_character_weapon_action(
+			weapon_id,
+			action_id,
+			token,
+			context,
+			plan_value as Dictionary,
+			coordinator_snapshot
+		)
+	_track_weapon_action_token(
+		token,
+		action_id,
+		int(context.get("action_generation", 0)),
+		context,
+		committed_plan
+	)
+	_confirm_weapon_action_commit_mastery(weapon_id, action_id, token, context, committed_plan)
 	EventBus.weapon_action_committed.emit(
 		weapon_id,
 		action_id,
@@ -7407,18 +8227,93 @@ func _on_weapon_action_committed(
 	_sync_weapon_resource_facts(&"action_committed")
 
 
-func _track_weapon_action_token(token: int, action_id: StringName, generation: int) -> void:
+func _settle_character_weapon_action(
+	weapon_id: StringName,
+	action_id: StringName,
+	token: int,
+	context: Dictionary,
+	plan: Dictionary,
+	coordinator_snapshot: Dictionary
+) -> void:
+	if (
+		character_action_coordinator == null
+		or not character_action_coordinator.has_method("on_weapon_action_committed")
+		or token <= 0
+		or weapon_id == &""
+		or action_id == &""
+	):
+		return
+	var action_generation := int(context.get(
+		"action_generation",
+		coordinator_snapshot.get("generation", 0)
+	))
+	if action_generation <= 0:
+		return
+	var character_before: Dictionary = character_action_coordinator.call("snapshot")
+	var action_before: Dictionary = character_action_coordinator.call("action_snapshot")
+	if character_before.is_empty() or action_before.is_empty():
+		set_physics_process(false)
+		push_error("Character weapon-action settlement could not capture rollback state")
+		return
+	var character_context := context.duplicate(true)
+	character_context["runtime_frame"] = _runtime_frame
+	character_context["run_id"] = _run_id
+	character_context["run_revision"] = _owner_character_generation
+	character_context["owner_character_generation"] = _owner_character_generation
+	character_context["generation"] = action_generation
+	character_context["action_token"] = token
+	character_context["weapon_id"] = weapon_id
+	character_context["action_id"] = action_id
+	character_context["position"] = global_position
+	character_context["plan"] = plan.duplicate(true)
+	character_context["approved_payload_descriptors"] = (
+		plan.get("payload_descriptors", plan.get(
+			"approved_payload_descriptors",
+			plan.get("payloads", [])
+		)) as Array
+	).duplicate(true)
+	character_context["full_charge"] = bool(context.get("full_charge", false)) or (
+		str(context.get("charge_tier", "")) == "full"
+		or action_id in [&"charged_slash", &"primordial_edge", &"charged_heavy"]
+	)
+	var result_value: Variant = character_action_coordinator.call(
+		"on_weapon_action_committed",
+		character_context
+	)
+	if (
+		not result_value is Dictionary
+		or not bool((result_value as Dictionary).get("ok", false))
+		or not _apply_character_result_events(result_value as Dictionary)
+	):
+		if not _restore_character_coordinator_pair(character_before, action_before):
+			set_physics_process(false)
+			push_error("Character weapon-action rollback failed closed")
+
+
+func _track_weapon_action_token(
+	token: int,
+	action_id: StringName,
+	generation: int,
+	context: Dictionary = {},
+	plan: Dictionary = {}
+) -> void:
 	if token <= 0 or action_id == &"" or generation <= 0:
 		return
 	if not _weapon_action_ids_by_token.has(token):
 		_weapon_action_token_order.append(token)
 	_weapon_action_ids_by_token[token] = action_id
 	_weapon_action_generations_by_token[token] = generation
+	_weapon_action_mastery_contexts_by_token[token] = {
+		"context": context.duplicate(true),
+		"plan": plan.duplicate(true),
+	}
 	while _weapon_action_token_order.size() > MAX_TRACKED_WEAPON_FACT_TOKENS:
 		var expired_token: int = int(_weapon_action_token_order.pop_front())
 		_weapon_action_ids_by_token.erase(expired_token)
 		_weapon_action_generations_by_token.erase(expired_token)
+		_weapon_action_mastery_contexts_by_token.erase(expired_token)
 		_weapon_hit_fact_claims.erase(expired_token)
+		_weapon_mastery_target_ids_by_token.erase(expired_token)
 		_clear_weapon_action_reward_claims(expired_token)
 
 
@@ -7792,6 +8687,7 @@ func _on_staff_payload_result_reported(
 ) -> void:
 	if loadout_runtime == null or not loadout_runtime.has_weapon(&"staff"):
 		return
+	_confirm_weapon_payload_mastery(&"staff", action_token, generation, result)
 	_sync_weapon_resource_facts(&"payload_result")
 	_record_weapon_replay_payload_result(action_token, generation, result)
 
@@ -7803,7 +8699,494 @@ func _on_gauntlets_payload_result_reported(
 ) -> void:
 	if loadout_runtime == null or not loadout_runtime.has_weapon(&"gauntlets"):
 		return
+	_confirm_weapon_payload_mastery(&"gauntlets", action_token, generation, result)
 	_record_weapon_replay_payload_result(action_token, generation, result)
+
+
+func _confirm_weapon_action_commit_mastery(
+	weapon_id: StringName,
+	action_id: StringName,
+	action_token: int,
+	context: Dictionary,
+	plan: Dictionary
+) -> void:
+	if (
+		weapon_id == &"gun"
+		and action_id == &"reload"
+		and bool(context.get("perfect_reload", false))
+	):
+		_confirm_weapon_mastery(
+			weapon_id,
+			&"gun_perfect_reload",
+			action_id,
+			action_token,
+			0,
+			{"confirmed": true, "mastery_eligible": true},
+			{
+				"reload_frame": int(context.get("reload_frame", -1)),
+				"plan": plan.duplicate(true),
+			}
+		)
+
+
+func _confirm_live_weapon_intent_mastery(result: Dictionary) -> void:
+	if loadout_runtime == null or not loadout_runtime.has_weapon(&"gun"):
+		return
+	var result_context := result.get("context", {}) as Dictionary
+	if not bool(result_context.get("perfect_reload", false)):
+		return
+	var coordinator_snapshot: Dictionary = weapon_action_coordinator.call("snapshot")
+	var action_token := int(result.get("token", coordinator_snapshot.get("token", 0)))
+	var plan := coordinator_snapshot.get("plan", {}) as Dictionary
+	if action_token <= 0 or StringName(str(plan.get("action_id", ""))) != &"reload":
+		return
+	_confirm_weapon_mastery(
+		&"gun",
+		&"gun_perfect_reload",
+		&"reload",
+		action_token,
+		0,
+		{"confirmed": true, "mastery_eligible": true},
+		{
+			"reload_frame": int(result_context.get("reload_frame", -1)),
+			"perfect_reload": true,
+		}
+	)
+
+
+func _confirm_sword_guard_mastery(
+	weapon_decision: Dictionary,
+	resolution: RefCounted
+) -> void:
+	if (
+		resolution == null
+		or StringName(str(weapon_decision.get("guard_kind", ""))) != &"sword_perfect"
+		or not bool(weapon_decision.get("prevented", false))
+		or not bool(resolution.call("is_prevented"))
+		or weapon_action_coordinator == null
+	):
+		return
+	var coordinator_snapshot: Dictionary = weapon_action_coordinator.call("snapshot")
+	var action_token := int(coordinator_snapshot.get("token", 0))
+	var plan := coordinator_snapshot.get("plan", {}) as Dictionary
+	var action_id := StringName(str(plan.get("action_id", "")))
+	if action_token <= 0 or action_id not in [&"guard", &"sword_guard"]:
+		return
+	_confirm_weapon_mastery(
+		&"sword",
+		&"sword_perfect_guard",
+		action_id,
+		action_token,
+		0,
+		{"confirmed": true, "mastery_eligible": true},
+		{
+			"guard_kind": &"sword_perfect",
+			"prevented": true,
+			"blocked_damage": float((
+				weapon_decision.get("commit_context", {}) as Dictionary
+			).get("blocked_damage", 0.0)),
+		}
+	)
+
+
+func _confirm_weapon_hit_mastery(
+	damage_info: RefCounted,
+	target: Node,
+	final_amount: float,
+	action_token: int,
+	weapon_action_generation: int
+) -> void:
+	if not _weapon_action_ids_by_token.has(action_token):
+		return
+	var action_id := StringName(str(_weapon_action_ids_by_token[action_token]))
+	var source := _weapon_action_mastery_context(action_token)
+	var plan := source.get("plan", {}) as Dictionary
+	var committed_context := source.get("context", {}) as Dictionary
+	var tags: Array[String] = []
+	for tag_value: Variant in damage_info.get("tags") as Array:
+		tags.append(str(tag_value))
+	var payload_result := {
+		"confirmed": true,
+		"hit_confirmed": true,
+		"mastery_eligible": true,
+		"is_echo": tags.has("non_recursive:echo") or tags.has("time:accelerate_echo"),
+		"recursive_echo": tags.has("recursive_echo"),
+		"tags": tags.duplicate(),
+	}
+	var target_id := _stable_weapon_mastery_target_id(target)
+	if target_id <= 0:
+		return
+	var weapon_id := StringName(str(loadout_runtime.weapon_id())) if loadout_runtime != null else &""
+	var mastery_id := StringName()
+	var semantic_context := {
+		"damage": final_amount,
+		"weapon_action_generation": weapon_action_generation,
+		"tags": tags.duplicate(),
+	}
+	match weapon_id:
+		&"sword":
+			if action_id == &"counter":
+				mastery_id = &"sword_counter_confirmed"
+			elif action_id == &"charged_slash" and (
+				bool(committed_context.get("full_charge", false))
+				or int(committed_context.get("held_frames", 0)) >= 30
+				or int(plan.get("held_frames", 0)) >= 30
+			):
+				mastery_id = &"sword_charged_commitment"
+		&"bow":
+			var full_charge := (
+				bool(committed_context.get("full_charge", false))
+				or str(committed_context.get("charge_tier", "")) == "full"
+				or bool((plan.get("payloads", [{}]) as Array)[0].get(
+					"parameters", {}
+				).get("full_charge", false))
+			)
+			if not full_charge:
+				return
+			var target_count := _record_weapon_mastery_target(action_token, target_id)
+			if _target_has_active_weakpoint(target, damage_info):
+				mastery_id = &"bow_full_charge_weakpoint"
+			elif target_count >= 2:
+				mastery_id = &"bow_full_charge_penetration"
+			semantic_context["distinct_target_count"] = target_count
+		&"gun":
+			var runtime_presentation := (
+				weapon_runtime.call("presentation_snapshot") as Dictionary
+				if weapon_runtime != null and weapon_runtime.has_method("presentation_snapshot")
+				else {}
+			)
+			if (
+				action_id in [&"normal_fire", &"aimed_fire"]
+				and int(plan.get("ammo_cost", 0)) > 0
+				and not bool(plan.get("time_load_active", false))
+				and int(runtime_presentation.get("ammo", -1)) == 0
+			):
+				mastery_id = &"gun_magazine_finisher"
+				semantic_context["ammo_after_commit"] = 0
+	if mastery_id == &"":
+		return
+	_confirm_weapon_mastery(
+		weapon_id,
+		mastery_id,
+		action_id,
+		action_token,
+		target_id,
+		payload_result,
+		semantic_context
+	)
+
+
+func _confirm_weapon_payload_mastery(
+	weapon_id: StringName,
+	action_token: int,
+	payload_generation: int,
+	result: Dictionary
+) -> void:
+	if (
+		action_token <= 0
+		or not _weapon_action_ids_by_token.has(action_token)
+		or int(_weapon_action_generations_by_token.get(action_token, 0)) <= 0
+		or bool(result.get("is_echo", false))
+		or bool(result.get("recursive_echo", false))
+		or not bool(result.get("hit_confirmed", result.get("hit", false)))
+	):
+		return
+	var action_id := StringName(str(_weapon_action_ids_by_token[action_token]))
+	var target_id := int(result.get("target_id", 0))
+	if target_id <= 0:
+		return
+	var mastery_id := StringName()
+	var semantic_context := {
+		"payload_generation": payload_generation,
+		"outcome_id": str(result.get("outcome_id", "")),
+	}
+	match weapon_id:
+		&"staff":
+			var combination_value: Variant = result.get("combination", {})
+			if combination_value is Dictionary and not (combination_value as Dictionary).is_empty():
+				mastery_id = &"staff_ordered_combination"
+				semantic_context["combo_id"] = str((combination_value as Dictionary).get("combo_id", ""))
+			elif action_id == &"planar_collapse" and _record_weapon_mastery_target(
+				action_token,
+				target_id
+			) >= 3:
+				mastery_id = &"staff_controlled_zone"
+				semantic_context["distinct_target_count"] = 3
+		&"gauntlets":
+			if action_id == &"dodge_counter":
+				mastery_id = &"gauntlets_dodge_counter"
+			elif action_id == &"punch_5":
+				mastery_id = &"gauntlets_chain_finisher"
+			else:
+				var combo_gain := int(result.get("combo_gain", 0))
+				var runtime_snapshot := (
+					weapon_runtime.call("snapshot") as Dictionary
+					if weapon_runtime != null and weapon_runtime.has_method("snapshot")
+					else {}
+				)
+				var combo_state := runtime_snapshot.get("combo_state", {}) as Dictionary
+				var combo_after := int(combo_state.get("combo_count", 0))
+				var combo_before := maxi(0, combo_after - maxi(0, combo_gain))
+				var threshold := 30 if combo_before < 30 and combo_after >= 30 else (
+					15 if combo_before < 15 and combo_after >= 15 else 0
+				)
+				if threshold > 0:
+					mastery_id = &"gauntlets_combo_threshold"
+					semantic_context["threshold"] = threshold
+					semantic_context["combo_before"] = combo_before
+					semantic_context["combo_after"] = combo_after
+	if mastery_id == &"":
+		return
+	_confirm_weapon_mastery(
+		weapon_id,
+		mastery_id,
+		action_id,
+		action_token,
+		target_id,
+		result,
+		semantic_context
+	)
+
+
+func _confirm_weapon_mastery(
+	weapon_id: StringName,
+	mastery_id: StringName,
+	action_id: StringName,
+	action_token: int,
+	target_id: int,
+	payload_result: Dictionary,
+	semantic_context: Dictionary
+) -> bool:
+	if (
+		weapon_runtime == null
+		or loadout_runtime == null
+		or loadout_runtime.weapon_id() != weapon_id
+		or not weapon_runtime.has_method("build_mastery_fact")
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("prepare_weapon_mastery")
+		or not character_action_coordinator.has_method("settle_prepared_weapon_mastery")
+		or not character_action_coordinator.has_method("abort_prepared_weapon_mastery")
+	):
+		return false
+	var fact_context := _weapon_mastery_context(action_token, semantic_context)
+	var fact_value: Variant = weapon_runtime.call(
+		"build_mastery_fact",
+		mastery_id,
+		action_id,
+		int(character_action_coordinator.call("generation")),
+		action_token,
+		target_id,
+		payload_result.duplicate(true),
+		fact_context
+	)
+	if not fact_value is Dictionary or (fact_value as Dictionary).is_empty():
+		return false
+	return _settle_weapon_mastery_fact(fact_value as Dictionary)
+
+
+func _settle_weapon_mastery_fact(fact: Dictionary) -> bool:
+	var external_before := _weapon_mastery_external_snapshot()
+	if external_before.is_empty():
+		return false
+	var prepared: Dictionary = character_action_coordinator.call(
+		"prepare_weapon_mastery",
+		fact.duplicate(true)
+	)
+	if not bool(prepared.get("ok", false)):
+		_discard_weapon_mastery_external_snapshot(external_before)
+		return false
+	var ticket_value: Variant = (prepared.get("context", {}) as Dictionary).get("ticket", {})
+	if not ticket_value is Dictionary:
+		_restore_weapon_mastery_external_snapshot(external_before)
+		return false
+	var ticket := (ticket_value as Dictionary).duplicate(true)
+	if not _apply_prepared_weapon_mastery_events(prepared.get("events", []) as Array):
+		var external_restored := _restore_weapon_mastery_external_snapshot(external_before)
+		var aborted := bool((character_action_coordinator.call(
+			"abort_prepared_weapon_mastery",
+			ticket
+		) as Dictionary).get("ok", false))
+		if not external_restored or not aborted:
+			set_physics_process(false)
+			push_error("Weapon mastery external-event rollback failed closed")
+		return false
+	var settled: Dictionary = character_action_coordinator.call(
+		"settle_prepared_weapon_mastery",
+		ticket
+	)
+	if bool(settled.get("ok", false)):
+		return _discard_weapon_mastery_external_snapshot(external_before)
+	var external_restored := _restore_weapon_mastery_external_snapshot(external_before)
+	var aborted := bool((character_action_coordinator.call(
+		"abort_prepared_weapon_mastery",
+		ticket
+	) as Dictionary).get("ok", false))
+	if not external_restored or not aborted:
+		set_physics_process(false)
+		push_error("Weapon mastery settlement rollback failed closed")
+	return false
+
+
+func _apply_prepared_weapon_mastery_events(events: Array) -> bool:
+	var boss_events: Array[Dictionary] = []
+	for event_value: Variant in events:
+		if not event_value is Dictionary:
+			return false
+		var event := event_value as Dictionary
+		if StringName(str(event.get("event_id", ""))) == &"boss_exposure_extension_requested":
+			boss_events.append(event.duplicate(true))
+		elif not _apply_character_event(event):
+			return false
+	for event: Dictionary in boss_events:
+		if not _apply_character_event(event):
+			return false
+	return true
+
+
+func _weapon_mastery_external_snapshot() -> Dictionary:
+	if (
+		time_manager == null
+		or not time_manager.has_method("replay_snapshot")
+		or health == null
+		or not health.has_method("transaction_snapshot")
+		or world_payload_authority == null
+		or not world_payload_authority.has_method("replay_snapshot")
+	):
+		return {}
+	var time_value: Variant = time_manager.call("replay_snapshot")
+	var health_value: Variant = health.call("transaction_snapshot")
+	var world_value: Variant = world_payload_authority.call("replay_snapshot")
+	if not time_value is Dictionary or not health_value is Dictionary or not world_value is Dictionary:
+		return {}
+	var boss_snapshots: Array[Dictionary] = []
+	if get_tree() != null:
+		for boss: Node in get_tree().get_nodes_in_group("bosses"):
+			if (
+				is_instance_valid(boss)
+				and boss.has_method("character_boss_exposure_snapshot")
+				and boss.has_method("restore_character_boss_exposure_snapshot")
+			):
+				var exposure_value: Variant = boss.call("character_boss_exposure_snapshot")
+				if exposure_value is Dictionary:
+					boss_snapshots.append({
+						"node": boss,
+						"snapshot": (exposure_value as Dictionary).duplicate(true),
+					})
+	return {
+		"position": global_position,
+		"time": (time_value as Dictionary).duplicate(true),
+		"health": (health_value as Dictionary).duplicate(true),
+		"world": (world_value as Dictionary).duplicate(true),
+		"bosses": boss_snapshots,
+	}
+
+
+func _restore_weapon_mastery_external_snapshot(value: Dictionary) -> bool:
+	var boss_ok := true
+	for boss_value: Variant in value.get("bosses", []) as Array:
+		if not boss_value is Dictionary:
+			boss_ok = false
+			continue
+		var boss_entry := boss_value as Dictionary
+		var boss_value_node: Variant = boss_entry.get("node")
+		if (
+			not boss_value_node is Node
+			or not is_instance_valid(boss_value_node)
+			or not bool((boss_value_node as Node).call(
+				"restore_character_boss_exposure_snapshot",
+				(boss_entry.get("snapshot", {}) as Dictionary).duplicate(true)
+			))
+		):
+			boss_ok = false
+	var world_ok := bool(world_payload_authority.call(
+		"restore_replay_snapshot",
+		(value.get("world", {}) as Dictionary).duplicate(true)
+	))
+	var time_ok := bool(time_manager.call(
+		"restore_replay_snapshot",
+		(value.get("time", {}) as Dictionary).duplicate(true)
+	))
+	var health_ok := bool(health.call(
+		"restore_transaction_snapshot",
+		(value.get("health", {}) as Dictionary).duplicate(true)
+	))
+	global_position = value.get("position", global_position)
+	return boss_ok and world_ok and time_ok and health_ok and global_position == value.get("position")
+
+
+func _discard_weapon_mastery_external_snapshot(value: Dictionary) -> bool:
+	return bool(health.call(
+		"discard_transaction_snapshot",
+		(value.get("health", {}) as Dictionary).duplicate(true)
+	))
+
+
+func _weapon_mastery_context(action_token: int, semantic_context: Dictionary) -> Dictionary:
+	var action_source := _weapon_action_mastery_context(action_token)
+	var committed_context := action_source.get("context", {}) as Dictionary
+	var result := {
+		"runtime_frame": _runtime_frame,
+		"run_id": _run_id,
+		"run_revision": _owner_character_generation,
+		"owner_character_generation": _owner_character_generation,
+		"maximum_hp": float(health.max_hp) if health != null else 0.0,
+		"position": global_position,
+		"attack": float(stats.attack),
+		"aim_direction": _last_weapon_aim_direction,
+		"weapon_action_generation": int(_weapon_action_generations_by_token.get(action_token, 0)),
+		"tags": (semantic_context.get("tags", []) as Array).duplicate(true),
+	}
+	for key: Variant in semantic_context.keys():
+		result[key] = semantic_context[key]
+	for field: String in ["held_frames", "full_charge", "charge_tier"]:
+		if committed_context.has(field) and not result.has(field):
+			result[field] = committed_context[field]
+	return result
+
+
+func _weapon_action_mastery_context(action_token: int) -> Dictionary:
+	var value: Variant = _weapon_action_mastery_contexts_by_token.get(action_token, {})
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func _record_weapon_mastery_target(action_token: int, target_id: int) -> int:
+	if action_token <= 0 or target_id <= 0:
+		return 0
+	var targets: Array = (
+		_weapon_mastery_target_ids_by_token.get(action_token, []) as Array
+	).duplicate()
+	if not targets.has(target_id):
+		targets.append(target_id)
+		targets.sort()
+	_weapon_mastery_target_ids_by_token[action_token] = targets
+	return targets.size()
+
+
+func _stable_weapon_mastery_target_id(target: Node) -> int:
+	if target == null or not is_instance_valid(target):
+		return 0
+	if target.has_meta("stable_target_id"):
+		var stable_id := int(target.get_meta("stable_target_id"))
+		return stable_id if stable_id > 0 else 0
+	for key: StringName in [&"stable_target_key", &"encounter_spawn_id", &"spawn_id"]:
+		if target.has_meta(key):
+			var stable_key := str(target.get_meta(key)).strip_edges()
+			if not stable_key.is_empty():
+				return maxi(1, stable_key.hash())
+	return 0
+
+
+func _target_has_active_weakpoint(target: Node, damage_info: RefCounted) -> bool:
+	if target.has_meta("weakpoint_active") and bool(target.get_meta("weakpoint_active")):
+		return true
+	if target.has_method("get_weakpoint_damage_bonus"):
+		var bonus_value: Variant = target.call("get_weakpoint_damage_bonus", damage_info)
+		return (
+			typeof(bonus_value) in [TYPE_INT, TYPE_FLOAT]
+			and is_finite(float(bonus_value))
+			and float(bonus_value) > 0.0
+		)
+	return false
 
 
 func _record_weapon_replay_payload_result(
@@ -7850,11 +9233,28 @@ func _on_weapon_replay_hit_confirmed(
 		or (damage_info as RefCounted).get("attacker") != self
 	):
 		return
+	var damage_tags_value: Variant = (damage_info as RefCounted).get("tags")
+	if damage_tags_value is Array:
+		for tag_value: Variant in damage_tags_value as Array:
+			if str(tag_value) in [
+				"character_owned",
+				"character_echo",
+				"world_owned",
+				"no_character_facts",
+			]:
+				return
 	var identity := _weapon_replay_damage_identity(damage_info as RefCounted)
 	var action_token := int(identity.get("token", 0))
 	var generation := int(identity.get("generation", 0))
 	if action_token <= 0 or generation <= 0:
 		return
+	_confirm_weapon_hit_mastery(
+		damage_info as RefCounted,
+		target,
+		final_amount,
+		action_token,
+		generation
+	)
 	var health := target.get_node_or_null("HealthComponent")
 	var health_path := NodePath("HealthComponent")
 	if health == null and target.has_method("lose_health"):
@@ -8169,16 +9569,53 @@ func _weapon_submission_context() -> Dictionary:
 			0,
 			_runtime_frame - _dash_completed_at_runtime_frame
 		)
-	return {
+	var context := {
 		"aim_direction": aim_direction,
 		"target_point": global_position + aim_direction * BOW_TARGET_DISTANCE_PIXELS,
 		"facing": _last_move_direction,
+		"runtime_frame": _runtime_frame,
+		"run_id": _run_id,
+		"run_revision": _owner_character_generation,
+		"owner_character_generation": _owner_character_generation,
+		"position": global_position,
 		"run_seed": loadout_runtime.run_seed() if loadout_runtime != null else 0,
 		"dash_completion_token": _dash_completion_token,
 		"frames_since_dash_completion": frames_since_dash_completion,
 		"dash_direction": _dash_direction,
 		"time_interactions": weapon_time_interaction_context(),
 	}
+	var forgiveness := _character_forgiveness_descriptor_for_weapon(
+		loadout_runtime.weapon_id() if loadout_runtime != null else &""
+	)
+	if not forgiveness.is_empty():
+		context["character_forgiveness"] = forgiveness
+	return context
+
+
+func _character_forgiveness_descriptor_for_weapon(weapon_id: StringName) -> Dictionary:
+	if (
+		weapon_id == &""
+		or character_runtime == null
+		or not character_runtime.has_method("snapshot")
+	):
+		return {}
+	var runtime_value: Variant = character_runtime.call("snapshot")
+	if not runtime_value is Dictionary:
+		return {}
+	var strategy_value: Variant = (runtime_value as Dictionary).get("strategy")
+	if not strategy_value is Dictionary:
+		return {}
+	var strategy := strategy_value as Dictionary
+	var descriptor_value: Variant = strategy.get("forgiveness_descriptor")
+	if (
+		not descriptor_value is Dictionary
+		or int(strategy.get("forgiveness_expires_frame", -1)) <= _runtime_frame
+	):
+		return {}
+	var descriptor := descriptor_value as Dictionary
+	if StringName(str(descriptor.get("weapon_id", ""))) != weapon_id:
+		return {}
+	return descriptor.duplicate(true)
 
 
 func _clear_owned_player_arrows() -> void:
@@ -8288,6 +9725,70 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 	tween.tween_property(visual, "color", BASE_COLOR, 0.12)
 	if health.current_hp > 0.0:
 		apply_hitstun_frames(_seconds_to_frames(HITSTUN_DURATION))
+
+
+func _on_character_room_started(
+	run_id: String,
+	room_id: StringName,
+	revision: int
+) -> void:
+	if (
+		StringName(run_id) != _run_id
+		or room_id == &""
+		or revision <= 0
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("on_room_started")
+	):
+		return
+	var before: Dictionary = character_action_coordinator.call("snapshot")
+	var action_before: Dictionary = character_action_coordinator.call("action_snapshot")
+	var result_value: Variant = character_action_coordinator.call("on_room_started", {
+		"run_id": _run_id,
+		"run_revision": _owner_character_generation,
+		"room_id": room_id,
+		"room_revision": revision,
+		"owner_character_generation": _owner_character_generation,
+	})
+	if (
+		not result_value is Dictionary
+		or not bool((result_value as Dictionary).get("ok", false))
+		or not _apply_character_result_events(result_value as Dictionary)
+	):
+		if not _restore_character_coordinator_pair(before, action_before):
+			set_physics_process(false)
+		push_error("Character room-start settlement failed closed")
+
+
+func _on_character_room_cleared(
+	run_id: String,
+	room_id: StringName,
+	revision: int
+) -> void:
+	if (
+		StringName(run_id) != _run_id
+		or room_id == &""
+		or revision <= 0
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("on_room_cleared")
+	):
+		return
+	var before: Dictionary = character_action_coordinator.call("snapshot")
+	var action_before: Dictionary = character_action_coordinator.call("action_snapshot")
+	var result_value: Variant = character_action_coordinator.call("on_room_cleared", {
+		"run_id": _run_id,
+		"run_revision": _owner_character_generation,
+		"room_id": room_id,
+		"room_revision": revision,
+		"owner_character_generation": _owner_character_generation,
+	})
+	if (
+		not result_value is Dictionary
+		or not bool((result_value as Dictionary).get("ok", false))
+		or not _apply_character_result_events(result_value as Dictionary)
+	):
+		if not _restore_character_coordinator_pair(before, action_before):
+			set_physics_process(false)
+		push_error("Character room-clear settlement failed closed")
 
 
 func _on_died(_killer: Variant) -> void:

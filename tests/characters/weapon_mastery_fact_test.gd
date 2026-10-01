@@ -25,6 +25,7 @@ const GauntletsWeaponRuntimeScript := preload(
 class FakeCharacterRuntime extends RefCounted:
 	var revision: int = 0
 	var mastery_contexts: Array[Dictionary] = []
+	var mastery_events: Array[Dictionary] = []
 	var reject_next_mastery: bool = false
 	var reject_restore: bool = false
 
@@ -68,7 +69,7 @@ class FakeCharacterRuntime extends RefCounted:
 		if reject_next_mastery:
 			reject_next_mastery = false
 			return {"ok": false, "events": []}
-		return []
+		return mastery_events.duplicate(true)
 
 
 class MasteryRecorder extends RefCounted:
@@ -158,6 +159,11 @@ func _run() -> void:
 	_test_rejected_and_malformed_facts_are_zero_mutation()
 	_test_runtime_rejection_rolls_back_before_claim_and_publication()
 	_test_runtime_rollback_failure_still_publishes_nothing()
+	_test_prepare_preserves_events_until_explicit_settle()
+	_test_prepared_mastery_locks_mutating_lifecycle_and_uses_stable_ticket_identity()
+	_test_abort_restores_hook_mutation_and_releases_claim()
+	_test_settle_rejects_forged_ticket_and_runtime_or_action_drift()
+	_test_legacy_confirm_refuses_to_drop_mastery_events()
 	_test_generation_reset_and_stale_facts()
 	_test_action_snapshot_preserves_claims_and_is_deep_isolated()
 	_test_weapon_runtime_mastery_boundaries()
@@ -298,6 +304,208 @@ func _test_runtime_rollback_failure_still_publishes_nothing() -> void:
 	)
 	_suite.assert_equal(coordinator.call("action_snapshot"), before_action, "rollback failure installs no claim")
 	_suite.assert_equal(_recorder.facts.size(), before_count, "rollback failure publishes no signal")
+
+
+func _test_prepare_preserves_events_until_explicit_settle() -> void:
+	var fixture := _coordinator_fixture()
+	var coordinator: RefCounted = fixture.coordinator
+	var runtime: FakeCharacterRuntime = fixture.runtime
+	var generation := int(coordinator.call("generation"))
+	var fact := _fact(&"staff", &"staff_controlled_zone", generation, 31, 70)
+	var expected_events: Array[Dictionary] = [{
+		"type": "world_payload_requested",
+		"payload_id": &"mastery_zone",
+	}]
+	runtime.mastery_events = expected_events.duplicate(true)
+	var before_action: Dictionary = coordinator.call("action_snapshot")
+	var before_count := _recorder.facts.size()
+
+	var prepared: Dictionary = coordinator.call("prepare_weapon_mastery", fact)
+	_suite.assert_true(bool(prepared.get("ok", false)), "mastery prepare accepts the canonical fact")
+	_suite.assert_equal(prepared.get("events"), expected_events, "prepare returns every Character Runtime event")
+	_suite.assert_true(
+		(prepared.get("context", {}) as Dictionary).get("ticket", {}) is Dictionary,
+		"prepare returns an explicit settlement ticket"
+	)
+	_suite.assert_equal(coordinator.call("action_snapshot"), before_action, "prepare installs no mastery claim")
+	_suite.assert_equal(_recorder.facts.size(), before_count, "prepare publishes no EventBus fact")
+	_suite.assert_equal(runtime.mastery_contexts.size(), 1, "prepare invokes the Character Runtime hook once")
+
+	var ticket := ((prepared.get("context", {}) as Dictionary).get("ticket", {}) as Dictionary).duplicate(true)
+	(prepared.get("events", []) as Array).clear()
+	((prepared.get("context", {}) as Dictionary).get("ticket", {}) as Dictionary).clear()
+	var settled: Dictionary = coordinator.call("settle_prepared_weapon_mastery", ticket)
+	_suite.assert_true(bool(settled.get("ok", false)), "authentic ticket settles after external events succeed")
+	_suite.assert_equal(
+		(coordinator.call("action_snapshot") as Dictionary).get("mastery_claims", []).size(),
+		1,
+		"settle installs exactly one mastery claim"
+	)
+	_suite.assert_equal(_recorder.facts.size(), before_count + 1, "settle publishes exactly one EventBus fact")
+	_suite.assert_true(
+		not bool((coordinator.call("settle_prepared_weapon_mastery", ticket) as Dictionary).get("ok", false)),
+		"settled ticket is single-use"
+	)
+
+
+func _test_prepared_mastery_locks_mutating_lifecycle_and_uses_stable_ticket_identity() -> void:
+	var fixture := _coordinator_fixture()
+	var coordinator: RefCounted = fixture.coordinator
+	var generation := int(coordinator.call("generation"))
+	var fact := _fact(&"gun", &"gun_perfect_reload", generation, 61, 0, {
+		"reload_frame": 31,
+	})
+	var action_before: Dictionary = coordinator.call("action_snapshot")
+	var runtime_before: Dictionary = coordinator.call("snapshot")
+	var prepared: Dictionary = coordinator.call("prepare_weapon_mastery", fact)
+	_suite.assert_true(bool(prepared.get("ok", false)), "lifecycle fixture prepares mastery")
+	var ticket := ((prepared.get("context", {}) as Dictionary).get("ticket", {}) as Dictionary)
+	_suite.assert_true(not ticket.has("owner_instance_id"), "mastery ticket never embeds process-local instance identity")
+	for field: String in [
+		"schema_version", "ticket_id", "coordinator_generation", "coordinator_revision",
+		"action_revision", "claim_key", "fact",
+	]:
+		_suite.assert_true(ticket.has(field), "mastery ticket carries stable %s" % field)
+	_suite.assert_equal(ticket.get("coordinator_generation"), generation, "ticket binds the stable character generation")
+	_suite.assert_equal(ticket.get("coordinator_revision"), runtime_before.get("revision"), "ticket binds the stable runtime revision")
+
+	_suite.assert_true(not coordinator.call("configure", fixture.runtime), "configure is locked while mastery is prepared")
+	_suite.assert_true(not coordinator.call("set_generation_floor", generation + 1), "generation floor is locked while mastery is prepared")
+	_suite.assert_true(not coordinator.call("set_next_token_floor", 99), "token floor is locked while mastery is prepared")
+	_suite.assert_true(not coordinator.call("restore_action_snapshot", action_before), "action restore is locked while mastery is prepared")
+	_suite.assert_true(not coordinator.call("restore_snapshot", runtime_before), "runtime restore is locked while mastery is prepared")
+	_suite.assert_true(not coordinator.call("restore_replay_snapshot", runtime_before), "Replay restore is locked while mastery is prepared")
+	_suite.assert_true(not coordinator.call("reset_runtime_state", &"prepared_mastery"), "reset is locked while mastery is prepared")
+	_suite.assert_true(
+		not bool((coordinator.call("prepare_frame_advance", 0, {}) as Dictionary).get("ok", false)),
+		"frame prepare is locked while mastery is prepared"
+	)
+	_suite.assert_true(
+		bool((coordinator.call("abort_prepared_weapon_mastery", ticket) as Dictionary).get("ok", false)),
+		"explicit abort is the only rollback exit"
+	)
+	_suite.assert_true(coordinator.call("reset_runtime_state", &"after_abort"), "lifecycle unlocks after abort")
+
+
+func _test_abort_restores_hook_mutation_and_releases_claim() -> void:
+	var fixture := _coordinator_fixture()
+	var coordinator: RefCounted = fixture.coordinator
+	var runtime: FakeCharacterRuntime = fixture.runtime
+	var generation := int(coordinator.call("generation"))
+	var fact := _fact(&"bow", &"bow_full_charge_penetration", generation, 32, 71)
+	runtime.mastery_events = [{"type": "character_cooldown_reduction_requested", "frames": 30}]
+	var before_runtime := runtime.snapshot()
+	var before_action: Dictionary = coordinator.call("action_snapshot")
+	var before_count := _recorder.facts.size()
+	var prepared: Dictionary = coordinator.call("prepare_weapon_mastery", fact)
+	var ticket := ((prepared.get("context", {}) as Dictionary).get("ticket", {}) as Dictionary).duplicate(true)
+	_suite.assert_true(bool(prepared.get("ok", false)), "abort fixture prepares a mastery transaction")
+	_suite.assert_true(runtime.snapshot() != before_runtime, "mastery hook mutates runtime before abort")
+
+	var aborted: Dictionary = coordinator.call("abort_prepared_weapon_mastery", ticket)
+	_suite.assert_true(bool(aborted.get("ok", false)), "authentic ticket aborts")
+	_suite.assert_equal(runtime.snapshot(), before_runtime, "abort restores the exact pre-hook runtime snapshot")
+	_suite.assert_equal(coordinator.call("action_snapshot"), before_action, "abort installs no mastery claim")
+	_suite.assert_equal(_recorder.facts.size(), before_count, "abort publishes no EventBus fact")
+	_suite.assert_true(
+		not bool((coordinator.call("abort_prepared_weapon_mastery", ticket) as Dictionary).get("ok", false)),
+		"aborted ticket is single-use"
+	)
+	runtime.mastery_events.clear()
+	_suite.assert_true(coordinator.call("confirm_weapon_mastery", fact), "aborted claim remains available to retry")
+
+
+func _test_settle_rejects_forged_ticket_and_runtime_or_action_drift() -> void:
+	var action_fixture := _coordinator_fixture()
+	var action_coordinator: RefCounted = action_fixture.coordinator
+	var action_runtime: FakeCharacterRuntime = action_fixture.runtime
+	var action_fact := _fact(
+		&"gun",
+		&"gun_perfect_reload",
+		int(action_coordinator.call("generation")),
+		33,
+		0
+	)
+	var before_count := _recorder.facts.size()
+	var action_prepared: Dictionary = action_coordinator.call("prepare_weapon_mastery", action_fact)
+	var action_ticket := (
+		(action_prepared.get("context", {}) as Dictionary).get("ticket", {}) as Dictionary
+	).duplicate(true)
+	var forged_ticket := action_ticket.duplicate(true)
+	forged_ticket["ticket_id"] = int(forged_ticket.get("ticket_id", 0)) + 1
+	_suite.assert_true(
+		not bool((action_coordinator.call("settle_prepared_weapon_mastery", forged_ticket) as Dictionary).get("ok", false)),
+		"forged ticket rejects without consuming the authentic ticket"
+	)
+	_suite.assert_true(
+		not action_coordinator.call("set_next_token_floor", int(action_coordinator.call("next_token")) + 10),
+		"prepared mastery locks action-authority revision drift"
+	)
+	_suite.assert_true(
+		bool((action_coordinator.call("settle_prepared_weapon_mastery", action_ticket) as Dictionary).get("ok", false)),
+		"authentic ticket remains settleable after rejected drift attempts"
+	)
+	_suite.assert_true(
+		not bool((action_coordinator.call("abort_prepared_weapon_mastery", action_ticket) as Dictionary).get("ok", false)),
+		"settled action ticket is consumed"
+	)
+	_suite.assert_equal(action_runtime.mastery_contexts, [action_fact], "settled action keeps exactly one hook mutation")
+	var count_after_action_settle := _recorder.facts.size()
+
+	var runtime_fixture := _coordinator_fixture()
+	var runtime_coordinator: RefCounted = runtime_fixture.coordinator
+	var runtime: FakeCharacterRuntime = runtime_fixture.runtime
+	var runtime_fact := _fact(
+		&"sword",
+		&"sword_perfect_guard",
+		int(runtime_coordinator.call("generation")),
+		34,
+		72
+	)
+	var runtime_before := runtime.snapshot()
+	var runtime_prepared: Dictionary = runtime_coordinator.call("prepare_weapon_mastery", runtime_fact)
+	var runtime_ticket := (
+		(runtime_prepared.get("context", {}) as Dictionary).get("ticket", {}) as Dictionary
+	).duplicate(true)
+	runtime.revision += 1
+	_suite.assert_true(
+		not bool((runtime_coordinator.call("settle_prepared_weapon_mastery", runtime_ticket) as Dictionary).get("ok", false)),
+		"runtime drift rejects settlement"
+	)
+	_suite.assert_true(
+		bool((runtime_coordinator.call("abort_prepared_weapon_mastery", runtime_ticket) as Dictionary).get("ok", false)),
+		"runtime-drifted transaction remains explicitly abortable"
+	)
+	_suite.assert_equal(runtime.snapshot(), runtime_before, "runtime-drift abort restores the exact pre-hook snapshot")
+	_suite.assert_equal(
+		_recorder.facts.size(),
+		count_after_action_settle,
+		"runtime-drift rejection publishes nothing beyond the prior authentic settlement"
+	)
+
+
+func _test_legacy_confirm_refuses_to_drop_mastery_events() -> void:
+	var fixture := _coordinator_fixture()
+	var coordinator: RefCounted = fixture.coordinator
+	var runtime: FakeCharacterRuntime = fixture.runtime
+	var fact := _fact(
+		&"gauntlets",
+		&"gauntlets_chain_finisher",
+		int(coordinator.call("generation")),
+		35,
+		73
+	)
+	runtime.mastery_events = [{"type": "character_resource_gain_requested", "amount": 1}]
+	var before_runtime := runtime.snapshot()
+	var before_action: Dictionary = coordinator.call("action_snapshot")
+	var before_count := _recorder.facts.size()
+	_suite.assert_true(
+		not coordinator.call("confirm_weapon_mastery", fact),
+		"legacy bool API rejects event-producing mastery instead of dropping events"
+	)
+	_suite.assert_equal(runtime.snapshot(), before_runtime, "legacy rejection rolls back hook mutation")
+	_suite.assert_equal(coordinator.call("action_snapshot"), before_action, "legacy rejection installs no claim")
+	_suite.assert_equal(_recorder.facts.size(), before_count, "legacy rejection publishes no EventBus fact")
 
 
 func _test_generation_reset_and_stale_facts() -> void:

@@ -19,6 +19,10 @@ var _current_token: int = 0
 var _committed_plan: Dictionary = {}
 var _action_revision: int = 0
 var _mastery_claims: Dictionary = {}
+var _next_mastery_ticket_id: int = 1
+var _prepared_mastery_ticket: Dictionary = {}
+var _prepared_mastery_runtime_before: Dictionary = {}
+var _prepared_mastery_runtime_after: Dictionary = {}
 
 const ACTION_SNAPSHOT_SCHEMA_VERSION := 2
 const ACTION_SNAPSHOT_FIELDS: Array[String] = [
@@ -40,6 +44,7 @@ const MASTERY_FACT_FIELDS: Array[String] = [
 	"target_id",
 	"context",
 ]
+const MASTERY_TICKET_SCHEMA_VERSION := 1
 const MASTERY_IDS_BY_FAMILY := {
 	"sword": [
 		&"sword_perfect_guard",
@@ -67,7 +72,7 @@ const MASTERY_IDS_BY_FAMILY := {
 
 
 func configure(runtime: Variant) -> bool:
-	if _prepared_frame >= 0:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return false
 	var validation: Dictionary = CharacterActionContractScript.validate_runtime(runtime)
 	if not bool(validation.get("ok", false)):
@@ -82,7 +87,12 @@ func configure(runtime: Variant) -> bool:
 
 
 func set_generation_floor(generation_floor: int) -> bool:
-	if generation_floor <= 0 or _prepared_frame >= 0 or _current_token != 0:
+	if (
+		generation_floor <= 0
+		or _prepared_frame >= 0
+		or _mastery_prepare_active()
+		or _current_token != 0
+	):
 		return false
 	if generation_floor > _generation:
 		_generation = generation_floor
@@ -91,7 +101,12 @@ func set_generation_floor(generation_floor: int) -> bool:
 
 
 func set_next_token_floor(next_token_floor: int) -> bool:
-	if next_token_floor <= 0 or _prepared_frame >= 0 or _current_token != 0:
+	if (
+		next_token_floor <= 0
+		or _prepared_frame >= 0
+		or _mastery_prepare_active()
+		or _current_token != 0
+	):
 		return false
 	if next_token_floor > _next_token:
 		_next_token = next_token_floor
@@ -130,7 +145,7 @@ func has_uncommitted_action() -> bool:
 
 
 func cancel_uncommitted_action(reason: Variant) -> bool:
-	if _prepared_frame >= 0:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return false
 	var validation: Dictionary = CharacterActionContractScript.validate_reset_reason(reason)
 	if not bool(validation.get("ok", false)):
@@ -184,7 +199,7 @@ func action_snapshot() -> Dictionary:
 
 
 func restore_action_snapshot(value: Dictionary) -> bool:
-	if not _valid_action_snapshot(value):
+	if _mastery_prepare_active() or not _valid_action_snapshot(value):
 		return false
 	_generation = int(value["generation"])
 	_next_token = int(value["next_token"])
@@ -196,6 +211,11 @@ func restore_action_snapshot(value: Dictionary) -> bool:
 
 
 func try_character_skill(intent: Variant, context: Variant) -> Dictionary:
+	if _mastery_prepare_active():
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_mastery_active"}
+		)
 	if not intent is Dictionary or not context is Dictionary:
 		return CharacterActionContractScript.failure(
 			CharacterActionContractScript.CODE_INVALID_CONTEXT,
@@ -275,22 +295,144 @@ func on_weapon_mastery_confirmed(context: Dictionary) -> Dictionary:
 	return _call_event_hook(&"on_weapon_mastery_confirmed", context)
 
 
-func confirm_weapon_mastery(fact: Variant) -> bool:
+func prepare_weapon_mastery(fact: Variant) -> Dictionary:
+	if not _prepared_mastery_ticket.is_empty():
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_mastery_active"}
+		)
+	if _prepared_frame >= 0:
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_frame_active"}
+		)
 	var normalized := _normalized_mastery_fact(fact)
 	if normalized.is_empty():
-		return false
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_INVALID_CONTEXT,
+			{"reason": "mastery_fact"}
+		)
 	var claim_key := _mastery_claim_key(
 		int(normalized["generation"]),
 		int(normalized["action_token"]),
 		StringName(normalized["mastery_family"])
 	)
 	if _mastery_claims.has(claim_key):
-		return false
-	var hook_result := on_weapon_mastery_confirmed(normalized.duplicate(true))
-	if not bool(hook_result.get("ok", false)):
-		return false
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "mastery_claimed"}
+		)
+	if _runtime == null:
+		return CharacterActionContractScript.failure(CharacterActionContractScript.CODE_NO_RUNTIME)
+	var runtime_before := _runtime_snapshot()
+	if runtime_before.is_empty():
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "snapshot_type"}
+		)
+	var events_value: Variant = _runtime.call(
+		"on_weapon_mastery_confirmed",
+		normalized.duplicate(true)
+	)
+	var events_validation := CharacterActionContractScript.validate_runtime_events(events_value)
+	if not bool(events_validation.get("ok", false)):
+		return _rollback_runtime_rejection(runtime_before, "on_weapon_mastery_confirmed_result")
+	var runtime_after := _runtime_snapshot()
+	if runtime_after.is_empty():
+		return _rollback_runtime_rejection(runtime_before, "mastery_staged_snapshot_type")
+	var ticket := {
+		"schema_version": MASTERY_TICKET_SCHEMA_VERSION,
+		"ticket_id": _next_mastery_ticket_id,
+		"coordinator_generation": _generation,
+		"coordinator_revision": _revision,
+		"action_revision": _action_revision,
+		"claim_key": claim_key,
+		"fact": normalized.duplicate(true),
+	}
+	_next_mastery_ticket_id += 1
+	_prepared_mastery_ticket = ticket.duplicate(true)
+	_prepared_mastery_runtime_before = runtime_before.duplicate(true)
+	_prepared_mastery_runtime_after = runtime_after.duplicate(true)
+	return CharacterActionContractScript.success(
+		CharacterActionContractScript.CODE_OK,
+		events_validation.get("events", []) as Array,
+		{"ticket": ticket.duplicate(true)}
+	)
+
+
+func settle_prepared_weapon_mastery(ticket: Variant) -> Dictionary:
+	if not _mastery_ticket_matches(ticket):
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_INVALID_CONTEXT,
+			{"reason": "mastery_ticket"}
+		)
+	var canonical_ticket := _prepared_mastery_ticket.duplicate(true)
+	var claim_key := str(canonical_ticket["claim_key"])
+	if (
+		_generation != int(canonical_ticket["coordinator_generation"])
+		or _revision != int(canonical_ticket["coordinator_revision"])
+		or _action_revision != int(canonical_ticket["action_revision"])
+	):
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_action_drift"}
+		)
+	if _mastery_claims.has(claim_key):
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_claim_drift"}
+		)
+	if not _runtime_snapshot_matches(_prepared_mastery_runtime_after):
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_runtime_drift"}
+		)
+	var normalized := (canonical_ticket["fact"] as Dictionary).duplicate(true)
 	_mastery_claims[claim_key] = normalized.duplicate(true)
 	_action_revision += 1
+	_clear_prepared_mastery()
+	_publish_weapon_mastery(normalized)
+	return CharacterActionContractScript.success(
+		CharacterActionContractScript.CODE_OK,
+		[],
+		{"fact": normalized.duplicate(true)}
+	)
+
+
+func abort_prepared_weapon_mastery(ticket: Variant) -> Dictionary:
+	if not _mastery_ticket_matches(ticket):
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_INVALID_CONTEXT,
+			{"reason": "mastery_ticket"}
+		)
+	if not _restore_runtime_exact(_prepared_mastery_runtime_before):
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_ROLLBACK_FAILED,
+			{"reason": "prepared_mastery_abort_rollback_failed"}
+		)
+	_clear_prepared_mastery()
+	return CharacterActionContractScript.success()
+
+
+func confirm_weapon_mastery(fact: Variant) -> bool:
+	var prepared := prepare_weapon_mastery(fact)
+	if not bool(prepared.get("ok", false)):
+		return false
+	var ticket_value: Variant = (prepared.get("context", {}) as Dictionary).get("ticket", {})
+	if not ticket_value is Dictionary:
+		return false
+	var ticket := (ticket_value as Dictionary).duplicate(true)
+	if not (prepared.get("events", []) as Array).is_empty():
+		abort_prepared_weapon_mastery(ticket)
+		return false
+	var settled := settle_prepared_weapon_mastery(ticket)
+	if bool(settled.get("ok", false)):
+		return true
+	abort_prepared_weapon_mastery(ticket)
+	return false
+
+
+func _publish_weapon_mastery(normalized: Dictionary) -> void:
 	EventBus.weapon_mastery_confirmed.emit(
 		StringName(normalized["weapon_id"]),
 		StringName(normalized["mastery_family"]),
@@ -301,7 +443,6 @@ func confirm_weapon_mastery(fact: Variant) -> bool:
 		int(normalized["target_id"]),
 		(normalized["context"] as Dictionary).duplicate(true)
 	)
-	return true
 
 
 func before_time_skill(context: Dictionary) -> Dictionary:
@@ -321,6 +462,11 @@ func on_room_cleared(context: Dictionary) -> Dictionary:
 
 
 func on_run_terminal(context: Dictionary) -> Dictionary:
+	if _mastery_prepare_active():
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_mastery_active"}
+		)
 	if _runtime == null:
 		return CharacterActionContractScript.failure(CharacterActionContractScript.CODE_NO_RUNTIME)
 	var runtime_before := _runtime_snapshot()
@@ -352,10 +498,16 @@ func advance_frame(runtime_frame: Variant, context: Variant = {}) -> Dictionary:
 
 
 func prepare_frame_advance(runtime_frame: Variant, context: Variant = {}) -> Dictionary:
-	if _prepared_frame >= 0:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return CharacterActionContractScript.failure(
 			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
-			{"reason": "prepared_frame_active"}
+			{
+				"reason": (
+					"prepared_mastery_active"
+					if _mastery_prepare_active()
+					else "prepared_frame_active"
+				),
+			}
 		)
 	var validation: Dictionary = CharacterActionContractScript.validate_advance(
 		runtime_frame,
@@ -469,7 +621,7 @@ func snapshot() -> Dictionary:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _prepared_frame >= 0:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return false
 	var validated := _validated_snapshot(value)
 	if validated.is_empty():
@@ -526,7 +678,7 @@ func restore_snapshot(value: Dictionary) -> bool:
 
 
 func restore_replay_snapshot(value: Dictionary) -> bool:
-	if _prepared_frame >= 0:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return false
 	var validated := _validated_snapshot(value)
 	if validated.is_empty() or bool(validated["runtime_configured"]) != (_runtime != null):
@@ -561,7 +713,7 @@ func _restore_replay_snapshot_unchecked(value: Dictionary) -> bool:
 
 
 func reset_runtime_state(reason: Variant = &"reset") -> bool:
-	if _prepared_frame >= 0:
+	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return false
 	var validation: Dictionary = CharacterActionContractScript.validate_reset_reason(reason)
 	if not bool(validation.get("ok", false)):
@@ -604,7 +756,12 @@ func is_configured() -> bool:
 
 
 func reanchor_unconfigured_runtime_frame(runtime_frame: int) -> bool:
-	if _runtime != null or _prepared_frame >= 0 or runtime_frame < -1:
+	if (
+		_runtime != null
+		or _prepared_frame >= 0
+		or _mastery_prepare_active()
+		or runtime_frame < -1
+	):
 		return false
 	if _last_runtime_frame == runtime_frame:
 		return true
@@ -617,6 +774,7 @@ func can_reanchor_replay_neutral_runtime_frame(runtime_frame: int) -> bool:
 	return (
 		_runtime != null
 		and _prepared_frame < 0
+		and not _mastery_prepare_active()
 		and _current_token == 0
 		and _committed_plan.is_empty()
 		and runtime_frame >= 0
@@ -640,6 +798,24 @@ func _clear_prepared_frame() -> void:
 	_prepared_runtime_before.clear()
 	_prepared_runtime_after.clear()
 	_prepared_result.clear()
+
+
+func _mastery_ticket_matches(ticket: Variant) -> bool:
+	return (
+		ticket is Dictionary
+		and not _prepared_mastery_ticket.is_empty()
+		and ticket == _prepared_mastery_ticket
+	)
+
+
+func _mastery_prepare_active() -> bool:
+	return not _prepared_mastery_ticket.is_empty()
+
+
+func _clear_prepared_mastery() -> void:
+	_prepared_mastery_ticket.clear()
+	_prepared_mastery_runtime_before.clear()
+	_prepared_mastery_runtime_after.clear()
 
 
 func _restore_runtime_exact(value: Dictionary) -> bool:
@@ -708,6 +884,11 @@ func _rollback_runtime_rejection(runtime_before: Dictionary, reason: String) -> 
 
 
 func _call_decision_hook(method_name: StringName, context: Dictionary) -> Dictionary:
+	if _mastery_prepare_active():
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_mastery_active"}
+		)
 	if _runtime == null:
 		return CharacterActionContractScript.failure(CharacterActionContractScript.CODE_NO_RUNTIME)
 	var runtime_before := _runtime_snapshot()
@@ -732,6 +913,11 @@ func _call_decision_hook(method_name: StringName, context: Dictionary) -> Dictio
 
 
 func _call_event_hook(method_name: StringName, context: Dictionary) -> Dictionary:
+	if _mastery_prepare_active():
+		return CharacterActionContractScript.failure(
+			CharacterActionContractScript.CODE_RUNTIME_REJECTED,
+			{"reason": "prepared_mastery_active"}
+		)
 	if _runtime == null:
 		return CharacterActionContractScript.failure(CharacterActionContractScript.CODE_NO_RUNTIME)
 	var runtime_before := _runtime_snapshot()

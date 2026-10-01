@@ -711,7 +711,7 @@ func _payload_descriptor(
 		handler_id,
 		Transform2D(0.0, origin),
 		{"shape": &"circle", "center": origin, "radius": maxf(radius, 0.01)},
-		1,
+		2,
 		[],
 		["character_owned", "no_mastery", "no_resource", "non_recursive"],
 		parameters

@@ -505,6 +505,7 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	_test_rejected_plan_is_atomic()
 	_test_failed_commit_restores_runtime_and_coordinator()
+	_test_non_hold_commit_publishes_runtime_commit_context()
 	_test_failed_commit_with_failed_rollback_resets_safe()
 	_test_phase_failure_cancels_safe()
 	_test_windup_active_recovery_and_cancel_boundary()
@@ -600,6 +601,23 @@ func _test_failed_commit_restores_runtime_and_coordinator() -> void:
 	_suite.assert_equal(runtime.resource, resource_before, "failed commit restores runtime resource state")
 	_suite.assert_equal(coordinator.snapshot(), before, "failed commit restores the coordinator snapshot")
 	_suite.assert_equal(_committed_facts.size(), 0, "failed commit publishes no committed fact")
+
+
+func _test_non_hold_commit_publishes_runtime_commit_context() -> void:
+	var fixture := _fixture()
+	var coordinator: RefCounted = fixture["coordinator"]
+	var committed: Dictionary = coordinator.submit_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		{"source": "runtime_commit_context"}
+	)
+
+	_suite.assert_true(bool(committed.get("ok", false)), "non-HOLD fixture commits")
+	_suite.assert_equal(_committed_facts.size(), 1, "non-HOLD commit publishes once")
+	_suite.assert_equal(
+		(_committed_facts[0].get("context", {}) as Dictionary).get("resource"),
+		7,
+		"published non-HOLD context preserves the runtime commit result"
+	)
 
 
 func _test_failed_commit_with_failed_rollback_resets_safe() -> void:

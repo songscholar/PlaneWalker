@@ -18,6 +18,12 @@ func _run() -> void:
 	await _test_recovery_time_stop_extends_only_recovery()
 	await _test_slam_excludes_melee_and_special_patterns()
 	await _test_every_action_uses_one_exclusive_clock()
+	await _test_character_stop_exposure_tail_waits_for_the_owned_source_window()
+	await _test_character_stop_exposure_tail_is_exactly_once_and_exactly_thirty_frames()
+	await _test_character_stop_exposure_uses_unscaled_integer_runtime_frames()
+	await _test_character_stop_exposure_claim_lifecycle_preserves_generation_deduplication()
+	await _test_character_stop_exposure_snapshot_is_isolated_replay_safe_and_atomic()
+	await _test_character_stop_exposure_live_restore_cannot_bypass_generation_deduplication()
 	_suite.finish(get_tree())
 
 
@@ -132,6 +138,240 @@ func _test_every_action_uses_one_exclusive_clock() -> void:
 	await _cleanup_subject(subject)
 
 
+func _test_character_stop_exposure_tail_waits_for_the_owned_source_window() -> void:
+	var subject: Dictionary = await _spawn_subject()
+	var boss: Node = subject["boss"]
+	var initial: Dictionary = boss.character_boss_exposure_snapshot()
+	_suite.assert_true(not boss.extend_character_boss_exposure(31, 30), "idle Boss without exposure or committed recovery fails closed")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot(), initial, "missing-window rejection does not consume the Stop generation")
+
+	boss.apply_time_stop_source(&"guardian-stop-window", 0.5)
+	_suite.assert_true(bool(_boss_snapshot(boss).get("exposed", false)), "owned Stop source opens the Boss exposure window")
+	_suite.assert_true(boss.extend_character_boss_exposure(31, 30), "the exposed Stop generation reserves one character tail")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("tail_state"), "pending", "the character tail waits behind the owned Stop source")
+	boss.advance_character_boss_exposure_for_test(30)
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("remaining_tail_frames"), 30, "pending tail cannot overlap or consume inside the original Stop exposure")
+
+	boss.clear_time_stop_source(&"guardian-stop-window")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("tail_state"), "active", "clearing the owned Stop source activates the exact tail")
+	_suite.assert_true(bool(_boss_snapshot(boss).get("exposed", false)), "source cleanup cannot create a one-frame vulnerability gap")
+	boss.advance_character_boss_exposure_for_test(30)
+	_suite.assert_true(not bool(_boss_snapshot(boss).get("exposed", true)), "the source-owned extension closes after its exact tail")
+	await _cleanup_subject(subject)
+
+
+func _test_character_stop_exposure_tail_is_exactly_once_and_exactly_thirty_frames() -> void:
+	var subject: Dictionary = await _spawn_subject()
+	var boss: Node = subject["boss"]
+	_suite.assert_true(boss.force_action_for_test("SLAM"), "exposure-tail fixture commits one Boss action")
+	var windup: Dictionary = _boss_snapshot(boss)
+	boss.advance_action_for_test(float(windup.get("remaining", 0.0)) + 0.01)
+	_suite.assert_equal(_boss_snapshot(boss).get("phase"), "RECOVERY", "exposure-tail fixture reaches committed recovery")
+
+	_suite.assert_true(
+		boss.extend_character_boss_exposure(41, 30),
+		"one positive Stop generation reserves the exact maximum exposure tail"
+	)
+	var reserved: Dictionary = boss.character_boss_exposure_snapshot()
+	_suite.assert_equal(reserved.get("claimed_stop_generation_floor"), 41, "accepted Stop generation advances the permanent deduplication floor")
+	_suite.assert_equal(reserved.get("remaining_tail_frames"), 30, "accepted Stop conversion reserves exactly thirty frames")
+	_suite.assert_equal(reserved.get("tail_state"), "pending", "recovery keeps the exposure tail pending")
+	_suite.assert_true(not boss.extend_character_boss_exposure(41, 30), "same Stop generation cannot stack its exposure tail")
+	_suite.assert_true(not boss.extend_character_boss_exposure(0, 30), "non-positive Stop generation fails closed")
+	_suite.assert_true(not boss.extend_character_boss_exposure(40, 30), "older Stop generation fails closed")
+	_suite.assert_true(not boss.extend_character_boss_exposure(42, 0), "non-positive exposure duration fails closed")
+	_suite.assert_true(not boss.extend_character_boss_exposure(42, 31), "an exposure request above the thirty-frame bound fails closed")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot(), reserved, "rejected exposure requests leave the complete ledger unchanged")
+
+	var recovery: Dictionary = _boss_snapshot(boss)
+	boss.advance_action_for_test(float(recovery.get("remaining", 0.0)) + 0.01)
+	_suite.assert_equal(_boss_snapshot(boss).get("phase"), "IDLE", "the original committed recovery completes normally")
+	_suite.assert_true(bool(_boss_snapshot(boss).get("exposed", false)), "completion activates the reserved vulnerability tail")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("tail_state"), "active", "completion advances the claim lifecycle to active")
+
+	boss.advance_character_boss_exposure_for_test(29)
+	_suite.assert_true(bool(_boss_snapshot(boss).get("exposed", false)), "the Boss remains exposed through tail frame twenty-nine")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("remaining_tail_frames"), 1, "twenty-nine frames leave one exact exposure frame")
+	boss.advance_character_boss_exposure_for_test(1)
+	_suite.assert_true(not bool(_boss_snapshot(boss).get("exposed", true)), "the Boss exposure closes exactly on tail frame thirty")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("remaining_tail_frames"), 0, "completed tail retains no active duration")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("claimed_stop_generation_floor"), 41, "tail completion preserves the permanent Stop-generation claim")
+	await _cleanup_subject(subject)
+
+
+func _test_character_stop_exposure_uses_unscaled_integer_runtime_frames() -> void:
+	var subject: Dictionary = await _spawn_subject()
+	var boss: Node = subject["boss"]
+	boss.apply_time_stop_source(&"integer-frame-window", 0.5)
+	_suite.assert_true(boss.extend_character_boss_exposure(47, 30), "integer-frame fixture reserves one exposure tail")
+	boss.clear_time_stop_source(&"integer-frame-window")
+	_suite.assert_equal(boss.character_boss_exposure_snapshot().get("tail_state"), "active", "integer-frame fixture activates its tail")
+
+	_suite.assert_true(
+		boss.elemental_status_runtime.apply_status(&"slow", &"frame-slow", 1, 120, 0.25, 30, 0.10),
+		"integer-frame fixture installs a severe elemental attack-speed multiplier"
+	)
+	_suite.assert_true(
+		boss.elemental_status_runtime.apply_status(&"freeze", &"frame-freeze", 1, 120, 1.0),
+		"integer-frame fixture installs a hard elemental freeze"
+	)
+	boss.call("_tick_additional_action_timers", 999.0)
+	_suite.assert_equal(
+		boss.character_boss_exposure_snapshot().get("remaining_tail_frames"),
+		30,
+		"scaled delta cannot consume any character exposure frame"
+	)
+	boss.call("_tick_unscaled_runtime_frame", 100)
+	boss.call("_tick_unscaled_runtime_frame", 129)
+	_suite.assert_equal(
+		boss.character_boss_exposure_snapshot().get("remaining_tail_frames"),
+		1,
+		"twenty-nine authoritative integer frames consume exactly twenty-nine tail frames despite slow and freeze"
+	)
+	_suite.assert_true(bool(_boss_snapshot(boss).get("exposed", false)), "tail remains exposed through authoritative frame twenty-nine")
+	boss.call("_tick_unscaled_runtime_frame", 130)
+	_suite.assert_equal(
+		boss.character_boss_exposure_snapshot().get("remaining_tail_frames"),
+		0,
+		"authoritative integer frame thirty consumes the exact final tail frame"
+	)
+	_suite.assert_true(not bool(_boss_snapshot(boss).get("exposed", true)), "tail closes on authoritative frame thirty even while the Boss is frozen")
+	await _cleanup_subject(subject)
+
+
+func _test_character_stop_exposure_claim_lifecycle_preserves_generation_deduplication() -> void:
+	var subject: Dictionary = await _spawn_subject()
+	var boss: Node = subject["boss"]
+	_suite.assert_true(boss.force_action_for_test("SLAM"), "cancel fixture commits one Boss action")
+	var windup: Dictionary = _boss_snapshot(boss)
+	boss.advance_action_for_test(float(windup.get("remaining", 0.0)) + 0.01)
+	_suite.assert_true(boss.extend_character_boss_exposure(51, 30), "cancel fixture reserves generation 51")
+	boss.cancel_active_attack()
+	var cancelled: Dictionary = boss.character_boss_exposure_snapshot()
+	_suite.assert_equal(cancelled.get("remaining_tail_frames"), 0, "cancellation clears the active claim lifecycle")
+	_suite.assert_equal(cancelled.get("claimed_stop_generation_floor"), 51, "cancellation cannot erase the used generation")
+	_suite.assert_true(not bool(_boss_snapshot(boss).get("exposed", true)), "cancellation leaves no residual character exposure source")
+
+	_suite.assert_true(boss.force_action_for_test("SLAM"), "Boss may commit a fresh action after cancellation")
+	windup = _boss_snapshot(boss)
+	boss.advance_action_for_test(float(windup.get("remaining", 0.0)) + 0.01)
+	_suite.assert_true(not boss.extend_character_boss_exposure(51, 30), "fresh action cannot reuse the cancelled Stop generation")
+	_suite.assert_true(boss.extend_character_boss_exposure(52, 30), "a newer Stop generation owns an independent exposure claim")
+	boss.reset_character_boss_exposure_state()
+	var reset: Dictionary = boss.character_boss_exposure_snapshot()
+	_suite.assert_equal(reset.get("remaining_tail_frames"), 0, "explicit reset clears pending and active claim lifetime")
+	_suite.assert_equal(reset.get("claimed_stop_generation_floor"), 52, "explicit reset preserves permanent generation deduplication")
+	_suite.assert_true(not boss.extend_character_boss_exposure(52, 30), "reset cannot make the same Stop generation reusable")
+	await _cleanup_subject(subject)
+
+
+func _test_character_stop_exposure_snapshot_is_isolated_replay_safe_and_atomic() -> void:
+	var source_subject: Dictionary = await _spawn_subject()
+	var source: Node = source_subject["boss"]
+	var replay_authority := RefCounted.new()
+	_suite.assert_true(source.configure_character_boss_exposure_replay_authority(replay_authority), "snapshot fixture installs a protected Replay authority")
+	_suite.assert_true(source.force_action_for_test("SLAM"), "snapshot fixture commits one Boss action")
+	var windup: Dictionary = _boss_snapshot(source)
+	source.advance_action_for_test(float(windup.get("remaining", 0.0)) + 0.01)
+	_suite.assert_true(source.extend_character_boss_exposure(61, 30), "snapshot fixture reserves one exposure tail")
+	var recovery: Dictionary = _boss_snapshot(source)
+	source.advance_action_for_test(float(recovery.get("remaining", 0.0)) + 0.01)
+	var checkpoint: Dictionary = source.character_boss_exposure_snapshot()
+	_suite.assert_equal(checkpoint.get("tail_state"), "active", "checkpoint captures an active replay-safe tail")
+	(checkpoint.get("claims", []) as Array).clear()
+	_suite.assert_equal((source.character_boss_exposure_snapshot().get("claims", []) as Array).size(), 1, "mutating a returned snapshot cannot mutate the live ledger")
+	checkpoint = source.character_boss_exposure_snapshot()
+
+	source.advance_character_boss_exposure_for_test(10)
+	_suite.assert_equal(source.character_boss_exposure_snapshot().get("remaining_tail_frames"), 20, "fixture diverges after its checkpoint")
+	_suite.assert_true(not source.can_restore_character_boss_exposure_snapshot(checkpoint), "ordinary live restore cannot rewind an already-consumed tail")
+	_suite.assert_true(source.can_restore_character_boss_exposure_replay_snapshot(checkpoint, replay_authority), "protected exact active checkpoint passes Replay restore preflight")
+	_suite.assert_true(source.restore_character_boss_exposure_replay_snapshot(checkpoint, replay_authority), "protected active checkpoint restores atomically")
+	_suite.assert_equal(source.character_boss_exposure_snapshot(), checkpoint, "restore reinstalls every data-only exposure field exactly")
+
+	var replay_subject: Dictionary = await _spawn_subject()
+	var replay_target: Node = replay_subject["boss"]
+	_suite.assert_true(replay_target.configure_character_boss_exposure_replay_authority(replay_authority), "fresh Replay target installs the protected authority")
+	_suite.assert_true(replay_target.can_restore_character_boss_exposure_replay_snapshot(checkpoint, replay_authority), "fresh Replay target accepts the data-only checkpoint")
+	_suite.assert_true(replay_target.restore_character_boss_exposure_replay_snapshot(checkpoint, replay_authority), "fresh Replay target reconstructs the exposure ledger")
+	_suite.assert_equal(replay_target.character_boss_exposure_snapshot(), checkpoint, "Replay reconstruction is byte-equivalent")
+	_suite.assert_true(bool(_boss_snapshot(replay_target).get("exposed", false)), "Replay reconstruction restores the actual Boss vulnerability")
+
+	var invalid_snapshots: Array[Dictionary] = []
+	var missing_field := checkpoint.duplicate(true)
+	missing_field.erase("claims")
+	invalid_snapshots.append(missing_field)
+	var unknown_field := checkpoint.duplicate(true)
+	unknown_field["smuggled"] = true
+	invalid_snapshots.append(unknown_field)
+	var stale_floor := checkpoint.duplicate(true)
+	stale_floor["claimed_stop_generation_floor"] = 60
+	invalid_snapshots.append(stale_floor)
+	var oversized_claim := checkpoint.duplicate(true)
+	((oversized_claim["claims"] as Array)[0] as Dictionary)["remaining_frames"] = 31
+	invalid_snapshots.append(oversized_claim)
+	var foreign_run := checkpoint.duplicate(true)
+	(foreign_run["identity"] as Dictionary)["run_id"] = "foreign-run"
+	invalid_snapshots.append(foreign_run)
+	var foreign_room := checkpoint.duplicate(true)
+	(foreign_room["identity"] as Dictionary)["room_id"] = "foreign-room"
+	invalid_snapshots.append(foreign_room)
+	var foreign_encounter := checkpoint.duplicate(true)
+	(foreign_encounter["identity"] as Dictionary)["encounter_id"] = "foreign-encounter"
+	invalid_snapshots.append(foreign_encounter)
+	var foreign_boss := checkpoint.duplicate(true)
+	(foreign_boss["identity"] as Dictionary)["hostile_source_id"] = "foreign-boss"
+	invalid_snapshots.append(foreign_boss)
+	for index: int in range(invalid_snapshots.size()):
+		var before: Dictionary = replay_target.character_boss_exposure_snapshot()
+		_suite.assert_true(
+			not replay_target.can_restore_character_boss_exposure_replay_snapshot(invalid_snapshots[index], replay_authority),
+			"invalid exposure snapshot %d fails preflight" % index
+		)
+		_suite.assert_true(
+			not replay_target.restore_character_boss_exposure_replay_snapshot(invalid_snapshots[index], replay_authority),
+			"invalid exposure snapshot %d fails restore" % index
+		)
+		_suite.assert_equal(replay_target.character_boss_exposure_snapshot(), before, "failed exposure restore %d is atomic" % index)
+
+	await _cleanup_subject(replay_subject)
+	await _cleanup_subject(source_subject)
+
+
+func _test_character_stop_exposure_live_restore_cannot_bypass_generation_deduplication() -> void:
+	var subject: Dictionary = await _spawn_subject()
+	var boss: Node = subject["boss"]
+	boss.apply_time_stop_source(&"generation-61-window", 0.5)
+	_suite.assert_true(boss.extend_character_boss_exposure(61, 30), "live-restore fixture claims generation 61")
+	boss.clear_time_stop_source(&"generation-61-window")
+	var generation_61: Dictionary = boss.character_boss_exposure_snapshot()
+	boss.advance_character_boss_exposure_for_test(1)
+	var generation_61_advanced: Dictionary = boss.character_boss_exposure_snapshot()
+	_suite.assert_true(
+		not boss.restore_character_boss_exposure_snapshot(generation_61),
+		"ordinary runtime restore cannot resurrect a consumed frame inside the same generation"
+	)
+	_suite.assert_equal(boss.character_boss_exposure_snapshot(), generation_61_advanced, "same-generation live rewind rejection is atomic")
+	_suite.assert_true(boss.extend_character_boss_exposure(62, 30), "live-restore fixture advances to generation 62")
+	var generation_62: Dictionary = boss.character_boss_exposure_snapshot()
+
+	_suite.assert_true(
+		not boss.can_restore_character_boss_exposure_snapshot(generation_61),
+		"ordinary runtime restore preflight rejects a generation-floor rollback"
+	)
+	_suite.assert_true(
+		not boss.restore_character_boss_exposure_snapshot(generation_61),
+		"ordinary runtime restore cannot bypass live monotonic generation deduplication"
+	)
+	_suite.assert_equal(boss.character_boss_exposure_snapshot(), generation_62, "rejected live rollback leaves the generation-62 ledger exact")
+	_suite.assert_true(not boss.has_method("restore_character_boss_exposure_replay_snapshot") or not bool(boss.call(
+		"restore_character_boss_exposure_replay_snapshot",
+		generation_61,
+		RefCounted.new()
+	)), "an unconfigured caller cannot invoke protected Replay exact restore")
+	await _cleanup_subject(subject)
+
+
 func _spawn_subject() -> Dictionary:
 	var player := PlayerScene.instantiate()
 	player.set_physics_process(false)
@@ -141,6 +381,11 @@ func _spawn_subject() -> Dictionary:
 	var boss := BossScene.instantiate()
 	boss.set_physics_process(false)
 	boss.configure_hostile_identity(&"boss-action-state-warden", 1)
+	boss.set_meta("run_id", &"run-boss-action-state")
+	boss.set_meta("room_id", &"room-boss-action-state")
+	boss.set_meta("encounter_id", &"encounter-boss-action-state")
+	boss.set_meta("encounter_spawn_id", &"spawn-boss-action-state")
+	boss.set_meta("encounter_enemy_id", &"chrono_warden")
 	add_child(boss)
 	boss.set_physics_process(false)
 	boss.global_position = Vector2.ZERO

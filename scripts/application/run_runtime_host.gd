@@ -11,6 +11,13 @@ const RunViewStateProjectorScript := preload("res://scripts/application/run_view
 const HostileThreatRegistryScript := preload("res://scripts/combat/hostile_threat_registry.gd")
 
 const HUD_RENDER_INTERVAL := 0.1
+const BOSS_EXPOSURE_REPLAY_CHECKPOINT_SCHEMA_VERSION := 1
+const BOSS_EXPOSURE_REPLAY_CHECKPOINT_FIELDS := [
+	"schema_version",
+	"run_id",
+	"runtime_frame",
+	"boss_exposure_state",
+]
 
 @export var room_controller_path: NodePath
 @export_file("*.json") var manifest_path: String = "res://data/content_packs/base/pack.json"
@@ -22,6 +29,7 @@ var _room_controller: Node
 var _player: Node
 var _projector: RefCounted
 var _hostile_threat_registry: RefCounted = HostileThreatRegistryScript.new()
+var _boss_exposure_replay_authority: RefCounted = RefCounted.new()
 var _hud_layer: CanvasLayer
 var _choice_layer: CanvasLayer
 var _choice_panel: Control
@@ -42,6 +50,14 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_room_controller = get_node_or_null(room_controller_path)
 	if _room_controller == null:
+		return
+	if (
+		not _room_controller.has_method("configure_character_boss_exposure_replay_authority")
+		or not bool(_room_controller.call(
+			"configure_character_boss_exposure_replay_authority",
+			_boss_exposure_replay_authority
+		))
+	):
 		return
 	_player = _room_controller.get_node_or_null("Player")
 	if _player == null:
@@ -233,11 +249,74 @@ func hostile_threat_registry() -> RefCounted:
 	return _hostile_threat_registry
 
 
+func capture_boss_exposure_replay_checkpoint() -> Dictionary:
+	if (
+		_active_run_id.is_empty()
+		or _room_controller == null
+		or not is_instance_valid(_room_controller)
+		or not _room_controller.has_method("capture_character_boss_exposure_replay_state")
+		or not _room_controller.has_method("character_boss_exposure_runtime_frame")
+	):
+		return {}
+	var state_value: Variant = _room_controller.call("capture_character_boss_exposure_replay_state")
+	if not state_value is Dictionary or (state_value as Dictionary).is_empty():
+		return {}
+	var runtime_frame := int(_room_controller.call("character_boss_exposure_runtime_frame"))
+	if runtime_frame < 0:
+		return {}
+	return {
+		"schema_version": BOSS_EXPOSURE_REPLAY_CHECKPOINT_SCHEMA_VERSION,
+		"run_id": _active_run_id,
+		"runtime_frame": runtime_frame,
+		"boss_exposure_state": (state_value as Dictionary).duplicate(true),
+	}
+
+
+func restore_boss_exposure_replay_checkpoint(value: Dictionary) -> bool:
+	if (
+		_active_run_id.is_empty()
+		or _room_controller == null
+		or not is_instance_valid(_room_controller)
+		or not _dictionary_has_exact_fields(value, BOSS_EXPOSURE_REPLAY_CHECKPOINT_FIELDS)
+		or typeof(value.get("schema_version")) != TYPE_INT
+		or int(value["schema_version"]) != BOSS_EXPOSURE_REPLAY_CHECKPOINT_SCHEMA_VERSION
+		or typeof(value.get("run_id")) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or str(value["run_id"]) != _active_run_id
+		or typeof(value.get("runtime_frame")) != TYPE_INT
+		or int(value["runtime_frame"]) < 0
+		or not value.get("boss_exposure_state") is Dictionary
+		or not _room_controller.has_method("can_restore_character_boss_exposure_replay_state")
+		or not _room_controller.has_method("restore_character_boss_exposure_replay_state")
+	):
+		return false
+	var state := (value["boss_exposure_state"] as Dictionary).duplicate(true)
+	if not bool(_room_controller.call(
+		"can_restore_character_boss_exposure_replay_state",
+		state,
+		_boss_exposure_replay_authority
+	)):
+		return false
+	return bool(_room_controller.call(
+		"restore_character_boss_exposure_replay_state",
+		state,
+		_boss_exposure_replay_authority
+	))
+
+
 static func hostile_identity_scope(run_id: StringName) -> Dictionary:
 	var normalized := str(run_id).strip_edges()
 	if normalized.is_empty() or normalized.length() > 64:
 		return {}
 	return {"run_id": StringName(normalized)}
+
+
+func _dictionary_has_exact_fields(value: Dictionary, expected_fields: Array) -> bool:
+	if value.size() != expected_fields.size():
+		return false
+	for field_value: Variant in expected_fields:
+		if not value.has(str(field_value)):
+			return false
+	return true
 
 
 func choice_panel() -> Control:
