@@ -2,6 +2,9 @@ class_name ReplayRecorder
 extends RefCounted
 
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
+const CharacterTalentStateScript := preload(
+	"res://scripts/player/characters/character_talent_state.gd"
+)
 
 const SCHEMA_ID := "planewalker.weapon_runtime_replay"
 const SCHEMA_VERSION := 6
@@ -11,9 +14,12 @@ const FULL_PLAYER_SCHEMA_ID := "planewalker.full_player_replay"
 const FULL_PLAYER_SCHEMA_VERSION := 2
 const FULL_PLAYER_FRAME_SCHEMA_VERSION := 2
 const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 2
-const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 5
-const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 5
-const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 5
+const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 6
+const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 6
+const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 6
+const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SCHEMA_VERSION := 5
+const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_FRAME_SCHEMA_VERSION := 5
+const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 5
 const FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION := 4
 const FULL_PLAYER_LEGACY_LAUNCH_FRAME_SCHEMA_VERSION := 4
 const FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 4
@@ -228,6 +234,80 @@ const FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS: Array[String] = [
 	"weapon_replay_capture_invalid_reason",
 	"weapon_replay_restore_invalid_reason",
 	"active_item_state",
+	"reward_effect_state",
+	"live_talent_state",
+]
+const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version",
+	"frame",
+	"identity",
+	"player_state",
+	"health_state",
+	"action_state",
+	"character_state",
+	"character_action_state",
+	"weapon_state",
+	"time_manager_state",
+	"world_payload_state",
+	"rewind_state",
+	"intent_router_state",
+	"player_weapon_state",
+	"weapon_replay_events",
+	"weapon_replay_capture_sequence",
+	"weapon_replay_fact_baseline",
+	"weapon_replay_capture_invalid_reason",
+	"weapon_replay_restore_invalid_reason",
+	"active_item_state",
+]
+const FULL_PLAYER_REWARD_EFFECT_FIELDS: Array[String] = [
+	"schema_version",
+	"stats",
+	"health",
+	"time",
+	"weapon",
+	"character",
+]
+const FULL_PLAYER_REWARD_HEALTH_FIELDS: Array[String] = [
+	"current_hp",
+	"max_hp",
+	"defense",
+	"healing_multiplier",
+	"dead",
+	"invulnerable",
+	"invulnerability_token",
+	"reward_invulnerability_tokens",
+]
+const FULL_PLAYER_REWARD_TIME_FIELDS: Array[String] = [
+	"energy",
+	"max_energy",
+	"resource_revision",
+	"time_stop_duration_bonus",
+	"time_stop_cost_multiplier",
+	"time_stop_weakpoint_damage_bonus",
+	"time_stop_weakpoint_duration",
+	"time_stop_self_damage",
+	"rewind_cost_multiplier",
+	"rewind_heal",
+	"rewind_echo_enabled",
+	"rewind_path_hit_multiplier",
+	"rewind_self_damage",
+	"time_rift_cost_multiplier",
+	"time_rift_duration_bonus",
+	"time_rift_radius_bonus",
+	"time_rift_slow_bonus",
+	"time_accelerate_cost_multiplier",
+	"time_accelerate_duration_bonus",
+	"time_accelerate_multiplier_bonus",
+	"low_energy_regen_multiplier",
+	"low_energy_threshold",
+]
+const FULL_PLAYER_LIVE_TALENT_FIELDS: Array[String] = [
+	"schema_version",
+	"selected_talent_ids",
+	"talent_definitions",
+	"definitions_digest",
+	"modifiers",
+	"modifier_digest",
 ]
 const LEGACY_CHARACTER_ACTION_SNAPSHOT_V1_FIELDS: Array[String] = [
 	"schema_version",
@@ -927,6 +1007,45 @@ static func validate_full_player_snapshot(
 		)
 	):
 		return _failure(&"FULL_PLAYER_ACTIVE_ITEM_STATE_INVALID")
+	if snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		var reward_effect_value: Variant = snapshot.get("reward_effect_state")
+		if (
+			not reward_effect_value is Dictionary
+			or not validate_full_player_reward_effect_state(
+				reward_effect_value as Dictionary
+			)
+		):
+			return _failure(&"FULL_PLAYER_REWARD_EFFECT_STATE_INVALID")
+		var reward_effect_state := reward_effect_value as Dictionary
+		var reward_health := reward_effect_state.get("health", {}) as Dictionary
+		var reward_time := reward_effect_state.get("time", {}) as Dictionary
+		var reward_weapon := reward_effect_state.get("weapon", {}) as Dictionary
+		var health_state := snapshot.get("health_state", {}) as Dictionary
+		var time_state := snapshot.get("time_manager_state", {}) as Dictionary
+		var energy_state := time_state.get("energy_state", {}) as Dictionary
+		var weapon_state := snapshot.get("weapon_state", {}) as Dictionary
+		if (
+			reward_effect_state.get("stats") != identity.get("stats")
+			or reward_health.get("current_hp") != health_state.get("current_hp")
+			or reward_health.get("max_hp") != health_state.get("max_hp")
+			or reward_health.get("healing_multiplier")
+				!= health_state.get("healing_multiplier")
+			or reward_health.get("dead") != health_state.get("dead")
+			or reward_time.get("energy") != energy_state.get("current")
+			or reward_time.get("max_energy") != energy_state.get("maximum")
+			or reward_time.get("resource_revision") != energy_state.get("revision")
+			or reward_weapon.get("runtime") != weapon_state.get("runtime")
+		):
+			return _failure(&"FULL_PLAYER_REWARD_EFFECT_STATE_INVALID")
+		var live_talent_value: Variant = snapshot.get("live_talent_state")
+		if (
+			not live_talent_value is Dictionary
+			or not validate_full_player_live_talent_state(
+				live_talent_value as Dictionary,
+				identity
+			)
+		):
+			return _failure(&"FULL_PLAYER_LIVE_TALENT_STATE_INVALID")
 	var frame := int(snapshot["frame"])
 	var character_frame_value: Variant = (
 		snapshot["character_state"] as Dictionary
@@ -1047,6 +1166,178 @@ static func validate_full_player_active_item_state(
 	return value.get("handler_state", {}) == expected_handler_state
 
 
+static func validate_full_player_reward_effect_state(value: Dictionary) -> bool:
+	if (
+		not replay_value_is_safe(value)
+		or not _has_exact_fields_static(value, FULL_PLAYER_REWARD_EFFECT_FIELDS)
+		or typeof(value.get("schema_version")) != TYPE_INT
+		or int(value["schema_version"]) != 1
+		or not value.get("stats") is Dictionary
+		or not value.get("health") is Dictionary
+		or not value.get("time") is Dictionary
+		or not value.get("weapon") is Dictionary
+		or not value.get("character") is Dictionary
+		or _validated_full_player_stats(value["stats"] as Dictionary).is_empty()
+	):
+		return false
+	var health := value["health"] as Dictionary
+	if not _has_exact_fields_static(health, FULL_PLAYER_REWARD_HEALTH_FIELDS):
+		return false
+	for field: String in ["current_hp", "max_hp", "defense", "healing_multiplier"]:
+		if typeof(health[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(health[field])):
+			return false
+	if (
+		float(health["max_hp"]) <= 0.0
+		or float(health["current_hp"]) < 0.0
+		or float(health["current_hp"]) > float(health["max_hp"])
+		or float(health["healing_multiplier"]) < 0.0
+		or typeof(health["dead"]) != TYPE_BOOL
+		or bool(health["dead"]) != is_zero_approx(float(health["current_hp"]))
+		or typeof(health["invulnerable"]) != TYPE_BOOL
+		or typeof(health["invulnerability_token"]) != TYPE_INT
+		or int(health["invulnerability_token"]) < 0
+		or not health["reward_invulnerability_tokens"] is Array
+	):
+		return false
+	var previous_token := 0
+	for token_value: Variant in health["reward_invulnerability_tokens"] as Array:
+		if typeof(token_value) != TYPE_INT:
+			return false
+		var token := int(token_value)
+		if token <= previous_token or token > int(health["invulnerability_token"]):
+			return false
+		previous_token = token
+
+	var time_state := value["time"] as Dictionary
+	if not _has_exact_fields_static(time_state, FULL_PLAYER_REWARD_TIME_FIELDS):
+		return false
+	for field: String in FULL_PLAYER_REWARD_TIME_FIELDS:
+		if field in ["resource_revision", "rewind_echo_enabled"]:
+			continue
+		if typeof(time_state[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(time_state[field])):
+			return false
+	if (
+		typeof(time_state["resource_revision"]) != TYPE_INT
+		or int(time_state["resource_revision"]) <= 0
+		or typeof(time_state["rewind_echo_enabled"]) != TYPE_BOOL
+		or float(time_state["max_energy"]) <= 0.0
+		or float(time_state["energy"]) < 0.0
+		or float(time_state["energy"]) > float(time_state["max_energy"])
+	):
+		return false
+	for field: String in FULL_PLAYER_REWARD_TIME_FIELDS:
+		if field in ["energy", "max_energy", "resource_revision", "rewind_echo_enabled"]:
+			continue
+		if float(time_state[field]) < 0.0:
+			return false
+	for field: String in [
+		"time_stop_cost_multiplier",
+		"rewind_cost_multiplier",
+		"time_rift_cost_multiplier",
+		"time_accelerate_cost_multiplier",
+	]:
+		if float(time_state[field]) <= 0.0:
+			return false
+
+	var weapon := value["weapon"] as Dictionary
+	if (
+		not _has_exact_fields_static(weapon, ["modifiers", "runtime"])
+		or not weapon["modifiers"] is Dictionary
+		or not weapon["runtime"] is Dictionary
+	):
+		return false
+	for modifier_value: Variant in (weapon["modifiers"] as Dictionary).values():
+		if typeof(modifier_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(modifier_value)):
+			return false
+	var character := value["character"] as Dictionary
+	return (
+		_has_exact_fields_static(character, ["dash_invulnerable_bonus"])
+		and typeof(character["dash_invulnerable_bonus"]) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(character["dash_invulnerable_bonus"]))
+		and float(character["dash_invulnerable_bonus"]) >= 0.0
+	)
+
+
+static func full_player_live_talent_state(
+	character_id: Variant,
+	selected_talent_ids: Variant,
+	talent_definitions: Variant,
+	modifiers: Variant
+) -> Dictionary:
+	if (
+		typeof(character_id) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or str(character_id).is_empty()
+		or not selected_talent_ids is Array
+		or not talent_definitions is Array
+		or not modifiers is Dictionary
+	):
+		return {}
+	var selected: Array[String] = []
+	for talent_value: Variant in selected_talent_ids as Array:
+		if typeof(talent_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return {}
+		var talent_id := str(talent_value)
+		if talent_id.is_empty() or selected.has(talent_id):
+			return {}
+		selected.append(talent_id)
+	var definitions := (talent_definitions as Array).duplicate(true)
+	var modifier_state := (modifiers as Dictionary).duplicate(true)
+	var result := {
+		"schema_version": 1,
+		"selected_talent_ids": selected,
+		"talent_definitions": definitions,
+		"definitions_digest": value_digest(definitions),
+		"modifiers": modifier_state,
+		"modifier_digest": value_digest(modifier_state),
+	}
+	var identity := {
+		"character_id": str(character_id),
+		"character_talent_ids": selected,
+	}
+	return result if validate_full_player_live_talent_state(result, identity) else {}
+
+
+static func validate_full_player_live_talent_state(
+	value: Dictionary,
+	identity: Dictionary
+) -> bool:
+	if (
+		not replay_value_is_safe(value)
+		or not _has_exact_fields_static(value, FULL_PLAYER_LIVE_TALENT_FIELDS)
+		or typeof(value.get("schema_version")) != TYPE_INT
+		or int(value["schema_version"]) != 1
+		or not value.get("selected_talent_ids") is Array
+		or not value.get("talent_definitions") is Array
+		or not value.get("modifiers") is Dictionary
+		or not _is_sha256(value.get("definitions_digest"))
+		or not _is_sha256(value.get("modifier_digest"))
+		or str(value["definitions_digest"])
+			!= value_digest(value["talent_definitions"])
+		or str(value["modifier_digest"]) != value_digest(value["modifiers"])
+		or not identity.get("character_talent_ids") is Array
+		or value["selected_talent_ids"] != identity["character_talent_ids"]
+		or not _is_non_empty_string(identity.get("character_id"))
+	):
+		return false
+	var selected: Array[String] = []
+	for talent_value: Variant in value["selected_talent_ids"] as Array:
+		if typeof(talent_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var talent_id := str(talent_value)
+		if talent_id.is_empty() or selected.has(talent_id):
+			return false
+		selected.append(talent_id)
+	var candidate: RefCounted = CharacterTalentStateScript.new()
+	if not bool(candidate.call(
+		"configure",
+		StringName(str(identity["character_id"])),
+		selected,
+		(value["talent_definitions"] as Array).duplicate(true)
+	)):
+		return false
+	return candidate.call("modifier_snapshot") == value["modifiers"]
+
+
 static func _full_player_snapshot_fields_for_schema(
 	identity: Dictionary,
 	schema_version: int
@@ -1059,6 +1350,11 @@ static func _full_player_snapshot_fields_for_schema(
 		and schema_version == FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION
 	):
 		return FULL_PLAYER_SNAPSHOT_FIELDS
+	if (
+		not is_m1
+		and schema_version == FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+	):
+		return FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_FIELDS
 	if not is_m1 and schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
 		return FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS
 	return []
@@ -1333,15 +1629,27 @@ static func normalize_full_player_snapshot(snapshot: Dictionary) -> Dictionary:
 	var identity_value: Variant = normalized.get("identity")
 	if identity_value is Dictionary:
 		var identity := validate_full_player_identity(identity_value as Dictionary)
+		var snapshot_schema_version := int(normalized.get("schema_version", 0))
+		var legacy_launch_fields: Array[String] = []
+		if snapshot_schema_version == FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+			legacy_launch_fields = FULL_PLAYER_SNAPSHOT_FIELDS
+		elif snapshot_schema_version == FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+			legacy_launch_fields = FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_FIELDS
 		if (
 			not identity.is_empty()
 			and str(identity.get("character_profile_id", "")) != "wanderer_m1_v1"
-			and int(normalized.get("schema_version", 0))
-				== FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-			and _has_exact_fields_static(normalized, FULL_PLAYER_SNAPSHOT_FIELDS)
+			and not legacy_launch_fields.is_empty()
+			and _has_exact_fields_static(normalized, legacy_launch_fields)
 		):
+			if snapshot_schema_version == FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+				normalized["active_item_state"] = empty_active_item_state()
+			var reward_effect_state := _legacy_full_player_reward_effect_state(normalized)
+			var live_talent_state := _legacy_full_player_live_talent_state(normalized)
+			if reward_effect_state.is_empty() or live_talent_state.is_empty():
+				return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID")
 			normalized["schema_version"] = FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-			normalized["active_item_state"] = empty_active_item_state()
+			normalized["reward_effect_state"] = reward_effect_state
+			normalized["live_talent_state"] = live_talent_state
 			migrated = true
 	var action_value: Variant = normalized.get("character_action_state")
 	if not action_value is Dictionary:
@@ -1372,8 +1680,10 @@ static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
 	var migrates_legacy_launch := (
 		not identity.is_empty()
 		and str(identity.get("character_profile_id", "")) != "wanderer_m1_v1"
-		and int(normalized.get("schema_version", 0))
-			== FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION
+		and int(normalized.get("schema_version", 0)) in [
+			FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION,
+			FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SCHEMA_VERSION,
+		]
 	)
 	var frames_value: Variant = normalized.get("frames")
 	if not frames_value is Array or (frames_value as Array).is_empty():
@@ -1426,6 +1736,113 @@ static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
 		"replay": normalized,
 		"migrated": migrated,
 	})
+
+
+static func _legacy_full_player_reward_effect_state(snapshot: Dictionary) -> Dictionary:
+	var identity_value: Variant = snapshot.get("identity")
+	var health_value: Variant = snapshot.get("health_state")
+	var time_value: Variant = snapshot.get("time_manager_state")
+	var weapon_value: Variant = snapshot.get("weapon_state")
+	if (
+		not identity_value is Dictionary
+		or not health_value is Dictionary
+		or not time_value is Dictionary
+		or not weapon_value is Dictionary
+	):
+		return {}
+	var identity := identity_value as Dictionary
+	var health_state := health_value as Dictionary
+	var time_state := time_value as Dictionary
+	var weapon_state := weapon_value as Dictionary
+	var stats_value: Variant = identity.get("stats")
+	var energy_value: Variant = time_state.get("energy_state")
+	if not stats_value is Dictionary or not energy_value is Dictionary:
+		return {}
+	var stats := (stats_value as Dictionary).duplicate(true)
+	var energy_state := energy_value as Dictionary
+	var reward_state := {
+		"schema_version": 1,
+		"stats": stats,
+		"health": {
+			"current_hp": float(health_state.get("current_hp", -1.0)),
+			"max_hp": float(health_state.get("max_hp", -1.0)),
+			"defense": float(stats.get("defense", -1.0)),
+			"healing_multiplier": float(health_state.get("healing_multiplier", -1.0)),
+			"dead": bool(health_state.get("dead", false)),
+			"invulnerable": false,
+			"invulnerability_token": 0,
+			"reward_invulnerability_tokens": [],
+		},
+		"time": {
+			"energy": float(energy_state.get("current", -1.0)),
+			"max_energy": float(energy_state.get("maximum", -1.0)),
+			"resource_revision": int(energy_state.get("revision", 0)),
+			"time_stop_duration_bonus": 0.0,
+			"time_stop_cost_multiplier": 1.0,
+			"time_stop_weakpoint_damage_bonus": 0.0,
+			"time_stop_weakpoint_duration": 0.0,
+			"time_stop_self_damage": 0.0,
+			"rewind_cost_multiplier": 1.0,
+			"rewind_heal": 0.0,
+			"rewind_echo_enabled": false,
+			"rewind_path_hit_multiplier": 0.0,
+			"rewind_self_damage": 0.0,
+			"time_rift_cost_multiplier": 1.0,
+			"time_rift_duration_bonus": 0.0,
+			"time_rift_radius_bonus": 0.0,
+			"time_rift_slow_bonus": 0.0,
+			"time_accelerate_cost_multiplier": 1.0,
+			"time_accelerate_duration_bonus": 0.0,
+			"time_accelerate_multiplier_bonus": 0.0,
+			"low_energy_regen_multiplier": 1.0,
+			"low_energy_threshold": 30.0,
+		},
+		"weapon": {
+			"modifiers": {},
+			"runtime": (weapon_state.get("runtime", {}) as Dictionary).duplicate(true),
+		},
+		"character": {"dash_invulnerable_bonus": 0.0},
+	}
+	return reward_state if validate_full_player_reward_effect_state(reward_state) else {}
+
+
+static func _legacy_full_player_live_talent_state(snapshot: Dictionary) -> Dictionary:
+	var identity_value: Variant = snapshot.get("identity")
+	var character_value: Variant = snapshot.get("character_state")
+	if not identity_value is Dictionary or not character_value is Dictionary:
+		return {}
+	var identity := identity_value as Dictionary
+	var character_state := character_value as Dictionary
+	var talent_ids_value: Variant = identity.get("character_talent_ids")
+	if not talent_ids_value is Array:
+		return {}
+	var talent_ids := (talent_ids_value as Array).duplicate()
+	if (
+		character_state.has("selected_talent_ids")
+		and character_state.get("selected_talent_ids") != talent_ids
+	):
+		return {}
+	var definitions: Array = []
+	if character_state.has("talent_definitions"):
+		if not character_state.get("talent_definitions") is Array:
+			return {}
+		definitions = (character_state.get("talent_definitions") as Array).duplicate(true)
+	elif not talent_ids.is_empty():
+		return {}
+	var candidate: RefCounted = CharacterTalentStateScript.new()
+	if not bool(candidate.call(
+		"configure",
+		StringName(str(identity.get("character_id", ""))),
+		talent_ids,
+		definitions
+	)):
+		return {}
+	return full_player_live_talent_state(
+		identity.get("character_id"),
+		talent_ids,
+		definitions,
+		candidate.call("modifier_snapshot")
+	)
 
 
 static func _full_player_intent_action_matches_category(

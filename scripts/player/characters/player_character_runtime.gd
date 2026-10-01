@@ -116,6 +116,18 @@ func talent_definition_snapshots() -> Array[Dictionary]:
 	return _talent_definitions.duplicate(true)
 
 
+func talent_modifier_snapshot() -> Dictionary:
+	if (
+		not _configured
+		or _strategy == null
+		or not _restore_integrity_ok
+		or not _strategy.has_method("talent_modifier_snapshot")
+	):
+		return {}
+	var value: Variant = _strategy.call("talent_modifier_snapshot")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
 func install_talent(definition: Dictionary) -> bool:
 	if (
 		not _configured

@@ -103,6 +103,11 @@ func _test_full_player_v1_schema_is_explicitly_rejected() -> void:
 		not snapshot.has("active_item_state"),
 		"M1 schema v2 keeps its exact legacy snapshot field set"
 	)
+	_suite.assert_true(
+		not snapshot.has("reward_effect_state")
+		and not snapshot.has("live_talent_state"),
+		"M1 schema v2 excludes Launch reward and live-talent sealing fields"
+	)
 
 	var legacy_replay := replay.duplicate(true)
 	legacy_replay["schema_version"] = 1

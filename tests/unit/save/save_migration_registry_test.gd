@@ -208,10 +208,7 @@ func _test_legacy_v0_migrates_through_v2_defaults(suite) -> void:
 
 func _test_default_v1_to_v2_preserves_valid_runtime_state(suite) -> void:
 	var active_state := _empty_active_item_state()
-	var reward_state := {
-		"schema_version": 1,
-		"effects": {"attack_multiplier": 1.25},
-	}
+	var reward_state := _reward_effect_state()
 	var source := {
 		"schema_version": 1,
 		"payload": {
@@ -238,6 +235,7 @@ func _test_default_v1_to_v2_rejects_malformed_runtime_state(suite) -> void:
 		{"label": "active item wrong type", "field": "active_item_state", "value": []},
 		{"label": "active item malformed dictionary", "field": "active_item_state", "value": {}},
 		{"label": "reward effect wrong type", "field": "reward_effect_state", "value": []},
+		{"label": "reward effect unknown fields", "field": "reward_effect_state", "value": {"unknown": true}},
 	]:
 		var payload := {}
 		payload[invalid_case["field"]] = invalid_case["value"]
@@ -260,6 +258,59 @@ func _empty_active_item_state() -> Dictionary:
 		"cooldown_end_frame": -1,
 		"handler_state": {},
 		"committed_receipts": {},
+	}
+
+
+func _reward_effect_state() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"stats": {
+			"max_hp": 100.0,
+			"attack": 10.0,
+			"defense": 0.0,
+			"move_speed": 200.0,
+			"attack_speed": 1.0,
+			"crit_chance": 0.05,
+			"crit_multiplier": 1.5,
+			"time_energy_max": 100.0,
+			"time_energy_regen": 2.0,
+		},
+		"health": {
+			"current_hp": 100.0,
+			"max_hp": 100.0,
+			"defense": 0.0,
+			"healing_multiplier": 1.0,
+			"dead": false,
+			"invulnerable": false,
+			"invulnerability_token": 0,
+			"reward_invulnerability_tokens": [],
+		},
+		"time": {
+			"energy": 100.0,
+			"max_energy": 100.0,
+			"resource_revision": 1,
+			"time_stop_duration_bonus": 0.0,
+			"time_stop_cost_multiplier": 1.0,
+			"time_stop_weakpoint_damage_bonus": 0.0,
+			"time_stop_weakpoint_duration": 0.0,
+			"time_stop_self_damage": 0.0,
+			"rewind_cost_multiplier": 1.0,
+			"rewind_heal": 0.0,
+			"rewind_echo_enabled": false,
+			"rewind_path_hit_multiplier": 0.0,
+			"rewind_self_damage": 0.0,
+			"time_rift_cost_multiplier": 1.0,
+			"time_rift_duration_bonus": 0.0,
+			"time_rift_radius_bonus": 0.0,
+			"time_rift_slow_bonus": 0.0,
+			"time_accelerate_cost_multiplier": 1.0,
+			"time_accelerate_duration_bonus": 0.0,
+			"time_accelerate_multiplier_bonus": 0.0,
+			"low_energy_regen_multiplier": 1.0,
+			"low_energy_threshold": 30.0,
+		},
+		"weapon": {"modifiers": {}, "runtime": {}},
+		"character": {"dash_invulnerable_bonus": 0.0},
 	}
 
 

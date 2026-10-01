@@ -10,7 +10,7 @@ const RunViewStateProjectorScript := preload(
 )
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 
-const REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION := 5
+const REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION := 6
 const MAX_ACTION_FRAMES := 96
 const LAUNCH_ARCHETYPE_SCORES := {
 	"freeze_burst": 0,
@@ -212,7 +212,7 @@ func _shared_p12_contracts_are_ready(character_id: StringName) -> bool:
 	_suite.assert_equal(
 		int(replay.get("schema_version", 0)),
 		REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION,
-		"%s requires Task 7 Player Replay schema 5" % str(character_id)
+		"%s requires Task 7 Player Replay schema 6" % str(character_id)
 	)
 
 	var skill_ready := await _commit_character_skill(player, character_id, "prerequisite probe")
@@ -290,7 +290,7 @@ func _run_case(
 	_suite.assert_equal(
 		int(replay.get("schema_version", 0)),
 		REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION,
-		"%s records Launch Player Replay schema 5" % label
+		"%s records Launch Player Replay schema 6" % label
 	)
 	var manager: Node = player.get_node("TimeManager")
 	var world: Node = player.get_node("WorldPayloadAuthority")

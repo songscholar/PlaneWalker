@@ -5,7 +5,7 @@ const ContentRegistryScript := preload("res://scripts/content/content_registry.g
 const PlayerScene := preload("res://scenes/player/player.tscn")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
-const REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION := 5
+const REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION := 6
 const CHARACTERS: Array[StringName] = [
 	&"wanderer",
 	&"time_guardian",
@@ -112,7 +112,7 @@ func _shared_contracts_are_ready() -> bool:
 	_suite.assert_equal(
 		schema_version,
 		REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION,
-		"pairwise integration requires Task 7 Player Replay schema 5"
+		"pairwise integration requires Task 7 Player Replay schema 6"
 	)
 	var boss := BossScene.instantiate()
 	var boss_contract_ready := (
@@ -191,7 +191,7 @@ func _run_pairwise_case(row: Dictionary) -> void:
 	_suite.assert_equal(
 		int(checkpoint.get("schema_version", 0)),
 		REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION,
-		"%s captures Player Replay schema 5" % label
+		"%s captures Player Replay schema 6" % label
 	)
 	_suite.assert_true(player.advance_action_frame({}), "%s diverges after checkpoint" % label)
 	_suite.assert_true(

@@ -6,7 +6,7 @@ const ReplayPlayerScript := preload("res://scripts/replay/replay_player.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
-const LAUNCH_SCHEMA_VERSION := 5
+const LAUNCH_SCHEMA_VERSION := 6
 const CHARACTER_IDS: Array[StringName] = [
 	&"wanderer",
 	&"time_guardian",
@@ -32,8 +32,9 @@ func _run() -> void:
 	_suite.assert_true(not report.call("has_blocking_errors"), "Replay matrix loads the Base Pack")
 	if not report.call("has_blocking_errors"):
 		await _test_five_character_round_trips()
+		await _test_passive_and_live_talent_round_trip_and_drift_rejection()
 		await _test_active_item_round_trip_and_tamper_rejection()
-		await _test_legacy_launch_v4_migrates_empty_active_state()
+		await _test_legacy_launch_v4_and_v5_migrate_after_authentication()
 	_suite.finish(get_tree())
 
 
@@ -47,11 +48,19 @@ func _test_five_character_round_trips() -> void:
 		_suite.assert_equal(
 			int(initial.get("schema_version", 0)),
 			LAUNCH_SCHEMA_VERSION,
-			"%s Launch snapshot uses Player Replay schema 5" % label
+			"%s Launch snapshot uses Player Replay schema 6" % label
 		)
 		_suite.assert_true(
 			initial.get("active_item_state") is Dictionary,
 			"%s Launch snapshot includes authoritative active-item state" % label
+		)
+		_suite.assert_true(
+			initial.get("reward_effect_state") is Dictionary,
+			"%s Launch snapshot seals passive reward-effect state" % label
+		)
+		_suite.assert_true(
+			initial.get("live_talent_state") is Dictionary,
+			"%s Launch snapshot seals live talent definitions and modifiers" % label
 		)
 
 		var recorder = ReplayRecorderScript.new()
@@ -83,19 +92,19 @@ func _test_five_character_round_trips() -> void:
 		_suite.assert_equal(
 			int(replay.get("schema_version", 0)),
 			LAUNCH_SCHEMA_VERSION,
-			"%s Launch Replay root uses schema 5" % label
+			"%s Launch Replay root uses schema 6" % label
 		)
 		for frame_value: Variant in replay.get("frames", []) as Array:
 			var frame := frame_value as Dictionary
 			_suite.assert_equal(
 				int(frame.get("schema_version", 0)),
 				LAUNCH_SCHEMA_VERSION,
-				"%s Launch Replay frame uses schema 5" % label
+				"%s Launch Replay frame uses schema 6" % label
 			)
 			_suite.assert_equal(
 				int((frame.get("snapshot", {}) as Dictionary).get("schema_version", 0)),
 				LAUNCH_SCHEMA_VERSION,
-				"%s embedded Launch snapshot uses schema 5" % label
+				"%s embedded Launch snapshot uses schema 6" % label
 			)
 
 		var target := await _spawn_launch_player(character_id, 4100 + character_index)
@@ -133,6 +142,173 @@ func _test_five_character_round_trips() -> void:
 		await _free_player(mismatched)
 		await _free_player(target)
 		await _free_player(source)
+
+
+func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
+	var source := await _spawn_launch_player(&"wanderer", 5151)
+	var talent_definition: Dictionary = _registry.call("get_content", &"tal_eternity_reserve")
+	var passive_definition := {
+		"id": "replay_passive_fixture",
+		"category": "item",
+		"effects": {"max_hp_bonus": 12.0},
+	}
+	_suite.assert_true(
+		source.install_character_talent(talent_definition),
+		"Launch Replay fixture installs a live content-driven talent"
+	)
+	_suite.assert_true(
+		bool(source.apply_reward(passive_definition).get("ok", false)),
+		"Launch Replay fixture applies a passive reward effect"
+	)
+	var identity: Dictionary = source.full_player_replay_identity()
+	var snapshot: Dictionary = source.full_player_replay_snapshot()
+	var live_talent := snapshot.get("live_talent_state", {}) as Dictionary
+	_suite.assert_equal(
+		live_talent.get("selected_talent_ids"),
+		["tal_eternity_reserve"],
+		"Launch Replay seals the selected live talent IDs"
+	)
+	_suite.assert_equal(
+		live_talent.get("definitions_digest"),
+		ReplayRecorderScript.value_digest(live_talent.get("talent_definitions", [])),
+		"Launch Replay seals the exact live talent definitions"
+	)
+	_suite.assert_equal(
+		live_talent.get("modifier_digest"),
+		ReplayRecorderScript.value_digest(live_talent.get("modifiers", {})),
+		"Launch Replay seals the exact live talent modifiers"
+	)
+	var recorder = ReplayRecorderScript.new()
+	_suite.assert_true(
+		bool(recorder.start_full_player_recording(identity, 5151).get("ok", false)),
+		"sealed Launch Replay recording starts"
+	)
+	_suite.assert_true(
+		bool(recorder.record_full_player_frame(
+			snapshot,
+			_frame_intents(int(snapshot.get("frame", 0))),
+			[]
+		).get("ok", false)),
+		"sealed Launch Replay records passive and live-talent state"
+	)
+	var finished: Dictionary = recorder.finish_full_player_recording()
+	_suite.assert_true(bool(finished.get("ok", false)), "sealed Launch Replay finishes")
+	var replay := (finished.get("replay", {}) as Dictionary).duplicate(true)
+	await _free_player(source)
+
+	var target := await _spawn_launch_player(&"wanderer", 5151)
+	_suite.assert_true(target.install_character_talent(talent_definition), "target installs the same live talent")
+	_suite.assert_true(
+		bool(target.apply_reward(passive_definition).get("ok", false)),
+		"target installs the same passive reward state"
+	)
+	var replay_player = ReplayPlayerScript.new()
+	_suite.assert_true(
+		bool(replay_player.load_full_player_replay(
+			replay,
+			target.full_player_replay_identity()
+		).get("ok", false)),
+		"sealed Launch Replay loads against matching content"
+	)
+	_suite.assert_true(
+		bool(replay_player.restore_full_player_frame(target, 0).get("ok", false)),
+		"sealed Launch Replay restores passive and live-talent state"
+	)
+	_suite.assert_equal(
+		target.reward_effect_snapshot(),
+		snapshot.get("reward_effect_state"),
+		"passive reward-effect state round-trips exactly"
+	)
+	await _free_player(target)
+
+	var unknown_reward := replay.duplicate(true)
+	var unknown_reward_state := (
+		((unknown_reward["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+	)["reward_effect_state"] as Dictionary
+	unknown_reward_state["unknown"] = true
+	_rehash_full_player_replay(unknown_reward)
+	var unknown_reward_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		unknown_reward,
+		identity
+	)
+	_suite.assert_equal(
+		unknown_reward_rejected.get("code"),
+		&"FULL_PLAYER_REWARD_EFFECT_STATE_INVALID",
+		"unknown passive-state fields fail closed after outer rehash"
+	)
+
+	var forged_modifier := replay.duplicate(true)
+	var forged_live := (
+		((forged_modifier["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+	)["live_talent_state"] as Dictionary
+	(forged_live["modifiers"] as Dictionary)["low_energy_threshold"] = 29
+	forged_live["modifier_digest"] = ReplayRecorderScript.value_digest(forged_live["modifiers"])
+	_rehash_full_player_replay(forged_modifier)
+	var forged_modifier_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		forged_modifier,
+		identity
+	)
+	_suite.assert_equal(
+		forged_modifier_rejected.get("code"),
+		&"FULL_PLAYER_LIVE_TALENT_STATE_INVALID",
+		"forged live modifier state fails closed after digest recomputation"
+	)
+
+	var changed_bounds := replay.duplicate(true)
+	var changed_bounds_live := (
+		((changed_bounds["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+	)["live_talent_state"] as Dictionary
+	var changed_definition := (changed_bounds_live["talent_definitions"] as Array)[0] as Dictionary
+	(changed_definition["effects"] as Dictionary)["low_energy_regen_multiplier"] = -1.0
+	changed_bounds_live["definitions_digest"] = ReplayRecorderScript.value_digest(
+		changed_bounds_live["talent_definitions"]
+	)
+	_rehash_full_player_replay(changed_bounds)
+	var changed_bounds_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		changed_bounds,
+		identity
+	)
+	_suite.assert_equal(
+		changed_bounds_rejected.get("code"),
+		&"FULL_PLAYER_LIVE_TALENT_STATE_INVALID",
+		"changed talent effect bounds fail closed after outer rehash"
+	)
+
+	var content_drift := replay.duplicate(true)
+	var drift_live := (
+		((content_drift["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
+	)["live_talent_state"] as Dictionary
+	((drift_live["talent_definitions"] as Array)[0] as Dictionary)["name_key"] = "content.drift"
+	drift_live["definitions_digest"] = ReplayRecorderScript.value_digest(
+		drift_live["talent_definitions"]
+	)
+	_rehash_full_player_replay(content_drift)
+	var drift_target := await _spawn_launch_player(&"wanderer", 5151)
+	_suite.assert_true(drift_target.install_character_talent(talent_definition), "drift target installs authoritative talent content")
+	_suite.assert_true(
+		bool(drift_target.apply_reward(passive_definition).get("ok", false)),
+		"drift target installs the matching passive state"
+	)
+	var drift_before: Dictionary = drift_target.full_player_replay_snapshot()
+	var drift_player = ReplayPlayerScript.new()
+	_suite.assert_true(
+		bool(drift_player.load_full_player_replay(
+			content_drift,
+			drift_target.full_player_replay_identity()
+		).get("ok", false)),
+		"semantically valid but drifted content reaches target validation"
+	)
+	_suite.assert_equal(
+		drift_player.restore_full_player_frame(drift_target, 0).get("code"),
+		&"FULL_PLAYER_REPLAY_RESTORE_REJECTED",
+		"target authority rejects drifted live talent definitions"
+	)
+	_suite.assert_equal(
+		drift_target.full_player_replay_snapshot(),
+		drift_before,
+		"content drift rejection leaves the target atomically unchanged"
+	)
+	await _free_player(drift_target)
 
 
 func _test_active_item_round_trip_and_tamper_rejection() -> void:
@@ -293,7 +469,7 @@ func _test_active_item_round_trip_and_tamper_rejection() -> void:
 	await _free_player(rollback_target)
 
 
-func _test_legacy_launch_v4_migrates_empty_active_state() -> void:
+func _test_legacy_launch_v4_and_v5_migrate_after_authentication() -> void:
 	var source := await _spawn_launch_player(&"time_guardian", 5301)
 	var identity: Dictionary = source.full_player_replay_identity()
 	var recorder = ReplayRecorderScript.new()
@@ -312,17 +488,12 @@ func _test_legacy_launch_v4_migrates_empty_active_state() -> void:
 	)
 	var finished: Dictionary = recorder.finish_full_player_recording()
 	_suite.assert_true(bool(finished.get("ok", false)), "legacy Launch fixture finishes")
-	var legacy := (finished.get("replay", {}) as Dictionary).duplicate(true)
-	legacy["schema_version"] = 4
-	for frame_value: Variant in legacy.get("frames", []) as Array:
-		var frame := frame_value as Dictionary
-		frame["schema_version"] = 4
-		var snapshot := frame.get("snapshot", {}) as Dictionary
-		snapshot["schema_version"] = 4
-		snapshot.erase("active_item_state")
-	_rehash_full_player_replay(legacy)
-	var caller_copy := legacy.duplicate(true)
-	var unauthenticated := legacy.duplicate(true)
+	var current := (finished.get("replay", {}) as Dictionary).duplicate(true)
+	var legacy_v4 := _legacy_launch_replay(current, 4)
+	var legacy_v5 := _legacy_launch_replay(current, 5)
+	var caller_copy_v4 := legacy_v4.duplicate(true)
+	var caller_copy_v5 := legacy_v5.duplicate(true)
+	var unauthenticated := legacy_v5.duplicate(true)
 	var unauthenticated_player_state := (
 		((unauthenticated["frames"] as Array)[0] as Dictionary)["snapshot"] as Dictionary
 	)["player_state"] as Dictionary
@@ -336,40 +507,63 @@ func _test_legacy_launch_v4_migrates_empty_active_state() -> void:
 	_suite.assert_equal(
 		unauthenticated_rejected.get("code"),
 		&"FULL_PLAYER_FRAME_DIGEST_MISMATCH",
-		"legacy Launch content is authenticated before migration can refresh digests"
+		"legacy Launch v5 content is authenticated before migration can refresh digests"
 	)
 	await _free_player(source)
 
-	var target := await _spawn_launch_player(&"time_guardian", 5301)
-	var replay_player = ReplayPlayerScript.new()
-	var loaded: Dictionary = replay_player.load_full_player_replay(
-		legacy,
-		target.full_player_replay_identity()
-	)
-	_suite.assert_true(bool(loaded.get("ok", false)), "trusted legacy Launch v4 Replay migrates")
-	_suite.assert_equal(legacy, caller_copy, "legacy Launch migration preserves caller-owned Replay")
-	var normalized := replay_player.full_player_replay_snapshot()
-	_suite.assert_equal(normalized.get("schema_version"), 5, "legacy Launch root migrates to schema 5")
-	var normalized_frame := (normalized.get("frames", []) as Array)[0] as Dictionary
-	_suite.assert_equal(normalized_frame.get("schema_version"), 5, "legacy Launch frame migrates to schema 5")
-	var normalized_snapshot := normalized_frame.get("snapshot", {}) as Dictionary
-	_suite.assert_equal(normalized_snapshot.get("schema_version"), 5, "legacy Launch snapshot migrates to schema 5")
-	_suite.assert_equal(
-		normalized_snapshot.get("active_item_state"),
-		_empty_active_item_state(),
-		"legacy Launch snapshot receives the explicit empty active-item default"
-	)
-	_suite.assert_equal(
-		normalized_frame.get("digest"),
-		ReplayRecorderScript.full_player_frame_digest(normalized_frame),
-		"legacy Launch migration refreshes the frame digest"
-	)
-	_suite.assert_equal(
-		normalized.get("terminal_digest"),
-		ReplayRecorderScript.full_player_terminal_digest(normalized),
-		"legacy Launch migration refreshes the terminal digest"
-	)
-	await _free_player(target)
+	for legacy_case: Dictionary in [
+		{"version": 4, "replay": legacy_v4, "copy": caller_copy_v4},
+		{"version": 5, "replay": legacy_v5, "copy": caller_copy_v5},
+	]:
+		var target := await _spawn_launch_player(&"time_guardian", 5301)
+		var replay_player = ReplayPlayerScript.new()
+		var loaded: Dictionary = replay_player.load_full_player_replay(
+			legacy_case["replay"],
+			target.full_player_replay_identity()
+		)
+		_suite.assert_true(
+			bool(loaded.get("ok", false)),
+			"trusted legacy Launch v%d Replay migrates" % int(legacy_case["version"])
+		)
+		_suite.assert_equal(
+			legacy_case["replay"],
+			legacy_case["copy"],
+			"legacy Launch v%d migration preserves caller-owned Replay" % int(legacy_case["version"])
+		)
+		var normalized := replay_player.full_player_replay_snapshot()
+		_suite.assert_equal(normalized.get("schema_version"), 6, "legacy Launch root migrates to schema 6")
+		var normalized_frame := (normalized.get("frames", []) as Array)[0] as Dictionary
+		_suite.assert_equal(normalized_frame.get("schema_version"), 6, "legacy Launch frame migrates to schema 6")
+		var normalized_snapshot := normalized_frame.get("snapshot", {}) as Dictionary
+		_suite.assert_equal(normalized_snapshot.get("schema_version"), 6, "legacy Launch snapshot migrates to schema 6")
+		_suite.assert_equal(
+			normalized_snapshot.get("active_item_state"),
+			_empty_active_item_state(),
+			"legacy Launch snapshot receives the explicit empty active-item default"
+		)
+		_suite.assert_true(
+			normalized_snapshot.get("reward_effect_state") is Dictionary
+			and not (normalized_snapshot.get("reward_effect_state") as Dictionary).is_empty(),
+			"legacy Launch snapshot receives a deterministic passive-state default"
+		)
+		_suite.assert_true(
+			ReplayRecorderScript.validate_full_player_live_talent_state(
+				normalized_snapshot.get("live_talent_state", {}),
+				normalized_snapshot.get("identity", {})
+			),
+			"legacy Launch snapshot receives a verified live-talent seal"
+		)
+		_suite.assert_equal(
+			normalized_frame.get("digest"),
+			ReplayRecorderScript.full_player_frame_digest(normalized_frame),
+			"legacy Launch migration refreshes the frame digest"
+		)
+		_suite.assert_equal(
+			normalized.get("terminal_digest"),
+			ReplayRecorderScript.full_player_terminal_digest(normalized),
+			"legacy Launch migration refreshes the terminal digest"
+		)
+		await _free_player(target)
 
 
 func _spawn_launch_player(character_id: StringName, seed_value: int) -> Node:
@@ -430,6 +624,22 @@ func _empty_active_item_state() -> Dictionary:
 		"handler_state": {},
 		"committed_receipts": {},
 	}
+
+
+func _legacy_launch_replay(current: Dictionary, version: int) -> Dictionary:
+	var legacy := current.duplicate(true)
+	legacy["schema_version"] = version
+	for frame_value: Variant in legacy.get("frames", []) as Array:
+		var frame := frame_value as Dictionary
+		frame["schema_version"] = version
+		var snapshot := frame.get("snapshot", {}) as Dictionary
+		snapshot["schema_version"] = version
+		snapshot.erase("reward_effect_state")
+		snapshot.erase("live_talent_state")
+		if version == 4:
+			snapshot.erase("active_item_state")
+	_rehash_full_player_replay(legacy)
+	return legacy
 
 
 func _rehash_full_player_replay(replay: Dictionary) -> void:

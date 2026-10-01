@@ -3683,8 +3683,44 @@ func full_player_replay_snapshot() -> Dictionary:
 		int(snapshot["schema_version"])
 		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
 	):
-		snapshot["active_item_state"] = active_item_snapshot()
+		var active_item_state := active_item_snapshot()
+		var reward_effect_state := reward_effect_snapshot()
+		var live_talent_state := _full_player_live_talent_state()
+		if (
+			active_item_state.is_empty()
+			or reward_effect_state.is_empty()
+			or live_talent_state.is_empty()
+		):
+			return {}
+		snapshot["active_item_state"] = active_item_state
+		snapshot["reward_effect_state"] = reward_effect_state
+		snapshot["live_talent_state"] = live_talent_state
 	return snapshot
+
+
+func _full_player_live_talent_state() -> Dictionary:
+	if (
+		character_runtime == null
+		or not character_runtime.has_method("selected_talent_ids")
+		or not character_runtime.has_method("talent_definition_snapshots")
+		or not character_runtime.has_method("talent_modifier_snapshot")
+	):
+		return {}
+	var selected_value: Variant = character_runtime.call("selected_talent_ids")
+	var definitions_value: Variant = character_runtime.call("talent_definition_snapshots")
+	var modifiers_value: Variant = character_runtime.call("talent_modifier_snapshot")
+	if (
+		not selected_value is Array
+		or not definitions_value is Array
+		or not modifiers_value is Dictionary
+	):
+		return {}
+	return ReplayRecorderScript.full_player_live_talent_state(
+		character_runtime.call("character_id"),
+		selected_value,
+		definitions_value,
+		modifiers_value
+	)
 
 
 func restore_full_player_replay_snapshot(snapshot: Dictionary) -> bool:
@@ -3719,6 +3755,13 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 		).duplicate(true)
 		if not bool(active_item_runtime.call("can_restore_snapshot", active_item_target)):
 			return false
+	if (
+		value.has("reward_effect_state")
+		and not restore_reward_effect_snapshot(
+			(value.get("reward_effect_state", {}) as Dictionary).duplicate(true)
+		)
+	):
+		return false
 	var health_target := (value.get("health_state", {}) as Dictionary).duplicate(true)
 	if not bool(health.call("can_restore_replay_snapshot", health_target)):
 		return false
@@ -3854,6 +3897,8 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 	]
 	if expected_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
 		fields.append("active_item_state")
+		fields.append("reward_effect_state")
+		fields.append("live_talent_state")
 	if value.size() != fields.size():
 		return {}
 	for field: String in fields:
@@ -3884,7 +3929,11 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or (
 			expected_schema_version
 				== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-			and not value.get("active_item_state") is Dictionary
+			and (
+				not value.get("active_item_state") is Dictionary
+				or not value.get("reward_effect_state") is Dictionary
+				or not value.get("live_talent_state") is Dictionary
+			)
 		)
 	):
 		return {}
@@ -3905,6 +3954,28 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 				active_item_state,
 				int(value["frame"])
 			)
+		):
+			return {}
+		var reward_effect_state := value.get("reward_effect_state", {}) as Dictionary
+		if not ReplayRecorderScript.validate_full_player_reward_effect_state(
+			reward_effect_state
+		):
+			return {}
+		var live_talent_state := value.get("live_talent_state", {}) as Dictionary
+		if (
+			not ReplayRecorderScript.validate_full_player_live_talent_state(
+				live_talent_state,
+				normalized_identity
+			)
+		):
+			return {}
+		var sealed_character_state := value.get("character_state", {}) as Dictionary
+		var sealed_character_runtime := sealed_character_state.get("runtime", {}) as Dictionary
+		if (
+			sealed_character_runtime.get("selected_talent_ids")
+				!= live_talent_state.get("selected_talent_ids")
+			or sealed_character_runtime.get("talent_definitions")
+				!= live_talent_state.get("talent_definitions")
 		):
 			return {}
 	var player_state := value["player_state"] as Dictionary

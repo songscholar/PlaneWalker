@@ -2,6 +2,7 @@ class_name SaveMigrationV1ToV2
 extends RefCounted
 
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
+const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 
 
@@ -30,7 +31,15 @@ func migrate(document: Dictionary, _context: Dictionary = {}):
 		defaults_added = true
 
 	if payload.has("reward_effect_state"):
-		if not payload["reward_effect_state"] is Dictionary:
+		if (
+			not payload["reward_effect_state"] is Dictionary
+			or (
+				not (payload["reward_effect_state"] as Dictionary).is_empty()
+				and not ReplayRecorderScript.validate_full_player_reward_effect_state(
+					(payload["reward_effect_state"] as Dictionary)
+				)
+			)
+		):
 			return _failure("reward_effect_state_invalid")
 	else:
 		payload["reward_effect_state"] = {}
