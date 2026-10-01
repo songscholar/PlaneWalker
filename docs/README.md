@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, the complete P11A–P11H five-weapon program, and P12A character-profile authority are certified locally; P12 Tasks 2D-2E semantic input, mastery/replay safety, stable hostile identity, and unscaled threat authority are focused-verified; Wanderer/Time Guardian and Void Walker/Primordial Knight pure strategies are committed while Player/Health/Time integration remains active; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, the complete P11 five-weapon program, and the complete P12 five-character program are certified locally; five Launch characters, fifteen talents, character UI/feedback, deterministic Replay, 150 loadouts, 40 talent subsets, 30 pairwise integrations, and two byte-identical 4500-sample reports are complete; P7/P9 continues with honest coverage/export blockers; the next local product stage is P13 eight-archetype mechanics and complete Launch pools; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -50,7 +50,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
-| Full Product Content | Active / Phased program | P11A–P11H、五武器完整运行时、统一 Launch Loadout UI、确定性 Replay 基础和 30 组合矩阵已本地认证；P12A Profile 权威已认证，Tasks 2D-2E 共享输入/回放/敌人威胁权威已 focused-verified，四个 Launch 角色纯策略已提交；当前继续角色 Player/Health/Time 集成、Time Lord、Talent、UI/Replay、150 组合、八流派、五层五 Boss 和完整内容池 |
+| Full Product Content | Active / Phased program | P11 五武器与 P12 五角色完整运行时已本地认证，包含统一 Launch UI/HUD、15 角色天赋、确定性 Replay、150 组合、40 Talent 子集、30 pairwise 集成和 4500 synthetic samples；当前进入 P13 八流派机制与完整 Launch 道具/祝福/诅咒/Talent 池，后续继续五层五 Boss、Hub、叙事与 Expansion 系统 |
 | Launch / Expansion Systems | Preserved / Later program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod 管理、外观和 DLC 内容包继续按阶段实施；P11 已完成武器运行时 Replay 基础，不等同于完整回放产品体验 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
@@ -105,9 +105,10 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P11 Five Complete Weapons Design](superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md) | 五武器共享动作权威、完整节奏、输入、HUD、反馈、时间与 Boss 联动及 30 组合验证 | Approved / Current authority |
 | [P11 Five Complete Weapons Plan](superpowers/plans/2026-09-29-plane-walker-p11-five-weapons.md) | P11A–P11H 共享权威、五武器迁移/实现、跨武器系统及认证实施记录 | Completed / Historical |
 | [P12 Five Complete Characters Design](superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md) | 五角色 Profile、专属资源/技能、武器 mastery、双时间转换、15 天赋、角色 UI/Replay 与 150 组合认证权威 | Approved / Current authority |
-| [P12 Five Complete Characters Plan](superpowers/plans/2026-09-30-plane-walker-p12-five-characters.md) | 五角色运行时、角色技能/天赋、UI/Replay、150 组合与 4500 synthetic samples 的执行计划 | Active / Current |
+| [P12 Five Complete Characters Plan](superpowers/plans/2026-09-30-plane-walker-p12-five-characters.md) | 五角色运行时、角色技能/天赋、UI/Replay、150 组合与 4500 synthetic samples 的执行记录 | Completed / Historical |
 | [P12A Character Profile Authority Evidence](current/2026-09-30-p12a-character-profile-authority-evidence.md) | 六个里程碑角色 Profile、15 Talent 身份、Registry/Policy、150 canonical loadouts、Schema/CI 与 115 场景整库认证 | Verified Locally / Current |
 | [P12B Input and Hostile Authority Evidence](current/2026-10-01-p12b-input-hostile-authority-evidence.md) | Input schema 3、角色技能优先级、Mastery exactly-once、Replay 迁移、稳定敌人身份与非缩放威胁权威 | Focused Verified / Current |
+| [P12 Five Complete Characters Evidence](current/2026-09-30-p12-five-characters-evidence.md) | 五角色、15 Talents、角色 UI/反馈、Replay、150 组合、40 Talent 子集、30 pairwise、4500 synthetic samples 与 154 场景最终认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |
 | [P11C Bow Candidate Migration Evidence](current/2026-09-29-p11c-bow-candidate-evidence.md) | Bow Candidate 同 token HOLD/release、道具能力迁移、反馈、legacy 时钟退休及 75 场景全量认证 | Verified Locally / Current |

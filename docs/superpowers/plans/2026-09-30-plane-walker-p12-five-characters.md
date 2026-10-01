@@ -1,13 +1,14 @@
 # Plane Walker P12 Five Complete Characters Implementation Plan
 
-- Status: Active / Current
-- Document Role: Current implementation plan
+- Status: Completed / Historical
+- Document Role: Historical implementation plan and execution record
 - Authority Level: Executable P12 work breakdown under the approved five-character design
 - Applies To: Character runtime profiles, fresh Stats, character actions, weapon mastery, five character mechanics, fifteen talents, Launch selection, HUD, presentation, replay, 150 loadouts, simulations, and certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Tasks 2A-2C deterministic shared-runtime foundations are certified; Task 2D semantic input/mastery/replay safety committed at `3a4769d`; Task 2E stable hostile identity and unscaled threat authority committed at `26ff039`; Task 3 Wanderer/Time Guardian integration is active, with pure strategies committed at `1271921`; Task 4 Void Walker/Primordial Knight pure strategies are committed at `d533cf1`
+- Implementation Status: Completed at implementation certification commit `e7b1ef9`; five Launch character runtimes, fifteen talents, player-facing UI/feedback, deterministic Replay, all 150 loadouts, 40 talent subsets, 30 pairwise integrations, two byte-identical 4500-sample reports, and the 154-scene repository gate are locally certified in `docs/current/2026-09-30-p12-five-characters-evidence.md`
+- Completion Evidence: `docs/current/2026-09-30-p12-five-characters-evidence.md`; five Launch characters, fifteen talents, player-facing UI/feedback, deterministic Replay, 150 loadouts, 40 talent subsets, 30 pairwise integrations, two byte-identical 4500-sample reports, and the `154 / 154` repository scene gate pass locally
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -410,7 +411,7 @@ Snapshots store both `irreversible_hp_loss_total` and `revision`. Target HP is `
 
 Ledger tests also cover actual-loss rather than requested overkill, healing monotonicity, terminal claims, invalid non-finite/empty/negative claims, forged Replay roots, and new-run invalidation. Rewind tests cover prepare zero side effects, participant-revision drift, exact rollback of HP/dead/position/velocity/facing/action/history, committed-payload preservation, uncommitted-action cancellation only after successful validation, and run identity supplied by `RunRuntimeHost` rather than a test-only fixture.
 
-- [ ] **Step 3: Run focused tests and confirm RED**
+- [x] **Step 3: Run focused tests and confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter damage_resolution
@@ -1169,30 +1170,30 @@ git commit -m "feat(combat): add deterministic hostile threat authority"
 - Consumes: room facts, immutable `DamageResolution` defense decisions, mastery-family facts, semantic character skill, committed TimeAction facts, irreversible ledger state, and equipped time context.
 - Produces: Path Marks/Waypoint Recall and Ward/Bulwark/Fortress with snapshot-safe payloads.
 
-- [ ] **Step 1: Write Wanderer boundary tests**
+- [x] **Step 1: Write Wanderer boundary tests**
 
 Cover progress `0/1/2/3`, marks `0/1/5/6`, first mark per room, time-skill reservation, 180/240-frame windows, energy/heal caps, room-clear heal, anchor `479/480`, cooldown `719/720`, insufficient energy, death, reset, Rewind non-refund, and stale anchor callbacks. Assert the bounded forgiveness descriptors exactly: Sword next recovery `-4f` with minimum `1f`; Bow full threshold `48 -> 44`; Gun next perfect window `28..35 -> 26..37`; Staff combo window `+60f` capped at `360f`; Gauntlets combo timeout `+30f` capped at `150f`.
 
-- [ ] **Step 2: Write Time Guardian boundary tests**
+- [x] **Step 2: Write Time Guardian boundary tests**
 
 Cover guard frames `8/9/23/24`, perfect/normal/closed damage, the ordinary guard `240`-frame cooldown, Ward `0/1/3/4`, one `(hostile_source_id, attack_generation)` claim, 35% Ward reduction, 180-frame Rebuke, 30-frame longer-time-cooldown reduction, Fortress hold `29/30`, exact cost `3 Ward + 40 energy`, duration `180`, cooldown `600`, frontal cone `120 degrees`, movement multiplier `0.70`, damage reduction `0.50`, three-Ward mastery shockwave radius `192` and `1.0x ATK`, Stop conversion Boss exposure `+30f` once per Stop generation, transaction rollback, and multi-hit caps.
 
-- [ ] **Step 3: Confirm RED**
+- [x] **Step 3: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter wanderer_character
 ./tools/run_tests.sh --filter time_guardian_character
 ```
 
-- [ ] **Step 4: Implement Path Mark and Waypoint Recall exactly**
+- [x] **Step 4: Implement Path Mark and Waypoint Recall exactly**
 
 Use source-owned anchor generation and `IrreversibleCharacterLedger`. The runtime returns decisions; PlayerController owns teleport/health application. Room and committed TimeAction facts carry run ID and revision so old-room callbacks fail closed. Rewind prepare freezes the anchor-return HP calculation and cannot refund the 30-energy placement cost or consumed marks.
 
-- [ ] **Step 5: Implement Ward and Bulwark/Fortress exactly**
+- [x] **Step 5: Implement Ward and Bulwark/Fortress exactly**
 
 HealthComponent asks the active character runtime for a validated character-defense decision before finalizing `DamageResolution`. Perfect guard returns `prevented`; normal guard returns multiplier `0.50`; Ward and Fortress compose at most once in the declared stage. Self/terminal/unguardable tags bypass Ward. Rebuke and shockwave commit through `WorldPayloadAuthority` with non-recursive/no-mastery/no-resource tags.
 
-- [ ] **Step 6: Run focused and adjacent regressions**
+- [x] **Step 6: Run focused and adjacent regressions**
 
 ```bash
 ./tools/run_tests.sh --filter wanderer_character
@@ -1203,7 +1204,7 @@ HealthComponent asks the active character runtime for a validated character-defe
 ./tools/run_tests.sh --filter sword_m1_parity
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- scripts/player/characters/wanderer_character_runtime.gd scripts/player/characters/time_guardian_character_runtime.gd scripts/combat/character_payload_execution.gd scripts/combat/health_component.gd scripts/player/player_controller.gd scripts/time_system/time_manager.gd tests/characters/character_payload_execution_test.gd tests/characters/character_payload_execution_test.tscn tests/characters/wanderer_character_runtime_test.gd tests/characters/wanderer_character_runtime_test.tscn tests/characters/time_guardian_character_runtime_test.gd tests/characters/time_guardian_character_runtime_test.tscn
@@ -1230,30 +1231,30 @@ git commit -m "feat(characters): add wanderer and time guardian"
 - Consumes: applied `DamageResolution`, `HostileThreatRegistry` unscaled queries, mastery-family/commitment facts, immutable weapon payload descriptors, `IrreversibleCharacterLedger`, `WorldPayloadAuthority`, and committed TimeAction facts.
 - Produces: Void Debt/Devour and Resonance/armor/planar echo/Realm Cleave.
 
-- [ ] **Step 1: Write Void boundaries**
+- [x] **Step 1: Write Void boundaries**
 
 Cover debt `0/59/60/99/100/101`, two-HP corruption tick per 60 authoritative frames, risk distance `239/240/241`, authorized unscaled threat/Rift facts, conversion cap 20, debt-conversion echo radius `160` and damage `0.75x ATK`, heal cap six, Devour HP cost `max(10, 20% max HP)`, energy cost 25, terminal-payment rejection, windup `24`, active `1`, recovery `30`, cooldown `480`, `4.0x` character-attack damage, 15%-confirmed-damage healing capped at 12% max HP, one cooldown reset per cast, Rift conversion echo radius `224`, Rewind non-refund, and reset cleanup.
 
-- [ ] **Step 2: Write Knight boundaries**
+- [x] **Step 2: Write Knight boundaries**
 
 Cover Resonance `0/1/3/4`, one mastery-family claim per token/generation, commitment-tier rejection, three-stack reservation, action-windup armor reduction `0.35`, payload construction rollback, echo `0.75x` on the first frame after recovery, no recursion, world ownership through gameplay Rewind, Replay reconstruction, Rift echo area/length `x1.25` with unchanged damage, and Realm Cleave windup `36`, active `1`, recovery `30`, cooldown `540`, windup armor reduction `0.40`, cost 35 energy, damage `1.5x + 0.35x per consumed stack`, one `480`-frame instability claim per target/token, 20% approved-damage bonus, and Boss poise conversion.
 
-- [ ] **Step 3: Confirm RED**
+- [x] **Step 3: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter void_walker_character
 ./tools/run_tests.sh --filter primordial_knight_character
 ```
 
-- [ ] **Step 4: Implement Void Debt and bounded Devour**
+- [x] **Step 4: Implement Void Debt and bounded Devour**
 
 Store self-cost through `HealthComponent.lose_health_irreversible()` before applying damage. Risk predicates use only `HostileThreatRegistry` immutable geometry/generation or authorized Rift descriptors; they never read `CombatTelegraph2D`. Aggregate healing is finalized once after all target results and clamped to both cast and missing-HP caps.
 
-- [ ] **Step 5: Implement Resonance and planar echo**
+- [x] **Step 5: Implement Resonance and planar echo**
 
 Copy only approved payload descriptors from the committed weapon plan. Echo and Realm Cleave payloads commit through `WorldPayloadAuthority`; they carry `character_echo`, original token, character generation, and no-mastery/no-resource tags. Gameplay Rewind preserves the committed echo and consumed Resonance; Replay checkpoint restore reconstructs it exactly.
 
-- [ ] **Step 6: Run focused and weapon/Boss regressions**
+- [x] **Step 6: Run focused and weapon/Boss regressions**
 
 ```bash
 ./tools/run_tests.sh --filter void_walker_character
@@ -1263,7 +1264,7 @@ Copy only approved payload descriptors from the committed weapon plan. Echo and 
 ./tools/run_tests.sh --filter replay
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- scripts/player/characters/void_walker_character_runtime.gd scripts/player/characters/primordial_knight_character_runtime.gd scripts/combat/void_devour_execution.gd scripts/combat/planar_echo_execution.gd scripts/player/player_controller.gd scripts/combat/health_component.gd scripts/time_system/time_manager.gd scripts/combat/world_payload_authority.gd tests/characters/void_walker_character_runtime_test.gd tests/characters/void_walker_character_runtime_test.tscn tests/characters/primordial_knight_character_runtime_test.gd tests/characters/primordial_knight_character_runtime_test.tscn
@@ -1297,11 +1298,11 @@ git commit -m "feat(characters): add void walker and primordial knight"
 - Consumes: mastery-family facts, exactly two equipped time abilities, committed TimeAction facts, `WorldPayloadAuthority`, character-scoped talent definitions, and resource transactions.
 - Produces: Codex Pages, Primer/pair conversion, Infusion/Dominion, and fifteen validated character talents.
 
-- [ ] **Step 1: Write Codex and pair tests**
+- [x] **Step 1: Write Codex and pair tests**
 
 Cover Pages `0/1/3/4`, one Page per mastery family/token/generation/rate cap, Primer `299/300`, same-ability rejection, all six unordered pairs, one pair consumption, Infusion cost 10/cooldown 120 and `2.0x` next-mastery echo, Dominion hold `59/60`, exact cost `2 Pages + 60 energy`, enhanced-pair arm window `300`, cooldown `480`, Page/energy rollback, separate Staff Mana, Rewind non-refund, reset, and stale pair callbacks.
 
-- [ ] **Step 2: Write talent content/runtime tests**
+- [x] **Step 2: Write talent content/runtime tests**
 
 Assert exactly fifteen canonical Run Talents total: the fifteen identities and localization keys registered by Task 1 remain unchanged; Task 5 activates the three frozen M1 talents through Wanderer's Launch route and installs typed runtime modifiers for the twelve Launch identities. Verify exactly three per character, no cross-character activation, bounded values, mutually exclusive duplicates rejected, atomic application, snapshot/restore, and reset.
 
@@ -1330,7 +1331,7 @@ func all_subsets(ids: Array[StringName]) -> Array[PackedStringArray]:
 
 For each character the masks are `000`, `001`, `010`, `011`, `100`, `101`, `110`, and `111`: empty, each single, each pair, and all three. The test must execute `5 x 8 = 40` distinct configurations, verify canonical ID order, install/snapshot/Replay/reset, and reject every cross-character ID. It must not define a sixteenth talent.
 
-- [ ] **Step 3: Confirm RED**
+- [x] **Step 3: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter time_lord_character
@@ -1338,7 +1339,7 @@ For each character the masks are `000`, `001`, `010`, `011`, `100`, `101`, `110`
 ./tools/run_tests.sh --filter content_registry
 ```
 
-- [ ] **Step 4: Implement six pair conversions with exact base/enhanced bounds**
+- [x] **Step 4: Implement six pair conversions with exact base/enhanced bounds**
 
 Use a canonical unordered pair key. Each conversion delegates to typed TimeManager/WorldPayloadAuthority methods with source ID, generation, rollback, and these exact values:
 
@@ -1353,11 +1354,11 @@ Use a canonical unordered pair key. Each conversion delegates to typed TimeManag
 
 Stop durations, Rift total ticks/total damage, and enemy lock are never extended beyond the named bound. No pair handler may call an unselected third ability. Rewind pairs use the pre-return position frozen by TimeAction prepare.
 
-- [ ] **Step 5: Activate fifteen talent handlers and capability routes**
+- [x] **Step 5: Activate fifteen talent handlers and capability routes**
 
 Preserve the three current M1 talent IDs and behavior, extend them into Wanderer's Launch route through profile-scoped handlers, and attach typed bounded modifiers to the twelve Launch identities already registered by Task 1. Do not create a sixteenth identity or duplicate localization key. Update both localization catalogs only if final player-facing copy changes and refresh manifest hashes after any content edit. CharacterTalentState freezes talent modifiers at action/time commit. Time Dominion arms exactly one enhanced pair for 300 frames; it neither casts a pair at hold release nor grants an unselected ability.
 
-- [ ] **Step 6: Run focused, content, time, item, and localization gates**
+- [x] **Step 6: Run focused, content, time, item, and localization gates**
 
 ```bash
 ./tools/run_tests.sh --filter time_lord_character
@@ -1369,7 +1370,7 @@ Preserve the three current M1 talent IDs and behavior, extend them into Wanderer
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- scripts/player/characters/time_lord_character_runtime.gd scripts/player/characters/character_talent_state.gd data/content_packs/base/content/talents.json data/content_packs/base/pack.json data/localization/translations.csv data/content_packs/base/localization/translations.csv scripts/content/effects/effect_handler_catalog.gd scripts/items/item_effect.gd scripts/time_system/time_manager.gd scripts/time_system/time_action_transaction.gd scripts/combat/world_payload_authority.gd tests/characters/time_lord_character_runtime_test.gd tests/characters/time_lord_character_runtime_test.tscn tests/characters/character_talent_state_test.gd tests/characters/character_talent_state_test.tscn tests/contract/content_schema/content_registry_test.gd tests/unit/items/item_effect_test.gd tests/smoke/character_talent_subset_matrix_test.gd tests/smoke/character_talent_subset_matrix_test.tscn
@@ -1401,11 +1402,11 @@ git commit -m "feat(characters): add time lord and character talents"
 - Consumes: immutable Registry-derived selector model and character presentation snapshots.
 - Produces: stable-ID Character/Weapon/Time selectors, validated `character_state`, generic character HUD, and profile-driven proxy/feedback.
 
-- [ ] **Step 1: Write failing 150-UI and character-state tests**
+- [x] **Step 1: Write failing 150-UI and character-state tests**
 
 Loop all 150 selections and assert exact emitted IDs. Reject unknown character/meter/status, NaN/INF/negative values, invalid Primer, cooldown overflow, and legacy fields. Preserve selected IDs across Chinese/English refresh.
 
-- [ ] **Step 2: Confirm RED**
+- [x] **Step 2: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter launch_loadout_panel
@@ -1414,19 +1415,19 @@ Loop all 150 selections and assert exact emitted IDs. Reject unknown character/m
 ./tools/run_tests.sh --filter controller_focus_flow
 ```
 
-- [ ] **Step 3: Implement the compact three-selector model**
+- [x] **Step 3: Implement the compact three-selector model**
 
 `RunLoadoutCatalog` returns ordered deep-copied entries with stable IDs, name/description keys, and legal time pairs. Replace the vertical label/control pairs with a two-column grid inside the existing 536×328 panel. Focus order is Character → Weapon → Time Pair → Start → Back.
 
-- [ ] **Step 4: Add exact character-state union and HUD**
+- [x] **Step 4: Add exact character-state union and HUD**
 
 The schema contains only the fields in the specification. The HUD shows one meter/status/cooldown without internal IDs and rerenders cached state on locale change.
 
-- [ ] **Step 5: Add five proxy visual profiles and cue budgets**
+- [x] **Step 5: Add five proxy visual profiles and cue budgets**
 
 Use profile palette/silhouette/resource aura/skill cue. Every cue respects shake, flash, motion, subtitle, contrast, and volume settings. Rejected character skills show accessible rejection without success animation.
 
-- [ ] **Step 6: Run UI, device, localization, and resolution gates**
+- [x] **Step 6: Run UI, device, localization, and resolution gates**
 
 ```bash
 ./tools/run_tests.sh --filter launch_loadout
@@ -1439,7 +1440,7 @@ Use profile palette/silhouette/resource aura/skill cue. Every cue respects shake
 
 Verify 640×360, 1280×720, 1920×1080, and ultrawide safe frames with real keyboard, mouse, and controller events.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- scripts/application/run_loadout_catalog.gd scripts/ui/launch_loadout_panel.gd scenes/ui/launch_loadout_panel.tscn scripts/main.gd scripts/ui/contracts/run_view_state.gd scripts/application/run_view_state_projector.gd scripts/ui/views/combat_hud_view.gd scenes/ui/combat_hud_v2.tscn scripts/presentation/pixel_proxy_actor.gd autoload/combat_feedback.gd tests/ui/launch_loadout_panel_test.gd tests/ui/run_view_state_contract_test.gd tests/ui/combat_hud_v2_scene_test.gd tests/integration/ui/launch_loadout_flow_test.gd tests/integration/ui/controller_focus_flow_test.gd tests/unit/application/run_view_state_projector_test.gd tests/presentation/combat_feedback_runtime_test.gd
@@ -1467,28 +1468,28 @@ git commit -m "feat(ui): add five-character launch selection"
 - Consumes: character profile/coordinator/runtime snapshots, TimeManager including active Rift descriptors, TimeAction transition state, hostile threat facts, WorldPayloadAuthority Replay descriptors, irreversible ledger roots, and validated character fact transitions.
 - Produces: Replay schema with character identity, all cross-domain authority roots, atomic restore, divergence rejection, and five-character round trip.
 
-- [ ] **Step 1: Write failing five-character replay tests**
+- [x] **Step 1: Write failing five-character replay tests**
 
 Keep `wanderer_m1_v1` on its certified P11/M1 Replay schema and digest. For each Launch character, use Player Replay schema 4 and record mastery family, character skill, committed TimeAction, DamageResolution/room facts, active Rift/threat/world payload, checkpoint restore, replay to terminal, and exact terminal digest. Reject profile mismatch, wrong token/generation/frame/run ID, forged irreversible ledger, malformed/no-op transitions, event-prefix drift, unstable hostile identity, and stale world payloads.
 
 Add three explicit authority cases: gameplay Rewind preserves a committed planar echo/Rift and does not recreate a previously consumed payload; Replay checkpoint restore deletes the current payload generation and reconstructs the recorded descriptors exactly; reset/loadout replacement invalidates the generation so late payload callbacks are rejected.
 
-- [ ] **Step 2: Confirm RED**
+- [x] **Step 2: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter character_runtime_replay
 ./tools/run_tests.sh --filter character_external_fact_replay
 ```
 
-- [ ] **Step 3: Extend snapshot and event schema**
+- [x] **Step 3: Extend snapshot and event schema**
 
 The schema-4 event envelope has exactly `schema_version`, `frame`, `sequence`, `capture_sequence`, `run_id`, `content_snapshot_digest`, `character_profile_id`, `character_profile_version`, `event_type`, and `payload`. Add character coordinator/runtime/talent/presentation state, TimeManager full snapshot, TimeAction token/generation floor and committed facts, DamageResolution/irreversible claim roots, hostile threat root, and sorted WorldPayloadAuthority descriptor set. TimeManager fields include energy/revision, all four cooldowns, Stop, Accelerate, Rewind window, Rift source sequence, and complete active-Rift descriptors. Existing P11 weapon replays either remain on their certified schema or fail with a precise unsupported-version code; they never load partially.
 
-- [ ] **Step 4: Validate record-time and playback-time transitions**
+- [x] **Step 4: Validate record-time and playback-time transitions**
 
 Use complete before/after digest and identity checks. Invalid recording attempts do not append, consume capture sequence, refresh baseline, or mutate live state. Validate every participant before replacing any state. Failed restore rolls every participant back to the exact prior snapshot; a documented safe reset is allowed only if rollback itself proves impossible, and the test must assert the resulting empty generations.
 
-- [ ] **Step 5: Run Replay and adjacent regressions**
+- [x] **Step 5: Run Replay and adjacent regressions**
 
 ```bash
 ./tools/run_tests.sh --filter replay
@@ -1501,7 +1502,7 @@ Use complete before/after digest and identity checks. Invalid recording attempts
 ./tools/run_tests.sh --filter weapon_time_loadout_matrix
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -- scripts/replay/replay_recorder.gd scripts/replay/replay_player.gd scripts/player/player_controller.gd scripts/time_system/time_manager.gd scripts/time_system/time_action_transaction.gd scripts/combat/world_payload_authority.gd scripts/combat/hostile_threat_registry.gd scripts/player/characters/irreversible_character_ledger.gd tests/replay/character_runtime_replay_test.gd tests/replay/character_runtime_replay_test.tscn tests/replay/character_external_fact_replay_test.gd tests/replay/character_external_fact_replay_test.tscn tests/replay/weapon_restore_observable_atomicity_test.gd
@@ -1534,15 +1535,15 @@ git commit -m "feat(replay): add deterministic character state"
 - Consumes: five certified Launch character profiles, five weapon profiles, six time pairs, all 40 legal character-talent subsets, 30 canonical seeds, Replay, UI, Boss/room contracts, and full repository validation.
 - Produces: 150 deterministic runtime results, 40 talent-subset results, 30 pairwise heavy integrations, 4500 synthetic samples, final evidence, and Historical plan conversion.
 
-- [ ] **Step 1: Write the exact matrix contracts**
+- [x] **Step 1: Write the exact matrix contracts**
 
 Each character shard covers five weapons × six time pairs twice. Every case starts the real Player, advances only through `advance_action_frame(frame_intents)`, commits representative mastery-family, character skill, both time abilities, validates Character/Weapon ViewState, schema-4 Launch Replay, TimeManager/Rift and WorldPayload roots, resets twice, and compares pre-reset and clean-reset digests.
 
-- [ ] **Step 2: Certify the exact 40-case talent-subset matrix**
+- [x] **Step 2: Certify the exact 40-case talent-subset matrix**
 
 Run the eight masks `000..111` for each of the five character talent triples defined in Task 5. Every case installs the real profile and one canonical Sword + Stop/Rewind loadout, commits the affected character loop, checks exact cost/cooldown/window/cap changes, performs Replay record/playback and checkpoint restore, resets, and proves canonical subset identity. Assert exactly 40 unique `(character_id, talent_ids)` rows, exactly 15 total definitions, and zero cross-character activations.
 
-- [ ] **Step 3: Add the 30-case pairwise integration**
+- [x] **Step 3: Add the 30-case pairwise integration**
 
 Use:
 
@@ -1552,11 +1553,11 @@ var weapon_index := (character_index + time_pair_index) % WEAPONS.size()
 
 Assert the set covers all 25 character×weapon pairs, all 30 character×time-pair pairs, and all 30 weapon×time-pair pairs while executing room start/clear, Chrono Warden conversion, Replay checkpoint, and terminal cleanup.
 
-- [ ] **Step 4: Add simulation report v2 and strict contract**
+- [x] **Step 4: Add simulation report v2 and strict contract**
 
 The CLI accepts only `--seeds 30`. Output contains five characters, five weapons, six pairs, 4500 samples, 150 loadouts, `talent_subset_cases: 40`, character/weapon/character×weapon/loadout summaries, exact character/weapon profile and active Content Pack digests, required P11 metrics, required P12 character metrics, and synthetic disclosure. It rejects ignored character profiles, noncanonical seeds, drifted summaries, NaN/INF, unknown fields, and human-evidence claims.
 
-- [ ] **Step 5: Run focused matrix and reports twice**
+- [x] **Step 5: Run focused matrix and reports twice**
 
 ```bash
 ./tools/run_tests.sh --filter loadout_matrix_smoke_test
@@ -1569,7 +1570,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 tools/run_character_weapon_simulation_matrix.p
 
 Expected: both JSON files are byte-identical and contain `human_playtests: 0`.
 
-- [ ] **Step 6: Run complete certification**
+- [x] **Step 6: Run complete certification**
 
 ```bash
 ./tools/validate_project.sh
@@ -1588,11 +1589,11 @@ git diff --check
 
 Expected: all gates pass with only registered warnings; GDScript line coverage and real export boundaries remain honestly reported.
 
-- [ ] **Step 7: Write evidence and mark this plan Historical**
+- [x] **Step 7: Write evidence and mark this plan Historical**
 
 Record implementation commits, commands, pass counts, report content/file digests, registered warnings, `0 / 20` human playtests, unsupported line coverage, and external export/signing/publication boundaries. Update Full Product status so the next active delivery step is eight archetype mechanics and the complete launch pools.
 
-- [ ] **Step 8: Commit certification**
+- [x] **Step 8: Commit certification**
 
 ```bash
 git add -- tests/smoke/character_weapon_time_matrix_runner.gd tests/smoke/wanderer_loadout_matrix_smoke_test.gd tests/smoke/wanderer_loadout_matrix_smoke_test.tscn tests/smoke/time_guardian_loadout_matrix_smoke_test.gd tests/smoke/time_guardian_loadout_matrix_smoke_test.tscn tests/smoke/void_walker_loadout_matrix_smoke_test.gd tests/smoke/void_walker_loadout_matrix_smoke_test.tscn tests/smoke/primordial_knight_loadout_matrix_smoke_test.gd tests/smoke/primordial_knight_loadout_matrix_smoke_test.tscn tests/smoke/time_lord_loadout_matrix_smoke_test.gd tests/smoke/time_lord_loadout_matrix_smoke_test.tscn tests/integration/characters/character_pairwise_integration_test.gd tests/integration/characters/character_pairwise_integration_test.tscn tools/run_character_weapon_simulation_matrix.py tests/contract/playtest/test_character_weapon_simulation_report.py docs/current/2026-09-30-p12-five-characters-evidence.md docs/README.md docs/superpowers/plans/2026-09-30-plane-walker-p12-five-characters.md
@@ -1601,18 +1602,18 @@ git commit -m "docs(characters): certify p12 five-character runtime"
 
 ## P12 Exit Gate
 
-- [ ] Six character profiles resolve only at their allowed milestones.
-- [ ] Six profiles match every exact base-stat, critical, Time, and Dash field; no runtime default fills an omitted value.
-- [ ] M1/CURRENT/NEXT Wanderer parity remains unchanged.
-- [ ] Five Launch characters have distinct stats, resource, skill, mastery, time conversions, three talents, HUD, feedback, controller, accessibility, snapshot, reset, replay, and cleanup.
-- [ ] Live, Replay, and simulation share the 60 Hz frame pump; gameplay `_process(delta)` mutation is absent.
-- [ ] DamageResolution, irreversible Rewind, TimeAction, hostile identity/threat, and WorldPayloadAuthority fault-injection suites pass with exact rollback.
-- [ ] All five weapons use character attack scaling while Wanderer P11 values remain exact.
-- [ ] Launch UI and Policy enumerate exactly 150 legal tuples.
-- [ ] Mastery dedupe is exact by `(generation, action_token, canonical weapon family)` even when mastery IDs differ.
-- [ ] Input schema `1 -> 2 -> 3`, real v2 recovery/collision fixtures, and Dash -> Time -> Character -> Weapon suppression/cancellation gates pass.
-- [ ] Exactly fifteen talent definitions and all 40 character-talent subsets pass install, behavior, Replay, checkpoint, and reset gates.
-- [ ] Twenty-five mastery, twenty ability, thirty pairwise, five runtime shards, schema-4 Launch Replay, and frozen M1 Replay gates pass.
-- [ ] Two 4500-sample synthetic reports are byte-identical.
-- [ ] Full repository validation is green with only registered warnings.
-- [ ] Evidence remains local and does not change M1, human-playtest, line-coverage, export, signing, or publication status.
+- [x] Six character profiles resolve only at their allowed milestones.
+- [x] Six profiles match every exact base-stat, critical, Time, and Dash field; no runtime default fills an omitted value.
+- [x] M1/CURRENT/NEXT Wanderer parity remains unchanged.
+- [x] Five Launch characters have distinct stats, resource, skill, mastery, time conversions, three talents, HUD, feedback, controller, accessibility, snapshot, reset, replay, and cleanup.
+- [x] Live, Replay, and simulation share the 60 Hz frame pump; gameplay `_process(delta)` mutation is absent.
+- [x] DamageResolution, irreversible Rewind, TimeAction, hostile identity/threat, and WorldPayloadAuthority fault-injection suites pass with exact rollback.
+- [x] All five weapons use character attack scaling while Wanderer P11 values remain exact.
+- [x] Launch UI and Policy enumerate exactly 150 legal tuples.
+- [x] Mastery dedupe is exact by `(generation, action_token, canonical weapon family)` even when mastery IDs differ.
+- [x] Input schema `1 -> 2 -> 3`, real v2 recovery/collision fixtures, and Dash -> Time -> Character -> Weapon suppression/cancellation gates pass.
+- [x] Exactly fifteen talent definitions and all 40 character-talent subsets pass install, behavior, Replay, checkpoint, and reset gates.
+- [x] Twenty-five mastery, twenty ability, thirty pairwise, five runtime shards, schema-4 Launch Replay, and frozen M1 Replay gates pass.
+- [x] Two 4500-sample synthetic reports are byte-identical.
+- [x] Full repository validation is green with only registered warnings.
+- [x] Evidence remains local and does not change M1, human-playtest, line-coverage, export, signing, or publication status.
