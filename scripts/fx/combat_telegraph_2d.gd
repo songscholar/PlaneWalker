@@ -1,6 +1,7 @@
 class_name CombatTelegraph2D
 extends Node2D
 
+const HostileTelegraphFactScript := preload("res://scripts/combat/hostile_telegraph_fact.gd")
 const DEFAULT_FILL_COLOR := Color(1.0, 0.24, 0.18, 0.18)
 const DEFAULT_OUTLINE_COLOR := Color(1.0, 0.64, 0.28, 0.92)
 const HIGH_CONTRAST_BACKGROUND := Color("101216")
@@ -24,6 +25,10 @@ var _length: float = 0.0
 var _remaining: float = 0.0
 var _visual_scale: float = 1.0
 var _high_contrast_danger: bool = false
+var _hostile_source_id: StringName = &""
+var _attack_generation: int = 0
+var _active_from_frame: int = 0
+var _active_through_frame: int = 0
 
 
 func _ready() -> void:
@@ -46,6 +51,7 @@ func show_telegraph(
 	length: float,
 	duration: float
 ) -> void:
+	_clear_fact_identity()
 	_action_id = action_id
 	_shape = shape
 	_origin_global = origin_global
@@ -59,6 +65,28 @@ func show_telegraph(
 	global_position = _origin_global
 	visible = true
 	queue_redraw()
+
+
+func project_fact(value: Variant) -> bool:
+	var fact: Dictionary = HostileTelegraphFactScript.create(value)
+	if fact.is_empty():
+		return false
+	show_telegraph(
+		"%s#%d" % [str(fact["hostile_source_id"]), int(fact["attack_generation"])],
+		str(fact["shape"]),
+		fact["origin"] as Vector2,
+		fact["aim_direction"] as Vector2,
+		fact["target_point"] as Vector2,
+		_typed_vector_array(fact["summon_slots"] as Array),
+		float(fact["radius"]),
+		float(fact["length"]),
+		float(int(fact["active_through_frame"]) - int(fact["active_from_frame"]) + 1) / 60.0
+	)
+	_hostile_source_id = StringName(str(fact["hostile_source_id"]))
+	_attack_generation = int(fact["attack_generation"])
+	_active_from_frame = int(fact["active_from_frame"])
+	_active_through_frame = int(fact["active_through_frame"])
+	return true
 
 
 func set_remaining_time(value: float) -> void:
@@ -75,6 +103,10 @@ func set_accessibility_options(high_contrast: bool, visual_scale: float) -> void
 	queue_redraw()
 
 
+func set_accessibility_visual_scale(visual_scale: float) -> void:
+	set_accessibility_options(_high_contrast_danger, visual_scale)
+
+
 func _rescale_geometry() -> void:
 	_radius = _base_radius * _visual_scale
 	_length = _base_length * _visual_scale
@@ -89,6 +121,7 @@ func update_origin_global(origin_global: Vector2) -> void:
 func clear_telegraph() -> void:
 	visible = false
 	_remaining = 0.0
+	_clear_fact_identity()
 	queue_redraw()
 
 
@@ -102,6 +135,12 @@ func get_snapshot() -> Dictionary:
 		"summon_slots": _summon_slots_global.duplicate(),
 		"radius": _radius,
 		"length": _length,
+		"visual_radius": _radius,
+		"visual_length": _length,
+		"hostile_source_id": _hostile_source_id,
+		"attack_generation": _attack_generation,
+		"active_from_frame": _active_from_frame,
+		"active_through_frame": _active_through_frame,
 		"remaining": _remaining,
 		"visible": visible,
 		"visual_scale": _visual_scale,
@@ -125,6 +164,8 @@ func _draw() -> void:
 			draw_arc(Vector2.ZERO, maxf(1.0, _radius - 8.0), 0.0, TAU, 48, fill_color, 8.0, true)
 			_draw_high_contrast_inner_ring(Vector2.ZERO, _radius)
 		"line":
+			_draw_line_proxy()
+		"rift":
 			_draw_line_proxy()
 		"summon_slots":
 			for slot_global: Vector2 in _summon_slots_global:
@@ -165,3 +206,17 @@ func _draw_high_contrast_inner_ring(center: Vector2, radius: float) -> void:
 	if not _high_contrast_danger:
 		return
 	draw_arc(center, maxf(1.0, radius - 4.0), 0.0, TAU, 48, HIGH_CONTRAST_FOREGROUND, 1.0, true)
+
+
+func _clear_fact_identity() -> void:
+	_hostile_source_id = &""
+	_attack_generation = 0
+	_active_from_frame = 0
+	_active_through_frame = 0
+
+
+func _typed_vector_array(values: Array) -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	for value: Variant in values:
+		result.append(value as Vector2)
+	return result

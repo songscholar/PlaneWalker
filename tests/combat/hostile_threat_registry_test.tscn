@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/combat/hostile_threat_registry_test.gd" id="1_hostile_threat_registry"]
+
+[node name="HostileThreatRegistryTest" type="Node"]
+script = ExtResource("1_hostile_threat_registry")
