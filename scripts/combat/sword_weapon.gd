@@ -9,6 +9,9 @@ const MAX_RESOLUTION_ID_LENGTH := 96
 @export var owner_path: NodePath
 @export var base_attack: float = 30.0
 @export var attack_speed: float = 1.0
+@export var character_attack_scale: float = 1.0
+@export var crit_chance: float = 0.05
+@export var crit_multiplier: float = 1.5
 
 @onready var hitbox: Node = $Hitbox
 @onready var owner_player: Node = get_node(owner_path)
@@ -86,6 +89,10 @@ func attack_definition(heavy: bool = false) -> Dictionary:
 		"recovery_cancel_frame": _seconds_to_frames(0.24 if heavy else 0.10),
 		"movement_multiplier": 0.2 if heavy else 0.55,
 		"combo_reset_frames": maxi(1, ceili(0.8 * Engine.physics_ticks_per_second)),
+		"character_attack_scale": character_attack_scale,
+		"attack_speed": attack_speed,
+		"crit_chance": crit_chance,
+		"crit_multiplier": crit_multiplier,
 	}
 
 
@@ -418,6 +425,7 @@ func _valid_profile_attack(definition: Dictionary) -> bool:
 		or not is_finite(float(definition.get("knockback", 0.0)))
 		or float(definition.get("knockback", -1.0)) < 0.0
 		or not definition.get("tags") is Array
+		or not _valid_character_combat_stats(definition)
 	):
 		return false
 	var tags: Array = definition["tags"]
@@ -427,6 +435,20 @@ func _valid_profile_attack(definition: Dictionary) -> bool:
 		if typeof(tag) not in [TYPE_STRING, TYPE_STRING_NAME] or str(tag).is_empty():
 			return false
 	return true
+
+
+func _valid_character_combat_stats(definition: Dictionary) -> bool:
+	for field: String in ["character_attack_scale", "attack_speed", "crit_chance", "crit_multiplier"]:
+		var value: Variant = definition.get(field)
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
+			return false
+	return (
+		float(definition["character_attack_scale"]) > 0.0
+		and float(definition["attack_speed"]) > 0.0
+		and float(definition["crit_chance"]) >= 0.0
+		and float(definition["crit_chance"]) <= 1.0
+		and float(definition["crit_multiplier"]) >= 1.0
+	)
 
 
 func plan_damage_defense(damage_info: RefCounted) -> Dictionary:

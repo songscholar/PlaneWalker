@@ -23,6 +23,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	await _test_character_stats_freeze_into_damage_payload()
 	await _test_profile_snapshot_and_capabilities_are_isolated()
 	await _test_parser_valid_m1_profile_drift_is_rejected()
 	await _test_exact_m1_frame_table_and_combo_progression()
@@ -33,6 +34,40 @@ func _run() -> void:
 	await _test_restore_snapshot_requires_quiescent_state()
 	await _test_snapshot_restore_cancel_and_reset()
 	_suite.finish(get_tree())
+
+
+func _test_character_stats_freeze_into_damage_payload() -> void:
+	var fixture := await _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var sword: Node = fixture["sword"]
+	sword.base_attack = 27.0
+	sword.attack_speed = 0.9
+	sword.character_attack_scale = 0.9
+	sword.crit_chance = 0.04
+	sword.crit_multiplier = 1.6
+	var plan: Dictionary = runtime.plan_intent(_intent(&"weapon_primary"), {}).get("plan", {})
+	var parameters := ((plan.get("payloads", []) as Array)[0] as Dictionary).get("parameters", {}) as Dictionary
+	for source: Dictionary in [plan, parameters]:
+		_suite.assert_close(float(source.get("character_attack_scale", 0.0)), 0.9, "Sword freezes character attack scale")
+		_suite.assert_close(float(source.get("attack_speed", 0.0)), 0.9, "Sword freezes character attack speed")
+		_suite.assert_close(float(source.get("crit_chance", -1.0)), 0.04, "Sword freezes character critical chance")
+		_suite.assert_close(float(source.get("crit_multiplier", 0.0)), 1.6, "Sword freezes character critical multiplier")
+	_suite.assert_true(bool(runtime.commit_action(plan, 90001).get("ok", false)), "Sword character-stat plan commits")
+	sword.base_attack = 999.0
+	sword.attack_speed = 4.0
+	sword.character_attack_scale = 4.0
+	sword.crit_chance = 1.0
+	sword.crit_multiplier = 9.0
+	runtime.on_phase_enter(plan, &"ACTIVE", 90001)
+	var committed_definition := sword.get("_current_attack") as Dictionary
+	_suite.assert_close(float(committed_definition.get("character_attack_scale", 0.0)), 0.9, "Sword committed definition freezes character attack scale")
+	_suite.assert_close(float(committed_definition.get("crit_chance", -1.0)), 0.04, "Sword committed definition freezes critical chance")
+	_suite.assert_close(float(committed_definition.get("crit_multiplier", 0.0)), 1.6, "Sword committed definition freezes critical multiplier")
+	var damage_info: RefCounted = sword.hitbox.get("_active_damage_info")
+	_suite.assert_true(damage_info != null, "Sword character-stat action creates a damage payload")
+	if damage_info != null:
+		_suite.assert_close(float(damage_info.amount), 21.6, "Sword damage keeps the frozen scaled attack")
+	await _free_player(fixture["player"])
 
 
 func _test_profile_snapshot_and_capabilities_are_isolated() -> void:
@@ -314,6 +349,40 @@ func _test_plan_and_commit_failures_are_atomic() -> void:
 	forged_plan["action_id"] = "light_3"
 	_suite.assert_true(not bool(runtime.commit_action(forged_plan, 402).get("ok", false)), "stale or forged combo plan is rejected")
 	_suite.assert_equal(runtime.snapshot(), before, "forged plan rejection remains atomic")
+
+	var forged_base_attack := plan.duplicate(true)
+	forged_base_attack["base_attack_snapshot"] = 999.0
+	_suite.assert_true(
+		not bool(runtime.commit_action(forged_base_attack, 403).get("ok", false)),
+		"forged M1 base attack snapshot is rejected"
+	)
+	_suite.assert_equal(runtime.snapshot(), before, "forged base attack rejection remains atomic")
+
+	var forged_root_stats := plan.duplicate(true)
+	forged_root_stats["crit_multiplier"] = 9.0
+	_suite.assert_true(
+		not bool(runtime.commit_action(forged_root_stats, 404).get("ok", false)),
+		"forged M1 root character stats are rejected"
+	)
+	_suite.assert_equal(runtime.snapshot(), before, "forged root stats rejection remains atomic")
+
+	var forged_payload := plan.duplicate(true)
+	((forged_payload["payloads"] as Array)[0]["parameters"] as Dictionary)["damage_multiplier"] = 99.0
+	_suite.assert_true(
+		not bool(runtime.commit_action(forged_payload, 405).get("ok", false)),
+		"forged M1 payload definition is rejected"
+	)
+	_suite.assert_equal(runtime.snapshot(), before, "forged payload rejection remains atomic")
+
+	var forged_character_snapshot := plan.duplicate(true)
+	(forged_character_snapshot["character_stats_snapshot"] as Dictionary)["attack_speed"] = 4.0
+	forged_character_snapshot["attack_speed"] = 4.0
+	((forged_character_snapshot["payloads"] as Array)[0]["parameters"] as Dictionary)["attack_speed"] = 4.0
+	_suite.assert_true(
+		not bool(runtime.commit_action(forged_character_snapshot, 406).get("ok", false)),
+		"forged M1 character snapshot is rejected even when mirrored into the payload"
+	)
+	_suite.assert_equal(runtime.snapshot(), before, "forged character snapshot rejection remains atomic")
 	await _free_player(fixture["player"])
 
 

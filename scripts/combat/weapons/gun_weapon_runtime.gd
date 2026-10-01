@@ -52,6 +52,9 @@ const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 	&"snapshot",
 	&"reset",
 ]
+const CHARACTER_STATS_FIELDS: Array[String] = [
+	"base_attack", "character_attack_scale", "attack_speed", "crit_chance", "crit_multiplier",
+]
 const FROZEN_CAPABILITIES: Array[String] = [
 	"weapon.ammo_capacity",
 	"weapon.attack_speed",
@@ -340,7 +343,15 @@ func update_hold_context(plan: Dictionary, token: int, context: Dictionary) -> b
 	var normalized := _normalized_context(context)
 	if not bool(normalized.get("ok", false)):
 		return false
-	_live_hold_context = (normalized["context"] as Dictionary).duplicate(true)
+	var character_stats: Variant = (plan.get("frozen_context", {}) as Dictionary).get(
+		"character_stats",
+		{}
+	)
+	if not _valid_character_stats_snapshot(character_stats):
+		return false
+	var live_context := (normalized["context"] as Dictionary).duplicate(true)
+	live_context["character_stats"] = (character_stats as Dictionary).duplicate(true)
+	_live_hold_context = live_context
 	return true
 
 
@@ -715,7 +726,10 @@ func _build_projectile_plan(action_id: StringName, context: Dictionary) -> Dicti
 	var frozen_modifiers: Dictionary = modifiers["modifiers"]
 	var time_context: Dictionary = frozen_context["time_interactions"]
 	var time_load_active := _time_load_remaining_frames > 0
-	var timing_scale := _modifier_timing_scale(frozen_modifiers)
+	var timing_scale := _modifier_timing_scale(
+		frozen_modifiers,
+		frozen_context["character_stats"]
+	)
 	if time_load_active:
 		timing_scale *= TIME_LOAD_TIMING_MULTIPLIER
 
@@ -804,6 +818,7 @@ func _build_projectile_plan(action_id: StringName, context: Dictionary) -> Dicti
 		"boss_conversion": _boss_conversion(),
 		"invulnerable_during_cast": action_id == ULTIMATE_ACTION_ID,
 	}
+	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(validation.get("ok", false)):
 		return validation
@@ -840,6 +855,7 @@ func _build_reload_plan(context: Dictionary, empty_primary_trigger: bool) -> Dic
 		"payloads": [{"descriptor_id": str(payload["payload_id"]), "kind": str(payload["kind"]), "parameters": (payload["parameters"] as Dictionary).duplicate(true)}],
 		"cue": cue, "time_interactions": [], "boss_conversion": _boss_conversion(),
 	}
+	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -870,6 +886,7 @@ func _build_time_load_plan(context: Dictionary) -> Dictionary:
 		"payloads": [{"descriptor_id": str(payload["payload_id"]), "kind": str(payload["kind"]), "parameters": (payload["parameters"] as Dictionary).duplicate(true)}],
 		"cue": cue, "time_interactions": [], "boss_conversion": _boss_conversion(),
 	}
+	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -909,6 +926,10 @@ func _build_hold_skeleton(
 		}],
 		"payloads": [], "cue": {}, "time_interactions": [], "boss_conversion": _boss_conversion(),
 	}
+	_freeze_character_stats_into_plan(
+		plan,
+		(normalized["context"] as Dictionary)["character_stats"]
+	)
 	if action_id == PRIMARY_HOLD_ACTION_ID:
 		plan["allowed_release_action_ids"] = [str(NORMAL_ACTION_ID), str(AIMED_ACTION_ID)]
 		plan["release_action_fingerprints"] = {
@@ -957,11 +978,21 @@ func _action_definition(plan: Dictionary, token: int) -> Dictionary:
 	var descriptors := _materialize_payloads(plan, token)
 	if descriptors.is_empty():
 		return {}
+	var character_stats := ((plan.get("frozen_context", {}) as Dictionary).get(
+		"character_stats",
+		{}
+	) as Dictionary)
+	if not _valid_character_stats_snapshot(character_stats):
+		return {}
 	return {
 		"token": token, "profile_id": PROFILE_ID, "weapon_id": str(WEAPON_ID),
 		"action_id": _resolved_action_id(plan), "semantic_action": str(plan.get("semantic_action", "")),
 		"aim_direction": plan.get("aim_direction_snapshot", Vector2.RIGHT),
-		"base_attack": float(_adapter.get("base_attack")),
+		"base_attack": float(character_stats["base_attack"]),
+		"character_attack_scale": float(character_stats["character_attack_scale"]),
+		"attack_speed": float(character_stats["attack_speed"]),
+		"crit_chance": float(character_stats["crit_chance"]),
+		"crit_multiplier": float(character_stats["crit_multiplier"]),
 		"payload_descriptors": descriptors,
 		"time_interactions": (plan.get("time_interactions", []) as Array).duplicate(true),
 		"boss_conversion": (plan.get("boss_conversion", {}) as Dictionary).duplicate(true),
@@ -1083,6 +1114,8 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	var contract_result := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(contract_result.get("ok", false)):
 		return contract_result
+	if not _plan_character_stats_match(plan):
+		return _failure(&"INVALID_CHARACTER_STATS")
 	if str(plan.get("profile_id", "")) != PROFILE_ID or int(plan.get("profile_version", 0)) != PROFILE_VERSION:
 		return _failure(&"PROFILE_MISMATCH")
 	if not plan.get("modifier_snapshot", {}) is Dictionary or not _variant_numbers_are_finite(plan["modifier_snapshot"]):
@@ -1148,6 +1181,14 @@ func _normalized_context(value: Dictionary) -> Dictionary:
 	if time_context.has("rewind_echo_generation"):
 		time_context["rewind_generation"] = int(time_context["rewind_echo_generation"])
 		time_context.erase("rewind_echo_generation")
+	var character_stats_value: Variant = value.get("character_stats", {})
+	var character_stats := (
+		(character_stats_value as Dictionary).duplicate(true)
+		if character_stats_value is Dictionary and not (character_stats_value as Dictionary).is_empty()
+		else _character_stats_snapshot(_adapter)
+	)
+	if not _valid_character_stats_snapshot(character_stats):
+		return _failure(&"INVALID_CONTEXT", {"field": "character_stats"})
 	return {
 		"ok": true,
 		"code": &"OK",
@@ -1155,6 +1196,7 @@ func _normalized_context(value: Dictionary) -> Dictionary:
 			"run_seed": int(run_seed_value),
 			"aim_direction": direction.normalized(),
 			"time_interactions": time_context,
+			"character_stats": character_stats,
 		},
 	}
 
@@ -1166,8 +1208,11 @@ func _frozen_modifiers() -> Dictionary:
 	return {"ok": true, "code": &"OK", "modifiers": (value as Dictionary).duplicate(true)}
 
 
-func _modifier_timing_scale(modifiers: Dictionary) -> float:
-	var attack_speed := float(modifiers.get("weapon.attack_speed", 1.0))
+func _modifier_timing_scale(modifiers: Dictionary, character_stats: Dictionary) -> float:
+	var attack_speed := (
+		float(character_stats["attack_speed"])
+		* float(modifiers.get("weapon.attack_speed", 1.0))
+	)
 	return 1.0 / maxf(0.01, attack_speed)
 
 
@@ -1446,10 +1491,64 @@ func _is_configured() -> bool:
 
 
 func _adapter_numbers_are_valid(adapter: Node) -> bool:
-	for field: String in ["base_attack", "attack_speed"]:
+	return not _character_stats_snapshot(adapter).is_empty()
+
+
+func _character_stats_snapshot(adapter: Node) -> Dictionary:
+	if adapter == null or not is_instance_valid(adapter):
+		return {}
+	var result: Dictionary = {}
+	for field: String in CHARACTER_STATS_FIELDS:
 		var value: Variant = adapter.get(field)
-		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or float(value) <= 0.0:
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
+			return {}
+		result[field] = float(value)
+	return result if _valid_character_stats_snapshot(result) else {}
+
+
+func _valid_character_stats_snapshot(value: Variant) -> bool:
+	if not value is Dictionary or (value as Dictionary).size() != CHARACTER_STATS_FIELDS.size():
+		return false
+	var stats := value as Dictionary
+	for field: String in CHARACTER_STATS_FIELDS:
+		if not stats.has(field) or typeof(stats[field]) != TYPE_FLOAT or not is_finite(float(stats[field])):
 			return false
+	return (
+		float(stats["base_attack"]) > 0.0
+		and float(stats["character_attack_scale"]) > 0.0
+		and float(stats["attack_speed"]) > 0.0
+		and float(stats["crit_chance"]) >= 0.0
+		and float(stats["crit_chance"]) <= 1.0
+		and float(stats["crit_multiplier"]) >= 1.0
+	)
+
+
+func _freeze_character_stats_into_plan(plan: Dictionary, stats: Dictionary) -> void:
+	for field: String in CHARACTER_STATS_FIELDS.slice(1):
+		plan[field] = float(stats[field])
+	for payload_value: Variant in plan.get("payloads", []):
+		if not payload_value is Dictionary or not (payload_value as Dictionary).get("parameters") is Dictionary:
+			continue
+		var parameters := (payload_value as Dictionary)["parameters"] as Dictionary
+		for field: String in CHARACTER_STATS_FIELDS:
+			parameters[field] = float(stats[field])
+
+
+func _plan_character_stats_match(plan: Dictionary) -> bool:
+	var stats_value: Variant = (plan.get("frozen_context", {}) as Dictionary).get("character_stats", {})
+	if not _valid_character_stats_snapshot(stats_value):
+		return false
+	var stats := stats_value as Dictionary
+	for field: String in CHARACTER_STATS_FIELDS.slice(1):
+		if typeof(plan.get(field)) not in [TYPE_INT, TYPE_FLOAT] or float(plan[field]) != float(stats[field]):
+			return false
+	for payload_value: Variant in plan.get("payloads", []):
+		if not payload_value is Dictionary or not (payload_value as Dictionary).get("parameters") is Dictionary:
+			return false
+		var parameters := (payload_value as Dictionary)["parameters"] as Dictionary
+		for field: String in CHARACTER_STATS_FIELDS:
+			if typeof(parameters.get(field)) not in [TYPE_INT, TYPE_FLOAT] or float(parameters[field]) != float(stats[field]):
+				return false
 	return true
 
 

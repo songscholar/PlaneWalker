@@ -434,7 +434,7 @@ func _test_player_sword_guard_commits_through_health() -> void:
 		"real Player defense fixture equips Sword"
 	)
 	var sword: Node = player.get_node("SwordWeapon")
-	var guard_definition := _guard_adapter_definition()
+	var guard_definition := _guard_adapter_definition(sword)
 	sword.call("begin_profile_attack", guard_definition)
 	sword.call("enter_profile_active_phase", guard_definition)
 	sword.call("advance_launch_state", 3)
@@ -521,7 +521,7 @@ func _test_player_rejects_guard_commit_after_weapon_switch() -> void:
 		"weapon-switch fixture equips Sword"
 	)
 	var sword: Node = player.get_node("SwordWeapon")
-	var guard_definition := _guard_adapter_definition()
+	var guard_definition := _guard_adapter_definition(sword)
 	sword.call("begin_profile_attack", guard_definition)
 	sword.call("enter_profile_active_phase", guard_definition)
 	sword.call("advance_launch_state", 3)
@@ -581,7 +581,7 @@ func _test_player_ignores_unequipped_sword_guard() -> void:
 		"unequipped-Sword fixture equips the authoritative Launch Bow"
 	)
 	var sword: Node = player.get_node("SwordWeapon")
-	var guard_definition := _guard_adapter_definition()
+	var guard_definition := _guard_adapter_definition(sword)
 	_suite.assert_true(
 		not sword.call("begin_profile_attack", guard_definition).is_empty(),
 		"permanent Sword adapter can hold dirty Guard state while unequipped"
@@ -1082,7 +1082,7 @@ func _loadout_config(weapon_id: String, profile_id: String) -> Dictionary:
 	}
 
 
-func _guard_adapter_definition() -> Dictionary:
+func _guard_adapter_definition(sword: Node) -> Dictionary:
 	var profile := _profile_definition(PROFILE_ID)
 	for action_value: Variant in profile.get("actions", []):
 		if not action_value is Dictionary or str((action_value as Dictionary).get("action_id", "")) != "guard":
@@ -1105,6 +1105,10 @@ func _guard_adapter_definition() -> Dictionary:
 				"advance_combo": false,
 				"payload_kind": "guard",
 				"payload_parameters": parameters,
+				"character_attack_scale": float(sword.get("character_attack_scale")),
+				"attack_speed": float(sword.get("attack_speed")),
+				"crit_chance": float(sword.get("crit_chance")),
+				"crit_multiplier": float(sword.get("crit_multiplier")),
 			}
 	return {}
 

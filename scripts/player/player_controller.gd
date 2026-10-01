@@ -5,6 +5,12 @@ const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
+const CharacterRuntimeProfileScript := preload(
+	"res://scripts/player/characters/character_runtime_profile.gd"
+)
+const PlayerCharacterRuntimeScript := preload(
+	"res://scripts/player/characters/player_character_runtime.gd"
+)
 const CharacterActionCoordinatorScript := preload(
 	"res://scripts/player/characters/character_action_coordinator.gd"
 )
@@ -26,6 +32,7 @@ const DEFAULT_LOADOUT_CONFIG := {
 	"enabled_time_skills": ["stop", "rewind"],
 }
 const WEAPON_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runtime_profiles.json"
+const CHARACTER_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/character_runtime_profiles.json"
 const WEAPON_MODIFIER_BOUNDS := {
 	"weapon.ammo_capacity": {"minimum": 0.0, "maximum": 20.0},
 	"weapon.attack_speed": {"minimum": 0.2, "maximum": 5.0},
@@ -85,6 +92,7 @@ var _time_acceleration_token: int = 0
 var _time_acceleration_remaining: float = 0.0
 var action_state = PlayerActionStateScript.new()
 var character_action_coordinator: RefCounted = CharacterActionCoordinatorScript.new()
+var character_runtime: RefCounted
 var weapon_action_coordinator: RefCounted
 var weapon_runtime: RefCounted
 var weapon_runtime_profile: RefCounted
@@ -114,10 +122,23 @@ var _active_time_frame_signal_ticket: Dictionary = {}
 var _active_health_frame_signal_ticket: Dictionary = {}
 var _active_world_frame_ticket: Dictionary = {}
 
-const DASH_DURATION := 0.28
-const DASH_COOLDOWN_FRAMES := 27
-const DASH_SPEED := 520.0
-const DASH_INVULNERABLE_TIME := 0.20
+const DEFAULT_MOBILITY_PROFILE := {
+	"dash_duration_frames": 17,
+	"dash_cooldown_frames": 27,
+	"dash_speed": 520.0,
+	"dash_cost_kind": "none",
+	"dash_cost": 0.0,
+	"dash_invulnerable_frames": 12,
+}
+const MOBILITY_PROFILE_FIELDS: Array[String] = [
+	"dash_duration_frames",
+	"dash_cooldown_frames",
+	"dash_speed",
+	"dash_cost_kind",
+	"dash_cost",
+	"dash_invulnerable_frames",
+]
+var _mobility_profile: Dictionary = DEFAULT_MOBILITY_PROFILE.duplicate(true)
 const KNOCKBACK_RETAINED_PER_FRAME := 0.8
 const FIXED_FRAME_SECONDS := 1.0 / 60.0
 const MAX_FIXED_FRAME_SLIDES := 4
@@ -130,15 +151,12 @@ const HITSTUN_DURATION := 0.18
 const TIME_CAST_MOVEMENT_MULTIPLIER := 0.35
 const BOW_TARGET_DISTANCE_PIXELS := 8.0 * 64.0
 const GUN_BASE_ATTACK := 15.0
-const GUN_ATTACK_SPEED := 0.9
 const GAUNTLETS_BASE_ATTACK := 6.0
-const GAUNTLETS_ATTACK_SPEED := 1.4
 const STAFF_BASE_ATTACK := 9.0
-const STAFF_ATTACK_SPEED := 0.85
 const MAX_TRACKED_WEAPON_FACT_TOKENS := 256
 const WEAPON_REPLAY_SNAPSHOT_SCHEMA_VERSION := 3
 const WEAPON_REPLAY_EVENT_SCHEMA_VERSION := 3
-const FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION := 1
+const FULL_PLAYER_REPLAY_SNAPSHOT_SCHEMA_VERSION := 2
 const WEAPON_REPLAY_EVENT_FIELDS: Array[String] = [
 	"schema_version",
 	"frame",
@@ -306,29 +324,85 @@ func _reset_weapon_adapters() -> void:
 
 
 func _sync_weapon_adapter_stats() -> void:
+	var character_attack_scale := float(stats.attack) / 30.0
+	var committed_attack_speed := (
+		float(stats.attack_speed) * _time_acceleration_multiplier
+	)
 	for weapon_id: StringName in WEAPON_ADAPTER_IDS:
 		var adapter := _weapon_adapter(weapon_id)
 		if adapter == null:
 			continue
 		var base_attack: float
-		var attack_speed: float
 		match weapon_id:
 			&"sword", &"bow":
 				base_attack = float(stats.attack)
-				attack_speed = float(stats.attack_speed)
 			&"gun":
-				base_attack = GUN_BASE_ATTACK
-				attack_speed = GUN_ATTACK_SPEED
+				base_attack = GUN_BASE_ATTACK * character_attack_scale
 			&"staff":
-				base_attack = STAFF_BASE_ATTACK
-				attack_speed = STAFF_ATTACK_SPEED
+				base_attack = STAFF_BASE_ATTACK * character_attack_scale
 			&"gauntlets":
-				base_attack = GAUNTLETS_BASE_ATTACK
-				attack_speed = GAUNTLETS_ATTACK_SPEED
+				base_attack = GAUNTLETS_BASE_ATTACK * character_attack_scale
 			_:
 				continue
 		adapter.set("base_attack", base_attack)
-		adapter.set("attack_speed", attack_speed * _time_acceleration_multiplier)
+		adapter.set("character_attack_scale", character_attack_scale)
+		adapter.set("attack_speed", committed_attack_speed)
+		adapter.set("crit_chance", float(stats.crit_chance))
+		adapter.set("crit_multiplier", float(stats.crit_multiplier))
+
+
+func apply_mobility_profile(profile: Dictionary) -> bool:
+	var normalized := _normalized_mobility_profile(profile)
+	if normalized.is_empty():
+		return false
+	_mobility_profile = normalized.duplicate(true)
+	return true
+
+
+func mobility_snapshot() -> Dictionary:
+	return _mobility_profile.duplicate(true)
+
+
+func _normalized_mobility_profile(profile: Dictionary) -> Dictionary:
+	if profile.size() != MOBILITY_PROFILE_FIELDS.size():
+		return {}
+	for field: String in MOBILITY_PROFILE_FIELDS:
+		if not profile.has(field):
+			return {}
+	for field: String in [
+		"dash_duration_frames",
+		"dash_cooldown_frames",
+		"dash_invulnerable_frames",
+	]:
+		var frame_value: Variant = profile[field]
+		if (
+			typeof(frame_value) not in [TYPE_INT, TYPE_FLOAT]
+			or not is_finite(float(frame_value))
+			or float(frame_value) != floorf(float(frame_value))
+			or int(frame_value) <= 0
+		):
+			return {}
+	if int(profile["dash_invulnerable_frames"]) > int(profile["dash_duration_frames"]):
+		return {}
+	if (
+		typeof(profile["dash_speed"]) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(profile["dash_speed"]))
+		or float(profile["dash_speed"]) <= 0.0
+		or typeof(profile["dash_cost_kind"]) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or StringName(str(profile["dash_cost_kind"])) != &"none"
+		or typeof(profile["dash_cost"]) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(profile["dash_cost"]))
+		or not is_zero_approx(float(profile["dash_cost"]))
+	):
+		return {}
+	return {
+		"dash_duration_frames": int(profile["dash_duration_frames"]),
+		"dash_cooldown_frames": int(profile["dash_cooldown_frames"]),
+		"dash_speed": float(profile["dash_speed"]),
+		"dash_cost_kind": "none",
+		"dash_cost": 0.0,
+		"dash_invulnerable_frames": int(profile["dash_invulnerable_frames"]),
+	}
 
 
 func _ready() -> void:
@@ -802,6 +876,45 @@ func configure_loadout(config: Dictionary) -> bool:
 	if loadout_runtime == null or not _runtime_reset_preflight():
 		return false
 	var next_config := config.duplicate(true)
+	var next_character_id := StringName(str(next_config.get("character_id", "wanderer")))
+	var explicit_character_profile := next_config.has("character_profile")
+	if explicit_character_profile:
+		var character_profile_value: Variant = next_config.get("character_profile")
+		if not character_profile_value is Dictionary:
+			return false
+		var supplied_character_profile := character_profile_value as Dictionary
+		var authoritative_character_profile := _character_profile_catalog_definition(
+			StringName(str(supplied_character_profile.get("id", "")))
+		)
+		if (
+			_canonical_character_profile(authoritative_character_profile).is_empty()
+			or _canonical_character_profile(supplied_character_profile)
+			!= _canonical_character_profile(authoritative_character_profile)
+		):
+			return false
+		next_config["character_profile"] = authoritative_character_profile.duplicate(true)
+	else:
+		var compatibility_character_profile := _default_character_profile_definition(
+			next_character_id,
+			StringName(str(next_config.get("milestone", "M1")))
+		)
+		if compatibility_character_profile.is_empty():
+			return false
+		next_config["character_id"] = str(next_character_id)
+		next_config["character_profile"] = compatibility_character_profile.duplicate(true)
+	if not next_config.has("character_talents"):
+		next_config["character_talents"] = []
+	if not _character_profile_allows_milestone(next_config):
+		return false
+	var character_profile := next_config.get("character_profile", {}) as Dictionary
+	var next_stats = StatsResource.new()
+	if not bool(next_stats.call("apply_profile", character_profile.get("base_stats", {}))):
+		return false
+	var next_mobility := _normalized_mobility_profile(
+		character_profile.get("mobility", {}) as Dictionary
+	)
+	if next_mobility.is_empty():
+		return false
 	var next_weapon_id := StringName(str(next_config.get("weapon_id", "")))
 	var explicit_weapon_profile := next_config.has("weapon_profile")
 	var used_compatibility_profile := false
@@ -840,6 +953,9 @@ func configure_loadout(config: Dictionary) -> bool:
 	if not loadout_is_valid:
 		return false
 
+	var character_assembly := _assemble_character_runtime(next_config)
+	if not bool(character_assembly.get("ok", false)):
+		return false
 	var assembly := _assemble_weapon_runtime(next_config)
 	if not bool(assembly.get("ok", false)):
 		return false
@@ -848,6 +964,10 @@ func configure_loadout(config: Dictionary) -> bool:
 	if not loadout_runtime.configure(next_config):
 		_rollback_loadout_configuration(transaction_before)
 		return false
+	stats = next_stats
+	_mobility_profile = next_mobility.duplicate(true)
+	character_runtime = character_assembly.get("runtime") as RefCounted
+	character_action_coordinator = character_assembly.get("coordinator") as RefCounted
 	var assembled_runtime := assembly.get("runtime") as RefCounted
 	if (
 		bool(assembly.get("requires_adapter_activation", false))
@@ -884,6 +1004,13 @@ func _loadout_configuration_transaction_snapshot() -> Dictionary:
 	return {
 		"loadout": loadout,
 		"full_player": full_player_replay_snapshot(),
+		"stats_resource": stats,
+		"stats_state": stats.snapshot() if stats != null and stats.has_method("snapshot") else {},
+		"mobility": mobility_snapshot(),
+		"run_id": _run_id,
+		"owner_character_generation": _owner_character_generation,
+		"character_runtime": character_runtime,
+		"character_action_coordinator": character_action_coordinator,
 		"weapon_runtime_profile": weapon_runtime_profile,
 		"weapon_modifier_state": weapon_modifier_state,
 		"weapon_runtime": weapon_runtime,
@@ -899,6 +1026,29 @@ func _rollback_loadout_configuration(before: Dictionary) -> bool:
 		(loadout_value as Dictionary).duplicate(true)
 	):
 		return false
+	var prior_stats := before.get("stats_resource") as Resource
+	var prior_stats_state: Variant = before.get("stats_state", {})
+	var prior_mobility_value: Variant = before.get("mobility", {})
+	if (
+		prior_stats == null
+		or not prior_stats_state is Dictionary
+		or not prior_stats.has_method("apply_profile")
+		or not bool(prior_stats.call("apply_profile", prior_stats_state))
+		or not prior_mobility_value is Dictionary
+	):
+		return false
+	var restored_mobility := _normalized_mobility_profile(prior_mobility_value as Dictionary)
+	if restored_mobility.is_empty():
+		return false
+	stats = prior_stats
+	_mobility_profile = restored_mobility
+	_run_id = StringName(str(before.get("run_id", _run_id)))
+	_owner_character_generation = int(before.get(
+		"owner_character_generation",
+		_owner_character_generation
+	))
+	character_runtime = before.get("character_runtime") as RefCounted
+	character_action_coordinator = before.get("character_action_coordinator") as RefCounted
 	_disconnect_weapon_coordinator()
 	weapon_runtime_profile = before.get("weapon_runtime_profile") as RefCounted
 	weapon_modifier_state = before.get("weapon_modifier_state") as RefCounted
@@ -915,9 +1065,14 @@ func _rollback_loadout_configuration(before: Dictionary) -> bool:
 		)
 	):
 		return false
+	_sync_weapon_adapter_stats()
 	set_physics_process(bool(before.get("physics_processing", false)))
 	return (
 		loadout_runtime.snapshot() == loadout_value
+		and character_runtime == before.get("character_runtime")
+		and character_action_coordinator == before.get("character_action_coordinator")
+		and _run_id == StringName(str(before.get("run_id", "")))
+		and _owner_character_generation == int(before.get("owner_character_generation", 0))
 		and (
 			not full_player_value is Dictionary
 			or (full_player_value as Dictionary).is_empty()
@@ -1427,6 +1582,7 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 	var time_transaction_value: Variant = time_manager.call("fixed_frame_transaction_snapshot")
 	var health_value: Variant = health.call("runtime_state_snapshot")
 	var character_value: Variant = character_action_coordinator.call("snapshot")
+	var character_action_value: Variant = character_action_coordinator.call("action_snapshot")
 	var weapon_value: Variant = weapon_action_coordinator.call("snapshot")
 	var world_value: Variant = world_payload_authority.call("replay_snapshot")
 	var intent_value: Variant = _weapon_intent_router.call("runtime_snapshot")
@@ -1436,6 +1592,7 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 		or not time_transaction_value is Dictionary
 		or not health_value is Dictionary
 		or not character_value is Dictionary
+		or not character_action_value is Dictionary
 		or not weapon_value is Dictionary
 		or not world_value is Dictionary
 		or not intent_value is Dictionary
@@ -1459,6 +1616,7 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 			"next_time_action_token": _next_time_action_token,
 			"action": action_state.snapshot(),
 		"character": (character_value as Dictionary).duplicate(true),
+		"character_action": (character_action_value as Dictionary).duplicate(true),
 		"weapon": (weapon_value as Dictionary).duplicate(true),
 			"time": (time_value as Dictionary).duplicate(true),
 			"time_transaction": (time_transaction_value as Dictionary).duplicate(true),
@@ -1507,6 +1665,10 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 	var character_ok := bool(character_action_coordinator.call(
 		"restore_snapshot",
 		(value.get("character", {}) as Dictionary).duplicate(true)
+	))
+	var character_action_ok := bool(character_action_coordinator.call(
+		"restore_action_snapshot",
+		(value.get("character_action", {}) as Dictionary).duplicate(true)
 	))
 	var weapon_ok := bool(weapon_action_coordinator.call(
 		"restore_snapshot_for_rollback",
@@ -1580,6 +1742,7 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and health_ok
 		and action_ok
 		and character_ok
+		and character_action_ok
 		and weapon_ok
 		and intent_ok
 		and rewind_ok
@@ -1590,6 +1753,8 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and _next_time_action_token == int(value.get("next_time_action_token", -1))
 		and action_state.snapshot() == value.get("action", {})
 		and character_action_coordinator.call("snapshot") == value.get("character", {})
+		and character_action_coordinator.call("action_snapshot")
+		== value.get("character_action", {})
 		and weapon_action_coordinator.call("snapshot") == value.get("weapon", {})
 		and world_payload_authority.call("replay_snapshot") == value.get("world", {})
 		and _rewind_frame_transaction_snapshot() == value.get("rewind", {})
@@ -1908,7 +2073,7 @@ func get_action_movement_multiplier() -> float:
 		return weapon_action_coordinator.movement_multiplier()
 	match action_state.current_state:
 		PlayerActionStateScript.State.DASH:
-			return DASH_SPEED / maxf(1.0, float(stats.move_speed))
+			return float(_mobility_profile["dash_speed"]) / maxf(1.0, float(stats.move_speed))
 		PlayerActionStateScript.State.TIME_CAST:
 			return TIME_CAST_MOVEMENT_MULTIPLIER
 		PlayerActionStateScript.State.HITSTUN, PlayerActionStateScript.State.DEAD:
@@ -2221,14 +2386,39 @@ func full_player_replay_identity() -> Dictionary:
 		_run_id == &""
 		or _owner_character_generation <= 0
 		or loadout_runtime == null
+		or character_runtime == null
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("is_configured")
+		or not bool(character_action_coordinator.call("is_configured"))
 		or stats == null
-		or not is_finite(float(stats.move_speed))
-		or float(stats.move_speed) <= 0.0
+		or not stats.has_method("snapshot")
 	):
 		return {}
 	var loadout: Dictionary = loadout_runtime.call("snapshot")
 	var character_id := str(loadout.get("character_id", "wanderer"))
-	if character_id.is_empty():
+	var stats_state: Dictionary = stats.call("snapshot")
+	var mobility_state := mobility_snapshot()
+	var profile_id := str(loadout_runtime.call("character_profile_id"))
+	var loadout_talents: Array = loadout_runtime.call("character_talent_ids")
+	var character_talents: Array[String] = []
+	for talent_value: Variant in loadout_talents:
+		character_talents.append(str(talent_value))
+	var runtime_talents: Array[String] = []
+	for talent_value: Variant in character_runtime.call("selected_talent_ids"):
+		runtime_talents.append(str(talent_value))
+	var character_action_value: Variant = character_action_coordinator.call("action_snapshot")
+	if (
+		character_id.is_empty()
+		or profile_id.is_empty()
+		or stats_state.is_empty()
+		or mobility_state.is_empty()
+		or str(character_runtime.call("character_id")) != character_id
+		or str(character_runtime.call("profile_id")) != profile_id
+		or runtime_talents != character_talents
+		or not character_action_value is Dictionary
+		or int((character_action_value as Dictionary).get("generation", 0))
+		!= _owner_character_generation
+	):
 		return {}
 	var time_abilities: Array[String] = []
 	for ability_value: Variant in loadout_runtime.call("time_ability_ids"):
@@ -2237,10 +2427,14 @@ func full_player_replay_identity() -> Dictionary:
 		"run_id": str(_run_id),
 		"owner_character_generation": _owner_character_generation,
 		"character_id": character_id,
+		"character_profile_id": profile_id,
+		"character_talent_ids": character_talents,
 		"weapon_id": str(loadout_runtime.call("weapon_id")),
 		"weapon_profile_id": str(loadout_runtime.call("weapon_profile_id")),
 		"time_ability_ids": time_abilities,
 		"move_speed": float(stats.move_speed),
+		"stats": stats_state,
+		"mobility": mobility_state,
 	}
 
 
@@ -2282,6 +2476,7 @@ func full_player_replay_snapshot() -> Dictionary:
 		"health_state": health.call("runtime_state_snapshot"),
 		"action_state": action_state.snapshot(),
 		"character_state": character_action_coordinator.call("snapshot"),
+		"character_action_state": character_action_coordinator.call("action_snapshot"),
 		"weapon_state": weapon_action_coordinator.call("snapshot"),
 		"time_manager_state": time_manager.call("replay_snapshot"),
 		"world_payload_state": world_payload_authority.call("replay_snapshot"),
@@ -2339,6 +2534,14 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 		return false
 	var character_target := (value.get("character_state", {}) as Dictionary).duplicate(true)
 	if not bool(character_action_coordinator.call("restore_replay_snapshot", character_target)):
+		return false
+	var character_action_target := (
+		value.get("character_action_state", {}) as Dictionary
+	).duplicate(true)
+	if not bool(character_action_coordinator.call(
+		"restore_action_snapshot",
+		character_action_target
+	)):
 		return false
 	var weapon_target := (value.get("weapon_state", {}) as Dictionary).duplicate(true)
 	# Full Replay checkpoints are allowed to move generation/token state backward.
@@ -2411,7 +2614,7 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 	var fields: Array[String] = [
 		"schema_version", "frame", "identity", "player_state", "health_state",
-		"action_state", "character_state", "weapon_state", "time_manager_state",
+		"action_state", "character_state", "character_action_state", "weapon_state", "time_manager_state",
 		"world_payload_state", "rewind_state", "intent_router_state",
 		"player_weapon_state", "weapon_replay_events",
 		"weapon_replay_capture_sequence", "weapon_replay_fact_baseline",
@@ -2432,6 +2635,7 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or not value["health_state"] is Dictionary
 		or not value["action_state"] is Dictionary
 		or not value["character_state"] is Dictionary
+		or not value["character_action_state"] is Dictionary
 		or not value["weapon_state"] is Dictionary
 		or not value["time_manager_state"] is Dictionary
 		or not value["world_payload_state"] is Dictionary
@@ -2476,6 +2680,19 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		))
 		or int((value["time_manager_state"] as Dictionary).get("runtime_frame", -1)) != int(value["frame"])
 		or int((value["action_state"] as Dictionary).get("frame", -1)) != int(value["frame"])
+		or (
+			int((value["character_state"] as Dictionary).get("last_runtime_frame", -2))
+			!= int(value["frame"])
+			and not (
+				int(value["frame"]) == 0
+				and int((value["character_state"] as Dictionary).get(
+					"last_runtime_frame",
+					-2
+				)) == -1
+			)
+		)
+		or int((value["character_action_state"] as Dictionary).get("generation", 0))
+		!= int((value["identity"] as Dictionary).get("owner_character_generation", -1))
 		or int((value["weapon_state"] as Dictionary).get("frame", -1)) != int(value["frame"])
 		or int((value["world_payload_state"] as Dictionary).get("last_runtime_frame", -2)) != int(value["frame"])
 		or int((value["rewind_state"] as Dictionary).get("last_runtime_frame", -1)) != int(value["frame"])
@@ -2743,11 +2960,29 @@ func _world_payload_replay_snapshot() -> Dictionary:
 func _can_reanchor_weapon_replay_clocks(target_frame: int) -> bool:
 	if _weapon_replay_clocks_match(target_frame):
 		return true
+	var character_can_reanchor := (
+		character_action_coordinator != null
+		and (
+			(
+				not bool(character_action_coordinator.call("is_configured"))
+				and character_action_coordinator.has_method(
+					"reanchor_unconfigured_runtime_frame"
+				)
+			)
+			or (
+				character_action_coordinator.has_method(
+					"can_reanchor_replay_neutral_runtime_frame"
+				)
+				and bool(character_action_coordinator.call(
+					"can_reanchor_replay_neutral_runtime_frame",
+					target_frame
+				))
+			)
+		)
+	)
 	return (
 		target_frame >= 0
-		and character_action_coordinator != null
-		and not bool(character_action_coordinator.call("is_configured"))
-		and character_action_coordinator.has_method("reanchor_unconfigured_runtime_frame")
+		and character_can_reanchor
 		and world_payload_authority != null
 		and world_payload_authority.has_method("reanchor_empty_runtime_clock")
 		and world_payload_authority.has_method("restore_transaction_snapshot")
@@ -2822,10 +3057,18 @@ func _reanchor_weapon_replay_clocks(target_frame: int) -> bool:
 	action_target["frame"] = target_frame
 	if not bool(action_state.call("restore_transaction_snapshot", action_target)):
 		return false
-	if not bool(character_action_coordinator.call(
-		"reanchor_unconfigured_runtime_frame",
-		target_frame
-	)):
+	var character_reanchored := (
+		bool(character_action_coordinator.call(
+			"reanchor_replay_neutral_runtime_frame",
+			target_frame
+		))
+		if bool(character_action_coordinator.call("is_configured"))
+		else bool(character_action_coordinator.call(
+			"reanchor_unconfigured_runtime_frame",
+			target_frame
+		))
+	)
+	if not character_reanchored:
 		return false
 	if not bool(world_payload_authority.call(
 		"reanchor_empty_runtime_clock",
@@ -6273,12 +6516,18 @@ func _begin_dash() -> bool:
 		or _weapon_hold_is_active()
 	):
 		_cancel_weapon_action(&"dash_cancel")
-	if not action_state.transition_to(PlayerActionStateScript.State.DASH, _seconds_to_frames(DASH_DURATION)):
+	if not action_state.transition_to(
+		PlayerActionStateScript.State.DASH,
+		int(_mobility_profile["dash_duration_frames"])
+	):
 		return false
-	_dash_cooldown_remaining_frames = DASH_COOLDOWN_FRAMES
+	_dash_cooldown_remaining_frames = int(_mobility_profile["dash_cooldown_frames"])
 	_dash_direction = _last_move_direction.normalized()
-	_dash_velocity = _dash_direction * DASH_SPEED
-	health.apply_invulnerability(DASH_INVULNERABLE_TIME + _dash_invulnerable_bonus)
+	_dash_velocity = _dash_direction * float(_mobility_profile["dash_speed"])
+	health.apply_invulnerability(
+		float(_mobility_profile["dash_invulnerable_frames"]) * FIXED_FRAME_SECONDS
+		+ _dash_invulnerable_bonus
+	)
 	EventBus.player_dashed.emit({})
 	return true
 
@@ -6365,6 +6614,79 @@ func _can_buffer_committed_action() -> bool:
 		PlayerActionStateScript.State.ATTACK_ACTIVE,
 		PlayerActionStateScript.State.ATTACK_RECOVERY,
 	]
+
+
+func character_runtime_snapshot() -> Dictionary:
+	if character_runtime == null or character_action_coordinator == null:
+		return {}
+	var runtime_value: Variant = character_runtime.call("snapshot")
+	var coordinator_value: Variant = character_action_coordinator.call("snapshot")
+	var action_value: Variant = character_action_coordinator.call("action_snapshot")
+	if (
+		not runtime_value is Dictionary
+		or not coordinator_value is Dictionary
+		or not action_value is Dictionary
+	):
+		return {}
+	return {
+		"character_id": str(character_runtime.call("character_id")),
+		"profile_id": str(character_runtime.call("profile_id")),
+		"selected_talent_ids": character_runtime.call("selected_talent_ids"),
+		"runtime": (runtime_value as Dictionary).duplicate(true),
+		"coordinator": (coordinator_value as Dictionary).duplicate(true),
+		"action": (action_value as Dictionary).duplicate(true),
+	}
+
+
+func character_presentation_snapshot() -> Dictionary:
+	if character_runtime == null:
+		return {}
+	var value: Variant = character_runtime.call("presentation_snapshot")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func _assemble_character_runtime(config: Dictionary) -> Dictionary:
+	var definition_value: Variant = config.get("character_profile", {})
+	var talents_value: Variant = config.get("character_talents", [])
+	if (
+		not definition_value is Dictionary
+		or (definition_value as Dictionary).is_empty()
+		or not talents_value is Array
+	):
+		return {"ok": false, "reason": "character_profile_missing"}
+	var profile: Variant = CharacterRuntimeProfileScript.from_definition(
+		(definition_value as Dictionary).duplicate(true)
+	)
+	if profile == null:
+		return {"ok": false, "reason": "character_profile_invalid"}
+	var runtime = PlayerCharacterRuntimeScript.new()
+	if not bool(runtime.call(
+		"configure",
+		self,
+		profile,
+		(talents_value as Array).duplicate(true)
+	)):
+		return {"ok": false, "reason": "character_runtime_configuration_failed"}
+	var coordinator = CharacterActionCoordinatorScript.new()
+	var generation_floor := maxi(1, _owner_character_generation)
+	var next_token_floor := (
+		int(character_action_coordinator.call("next_token"))
+		if character_action_coordinator != null
+		and character_action_coordinator.has_method("next_token")
+		else 1
+	)
+	if (
+		not bool(coordinator.call("set_generation_floor", generation_floor))
+		or not bool(coordinator.call("set_next_token_floor", next_token_floor))
+		or not bool(coordinator.call("configure", runtime))
+	):
+		return {"ok": false, "reason": "character_coordinator_configuration_failed"}
+	return {
+		"ok": true,
+		"profile": profile,
+		"runtime": runtime,
+		"coordinator": coordinator,
+	}
 
 
 func _assemble_weapon_runtime(config: Dictionary) -> Dictionary:
@@ -6508,6 +6830,63 @@ func _weapon_profile_catalog_definition(profile_id: StringName) -> Dictionary:
 	return {}
 
 
+func _character_profile_catalog_definition(profile_id: StringName) -> Dictionary:
+	if profile_id == &"":
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(
+		CHARACTER_PROFILE_CATALOG_PATH
+	))
+	if not parsed is Array:
+		return {}
+	for definition_value: Variant in parsed as Array:
+		if not definition_value is Dictionary:
+			continue
+		var definition := definition_value as Dictionary
+		if StringName(str(definition.get("id", ""))) == profile_id:
+			return definition.duplicate(true)
+	return {}
+
+
+func _default_character_profile_definition(
+	character_id: StringName,
+	milestone: StringName
+) -> Dictionary:
+	if character_id != &"wanderer":
+		return {}
+	var normalized_milestone := str(milestone).strip_edges().to_upper()
+	var profile_id := StringName()
+	if normalized_milestone in ["M1", "CURRENT", "NEXT"]:
+		profile_id = &"wanderer_m1_v1"
+	elif normalized_milestone in ["LAUNCH", "EXPANSION"]:
+		profile_id = &"wanderer_launch_v1"
+	return _character_profile_catalog_definition(profile_id)
+
+
+func _canonical_character_profile(source: Dictionary) -> Dictionary:
+	if source.is_empty():
+		return {}
+	var profile = CharacterRuntimeProfileScript.new()
+	var result: Dictionary = profile.configure(source.duplicate(true))
+	var snapshot: Dictionary = (
+		(result.get("profile", {}) as Dictionary).duplicate(true)
+		if bool(result.get("ok", false)) and result.get("profile", {}) is Dictionary
+		else {}
+	)
+	if snapshot.is_empty():
+		return {}
+	for field: String in ["availability", "tags", "references", "capabilities", "talent_ids"]:
+		var values: Array = snapshot.get(field, [])
+		values.sort()
+		snapshot[field] = values
+	var compatibility: Dictionary = snapshot.get("compatibility", {}).duplicate(true)
+	for field_value: Variant in compatibility.keys():
+		var values: Array = compatibility[field_value]
+		values.sort()
+		compatibility[field_value] = values
+	snapshot["compatibility"] = compatibility
+	return snapshot
+
+
 func _canonical_weapon_profile(source: Dictionary) -> Dictionary:
 	if source.is_empty():
 		return {}
@@ -6535,6 +6914,20 @@ func _canonical_weapon_profile(source: Dictionary) -> Dictionary:
 
 func _profile_allows_milestone(config: Dictionary) -> bool:
 	var profile_value: Variant = config.get("weapon_profile", {})
+	if not profile_value is Dictionary:
+		return false
+	var availability_value: Variant = (profile_value as Dictionary).get("availability", [])
+	if not availability_value is Array:
+		return false
+	var milestone := str(config.get("milestone", "M1")).strip_edges().to_upper()
+	for availability: Variant in availability_value as Array:
+		if str(availability).strip_edges().to_upper() == milestone:
+			return true
+	return false
+
+
+func _character_profile_allows_milestone(config: Dictionary) -> bool:
+	var profile_value: Variant = config.get("character_profile", {})
 	if not profile_value is Dictionary:
 		return false
 	var availability_value: Variant = (profile_value as Dictionary).get("availability", [])

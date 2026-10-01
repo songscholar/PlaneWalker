@@ -1,6 +1,9 @@
 extends Node
 
 const PlayerScene := preload("res://scenes/player/player.tscn")
+const CharacterActionCoordinatorScript := preload(
+	"res://scripts/player/characters/character_action_coordinator.gd"
+)
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
 
@@ -152,7 +155,7 @@ func _test_character_rejection_rolls_back_the_complete_frame() -> void:
 	var player := await _spawn_player()
 	var runtime := RejectingCharacterRuntime.new()
 	_suite.assert_true(
-		player.character_action_coordinator.configure(runtime),
+		_install_character_probe(player, runtime),
 		"rejecting character runtime configures"
 	)
 	runtime.reject_next_frame = true
@@ -180,7 +183,7 @@ func _test_fixed_frame_participants_observe_authoritative_order() -> void:
 	var character_runtime := FrameOrderCharacterRuntime.new()
 	character_runtime.time_manager = player.get_node("TimeManager")
 	_suite.assert_true(
-		player.character_action_coordinator.configure(character_runtime),
+		_install_character_probe(player, character_runtime),
 		"frame-order character probe configures"
 	)
 	var rewind_probe := RewindOrderProbe.new()
@@ -854,6 +857,23 @@ func _complete_frame_snapshot(player: Node) -> Dictionary:
 		"world": authority.replay_snapshot(),
 		"rewind_runtime_frame": int(recorder.get("_last_runtime_frame")),
 	}
+
+
+func _install_character_probe(player: Node, runtime: RefCounted) -> bool:
+	var previous: RefCounted = player.character_action_coordinator
+	var coordinator = CharacterActionCoordinatorScript.new()
+	if (
+		previous != null
+		and (
+			not coordinator.set_generation_floor(int(previous.call("generation")))
+			or not coordinator.set_next_token_floor(int(previous.call("next_token")))
+		)
+	):
+		return false
+	if not coordinator.configure(runtime):
+		return false
+	player.character_action_coordinator = coordinator
+	return true
 
 
 func _assert_all_clocks(player: Node, expected_frame: int, label: String) -> void:

@@ -26,6 +26,24 @@ class WeaponProfileFixture:
 		return {}
 
 
+class CharacterProfileFixture:
+	extends RefCounted
+
+	const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/character_runtime_profiles.json"
+
+	static func m1_wanderer() -> Dictionary:
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PROFILE_CATALOG_PATH))
+		assert(parsed is Array, "character runtime profile catalog must contain an array")
+		for definition_value: Variant in parsed as Array:
+			if (
+				definition_value is Dictionary
+				and str((definition_value as Dictionary).get("id", "")) == "wanderer_m1_v1"
+			):
+				return (definition_value as Dictionary).duplicate(true)
+		assert(false, "character runtime profile catalog must contain wanderer_m1_v1")
+		return {}
+
+
 class RejectingLoadoutPlayer:
 	extends Node
 
@@ -104,7 +122,11 @@ class FailingInitialRoomFacade:
 		}
 
 	func active_loadout() -> Dictionary:
-		return {"weapon_profile": WeaponProfileFixture.m1_sword()}
+		return {
+			"character_profile": CharacterProfileFixture.m1_wanderer(),
+			"character_talents": [],
+			"weapon_profile": WeaponProfileFixture.m1_sword(),
+		}
 
 	func create_room_runtime(_runner: Node) -> Node:
 		return FailingInitialRoomRuntime.new()
@@ -195,7 +217,11 @@ class SynchronousInitialRoomFacade:
 		}
 
 	func active_loadout() -> Dictionary:
-		return {"weapon_profile": WeaponProfileFixture.m1_sword()}
+		return {
+			"character_profile": CharacterProfileFixture.m1_wanderer(),
+			"character_talents": [],
+			"weapon_profile": WeaponProfileFixture.m1_sword(),
+		}
 
 	func create_room_runtime(_runner: Node) -> Node:
 		var runtime := SynchronousInitialRoomRuntime.new()

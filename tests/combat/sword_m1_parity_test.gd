@@ -474,6 +474,15 @@ func _intent(intent_id: StringName, buffer_frames: int = 12) -> Dictionary:
 func _assert_exact_plan(plan: Dictionary, expected: Dictionary) -> void:
 	_suite.assert_equal(plan.get("weapon_id"), "sword", "%s identifies Sword" % expected["id"])
 	_suite.assert_equal(plan.get("action_id"), expected["id"], "%s action id matches" % expected["id"])
+	_suite.assert_close(float(plan.get("character_attack_scale", 0.0)), 1.0, "%s freezes Wanderer attack scale" % expected["id"])
+	_suite.assert_close(float(plan.get("attack_speed", 0.0)), 1.0, "%s freezes Wanderer attack speed" % expected["id"])
+	_suite.assert_close(float(plan.get("crit_chance", -1.0)), 0.05, "%s freezes Wanderer critical chance" % expected["id"])
+	_suite.assert_close(float(plan.get("crit_multiplier", 0.0)), 1.5, "%s freezes Wanderer critical multiplier" % expected["id"])
+	var payload_parameters := ((plan.get("payloads", []) as Array)[0] as Dictionary).get("parameters", {}) as Dictionary
+	_suite.assert_close(float(payload_parameters.get("character_attack_scale", 0.0)), 1.0, "%s payload freezes Wanderer attack scale" % expected["id"])
+	_suite.assert_close(float(payload_parameters.get("attack_speed", 0.0)), 1.0, "%s payload freezes Wanderer attack speed" % expected["id"])
+	_suite.assert_close(float(payload_parameters.get("crit_chance", -1.0)), 0.05, "%s payload freezes Wanderer critical chance" % expected["id"])
+	_suite.assert_close(float(payload_parameters.get("crit_multiplier", 0.0)), 1.5, "%s payload freezes Wanderer critical multiplier" % expected["id"])
 	_suite.assert_equal(_phase(plan, 0).get("phase"), "WINDUP", "%s begins in windup" % expected["id"])
 	_suite.assert_equal(
 		_phase(plan, 0).get("duration_frames"),

@@ -87,7 +87,11 @@ func _test_gun_aim_stats_and_modifier_bounds() -> void:
 	var player := await _spawn_gun()
 	var gun: Node2D = player.get_node("GunWeapon")
 	_suite.assert_close(float(gun.get("base_attack")), 15.0, "Gun uses its authoritative base attack")
-	_suite.assert_close(float(gun.get("attack_speed")), 0.9, "Gun uses its authoritative attack speed")
+	_suite.assert_close(
+		float(gun.get("attack_speed")),
+		1.0,
+		"Gun receives the Wanderer character attack-speed multiplier"
+	)
 	gun.global_rotation = PI * 0.5
 	_suite.assert_equal(
 		player.call("_weapon_aim_direction").round(),

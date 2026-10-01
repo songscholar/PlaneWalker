@@ -6,9 +6,9 @@ const SCHEMA_VERSION := 6
 const SNAPSHOT_SCHEMA_VERSION := 3
 const EVENT_SCHEMA_VERSION := 3
 const FULL_PLAYER_SCHEMA_ID := "planewalker.full_player_replay"
-const FULL_PLAYER_SCHEMA_VERSION := 1
-const FULL_PLAYER_FRAME_SCHEMA_VERSION := 1
-const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 1
+const FULL_PLAYER_SCHEMA_VERSION := 2
+const FULL_PLAYER_FRAME_SCHEMA_VERSION := 2
+const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 2
 const EVENT_PREFIX_SCHEMA_ID := "planewalker.weapon_runtime_replay.event_prefix"
 const EVENT_PREFIX_SCHEMA_VERSION := 1
 const SHA256_LENGTH := 64
@@ -129,10 +129,33 @@ const FULL_PLAYER_IDENTITY_FIELDS: Array[String] = [
 	"run_id",
 	"owner_character_generation",
 	"character_id",
+	"character_profile_id",
+	"character_talent_ids",
 	"weapon_id",
 	"weapon_profile_id",
 	"time_ability_ids",
 	"move_speed",
+	"stats",
+	"mobility",
+]
+const FULL_PLAYER_STATS_FIELDS: Array[String] = [
+	"max_hp",
+	"attack",
+	"defense",
+	"move_speed",
+	"attack_speed",
+	"crit_chance",
+	"crit_multiplier",
+	"time_energy_max",
+	"time_energy_regen",
+]
+const FULL_PLAYER_MOBILITY_FIELDS: Array[String] = [
+	"dash_duration_frames",
+	"dash_cooldown_frames",
+	"dash_speed",
+	"dash_cost_kind",
+	"dash_cost",
+	"dash_invulnerable_frames",
 ]
 const FULL_PLAYER_REPLAY_FIELDS: Array[String] = [
 	"schema_id",
@@ -163,6 +186,7 @@ const FULL_PLAYER_SNAPSHOT_FIELDS: Array[String] = [
 	"health_state",
 	"action_state",
 	"character_state",
+	"character_action_state",
 	"weapon_state",
 	"time_manager_state",
 	"world_payload_state",
@@ -660,14 +684,33 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 		or str(value["run_id"]).length() > 256
 		or not _is_positive_integer(value.get("owner_character_generation"))
 		or not _is_non_empty_string(value.get("character_id"))
+		or not _is_non_empty_string(value.get("character_profile_id"))
+		or not value.get("character_talent_ids") is Array
 		or not _is_non_empty_string(value.get("weapon_id"))
 		or not _is_non_empty_string(value.get("weapon_profile_id"))
 		or not value.get("time_ability_ids") is Array
 		or typeof(value.get("move_speed")) not in [TYPE_INT, TYPE_FLOAT]
 		or not is_finite(float(value["move_speed"]))
 		or float(value["move_speed"]) <= 0.0
+		or not value.get("stats") is Dictionary
+		or not value.get("mobility") is Dictionary
 	):
 		return {}
+	var stats := _validated_full_player_stats(value["stats"] as Dictionary)
+	var mobility := _validated_full_player_mobility(value["mobility"] as Dictionary)
+	if (
+		stats.is_empty()
+		or mobility.is_empty()
+		or float(stats["move_speed"]) != float(value["move_speed"])
+	):
+		return {}
+	var character_talent_ids: Array[String] = []
+	var seen_talents: Dictionary = {}
+	for talent_value: Variant in value["character_talent_ids"] as Array:
+		if not _is_non_empty_string(talent_value) or seen_talents.has(str(talent_value)):
+			return {}
+		seen_talents[str(talent_value)] = true
+		character_talent_ids.append(str(talent_value))
 	var time_ability_ids: Array[String] = []
 	var seen: Dictionary = {}
 	for ability_value: Variant in value["time_ability_ids"] as Array:
@@ -679,10 +722,71 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 		"run_id": str(value["run_id"]),
 		"owner_character_generation": int(value["owner_character_generation"]),
 		"character_id": str(value["character_id"]),
+		"character_profile_id": str(value["character_profile_id"]),
+		"character_talent_ids": character_talent_ids,
 		"weapon_id": str(value["weapon_id"]),
 		"weapon_profile_id": str(value["weapon_profile_id"]),
 		"time_ability_ids": time_ability_ids,
 		"move_speed": float(value["move_speed"]),
+		"stats": stats,
+		"mobility": mobility,
+	}
+
+
+static func _validated_full_player_stats(value: Dictionary) -> Dictionary:
+	if not _has_exact_fields_static(value, FULL_PLAYER_STATS_FIELDS):
+		return {}
+	var normalized: Dictionary = {}
+	for field: String in FULL_PLAYER_STATS_FIELDS:
+		var field_value: Variant = value[field]
+		if typeof(field_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(field_value)):
+			return {}
+		normalized[field] = float(field_value)
+	if (
+		float(normalized["max_hp"]) <= 0.0
+		or float(normalized["attack"]) < 0.0
+		or float(normalized["defense"]) < 0.0
+		or float(normalized["move_speed"]) <= 0.0
+		or float(normalized["attack_speed"]) <= 0.0
+		or float(normalized["crit_chance"]) < 0.0
+		or float(normalized["crit_chance"]) > 1.0
+		or float(normalized["crit_multiplier"]) < 1.0
+		or float(normalized["time_energy_max"]) <= 0.0
+		or float(normalized["time_energy_regen"]) < 0.0
+	):
+		return {}
+	return normalized
+
+
+static func _validated_full_player_mobility(value: Dictionary) -> Dictionary:
+	if not _has_exact_fields_static(value, FULL_PLAYER_MOBILITY_FIELDS):
+		return {}
+	for field: String in [
+		"dash_duration_frames",
+		"dash_cooldown_frames",
+		"dash_invulnerable_frames",
+	]:
+		if not _is_positive_integer(value[field]):
+			return {}
+	if (
+		int(value["dash_invulnerable_frames"]) > int(value["dash_duration_frames"])
+		or typeof(value["dash_speed"]) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(value["dash_speed"]))
+		or float(value["dash_speed"]) <= 0.0
+		or not _is_non_empty_string(value["dash_cost_kind"])
+		or str(value["dash_cost_kind"]) != "none"
+		or typeof(value["dash_cost"]) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(value["dash_cost"]))
+		or not is_zero_approx(float(value["dash_cost"]))
+	):
+		return {}
+	return {
+		"dash_duration_frames": int(value["dash_duration_frames"]),
+		"dash_cooldown_frames": int(value["dash_cooldown_frames"]),
+		"dash_speed": float(value["dash_speed"]),
+		"dash_cost_kind": "none",
+		"dash_cost": 0.0,
+		"dash_invulnerable_frames": int(value["dash_invulnerable_frames"]),
 	}
 
 
@@ -709,7 +813,7 @@ static func validate_full_player_snapshot(
 		return _failure(&"FULL_PLAYER_SNAPSHOT_IDENTITY_MISMATCH")
 	for dictionary_field: String in [
 		"player_state", "health_state", "action_state", "character_state",
-		"weapon_state", "time_manager_state", "world_payload_state", "rewind_state",
+		"character_action_state", "weapon_state", "time_manager_state", "world_payload_state", "rewind_state",
 		"intent_router_state", "player_weapon_state", "weapon_replay_fact_baseline",
 	]:
 		if not snapshot.get(dictionary_field) is Dictionary:
@@ -726,6 +830,28 @@ static func validate_full_player_snapshot(
 	):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_FIELDS_MISMATCH")
 	var frame := int(snapshot["frame"])
+	var character_frame_value: Variant = (
+		snapshot["character_state"] as Dictionary
+	).get("last_runtime_frame")
+	if (
+		typeof(character_frame_value) != TYPE_INT
+		or (
+			int(character_frame_value) != frame
+			and not (frame == 0 and int(character_frame_value) == -1)
+		)
+	):
+		return _failure(&"FULL_PLAYER_SNAPSHOT_CLOCK_MISMATCH", {
+			"field": "character_state",
+			"clock": "last_runtime_frame",
+		})
+	if (
+		not _is_positive_integer(
+			(snapshot["character_action_state"] as Dictionary).get("generation")
+		)
+		or int((snapshot["character_action_state"] as Dictionary)["generation"])
+		!= int(identity["owner_character_generation"])
+	):
+		return _failure(&"FULL_PLAYER_SNAPSHOT_IDENTITY_MISMATCH")
 	for clock_spec: Dictionary in [
 		{"field": "action_state", "clock": "frame"},
 		{"field": "weapon_state", "clock": "frame"},

@@ -244,6 +244,9 @@ const REQUIRED_MODIFIER_METHODS: Array[StringName] = [
 const ADAPTER_NUMERIC_FIELDS: Array[String] = [
 	"base_attack",
 	"attack_speed",
+	"character_attack_scale",
+	"crit_chance",
+	"crit_multiplier",
 ]
 
 var _owner: Node
@@ -910,7 +913,7 @@ func _build_launch_hold_skeleton(frozen_context: Dictionary) -> Dictionary:
 	)
 	var full_charge_raw_frames := ceili(float(LAUNCH_FULL_CHARGE_FRAMES) / maxf(charge_multiplier, 0.001))
 	var hold_duration := full_charge_raw_frames + (LAUNCH_AUTO_RELEASE_FRAMES - LAUNCH_FULL_CHARGE_FRAMES)
-	return {
+	var plan := {
 		"weapon_id": str(WEAPON_ID),
 		"action_id": str(LAUNCH_PRIMARY_ACTION_ID),
 		"profile_id": LAUNCH_PROFILE_ID,
@@ -956,6 +959,8 @@ func _build_launch_hold_skeleton(frozen_context: Dictionary) -> Dictionary:
 		],
 		"payloads": [],
 	}
+	_freeze_character_stats_into_plan(plan, frozen_context["adapter_snapshot"])
+	return plan
 
 
 func _build_launch_primary_plan(
@@ -1016,6 +1021,7 @@ func _build_launch_primary_plan(
 		"weakpoint_eligible": full_charge,
 		"tags": ["weapon:bow", "attack:%s" % str(tier["tier_id"])],
 	}
+	_freeze_character_stats_into_parameters(parameters, frozen_context["adapter_snapshot"])
 	if str(tier["tier_id"]) == "piercing":
 		parameters["time_mark_chance"] = 0.15
 		parameters["time_mark_duration_frames"] = 180
@@ -1074,6 +1080,7 @@ func _build_launch_press_plan(
 	var payload_parameters := _launch_press_payload_parameters(action_id, frozen_context)
 	if payload_parameters.is_empty():
 		return _failure(&"PAYLOAD_PROFILE_INVALID", {"action_id": action_id})
+	_freeze_character_stats_into_parameters(payload_parameters, frozen_context["adapter_snapshot"])
 	var plan := _launch_plan_base(action_id, frozen_context)
 	var recovery_phase := {
 		"phase": "RECOVERY",
@@ -1105,7 +1112,7 @@ func _build_launch_press_plan(
 
 func _launch_plan_base(action_id: String, frozen_context: Dictionary) -> Dictionary:
 	var action: Dictionary = _launch_actions_by_id[action_id]
-	return {
+	var plan := {
 		"weapon_id": str(WEAPON_ID),
 		"action_id": action_id,
 		"profile_id": LAUNCH_PROFILE_ID,
@@ -1125,6 +1132,8 @@ func _launch_plan_base(action_id: String, frozen_context: Dictionary) -> Diction
 		"phases": [],
 		"payloads": [],
 	}
+	_freeze_character_stats_into_plan(plan, frozen_context["adapter_snapshot"])
+	return plan
 
 
 func _launch_press_payload_parameters(action_id: String, frozen_context: Dictionary) -> Dictionary:
@@ -1350,6 +1359,10 @@ func _launch_action_definition(plan: Dictionary, token: int) -> Dictionary:
 		"payload_descriptors": descriptors,
 		"time_interactions": _launch_time_descriptors(plan, token, descriptors),
 		"boss_conversion": _launch_boss_conversion(plan),
+		"character_attack_scale": float(plan.get("character_attack_scale", 0.0)),
+		"attack_speed": float(plan.get("attack_speed", 0.0)),
+		"crit_chance": float(plan.get("crit_chance", -1.0)),
+		"crit_multiplier": float(plan.get("crit_multiplier", 0.0)),
 	}
 
 
@@ -1730,7 +1743,7 @@ func _build_hold_skeleton(
 ) -> Dictionary:
 	var timing_multiplier := _timing_multiplier(adapter_snapshot, modifier_snapshot)
 	var charge_multiplier := _charge_multiplier(adapter_snapshot, modifier_snapshot)
-	return {
+	var plan := {
 		"weapon_id": str(WEAPON_ID),
 		"action_id": str(ACTION_ID),
 		"profile_id": str(_profile_snapshot["id"]),
@@ -1772,6 +1785,8 @@ func _build_hold_skeleton(
 		],
 		"payloads": [],
 	}
+	_freeze_character_stats_into_plan(plan, adapter_snapshot)
+	return plan
 
 
 func _build_final_plan_result(
@@ -1852,6 +1867,7 @@ func _build_final_plan_result(
 			"parameters": parameters,
 		}],
 	}
+	_freeze_character_stats_into_plan(plan, adapter_snapshot)
 	var validation: Dictionary = WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(validation.get("ok", false)):
 		return validation
@@ -2032,6 +2048,10 @@ func _profile_shot_definition(plan: Dictionary, token: int) -> Dictionary:
 		"energy_reward_id": str(REWARD_ID),
 		"energy_reward_once_per_action": bool(parameters.get("energy_reward_once_per_action", true)),
 		"tags": (parameters.get("tags", []) as Array).duplicate(),
+		"character_attack_scale": float(plan.get("character_attack_scale", 0.0)),
+		"attack_speed": float(plan.get("attack_speed", 0.0)),
+		"crit_chance": float(plan.get("crit_chance", -1.0)),
+		"crit_multiplier": float(plan.get("crit_multiplier", 0.0)),
 	}
 
 
@@ -2080,6 +2100,10 @@ func _payload_parameters(
 		"time_energy_restore": FULL_CHARGE_ENERGY if full_charge else 0.0,
 		"energy_reward_once_per_action": true,
 		"tags": tags,
+		"character_attack_scale": float(adapter_snapshot["character_attack_scale"]),
+		"attack_speed": float(adapter_snapshot["attack_speed"]),
+		"crit_chance": float(adapter_snapshot["crit_chance"]),
+		"crit_multiplier": float(adapter_snapshot["crit_multiplier"]),
 	}
 
 
@@ -2420,7 +2444,32 @@ func _valid_frozen_adapter_values(value: Dictionary) -> bool:
 	return (
 		float(value["base_attack"]) >= 0.0
 		and float(value["attack_speed"]) > 0.0
+		and float(value["character_attack_scale"]) > 0.0
+		and float(value["crit_chance"]) >= 0.0
+		and float(value["crit_chance"]) <= 1.0
+		and float(value["crit_multiplier"]) >= 1.0
 	)
+
+
+func _freeze_character_stats_into_plan(plan: Dictionary, adapter_snapshot: Dictionary) -> void:
+	for field: String in ["character_attack_scale", "attack_speed", "crit_chance", "crit_multiplier"]:
+		plan[field] = float(adapter_snapshot[field])
+	var payloads: Array = plan.get("payloads", [])
+	for payload_value: Variant in payloads:
+		if payload_value is Dictionary and (payload_value as Dictionary).get("parameters") is Dictionary:
+			_freeze_character_stats_into_parameters(
+				(payload_value as Dictionary)["parameters"],
+				adapter_snapshot
+			)
+
+
+func _freeze_character_stats_into_parameters(
+	parameters: Dictionary,
+	adapter_snapshot: Dictionary
+) -> void:
+	parameters["base_attack"] = float(adapter_snapshot["base_attack"])
+	for field: String in ["character_attack_scale", "attack_speed", "crit_chance", "crit_multiplier"]:
+		parameters[field] = float(adapter_snapshot[field])
 
 
 func _charge_multiplier(adapter_snapshot: Dictionary, modifiers: Dictionary) -> float:

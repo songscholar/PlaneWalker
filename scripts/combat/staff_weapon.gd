@@ -38,7 +38,10 @@ const PAYLOAD_SNAPSHOT_FIELDS: Array[String] = [
 
 @export var owner_path: NodePath
 @export var base_attack: float = 9.0
-@export var attack_speed: float = 0.85
+@export var attack_speed: float = 1.0
+@export var character_attack_scale: float = 1.0
+@export var crit_chance: float = 0.05
+@export var crit_multiplier: float = 1.5
 
 var _result_sink: Object
 var _profile_action: Dictionary = {}

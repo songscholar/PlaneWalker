@@ -37,6 +37,50 @@ class FakeCharacterRuntime extends RefCounted:
 		}]
 
 
+	func plan_character_skill(_intent: Dictionary, _context: Dictionary) -> Dictionary:
+		return {"ok": false, "code": "unsupported"}
+
+
+	func commit_character_skill(_plan: Dictionary, _token: int) -> Dictionary:
+		return {"ok": false, "code": "unsupported"}
+
+
+	func before_damage(_context: Dictionary) -> Dictionary:
+		return {"ok": true, "decision": {}}
+
+
+	func after_damage(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+
+	func on_weapon_action_committed(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+
+	func on_weapon_mastery_confirmed(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+
+	func before_time_skill(_context: Dictionary) -> Dictionary:
+		return {"ok": true, "decision": {}}
+
+
+	func after_time_skill(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+
+	func on_room_started(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+
+	func on_room_cleared(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+
+	func on_run_terminal(_context: Dictionary) -> Dictionary:
+		return {"ok": true, "summary": {}}
+
+
 	func snapshot() -> Dictionary:
 		return {
 			"last_runtime_frame": last_runtime_frame,
@@ -80,6 +124,10 @@ class FakeCharacterRuntime extends RefCounted:
 		revision += 1
 		received_contexts.clear()
 		reset_reasons.append(reason)
+
+
+	func presentation_snapshot() -> Dictionary:
+		return {}
 
 
 var _suite

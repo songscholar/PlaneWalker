@@ -1029,6 +1029,10 @@ func _launch_definition(action_id: String, descriptors: Array) -> Dictionary:
 			"preserve_committed_active_attack": true,
 			"allowed_phases": ["RECOVERY", "EXPOSED"],
 		},
+		"character_attack_scale": 1.0,
+		"attack_speed": 1.0,
+		"crit_chance": 0.05,
+		"crit_multiplier": 1.5,
 	}
 
 

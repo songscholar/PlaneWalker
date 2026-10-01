@@ -117,12 +117,26 @@ func start_run(config: Dictionary) -> Variant:
 		)
 	var accepted_config := (config_value as Dictionary).duplicate(true)
 	var accepted_loadout := accepted_loadout_value as Dictionary
+	var character_profile_value: Variant = accepted_loadout.get("character_profile", {})
 	var weapon_profile_value: Variant = accepted_loadout.get("weapon_profile", {})
+	if not character_profile_value is Dictionary or (character_profile_value as Dictionary).is_empty():
+		return _fail_start(
+			&"LOADOUT_APPLY_FAILED",
+			{"configured": false, "reason": "character_profile_missing"}
+		)
 	if not weapon_profile_value is Dictionary or (weapon_profile_value as Dictionary).is_empty():
 		return _fail_start(
 			&"LOADOUT_APPLY_FAILED",
 			{"configured": false, "reason": "weapon_profile_missing"}
 		)
+	accepted_config["character_profile"] = (
+		character_profile_value as Dictionary
+	).duplicate(true)
+	accepted_config["character_talents"] = (
+		(accepted_loadout.get("character_talents", []) as Array).duplicate(true)
+		if accepted_loadout.get("character_talents", []) is Array
+		else []
+	)
 	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
 	if not bool(_player.call("configure_loadout", accepted_config)):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})

@@ -57,9 +57,85 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 	await _test_full_player_active_rift_round_trip()
 	await _test_full_player_identity_binds_movement_profile()
+	await _test_full_player_v1_schema_is_explicitly_rejected()
 	await _test_full_player_replay_rejects_forged_semantics_and_facts()
 	await _test_full_player_playback_failure_is_atomic()
 	_suite.finish(get_tree())
+
+
+func _test_full_player_v1_schema_is_explicitly_rejected() -> void:
+	var source := await _spawn_player()
+	var identity: Dictionary = source.full_player_replay_identity()
+	var snapshot: Dictionary = source.full_player_replay_snapshot()
+	var recorder = ReplayRecorderScript.new()
+	_suite.assert_true(
+		bool(recorder.start_full_player_recording(identity, 1202).get("ok", false)),
+		"v2 schema fixture starts recording"
+	)
+	_suite.assert_true(
+		bool(recorder.record_full_player_frame(
+			snapshot,
+			_frame_intents(int(snapshot.get("frame", 0)), Vector2.ZERO, Vector2.RIGHT),
+			[]
+		).get("ok", false)),
+		"v2 schema fixture records one checkpoint"
+	)
+	var finished: Dictionary = recorder.finish_full_player_recording()
+	_suite.assert_true(bool(finished.get("ok", false)), "v2 schema fixture finishes")
+	var replay := (finished.get("replay", {}) as Dictionary).duplicate(true)
+	_suite.assert_equal(
+		ReplayRecorderScript.FULL_PLAYER_SCHEMA_VERSION,
+		2,
+		"full-player Replay schema advances for the incompatible identity extension"
+	)
+	_suite.assert_equal(
+		ReplayRecorderScript.FULL_PLAYER_FRAME_SCHEMA_VERSION,
+		2,
+		"full-player frame schema advances with its snapshot contract"
+	)
+	_suite.assert_equal(
+		ReplayRecorderScript.FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION,
+		2,
+		"full-player snapshot schema advances for character action state"
+	)
+
+	var legacy_replay := replay.duplicate(true)
+	legacy_replay["schema_version"] = 1
+	var legacy_replay_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		legacy_replay,
+		identity
+	)
+	_suite.assert_equal(
+		legacy_replay_rejected.get("code"),
+		&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH",
+		"legacy v1 full-player Replay is rejected by schema version"
+	)
+
+	var legacy_frame := replay.duplicate(true)
+	((legacy_frame["frames"] as Array)[0] as Dictionary)["schema_version"] = 1
+	var legacy_frame_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		legacy_frame,
+		identity
+	)
+	_suite.assert_equal(
+		legacy_frame_rejected.get("code"),
+		&"FULL_PLAYER_REPLAY_FRAME_INVALID",
+		"legacy v1 full-player frame is rejected before digest validation"
+	)
+
+	var legacy_snapshot := replay.duplicate(true)
+	var legacy_snapshot_frame := (legacy_snapshot["frames"] as Array)[0] as Dictionary
+	(legacy_snapshot_frame["snapshot"] as Dictionary)["schema_version"] = 1
+	var legacy_snapshot_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		legacy_snapshot,
+		identity
+	)
+	_suite.assert_equal(
+		legacy_snapshot_rejected.get("code"),
+		&"FULL_PLAYER_SNAPSHOT_SCHEMA_MISMATCH",
+		"legacy v1 full-player snapshot is rejected before digest validation"
+	)
+	await _free_player(source)
 
 
 func _test_full_player_active_rift_round_trip() -> void:
@@ -233,6 +309,26 @@ func _test_full_player_identity_binds_movement_profile() -> void:
 		float(identity.get("move_speed", -1.0)),
 		260.0,
 		"full-player identity seals the fixed-frame movement speed"
+	)
+	_suite.assert_equal(
+		str(identity.get("character_profile_id", "")),
+		"wanderer_m1_v1",
+		"full-player identity seals the authoritative character profile"
+	)
+	_suite.assert_equal(
+		identity.get("character_talent_ids", []),
+		[],
+		"full-player identity seals the selected character talents"
+	)
+	_suite.assert_equal(
+		(identity.get("stats", {}) as Dictionary).get("move_speed"),
+		260.0,
+		"full-player identity seals the complete Stats projection"
+	)
+	_suite.assert_equal(
+		identity.get("mobility", {}),
+		source.mobility_snapshot(),
+		"full-player identity seals profile-authoritative mobility"
 	)
 	var recorder = ReplayRecorderScript.new()
 	_suite.assert_true(

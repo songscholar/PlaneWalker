@@ -14,7 +14,10 @@ const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runt
 
 class FakeGunAdapter extends Node2D:
 	var base_attack: float = 15.0
-	var attack_speed: float = 0.9
+	var attack_speed: float = 1.0
+	var character_attack_scale: float = 1.0
+	var crit_chance: float = 0.05
+	var crit_multiplier: float = 1.5
 	var fail_begin: bool = false
 	var corrupt_begin: bool = false
 	var fail_release: bool = false
@@ -197,6 +200,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	_test_character_stats_freeze_across_hold_release()
 	_test_catalog_profile_is_strict()
 	_test_primary_hold_and_ammo_boundaries()
 	_test_coordinator_publishes_real_hold_identity_and_live_reload()
@@ -210,6 +214,46 @@ func _run() -> void:
 	_test_failed_gameplay_rewind_restore_compensates_adapter_and_runtime()
 	await _test_real_adapter_gameplay_rewind_preserves_committed_projectile_identity()
 	_suite.finish(get_tree())
+
+
+func _test_character_stats_freeze_across_hold_release() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var adapter: FakeGunAdapter = fixture["gun"]
+	adapter.base_attack = 13.5
+	adapter.attack_speed = 0.9
+	adapter.character_attack_scale = 0.9
+	adapter.crit_chance = 0.04
+	adapter.crit_multiplier = 1.6
+	var hold: Dictionary = runtime.plan_intent(
+		_press_intent(&"weapon_primary"),
+		_context(91001)
+	).get("plan", {})
+	_assert_character_stats(hold, {}, 0.9, 0.9, 0.04, 1.6, "Gun hold")
+	_suite.assert_true(bool(runtime.commit_action(hold, 91001).get("ok", false)), "Gun character-stat hold commits")
+	adapter.base_attack = 999.0
+	adapter.attack_speed = 4.0
+	adapter.character_attack_scale = 4.0
+	adapter.crit_chance = 1.0
+	adapter.crit_multiplier = 9.0
+	var live_context := _context(91002)
+	live_context["aim_direction"] = Vector2.UP
+	_suite.assert_true(
+		runtime.update_hold_context(hold, 91001, live_context),
+		"Gun HOLD context updates without replacing frozen character stats"
+	)
+	var released: Dictionary = runtime.release_hold(hold, 91001, 0)
+	_suite.assert_true(bool(released.get("ok", false)), "Gun character-stat hold releases")
+	var finalized: Dictionary = released.get("finalized_plan", {})
+	_suite.assert_equal(int(finalized.get("run_seed", 0)), 91002, "Gun HOLD keeps live run seed updates")
+	_suite.assert_equal(finalized.get("aim_direction_snapshot", Vector2.ZERO), Vector2.UP, "Gun HOLD keeps live aim updates")
+	var parameters := _payload_parameters(finalized)
+	_assert_character_stats(finalized, parameters, 0.9, 0.9, 0.04, 1.6, "Gun finalized payload")
+	_suite.assert_close(float(adapter.staged_definition.get("base_attack", 0.0)), 13.5, "Gun committed definition keeps the scaled base attack")
+	_suite.assert_close(float(adapter.staged_definition.get("character_attack_scale", 0.0)), 0.9, "Gun committed definition freezes character attack scale")
+	_suite.assert_close(float(adapter.staged_definition.get("crit_chance", -1.0)), 0.04, "Gun committed definition freezes critical chance")
+	_suite.assert_close(float(adapter.staged_definition.get("crit_multiplier", 0.0)), 1.6, "Gun committed definition freezes critical multiplier")
+	_free_fixture(fixture)
 
 
 func _test_catalog_profile_is_strict() -> void:
@@ -1116,6 +1160,24 @@ func _payload_parameters(plan: Dictionary) -> Dictionary:
 		return {}
 	var parameters_value: Variant = (payload_value as Dictionary).get("parameters", {})
 	return (parameters_value as Dictionary).duplicate(true) if parameters_value is Dictionary else {}
+
+
+func _assert_character_stats(
+	plan: Dictionary,
+	parameters: Dictionary,
+	attack_scale: float,
+	attack_speed: float,
+	crit_chance: float,
+	crit_multiplier: float,
+	label: String
+) -> void:
+	for source: Dictionary in [plan, parameters]:
+		if source.is_empty():
+			continue
+		_suite.assert_close(float(source.get("character_attack_scale", 0.0)), attack_scale, "%s freezes character attack scale" % label)
+		_suite.assert_close(float(source.get("attack_speed", 0.0)), attack_speed, "%s freezes attack speed" % label)
+		_suite.assert_close(float(source.get("crit_chance", -1.0)), crit_chance, "%s freezes critical chance" % label)
+		_suite.assert_close(float(source.get("crit_multiplier", 0.0)), crit_multiplier, "%s freezes critical multiplier" % label)
 
 
 func _press_intent(intent_id: StringName) -> Dictionary:

@@ -12,7 +12,10 @@ const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runt
 
 class RecordingStaffAdapter extends Node2D:
 	var base_attack: float = 9.0
-	var attack_speed: float = 0.85
+	var attack_speed: float = 1.0
+	var character_attack_scale: float = 1.0
+	var crit_chance: float = 0.05
+	var crit_multiplier: float = 1.5
 	var staged_definition: Dictionary = {}
 	var _active: bool = false
 	var _released: bool = false

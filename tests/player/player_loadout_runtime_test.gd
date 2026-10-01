@@ -3,9 +3,11 @@ extends Node
 const PLAYER_LOADOUT_RUNTIME_PATH := "res://scripts/player/player_loadout_runtime.gd"
 const PlayerScene := preload("res://scenes/player/player.tscn")
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
+const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
 var _suite
+var _registry: RefCounted
 
 
 func _ready() -> void:
@@ -14,11 +16,18 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	_registry = ContentRegistryScript.new()
+	var report = _registry.call("load_packs", [
+		{"path": "res://data/content_packs/base/pack.json", "required": true},
+	], "0.4.0-dev", &"M1")
+	_suite.assert_true(not report.has_blocking_errors(), "character runtime fixture loads the base pack")
 	_test_component_contract()
 	await _test_m1_equipment_isolation()
 	await _test_successful_reconfigure_resets_runtime_state()
 	await _test_invalid_reconfigure_preserves_runtime_state()
 	await _test_reconfigure_revives_dead_player()
+	await _test_default_character_profile_resolution_by_milestone()
+	await _test_launch_character_profile_rebuilds_fresh_runtime()
 	_suite.finish(get_tree())
 
 
@@ -31,7 +40,18 @@ func _test_component_contract() -> void:
 	var runtime = runtime_script.new()
 	var source := _config("sword", ["stop", "rewind"])
 	source["weapon_profile"] = _weapon_profile("sword_m1_v1", "sword")
+	source["character_profile"] = _registry.call(
+		"resolve_character_runtime_profile", &"wanderer", &"M1"
+	)
+	source["character_talents"] = []
 	_suite.assert_true(bool(runtime.call("configure", source)), "valid loadout configures the component")
+	_suite.assert_true(runtime.has_method("character_profile_id"), "component exposes the character profile identity")
+	_suite.assert_true(runtime.has_method("character_profile_snapshot"), "component exposes an isolated character profile")
+	_suite.assert_true(runtime.has_method("character_talent_ids"), "component exposes selected character talents")
+	if runtime.has_method("character_profile_id"):
+		_suite.assert_equal(str(runtime.call("character_profile_id")), "wanderer_m1_v1", "component stores the character profile")
+	if runtime.has_method("character_talent_ids"):
+		_suite.assert_equal(runtime.call("character_talent_ids"), [], "component stores the empty M1 talent selection")
 	_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "component stores the equipped weapon")
 	_suite.assert_true(runtime.has_method("weapon_profile_id"), "component exposes the equipped profile identity")
 	_suite.assert_true(runtime.has_method("weapon_profile_snapshot"), "component exposes an isolated profile snapshot")
@@ -48,10 +68,13 @@ func _test_component_contract() -> void:
 	source["weapon_id"] = "bow"
 	(source["enabled_time_skills"] as Array)[0] = "rift"
 	(source["weapon_profile"] as Dictionary)["id"] = "forged_profile"
+	(source["character_profile"] as Dictionary)["id"] = "forged_character_profile"
 	_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "component is isolated from caller weapon mutation")
 	_suite.assert_equal(_string_ids(runtime.call("time_ability_ids")), ["stop", "rewind"], "component deep-copies caller ability arrays")
 	if runtime.has_method("weapon_profile_id"):
 		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "component deep-copies the caller weapon profile")
+	if runtime.has_method("character_profile_id"):
+		_suite.assert_equal(str(runtime.call("character_profile_id")), "wanderer_m1_v1", "component deep-copies the caller character profile")
 
 	var returned_ids: Array = runtime.call("time_ability_ids")
 	returned_ids[0] = "accelerate"
@@ -63,6 +86,10 @@ func _test_component_contract() -> void:
 		_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "profile query returns an isolated copy")
 	if runtime.has_method("run_seed"):
 		_suite.assert_equal(int(runtime.call("run_seed")), 20260929, "component preserves the accepted run seed")
+	if runtime.has_method("character_profile_snapshot"):
+		var returned_character_profile: Dictionary = runtime.call("character_profile_snapshot")
+		returned_character_profile["id"] = "forged_character_profile"
+		_suite.assert_equal(str(runtime.call("character_profile_id")), "wanderer_m1_v1", "character profile query returns an isolated copy")
 
 	var invalid_configs: Array[Dictionary] = []
 	invalid_configs.append(_config("sword", ["stop"]))
@@ -71,6 +98,9 @@ func _test_component_contract() -> void:
 	var mismatched_profile := _config("sword", ["stop", "rewind"])
 	mismatched_profile["weapon_profile"] = _weapon_profile("bow_candidate_v1", "bow")
 	invalid_configs.append(mismatched_profile)
+	var mismatched_character := source.duplicate(true)
+	mismatched_character["character_id"] = "time_guardian"
+	invalid_configs.append(mismatched_character)
 	for invalid: Dictionary in invalid_configs:
 		_suite.assert_true(not bool(runtime.call("configure", invalid)), "component rejects malformed two-ability loadout")
 		_suite.assert_equal(str(runtime.call("weapon_id")), "sword", "failed configure preserves the prior weapon")
@@ -78,6 +108,103 @@ func _test_component_contract() -> void:
 		if runtime.has_method("weapon_profile_id"):
 			_suite.assert_equal(str(runtime.call("weapon_profile_id")), "sword_m1_v1", "failed configure preserves the prior profile atomically")
 	runtime.free()
+
+
+func _test_default_character_profile_resolution_by_milestone() -> void:
+	var player := await _spawn_player()
+	for case: Dictionary in [
+		{"milestone": "M1", "profile_id": "wanderer_m1_v1"},
+		{"milestone": "CURRENT", "profile_id": "wanderer_m1_v1"},
+		{"milestone": "NEXT", "profile_id": "wanderer_m1_v1"},
+		{"milestone": "LAUNCH", "profile_id": "wanderer_launch_v1"},
+		{"milestone": "EXPANSION", "profile_id": "wanderer_launch_v1"},
+	]:
+		var config := _config("sword", ["stop", "rewind"], str(case["milestone"]))
+		config["character_id"] = "wanderer"
+		_suite.assert_true(
+			not config.has("character_profile"),
+			"%s fixture omits the character profile" % str(case["milestone"])
+		)
+		_suite.assert_true(
+			player.configure_loadout(config),
+			"%s resolves the authoritative Wanderer profile" % str(case["milestone"])
+		)
+		_suite.assert_equal(
+			str(player.loadout_runtime.character_profile_id()),
+			str(case["profile_id"]),
+			"%s installs the milestone-specific Wanderer profile" % str(case["milestone"])
+		)
+
+	var before_non_wanderer: Dictionary = player.full_player_replay_snapshot()
+	var missing_non_wanderer_profile := _config("sword", ["stop", "rewind"], "LAUNCH")
+	missing_non_wanderer_profile["character_id"] = "time_guardian"
+	_suite.assert_true(
+		not player.configure_loadout(missing_non_wanderer_profile),
+		"non-Wanderer loadout still requires an explicit authoritative profile"
+	)
+	_suite.assert_equal(
+		player.full_player_replay_snapshot(),
+		before_non_wanderer,
+		"missing non-Wanderer profile preserves the committed Player state"
+	)
+	await _free_player(player)
+
+
+func _test_launch_character_profile_rebuilds_fresh_runtime() -> void:
+	var player := await _spawn_player()
+	var config := _launch_config(&"time_guardian", &"sword", [&"stop", &"rewind"])
+	_suite.assert_true(not config.is_empty(), "Launch guardian fixture resolves both runtime profiles")
+	if config.is_empty():
+		await _free_player(player)
+		return
+	player.stats.attack = 999.0
+	player.stats.move_speed = 999.0
+	_suite.assert_true(player.configure_loadout(config), "Launch guardian loadout installs atomically")
+	_suite.assert_true(player.has_method("character_runtime_snapshot"), "Player exposes the committed character runtime")
+	_suite.assert_true(player.has_method("mobility_snapshot"), "Player exposes profile-authoritative mobility")
+	if not player.has_method("character_runtime_snapshot") or not player.has_method("mobility_snapshot"):
+		await _free_player(player)
+		return
+	_suite.assert_equal(player.stats.snapshot(), {
+		"max_hp": 240.0,
+		"attack": 27.0,
+		"defense": 10.0,
+		"move_speed": 190.0,
+		"attack_speed": 0.9,
+		"crit_chance": 0.04,
+		"crit_multiplier": 1.5,
+		"time_energy_max": 120.0,
+		"time_energy_regen": 2.0,
+	}, "Launch guardian rebuilds every base stat from a fresh profile")
+	_suite.assert_equal(player.mobility_snapshot(), {
+		"dash_duration_frames": 18,
+		"dash_cooldown_frames": 30,
+		"dash_speed": 500.0,
+		"dash_cost_kind": "none",
+		"dash_cost": 0.0,
+		"dash_invulnerable_frames": 12,
+	}, "Launch guardian installs the exact mobility row")
+	_suite.assert_equal(str(player.loadout_runtime.character_profile_id()), "time_guardian_launch_v1", "loadout owns the committed character profile")
+	_suite.assert_equal(str(player.character_runtime_snapshot().get("character_id", "")), "time_guardian", "character runtime owns the committed character")
+	var health: Node = player.get_node("HealthComponent")
+	var manager: Node = player.get_node("TimeManager")
+	_suite.assert_close(float(health.max_hp), 240.0, "fresh character stats configure maximum HP")
+	_suite.assert_close(float(health.current_hp), 240.0, "fresh character activation restores current HP")
+	_suite.assert_close(float(manager.max_energy), 120.0, "fresh character stats configure maximum Time Energy")
+	_suite.assert_close(float(manager.energy), 120.0, "fresh character activation restores current Time Energy")
+
+	player.stats.attack = 777.0
+	player.stats.time_energy_max = 1.0
+	_suite.assert_true(player.configure_loadout(config), "second fresh activation succeeds")
+	_suite.assert_close(float(player.stats.attack), 27.0, "second activation does not retain prior-run attack mutation")
+	_suite.assert_close(float(player.stats.time_energy_max), 120.0, "second activation does not retain prior-run Time maximum mutation")
+
+	var before: Dictionary = player.full_player_replay_snapshot()
+	var forged := config.duplicate(true)
+	(forged["character_profile"] as Dictionary)["base_stats"]["attack"] = 999.0
+	_suite.assert_true(not player.configure_loadout(forged), "forged character profile is rejected")
+	_suite.assert_equal(player.full_player_replay_snapshot(), before, "failed character activation preserves the complete prior runtime")
+	await _free_player(player)
 
 
 func _test_m1_equipment_isolation() -> void:
@@ -270,6 +397,33 @@ func _weapon_profile(profile_id: String, weapon_id: String) -> Dictionary:
 		"capabilities": [],
 		"payloads": [],
 		"cues": [],
+	}
+
+
+func _launch_config(
+	character_id: StringName,
+	weapon_id: StringName,
+	ability_ids: Array[StringName]
+) -> Dictionary:
+	var character_profile: Dictionary = _registry.call(
+		"resolve_character_runtime_profile", character_id, &"LAUNCH"
+	)
+	var weapon_profile: Dictionary = _registry.call(
+		"resolve_weapon_runtime_profile", weapon_id, &"LAUNCH"
+	)
+	if character_profile.is_empty() or weapon_profile.is_empty():
+		return {}
+	return {
+		"schema_version": 1,
+		"milestone": "LAUNCH",
+		"character_id": str(character_id),
+		"character_profile": character_profile,
+		"character_talents": [],
+		"weapon_id": str(weapon_id),
+		"weapon_profile": weapon_profile,
+		"enabled_time_skills": ability_ids.duplicate(),
+		"difficulty": "normal",
+		"seed": 20261001,
 	}
 
 

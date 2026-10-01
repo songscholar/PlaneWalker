@@ -13,6 +13,9 @@ const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/weapon_runt
 class FakeBowAdapter extends Node2D:
 	var base_attack: float = 30.0
 	var attack_speed: float = 1.0
+	var character_attack_scale: float = 1.0
+	var crit_chance: float = 0.05
+	var crit_multiplier: float = 1.5
 	var fail_begin: bool = false
 	var corrupt_begin: bool = false
 	var fail_release: bool = false
@@ -183,6 +186,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	_test_character_stats_freeze_across_hold_release()
 	_test_launch_profile_is_strict_and_candidate_remains_frozen()
 	_test_launch_primary_four_tiers_and_hold_contract()
 	_test_launch_primary_automatic_release_at_228_frames()
@@ -201,6 +205,38 @@ func _run() -> void:
 	_test_commit_release_cancel_and_reset_fail_atomically()
 	_test_quiescent_snapshot_restore_preserves_reward_ledger()
 	_suite.finish(get_tree())
+
+
+func _test_character_stats_freeze_across_hold_release() -> void:
+	var fixture := _launch_fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var adapter: FakeBowAdapter = fixture["bow"]
+	adapter.base_attack = 27.0
+	adapter.attack_speed = 0.9
+	adapter.character_attack_scale = 0.9
+	adapter.crit_chance = 0.04
+	adapter.crit_multiplier = 1.6
+	var hold: Dictionary = runtime.plan_intent(
+		{"id": "weapon_primary", "edge": "pressed"},
+		_aim_context(Vector2.RIGHT)
+	).get("plan", {})
+	_assert_character_stats(hold, {}, 0.9, 0.9, 0.04, 1.6, "Bow hold")
+	_suite.assert_true(bool(runtime.commit_action(hold, 90001).get("ok", false)), "Bow character-stat hold commits")
+	adapter.base_attack = 999.0
+	adapter.attack_speed = 4.0
+	adapter.character_attack_scale = 4.0
+	adapter.crit_chance = 1.0
+	adapter.crit_multiplier = 9.0
+	var released: Dictionary = runtime.release_hold(hold, 90001, 54)
+	_suite.assert_true(bool(released.get("ok", false)), "Bow character-stat hold releases")
+	var finalized: Dictionary = released.get("finalized_plan", {})
+	var parameters := _payload_parameters(finalized)
+	_assert_character_stats(finalized, parameters, 0.9, 0.9, 0.04, 1.6, "Bow finalized payload")
+	_suite.assert_close(float(parameters.get("base_attack", 0.0)), 27.0, "Bow finalized payload keeps the frozen scaled attack")
+	_suite.assert_close(float(adapter.staged_action_definition.get("character_attack_scale", 0.0)), 0.9, "Bow committed definition freezes character attack scale")
+	_suite.assert_close(float(adapter.staged_action_definition.get("crit_chance", -1.0)), 0.04, "Bow committed definition freezes critical chance")
+	_suite.assert_close(float(adapter.staged_action_definition.get("crit_multiplier", 0.0)), 1.6, "Bow committed definition freezes critical multiplier")
+	_free_fixture(fixture)
 
 
 func _test_launch_profile_is_strict_and_candidate_remains_frozen() -> void:
@@ -1247,6 +1283,24 @@ func _payload_parameters(plan: Dictionary) -> Dictionary:
 	if not payload_value is Dictionary or not (payload_value as Dictionary).get("parameters") is Dictionary:
 		return {}
 	return ((payload_value as Dictionary)["parameters"] as Dictionary).duplicate(true)
+
+
+func _assert_character_stats(
+	plan: Dictionary,
+	parameters: Dictionary,
+	attack_scale: float,
+	attack_speed: float,
+	crit_chance: float,
+	crit_multiplier: float,
+	label: String
+) -> void:
+	for source: Dictionary in [plan, parameters]:
+		if source.is_empty():
+			continue
+		_suite.assert_close(float(source.get("character_attack_scale", 0.0)), attack_scale, "%s freezes character attack scale" % label)
+		_suite.assert_close(float(source.get("attack_speed", 0.0)), attack_speed, "%s freezes attack speed" % label)
+		_suite.assert_close(float(source.get("crit_chance", -1.0)), crit_chance, "%s freezes critical chance" % label)
+		_suite.assert_close(float(source.get("crit_multiplier", 0.0)), crit_multiplier, "%s freezes critical multiplier" % label)
 
 
 func _phase(plan: Dictionary, index: int) -> Dictionary:

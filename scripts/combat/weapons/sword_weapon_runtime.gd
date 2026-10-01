@@ -148,6 +148,9 @@ const LEGACY_REWARD_FIELDS: Array[String] = [
 	"low_hp_damage_multiplier_bonus",
 	"low_hp_threshold",
 ]
+const CHARACTER_STATS_FIELDS: Array[String] = [
+	"base_attack", "character_attack_scale", "attack_speed", "crit_chance", "crit_multiplier",
+]
 const LEGACY_REWARD_CAPABILITIES := {
 	"weapon.combo_finisher_damage": {"field": "combo_finisher_multiplier_bonus", "base_value": 0.0},
 	"weapon.heavy_damage": {"field": "heavy_damage_multiplier_bonus", "base_value": 0.0},
@@ -184,7 +187,12 @@ func weapon_id() -> StringName:
 func bind_adapter(adapter: Node) -> bool:
 	if _owner != null:
 		return adapter == _adapter
-	if adapter == null or not is_instance_valid(adapter) or not _has_methods(adapter, REQUIRED_ADAPTER_METHODS):
+	if (
+		adapter == null
+		or not is_instance_valid(adapter)
+		or not _has_methods(adapter, REQUIRED_ADAPTER_METHODS)
+		or _character_stats_snapshot(adapter).is_empty()
+	):
 		return false
 	_adapter = adapter
 	return true
@@ -284,7 +292,10 @@ func plan_intent(intent: Dictionary, _context: Dictionary) -> Dictionary:
 	if not modifier_value is Dictionary or not _dictionary_numbers_are_finite(modifier_value as Dictionary):
 		return _failure(&"INVALID_MODIFIER_SNAPSHOT")
 	var frozen_modifiers := (modifier_value as Dictionary).duplicate(true)
-	var timing_multiplier := _timing_multiplier(frozen_modifiers)
+	var character_stats := _character_stats_snapshot(_adapter)
+	if character_stats.is_empty():
+		return _failure(&"INVALID_CHARACTER_STATS")
+	var timing_multiplier := _timing_multiplier(frozen_modifiers, character_stats)
 	var recovery_frames := _scaled_action_frames(action_id, &"recovery", timing_multiplier)
 	var cancel_from_frame := mini(
 		_scaled_action_frames(action_id, &"cancel", timing_multiplier),
@@ -304,6 +315,7 @@ func plan_intent(intent: Dictionary, _context: Dictionary) -> Dictionary:
 		"resource_costs": (action.get("resource_costs", {}) as Dictionary).duplicate(true),
 		"modifier_snapshot": frozen_modifiers,
 		"base_attack_snapshot": float(_adapter.get("base_attack")),
+		"character_stats_snapshot": character_stats.duplicate(true),
 		"legacy_reward_snapshot": _legacy_reward_snapshot(),
 		"cue": cue,
 		"phases": [
@@ -330,6 +342,7 @@ func plan_intent(intent: Dictionary, _context: Dictionary) -> Dictionary:
 			"parameters": (payload.get("parameters", {}) as Dictionary).duplicate(true),
 		}],
 	}
+	_freeze_character_stats_into_plan(plan, character_stats)
 	var validation: Dictionary = WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(validation.get("ok", false)):
 		return validation
@@ -411,7 +424,9 @@ func release_hold(plan: Dictionary, token: int, held_frames: int) -> Dictionary:
 		action_id,
 		(plan.get("modifier_snapshot", {}) as Dictionary).duplicate(true),
 		float(plan.get("base_attack_snapshot", 0.0)),
-		(plan.get("legacy_reward_snapshot", {}) as Dictionary).duplicate(true)
+		(plan.get("legacy_reward_snapshot", {}) as Dictionary).duplicate(true),
+		-1,
+		(plan.get("character_stats_snapshot", {}) as Dictionary).duplicate(true)
 	)
 	if not bool(built.get("ok", false)):
 		return built
@@ -819,6 +834,9 @@ func _build_launch_hold_plan(
 	var modifiers_result := _frozen_modifier_snapshot()
 	if not bool(modifiers_result.get("ok", false)):
 		return modifiers_result
+	var character_stats := _character_stats_snapshot(_adapter)
+	if character_stats.is_empty():
+		return _failure(&"INVALID_CHARACTER_STATS")
 	var fingerprints: Dictionary = {}
 	var allowed_ids: Array[String] = []
 	for release_id: StringName in allowed_release_ids:
@@ -839,6 +857,7 @@ func _build_launch_hold_plan(
 		"resource_costs": resource_costs.duplicate(true),
 		"modifier_snapshot": (modifiers_result["modifiers"] as Dictionary).duplicate(true),
 		"base_attack_snapshot": float(_adapter.get("base_attack")),
+		"character_stats_snapshot": character_stats.duplicate(true),
 		"legacy_reward_snapshot": _legacy_reward_snapshot(),
 		"phases": [{
 			"phase": "HOLD",
@@ -852,6 +871,7 @@ func _build_launch_hold_plan(
 		"allowed_release_action_ids": allowed_ids,
 		"release_action_fingerprints": fingerprints,
 	}
+	_freeze_character_stats_into_plan(plan, character_stats)
 	var validation: Dictionary = WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -861,7 +881,8 @@ func _build_launch_action_plan(
 	frozen_modifiers: Dictionary = {},
 	base_attack_snapshot: float = -1.0,
 	legacy_reward_snapshot: Dictionary = {},
-	combo_step_override: int = -1
+	combo_step_override: int = -1,
+	character_stats_snapshot: Dictionary = {}
 ) -> Dictionary:
 	var action: Dictionary = _copy_indexed(_actions_by_id, action_id)
 	if action.is_empty():
@@ -879,7 +900,12 @@ func _build_launch_action_plan(
 		if not bool(modifiers_result.get("ok", false)):
 			return modifiers_result
 		modifiers = (modifiers_result["modifiers"] as Dictionary).duplicate(true)
-	var timing_multiplier := _timing_multiplier(modifiers)
+	var character_stats := character_stats_snapshot.duplicate(true)
+	if character_stats.is_empty():
+		character_stats = _character_stats_snapshot(_adapter)
+	if not _valid_character_stats_snapshot(character_stats):
+		return _failure(&"INVALID_CHARACTER_STATS")
+	var timing_multiplier := _timing_multiplier(modifiers, character_stats)
 	var recovery_frames := _scaled_frames(action.get("recovery_frames", 0), timing_multiplier)
 	var recovery_phase := {
 		"phase": "RECOVERY",
@@ -908,6 +934,7 @@ func _build_launch_action_plan(
 			if base_attack_snapshot >= 0.0
 			else float(_adapter.get("base_attack"))
 		),
+		"character_stats_snapshot": character_stats.duplicate(true),
 		"legacy_reward_snapshot": (
 			legacy_reward_snapshot.duplicate(true)
 			if not legacy_reward_snapshot.is_empty()
@@ -933,6 +960,7 @@ func _build_launch_action_plan(
 		}],
 		"cue": cue.duplicate(true),
 	}
+	_freeze_character_stats_into_plan(plan, character_stats)
 	if action_id == &"light_chain":
 		plan["combo_step_before"] = combo_step_override if combo_step_override >= 0 else _combo_step
 		plan["combo_reset_frames"] = LAUNCH_COMBO_RESET_FRAMES
@@ -994,6 +1022,7 @@ func _launch_hold_plan_matches_profile(plan: Dictionary) -> bool:
 		or not _dictionary_numbers_are_finite(plan.get("modifier_snapshot"))
 		or typeof(plan.get("base_attack_snapshot")) not in [TYPE_INT, TYPE_FLOAT]
 		or not is_finite(float(plan.get("base_attack_snapshot", NAN)))
+		or not _valid_character_stats_snapshot(plan.get("character_stats_snapshot", {}))
 		or not plan.get("legacy_reward_snapshot") is Dictionary
 		or not _dictionary_numbers_are_finite(plan.get("legacy_reward_snapshot"))
 		or not (plan.get("payloads", []) as Array).is_empty()
@@ -1056,6 +1085,7 @@ func _launch_final_plan_matches_profile(plan: Dictionary, action_id: StringName)
 		or not _dictionary_numbers_are_finite(plan.get("modifier_snapshot"))
 		or typeof(plan.get("base_attack_snapshot")) not in [TYPE_INT, TYPE_FLOAT]
 		or not is_finite(float(plan.get("base_attack_snapshot", NAN)))
+		or not _valid_character_stats_snapshot(plan.get("character_stats_snapshot", {}))
 		or not plan.get("legacy_reward_snapshot") is Dictionary
 		or not _dictionary_numbers_are_finite(plan.get("legacy_reward_snapshot"))
 	):
@@ -1065,13 +1095,104 @@ func _launch_final_plan_matches_profile(plan: Dictionary, action_id: StringName)
 		(plan["modifier_snapshot"] as Dictionary).duplicate(true),
 		float(plan["base_attack_snapshot"]),
 		(plan["legacy_reward_snapshot"] as Dictionary).duplicate(true),
-		int(plan.get("combo_step_before", -1)) if action_id == &"light_chain" else -1
+		int(plan.get("combo_step_before", -1)) if action_id == &"light_chain" else -1,
+		(plan["character_stats_snapshot"] as Dictionary).duplicate(true)
 	)
 	if not bool(expected_result.get("ok", false)):
 		return false
 	var comparable := plan.duplicate(true)
 	comparable.erase("release_action_fingerprint")
 	return comparable == (expected_result["plan"] as Dictionary)
+
+
+func _m1_plan_matches_profile(plan: Dictionary, action_id: StringName) -> bool:
+	var character_stats_value: Variant = plan.get("character_stats_snapshot", {})
+	if not _valid_character_stats_snapshot(character_stats_value):
+		return false
+	var character_stats := character_stats_value as Dictionary
+	if not _number_matches_exactly(
+		plan.get("base_attack_snapshot"),
+		character_stats.get("base_attack")
+	):
+		return false
+	var modifier_value: Variant = plan.get("modifier_snapshot", {})
+	if (
+		not modifier_value is Dictionary
+		or not _dictionary_numbers_are_finite(modifier_value as Dictionary)
+	):
+		return false
+	var legacy_rewards_value: Variant = plan.get("legacy_reward_snapshot", {})
+	if (
+		not legacy_rewards_value is Dictionary
+		or not _dictionary_numbers_are_finite(legacy_rewards_value as Dictionary)
+	):
+		return false
+	var legacy_rewards := (legacy_rewards_value as Dictionary).duplicate(true)
+
+	var action := _copy_indexed(_actions_by_id, action_id)
+	if action.is_empty():
+		return false
+	var payload_id := StringName(str(action.get("payload_id", "")))
+	var payload := _copy_indexed(_payloads_by_id, payload_id)
+	var cue := _copy_indexed(
+		_cues_by_id,
+		StringName(str(action.get("cue_id", "")))
+	)
+	if payload.is_empty() or cue.is_empty():
+		return false
+	var frozen_modifiers := (modifier_value as Dictionary).duplicate(true)
+	var timing_multiplier := _timing_multiplier(frozen_modifiers, character_stats)
+	var recovery_frames := _scaled_action_frames(
+		action_id,
+		&"recovery",
+		timing_multiplier
+	)
+	var expected := {
+		"weapon_id": str(WEAPON_ID),
+		"action_id": str(action_id),
+		"profile_id": str(_profile_snapshot["id"]),
+		"profile_version": int(_profile_snapshot["profile_version"]),
+		"semantic_action": "weapon_secondary" if action_id == HEAVY_ACTION_ID else "weapon_primary",
+		"heavy": action_id == HEAVY_ACTION_ID,
+		"combo_step_before": _combo_step,
+		"combo_reset_frames": COMBO_RESET_FRAMES,
+		"buffer_frames": int(action.get("buffer_frames", 12)),
+		"cooldown_frames": int(action.get("cooldown_frames", 0)),
+		"resource_costs": (action.get("resource_costs", {}) as Dictionary).duplicate(true),
+		"modifier_snapshot": frozen_modifiers,
+		"base_attack_snapshot": float(character_stats["base_attack"]),
+		"character_stats_snapshot": character_stats.duplicate(true),
+		"legacy_reward_snapshot": legacy_rewards,
+		"cue": cue,
+		"phases": [
+			{
+				"phase": "WINDUP",
+				"duration_frames": _scaled_action_frames(action_id, &"windup", timing_multiplier),
+				"movement_multiplier": float(action.get("movement_multiplier", 1.0)),
+			},
+			{
+				"phase": "ACTIVE",
+				"duration_frames": _scaled_action_frames(action_id, &"active", timing_multiplier),
+				"movement_multiplier": float(action.get("movement_multiplier", 1.0)),
+			},
+			{
+				"phase": "RECOVERY",
+				"duration_frames": recovery_frames,
+				"cancel_from_frame": mini(
+					_scaled_action_frames(action_id, &"cancel", timing_multiplier),
+					recovery_frames - 1
+				),
+				"movement_multiplier": float(action.get("movement_multiplier", 1.0)),
+			},
+		],
+		"payloads": [{
+			"descriptor_id": str(payload_id),
+			"kind": str(payload.get("kind", "")),
+			"parameters": (payload.get("parameters", {}) as Dictionary).duplicate(true),
+		}],
+	}
+	_freeze_character_stats_into_plan(expected, character_stats)
+	return plan == expected
 
 
 func _validate_commit_plan(plan: Dictionary) -> Dictionary:
@@ -1103,8 +1224,8 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	)
 	if StringName(str(plan.get("action_id", ""))) != expected_action:
 		return _failure(&"ACTION_ID_MISMATCH")
-	if not plan.get("modifier_snapshot", {}) is Dictionary:
-		return _failure(&"INVALID_MODIFIER_SNAPSHOT")
+	if not _m1_plan_matches_profile(plan, expected_action):
+		return _failure(&"ACTION_PROFILE_MISMATCH")
 	return {"ok": true, "code": &"OK", "context": {}}
 
 
@@ -1749,8 +1870,11 @@ func _sync_legacy_reward_capabilities() -> void:
 		)
 
 
-func _timing_multiplier(modifiers: Dictionary) -> float:
-	var adapter_speed := float(_adapter.get("attack_speed")) if _adapter != null else 1.0
+func _timing_multiplier(modifiers: Dictionary, character_stats: Dictionary = {}) -> float:
+	var adapter_speed := float(character_stats.get(
+		"attack_speed",
+		float(_adapter.get("attack_speed")) if _adapter != null else 1.0
+	))
 	return maxf(0.2, adapter_speed * float(modifiers.get("weapon.attack_speed", 1.0)))
 
 
@@ -1795,6 +1919,10 @@ func _profile_attack_definition(plan: Dictionary) -> Dictionary:
 			"multiplier": float(parameters.get("damage_multiplier", 0.0)),
 			"knockback": float(parameters.get("knockback", 0.0)),
 			"tags": (tags_value as Array).duplicate(),
+			"character_attack_scale": float(plan.get("character_attack_scale", 0.0)),
+			"attack_speed": float(plan.get("attack_speed", 0.0)),
+			"crit_chance": float(plan.get("crit_chance", -1.0)),
+			"crit_multiplier": float(plan.get("crit_multiplier", 0.0)),
 		}
 	var tags: Array = (tags_value as Array).duplicate()
 	for tag: String in ["weapon:sword", "action:%s" % str(plan.get("action_id", "")), "payload:%s" % payload_kind]:
@@ -1816,7 +1944,52 @@ func _profile_attack_definition(plan: Dictionary) -> Dictionary:
 		"advance_combo": not launch_profile,
 		"payload_kind": payload_kind,
 		"payload_parameters": parameters.duplicate(true),
+		"character_attack_scale": float(plan.get("character_attack_scale", 0.0)),
+		"attack_speed": float(plan.get("attack_speed", 0.0)),
+		"crit_chance": float(plan.get("crit_chance", -1.0)),
+		"crit_multiplier": float(plan.get("crit_multiplier", 0.0)),
 	}
+
+
+func _character_stats_snapshot(adapter: Node) -> Dictionary:
+	if adapter == null or not is_instance_valid(adapter):
+		return {}
+	var result: Dictionary = {}
+	for field: String in CHARACTER_STATS_FIELDS:
+		var value: Variant = adapter.get(field)
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)):
+			return {}
+		result[field] = float(value)
+	return result if _valid_character_stats_snapshot(result) else {}
+
+
+func _valid_character_stats_snapshot(value: Variant) -> bool:
+	if not value is Dictionary or (value as Dictionary).size() != CHARACTER_STATS_FIELDS.size():
+		return false
+	var stats := value as Dictionary
+	for field: String in CHARACTER_STATS_FIELDS:
+		if not stats.has(field) or typeof(stats[field]) != TYPE_FLOAT or not is_finite(float(stats[field])):
+			return false
+	return (
+		float(stats["base_attack"]) > 0.0
+		and float(stats["character_attack_scale"]) > 0.0
+		and float(stats["attack_speed"]) > 0.0
+		and float(stats["crit_chance"]) >= 0.0
+		and float(stats["crit_chance"]) <= 1.0
+		and float(stats["crit_multiplier"]) >= 1.0
+	)
+
+
+func _freeze_character_stats_into_plan(plan: Dictionary, stats: Dictionary) -> void:
+	for field: String in CHARACTER_STATS_FIELDS.slice(1):
+		plan[field] = float(stats[field])
+	var payloads: Array = plan.get("payloads", [])
+	for payload_value: Variant in payloads:
+		if not payload_value is Dictionary or not (payload_value as Dictionary).get("parameters") is Dictionary:
+			continue
+		var parameters := (payload_value as Dictionary)["parameters"] as Dictionary
+		for field: String in CHARACTER_STATS_FIELDS:
+			parameters[field] = float(stats[field])
 
 
 func _matches_active_action(plan: Dictionary, token: int) -> bool:

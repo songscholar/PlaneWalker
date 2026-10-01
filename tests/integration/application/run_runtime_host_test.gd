@@ -103,6 +103,8 @@ func _run() -> void:
 		suite.assert_equal(str(player_config.get("weapon_id", "")), str(snapshot.get("config", {}).get("weapon_id", "")), "host applies the authoritative weapon id")
 		suite.assert_equal(player_config.get("enabled_time_skills", []), snapshot.get("config", {}).get("enabled_time_skills", []), "host applies the authoritative time loadout")
 		suite.assert_equal(str(player_config.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "host forwards the policy-accepted weapon profile")
+		suite.assert_equal(str(player_config.get("character_profile", {}).get("id", "")), "wanderer_m1_v1", "host forwards the policy-accepted character profile")
+		suite.assert_equal(player_config.get("character_talents", []), [], "host forwards an explicit isolated character talent selection")
 	caller_config["weapon_id"] = "bow"
 	(caller_config["enabled_time_skills"] as Array)[0] = "rift"
 	if not loadout_spy.received_configs.is_empty():
@@ -111,8 +113,13 @@ func _run() -> void:
 		loadout_spy.received_configs[0]["weapon_id"] = "forged"
 		(loadout_spy.received_configs[0]["enabled_time_skills"] as Array).append("forged")
 		(loadout_spy.received_configs[0]["weapon_profile"] as Dictionary)["id"] = "forged_profile"
+		if loadout_spy.received_configs[0].get("character_profile") is Dictionary:
+			(loadout_spy.received_configs[0]["character_profile"] as Dictionary)["id"] = "forged_character_profile"
+		if loadout_spy.received_configs[0].get("character_talents") is Array:
+			(loadout_spy.received_configs[0]["character_talents"] as Array).append("forged_talent")
 		var authoritative_loadout: Dictionary = host.get("_facade").call("active_loadout")
 		suite.assert_equal(str(authoritative_loadout.get("weapon_profile", {}).get("id", "")), "sword_m1_v1", "Player profile mutation cannot alter facade authority")
+		suite.assert_equal(str(authoritative_loadout.get("character_profile", {}).get("id", "")), "wanderer_m1_v1", "Player character profile mutation cannot alter facade authority")
 	var isolated_snapshot: Dictionary = host.call("runtime_snapshot")
 	suite.assert_equal(str(isolated_snapshot.get("config", {}).get("weapon_id", "")), "sword", "Player input mutation cannot alter authority")
 	suite.assert_equal(isolated_snapshot.get("config", {}).get("enabled_time_skills", []), ["stop", "rewind"], "nested Player input mutation cannot alter authority")
@@ -125,6 +132,7 @@ func _run() -> void:
 	var actual_run_id := str(actual_snapshot.get("run_id", ""))
 	var actual_health: Node = actual_player.get_node("HealthComponent")
 	var actual_rewind: Node = actual_player.get_node("RewindRecorder")
+	_assert_full_player_identity_generation(suite, actual_player, "first hosted run")
 	suite.assert_equal(str(actual_player.current_run_id()), actual_run_id, "Player receives the host run id")
 	suite.assert_equal(str(actual_health.irreversible_ledger_snapshot().get("run_id", "")), actual_run_id, "Health ledger receives the host run id")
 	suite.assert_equal(str(actual_rewind.current_run_id()), actual_run_id, "Rewind receives the host run id")
@@ -145,6 +153,7 @@ func _run() -> void:
 	var replacement_snapshot: Dictionary = host.call("runtime_snapshot")
 	var replacement_run_id := str(replacement_snapshot.get("run_id", ""))
 	suite.assert_true(replacement_run_id != actual_run_id, "replacement run receives a distinct identity")
+	_assert_full_player_identity_generation(suite, actual_player, "replacement hosted run")
 	suite.assert_equal(str(actual_player.current_run_id()), replacement_run_id, "Player advances to the replacement run id")
 	suite.assert_equal(str(actual_health.irreversible_ledger_snapshot().get("run_id", "")), replacement_run_id, "Health ledger advances to the replacement run id")
 	suite.assert_equal(str(actual_rewind.current_run_id()), replacement_run_id, "Rewind advances to the replacement run id")
@@ -195,6 +204,21 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	suite.finish(get_tree())
+
+
+func _assert_full_player_identity_generation(suite, player: Node, label: String) -> void:
+	var identity: Dictionary = player.call("full_player_replay_identity")
+	var snapshot: Dictionary = player.call("full_player_replay_snapshot")
+	suite.assert_true(not identity.is_empty(), "%s exposes a full-player Replay identity" % label)
+	suite.assert_true(not snapshot.is_empty(), "%s exposes a full-player Replay snapshot" % label)
+	if identity.is_empty() or snapshot.is_empty():
+		return
+	var character_action_state := snapshot.get("character_action_state", {}) as Dictionary
+	suite.assert_equal(
+		int(character_action_state.get("generation", 0)),
+		int(identity.get("owner_character_generation", 0)),
+		"%s keeps Character and World generations aligned" % label
+	)
 
 
 func _assert_main_gameplay_pause_boundary(suite) -> void:
