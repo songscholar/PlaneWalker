@@ -71,3 +71,38 @@ horizontal_alignment = 1
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 12
+
+[node name="ReplacementPanel" type="PanelContainer" parent="SafeArea/Center/PanelRoot/Content"]
+visible = false
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ReplacementLabel" type="Label" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "EQUIPPED → OFFERED"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Actions" type="HBoxContainer" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="CancelButton" type="Button" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/Actions"]
+custom_minimum_size = Vector2(180, 36)
+layout_mode = 2
+focus_mode = 2
+text = "UI_BACK"
+
+[node name="ConfirmButton" type="Button" parent="SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/Actions"]
+custom_minimum_size = Vector2(260, 36)
+layout_mode = 2
+focus_mode = 2
+text = "CONFIRM"

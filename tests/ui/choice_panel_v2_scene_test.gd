@@ -95,6 +95,103 @@ func _run() -> void:
 	_suite.assert_equal(_buttons(panel)[2].get_meta("option_id"), "decline_contract", "contract includes safe decline option")
 	_suite.assert_equal(_buttons(panel)[2].get_meta("choice_tone"), "safe", "decline option uses safe visual tone")
 
+	var active_offer := item_offer.duplicate(true)
+	active_offer["offer_id"] = "offer-active-replacement"
+	active_offer["revision"] = 8
+	active_offer["options"][0]["content_id"] = "paradox_beacon"
+	active_offer["options"][0]["option_id"] = "paradox_beacon"
+	active_offer["options"][0]["name_key"] = "PARADOX_BEACON_NAME"
+	active_offer["options"][0]["description_key"] = "PARADOX_BEACON_DESC"
+	active_offer["options"][0]["role_key"] = "ROLE_RISK"
+	active_offer["options"][0]["rarity"] = "rare"
+	active_offer["options"][0]["effect_summary_keys"] = ["INPUT_ACTION_ACTIVE_ITEM"]
+	active_offer["options"][0]["active_item"] = {
+		"cooldown_frames": 900,
+		"replacement_required": true,
+		"equipped_content_id": "absolute_zero_device",
+		"equipped_name_key": "ABSOLUTE_ZERO_DEVICE_NAME",
+	}
+	var active_result = panel.render(active_offer)
+	_suite.assert_true(active_result.ok, "active-item offer renders")
+	await get_tree().process_frame
+	var active_button: Button = _buttons(panel)[0]
+	_suite.assert_equal(
+		_card_label(active_button, "ModeLabel").text,
+		tr("INPUT_ACTION_ACTIVE_ITEM"),
+		"active card identifies its one-slot item mode"
+	)
+	_suite.assert_equal(
+		_card_label(active_button, "CooldownLabel").text,
+		tr("HUD_WEAPON_COOLDOWN_FMT") % 15.0,
+		"active card converts its frame cooldown to seconds"
+	)
+	_suite.assert_true(
+		_card_label(active_button, "MetaLabel").text.contains(tr("ROLE_RISK")),
+		"active card keeps its gameplay role visible"
+	)
+	_suite.assert_true(
+		_card_label(active_button, "MetaLabel").text.contains(tr("rare").to_upper()),
+		"active card keeps its rarity visible"
+	)
+	_suite.assert_true(
+		not _card_label(active_button, "EffectLabel").text.is_empty(),
+		"active card keeps an effect summary visible"
+	)
+
+	var intent_count_before_replacement := _intents.size()
+	active_button.pressed.emit()
+	await get_tree().process_frame
+	_suite.assert_equal(
+		_intents.size(),
+		intent_count_before_replacement,
+		"occupied active slot requires confirmation before emitting an intent"
+	)
+	_suite.assert_true(panel.replacement_panel.visible, "replacement confirmation becomes visible")
+	_suite.assert_true(not panel.options_container.visible, "replacement confirmation temporarily hides choices")
+	_suite.assert_true(
+		panel.panel_root.size.y <= 328.0,
+		"replacement confirmation stays inside the 16-pixel safe area at 360 height"
+	)
+	_suite.assert_true(
+		panel.replacement_label.text.contains(tr("ABSOLUTE_ZERO_DEVICE_NAME"))
+		and panel.replacement_label.text.contains(tr("PARADOX_BEACON_NAME")),
+		"replacement confirmation names both equipped and offered items"
+	)
+	_suite.assert_equal(
+		get_viewport().gui_get_focus_owner(),
+		panel.replacement_cancel_button,
+		"replacement confirmation starts on the reversible cancel action"
+	)
+	_send_action(&"ui_right")
+	await _frames(2)
+	_suite.assert_equal(
+		get_viewport().gui_get_focus_owner(),
+		panel.replacement_confirm_button,
+		"controller moves from cancel to confirm in explicit order"
+	)
+	_send_action(&"ui_right")
+	await _frames(2)
+	_suite.assert_equal(
+		get_viewport().gui_get_focus_owner(),
+		panel.replacement_cancel_button,
+		"replacement confirmation focus ring wraps"
+	)
+	panel.replacement_cancel_button.pressed.emit()
+	await get_tree().process_frame
+	_suite.assert_true(not panel.replacement_panel.visible, "cancel closes replacement confirmation")
+	_suite.assert_true(panel.options_container.visible, "cancel restores the choice cards")
+	_suite.assert_equal(
+		get_viewport().gui_get_focus_owner(),
+		active_button,
+		"cancel restores focus to the proposed active item"
+	)
+
+	active_button.pressed.emit()
+	await get_tree().process_frame
+	panel.replacement_confirm_button.pressed.emit()
+	_suite.assert_equal(_intents.size(), intent_count_before_replacement + 1, "confirm emits one active-item intent")
+	_suite.assert_equal(_intents[-1]["option_id"], "paradox_beacon", "confirm emits the proposed active item")
+
 	var long_text_offer := contract_offer.duplicate(true)
 	long_text_offer["offer_id"] = "offer-contract-long-text"
 	long_text_offer["options"][0]["description_key"] = "Attack much faster, but maximum health is substantially reduced for the rest of this run."
@@ -139,3 +236,19 @@ func _finish_after_free(panel: Node) -> void:
 	panel.queue_free()
 	await get_tree().process_frame
 	_suite.finish(get_tree())
+
+
+func _send_action(action: StringName) -> void:
+	var pressed := InputEventAction.new()
+	pressed.action = action
+	pressed.pressed = true
+	Input.parse_input_event(pressed)
+	var released := InputEventAction.new()
+	released.action = action
+	released.pressed = false
+	Input.parse_input_event(released)
+
+
+func _frames(count: int) -> void:
+	for _index: int in range(count):
+		await get_tree().process_frame

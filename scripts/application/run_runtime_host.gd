@@ -442,9 +442,66 @@ func _open_offer(offer_value: Variant) -> void:
 	if not offer_value is Dictionary or (offer_value as Dictionary).is_empty() or _choice_panel == null:
 		return
 	_set_selection_safety(true)
-	var rendered = _choice_panel.render((offer_value as Dictionary).duplicate(true))
+	var rendered = _choice_panel.render(_choice_offer_for_player(offer_value as Dictionary))
 	if not rendered.ok:
 		_set_selection_safety(false)
+
+
+func _choice_offer_for_player(offer: Dictionary) -> Dictionary:
+	var presented := offer.duplicate(true)
+	if (
+		_facade == null
+		or _player == null
+		or not _facade.has_method("content_registry")
+		or not _player.has_method("active_item_snapshot")
+	):
+		return presented
+	var registry_value: Variant = _facade.call("content_registry")
+	if not registry_value is RefCounted or not (registry_value as RefCounted).has_method("get_content"):
+		return presented
+	var active_value: Variant = _player.call("active_item_snapshot")
+	if not active_value is Dictionary:
+		return presented
+	var equipped_active := active_value as Dictionary
+	var equipped_definition := equipped_active.get("definition", {}) as Dictionary
+	var equipped_content_id := str(equipped_definition.get("id", ""))
+	var equipped_name_key := equipped_content_id
+	if not equipped_content_id.is_empty():
+		var equipped_content_value: Variant = (registry_value as RefCounted).call(
+			"get_content",
+			StringName(equipped_content_id)
+		)
+		if equipped_content_value is Dictionary:
+			equipped_name_key = str(
+				(equipped_content_value as Dictionary).get("name_key", equipped_content_id)
+			)
+	var options := presented.get("options", []) as Array
+	for index: int in range(options.size()):
+		var option_value: Variant = options[index]
+		if not option_value is Dictionary:
+			continue
+		var option := option_value as Dictionary
+		var definition_value: Variant = (registry_value as RefCounted).call(
+			"get_content",
+			StringName(str(option.get("content_id", "")))
+		)
+		if (
+			not definition_value is Dictionary
+			or str((definition_value as Dictionary).get("item_mode", "")) != "active"
+		):
+			continue
+		var definition := definition_value as Dictionary
+		option["active_item"] = {
+			"cooldown_frames": int(definition.get("cooldown_frames", 0)),
+			"replacement_required": bool(equipped_active.get("configured", false)),
+			"equipped_content_id": equipped_content_id,
+			"equipped_name_key": equipped_name_key,
+		}
+		if (option.get("effect_summary_keys", []) as Array).is_empty():
+			option["effect_summary_keys"] = ["INPUT_ACTION_ACTIVE_ITEM"]
+		options[index] = option
+	presented["options"] = options
+	return presented
 
 
 func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> void:
@@ -464,10 +521,47 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 		return
 	var reservation_id := str(reserved.context.get("reservation_id", ""))
 	var definition: Dictionary = reserved.context.get("definition", {}).duplicate(true)
+	var is_active_item_selection := str(definition.get("item_mode", "")) == "active"
 	var receipt: Dictionary = {}
+	var active_item_before: Dictionary = {}
 	var publication_started := false
 	if str(definition.get("id", "")) != "decline_contract":
-		if (
+		if is_active_item_selection:
+			if (
+				not _player.has_method("active_item_snapshot")
+				or not _player.has_method("equip_active_item")
+				or not _player.has_method("full_player_replay_snapshot")
+				or not _player.has_method("restore_full_player_replay_snapshot")
+			):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			var active_item_before_value: Variant = _player.call(
+				"full_player_replay_snapshot"
+			)
+			var current_active_value: Variant = _player.call("active_item_snapshot")
+			if (
+				not active_item_before_value is Dictionary
+				or (active_item_before_value as Dictionary).is_empty()
+				or not current_active_value is Dictionary
+			):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			active_item_before = (active_item_before_value as Dictionary).duplicate(true)
+			var replace_existing := bool(
+				(current_active_value as Dictionary).get("configured", false)
+			)
+			var equip_value: Variant = _player.call(
+				"equip_active_item",
+				definition.duplicate(true),
+				replace_existing
+			)
+			if not equip_value is Dictionary or not bool((equip_value as Dictionary).get("ok", false)):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+		elif (
 			not _player.has_method("reward_effect_snapshot")
 			or not _player.has_method("reward_effect_begin_publication")
 			or not _player.has_method("reward_effect_publication_can_commit")
@@ -478,79 +572,85 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 			_facade.call("cancel_reserved_selection", reservation_id)
 			_choice_panel.show_rejection("CHOICE_REJECTED")
 			return
-		publication_started = true
-		var snapshot_value: Variant = _player.call("reward_effect_snapshot")
-		if not snapshot_value is Dictionary or (snapshot_value as Dictionary).is_empty():
-			_facade.call("cancel_reserved_selection", reservation_id)
-			if not bool(_player.call("reward_effect_rollback_publication")):
-				_fail_reward_integrity({"stage": "player_snapshot"})
-			else:
-				_choice_panel.show_rejection("CHOICE_REJECTED")
-			return
-		var prepared: Dictionary = _reward_effect_runtime.call(
-			"prepare",
-			definition.duplicate(true),
-			(snapshot_value as Dictionary).duplicate(true)
-		)
-		if not bool(prepared.get("ok", false)):
-			_facade.call("cancel_reserved_selection", reservation_id)
-			if not bool(_player.call("reward_effect_rollback_publication")):
-				_fail_reward_integrity({
-					"stage": "player_prepare",
-					"effect_result": prepared.duplicate(true),
-				})
-			else:
-				_choice_panel.show_rejection("CHOICE_REJECTED")
-			return
-		var player_commit: Dictionary = _reward_effect_runtime.call(
-			"commit",
-			(prepared.get("plan", {}) as Dictionary).duplicate(true),
-			_player
-		)
-		if not bool(player_commit.get("ok", false)):
-			_facade.call("cancel_reserved_selection", reservation_id)
-			var publication_rollback_ok := bool(_player.call(
-				"reward_effect_rollback_publication"
-			))
-			publication_started = false
-			if (
-				StringName(str(player_commit.get("code", ""))) == &"ROLLBACK_FAILED"
-				or not publication_rollback_ok
-			):
-				_fail_reward_integrity({
-					"stage": "player_commit",
-					"effect_result": player_commit.duplicate(true),
-					"publication_rollback_ok": publication_rollback_ok,
-				})
-			else:
-				_choice_panel.show_rejection("CHOICE_REJECTED")
-			return
-		receipt = (player_commit.get("receipt", {}) as Dictionary).duplicate(true)
-		if not bool(_player.call("reward_effect_publication_can_commit")):
-			_facade.call("cancel_reserved_selection", reservation_id)
-			var rolled_back: Dictionary = _reward_effect_runtime.call(
-				"rollback",
-				receipt.duplicate(true),
+		else:
+			publication_started = true
+			var snapshot_value: Variant = _player.call("reward_effect_snapshot")
+			if not snapshot_value is Dictionary or (snapshot_value as Dictionary).is_empty():
+				_facade.call("cancel_reserved_selection", reservation_id)
+				if not bool(_player.call("reward_effect_rollback_publication")):
+					_fail_reward_integrity({"stage": "player_snapshot"})
+				else:
+					_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			var prepared: Dictionary = _reward_effect_runtime.call(
+				"prepare",
+				definition.duplicate(true),
+				(snapshot_value as Dictionary).duplicate(true)
+			)
+			if not bool(prepared.get("ok", false)):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				if not bool(_player.call("reward_effect_rollback_publication")):
+					_fail_reward_integrity({
+						"stage": "player_prepare",
+						"effect_result": prepared.duplicate(true),
+					})
+				else:
+					_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			var player_commit: Dictionary = _reward_effect_runtime.call(
+				"commit",
+				(prepared.get("plan", {}) as Dictionary).duplicate(true),
 				_player
 			)
-			var publication_rollback_ok := bool(_player.call(
-				"reward_effect_rollback_publication"
-			))
-			publication_started = false
-			if not bool(rolled_back.get("ok", false)) or not publication_rollback_ok:
-				_fail_reward_integrity({
-					"stage": "player_publication_preflight",
-					"rollback_result": rolled_back.duplicate(true),
-					"publication_rollback_ok": publication_rollback_ok,
-				})
-			else:
-				_choice_panel.show_rejection("CHOICE_REJECTED")
-			return
+			if not bool(player_commit.get("ok", false)):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				var publication_rollback_ok := bool(_player.call(
+					"reward_effect_rollback_publication"
+				))
+				publication_started = false
+				if (
+					StringName(str(player_commit.get("code", ""))) == &"ROLLBACK_FAILED"
+					or not publication_rollback_ok
+				):
+					_fail_reward_integrity({
+						"stage": "player_commit",
+						"effect_result": player_commit.duplicate(true),
+						"publication_rollback_ok": publication_rollback_ok,
+					})
+				else:
+					_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
+			receipt = (player_commit.get("receipt", {}) as Dictionary).duplicate(true)
+			if not bool(_player.call("reward_effect_publication_can_commit")):
+				_facade.call("cancel_reserved_selection", reservation_id)
+				var rolled_back: Dictionary = _reward_effect_runtime.call(
+					"rollback",
+					receipt.duplicate(true),
+					_player
+				)
+				var publication_rollback_ok := bool(_player.call(
+					"reward_effect_rollback_publication"
+				))
+				publication_started = false
+				if not bool(rolled_back.get("ok", false)) or not publication_rollback_ok:
+					_fail_reward_integrity({
+						"stage": "player_publication_preflight",
+						"rollback_result": rolled_back.duplicate(true),
+						"publication_rollback_ok": publication_rollback_ok,
+					})
+				else:
+					_choice_panel.show_rejection("CHOICE_REJECTED")
+				return
 	var committed = _facade.call("commit_reserved_selection", reservation_id)
 	if not committed.ok:
 		_facade.call("cancel_reserved_selection", reservation_id)
 		var state_rollback_ok := true
-		if not receipt.is_empty():
+		if is_active_item_selection and not active_item_before.is_empty():
+			state_rollback_ok = bool(_player.call(
+				"restore_full_player_replay_snapshot",
+				active_item_before.duplicate(true)
+			))
+		elif not receipt.is_empty():
 			var rolled_back: Dictionary = _reward_effect_runtime.call(
 				"rollback",
 				receipt.duplicate(true),

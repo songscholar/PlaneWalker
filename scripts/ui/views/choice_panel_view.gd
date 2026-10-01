@@ -12,16 +12,25 @@ const CARD_MINIMUM_SIZE := Vector2(184.0, 200.0)
 @onready var title_label: Label = $SafeArea/Center/PanelRoot/Content/TitleLabel
 @onready var error_label: Label = $SafeArea/Center/PanelRoot/Content/ErrorLabel
 @onready var options_container: HBoxContainer = $SafeArea/Center/PanelRoot/Content/OptionsContainer
+@onready var replacement_panel: PanelContainer = $SafeArea/Center/PanelRoot/Content/ReplacementPanel
+@onready var replacement_label: Label = $SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/ReplacementLabel
+@onready var replacement_cancel_button: Button = $SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/Actions/CancelButton
+@onready var replacement_confirm_button: Button = $SafeArea/Center/PanelRoot/Content/ReplacementPanel/Layout/Actions/ConfirmButton
 
 var _current_offer: Dictionary = {}
 var _current_offer_id: String = ""
 var _current_revision: int = -1
 var _submitted: bool = false
+var _pending_replacement_option_id: String = ""
+var _pending_replacement_button: Button
 
 
 func _ready() -> void:
 	visible = false
 	error_label.visible = false
+	replacement_panel.visible = false
+	replacement_cancel_button.pressed.connect(_on_replacement_cancelled)
+	replacement_confirm_button.pressed.connect(_on_replacement_confirmed)
 
 
 func render(offer: Dictionary):
@@ -46,6 +55,7 @@ func render(offer: Dictionary):
 	_current_offer_id = offer_id
 	_current_revision = revision
 	_submitted = false
+	_reset_replacement_confirmation()
 	_clear_options()
 	title_label.text = tr(str(_current_offer["title_key"]))
 	error_label.text = ""
@@ -64,6 +74,7 @@ func show_rejection(message_key: String) -> void:
 	if _current_offer.is_empty():
 		return
 	_submitted = false
+	_reset_replacement_confirmation()
 	error_label.text = tr(message_key)
 	error_label.visible = true
 	visible = true
@@ -78,6 +89,7 @@ func close_panel() -> void:
 	visible = false
 	_submitted = false
 	_current_offer = {}
+	_reset_replacement_confirmation()
 	error_label.text = ""
 	error_label.visible = false
 	_clear_options()
@@ -94,6 +106,12 @@ func _add_option_button(option: Dictionary, category: String) -> void:
 	button.set_meta("option_id", option_id)
 	button.set_meta("content_id", str(option["content_id"]))
 	button.set_meta("choice_tone", tone)
+	button.set_meta(
+		"active_item",
+		(option.get("active_item", {}) as Dictionary).duplicate(true)
+		if option.get("active_item") is Dictionary
+		else {}
+	)
 	_apply_card_style(button, tone)
 	button.pressed.connect(_on_option_pressed.bind(_current_offer_id, option_id, _current_revision))
 	options_container.add_child(button)
@@ -110,9 +128,82 @@ func _on_option_pressed(source_offer_id: String, option_id: String, source_revis
 		return
 	if not _current_offer_has_option(option_id):
 		return
+	if _option_requires_replacement(option_id):
+		_show_replacement_confirmation(option_id)
+		return
+	_submit_option(option_id)
+
+
+func _submit_option(option_id: String) -> void:
 	_submitted = true
 	_set_buttons_disabled(true)
+	replacement_cancel_button.disabled = true
+	replacement_confirm_button.disabled = true
 	option_chosen.emit(_current_offer_id, option_id, _current_revision)
+
+
+func _show_replacement_confirmation(option_id: String) -> void:
+	var option := _current_offer_option(option_id)
+	var active_value: Variant = option.get("active_item", {})
+	if not active_value is Dictionary:
+		return
+	var active := active_value as Dictionary
+	_pending_replacement_option_id = option_id
+	_pending_replacement_button = _button_for_option(option_id)
+	_set_buttons_disabled(true)
+	options_container.visible = false
+	replacement_panel.visible = true
+	replacement_cancel_button.disabled = false
+	replacement_confirm_button.disabled = false
+	replacement_cancel_button.text = tr("UI_BACK")
+	replacement_confirm_button.text = tr(str(option.get("name_key", "")))
+	replacement_label.text = "%s  →  %s" % [
+		tr(str(active.get("equipped_name_key", active.get("equipped_content_id", "")))),
+		tr(str(option.get("name_key", option_id))),
+	]
+	var controls: Array[Control] = [
+		replacement_cancel_button,
+		replacement_confirm_button,
+	]
+	FocusCoordinator.link_ring(controls, true)
+	FocusCoordinator.recover(self, replacement_cancel_button)
+
+
+func _on_replacement_cancelled() -> void:
+	if _pending_replacement_option_id.is_empty() or _submitted:
+		return
+	var fallback := _pending_replacement_button
+	_reset_replacement_confirmation()
+	var buttons := _option_buttons()
+	FocusCoordinator.link_ring(buttons, true)
+	if fallback != null and is_instance_valid(fallback):
+		FocusCoordinator.recover(self, fallback)
+
+
+func _on_replacement_confirmed() -> void:
+	if _pending_replacement_option_id.is_empty() or _submitted:
+		return
+	_submit_option(_pending_replacement_option_id)
+
+
+func _reset_replacement_confirmation() -> void:
+	_pending_replacement_option_id = ""
+	_pending_replacement_button = null
+	replacement_panel.visible = false
+	options_container.visible = true
+	replacement_cancel_button.disabled = false
+	replacement_confirm_button.disabled = false
+	_set_buttons_disabled(false)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if (
+		visible
+		and replacement_panel.visible
+		and event.is_action_pressed("ui_cancel")
+	):
+		_on_replacement_cancelled()
+		get_viewport().set_input_as_handled()
 
 
 func _set_buttons_disabled(disabled: bool) -> void:
@@ -161,6 +252,40 @@ func _add_card_content(button: Button, option: Dictionary, tone: String) -> void
 	meta_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(meta_label)
 
+	var archetype_label := _card_label(
+		"ArchetypeLabel",
+		tr(str(option["archetype_key"])),
+		10,
+		Color(0.62, 0.7, 0.78, 1.0)
+	)
+	archetype_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(archetype_label)
+
+	var active_value: Variant = option.get("active_item", {})
+	var active := active_value as Dictionary if active_value is Dictionary else {}
+	var mode_label := _card_label(
+		"ModeLabel",
+		tr("INPUT_ACTION_ACTIVE_ITEM") if not active.is_empty() else "",
+		10,
+		colors["font"]
+	)
+	mode_label.visible = not active.is_empty()
+	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(mode_label)
+
+	var cooldown_frames := int(active.get("cooldown_frames", 0))
+	var cooldown_label := _card_label(
+		"CooldownLabel",
+		tr("HUD_WEAPON_COOLDOWN_FMT") % (float(cooldown_frames) / 60.0)
+		if cooldown_frames > 0
+		else "",
+		10,
+		colors["border"]
+	)
+	cooldown_label.visible = cooldown_frames > 0
+	cooldown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(cooldown_label)
+
 	var description_label := _card_label(
 		"DescriptionLabel",
 		tr(str(option["description_key"])),
@@ -195,6 +320,29 @@ func _current_offer_has_option(option_id: String) -> bool:
 		if str(option.get("option_id", "")) == option_id:
 			return true
 	return false
+
+
+func _current_offer_option(option_id: String) -> Dictionary:
+	for option: Dictionary in _current_offer.get("options", []):
+		if str(option.get("option_id", "")) == option_id:
+			return option.duplicate(true)
+	return {}
+
+
+func _option_requires_replacement(option_id: String) -> bool:
+	var option := _current_offer_option(option_id)
+	var active_value: Variant = option.get("active_item", {})
+	return (
+		active_value is Dictionary
+		and bool((active_value as Dictionary).get("replacement_required", false))
+	)
+
+
+func _button_for_option(option_id: String) -> Button:
+	for child: Node in options_container.get_children():
+		if child is Button and str((child as Button).get_meta("option_id", "")) == option_id:
+			return child as Button
+	return null
 
 
 func _choice_tone(option: Dictionary, category: String) -> String:
