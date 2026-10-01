@@ -13,6 +13,7 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_live_view_revision_is_independent(suite)
+	_test_character_presentations_project_to_union(suite)
 	_test_weapon_presentations_project_to_union(suite)
 	_test_phase_flags_and_optional_payloads(suite)
 	_test_new_run_resets_view_revision(suite)
@@ -34,6 +35,8 @@ func _test_live_view_revision_is_independent(suite) -> void:
 	suite.assert_equal(first_view["phase"], "COMBAT_ACTIVE", "numeric run phase maps to the view contract")
 	suite.assert_equal(first_view["room"]["index"], 1, "authoritative room index projects")
 	suite.assert_equal(first_view["build"]["archetype_scores"], {"time_stop_burst": 2}, "build archetypes map to view scores")
+	suite.assert_equal(first_view["character_state"]["character_id"], "time_lord", "character presentation projects")
+	suite.assert_equal(first_view["character_state"]["status_id"], "primer", "Time Lord Primer projects as a short status")
 
 	player["hp"] = 120.0
 	player["energy"] = 45.0
@@ -85,6 +88,46 @@ func _test_live_view_revision_is_independent(suite) -> void:
 	suite.assert_equal(latest["weapon_state"]["meter_current"], 28, "projected weapon state is isolated")
 	suite.assert_equal(player["time_slots"][0]["ability_id"], "stop", "projection never mutates player slot input")
 	suite.assert_equal(player["weapon"]["runtime"]["reload_frame"], 28, "projection never mutates raw weapon presentation")
+	suite.assert_equal(player["character"]["primer_ability_id"], "stop", "projection never mutates raw character presentation")
+
+
+func _test_character_presentations_project_to_union(suite) -> void:
+	var cases: Array[Dictionary] = [
+		{"run_id": "wanderer-character-view", "source": _wanderer_character_presentation(), "meter": "path_marks", "status": "anchor"},
+		{"run_id": "guardian-character-view", "source": _guardian_character_presentation(), "meter": "ward", "status": "fortress"},
+		{"run_id": "void-character-view", "source": _void_character_presentation(), "meter": "void_debt", "status": "corruption"},
+		{"run_id": "knight-character-view", "source": _knight_character_presentation(), "meter": "resonance", "status": "echo_pending"},
+		{"run_id": "lord-character-view", "source": _time_lord_character_presentation(), "meter": "codex_pages", "status": "primer"},
+	]
+	var projector = RunViewStateProjectorScript.new()
+	for case: Dictionary in cases:
+		var authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+		authoritative["run_id"] = case["run_id"]
+		var player := _player_snapshot()
+		player["character"] = (case["source"] as Dictionary).duplicate(true)
+		var result = projector.project(authoritative, _room_definition(1, "combat"), player, null, 1, {})
+		suite.assert_true(result.ok, "%s presentation projects" % case["run_id"])
+		if result.ok:
+			var state: Dictionary = result.context["view_state"]["character_state"]
+			suite.assert_equal(state["meter_kind"], case["meter"], "%s meter projects" % case["run_id"])
+			suite.assert_equal(state["status_id"], case["status"], "%s status projects" % case["run_id"])
+			suite.assert_true(RunViewStateScript.validate(result.context["view_state"]).ok, "%s union validates" % case["run_id"])
+
+	var m1_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	m1_authoritative["run_id"] = "m1-character-view"
+	var m1_player := _player_snapshot()
+	m1_player["character"] = {"runtime_kind": "wanderer_m1_compat"}
+	var m1_result = projector.project(m1_authoritative, _room_definition(1, "combat"), m1_player, null, 1, {})
+	suite.assert_true(m1_result.ok, "M1 compatibility character presentation projects")
+	if m1_result.ok:
+		suite.assert_equal(m1_result.context["view_state"]["character_state"], null, "M1 compatibility keeps the character HUD hidden")
+
+	var invalid_authoritative := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	invalid_authoritative["run_id"] = "invalid-character-view"
+	var invalid_player := _player_snapshot()
+	invalid_player["character"]["primer_ability_id"] = "time_stop"
+	var invalid_result = projector.project(invalid_authoritative, _room_definition(1, "combat"), invalid_player, null, 1, {})
+	suite.assert_equal(invalid_result.code, &"INVALID_ARGUMENT", "invalid Primer presentation is rejected")
 
 
 func _test_weapon_presentations_project_to_union(suite) -> void:
@@ -480,10 +523,77 @@ func _player_snapshot() -> Dictionary:
 		"max_energy": 100.0,
 		"action_state": "FREE",
 		"weapon": _gun_weapon_presentation(),
+		"character": _time_lord_character_presentation(),
 		"time_slots": [
 			{"ability_id": "stop", "action_id": "time_stop", "cooldown": 0.0},
 			{"ability_id": "rift", "action_id": "time_rift", "cooldown": 4.5},
 		],
+	}
+
+
+func _wanderer_character_presentation() -> Dictionary:
+	return {
+		"runtime_kind": "wanderer",
+		"runtime_frame": 120,
+		"resource_value": 3,
+		"path_progress": 2,
+		"anchor_active": true,
+		"anchor_expires_frame": 300,
+		"wayfarer_active": false,
+		"wayfarer_until_frame": -1,
+		"skill_cooldown_until_frame": 500,
+	}
+
+
+func _guardian_character_presentation() -> Dictionary:
+	return {
+		"runtime_kind": "time_guardian",
+		"runtime_frame": 120,
+		"resource_value": 3,
+		"guard_active": false,
+		"fortress_active": true,
+		"fortress_until_frame": 300,
+		"rebuke_active": false,
+		"rebuke_until_frame": -1,
+		"skill_cooldown_until_frame": 500,
+	}
+
+
+func _void_character_presentation() -> Dictionary:
+	return {
+		"runtime_kind": "void_walker",
+		"runtime_frame": 120,
+		"resource_value": 75,
+		"resource_maximum": 100,
+		"corruption_threshold": 75,
+		"corruption_active": true,
+		"next_corruption_frame": 150,
+		"skill_active": false,
+		"skill_cooldown_until_frame": 500,
+	}
+
+
+func _knight_character_presentation() -> Dictionary:
+	return {
+		"runtime_kind": "primordial_knight",
+		"runtime_frame": 120,
+		"resource_value": 2,
+		"armor_active": false,
+		"pending_echo_count": 2,
+		"skill_cooldown_until_frame": 500,
+	}
+
+
+func _time_lord_character_presentation() -> Dictionary:
+	return {
+		"runtime_kind": "time_lord",
+		"runtime_frame": 120,
+		"resource_value": 2,
+		"primer_ability_id": "stop",
+		"primer_expires_frame": 419,
+		"infusion_until_frame": -1,
+		"dominion_until_frame": -1,
+		"skill_cooldown_until_frame": 240,
 	}
 
 

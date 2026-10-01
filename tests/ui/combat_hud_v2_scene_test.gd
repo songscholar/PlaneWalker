@@ -44,6 +44,18 @@ func _run() -> void:
 	_suite.assert_true(weapon_meter_bar != null, "generic weapon meter bar exists")
 	_suite.assert_true(weapon_meter_label != null, "generic weapon meter label exists")
 	_suite.assert_true(weapon_status_label != null, "generic weapon status label exists")
+	var character_panel := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel") as PanelContainer
+	var character_name_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterNameLabel") as Label
+	var character_meter_bar := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterMeterBar") as ProgressBar
+	var character_meter_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterMeterLabel") as Label
+	var character_status_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterStatusLabel") as Label
+	var character_cooldown_label := hud.get_node_or_null("HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterCooldownLabel") as Label
+	_suite.assert_true(character_panel != null, "generic character panel exists")
+	_suite.assert_true(character_name_label != null, "generic character name label exists")
+	_suite.assert_true(character_meter_bar != null, "generic character meter bar exists")
+	_suite.assert_true(character_meter_label != null, "generic character meter label exists")
+	_suite.assert_true(character_status_label != null, "generic character status label exists")
+	_suite.assert_true(character_cooldown_label != null, "generic character cooldown label exists")
 
 	var combat := _load_json("res://tests/fixtures/ui/hud_combat.json")
 	var combat_input := combat.duplicate(true)
@@ -64,6 +76,18 @@ func _run() -> void:
 		_suite.assert_true(not weapon_name_label.text.contains("normal_fire"), "weapon name never leaks action id")
 		_suite.assert_true(not weapon_meter_label.text.contains("normal_fire"), "weapon meter never leaks action id")
 		_suite.assert_true(not weapon_status_label.text.contains("normal_fire"), "weapon status never leaks action id")
+	if character_panel != null and character_name_label != null and character_meter_bar != null and character_meter_label != null and character_status_label != null and character_cooldown_label != null:
+		_suite.assert_true(character_panel.visible, "Launch character state shows the generic panel")
+		_suite.assert_equal(character_name_label.text, tr("CHARACTER_TIME_LORD_NAME"), "character name is localized")
+		_suite.assert_close(character_meter_bar.max_value, 3.0, "Codex Page maximum renders")
+		_suite.assert_close(character_meter_bar.value, 2.0, "Codex Page current value renders")
+		_suite.assert_true(character_meter_label.text.contains("2 / 3"), "character meter renders current over maximum")
+		_suite.assert_true(character_status_label.text.contains(tr("TIME_ABILITY_STOP_NAME")), "Primer renders its localized ability")
+		_suite.assert_true(character_status_label.text.contains("5.0"), "Primer duration renders in seconds")
+		_suite.assert_true(character_cooldown_label.text.contains("2.0"), "character cooldown renders in seconds")
+		_suite.assert_true(not character_name_label.text.contains("time_lord"), "character name never leaks internal id")
+		_suite.assert_true(not character_meter_label.text.contains("codex_pages"), "character meter never leaks internal id")
+		_suite.assert_true(not character_status_label.text.contains("primer"), "character status never leaks internal id")
 	if slot_one != null and slot_two != null:
 		_suite.assert_true(slot_one.text.contains(tr("TIME_ABILITY_STOP_NAME")), "first slot renders localized Stop name")
 		_suite.assert_true(slot_one.text.contains(tr("HUD_WEAPON_READY")), "ready skill state renders")
@@ -82,6 +106,8 @@ func _run() -> void:
 	_assert_control_fits(hud.hud_root, hud.get_node("HudRoot/SafeArea/HudLayout/SkillPanel"), "skill panel fits 640x360")
 	if weapon_panel != null:
 		_assert_control_fits(hud.hud_root, weapon_panel, "weapon panel fits 640x360")
+	if character_panel != null:
+		_assert_control_fits(hud.hud_root, character_panel, "character panel fits 640x360")
 
 	TranslationServer.set_locale("zh_CN")
 	await get_tree().process_frame
@@ -95,6 +121,11 @@ func _run() -> void:
 		_suite.assert_equal(weapon_name_label.text, "枪", "locale change redraws Gun name")
 		_suite.assert_true(weapon_meter_label.text.contains("弹药"), "locale change redraws Gun ammo meter")
 		_suite.assert_true(weapon_status_label.text.contains("时间装填"), "locale change redraws Time Load status")
+	if character_name_label != null and character_meter_label != null and character_status_label != null and character_cooldown_label != null:
+		_suite.assert_equal(character_name_label.text, "时之领主", "locale change redraws character name")
+		_suite.assert_true(character_meter_label.text.contains("秘典页"), "locale change redraws character meter")
+		_suite.assert_true(character_status_label.text.contains("引式"), "locale change redraws character status")
+		_suite.assert_true(character_cooldown_label.text.contains("冷却"), "locale change redraws character cooldown")
 	TranslationServer.set_locale("en")
 	await get_tree().process_frame
 	if slot_one != null:
@@ -208,6 +239,13 @@ func _run() -> void:
 		_suite.assert_true(weapon_meter_label.text.contains("15 / 30"), "Gauntlets Combo meter renders")
 		_suite.assert_true(weapon_status_label.text.contains(tr("HUD_WEAPON_STATUS_COMBO_ACTIVE")), "Gauntlets active Combo status renders")
 		_suite.assert_true(not weapon_status_label.text.contains("gauntlets"), "Gauntlets HUD does not expose an internal identifier")
+	var m1_run := combat.duplicate(true)
+	m1_run["run_id"] = "fixture-m1-character-run"
+	m1_run["revision"] = 0
+	m1_run["character_state"] = null
+	_suite.assert_true(hud.render(m1_run).ok, "M1 compatibility state renders")
+	if character_panel != null:
+		_suite.assert_true(not character_panel.visible, "M1 compatibility hides the Launch character HUD")
 	_suite.assert_equal(combat, combat_input, "render treats the supplied snapshot as immutable input")
 	var latest: Dictionary = hud.latest_state()
 	if not latest.is_empty():
@@ -243,10 +281,12 @@ func _assert_layout_at_resolution(hud: CanvasLayer, weapon_panel: PanelContainer
 	var room_panel := hud.get_node("HudRoot/SafeArea/HudLayout/RoomPanel") as Control
 	var player_panel := hud.get_node("HudRoot/SafeArea/HudLayout/PlayerPanel") as Control
 	var skill_panel := hud.get_node("HudRoot/SafeArea/HudLayout/SkillPanel") as Control
+	var character_panel := hud.get_node("HudRoot/SafeArea/HudLayout/CharacterPanel") as Control
 	_assert_control_fits(hud.hud_root, safe_area, "safe area fits %s" % label)
 	_assert_control_fits(safe_area, room_panel, "room panel fits safe area at %s" % label)
 	_assert_control_fits(safe_area, player_panel, "player panel fits safe area at %s" % label)
 	_assert_control_fits(safe_area, skill_panel, "skill panel fits safe area at %s" % label)
+	_assert_control_fits(safe_area, character_panel, "character panel fits safe area at %s" % label)
 	if weapon_panel != null:
 		_assert_control_fits(safe_area, weapon_panel, "weapon panel fits safe area at %s" % label)
 		_suite.assert_true(

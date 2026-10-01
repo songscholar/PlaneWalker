@@ -4,7 +4,7 @@ extends RefCounted
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
-const SCHEMA_VERSION := 3
+const SCHEMA_VERSION := 4
 const PHASES: Array[String] = [
 	"BOOT",
 	"HUB",
@@ -39,6 +39,69 @@ const WEAPON_STATE_FIELDS: Array[String] = [
 	"status_remaining",
 	"secondary_id",
 	"secondary_value",
+]
+const CHARACTER_PHASES: Array[String] = [
+	"READY",
+	"HOLD",
+	"WINDUP",
+	"ACTIVE",
+	"RECOVERY",
+]
+const CHARACTER_STATE_FIELDS: Array[String] = [
+	"character_id",
+	"skill_id",
+	"phase",
+	"cooldown_current",
+	"cooldown_max",
+	"meter_kind",
+	"meter_current",
+	"meter_max",
+	"status_id",
+	"status_stacks",
+	"status_remaining",
+	"secondary_id",
+	"secondary_value",
+]
+const CHARACTER_CONTRACTS := {
+	"wanderer": {
+		"skill_id": "waypoint_recall",
+		"meter_kind": "path_marks",
+		"status_ids": ["ready", "wayfarer", "anchor"],
+		"secondary_ids": ["", "path_progress"],
+	},
+	"time_guardian": {
+		"skill_id": "chrono_fortress",
+		"meter_kind": "ward",
+		"status_ids": ["ready", "guarding", "fortress", "rebuke"],
+		"secondary_ids": [""],
+	},
+	"void_walker": {
+		"skill_id": "void_devour",
+		"meter_kind": "void_debt",
+		"status_ids": ["ready", "corruption", "devouring"],
+		"secondary_ids": ["", "corruption_threshold"],
+	},
+	"primordial_knight": {
+		"skill_id": "realm_cleave",
+		"meter_kind": "resonance",
+		"status_ids": ["ready", "armored", "echo_pending"],
+		"secondary_ids": ["", "pending_echoes"],
+	},
+	"time_lord": {
+		"skill_id": "codex_dominion",
+		"meter_kind": "codex_pages",
+		"status_ids": ["ready", "primer", "infusion", "dominion"],
+		"secondary_ids": ["", "primer"],
+	},
+}
+const LEGACY_CHARACTER_FIELDS: Array[String] = [
+	"character",
+	"path_marks",
+	"ward",
+	"void_debt",
+	"resonance",
+	"codex_pages",
+	"primer_ability_id",
 ]
 const LEGACY_WEAPON_FIELDS: Array[String] = [
 	"weapon",
@@ -143,6 +206,9 @@ static func validate(value: Variant):
 	for legacy_field: String in LEGACY_TOP_LEVEL_WEAPON_FIELDS:
 		if state.has(legacy_field):
 			return _failure(revision, legacy_field, "weapon state must use the weapon_state union")
+	for legacy_field: String in LEGACY_CHARACTER_FIELDS:
+		if state.has(legacy_field):
+			return _failure(revision, legacy_field, "character state must use the character_state union")
 
 	var room_result = _validate_room(state.get("room"), revision)
 	if not room_result.ok:
@@ -153,6 +219,11 @@ static func validate(value: Variant):
 	var weapon_result = _validate_weapon_state(state.get("weapon_state"), revision)
 	if not weapon_result.ok:
 		return weapon_result
+	if not state.has("character_state"):
+		return _failure(revision, "character_state", "missing field")
+	var character_result = _validate_character_state(state["character_state"], revision)
+	if not character_result.ok:
+		return character_result
 	var build_result = _validate_build(state.get("build"), revision)
 	if not build_result.ok:
 		return build_result
@@ -217,6 +288,8 @@ static func _validate_player(value: Variant, revision: int):
 			return _failure(revision, "player.%s" % legacy_field, "raw weapon state is not supported")
 	if player.has("weapon_state"):
 		return _failure(revision, "player.weapon_state", "weapon state must be top-level")
+	if player.has("character") or player.has("character_state"):
+		return _failure(revision, "player.character_state", "character state must be top-level")
 	if player.has("cooldowns"):
 		return _failure(revision, "player.cooldowns", "legacy cooldown dictionary is not supported")
 	if typeof(player.get("time_slots")) != TYPE_ARRAY:
@@ -249,6 +322,78 @@ static func _validate_player(value: Variant, revision: int):
 			return _failure(revision, "player.time_slots[%d].cooldown" % index, "expected non-negative finite number")
 		ability_ids.append(ability_id)
 		action_ids.append(action_id)
+	return CommandResultScript.success(revision)
+
+
+static func _validate_character_state(value: Variant, revision: int):
+	if value == null:
+		return CommandResultScript.success(revision)
+	if typeof(value) != TYPE_DICTIONARY:
+		return _failure(revision, "character_state", "expected dictionary or null")
+	var character := value as Dictionary
+	for field: String in CHARACTER_STATE_FIELDS:
+		if not character.has(field):
+			return _failure(revision, "character_state.%s" % field, "missing field")
+	for raw_field: Variant in character:
+		var field := str(raw_field)
+		if not CHARACTER_STATE_FIELDS.has(field):
+			return _failure(revision, "character_state.%s" % field, "unexpected field")
+
+	var character_id := str(character.get("character_id", ""))
+	if not _is_non_empty_string(character.get("character_id")) or not CHARACTER_CONTRACTS.has(character_id):
+		return _failure(revision, "character_state.character_id", "unknown character")
+	var contract := CHARACTER_CONTRACTS[character_id] as Dictionary
+	if str(character.get("skill_id", "")) != str(contract["skill_id"]):
+		return _failure(revision, "character_state.skill_id", "skill is not supported by character")
+	if not _is_non_empty_string(character.get("phase")) or not CHARACTER_PHASES.has(str(character["phase"])):
+		return _failure(revision, "character_state.phase", "unknown phase")
+	if not _is_number(character.get("cooldown_current")) or not _is_number(character.get("cooldown_max")):
+		return _failure(revision, "character_state.cooldown_current", "cooldown values must be finite numbers")
+	var cooldown_current := float(character["cooldown_current"])
+	var cooldown_max := float(character["cooldown_max"])
+	if cooldown_max <= 0.0 or cooldown_current < 0.0 or cooldown_current > cooldown_max:
+		return _failure(revision, "character_state.cooldown_current", "cooldown must be within a positive maximum")
+
+	if str(character.get("meter_kind", "")) != str(contract["meter_kind"]):
+		return _failure(revision, "character_state.meter_kind", "meter is not supported by character")
+	if not _is_number(character.get("meter_current")) or not _is_number(character.get("meter_max")):
+		return _failure(revision, "character_state.meter_current", "meter values must be finite numbers")
+	var meter_current := float(character["meter_current"])
+	var meter_max := float(character["meter_max"])
+	if meter_max <= 0.0 or meter_current < 0.0 or meter_current > meter_max:
+		return _failure(revision, "character_state.meter_current", "meter must be within a positive maximum")
+
+	var status_id := str(character.get("status_id", ""))
+	if not _is_non_empty_string(character.get("status_id")) or not (contract["status_ids"] as Array).has(status_id):
+		return _failure(revision, "character_state.status_id", "status is not supported by character")
+	if not _is_integer(character.get("status_stacks")) or int(character["status_stacks"]) < 0:
+		return _failure(revision, "character_state.status_stacks", "expected non-negative integer")
+	if not _is_number(character.get("status_remaining")) or float(character["status_remaining"]) < 0.0:
+		return _failure(revision, "character_state.status_remaining", "expected non-negative finite number")
+	if status_id == "ready" and int(character["status_stacks"]) != 0:
+		return _failure(revision, "character_state.status_stacks", "ready status cannot carry stacks")
+	if status_id != "ready" and int(character["status_stacks"]) <= 0:
+		return _failure(revision, "character_state.status_stacks", "active status requires a stack")
+	if status_id in ["wayfarer", "anchor", "fortress", "rebuke", "corruption", "primer", "infusion", "dominion"] and float(character["status_remaining"]) <= 0.0:
+		return _failure(revision, "character_state.status_remaining", "timed status requires remaining time")
+
+	if typeof(character.get("secondary_id")) != TYPE_STRING:
+		return _failure(revision, "character_state.secondary_id", "expected string")
+	var secondary_id := str(character["secondary_id"])
+	if not (contract["secondary_ids"] as Array).has(secondary_id):
+		return _failure(revision, "character_state.secondary_id", "secondary state is not supported by character")
+	var secondary_value: Variant = character["secondary_value"]
+	if secondary_id == "primer":
+		if character_id != "time_lord" or not TimeAbilityIdsScript.is_canonical_id(secondary_value):
+			return _failure(revision, "character_state.secondary_value", "Primer requires a canonical ability id")
+		if status_id != "primer":
+			return _failure(revision, "character_state.secondary_id", "Primer secondary requires Primer status")
+	else:
+		if not _is_number(secondary_value) or float(secondary_value) < 0.0:
+			return _failure(revision, "character_state.secondary_value", "expected non-negative finite number")
+		if secondary_id.is_empty() and not is_zero_approx(float(secondary_value)):
+			return _failure(revision, "character_state.secondary_value", "empty secondary state must be zero")
+
 	return CommandResultScript.success(revision)
 
 

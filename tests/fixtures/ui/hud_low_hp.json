@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "revision": 2,
   "run_id": "fixture-run",
   "phase": "COMBAT_ACTIVE",
@@ -42,6 +42,21 @@
     "status_remaining": 0,
     "secondary_id": "hold",
     "secondary_value": 30
+  },
+  "character_state": {
+    "character_id": "void_walker",
+    "skill_id": "void_devour",
+    "phase": "READY",
+    "cooldown_current": 180,
+    "cooldown_max": 480,
+    "meter_kind": "void_debt",
+    "meter_current": 75,
+    "meter_max": 100,
+    "status_id": "corruption",
+    "status_stacks": 1,
+    "status_remaining": 30,
+    "secondary_id": "corruption_threshold",
+    "secondary_value": 75
   },
   "build": {
     "items": ["frozen_burst"],

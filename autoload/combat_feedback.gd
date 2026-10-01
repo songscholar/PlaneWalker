@@ -11,6 +11,13 @@ const MAX_CAMERA_TRAUMA := 8.0
 const MAX_SCREEN_FLASHES_PER_WINDOW := 3
 const MAX_HIT_PAUSES_PER_WINDOW := 8
 const MAX_HIT_AUDIO_CUES_PER_WINDOW := 12
+const KNOWN_CHARACTER_IDS: Array[String] = [
+	"wanderer",
+	"time_guardian",
+	"void_walker",
+	"primordial_knight",
+	"time_lord",
+]
 const KNOWN_WEAPON_IDS: Array[StringName] = [
 	&"sword",
 	&"bow",
@@ -36,6 +43,10 @@ var _camera_shake_enabled: bool = true
 var _hit_flash_enabled: bool = true
 var _reduced_motion: bool = false
 var _high_contrast_danger: bool = false
+var _subtitles_enabled: bool = true
+var _subtitle_scale: float = 1.0
+var _master_volume: float = 0.85
+var _sfx_volume: float = 0.90
 var _cached_player: Node2D
 var _cached_player_health: HealthComponent
 var _played_weapon_cues: Dictionary = {}
@@ -52,6 +63,10 @@ var _hit_pauses_accepted: int = 0
 var _hit_pauses_rejected: int = 0
 var _hit_audio_accepted: int = 0
 var _hit_audio_rejected: int = 0
+var _character_cues_accepted: Dictionary = {}
+var _character_cues_rejected: Dictionary = {}
+var _character_feedback_snapshot: Dictionary = {}
+var _last_character_priority_frame: int = -1
 
 
 const HIT_PROFILES := {
@@ -121,6 +136,7 @@ func _process(delta: float) -> void:
 		_scan_remaining = 0.25
 		_scan_for_actors()
 	_update_low_health_overlay()
+	_update_character_priority_feedback()
 	_update_camera_feedback(delta)
 
 
@@ -217,6 +233,9 @@ func get_feedback_budget_snapshot_for_test() -> Dictionary:
 		"hit_pauses_rejected": _hit_pauses_rejected,
 		"hit_audio_accepted": _hit_audio_accepted,
 		"hit_audio_rejected": _hit_audio_rejected,
+		"character_cues_accepted": _character_cues_accepted.duplicate(true),
+		"character_cues_rejected": _character_cues_rejected.duplicate(true),
+		"character_profile_limits": _character_profile_limits_snapshot(),
 		"max_weapon_cues": MAX_WEAPON_CUES_PER_WINDOW,
 		"max_camera_events": MAX_CAMERA_EVENTS_PER_WINDOW,
 		"max_camera_trauma": MAX_CAMERA_TRAUMA,
@@ -224,6 +243,64 @@ func get_feedback_budget_snapshot_for_test() -> Dictionary:
 		"max_hit_pauses": MAX_HIT_PAUSES_PER_WINDOW,
 		"max_hit_audio": MAX_HIT_AUDIO_CUES_PER_WINDOW,
 	}
+
+
+func get_character_feedback_snapshot_for_test() -> Dictionary:
+	return _character_feedback_snapshot.duplicate(true)
+
+
+func present_character_skill_result_for_test(
+	actor: Node2D,
+	character_id: StringName,
+	skill_id: StringName,
+	accepted: bool,
+	reason: StringName
+) -> bool:
+	return present_character_skill_result(actor, character_id, skill_id, accepted, reason)
+
+
+func present_character_skill_result(
+	actor: Node2D,
+	character_id: StringName,
+	skill_id: StringName,
+	accepted: bool,
+	reason: StringName = &""
+) -> bool:
+	var character_key := str(character_id)
+	var character_profile := PixelProxyScript.character_profile_snapshot(character_id)
+	if (
+		actor == null
+		or not is_instance_valid(actor)
+		or character_profile.is_empty()
+		or str(character_profile.get("skill_cue_id", "")) != str(skill_id)
+		or not _actor_character_matches(actor, character_key)
+		or not _consume_character_cue_budget(character_key)
+	):
+		return false
+	var proxy := _ensure_actor_proxy(actor)
+	if proxy == null or not proxy.has_method("play_character_cue"):
+		return false
+	if not bool(proxy.call("play_character_cue", skill_id, accepted)):
+		return false
+	var audio_intensity := clampf(_master_volume * _sfx_volume, 0.0, 1.0)
+	_character_feedback_snapshot = {
+		"character_id": character_key,
+		"skill_id": str(skill_id),
+		"accepted": accepted,
+		"reason": str(reason),
+		"subtitle_key": (
+			"HUD_CHARACTER_SKILL_ACCEPTED"
+			if accepted
+			else "HUD_CHARACTER_SKILL_REJECTED_%s" % str(reason).to_upper()
+		),
+		"subtitle_visible": _subtitles_enabled,
+		"subtitle_scale": _subtitle_scale,
+		"audio_intensity": audio_intensity,
+		"high_contrast": _high_contrast_danger,
+	}
+	if accepted:
+		add_camera_trauma(1.0)
+	return true
 
 
 func advance_feedback_budget_for_test(delta: float) -> void:
@@ -240,6 +317,10 @@ func get_feedback_options_for_test() -> Dictionary:
 		"hit_flash_enabled": _hit_flash_enabled,
 		"reduced_motion": _reduced_motion,
 		"high_contrast_danger": _high_contrast_danger,
+		"subtitles_enabled": _subtitles_enabled,
+		"subtitle_scale": _subtitle_scale,
+		"master_volume": _master_volume,
+		"sfx_volume": _sfx_volume,
 	}
 
 
@@ -256,6 +337,10 @@ func reload_feedback_options_from_game_state() -> void:
 		"hit_flash_enabled": bool(GameState.get_setting("hit_flash_enabled", true)),
 		"reduced_motion": bool(GameState.get_setting("reduced_motion", false)),
 		"high_contrast_danger": bool(GameState.get_setting("high_contrast_danger", false)),
+		"subtitles_enabled": bool(GameState.get_setting("subtitles_enabled", true)),
+		"subtitle_scale": float(GameState.get_setting("subtitle_scale", 1.0)),
+		"master_volume": float(GameState.get_setting("master_volume", 0.85)),
+		"sfx_volume": float(GameState.get_setting("sfx_volume", 0.90)),
 	})
 
 
@@ -268,6 +353,14 @@ func set_feedback_options(options: Dictionary) -> void:
 		_reduced_motion = bool(options["reduced_motion"])
 	if options.has("high_contrast_danger"):
 		_high_contrast_danger = bool(options["high_contrast_danger"])
+	if options.has("subtitles_enabled"):
+		_subtitles_enabled = bool(options["subtitles_enabled"])
+	if options.has("subtitle_scale"):
+		_subtitle_scale = clampf(float(options["subtitle_scale"]), 0.75, 2.0)
+	if options.has("master_volume"):
+		_master_volume = clampf(float(options["master_volume"]), 0.0, 1.0)
+	if options.has("sfx_volume"):
+		_sfx_volume = clampf(float(options["sfx_volume"]), 0.0, 1.0)
 	if not _camera_shake_enabled or _reduced_motion:
 		_camera_trauma = 0.0
 		_restore_camera_offset()
@@ -279,7 +372,7 @@ func set_feedback_options(options: Dictionary) -> void:
 
 
 func _on_game_setting_changed(setting_id: StringName, value: Variant) -> void:
-	if setting_id not in [&"camera_shake_enabled", &"hit_flash_enabled", &"reduced_motion", &"high_contrast_danger"]:
+	if setting_id not in [&"camera_shake_enabled", &"hit_flash_enabled", &"reduced_motion", &"high_contrast_danger", &"subtitles_enabled", &"subtitle_scale", &"master_volume", &"sfx_volume"]:
 		return
 	set_feedback_options({str(setting_id): value})
 
@@ -598,6 +691,72 @@ func _reset_feedback_budget_counts() -> void:
 	_hit_pauses_rejected = 0
 	_hit_audio_accepted = 0
 	_hit_audio_rejected = 0
+	_character_cues_accepted.clear()
+	_character_cues_rejected.clear()
+	for character_id: String in KNOWN_CHARACTER_IDS:
+		_character_cues_accepted[character_id] = 0
+		_character_cues_rejected[character_id] = 0
+
+
+func _consume_character_cue_budget(character_id: String) -> bool:
+	var accepted := int(_character_cues_accepted.get(character_id, 0))
+	var limit := int(PixelProxyScript.character_profile_snapshot(StringName(character_id)).get("cue_budget", 0))
+	if limit <= 0 or accepted >= limit:
+		_character_cues_rejected[character_id] = int(_character_cues_rejected.get(character_id, 0)) + 1
+		return false
+	_character_cues_accepted[character_id] = accepted + 1
+	return true
+
+
+func _character_profile_limits_snapshot() -> Dictionary:
+	var result: Dictionary = {}
+	for character_id: String in KNOWN_CHARACTER_IDS:
+		result[character_id] = int(PixelProxyScript.character_profile_snapshot(StringName(character_id)).get("cue_budget", 0))
+	return result
+
+
+func _actor_character_matches(actor: Node, expected_character_id: String) -> bool:
+	if not actor.has_method("character_presentation_snapshot"):
+		return false
+	var value: Variant = actor.call("character_presentation_snapshot")
+	return value is Dictionary and str((value as Dictionary).get("runtime_kind", "")) == expected_character_id
+
+
+func _update_character_priority_feedback() -> void:
+	var player := _first_player()
+	if player == null or not player.has_method("priority_arbitration_snapshot"):
+		return
+	var arbitration_value: Variant = player.call("priority_arbitration_snapshot")
+	if not arbitration_value is Dictionary:
+		return
+	var arbitration := arbitration_value as Dictionary
+	var frame := int(arbitration.get("frame", -1))
+	var decisions_value: Variant = arbitration.get("decisions", [])
+	if frame < 0 or not decisions_value is Array:
+		return
+	if frame == _last_character_priority_frame:
+		return
+	_last_character_priority_frame = frame
+	for index: int in range((decisions_value as Array).size()):
+		var decision_value: Variant = (decisions_value as Array)[index]
+		if not decision_value is Dictionary:
+			continue
+		var decision := decision_value as Dictionary
+		if str(decision.get("category", "")) != "character" or str(decision.get("edge", "")) != "pressed":
+			continue
+		var presentation_value: Variant = player.call("character_presentation_snapshot") if player.has_method("character_presentation_snapshot") else {}
+		if not presentation_value is Dictionary:
+			return
+		var character_id := StringName(str((presentation_value as Dictionary).get("runtime_kind", "")))
+		var skill_id := StringName(str(PixelProxyScript.character_profile_snapshot(character_id).get("skill_cue_id", "")))
+		var status := str(decision.get("status", "rejected"))
+		present_character_skill_result(
+			player,
+			character_id,
+			skill_id,
+			status == "accepted",
+			&"" if status == "accepted" else StringName(status)
+		)
 
 
 func _update_camera_feedback(delta: float) -> void:
@@ -662,6 +821,8 @@ func _reset_feedback() -> void:
 	_reset_feedback_budget_counts()
 	_played_weapon_cues.clear()
 	_played_weapon_cue_order.clear()
+	_character_feedback_snapshot.clear()
+	_last_character_priority_frame = -1
 	_restore_camera_offset()
 	if _audio != null and _audio.has_method("stop_all"):
 		_audio.stop_all()
@@ -701,6 +862,8 @@ func _configure_existing_proxies() -> void:
 func _configure_proxy(proxy: Node) -> void:
 	if proxy != null and proxy.has_method("set_feedback_options"):
 		proxy.set_feedback_options(_hit_flash_enabled, _reduced_motion)
+	if proxy != null and proxy.has_method("set_character_feedback_options"):
+		proxy.call("set_character_feedback_options", _high_contrast_danger)
 
 
 func _cache_player(player: Node2D) -> void:

@@ -75,6 +75,68 @@ const ACTION_DURATIONS := {
 	&"windup": 0.46,
 	&"recovery": 0.28,
 }
+const CHARACTER_VISUAL_PROFILES := {
+	"wanderer": {
+		"palette_id": "wanderer_cyan",
+		"primary": Color(0.08, 0.72, 0.86),
+		"secondary": Color(0.035, 0.12, 0.18),
+		"accent": Color(0.82, 0.98, 1.0),
+		"danger": Color(1.0, 0.32, 0.22),
+		"footprint": Vector2i(24, 32),
+		"resource_aura": Color(0.22, 0.94, 1.0),
+		"skill_cue_id": "waypoint_recall",
+		"damage_cue_id": "wanderer_stagger",
+		"cue_budget": 4,
+	},
+	"time_guardian": {
+		"palette_id": "guardian_gold",
+		"primary": Color(0.22, 0.56, 0.82),
+		"secondary": Color(0.04, 0.10, 0.22),
+		"accent": Color(1.0, 0.82, 0.28),
+		"danger": Color(1.0, 0.38, 0.18),
+		"footprint": Vector2i(28, 34),
+		"resource_aura": Color(1.0, 0.82, 0.28),
+		"skill_cue_id": "chrono_fortress",
+		"damage_cue_id": "guardian_ward_break",
+		"cue_budget": 3,
+	},
+	"void_walker": {
+		"palette_id": "void_magenta",
+		"primary": Color(0.58, 0.16, 0.82),
+		"secondary": Color(0.10, 0.02, 0.18),
+		"accent": Color(0.96, 0.42, 1.0),
+		"danger": Color(1.0, 0.20, 0.42),
+		"footprint": Vector2i(24, 34),
+		"resource_aura": Color(0.84, 0.22, 1.0),
+		"skill_cue_id": "void_devour",
+		"damage_cue_id": "void_corruption_hit",
+		"cue_budget": 3,
+	},
+	"primordial_knight": {
+		"palette_id": "primordial_iron",
+		"primary": Color(0.58, 0.62, 0.68),
+		"secondary": Color(0.08, 0.10, 0.14),
+		"accent": Color(1.0, 0.54, 0.18),
+		"danger": Color(1.0, 0.24, 0.12),
+		"footprint": Vector2i(30, 36),
+		"resource_aura": Color(1.0, 0.50, 0.16),
+		"skill_cue_id": "realm_cleave",
+		"damage_cue_id": "primordial_armor_hit",
+		"cue_budget": 3,
+	},
+	"time_lord": {
+		"palette_id": "codex_indigo",
+		"primary": Color(0.28, 0.30, 0.82),
+		"secondary": Color(0.04, 0.05, 0.18),
+		"accent": Color(0.60, 0.96, 1.0),
+		"danger": Color(1.0, 0.36, 0.66),
+		"footprint": Vector2i(26, 34),
+		"resource_aura": Color(0.48, 0.60, 1.0),
+		"skill_cue_id": "codex_dominion",
+		"damage_cue_id": "codex_page_break",
+		"cue_budget": 2,
+	},
+}
 
 var _actor: Node2D
 var _source_visual: CanvasItem
@@ -118,6 +180,13 @@ var _staff_element: String = ""
 var _presentation_animation_id: String = ""
 var _presentation_vfx_id: String = ""
 var _presentation_cue_remaining: float = 0.0
+var _character_profile_id: String = ""
+var _character_profile: Dictionary = {}
+var _character_resource_ratio: float = 0.0
+var _character_cue_kind: String = ""
+var _character_success_remaining: float = 0.0
+var _character_rejection_remaining: float = 0.0
+var _high_contrast_character_feedback: bool = false
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -153,6 +222,7 @@ func bind_actor(actor: Node2D) -> bool:
 	if actor.has_signal("attack_phase_changed") and not actor.attack_phase_changed.is_connected(_on_attack_phase_changed):
 		actor.attack_phase_changed.connect(_on_attack_phase_changed)
 	_refresh_player_weapon_presentation()
+	_refresh_character_presentation()
 	_update_presentation_facing()
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
@@ -185,6 +255,30 @@ func play_weapon_cue(animation_id: StringName, vfx_id: StringName) -> void:
 	_presentation_vfx_id = str(vfx_id)
 	_presentation_cue_remaining = _weapon_cue_duration()
 	play_action(&"attack", _presentation_cue_remaining)
+
+
+static func character_profile_snapshot(character_id: StringName) -> Dictionary:
+	var profile_value: Variant = CHARACTER_VISUAL_PROFILES.get(str(character_id), {})
+	return (profile_value as Dictionary).duplicate(true) if profile_value is Dictionary else {}
+
+
+func play_character_cue(skill_id: StringName, accepted: bool) -> bool:
+	if _character_profile.is_empty() or str(skill_id) != str(_character_profile.get("skill_cue_id", "")):
+		return false
+	if accepted:
+		_character_cue_kind = "success"
+		_character_rejection_remaining = 0.0
+		_character_success_remaining = 0.34
+		play_action(&"cast", _character_success_remaining)
+	else:
+		_character_cue_kind = "rejected"
+		_character_success_remaining = 0.0
+		_character_rejection_remaining = 0.65
+		_action_remaining = 0.0
+		if _state in [&"cast", &"time_stop", &"time_rewind"]:
+			_state = &"idle"
+		queue_redraw()
+	return true
 
 
 func spawn_afterimage(world_position: Vector2, lifetime: float = 0.22) -> Node2D:
@@ -226,6 +320,11 @@ func set_feedback_options(hit_flash_enabled: bool, reduced_motion: bool) -> void
 	_reduced_motion = reduced_motion
 	if not _hit_flash_enabled:
 		_flash_remaining = 0.0
+	queue_redraw()
+
+
+func set_character_feedback_options(high_contrast: bool) -> void:
+	_high_contrast_character_feedback = high_contrast
 	queue_redraw()
 
 
@@ -271,6 +370,15 @@ func get_snapshot_for_test() -> Dictionary:
 		"staff_combination_signature_visible": _staff_combination_signature_visible(),
 		"presentation_animation_id": _presentation_animation_id,
 		"presentation_vfx_id": _presentation_vfx_id,
+		"character_profile_id": _character_profile_id,
+		"character_resource_ratio": _character_resource_ratio,
+		"character_skill_cue_id": str(_character_profile.get("skill_cue_id", "")),
+		"character_damage_cue_id": str(_character_profile.get("damage_cue_id", "")),
+		"character_cue_budget": int(_character_profile.get("cue_budget", 0)),
+		"character_cue_kind": _character_cue_kind,
+		"character_success_active": _character_success_remaining > 0.0,
+		"character_rejection_active": _character_rejection_remaining > 0.0,
+		"high_contrast_character_feedback": _high_contrast_character_feedback,
 		"gauntlets_lead_fist": _gauntlets_lead_fist(),
 		"gauntlets_punch_wind_visible": _gauntlets_punch_wind_visible(),
 		"gauntlets_counter_line_visible": _gauntlets_counter_line_visible(),
@@ -295,10 +403,15 @@ func _advance_animation(delta: float) -> void:
 		_phase_clock += delta
 	_flash_remaining = maxf(0.0, _flash_remaining - delta)
 	_presentation_cue_remaining = maxf(0.0, _presentation_cue_remaining - delta)
+	_character_success_remaining = maxf(0.0, _character_success_remaining - delta)
+	_character_rejection_remaining = maxf(0.0, _character_rejection_remaining - delta)
+	if _character_success_remaining <= 0.0 and _character_rejection_remaining <= 0.0:
+		_character_cue_kind = ""
 	if _presentation_cue_remaining <= 0.0:
 		_presentation_animation_id = ""
 		_presentation_vfx_id = ""
 	_refresh_player_weapon_presentation()
+	_refresh_character_presentation()
 	if _action_remaining > 0.0:
 		_action_remaining = maxf(0.0, _action_remaining - delta)
 	elif _state != &"death":
@@ -422,6 +535,61 @@ func _clear_player_weapon_presentation() -> void:
 	_bow_tension = 0.0
 	_bow_charge_tier = ""
 	_staff_element = ""
+
+
+func _refresh_character_presentation() -> void:
+	if _role != "player" or _actor == null or not is_instance_valid(_actor):
+		return
+	if not _actor.has_method("character_presentation_snapshot"):
+		_clear_character_presentation()
+		return
+	var snapshot_value: Variant = _actor.call("character_presentation_snapshot")
+	if not snapshot_value is Dictionary:
+		_clear_character_presentation()
+		return
+	var snapshot := snapshot_value as Dictionary
+	var profile_id := str(snapshot.get("runtime_kind", snapshot.get("character_id", "")))
+	if profile_id == "wanderer_m1_compat":
+		_clear_character_presentation()
+		return
+	var profile_value: Variant = CHARACTER_VISUAL_PROFILES.get(profile_id, {})
+	if not profile_value is Dictionary or (profile_value as Dictionary).is_empty():
+		_clear_character_presentation()
+		return
+	_character_profile_id = profile_id
+	_character_profile = (profile_value as Dictionary).duplicate(true)
+	_palette = {
+		"id": str(_character_profile["palette_id"]),
+		"primary": _character_profile["primary"],
+		"secondary": _character_profile["secondary"],
+		"accent": _character_profile["accent"],
+		"danger": _character_profile["danger"],
+	}
+	_footprint = _character_profile["footprint"] as Vector2i
+	var current_value: Variant = snapshot.get("resource_value", 0)
+	var maximum_value: Variant = snapshot.get("resource_maximum", _character_default_meter_max(profile_id))
+	if typeof(current_value) in [TYPE_INT, TYPE_FLOAT] and typeof(maximum_value) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(current_value)) and is_finite(float(maximum_value)) and float(maximum_value) > 0.0:
+		_character_resource_ratio = clampf(float(current_value) / float(maximum_value), 0.0, 1.0)
+	else:
+		_character_resource_ratio = 0.0
+
+
+func _clear_character_presentation() -> void:
+	_character_profile_id = ""
+	_character_profile.clear()
+	_character_resource_ratio = 0.0
+	_palette = (PALETTES["player"] as Dictionary).duplicate(true)
+	_footprint = FOOTPRINTS["player"]
+
+
+func _character_default_meter_max(profile_id: String) -> int:
+	match profile_id:
+		"wanderer":
+			return 5
+		"void_walker":
+			return 100
+		_:
+			return 3
 
 
 func _player_weapon_action_is_presented() -> bool:
@@ -742,6 +910,8 @@ func _draw() -> void:
 		_draw_time_cast(accent)
 	if _state == &"windup":
 		_draw_danger_crown(_palette["danger"])
+	if _role == "player" and not _character_profile.is_empty():
+		_draw_character_profile_cues()
 
 
 func _draw_shadow() -> void:
@@ -771,6 +941,29 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 	elif _weapon_visual_kind() == "sword":
 		draw_rect(Rect2(10, 2, 14, 4), accent.darkened(0.15), true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_character_profile_cues() -> void:
+	var aura_color := _character_profile.get("resource_aura", Color.WHITE) as Color
+	if _character_resource_ratio > 0.0:
+		var radius := 17.0 + roundf(_character_resource_ratio * 5.0)
+		draw_arc(Vector2.ZERO, radius, -PI * 0.5, -PI * 0.5 + TAU * _character_resource_ratio, 20, Color(aura_color, 0.8), 2.0, false)
+	match _character_profile_id:
+		"time_guardian":
+			draw_rect(Rect2(-14, -6, 4, 18), aura_color, true)
+		"void_walker":
+			draw_colored_polygon(PackedVector2Array([Vector2(-13, -12), Vector2(-7, -18), Vector2(-3, -12)]), aura_color)
+		"primordial_knight":
+			draw_rect(Rect2(-14, -12, 5, 24), aura_color.darkened(0.2), true)
+		"time_lord":
+			draw_rect(Rect2(-15, -14, 6, 10), aura_color, false, 2.0)
+		"wanderer":
+			draw_rect(Rect2(-12, -16, 8, 3), aura_color, true)
+	if _character_rejection_remaining > 0.0:
+		var rejection_color := Color.WHITE if _high_contrast_character_feedback else _palette["danger"] as Color
+		draw_line(Vector2(-9, -9), Vector2(9, 9), rejection_color, 3.0)
+		draw_line(Vector2(9, -9), Vector2(-9, 9), rejection_color, 3.0)
+		draw_arc(Vector2.ZERO, 20.0, 0.0, TAU, 16, rejection_color, 2.0, false)
 
 
 func _draw_player_bow(accent: Color) -> void:

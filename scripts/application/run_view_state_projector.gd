@@ -4,6 +4,7 @@ extends RefCounted
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
+const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
 var _last_run_id: String = ""
 var _view_revision: int = -1
@@ -62,7 +63,15 @@ func project(
 			maxi(0, _view_revision),
 			{"field": str(weapon_projection.get("field", "player.weapon"))}
 		)
+	var character_projection := _character_view(player_view.get("character"))
+	if not bool(character_projection.get("ok", false)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			maxi(0, _view_revision),
+			{"field": str(character_projection.get("field", "player.character"))}
+		)
 	player_view.erase("weapon")
+	player_view.erase("character")
 	var view_state := {
 		"schema_version": RunViewStateScript.SCHEMA_VERSION,
 		"revision": next_revision,
@@ -78,6 +87,11 @@ func project(
 		},
 		"player": player_view,
 		"weapon_state": (weapon_projection["weapon_state"] as Dictionary).duplicate(true),
+		"character_state": (
+			(character_projection["character_state"] as Dictionary).duplicate(true)
+			if character_projection.get("character_state") is Dictionary
+			else null
+		),
 		"build": _build_view(build),
 		"selection": open_offer.duplicate(true) if not open_offer.is_empty() else null,
 		"boss": _boss_view(phase, boss_snapshot),
@@ -103,6 +117,144 @@ func project(
 
 func latest_view_state() -> Dictionary:
 	return _latest_view_state.duplicate(true)
+
+
+func _character_view(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "character_state": null}
+	if not value is Dictionary:
+		return {"ok": false, "field": "player.character"}
+	var source := value as Dictionary
+	if source.is_empty() or str(source.get("runtime_kind", "")) == "wanderer_m1_compat":
+		return {"ok": true, "character_state": null}
+	var runtime_kind := str(source.get("runtime_kind", source.get("character_id", "")))
+	var profile := _character_profile(runtime_kind)
+	if profile.is_empty():
+		return {"ok": false, "field": "player.character.runtime_kind"}
+	var runtime_frame_value: Variant = source.get("runtime_frame", 0)
+	if typeof(runtime_frame_value) != TYPE_INT or int(runtime_frame_value) < 0:
+		return {"ok": false, "field": "player.character.runtime_frame"}
+	var runtime_frame := int(runtime_frame_value)
+	var cooldown_until_value: Variant = source.get("skill_cooldown_until_frame", -1)
+	if typeof(cooldown_until_value) != TYPE_INT or int(cooldown_until_value) < -1:
+		return {"ok": false, "field": "player.character.skill_cooldown_until_frame"}
+	var cooldown_max := int(profile["cooldown_max"])
+	var cooldown_current := clampi(int(cooldown_until_value) - runtime_frame, 0, cooldown_max)
+	var status := _character_status(runtime_kind, source, runtime_frame)
+	if not bool(status.get("ok", false)):
+		return status
+	var meter_max_value: Variant = source.get("resource_maximum", profile["meter_max"])
+	return {
+		"ok": true,
+		"character_state": {
+			"character_id": runtime_kind,
+			"skill_id": str(profile["skill_id"]),
+			"phase": str(source.get("phase", "READY")),
+			"cooldown_current": cooldown_current,
+			"cooldown_max": cooldown_max,
+			"meter_kind": str(profile["meter_kind"]),
+			"meter_current": source.get("resource_value", 0),
+			"meter_max": meter_max_value,
+			"status_id": str(status["status_id"]),
+			"status_stacks": int(status["status_stacks"]),
+			"status_remaining": status["status_remaining"],
+			"secondary_id": str(status["secondary_id"]),
+			"secondary_value": status["secondary_value"],
+		},
+	}
+
+
+func _character_profile(runtime_kind: String) -> Dictionary:
+	match runtime_kind:
+		"wanderer":
+			return {"skill_id": "waypoint_recall", "cooldown_max": 720, "meter_kind": "path_marks", "meter_max": 5}
+		"time_guardian":
+			return {"skill_id": "chrono_fortress", "cooldown_max": 600, "meter_kind": "ward", "meter_max": 3}
+		"void_walker":
+			return {"skill_id": "void_devour", "cooldown_max": 480, "meter_kind": "void_debt", "meter_max": 100}
+		"primordial_knight":
+			return {"skill_id": "realm_cleave", "cooldown_max": 540, "meter_kind": "resonance", "meter_max": 3}
+		"time_lord":
+			return {"skill_id": "codex_dominion", "cooldown_max": 480, "meter_kind": "codex_pages", "meter_max": 3}
+		_:
+			return {}
+
+
+func _character_status(runtime_kind: String, source: Dictionary, runtime_frame: int) -> Dictionary:
+	var status_id := "ready"
+	var status_stacks := 0
+	var status_remaining: Variant = 0
+	var secondary_id := ""
+	var secondary_value: Variant = 0
+	match runtime_kind:
+		"wanderer":
+			if bool(source.get("anchor_active", false)):
+				status_id = "anchor"
+				status_remaining = maxi(0, int(source.get("anchor_expires_frame", -1)) - runtime_frame)
+			elif bool(source.get("wayfarer_active", false)):
+				status_id = "wayfarer"
+				status_remaining = maxi(0, int(source.get("wayfarer_until_frame", -1)) - runtime_frame)
+			var path_progress := int(source.get("path_progress", 0))
+			if path_progress > 0:
+				secondary_id = "path_progress"
+				secondary_value = path_progress
+		"time_guardian":
+			if bool(source.get("guard_active", false)):
+				status_id = "guarding"
+			elif bool(source.get("fortress_active", false)):
+				status_id = "fortress"
+				status_remaining = maxi(0, int(source.get("fortress_until_frame", -1)) - runtime_frame)
+			elif bool(source.get("rebuke_active", false)):
+				status_id = "rebuke"
+				status_remaining = maxi(0, int(source.get("rebuke_until_frame", -1)) - runtime_frame)
+		"void_walker":
+			if bool(source.get("skill_active", false)):
+				status_id = "devouring"
+			elif bool(source.get("corruption_active", false)):
+				status_id = "corruption"
+				status_remaining = maxi(0, int(source.get("next_corruption_frame", -1)) - runtime_frame)
+			var threshold := int(source.get("corruption_threshold", 0))
+			if threshold > 0:
+				secondary_id = "corruption_threshold"
+				secondary_value = threshold
+		"primordial_knight":
+			var pending_echoes := int(source.get("pending_echo_count", 0))
+			if bool(source.get("armor_active", false)):
+				status_id = "armored"
+			elif pending_echoes > 0:
+				status_id = "echo_pending"
+				status_stacks = pending_echoes
+			if pending_echoes > 0:
+				secondary_id = "pending_echoes"
+				secondary_value = pending_echoes
+		"time_lord":
+			var dominion_remaining := maxi(0, int(source.get("dominion_until_frame", -1)) - runtime_frame)
+			var infusion_remaining := maxi(0, int(source.get("infusion_until_frame", -1)) - runtime_frame)
+			var primer_remaining := maxi(0, int(source.get("primer_expires_frame", -1)) - runtime_frame)
+			var primer_id := str(source.get("primer_ability_id", ""))
+			if dominion_remaining > 0:
+				status_id = "dominion"
+				status_remaining = dominion_remaining
+			elif infusion_remaining > 0:
+				status_id = "infusion"
+				status_remaining = infusion_remaining
+			elif not primer_id.is_empty():
+				if not TimeAbilityIdsScript.is_canonical_id(primer_id):
+					return {"ok": false, "field": "player.character.primer_ability_id"}
+				status_id = "primer"
+				status_remaining = primer_remaining
+				secondary_id = "primer"
+				secondary_value = primer_id
+	if status_id != "ready" and status_stacks == 0:
+		status_stacks = 1
+	return {
+		"ok": true,
+		"status_id": status_id,
+		"status_stacks": status_stacks,
+		"status_remaining": status_remaining,
+		"secondary_id": secondary_id,
+		"secondary_value": secondary_value,
+	}
 
 
 func _weapon_view(value: Variant) -> Dictionary:

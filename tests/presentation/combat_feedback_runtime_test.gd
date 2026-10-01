@@ -22,6 +22,11 @@ class SnapshotPlayer extends Node2D:
 		"runtime": {"facing": Vector2.RIGHT},
 	}
 	var rewind_facing := Vector2.DOWN
+	var character_snapshot: Dictionary = {
+		"runtime_kind": "wanderer",
+		"resource_value": 0,
+		"resource_maximum": 5,
+	}
 
 
 	func _init() -> void:
@@ -37,6 +42,10 @@ class SnapshotPlayer extends Node2D:
 
 	func get_rewind_facing() -> Vector2:
 		return rewind_facing
+
+
+	func character_presentation_snapshot() -> Dictionary:
+		return character_snapshot.duplicate(true)
 
 
 class VelocityActor extends CharacterBody2D:
@@ -60,6 +69,7 @@ func _run() -> void:
 	await _assert_gun_feedback_contract()
 	await _assert_staff_feedback_contract()
 	await _assert_gauntlets_feedback_contract()
+	await _assert_character_profile_feedback_contract()
 	await _assert_high_frequency_feedback_budget()
 	await _assert_unknown_weapon_fails_closed()
 	await _assert_audio_cleanup_contract()
@@ -327,6 +337,111 @@ func _assert_player_weapon_snapshot_proxy_contract() -> void:
 
 	player.queue_free()
 	velocity_actor.queue_free()
+	await get_tree().process_frame
+
+
+func _assert_character_profile_feedback_contract() -> void:
+	CombatFeedback.reset_feedback_for_test()
+	var player := SnapshotPlayer.new()
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "character feedback probe receives a player proxy")
+	if proxy == null:
+		player.queue_free()
+		return
+	var cases: Array[Dictionary] = [
+		{"character": "wanderer", "resource": 3, "maximum": 5, "skill": "waypoint_recall"},
+		{"character": "time_guardian", "resource": 2, "maximum": 3, "skill": "chrono_fortress"},
+		{"character": "void_walker", "resource": 75, "maximum": 100, "skill": "void_devour"},
+		{"character": "primordial_knight", "resource": 2, "maximum": 3, "skill": "realm_cleave"},
+		{"character": "time_lord", "resource": 2, "maximum": 3, "skill": "codex_dominion"},
+	]
+	var palette_ids: Array[String] = []
+	for case: Dictionary in cases:
+		player.character_snapshot = {
+			"runtime_kind": case["character"],
+			"resource_value": case["resource"],
+			"resource_maximum": case["maximum"],
+		}
+		proxy.advance_animation_for_test(0.01)
+		var snapshot: Dictionary = proxy.get_snapshot_for_test()
+		_suite.assert_equal(snapshot.get("character_profile_id"), case["character"], "%s selects its visual profile" % case["character"])
+		_suite.assert_close(float(snapshot.get("character_resource_ratio", -1.0)), float(case["resource"]) / float(case["maximum"]), "%s resource aura follows its meter" % case["character"])
+		_suite.assert_equal(snapshot.get("character_skill_cue_id"), case["skill"], "%s selects its profile skill cue" % case["character"])
+		palette_ids.append(str(snapshot.get("palette_id", "")))
+	var unique_palettes: Dictionary = {}
+	for palette_id: String in palette_ids:
+		unique_palettes[palette_id] = true
+	_suite.assert_equal(unique_palettes.size(), 5, "all five characters have distinct profile palettes")
+
+	var budget: Dictionary = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	var profile_limits := budget.get("character_profile_limits", {}) as Dictionary
+	for case: Dictionary in cases:
+		_suite.assert_true(int(profile_limits.get(case["character"], 0)) > 0, "%s has an explicit cue budget" % case["character"])
+
+	player.character_snapshot = {"runtime_kind": "time_lord", "resource_value": 2, "resource_maximum": 3}
+	proxy.advance_animation_for_test(0.01)
+	CombatFeedback.set_feedback_options({
+		"camera_shake_enabled": false,
+		"hit_flash_enabled": false,
+		"reduced_motion": true,
+		"high_contrast_danger": true,
+		"subtitles_enabled": false,
+		"subtitle_scale": 1.5,
+		"master_volume": 0.0,
+		"sfx_volume": 1.0,
+	})
+	_suite.assert_true(
+		CombatFeedback.present_character_skill_result_for_test(player, &"time_lord", &"codex_dominion", true, &""),
+		"accepted character skill emits its bounded profile cue"
+	)
+	var success_snapshot: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(success_snapshot.get("character_cue_kind"), "success", "accepted character skill uses success presentation")
+	_suite.assert_true(not bool(success_snapshot.get("flash_active", true)), "disabled flash reaches character cues")
+	_suite.assert_close(float(CombatFeedback.get_camera_feedback_snapshot_for_test().get("trauma", -1.0)), 0.0, "reduced motion suppresses character cue shake")
+
+	proxy.advance_animation_for_test(1.0)
+	_suite.assert_true(
+		CombatFeedback.present_character_skill_result_for_test(player, &"time_lord", &"codex_dominion", false, &"cooldown"),
+		"rejected character skill emits accessible rejection feedback"
+	)
+	var rejection_snapshot: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(rejection_snapshot.get("character_cue_kind"), "rejected", "rejection uses a distinct cue kind")
+	_suite.assert_true(bool(rejection_snapshot.get("character_rejection_active", false)), "rejection keeps a geometry cue when subtitles are disabled")
+	_suite.assert_true(not bool(rejection_snapshot.get("character_success_active", true)), "rejection never replays the success animation")
+	_suite.assert_true(bool(rejection_snapshot.get("high_contrast_character_feedback", false)), "rejection respects high-contrast feedback")
+	var accessible: Dictionary = CombatFeedback.get_character_feedback_snapshot_for_test()
+	_suite.assert_true(not bool(accessible.get("subtitle_visible", true)), "subtitle preference is respected")
+	_suite.assert_equal(accessible.get("subtitle_scale"), 1.5, "subtitle scale remains available to accessible feedback")
+	_suite.assert_close(float(accessible.get("audio_intensity", -1.0)), 0.0, "muted volume suppresses character cue audio")
+	_suite.assert_equal(accessible.get("reason"), "cooldown", "rejection reason remains machine-readable")
+
+	CombatFeedback.reset_feedback_for_test()
+	var limit := int(profile_limits.get("time_lord", 0))
+	for index: int in range(limit + 2):
+		CombatFeedback.present_character_skill_result_for_test(
+			player,
+			&"time_lord",
+			&"codex_dominion",
+			true,
+			StringName("probe_%d" % index)
+		)
+	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal((budget.get("character_cues_accepted", {}) as Dictionary).get("time_lord"), limit, "Time Lord cue budget caps accepted cues")
+	_suite.assert_equal((budget.get("character_cues_rejected", {}) as Dictionary).get("time_lord"), 2, "Time Lord cue budget rejects overflow deterministically")
+
+	CombatFeedback.set_feedback_options({
+		"camera_shake_enabled": true,
+		"hit_flash_enabled": true,
+		"reduced_motion": false,
+		"high_contrast_danger": false,
+		"subtitles_enabled": true,
+		"subtitle_scale": 1.0,
+		"master_volume": 0.85,
+		"sfx_volume": 0.9,
+	})
+	player.queue_free()
 	await get_tree().process_frame
 
 

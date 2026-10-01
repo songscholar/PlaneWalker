@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "revision": 3,
   "run_id": "fixture-run",
   "phase": "BOSS_ACTIVE",
@@ -42,6 +42,21 @@
     "status_remaining": 0,
     "secondary_id": "combo",
     "secondary_value": 2
+  },
+  "character_state": {
+    "character_id": "time_guardian",
+    "skill_id": "chrono_fortress",
+    "phase": "READY",
+    "cooldown_current": 90,
+    "cooldown_max": 600,
+    "meter_kind": "ward",
+    "meter_current": 3,
+    "meter_max": 3,
+    "status_id": "fortress",
+    "status_stacks": 1,
+    "status_remaining": 90,
+    "secondary_id": "",
+    "secondary_value": 0
   },
   "build": {
     "items": ["frozen_burst", "rewind_echo"],

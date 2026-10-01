@@ -16,7 +16,7 @@ func _run() -> void:
 	var combat := _load_json("res://tests/fixtures/ui/hud_combat.json")
 	_suite.assert_true(not combat.is_empty(), "combat fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(combat).ok, "combat fixture validates")
-	_suite.assert_equal(RunViewStateScript.SCHEMA_VERSION, 3, "weapon union uses view-state schema 3")
+	_suite.assert_equal(RunViewStateScript.SCHEMA_VERSION, 4, "character union uses view-state schema 4")
 
 	var low_hp := _load_json("res://tests/fixtures/ui/hud_low_hp.json")
 	_suite.assert_true(not low_hp.is_empty(), "low hp fixture loads")
@@ -31,6 +31,9 @@ func _run() -> void:
 	_assert_weapon_state(combat, "gun", "ammo", "time_load", "combat fixture")
 	_assert_weapon_state(low_hp, "bow", "charge", "charging", "low-hp fixture")
 	_assert_weapon_state(boss, "sword", "counter", "counter_ready", "boss fixture")
+	_assert_character_state(combat, "time_lord", "codex_pages", "primer", "combat fixture")
+	_assert_character_state(low_hp, "void_walker", "void_debt", "corruption", "low-hp fixture")
+	_assert_character_state(boss, "time_guardian", "ward", "fortress", "boss fixture")
 	var staff_state := combat.duplicate(true)
 	staff_state["weapon_state"] = {
 		"weapon_id": "staff",
@@ -54,7 +57,7 @@ func _run() -> void:
 	_suite.assert_true(not RunViewStateScript.validate(expired_staff_sequence).ok, "Staff sequence-ready status requires remaining time")
 
 	_assert_invalid(combat, "schema_version", null, "missing schema version is rejected", true)
-	_assert_invalid(combat, "schema_version", 2, "pre-weapon-union schema is rejected")
+	_assert_invalid(combat, "schema_version", 3, "pre-character-union schema is rejected")
 	_assert_invalid(combat, "schema_version", 99, "unknown schema version is rejected")
 	_assert_invalid(combat, "revision", -1, "negative revision is rejected")
 	_assert_invalid(combat, "run_id", "", "empty run id is rejected")
@@ -227,6 +230,52 @@ func _run() -> void:
 	nested_weapon_union["player"]["weapon_state"] = combat["weapon_state"].duplicate(true)
 	_suite.assert_true(not RunViewStateScript.validate(nested_weapon_union).ok, "weapon union cannot be nested under player")
 
+	var missing_character_state := combat.duplicate(true)
+	missing_character_state.erase("character_state")
+	_suite.assert_true(not RunViewStateScript.validate(missing_character_state).ok, "character state key is required even when M1 uses null")
+
+	var m1_character_state := combat.duplicate(true)
+	m1_character_state["character_state"] = null
+	_suite.assert_true(RunViewStateScript.validate(m1_character_state).ok, "M1 compatibility may omit the Launch character HUD through null")
+
+	var valid_character_states: Array[Dictionary] = [
+		_character_state("wanderer", "waypoint_recall", "path_marks", 3, 5, "anchor", 1, 120, "path_progress", 2),
+		_character_state("time_guardian", "chrono_fortress", "ward", 3, 3, "fortress", 1, 90, "", 0),
+		_character_state("void_walker", "void_devour", "void_debt", 75, 100, "corruption", 1, 30, "corruption_threshold", 75),
+		_character_state("primordial_knight", "realm_cleave", "resonance", 2, 3, "echo_pending", 2, 0, "pending_echoes", 2),
+		_character_state("time_lord", "codex_dominion", "codex_pages", 2, 3, "primer", 1, 299, "primer", "stop"),
+	]
+	for character_state: Dictionary in valid_character_states:
+		var candidate := combat.duplicate(true)
+		candidate["character_state"] = character_state
+		_suite.assert_true(RunViewStateScript.validate(candidate).ok, "%s character state validates" % character_state["character_id"])
+
+	var invalid_character_cases: Array[Dictionary] = [
+		{"field": "character_id", "value": "unknown", "label": "unknown character"},
+		{"field": "meter_kind", "value": "ward", "label": "mismatched character meter"},
+		{"field": "status_id", "value": "fortress", "label": "mismatched character status"},
+		{"field": "meter_current", "value": NAN, "label": "NaN character meter"},
+		{"field": "meter_max", "value": INF, "label": "infinite character maximum"},
+		{"field": "meter_current", "value": -1, "label": "negative character meter"},
+		{"field": "cooldown_current", "value": 721, "label": "character cooldown overflow"},
+		{"field": "status_remaining", "value": -1, "label": "negative character status duration"},
+	]
+	for invalid_case: Dictionary in invalid_character_cases:
+		var invalid_character := combat.duplicate(true)
+		invalid_character["character_state"][str(invalid_case["field"])] = invalid_case["value"]
+		_suite.assert_true(not RunViewStateScript.validate(invalid_character).ok, "%s is rejected" % invalid_case["label"])
+
+	var invalid_primer := combat.duplicate(true)
+	invalid_primer["character_state"]["secondary_value"] = "time_stop"
+	_suite.assert_true(not RunViewStateScript.validate(invalid_primer).ok, "Primer requires a canonical ability id rather than an input action id")
+
+	var legacy_character := combat.duplicate(true)
+	legacy_character["codex_pages"] = 2
+	_suite.assert_true(not RunViewStateScript.validate(legacy_character).ok, "legacy character-specific top-level fields are rejected")
+	var nested_character := combat.duplicate(true)
+	nested_character["player"]["character_state"] = combat["character_state"].duplicate(true)
+	_suite.assert_true(not RunViewStateScript.validate(nested_character).ok, "character union cannot be nested under player")
+
 	var room_outside_total := combat.duplicate(true)
 	room_outside_total["room"]["index"] = 6
 	_suite.assert_true(not RunViewStateScript.validate(room_outside_total).ok, "room outside total is rejected")
@@ -305,6 +354,52 @@ func _assert_weapon_state(
 	_suite.assert_equal(weapon.get("weapon_id"), expected_weapon, "%s weapon id is canonical" % label)
 	_suite.assert_equal(weapon.get("meter_kind"), expected_meter, "%s meter kind matches weapon" % label)
 	_suite.assert_equal(weapon.get("status_id"), expected_status, "%s status id is validated" % label)
+
+
+func _assert_character_state(
+	state: Dictionary,
+	expected_character: String,
+	expected_meter: String,
+	expected_status: String,
+	label: String
+) -> void:
+	var character_value: Variant = state.get("character_state")
+	_suite.assert_true(character_value is Dictionary, "%s exposes a character-state union" % label)
+	if not character_value is Dictionary:
+		return
+	var character := character_value as Dictionary
+	_suite.assert_equal(character.get("character_id"), expected_character, "%s character id is canonical" % label)
+	_suite.assert_equal(character.get("meter_kind"), expected_meter, "%s character meter is canonical" % label)
+	_suite.assert_equal(character.get("status_id"), expected_status, "%s character status is canonical" % label)
+
+
+func _character_state(
+	character_id: String,
+	skill_id: String,
+	meter_kind: String,
+	meter_current: Variant,
+	meter_max: Variant,
+	status_id: String,
+	status_stacks: int,
+	status_remaining: Variant,
+	secondary_id: String,
+	secondary_value: Variant
+) -> Dictionary:
+	return {
+		"character_id": character_id,
+		"skill_id": skill_id,
+		"phase": "READY",
+		"cooldown_current": 120,
+		"cooldown_max": 720,
+		"meter_kind": meter_kind,
+		"meter_current": meter_current,
+		"meter_max": meter_max,
+		"status_id": status_id,
+		"status_stacks": status_stacks,
+		"status_remaining": status_remaining,
+		"secondary_id": secondary_id,
+		"secondary_value": secondary_value,
+	}
 
 
 func _load_json(path: String) -> Dictionary:

@@ -22,6 +22,12 @@ const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_id
 @onready var weapon_meter_bar: ProgressBar = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponMeterBar
 @onready var weapon_meter_label: Label = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponMeterLabel
 @onready var weapon_status_label: Label = $HudRoot/SafeArea/HudLayout/WeaponPanel/WeaponContent/WeaponStatusLabel
+@onready var character_panel: PanelContainer = $HudRoot/SafeArea/HudLayout/CharacterPanel
+@onready var character_name_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterNameLabel
+@onready var character_meter_bar: ProgressBar = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterMeterBar
+@onready var character_meter_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterMeterLabel
+@onready var character_status_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterStatusLabel
+@onready var character_cooldown_label: Label = $HudRoot/SafeArea/HudLayout/CharacterPanel/CharacterContent/CharacterCooldownLabel
 @onready var skill_slot_labels: Array[Label] = [
 	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot1Label,
 	$HudRoot/SafeArea/HudLayout/SkillPanel/SkillContent/AbilitySlot2Label,
@@ -40,6 +46,7 @@ func _ready() -> void:
 	low_hp_indicator.visible = false
 	boss_panel.visible = false
 	pause_indicator.visible = false
+	character_panel.visible = false
 
 
 func _notification(what: int) -> void:
@@ -108,6 +115,7 @@ func _render_state(state: Dictionary) -> void:
 		)
 
 	_render_weapon(state["weapon_state"] as Dictionary)
+	_render_character(state["character_state"])
 
 	var build := state["build"] as Dictionary
 	var archetype := str(build["dominant_archetype"])
@@ -129,6 +137,47 @@ func _format_skill(ability_id: String, cooldown: float) -> String:
 	if cooldown <= 0.0:
 		return "%s  %s" % [label, tr("HUD_WEAPON_READY")]
 	return "%s  %s" % [label, tr("HUD_WEAPON_COOLDOWN_FMT") % cooldown]
+
+
+func _render_character(value: Variant) -> void:
+	character_panel.visible = value is Dictionary
+	if not value is Dictionary:
+		return
+	var character := value as Dictionary
+	var character_id := str(character["character_id"])
+	var meter_kind := str(character["meter_kind"])
+	var meter_current := float(character["meter_current"])
+	var meter_max := float(character["meter_max"])
+	var cooldown_current := float(character["cooldown_current"])
+	character_name_label.text = tr("CHARACTER_%s_NAME" % character_id.to_upper())
+	character_meter_bar.max_value = meter_max
+	character_meter_bar.value = meter_current
+	character_meter_label.text = tr("HUD_CHARACTER_METER_%s_FMT" % meter_kind.to_upper()) % [
+		roundi(meter_current),
+		roundi(meter_max),
+	]
+	character_status_label.text = _format_character_status(character)
+	character_cooldown_label.text = (
+		tr("HUD_CHARACTER_COOLDOWN_READY")
+		if cooldown_current <= 0.0
+		else tr("HUD_CHARACTER_COOLDOWN_FMT") % (cooldown_current / 60.0)
+	)
+
+
+func _format_character_status(character: Dictionary) -> String:
+	var status_id := str(character["status_id"])
+	var status_remaining := float(character["status_remaining"])
+	var status_stacks := int(character["status_stacks"])
+	if status_id == "primer":
+		return tr("HUD_CHARACTER_STATUS_PRIMER_FMT") % [
+			tr(TimeAbilityIdsScript.localization_key(str(character["secondary_value"]))),
+			status_remaining / 60.0,
+		]
+	if status_id == "echo_pending":
+		return tr("HUD_CHARACTER_STATUS_ECHO_PENDING_FMT") % status_stacks
+	if status_id in ["guarding", "devouring", "armored", "ready"]:
+		return tr("HUD_CHARACTER_STATUS_%s" % status_id.to_upper())
+	return tr("HUD_CHARACTER_STATUS_%s_FMT" % status_id.to_upper()) % (status_remaining / 60.0)
 
 
 func _render_weapon(weapon: Dictionary) -> void:
