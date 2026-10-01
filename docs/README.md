@@ -115,6 +115,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P13B Complete Launch Pools Design](superpowers/specs/2026-10-01-plane-walker-p13b-launch-content-design.md) | 精确 `50 / 28 / 18 / 15` 内容目录、效果事务、8 主动道具、Talent 数据权威、UI/Replay 与认证 Gate | Approved / Current authority |
 | [P13B Complete Launch Pools Plan](superpowers/plans/2026-10-01-plane-walker-p13b-launch-content.md) | 内容 Schema、原子效果事务、完整池、主动道具、Talent、UI/Replay、模拟与认证的执行记录 | Completed / Historical |
 | [P13B Complete Launch Pools Evidence](current/2026-10-01-p13b-launch-content-evidence.md) | `50 / 28 / 18 / 15`、`42 / 8`、62 effects、8 主动、15 Talent、Replay/Save、240 samples、150 组合与 168 场景认证 | Verified Locally / Current |
+| [P14 Five-Floor Dungeon Design](superpowers/specs/2026-10-01-plane-walker-p14-five-floor-dungeon-design.md) | 五层确定性路线图、30 房间场景、楼层规则、经济、商人、事件、地图/UI、Save/Replay 权威 | Approved / Current authority |
+| [P14 Five-Floor Dungeon Plan](superpowers/plans/2026-10-01-plane-walker-p14-five-floor-dungeon.md) | P14A–P14H 内容权威、FloorPlan、生命周期、房间流式加载、经济事件、UI、模拟与认证计划 | Active / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |
 | [P11C Bow Candidate Migration Evidence](current/2026-09-29-p11c-bow-candidate-evidence.md) | Bow Candidate 同 token HOLD/release、道具能力迁移、反馈、legacy 时钟退休及 75 场景全量认证 | Verified Locally / Current |
