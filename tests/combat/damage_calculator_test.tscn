@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/combat/damage_calculator_test.gd" id="1_damage_calculator"]
+
+[node name="DamageCalculatorTest" type="Node"]
+script = ExtResource("1_damage_calculator")
