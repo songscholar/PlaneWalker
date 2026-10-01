@@ -18,7 +18,19 @@ const EXPECTED_BASE_CATEGORY_COUNTS := {
 	"blessing": 28,
 	"curse": 24,
 	"talent": 15,
+	"floor_definition": 5,
+	"room_template": 30,
+	"dungeon_event": 18,
+	"merchant_definition": 5,
+	"economy_profile": 1,
 }
+const EXPECTED_FLOOR_IDS: Array[String] = [
+	"floor_ruins_of_remnant",
+	"floor_void_forest",
+	"floor_time_rift",
+	"floor_plane_forge",
+	"floor_throne_of_void",
+]
 
 
 func _ready() -> void:
@@ -28,6 +40,9 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_project_base_pack_v2(suite)
+	_test_p14_specialized_registry_contract(suite)
+	_test_specialized_nested_localization_and_reference_closure(suite)
+	_test_required_specialized_pack_failure_is_atomic(suite)
 	_test_optional_pack_isolation(suite)
 	_test_required_invalid_pack_blocks(suite)
 	_test_project_manifest(suite)
@@ -205,6 +220,223 @@ func _test_project_base_pack_v2(suite) -> void:
 	var active_copy: Array[Dictionary] = registry.active_packs()
 	active_copy[0]["pack_id"] = "mutated"
 	suite.assert_equal(registry.active_packs()[0].get("pack_id"), "base", "active pack getter returns deep copies")
+
+
+func _test_p14_specialized_registry_contract(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		"0.4.0-dev",
+		&"LAUNCH"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "P14 specialized Base Pack activates: %s" % str(report.blocking_errors))
+	if report.has_blocking_errors():
+		return
+	for method_name: String in [
+		"resolve_floor",
+		"resolve_room_template",
+		"resolve_dungeon_event",
+		"resolve_merchant",
+		"resolve_economy_profile",
+		"get_floor_definitions",
+	]:
+		suite.assert_true(registry.has_method(method_name), "Registry exposes %s" % method_name)
+	if not registry.has_method("get_floor_definitions"):
+		return
+	var floors: Array = registry.call("get_floor_definitions", &"LAUNCH")
+	var floor_ids: Array[String] = []
+	for floor_value: Variant in floors:
+		if floor_value is Dictionary:
+			floor_ids.append(str((floor_value as Dictionary).get("id", "")))
+	suite.assert_equal(floor_ids, EXPECTED_FLOOR_IDS, "floor API preserves authoritative order instead of ID order")
+	suite.assert_true(
+		(registry.call("get_floor_definitions", &"M1") as Array).is_empty(),
+		"Launch floors do not widen M1"
+	)
+	if floors.is_empty():
+		return
+	var mutated_floor: Dictionary = (floors[0] as Dictionary).duplicate(true)
+	mutated_floor["merchant_ids"] = ["mutated_merchant"]
+	floors[0] = mutated_floor
+	var fresh_floors: Array = registry.call("get_floor_definitions", &"LAUNCH")
+	suite.assert_true(
+		not ((fresh_floors[0] as Dictionary).get("merchant_ids", []) as Array).has("mutated_merchant"),
+		"ordered floor API returns deep copies"
+	)
+	var resolved_floor: Dictionary = registry.call("resolve_floor", &"floor_ruins_of_remnant")
+	resolved_floor["required_room_budgets"] = {"mutated": 999}
+	suite.assert_true(
+		not (registry.call("resolve_floor", &"floor_ruins_of_remnant") as Dictionary)
+			.get("required_room_budgets", {}).has("mutated"),
+		"specialized resolver returns a deep copy"
+	)
+	suite.assert_equal(
+		(registry.call("resolve_room_template", &"room_combat_pillared_hall") as Dictionary).get("category"),
+		"room_template",
+		"room resolver enforces its specialized category"
+	)
+	suite.assert_equal(
+		(registry.call("resolve_dungeon_event", &"event_chronal_altar") as Dictionary).get("category"),
+		"dungeon_event",
+		"event resolver enforces its specialized category"
+	)
+	suite.assert_equal(
+		(registry.call("resolve_merchant", &"merchant_wayfarer") as Dictionary).get("category"),
+		"merchant_definition",
+		"merchant resolver enforces its specialized category"
+	)
+	suite.assert_equal(
+		(registry.call("resolve_economy_profile", &"launch_economy_v1") as Dictionary).get("category"),
+		"economy_profile",
+		"economy resolver enforces its specialized category"
+	)
+
+
+func _test_specialized_nested_localization_and_reference_closure(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	suite.assert_true(
+		registry.has_method("_nested_localization_error"),
+		"Registry exposes one recursive specialized localization boundary"
+	)
+	if registry.has_method("_nested_localization_error"):
+		var nested_source := {
+			"name_key": "KNOWN_NAME",
+			"options": [
+				{
+					"label_key": "KNOWN_OPTION",
+					"outcomes": {"success": {"description_key": "KNOWN_OUTCOME"}},
+				},
+			],
+		}
+		var known_keys := {
+			"KNOWN_NAME": true,
+			"KNOWN_OPTION": true,
+			"KNOWN_OUTCOME": true,
+		}
+		suite.assert_equal(
+			registry.call("_nested_localization_error", nested_source, known_keys),
+			{},
+			"recursive localization accepts every known nested key"
+		)
+		var missing_keys: Dictionary = known_keys.duplicate(true)
+		missing_keys.erase("KNOWN_OUTCOME")
+		var localization_error: Dictionary = registry.call(
+			"_nested_localization_error",
+			nested_source,
+			missing_keys
+		)
+		suite.assert_equal(
+			localization_error.get("field"),
+			"options[0].outcomes.success.description_key",
+			"recursive localization identifies the exact nested field"
+		)
+		suite.assert_equal(
+			localization_error.get("reason"),
+			"missing_localization",
+			"recursive localization fails closed on missing keys"
+		)
+
+	var report = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		"0.4.0-dev",
+		&"LAUNCH"
+	)
+	if report.has_blocking_errors():
+		return
+	var definitions: Array[Dictionary] = registry.all_content()
+	for index: int in range(definitions.size()):
+		if str(definitions[index].get("id", "")) != "floor_ruins_of_remnant":
+			continue
+		var broken_floor: Dictionary = definitions[index].duplicate(true)
+		broken_floor["economy_profile_id"] = "missing_economy_profile"
+		definitions[index] = broken_floor
+		break
+	var reference_error: Dictionary = registry.call(
+		"_first_reference_error",
+		definitions,
+		_known_ids(definitions)
+	)
+	suite.assert_equal(reference_error.get("content_id"), "floor_ruins_of_remnant", "cross-reference error identifies the floor")
+	suite.assert_equal(reference_error.get("field"), "economy_profile_id", "cross-reference error identifies the specialized field")
+	suite.assert_equal(reference_error.get("reference_id"), "missing_economy_profile", "cross-reference error identifies the missing target")
+
+	definitions = registry.all_content()
+	for index: int in range(definitions.size()):
+		if str(definitions[index].get("id", "")) != "event_sleeping_guardian":
+			continue
+		var broken_event: Dictionary = definitions[index].duplicate(true)
+		var options: Array = broken_event.get("options", [])
+		for option_index: int in range(options.size()):
+			var consequences: Array = (options[option_index] as Dictionary).get("consequences", [])
+			for consequence_index: int in range(consequences.size()):
+				if str((consequences[consequence_index] as Dictionary).get("operation", "")) != "encounter_start":
+					continue
+				(consequences[consequence_index] as Dictionary)["arguments"]["encounter_id"] = "unknown_encounter_adapter"
+				(options[option_index] as Dictionary)["consequences"] = consequences
+		broken_event["options"] = options
+		definitions[index] = broken_event
+		break
+	var nested_reference_error: Dictionary = registry.call(
+		"_first_reference_error",
+		definitions,
+		_known_ids(definitions)
+	)
+	suite.assert_equal(nested_reference_error.get("content_id"), "event_sleeping_guardian", "nested reference error identifies the event")
+	suite.assert_true(
+		str(nested_reference_error.get("field", "")).ends_with("arguments.encounter_id"),
+		"nested reference error identifies the encounter argument"
+	)
+	suite.assert_equal(nested_reference_error.get("reason"), "closed_adapter_id", "nested encounter reference fails closed")
+
+
+func _test_required_specialized_pack_failure_is_atomic(suite) -> void:
+	var source_rows: Variant = _read_json_value("res://data/content_packs/base/content/floors.json")
+	if not source_rows is Array or (source_rows as Array).is_empty():
+		suite.assert_true(false, "atomic failure fixture can read a P14 floor definition")
+		return
+	var valid_floor: Dictionary = ((source_rows as Array)[0] as Dictionary).duplicate(true)
+	var invalid_floor: Dictionary = valid_floor.duplicate(true)
+	invalid_floor["id"] = "floor_atomic_invalid"
+	invalid_floor["schema_version"] = 2
+	var root_path := "user://p14_atomic_registry_pack"
+	var content_path := root_path.path_join("content/floors.json")
+	var localization_path := root_path.path_join("localization/translations.csv")
+	var pack_path := root_path.path_join("pack.json")
+	var absolute_content_dir := ProjectSettings.globalize_path(content_path.get_base_dir())
+	var absolute_localization_dir := ProjectSettings.globalize_path(localization_path.get_base_dir())
+	suite.assert_equal(DirAccess.make_dir_recursive_absolute(absolute_content_dir), OK, "atomic fixture content directory exists")
+	suite.assert_equal(DirAccess.make_dir_recursive_absolute(absolute_localization_dir), OK, "atomic fixture localization directory exists")
+	var content_text := JSON.stringify([valid_floor, invalid_floor], "\t")
+	var localization_text := FileAccess.get_file_as_string("res://data/content_packs/base/localization/translations.csv")
+	suite.assert_true(_write_text(content_path, content_text), "atomic fixture writes specialized definitions")
+	suite.assert_true(_write_text(localization_path, localization_text), "atomic fixture writes localization authority")
+	var pack := {
+		"pack_id": "p14_atomic_failure",
+		"pack_version": "1.0.0",
+		"schema_version": 2,
+		"game_version_range": ">=0.4.0-dev <1.0.0",
+		"dependencies": [],
+		"load_order": 0,
+		"content_manifest": ["content/floors.json"],
+		"localization_sources": ["localization/translations.csv"],
+		"asset_manifest": [],
+		"integrity_hashes": {
+			"content/floors.json": _sha256_text(content_text),
+			"localization/translations.csv": _sha256_text(localization_text),
+		},
+		"entitlement_tag": "",
+	}
+	suite.assert_true(_write_text(pack_path, JSON.stringify(pack, "\t")), "atomic fixture writes its pack descriptor")
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": pack_path, "required": true}],
+		"0.4.0-dev",
+		&"LAUNCH"
+	)
+	suite.assert_true(report.has_blocking_errors(), "one invalid specialized definition blocks a required pack")
+	suite.assert_equal(report.loaded_count, 0, "failed required specialized pack reports no loaded definitions")
+	suite.assert_true(registry.all_content().is_empty(), "failed required specialized pack exposes no partial candidate definitions")
+	suite.assert_true(registry.active_packs().is_empty(), "failed required specialized pack exposes no active descriptor")
 
 
 func _test_identity_effect_boundary(suite) -> void:
@@ -1007,6 +1239,33 @@ func _known_ids(definitions: Array[Dictionary]) -> Dictionary:
 	for definition: Dictionary in definitions:
 		result[str(definition.get("id", ""))] = true
 	return result
+
+
+func _read_json_value(path: String) -> Variant:
+	if not FileAccess.file_exists(path):
+		return null
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return null
+	return JSON.parse_string(file.get_as_text())
+
+
+func _write_text(path: String, value: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(value)
+	file.close()
+	return true
+
+
+func _sha256_text(value: String) -> String:
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK:
+		return ""
+	if context.update(value.to_utf8_buffer()) != OK:
+		return ""
+	return context.finish().hex_encode()
 
 
 func _expected_base_content_total() -> int:

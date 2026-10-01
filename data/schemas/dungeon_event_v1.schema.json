@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/dungeon-event/1.0.0",
+  "title": "Plane Walker Dungeon Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "id", "schema_version", "name_key", "description_key", "prompt_key", "availability", "special", "floor_min", "floor_max", "weight", "repeat_policy", "trigger_predicate_id", "outcome_channel", "options"],
+  "properties": {
+    "category": { "const": "dungeon_event" },
+    "id": { "$ref": "#/$defs/event_id" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "name_key": { "$ref": "#/$defs/localization_key" },
+    "description_key": { "$ref": "#/$defs/localization_key" },
+    "prompt_key": { "$ref": "#/$defs/localization_key" },
+    "availability": { "const": ["LAUNCH", "EXPANSION"] },
+    "special": { "type": "boolean" },
+    "floor_min": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "floor_max": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "weight": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "repeat_policy": { "type": "string", "enum": ["once_per_run", "once_per_floor", "repeatable"] },
+    "trigger_predicate_id": { "type": "string", "enum": ["always", "low_health", "has_curse", "no_curse", "rich", "poor", "perfect_rewind_available", "old_reunion_eligible"] },
+    "outcome_channel": { "const": "event_outcome_v1" },
+    "options": { "type": "array", "minItems": 2, "maxItems": 3, "items": { "$ref": "#/$defs/option" } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "id": { "enum": ["event_chronal_altar", "event_trapped_traveler", "event_cursed_pool", "event_smiths_legacy", "event_memory_mirror", "event_planar_merchant", "event_void_rift", "event_sleeping_guardian", "event_twisted_well", "event_soul_contract", "event_time_paradox", "event_sacrificial_altar", "event_lost_journal", "event_rift_garden", "event_final_choice"] } }, "required": ["id"] },
+      "then": { "properties": { "special": { "const": false } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["event_void_whispers", "event_perfect_rewind", "event_old_reunion"] } }, "required": ["id"] },
+      "then": { "properties": { "special": { "const": true } } }
+    }
+  ],
+  "$defs": {
+    "localization_key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" },
+    "event_id": { "type": "string", "enum": ["event_chronal_altar", "event_trapped_traveler", "event_cursed_pool", "event_smiths_legacy", "event_memory_mirror", "event_planar_merchant", "event_void_rift", "event_sleeping_guardian", "event_twisted_well", "event_soul_contract", "event_time_paradox", "event_sacrificial_altar", "event_lost_journal", "event_rift_garden", "event_final_choice", "event_void_whispers", "event_perfect_rewind", "event_old_reunion"] },
+    "option": { "type": "object", "additionalProperties": false, "required": ["id", "label_key", "outcome_key", "outcome_visibility", "requirements", "consequences"], "properties": {
+      "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+      "label_key": { "$ref": "#/$defs/localization_key" },
+      "outcome_key": { "$ref": "#/$defs/localization_key" },
+      "outcome_visibility": { "type": "string", "enum": ["preview_exact", "preview_category", "hidden_until_commit"] },
+      "requirements": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/requirement" } },
+      "consequences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/consequence" } }
+    } },
+    "requirement": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": {
+      "operation": { "type": "string", "enum": ["resource_min", "health_min", "health_max_ratio", "gold_min", "has_reward_tag", "lacks_curse", "narrative_flag", "floor_index_min"] },
+      "arguments": { "$ref": "#/$defs/arguments" }
+    } },
+    "consequence": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": {
+      "operation": { "type": "string", "enum": ["resource_delta", "health_delta", "reward_draft", "curse_add", "curse_remove", "temporary_modifier", "map_reveal", "encounter_start", "route_skip", "narrative_flag"] },
+      "arguments": { "$ref": "#/$defs/arguments" }
+    } },
+    "arguments": { "type": "object", "minProperties": 1, "propertyNames": { "allOf": [{ "pattern": "^[a-z][a-z0-9_]{0,63}$" }, { "not": { "enum": ["script", "script_path", "callable", "method", "method_name", "handler", "handler_id"] } }] }, "additionalProperties": { "$ref": "#/$defs/scalar" } },
+    "scalar": { "oneOf": [{ "type": "number" }, { "type": "boolean" }, { "type": "string", "minLength": 1, "maxLength": 96, "pattern": "^(?!res://)(?!.*\\.gd$)[A-Za-z0-9_.:-]+$" }] }
+  }
+}

@@ -1,0 +1,253 @@
+[
+  {
+    "category": "merchant_definition",
+    "id": "merchant_wayfarer",
+    "schema_version": 1,
+    "name_key": "MERCHANT_WAYFARER_NAME",
+    "description_key": "MERCHANT_WAYFARER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "floor_min": 1,
+    "floor_max": 5,
+    "portrait_id": "portrait_merchant_wayfarer",
+    "pixel_proxy_id": "pixel_proxy_merchant_wayfarer",
+    "shop_room_template_ids": [
+      "room_shop_wayfarer_tent"
+    ],
+    "inventory_rules": {
+      "offer_count_min": 3,
+      "offer_count_max": 5,
+      "rarity_weights": {
+        "common": 0.45,
+        "uncommon": 0.3,
+        "rare": 0.18,
+        "legendary": 0.06,
+        "unique": 0.01
+      },
+      "content_categories": [
+        "item",
+        "blessing"
+      ],
+      "required_tags": [
+        "launch"
+      ],
+      "allow_duplicates": false
+    },
+    "services": [
+      "purchase_reward",
+      "heal",
+      "reroll",
+      "sell_reward"
+    ],
+    "accepted_costs": [
+      "gold",
+      "reward"
+    ],
+    "economy_profile_id": "launch_economy_v1",
+    "intro_key": "MERCHANT_WAYFARER_INTRO",
+    "farewell_key": "MERCHANT_WAYFARER_FAREWELL"
+  },
+  {
+    "category": "merchant_definition",
+    "id": "merchant_chronomancer",
+    "schema_version": 1,
+    "name_key": "MERCHANT_CHRONOMANCER_NAME",
+    "description_key": "MERCHANT_CHRONOMANCER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "floor_min": 2,
+    "floor_max": 5,
+    "portrait_id": "portrait_merchant_chronomancer",
+    "pixel_proxy_id": "pixel_proxy_merchant_chronomancer",
+    "shop_room_template_ids": [
+      "room_shop_chrono_emporium"
+    ],
+    "inventory_rules": {
+      "offer_count_min": 2,
+      "offer_count_max": 4,
+      "rarity_weights": {
+        "common": 0.25,
+        "uncommon": 0.3,
+        "rare": 0.28,
+        "legendary": 0.14,
+        "unique": 0.03
+      },
+      "content_categories": [
+        "item",
+        "blessing"
+      ],
+      "required_tags": [
+        "time"
+      ],
+      "allow_duplicates": false
+    },
+    "services": [
+      "purchase_reward",
+      "cleanse_curse",
+      "health_trade",
+      "route_reveal"
+    ],
+    "accepted_costs": [
+      "gold",
+      "health",
+      "time_shard"
+    ],
+    "economy_profile_id": "launch_economy_v1",
+    "intro_key": "MERCHANT_CHRONOMANCER_INTRO",
+    "farewell_key": "MERCHANT_CHRONOMANCER_FAREWELL"
+  },
+  {
+    "category": "merchant_definition",
+    "id": "merchant_forgekeeper",
+    "schema_version": 1,
+    "name_key": "MERCHANT_FORGEKEEPER_NAME",
+    "description_key": "MERCHANT_FORGEKEEPER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "floor_min": 3,
+    "floor_max": 5,
+    "portrait_id": "portrait_merchant_forgekeeper",
+    "pixel_proxy_id": "pixel_proxy_merchant_forgekeeper",
+    "shop_room_template_ids": [
+      "room_shop_wayfarer_tent"
+    ],
+    "inventory_rules": {
+      "offer_count_min": 3,
+      "offer_count_max": 4,
+      "rarity_weights": {
+        "common": 0.2,
+        "uncommon": 0.35,
+        "rare": 0.3,
+        "legendary": 0.13,
+        "unique": 0.02
+      },
+      "content_categories": [
+        "item"
+      ],
+      "required_tags": [
+        "weapon"
+      ],
+      "allow_duplicates": false
+    },
+    "services": [
+      "purchase_reward",
+      "weapon_upgrade",
+      "reroll"
+    ],
+    "accepted_costs": [
+      "gold",
+      "forge_essence"
+    ],
+    "economy_profile_id": "launch_economy_v1",
+    "intro_key": "MERCHANT_FORGEKEEPER_INTRO",
+    "farewell_key": "MERCHANT_FORGEKEEPER_FAREWELL"
+  },
+  {
+    "category": "merchant_definition",
+    "id": "merchant_void_broker",
+    "schema_version": 1,
+    "name_key": "MERCHANT_VOID_BROKER_NAME",
+    "description_key": "MERCHANT_VOID_BROKER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "floor_min": 4,
+    "floor_max": 5,
+    "portrait_id": "portrait_merchant_void_broker",
+    "pixel_proxy_id": "pixel_proxy_merchant_void_broker",
+    "shop_room_template_ids": [
+      "room_shop_chrono_emporium"
+    ],
+    "inventory_rules": {
+      "offer_count_min": 2,
+      "offer_count_max": 4,
+      "rarity_weights": {
+        "common": 0.15,
+        "uncommon": 0.25,
+        "rare": 0.32,
+        "legendary": 0.22,
+        "unique": 0.06
+      },
+      "content_categories": [
+        "item",
+        "blessing",
+        "curse"
+      ],
+      "required_tags": [
+        "void"
+      ],
+      "allow_duplicates": false
+    },
+    "services": [
+      "purchase_reward",
+      "cleanse_curse",
+      "health_trade"
+    ],
+    "accepted_costs": [
+      "gold",
+      "health",
+      "reward"
+    ],
+    "economy_profile_id": "launch_economy_v1",
+    "intro_key": "MERCHANT_VOID_BROKER_INTRO",
+    "farewell_key": "MERCHANT_VOID_BROKER_FAREWELL"
+  },
+  {
+    "category": "merchant_definition",
+    "id": "merchant_echo_archivist",
+    "schema_version": 1,
+    "name_key": "MERCHANT_ECHO_ARCHIVIST_NAME",
+    "description_key": "MERCHANT_ECHO_ARCHIVIST_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "floor_min": 2,
+    "floor_max": 5,
+    "portrait_id": "portrait_merchant_echo_archivist",
+    "pixel_proxy_id": "pixel_proxy_merchant_echo_archivist",
+    "shop_room_template_ids": [
+      "room_shop_wayfarer_tent",
+      "room_shop_chrono_emporium"
+    ],
+    "inventory_rules": {
+      "offer_count_min": 3,
+      "offer_count_max": 5,
+      "rarity_weights": {
+        "common": 0.3,
+        "uncommon": 0.3,
+        "rare": 0.25,
+        "legendary": 0.12,
+        "unique": 0.03
+      },
+      "content_categories": [
+        "item",
+        "blessing"
+      ],
+      "required_tags": [
+        "echo"
+      ],
+      "allow_duplicates": false
+    },
+    "services": [
+      "purchase_reward",
+      "route_reveal",
+      "sell_reward"
+    ],
+    "accepted_costs": [
+      "gold",
+      "time_shard",
+      "reward"
+    ],
+    "economy_profile_id": "launch_economy_v1",
+    "intro_key": "MERCHANT_ECHO_ARCHIVIST_INTRO",
+    "farewell_key": "MERCHANT_ECHO_ARCHIVIST_FAREWELL"
+  }
+]

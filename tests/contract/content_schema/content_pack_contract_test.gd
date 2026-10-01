@@ -10,6 +10,13 @@ const VALID_PACK_PATH := "res://tests/fixtures/content_packs/valid_base/pack.jso
 const VALID_ENTRY_PATH := "res://tests/fixtures/content_packs/valid_base/content/items.json"
 const HOSTILE_PACK_PATH := "res://tests/fixtures/content_packs/invalid_script/pack.json"
 const HOSTILE_ENTRY_PATH := "res://tests/fixtures/content_packs/invalid_script/content/items.json"
+const SPECIALIZED_SCHEMAS := {
+	"floor_definition": "res://data/schemas/floor_definition_v1.schema.json",
+	"room_template": "res://data/schemas/room_template_v1.schema.json",
+	"dungeon_event": "res://data/schemas/dungeon_event_v1.schema.json",
+	"merchant_definition": "res://data/schemas/merchant_definition_v1.schema.json",
+	"economy_profile": "res://data/schemas/economy_profile_v1.schema.json",
+}
 
 
 func _ready() -> void:
@@ -22,6 +29,7 @@ func _run() -> void:
 	_test_pack_schema(suite)
 	_test_entry_schema(suite)
 	_test_archetype_profile_entry_schema(suite)
+	_test_registered_specialized_schemas(suite)
 	_test_pack_fixtures(suite)
 	suite.finish(get_tree())
 
@@ -142,6 +150,45 @@ func _test_archetype_profile_entry_schema(suite) -> void:
 		suite.assert_true(
 			conditional_text.contains(field),
 			"generic entry schema scopes profile-only field %s" % field
+		)
+
+
+func _test_registered_specialized_schemas(suite) -> void:
+	var contract_text := _read_text(CONTRACT_PATH, suite).to_lower()
+	var generic_schema: Dictionary = _read_json(ENTRY_SCHEMA_PATH, suite)
+	var generic_categories: Array = generic_schema.get("properties", {}).get("category", {}).get("enum", [])
+	for category: String in SPECIALIZED_SCHEMAS:
+		var schema_path := str(SPECIALIZED_SCHEMAS[category])
+		suite.assert_true(
+			contract_text.contains(category),
+			"content pack contract registers specialized category %s" % category
+		)
+		suite.assert_true(
+			contract_text.contains(schema_path.get_file()),
+			"content pack contract names the %s schema" % category
+		)
+		suite.assert_true(
+			not generic_categories.has(category),
+			"specialized category %s does not widen generic entry v2" % category
+		)
+		var schema: Dictionary = _read_json(schema_path, suite)
+		if schema.is_empty():
+			continue
+		suite.assert_equal(
+			schema.get("additionalProperties"),
+			false,
+			"specialized %s schema rejects unknown root fields" % category
+		)
+		var properties: Dictionary = schema.get("properties", {})
+		suite.assert_equal(
+			properties.get("category", {}).get("const"),
+			category,
+			"specialized %s schema owns its discriminator" % category
+		)
+		suite.assert_equal(
+			properties.get("schema_version", {}).get("const"),
+			1,
+			"specialized %s schema version is explicit" % category
 		)
 
 

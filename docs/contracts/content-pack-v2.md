@@ -5,8 +5,8 @@
 - Authority Level: Versioned content-pack and declarative-effect contract
 - Applies To: Base game, first-party updates, Mods, DLC, localization, approved assets, and deterministic content snapshots
 - Owner: Project integration lead
-- Depends On: `AGENTS.md`, `docs/contracts/save-service-v1.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
-- Last Verified: 2026-09-29
+- Depends On: `AGENTS.md`, `docs/contracts/save-service-v2.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/superpowers/specs/2026-10-01-plane-walker-p14-five-floor-dungeon-design.md`
+- Last Verified: 2026-10-01
 - Schema version: `2`
 
 ## Purpose
@@ -46,6 +46,22 @@ Every file named by the content manifest, localization source list, or asset man
 Entries have a stable ID, category, availability list, localization keys, tags, compatibility constraints, and declarative effects. Unknown root fields are rejected. Cross-references must resolve inside the activated pack set. Localization keys must exist in every required locale before the entry is eligible.
 
 Effects use a closed engine-owned handler catalog. Content may supply scalar parameters only. An arbitrary script path, script resource, callable name, or executable expression is forbidden and blocks the owning required pack or isolates the owning optional pack.
+
+### Registered specialized schemas
+
+The generic `content_entry_v2.schema.json` contract remains frozen. Domains whose nested structure cannot be represented safely as generic scalar effects are registered as specialized manifest rows and dispatched by `ContentRegistry` before generic-entry validation:
+
+| Category discriminator | Schema | Runtime parser |
+|---|---|---|
+| `floor_definition` | `floor_definition_v1.schema.json` | `FloorDefinition` |
+| `room_template` | `room_template_v1.schema.json` | `RoomTemplateDefinition` |
+| `dungeon_event` | `dungeon_event_v1.schema.json` | `DungeonEventDefinition` |
+| `merchant_definition` | `merchant_definition_v1.schema.json` | `MerchantDefinition` |
+| `economy_profile` | `economy_profile_v1.schema.json` | `EconomyProfile` |
+
+Each specialized row declares `category`, stable `id`, `schema_version: 1`, and availability. Its parser rejects unknown root fields and normalizes only closed declarative data. Nested keys whose field name ends in `_key` are localization references and must resolve through the candidate pack's localization sources. IDs in registered reference fields must resolve against the same candidate activated-pack set or the closed P14 encounter-adapter taxonomy.
+
+Specialized rows receive the same integrity hash, pack-level ID uniqueness, dependency isolation, no-executable-content, localization, cross-reference, deterministic activation, and immutable deep-copy guarantees as generic rows. A parser, localization, or reference failure rejects the complete required pack or isolates the complete optional pack; no partial candidate definitions become visible.
 
 ## Localization and assets
 

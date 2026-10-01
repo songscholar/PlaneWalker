@@ -1,0 +1,289 @@
+[
+  {
+    "category": "floor_definition",
+    "id": "floor_ruins_of_remnant",
+    "schema_version": 1,
+    "name_key": "FLOOR_RUINS_OF_REMNANT_NAME",
+    "description_key": "FLOOR_RUINS_OF_REMNANT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "order": 1,
+    "route_room_min": 6,
+    "route_room_max": 6,
+    "graph_node_min": 9,
+    "graph_node_max": 9,
+    "allowed_room_types": [
+      "combat",
+      "elite",
+      "treasure",
+      "shop",
+      "event",
+      "boss",
+      "rest"
+    ],
+    "required_room_budgets": {
+      "shop_or_treasure_min": 1,
+      "shop_min": 0,
+      "treasure_min": 0,
+      "event_min": 1,
+      "rest_min": 1,
+      "boss_count": 1
+    },
+    "environment_rule_id": "rule_crumbling_ground",
+    "encounter_profile_id": "encounter_profile_ruins_adapter_v1",
+    "economy_profile_id": "launch_economy_v1",
+    "merchant_ids": [
+      "merchant_wayfarer",
+      "merchant_chronomancer"
+    ],
+    "event_ids": [
+      "event_chronal_altar",
+      "event_trapped_traveler",
+      "event_cursed_pool",
+      "event_smiths_legacy",
+      "event_memory_mirror",
+      "event_planar_merchant",
+      "event_void_rift",
+      "event_sleeping_guardian"
+    ],
+    "palette_id": "palette_ruins_of_remnant",
+    "music_cue_id": "music_ruins_of_remnant",
+    "boss_room_template_id": "room_boss_ruin_king",
+    "boss_encounter_id": "boss_encounter_ruin_king_adapter_v1"
+  },
+  {
+    "category": "floor_definition",
+    "id": "floor_void_forest",
+    "schema_version": 1,
+    "name_key": "FLOOR_VOID_FOREST_NAME",
+    "description_key": "FLOOR_VOID_FOREST_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "order": 2,
+    "route_room_min": 7,
+    "route_room_max": 7,
+    "graph_node_min": 10,
+    "graph_node_max": 10,
+    "allowed_room_types": [
+      "combat",
+      "elite",
+      "treasure",
+      "shop",
+      "event",
+      "boss",
+      "rest"
+    ],
+    "required_room_budgets": {
+      "shop_or_treasure_min": 1,
+      "shop_min": 0,
+      "treasure_min": 0,
+      "event_min": 1,
+      "rest_min": 1,
+      "boss_count": 1
+    },
+    "environment_rule_id": "rule_void_spores",
+    "encounter_profile_id": "encounter_profile_forest_adapter_v1",
+    "economy_profile_id": "launch_economy_v1",
+    "merchant_ids": [
+      "merchant_wayfarer",
+      "merchant_chronomancer",
+      "merchant_echo_archivist"
+    ],
+    "event_ids": [
+      "event_cursed_pool",
+      "event_smiths_legacy",
+      "event_memory_mirror",
+      "event_planar_merchant",
+      "event_void_rift",
+      "event_sleeping_guardian",
+      "event_twisted_well",
+      "event_soul_contract",
+      "event_time_paradox",
+      "event_sacrificial_altar",
+      "event_old_reunion"
+    ],
+    "palette_id": "palette_void_forest",
+    "music_cue_id": "music_void_forest",
+    "boss_room_template_id": "room_boss_forest_heart",
+    "boss_encounter_id": "boss_encounter_forest_heart_adapter_v1"
+  },
+  {
+    "category": "floor_definition",
+    "id": "floor_time_rift",
+    "schema_version": 1,
+    "name_key": "FLOOR_TIME_RIFT_NAME",
+    "description_key": "FLOOR_TIME_RIFT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "order": 3,
+    "route_room_min": 8,
+    "route_room_max": 8,
+    "graph_node_min": 12,
+    "graph_node_max": 12,
+    "allowed_room_types": [
+      "combat",
+      "elite",
+      "treasure",
+      "shop",
+      "event",
+      "boss",
+      "rest"
+    ],
+    "required_room_budgets": {
+      "shop_or_treasure_min": 1,
+      "shop_min": 0,
+      "treasure_min": 0,
+      "event_min": 2,
+      "rest_min": 1,
+      "boss_count": 1
+    },
+    "environment_rule_id": "rule_temporal_distortion",
+    "encounter_profile_id": "encounter_profile_rift_adapter_v1",
+    "economy_profile_id": "launch_economy_v1",
+    "merchant_ids": [
+      "merchant_wayfarer",
+      "merchant_chronomancer",
+      "merchant_forgekeeper",
+      "merchant_echo_archivist"
+    ],
+    "event_ids": [
+      "event_smiths_legacy",
+      "event_memory_mirror",
+      "event_planar_merchant",
+      "event_void_rift",
+      "event_sleeping_guardian",
+      "event_twisted_well",
+      "event_soul_contract",
+      "event_time_paradox",
+      "event_sacrificial_altar",
+      "event_lost_journal",
+      "event_rift_garden",
+      "event_perfect_rewind",
+      "event_old_reunion"
+    ],
+    "palette_id": "palette_time_rift",
+    "music_cue_id": "music_time_rift",
+    "boss_room_template_id": "room_boss_time_sovereign",
+    "boss_encounter_id": "boss_encounter_time_sovereign_adapter_v1"
+  },
+  {
+    "category": "floor_definition",
+    "id": "floor_plane_forge",
+    "schema_version": 1,
+    "name_key": "FLOOR_PLANE_FORGE_NAME",
+    "description_key": "FLOOR_PLANE_FORGE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "order": 4,
+    "route_room_min": 9,
+    "route_room_max": 9,
+    "graph_node_min": 14,
+    "graph_node_max": 14,
+    "allowed_room_types": [
+      "combat",
+      "elite",
+      "treasure",
+      "shop",
+      "event",
+      "boss",
+      "rest"
+    ],
+    "required_room_budgets": {
+      "shop_or_treasure_min": 0,
+      "shop_min": 1,
+      "treasure_min": 1,
+      "event_min": 1,
+      "rest_min": 1,
+      "boss_count": 1
+    },
+    "environment_rule_id": "rule_forge_vents",
+    "encounter_profile_id": "encounter_profile_forge_adapter_v1",
+    "economy_profile_id": "launch_economy_v1",
+    "merchant_ids": [
+      "merchant_wayfarer",
+      "merchant_forgekeeper",
+      "merchant_void_broker",
+      "merchant_echo_archivist"
+    ],
+    "event_ids": [
+      "event_planar_merchant",
+      "event_void_rift",
+      "event_sleeping_guardian",
+      "event_twisted_well",
+      "event_soul_contract",
+      "event_time_paradox",
+      "event_sacrificial_altar",
+      "event_lost_journal",
+      "event_rift_garden",
+      "event_final_choice",
+      "event_void_whispers",
+      "event_old_reunion"
+    ],
+    "palette_id": "palette_plane_forge",
+    "music_cue_id": "music_plane_forge",
+    "boss_room_template_id": "room_boss_forge_colossus",
+    "boss_encounter_id": "boss_encounter_forge_colossus_adapter_v1"
+  },
+  {
+    "category": "floor_definition",
+    "id": "floor_throne_of_void",
+    "schema_version": 1,
+    "name_key": "FLOOR_THRONE_OF_VOID_NAME",
+    "description_key": "FLOOR_THRONE_OF_VOID_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "order": 5,
+    "route_room_min": 7,
+    "route_room_max": 7,
+    "graph_node_min": 9,
+    "graph_node_max": 9,
+    "allowed_room_types": [
+      "combat",
+      "elite",
+      "treasure",
+      "shop",
+      "event",
+      "boss"
+    ],
+    "required_room_budgets": {
+      "shop_or_treasure_min": 1,
+      "shop_min": 0,
+      "treasure_min": 0,
+      "event_min": 1,
+      "rest_min": 0,
+      "boss_count": 1
+    },
+    "environment_rule_id": "rule_collapsing_plane",
+    "encounter_profile_id": "encounter_profile_throne_adapter_v1",
+    "economy_profile_id": "launch_economy_v1",
+    "merchant_ids": [
+      "merchant_chronomancer",
+      "merchant_void_broker",
+      "merchant_echo_archivist"
+    ],
+    "event_ids": [
+      "event_twisted_well",
+      "event_soul_contract",
+      "event_time_paradox",
+      "event_sacrificial_altar",
+      "event_lost_journal",
+      "event_rift_garden",
+      "event_final_choice",
+      "event_void_whispers"
+    ],
+    "palette_id": "palette_throne_of_void",
+    "music_cue_id": "music_throne_of_void",
+    "boss_room_template_id": "room_boss_void_throne",
+    "boss_encounter_id": "boss_encounter_void_throne_adapter_v1"
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/economy-profile/1.0.0",
+  "title": "Plane Walker Economy Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "id", "schema_version", "name_key", "description_key", "availability", "floor_income_budgets", "base_prices", "rarity_multipliers", "floor_multipliers", "reroll_surcharge", "sell_ratio", "curse_cleanse_cost", "healing_cost", "gold_caps", "overflow_decay", "pity_bounds", "inventory_sizes"],
+  "properties": {
+    "category": { "const": "economy_profile" },
+    "id": { "const": "launch_economy_v1" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "name_key": { "$ref": "#/$defs/localization_key" },
+    "description_key": { "$ref": "#/$defs/localization_key" },
+    "availability": { "const": ["LAUNCH", "EXPANSION"] },
+    "floor_income_budgets": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/floor_income_budget" } },
+    "base_prices": { "type": "object", "additionalProperties": false, "required": ["common_reward", "uncommon_reward", "rare_reward", "legendary_reward", "healing", "curse_cleanse", "reroll", "weapon_upgrade", "route_reveal"], "properties": { "common_reward": { "$ref": "#/$defs/nonnegative_integer" }, "uncommon_reward": { "$ref": "#/$defs/nonnegative_integer" }, "rare_reward": { "$ref": "#/$defs/nonnegative_integer" }, "legendary_reward": { "$ref": "#/$defs/nonnegative_integer" }, "healing": { "$ref": "#/$defs/nonnegative_integer" }, "curse_cleanse": { "$ref": "#/$defs/nonnegative_integer" }, "reroll": { "$ref": "#/$defs/nonnegative_integer" }, "weapon_upgrade": { "$ref": "#/$defs/nonnegative_integer" }, "route_reveal": { "$ref": "#/$defs/nonnegative_integer" } } },
+    "rarity_multipliers": { "type": "object", "additionalProperties": false, "required": ["common", "uncommon", "rare", "legendary", "unique"], "properties": { "common": { "$ref": "#/$defs/positive_number" }, "uncommon": { "$ref": "#/$defs/positive_number" }, "rare": { "$ref": "#/$defs/positive_number" }, "legendary": { "$ref": "#/$defs/positive_number" }, "unique": { "$ref": "#/$defs/positive_number" } } },
+    "floor_multipliers": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/positive_number" } },
+    "reroll_surcharge": { "type": "object", "additionalProperties": false, "required": ["base_price", "increment", "maximum_rerolls"], "properties": { "base_price": { "$ref": "#/$defs/nonnegative_integer" }, "increment": { "type": "integer", "minimum": 1 }, "maximum_rerolls": { "type": "integer", "minimum": 1, "maximum": 10 } } },
+    "sell_ratio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+    "curse_cleanse_cost": { "$ref": "#/$defs/nonnegative_integer" },
+    "healing_cost": { "$ref": "#/$defs/nonnegative_integer" },
+    "gold_caps": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "type": "integer", "minimum": 1 } },
+    "overflow_decay": { "type": "number", "minimum": 0, "maximum": 1 },
+    "pity_bounds": { "type": "object", "additionalProperties": false, "required": ["rare_offer_min", "rare_offer_max"], "properties": { "rare_offer_min": { "type": "integer", "minimum": 1 }, "rare_offer_max": { "type": "integer", "minimum": 1 } } },
+    "inventory_sizes": { "type": "object", "additionalProperties": false, "required": ["standard_min", "standard_max", "premium_min", "premium_max"], "properties": { "standard_min": { "type": "integer", "minimum": 1, "maximum": 8 }, "standard_max": { "type": "integer", "minimum": 1, "maximum": 8 }, "premium_min": { "type": "integer", "minimum": 1, "maximum": 8 }, "premium_max": { "type": "integer", "minimum": 1, "maximum": 8 } } }
+  },
+  "$defs": {
+    "localization_key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" },
+    "nonnegative_integer": { "type": "integer", "minimum": 0 },
+    "positive_number": { "type": "number", "exclusiveMinimum": 0 },
+    "floor_income_budget": { "type": "object", "additionalProperties": false, "required": ["floor_index", "earned_min", "earned_max", "spend_min", "spend_max", "remainder_min", "remainder_max"], "properties": { "floor_index": { "type": "integer", "minimum": 1, "maximum": 5 }, "earned_min": { "$ref": "#/$defs/nonnegative_integer" }, "earned_max": { "$ref": "#/$defs/nonnegative_integer" }, "spend_min": { "$ref": "#/$defs/nonnegative_integer" }, "spend_max": { "$ref": "#/$defs/nonnegative_integer" }, "remainder_min": { "$ref": "#/$defs/nonnegative_integer" }, "remainder_max": { "$ref": "#/$defs/nonnegative_integer" } } }
+  }
+}

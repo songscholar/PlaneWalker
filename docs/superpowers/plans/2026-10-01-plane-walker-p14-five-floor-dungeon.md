@@ -67,7 +67,7 @@
 - Consumes: exact IDs, counts, bounds, and closed consequence/merchant/economy operations from the approved P14 design.
 - Produces: normalized parsers with `configure(source: Dictionary) -> Dictionary`, immutable `snapshot() -> Dictionary`, ContentRegistry lookup methods `resolve_floor`, `resolve_room_template`, `resolve_dungeon_event`, `resolve_merchant`, and `resolve_economy_profile`, plus ordered `get_floor_definitions(availability)`.
 
-- [ ] **Step 1: Write failing exact-count, exact-ID, schema, and cross-reference tests**
+- [x] **Step 1: Write failing exact-count, exact-ID, schema, and cross-reference tests**
 
 Add exact assertions:
 
@@ -88,7 +88,7 @@ suite.assert_equal(economy_profiles.map(func(row): return row["id"]), ["launch_e
 
 Mutation tests reject unknown root fields, duplicate IDs, missing or nested localization, invalid floor order, unsupported room type, scene paths outside `res://data/content_packs/base/assets/rooms/launch/`, missing anchors, incompatible floor/rule references, invalid route bounds, invalid merchant services, negative prices, executable strings, unknown event requirement/consequence operations, non-scalar arguments, missing option requirements, parser state retained after a failed reconfiguration, and manifest hash drift. Resolver tests freeze `15` manifest files, `152` generic definitions, `59` specialized definitions, and `211` total definitions.
 
-- [ ] **Step 2: Run RED for each independent filter**
+- [x] **Step 2: Run RED for each independent filter**
 
 ```bash
 ./tools/run_tests.sh --filter p14_dungeon_content_contract
@@ -103,7 +103,7 @@ bash tools/test_ci_contract.sh
 
 Expected: P14 tests fail because schemas, content, parsers, and Registry routes do not exist; pre-existing contracts remain green.
 
-- [ ] **Step 3: Implement closed normalized parsers and Registry routing**
+- [x] **Step 3: Implement closed normalized parsers and Registry routing**
 
 Every parser follows one shape:
 
@@ -130,7 +130,7 @@ func snapshot() -> Dictionary:
 
 `docs/contracts/content-pack-v2.md` records registered specialized schemas as legal manifest rows with the same integrity, isolation, localization, no-executable-content, and activation guarantees. P14 encounter references validate against the exact adapter taxonomy in the design until P15 supplies real behavior definitions.
 
-- [ ] **Step 4: Author exact content, localization, and integrity hashes**
+- [x] **Step 4: Author exact content, localization, and integrity hashes**
 
 Populate the exact catalogs from the P14 design. Event consequences use only the closed operations:
 
@@ -148,7 +148,7 @@ health_trade | route_reveal | sell_reward
 
 Add every name, description, option, outcome, rule, merchant, service, floor, and room key to both localization catalogs, then refresh the Base Pack manifest hashes.
 
-- [ ] **Step 5: Run GREEN, review, and commit**
+- [x] **Step 5: Run GREEN, review, and commit**
 
 ```bash
 ./tools/run_tests.sh --filter p14_dungeon_content_contract

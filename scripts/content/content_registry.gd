@@ -10,6 +10,11 @@ const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/
 const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
 const ActiveItemDefinitionScript := preload("res://scripts/items/active_item_definition.gd")
 const LaunchPoolCatalogScript := preload("res://scripts/content/launch_pool_catalog.gd")
+const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
+const RoomTemplateDefinitionScript := preload("res://scripts/dungeon/room_template_definition.gd")
+const DungeonEventDefinitionScript := preload("res://scripts/dungeon/dungeon_event_definition.gd")
+const MerchantDefinitionScript := preload("res://scripts/dungeon/merchant_definition.gd")
+const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -190,6 +195,34 @@ const ARCHETYPE_PROFILE_ONLY_FIELDS: Array[String] = [
 	"risk_min",
 	"boss_conversion_id",
 	"boss_response_key",
+]
+const SPECIALIZED_CATEGORIES: Array[String] = [
+	"floor_definition",
+	"room_template",
+	"dungeon_event",
+	"merchant_definition",
+	"economy_profile",
+]
+const P14_ENVIRONMENT_RULE_IDS: Array[String] = [
+	"rule_crumbling_ground",
+	"rule_void_spores",
+	"rule_temporal_distortion",
+	"rule_forge_vents",
+	"rule_collapsing_plane",
+]
+const P14_ENCOUNTER_PROFILE_IDS: Array[String] = [
+	"encounter_profile_ruins_adapter_v1",
+	"encounter_profile_forest_adapter_v1",
+	"encounter_profile_rift_adapter_v1",
+	"encounter_profile_forge_adapter_v1",
+	"encounter_profile_throne_adapter_v1",
+]
+const P14_BOSS_ENCOUNTER_IDS: Array[String] = [
+	"boss_encounter_ruin_king_adapter_v1",
+	"boss_encounter_forest_heart_adapter_v1",
+	"boss_encounter_time_sovereign_adapter_v1",
+	"boss_encounter_forge_colossus_adapter_v1",
+	"boss_encounter_void_throne_adapter_v1",
 ]
 
 var _definitions: Dictionary = {}
@@ -556,6 +589,46 @@ func get_archetype_profiles(milestone: StringName) -> Array[Dictionary]:
 	return profiles
 
 
+func resolve_floor(floor_id: StringName) -> Dictionary:
+	return _resolve_specialized(floor_id, "floor_definition")
+
+
+func resolve_room_template(room_template_id: StringName) -> Dictionary:
+	return _resolve_specialized(room_template_id, "room_template")
+
+
+func resolve_dungeon_event(event_id: StringName) -> Dictionary:
+	return _resolve_specialized(event_id, "dungeon_event")
+
+
+func resolve_merchant(merchant_id: StringName) -> Dictionary:
+	return _resolve_specialized(merchant_id, "merchant_definition")
+
+
+func resolve_economy_profile(economy_profile_id: StringName) -> Dictionary:
+	return _resolve_specialized(economy_profile_id, "economy_profile")
+
+
+func get_floor_definitions(availability: StringName = &"") -> Array[Dictionary]:
+	var floors := get_by_category(&"floor_definition", availability)
+	floors.sort_custom(
+		func(left: Dictionary, right: Dictionary) -> bool:
+			var left_order := int(left.get("order", 0))
+			var right_order := int(right.get("order", 0))
+			if left_order != right_order:
+				return left_order < right_order
+			return str(left.get("id", "")) < str(right.get("id", ""))
+	)
+	return floors
+
+
+func _resolve_specialized(content_id: StringName, expected_category: String) -> Dictionary:
+	var definition := get_content(content_id)
+	if str(definition.get("category", "")) != expected_category:
+		return {}
+	return definition.duplicate(true)
+
+
 func _canonical_weapon_runtime_profile(definition: Dictionary) -> Dictionary:
 	var source: Dictionary = {}
 	for field: String in WEAPON_RUNTIME_PROFILE_FIELDS:
@@ -904,15 +977,67 @@ func _load_pack_definitions(
 			continue
 		for index: int in range((parser.data as Array).size()):
 			var entry_value: Variant = (parser.data as Array)[index]
-			var entry_error := _v2_entry_error(entry_value, effect_catalog, localization_keys)
-			if not entry_error.is_empty():
-				entry_error["pack_id"] = pack_id
-				entry_error["path"] = source_path
-				entry_error["index"] = index
-				errors.append({"message": "Content pack entry failed validation", "context": entry_error})
-				continue
-			var entry: Dictionary = entry_value
-			var content_id := str(entry["id"])
+			var normalized: Dictionary = {}
+			var specialized_result := _specialized_definition_parse_result(
+				entry_value,
+				localization_keys
+			)
+			if bool(specialized_result.get("handled", false)):
+				if not bool(specialized_result.get("ok", false)):
+					var specialized_error: Dictionary = specialized_result.get("context", {}).duplicate(true)
+					specialized_error["pack_id"] = pack_id
+					specialized_error["path"] = source_path
+					specialized_error["index"] = index
+					specialized_error["code"] = str(specialized_result.get("code", &"SPECIALIZED_DEFINITION_INVALID"))
+					errors.append({
+						"message": "Specialized content pack entry failed validation",
+						"context": specialized_error,
+					})
+					continue
+				normalized = (specialized_result.get("definition", {}) as Dictionary).duplicate(true)
+			else:
+				var entry_error := _v2_entry_error(entry_value, effect_catalog, localization_keys)
+				if not entry_error.is_empty():
+					entry_error["pack_id"] = pack_id
+					entry_error["path"] = source_path
+					entry_error["index"] = index
+					errors.append({"message": "Content pack entry failed validation", "context": entry_error})
+					continue
+				var entry: Dictionary = entry_value
+				normalized = entry.duplicate(true)
+				var availability: Array = normalized["availability"]
+				if str(normalized.get("category", "")) != "archetype_profile":
+					availability.sort()
+				normalized["availability"] = availability
+				var tags: Array = normalized["tags"]
+				tags.sort()
+				normalized["tags"] = tags
+				var compatibility: Dictionary = normalized["compatibility"]
+				for compatibility_field: Variant in compatibility.keys():
+					var values: Array = compatibility[compatibility_field]
+					values.sort()
+					compatibility[compatibility_field] = values
+				normalized["compatibility"] = compatibility
+				normalized["effects"] = effect_catalog.normalize_effects(normalized["effects"])
+				normalized["kind"] = str(normalized.get("kind", ""))
+				normalized["archetype"] = str(normalized.get("archetype", ""))
+				normalized["role"] = str(normalized.get("role", "utility"))
+				normalized["rarity"] = str(normalized.get("rarity", "common"))
+				normalized["icon_id"] = str(normalized.get("icon_id", "content_%s" % str(normalized.get("id", ""))))
+				if str(normalized.get("category", "")) == "item":
+					normalized["item_mode"] = str(normalized.get("item_mode", "passive"))
+					if normalized["item_mode"] == "active":
+						var active_parse_result := _active_item_parse_result(normalized)
+						if bool(active_parse_result.get("ok", false)):
+							var active_snapshot: Dictionary = active_parse_result.get("snapshot", {})
+							for active_field: String in [
+								"active_handler_id", "cooldown_frames", "active_parameters",
+							]:
+								normalized[active_field] = active_snapshot[active_field]
+				var references: Array = normalized.get("references", [])
+				references.sort()
+				normalized["references"] = references
+			var content_id := str(normalized.get("id", ""))
 			if pack_ids.has(content_id):
 				errors.append({
 					"message": "Duplicate content id inside pack",
@@ -920,39 +1045,6 @@ func _load_pack_definitions(
 				})
 				continue
 			pack_ids[content_id] = true
-			var normalized := entry.duplicate(true)
-			var availability: Array = normalized["availability"]
-			if str(normalized.get("category", "")) != "archetype_profile":
-				availability.sort()
-			normalized["availability"] = availability
-			var tags: Array = normalized["tags"]
-			tags.sort()
-			normalized["tags"] = tags
-			var compatibility: Dictionary = normalized["compatibility"]
-			for compatibility_field: Variant in compatibility.keys():
-				var values: Array = compatibility[compatibility_field]
-				values.sort()
-				compatibility[compatibility_field] = values
-			normalized["compatibility"] = compatibility
-			normalized["effects"] = effect_catalog.normalize_effects(normalized["effects"])
-			normalized["kind"] = str(normalized.get("kind", ""))
-			normalized["archetype"] = str(normalized.get("archetype", ""))
-			normalized["role"] = str(normalized.get("role", "utility"))
-			normalized["rarity"] = str(normalized.get("rarity", "common"))
-			normalized["icon_id"] = str(normalized.get("icon_id", "content_%s" % content_id))
-			if str(normalized.get("category", "")) == "item":
-				normalized["item_mode"] = str(normalized.get("item_mode", "passive"))
-				if normalized["item_mode"] == "active":
-					var active_parse_result := _active_item_parse_result(normalized)
-					if bool(active_parse_result.get("ok", false)):
-						var active_snapshot: Dictionary = active_parse_result.get("snapshot", {})
-						for active_field: String in [
-							"active_handler_id", "cooldown_frames", "active_parameters",
-						]:
-							normalized[active_field] = active_snapshot[active_field]
-			var references: Array = normalized.get("references", [])
-			references.sort()
-			normalized["references"] = references
 			normalized["pack_id"] = pack_id
 			normalized["pack_version"] = pack_version
 			definitions.append(normalized)
@@ -963,6 +1055,95 @@ func _load_pack_definitions(
 			return str(left["id"]) < str(right["id"])
 	)
 	return {"ok": true, "definitions": definitions, "errors": []}
+
+
+func _specialized_definition_parse_result(
+	entry_value: Variant,
+	localization_keys: Dictionary
+) -> Dictionary:
+	if not entry_value is Dictionary:
+		return {"handled": false, "ok": false, "definition": {}, "context": {}}
+	var entry: Dictionary = entry_value
+	var category := str(entry.get("category", ""))
+	if not SPECIALIZED_CATEGORIES.has(category):
+		return {"handled": false, "ok": false, "definition": {}, "context": {}}
+	var definition_parser: RefCounted
+	match category:
+		"floor_definition":
+			definition_parser = FloorDefinitionScript.new()
+		"room_template":
+			definition_parser = RoomTemplateDefinitionScript.new()
+		"dungeon_event":
+			definition_parser = DungeonEventDefinitionScript.new()
+		"merchant_definition":
+			definition_parser = MerchantDefinitionScript.new()
+		"economy_profile":
+			definition_parser = EconomyProfileScript.new()
+		_:
+			return {
+				"handled": true,
+				"ok": false,
+				"code": &"SPECIALIZED_CATEGORY_UNREGISTERED",
+				"definition": {},
+				"context": {"field": "category", "reason": "unregistered"},
+			}
+	var result: Dictionary = definition_parser.call("configure", entry)
+	if not bool(result.get("ok", false)):
+		return {
+			"handled": true,
+			"ok": false,
+			"code": result.get("code", &"SPECIALIZED_DEFINITION_INVALID"),
+			"definition": {},
+			"context": (result.get("context", {}) as Dictionary).duplicate(true),
+		}
+	var definition: Dictionary = (result.get("definition", {}) as Dictionary).duplicate(true)
+	if definition.is_empty():
+		definition = (definition_parser.call("snapshot") as Dictionary).duplicate(true)
+	var localization_error := _nested_localization_error(definition, localization_keys)
+	if not localization_error.is_empty():
+		return {
+			"handled": true,
+			"ok": false,
+			"code": &"SPECIALIZED_LOCALIZATION_INVALID",
+			"definition": {},
+			"context": localization_error,
+		}
+	return {
+		"handled": true,
+		"ok": true,
+		"code": &"OK",
+		"definition": definition.duplicate(true),
+		"context": {},
+	}
+
+
+func _nested_localization_error(
+	value: Variant,
+	localization_keys: Dictionary,
+	field_path: String = ""
+) -> Dictionary:
+	if value is Dictionary:
+		var dictionary: Dictionary = value
+		for key_value: Variant in dictionary.keys():
+			var key := str(key_value)
+			var child_path := key if field_path.is_empty() else "%s.%s" % [field_path, key]
+			var child_value: Variant = dictionary[key_value]
+			if key.ends_with("_key"):
+				if not _matches(LOCALIZATION_KEY_PATTERN, child_value):
+					return {"field": child_path, "reason": "invalid_localization", "key": child_value}
+				if not localization_keys.has(str(child_value)):
+					return {"field": child_path, "reason": "missing_localization", "key": child_value}
+			var child_error := _nested_localization_error(child_value, localization_keys, child_path)
+			if not child_error.is_empty():
+				return child_error
+	elif value is Array:
+		var values: Array = value
+		for index: int in range(values.size()):
+			var child_path := "[%d]" % index if field_path.is_empty() else "%s[%d]" % [field_path, index]
+			var child_error := _nested_localization_error(values[index], localization_keys, child_path)
+			if not child_error.is_empty():
+				return child_error
+	return {}
 
 
 func _v2_entry_error(
@@ -1276,6 +1457,12 @@ func _first_reference_error(
 		definitions_by_id[str(existing_id)] = _definitions[existing_id]
 	for definition: Dictionary in pack_definitions:
 		definitions_by_id[str(definition["id"])] = definition
+	var specialized_reference_error := _first_specialized_reference_error(
+		pack_definitions,
+		definitions_by_id
+	)
+	if not specialized_reference_error.is_empty():
+		return specialized_reference_error
 	var profiles_by_archetype: Dictionary = {}
 	for definition_value: Variant in definitions_by_id.values():
 		if not definition_value is Dictionary:
@@ -1380,6 +1567,204 @@ func _first_reference_error(
 						"reference_id": talent_id,
 						"reason": "talent_character_mismatch",
 					}
+	return {}
+
+
+func _first_specialized_reference_error(
+	pack_definitions: Array[Dictionary],
+	definitions_by_id: Dictionary
+) -> Dictionary:
+	for definition: Dictionary in pack_definitions:
+		var category := str(definition.get("category", ""))
+		if not SPECIALIZED_CATEGORIES.has(category):
+			continue
+		var reference_error: Dictionary = {}
+		match category:
+			"floor_definition":
+				reference_error = _specialized_reference_field_error(
+					definition,
+					"economy_profile_id",
+					"economy_profile",
+					definitions_by_id
+				)
+				if reference_error.is_empty():
+					reference_error = _specialized_reference_field_error(
+						definition,
+						"merchant_ids",
+						"merchant_definition",
+						definitions_by_id
+					)
+				if reference_error.is_empty():
+					reference_error = _specialized_reference_field_error(
+						definition,
+						"event_ids",
+						"dungeon_event",
+						definitions_by_id
+					)
+				if reference_error.is_empty():
+					reference_error = _specialized_reference_field_error(
+						definition,
+						"boss_room_template_id",
+						"room_template",
+						definitions_by_id
+					)
+				if reference_error.is_empty():
+					reference_error = _closed_specialized_id_error(
+						definition,
+						"environment_rule_id",
+						P14_ENVIRONMENT_RULE_IDS
+					)
+				if reference_error.is_empty():
+					reference_error = _closed_specialized_id_error(
+						definition,
+						"encounter_profile_id",
+						P14_ENCOUNTER_PROFILE_IDS
+					)
+				if reference_error.is_empty():
+					reference_error = _closed_specialized_id_error(
+						definition,
+						"boss_encounter_id",
+						P14_BOSS_ENCOUNTER_IDS
+					)
+			"room_template":
+				for floor_field: String in ["floor_ids", "eligible_floor_ids"]:
+					if not reference_error.is_empty() or not definition.has(floor_field):
+						continue
+					reference_error = _specialized_reference_field_error(
+						definition,
+						floor_field,
+						"floor_definition",
+						definitions_by_id
+					)
+				for rule_field: String in ["environment_rule_ids", "supported_environment_rule_ids"]:
+					if not reference_error.is_empty() or not definition.has(rule_field):
+						continue
+					reference_error = _closed_specialized_id_error(
+						definition,
+						rule_field,
+						P14_ENVIRONMENT_RULE_IDS
+					)
+			"dungeon_event", "merchant_definition":
+				for floor_field: String in ["floor_ids", "eligible_floor_ids"]:
+					if not reference_error.is_empty() or not definition.has(floor_field):
+						continue
+					reference_error = _specialized_reference_field_error(
+						definition,
+						floor_field,
+						"floor_definition",
+						definitions_by_id
+					)
+				if reference_error.is_empty() and definition.has("economy_profile_id"):
+					reference_error = _specialized_reference_field_error(
+						definition,
+						"economy_profile_id",
+						"economy_profile",
+						definitions_by_id
+					)
+				if reference_error.is_empty() and definition.has("shop_room_template_ids"):
+					reference_error = _specialized_reference_field_error(
+						definition,
+						"shop_room_template_ids",
+						"room_template",
+						definitions_by_id
+					)
+				if reference_error.is_empty() and category == "dungeon_event":
+					reference_error = _dungeon_event_reference_error(definition)
+		if not reference_error.is_empty():
+			return reference_error
+	return {}
+
+
+func _dungeon_event_reference_error(definition: Dictionary) -> Dictionary:
+	var allowed_encounters: Array[String] = []
+	allowed_encounters.append_array(P14_ENCOUNTER_PROFILE_IDS)
+	allowed_encounters.append_array(P14_BOSS_ENCOUNTER_IDS)
+	var options: Array = definition.get("options", [])
+	for option_index: int in range(options.size()):
+		if not options[option_index] is Dictionary:
+			continue
+		var consequences: Array = (options[option_index] as Dictionary).get("consequences", [])
+		for consequence_index: int in range(consequences.size()):
+			if not consequences[consequence_index] is Dictionary:
+				continue
+			var consequence: Dictionary = consequences[consequence_index]
+			if str(consequence.get("operation", "")) != "encounter_start":
+				continue
+			var encounter_id := str(consequence.get("arguments", {}).get("encounter_id", ""))
+			if allowed_encounters.has(encounter_id):
+				continue
+			return {
+				"content_id": str(definition.get("id", "")),
+				"field": "options[%d].consequences[%d].arguments.encounter_id" % [
+					option_index,
+					consequence_index,
+				],
+				"reference_id": encounter_id,
+				"reason": "closed_adapter_id",
+			}
+	return {}
+
+
+func _specialized_reference_field_error(
+	definition: Dictionary,
+	field: String,
+	expected_category: String,
+	definitions_by_id: Dictionary
+) -> Dictionary:
+	if not definition.has(field):
+		return {}
+	var reference_values: Array = (
+		(definition[field] as Array).duplicate()
+		if definition[field] is Array
+		else [definition[field]]
+	)
+	for reference_value: Variant in reference_values:
+		var reference_id := str(reference_value)
+		var target_value: Variant = definitions_by_id.get(reference_id)
+		if (
+			not target_value is Dictionary
+			or str((target_value as Dictionary).get("category", "")) != expected_category
+		):
+			return {
+				"content_id": str(definition.get("id", "")),
+				"field": field,
+				"reference_id": reference_id,
+				"reason": "specialized_reference_category",
+			}
+		for milestone_value: Variant in definition.get("availability", []):
+			if not (target_value as Dictionary).get("availability", []).has(str(milestone_value)):
+				return {
+					"content_id": str(definition.get("id", "")),
+					"field": field,
+					"reference_id": reference_id,
+					"reason": "availability_widening",
+					"milestone": str(milestone_value),
+				}
+	return {}
+
+
+func _closed_specialized_id_error(
+	definition: Dictionary,
+	field: String,
+	allowed_ids: Array[String]
+) -> Dictionary:
+	if not definition.has(field):
+		return {}
+	var reference_values: Array = (
+		(definition[field] as Array).duplicate()
+		if definition[field] is Array
+		else [definition[field]]
+	)
+	for reference_value: Variant in reference_values:
+		var reference_id := str(reference_value)
+		if allowed_ids.has(reference_id):
+			continue
+		return {
+			"content_id": str(definition.get("id", "")),
+			"field": field,
+			"reference_id": reference_id,
+			"reason": "closed_adapter_id",
+		}
 	return {}
 
 

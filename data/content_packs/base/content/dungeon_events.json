@@ -1,0 +1,1256 @@
+[
+  {
+    "category": "dungeon_event",
+    "id": "event_chronal_altar",
+    "schema_version": 1,
+    "name_key": "EVENT_CHRONAL_ALTAR_NAME",
+    "description_key": "EVENT_CHRONAL_ALTAR_DESC",
+    "prompt_key": "EVENT_CHRONAL_ALTAR_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 5,
+    "weight": 10,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_CHRONAL_ALTAR_OPTION_COMMIT",
+        "outcome_key": "EVENT_CHRONAL_ALTAR_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "chronal_grace",
+              "room_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_CHRONAL_ALTAR_OPTION_DECLINE",
+        "outcome_key": "EVENT_CHRONAL_ALTAR_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_chronal_altar",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_trapped_traveler",
+    "schema_version": 1,
+    "name_key": "EVENT_TRAPPED_TRAVELER_NAME",
+    "description_key": "EVENT_TRAPPED_TRAVELER_DESC",
+    "prompt_key": "EVENT_TRAPPED_TRAVELER_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 4,
+    "weight": 10,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_TRAPPED_TRAVELER_OPTION_COMMIT",
+        "outcome_key": "EVENT_TRAPPED_TRAVELER_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "blessing",
+              "choices": 2
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_TRAPPED_TRAVELER_OPTION_DECLINE",
+        "outcome_key": "EVENT_TRAPPED_TRAVELER_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_trapped_traveler",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_cursed_pool",
+    "schema_version": 1,
+    "name_key": "EVENT_CURSED_POOL_NAME",
+    "description_key": "EVENT_CURSED_POOL_DESC",
+    "prompt_key": "EVENT_CURSED_POOL_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 5,
+    "weight": 8,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "no_curse",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_CURSED_POOL_OPTION_COMMIT",
+        "outcome_key": "EVENT_CURSED_POOL_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "curse_add",
+            "arguments": {
+              "curse_id": "curse_pool_mark"
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_CURSED_POOL_OPTION_DECLINE",
+        "outcome_key": "EVENT_CURSED_POOL_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_cursed_pool",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_smiths_legacy",
+    "schema_version": 1,
+    "name_key": "EVENT_SMITHS_LEGACY_NAME",
+    "description_key": "EVENT_SMITHS_LEGACY_DESC",
+    "prompt_key": "EVENT_SMITHS_LEGACY_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 5,
+    "weight": 9,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_SMITHS_LEGACY_OPTION_COMMIT",
+        "outcome_key": "EVENT_SMITHS_LEGACY_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "weapon_temper",
+              "room_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_SMITHS_LEGACY_OPTION_DECLINE",
+        "outcome_key": "EVENT_SMITHS_LEGACY_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_smiths_legacy",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_memory_mirror",
+    "schema_version": 1,
+    "name_key": "EVENT_MEMORY_MIRROR_NAME",
+    "description_key": "EVENT_MEMORY_MIRROR_DESC",
+    "prompt_key": "EVENT_MEMORY_MIRROR_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 8,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_MEMORY_MIRROR_OPTION_COMMIT",
+        "outcome_key": "EVENT_MEMORY_MIRROR_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "past_strength",
+              "attack_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_MEMORY_MIRROR_OPTION_DECLINE",
+        "outcome_key": "EVENT_MEMORY_MIRROR_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_memory_mirror",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_planar_merchant",
+    "schema_version": 1,
+    "name_key": "EVENT_PLANAR_MERCHANT_NAME",
+    "description_key": "EVENT_PLANAR_MERCHANT_DESC",
+    "prompt_key": "EVENT_PLANAR_MERCHANT_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 8,
+    "repeat_policy": "once_per_floor",
+    "trigger_predicate_id": "rich",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_PLANAR_MERCHANT_OPTION_COMMIT",
+        "outcome_key": "EVENT_PLANAR_MERCHANT_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "resource_delta",
+            "arguments": {
+              "resource": "gold",
+              "amount": -80
+            }
+          },
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "item",
+              "choices": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_PLANAR_MERCHANT_OPTION_DECLINE",
+        "outcome_key": "EVENT_PLANAR_MERCHANT_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_planar_merchant",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_void_rift",
+    "schema_version": 1,
+    "name_key": "EVENT_VOID_RIFT_NAME",
+    "description_key": "EVENT_VOID_RIFT_DESC",
+    "prompt_key": "EVENT_VOID_RIFT_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 7,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_VOID_RIFT_OPTION_COMMIT",
+        "outcome_key": "EVENT_VOID_RIFT_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "route_skip",
+            "arguments": {
+              "rooms": 2
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_VOID_RIFT_OPTION_DECLINE",
+        "outcome_key": "EVENT_VOID_RIFT_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_void_rift",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_sleeping_guardian",
+    "schema_version": 1,
+    "name_key": "EVENT_SLEEPING_GUARDIAN_NAME",
+    "description_key": "EVENT_SLEEPING_GUARDIAN_DESC",
+    "prompt_key": "EVENT_SLEEPING_GUARDIAN_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 4,
+    "weight": 8,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_SLEEPING_GUARDIAN_OPTION_COMMIT",
+        "outcome_key": "EVENT_SLEEPING_GUARDIAN_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "encounter_start",
+            "arguments": {
+              "encounter_id": "encounter_profile_ruins_adapter_v1"
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_SLEEPING_GUARDIAN_OPTION_DECLINE",
+        "outcome_key": "EVENT_SLEEPING_GUARDIAN_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_sleeping_guardian",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_twisted_well",
+    "schema_version": 1,
+    "name_key": "EVENT_TWISTED_WELL_NAME",
+    "description_key": "EVENT_TWISTED_WELL_DESC",
+    "prompt_key": "EVENT_TWISTED_WELL_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 5,
+    "weight": 9,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_TWISTED_WELL_OPTION_COMMIT",
+        "outcome_key": "EVENT_TWISTED_WELL_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "resource_delta",
+            "arguments": {
+              "resource": "gold",
+              "amount": -30
+            }
+          },
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "blessing",
+              "choices": 2
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_TWISTED_WELL_OPTION_DECLINE",
+        "outcome_key": "EVENT_TWISTED_WELL_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_twisted_well",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_soul_contract",
+    "schema_version": 1,
+    "name_key": "EVENT_SOUL_CONTRACT_NAME",
+    "description_key": "EVENT_SOUL_CONTRACT_DESC",
+    "prompt_key": "EVENT_SOUL_CONTRACT_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 7,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "low_health",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_SOUL_CONTRACT_OPTION_COMMIT",
+        "outcome_key": "EVENT_SOUL_CONTRACT_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "health_delta",
+            "arguments": {
+              "ratio": -0.25
+            }
+          },
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "rare_item",
+              "choices": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_SOUL_CONTRACT_OPTION_DECLINE",
+        "outcome_key": "EVENT_SOUL_CONTRACT_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_soul_contract",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_time_paradox",
+    "schema_version": 1,
+    "name_key": "EVENT_TIME_PARADOX_NAME",
+    "description_key": "EVENT_TIME_PARADOX_DESC",
+    "prompt_key": "EVENT_TIME_PARADOX_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 3,
+    "floor_max": 5,
+    "weight": 6,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_TIME_PARADOX_OPTION_COMMIT",
+        "outcome_key": "EVENT_TIME_PARADOX_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 3
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "paradox_echo",
+              "room_count": 2
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_TIME_PARADOX_OPTION_DECLINE",
+        "outcome_key": "EVENT_TIME_PARADOX_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 3
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_time_paradox",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_sacrificial_altar",
+    "schema_version": 1,
+    "name_key": "EVENT_SACRIFICIAL_ALTAR_NAME",
+    "description_key": "EVENT_SACRIFICIAL_ALTAR_DESC",
+    "prompt_key": "EVENT_SACRIFICIAL_ALTAR_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 8,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_SACRIFICIAL_ALTAR_OPTION_COMMIT",
+        "outcome_key": "EVENT_SACRIFICIAL_ALTAR_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "health_delta",
+            "arguments": {
+              "amount": -20
+            }
+          },
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "blessing",
+              "choices": 2
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_SACRIFICIAL_ALTAR_OPTION_DECLINE",
+        "outcome_key": "EVENT_SACRIFICIAL_ALTAR_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_sacrificial_altar",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_lost_journal",
+    "schema_version": 1,
+    "name_key": "EVENT_LOST_JOURNAL_NAME",
+    "description_key": "EVENT_LOST_JOURNAL_DESC",
+    "prompt_key": "EVENT_LOST_JOURNAL_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 1,
+    "floor_max": 5,
+    "weight": 9,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_LOST_JOURNAL_OPTION_COMMIT",
+        "outcome_key": "EVENT_LOST_JOURNAL_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "map_reveal",
+            "arguments": {
+              "scope": "floor"
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_LOST_JOURNAL_OPTION_DECLINE",
+        "outcome_key": "EVENT_LOST_JOURNAL_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 1
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_lost_journal",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_rift_garden",
+    "schema_version": 1,
+    "name_key": "EVENT_RIFT_GARDEN_NAME",
+    "description_key": "EVENT_RIFT_GARDEN_DESC",
+    "prompt_key": "EVENT_RIFT_GARDEN_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 8,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "low_health",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_RIFT_GARDEN_OPTION_COMMIT",
+        "outcome_key": "EVENT_RIFT_GARDEN_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "health_delta",
+            "arguments": {
+              "ratio": 0.25
+            }
+          },
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "tranquility",
+              "room_count": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_RIFT_GARDEN_OPTION_DECLINE",
+        "outcome_key": "EVENT_RIFT_GARDEN_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_rift_garden",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_final_choice",
+    "schema_version": 1,
+    "name_key": "EVENT_FINAL_CHOICE_NAME",
+    "description_key": "EVENT_FINAL_CHOICE_DESC",
+    "prompt_key": "EVENT_FINAL_CHOICE_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": false,
+    "floor_min": 5,
+    "floor_max": 5,
+    "weight": 10,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "always",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_FINAL_CHOICE_OPTION_COMMIT",
+        "outcome_key": "EVENT_FINAL_CHOICE_OUTCOME_COMMIT",
+        "outcome_visibility": "preview_category",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 5
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "final_blessing",
+              "choices": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_FINAL_CHOICE_OPTION_DECLINE",
+        "outcome_key": "EVENT_FINAL_CHOICE_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 5
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_final_choice",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_void_whispers",
+    "schema_version": 1,
+    "name_key": "EVENT_VOID_WHISPERS_NAME",
+    "description_key": "EVENT_VOID_WHISPERS_DESC",
+    "prompt_key": "EVENT_VOID_WHISPERS_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": true,
+    "floor_min": 2,
+    "floor_max": 5,
+    "weight": 5,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "has_curse",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_VOID_WHISPERS_OPTION_COMMIT",
+        "outcome_key": "EVENT_VOID_WHISPERS_OUTCOME_COMMIT",
+        "outcome_visibility": "hidden_until_commit",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "curse_remove",
+            "arguments": {
+              "count": 1
+            }
+          },
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "void_bargain",
+              "room_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_VOID_WHISPERS_OPTION_DECLINE",
+        "outcome_key": "EVENT_VOID_WHISPERS_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_void_whispers",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_perfect_rewind",
+    "schema_version": 1,
+    "name_key": "EVENT_PERFECT_REWIND_NAME",
+    "description_key": "EVENT_PERFECT_REWIND_DESC",
+    "prompt_key": "EVENT_PERFECT_REWIND_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": true,
+    "floor_min": 3,
+    "floor_max": 5,
+    "weight": 4,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "perfect_rewind_available",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_PERFECT_REWIND_OPTION_COMMIT",
+        "outcome_key": "EVENT_PERFECT_REWIND_OUTCOME_COMMIT",
+        "outcome_visibility": "hidden_until_commit",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 3
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "perfect_rewind_claimed",
+              "value": true
+            }
+          },
+          {
+            "operation": "reward_draft",
+            "arguments": {
+              "pool": "unique_item",
+              "choices": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_PERFECT_REWIND_OPTION_DECLINE",
+        "outcome_key": "EVENT_PERFECT_REWIND_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 3
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_perfect_rewind",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "dungeon_event",
+    "id": "event_old_reunion",
+    "schema_version": 1,
+    "name_key": "EVENT_OLD_REUNION_NAME",
+    "description_key": "EVENT_OLD_REUNION_DESC",
+    "prompt_key": "EVENT_OLD_REUNION_PROMPT",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "special": true,
+    "floor_min": 2,
+    "floor_max": 4,
+    "weight": 3,
+    "repeat_policy": "once_per_run",
+    "trigger_predicate_id": "old_reunion_eligible",
+    "outcome_channel": "event_outcome_v1",
+    "options": [
+      {
+        "id": "commit",
+        "label_key": "EVENT_OLD_REUNION_OPTION_COMMIT",
+        "outcome_key": "EVENT_OLD_REUNION_OUTCOME_COMMIT",
+        "outcome_visibility": "hidden_until_commit",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "resource_delta",
+            "arguments": {
+              "resource": "time_shard",
+              "amount": -1
+            }
+          },
+          {
+            "operation": "temporary_modifier",
+            "arguments": {
+              "modifier_id": "heroic_guard",
+              "room_count": 5
+            }
+          }
+        ]
+      },
+      {
+        "id": "decline",
+        "label_key": "EVENT_OLD_REUNION_OPTION_DECLINE",
+        "outcome_key": "EVENT_OLD_REUNION_OUTCOME_DECLINE",
+        "outcome_visibility": "preview_exact",
+        "requirements": [
+          {
+            "operation": "floor_index_min",
+            "arguments": {
+              "value": 2
+            }
+          }
+        ],
+        "consequences": [
+          {
+            "operation": "narrative_flag",
+            "arguments": {
+              "flag": "declined_old_reunion",
+              "value": true
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

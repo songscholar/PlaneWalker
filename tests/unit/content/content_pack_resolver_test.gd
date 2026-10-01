@@ -10,6 +10,20 @@ const BAD_DIGEST_PACK_PATH := "res://tests/fixtures/content_packs/bad_digest/pac
 const PROJECT_BASE_PACK_PATH := "res://data/content_packs/base/pack.json"
 const CHAIN_ROOT := "res://tests/fixtures/content_packs/dependency_chain"
 const CYCLE_ROOT := "res://tests/fixtures/content_packs/dependency_cycle"
+const SPECIALIZED_CATEGORY_COUNTS := {
+	"floor_definition": 5,
+	"room_template": 30,
+	"dungeon_event": 18,
+	"merchant_definition": 5,
+	"economy_profile": 1,
+}
+const P14_MANIFEST_PATHS: Array[String] = [
+	"content/floors.json",
+	"content/room_templates.json",
+	"content/dungeon_events.json",
+	"content/merchants.json",
+	"content/economy_profiles.json",
+]
 
 
 func _ready() -> void:
@@ -62,7 +76,10 @@ func _test_project_base_pack(suite) -> void:
 	var descriptor: Dictionary = loaded.get("descriptor", {})
 	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
 	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
-	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 10, "project base pack owns rewards, runtime profiles, and Launch archetypes")
+	var content_manifest: Array = descriptor.get("content_manifest", [])
+	suite.assert_equal(content_manifest.size(), 15, "project base pack owns fifteen generic and specialized content sources")
+	for relative_path: String in P14_MANIFEST_PATHS:
+		suite.assert_true(content_manifest.has(relative_path), "project base pack registers %s" % relative_path)
 	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
 
 	var entries: Array[Dictionary] = []
@@ -78,11 +95,26 @@ func _test_project_base_pack(suite) -> void:
 		for entry_value: Variant in parsed:
 			if entry_value is Dictionary:
 				entries.append((entry_value as Dictionary).duplicate(true))
-	suite.assert_equal(
-		entries.size(),
-		152,
-		"project base pack contains the complete Launch reward pools and eight archetype profiles"
-	)
+	var generic_entries: Array[Dictionary] = []
+	var specialized_entries: Array[Dictionary] = []
+	for entry: Dictionary in entries:
+		if SPECIALIZED_CATEGORY_COUNTS.has(str(entry.get("category", ""))):
+			specialized_entries.append(entry)
+		else:
+			generic_entries.append(entry)
+	suite.assert_equal(entries.size(), 211, "project base pack contains the exact Launch content authority")
+	suite.assert_equal(generic_entries.size(), 152, "generic v2 authority remains frozen at 152 definitions")
+	suite.assert_equal(specialized_entries.size(), 59, "P14 contributes exactly 59 specialized definitions")
+	for category: String in SPECIALIZED_CATEGORY_COUNTS:
+		var category_count := 0
+		for entry: Dictionary in specialized_entries:
+			if str(entry.get("category", "")) == category:
+				category_count += 1
+		suite.assert_equal(
+			category_count,
+			int(SPECIALIZED_CATEGORY_COUNTS[category]),
+			"P14 specialized %s count is exact" % category
+		)
 	var allowed_archetypes: Array[String] = [
 		"",
 		"accelerated_combo",
@@ -95,7 +127,7 @@ func _test_project_base_pack(suite) -> void:
 		"rift_trap",
 	]
 	var archetype_profiles: Array[Dictionary] = []
-	for entry: Dictionary in entries:
+	for entry: Dictionary in generic_entries:
 		for required_field: String in [
 			"id", "category", "availability", "name_key", "description_key",
 			"tags", "compatibility", "effects",

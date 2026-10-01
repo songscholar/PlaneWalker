@@ -1,0 +1,111 @@
+[
+  {
+    "category": "economy_profile",
+    "id": "launch_economy_v1",
+    "schema_version": 1,
+    "name_key": "ECONOMY_LAUNCH_V1_NAME",
+    "description_key": "ECONOMY_LAUNCH_V1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "floor_income_budgets": [
+      {
+        "floor_index": 1,
+        "earned_min": 140,
+        "earned_max": 220,
+        "spend_min": 100,
+        "spend_max": 180,
+        "remainder_min": 20,
+        "remainder_max": 80
+      },
+      {
+        "floor_index": 2,
+        "earned_min": 180,
+        "earned_max": 280,
+        "spend_min": 150,
+        "spend_max": 240,
+        "remainder_min": 20,
+        "remainder_max": 90
+      },
+      {
+        "floor_index": 3,
+        "earned_min": 240,
+        "earned_max": 380,
+        "spend_min": 210,
+        "spend_max": 340,
+        "remainder_min": 20,
+        "remainder_max": 110
+      },
+      {
+        "floor_index": 4,
+        "earned_min": 300,
+        "earned_max": 460,
+        "spend_min": 270,
+        "spend_max": 420,
+        "remainder_min": 20,
+        "remainder_max": 120
+      },
+      {
+        "floor_index": 5,
+        "earned_min": 280,
+        "earned_max": 430,
+        "spend_min": 250,
+        "spend_max": 400,
+        "remainder_min": 0,
+        "remainder_max": 100
+      }
+    ],
+    "base_prices": {
+      "common_reward": 50,
+      "uncommon_reward": 80,
+      "rare_reward": 120,
+      "legendary_reward": 220,
+      "healing": 40,
+      "curse_cleanse": 100,
+      "reroll": 40,
+      "weapon_upgrade": 120,
+      "route_reveal": 60
+    },
+    "rarity_multipliers": {
+      "common": 1,
+      "uncommon": 1.25,
+      "rare": 1.6,
+      "legendary": 2.4,
+      "unique": 3
+    },
+    "floor_multipliers": [
+      1,
+      1.15,
+      1.3,
+      1.45,
+      1.6
+    ],
+    "reroll_surcharge": {
+      "base_price": 40,
+      "increment": 20,
+      "maximum_rerolls": 4
+    },
+    "sell_ratio": 0.4,
+    "curse_cleanse_cost": 100,
+    "healing_cost": 40,
+    "gold_caps": [
+      700,
+      900,
+      1100,
+      1300,
+      1500
+    ],
+    "overflow_decay": 0.5,
+    "pity_bounds": {
+      "rare_offer_min": 3,
+      "rare_offer_max": 6
+    },
+    "inventory_sizes": {
+      "standard_min": 3,
+      "standard_max": 5,
+      "premium_min": 2,
+      "premium_max": 4
+    }
+  }
+]

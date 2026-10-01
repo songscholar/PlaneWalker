@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/room-template/1.0.0",
+  "title": "Plane Walker Room Template v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "id", "schema_version", "name_key", "description_key", "availability", "room_type", "scene_path", "floor_ids", "door_anchors", "camera_bounds", "spawn_anchors", "interaction_anchors", "supported_environment_rule_ids", "accessibility_safe_hazard_zones", "thumbnail_id", "icon_id"],
+  "properties": {
+    "category": { "const": "room_template" },
+    "id": { "$ref": "#/$defs/room_id" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "name_key": { "$ref": "#/$defs/localization_key" },
+    "description_key": { "$ref": "#/$defs/localization_key" },
+    "availability": { "const": ["LAUNCH", "EXPANSION"] },
+    "room_type": { "$ref": "#/$defs/room_type" },
+    "scene_path": { "type": "string", "pattern": "^res://data/content_packs/base/assets/rooms/launch/[a-z0-9_]+\\.tscn$" },
+    "floor_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/floor_id" } },
+    "door_anchors": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/door_anchor" } },
+    "camera_bounds": { "$ref": "#/$defs/rect" },
+    "spawn_anchors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/spawn_anchor" } },
+    "interaction_anchors": { "type": "array", "items": { "$ref": "#/$defs/interaction_anchor" } },
+    "supported_environment_rule_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/environment_rule_id" } },
+    "accessibility_safe_hazard_zones": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/hazard_zone" } },
+    "thumbnail_id": { "$ref": "#/$defs/id" },
+    "icon_id": { "$ref": "#/$defs/id" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "id": { "enum": ["room_combat_pillared_hall", "room_combat_split_chambers", "room_combat_open_field", "room_combat_l_corner", "room_combat_crossroads", "room_combat_high_ground", "room_combat_void_grove", "room_combat_ring", "room_combat_bridge", "room_combat_clockwork"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "combat" } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["room_elite_arena", "room_elite_guard_corridor", "room_elite_altar_defense", "room_elite_trap_arena", "room_elite_twin_hall"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "elite" } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["room_treasure_vault", "room_treasure_wishing_pool", "room_treasure_chronovault"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "treasure" } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["room_shop_wayfarer_tent", "room_shop_chrono_emporium"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "shop" } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["room_event_shrine", "room_event_crossroads", "room_event_mirror_hall"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "event" } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["room_boss_ruin_king", "room_boss_forest_heart", "room_boss_time_sovereign", "room_boss_forge_colossus", "room_boss_void_throne"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "boss" } } }
+    },
+    {
+      "if": { "properties": { "id": { "enum": ["room_rest_campfire", "room_rest_sanctuary"] } }, "required": ["id"] },
+      "then": { "properties": { "room_type": { "const": "rest" } } }
+    },
+    {
+      "if": { "properties": { "floor_ids": { "contains": { "const": "floor_ruins_of_remnant" } } }, "required": ["floor_ids"] },
+      "then": { "properties": { "supported_environment_rule_ids": { "contains": { "const": "rule_crumbling_ground" } } } },
+      "else": { "properties": { "supported_environment_rule_ids": { "not": { "contains": { "const": "rule_crumbling_ground" } } } } }
+    },
+    {
+      "if": { "properties": { "floor_ids": { "contains": { "const": "floor_void_forest" } } }, "required": ["floor_ids"] },
+      "then": { "properties": { "supported_environment_rule_ids": { "contains": { "const": "rule_void_spores" } } } },
+      "else": { "properties": { "supported_environment_rule_ids": { "not": { "contains": { "const": "rule_void_spores" } } } } }
+    },
+    {
+      "if": { "properties": { "floor_ids": { "contains": { "const": "floor_time_rift" } } }, "required": ["floor_ids"] },
+      "then": { "properties": { "supported_environment_rule_ids": { "contains": { "const": "rule_temporal_distortion" } } } },
+      "else": { "properties": { "supported_environment_rule_ids": { "not": { "contains": { "const": "rule_temporal_distortion" } } } } }
+    },
+    {
+      "if": { "properties": { "floor_ids": { "contains": { "const": "floor_plane_forge" } } }, "required": ["floor_ids"] },
+      "then": { "properties": { "supported_environment_rule_ids": { "contains": { "const": "rule_forge_vents" } } } },
+      "else": { "properties": { "supported_environment_rule_ids": { "not": { "contains": { "const": "rule_forge_vents" } } } } }
+    },
+    {
+      "if": { "properties": { "floor_ids": { "contains": { "const": "floor_throne_of_void" } } }, "required": ["floor_ids"] },
+      "then": { "properties": { "supported_environment_rule_ids": { "contains": { "const": "rule_collapsing_plane" } } } },
+      "else": { "properties": { "supported_environment_rule_ids": { "not": { "contains": { "const": "rule_collapsing_plane" } } } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$" },
+    "localization_key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" },
+    "room_id": { "type": "string", "enum": ["room_combat_pillared_hall", "room_combat_split_chambers", "room_combat_open_field", "room_combat_l_corner", "room_combat_crossroads", "room_combat_high_ground", "room_combat_void_grove", "room_combat_ring", "room_combat_bridge", "room_combat_clockwork", "room_elite_arena", "room_elite_guard_corridor", "room_elite_altar_defense", "room_elite_trap_arena", "room_elite_twin_hall", "room_treasure_vault", "room_treasure_wishing_pool", "room_treasure_chronovault", "room_shop_wayfarer_tent", "room_shop_chrono_emporium", "room_event_shrine", "room_event_crossroads", "room_event_mirror_hall", "room_boss_ruin_king", "room_boss_forest_heart", "room_boss_time_sovereign", "room_boss_forge_colossus", "room_boss_void_throne", "room_rest_campfire", "room_rest_sanctuary"] },
+    "room_type": { "type": "string", "enum": ["combat", "elite", "treasure", "shop", "event", "boss", "rest"] },
+    "floor_id": { "type": "string", "enum": ["floor_ruins_of_remnant", "floor_void_forest", "floor_time_rift", "floor_plane_forge", "floor_throne_of_void"] },
+    "environment_rule_id": { "type": "string", "enum": ["rule_crumbling_ground", "rule_void_spores", "rule_temporal_distortion", "rule_forge_vents", "rule_collapsing_plane"] },
+    "vector": { "type": "object", "additionalProperties": false, "required": ["x", "y"], "properties": { "x": { "type": "number" }, "y": { "type": "number" } } },
+    "rect": { "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"], "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 } } },
+    "door_anchor": { "type": "object", "additionalProperties": false, "required": ["id", "direction", "position"], "properties": { "id": { "$ref": "#/$defs/id" }, "direction": { "type": "string", "enum": ["north", "east", "south", "west"] }, "position": { "$ref": "#/$defs/vector" } } },
+    "spawn_anchor": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "position"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "type": "string", "enum": ["player", "enemy", "elite", "boss"] }, "position": { "$ref": "#/$defs/vector" } } },
+    "interaction_anchor": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "position"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "type": "string", "enum": ["treasure", "shop", "event", "rest", "exit"] }, "position": { "$ref": "#/$defs/vector" } } },
+    "hazard_zone": { "type": "object", "additionalProperties": false, "required": ["id", "bounds"], "properties": { "id": { "$ref": "#/$defs/id" }, "bounds": { "$ref": "#/$defs/rect" } } }
+  }
+}

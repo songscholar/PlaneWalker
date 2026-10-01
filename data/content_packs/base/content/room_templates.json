@@ -1,0 +1,2700 @@
+[
+  {
+    "category": "room_template",
+    "id": "room_combat_pillared_hall",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_PILLARED_HALL_NAME",
+    "description_key": "ROOM_COMBAT_PILLARED_HALL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_pillared_hall.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_pillared_hall",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_split_chambers",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_SPLIT_CHAMBERS_NAME",
+    "description_key": "ROOM_COMBAT_SPLIT_CHAMBERS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_split_chambers.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_split_chambers",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_open_field",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_OPEN_FIELD_NAME",
+    "description_key": "ROOM_COMBAT_OPEN_FIELD_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_open_field.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_open_field",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_l_corner",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_L_CORNER_NAME",
+    "description_key": "ROOM_COMBAT_L_CORNER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_l_corner.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_l_corner",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_crossroads",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_CROSSROADS_NAME",
+    "description_key": "ROOM_COMBAT_CROSSROADS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_crossroads.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_crossroads",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_high_ground",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_HIGH_GROUND_NAME",
+    "description_key": "ROOM_COMBAT_HIGH_GROUND_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_high_ground.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_high_ground",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_void_grove",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_VOID_GROVE_NAME",
+    "description_key": "ROOM_COMBAT_VOID_GROVE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_void_grove.tscn",
+    "floor_ids": [
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_void_grove",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_ring",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_RING_NAME",
+    "description_key": "ROOM_COMBAT_RING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_ring.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_ring",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_bridge",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_BRIDGE_NAME",
+    "description_key": "ROOM_COMBAT_BRIDGE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_bridge.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_time_rift",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_temporal_distortion",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_bridge",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_combat_clockwork",
+    "schema_version": 1,
+    "name_key": "ROOM_COMBAT_CLOCKWORK_NAME",
+    "description_key": "ROOM_COMBAT_CLOCKWORK_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "combat",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_combat_clockwork.tscn",
+    "floor_ids": [
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_combat_clockwork",
+    "icon_id": "icon_combat_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_elite_arena",
+    "schema_version": 1,
+    "name_key": "ROOM_ELITE_ARENA_NAME",
+    "description_key": "ROOM_ELITE_ARENA_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "elite",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_elite_arena.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "elite_primary",
+        "kind": "elite",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_elite_arena",
+    "icon_id": "icon_elite_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_elite_guard_corridor",
+    "schema_version": 1,
+    "name_key": "ROOM_ELITE_GUARD_CORRIDOR_NAME",
+    "description_key": "ROOM_ELITE_GUARD_CORRIDOR_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "elite",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_elite_guard_corridor.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "elite_primary",
+        "kind": "elite",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_elite_guard_corridor",
+    "icon_id": "icon_elite_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_elite_altar_defense",
+    "schema_version": 1,
+    "name_key": "ROOM_ELITE_ALTAR_DEFENSE_NAME",
+    "description_key": "ROOM_ELITE_ALTAR_DEFENSE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "elite",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_elite_altar_defense.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "elite_primary",
+        "kind": "elite",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_elite_altar_defense",
+    "icon_id": "icon_elite_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_elite_trap_arena",
+    "schema_version": 1,
+    "name_key": "ROOM_ELITE_TRAP_ARENA_NAME",
+    "description_key": "ROOM_ELITE_TRAP_ARENA_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "elite",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_elite_trap_arena.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "elite_primary",
+        "kind": "elite",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_elite_trap_arena",
+    "icon_id": "icon_elite_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_elite_twin_hall",
+    "schema_version": 1,
+    "name_key": "ROOM_ELITE_TWIN_HALL_NAME",
+    "description_key": "ROOM_ELITE_TWIN_HALL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "elite",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_elite_twin_hall.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "elite_primary",
+        "kind": "elite",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_elite_twin_hall",
+    "icon_id": "icon_elite_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_treasure_vault",
+    "schema_version": 1,
+    "name_key": "ROOM_TREASURE_VAULT_NAME",
+    "description_key": "ROOM_TREASURE_VAULT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "treasure",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_treasure_vault.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "treasure_primary",
+        "kind": "treasure",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_treasure_vault",
+    "icon_id": "icon_treasure_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_treasure_wishing_pool",
+    "schema_version": 1,
+    "name_key": "ROOM_TREASURE_WISHING_POOL_NAME",
+    "description_key": "ROOM_TREASURE_WISHING_POOL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "treasure",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_treasure_wishing_pool.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "treasure_primary",
+        "kind": "treasure",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_treasure_wishing_pool",
+    "icon_id": "icon_treasure_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_treasure_chronovault",
+    "schema_version": 1,
+    "name_key": "ROOM_TREASURE_CHRONOVAULT_NAME",
+    "description_key": "ROOM_TREASURE_CHRONOVAULT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "treasure",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_treasure_chronovault.tscn",
+    "floor_ids": [
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "treasure_primary",
+        "kind": "treasure",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_treasure_chronovault",
+    "icon_id": "icon_treasure_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_shop_wayfarer_tent",
+    "schema_version": 1,
+    "name_key": "ROOM_SHOP_WAYFARER_TENT_NAME",
+    "description_key": "ROOM_SHOP_WAYFARER_TENT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "shop",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_shop_wayfarer_tent.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "shop_primary",
+        "kind": "shop",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_shop_wayfarer_tent",
+    "icon_id": "icon_shop_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_shop_chrono_emporium",
+    "schema_version": 1,
+    "name_key": "ROOM_SHOP_CHRONO_EMPORIUM_NAME",
+    "description_key": "ROOM_SHOP_CHRONO_EMPORIUM_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "shop",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_shop_chrono_emporium.tscn",
+    "floor_ids": [
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "shop_primary",
+        "kind": "shop",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_shop_chrono_emporium",
+    "icon_id": "icon_shop_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_event_shrine",
+    "schema_version": 1,
+    "name_key": "ROOM_EVENT_SHRINE_NAME",
+    "description_key": "ROOM_EVENT_SHRINE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "event",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_event_shrine.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "event_primary",
+        "kind": "event",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_event_shrine",
+    "icon_id": "icon_event_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_event_crossroads",
+    "schema_version": 1,
+    "name_key": "ROOM_EVENT_CROSSROADS_NAME",
+    "description_key": "ROOM_EVENT_CROSSROADS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "event",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_event_crossroads.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "event_primary",
+        "kind": "event",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_event_crossroads",
+    "icon_id": "icon_event_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_event_mirror_hall",
+    "schema_version": 1,
+    "name_key": "ROOM_EVENT_MIRROR_HALL_NAME",
+    "description_key": "ROOM_EVENT_MIRROR_HALL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "event",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_event_mirror_hall.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge",
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "event_primary",
+        "kind": "event",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents",
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_event_mirror_hall",
+    "icon_id": "icon_event_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_boss_ruin_king",
+    "schema_version": 1,
+    "name_key": "ROOM_BOSS_RUIN_KING_NAME",
+    "description_key": "ROOM_BOSS_RUIN_KING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "boss",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_boss_ruin_king.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "boss_primary",
+        "kind": "boss",
+        "position": {
+          "x": 320,
+          "y": 144
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_boss_ruin_king",
+    "icon_id": "icon_boss_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_boss_forest_heart",
+    "schema_version": 1,
+    "name_key": "ROOM_BOSS_FOREST_HEART_NAME",
+    "description_key": "ROOM_BOSS_FOREST_HEART_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "boss",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_boss_forest_heart.tscn",
+    "floor_ids": [
+      "floor_void_forest"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "boss_primary",
+        "kind": "boss",
+        "position": {
+          "x": 320,
+          "y": 144
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_void_spores"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_boss_forest_heart",
+    "icon_id": "icon_boss_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_boss_time_sovereign",
+    "schema_version": 1,
+    "name_key": "ROOM_BOSS_TIME_SOVEREIGN_NAME",
+    "description_key": "ROOM_BOSS_TIME_SOVEREIGN_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "boss",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_boss_time_sovereign.tscn",
+    "floor_ids": [
+      "floor_time_rift"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "boss_primary",
+        "kind": "boss",
+        "position": {
+          "x": 320,
+          "y": 144
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_temporal_distortion"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_boss_time_sovereign",
+    "icon_id": "icon_boss_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_boss_forge_colossus",
+    "schema_version": 1,
+    "name_key": "ROOM_BOSS_FORGE_COLOSSUS_NAME",
+    "description_key": "ROOM_BOSS_FORGE_COLOSSUS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "boss",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_boss_forge_colossus.tscn",
+    "floor_ids": [
+      "floor_plane_forge"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "boss_primary",
+        "kind": "boss",
+        "position": {
+          "x": 320,
+          "y": 144
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_forge_vents"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_boss_forge_colossus",
+    "icon_id": "icon_boss_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_boss_void_throne",
+    "schema_version": 1,
+    "name_key": "ROOM_BOSS_VOID_THRONE_NAME",
+    "description_key": "ROOM_BOSS_VOID_THRONE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "boss",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_boss_void_throne.tscn",
+    "floor_ids": [
+      "floor_throne_of_void"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      },
+      {
+        "id": "boss_primary",
+        "kind": "boss",
+        "position": {
+          "x": 320,
+          "y": 144
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_collapsing_plane"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_boss_void_throne",
+    "icon_id": "icon_boss_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_rest_campfire",
+    "schema_version": 1,
+    "name_key": "ROOM_REST_CAMPFIRE_NAME",
+    "description_key": "ROOM_REST_CAMPFIRE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "rest",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_rest_campfire.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "rest_primary",
+        "kind": "rest",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_rest_campfire",
+    "icon_id": "icon_rest_room"
+  },
+  {
+    "category": "room_template",
+    "id": "room_rest_sanctuary",
+    "schema_version": 1,
+    "name_key": "ROOM_REST_SANCTUARY_NAME",
+    "description_key": "ROOM_REST_SANCTUARY_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "room_type": "rest",
+    "scene_path": "res://data/content_packs/base/assets/rooms/launch/room_rest_sanctuary.tscn",
+    "floor_ids": [
+      "floor_ruins_of_remnant",
+      "floor_void_forest",
+      "floor_time_rift",
+      "floor_plane_forge"
+    ],
+    "door_anchors": [
+      {
+        "id": "door_west",
+        "direction": "west",
+        "position": {
+          "x": 16,
+          "y": 180
+        }
+      },
+      {
+        "id": "door_east",
+        "direction": "east",
+        "position": {
+          "x": 624,
+          "y": 180
+        }
+      }
+    ],
+    "camera_bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 360
+    },
+    "spawn_anchors": [
+      {
+        "id": "player_entry",
+        "kind": "player",
+        "position": {
+          "x": 160,
+          "y": 280
+        }
+      }
+    ],
+    "interaction_anchors": [
+      {
+        "id": "rest_primary",
+        "kind": "rest",
+        "position": {
+          "x": 320,
+          "y": 160
+        }
+      },
+      {
+        "id": "room_exit",
+        "kind": "exit",
+        "position": {
+          "x": 608,
+          "y": 180
+        }
+      }
+    ],
+    "supported_environment_rule_ids": [
+      "rule_crumbling_ground",
+      "rule_void_spores",
+      "rule_temporal_distortion",
+      "rule_forge_vents"
+    ],
+    "accessibility_safe_hazard_zones": [
+      {
+        "id": "safe_core",
+        "bounds": {
+          "x": 224,
+          "y": 96,
+          "width": 192,
+          "height": 168
+        }
+      }
+    ],
+    "thumbnail_id": "thumb_room_rest_sanctuary",
+    "icon_id": "icon_rest_room"
+  }
+]
