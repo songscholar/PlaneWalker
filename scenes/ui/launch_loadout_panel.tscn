@@ -51,7 +51,7 @@ theme_override_constants/margin_bottom = 10
 
 [node name="Layout" type="VBoxContainer" parent="SafeArea/Center/PanelRoot/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 3
 
 [node name="TitleLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
 layout_mode = 2
@@ -60,45 +60,95 @@ text = "Launch Loadout"
 horizontal_alignment = 1
 
 [node name="WarningLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.819608, 0.4, 1)
 theme_override_font_sizes/font_size = 10
 text = "Launch content is available for local verification."
 horizontal_alignment = 1
+vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="WeaponLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+[node name="SelectorGrid" type="GridContainer" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 3
+columns = 2
+
+[node name="CharacterLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid"]
+custom_minimum_size = Vector2(112, 30)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "Character"
+vertical_alignment = 1
+
+[node name="CharacterOption" type="OptionButton" parent="SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid"]
+custom_minimum_size = Vector2(380, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 2
+
+[node name="WeaponLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid"]
+custom_minimum_size = Vector2(112, 30)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "Weapon"
+vertical_alignment = 1
 
-[node name="WeaponOption" type="OptionButton" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
-custom_minimum_size = Vector2(500, 34)
+[node name="WeaponOption" type="OptionButton" parent="SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid"]
+custom_minimum_size = Vector2(380, 30)
 layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 2
 
-[node name="TimePairLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+[node name="TimePairLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid"]
+custom_minimum_size = Vector2(112, 30)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "Time Pair"
+vertical_alignment = 1
 
-[node name="TimePairOption" type="OptionButton" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
-custom_minimum_size = Vector2(500, 34)
+[node name="TimePairOption" type="OptionButton" parent="SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid"]
+custom_minimum_size = Vector2(380, 30)
 layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 2
+
+[node name="DescriptionLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.752941, 0.835294, 0.901961, 1)
+theme_override_font_sizes/font_size = 10
+text = "A balanced fighter."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
 
 [node name="SummaryLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
-custom_minimum_size = Vector2(0, 24)
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "Sword / Time Stop + Rewind"
+text = "Wanderer / Sword / Time Stop + Rewind"
 horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="StartButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
-custom_minimum_size = Vector2(500, 36)
+[node name="ButtonRow" type="HBoxContainer" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
 layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StartButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout/ButtonRow"]
+custom_minimum_size = Vector2(246, 34)
+layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 2
 text = "Start Launch Run"
+
+[node name="BackButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout/ButtonRow"]
+custom_minimum_size = Vector2(246, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 2
+text = "Back"
 
 [node name="StatusLabel" type="Label" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
 custom_minimum_size = Vector2(0, 18)
@@ -106,10 +156,5 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.419608, 0.419608, 1)
 theme_override_font_sizes/font_size = 10
 horizontal_alignment = 1
+vertical_alignment = 1
 autowrap_mode = 2
-
-[node name="BackButton" type="Button" parent="SafeArea/Center/PanelRoot/Margin/Layout"]
-custom_minimum_size = Vector2(500, 32)
-layout_mode = 2
-focus_mode = 2
-text = "Back"

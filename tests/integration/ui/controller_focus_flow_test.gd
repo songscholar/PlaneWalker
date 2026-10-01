@@ -157,8 +157,8 @@ func _run() -> void:
 	suite.assert_true(launch_panel.visible, "controller opens Launch Loadout")
 	suite.assert_equal(
 		get_viewport().gui_get_focus_owner(),
-		launch_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/WeaponOption"),
-		"Launch flow enters on the weapon selector"
+		launch_panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption"),
+		"Launch flow enters on the character selector"
 	)
 	_send_action(&"interact")
 	await _frames(2)

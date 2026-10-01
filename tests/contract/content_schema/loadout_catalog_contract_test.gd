@@ -2,6 +2,7 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const RunLoadoutCatalogScript := preload("res://scripts/application/run_loadout_catalog.gd")
 
 const BASE_PACK_PATH := "res://data/content_packs/base/pack.json"
 const ALL_MILESTONES := ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
@@ -19,6 +20,18 @@ const EXPECTED_WEAPON_PROFILES := [
 const EXPECTED_CHARACTER_PROFILES := [
 	"primordial_knight_launch_v1", "time_guardian_launch_v1", "time_lord_launch_v1",
 	"void_walker_launch_v1", "wanderer_launch_v1", "wanderer_m1_v1",
+]
+const EXPECTED_LAUNCH_CHARACTER_ORDER := [
+	"wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord",
+]
+const EXPECTED_LAUNCH_WEAPON_ORDER := ["sword", "bow", "gun", "staff", "gauntlets"]
+const EXPECTED_LAUNCH_TIME_PAIRS := [
+	["stop", "rewind"],
+	["stop", "rift"],
+	["stop", "accelerate"],
+	["rewind", "rift"],
+	["rewind", "accelerate"],
+	["rift", "accelerate"],
 ]
 
 
@@ -41,6 +54,7 @@ func _run() -> void:
 	_assert_catalog(suite, registry)
 	_assert_availability_boundaries(suite, registry)
 	_assert_returned_definitions_are_deep_copies(suite, registry)
+	_assert_launch_selector_catalog(suite, registry)
 	suite.finish(get_tree())
 
 
@@ -147,6 +161,50 @@ func _assert_returned_definitions_are_deep_copies(suite, registry: RefCounted) -
 		)
 
 
+func _assert_launch_selector_catalog(suite, registry: RefCounted) -> void:
+	var catalog := RunLoadoutCatalogScript.new()
+	suite.assert_true(
+		catalog.configure(registry, &"LAUNCH"),
+		"Launch selector catalog accepts the complete authoritative Registry"
+	)
+	var characters: Array[Dictionary] = catalog.characters()
+	var weapons: Array[Dictionary] = catalog.weapons()
+	var time_pairs: Array[Dictionary] = catalog.time_pairs()
+	suite.assert_equal(_selector_ids(characters), EXPECTED_LAUNCH_CHARACTER_ORDER, "character selector uses design order")
+	suite.assert_equal(_selector_ids(weapons), EXPECTED_LAUNCH_WEAPON_ORDER, "weapon selector uses design order")
+	suite.assert_equal(_pair_ability_ids(time_pairs), EXPECTED_LAUNCH_TIME_PAIRS, "time selector exposes six canonical unordered pairs")
+	for entry: Dictionary in characters + weapons:
+		suite.assert_true(not str(entry.get("id", "")).is_empty(), "selector entry has a stable ID")
+		suite.assert_true(not str(entry.get("name_key", "")).is_empty(), "selector entry has a name key")
+		suite.assert_true(not str(entry.get("description_key", "")).is_empty(), "selector entry has a description key")
+	for pair: Dictionary in time_pairs:
+		suite.assert_true(not str(pair.get("id", "")).is_empty(), "time pair has a stable ID")
+		suite.assert_equal((pair.get("name_keys", []) as Array).size(), 2, "time pair has two name keys")
+		suite.assert_equal((pair.get("description_keys", []) as Array).size(), 2, "time pair has two description keys")
+
+	var loadouts: Array[Dictionary] = catalog.loadouts()
+	suite.assert_equal(loadouts.size(), 150, "Launch selector catalog enumerates exactly 150 loadouts")
+	var identities := {}
+	for loadout: Dictionary in loadouts:
+		var identity := "%s|%s|%s" % [
+			str(loadout.get("character_id", "")),
+			str(loadout.get("weapon_id", "")),
+			"+".join(loadout.get("enabled_time_skills", [])),
+		]
+		identities[identity] = true
+	suite.assert_equal(identities.size(), 150, "Launch selector catalog has no duplicate tuple")
+
+	characters[0]["id"] = "forged"
+	characters[0]["availability"] = []
+	time_pairs[0]["ability_ids"] = ["accelerate", "stop"]
+	suite.assert_equal(str(catalog.characters()[0].get("id", "")), "wanderer", "character entries are deep copies")
+	suite.assert_equal(
+		catalog.time_pairs()[0].get("ability_ids", []),
+		["stop", "rewind"],
+		"time-pair entries are deep copies"
+	)
+
+
 func _assert_availability(suite, registry: RefCounted, content_id: String, expected: Array) -> void:
 	var definition: Dictionary = registry.get_content(StringName(content_id))
 	suite.assert_equal(
@@ -162,6 +220,20 @@ func _ids(definitions: Array[Dictionary]) -> Array[String]:
 		ids.append(str(definition.get("id", "")))
 	ids.sort()
 	return ids
+
+
+func _selector_ids(definitions: Array[Dictionary]) -> Array[String]:
+	var ids: Array[String] = []
+	for definition: Dictionary in definitions:
+		ids.append(str(definition.get("id", "")))
+	return ids
+
+
+func _pair_ability_ids(definitions: Array[Dictionary]) -> Array:
+	var pairs: Array = []
+	for definition: Dictionary in definitions:
+		pairs.append((definition.get("ability_ids", []) as Array).duplicate())
+	return pairs
 
 
 func _sorted_strings(values: Array) -> Array[String]:

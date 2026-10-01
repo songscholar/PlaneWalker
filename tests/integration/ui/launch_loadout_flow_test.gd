@@ -27,7 +27,7 @@ func _test_rejected_launch(suite) -> void:
 	await _frames(3)
 	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
-	var weapon_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/WeaponOption") as OptionButton
+	var character_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption") as OptionButton
 	var status_label := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/StatusLabel") as Label
 
 	launch_button.pressed.emit()
@@ -51,7 +51,7 @@ func _test_rejected_launch(suite) -> void:
 		"rejected Launch start disables combat processing"
 	)
 	suite.assert_equal(status_label.text, tr("UI_LAUNCH_START_REJECTED"), "rejected Launch start shows the localized error")
-	suite.assert_equal(get_viewport().gui_get_focus_owner(), weapon_option, "rejected Launch start restores weapon focus")
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), character_option, "rejected Launch start restores character focus")
 
 	panel.call("close_panel")
 	main.queue_free()
@@ -64,9 +64,10 @@ func _test_real_device_launch(suite) -> void:
 	await _frames(3)
 	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
-	var weapon_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/WeaponOption") as OptionButton
-	var time_pair_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/TimePairOption") as OptionButton
-	var start_button := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/StartButton") as Button
+	var character_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption") as OptionButton
+	var weapon_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/WeaponOption") as OptionButton
+	var time_pair_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/TimePairOption") as OptionButton
+	var start_button := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/ButtonRow/StartButton") as Button
 
 	_send_key(KEY_DOWN)
 	await _frames(2)
@@ -76,8 +77,14 @@ func _test_real_device_launch(suite) -> void:
 	_send_mouse_click(launch_button)
 	await _frames(3)
 	suite.assert_true(panel.visible, "real mouse events open Launch Loadout")
-	suite.assert_equal(get_viewport().gui_get_focus_owner(), weapon_option, "mouse-opened Launch flow focuses the weapon selector")
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), character_option, "mouse-opened Launch flow focuses the character selector")
 
+	_send_joy_button(JOY_BUTTON_DPAD_RIGHT)
+	await _frames(2)
+	suite.assert_equal(character_option.selected, 1, "real controller input changes the character OptionButton")
+	_send_joy_button(JOY_BUTTON_DPAD_DOWN)
+	await _frames(2)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), weapon_option, "real controller input reaches the weapon OptionButton")
 	_send_joy_button(JOY_BUTTON_DPAD_RIGHT)
 	await _frames(2)
 	suite.assert_equal(weapon_option.selected, 1, "real controller input changes the weapon OptionButton")
@@ -100,6 +107,7 @@ func _test_real_device_launch(suite) -> void:
 	suite.assert_true(main.get_node("CombatRoom01").visible, "real controller confirmation starts combat")
 	var snapshot: Dictionary = main.get_node("RunRuntimeHost").call("runtime_snapshot")
 	var config: Dictionary = snapshot.get("config", {})
+	suite.assert_equal(config.get("character_id"), "time_guardian", "real controller character selection reaches the runtime host")
 	suite.assert_equal(config.get("weapon_id"), "bow", "real controller weapon selection reaches the runtime host")
 	suite.assert_equal(
 		config.get("enabled_time_skills"),
@@ -120,14 +128,15 @@ func _test_launch_weapon(suite, weapon_index: int, weapon_id: String) -> void:
 	await _frames(3)
 	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
-	var weapon_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/WeaponOption") as OptionButton
-	var time_pair_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/TimePairOption") as OptionButton
-	var start_button := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/StartButton") as Button
+	var character_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption") as OptionButton
+	var weapon_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/WeaponOption") as OptionButton
+	var time_pair_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/TimePairOption") as OptionButton
+	var start_button := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/ButtonRow/StartButton") as Button
 
 	launch_button.pressed.emit()
 	await _frames(3)
 	suite.assert_true(panel.visible, "%s: Launch button opens the formal player loadout entry" % weapon_id)
-	suite.assert_equal(get_viewport().gui_get_focus_owner(), weapon_option, "%s: Launch entry is controller-focused" % weapon_id)
+	suite.assert_equal(get_viewport().gui_get_focus_owner(), character_option, "%s: Launch entry is controller-focused" % weapon_id)
 	weapon_option.select(weapon_index)
 	time_pair_option.select(5)
 	panel.call("refresh_selection")

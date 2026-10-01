@@ -12,6 +12,7 @@ keys,en,zh_CN
 "UI_LAUNCH_LOADOUT","Launch Loadout","启动配置"
 "UI_LAUNCH_LOADOUT_TITLE","Launch Loadout","启动配置"
 "UI_LAUNCH_LOADOUT_WARNING","Launch content is available for local verification; this is not a release claim.","启动内容可供本地验证；这不代表已经正式发布。"
+"UI_LAUNCH_CHARACTER_LABEL","Character","角色"
 "UI_LAUNCH_WEAPON_LABEL","Weapon","武器"
 "UI_LAUNCH_TIME_PAIR_LABEL","Time Ability Pair","时间能力组合"
 "UI_TIME_PAIR_FMT","%s + %s","%s + %s"
