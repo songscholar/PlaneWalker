@@ -190,6 +190,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.playtest.test_weapon_simulation_report \
 	tests.contract.playtest.test_character_weapon_simulation_report
 
+printf '\n== Launch pool simulation contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+	tests.contract.simulation.test_launch_pool_report
+
 printf '\n== M1 release gate contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.m1.test_m1_gate
 
