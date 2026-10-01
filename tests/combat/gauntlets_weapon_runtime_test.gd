@@ -211,6 +211,7 @@ func _run() -> void:
 	_test_authoritative_profile_is_frozen()
 	_test_five_punches_have_exact_frames_and_damage()
 	_test_chain_combo_dedup_damage_and_dash_semantics()
+	_test_wanderer_combo_timeout_forgiveness()
 	_test_heavy_counter_skill_and_ultimate_boundaries()
 	_test_tier_snapshots_affect_future_actions_only()
 	_test_stop_accelerate_rewind_and_rift_interactions()
@@ -224,6 +225,35 @@ func _run() -> void:
 	_test_ready_snapshot_tombstones_completed_actions()
 	_test_snapshot_reset_determinism_and_bounded_ledgers()
 	_suite.finish(get_tree())
+
+
+func _test_wanderer_combo_timeout_forgiveness() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var context := _context(4601)
+	context["character_forgiveness"] = {
+		"weapon_id": &"gauntlets", "expires_after_frames": 180,
+		"combo_extension_frames": 30, "combo_cap_frames": 150,
+	}
+	var plan: Dictionary = _primary_plan(runtime, context)
+	var committed: Dictionary = runtime.commit_action(plan, 4601)
+	_suite.assert_equal(
+		(committed.get("context", {}) as Dictionary).get("consume_forgiveness"), true,
+		"successful Gauntlets commit returns the one-shot consumption fact"
+	)
+	var hit := {
+		"target_id": 1, "outcome_id": "forgiven:punch", "damage": 4.0,
+		"hit_confirmed": true, "terminal": true,
+	}
+	_suite.assert_true(
+		bool(runtime.handle_payload_result(4601, 4601, hit).get("ok", false)),
+		"forgiven Gauntlets hit confirms"
+	)
+	_suite.assert_equal(
+		runtime.snapshot().get("combo_remaining_frames"), 150,
+		"Wanderer Gauntlets forgiveness opens the Combo timeout at the 150-frame cap"
+	)
+	_free_fixture(fixture)
 
 
 func _test_character_stats_freeze_across_hold_release() -> void:

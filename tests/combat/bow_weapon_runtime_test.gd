@@ -194,6 +194,7 @@ func _run() -> void:
 	_test_launch_payload_seeds_are_deterministic_and_token_scoped()
 	_test_launch_time_interactions_and_boss_conversion_are_declarative()
 	_test_launch_hold_release_refreshes_dynamic_time_context()
+	_test_wanderer_full_charge_forgiveness()
 	_test_launch_hold_snapshot_restore_and_active_restore_rejection()
 	_test_profile_snapshot_capabilities_and_drift_rejection()
 	_test_candidate_charge_boundaries_and_payload_curve()
@@ -205,6 +206,36 @@ func _run() -> void:
 	_test_commit_release_cancel_and_reset_fail_atomically()
 	_test_quiescent_snapshot_restore_preserves_reward_ledger()
 	_suite.finish(get_tree())
+
+
+func _test_wanderer_full_charge_forgiveness() -> void:
+	var fixture := _launch_fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var context := _launch_context(Vector2.RIGHT, 4401)
+	context["character_forgiveness"] = {
+		"weapon_id": &"bow", "expires_after_frames": 180, "full_charge_frames": 44,
+	}
+	var hold: Dictionary = runtime.plan_intent(
+		_semantic_press(&"weapon_primary"), context
+	).get("plan", {})
+	_suite.assert_equal(
+		((hold.get("phases", []) as Array)[0] as Dictionary).get("charge_complete_frames"),
+		44,
+		"Wanderer Bow forgiveness freezes a 44-frame full-charge threshold"
+	)
+	_suite.assert_true(bool(runtime.commit_action(hold, 4401).get("ok", false)), "forgiven Bow hold commits")
+	var released: Dictionary = runtime.release_hold(hold, 4401, 44)
+	_suite.assert_equal(
+		_payload_parameters(released.get("finalized_plan", {})).get("full_charge"),
+		true,
+		"frame 44 resolves the full tier only for the frozen forgiven action"
+	)
+	_suite.assert_equal(
+		(released.get("context", {}) as Dictionary).get("consume_forgiveness"),
+		true,
+		"successful Bow release returns the one-shot consumption fact"
+	)
+	_free_fixture(fixture)
 
 
 func _test_character_stats_freeze_across_hold_release() -> void:

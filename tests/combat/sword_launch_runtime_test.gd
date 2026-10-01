@@ -86,6 +86,7 @@ func _ready() -> void:
 func _run() -> void:
 	_suite = TestSuiteScript.new()
 	await _test_launch_profile_identity_and_primary_hold_release()
+	await _test_wanderer_forgiveness_freezes_and_consumes_once()
 	await _test_launch_resources_guard_and_counter_transaction()
 	await _test_guard_commit_is_bound_and_exactly_once()
 	await _test_normal_guard_composes_with_character_defense()
@@ -101,6 +102,38 @@ func _run() -> void:
 	await _test_player_active_hitbox_restore_preserves_damage_identity()
 	await _test_launch_cancel_reset_snapshot_restore_and_presentation()
 	_suite.finish(get_tree())
+
+
+func _test_wanderer_forgiveness_freezes_and_consumes_once() -> void:
+	var fixture := await _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var baseline: Dictionary = runtime.plan_intent(_intent(&"weapon_secondary", &"pressed"), {}).get("plan", {})
+	var context := {"character_forgiveness": {
+		"weapon_id": &"sword", "expires_after_frames": 180,
+		"recovery_reduction_frames": 4, "minimum_recovery_frames": 1,
+	}}
+	var forgiven: Dictionary = runtime.plan_intent(
+		_intent(&"weapon_secondary", &"pressed"), context
+	).get("plan", {})
+	_suite.assert_equal(
+		int(_phase(forgiven, 2).get("duration_frames", 0)),
+		maxi(1, int(_phase(baseline, 2).get("duration_frames", 0)) - 4),
+		"Wanderer Sword forgiveness subtracts exactly four recovery frames"
+	)
+	var committed: Dictionary = runtime.commit_action(forgiven, 9901)
+	_suite.assert_equal(
+		(committed.get("context", {}) as Dictionary).get("consume_forgiveness"),
+		true,
+		"successful Sword commit returns the one-shot consumption fact"
+	)
+	runtime.finish_action(9901)
+	var ordinary: Dictionary = runtime.plan_intent(_intent(&"weapon_secondary", &"pressed"), {}).get("plan", {})
+	_suite.assert_equal(
+		_phase(ordinary, 2).get("duration_frames"),
+		_phase(baseline, 2).get("duration_frames"),
+		"the following Sword action stays at the authored recovery"
+	)
+	await _free_player(fixture["player"])
 
 
 func _test_launch_profile_identity_and_primary_hold_release() -> void:

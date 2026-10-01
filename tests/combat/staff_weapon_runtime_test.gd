@@ -219,6 +219,7 @@ func _run() -> void:
 	_test_mana_regeneration_and_bounded_damage_return()
 	_test_payload_target_deduplication_is_per_outcome()
 	_test_six_ordered_combinations_and_atomic_refund()
+	_test_wanderer_combo_window_forgiveness()
 	_test_near_expiry_combo_projectile_does_not_extend_window()
 	_test_overlapping_combo_reservations_are_token_owned()
 	_test_lightning_first_combo_preserves_origin_material()
@@ -230,6 +231,33 @@ func _run() -> void:
 	_test_cast_ledgers_are_bounded()
 	_test_replay_payload_transition_projector()
 	_suite.finish(get_tree())
+
+
+func _test_wanderer_combo_window_forgiveness() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var context := _context(3601)
+	context["character_forgiveness"] = {
+		"weapon_id": &"staff", "expires_after_frames": 180,
+		"window_extension_frames": 60, "window_cap_frames": 360,
+	}
+	var plan: Dictionary = runtime.plan_intent(
+		_release_intent(&"weapon_primary", 30), context
+	).get("plan", {})
+	var committed: Dictionary = runtime.commit_action(plan, 3601)
+	_suite.assert_equal(
+		(committed.get("context", {}) as Dictionary).get("consume_forgiveness"), true,
+		"successful charged Staff commit returns the one-shot consumption fact"
+	)
+	_suite.assert_true(
+		bool(runtime.payload_result(3601, 3601, &"forgiven_fire", &"fire", 1, true, 0.0, true).get("ok", false)),
+		"forgiven Staff element confirms"
+	)
+	_suite.assert_equal(
+		runtime.snapshot().get("combo_remaining_frames"), 360,
+		"Wanderer Staff forgiveness opens the next ordered-combination window at the 360-frame cap"
+	)
+	_free_fixture(fixture)
 
 
 func _test_character_stats_freeze_across_hold_release() -> void:

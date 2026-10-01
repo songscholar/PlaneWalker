@@ -2,6 +2,7 @@ class_name StaffWeaponRuntime
 extends "res://scripts/combat/weapons/weapon_runtime.gd"
 
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
+const WeaponForgivenessScript := preload("res://scripts/combat/weapons/weapon_forgiveness.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 
 const SNAPSHOT_SCHEMA_VERSION := 2
@@ -30,6 +31,7 @@ const ACCELERATED_CHARGE_FRAMES := 15
 const PRIMARY_MAXIMUM_HOLD_FRAMES := 600
 const ULTIMATE_HOLD_FRAMES := 60
 const COMBO_WINDOW_FRAMES := 300
+const MAX_COMBO_WINDOW_FRAMES := 360
 const MANA_RETURN_RATIO := 0.02
 const MANA_RETURN_CAP_PER_OUTCOME := 5.0
 const MAX_TRACKED_CAST_LEDGERS := 256
@@ -553,7 +555,9 @@ func _project_payload_result_transition(
 			cast["combo_source_context"] = {}
 			if str(projected.get("combo_element", "")).is_empty() or int(projected.get("combo_remaining_frames", 0)) <= 0:
 				projected["combo_element"] = str(element)
-				projected["combo_remaining_frames"] = COMBO_WINDOW_FRAMES
+				projected["combo_remaining_frames"] = int(cast.get(
+					"combo_window_capacity_frames", COMBO_WINDOW_FRAMES
+				))
 				projected["combo_source_context"] = payload_context.duplicate(true)
 	elif not resource_only and not hit and terminal:
 		var pending_value: Variant = pending_combos.get(token_key, {})
@@ -919,6 +923,9 @@ func _build_primary_hold_plan(context: Dictionary) -> Dictionary:
 		},
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
+	WeaponForgivenessScript.attach_to_plan(
+		plan, frozen_context.get("character_forgiveness", {})
+	)
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -1024,7 +1031,27 @@ func _build_action_plan_from_frozen(
 	var combo: Dictionary = {}
 	if action_id == CHARGED_ACTION_ID and _combo_remaining_frames > 0 and _combo_element != &"" and _combo_element != _current_element:
 		combo = _copy_indexed(_combinations_by_pair, StringName("%s>%s" % [str(_combo_element), str(_current_element)]))
-	var combo_window_remaining_frames := _combo_remaining_frames if not combo.is_empty() else 0
+	var forgiveness := (
+		frozen_context.get("character_forgiveness", {}) as Dictionary
+	).duplicate(true)
+	var combo_window_capacity_frames := COMBO_WINDOW_FRAMES
+	if action_id == CHARGED_ACTION_ID and not forgiveness.is_empty():
+		combo_window_capacity_frames = mini(
+			WeaponForgivenessScript.descriptor_int(
+				forgiveness, WEAPON_ID, "window_cap_frames", COMBO_WINDOW_FRAMES
+			),
+			COMBO_WINDOW_FRAMES + WeaponForgivenessScript.descriptor_int(
+				forgiveness, WEAPON_ID, "window_extension_frames", 0
+			)
+		)
+	var combo_window_remaining_frames := (
+		mini(
+			combo_window_capacity_frames,
+			_combo_remaining_frames + (combo_window_capacity_frames - COMBO_WINDOW_FRAMES)
+		)
+		if not combo.is_empty()
+		else 0
+	)
 
 	var mana_cost := float((action.get("resource_costs", {}) as Dictionary).get("mana", 0.0))
 	if action_id == CHARGED_ACTION_ID:
@@ -1092,6 +1119,7 @@ func _build_action_plan_from_frozen(
 		"element": str(_current_element) if action_id == CHARGED_ACTION_ID else "",
 		"combo": combo.duplicate(true),
 		"combo_window_remaining_frames": combo_window_remaining_frames,
+		"combo_window_capacity_frames": combo_window_capacity_frames,
 		"combo_source_context": _combo_source_context.duplicate(true) if not combo.is_empty() else {},
 		"combo_extra_mana": _resolved_combo_extra(combo, rewind_available, accelerate_active),
 		"run_seed": int(frozen_context["run_seed"]),
@@ -1115,6 +1143,8 @@ func _build_action_plan_from_frozen(
 		"invulnerable_during_cast": action_id == ULTIMATE_ACTION_ID,
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
+	if action_id == CHARGED_ACTION_ID:
+		WeaponForgivenessScript.attach_to_plan(plan, forgiveness)
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -1128,7 +1158,13 @@ func _stage_and_commit(plan: Dictionary, token: int) -> Dictionary:
 	_active_phase = StringName(str(((plan["phases"] as Array)[0] as Dictionary)["phase"]))
 	_active_plan = plan.duplicate(true)
 	_modifier_snapshot = (plan.get("modifier_snapshot", {}) as Dictionary).duplicate(true)
-	return {"ok": true, "code": &"OK", "context": {"action_id": _resolved_action_id(plan)}}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			{"action_id": _resolved_action_id(plan)}, plan, WEAPON_ID
+		),
+	}
 
 
 func _stage_definition(plan: Dictionary, token: int) -> Dictionary:
@@ -1281,11 +1317,15 @@ func _apply_committed_mutations(plan: Dictionary, token: int) -> void:
 			"outcomes": {},
 			"combo": combo.duplicate(true),
 			"combo_window_remaining_frames": combo_window_remaining_frames,
+			"combo_window_capacity_frames": int(plan.get(
+				"combo_window_capacity_frames", COMBO_WINDOW_FRAMES
+			)),
 			"combo_source_context": (plan.get("combo_source_context", {}) as Dictionary).duplicate(true),
 		}
 		_prune_cast_ledgers()
 		var extra_mana := float(plan.get("combo_extra_mana", 0.0))
 		if not combo.is_empty() and combo_window_remaining_frames > 0:
+			_combo_remaining_frames = combo_window_remaining_frames
 			_pending_combos[str(token)] = {
 				"token": token,
 				"combo": combo.duplicate(true),
@@ -1443,15 +1483,35 @@ func _normalized_context(value: Dictionary) -> Dictionary:
 	)
 	if not _valid_character_stats_snapshot(character_stats):
 		return _failure(&"INVALID_CONTEXT", {"field": "character_stats"})
+	var forgiveness_envelope: Dictionary = {}
+	if value.has("character_forgiveness"):
+		var forgiveness_value: Variant = value.get("character_forgiveness")
+		if (
+			forgiveness_value is Dictionary
+			and WeaponForgivenessScript.is_valid_envelope(
+				forgiveness_value as Dictionary, WEAPON_ID
+			)
+		):
+			forgiveness_envelope = (forgiveness_value as Dictionary).duplicate(true)
+		else:
+			var forgiveness_result := WeaponForgivenessScript.freeze_from_context(value, WEAPON_ID)
+			if not bool(forgiveness_result.get("ok", false)):
+				return _failure(&"INVALID_FORGIVENESS_DESCRIPTOR")
+			forgiveness_envelope = (
+				forgiveness_result.get("envelope", {}) as Dictionary
+			).duplicate(true)
+	var normalized_context := {
+		"run_seed": int(run_seed_value),
+		"aim_direction": direction.normalized(),
+		"time_interactions": time_context,
+		"character_stats": character_stats,
+	}
+	if not forgiveness_envelope.is_empty():
+		normalized_context["character_forgiveness"] = forgiveness_envelope
 	return {
 		"ok": true,
 		"code": &"OK",
-		"context": {
-			"run_seed": int(run_seed_value),
-			"aim_direction": direction.normalized(),
-			"time_interactions": time_context,
-			"character_stats": character_stats,
-		},
+		"context": normalized_context,
 	}
 
 
@@ -1459,6 +1519,8 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	var contract_result := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(contract_result.get("ok", false)):
 		return contract_result
+	if not WeaponForgivenessScript.plan_envelope_is_valid(plan, WEAPON_ID):
+		return _failure(&"INVALID_FORGIVENESS_FINGERPRINT")
 	if not _plan_character_stats_match(plan):
 		return _failure(&"INVALID_CHARACTER_STATS")
 	if str(plan.get("profile_id", "")) != PROFILE_ID or int(plan.get("profile_version", 0)) != PROFILE_VERSION:
@@ -1487,6 +1549,19 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	):
 		return _failure(&"STALE_REWIND_GENERATION")
 	if action_id == CHARGED_ACTION_ID:
+		var forgiveness_envelope := WeaponForgivenessScript.envelope_from_plan(plan, WEAPON_ID)
+		var expected_capacity := COMBO_WINDOW_FRAMES
+		if not forgiveness_envelope.is_empty():
+			expected_capacity = mini(
+				WeaponForgivenessScript.descriptor_int(
+					forgiveness_envelope, WEAPON_ID, "window_cap_frames", COMBO_WINDOW_FRAMES
+				),
+				COMBO_WINDOW_FRAMES + WeaponForgivenessScript.descriptor_int(
+					forgiveness_envelope, WEAPON_ID, "window_extension_frames", 0
+				)
+			)
+		if int(plan.get("combo_window_capacity_frames", 0)) != expected_capacity:
+			return _failure(&"COMBO_WINDOW_MISMATCH")
 		var element := StringName(str(plan.get("element", "")))
 		if not ELEMENT_SEQUENCE.has(str(element)) or element != _current_element:
 			return _failure(&"ELEMENT_MISMATCH")
@@ -1504,8 +1579,12 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 				return _failure(&"COMBO_MISMATCH")
 			if (
 				combo_window_remaining_frames <= 0
-				or combo_window_remaining_frames > COMBO_WINDOW_FRAMES
-				or combo_window_remaining_frames != _combo_remaining_frames
+				or combo_window_remaining_frames > MAX_COMBO_WINDOW_FRAMES
+				or combo_window_remaining_frames != mini(
+					int(plan.get("combo_window_capacity_frames", COMBO_WINDOW_FRAMES)),
+					_combo_remaining_frames
+					+ (int(plan.get("combo_window_capacity_frames", COMBO_WINDOW_FRAMES)) - COMBO_WINDOW_FRAMES)
+				)
 			):
 				return _failure(&"COMBO_WINDOW_MISMATCH")
 			if not _frozen_equal(combo_source_value, _combo_source_context):
@@ -1755,7 +1834,7 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 		or (not str(value.get("combo_element", "")).is_empty() and str(value.get("combo_element", "")) not in ELEMENT_SEQUENCE)
 		or typeof(value.get("combo_remaining_frames")) != TYPE_INT
 		or int(value.get("combo_remaining_frames", -1)) < 0
-		or int(value.get("combo_remaining_frames", -1)) > COMBO_WINDOW_FRAMES
+		or int(value.get("combo_remaining_frames", -1)) > MAX_COMBO_WINDOW_FRAMES
 		or not value.get("combo_source_context") is Dictionary
 		or not value.get("pending_combo") is Dictionary
 		or not value.get("pending_combos") is Dictionary
@@ -1913,7 +1992,10 @@ func _valid_cast_ledgers(value: Variant) -> bool:
 			or not cast.get("combo", {}) is Dictionary
 			or typeof(cast.get("combo_window_remaining_frames")) != TYPE_INT
 			or int(cast.get("combo_window_remaining_frames", -1)) < 0
-			or int(cast.get("combo_window_remaining_frames", -1)) > COMBO_WINDOW_FRAMES
+			or int(cast.get("combo_window_remaining_frames", -1)) > MAX_COMBO_WINDOW_FRAMES
+			or typeof(cast.get("combo_window_capacity_frames")) != TYPE_INT
+			or int(cast.get("combo_window_capacity_frames", 0)) < COMBO_WINDOW_FRAMES
+			or int(cast.get("combo_window_capacity_frames", 0)) > MAX_COMBO_WINDOW_FRAMES
 			or not _valid_combo_source_context(cast.get("combo_source_context", {}))
 		):
 			return false
@@ -1956,7 +2038,7 @@ func _valid_pending_combos(value: Variant, cast_ledgers_value: Variant) -> bool:
 			or float(pending.get("extra_mana", -1.0)) < 0.0
 			or typeof(pending.get("remaining_frames")) != TYPE_INT
 			or int(pending.get("remaining_frames", 0)) <= 0
-			or int(pending.get("remaining_frames", 0)) > COMBO_WINDOW_FRAMES
+			or int(pending.get("remaining_frames", 0)) > MAX_COMBO_WINDOW_FRAMES
 			or typeof(pending.get("refunded")) != TYPE_BOOL
 			or bool(pending.get("refunded", true))
 		):

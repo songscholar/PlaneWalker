@@ -2,6 +2,7 @@ class_name SwordWeaponRuntime
 extends "res://scripts/combat/weapons/weapon_runtime.gd"
 
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
+const WeaponForgivenessScript := preload("res://scripts/combat/weapons/weapon_forgiveness.gd")
 
 const SNAPSHOT_SCHEMA_VERSION := 1
 const PROFILE_ID := "sword_m1_v1"
@@ -265,11 +266,11 @@ func capabilities() -> PackedStringArray:
 	return _capabilities.duplicate()
 
 
-func plan_intent(intent: Dictionary, _context: Dictionary) -> Dictionary:
+func plan_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 	if not _is_configured():
 		return _failure(&"NOT_CONFIGURED")
 	if _is_launch_profile():
-		return _plan_launch_intent(intent)
+		return _plan_launch_intent(intent, context)
 	if str(intent.get("edge", "")) != "pressed":
 		return _failure(&"UNSUPPORTED_EDGE")
 
@@ -435,7 +436,8 @@ func release_hold(plan: Dictionary, token: int, held_frames: int) -> Dictionary:
 		float(plan.get("base_attack_snapshot", 0.0)),
 		(plan.get("legacy_reward_snapshot", {}) as Dictionary).duplicate(true),
 		-1,
-		(plan.get("character_stats_snapshot", {}) as Dictionary).duplicate(true)
+		(plan.get("character_stats_snapshot", {}) as Dictionary).duplicate(true),
+		WeaponForgivenessScript.envelope_from_plan(plan, WEAPON_ID)
 	)
 	if not bool(built.get("ok", false)):
 		return built
@@ -456,7 +458,11 @@ func release_hold(plan: Dictionary, token: int, held_frames: int) -> Dictionary:
 		"ok": true,
 		"code": &"OK",
 		"finalized_plan": finalized_plan.duplicate(true),
-		"context": {"action_id": str(action_id), "held_frames": held_frames},
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			{"action_id": str(action_id), "held_frames": held_frames},
+			finalized_plan,
+			WEAPON_ID
+		),
 	}
 
 
@@ -777,8 +783,12 @@ func presentation_snapshot() -> Dictionary:
 	}
 
 
-func _plan_launch_intent(intent: Dictionary) -> Dictionary:
+func _plan_launch_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 	_sync_launch_adapter_effects()
+	var forgiveness_result := WeaponForgivenessScript.freeze_from_context(context, WEAPON_ID)
+	if not bool(forgiveness_result.get("ok", false)):
+		return _failure(&"INVALID_FORGIVENESS_DESCRIPTOR")
+	var forgiveness := (forgiveness_result.get("envelope", {}) as Dictionary).duplicate(true)
 	var semantic := StringName(str(intent.get("id", "")))
 	var edge := StringName(str(intent.get("edge", "")))
 	if semantic == &"weapon_primary":
@@ -790,13 +800,15 @@ func _plan_launch_intent(intent: Dictionary) -> Dictionary:
 				LAUNCH_PRIMARY_MAXIMUM_HOLD_FRAMES,
 				LAUNCH_PRIMARY_CHARGE_FRAMES,
 				LAUNCH_PRIMARY_ACTION_IDS,
-				{}
+				{},
+				forgiveness
 			)
 		if edge == &"released":
 			if typeof(intent.get("held_frames")) != TYPE_INT or int(intent["held_frames"]) < 0:
 				return _failure(&"INVALID_HELD_FRAMES")
 			return _build_launch_action_plan(
-				&"charged_slash" if int(intent["held_frames"]) >= LAUNCH_PRIMARY_CHARGE_FRAMES else &"light_chain"
+				&"charged_slash" if int(intent["held_frames"]) >= LAUNCH_PRIMARY_CHARGE_FRAMES else &"light_chain",
+				{}, -1.0, {}, -1, {}, forgiveness
 			)
 		return _failure(&"UNSUPPORTED_EDGE")
 	if semantic == &"weapon_ultimate":
@@ -809,7 +821,8 @@ func _plan_launch_intent(intent: Dictionary) -> Dictionary:
 				LAUNCH_ULTIMATE_HOLD_FRAMES,
 				LAUNCH_ULTIMATE_HOLD_FRAMES,
 				[LAUNCH_ULTIMATE_ACTION_ID],
-				(ultimate_action.get("resource_costs", {}) as Dictionary).duplicate(true)
+				(ultimate_action.get("resource_costs", {}) as Dictionary).duplicate(true),
+				forgiveness
 			)
 		if edge == &"released":
 			if typeof(intent.get("held_frames")) != TYPE_INT or int(intent["held_frames"]) < LAUNCH_ULTIMATE_HOLD_FRAMES:
@@ -817,7 +830,9 @@ func _plan_launch_intent(intent: Dictionary) -> Dictionary:
 					"held_frames": int(intent.get("held_frames", 0)),
 					"minimum_frames": LAUNCH_ULTIMATE_HOLD_FRAMES,
 				})
-			return _build_launch_action_plan(LAUNCH_ULTIMATE_ACTION_ID)
+			return _build_launch_action_plan(
+				LAUNCH_ULTIMATE_ACTION_ID, {}, -1.0, {}, -1, {}, forgiveness
+			)
 		return _failure(&"UNSUPPORTED_EDGE")
 	if edge != &"pressed":
 		return _failure(&"UNSUPPORTED_EDGE")
@@ -828,7 +843,7 @@ func _plan_launch_intent(intent: Dictionary) -> Dictionary:
 	var availability := _validate_owned_resource_costs(action.get("resource_costs", {}))
 	if not bool(availability.get("ok", false)):
 		return availability
-	return _build_launch_action_plan(action_id)
+	return _build_launch_action_plan(action_id, {}, -1.0, {}, -1, {}, forgiveness)
 
 
 func _build_launch_hold_plan(
@@ -838,7 +853,8 @@ func _build_launch_hold_plan(
 	maximum_frames: int,
 	charge_complete_frames: int,
 	allowed_release_ids: Array[StringName],
-	resource_costs: Dictionary
+	resource_costs: Dictionary,
+	forgiveness: Dictionary = {}
 ) -> Dictionary:
 	var modifiers_result := _frozen_modifier_snapshot()
 	if not bool(modifiers_result.get("ok", false)):
@@ -881,6 +897,7 @@ func _build_launch_hold_plan(
 		"release_action_fingerprints": fingerprints,
 	}
 	_freeze_character_stats_into_plan(plan, character_stats)
+	WeaponForgivenessScript.attach_to_plan(plan, forgiveness)
 	var validation: Dictionary = WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -891,7 +908,8 @@ func _build_launch_action_plan(
 	base_attack_snapshot: float = -1.0,
 	legacy_reward_snapshot: Dictionary = {},
 	combo_step_override: int = -1,
-	character_stats_snapshot: Dictionary = {}
+	character_stats_snapshot: Dictionary = {},
+	forgiveness: Dictionary = {}
 ) -> Dictionary:
 	var action: Dictionary = _copy_indexed(_actions_by_id, action_id)
 	if action.is_empty():
@@ -970,6 +988,8 @@ func _build_launch_action_plan(
 		"cue": cue.duplicate(true),
 	}
 	_freeze_character_stats_into_plan(plan, character_stats)
+	WeaponForgivenessScript.attach_to_plan(plan, forgiveness)
+	_apply_sword_forgiveness(plan, forgiveness)
 	if action_id == &"light_chain":
 		plan["combo_step_before"] = combo_step_override if combo_step_override >= 0 else _combo_step
 		plan["combo_reset_frames"] = LAUNCH_COMBO_RESET_FRAMES
@@ -982,6 +1002,29 @@ func _frozen_modifier_snapshot() -> Dictionary:
 	if not value is Dictionary or not _dictionary_numbers_are_finite(value):
 		return _failure(&"INVALID_MODIFIER_SNAPSHOT")
 	return {"ok": true, "code": &"OK", "modifiers": (value as Dictionary).duplicate(true)}
+
+
+func _apply_sword_forgiveness(plan: Dictionary, envelope: Dictionary) -> void:
+	if not WeaponForgivenessScript.is_valid_envelope(envelope, WEAPON_ID):
+		return
+	var reduction := WeaponForgivenessScript.descriptor_int(
+		envelope, WEAPON_ID, "recovery_reduction_frames", 0
+	)
+	var minimum := WeaponForgivenessScript.descriptor_int(
+		envelope, WEAPON_ID, "minimum_recovery_frames", 1
+	)
+	var phases_value: Variant = plan.get("phases", [])
+	if not phases_value is Array:
+		return
+	for phase_value: Variant in phases_value as Array:
+		if not phase_value is Dictionary or str((phase_value as Dictionary).get("phase", "")) != "RECOVERY":
+			continue
+		var phase := phase_value as Dictionary
+		var duration := maxi(minimum, int(phase.get("duration_frames", minimum)) - reduction)
+		phase["duration_frames"] = duration
+		if phase.has("cancel_from_frame"):
+			phase["cancel_from_frame"] = mini(int(phase["cancel_from_frame"]), duration - 1)
+		return
 
 
 func _commit_launch_action(plan: Dictionary, token: int) -> Dictionary:
@@ -1004,7 +1047,13 @@ func _commit_launch_action(plan: Dictionary, token: int) -> Dictionary:
 	_active_phase = &"WINDUP"
 	_active_plan = plan.duplicate(true)
 	_modifier_snapshot = (plan.get("modifier_snapshot", {}) as Dictionary).duplicate(true)
-	return {"ok": true, "code": &"OK", "context": {"action_id": str(plan["action_id"])}}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			{"action_id": str(plan["action_id"])}, plan, WEAPON_ID
+		),
+	}
 
 
 func _stage_launch_action(plan: Dictionary, _token: int) -> Dictionary:
@@ -1105,7 +1154,8 @@ func _launch_final_plan_matches_profile(plan: Dictionary, action_id: StringName)
 		float(plan["base_attack_snapshot"]),
 		(plan["legacy_reward_snapshot"] as Dictionary).duplicate(true),
 		int(plan.get("combo_step_before", -1)) if action_id == &"light_chain" else -1,
-		(plan["character_stats_snapshot"] as Dictionary).duplicate(true)
+		(plan["character_stats_snapshot"] as Dictionary).duplicate(true),
+		WeaponForgivenessScript.envelope_from_plan(plan, WEAPON_ID)
 	)
 	if not bool(expected_result.get("ok", false)):
 		return false
@@ -1208,6 +1258,8 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	var contract_result: Dictionary = WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(contract_result.get("ok", false)):
 		return contract_result
+	if not WeaponForgivenessScript.plan_envelope_is_valid(plan, WEAPON_ID):
+		return _failure(&"INVALID_FORGIVENESS_FINGERPRINT")
 	if (
 		str(plan.get("profile_id", "")) != str(_profile_snapshot.get("id", ""))
 		or int(plan.get("profile_version", 0)) != int(_profile_snapshot.get("profile_version", 0))

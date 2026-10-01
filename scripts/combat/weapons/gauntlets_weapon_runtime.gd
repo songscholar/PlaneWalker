@@ -2,6 +2,7 @@ class_name GauntletsWeaponRuntime
 extends "res://scripts/combat/weapons/weapon_runtime.gd"
 
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
+const WeaponForgivenessScript := preload("res://scripts/combat/weapons/weapon_forgiveness.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const GauntletsComboStateScript := preload("res://scripts/combat/weapons/gauntlets_combo_state.gd")
 
@@ -236,7 +237,14 @@ func release_hold(plan: Dictionary, token: int, held_frames: int) -> Dictionary:
 	_active_phase = &"WINDUP"
 	_modifier_snapshot = (finalized_plan.get("modifier_snapshot", {}) as Dictionary).duplicate(true)
 	_live_hold_context.clear()
-	return {"ok": true, "code": &"OK", "finalized_plan": finalized_plan.duplicate(true), "context": {"action_id": resolved_action_id}}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"finalized_plan": finalized_plan.duplicate(true),
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			{"action_id": resolved_action_id}, finalized_plan, WEAPON_ID
+		),
+	}
 
 
 func update_hold_context(plan: Dictionary, token: int, context: Dictionary) -> bool:
@@ -810,6 +818,9 @@ func _build_hold_skeleton(
 		"release_action_fingerprints": release_action_fingerprints.duplicate(true),
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
+	WeaponForgivenessScript.attach_to_plan(
+		plan, frozen_context.get("character_forgiveness", {})
+	)
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -874,6 +885,9 @@ func _build_action_plan(action_id: StringName, context: Dictionary) -> Dictionar
 		roundi(120.0 * float(frozen_modifiers.get("weapon.combo_timeout", 1.0))),
 		1, GauntletsComboStateScript.MAX_COMBO_TIMEOUT_FRAMES
 	)
+	var forgiveness := (
+		frozen_context.get("character_forgiveness", {}) as Dictionary
+	).duplicate(true)
 	var status_duration_multiplier := maxf(0.0, float(frozen_modifiers.get("weapon.status_duration", 1.0)))
 	var parameters := (payload.get("parameters", {}) as Dictionary).duplicate(true)
 	var damage_multiplier := float(parameters.get("damage_multiplier", 0.0))
@@ -887,6 +901,15 @@ func _build_action_plan(action_id: StringName, context: Dictionary) -> Dictionar
 	parameters["time_damage_ratio"] = float(tier.get("time_damage_ratio", 0.0)) if PRIMARY_ACTION_IDS.has(action_id) else 0.0
 	parameters["energy_return"] = int(tier.get("energy_return", 0))
 	parameters["combo_eligible"] = int(parameters.get("combo_gain", 0)) > 0
+	if bool(parameters["combo_eligible"]) and not forgiveness.is_empty():
+		combo_timeout_frames = mini(
+			WeaponForgivenessScript.descriptor_int(
+				forgiveness, WEAPON_ID, "combo_cap_frames", combo_timeout_frames
+			),
+			combo_timeout_frames + WeaponForgivenessScript.descriptor_int(
+				forgiveness, WEAPON_ID, "combo_extension_frames", 0
+			)
+		)
 	parameters["energy_eligible"] = int(tier.get("energy_return", 0)) > 0
 	parameters["stop_extension_eligible"] = bool(time_context.get("stop_active", false))
 	parameters["stop_extension_frames"] = 5 if bool(time_context.get("stop_active", false)) else 0
@@ -1010,6 +1033,8 @@ func _build_action_plan(action_id: StringName, context: Dictionary) -> Dictionar
 		"invulnerable_during_cast": action_id in [DODGE_COUNTER_ACTION_ID, ULTIMATE_ACTION_ID],
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
+	if bool(parameters.get("combo_eligible", false)):
+		WeaponForgivenessScript.attach_to_plan(plan, forgiveness)
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -1023,7 +1048,13 @@ func _stage_and_commit(plan: Dictionary, token: int) -> Dictionary:
 	_active_phase = StringName(str(((plan["phases"] as Array)[0] as Dictionary)["phase"]))
 	_active_plan = plan.duplicate(true)
 	_modifier_snapshot = (plan.get("modifier_snapshot", {}) as Dictionary).duplicate(true)
-	return {"ok": true, "code": &"OK", "context": {"action_id": _resolved_action_id(plan)}}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			{"action_id": _resolved_action_id(plan)}, plan, WEAPON_ID
+		),
+	}
 
 
 func _stage_definition(plan: Dictionary, token: int) -> Dictionary:
@@ -1097,6 +1128,17 @@ func _materialize_payloads(plan: Dictionary, token: int) -> Array[Dictionary]:
 
 
 func _apply_committed_mutations(plan: Dictionary, token: int) -> void:
+	var envelope := WeaponForgivenessScript.envelope_from_plan(plan, WEAPON_ID)
+	if not envelope.is_empty():
+		_combo_state.call(
+			"extend_active_timeout",
+			WeaponForgivenessScript.descriptor_int(
+				envelope, WEAPON_ID, "combo_extension_frames", 0
+			),
+			WeaponForgivenessScript.descriptor_int(
+				envelope, WEAPON_ID, "combo_cap_frames", 120
+			)
+		)
 	var action_id := StringName(_resolved_action_id(plan))
 	if PRIMARY_ACTION_IDS.has(action_id):
 		_combo_state.call("commit_primary_action", action_id, token)
@@ -1344,6 +1386,8 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	var contract := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(contract.get("ok", false)):
 		return contract
+	if not WeaponForgivenessScript.plan_envelope_is_valid(plan, WEAPON_ID):
+		return _failure(&"INVALID_FORGIVENESS_FINGERPRINT")
 	if not _plan_character_stats_match(plan):
 		return _failure(&"INVALID_CHARACTER_STATS")
 	if str(plan.get("profile_id", "")) != PROFILE_ID or int(plan.get("profile_version", 0)) != PROFILE_VERSION:
@@ -1357,6 +1401,26 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	var action_id := StringName(_resolved_action_id(plan))
 	if not _actions_by_id.has(str(action_id)):
 		return _failure(&"ACTION_ID_MISMATCH")
+	var base_combo_timeout := clampi(
+		roundi(120.0 * float((plan.get("modifier_snapshot", {}) as Dictionary).get(
+			"weapon.combo_timeout", 1.0
+		))),
+		1,
+		GauntletsComboStateScript.MAX_COMBO_TIMEOUT_FRAMES
+	)
+	var expected_combo_timeout := base_combo_timeout
+	var forgiveness_envelope := WeaponForgivenessScript.envelope_from_plan(plan, WEAPON_ID)
+	if not forgiveness_envelope.is_empty():
+		expected_combo_timeout = mini(
+			WeaponForgivenessScript.descriptor_int(
+				forgiveness_envelope, WEAPON_ID, "combo_cap_frames", base_combo_timeout
+			),
+			base_combo_timeout + WeaponForgivenessScript.descriptor_int(
+				forgiveness_envelope, WEAPON_ID, "combo_extension_frames", 0
+			)
+		)
+	if int(plan.get("combo_timeout_frames", 0)) != expected_combo_timeout:
+		return _failure(&"COMBO_TIMEOUT_MISMATCH")
 	if PRIMARY_ACTION_IDS.has(action_id) and action_id != StringName(_combo_state.call("peek_primary_action_id")):
 		return _failure(&"STALE_CHAIN_PLAN")
 	var rewind_generation := int(plan.get("rewind_generation_claim", 0))
@@ -1447,17 +1511,37 @@ func _normalized_context(value: Dictionary) -> Dictionary:
 	)
 	if not _valid_character_stats_snapshot(character_stats):
 		return _failure(&"INVALID_CONTEXT", {"field": "character_stats"})
+	var forgiveness_envelope: Dictionary = {}
+	if value.has("character_forgiveness"):
+		var forgiveness_value: Variant = value.get("character_forgiveness")
+		if (
+			forgiveness_value is Dictionary
+			and WeaponForgivenessScript.is_valid_envelope(
+				forgiveness_value as Dictionary, WEAPON_ID
+			)
+		):
+			forgiveness_envelope = (forgiveness_value as Dictionary).duplicate(true)
+		else:
+			var forgiveness_result := WeaponForgivenessScript.freeze_from_context(value, WEAPON_ID)
+			if not bool(forgiveness_result.get("ok", false)):
+				return _failure(&"INVALID_FORGIVENESS_DESCRIPTOR")
+			forgiveness_envelope = (
+				forgiveness_result.get("envelope", {}) as Dictionary
+			).duplicate(true)
+	var normalized_context := {
+		"run_seed": int(run_seed_value), "aim_direction": direction.normalized(),
+		"dash_completion_token": int(value.get("dash_completion_token", 0)),
+		"frames_since_dash_completion": int(value.get("frames_since_dash_completion", -1)),
+		"dash_direction": value.get("dash_direction", direction.normalized()),
+		"player_generation": int(value.get("player_generation", 0)),
+		"time_interactions": time_context,
+		"character_stats": character_stats,
+	}
+	if not forgiveness_envelope.is_empty():
+		normalized_context["character_forgiveness"] = forgiveness_envelope
 	return {
 		"ok": true, "code": &"OK",
-		"context": {
-			"run_seed": int(run_seed_value), "aim_direction": direction.normalized(),
-			"dash_completion_token": int(value.get("dash_completion_token", 0)),
-			"frames_since_dash_completion": int(value.get("frames_since_dash_completion", -1)),
-			"dash_direction": value.get("dash_direction", direction.normalized()),
-			"player_generation": int(value.get("player_generation", 0)),
-			"time_interactions": time_context,
-			"character_stats": character_stats,
-		},
+		"context": normalized_context,
 	}
 
 

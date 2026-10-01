@@ -206,6 +206,7 @@ func _run() -> void:
 	_test_coordinator_publishes_real_hold_identity_and_live_reload()
 	_test_shotgun_is_atomic_seeded_and_pellet_scoped()
 	_test_reload_half_open_boundaries_and_completion()
+	_test_wanderer_reload_window_forgiveness()
 	_test_perfect_reload_grants_free_time_load_without_touching_active_cooldown()
 	_test_active_time_load_refills_and_accelerates_future_shots()
 	_test_ultimate_hold_boundary_and_time_load_amplification()
@@ -214,6 +215,34 @@ func _run() -> void:
 	_test_failed_gameplay_rewind_restore_compensates_adapter_and_runtime()
 	await _test_real_adapter_gameplay_rewind_preserves_committed_projectile_identity()
 	_suite.finish(get_tree())
+
+
+func _test_wanderer_reload_window_forgiveness() -> void:
+	var fixture := _fixture()
+	var runtime: RefCounted = fixture["runtime"]
+	var shot: Dictionary = runtime.plan_intent(
+		_release_intent(&"weapon_primary", 0), _context(2601)
+	).get("plan", {})
+	_suite.assert_true(bool(runtime.commit_action(shot, 2601).get("ok", false)), "ammo fixture shot commits")
+	runtime.finish_action(2601)
+	var context := _context(2602)
+	context["character_forgiveness"] = {
+		"weapon_id": &"gun", "expires_after_frames": 180,
+		"perfect_start_frame": 26, "perfect_end_frame": 37,
+	}
+	var reload: Dictionary = runtime.plan_intent(
+		_press_intent(&"weapon_utility"), context
+	).get("plan", {})
+	var committed: Dictionary = runtime.commit_action(reload, 2602)
+	_suite.assert_equal(runtime.reload_window(25).get("perfect_confirm"), false, "frame 25 stays outside forgiven reload")
+	_suite.assert_equal(runtime.reload_window(26).get("perfect_confirm"), true, "frame 26 opens forgiven reload")
+	_suite.assert_equal(runtime.reload_window(37).get("perfect_confirm"), true, "frame 37 remains inside forgiven reload")
+	_suite.assert_equal(runtime.reload_window(38).get("perfect_confirm"), false, "frame 38 closes forgiven reload")
+	_suite.assert_equal(
+		(committed.get("context", {}) as Dictionary).get("consume_forgiveness"), true,
+		"successful reload commit returns the one-shot consumption fact"
+	)
+	_free_fixture(fixture)
 
 
 func _test_character_stats_freeze_across_hold_release() -> void:

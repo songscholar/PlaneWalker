@@ -102,6 +102,23 @@ func notify_dash_completed() -> void:
 	pass
 
 
+func extend_active_timeout(extension_frames: int, cap_frames: int) -> bool:
+	if (
+		extension_frames <= 0
+		or cap_frames < COMBO_TIMEOUT_FRAMES
+		or cap_frames > MAX_COMBO_TIMEOUT_FRAMES
+		or _combo_count <= 0
+		or _combo_timeout_frames_remaining <= 0
+	):
+		return false
+	_combo_timeout_cap_frames = mini(cap_frames, _combo_timeout_cap_frames + extension_frames)
+	_combo_timeout_frames_remaining = mini(
+		_combo_timeout_cap_frames,
+		_combo_timeout_frames_remaining + extension_frames
+	)
+	return true
+
+
 func reset_combo(_reason: StringName = &"reset") -> void:
 	_combo_count = 0
 	_combo_timeout_frames_remaining = 0

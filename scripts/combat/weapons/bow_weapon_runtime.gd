@@ -2,6 +2,7 @@ class_name BowWeaponRuntime
 extends "res://scripts/combat/weapons/weapon_runtime.gd"
 
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
+const WeaponForgivenessScript := preload("res://scripts/combat/weapons/weapon_forgiveness.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 
 const SNAPSHOT_SCHEMA_VERSION := 2
@@ -808,7 +809,10 @@ func presentation_snapshot() -> Dictionary:
 		"phase": str(_active_phase),
 		"token": _active_token,
 		"charge_frames": float(hold.get("effective_frames", 0.0)),
-		"maximum_charge_frames": LAUNCH_FULL_CHARGE_FRAMES if _is_launch_profile() else MAXIMUM_CHARGE_FRAMES,
+		"maximum_charge_frames": int(hold.get(
+			"full_charge_frames",
+			LAUNCH_FULL_CHARGE_FRAMES if _is_launch_profile() else MAXIMUM_CHARGE_FRAMES
+		)),
 		"charge_ratio": float(hold.get("charge_ratio", 0.0)),
 		"full_charge": bool(parameters.get("full_charge", false)),
 		"cooldown_frames": int(_active_plan.get("cooldown_frames", 0)) if _is_launch_profile() else _profile_cooldown_frames(),
@@ -849,6 +853,13 @@ func _plan_launch_intent(intent: Dictionary, context: Dictionary) -> Dictionary:
 		"modifier_snapshot": (modifier_value as Dictionary).duplicate(true),
 		"time_interactions": (time_result["context"] as Dictionary).duplicate(true),
 	}
+	if action_id == str(LAUNCH_PRIMARY_ACTION_ID):
+		var forgiveness_result := WeaponForgivenessScript.freeze_from_context(context, WEAPON_ID)
+		if not bool(forgiveness_result.get("ok", false)):
+			return _failure(&"INVALID_FORGIVENESS_DESCRIPTOR")
+		frozen_context["character_forgiveness"] = (
+			forgiveness_result.get("envelope", {}) as Dictionary
+		).duplicate(true)
 	var edge := StringName(str(intent.get("edge", "")))
 	if action_id == str(LAUNCH_PRIMARY_ACTION_ID):
 		if edge == &"pressed":
@@ -919,7 +930,8 @@ func _build_launch_hold_skeleton(frozen_context: Dictionary) -> Dictionary:
 		frozen_context["modifier_snapshot"],
 		frozen_context["time_interactions"]
 	)
-	var full_charge_raw_frames := ceili(float(LAUNCH_FULL_CHARGE_FRAMES) / maxf(charge_multiplier, 0.001))
+	var full_charge_frames := _launch_full_charge_frames(frozen_context)
+	var full_charge_raw_frames := ceili(float(full_charge_frames) / maxf(charge_multiplier, 0.001))
 	var hold_duration := full_charge_raw_frames + (LAUNCH_AUTO_RELEASE_FRAMES - LAUNCH_FULL_CHARGE_FRAMES)
 	var plan := {
 		"weapon_id": str(WEAPON_ID),
@@ -943,7 +955,7 @@ func _build_launch_hold_skeleton(frozen_context: Dictionary) -> Dictionary:
 				"phase": "HOLD",
 				"duration_frames": hold_duration,
 				"minimum_hold_frames": 0,
-				"charge_complete_frames": LAUNCH_FULL_CHARGE_FRAMES,
+				"charge_complete_frames": full_charge_frames,
 				"hold_progress_multiplier": charge_multiplier,
 				"movement_start_multiplier": LAUNCH_NORMAL_MOVE_MULTIPLIER,
 				"movement_multiplier": LAUNCH_FULL_MOVE_MULTIPLIER,
@@ -968,6 +980,9 @@ func _build_launch_hold_skeleton(frozen_context: Dictionary) -> Dictionary:
 		"payloads": [],
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["adapter_snapshot"])
+	WeaponForgivenessScript.attach_to_plan(
+		plan, frozen_context.get("character_forgiveness", {})
+	)
 	return plan
 
 
@@ -982,12 +997,13 @@ func _build_launch_primary_plan(
 		frozen_context["modifier_snapshot"],
 		frozen_context["time_interactions"]
 	)
+	var full_charge_frames := _launch_full_charge_frames(frozen_context)
 	var effective_frames := clampf(
 		float(raw_frames) * charge_multiplier,
 		0.0,
-		float(LAUNCH_FULL_CHARGE_FRAMES)
+		float(full_charge_frames)
 	)
-	var tier := _launch_charge_tier(effective_frames)
+	var tier := _launch_charge_tier(effective_frames, full_charge_frames)
 	if tier.is_empty():
 		return _failure(&"CHARGE_TIER_NOT_FOUND")
 	var recovery_frames := int(tier["recovery_frames"])
@@ -1040,8 +1056,8 @@ func _build_launch_primary_plan(
 		"effective_frames": effective_frames,
 		"minimum_frames": 0,
 		"maximum_frames": LAUNCH_AUTO_RELEASE_FRAMES,
-		"charge_ratio": effective_frames / float(LAUNCH_FULL_CHARGE_FRAMES),
-		"full_charge_frames": LAUNCH_FULL_CHARGE_FRAMES,
+		"charge_ratio": effective_frames / float(full_charge_frames),
+		"full_charge_frames": full_charge_frames,
 	}
 	plan["phases"] = [
 		{"phase": "WINDUP", "duration_frames": int(tier["windup_frames"]), "movement_multiplier": float(action["movement_multiplier"])},
@@ -1141,6 +1157,10 @@ func _launch_plan_base(action_id: String, frozen_context: Dictionary) -> Diction
 		"payloads": [],
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["adapter_snapshot"])
+	if action_id == str(LAUNCH_PRIMARY_ACTION_ID):
+		WeaponForgivenessScript.attach_to_plan(
+			plan, frozen_context.get("character_forgiveness", {})
+		)
 	return plan
 
 
@@ -1291,7 +1311,11 @@ func _release_launch_hold(plan: Dictionary, token: int, held_frames: int) -> Dic
 		"ok": true,
 		"code": &"OK",
 		"finalized_plan": finalized_plan.duplicate(true),
-		"context": (finalized_result.get("context", {}) as Dictionary).duplicate(true),
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			(finalized_result.get("context", {}) as Dictionary).duplicate(true),
+			finalized_plan,
+			WEAPON_ID
+		),
 	}
 
 
@@ -1541,6 +1565,8 @@ func _validate_launch_plan(plan: Dictionary) -> Dictionary:
 	var contract_result := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(contract_result.get("ok", false)):
 		return contract_result
+	if not WeaponForgivenessScript.plan_envelope_is_valid(plan, WEAPON_ID):
+		return _failure(&"INVALID_FORGIVENESS_FINGERPRINT")
 	if str(plan.get("profile_id", "")) != LAUNCH_PROFILE_ID or int(plan.get("profile_version", 0)) != 1:
 		return _failure(&"PROFILE_MISMATCH")
 	var action_id := str(plan.get("action_id", ""))
@@ -1602,7 +1628,7 @@ func _build_launch_press_plan_unvalidated(action_id: String, frozen_context: Dic
 
 
 func _launch_frozen_context_from_plan(plan: Dictionary) -> Dictionary:
-	return {
+	var result := {
 		"direction": plan["aim_direction_snapshot"],
 		"target_point": plan["target_point_snapshot"],
 		"run_seed": plan["run_seed"],
@@ -1610,6 +1636,11 @@ func _launch_frozen_context_from_plan(plan: Dictionary) -> Dictionary:
 		"adapter_snapshot": (plan["adapter_snapshot"] as Dictionary).duplicate(true),
 		"time_interactions": (plan["time_interactions_snapshot"] as Dictionary).duplicate(true),
 	}
+	if str(plan.get("action_id", "")) == str(LAUNCH_PRIMARY_ACTION_ID):
+		result["character_forgiveness"] = WeaponForgivenessScript.envelope_from_plan(
+			plan, WEAPON_ID
+		)
+	return result
 
 
 func _normalize_launch_time_context(value: Variant) -> Dictionary:
@@ -1650,8 +1681,22 @@ func _launch_charge_multiplier(
 	return maxf(multiplier, 0.001)
 
 
-func _launch_charge_tier(effective_frames: float) -> Dictionary:
+func _launch_full_charge_frames(frozen_context: Dictionary) -> int:
+	var envelope_value: Variant = frozen_context.get("character_forgiveness", {})
+	if not envelope_value is Dictionary:
+		return LAUNCH_FULL_CHARGE_FRAMES
+	return WeaponForgivenessScript.descriptor_int(
+		envelope_value as Dictionary,
+		WEAPON_ID,
+		"full_charge_frames",
+		LAUNCH_FULL_CHARGE_FRAMES
+	)
+
+
+func _launch_charge_tier(effective_frames: float, full_charge_frames: int = LAUNCH_FULL_CHARGE_FRAMES) -> Dictionary:
 	var frame_value := floori(effective_frames)
+	if frame_value >= full_charge_frames:
+		return LAUNCH_PRIMARY_TIERS.back().duplicate(true)
 	for tier: Dictionary in LAUNCH_PRIMARY_TIERS:
 		if (
 			frame_value >= int(tier["minimum_frames"])

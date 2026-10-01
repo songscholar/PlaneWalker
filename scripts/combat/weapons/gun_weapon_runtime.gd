@@ -3,6 +3,7 @@ extends "res://scripts/combat/weapons/weapon_runtime.gd"
 
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const WeaponActionContractScript := preload("res://scripts/combat/weapons/weapon_action_contract.gd")
+const WeaponForgivenessScript := preload("res://scripts/combat/weapons/weapon_forgiveness.gd")
 
 const SNAPSHOT_SCHEMA_VERSION := 1
 const PROFILE_ID := "gun_launch_v1"
@@ -481,13 +482,23 @@ func _confirm_reload_authoritative(reload_frame: int) -> Dictionary:
 
 
 func reload_window(frame: int) -> Dictionary:
+	var perfect_start := 28
+	var perfect_end_exclusive := 36
+	var envelope := WeaponForgivenessScript.envelope_from_plan(_active_plan, WEAPON_ID)
+	if not envelope.is_empty() and _resolved_action_id(_active_plan) == "reload":
+		perfect_start = WeaponForgivenessScript.descriptor_int(
+			envelope, WEAPON_ID, "perfect_start_frame", perfect_start
+		)
+		perfect_end_exclusive = WeaponForgivenessScript.descriptor_int(
+			envelope, WEAPON_ID, "perfect_end_frame", perfect_end_exclusive - 1
+		) + 1
 	if frame < 0:
 		return {"segment": "invalid", "dash_cancellable": false, "perfect_confirm": false, "complete": false}
 	if frame < 8:
 		return {"segment": "locked_open", "dash_cancellable": false, "perfect_confirm": false, "complete": false}
-	if frame < 28:
+	if frame < perfect_start:
 		return {"segment": "dash_cancel", "dash_cancellable": true, "perfect_confirm": false, "complete": false}
-	if frame < 36:
+	if frame < perfect_end_exclusive:
 		return {"segment": "perfect", "dash_cancellable": true, "perfect_confirm": true, "complete": false}
 	if frame < 40:
 		return {"segment": "dash_cancel", "dash_cancellable": true, "perfect_confirm": false, "complete": false}
@@ -846,6 +857,9 @@ func _build_reload_plan(context: Dictionary, empty_primary_trigger: bool) -> Dic
 	if not bool(modifiers.get("ok", false)):
 		return modifiers
 	var frozen_context: Dictionary = normalized["context"]
+	var forgiveness_result := WeaponForgivenessScript.freeze_from_context(context, WEAPON_ID)
+	if not bool(forgiveness_result.get("ok", false)):
+		return _failure(&"INVALID_FORGIVENESS_DESCRIPTOR")
 	var plan := {
 		"weapon_id": str(WEAPON_ID), "action_id": str(RELOAD_ACTION_ID),
 		"profile_id": PROFILE_ID, "profile_version": PROFILE_VERSION,
@@ -864,6 +878,9 @@ func _build_reload_plan(context: Dictionary, empty_primary_trigger: bool) -> Dic
 		"cue": cue, "time_interactions": [], "boss_conversion": _boss_conversion(),
 	}
 	_freeze_character_stats_into_plan(plan, frozen_context["character_stats"])
+	WeaponForgivenessScript.attach_to_plan(
+		plan, forgiveness_result.get("envelope", {})
+	)
 	var validation := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	return {"ok": true, "code": &"OK", "plan": plan, "context": {}} if bool(validation.get("ok", false)) else validation
 
@@ -962,7 +979,13 @@ func _stage_and_commit(plan: Dictionary, token: int) -> Dictionary:
 	_active_phase = StringName(str(((plan["phases"] as Array)[0] as Dictionary)["phase"]))
 	_active_plan = plan.duplicate(true)
 	_modifier_snapshot = (plan.get("modifier_snapshot", {}) as Dictionary).duplicate(true)
-	return {"ok": true, "code": &"OK", "context": {"action_id": _resolved_action_id(plan)}}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"context": WeaponForgivenessScript.merge_consumption_context(
+			{"action_id": _resolved_action_id(plan)}, plan, WEAPON_ID
+		),
+	}
 
 
 func _stage_definition(plan: Dictionary, token: int) -> Dictionary:
@@ -1122,6 +1145,8 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 	var contract_result := WeaponActionContractScript.validate_plan(plan, WEAPON_ID)
 	if not bool(contract_result.get("ok", false)):
 		return contract_result
+	if not WeaponForgivenessScript.plan_envelope_is_valid(plan, WEAPON_ID):
+		return _failure(&"INVALID_FORGIVENESS_FINGERPRINT")
 	if not _plan_character_stats_match(plan):
 		return _failure(&"INVALID_CHARACTER_STATS")
 	if str(plan.get("profile_id", "")) != PROFILE_ID or int(plan.get("profile_version", 0)) != PROFILE_VERSION:
