@@ -34,6 +34,22 @@ EXPECTED_COUNTS = {
     "curses": 18,
     "talents": 15,
 }
+EXPECTED_CHARACTERS = {
+    "wanderer",
+    "time_guardian",
+    "void_walker",
+    "primordial_knight",
+    "time_lord",
+}
+EXPECTED_WEAPONS = {"sword", "bow", "gun", "staff", "gauntlets"}
+EXPECTED_TIME_PAIRS = {
+    ("stop", "rewind"),
+    ("stop", "rift"),
+    ("stop", "accelerate"),
+    ("rewind", "rift"),
+    ("rewind", "accelerate"),
+    ("rift", "accelerate"),
+}
 
 
 class LaunchPoolReportContractTest(unittest.TestCase):
@@ -58,7 +74,7 @@ class LaunchPoolReportContractTest(unittest.TestCase):
                 "content_digest",
             },
         )
-        self.assertEqual(self.report["schema_version"], "1.0.0")
+        self.assertEqual(self.report["schema_version"], "2.0.0")
         self.assertEqual(self.report["report_type"], "launch_pool_formation")
         self.assertEqual(
             self.report["evidence"],
@@ -70,6 +86,14 @@ class LaunchPoolReportContractTest(unittest.TestCase):
             },
         )
         self.assertEqual(simulation.validate_report(self.report), [])
+        self.assertEqual(
+            self.report["methodology"]["loadout_policy"],
+            "canonical_5x5x6_launch_loadouts_with_definition_compatibility",
+        )
+        self.assertEqual(
+            self.report["methodology"]["effect_execution_model"],
+            "bounded_effect_catalog_dry_run_with_active_handler_receipts",
+        )
 
     def test_report_covers_exact_counts_routes_and_canonical_seeds(self) -> None:
         self.assertEqual(self.report["content_counts"], EXPECTED_COUNTS)
@@ -100,7 +124,15 @@ class LaunchPoolReportContractTest(unittest.TestCase):
             self.assertEqual(len(sample["selected"]["utility"]), 1)
             self.assertEqual(len(sample["selected"]["talent"]), 1)
             exposed_talents.update(sample["selected"]["talent"])
+            self.assertIn(sample["character_id"], EXPECTED_CHARACTERS)
+            self.assertIn(sample["weapon_id"], EXPECTED_WEAPONS)
+            self.assertIn(tuple(sample["time_ability_ids"]), EXPECTED_TIME_PAIRS)
             self.assertGreater(sample["effect_execution_count"], 0)
+            self.assertEqual(
+                sample["effect_execution_count"],
+                sum(sample["effect_runtime_domains"].values()),
+            )
+            self.assertRegex(sample["effect_execution_digest"], r"^[0-9a-f]{64}$")
 
         self.assertEqual(len(exposed_talents), 15)
         for summary in self.report["route_summaries"]:
@@ -119,7 +151,21 @@ class LaunchPoolReportContractTest(unittest.TestCase):
     def test_source_hashes_and_report_digest_are_stable(self) -> None:
         self.assertEqual(
             set(self.report["content_digests"]),
-            {"catalog", "items", "blessings", "curses", "talents", "archetypes", "combined"},
+            {
+                "catalog",
+                "items",
+                "blessings",
+                "curses",
+                "talents",
+                "archetypes",
+                "effect_catalog",
+                "characters",
+                "character_profiles",
+                "weapons",
+                "weapon_profiles",
+                "time_abilities",
+                "combined",
+            },
         )
         for digest in self.report["content_digests"].values():
             self.assertRegex(digest, r"^[0-9a-f]{64}$")
@@ -142,6 +188,81 @@ class LaunchPoolReportContractTest(unittest.TestCase):
         human["evidence"]["synthetic"] = False
         human["evidence"]["human_playtests"] = 20
         self.assertTrue(any("evidence" in item for item in simulation.validate_report(human)))
+
+        forged_sources = copy.deepcopy(self.report)
+        forged_sources["content_digests"]["items"] = "0" * 64
+        forged_sources["content_digests"]["combined"] = simulation._canonical_digest(
+            {
+                key: value
+                for key, value in forged_sources["content_digests"].items()
+                if key != "combined"
+            }
+        )
+        forged_sources["content_digest"] = simulation.report_digest(forged_sources)
+        self.assertTrue(
+            any(
+                "source digest mismatch" in item
+                for item in simulation.validate_report(forged_sources)
+            )
+        )
+
+    def test_validator_rejects_incompatible_loadouts_and_fake_execution(self) -> None:
+        incompatible = copy.deepcopy(self.report)
+        accelerated = next(
+            sample
+            for sample in incompatible["samples"]
+            if sample["archetype_id"] == "accelerated_combo"
+        )
+        self.assertEqual(accelerated["weapon_id"], "sword")
+        accelerated["weapon_id"] = "bow"
+        incompatible["content_digest"] = simulation.report_digest(incompatible)
+        self.assertTrue(
+            any(
+                "compatibility" in item
+                for item in simulation.validate_report(incompatible)
+            )
+        )
+
+        fake_execution = copy.deepcopy(self.report)
+        fake_execution["samples"][0]["effect_execution_count"] += 1
+        fake_execution["content_digest"] = simulation.report_digest(fake_execution)
+        self.assertTrue(
+            any(
+                "effect_execution" in item
+                for item in simulation.validate_report(fake_execution)
+            )
+        )
+
+    def test_dry_run_rejects_invalid_active_payload_and_weapon_capability(self) -> None:
+        context = simulation._load_simulation_context()
+        active = copy.deepcopy(context["rows_by_id"]["absolute_zero_device"][1])
+        active["active_parameters"]["radius"] = True
+        with self.assertRaisesRegex(ValueError, "active_parameters"):
+            simulation._execute_definition_dry_run(
+                "item",
+                active,
+                {
+                    "character_id": "wanderer",
+                    "weapon_id": "sword",
+                    "time_ability_ids": ("stop", "rewind"),
+                },
+                context["effect_catalog"],
+                {},
+            )
+
+        sword_only = context["rows_by_id"]["accelerated_combo"][1]
+        with self.assertRaisesRegex(ValueError, "weapon"):
+            simulation._execute_definition_dry_run(
+                "item",
+                sword_only,
+                {
+                    "character_id": "wanderer",
+                    "weapon_id": "bow",
+                    "time_ability_ids": ("stop", "accelerate"),
+                },
+                context["effect_catalog"],
+                {},
+            )
 
     def test_cli_requires_thirty_seeds_and_is_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

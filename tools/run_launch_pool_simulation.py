@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from collections import Counter
 from pathlib import Path
@@ -24,8 +25,14 @@ BLESSINGS_PATH = BASE_CONTENT_ROOT / "blessings.json"
 CURSES_PATH = BASE_CONTENT_ROOT / "curses.json"
 TALENTS_PATH = BASE_CONTENT_ROOT / "talents.json"
 ARCHETYPES_PATH = BASE_CONTENT_ROOT / "archetype_profiles.json"
+EFFECT_CATALOG_PATH = PROJECT_ROOT / "data" / "content" / "effect_catalog.json"
+CHARACTERS_PATH = BASE_CONTENT_ROOT / "characters.json"
+CHARACTER_PROFILES_PATH = BASE_CONTENT_ROOT / "character_runtime_profiles.json"
+WEAPONS_PATH = BASE_CONTENT_ROOT / "weapons.json"
+WEAPON_PROFILES_PATH = BASE_CONTENT_ROOT / "weapon_runtime_profiles.json"
+TIME_ABILITIES_PATH = BASE_CONTENT_ROOT / "time_abilities.json"
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 REPORT_TYPE = "launch_pool_formation"
 CANONICAL_ARCHETYPES = (
     "freeze_burst",
@@ -38,6 +45,23 @@ CANONICAL_ARCHETYPES = (
     "echo_legion",
 )
 CANONICAL_SEEDS = tuple(range(20260901, 20260931))
+CANONICAL_CHARACTERS = (
+    "wanderer",
+    "time_guardian",
+    "void_walker",
+    "primordial_knight",
+    "time_lord",
+)
+CANONICAL_WEAPONS = ("sword", "bow", "gun", "staff", "gauntlets")
+CANONICAL_TIME_ABILITIES = ("stop", "rewind", "rift", "accelerate")
+CANONICAL_TIME_PAIRS = (
+    ("stop", "rewind"),
+    ("stop", "rift"),
+    ("stop", "accelerate"),
+    ("rewind", "rift"),
+    ("rewind", "accelerate"),
+    ("rift", "accelerate"),
+)
 EXPECTED_SEED_COUNT = len(CANONICAL_SEEDS)
 EXPECTED_COUNTS = {
     "items": 50,
@@ -71,11 +95,15 @@ SAMPLE_FIELDS = {
     "archetype_id",
     "seed",
     "character_id",
+    "weapon_id",
+    "time_ability_ids",
     "formation_success",
     "failure_reasons",
     "selected",
     "option_exposure",
     "effect_execution_count",
+    "effect_execution_digest",
+    "effect_runtime_domains",
     "active_usage_count",
     "curse_tradeoff_count",
 }
@@ -94,26 +122,40 @@ SUMMARY_FIELDS = {
     "active_usage_count",
     "curse_tradeoff_count",
 }
+COMPATIBILITY_FIELDS = {
+    "archetype_ids",
+    "character_ids",
+    "weapon_ids",
+    "time_ability_ids",
+}
+ACTIVE_HANDLER_IDS = {
+    "absolute_zero",
+    "paradox_beacon",
+    "gravity_snare",
+    "redline_injector",
+    "blood_price",
+    "aegis_reversal",
+    "railshot",
+    "army_of_yesterday",
+}
+TIME_EFFECT_PREFIXES = {
+    "time_stop_": "stop",
+    "rewind_": "rewind",
+    "time_rift_": "rift",
+    "time_accelerate_": "accelerate",
+}
 
 
 def build_report(seed_count: int = EXPECTED_SEED_COUNT) -> dict[str, Any]:
     if seed_count != EXPECTED_SEED_COUNT:
         raise ValueError(f"seed_count must be exactly {EXPECTED_SEED_COUNT}")
 
-    catalog = _load_json(CATALOG_PATH)
-    live = {
-        "item": _launch_rows(_require_rows(_load_json(ITEMS_PATH), ITEMS_PATH)),
-        "blessing": _launch_rows(_require_rows(_load_json(BLESSINGS_PATH), BLESSINGS_PATH)),
-        "curse": _launch_rows(_require_rows(_load_json(CURSES_PATH), CURSES_PATH)),
-        "talent": _launch_rows(_require_rows(_load_json(TALENTS_PATH), TALENTS_PATH)),
-    }
-    archetype_profiles = _require_rows(_load_json(ARCHETYPES_PATH), ARCHETYPES_PATH)
-    _require_catalog(catalog, live, archetype_profiles)
-
-    rows_by_id: dict[str, tuple[str, dict[str, Any]]] = {}
-    for category, rows in live.items():
-        for row in rows:
-            rows_by_id[str(row["id"])] = (category, row)
+    context = _load_simulation_context()
+    catalog = context["catalog"]
+    live = context["live"]
+    rows_by_id = context["rows_by_id"]
+    effect_catalog = context["effect_catalog"]
+    loadouts = context["loadouts"]
 
     content_counts = {
         "items": len(live["item"]),
@@ -130,24 +172,11 @@ def build_report(seed_count: int = EXPECTED_SEED_COUNT) -> dict[str, Any]:
     if content_counts != EXPECTED_COUNTS:
         raise ValueError(f"live content counts drifted: {content_counts}")
 
-    source_paths = {
-        "catalog": CATALOG_PATH,
-        "items": ITEMS_PATH,
-        "blessings": BLESSINGS_PATH,
-        "curses": CURSES_PATH,
-        "talents": TALENTS_PATH,
-        "archetypes": ARCHETYPES_PATH,
-    }
+    source_paths = context["source_paths"]
     content_digests = {key: _file_digest(path) for key, path in source_paths.items()}
     content_digests["combined"] = _canonical_digest(content_digests)
 
-    catalog_groups = {
-        "item": _require_rows(catalog.get("items"), CATALOG_PATH),
-        "blessing": _require_rows(catalog.get("blessings"), CATALOG_PATH),
-        "curse": _require_rows(catalog.get("curses"), CATALOG_PATH),
-        "talent": _require_rows(catalog.get("talents"), CATALOG_PATH),
-    }
-    talents = catalog_groups["talent"]
+    catalog_groups = context["catalog_groups"]
     utilities = [
         (category, row)
         for category in ("item", "blessing")
@@ -163,12 +192,30 @@ def build_report(seed_count: int = EXPECTED_SEED_COUNT) -> dict[str, Any]:
         risks = _route_rows(catalog_groups, archetype_id, "risk")
         pool_counts[archetype_id] = (len(starters), len(payoffs), len(risks))
         for seed_index, seed in enumerate(CANONICAL_SEEDS):
-            chosen_starters = _rotate_pick(starters, FORMATION_REQUIREMENTS["starters"], seed, "starter")
-            chosen_payoffs = _rotate_pick(payoffs, FORMATION_REQUIREMENTS["payoffs"], seed, "payoff")
-            chosen_risks = _rotate_pick(risks, FORMATION_REQUIREMENTS["risks"], seed, "risk")
-            chosen_utility = _rotate_pick(utilities, 1, seed + route_index, "utility")
-            talent_index = (route_index * EXPECTED_SEED_COUNT + seed_index) % len(talents)
-            chosen_talent = [("talent", talents[talent_index])]
+            formation = _select_compatible_formation(
+                archetype_id=archetype_id,
+                seed=seed,
+                route_index=route_index,
+                seed_index=seed_index,
+                loadouts=loadouts,
+                starters=starters,
+                payoffs=payoffs,
+                risks=risks,
+                utilities=utilities,
+                talents=[("talent", row) for row in catalog_groups["talent"]],
+                rows_by_id=rows_by_id,
+                effect_catalog=effect_catalog,
+            )
+            if formation is None:
+                raise ValueError(
+                    f"{archetype_id}:{seed}: no compatible character/weapon/time formation"
+                )
+            loadout = formation["loadout"]
+            chosen_starters = formation["starters"]
+            chosen_payoffs = formation["payoffs"]
+            chosen_risks = formation["risks"]
+            chosen_utility = formation["utility"]
+            chosen_talent = formation["talent"]
             chosen = (
                 chosen_starters
                 + chosen_payoffs
@@ -183,48 +230,28 @@ def build_report(seed_count: int = EXPECTED_SEED_COUNT) -> dict[str, Any]:
                 "utility": _row_ids(chosen_utility),
                 "talent": _row_ids(chosen_talent),
             }
-            failures = _formation_failures(selected)
-            exposure = {key: 0 for key in sorted(EXPOSURE_FIELDS)}
-            effect_execution_count = 0
-            active_usage_count = 0
-            curse_tradeoff_count = 0
-            for category, catalog_row in chosen:
-                content_id = str(catalog_row["id"])
-                live_category, definition = rows_by_id[content_id]
-                if live_category != category:
-                    raise ValueError(
-                        f"{content_id}: catalog category {category} != live {live_category}"
-                    )
-                exposure[category] += 1
-                effects = definition.get("effects", {})
-                if isinstance(effects, dict):
-                    effect_execution_count += len(effects)
-                if category == "item" and definition.get("item_mode") == "active":
-                    exposure["active"] += 1
-                    active_usage_count += 1
-                    effect_execution_count += 1
-                if category == "curse":
-                    curse_tradeoff_count += 1
-            talent_definition = rows_by_id[selected["talent"][0]][1]
-            character_ids = talent_definition.get("compatibility", {}).get(
-                "character_ids", []
+            evidence = _selection_evidence(
+                archetype_id,
+                selected,
+                loadout,
+                context,
             )
-            if not isinstance(character_ids, list) or len(character_ids) != 1:
-                raise ValueError(
-                    f"{selected['talent'][0]}: expected one compatible character"
-                )
             samples.append(
                 {
                     "archetype_id": archetype_id,
                     "seed": seed,
-                    "character_id": str(character_ids[0]),
-                    "formation_success": not failures,
-                    "failure_reasons": failures,
+                    "character_id": loadout["character_id"],
+                    "weapon_id": loadout["weapon_id"],
+                    "time_ability_ids": list(loadout["time_ability_ids"]),
+                    "formation_success": not evidence["failures"],
+                    "failure_reasons": evidence["failures"],
                     "selected": selected,
-                    "option_exposure": exposure,
-                    "effect_execution_count": effect_execution_count,
-                    "active_usage_count": active_usage_count,
-                    "curse_tradeoff_count": curse_tradeoff_count,
+                    "option_exposure": evidence["option_exposure"],
+                    "effect_execution_count": evidence["effect_execution_count"],
+                    "effect_execution_digest": evidence["effect_execution_digest"],
+                    "effect_runtime_domains": evidence["effect_runtime_domains"],
+                    "active_usage_count": evidence["active_usage_count"],
+                    "curse_tradeoff_count": evidence["curse_tradeoff_count"],
                 }
             )
 
@@ -234,11 +261,17 @@ def build_report(seed_count: int = EXPECTED_SEED_COUNT) -> dict[str, Any]:
         "report_type": REPORT_TYPE,
         "evidence": EVIDENCE.copy(),
         "methodology": {
-            "model_version": "p13b-launch-pool-formation-v1",
+            "model_version": "p13b-launch-pool-formation-v2",
             "seed_policy": "canonical_20260901_through_20260930_exact",
             "samples_per_archetype": EXPECTED_SEED_COUNT,
             "total_samples": len(CANONICAL_ARCHETYPES) * EXPECTED_SEED_COUNT,
             "formation_requirements": FORMATION_REQUIREMENTS.copy(),
+            "loadout_policy": (
+                "canonical_5x5x6_launch_loadouts_with_definition_compatibility"
+            ),
+            "effect_execution_model": (
+                "bounded_effect_catalog_dry_run_with_active_handler_receipts"
+            ),
             "sources": {
                 key: str(path.relative_to(PROJECT_ROOT))
                 for key, path in source_paths.items()
@@ -268,6 +301,11 @@ def report_digest(report: Mapping[str, Any]) -> str:
 
 def validate_report(report: Any) -> list[str]:
     violations: list[str] = []
+    try:
+        context: dict[str, Any] | None = _load_simulation_context()
+    except ValueError as exc:
+        context = None
+        violations.append(f"canonical_content: {exc}")
     if type(report) is not dict:
         return ["root: expected object"]
     _check_exact_fields(report, ROOT_FIELDS, "root", violations)
@@ -296,6 +334,14 @@ def validate_report(report: Any) -> list[str]:
             violations.append("methodology.total_samples: expected 240")
         if methodology.get("formation_requirements") != FORMATION_REQUIREMENTS:
             violations.append("methodology.formation_requirements: expected 3/2/1")
+        if methodology.get("loadout_policy") != (
+            "canonical_5x5x6_launch_loadouts_with_definition_compatibility"
+        ):
+            violations.append("methodology.loadout_policy: canonical compatibility policy required")
+        if methodology.get("effect_execution_model") != (
+            "bounded_effect_catalog_dry_run_with_active_handler_receipts"
+        ):
+            violations.append("methodology.effect_execution_model: bounded dry-run required")
         if "synthetic" not in str(methodology.get("disclaimer", "")).lower():
             violations.append("methodology.disclaimer: synthetic boundary required")
 
@@ -304,7 +350,19 @@ def validate_report(report: Any) -> list[str]:
         violations.append("content_digests: expected object")
     else:
         expected_digest_fields = {
-            "catalog", "items", "blessings", "curses", "talents", "archetypes", "combined"
+            "catalog",
+            "items",
+            "blessings",
+            "curses",
+            "talents",
+            "archetypes",
+            "effect_catalog",
+            "characters",
+            "character_profiles",
+            "weapons",
+            "weapon_profiles",
+            "time_abilities",
+            "combined",
         }
         _check_exact_fields(content_digests, expected_digest_fields, "content_digests", violations)
         for key in expected_digest_fields:
@@ -318,6 +376,12 @@ def validate_report(report: Any) -> list[str]:
         }
         if content_digests.get("combined") != _canonical_digest(raw_digests):
             violations.append("content_digests.combined: source digest mismatch")
+        if context is not None:
+            for key, source_path in context["source_paths"].items():
+                if content_digests.get(key) != _file_digest(source_path):
+                    violations.append(
+                        f"content_digests.{key}: canonical source digest mismatch"
+                    )
 
     samples = report.get("samples")
     if not isinstance(samples, list) or len(samples) != 240:
@@ -353,11 +417,69 @@ def validate_report(report: Any) -> list[str]:
             for key in EXPOSURE_FIELDS:
                 if type(exposure.get(key)) is not int or exposure.get(key, -1) < 0:
                     violations.append(f"{path}.option_exposure.{key}: expected non-negative integer")
+        if sample.get("character_id") not in CANONICAL_CHARACTERS:
+            violations.append(f"{path}.character_id: expected canonical Launch character")
+        if sample.get("weapon_id") not in CANONICAL_WEAPONS:
+            violations.append(f"{path}.weapon_id: expected canonical Launch weapon")
+        time_ability_ids = sample.get("time_ability_ids")
+        if (
+            not isinstance(time_ability_ids, list)
+            or tuple(time_ability_ids) not in CANONICAL_TIME_PAIRS
+        ):
+            violations.append(f"{path}.time_ability_ids: expected canonical ordered pair")
         if sample.get("formation_success") is not True or sample.get("failure_reasons") != []:
             violations.append(f"{path}: every canonical route must form successfully")
         for key in ("effect_execution_count", "active_usage_count", "curse_tradeoff_count"):
             if type(sample.get(key)) is not int or sample.get(key, -1) < 0:
                 violations.append(f"{path}.{key}: expected non-negative integer")
+        if not _is_sha256(sample.get("effect_execution_digest")):
+            violations.append(f"{path}.effect_execution_digest: expected sha256")
+        runtime_domains = sample.get("effect_runtime_domains")
+        if not isinstance(runtime_domains, dict):
+            violations.append(f"{path}.effect_runtime_domains: expected object")
+        elif any(
+            type(value) is not int or value < 0 for value in runtime_domains.values()
+        ):
+            violations.append(
+                f"{path}.effect_runtime_domains: expected non-negative integer counts"
+            )
+        elif sum(runtime_domains.values()) != sample.get("effect_execution_count"):
+            violations.append(
+                f"{path}.effect_execution_count: runtime-domain total mismatch"
+            )
+        if (
+            context is not None
+            and isinstance(selected, dict)
+            and isinstance(time_ability_ids, list)
+            and sample.get("character_id") in CANONICAL_CHARACTERS
+            and sample.get("weapon_id") in CANONICAL_WEAPONS
+        ):
+            try:
+                recomputed = _selection_evidence(
+                    str(sample.get("archetype_id", "")),
+                    selected,
+                    {
+                        "character_id": str(sample["character_id"]),
+                        "weapon_id": str(sample["weapon_id"]),
+                        "time_ability_ids": tuple(str(value) for value in time_ability_ids),
+                    },
+                    context,
+                )
+            except ValueError as exc:
+                violations.append(f"{path}.compatibility: {exc}")
+            else:
+                for failure in recomputed["failures"]:
+                    violations.append(f"{path}.compatibility: {failure}")
+                for key in (
+                    "option_exposure",
+                    "effect_execution_count",
+                    "effect_execution_digest",
+                    "effect_runtime_domains",
+                    "active_usage_count",
+                    "curse_tradeoff_count",
+                ):
+                    if sample.get(key) != recomputed[key]:
+                        violations.append(f"{path}.{key}: recomputed value mismatch")
     if actual_order != expected_order:
         violations.append("samples: canonical archetype/seed order drifted")
 
@@ -411,6 +533,608 @@ def validate_report(report: Any) -> list[str]:
     elif digest != report_digest(report):
         violations.append("content_digest: report payload mismatch")
     return violations
+
+
+def _load_simulation_context() -> dict[str, Any]:
+    catalog = _load_json(CATALOG_PATH)
+    live = {
+        "item": _launch_rows(_require_rows(_load_json(ITEMS_PATH), ITEMS_PATH)),
+        "blessing": _launch_rows(_require_rows(_load_json(BLESSINGS_PATH), BLESSINGS_PATH)),
+        "curse": _launch_rows(_require_rows(_load_json(CURSES_PATH), CURSES_PATH)),
+        "talent": _launch_rows(_require_rows(_load_json(TALENTS_PATH), TALENTS_PATH)),
+    }
+    archetype_profiles = _require_rows(_load_json(ARCHETYPES_PATH), ARCHETYPES_PATH)
+    _require_catalog(catalog, live, archetype_profiles)
+
+    catalog_groups = {
+        "item": _require_rows(catalog.get("items"), CATALOG_PATH),
+        "blessing": _require_rows(catalog.get("blessings"), CATALOG_PATH),
+        "curse": _require_rows(catalog.get("curses"), CATALOG_PATH),
+        "talent": _require_rows(catalog.get("talents"), CATALOG_PATH),
+    }
+    rows_by_id: dict[str, tuple[str, dict[str, Any]]] = {}
+    catalog_by_id: dict[str, tuple[str, dict[str, Any]]] = {}
+    for category, rows in live.items():
+        for row in rows:
+            content_id = str(row.get("id", ""))
+            if not content_id or content_id in rows_by_id:
+                raise ValueError(f"{category}: missing or duplicate live content id")
+            rows_by_id[content_id] = (category, row)
+    for category, rows in catalog_groups.items():
+        for row in rows:
+            content_id = str(row.get("id", ""))
+            if not content_id or content_id in catalog_by_id:
+                raise ValueError(f"{category}: missing or duplicate catalog content id")
+            catalog_by_id[content_id] = (category, row)
+
+    effect_rows = _require_rows(_load_json(EFFECT_CATALOG_PATH), EFFECT_CATALOG_PATH)
+    effect_catalog: dict[str, dict[str, Any]] = {}
+    for row in effect_rows:
+        effect_id = str(row.get("effect_id", ""))
+        if not effect_id or effect_id in effect_catalog:
+            raise ValueError("effect catalog contains a missing or duplicate effect_id")
+        effect_catalog[effect_id] = row
+
+    character_rows = _launch_rows(
+        _require_rows(_load_json(CHARACTERS_PATH), CHARACTERS_PATH)
+    )
+    character_profiles = _launch_rows(
+        _require_rows(_load_json(CHARACTER_PROFILES_PATH), CHARACTER_PROFILES_PATH)
+    )
+    weapon_rows = _launch_rows(_require_rows(_load_json(WEAPONS_PATH), WEAPONS_PATH))
+    weapon_profiles = _launch_rows(
+        _require_rows(_load_json(WEAPON_PROFILES_PATH), WEAPON_PROFILES_PATH)
+    )
+    time_ability_rows = _launch_rows(
+        _require_rows(_load_json(TIME_ABILITIES_PATH), TIME_ABILITIES_PATH)
+    )
+    loadouts = _canonical_loadouts(
+        character_rows,
+        character_profiles,
+        weapon_rows,
+        weapon_profiles,
+        time_ability_rows,
+    )
+
+    source_paths = {
+        "catalog": CATALOG_PATH,
+        "items": ITEMS_PATH,
+        "blessings": BLESSINGS_PATH,
+        "curses": CURSES_PATH,
+        "talents": TALENTS_PATH,
+        "archetypes": ARCHETYPES_PATH,
+        "effect_catalog": EFFECT_CATALOG_PATH,
+        "characters": CHARACTERS_PATH,
+        "character_profiles": CHARACTER_PROFILES_PATH,
+        "weapons": WEAPONS_PATH,
+        "weapon_profiles": WEAPON_PROFILES_PATH,
+        "time_abilities": TIME_ABILITIES_PATH,
+    }
+    return {
+        "catalog": catalog,
+        "live": live,
+        "catalog_groups": catalog_groups,
+        "rows_by_id": rows_by_id,
+        "catalog_by_id": catalog_by_id,
+        "effect_catalog": effect_catalog,
+        "loadouts": loadouts,
+        "source_paths": source_paths,
+    }
+
+
+def _canonical_loadouts(
+    character_rows: list[dict[str, Any]],
+    character_profiles: list[dict[str, Any]],
+    weapon_rows: list[dict[str, Any]],
+    weapon_profiles: list[dict[str, Any]],
+    time_ability_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    _require_identity_set(character_rows, "id", CANONICAL_CHARACTERS, "characters")
+    _require_identity_set(weapon_rows, "id", CANONICAL_WEAPONS, "weapons")
+    _require_identity_set(
+        time_ability_rows,
+        "id",
+        CANONICAL_TIME_ABILITIES,
+        "time abilities",
+    )
+    character_profiles_by_id = _unique_rows_by_field(
+        character_profiles,
+        "character_id",
+        CANONICAL_CHARACTERS,
+        "character runtime profiles",
+    )
+    weapon_profiles_by_id = _unique_rows_by_field(
+        weapon_profiles,
+        "weapon_id",
+        CANONICAL_WEAPONS,
+        "weapon runtime profiles",
+    )
+
+    loadouts: list[dict[str, Any]] = []
+    for character_id in CANONICAL_CHARACTERS:
+        character_profile = character_profiles_by_id[character_id]
+        mastery = character_profile.get("weapon_mastery")
+        time_interactions = character_profile.get("time_interactions")
+        if not isinstance(mastery, dict) or not isinstance(time_interactions, dict):
+            raise ValueError(f"{character_id}: incomplete Launch character profile")
+        for weapon_id in CANONICAL_WEAPONS:
+            weapon_profile = weapon_profiles_by_id[weapon_id]
+            weapon_time_interactions = weapon_profile.get("time_interactions")
+            if weapon_id not in mastery:
+                raise ValueError(f"{character_id}: missing {weapon_id} mastery")
+            if not isinstance(weapon_time_interactions, dict):
+                raise ValueError(f"{weapon_id}: missing time interactions")
+            for time_pair in CANONICAL_TIME_PAIRS:
+                missing_character_time = [
+                    ability_id
+                    for ability_id in time_pair
+                    if ability_id not in time_interactions
+                ]
+                missing_weapon_time = [
+                    ability_id
+                    for ability_id in time_pair
+                    if ability_id not in weapon_time_interactions
+                ]
+                if missing_character_time or missing_weapon_time:
+                    raise ValueError(
+                        f"{character_id}/{weapon_id}/{'+'.join(time_pair)}: "
+                        "runtime profile compatibility drift"
+                    )
+                loadouts.append(
+                    {
+                        "character_id": character_id,
+                        "weapon_id": weapon_id,
+                        "time_ability_ids": time_pair,
+                    }
+                )
+    if len(loadouts) != 150:
+        raise ValueError(f"canonical Launch loadout count drifted: {len(loadouts)}")
+    return loadouts
+
+
+def _require_identity_set(
+    rows: list[dict[str, Any]],
+    field: str,
+    expected: tuple[str, ...],
+    label: str,
+) -> None:
+    actual = [str(row.get(field, "")) for row in rows]
+    if len(actual) != len(set(actual)) or set(actual) != set(expected):
+        raise ValueError(f"{label}: canonical identities drifted")
+
+
+def _unique_rows_by_field(
+    rows: list[dict[str, Any]],
+    field: str,
+    expected: tuple[str, ...],
+    label: str,
+) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        content_id = str(row.get(field, ""))
+        if not content_id or content_id in result:
+            raise ValueError(f"{label}: missing or duplicate {field}")
+        result[content_id] = row
+    if set(result) != set(expected):
+        raise ValueError(f"{label}: canonical identities drifted")
+    return result
+
+
+def _select_compatible_formation(
+    *,
+    archetype_id: str,
+    seed: int,
+    route_index: int,
+    seed_index: int,
+    loadouts: list[dict[str, Any]],
+    starters: list[tuple[str, dict[str, Any]]],
+    payoffs: list[tuple[str, dict[str, Any]]],
+    risks: list[tuple[str, dict[str, Any]]],
+    utilities: list[tuple[str, dict[str, Any]]],
+    talents: list[tuple[str, dict[str, Any]]],
+    rows_by_id: Mapping[str, tuple[str, dict[str, Any]]],
+    effect_catalog: Mapping[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    start = _stable_index(
+        len(loadouts),
+        "loadout",
+        archetype_id,
+        seed,
+        route_index,
+        seed_index,
+    )
+    ordered_loadouts = loadouts[start:] + loadouts[:start]
+    for loadout in ordered_loadouts:
+        compatible_starters = _compatible_rows(
+            starters, archetype_id, loadout, rows_by_id, effect_catalog
+        )
+        compatible_payoffs = _compatible_rows(
+            payoffs, archetype_id, loadout, rows_by_id, effect_catalog
+        )
+        compatible_risks = _compatible_rows(
+            risks, archetype_id, loadout, rows_by_id, effect_catalog
+        )
+        compatible_utilities = _compatible_rows(
+            utilities, archetype_id, loadout, rows_by_id, effect_catalog
+        )
+        compatible_talents = _compatible_rows(
+            talents, archetype_id, loadout, rows_by_id, effect_catalog
+        )
+        if (
+            len(compatible_starters) < FORMATION_REQUIREMENTS["starters"]
+            or len(compatible_payoffs) < FORMATION_REQUIREMENTS["payoffs"]
+            or len(compatible_risks) < FORMATION_REQUIREMENTS["risks"]
+            or not compatible_utilities
+            or not compatible_talents
+        ):
+            continue
+        return {
+            "loadout": loadout,
+            "starters": _rotate_pick(
+                compatible_starters,
+                FORMATION_REQUIREMENTS["starters"],
+                seed,
+                "starter",
+            ),
+            "payoffs": _rotate_pick(
+                compatible_payoffs,
+                FORMATION_REQUIREMENTS["payoffs"],
+                seed,
+                "payoff",
+            ),
+            "risks": _rotate_pick(
+                compatible_risks,
+                FORMATION_REQUIREMENTS["risks"],
+                seed,
+                "risk",
+            ),
+            "utility": _rotate_pick(
+                compatible_utilities,
+                1,
+                seed + route_index,
+                "utility",
+            ),
+            "talent": _rotate_pick(
+                compatible_talents,
+                1,
+                seed + seed_index,
+                "talent",
+            ),
+        }
+    return None
+
+
+def _compatible_rows(
+    rows: list[tuple[str, dict[str, Any]]],
+    archetype_id: str,
+    loadout: Mapping[str, Any],
+    rows_by_id: Mapping[str, tuple[str, dict[str, Any]]],
+    effect_catalog: Mapping[str, dict[str, Any]],
+) -> list[tuple[str, dict[str, Any]]]:
+    result: list[tuple[str, dict[str, Any]]] = []
+    for category, catalog_row in rows:
+        content_id = str(catalog_row.get("id", ""))
+        live_value = rows_by_id.get(content_id)
+        if live_value is None or live_value[0] != category:
+            continue
+        if not _definition_compatibility_failures(
+            live_value[1], archetype_id, loadout, effect_catalog
+        ):
+            result.append((category, catalog_row))
+    return result
+
+
+def _definition_compatibility_failures(
+    definition: Mapping[str, Any],
+    archetype_id: str,
+    loadout: Mapping[str, Any],
+    effect_catalog: Mapping[str, dict[str, Any]],
+) -> list[str]:
+    content_id = str(definition.get("id", ""))
+    compatibility = definition.get("compatibility", {})
+    if not isinstance(compatibility, dict):
+        return [f"{content_id}:compatibility_type"]
+    failures = [
+        f"{content_id}:compatibility_unknown_{field}"
+        for field in sorted(set(compatibility) - COMPATIBILITY_FIELDS)
+    ]
+    selections = {
+        "archetype_ids": archetype_id,
+        "character_ids": str(loadout.get("character_id", "")),
+        "weapon_ids": str(loadout.get("weapon_id", "")),
+    }
+    for field, selected_id in selections.items():
+        if field not in compatibility:
+            continue
+        allowed = compatibility[field]
+        if not isinstance(allowed, list) or not allowed:
+            failures.append(f"{content_id}:compatibility_{field}_empty")
+        elif selected_id not in allowed:
+            failures.append(f"{content_id}:compatibility_{field}_{selected_id}")
+    time_ability_ids = tuple(str(value) for value in loadout.get("time_ability_ids", ()))
+    if "time_ability_ids" in compatibility:
+        allowed_time = compatibility["time_ability_ids"]
+        if not isinstance(allowed_time, list) or not allowed_time:
+            failures.append(f"{content_id}:compatibility_time_ability_ids_empty")
+        else:
+            for ability_id in time_ability_ids:
+                if ability_id not in allowed_time:
+                    failures.append(
+                        f"{content_id}:compatibility_time_ability_ids_{ability_id}"
+                    )
+
+    effects = definition.get("effects", {})
+    if not isinstance(effects, dict):
+        failures.append(f"{content_id}:effects_type")
+        return failures
+    required_time_abilities: set[str] = set()
+    for effect_id in effects:
+        effect_spec = effect_catalog.get(str(effect_id))
+        if effect_spec is None:
+            failures.append(f"{content_id}:unknown_effect_{effect_id}")
+            continue
+        for prefix, ability_id in TIME_EFFECT_PREFIXES.items():
+            if str(effect_id).startswith(prefix):
+                required_time_abilities.add(ability_id)
+        capabilities = effect_spec.get("weapon_capabilities", [])
+        if capabilities:
+            if not isinstance(capabilities, list) or not any(
+                isinstance(capability, dict)
+                and capability.get("weapon_id") == loadout.get("weapon_id")
+                for capability in capabilities
+            ):
+                failures.append(
+                    f"{content_id}:effect_{effect_id}_weapon_{loadout.get('weapon_id', '')}"
+                )
+    for ability_id in sorted(required_time_abilities):
+        if ability_id not in time_ability_ids:
+            failures.append(f"{content_id}:effect_requires_time_{ability_id}")
+    if definition.get("item_mode") == "active":
+        handler_id = str(definition.get("active_handler_id", ""))
+        required_active_time = {
+            "absolute_zero": "stop",
+            "paradox_beacon": "rewind",
+            "gravity_snare": "rift",
+            "redline_injector": "accelerate",
+        }.get(handler_id)
+        if required_active_time is not None and required_active_time not in time_ability_ids:
+            failures.append(f"{content_id}:active_requires_time_{required_active_time}")
+        if handler_id == "railshot" and loadout.get("weapon_id") != "bow":
+            failures.append(f"{content_id}:active_requires_weapon_bow")
+    return failures
+
+
+def _selection_evidence(
+    archetype_id: str,
+    selected: Mapping[str, Any],
+    loadout: Mapping[str, Any],
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    rows_by_id = context["rows_by_id"]
+    catalog_by_id = context["catalog_by_id"]
+    effect_catalog = context["effect_catalog"]
+    failures = _formation_failures(selected)
+    exposure = {key: 0 for key in sorted(EXPOSURE_FIELDS)}
+    receipts: list[dict[str, Any]] = []
+    state: dict[str, Any] = {}
+    active_usage_count = 0
+    curse_tradeoff_count = 0
+    seen_ids: set[str] = set()
+    lane_contracts = {
+        "starters": "starter",
+        "payoffs": "payoff",
+        "risks": "risk",
+        "utility": "utility",
+        "talent": "talent",
+    }
+    for lane, expected_role in lane_contracts.items():
+        values = selected.get(lane, [])
+        if not isinstance(values, list):
+            continue
+        for content_id_value in values:
+            content_id = str(content_id_value)
+            if content_id in seen_ids:
+                failures.append(f"{content_id}:duplicate_selection")
+                continue
+            seen_ids.add(content_id)
+            live_value = rows_by_id.get(content_id)
+            catalog_value = catalog_by_id.get(content_id)
+            if live_value is None or catalog_value is None:
+                failures.append(f"{content_id}:unknown_selection")
+                continue
+            category, definition = live_value
+            catalog_category, catalog_row = catalog_value
+            if category != catalog_category:
+                failures.append(f"{content_id}:category_mismatch")
+                continue
+            if lane == "talent":
+                if category != "talent":
+                    failures.append(f"{content_id}:talent_category")
+            elif lane == "utility":
+                if (
+                    str(catalog_row.get("archetype", "")) != ""
+                    or catalog_row.get("role") != "utility"
+                ):
+                    failures.append(f"{content_id}:utility_role")
+            elif (
+                catalog_row.get("archetype") != archetype_id
+                or catalog_row.get("role") != expected_role
+            ):
+                failures.append(f"{content_id}:{lane}_route_role")
+            compatibility_failures = _definition_compatibility_failures(
+                definition, archetype_id, loadout, effect_catalog
+            )
+            failures.extend(compatibility_failures)
+            exposure[category] += 1
+            try:
+                content_receipts = _execute_definition_dry_run(
+                    category,
+                    definition,
+                    loadout,
+                    effect_catalog,
+                    state,
+                )
+            except ValueError as exc:
+                failures.append(f"{content_id}:execution_{exc}")
+                continue
+            receipts.extend(content_receipts)
+            if category == "item" and definition.get("item_mode") == "active":
+                exposure["active"] += 1
+                active_usage_count += 1
+            if category == "curse":
+                if len(content_receipts) < 2:
+                    failures.append(f"{content_id}:curse_tradeoff_missing")
+                else:
+                    curse_tradeoff_count += 1
+    domain_counts: Counter[str] = Counter(
+        str(receipt["runtime_domain"]) for receipt in receipts
+    )
+    return {
+        "failures": sorted(set(failures)),
+        "option_exposure": exposure,
+        "effect_execution_count": len(receipts),
+        "effect_execution_digest": _canonical_digest(receipts),
+        "effect_runtime_domains": dict(sorted(domain_counts.items())),
+        "active_usage_count": active_usage_count,
+        "curse_tradeoff_count": curse_tradeoff_count,
+    }
+
+
+def _execute_definition_dry_run(
+    category: str,
+    definition: Mapping[str, Any],
+    loadout: Mapping[str, Any],
+    effect_catalog: Mapping[str, dict[str, Any]],
+    state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    content_id = str(definition.get("id", ""))
+    effects = definition.get("effects", {})
+    if not isinstance(effects, dict):
+        raise ValueError("effects_type")
+    receipts: list[dict[str, Any]] = []
+    for effect_id in sorted(str(value) for value in effects):
+        value = effects[effect_id]
+        spec = effect_catalog.get(effect_id)
+        if spec is None:
+            raise ValueError(f"unknown_effect_{effect_id}")
+        allowed_categories = spec.get("allowed_categories", [])
+        if not isinstance(allowed_categories, list) or category not in allowed_categories:
+            raise ValueError(f"effect_{effect_id}_category")
+        _validate_effect_value(effect_id, value, spec)
+        capabilities = spec.get("weapon_capabilities", [])
+        if capabilities and not any(
+            isinstance(capability, dict)
+            and capability.get("weapon_id") == loadout.get("weapon_id")
+            for capability in capabilities
+        ):
+            raise ValueError(f"effect_{effect_id}_weapon")
+        runtime_domain = str(spec.get("runtime_domain", ""))
+        stack_rule = str(spec.get("stack_rule", ""))
+        if not runtime_domain or not stack_rule:
+            raise ValueError(f"effect_{effect_id}_runtime_contract")
+        state_key = f"{runtime_domain}:{effect_id}"
+        previous = state.get(state_key)
+        result = _apply_stack_rule(stack_rule, previous, value)
+        if stack_rule != "trigger":
+            state[state_key] = result
+        receipts.append(
+            {
+                "content_id": content_id,
+                "effect_id": effect_id,
+                "runtime_domain": runtime_domain,
+                "stack_rule": stack_rule,
+                "previous": previous,
+                "value": value,
+                "result": result,
+            }
+        )
+    if definition.get("item_mode") == "active":
+        handler_id = str(definition.get("active_handler_id", ""))
+        cooldown_frames = definition.get("cooldown_frames")
+        parameters = definition.get("active_parameters")
+        if handler_id not in ACTIVE_HANDLER_IDS:
+            raise ValueError("active_handler")
+        if type(cooldown_frames) is not int or not 1 <= cooldown_frames <= 3600:
+            raise ValueError("active_cooldown")
+        if (
+            not isinstance(parameters, dict)
+            or not parameters
+            or any(not _is_finite_number(value) for value in parameters.values())
+        ):
+            raise ValueError("active_parameters")
+        receipts.append(
+            {
+                "content_id": content_id,
+                "effect_id": f"active_handler:{handler_id}",
+                "runtime_domain": "active",
+                "stack_rule": "trigger",
+                "previous": None,
+                "value": dict(sorted(parameters.items())),
+                "result": {"cooldown_frames": cooldown_frames},
+            }
+        )
+    elif category in {"item", "blessing", "curse", "talent"} and not effects:
+        raise ValueError("empty_effects")
+    return receipts
+
+
+def _validate_effect_value(
+    effect_id: str,
+    value: Any,
+    spec: Mapping[str, Any],
+) -> None:
+    value_type = spec.get("value_type")
+    if value_type == "boolean":
+        valid_type = type(value) is bool
+    elif value_type == "integer":
+        valid_type = type(value) is int
+    elif value_type == "number":
+        valid_type = type(value) in {int, float} and not isinstance(value, bool)
+    else:
+        raise ValueError(f"effect_{effect_id}_value_type_contract")
+    if not valid_type or not _is_finite_scalar(value):
+        raise ValueError(f"effect_{effect_id}_value_type")
+    minimum = spec.get("minimum")
+    maximum = spec.get("maximum")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"effect_{effect_id}_minimum")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"effect_{effect_id}_maximum")
+
+
+def _apply_stack_rule(stack_rule: str, previous: Any, value: Any) -> Any:
+    if stack_rule == "add":
+        return (0 if previous is None else previous) + value
+    if stack_rule == "multiply":
+        return (1 if previous is None else previous) * value
+    if stack_rule == "maximum":
+        return value if previous is None else max(previous, value)
+    if stack_rule == "replace":
+        return value
+    if stack_rule == "set_true":
+        if value is not True:
+            raise ValueError("set_true_value")
+        return True
+    if stack_rule == "trigger":
+        return value
+    raise ValueError(f"unknown_stack_rule_{stack_rule}")
+
+
+def _is_finite_scalar(value: Any) -> bool:
+    if type(value) is bool:
+        return True
+    return type(value) in {int, float} and math.isfinite(float(value))
+
+
+def _is_finite_number(value: Any) -> bool:
+    return type(value) in {int, float} and math.isfinite(float(value))
+
+
+def _stable_index(length: int, *parts: Any) -> int:
+    if length <= 0:
+        return 0
+    payload = ":".join(str(part) for part in parts).encode("utf-8")
+    return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") % length
 
 
 def _require_catalog(

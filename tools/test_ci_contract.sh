@@ -252,6 +252,8 @@ assert_file_contains tools/validate_project.sh 'python3 tools/validate_localizat
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.documentation\.test_document_governance' "documentation unit contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 tools/document_governance\.py' "documentation validator entrypoint"
 assert_file_contains tools/validate_project.sh 'tools/document_governance_baseline\.json' "documentation migration baseline"
+assert_file_contains tools/validate_project.sh 'tests\.contract\.content_schema\.test_active_item_entry_schema' "active-item schema contract entrypoint"
+assert_file_contains tools/validate_project.sh 'tests\.contract\.simulation\.test_launch_pool_report' "Launch-pool simulation contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.playtest\.test_playtest_data' "playtest data contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.m1\.test_m1_gate' "M1 release gate contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.coverage\.test_gdscript_coverage' "GDScript coverage contract entrypoint"

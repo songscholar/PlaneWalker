@@ -177,6 +177,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 tools/document_governance.py \
 
 printf '\n== Content schema contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+	tests.contract.content_schema.test_active_item_entry_schema \
 	tests.contract.content_schema.test_character_runtime_profile_schema \
 	tests.contract.content_schema.test_archetype_profile_schema
 
