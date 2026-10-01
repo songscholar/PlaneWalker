@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-30-plane-walker-p12-five-characters-design.md`, `docs/superpowers/specs/2026-09-29-plane-walker-p11-five-weapons-design.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Task 2A immutable damage committed at `3d45885`; irreversible HP authority committed at `6761ede`; rollback-safe Gameplay Rewind committed at `87eb931`; Task 2B fixed-frame transactional authority certified at `bc6e9eb`; Task 2C atomic character runtime shell committed at `3d2c6de`; Task 2D is next
+- Implementation Status: Design approved at `3057c7c`; P12A character-profile authority certified at `61eaae6`; Tasks 2A-2C deterministic shared-runtime foundations are certified; Task 2D semantic input/mastery/replay safety committed at `3a4769d`; Task 2E stable hostile identity and unscaled threat authority committed at `26ff039`; Task 3 Wanderer/Time Guardian integration is active, with pure strategies committed at `1271921`; Task 4 Void Walker/Primordial Knight pure strategies are committed at `d533cf1`
 - Exit Gate: Six milestone-aware character profiles, five complete Launch character runtimes, fifteen character talents, character UI/replay, all 150 loadouts, deterministic 4500-sample reports, full repository validation, and honest local evidence pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -880,7 +880,7 @@ git commit -m "feat(characters): add atomic character runtime shell"
 - Consumes: schema-1 fixed-action saves, a real schema-2 semantic fixture, raw input edges, committed weapon results, stable seed/context, and typed combat facts.
 - Produces: schema-3 semantic `character_skill`, exact Dash -> Time -> Character -> Weapon arbitration, and `CharacterActionCoordinator.confirm_weapon_mastery(fact) -> bool` deduplicated by `(generation, action_token, mastery_family)`.
 
-- [ ] **Step 1: Write failing migration and exactly-once tests**
+- [x] **Step 1: Write failing migration and exactly-once tests**
 
 ```gdscript
 func test_character_skill_binding_round_trips() -> void:
@@ -936,7 +936,7 @@ Load `tests/fixtures/input/input_profile_v2.json` from disk rather than construc
 
 Add simultaneous-edge cases proving: accepted Dash consumes Time/Character/Weapon press edges; rejected Dash falls through to Time; accepted Time consumes Character/Weapon; rejected Time falls through to Character; accepted Character consumes Weapon; Character hold release returns only to its owning coordinator; loadout replacement/death/reset clears every pending latch and buffered lower-priority action.
 
-- [ ] **Step 2: Confirm RED**
+- [x] **Step 2: Confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter character_skill_input
@@ -945,7 +945,7 @@ Add simultaneous-edge cases proving: accepted Dash consumes Time/Character/Weapo
 ./tools/run_tests.sh --filter input_remap
 ```
 
-- [ ] **Step 3: Add semantic input and typed facts**
+- [x] **Step 3: Add semantic input and typed facts**
 
 Advance the input profile to schema 3. Schema 1 must first pass through the existing schema-2 semantic mapping and only then receive the schema-3 character field; schema 2 migrates directly and preserves every existing binding record byte-for-byte. Try keyboard `C` and controller button `8` first. If occupied, choose the first unowned printable physical keycode in ascending order after `C` and the first unowned controller button in `8, 0..31` order. If either finite family is exhausted, return `NO_REACHABLE_CHARACTER_SKILL`, preserve the verified v2 source, and do not promote a partial v3 file. Retire runtime listening/binding requirements for the four fixed legacy time actions after migration while preserving canonical fixed-ID mapping for old replay/config data.
 
@@ -958,11 +958,11 @@ signal character_conversion_resolved(character_id: StringName, conversion_id: St
 
 Use one explicit mastery claim per `(generation, token, mastery_family)`. The five family IDs are the canonical weapon IDs `sword`, `bow`, `gun`, `staff`, and `gauntlets`. A different `mastery_id`, target, hit index, pellet, arrow, chain, zone tick, echo, status, or presentation event cannot mint a second claim.
 
-- [ ] **Step 4: Implement priority and cancellation policy**
+- [x] **Step 4: Implement priority and cancellation policy**
 
 Sample each semantic edge once. Try Dash, then `time_slot_1`, then `time_slot_2`, then Character Skill, then weapon semantics in profile declaration order. A successful commit records every lower-priority same-frame edge as `priority_suppressed` and discards it; suppressed edges are never buffered. A rejection falls through without state mutation. Dash cancels an uncommitted character windup/hold; hitstun and Gameplay Rewind cancel every uncommitted character phase before their own transition. Guardian cancellation before a guard resolution spends no Ward/energy and starts no cooldown; cancellation after a perfect/normal resolution preserves its fact/Ward and starts the 240-frame ordinary cooldown; committed Fortress, Waypoint anchor, Devour/Cleave payload, and armed Dominion remain authoritative and are never refunded by cancellation.
 
-- [ ] **Step 5: Replace global critical randomness**
+- [x] **Step 5: Replace global critical randomness**
 
 `DamageCalculator` accepts a frozen deterministic critical outcome or seeded roll context. Tests reject unseeded character/150-matrix paths; legacy non-gameplay fixtures pass an explicit deterministic `critical_outcome` rather than invoking global randomness.
 
@@ -983,7 +983,7 @@ func _critical_fixture() -> DamageInfo:
 	return info
 ```
 
-- [ ] **Step 6: Run input, event, weapon, and deterministic regressions**
+- [x] **Step 6: Run input, event, weapon, and deterministic regressions**
 
 ```bash
 ./tools/run_tests.sh --filter input
@@ -998,7 +998,7 @@ func _critical_fixture() -> DamageInfo:
 ./tools/run_tests.sh --filter gauntlets
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- project.godot scripts/input/input_action_contract.gd scripts/input/weapon_intent_router.gd scripts/input/input_binding_codec.gd scripts/input/input_profile_store.gd scripts/input/input_remap_service.gd scripts/player/player_controller.gd scripts/player/characters/character_action_coordinator.gd autoload/event_bus.gd scripts/combat/weapons/weapon_runtime.gd scripts/combat/weapons/sword_weapon_runtime.gd scripts/combat/weapons/bow_weapon_runtime.gd scripts/combat/weapons/gun_weapon_runtime.gd scripts/combat/weapons/staff_weapon_runtime.gd scripts/combat/weapons/gauntlets_weapon_runtime.gd scripts/combat/damage_calculator.gd tests/fixtures/input/input_profile_v2.json tests/contract/input/character_skill_input_test.gd tests/contract/input/character_skill_input_test.tscn tests/contract/input/weapon_intent_router_test.gd tests/unit/input/input_binding_codec_test.gd tests/unit/input/input_remap_service_test.gd tests/unit/input/input_profile_store_test.gd tests/characters/weapon_mastery_fact_test.gd tests/characters/weapon_mastery_fact_test.tscn tests/contract/events/combat_event_publication_test.gd tests/integration/ui/input_remap_panel_test.gd tests/combat/damage_calculator_test.gd tests/combat/damage_calculator_test.tscn
@@ -1033,7 +1033,7 @@ git commit -m "feat(characters): add character input and mastery facts"
 - Consumes: deterministic run/room/spawn identity, accepted hostile attack start, immutable unscaled geometry, and active frame bounds.
 - Produces: `EnemyBase.configure_hostile_identity(source_id, next_generation_floor)`, `DamageInfo.hostile_source_id`, `DamageInfo.attack_generation`, `DamageInfo.hit_index`, and `HostileThreatRegistry` queries that never depend on presentation scale.
 
-- [ ] **Step 1: Write failing hostile identity tests**
+- [x] **Step 1: Write failing hostile identity tests**
 
 ```gdscript
 func test_projectiles_from_one_burst_share_generation_and_have_unique_hit_index() -> void:
@@ -1063,7 +1063,7 @@ func _spawn_shooter_burst(source_id: StringName, pellet_count: int) -> Array[Dic
 
 Cover melee, Chaser, Shooter burst/projectile, Tank pulse, Time Crack tick, Chrono Warden melee/area/summon, reset, death, room transition, and Replay reconstruction. `attack_generation` increments only when a new attack plan, projectile launch, or zone tick commits; retries, every pellet in one burst, every target in one zone tick, and repeated collision from one projectile keep that committed generation.
 
-- [ ] **Step 2: Write failing threat/presentation separation tests**
+- [x] **Step 2: Write failing threat/presentation separation tests**
 
 ```gdscript
 func test_accessibility_scale_does_not_change_gameplay_risk() -> void:
@@ -1108,7 +1108,7 @@ func _circle_fact(
 
 Cover circle, cone, line, and Rift-authorized geometry; inclusive `active_from_frame..active_through_frame` boundaries; duplicate source/generation rejection; retirement; stable nearest-hostile distance; visual scales `1.0`, `1.25`, and `1.5`; and absence of gameplay reads from `CombatTelegraph2D.get_snapshot()`.
 
-- [ ] **Step 3: Run focused tests and confirm RED**
+- [x] **Step 3: Run focused tests and confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter hostile_attack_identity
@@ -1120,15 +1120,15 @@ Cover circle, cone, line, and Rift-authorized geometry; inclusive `active_from_f
 
 Expected: FAIL because hostile producers default to token/generation zero and risk geometry currently lives in the scaled presentation node.
 
-- [ ] **Step 4: Install deterministic source and attack identity**
+- [x] **Step 4: Install deterministic source and attack identity**
 
 `RoomController` derives `hostile_source_id` from encounter identity, room generation, spawn slot, and spawn ordinal. Summons derive a child ID from the parent source and deterministic summon sequence. `EnemyBase` owns a monotonic next-generation floor. Shooter copies one burst generation into its pellets and assigns `hit_index` by authored order; an independently launched projectile gets a new generation. Tank, Time Crack, and Chrono Warden reuse one generation across all targets of one pulse/tick, then allocate the next generation for the next tick. `get_instance_id()` remains allowed only for local signal bookkeeping, never serialized identity.
 
-- [ ] **Step 5: Publish immutable hostile facts and project visuals**
+- [x] **Step 5: Publish immutable hostile facts and project visuals**
 
 `HostileTelegraphFact` contains exactly `hostile_source_id`, `attack_generation`, `shape`, `origin`, `aim_direction`, `target_point`, `summon_slots`, `radius`, `length`, `active_from_frame`, and `active_through_frame`. It validates unscaled geometry and the inclusive active range. `HostileThreatRegistry` is the only risk-query authority used by Void Walker. `CombatTelegraph2D.project_fact()` copies the fact and applies accessibility scaling only to drawn geometry. Clearing/cancelling the attack retires the matching fact.
 
-- [ ] **Step 6: Run hostile, accessibility, Boss, and Replay gates**
+- [x] **Step 6: Run hostile, accessibility, Boss, and Replay gates**
 
 ```bash
 ./tools/run_tests.sh --filter hostile_attack_identity
@@ -1142,7 +1142,7 @@ Expected: FAIL because hostile producers default to token/generation zero and ri
 
 Expected: PASS with identical gameplay threat answers at all three visual scales.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -- scripts/combat/hostile_telegraph_fact.gd scripts/combat/hostile_threat_registry.gd scripts/combat/damage_info.gd scripts/fx/combat_telegraph_2d.gd scripts/enemies/enemy_base.gd scripts/enemies/enemy_chaser.gd scripts/enemies/enemy_shooter.gd scripts/enemies/enemy_projectile.gd scripts/enemies/enemy_tank.gd scripts/enemies/boss_time_crack.gd scripts/enemies/boss_chrono_warden.gd scripts/dungeon/room_controller.gd scripts/application/run_runtime_host.gd tests/combat/hostile_attack_identity_test.gd tests/combat/hostile_attack_identity_test.tscn tests/combat/hostile_threat_registry_test.gd tests/combat/hostile_threat_registry_test.tscn tests/combat/enemy_projectile_test.gd tests/combat/boss_telegraph_test.gd tests/unit/dungeon/encounter_runner_test.gd
