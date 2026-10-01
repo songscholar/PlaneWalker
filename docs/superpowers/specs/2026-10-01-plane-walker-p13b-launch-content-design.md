@@ -78,17 +78,19 @@ For each route, the first new route entry is a starter and the remaining route e
 
 | Archetype | Exact curse IDs |
 |---|---|
-| `freeze_burst` | `overclocked_stasis`, `curse_thaw_debt` |
-| `rewind_echo` | `blood_rewind`, `curse_erased_present` |
-| `rift_trap` | `starving_clock`, `curse_folded_hunger` |
-| `accelerated_combo` | `glass_tempo`, `curse_burnout_clock` |
-| `low_hp_void` | `brittle_vitality`, `curse_empty_veins` |
-| `perfect_guard` | `narrow_escape`, `curse_shattered_aegis` |
+| `freeze_burst` | `curse_stasis_fracture`, `curse_thaw_debt` |
+| `rewind_echo` | `curse_blood_memory`, `curse_erased_present` |
+| `rift_trap` | `curse_starved_horizon`, `curse_folded_hunger` |
+| `accelerated_combo` | `curse_glass_cadence`, `curse_burnout_clock` |
+| `low_hp_void` | `curse_brittle_pact`, `curse_empty_veins` |
+| `perfect_guard` | `curse_narrow_counter`, `curse_shattered_aegis` |
 | `piercing_barrage` | `curse_recoil_tax`, `curse_empty_magazine` |
 | `echo_legion` | `curse_divided_self`, `curse_phantom_attention` |
 | General utility contracts | `curse_fickle_time`, `curse_brittle_fortune` |
 
 Route curses use role `risk` and contain both a bounded upside and a bounded downside. The two general contracts use an empty archetype plus `generalist + utility` and still expose their tradeoff in localized text and effect summaries.
+
+The six existing M1/NEXT curses — `blood_rewind`, `glass_tempo`, `overclocked_stasis`, `brittle_vitality`, `narrow_escape`, and `starving_clock` — keep their current availability, empty archetype, role, and effects. They are not counted in the eighteen Launch curses. Reusing them as Launch route risks would change frozen M1 BuildState scoring or make NEXT content invalid under the three-route domain.
 
 ### 3.4 Character run talents: 15
 
@@ -131,6 +133,21 @@ army_of_yesterday
 ```
 
 No content definition may contain a script path, method name, Callable, scene path, or arbitrary nested executable payload.
+
+The exact active parameter contracts are:
+
+| Handler | Exact parameters and inclusive bounds |
+|---|---|
+| `absolute_zero` | `radius` number `32..512`; `duration_frames` integer `1..600`; `weakpoint_bonus` number `0..3`; `energy_cost` number `0..100` |
+| `paradox_beacon` | `rewind_frames` integer `1..600`; `echo_damage_multiplier` number `0..3`; `energy_cost` number `0..100` |
+| `gravity_snare` | `radius` number `32..512`; `duration_frames` integer `1..600`; `slow_ratio` number `0..0.9`; `energy_cost` number `0..100` |
+| `redline_injector` | `duration_frames` integer `1..600`; `speed_multiplier` number `1..3`; `health_cost_ratio` number `0..0.5` |
+| `blood_price` | `duration_frames` integer `1..600`; `damage_multiplier` number `1..5`; `health_cost_ratio` number `0..0.5` |
+| `aegis_reversal` | `duration_frames` integer `1..600`; `counter_multiplier` number `0..5`; `energy_cost` number `0..100` |
+| `railshot` | `pierce_bonus` integer `1..20`; `damage_multiplier` number `1..5`; `ammo_refund` integer `0..20` |
+| `army_of_yesterday` | `echo_count` integer `1..8`; `duration_frames` integer `1..600`; `echo_damage_multiplier` number `0..2`; `energy_cost` number `0..100` |
+
+Each handler requires exactly its listed keys. Missing, additional, wrong-type, non-finite, or out-of-range values fail before pack activation.
 
 ### 4.2 Passive effects
 

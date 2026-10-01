@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-01-plane-walker-p13b-launch-content-design.md`, `docs/current/2026-10-01-p13a-launch-archetype-authority-evidence.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Task 1 is next; P13A authority is certified at `4fbf9b1`, and no P13B runtime or count completion is claimed yet
+- Implementation Status: Task 1 is complete and verified; Task 2 typed effect plans and atomic reward selection is next. P13A authority remains certified at `4fbf9b1`; no live Launch pool completion is claimed yet
 - Exit Gate: Exact Launch counts, every effect executable and bounded, reward selection atomic, eight active items player-facing, fifteen talents data-authoritative and live-installable, deterministic drafting/build formation/Replay, 150-loadout regression, and full repository validation pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -35,22 +35,27 @@
 ### Task 1: Close Launch pool schema and exact identity contract
 
 **Files:**
+- Create: `data/content/launch_pool_catalog.json`
 - Modify: `data/schemas/content_entry_v2.schema.json`
+- Modify: `data/localization/translations.csv`
+- Modify: `data/content_packs/base/localization/translations.csv`
+- Modify: `data/content_packs/base/pack.json`
+- Create: `scripts/content/launch_pool_catalog.gd`
 - Create: `scripts/items/active_item_definition.gd`
 - Modify: `scripts/content/content_registry.gd`
 - Create: `tests/contract/content_schema/launch_pool_contract_test.gd`
 - Create: `tests/contract/content_schema/launch_pool_contract_test.tscn`
 - Modify: `tests/contract/content_schema/content_pack_contract_test.gd`
 - Modify: `tests/contract/content_schema/content_registry_test.gd`
-- Modify: `tools/validate_project.sh`
+- Create: `tests/contract/content_schema/test_active_item_entry_schema.py`
 
 **Interfaces:**
 - Consumes: exact IDs and category rules in the approved P13B design.
-- Produces: `ActiveItemDefinition.configure(definition) -> Dictionary`, `snapshot() -> Dictionary`, category-specific item validation, and one executable exact-count contract.
+- Produces: `LaunchPoolCatalog.configure(source) -> Dictionary`, `ActiveItemDefinition.configure(definition) -> Dictionary`, category-specific item validation, and one executable exact-identity target contract.
 
-- [ ] **Step 1: Write failing exact-count and active-field tests**
+- [x] **Step 1: Write failing exact-count and active-field tests**
 
-The Launch pool test must define the exact ID arrays from P13B §3 and assert:
+The Launch pool test loads `data/content/launch_pool_catalog.json`, verifies the exact ID arrays from P13B §3, and asserts:
 
 ```gdscript
 suite.assert_equal(items.size(), 50, "Launch has exactly fifty items")
@@ -61,17 +66,19 @@ suite.assert_equal(curses.size(), 18, "Launch has exactly eighteen curses")
 suite.assert_equal(talents.size(), 15, "Launch keeps exactly fifteen talents")
 ```
 
-Mutation cases must reject active fields on passive/non-item entries, missing handler, unknown handler, cooldown outside `1..3600`, non-scalar parameters, script-like values, active item without one archetype, passive item tagged active, and exact-ID drift.
+The catalog contains identity, category, item mode, archetype, role, and character scope only; it is a product-count contract, not runtime content. Mutation cases must reject active fields on passive/non-item entries, missing handler, unknown handler, cooldown outside `1..3600`, non-scalar parameters, script-like values, active item without one archetype, passive item tagged active, and exact-ID drift.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
-./tools/run_tests.sh --filter "launch_pool_contract|content_pack_contract|content_registry"
+./tools/run_tests.sh --filter launch_pool_contract
+./tools/run_tests.sh --filter content_pack_contract
+./tools/run_tests.sh --filter content_registry
 ```
 
-Expected: FAIL because item-mode and active-handler fields do not exist and the Launch pools are incomplete.
+Expected: FAIL because the catalog, parsers, and item-mode/active-handler fields do not exist.
 
-- [ ] **Step 3: Implement the closed active definition parser**
+- [x] **Step 3: Implement the closed active definition parser**
 
 `ActiveItemDefinition` requires these fields and rejects every unknown field after generic content normalization:
 
@@ -91,23 +98,28 @@ func snapshot() -> Dictionary:
 	}
 ```
 
-Add `item_mode`, `active_handler_id`, `cooldown_frames`, and `active_parameters` to the generic schema and Registry allow-list. The Registry invokes this parser only for active items and rejects active-only fields everywhere else.
+Add `item_mode`, `active_handler_id`, `cooldown_frames`, and `active_parameters` to the generic schema and Registry allow-list. `item_mode` remains optional for legacy rows and normalizes to `passive`; Tasks 3 and 9 require it explicitly on every Launch item. The Registry invokes the active parser only for active items and rejects active-only fields everywhere else.
 
-- [ ] **Step 4: Run parser and schema GREEN without weakening the expected count failure**
+- [x] **Step 4: Run catalog, parser, schema, and Registry GREEN**
 
 ```bash
-./tools/run_tests.sh --filter "content_pack_contract|content_registry"
+./tools/run_tests.sh --filter content_pack_contract
+./tools/run_tests.sh --filter content_registry
 ./tools/run_tests.sh --filter launch_pool_contract
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/contract/content_schema -p 'test_*.py'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
 ```
 
-Expected: schema/Registry cases PASS; exact Launch count cases still FAIL until Tasks 3–6 populate the pools.
+Expected: the target catalog and parser contracts PASS. Live Base Pack equality is added in Tasks 3–6 as each category is populated, so the repository gate remains green after this commit.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
-git add -- data/schemas/content_entry_v2.schema.json scripts/items/active_item_definition.gd scripts/content/content_registry.gd tests/contract/content_schema/launch_pool_contract_test.gd tests/contract/content_schema/launch_pool_contract_test.tscn tests/contract/content_schema/content_pack_contract_test.gd tests/contract/content_schema/content_registry_test.gd tools/validate_project.sh
+git add -- data/content/launch_pool_catalog.json data/schemas/content_entry_v2.schema.json data/localization/translations.csv data/content_packs/base/localization/translations.csv data/content_packs/base/pack.json scripts/content/launch_pool_catalog.gd scripts/items/active_item_definition.gd scripts/content/content_registry.gd tests/contract/content_schema/launch_pool_contract_test.gd tests/contract/content_schema/launch_pool_contract_test.tscn tests/contract/content_schema/content_pack_contract_test.gd tests/contract/content_schema/content_registry_test.gd tests/contract/content_schema/test_active_item_entry_schema.py
 git commit -m "feat(content): close launch pool contract"
 ```
+
+**Completion evidence (2026-10-01):** Exact catalog, active-item parser, JSON Schema parity, Registry Launch routing, canonical active normalization, localization, and Base Pack integrity all pass. Repository verification recorded `157 / 157` scene tests, `23 / 23` Python content-schema tests, `8 / 8` localization tests, zero documentation-governance violations, and the one pre-existing registered `reward_system_smoke.tscn` ObjectDB leak warning.
 
 ---
 
@@ -248,7 +260,7 @@ For each route assert at least one blessing starter, two blessing payoffs across
 
 - [ ] **Step 3: Author exact blessing and curse catalogs**
 
-Use the exact §3.2 and §3.3 IDs. Migrate the four existing blessings and six existing curses without changing approved M1 behavior. Every new scalar effect is added to the catalog with bounded values and a live Task 2 runtime domain in the same diff.
+Use the exact §3.2 and §3.3 IDs. Migrate the four existing blessings without changing approved M1 behavior. Preserve the six existing M1/NEXT curses byte-for-byte in availability, archetype, role, and effects; add eighteen new Launch/Expansion curse identities instead. Every new scalar effect is added to the catalog with bounded values and a live Task 2 runtime domain in the same diff.
 
 - [ ] **Step 4: Add localization and update manifest hashes**
 

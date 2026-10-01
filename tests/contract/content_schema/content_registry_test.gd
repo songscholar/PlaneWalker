@@ -30,6 +30,8 @@ func _run() -> void:
 	_test_next_content_isolation(suite)
 	_test_identity_effect_boundary(suite)
 	_test_effect_capability_profile_validation(suite)
+	_test_active_item_entry_boundary(suite)
+	_test_launch_reward_routing_boundary(suite)
 	_test_archetype_profile_entry_boundary(suite)
 	_test_archetype_reference_closure(suite)
 	suite.finish(get_tree())
@@ -229,6 +231,201 @@ func _test_identity_effect_boundary(suite) -> void:
 	)
 	suite.assert_equal(error.get("field"), "effects", "identity content rejects effect execution")
 	suite.assert_equal(error.get("reason"), "unsupported_category", "identity effect rejection is explicit")
+
+
+func _test_active_item_entry_boundary(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var effect_catalog = EffectHandlerCatalogScript.new()
+	var localization_keys := {
+		"ABSOLUTE_ZERO_DEVICE_NAME": true,
+		"ABSOLUTE_ZERO_DEVICE_DESC": true,
+	}
+	var active_item := {
+		"id": "absolute_zero_device",
+		"category": "item",
+		"availability": ["LAUNCH", "EXPANSION"],
+		"name_key": "ABSOLUTE_ZERO_DEVICE_NAME",
+		"description_key": "ABSOLUTE_ZERO_DEVICE_DESC",
+		"tags": ["active", "freeze_burst", "risk"],
+		"compatibility": {"archetype_ids": ["freeze_burst"]},
+		"effects": {},
+		"kind": "time",
+		"archetype": "freeze_burst",
+		"role": "risk",
+		"rarity": "rare",
+		"icon_id": "content_absolute_zero_device",
+		"item_mode": "active",
+		"active_handler_id": "absolute_zero",
+		"cooldown_frames": 900,
+		"active_parameters": {
+			"radius": 180.0,
+			"duration_frames": 180,
+			"weakpoint_bonus": 0.5,
+			"energy_cost": 35.0,
+		},
+	}
+	suite.assert_equal(
+		registry.call("_v2_entry_error", active_item, effect_catalog, localization_keys),
+		{},
+		"closed active item definition validates at the Registry boundary"
+	)
+	suite.assert_true(
+		registry.has_method("_active_item_parse_result"),
+		"Registry exposes one canonical active-item parse path"
+	)
+	if registry.has_method("_active_item_parse_result"):
+		var floating_integral_item: Dictionary = active_item.duplicate(true)
+		floating_integral_item["cooldown_frames"] = 900.0
+		floating_integral_item["active_parameters"]["duration_frames"] = 180.0
+		var parse_result: Dictionary = registry.call("_active_item_parse_result", floating_integral_item)
+		var canonical: Dictionary = parse_result.get("snapshot", {})
+		suite.assert_true(bool(parse_result.get("ok", false)), "Registry canonical parser accepts integral numeric input")
+		suite.assert_equal(typeof(canonical.get("cooldown_frames")), TYPE_INT, "canonical cooldown is stored as an integer")
+		suite.assert_equal(
+			typeof(canonical.get("active_parameters", {}).get("duration_frames")),
+			TYPE_INT,
+			"canonical integral active parameter is stored as an integer"
+		)
+
+	var passive_with_handler := active_item.duplicate(true)
+	passive_with_handler["item_mode"] = "passive"
+	var passive_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		passive_with_handler,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(passive_error.get("field"), "active_handler_id", "passive item rejects active-only handler")
+
+	var blessing_with_active_fields := active_item.duplicate(true)
+	blessing_with_active_fields["category"] = "blessing"
+	var category_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		blessing_with_active_fields,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(category_error.get("field"), "item_mode", "non-item content rejects item-mode fields")
+
+	var malformed_parameters := active_item.duplicate(true)
+	malformed_parameters["active_parameters"] = {"script": "res://hostile.gd"}
+	var parameter_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		malformed_parameters,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(parameter_error.get("field"), "active_parameters", "active parameters fail closed")
+
+
+func _test_launch_reward_routing_boundary(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var effect_catalog = EffectHandlerCatalogScript.new()
+	var localization_keys := {
+		"TEST_ITEM_NAME": true,
+		"TEST_ITEM_DESC": true,
+	}
+	var routed_item := _archetype_reward_definition(
+		"routed_launch_item",
+		"freeze_burst",
+		["LAUNCH"]
+	)
+	suite.assert_equal(
+		registry.call("_v2_entry_error", routed_item, effect_catalog, localization_keys),
+		{},
+		"Launch route content declares matching archetype tags and compatibility"
+	)
+
+	var generalist_wrong_role: Dictionary = routed_item.duplicate(true)
+	generalist_wrong_role["archetype"] = ""
+	generalist_wrong_role["role"] = "starter"
+	generalist_wrong_role["tags"] = ["generalist", "utility"]
+	generalist_wrong_role["compatibility"] = {}
+	var wrong_role_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		generalist_wrong_role,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(wrong_role_error.get("field"), "role", "generalist Launch content identifies its invalid role")
+
+	var generalist_missing_tags: Dictionary = generalist_wrong_role.duplicate(true)
+	generalist_missing_tags["role"] = "utility"
+	generalist_missing_tags["tags"] = ["test"]
+	var missing_tags_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		generalist_missing_tags,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(missing_tags_error.get("field"), "tags", "generalist Launch content requires both contract tags")
+
+	var routed_without_scope: Dictionary = routed_item.duplicate(true)
+	routed_without_scope["compatibility"] = {}
+	var route_scope_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		routed_without_scope,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(
+		route_scope_error.get("field"),
+		"compatibility.archetype_ids",
+		"Launch route content requires exact archetype compatibility"
+	)
+
+	var curse_wrong_role: Dictionary = routed_item.duplicate(true)
+	curse_wrong_role["category"] = "curse"
+	var curse_role_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		curse_wrong_role,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(curse_role_error.get("field"), "role", "Launch route curses require the risk role")
+
+	var launch_talent := {
+		"id": "widened_guard",
+		"category": "talent",
+		"availability": ["LAUNCH"],
+		"name_key": "TEST_ITEM_NAME",
+		"description_key": "TEST_ITEM_DESC",
+		"tags": ["character", "time_guardian"],
+		"compatibility": {},
+		"effects": {},
+		"kind": "guard",
+		"archetype": "",
+		"role": "route",
+	}
+	var missing_owner_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		launch_talent,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(
+		missing_owner_error.get("field"),
+		"compatibility.character_ids",
+		"Launch talents require exactly one character owner"
+	)
+
+	var mismatched_talent: Dictionary = launch_talent.duplicate(true)
+	mismatched_talent["compatibility"] = {"character_ids": ["void_walker"]}
+	var mismatch_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		mismatched_talent,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(mismatch_error.get("reason"), "owner_mismatch", "canonical Launch talent cannot change owner")
+
+	var valid_talent: Dictionary = launch_talent.duplicate(true)
+	valid_talent["compatibility"] = {"character_ids": ["time_guardian"]}
+	suite.assert_equal(
+		registry.call("_v2_entry_error", valid_talent, effect_catalog, localization_keys),
+		{},
+		"Launch talent accepts its exact approved character owner"
+	)
 
 
 func _test_effect_capability_profile_validation(suite) -> void:
@@ -753,8 +950,8 @@ func _archetype_reward_definition(id: String, archetype: String, milestones: Arr
 		"availability": milestones.duplicate(),
 		"name_key": "TEST_ITEM_NAME",
 		"description_key": "TEST_ITEM_DESC",
-		"tags": ["test", "utility"],
-		"compatibility": {},
+		"tags": ["test", "generalist", "utility"] if archetype.is_empty() else ["test", archetype],
+		"compatibility": {} if archetype.is_empty() else {"archetype_ids": [archetype]},
 		"effects": {},
 		"kind": "utility",
 		"archetype": archetype,

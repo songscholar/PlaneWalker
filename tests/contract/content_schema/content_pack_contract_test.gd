@@ -87,6 +87,18 @@ func _test_entry_schema(suite) -> void:
 	var properties: Dictionary = schema.get("properties", {})
 	suite.assert_equal(properties.get("id", {}).get("pattern"), "^[a-z0-9][a-z0-9_.-]{0,63}$", "entry id blocks unsafe paths")
 	suite.assert_equal(properties.get("effects", {}).get("additionalProperties", {}).get("type"), ["number", "integer", "boolean", "string"], "effects contain JSON scalar values only")
+	suite.assert_equal(properties.get("item_mode", {}).get("enum", []), ["passive", "active"], "item mode is closed")
+	suite.assert_equal(
+		properties.get("active_handler_id", {}).get("enum", []),
+		[
+			"absolute_zero", "paradox_beacon", "gravity_snare", "redline_injector",
+			"blood_price", "aegis_reversal", "railshot", "army_of_yesterday",
+		],
+		"active item handler taxonomy is closed"
+	)
+	suite.assert_equal(properties.get("cooldown_frames", {}).get("minimum"), 1, "active cooldown has a positive lower bound")
+	suite.assert_equal(properties.get("cooldown_frames", {}).get("maximum"), 3600, "active cooldown is bounded")
+	suite.assert_equal(properties.get("active_parameters", {}).get("type"), "object", "active parameters are declarative data")
 	suite.assert_true(not properties.has("script_path"), "entry schema exposes no script path")
 	suite.assert_true(not properties.has("script"), "entry schema exposes no executable script field")
 

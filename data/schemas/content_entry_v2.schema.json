@@ -108,6 +108,38 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
     },
+    "item_mode": {
+      "type": "string",
+      "enum": ["passive", "active"]
+    },
+    "active_handler_id": {
+      "type": "string",
+      "enum": [
+        "absolute_zero",
+        "paradox_beacon",
+        "gravity_snare",
+        "redline_injector",
+        "blood_price",
+        "aegis_reversal",
+        "railshot",
+        "army_of_yesterday"
+      ]
+    },
+    "cooldown_frames": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    },
+    "active_parameters": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": ["number", "integer", "boolean", "string"]
+      }
+    },
     "references": {
       "$ref": "#/$defs/id_list"
     },
@@ -308,6 +340,164 @@
           ]
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {"not": {"const": "item"}}
+        },
+        "required": ["category"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["item_mode"]},
+            {"required": ["active_handler_id"]},
+            {"required": ["cooldown_frames"]},
+            {"required": ["active_parameters"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "item_mode": {"const": "active"}
+        },
+        "required": ["item_mode"]
+      },
+      "then": {
+        "required": ["active_handler_id", "cooldown_frames", "active_parameters"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["active_handler_id"]},
+            {"required": ["cooldown_frames"]},
+            {"required": ["active_parameters"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "absolute_zero"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/absolute_zero_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "paradox_beacon"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/paradox_beacon_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "gravity_snare"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/gravity_snare_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "redline_injector"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/redline_injector_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "blood_price"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/blood_price_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "aegis_reversal"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/aegis_reversal_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "railshot"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/railshot_active_parameters"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "active_handler_id": {"const": "army_of_yesterday"}
+        },
+        "required": ["active_handler_id"]
+      },
+      "then": {
+        "properties": {
+          "active_parameters": {
+            "$ref": "#/$defs/army_of_yesterday_active_parameters"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -317,6 +507,124 @@
       "items": {
         "type": "string",
         "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+      }
+    },
+    "absolute_zero_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "radius",
+        "duration_frames",
+        "weakpoint_bonus",
+        "energy_cost"
+      ],
+      "properties": {
+        "radius": {"type": "number", "minimum": 32, "maximum": 512},
+        "duration_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "weakpoint_bonus": {"type": "number", "minimum": 0, "maximum": 3},
+        "energy_cost": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "paradox_beacon_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rewind_frames",
+        "echo_damage_multiplier",
+        "energy_cost"
+      ],
+      "properties": {
+        "rewind_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "echo_damage_multiplier": {"type": "number", "minimum": 0, "maximum": 3},
+        "energy_cost": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "gravity_snare_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "radius",
+        "duration_frames",
+        "slow_ratio",
+        "energy_cost"
+      ],
+      "properties": {
+        "radius": {"type": "number", "minimum": 32, "maximum": 512},
+        "duration_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "slow_ratio": {"type": "number", "minimum": 0, "maximum": 0.9},
+        "energy_cost": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "redline_injector_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_frames",
+        "speed_multiplier",
+        "health_cost_ratio"
+      ],
+      "properties": {
+        "duration_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "speed_multiplier": {"type": "number", "minimum": 1, "maximum": 3},
+        "health_cost_ratio": {"type": "number", "minimum": 0, "maximum": 0.5}
+      }
+    },
+    "blood_price_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_frames",
+        "damage_multiplier",
+        "health_cost_ratio"
+      ],
+      "properties": {
+        "duration_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "damage_multiplier": {"type": "number", "minimum": 1, "maximum": 5},
+        "health_cost_ratio": {"type": "number", "minimum": 0, "maximum": 0.5}
+      }
+    },
+    "aegis_reversal_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_frames",
+        "counter_multiplier",
+        "energy_cost"
+      ],
+      "properties": {
+        "duration_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "counter_multiplier": {"type": "number", "minimum": 0, "maximum": 5},
+        "energy_cost": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "railshot_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pierce_bonus",
+        "damage_multiplier",
+        "ammo_refund"
+      ],
+      "properties": {
+        "pierce_bonus": {"type": "integer", "minimum": 1, "maximum": 20},
+        "damage_multiplier": {"type": "number", "minimum": 1, "maximum": 5},
+        "ammo_refund": {"type": "integer", "minimum": 0, "maximum": 20}
+      }
+    },
+    "army_of_yesterday_active_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "echo_count",
+        "duration_frames",
+        "echo_damage_multiplier",
+        "energy_cost"
+      ],
+      "properties": {
+        "echo_count": {"type": "integer", "minimum": 1, "maximum": 8},
+        "duration_frames": {"type": "integer", "minimum": 1, "maximum": 600},
+        "echo_damage_multiplier": {"type": "number", "minimum": 0, "maximum": 2},
+        "energy_cost": {"type": "number", "minimum": 0, "maximum": 100}
       }
     }
   }

@@ -8,6 +8,8 @@ const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effec
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/character_runtime_profile.gd")
 const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
+const ActiveItemDefinitionScript := preload("res://scripts/items/active_item_definition.gd")
+const LaunchPoolCatalogScript := preload("res://scripts/content/launch_pool_catalog.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -32,6 +34,7 @@ const VALID_CATEGORIES: Array[String] = [
 	"character_runtime_profile",
 ]
 const EFFECT_BEARING_CATEGORIES: Array[String] = ["blessing", "curse", "item", "talent"]
+const LAUNCH_ROUTE_CATEGORIES: Array[String] = ["item", "blessing", "curse"]
 const OVERRIDABLE_FIELDS: Array[String] = ["archetype", "role", "rarity", "kind"]
 const CONTENT_ID_PATTERN := "^[a-z0-9][a-z0-9_.-]{0,63}$"
 const LOCALIZATION_KEY_PATTERN := "^[A-Z][A-Z0-9_]{1,127}$"
@@ -59,6 +62,10 @@ const V2_ALLOWED_FIELDS: Array[String] = [
 	"role",
 	"rarity",
 	"icon_id",
+	"item_mode",
+	"active_handler_id",
+	"cooldown_frames",
+	"active_parameters",
 	"references",
 	"profile_version",
 	"weapon_id",
@@ -922,6 +929,16 @@ func _load_pack_definitions(
 			normalized["role"] = str(normalized.get("role", "utility"))
 			normalized["rarity"] = str(normalized.get("rarity", "common"))
 			normalized["icon_id"] = str(normalized.get("icon_id", "content_%s" % content_id))
+			if str(normalized.get("category", "")) == "item":
+				normalized["item_mode"] = str(normalized.get("item_mode", "passive"))
+				if normalized["item_mode"] == "active":
+					var active_parse_result := _active_item_parse_result(normalized)
+					if bool(active_parse_result.get("ok", false)):
+						var active_snapshot: Dictionary = active_parse_result.get("snapshot", {})
+						for active_field: String in [
+							"active_handler_id", "cooldown_frames", "active_parameters",
+						]:
+							normalized[active_field] = active_snapshot[active_field]
 			var references: Array = normalized.get("references", [])
 			references.sort()
 			normalized["references"] = references
@@ -957,6 +974,9 @@ func _v2_entry_error(
 	if typeof(entry["category"]) != TYPE_STRING or not VALID_CATEGORIES.has(str(entry["category"])):
 		return {"field": "category", "reason": "value"}
 	var category := str(entry["category"])
+	for item_field: String in ["item_mode", "active_handler_id", "cooldown_frames", "active_parameters"]:
+		if category != "item" and entry.has(item_field):
+			return {"field": item_field, "reason": "category_specific_field"}
 	if category != "archetype_profile":
 		for profile_field: String in ARCHETYPE_PROFILE_ONLY_FIELDS:
 			if entry.has(profile_field):
@@ -1040,10 +1060,109 @@ func _v2_entry_error(
 		return {"field": "rarity", "reason": "value"}
 	if entry.has("icon_id") and not _matches(CONTENT_ID_PATTERN, entry["icon_id"]):
 		return {"field": "icon_id", "reason": "value"}
+	if category == "item":
+		var item_mode := str(entry.get("item_mode", "passive"))
+		if item_mode not in ["passive", "active"]:
+			return {"field": "item_mode", "reason": "value"}
+		if item_mode == "active":
+			var active_result := _active_item_parse_result(entry)
+			if not bool(active_result.get("ok", false)):
+				var active_context: Dictionary = active_result.get("context", {})
+				return {
+					"field": str(active_context.get("field", "active_item")),
+					"reason": str(active_context.get("reason", "invalid")),
+				}
+		else:
+			for active_field: String in ["active_handler_id", "cooldown_frames", "active_parameters"]:
+				if entry.has(active_field):
+					return {"field": active_field, "reason": "active_only"}
+	var launch_content_error := _launch_content_error(entry)
+	if not launch_content_error.is_empty():
+		return launch_content_error
 	if entry.has("references"):
 		var reference_error := _id_array_error(entry["references"], [], true)
 		if not reference_error.is_empty():
 			return {"field": "references", "reason": reference_error}
+	return {}
+
+
+func _active_item_parse_result(entry: Dictionary) -> Dictionary:
+	var parser = ActiveItemDefinitionScript.new()
+	var result: Dictionary = parser.configure(entry)
+	if not bool(result.get("ok", false)):
+		return result
+	return {
+		"ok": true,
+		"context": {},
+		"snapshot": parser.snapshot(),
+	}
+
+
+func _launch_content_error(entry: Dictionary) -> Dictionary:
+	var availability: Array = entry.get("availability", [])
+	if not availability.has("LAUNCH"):
+		return {}
+	var category := str(entry.get("category", ""))
+	var archetype := str(entry.get("archetype", ""))
+	var role := str(entry.get("role", "utility"))
+	var tags: Array = entry.get("tags", [])
+	var compatibility: Dictionary = entry.get("compatibility", {})
+	if LAUNCH_ROUTE_CATEGORIES.has(category):
+		var route_ids: Array = compatibility.get("archetype_ids", [])
+		if archetype.is_empty():
+			if role != "utility":
+				return {"field": "role", "reason": "generalist_requires_utility"}
+			if not tags.has("generalist") or not tags.has("utility"):
+				return {"field": "tags", "reason": "generalist_utility_required"}
+			if not route_ids.is_empty():
+				return {
+					"field": "compatibility.archetype_ids",
+					"reason": "generalist_must_not_route",
+				}
+			return {}
+		if not ArchetypeProfileScript.ARCHETYPE_IDS.has(archetype):
+			return {"field": "archetype", "reason": "unknown"}
+		var allowed_roles: Array = []
+		match category:
+			"item":
+				allowed_roles = ["risk"] if str(entry.get("item_mode", "passive")) == "active" else ["starter", "payoff"]
+			"blessing":
+				allowed_roles = ["starter", "payoff"]
+			"curse":
+				allowed_roles = ["risk"]
+		if not allowed_roles.has(role):
+			return {"field": "role", "reason": "route_role"}
+		if not tags.has(archetype) or tags.has("generalist") or tags.has("utility"):
+			return {"field": "tags", "reason": "route_tag_contract"}
+		if route_ids != [archetype]:
+			return {
+				"field": "compatibility.archetype_ids",
+				"reason": "exact_route_required",
+			}
+		return {}
+	if category == "talent":
+		if not archetype.is_empty():
+			return {"field": "archetype", "reason": "talent_route_forbidden"}
+		var talent_route_ids: Array = compatibility.get("archetype_ids", [])
+		if not talent_route_ids.is_empty():
+			return {
+				"field": "compatibility.archetype_ids",
+				"reason": "talent_route_forbidden",
+			}
+		var character_ids_value: Variant = compatibility.get("character_ids", [])
+		if not character_ids_value is Array or (character_ids_value as Array).size() != 1:
+			return {
+				"field": "compatibility.character_ids",
+				"reason": "exact_owner_required",
+			}
+		var character_id := str((character_ids_value as Array)[0])
+		if not CharacterRuntimeProfileScript.CHARACTER_IDS.has(character_id):
+			return {"field": "compatibility.character_ids", "reason": "unknown_owner"}
+		var canonical_owner := str(
+			LaunchPoolCatalogScript.TALENT_CHARACTER_BY_ID.get(str(entry.get("id", "")), "")
+		)
+		if not canonical_owner.is_empty() and canonical_owner != character_id:
+			return {"field": "compatibility.character_ids", "reason": "owner_mismatch"}
 	return {}
 
 
