@@ -1,6 +1,7 @@
 extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
 
 const CONTRACT_PATH := "res://docs/contracts/content-pack-v2.md"
 const PACK_SCHEMA_PATH := "res://data/schemas/content_pack_v2.schema.json"
@@ -20,6 +21,7 @@ func _run() -> void:
 	_test_contract_document(suite)
 	_test_pack_schema(suite)
 	_test_entry_schema(suite)
+	_test_archetype_profile_entry_schema(suite)
 	_test_pack_fixtures(suite)
 	suite.finish(get_tree())
 
@@ -87,6 +89,48 @@ func _test_entry_schema(suite) -> void:
 	suite.assert_equal(properties.get("effects", {}).get("additionalProperties", {}).get("type"), ["number", "integer", "boolean", "string"], "effects contain JSON scalar values only")
 	suite.assert_true(not properties.has("script_path"), "entry schema exposes no script path")
 	suite.assert_true(not properties.has("script"), "entry schema exposes no executable script field")
+
+
+func _test_archetype_profile_entry_schema(suite) -> void:
+	var schema: Dictionary = _read_json(ENTRY_SCHEMA_PATH, suite)
+	if schema.is_empty():
+		return
+	var properties: Dictionary = schema.get("properties", {})
+	var categories: Array = properties.get("category", {}).get("enum", [])
+	suite.assert_true(categories.has("archetype_profile"), "generic entry schema registers archetype profiles")
+	for field: String in [
+		"archetype_id",
+		"mechanic_tags",
+		"starter_min",
+		"payoff_min",
+		"risk_min",
+		"boss_conversion_id",
+		"boss_response_key",
+	]:
+		suite.assert_true(properties.has(field), "generic entry schema declares %s" % field)
+	suite.assert_equal(
+		properties.get("archetype_id", {}).get("enum", []),
+		ArchetypeProfileScript.ARCHETYPE_IDS,
+		"generic entry schema closes the top-level archetype taxonomy"
+	)
+	var conditional_text := JSON.stringify(schema.get("allOf", []))
+	suite.assert_true(
+		conditional_text.contains("archetype_profile"),
+		"generic entry schema contains an archetype-profile category branch"
+	)
+	for field: String in [
+		"archetype_id",
+		"mechanic_tags",
+		"starter_min",
+		"payoff_min",
+		"risk_min",
+		"boss_conversion_id",
+		"boss_response_key",
+	]:
+		suite.assert_true(
+			conditional_text.contains(field),
+			"generic entry schema scopes profile-only field %s" % field
+		)
 
 
 func _test_pack_fixtures(suite) -> void:

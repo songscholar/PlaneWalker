@@ -7,7 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/0_深度收敛与系统职责设计.md`, `docs/contracts/content-pack-v2.md`, `docs/current/2026-09-30-p12-five-characters-evidence.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Task 1 complete locally; Task 2 ContentRegistry integration is next
+- Implementation Status: Tasks 1-2 complete locally; Task 3 milestone-aware drafting is next
 - Exit Gate: Exactly eight versioned Launch archetype profiles resolve through ContentRegistry, every non-empty content archetype reference is validated, M1 drafting remains byte-for-byte compatible, Launch drafting is milestone-aware, build/UI state rejects unknown archetypes, and the complete repository gate remains green
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -151,7 +151,7 @@ git commit -m "feat(builds): add launch archetype profiles"
 - Consumes: Task 1 `ArchetypeProfile` and eight profile definitions.
 - Produces: `get_archetype_profile(archetype_id)`, `get_archetype_profiles(milestone)`, strict `archetype` and `compatibility.archetype_ids` validation, and one manifest-backed source.
 
-- [ ] **Step 1: Write failing Registry and pack tests**
+- [x] **Step 1: Write failing Registry and pack tests**
 
 Update the real Base Pack expectations from 72 to 80 definitions and assert `archetype_profile: 8`. Add cases proving:
 
@@ -167,7 +167,7 @@ suite.assert_equal(registry.get_content(&"frozen_burst")["archetype"], "freeze_b
 
 Temporary packs with `time_stop_burst`, `piercing_draw`, missing profiles, unavailable profiles, empty `compatibility.archetype_ids`, and archetype-profile-only fields on an item must fail before activation.
 
-- [ ] **Step 2: Run Registry tests and confirm RED**
+- [x] **Step 2: Run Registry tests and confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter content_registry
@@ -177,7 +177,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.content_schema.test
 
 Expected: FAIL because `archetype_profile` is not a valid category and references are not checked.
 
-- [ ] **Step 3: Add generic entry and Registry support**
+- [x] **Step 3: Add generic entry and Registry support**
 
 Add `archetype_profile` to category enums and close these fields to that category only:
 
@@ -190,11 +190,11 @@ boss_conversion_id, boss_response_key
 
 `get_archetype_profile()` and `get_archetype_profiles()` return parser-ready deep copies with pack envelope fields removed.
 
-- [ ] **Step 4: Register the source and integrity digest**
+- [x] **Step 4: Register the source and integrity digest**
 
 Add `content/archetype_profiles.json` to the Base Pack manifest and compute its SHA-256. Run the real pack through M1 and Launch activation; both must load the same eight identities while milestone queries keep them Launch/Expansion-only.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 ```bash
 ./tools/run_tests.sh --filter content_registry

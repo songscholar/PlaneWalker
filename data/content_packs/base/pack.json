@@ -6,6 +6,7 @@
   "dependencies": [],
   "load_order": 0,
   "content_manifest": [
+    "content/archetype_profiles.json",
     "content/blessings.json",
     "content/character_runtime_profiles.json",
     "content/characters.json",
@@ -21,6 +22,7 @@
   ],
   "asset_manifest": [],
   "integrity_hashes": {
+    "content/archetype_profiles.json": "9bb211b494e9187ae7eff4d674a4bcdadef24d256856f99b094c735a7b33c067",
     "content/blessings.json": "b9a0eb5299f9a27fdb73947fb81b2285bf04183dcd172a60e5e8a3cf130a199b",
     "content/character_runtime_profiles.json": "c1d148fee2a0ab2d79efc14aeb684c3ea4b2e6954b830a75cc8dee14058bc3ff",
     "content/characters.json": "8fd8aef62d60112cc0db8600e76e7c9ba9f9a1cbbfec7a1d007a834413ce8f3a",
@@ -30,7 +32,7 @@
     "content/time_abilities.json": "33401f7d8a9fd5fdb705e51b3eb287ab8d995fe6b2f6f3049ab2c21cb9e76a15",
     "content/weapon_runtime_profiles.json": "e9d17db1458bc5b2ea5372d446c7d53c699c377a6d2d1a67316e9a7181808d40",
     "content/weapons.json": "e97d8e4aa3fa276a9058800fb0b9f5cbe497201cc066e1a0d5da3d549a1afd8a",
-    "localization/translations.csv": "f8be47786574a4fe6a37aa1bf6aa049828eeb9db4c768306f02094ca96a1c3ad"
+    "localization/translations.csv": "9b3914695aba812f117900692bf2568a1abd6ea3d77868fcdffa4b72e0b903c4"
   },
   "entitlement_tag": ""
 }

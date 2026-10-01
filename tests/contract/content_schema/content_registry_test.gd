@@ -6,6 +6,7 @@ const ContentSnapshotProviderScript := preload("res://scripts/content/content_sn
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/character_runtime_profile.gd")
+const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
 
 
 func _ready() -> void:
@@ -29,6 +30,8 @@ func _run() -> void:
 	_test_next_content_isolation(suite)
 	_test_identity_effect_boundary(suite)
 	_test_effect_capability_profile_validation(suite)
+	_test_archetype_profile_entry_boundary(suite)
+	_test_archetype_reference_closure(suite)
 	suite.finish(get_tree())
 
 
@@ -43,17 +46,35 @@ func _test_project_base_pack_v2(suite) -> void:
 	if report.has_blocking_errors():
 		return
 	suite.assert_equal(report.active_pack_count, 1, "project base pack is the only active pack")
-	suite.assert_equal(report.loaded_count, 72, "project base pack loads rewards, fifteen talents, and both runtime-profile dimensions")
+	suite.assert_equal(report.loaded_count, 80, "project base pack loads rewards, profiles, and eight Launch archetypes")
 	suite.assert_equal(report.content_count_by_category.get("character"), 5, "base pack registers five characters")
 	suite.assert_equal(report.content_count_by_category.get("character_runtime_profile"), 6, "base pack registers six milestone-aware character profiles")
 	suite.assert_equal(report.content_count_by_category.get("weapon"), 5, "base pack registers five weapons")
 	suite.assert_equal(report.content_count_by_category.get("weapon_runtime_profile"), 7, "base pack registers seven milestone-aware weapon profiles")
+	suite.assert_equal(report.content_count_by_category.get("archetype_profile"), 8, "base pack registers the exact Launch archetype catalog")
 	suite.assert_equal(report.content_count_by_category.get("time_ability"), 4, "base pack registers four time abilities")
 	suite.assert_equal(report.content_count_by_category.get("item"), 20, "base pack preserves twenty items")
 	suite.assert_equal(report.content_count_by_category.get("blessing"), 4, "base pack preserves four blessings")
 	suite.assert_equal(report.content_count_by_category.get("curse"), 6, "base pack preserves six curses")
 	suite.assert_equal(report.content_count_by_category.get("talent"), 15, "base pack registers exactly fifteen talents")
 	suite.assert_equal(report.metadata.get("activation_order"), ["base"], "base activation order is recorded")
+	suite.assert_true(registry.has_method("get_archetype_profiles"), "Registry exposes milestone-aware archetype queries")
+	suite.assert_true(registry.has_method("get_archetype_profile"), "Registry exposes archetype identity lookup")
+	if registry.has_method("get_archetype_profiles") and registry.has_method("get_archetype_profile"):
+		var launch_profiles: Array = registry.call("get_archetype_profiles", &"LAUNCH")
+		var launch_ids: Array[String] = []
+		for profile_value: Variant in launch_profiles:
+			if profile_value is Dictionary:
+				launch_ids.append(str((profile_value as Dictionary).get("archetype_id", "")))
+		suite.assert_equal(launch_ids, ArchetypeProfileScript.ARCHETYPE_IDS, "Launch resolves the exact ordered archetype taxonomy")
+		suite.assert_true(
+			(registry.call("get_archetype_profiles", &"M1") as Array).is_empty(),
+			"Launch archetype profiles do not widen M1"
+		)
+		var freeze_profile: Dictionary = registry.call("get_archetype_profile", &"freeze_burst")
+		suite.assert_equal(freeze_profile.get("archetype_id"), "freeze_burst", "archetype lookup resolves by stable identity")
+		suite.assert_true(not freeze_profile.has("pack_id"), "archetype lookup strips pack provenance")
+		suite.assert_true(not freeze_profile.has("category"), "archetype lookup returns the runtime snapshot instead of its content envelope")
 	var sword_profile: Dictionary = registry.get_weapon_runtime_profile(&"sword_m1_v1")
 	suite.assert_equal(sword_profile.get("weapon_id"), "sword", "profile lookup resolves its weapon")
 	suite.assert_equal(sword_profile.get("availability"), ["CURRENT", "M1"], "M1 Sword profile covers CURRENT and M1")
@@ -396,7 +417,7 @@ func _test_optional_pack_isolation(suite) -> void:
 	suite.assert_true(not report.has_blocking_errors(), "invalid optional pack does not block base content")
 	suite.assert_true(report.isolated_pack_ids.has("fixture_invalid_script"), "invalid optional pack is isolated")
 	suite.assert_equal(report.active_pack_count, 1, "only base remains active")
-	suite.assert_equal(report.loaded_count, 72, "optional pack failure cannot remove base definitions")
+	suite.assert_equal(report.loaded_count, 80, "optional pack failure cannot remove base definitions")
 	suite.assert_true(registry.get_content(&"fixture_scripted_edge").is_empty(), "hostile optional entry is not indexed")
 
 
@@ -578,3 +599,174 @@ func _test_next_content_isolation(suite) -> void:
 	suite.assert_true(not report.has_blocking_errors(), "invalid next content does not block M1")
 	suite.assert_equal(report.isolated_errors.size(), 4, "invalid next content is isolated")
 	suite.assert_true(registry.all_content().is_empty(), "isolated next definitions are not indexed")
+
+
+func _test_archetype_profile_entry_boundary(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var effect_catalog = EffectHandlerCatalogScript.new()
+	var localization_keys := {
+		"ARCHETYPE_FREEZE_BURST_NAME": true,
+		"ARCHETYPE_FREEZE_BURST_DESC": true,
+		"ARCHETYPE_FREEZE_BURST_BOSS_RESPONSE": true,
+		"TEST_ITEM_NAME": true,
+		"TEST_ITEM_DESC": true,
+	}
+	var profile := _archetype_profile_definition("freeze_burst", ["LAUNCH", "EXPANSION"])
+	suite.assert_equal(
+		registry.call("_v2_entry_error", profile, effect_catalog, localization_keys),
+		{},
+		"generic v2 validation accepts a parser-valid archetype profile"
+	)
+
+	var leaked_item := _archetype_reward_definition("profile_field_leak", "freeze_burst", ["LAUNCH"])
+	leaked_item["archetype_id"] = "freeze_burst"
+	var leak_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		leaked_item,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(leak_error.get("field"), "archetype_id", "profile-only field leak identifies the field")
+	suite.assert_equal(
+		leak_error.get("reason"),
+		"category_specific_field",
+		"profile-only fields are rejected explicitly on ordinary content"
+	)
+
+	var empty_compatibility := _archetype_reward_definition("empty_archetype_scope", "freeze_burst", ["LAUNCH"])
+	empty_compatibility["compatibility"] = {"archetype_ids": []}
+	var compatibility_error: Dictionary = registry.call(
+		"_v2_entry_error",
+		empty_compatibility,
+		effect_catalog,
+		localization_keys
+	)
+	suite.assert_equal(
+		compatibility_error.get("field"),
+		"compatibility.archetype_ids",
+		"empty archetype compatibility fails on the exact field"
+	)
+	suite.assert_equal(compatibility_error.get("reason"), "empty", "empty archetype compatibility fails closed")
+
+
+func _test_archetype_reference_closure(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var launch_profile := _archetype_profile_definition("freeze_burst", ["LAUNCH", "EXPANSION"])
+	var known_reward := _archetype_reward_definition("known_freeze_reward", "freeze_burst", ["LAUNCH"])
+	var known_definitions: Array[Dictionary] = [launch_profile, known_reward]
+	suite.assert_equal(
+		registry.call(
+			"_first_reference_error",
+			known_definitions,
+			_known_ids(known_definitions)
+		),
+		{},
+		"known archetype resolves against an available profile"
+	)
+
+	var missing_reward := _archetype_reward_definition("missing_profile_reward", "freeze_burst", ["LAUNCH"])
+	var missing_definitions: Array[Dictionary] = [missing_reward]
+	var missing_error: Dictionary = registry.call(
+		"_first_reference_error",
+		missing_definitions,
+		_known_ids(missing_definitions)
+	)
+	suite.assert_true(not missing_error.is_empty(), "a known archetype without its profile fails closed")
+	suite.assert_equal(missing_error.get("content_id"), "missing_profile_reward", "missing-profile error identifies content")
+	suite.assert_equal(missing_error.get("field"), "archetype", "missing-profile error identifies the archetype field")
+
+	var unknown_reward := _archetype_reward_definition("unknown_profile_reward", "time_stop_burst", ["LAUNCH"])
+	var unknown_definitions: Array[Dictionary] = [launch_profile, unknown_reward]
+	var unknown_error: Dictionary = registry.call(
+		"_first_reference_error",
+		unknown_definitions,
+		_known_ids(unknown_definitions)
+	)
+	suite.assert_true(not unknown_error.is_empty(), "unknown top-level archetype fails closed")
+	suite.assert_equal(unknown_error.get("field"), "archetype", "unknown archetype failure identifies the field")
+
+	var expansion_profile := _archetype_profile_definition("freeze_burst", ["EXPANSION"])
+	var widened_reward := _archetype_reward_definition("widened_profile_reward", "freeze_burst", ["LAUNCH"])
+	var widened_definitions: Array[Dictionary] = [expansion_profile, widened_reward]
+	var widened_error: Dictionary = registry.call(
+		"_first_reference_error",
+		widened_definitions,
+		_known_ids(widened_definitions)
+	)
+	suite.assert_true(not widened_error.is_empty(), "content cannot widen archetype profile availability")
+	suite.assert_equal(widened_error.get("milestone"), "LAUNCH", "availability error identifies the widened milestone")
+
+	var scoped_reward := _archetype_reward_definition("scoped_profile_reward", "freeze_burst", ["LAUNCH"])
+	scoped_reward["compatibility"] = {"archetype_ids": ["freeze_burst"]}
+	var scoped_definitions: Array[Dictionary] = [launch_profile, scoped_reward]
+	suite.assert_equal(
+		registry.call(
+			"_first_reference_error",
+			scoped_definitions,
+			_known_ids(scoped_definitions)
+		),
+		{},
+		"known compatibility archetype resolves through the profile catalog"
+	)
+	var missing_scope_reward := _archetype_reward_definition("missing_scope_reward", "", ["LAUNCH"])
+	missing_scope_reward["compatibility"] = {"archetype_ids": ["echo_legion"]}
+	var missing_scope_definitions: Array[Dictionary] = [launch_profile, missing_scope_reward]
+	var missing_scope_error: Dictionary = registry.call(
+		"_first_reference_error",
+		missing_scope_definitions,
+		_known_ids(missing_scope_definitions)
+	)
+	suite.assert_true(not missing_scope_error.is_empty(), "compatibility archetype requires a profile")
+	suite.assert_equal(
+		missing_scope_error.get("field"),
+		"compatibility.archetype_ids",
+		"compatibility reference failure identifies the exact field"
+	)
+
+
+func _archetype_profile_definition(id: String, milestones: Array) -> Dictionary:
+	return {
+		"id": "archetype_%s_v1" % id,
+		"category": "archetype_profile",
+		"availability": milestones.duplicate(),
+		"name_key": "ARCHETYPE_FREEZE_BURST_NAME",
+		"description_key": "ARCHETYPE_FREEZE_BURST_DESC",
+		"tags": ["build_route", "control"],
+		"compatibility": {},
+		"effects": {},
+		"references": [],
+		"profile_version": 1,
+		"archetype_id": id,
+		"mechanic_tags": ["stop", "slow", "weakpoint", "burst"],
+		"starter_min": 3,
+		"payoff_min": 2,
+		"risk_min": 1,
+		"boss_conversion_id": "boss_weakpoint_exposure",
+		"boss_response_key": "ARCHETYPE_FREEZE_BURST_BOSS_RESPONSE",
+	}
+
+
+func _archetype_reward_definition(id: String, archetype: String, milestones: Array) -> Dictionary:
+	return {
+		"id": id,
+		"category": "item",
+		"availability": milestones.duplicate(),
+		"name_key": "TEST_ITEM_NAME",
+		"description_key": "TEST_ITEM_DESC",
+		"tags": ["test", "utility"],
+		"compatibility": {},
+		"effects": {},
+		"kind": "utility",
+		"archetype": archetype,
+		"role": "utility" if archetype.is_empty() else "starter",
+		"rarity": "common",
+		"icon_id": "content_%s" % id,
+		"references": [],
+	}
+
+
+func _known_ids(definitions: Array[Dictionary]) -> Dictionary:
+	var result: Dictionary = {}
+	for definition: Dictionary in definitions:
+		result[str(definition.get("id", ""))] = true
+	return result

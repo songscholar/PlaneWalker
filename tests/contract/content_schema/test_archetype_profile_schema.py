@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = ROOT / "data/schemas/archetype_profile_v1.schema.json"
+ENTRY_SCHEMA_PATH = ROOT / "data/schemas/content_entry_v2.schema.json"
 CATALOG_PATH = ROOT / "data/content_packs/base/content/archetype_profiles.json"
 
 EXPECTED_IDS = [
@@ -37,16 +38,47 @@ class ArchetypeProfileSchemaTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        cls.entry_schema = json.loads(ENTRY_SCHEMA_PATH.read_text(encoding="utf-8"))
         cls.catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
         cls.validator = Draft202012Validator(cls.schema)
+        cls.entry_validator = Draft202012Validator(cls.entry_schema)
 
     def test_schema_is_valid_draft_2020_12(self) -> None:
         Draft202012Validator.check_schema(self.schema)
+        Draft202012Validator.check_schema(self.entry_schema)
         self.assertEqual(
             self.schema["$id"],
             "planewalker://schemas/archetype-profile/1.0.0",
         )
         self.assertFalse(self.schema["additionalProperties"])
+
+    def test_generic_content_entry_schema_accepts_the_catalog(self) -> None:
+        self.assertIn(
+            "archetype_profile",
+            self.entry_schema["properties"]["category"]["enum"],
+        )
+        for row in self.catalog:
+            with self.subTest(archetype=row["archetype_id"]):
+                self.assertEqual(list(self.entry_validator.iter_errors(row)), [])
+
+    def test_generic_content_entry_schema_scopes_profile_only_fields(self) -> None:
+        leaked_item = {
+            "id": "profile_field_leak",
+            "category": "item",
+            "availability": ["LAUNCH"],
+            "name_key": "PROFILE_FIELD_LEAK_NAME",
+            "description_key": "PROFILE_FIELD_LEAK_DESC",
+            "tags": ["test"],
+            "compatibility": {},
+            "effects": {},
+            "kind": "utility",
+            "archetype": "freeze_burst",
+            "role": "starter",
+            "rarity": "common",
+            "icon_id": "content_profile_field_leak",
+            "archetype_id": "freeze_burst",
+        }
+        self.assertTrue(list(self.entry_validator.iter_errors(leaked_item)))
 
     def test_exact_catalog_and_closed_values(self) -> None:
         self.assertEqual(

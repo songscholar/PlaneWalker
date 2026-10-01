@@ -7,6 +7,7 @@ const ContentPackResolverScript := preload("res://scripts/content/content_pack_r
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/character_runtime_profile.gd")
+const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -26,6 +27,7 @@ const VALID_CATEGORIES: Array[String] = [
 	"narrative",
 	"cosmetic",
 	"challenge",
+	"archetype_profile",
 	"weapon_runtime_profile",
 	"character_runtime_profile",
 ]
@@ -77,6 +79,13 @@ const V2_ALLOWED_FIELDS: Array[String] = [
 	"weapon_mastery",
 	"presentation",
 	"talent_ids",
+	"archetype_id",
+	"mechanic_tags",
+	"starter_min",
+	"payoff_min",
+	"risk_min",
+	"boss_conversion_id",
+	"boss_response_key",
 ]
 const COMPATIBILITY_FIELDS: Array[String] = [
 	"character_ids",
@@ -146,6 +155,34 @@ const CHARACTER_PROFILE_ONLY_FIELDS: Array[String] = [
 	"weapon_mastery",
 	"presentation",
 	"talent_ids",
+]
+const ARCHETYPE_PROFILE_FIELDS: Array[String] = [
+	"id",
+	"category",
+	"availability",
+	"name_key",
+	"description_key",
+	"tags",
+	"compatibility",
+	"effects",
+	"references",
+	"profile_version",
+	"archetype_id",
+	"mechanic_tags",
+	"starter_min",
+	"payoff_min",
+	"risk_min",
+	"boss_conversion_id",
+	"boss_response_key",
+]
+const ARCHETYPE_PROFILE_ONLY_FIELDS: Array[String] = [
+	"archetype_id",
+	"mechanic_tags",
+	"starter_min",
+	"payoff_min",
+	"risk_min",
+	"boss_conversion_id",
+	"boss_response_key",
 ]
 
 var _definitions: Dictionary = {}
@@ -492,6 +529,26 @@ func resolve_character_runtime_profile(character_id: StringName, milestone: Stri
 	return _canonical_character_runtime_profile(matches[0])
 
 
+func get_archetype_profile(archetype_id: StringName) -> Dictionary:
+	var matches: Array[Dictionary] = []
+	for definition: Dictionary in get_by_category(&"archetype_profile"):
+		if str(definition.get("archetype_id", "")) == str(archetype_id):
+			matches.append(definition)
+	if matches.size() != 1:
+		return {}
+	return _canonical_archetype_profile(matches[0])
+
+
+func get_archetype_profiles(milestone: StringName) -> Array[Dictionary]:
+	var profiles: Array[Dictionary] = []
+	for archetype_id: String in ArchetypeProfileScript.ARCHETYPE_IDS:
+		var profile := get_archetype_profile(StringName(archetype_id))
+		if profile.is_empty() or not profile.get("availability", []).has(str(milestone)):
+			continue
+		profiles.append(profile)
+	return profiles
+
+
 func _canonical_weapon_runtime_profile(definition: Dictionary) -> Dictionary:
 	var source: Dictionary = {}
 	for field: String in WEAPON_RUNTIME_PROFILE_FIELDS:
@@ -509,6 +566,17 @@ func _canonical_character_runtime_profile(definition: Dictionary) -> Dictionary:
 		if definition.has(field):
 			source[field] = definition[field].duplicate(true) if definition[field] is Array or definition[field] is Dictionary else definition[field]
 	var result: Dictionary = CharacterRuntimeProfileScript.new().configure(source)
+	if not bool(result.get("ok", false)):
+		return {}
+	return (result.get("profile", {}) as Dictionary).duplicate(true)
+
+
+func _canonical_archetype_profile(definition: Dictionary) -> Dictionary:
+	var source: Dictionary = {}
+	for field: String in ARCHETYPE_PROFILE_FIELDS:
+		if definition.has(field):
+			source[field] = definition[field].duplicate(true) if definition[field] is Array or definition[field] is Dictionary else definition[field]
+	var result: Dictionary = ArchetypeProfileScript.new().configure(source)
 	if not bool(result.get("ok", false)):
 		return {}
 	return (result.get("profile", {}) as Dictionary).duplicate(true)
@@ -836,7 +904,8 @@ func _load_pack_definitions(
 			pack_ids[content_id] = true
 			var normalized := entry.duplicate(true)
 			var availability: Array = normalized["availability"]
-			availability.sort()
+			if str(normalized.get("category", "")) != "archetype_profile":
+				availability.sort()
 			normalized["availability"] = availability
 			var tags: Array = normalized["tags"]
 			tags.sort()
@@ -888,6 +957,10 @@ func _v2_entry_error(
 	if typeof(entry["category"]) != TYPE_STRING or not VALID_CATEGORIES.has(str(entry["category"])):
 		return {"field": "category", "reason": "value"}
 	var category := str(entry["category"])
+	if category != "archetype_profile":
+		for profile_field: String in ARCHETYPE_PROFILE_ONLY_FIELDS:
+			if entry.has(profile_field):
+				return {"field": profile_field, "reason": "category_specific_field"}
 	var availability_error := _id_array_error(entry["availability"], VALID_AVAILABILITY, false, false)
 	if not availability_error.is_empty():
 		return {"field": "availability", "reason": availability_error}
@@ -910,7 +983,7 @@ func _v2_entry_error(
 		var compatibility_error := _id_array_error(
 			(entry["compatibility"] as Dictionary)[field_value],
 			[],
-			category != "character_runtime_profile"
+			false if field == "archetype_ids" else category != "character_runtime_profile"
 		)
 		if not compatibility_error.is_empty():
 			return {"field": "compatibility.%s" % field, "reason": compatibility_error}
@@ -952,6 +1025,14 @@ func _v2_entry_error(
 		var character_integration_error := _character_runtime_profile_integration_error(entry)
 		if not character_integration_error.is_empty():
 			return character_integration_error
+	if category == "archetype_profile":
+		var archetype_profile_result: Dictionary = ArchetypeProfileScript.new().configure(entry)
+		if not bool(archetype_profile_result.get("ok", false)):
+			var archetype_profile_context: Dictionary = archetype_profile_result.get("context", {})
+			return {
+				"field": str(archetype_profile_context.get("field", "archetype_profile")),
+				"reason": str(archetype_profile_context.get("reason", "invalid")),
+			}
 	for field: String in ["kind", "archetype", "role"]:
 		if entry.has(field) and not _optional_identifier_is_valid(entry[field]):
 			return {"field": field, "reason": "value"}
@@ -1065,12 +1146,35 @@ func _first_reference_error(
 		definitions_by_id[str(existing_id)] = _definitions[existing_id]
 	for definition: Dictionary in pack_definitions:
 		definitions_by_id[str(definition["id"])] = definition
+	var profiles_by_archetype: Dictionary = {}
+	for definition_value: Variant in definitions_by_id.values():
+		if not definition_value is Dictionary:
+			continue
+		var profile_definition: Dictionary = definition_value
+		if str(profile_definition.get("category", "")) != "archetype_profile":
+			continue
+		var profile_archetype_id := str(profile_definition.get("archetype_id", ""))
+		if profiles_by_archetype.has(profile_archetype_id):
+			return {
+				"content_id": str(profile_definition.get("id", "")),
+				"field": "archetype_id",
+				"reference_id": profile_archetype_id,
+				"reason": "duplicate_profile",
+			}
+		profiles_by_archetype[profile_archetype_id] = profile_definition
 	for definition: Dictionary in pack_definitions:
 		for reference_value: Variant in definition.get("references", []):
 			var reference_id := str(reference_value)
 			if not available_ids.has(reference_id):
 				return {"content_id": str(definition["id"]), "reference_id": reference_id}
 		var category := str(definition.get("category", ""))
+		if category != "archetype_profile":
+			var archetype_reference_error := _archetype_reference_error(
+				definition,
+				profiles_by_archetype
+			)
+			if not archetype_reference_error.is_empty():
+				return archetype_reference_error
 		var compatibility_reference_error := _compatibility_reference_error(
 			definition,
 			definitions_by_id
@@ -1146,6 +1250,74 @@ func _first_reference_error(
 						"reference_id": talent_id,
 						"reason": "talent_character_mismatch",
 					}
+	return {}
+
+
+func _archetype_reference_error(
+	definition: Dictionary,
+	profiles_by_archetype: Dictionary
+) -> Dictionary:
+	var archetype_id := str(definition.get("archetype", ""))
+	if not archetype_id.is_empty():
+		var direct_error := _archetype_profile_reference_error(
+			definition,
+			archetype_id,
+			"archetype",
+			profiles_by_archetype
+		)
+		if not direct_error.is_empty():
+			return direct_error
+	var compatibility: Dictionary = definition.get("compatibility", {})
+	for compatible_id_value: Variant in compatibility.get("archetype_ids", []):
+		var compatibility_error := _archetype_profile_reference_error(
+			definition,
+			str(compatible_id_value),
+			"compatibility.archetype_ids",
+			profiles_by_archetype
+		)
+		if not compatibility_error.is_empty():
+			return compatibility_error
+	for tag_value: Variant in definition.get("tags", []):
+		var tag := str(tag_value)
+		if not ArchetypeProfileScript.ARCHETYPE_IDS.has(tag):
+			continue
+		var tag_error := _archetype_profile_reference_error(
+			definition,
+			tag,
+			"tags",
+			profiles_by_archetype
+		)
+		if not tag_error.is_empty():
+			return tag_error
+	return {}
+
+
+func _archetype_profile_reference_error(
+	definition: Dictionary,
+	archetype_id: String,
+	field: String,
+	profiles_by_archetype: Dictionary
+) -> Dictionary:
+	var profile_value: Variant = profiles_by_archetype.get(archetype_id)
+	if not profile_value is Dictionary:
+		return {
+			"content_id": str(definition.get("id", "")),
+			"field": field,
+			"reference_id": archetype_id,
+			"reason": "archetype_profile_missing",
+		}
+	var profile: Dictionary = profile_value
+	for milestone: String in ["LAUNCH", "EXPANSION"]:
+		if not definition.get("availability", []).has(milestone):
+			continue
+		if not profile.get("availability", []).has(milestone):
+			return {
+				"content_id": str(definition.get("id", "")),
+				"field": field,
+				"reference_id": archetype_id,
+				"reason": "availability_widening",
+				"milestone": milestone,
+			}
 	return {}
 
 

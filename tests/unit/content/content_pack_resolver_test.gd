@@ -3,6 +3,7 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentPackDescriptorScript := preload("res://scripts/content/content_pack_descriptor.gd")
 const ContentPackResolverScript := preload("res://scripts/content/content_pack_resolver.gd")
+const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
 
 const VALID_PACK_PATH := "res://tests/fixtures/content_packs/valid_base/pack.json"
 const BAD_DIGEST_PACK_PATH := "res://tests/fixtures/content_packs/bad_digest/pack.json"
@@ -61,7 +62,7 @@ func _test_project_base_pack(suite) -> void:
 	var descriptor: Dictionary = loaded.get("descriptor", {})
 	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
 	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
-	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 9, "project base pack owns rewards, loadout identities, and both runtime-profile dimensions")
+	suite.assert_equal((descriptor.get("content_manifest", []) as Array).size(), 10, "project base pack owns rewards, runtime profiles, and Launch archetypes")
 	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
 
 	var entries: Array[Dictionary] = []
@@ -77,10 +78,11 @@ func _test_project_base_pack(suite) -> void:
 		for entry_value: Variant in parsed:
 			if entry_value is Dictionary:
 				entries.append((entry_value as Dictionary).duplicate(true))
-	suite.assert_equal(entries.size(), 72, "project base pack preserves rewards, fifteen talents, loadout definitions, and both runtime-profile dimensions")
+	suite.assert_equal(entries.size(), 80, "project base pack preserves existing content and eight Launch archetype profiles")
 	var allowed_archetypes: Array[String] = [
 		"",
 		"accelerated_combo",
+		"echo_legion",
 		"freeze_burst",
 		"low_hp_void",
 		"perfect_guard",
@@ -88,6 +90,7 @@ func _test_project_base_pack(suite) -> void:
 		"rewind_echo",
 		"rift_trap",
 	]
+	var archetype_profiles: Array[Dictionary] = []
 	for entry: Dictionary in entries:
 		for required_field: String in [
 			"id", "category", "availability", "name_key", "description_key",
@@ -99,6 +102,17 @@ func _test_project_base_pack(suite) -> void:
 				suite.assert_true(entry.has(reward_field), "reward entry %s has %s" % [entry.get("id", ""), reward_field])
 		suite.assert_true(not entry.has("name") and not entry.has("description"), "base entry %s uses v2 localization fields" % entry.get("id", ""))
 		suite.assert_true(allowed_archetypes.has(str(entry.get("archetype", ""))), "base entry %s uses authoritative archetype taxonomy" % entry.get("id", ""))
+		if str(entry.get("category", "")) == "archetype_profile":
+			archetype_profiles.append(entry.duplicate(true))
+	suite.assert_equal(archetype_profiles.size(), 8, "project base pack contains exactly eight archetype profiles")
+	var archetype_ids: Array[String] = []
+	for profile: Dictionary in archetype_profiles:
+		archetype_ids.append(str(profile.get("archetype_id", "")))
+		suite.assert_true(
+			bool(ArchetypeProfileScript.new().configure(profile).get("ok", false)),
+			"base archetype profile %s is parser-ready" % profile.get("id", "")
+		)
+	suite.assert_equal(archetype_ids, ArchetypeProfileScript.ARCHETYPE_IDS, "base manifest preserves approved archetype order")
 
 
 func _test_fixture_graphs(suite) -> void:

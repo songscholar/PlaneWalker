@@ -38,6 +38,7 @@
         "narrative",
         "cosmetic",
         "challenge",
+        "archetype_profile",
         "weapon_runtime_profile",
         "character_runtime_profile"
       ]
@@ -114,6 +115,54 @@
       "type": "integer",
       "minimum": 1
     },
+    "archetype_id": {
+      "type": "string",
+      "enum": [
+        "freeze_burst",
+        "rewind_echo",
+        "rift_trap",
+        "accelerated_combo",
+        "low_hp_void",
+        "perfect_guard",
+        "piercing_barrage",
+        "echo_legion"
+      ]
+    },
+    "mechanic_tags": {
+      "allOf": [
+        { "$ref": "#/$defs/id_list" },
+        { "minItems": 4 }
+      ]
+    },
+    "starter_min": {
+      "type": "integer",
+      "const": 3
+    },
+    "payoff_min": {
+      "type": "integer",
+      "const": 2
+    },
+    "risk_min": {
+      "type": "integer",
+      "const": 1
+    },
+    "boss_conversion_id": {
+      "type": "string",
+      "enum": [
+        "boss_weakpoint_exposure",
+        "boss_rewind_path_strike",
+        "boss_projectile_window",
+        "boss_combo_break",
+        "boss_execute_warning",
+        "boss_counter_window",
+        "boss_weakpoint_ammo_refund",
+        "boss_facing_lure"
+      ]
+    },
+    "boss_response_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
     "weapon_id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
@@ -187,6 +236,53 @@
       "then": {
         "properties": {
           "profile_version": {"const": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {"const": "archetype_profile"}
+        },
+        "required": ["category"]
+      },
+      "then": {
+        "required": [
+          "references",
+          "profile_version",
+          "archetype_id",
+          "mechanic_tags",
+          "starter_min",
+          "payoff_min",
+          "risk_min",
+          "boss_conversion_id",
+          "boss_response_key"
+        ],
+        "properties": {
+          "availability": {"const": ["LAUNCH", "EXPANSION"]},
+          "effects": {"maxProperties": 0},
+          "profile_version": {"const": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "category": {"not": {"const": "archetype_profile"}}
+        },
+        "required": ["category"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["archetype_id"]},
+            {"required": ["mechanic_tags"]},
+            {"required": ["starter_min"]},
+            {"required": ["payoff_min"]},
+            {"required": ["risk_min"]},
+            {"required": ["boss_conversion_id"]},
+            {"required": ["boss_response_key"]}
+          ]
         }
       }
     },
