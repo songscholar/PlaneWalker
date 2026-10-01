@@ -8,6 +8,8 @@ const RunStateScript := preload("res://scripts/application/run_state.gd")
 const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
 
 var _state: RefCounted
+var _pending_route_transition: Dictionary = {}
+var _next_route_transition_id: int = 1
 
 
 func _init() -> void:
@@ -42,6 +44,20 @@ func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 	return _state.restore_selection_transaction_snapshot(value.duplicate(true))
 
 
+func floor_transaction_snapshot() -> Dictionary:
+	return _state.floor_transaction_snapshot().duplicate(true)
+
+
+func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
+	return _state.can_restore_floor_transaction_snapshot(value.duplicate(true))
+
+
+func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
+	if not _pending_route_transition.is_empty():
+		return false
+	return _state.restore_floor_transaction_snapshot(value.duplicate(true))
+
+
 func reward_replay_build_snapshot() -> Dictionary:
 	return _state.reward_replay_build_snapshot().duplicate(true)
 
@@ -69,7 +85,288 @@ func start_run(config: Dictionary, run_id: String):
 	if run_id.is_empty():
 		return CommandResultScript.failure(&"INVALID_ARGUMENT", _state.revision, {"field": "run_id"})
 	_state.reset_domain(config, run_id)
+	_pending_route_transition.clear()
+	_next_route_transition_id = 1
 	return _accept_phase(RunPhaseScript.Value.RUN_PREPARING)
+
+
+func start_floor(
+	plan: Dictionary,
+	floor_definition: Dictionary,
+	room_templates: Array,
+	expected_revision: int
+):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _state.is_launch_floor_mode():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "config.milestone", "reason": "floor_plan_not_supported"}
+		)
+	if (
+		_state.phase != RunPhaseScript.Value.RUN_PREPARING
+		or not _pending_route_transition.is_empty()
+	):
+		return _reject_floor_operation("start_floor")
+	var floor_index := int(plan.get("floor_index", -1))
+	if (
+		floor_index < 0
+		or floor_index > 4
+		or floor_index != (_state.completed_floor_ids as Array).size()
+		or int(floor_definition.get("order", 0)) - 1 != floor_index
+		or str(plan.get("floor_id", "")) != str(floor_definition.get("id", ""))
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "floor_plan.floor_index", "received": floor_index}
+		)
+	var configured: Dictionary = _state.configure_floor_plan(
+		plan.duplicate(true), floor_definition.duplicate(true), room_templates.duplicate(true)
+	)
+	if not bool(configured.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(configured.get("code", &"INVALID_ARGUMENT"))),
+			_state.revision,
+			(configured.get("context", {}) as Dictionary).duplicate(true)
+		)
+	_state.phase = RunPhaseScript.Value.ROOM_ACTIVE
+	var accepted_revision: int = int(_state.advance_revision())
+	return CommandResultScript.success(
+		accepted_revision,
+		{
+			"floor_id": str(plan.get("floor_id", "")),
+			"floor_index": floor_index,
+			"plan": _state.floor_plan.duplicate(true),
+		}
+	)
+
+
+func select_route(edge_id: StringName, expected_revision: int):
+	return begin_route_transition(edge_id, expected_revision)
+
+
+func begin_route_transition(edge_id: StringName, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if (
+		not _state.is_launch_floor_mode()
+		or not _pending_route_transition.is_empty()
+		or _state.phase not in [RunPhaseScript.Value.ROOM_ACTIVE, RunPhaseScript.Value.ROOM_RESOLVING]
+	):
+		return _reject_floor_operation("begin_route_transition")
+	if str(edge_id).is_empty():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _state.revision, {"field": "edge_id"}
+		)
+	var before: Dictionary = _state.floor_transaction_snapshot()
+	var selected: Dictionary = _state.select_floor_edge(edge_id)
+	if not bool(selected.get("ok", false)):
+		var selected_code := StringName(str(selected.get("code", &"INVALID_ARGUMENT")))
+		if selected_code == &"INVALID_PHASE":
+			return _reject_floor_operation("begin_route_transition")
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{
+				"field": "edge_id",
+				"edge_id": str(edge_id),
+				"reason": str(selected_code).to_lower(),
+			}
+		)
+	var transition_id := "%s:route-%d" % [_state.run_id, _next_route_transition_id]
+	_next_route_transition_id += 1
+	_state.phase = RunPhaseScript.Value.ROOM_TRANSITION
+	var staged_revision: int = int(_state.advance_revision())
+	var node_id := str(selected.get("node_id", ""))
+	_pending_route_transition = {
+		"transition_id": transition_id,
+		"before": before.duplicate(true),
+		"floor_id": str(_state.floor_plan.get("floor_id", "")),
+		"floor_index": int(_state.current_floor_index),
+		"edge_id": str(edge_id),
+		"node_id": node_id,
+		"staged_revision": staged_revision,
+	}
+	return CommandResultScript.success(
+		staged_revision,
+		{
+			"transition_id": transition_id,
+			"floor_id": str(_pending_route_transition["floor_id"]),
+			"floor_index": int(_pending_route_transition["floor_index"]),
+			"edge_id": str(edge_id),
+			"node_id": node_id,
+			"pending_transition": true,
+		}
+	)
+
+
+func finalize_route_transition(transition_id: String, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	var pending_validation = _validate_pending_route_transition(
+		transition_id, "finalize_route_transition"
+	)
+	if not pending_validation.ok:
+		return pending_validation
+	if _state.phase != RunPhaseScript.Value.ROOM_TRANSITION:
+		return _reject_floor_operation("finalize_route_transition")
+	var committed := _pending_route_transition.duplicate(true)
+	_pending_route_transition.clear()
+	_state.phase = RunPhaseScript.Value.ROOM_ENTERING
+	var committed_revision: int = int(_state.advance_revision())
+	return CommandResultScript.success(
+		committed_revision,
+		{
+			"transition_id": transition_id,
+			"floor_id": str(committed["floor_id"]),
+			"floor_index": int(committed["floor_index"]),
+			"edge_id": str(committed["edge_id"]),
+			"node_id": str(committed["node_id"]),
+			"pending_transition": false,
+		}
+	)
+
+
+func rollback_route_transition(transition_id: String, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	var pending_validation = _validate_pending_route_transition(
+		transition_id, "rollback_route_transition"
+	)
+	if not pending_validation.ok:
+		return pending_validation
+	var before: Dictionary = _pending_route_transition.get("before", {}).duplicate(true)
+	if not _state.restore_floor_transaction_snapshot(before):
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE",
+			_state.revision,
+			{"stage": "route_transition_rollback", "transition_id": transition_id}
+		)
+	_pending_route_transition.clear()
+	return CommandResultScript.success(
+		_state.revision,
+		{"transition_id": transition_id, "rolled_back": true}
+	)
+
+
+func enter_floor_node(node_id: String, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if (
+		_state.phase != RunPhaseScript.Value.ROOM_ENTERING
+		or not _state.is_launch_floor_mode()
+		or not _pending_route_transition.is_empty()
+	):
+		return _reject_floor_operation("enter_floor_node")
+	var node: Dictionary = _state.current_floor_node()
+	if (
+		node.is_empty()
+		or node_id.is_empty()
+		or node_id != str(node.get("id", ""))
+		or node_id == str(_state.floor_plan.get("entry_node_id", "entry"))
+		or not bool(node.get("visited", false))
+		or bool(node.get("cleared", false))
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "node_id", "node_id": node_id}
+		)
+	_state.phase = _active_phase_for_room_type(str(node.get("room_type", "")))
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{"floor_id": str(_state.floor_plan.get("floor_id", "")), "node": node}
+	)
+
+
+func complete_floor_node(node_id: String, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _state.is_launch_floor_mode() or not _pending_route_transition.is_empty():
+		return _reject_floor_operation("complete_floor_node")
+	var node: Dictionary = _state.current_floor_node()
+	if node.is_empty() or _state.phase != _active_phase_for_room_type(str(node.get("room_type", ""))):
+		return _reject_floor_operation("complete_floor_node")
+	if node_id.is_empty() or node_id != str(node.get("id", "")):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "node_id", "node_id": node_id}
+		)
+	var completed: Dictionary = _state.complete_current_floor_node(node_id)
+	if not bool(completed.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(completed.get("code", &"INVALID_ARGUMENT"))),
+			_state.revision,
+			(completed.get("context", {}) as Dictionary).duplicate(true)
+		)
+	_state.phase = RunPhaseScript.Value.ROOM_RESOLVING
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{
+			"floor_id": str(_state.floor_plan.get("floor_id", "")),
+			"floor_index": int(_state.current_floor_index),
+			"node": _state.current_floor_node(),
+		}
+	)
+
+
+func complete_floor(context: Dictionary = {}, expected_revision: int = -1):
+	if expected_revision < 0:
+		expected_revision = int(_state.revision)
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if (
+		not _state.is_launch_floor_mode()
+		or not _pending_route_transition.is_empty()
+		or _state.phase != RunPhaseScript.Value.ROOM_RESOLVING
+	):
+		return _reject_floor_operation("complete_floor")
+	var node: Dictionary = _state.current_floor_node()
+	if (
+		node.is_empty()
+		or str(node.get("id", "")) != str(_state.floor_plan.get("boss_node_id", ""))
+		or str(node.get("room_type", "")) != "boss"
+		or not bool(node.get("cleared", false))
+	):
+		return _reject_floor_operation("complete_floor")
+	var floor_id := str(_state.floor_plan.get("floor_id", ""))
+	var floor_index := int(_state.current_floor_index)
+	if not _state.append_completed_floor():
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED",
+			_state.revision,
+			{"field": "completed_floor_ids", "floor_id": floor_id}
+		)
+	var terminal := floor_index == 4
+	if terminal:
+		_state.result = context.duplicate(true)
+		if str(_state.result.get("result", "")).is_empty():
+			_state.result["result"] = "victory"
+		_state.result["floor_id"] = floor_id
+		_state.result["floor_index"] = floor_index
+		_state.phase = RunPhaseScript.Value.VICTORY
+	else:
+		_state.phase = RunPhaseScript.Value.RUN_PREPARING
+	var completed_revision: int = int(_state.advance_revision())
+	return CommandResultScript.success(
+		completed_revision,
+		{
+			"floor_id": floor_id,
+			"floor_index": floor_index,
+			"terminal": terminal,
+			"completed_floor_ids": (_state.completed_floor_ids as Array).duplicate(),
+		}
+	)
 
 
 func preparation_completed():
@@ -207,8 +504,22 @@ func player_died(context: Dictionary = {}):
 		RunPhaseScript.Value.SELECTION_ACTIVE,
 		RunPhaseScript.Value.ROOM_TRANSITION,
 		RunPhaseScript.Value.BOSS_ACTIVE,
+		RunPhaseScript.Value.ROOM_ACTIVE,
 	]:
 		return _reject_phase()
+	if not _pending_route_transition.is_empty():
+		var transition_id := str(_pending_route_transition.get("transition_id", ""))
+		var before: Dictionary = _pending_route_transition.get("before", {}).duplicate(true)
+		if not _state.restore_floor_transaction_snapshot(before):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_state.revision,
+				{
+					"stage": "route_transition_death_rollback",
+					"transition_id": transition_id,
+				}
+			)
+		_pending_route_transition.clear()
 	_state.open_offer = {}
 	_state.result = context.duplicate(true)
 	return _accept_phase(RunPhaseScript.Value.DEFEAT)
@@ -219,6 +530,22 @@ func boss_defeated(context: Dictionary = {}):
 		return CommandResultScript.failure(&"TERMINAL_STATE", _state.revision)
 	if _state.phase != RunPhaseScript.Value.BOSS_ACTIVE:
 		return _reject_phase()
+	if _state.is_launch_floor_mode() and _state.has_active_floor_plan():
+		var before: Dictionary = _state.floor_transaction_snapshot()
+		var node_id := str(_state.floor_plan.get("current_node_id", ""))
+		var node_completed = complete_floor_node(node_id, _state.revision)
+		if not node_completed.ok:
+			return node_completed
+		var floor_completed = complete_floor(context, _state.revision)
+		if floor_completed.ok:
+			return floor_completed
+		if not _state.restore_floor_transaction_snapshot(before):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_state.revision,
+				{"stage": "boss_floor_completion_rollback"}
+			)
+		return floor_completed
 	_state.open_offer = {}
 	_state.result = context.duplicate(true)
 	return _accept_phase(RunPhaseScript.Value.VICTORY)
@@ -271,6 +598,49 @@ func _accept_phase(next_phase: int):
 
 func _accept_without_phase_change():
 	return CommandResultScript.success(_state.advance_revision())
+
+
+func _validate_expected_revision(expected_revision: int):
+	if expected_revision != int(_state.revision):
+		return CommandResultScript.failure(
+			&"STALE_REVISION",
+			_state.revision,
+			{
+				"received_revision": expected_revision,
+				"last_revision": int(_state.revision),
+			}
+		)
+	return CommandResultScript.success(_state.revision)
+
+
+func _validate_pending_route_transition(transition_id: String, operation: String):
+	if (
+		_pending_route_transition.is_empty()
+		or transition_id.is_empty()
+		or transition_id != str(_pending_route_transition.get("transition_id", ""))
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "transition_id", "operation": operation}
+		)
+	return CommandResultScript.success(_state.revision)
+
+
+func _reject_floor_operation(operation: String):
+	if _state.is_terminal():
+		return CommandResultScript.failure(&"TERMINAL_STATE", _state.revision)
+	return CommandResultScript.failure(
+		&"INVALID_PHASE", _state.revision, {"operation": operation}
+	)
+
+
+func _active_phase_for_room_type(room_type: String) -> int:
+	if room_type == "boss":
+		return RunPhaseScript.Value.BOSS_ACTIVE
+	if room_type == "combat" or room_type == "elite":
+		return RunPhaseScript.Value.COMBAT_ACTIVE
+	return RunPhaseScript.Value.ROOM_ACTIVE
 
 
 func _validate_selected_definition(definition: Dictionary):

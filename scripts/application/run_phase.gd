@@ -13,6 +13,7 @@ enum Value {
 	BOSS_ACTIVE,
 	VICTORY,
 	DEFEAT,
+	ROOM_ACTIVE,
 }
 
 

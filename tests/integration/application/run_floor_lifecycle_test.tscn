@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/application/run_floor_lifecycle_test.gd" id="1"]
+
+[node name="RunFloorLifecycleTest" type="Node"]
+script = ExtResource("1")
