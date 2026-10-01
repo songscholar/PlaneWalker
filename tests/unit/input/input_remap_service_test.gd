@@ -19,6 +19,9 @@ class FailingStore:
 	func validate_profile(profile: Dictionary) -> Dictionary:
 		return validator.validate_profile(profile)
 
+	func validate_schema_two_profile(profile: Dictionary) -> Dictionary:
+		return validator.validate_schema_two_profile(profile)
+
 	func save(_profile: Dictionary) -> Dictionary:
 		return {"ok": false, "code": "IO_ERROR", "details": {"injected": true}}
 
@@ -44,13 +47,14 @@ func _run() -> void:
 	var initial: Dictionary = service.load_or_defaults()
 	_suite.assert_true(bool(initial.get("ok", false)), "missing profile creates verified defaults")
 	_suite.assert_equal(initial.get("code", ""), "DEFAULTS_CREATED", "default creation is explicit")
-	_suite.assert_equal(initial.get("profile", {}).get("schema_version"), 2, "new defaults persist semantic schema two")
+	_suite.assert_equal(initial.get("profile", {}).get("schema_version"), 3, "new defaults persist semantic schema three")
 	_suite.assert_equal(
 		service.remappable_actions(),
 		[
 			&"move_up", &"move_down", &"move_left", &"move_right",
 			&"weapon_primary", &"weapon_secondary", &"weapon_utility", &"weapon_skill",
-			&"weapon_ultimate", &"time_slot_1", &"time_slot_2", &"dash", &"interact", &"pause",
+			&"weapon_ultimate", &"time_slot_1", &"time_slot_2", &"character_skill",
+			&"dash", &"interact", &"pause",
 		],
 		"remap data source exposes movement and semantic runtime slots only"
 	)
@@ -106,6 +110,8 @@ func _run() -> void:
 	_assert_default_controller_grammar("reset all")
 	_assert_profile_actions_reachable("reset all")
 	_test_legacy_primary_and_backup_migrate_atomically()
+	_test_schema_two_primary_migrates_atomically()
+	_test_exhausted_schema_two_migration_preserves_source()
 	_test_failed_legacy_migration_rolls_runtime_back(validation_store)
 	_suite.finish(get_tree())
 
@@ -124,6 +130,7 @@ func _assert_default_controller_grammar(label: String) -> void:
 		&"dash": ["button:1"],
 		&"time_slot_1": ["button:9"],
 		&"time_slot_2": ["button:10"],
+		&"character_skill": ["button:8"],
 		&"interact": ["button:0"],
 		&"pause": ["button:6"],
 	}
@@ -161,7 +168,7 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 	var migrated: Dictionary = service.load_or_defaults()
 	_suite.assert_true(bool(migrated.get("ok", false)), "legacy primary migrates through the production load chain")
 	_suite.assert_equal(migrated.get("code", ""), "MIGRATED", "legacy primary migration is explicit")
-	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 2, "migration persists schema two")
+	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 3, "migration persists schema three")
 	_suite.assert_equal(
 		_controller_binding_ids(&"weapon_primary"),
 		["button:2", "axis:5:1"],
@@ -177,6 +184,11 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 		["button:10", "button:8"],
 		"rewind then accelerate controller bindings merge into time slot two"
 	)
+	_suite.assert_equal(
+		_controller_binding_ids(&"character_skill"),
+		["button:15"],
+		"schema one reaches schema three through a complete schema-two profile before collision selection"
+	)
 	for legacy_action: StringName in [
 		&"attack", &"heavy_attack", &"ranged_attack",
 		&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate",
@@ -187,8 +199,8 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 			"schema two deactivates legacy runtime binding %s" % legacy_action
 		)
 	var persisted: Dictionary = store.load()
-	_suite.assert_equal(persisted.get("source", ""), "primary", "migrated schema two becomes authoritative")
-	_suite.assert_equal(persisted.get("profile", {}), migrated.get("profile", {}), "persisted migration matches applied profile")
+	_suite.assert_equal(persisted.get("source", ""), "primary", "migrated schema three becomes authoritative")
+	_suite.assert_equal(persisted.get("profile", {}), migrated.get("profile", {}), "persisted chained migration matches applied profile")
 	_suite.assert_true(FileAccess.file_exists(store.legacy_primary_path()), "legacy primary remains as a rollback point")
 
 	var backup_root := _unique_test_root()
@@ -205,6 +217,67 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 	_suite.assert_equal(recovered.get("source", ""), "legacy_backup", "backup migration reports its source")
 
 
+func _test_schema_two_primary_migrates_atomically() -> void:
+	var root := _unique_test_root()
+	var store = InputProfileStoreScript.new()
+	store.configure(root)
+	DirAccess.make_dir_recursive_absolute(root)
+	var source := _schema_two_fixture()
+	_write_text(store.schema_two_primary_path(), JSON.stringify(source))
+
+	var service = InputRemapServiceScript.new()
+	service.configure(root)
+	var migrated: Dictionary = service.load_or_defaults()
+	_suite.assert_true(bool(migrated.get("ok", false)), "schema-two primary migrates through the production load chain")
+	_suite.assert_equal(migrated.get("code", ""), "MIGRATED", "schema-two promotion is explicit")
+	_suite.assert_equal(migrated.get("source", ""), "schema_two_primary", "schema-two provenance is retained")
+	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 3, "schema-two promotion persists schema three")
+	_suite.assert_equal(
+		migrated.get("profile", {}).get("bindings", {}).get("character_skill", {}),
+		{
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_C}],
+			"controller": [{"type": "joypad_button", "button_index": 8}],
+		},
+		"schema-two promotion adds the fresh character binding"
+	)
+	for action_value: Variant in source["bindings"].keys():
+		_suite.assert_equal(
+			migrated["profile"]["bindings"][action_value],
+			source["bindings"][action_value],
+			"schema-two promotion preserves %s binding records" % action_value
+		)
+	_suite.assert_true(FileAccess.file_exists(store.primary_path()), "successful promotion creates the v3 primary")
+	_suite.assert_true(FileAccess.file_exists(store.schema_two_primary_path()), "successful promotion preserves the verified v2 rollback source")
+
+
+func _test_exhausted_schema_two_migration_preserves_source() -> void:
+	var root := _unique_test_root()
+	var store = InputProfileStoreScript.new()
+	store.configure(root)
+	DirAccess.make_dir_recursive_absolute(root)
+	var source := _schema_two_fixture()
+	var actions: Array = source["bindings"].keys()
+	for action_value: Variant in actions:
+		source["bindings"][action_value]["controller"] = []
+	for button_index: int in range(32):
+		var action_value: Variant = actions[button_index % actions.size()]
+		source["bindings"][action_value]["controller"].append({
+			"type": "joypad_button",
+			"button_index": button_index,
+		})
+	var serialized := JSON.stringify(source)
+	_write_text(store.schema_two_primary_path(), serialized)
+
+	var service = InputRemapServiceScript.new()
+	service.configure(root)
+	var runtime_before := service.snapshot_profile()
+	var rejected: Dictionary = service.load_or_defaults()
+	_suite.assert_equal(rejected.get("code", ""), "NO_REACHABLE_CHARACTER_SKILL", "controller exhaustion rejects production promotion")
+	_suite.assert_equal(service.snapshot_profile(), runtime_before, "failed promotion leaves runtime bindings untouched")
+	_suite.assert_equal(FileAccess.get_file_as_string(store.schema_two_primary_path()), serialized, "failed promotion preserves the v2 source byte-for-byte")
+	_suite.assert_true(not FileAccess.file_exists(store.primary_path()), "failed promotion does not create a partial v3 primary")
+
+
 func _test_failed_legacy_migration_rolls_runtime_back(validation_store) -> void:
 	var legacy := _legacy_profile_from_project_settings()
 	_restore_legacy_runtime_defaults()
@@ -218,7 +291,7 @@ func _test_failed_legacy_migration_rolls_runtime_back(validation_store) -> void:
 	var before := failing_service.snapshot_profile()
 	var result: Dictionary = failing_service.load_or_defaults()
 	_suite.assert_equal(result.get("code", ""), "IO_ERROR", "failed migration surfaces persistence error")
-	_suite.assert_equal(failing_service.snapshot_profile(), before, "failed migration restores runtime schema two bindings")
+	_suite.assert_equal(failing_service.snapshot_profile(), before, "failed migration restores runtime schema-three bindings")
 	_suite.assert_equal(
 		_controller_binding_ids(&"attack"),
 		["button:2"],
@@ -228,7 +301,7 @@ func _test_failed_legacy_migration_rolls_runtime_back(validation_store) -> void:
 
 func _legacy_profile_from_project_settings() -> Dictionary:
 	var bindings := {}
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in InputActionContractScript.legacy_profile_actions():
 		var action_setting: Dictionary = ProjectSettings.get_setting("input/%s" % action, {})
 		var families := {"keyboard_mouse": [], "controller": []}
 		for event_value: Variant in action_setting.get("events", []):
@@ -246,7 +319,7 @@ func _legacy_profile_from_project_settings() -> Dictionary:
 
 
 func _restore_legacy_runtime_defaults() -> void:
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in InputActionContractScript.legacy_profile_actions():
 		InputMap.action_erase_events(action)
 		var action_setting: Dictionary = ProjectSettings.get_setting("input/%s" % action, {})
 		for event_value: Variant in action_setting.get("events", []):
@@ -256,6 +329,34 @@ func _restore_legacy_runtime_defaults() -> void:
 
 func _controller_binding_ids(action: StringName) -> Array[String]:
 	return InputActionContractScript.controller_binding_ids(action)
+
+
+func _schema_two_fixture() -> Dictionary:
+	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://tests/fixtures/input/input_profile_v2.json"
+	))
+	_suite.assert_true(value is Dictionary, "checked-in schema-two fixture parses")
+	return (
+		_normalize_integral_numbers((value as Dictionary).duplicate(true)) as Dictionary
+		if value is Dictionary
+		else {}
+	)
+
+
+func _normalize_integral_numbers(value: Variant) -> Variant:
+	if value is Dictionary:
+		var normalized := {}
+		for key: Variant in (value as Dictionary).keys():
+			normalized[key] = _normalize_integral_numbers((value as Dictionary)[key])
+		return normalized
+	if value is Array:
+		var normalized: Array = []
+		for item: Variant in value as Array:
+			normalized.append(_normalize_integral_numbers(item))
+		return normalized
+	if typeof(value) == TYPE_FLOAT and is_equal_approx(float(value), floorf(float(value))):
+		return int(value)
+	return value
 
 
 func _write_text(path: String, contents: String) -> void:

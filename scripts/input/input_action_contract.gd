@@ -1,7 +1,7 @@
 class_name InputActionContract
 extends RefCounted
 
-const REQUIRED_ACTIONS: Array[StringName] = [
+const LEGACY_PROFILE_ACTIONS: Array[StringName] = [
 	&"move_up",
 	&"move_down",
 	&"move_left",
@@ -17,6 +17,18 @@ const REQUIRED_ACTIONS: Array[StringName] = [
 	&"interact",
 	&"pause",
 ]
+const REQUIRED_ACTIONS: Array[StringName] = [
+	&"move_up",
+	&"move_down",
+	&"move_left",
+	&"move_right",
+	&"attack",
+	&"heavy_attack",
+	&"ranged_attack",
+	&"dash",
+	&"interact",
+	&"pause",
+]
 const SEMANTIC_ACTIONS: Array[StringName] = [
 	&"weapon_primary",
 	&"weapon_secondary",
@@ -25,6 +37,7 @@ const SEMANTIC_ACTIONS: Array[StringName] = [
 	&"weapon_ultimate",
 	&"time_slot_1",
 	&"time_slot_2",
+	&"character_skill",
 	&"dash",
 	&"interact",
 	&"pause",
@@ -33,6 +46,10 @@ const SEMANTIC_ACTIONS: Array[StringName] = [
 
 static func required_actions() -> Array[StringName]:
 	return REQUIRED_ACTIONS.duplicate()
+
+
+static func legacy_profile_actions() -> Array[StringName]:
+	return LEGACY_PROFILE_ACTIONS.duplicate()
 
 
 static func semantic_actions() -> Array[StringName]:

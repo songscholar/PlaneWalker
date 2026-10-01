@@ -24,6 +24,7 @@ func _test_supported_round_trips() -> void:
 		{"type": "key", "physical_keycode": KEY_Q},
 		{"type": "mouse_button", "button_index": MOUSE_BUTTON_LEFT},
 		{"type": "joypad_button", "button_index": JOY_BUTTON_X},
+		{"type": "joypad_button", "button_index": 31},
 		{"type": "joypad_axis", "axis": JOY_AXIS_TRIGGER_RIGHT, "direction": 1},
 		{"type": "joypad_axis", "axis": JOY_AXIS_LEFT_Y, "direction": -1},
 	]
@@ -66,6 +67,7 @@ func _test_invalid_records() -> void:
 		{"type": "key", "physical_keycode": KEY_Q, "device": 2},
 		{"type": "mouse_button", "button_index": 0},
 		{"type": "joypad_button", "button_index": -1},
+		{"type": "joypad_button", "button_index": 32},
 		{"type": "joypad_axis", "axis": JOY_AXIS_LEFT_X, "direction": 0},
 		{"type": "joypad_axis", "axis": -1, "direction": 1},
 		{"type": "unknown", "value": 1},

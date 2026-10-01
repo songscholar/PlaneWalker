@@ -10,6 +10,11 @@ const PROFILE_ID := "gauntlets_launch_v1"
 const PROFILE_VERSION := 1
 const PROFILE_FINGERPRINT := "63b6a21a7ea03cd1d63ba93307eac84320a1bf9b3b430d9943cfea0f2b32cdd9"
 const WEAPON_ID := &"gauntlets"
+const MASTERY_IDS: Array[StringName] = [
+	&"gauntlets_dodge_counter",
+	&"gauntlets_combo_threshold",
+	&"gauntlets_chain_finisher",
+]
 const PRIMARY_HOLD_ACTION_ID := &"gauntlets_primary_charge"
 const CHARGED_HEAVY_ACTION_ID := &"charged_heavy"
 const DODGE_COUNTER_ACTION_ID := &"dodge_counter"
@@ -89,6 +94,10 @@ var _live_hold_context: Dictionary = {}
 
 func weapon_id() -> StringName:
 	return WEAPON_ID
+
+
+func mastery_ids() -> Array[StringName]:
+	return MASTERY_IDS.duplicate()
 
 
 func configure(owner: Node, profile: Variant, modifiers: Variant) -> bool:

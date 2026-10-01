@@ -7,6 +7,11 @@ const SNAPSHOT_SCHEMA_VERSION := 1
 const PROFILE_ID := "sword_m1_v1"
 const LAUNCH_PROFILE_ID := "sword_launch_v1"
 const WEAPON_ID := &"sword"
+const MASTERY_IDS: Array[StringName] = [
+	&"sword_perfect_guard",
+	&"sword_counter_confirmed",
+	&"sword_charged_commitment",
+]
 const COMBO_ACTION_IDS: Array[StringName] = [&"light_1", &"light_2", &"light_3"]
 const HEAVY_ACTION_ID := &"heavy"
 const COMBO_RESET_FRAMES := 48
@@ -182,6 +187,10 @@ var _last_runtime_frame: int = 0
 
 func weapon_id() -> StringName:
 	return WEAPON_ID
+
+
+func mastery_ids() -> Array[StringName]:
+	return MASTERY_IDS.duplicate()
 
 
 func bind_adapter(adapter: Node) -> bool:

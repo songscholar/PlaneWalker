@@ -8,6 +8,10 @@ const SNAPSHOT_SCHEMA_VERSION := 1
 const PROFILE_ID := "gun_launch_v1"
 const PROFILE_VERSION := 1
 const WEAPON_ID := &"gun"
+const MASTERY_IDS: Array[StringName] = [
+	&"gun_perfect_reload",
+	&"gun_magazine_finisher",
+]
 const PRIMARY_HOLD_ACTION_ID := &"normal_fire"
 const NORMAL_ACTION_ID := &"normal_fire"
 const AIMED_ACTION_ID := &"aimed_fire"
@@ -191,6 +195,10 @@ var _reload_frame: int = -1
 
 func weapon_id() -> StringName:
 	return WEAPON_ID
+
+
+func mastery_ids() -> Array[StringName]:
+	return MASTERY_IDS.duplicate()
 
 
 func configure(owner: Node, profile: Variant, modifiers: Variant) -> bool:

@@ -108,6 +108,14 @@ func commit_character_skill(_plan: Dictionary, _token: int) -> Dictionary:
 	return {"ok": false, "code": "unsupported"}
 
 
+func character_action_cancellation_state() -> Dictionary:
+	return {"active": false, "committed": false}
+
+
+func cancel_uncommitted_action(_reason: StringName) -> Dictionary:
+	return {"ok": true, "cancelled": false}
+
+
 func before_damage(_damage_context: Dictionary) -> Dictionary:
 	return {"ok": true, "decision": {}}
 

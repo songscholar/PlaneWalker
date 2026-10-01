@@ -131,6 +131,27 @@ func commit_character_skill(plan: Dictionary, token: int) -> Dictionary:
 	}
 
 
+func character_action_cancellation_state() -> Dictionary:
+	if _strategy == null or not _restore_integrity_ok:
+		return {}
+	if not _strategy.has_method("character_action_cancellation_state"):
+		return {"active": false, "committed": false}
+	var value: Variant = _strategy.call("character_action_cancellation_state")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func cancel_uncommitted_action(reason: StringName) -> Dictionary:
+	if _strategy == null or not _restore_integrity_ok:
+		return {"ok": false, "cancelled": false}
+	if not _strategy.has_method("cancel_uncommitted_action"):
+		return {"ok": true, "cancelled": false}
+	var value: Variant = _strategy.call("cancel_uncommitted_action", reason)
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {
+		"ok": false,
+		"cancelled": false,
+	}
+
+
 func before_damage(damage_context: Dictionary) -> Dictionary:
 	return _decision_hook(&"before_damage", damage_context)
 

@@ -121,6 +121,13 @@ var _owner_character_generation: int = 0
 var _active_time_frame_signal_ticket: Dictionary = {}
 var _active_health_frame_signal_ticket: Dictionary = {}
 var _active_world_frame_ticket: Dictionary = {}
+var _character_skill_live_hold_frames: int = 0
+var _character_skill_input_owner: Dictionary = {}
+var _last_priority_arbitration: Dictionary = {
+	"frame": 0,
+	"accepted": {},
+	"decisions": [],
+}
 
 const DEFAULT_MOBILITY_PROFILE := {
 	"dash_duration_frames": 17,
@@ -142,7 +149,7 @@ var _mobility_profile: Dictionary = DEFAULT_MOBILITY_PROFILE.duplicate(true)
 const KNOCKBACK_RETAINED_PER_FRAME := 0.8
 const FIXED_FRAME_SECONDS := 1.0 / 60.0
 const MAX_FIXED_FRAME_SLIDES := 4
-const FRAME_INTENT_CATEGORIES: Array[String] = ["dash", "time", "weapon", "character"]
+const FRAME_INTENT_CATEGORIES: Array[String] = ["dash", "time", "character", "weapon"]
 const FRAME_INTENT_EDGES: Array[StringName] = [&"pressed", &"held", &"released"]
 const FRAME_INTENT_MODES: Array[StringName] = [&"press", &"hold", &"toggle"]
 const BASE_COLOR := Color(0.2, 0.85, 0.95)
@@ -529,9 +536,50 @@ func _collect_live_frame_intents() -> Dictionary:
 		queued_time_abilities[canonical_id] = true
 		(result["time"] as Array).append(_frame_intent(action_id, &"pressed", 0, &"press"))
 
+	for intent: Dictionary in _collect_live_character_frame_intents():
+		(result["character"] as Array).append(intent)
 	for intent: Dictionary in _collect_raw_weapon_frame_intents():
 		(result["weapon"] as Array).append(intent)
 	return result
+
+
+func _collect_live_character_frame_intents() -> Array[Dictionary]:
+	var intents: Array[Dictionary] = []
+	if not InputMap.has_action("character_skill"):
+		_character_skill_live_hold_frames = 0
+		return intents
+	var mode := _character_skill_input_mode()
+	if Input.is_action_just_pressed("character_skill"):
+		_character_skill_live_hold_frames = 0
+		intents.append(_frame_intent(&"character_skill", &"pressed", 0, mode))
+	elif Input.is_action_just_released("character_skill"):
+		if mode == &"hold":
+			intents.append(_frame_intent(
+				&"character_skill",
+				&"released",
+				_character_skill_live_hold_frames,
+				mode
+			))
+		_character_skill_live_hold_frames = 0
+	elif Input.is_action_pressed("character_skill") and mode == &"hold":
+		_character_skill_live_hold_frames += 1
+		intents.append(_frame_intent(
+			&"character_skill",
+			&"held",
+			_character_skill_live_hold_frames,
+			mode
+		))
+	return intents
+
+
+func _character_skill_input_mode() -> StringName:
+	var profile: Dictionary = {}
+	if loadout_runtime != null and loadout_runtime.has_method("character_profile_snapshot"):
+		profile = loadout_runtime.call("character_profile_snapshot")
+	elif character_runtime != null and character_runtime.has_method("profile_snapshot"):
+		profile = character_runtime.call("profile_snapshot")
+	var skill := profile.get("character_skill", {}) as Dictionary
+	return &"hold" if int(skill.get("hold_threshold_frames", 0)) > 0 else &"press"
 
 
 func _collect_raw_weapon_frame_intents() -> Array[Dictionary]:
@@ -745,28 +793,299 @@ func _frame_intents_have_unique_edges(value: Dictionary) -> bool:
 
 
 func _apply_frame_intents(value: Dictionary) -> bool:
-	for dash_intent: Dictionary in value.get("dash", []) as Array:
-		if StringName(str(dash_intent.get("edge", ""))) == &"pressed" and try_action(&"dash"):
-			return true
-	for time_intent: Dictionary in value.get("time", []) as Array:
-		if StringName(str(time_intent.get("edge", ""))) != &"pressed":
+	_last_priority_arbitration = {
+		"frame": _runtime_frame,
+		"accepted": {},
+		"decisions": [],
+	}
+	var ordered := _ordered_frame_intents(value)
+	var accepted := false
+	for ordered_value: Variant in ordered:
+		var intent := ordered_value as Dictionary
+		if accepted:
+			_discard_suppressed_frame_intent(intent)
+			_record_priority_decision(intent, &"priority_suppressed")
 			continue
-		if try_action(StringName(str(time_intent.get("id", "")))):
-			return true
-	var weapon_intents := value.get("weapon", []) as Array
-	for index: int in range(weapon_intents.size()):
-		var raw_intent := weapon_intents[index] as Dictionary
-		var normalized: Dictionary = _weapon_intent_router.call(
-			"normalize_edge",
-			StringName(str(raw_intent.get("id", ""))),
-			StringName(str(raw_intent.get("edge", ""))),
-			int(raw_intent.get("held_frames", 0)),
-			StringName(str(raw_intent.get("mode", "press")))
+		var attempt := _attempt_frame_intent(intent, value)
+		var status := StringName(str(attempt.get("status", "rejected")))
+		_record_priority_decision(intent, status)
+		if not bool(attempt.get("accepted", false)):
+			continue
+		accepted = true
+		_last_priority_arbitration["accepted"] = {
+			"category": str(intent.get("category", "")),
+			"id": str(intent.get("id", "")),
+			"edge": str(intent.get("edge", "")),
+		}
+	return true
+
+
+func _ordered_frame_intents(value: Dictionary) -> Array[Dictionary]:
+	var ordered: Array[Dictionary] = []
+	for category: String in FRAME_INTENT_CATEGORIES:
+		var entries: Array[Dictionary] = []
+		for entry_value: Variant in value.get(category, []) as Array:
+			var entry := (entry_value as Dictionary).duplicate(true)
+			entry["category"] = category
+			entries.append(entry)
+		entries.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+			var left_rank := _frame_intent_priority_rank(category, left)
+			var right_rank := _frame_intent_priority_rank(category, right)
+			if left_rank != right_rank:
+				return left_rank < right_rank
+			return _frame_edge_rank(StringName(str(left.get("edge", "")))) < _frame_edge_rank(
+				StringName(str(right.get("edge", "")))
+			)
 		)
-		if normalized.is_empty():
+		ordered.append_array(entries)
+	return ordered
+
+
+func _frame_intent_priority_rank(category: String, intent: Dictionary) -> int:
+	var action_id := StringName(str(intent.get("id", "")))
+	match category:
+		"dash":
+			return 0
+		"time":
+			match action_id:
+				&"time_slot_1":
+					return 0
+				&"time_slot_2":
+					return 1
+				&"time_stop":
+					return 2
+				&"time_rewind":
+					return 3
+				&"time_rift":
+					return 4
+				&"time_accelerate":
+					return 5
+		"character":
+			return 0
+		"weapon":
+			var declaration_order := _weapon_semantic_priority_order()
+			var declaration_index := declaration_order.find(action_id)
+			return declaration_index if declaration_index >= 0 else declaration_order.size()
+	return 100
+
+
+func _frame_edge_rank(edge: StringName) -> int:
+	match edge:
+		&"pressed":
+			return 0
+		&"held":
+			return 1
+		&"released":
+			return 2
+	return 3
+
+
+func _weapon_semantic_priority_order() -> Array[StringName]:
+	var fallback: Array[StringName] = [
+		&"weapon_primary",
+		&"weapon_secondary",
+		&"weapon_utility",
+		&"weapon_skill",
+		&"weapon_ultimate",
+	]
+	if weapon_runtime_profile == null or not weapon_runtime_profile.has_method("snapshot"):
+		return fallback
+	var profile_value: Variant = weapon_runtime_profile.call("snapshot")
+	if not profile_value is Dictionary:
+		return fallback
+	var result: Array[StringName] = []
+	for action_value: Variant in (profile_value as Dictionary).get("actions", []) as Array:
+		if not action_value is Dictionary:
 			continue
-		if _submit_normalized_weapon_intent(normalized):
-			return true
+		var semantic_id := StringName(str((action_value as Dictionary).get("semantic_action", "")))
+		if semantic_id in fallback and not result.has(semantic_id):
+			result.append(semantic_id)
+	for semantic_id: StringName in fallback:
+		if not result.has(semantic_id):
+			result.append(semantic_id)
+	return result
+
+
+func _attempt_frame_intent(intent: Dictionary, frame_intents: Dictionary) -> Dictionary:
+	var category := StringName(str(intent.get("category", "")))
+	var action_id := StringName(str(intent.get("id", "")))
+	var edge := StringName(str(intent.get("edge", "")))
+	match category:
+		&"dash":
+			return _frame_attempt_result(edge == &"pressed" and try_action(&"dash"))
+		&"time":
+			return _frame_attempt_result(edge == &"pressed" and try_action(action_id))
+		&"character":
+			return _submit_character_frame_intent(intent, frame_intents)
+		&"weapon":
+			var normalized: Dictionary = _weapon_intent_router.call(
+				"normalize_edge",
+				action_id,
+				edge,
+				int(intent.get("held_frames", 0)),
+				StringName(str(intent.get("mode", "press")))
+			)
+			if normalized.is_empty():
+				return _frame_attempt_result(false)
+			return _frame_attempt_result(_submit_normalized_weapon_intent(normalized))
+	return _frame_attempt_result(false)
+
+
+func _frame_attempt_result(accepted: bool, status: StringName = &"") -> Dictionary:
+	return {
+		"accepted": accepted,
+		"status": status if status != &"" else (&"accepted" if accepted else &"rejected"),
+	}
+
+
+func _submit_character_frame_intent(
+	intent: Dictionary,
+	frame_intents: Dictionary
+) -> Dictionary:
+	var edge := StringName(str(intent.get("edge", "")))
+	if edge in [&"held", &"released"] and not _character_input_owner_is_current():
+		if edge == &"released":
+			_clear_character_input_owner()
+		return _frame_attempt_result(false, &"unowned_edge")
+	if character_action_coordinator == null or not character_action_coordinator.has_method(
+		"try_character_skill"
+	):
+		if edge == &"released":
+			_clear_character_input_owner()
+		return _frame_attempt_result(false)
+	var context := {
+		"run_id": str(_run_id),
+		"owner_character_generation": _owner_character_generation,
+		"runtime_frame": _runtime_frame,
+		"movement": frame_intents.get("movement", Vector2.ZERO),
+		"aim": frame_intents.get("aim", _last_weapon_aim_direction),
+		"owner_token": int(_character_skill_input_owner.get("token", 0)),
+		"owner_generation": int(_character_skill_input_owner.get("generation", 0)),
+	}
+	var result_value: Variant = character_action_coordinator.call(
+		"try_character_skill",
+		intent.duplicate(true),
+		context
+	)
+	var result := (result_value as Dictionary) if result_value is Dictionary else {}
+	var accepted := bool(result.get("ok", false))
+	if accepted and edge == &"pressed" and StringName(str(intent.get("mode", "press"))) == &"hold":
+		var result_context := result.get("context", {}) as Dictionary
+		var generation := int(result_context.get("generation", 0))
+		var token := int(result_context.get("token", 0))
+		if generation > 0 and token > 0:
+			_character_skill_input_owner = {
+				"generation": generation,
+				"token": token,
+			}
+	if edge == &"released":
+		_clear_character_input_owner()
+	return _frame_attempt_result(accepted)
+
+
+func _discard_suppressed_frame_intent(intent: Dictionary) -> void:
+	var category := StringName(str(intent.get("category", "")))
+	var action_id := StringName(str(intent.get("id", "")))
+	var edge := StringName(str(intent.get("edge", "")))
+	if category == &"weapon" and action_id != &"":
+		_weapon_intent_router.call("reset_action", action_id)
+	elif category == &"character" and edge == &"released":
+		_clear_character_input_owner()
+
+
+func _record_priority_decision(intent: Dictionary, status: StringName) -> void:
+	(_last_priority_arbitration["decisions"] as Array).append({
+		"category": str(intent.get("category", "")),
+		"id": str(intent.get("id", "")),
+		"edge": str(intent.get("edge", "")),
+		"status": str(status),
+	})
+
+
+func priority_arbitration_snapshot() -> Dictionary:
+	return _last_priority_arbitration.duplicate(true)
+
+
+func character_input_owner_snapshot() -> Dictionary:
+	return {
+		"active": not _character_skill_input_owner.is_empty(),
+		"generation": int(_character_skill_input_owner.get("generation", 0)),
+		"token": int(_character_skill_input_owner.get("token", 0)),
+		"held_frames": _character_skill_live_hold_frames,
+	}
+
+
+func _valid_character_input_owner_snapshot(value: Dictionary) -> bool:
+	if value.size() != 4:
+		return false
+	for field: String in ["active", "generation", "token", "held_frames"]:
+		if not value.has(field):
+			return false
+	if (
+		typeof(value["active"]) != TYPE_BOOL
+		or typeof(value["generation"]) != TYPE_INT
+		or typeof(value["token"]) != TYPE_INT
+		or typeof(value["held_frames"]) != TYPE_INT
+		or int(value["generation"]) < 0
+		or int(value["token"]) < 0
+		or int(value["held_frames"]) < 0
+	):
+		return false
+	return (
+		(bool(value["active"]) and int(value["generation"]) > 0 and int(value["token"]) > 0)
+		or (
+			not bool(value["active"])
+			and int(value["generation"]) == 0
+			and int(value["token"]) == 0
+		)
+	)
+
+
+func _restore_character_input_owner_snapshot(value: Dictionary) -> bool:
+	if not _valid_character_input_owner_snapshot(value):
+		return false
+	_character_skill_live_hold_frames = int(value["held_frames"])
+	_character_skill_input_owner.clear()
+	if bool(value["active"]):
+		_character_skill_input_owner = {
+			"generation": int(value["generation"]),
+			"token": int(value["token"]),
+		}
+	return character_input_owner_snapshot() == value
+
+
+func _character_input_owner_is_current() -> bool:
+	if (
+		_character_skill_input_owner.is_empty()
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("owns_action")
+	):
+		return false
+	return bool(character_action_coordinator.call(
+		"owns_action",
+		int(_character_skill_input_owner.get("generation", 0)),
+		int(_character_skill_input_owner.get("token", 0))
+	))
+
+
+func _clear_character_input_owner() -> void:
+	_character_skill_input_owner.clear()
+	_character_skill_live_hold_frames = 0
+
+
+func _cancel_uncommitted_character_action(reason: StringName) -> bool:
+	if character_action_coordinator == null:
+		_clear_character_input_owner()
+		return true
+	if character_action_coordinator.has_method("cancel_uncommitted_action"):
+		if not bool(character_action_coordinator.call("cancel_uncommitted_action", reason)):
+			return false
+	elif (
+		character_action_coordinator.has_method("has_uncommitted_action")
+		and bool(character_action_coordinator.call("has_uncommitted_action"))
+	):
+		return false
+	_clear_character_input_owner()
 	return true
 
 
@@ -962,6 +1281,9 @@ func configure_loadout(config: Dictionary) -> bool:
 	var transaction_before := _loadout_configuration_transaction_snapshot()
 	_capture_next_weapon_action_token_floor()
 	if not loadout_runtime.configure(next_config):
+		_rollback_loadout_configuration(transaction_before)
+		return false
+	if not _cancel_uncommitted_character_action(&"loadout_replacement"):
 		_rollback_loadout_configuration(transaction_before)
 		return false
 	stats = next_stats
@@ -1275,6 +1597,10 @@ func reset_runtime_state() -> bool:
 		set_physics_process(false)
 		push_error("WorldPayloadAuthority runtime reset preflight failed closed")
 		return false
+	if not _cancel_uncommitted_character_action(&"player_runtime_reset"):
+		set_physics_process(false)
+		push_error("CharacterActionCoordinator runtime reset cancellation failed")
+		return false
 	action_state.reset_runtime_state()
 	if character_action_coordinator != null:
 		if not bool(character_action_coordinator.call("reset_runtime_state", &"player_runtime_reset")):
@@ -1295,6 +1621,8 @@ func reset_runtime_state() -> bool:
 	_weapon_replay_capture_invalid_reason = &""
 	_weapon_replay_restore_invalid_reason = &""
 	_weapon_intent_router.call("reset_all")
+	_clear_character_input_owner()
+	_last_priority_arbitration = {"frame": 0, "accepted": {}, "decisions": []}
 	_buffered_time_skill = &""
 	_next_time_action_token = 1
 	_time_action_generation += 1
@@ -1612,9 +1940,11 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 		"knockback_velocity": _knockback_velocity,
 		"buffered_time_skill": _buffered_time_skill,
 		"dash_completion_token": _dash_completion_token,
-			"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
-			"next_time_action_token": _next_time_action_token,
-			"action": action_state.snapshot(),
+		"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
+		"next_time_action_token": _next_time_action_token,
+		"character_input_owner": character_input_owner_snapshot(),
+		"priority_arbitration": priority_arbitration_snapshot(),
+		"action": action_state.snapshot(),
 		"character": (character_value as Dictionary).duplicate(true),
 		"character_action": (character_action_value as Dictionary).duplicate(true),
 		"weapon": (weapon_value as Dictionary).duplicate(true),
@@ -1714,6 +2044,12 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		"next_time_action_token",
 		_next_time_action_token
 	))
+	var character_input_ok := _restore_character_input_owner_snapshot(
+		value.get("character_input_owner", {}) as Dictionary
+	)
+	_last_priority_arbitration = (
+		value.get("priority_arbitration", _last_priority_arbitration) as Dictionary
+	).duplicate(true)
 	_install_player_weapon_replay_state(value.get("player_weapon_state", {}) as Dictionary)
 	var replay_events: Array[Dictionary] = []
 	for event_value: Variant in value.get("replay_events", []) as Array:
@@ -1743,6 +2079,7 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and action_ok
 		and character_ok
 		and character_action_ok
+		and character_input_ok
 		and weapon_ok
 		and intent_ok
 		and rewind_ok
@@ -1755,6 +2092,8 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 		and character_action_coordinator.call("snapshot") == value.get("character", {})
 		and character_action_coordinator.call("action_snapshot")
 		== value.get("character_action", {})
+		and character_input_owner_snapshot() == value.get("character_input_owner", {})
+		and priority_arbitration_snapshot() == value.get("priority_arbitration", {})
 		and weapon_action_coordinator.call("snapshot") == value.get("weapon", {})
 		and world_payload_authority.call("replay_snapshot") == value.get("world", {})
 		and _rewind_frame_transaction_snapshot() == value.get("rewind", {})
@@ -2085,6 +2424,10 @@ func get_action_movement_multiplier() -> float:
 func apply_hitstun_frames(duration_frames: int) -> bool:
 	if duration_frames <= 0 or action_state.current_state == PlayerActionStateScript.State.DEAD:
 		return false
+	if not action_state.can_transition_to(PlayerActionStateScript.State.HITSTUN):
+		return false
+	if not _cancel_uncommitted_character_action(&"hitstun"):
+		return false
 	if not action_state.transition_to(PlayerActionStateScript.State.HITSTUN, duration_frames):
 		return false
 	action_state.clear_buffered_inputs()
@@ -2093,6 +2436,7 @@ func apply_hitstun_frames(duration_frames: int) -> bool:
 
 
 func cancel_transient_actions() -> void:
+	_cancel_uncommitted_character_action(&"transient_clear")
 	action_state.clear_buffered_inputs()
 	action_state.force_safe_reset()
 	_weapon_combo_timeout_frames = 0
@@ -2131,15 +2475,26 @@ func restore_rewind_safe_action_state(state: Dictionary) -> bool:
 func rewind_transaction_snapshot() -> Dictionary:
 	if (
 		not action_state.has_method("snapshot")
+		or character_action_coordinator == null
+		or not character_action_coordinator.has_method("snapshot")
+		or not character_action_coordinator.has_method("action_snapshot")
 		or weapon_action_coordinator == null
 		or not weapon_action_coordinator.has_method("gameplay_rewind_snapshot")
 		or not _weapon_intent_router.has_method("runtime_snapshot")
 	):
 		return {}
 	var action_value: Variant = action_state.call("snapshot")
+	var character_value: Variant = character_action_coordinator.call("snapshot")
+	var character_action_value: Variant = character_action_coordinator.call("action_snapshot")
 	var coordinator_value: Variant = weapon_action_coordinator.call("gameplay_rewind_snapshot")
 	var intent_value: Variant = _weapon_intent_router.call("runtime_snapshot")
-	if not action_value is Dictionary or not coordinator_value is Dictionary or not intent_value is Dictionary:
+	if (
+		not action_value is Dictionary
+		or not character_value is Dictionary
+		or not character_action_value is Dictionary
+		or not coordinator_value is Dictionary
+		or not intent_value is Dictionary
+	):
 		return {}
 	return {
 		"run_id": _run_id,
@@ -2152,6 +2507,10 @@ func rewind_transaction_snapshot() -> Dictionary:
 		"combo_timeout_frames": _weapon_combo_timeout_frames,
 		"runtime_frame": _runtime_frame,
 		"action_state": (action_value as Dictionary).duplicate(true),
+		"character": (character_value as Dictionary).duplicate(true),
+		"character_action": (character_action_value as Dictionary).duplicate(true),
+		"character_input_owner": character_input_owner_snapshot(),
+		"priority_arbitration": priority_arbitration_snapshot(),
 		"coordinator": (coordinator_value as Dictionary).duplicate(true),
 		"intent_router": (intent_value as Dictionary).duplicate(true),
 		"next_time_action_token": _next_time_action_token,
@@ -2178,6 +2537,8 @@ func can_prepare_gameplay_rewind() -> bool:
 
 func install_gameplay_rewind_state(target_snapshot: Dictionary) -> bool:
 	if not can_prepare_gameplay_rewind() or not _valid_rewind_target_snapshot(target_snapshot):
+		return false
+	if not _cancel_uncommitted_character_action(&"gameplay_rewind"):
 		return false
 	if not bool(weapon_action_coordinator.call("cancel_for_gameplay_rewind")):
 		return false
@@ -2212,6 +2573,16 @@ func restore_rewind_transaction_snapshot(value: Dictionary) -> bool:
 		(value["action_state"] as Dictionary).duplicate(true)
 	)):
 		return false
+	if not bool(character_action_coordinator.call(
+		"restore_snapshot",
+		(value["character"] as Dictionary).duplicate(true)
+	)):
+		return false
+	if not bool(character_action_coordinator.call(
+		"restore_action_snapshot",
+		(value["character_action"] as Dictionary).duplicate(true)
+	)):
+		return false
 	if not bool(_weapon_intent_router.call(
 		"restore_runtime_snapshot",
 		(value["intent_router"] as Dictionary).duplicate(true)
@@ -2227,6 +2598,13 @@ func restore_rewind_transaction_snapshot(value: Dictionary) -> bool:
 	_runtime_frame = int(value["runtime_frame"])
 	_next_time_action_token = int(value["next_time_action_token"])
 	_time_action_generation = int(value["time_action_generation"])
+	if not _restore_character_input_owner_snapshot(
+		value["character_input_owner"] as Dictionary
+	):
+		return false
+	_last_priority_arbitration = (
+		value["priority_arbitration"] as Dictionary
+	).duplicate(true)
 	var replay_events: Array[Dictionary] = []
 	for event_value: Variant in value["replay_events"] as Array:
 		replay_events.append((event_value as Dictionary).duplicate(true))
@@ -2270,12 +2648,13 @@ func _valid_rewind_target_snapshot(value: Dictionary) -> bool:
 
 
 func _valid_rewind_transaction_snapshot(value: Dictionary) -> bool:
-	if value.size() != 19:
+	if value.size() != 23:
 		return false
 	for field: String in [
 		"run_id", "position", "velocity", "facing", "dash_velocity",
 		"knockback_velocity", "buffered_time_skill", "combo_timeout_frames",
-		"runtime_frame", "action_state", "coordinator", "intent_router",
+		"runtime_frame", "action_state", "character", "character_action",
+		"character_input_owner", "priority_arbitration", "coordinator", "intent_router",
 		"next_time_action_token", "time_action_generation", "replay_events",
 		"replay_capture_sequence", "replay_fact_baseline",
 		"replay_capture_invalid_reason", "replay_restore_invalid_reason",
@@ -2304,6 +2683,11 @@ func _valid_rewind_transaction_snapshot(value: Dictionary) -> bool:
 		and typeof(value["runtime_frame"]) == TYPE_INT
 		and int(value["runtime_frame"]) >= 0
 		and value["coordinator"] is Dictionary
+		and value["character"] is Dictionary
+		and value["character_action"] is Dictionary
+		and value["character_input_owner"] is Dictionary
+		and _valid_character_input_owner_snapshot(value["character_input_owner"] as Dictionary)
+		and value["priority_arbitration"] is Dictionary
 		and value["intent_router"] is Dictionary
 		and typeof(value["next_time_action_token"]) == TYPE_INT
 		and int(value["next_time_action_token"]) > 0
@@ -2472,6 +2856,8 @@ func full_player_replay_snapshot() -> Dictionary:
 			"dash_completed_at_runtime_frame": _dash_completed_at_runtime_frame,
 			"next_time_action_token": _next_time_action_token,
 			"time_action_generation": _time_action_generation,
+			"character_input_owner": character_input_owner_snapshot(),
+			"priority_arbitration": priority_arbitration_snapshot(),
 		},
 		"health_state": health.call("runtime_state_snapshot"),
 		"action_state": action_state.snapshot(),
@@ -2607,11 +2993,24 @@ func _install_full_player_replay_snapshot(value: Dictionary, _for_rollback: bool
 	))
 	_next_time_action_token = int(player_state.get("next_time_action_token", 1))
 	_time_action_generation = int(player_state.get("time_action_generation", 1))
+	if not _restore_character_input_owner_snapshot(
+		player_state.get("character_input_owner", {}) as Dictionary
+	):
+		return false
+	_last_priority_arbitration = (
+		player_state.get("priority_arbitration", {}) as Dictionary
+	).duplicate(true)
 	_sync_weapon_action_projection()
 	return full_player_replay_snapshot() == value
 
 
 func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
+	var normalization := ReplayRecorderScript.normalize_full_player_snapshot(value)
+	if not bool(normalization.get("ok", false)):
+		return {}
+	value = (
+		(normalization.get("context", {}) as Dictionary).get("snapshot", {}) as Dictionary
+	).duplicate(true)
 	var fields: Array[String] = [
 		"schema_version", "frame", "identity", "player_state", "health_state",
 		"action_state", "character_state", "character_action_state", "weapon_state", "time_manager_state",
@@ -2672,6 +3071,11 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or int(player_state["next_time_action_token"]) <= 0
 		or int(player_state["time_action_generation"]) <= 0
 		or typeof(player_state.get("buffered_time_skill")) not in [TYPE_STRING, TYPE_STRING_NAME]
+		or not player_state.get("character_input_owner") is Dictionary
+		or not _valid_character_input_owner_snapshot(
+			player_state.get("character_input_owner", {}) as Dictionary
+		)
+		or not player_state.get("priority_arbitration") is Dictionary
 		or health == null
 		or not health.has_method("can_restore_replay_snapshot")
 		or not bool(health.call(
@@ -6511,6 +6915,8 @@ func _request_dash() -> bool:
 func _begin_dash() -> bool:
 	if _dash_cooldown_remaining_frames > 0 or not action_state.can_transition_to(PlayerActionStateScript.State.DASH):
 		return false
+	if not _cancel_uncommitted_character_action(&"dash"):
+		return false
 	if (
 		action_state.current_state == PlayerActionStateScript.State.ATTACK_RECOVERY
 		or _weapon_hold_is_active()
@@ -7885,10 +8291,12 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 
 
 func _on_died(_killer: Variant) -> void:
+	_cancel_uncommitted_character_action(&"player_died")
 	if action_state.transition_to(PlayerActionStateScript.State.DEAD, 0):
 		if not _invalidate_world_payload_generation(&"player_died"):
 			push_error("WorldPayloadAuthority death invalidation failed")
 		action_state.clear_buffered_inputs()
+		_clear_character_input_owner()
 		_clear_transient_effects()
 		_clear_owned_player_arrows()
 		_clear_owned_player_projectiles()

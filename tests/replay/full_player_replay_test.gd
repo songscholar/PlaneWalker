@@ -58,6 +58,7 @@ func _run() -> void:
 	await _test_full_player_active_rift_round_trip()
 	await _test_full_player_identity_binds_movement_profile()
 	await _test_full_player_v1_schema_is_explicitly_rejected()
+	await _test_legacy_character_action_snapshot_is_migrated()
 	await _test_full_player_replay_rejects_forged_semantics_and_facts()
 	await _test_full_player_playback_failure_is_atomic()
 	_suite.finish(get_tree())
@@ -136,6 +137,196 @@ func _test_full_player_v1_schema_is_explicitly_rejected() -> void:
 		"legacy v1 full-player snapshot is rejected before digest validation"
 	)
 	await _free_player(source)
+
+
+func _test_legacy_character_action_snapshot_is_migrated() -> void:
+	var source := await _spawn_player()
+	var recorder = ReplayRecorderScript.new()
+	var identity: Dictionary = source.full_player_replay_identity()
+	_suite.assert_true(
+		bool(recorder.start_full_player_recording(identity, 2201).get("ok", false)),
+		"legacy character-action fixture starts"
+	)
+	_suite.assert_true(
+		bool(recorder.record_full_player_frame(
+			source.full_player_replay_snapshot(),
+			_frame_intents(0, Vector2.ZERO, Vector2.RIGHT),
+			[]
+		).get("ok", false)),
+		"legacy character-action fixture records frame zero"
+	)
+	for frame: int in range(1, 3):
+		_suite.assert_true(
+			_advance_and_record(
+				source,
+				recorder,
+				_frame_intents(frame, Vector2.ZERO, Vector2.RIGHT),
+				"legacy character-action frame %d" % frame
+			),
+			"legacy character-action frame %d records" % frame
+		)
+	var finished: Dictionary = recorder.finish_full_player_recording()
+	var replay := finished.get("replay", {}) as Dictionary
+	_suite.assert_true(bool(finished.get("ok", false)), "legacy character-action fixture finishes")
+	var legacy_replay := _legacy_character_action_replay(replay)
+	var caller_copy := legacy_replay.duplicate(true)
+	var legacy_first_digest := str(
+		((legacy_replay.get("frames", []) as Array)[0] as Dictionary).get("digest", "")
+	)
+	await _free_player(source)
+
+	var target := await _spawn_player()
+	var replay_player = ReplayPlayerScript.new()
+	var loaded: Dictionary = replay_player.load_full_player_replay(
+		legacy_replay,
+		target.full_player_replay_identity()
+	)
+	_suite.assert_true(bool(loaded.get("ok", false)), "legacy nested action schema loads")
+	_suite.assert_equal(
+		legacy_replay,
+		caller_copy,
+		"legacy Replay migration does not mutate the caller-owned value"
+	)
+	var normalized_replay := replay_player.full_player_replay_snapshot()
+	for frame_value: Variant in normalized_replay.get("frames", []) as Array:
+		var normalized_action := (
+			((frame_value as Dictionary).get("snapshot", {}) as Dictionary).get(
+				"character_action_state",
+				{}
+			) as Dictionary
+		)
+		_suite.assert_equal(
+			int(normalized_action.get("schema_version", 0)),
+			2,
+			"legacy character-action state is normalized to schema v2"
+		)
+		_suite.assert_equal(
+			normalized_action.get("mastery_claims", null),
+			[],
+			"legacy character-action migration adds an empty mastery ledger"
+		)
+	_suite.assert_true(
+		str(((normalized_replay["frames"] as Array)[0] as Dictionary).get("digest", ""))
+		!= legacy_first_digest,
+		"migration refreshes frame digests for the normalized snapshots"
+	)
+	_suite.assert_equal(
+		str(normalized_replay.get("terminal_snapshot_digest", "")),
+		ReplayRecorderScript.value_digest(
+			((normalized_replay["frames"] as Array)[-1] as Dictionary).get("snapshot", {})
+		),
+		"migration refreshes the terminal snapshot digest"
+	)
+	_suite.assert_equal(
+		str(normalized_replay.get("terminal_digest", "")),
+		ReplayRecorderScript.full_player_terminal_digest(normalized_replay),
+		"migration refreshes the terminal Replay digest"
+	)
+	var replayed: Dictionary = replay_player.replay_full_player_to_terminal(target, 0)
+	_suite.assert_true(
+		bool(replayed.get("ok", false)),
+		"legacy nested action Replay restores and reaches terminal: %s" % str(replayed)
+	)
+	_suite.assert_equal(
+		target.full_player_replay_snapshot(),
+		((normalized_replay["frames"] as Array)[-1] as Dictionary).get("snapshot", {}),
+		"legacy nested action Replay reaches the normalized terminal snapshot"
+	)
+
+	var direct_snapshot := (
+		((legacy_replay.get("frames", []) as Array)[0] as Dictionary).get("snapshot", {})
+		as Dictionary
+	).duplicate(true)
+	_suite.assert_true(
+		target.restore_full_player_replay_snapshot(direct_snapshot),
+		"Player direct restore normalizes a legacy nested action snapshot"
+	)
+	_suite.assert_equal(
+		int((target.full_player_replay_snapshot()["character_action_state"] as Dictionary).get(
+			"schema_version",
+			0
+		)),
+		2,
+		"Player direct restore installs the normalized action schema"
+	)
+	await _free_player(target)
+
+	var unknown_schema := legacy_replay.duplicate(true)
+	unknown_schema["frames"][0]["snapshot"]["character_action_state"]["schema_version"] = 99
+	_rehash_full_player_replay(unknown_schema)
+	var unknown_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		unknown_schema,
+		identity
+	)
+	_suite.assert_equal(
+		unknown_rejected.get("code"),
+		&"FULL_PLAYER_CHARACTER_ACTION_STATE_SCHEMA_MISMATCH",
+		"unknown nested action schema has a stable refusal code"
+	)
+
+	var malformed_v1 := legacy_replay.duplicate(true)
+	malformed_v1["frames"][0]["snapshot"]["character_action_state"]["unexpected"] = true
+	_rehash_full_player_replay(malformed_v1)
+	var malformed_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		malformed_v1,
+		identity
+	)
+	_suite.assert_equal(
+		malformed_rejected.get("code"),
+		&"FULL_PLAYER_CHARACTER_ACTION_STATE_FIELDS_MISMATCH",
+		"malformed nested action v1 has a stable refusal code"
+	)
+	var tampered_v1 := legacy_replay.duplicate(true)
+	tampered_v1["frames"][0]["snapshot"]["character_action_state"]["revision"] = 99
+	var tampered_rejected: Dictionary = ReplayPlayerScript.new().load_full_player_replay(
+		tampered_v1,
+		identity
+	)
+	_suite.assert_equal(
+		tampered_rejected.get("code"),
+		&"FULL_PLAYER_FRAME_DIGEST_MISMATCH",
+		"legacy content is authenticated before migration can refresh its digests"
+	)
+
+	var rollback_replay := legacy_replay.duplicate(true)
+	rollback_replay["frames"][1]["snapshot"]["weapon_state"]["schema_version"] = 99
+	_rehash_full_player_replay(rollback_replay)
+	var rollback_target := await _spawn_player()
+	var rollback_player = ReplayPlayerScript.new()
+	_suite.assert_true(
+		bool(rollback_player.load_full_player_replay(
+			rollback_replay,
+			rollback_target.full_player_replay_identity()
+		).get("ok", false)),
+		"legacy rollback fixture loads before participant restoration"
+	)
+	_suite.assert_true(
+		bool(rollback_player.restore_full_player_frame(rollback_target, 0).get("ok", false)),
+		"legacy rollback fixture establishes frame zero"
+	)
+	var rollback_before: Dictionary = rollback_target.full_player_replay_snapshot()
+	var failed_restore: Dictionary = rollback_player.restore_full_player_frame(rollback_target, 1)
+	_suite.assert_equal(
+		failed_restore.get("code"),
+		&"FULL_PLAYER_REPLAY_RESTORE_REJECTED",
+		"a later participant rejection preserves the stable restore refusal code"
+	)
+	_suite.assert_equal(
+		rollback_target.full_player_replay_snapshot(),
+		rollback_before,
+		"a post-migration participant rejection rolls the real Player back atomically"
+	)
+	var cursor_restore: Dictionary = rollback_player.restore_full_player_frame(rollback_target)
+	_suite.assert_true(
+		bool(cursor_restore.get("ok", false)),
+		"a post-migration participant rejection leaves the Replay cursor usable"
+	)
+	_suite.assert_equal(
+		(cursor_restore.get("context", {}) as Dictionary).get("index"),
+		0,
+		"a post-migration participant rejection preserves the Replay cursor"
+	)
+	await _free_player(rollback_target)
 
 
 func _test_full_player_active_rift_round_trip() -> void:
@@ -752,6 +943,26 @@ func _rehash_full_player_replay(replay: Dictionary) -> void:
 		((replay.get("frames", []) as Array)[-1] as Dictionary).get("snapshot", {})
 	)
 	replay["terminal_digest"] = ReplayRecorderScript.full_player_terminal_digest(replay)
+
+
+func _legacy_character_action_replay(replay: Dictionary) -> Dictionary:
+	var legacy := replay.duplicate(true)
+	for frame_value: Variant in legacy.get("frames", []) as Array:
+		var action_state := (
+			((frame_value as Dictionary).get("snapshot", {}) as Dictionary).get(
+				"character_action_state",
+				{}
+			) as Dictionary
+		)
+		_suite.assert_equal(
+			action_state.get("mastery_claims", []),
+			[],
+			"legacy fixture only removes an empty v2 mastery ledger"
+		)
+		action_state.erase("mastery_claims")
+		action_state["schema_version"] = 1
+	_rehash_full_player_replay(legacy)
+	return legacy
 
 
 func _spawn_player() -> Node:

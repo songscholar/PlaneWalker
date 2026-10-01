@@ -7,6 +7,10 @@ const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const SNAPSHOT_SCHEMA_VERSION := 2
 const PROFILE_ID := "bow_candidate_v1"
 const WEAPON_ID := &"bow"
+const MASTERY_IDS: Array[StringName] = [
+	&"bow_full_charge_weakpoint",
+	&"bow_full_charge_penetration",
+]
 const ACTION_ID := &"candidate_draw"
 const RESOURCE_ID := &"charge"
 const REWARD_ID := &"full_charge_energy"
@@ -275,6 +279,10 @@ var _reward_claimed_tokens: Array[int] = []
 
 func weapon_id() -> StringName:
 	return WEAPON_ID
+
+
+func mastery_ids() -> Array[StringName]:
+	return MASTERY_IDS.duplicate()
 
 
 func configure(owner: Node, profile: Variant, modifiers: Variant) -> bool:

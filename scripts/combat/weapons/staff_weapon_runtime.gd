@@ -9,6 +9,10 @@ const PROFILE_ID := "staff_launch_v1"
 const PROFILE_VERSION := 1
 const PROFILE_FINGERPRINT := "9126a54f29a730d47b736bff1aafcf2198abb1ff6ef1d736f0c80cdbf4692b6c"
 const WEAPON_ID := &"staff"
+const MASTERY_IDS: Array[StringName] = [
+	&"staff_ordered_combination",
+	&"staff_controlled_zone",
+]
 const PRIMARY_HOLD_ACTION_ID := &"staff_primary_charge"
 const ARCANE_ACTION_ID := &"arcane_bolt"
 const CHARGED_ACTION_ID := &"charged_element"
@@ -113,6 +117,10 @@ var _live_hold_context: Dictionary = {}
 
 func weapon_id() -> StringName:
 	return WEAPON_ID
+
+
+func mastery_ids() -> Array[StringName]:
+	return MASTERY_IDS.duplicate()
 
 
 func configure(owner: Node, profile: Variant, modifiers: Variant) -> bool:

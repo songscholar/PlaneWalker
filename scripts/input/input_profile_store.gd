@@ -4,15 +4,35 @@ extends RefCounted
 const InputActionContractScript := preload("res://scripts/input/input_action_contract.gd")
 const InputBindingCodecScript := preload("res://scripts/input/input_binding_codec.gd")
 
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
+const SCHEMA_TWO_VERSION := 2
 const LEGACY_SCHEMA_VERSION := 1
-const PRIMARY_FILE := "input_profile_v2.json"
+const PRIMARY_FILE := "input_profile_v3.json"
 const PENDING_FILE := "pending.tmp"
-const BACKUP_FILE := "backup_2.json"
+const BACKUP_FILE := "backup_3.json"
+const SCHEMA_TWO_PRIMARY_FILE := "input_profile_v2.json"
+const SCHEMA_TWO_BACKUP_FILE := "backup_2.json"
 const LEGACY_PRIMARY_FILE := "input_profile_v1.json"
 const LEGACY_BACKUP_FILE := "backup_1.json"
 const BINDING_FAMILIES: Array[String] = ["keyboard_mouse", "controller"]
 const PROFILE_ACTIONS: Array[StringName] = [
+	&"move_up",
+	&"move_down",
+	&"move_left",
+	&"move_right",
+	&"weapon_primary",
+	&"weapon_secondary",
+	&"weapon_utility",
+	&"weapon_skill",
+	&"weapon_ultimate",
+	&"time_slot_1",
+	&"time_slot_2",
+	&"character_skill",
+	&"dash",
+	&"interact",
+	&"pause",
+]
+const SCHEMA_TWO_PROFILE_ACTIONS: Array[StringName] = [
 	&"move_up",
 	&"move_down",
 	&"move_left",
@@ -48,6 +68,14 @@ func backup_path() -> String:
 	return _path(BACKUP_FILE)
 
 
+func schema_two_primary_path() -> String:
+	return _path(SCHEMA_TWO_PRIMARY_FILE)
+
+
+func schema_two_backup_path() -> String:
+	return _path(SCHEMA_TWO_BACKUP_FILE)
+
+
 func legacy_primary_path() -> String:
 	return _path(LEGACY_PRIMARY_FILE)
 
@@ -58,6 +86,10 @@ func legacy_backup_path() -> String:
 
 static func profile_actions() -> Array[StringName]:
 	return PROFILE_ACTIONS.duplicate()
+
+
+static func schema_two_profile_actions() -> Array[StringName]:
+	return SCHEMA_TWO_PROFILE_ACTIONS.duplicate()
 
 
 func save(profile: Dictionary) -> Dictionary:
@@ -121,7 +153,7 @@ func load() -> Dictionary:
 	var primary_result := _load_candidate(primary_path(), "primary", SCHEMA_VERSION)
 	if bool(primary_result["ok"]):
 		return primary_result
-	var backup_result := _load_candidate(backup_path(), "backup_2", SCHEMA_VERSION)
+	var backup_result := _load_candidate(backup_path(), "backup_3", SCHEMA_VERSION)
 	if bool(backup_result["ok"]):
 		backup_result["code"] = "RECOVERED"
 		backup_result["diagnostics"] = [{
@@ -129,6 +161,27 @@ func load() -> Dictionary:
 			"code": primary_result.get("code", "CORRUPT"),
 		}]
 		return backup_result
+
+	var schema_two_primary_result := _load_candidate(
+		schema_two_primary_path(),
+		"schema_two_primary",
+		SCHEMA_TWO_VERSION
+	)
+	if bool(schema_two_primary_result["ok"]):
+		schema_two_primary_result["code"] = "MIGRATION_REQUIRED"
+		return schema_two_primary_result
+	var schema_two_backup_result := _load_candidate(
+		schema_two_backup_path(),
+		"schema_two_backup",
+		SCHEMA_TWO_VERSION
+	)
+	if bool(schema_two_backup_result["ok"]):
+		schema_two_backup_result["code"] = "RECOVERED_MIGRATION_REQUIRED"
+		schema_two_backup_result["diagnostics"] = [{
+			"candidate": "schema_two_primary",
+			"code": schema_two_primary_result.get("code", "CORRUPT"),
+		}]
+		return schema_two_backup_result
 
 	var legacy_primary_result := _load_candidate(
 		legacy_primary_path(),
@@ -154,13 +207,17 @@ func load() -> Dictionary:
 	if (
 		primary_result.get("code") == "NOT_FOUND"
 		and backup_result.get("code") == "NOT_FOUND"
+		and schema_two_primary_result.get("code") == "NOT_FOUND"
+		and schema_two_backup_result.get("code") == "NOT_FOUND"
 		and legacy_primary_result.get("code") == "NOT_FOUND"
 		and legacy_backup_result.get("code") == "NOT_FOUND"
 	):
 		return _failure("NOT_FOUND")
 	return _failure("CORRUPT", {
 		"primary": primary_result,
-		"backup_2": backup_result,
+		"backup_3": backup_result,
+		"schema_two_primary": schema_two_primary_result,
+		"schema_two_backup": schema_two_backup_result,
 		"legacy_primary": legacy_primary_result,
 		"legacy_backup": legacy_backup_result,
 	})
@@ -170,11 +227,19 @@ func validate_profile(profile: Dictionary) -> Dictionary:
 	return _validate_profile_for_actions(profile, SCHEMA_VERSION, PROFILE_ACTIONS)
 
 
+func validate_schema_two_profile(profile: Dictionary) -> Dictionary:
+	return _validate_profile_for_actions(
+		profile,
+		SCHEMA_TWO_VERSION,
+		SCHEMA_TWO_PROFILE_ACTIONS
+	)
+
+
 func _validate_legacy_profile(profile: Dictionary) -> Dictionary:
 	return _validate_profile_for_actions(
 		profile,
 		LEGACY_SCHEMA_VERSION,
-		InputActionContractScript.required_actions()
+		InputActionContractScript.legacy_profile_actions()
 	)
 
 
@@ -265,11 +330,14 @@ func _load_candidate(path: String, source: String, expected_schema_version: int)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return _failure("CORRUPT", {"path": path, "source": source, "reason": "json"})
 	var profile := _normalize_json_profile(parsed as Dictionary)
-	var validation := (
-		_validate_legacy_profile(profile)
-		if expected_schema_version == LEGACY_SCHEMA_VERSION
-		else validate_profile(profile)
-	)
+	var validation: Dictionary
+	match expected_schema_version:
+		LEGACY_SCHEMA_VERSION:
+			validation = _validate_legacy_profile(profile)
+		SCHEMA_TWO_VERSION:
+			validation = validate_schema_two_profile(profile)
+		_:
+			validation = validate_profile(profile)
 	if not bool(validation["ok"]):
 		return _failure("CORRUPT", {"path": path, "source": source, "reason": validation})
 	return _success(profile, source, "OK")

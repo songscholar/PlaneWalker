@@ -289,6 +289,7 @@ keys,en,zh_CN
 "INPUT_ACTION_TIME_ACCELERATE","Time Accelerate","时间加速"
 "INPUT_ACTION_TIME_SLOT_1","Time Ability 1","时间能力 1"
 "INPUT_ACTION_TIME_SLOT_2","Time Ability 2","时间能力 2"
+"INPUT_ACTION_CHARACTER_SKILL","Character Skill","角色技能"
 "INPUT_ACTION_INTERACT","Interact / Confirm","互动 / 确认"
 "INPUT_ACTION_PAUSE","Pause","暂停"
 "CHARACTER_PRIMORDIAL_KNIGHT_NAME","Primordial Knight","原初骑士"

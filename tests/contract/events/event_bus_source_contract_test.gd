@@ -42,6 +42,7 @@ func _run() -> void:
 		&"weapon_cue_requested",
 		&"weapon_resource_changed",
 		&"weapon_hit_confirmed",
+		&"weapon_mastery_confirmed",
 	]:
 		suite.assert_true(signal_names.has(required_signal), "EventBus exposes typed %s fact" % required_signal)
 	var paths: Array[String] = []

@@ -4,6 +4,7 @@ extends RefCounted
 const CharacterActionContractScript := preload(
 	"res://scripts/player/characters/character_action_contract.gd"
 )
+const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 
 var _runtime: RefCounted
 var _last_runtime_frame: int = -1
@@ -17,16 +18,52 @@ var _next_token: int = 1
 var _current_token: int = 0
 var _committed_plan: Dictionary = {}
 var _action_revision: int = 0
+var _mastery_claims: Dictionary = {}
 
-const ACTION_SNAPSHOT_SCHEMA_VERSION := 1
+const ACTION_SNAPSHOT_SCHEMA_VERSION := 2
 const ACTION_SNAPSHOT_FIELDS: Array[String] = [
 	"schema_version",
 	"generation",
 	"next_token",
 	"current_token",
 	"committed_plan",
+	"mastery_claims",
 	"revision",
 ]
+const MASTERY_FACT_FIELDS: Array[String] = [
+	"weapon_id",
+	"mastery_family",
+	"mastery_id",
+	"action_id",
+	"generation",
+	"action_token",
+	"target_id",
+	"context",
+]
+const MASTERY_IDS_BY_FAMILY := {
+	"sword": [
+		&"sword_perfect_guard",
+		&"sword_counter_confirmed",
+		&"sword_charged_commitment",
+	],
+	"bow": [
+		&"bow_full_charge_weakpoint",
+		&"bow_full_charge_penetration",
+	],
+	"gun": [
+		&"gun_perfect_reload",
+		&"gun_magazine_finisher",
+	],
+	"staff": [
+		&"staff_ordered_combination",
+		&"staff_controlled_zone",
+	],
+	"gauntlets": [
+		&"gauntlets_dodge_counter",
+		&"gauntlets_combo_threshold",
+		&"gauntlets_chain_finisher",
+	],
+}
 
 
 func configure(runtime: Variant) -> bool:
@@ -74,6 +111,66 @@ func next_token() -> int:
 	return _next_token
 
 
+func owns_action(generation_value: int, token: int) -> bool:
+	return (
+		generation_value == _generation
+		and token > 0
+		and token == _current_token
+		and not _committed_plan.is_empty()
+	)
+
+
+func has_uncommitted_action() -> bool:
+	var state := _character_action_cancellation_state()
+	return (
+		not state.is_empty()
+		and bool(state.get("active", false))
+		and not bool(state.get("committed", false))
+	)
+
+
+func cancel_uncommitted_action(reason: Variant) -> bool:
+	if _prepared_frame >= 0:
+		return false
+	var validation: Dictionary = CharacterActionContractScript.validate_reset_reason(reason)
+	if not bool(validation.get("ok", false)):
+		return false
+	var state := _character_action_cancellation_state()
+	if state.is_empty():
+		return false
+	if not bool(state["active"]) or bool(state["committed"]):
+		return true
+	if _runtime == null or not _runtime.has_method("cancel_uncommitted_action"):
+		return false
+	var runtime_before := _runtime_snapshot()
+	if runtime_before.is_empty():
+		return false
+	var normalized_reason := StringName(str(
+		(validation.get("context", {}) as Dictionary).get("reason", &"")
+	))
+	var cancelled_value: Variant = _runtime.call(
+		"cancel_uncommitted_action",
+		normalized_reason
+	)
+	if (
+		not cancelled_value is Dictionary
+		or typeof((cancelled_value as Dictionary).get("ok")) != TYPE_BOOL
+		or not bool((cancelled_value as Dictionary).get("ok", false))
+		or typeof((cancelled_value as Dictionary).get("cancelled")) != TYPE_BOOL
+		or not bool((cancelled_value as Dictionary).get("cancelled", false))
+	):
+		_restore_runtime_exact(runtime_before)
+		return false
+	var after := _character_action_cancellation_state()
+	if after.is_empty() or bool(after["active"]):
+		_restore_runtime_exact(runtime_before)
+		return false
+	_current_token = 0
+	_committed_plan.clear()
+	_action_revision += 1
+	return true
+
+
 func action_snapshot() -> Dictionary:
 	return {
 		"schema_version": ACTION_SNAPSHOT_SCHEMA_VERSION,
@@ -81,6 +178,7 @@ func action_snapshot() -> Dictionary:
 		"next_token": _next_token,
 		"current_token": _current_token,
 		"committed_plan": _committed_plan.duplicate(true),
+		"mastery_claims": _mastery_claims_snapshot(),
 		"revision": _action_revision,
 	}
 
@@ -92,6 +190,7 @@ func restore_action_snapshot(value: Dictionary) -> bool:
 	_next_token = int(value["next_token"])
 	_current_token = int(value["current_token"])
 	_committed_plan = (value["committed_plan"] as Dictionary).duplicate(true)
+	_mastery_claims = _mastery_claim_map(value["mastery_claims"] as Array)
 	_action_revision = int(value["revision"])
 	return action_snapshot() == value
 
@@ -174,6 +273,35 @@ func on_weapon_action_committed(context: Dictionary) -> Dictionary:
 
 func on_weapon_mastery_confirmed(context: Dictionary) -> Dictionary:
 	return _call_event_hook(&"on_weapon_mastery_confirmed", context)
+
+
+func confirm_weapon_mastery(fact: Variant) -> bool:
+	var normalized := _normalized_mastery_fact(fact)
+	if normalized.is_empty():
+		return false
+	var claim_key := _mastery_claim_key(
+		int(normalized["generation"]),
+		int(normalized["action_token"]),
+		StringName(normalized["mastery_family"])
+	)
+	if _mastery_claims.has(claim_key):
+		return false
+	var hook_result := on_weapon_mastery_confirmed(normalized.duplicate(true))
+	if not bool(hook_result.get("ok", false)):
+		return false
+	_mastery_claims[claim_key] = normalized.duplicate(true)
+	_action_revision += 1
+	EventBus.weapon_mastery_confirmed.emit(
+		StringName(normalized["weapon_id"]),
+		StringName(normalized["mastery_family"]),
+		StringName(normalized["mastery_id"]),
+		StringName(normalized["action_id"]),
+		int(normalized["action_token"]),
+		int(normalized["generation"]),
+		int(normalized["target_id"]),
+		(normalized["context"] as Dictionary).duplicate(true)
+	)
+	return true
 
 
 func before_time_skill(context: Dictionary) -> Dictionary:
@@ -545,6 +673,28 @@ func _runtime_snapshot() -> Dictionary:
 	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 
+func _character_action_cancellation_state() -> Dictionary:
+	if _runtime == null or not _runtime.has_method("character_action_cancellation_state"):
+		return {"active": false, "committed": false}
+	var value: Variant = _runtime.call("character_action_cancellation_state")
+	if not value is Dictionary:
+		return {}
+	var state := value as Dictionary
+	if (
+		state.size() != 2
+		or not state.has("active")
+		or not state.has("committed")
+		or typeof(state["active"]) != TYPE_BOOL
+		or typeof(state["committed"]) != TYPE_BOOL
+		or (bool(state["committed"]) and not bool(state["active"]))
+	):
+		return {}
+	return {
+		"active": bool(state["active"]),
+		"committed": bool(state["committed"]),
+	}
+
+
 func _rollback_runtime_rejection(runtime_before: Dictionary, reason: String) -> Dictionary:
 	if not _restore_runtime_exact(runtime_before):
 		return CharacterActionContractScript.failure(
@@ -604,6 +754,7 @@ func _reset_action_authority() -> void:
 	_generation += 1
 	_current_token = 0
 	_committed_plan.clear()
+	_mastery_claims.clear()
 	_action_revision += 1
 
 
@@ -630,14 +781,168 @@ func _valid_action_snapshot(value: Dictionary) -> bool:
 		or int(value["current_token"]) < 0
 		or int(value["current_token"]) >= int(value["next_token"])
 		or not value["committed_plan"] is Dictionary
+		or not value["mastery_claims"] is Array
 		or typeof(value["revision"]) != TYPE_INT
 		or int(value["revision"]) < 0
 	):
+		return false
+	var claims_validation := _validated_mastery_claims(
+		value["mastery_claims"] as Array,
+		int(value["generation"])
+	)
+	if not bool(claims_validation.get("ok", false)):
 		return false
 	return (
 		int(value["current_token"]) > 0
 		or (value["committed_plan"] as Dictionary).is_empty()
 	)
+
+
+func _normalized_mastery_fact(value: Variant, expected_generation: int = -1) -> Dictionary:
+	if not value is Dictionary:
+		return {}
+	var fact: Dictionary = value
+	if fact.size() != MASTERY_FACT_FIELDS.size():
+		return {}
+	for field: String in MASTERY_FACT_FIELDS:
+		if not fact.has(field):
+			return {}
+	for key: Variant in fact.keys():
+		if (
+			typeof(key) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or not MASTERY_FACT_FIELDS.has(str(key))
+		):
+			return {}
+	for field: String in ["weapon_id", "mastery_family", "mastery_id", "action_id"]:
+		if (
+			typeof(fact[field]) not in [TYPE_STRING, TYPE_STRING_NAME]
+			or str(fact[field]).strip_edges().is_empty()
+		):
+			return {}
+	var weapon_id := StringName(str(fact["weapon_id"]).strip_edges())
+	var mastery_family := StringName(str(fact["mastery_family"]).strip_edges())
+	var mastery_id := StringName(str(fact["mastery_id"]).strip_edges())
+	var action_id := StringName(str(fact["action_id"]).strip_edges())
+	if weapon_id != mastery_family or not MASTERY_IDS_BY_FAMILY.has(str(mastery_family)):
+		return {}
+	var allowed_mastery_ids: Array = MASTERY_IDS_BY_FAMILY[str(mastery_family)]
+	if not allowed_mastery_ids.has(mastery_id):
+		return {}
+	var required_generation := _generation if expected_generation < 0 else expected_generation
+	if (
+		typeof(fact["generation"]) != TYPE_INT
+		or int(fact["generation"]) <= 0
+		or int(fact["generation"]) != required_generation
+		or typeof(fact["action_token"]) != TYPE_INT
+		or int(fact["action_token"]) <= 0
+		or typeof(fact["target_id"]) != TYPE_INT
+		or int(fact["target_id"]) < 0
+		or not fact["context"] is Dictionary
+	):
+		return {}
+	var context := (fact["context"] as Dictionary).duplicate(true)
+	if not _mastery_context_is_eligible(context):
+		return {}
+	return {
+		"weapon_id": weapon_id,
+		"mastery_family": mastery_family,
+		"mastery_id": mastery_id,
+		"action_id": action_id,
+		"generation": int(fact["generation"]),
+		"action_token": int(fact["action_token"]),
+		"target_id": int(fact["target_id"]),
+		"context": context,
+	}
+
+
+func _mastery_claims_snapshot() -> Array[Dictionary]:
+	var claims: Array[Dictionary] = []
+	var keys: Array = _mastery_claims.keys()
+	keys.sort()
+	for key: Variant in keys:
+		var claim_value: Variant = _mastery_claims[key]
+		if claim_value is Dictionary:
+			claims.append((claim_value as Dictionary).duplicate(true))
+	return claims
+
+
+func _mastery_claim_map(claims: Array) -> Dictionary:
+	var result: Dictionary = {}
+	for claim_value: Variant in claims:
+		var claim: Dictionary = (claim_value as Dictionary).duplicate(true)
+		result[_mastery_claim_key(
+			int(claim["generation"]),
+			int(claim["action_token"]),
+			StringName(claim["mastery_family"])
+		)] = claim
+	return result
+
+
+func _validated_mastery_claims(claims: Array, generation: int) -> Dictionary:
+	var seen: Dictionary = {}
+	var ordered_keys: Array[String] = []
+	for claim_value: Variant in claims:
+		var normalized := _normalized_mastery_fact(claim_value, generation)
+		if normalized.is_empty():
+			return {"ok": false}
+		var claim_key := _mastery_claim_key(
+			int(normalized["generation"]),
+			int(normalized["action_token"]),
+			StringName(normalized["mastery_family"])
+		)
+		if seen.has(claim_key):
+			return {"ok": false}
+		seen[claim_key] = true
+		ordered_keys.append(claim_key)
+	var sorted_keys := ordered_keys.duplicate()
+	sorted_keys.sort()
+	if ordered_keys != sorted_keys:
+		return {"ok": false}
+	return {"ok": true}
+
+
+static func _mastery_claim_key(
+	generation: int,
+	action_token: int,
+	mastery_family: StringName
+) -> String:
+	return "%d:%d:%s" % [generation, action_token, str(mastery_family)]
+
+
+static func _mastery_context_is_eligible(context: Dictionary, depth: int = 0) -> bool:
+	if depth > 8 or not ReplaySafeValueScript.is_supported(context):
+		return false
+	for flag: String in ["is_echo", "recursive_echo", "rejected"]:
+		if context.has(flag):
+			if typeof(context[flag]) != TYPE_BOOL or bool(context[flag]):
+				return false
+	if context.has("mastery_eligible"):
+		if typeof(context["mastery_eligible"]) != TYPE_BOOL or not bool(context["mastery_eligible"]):
+			return false
+	if context.has("accepted"):
+		if typeof(context["accepted"]) != TYPE_BOOL or not bool(context["accepted"]):
+			return false
+	if context.has("tags"):
+		var tags_value: Variant = context["tags"]
+		if not tags_value is Array and not tags_value is PackedStringArray:
+			return false
+		for tag_value: Variant in tags_value:
+			if typeof(tag_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+				return false
+			if str(tag_value) == "no_mastery":
+				return false
+	for child_value: Variant in context.values():
+		if child_value is Dictionary:
+			if not _mastery_context_is_eligible(child_value as Dictionary, depth + 1):
+				return false
+		elif child_value is Array:
+			for nested_value: Variant in child_value:
+				if nested_value is Dictionary and not _mastery_context_is_eligible(
+					nested_value as Dictionary,
+					depth + 1
+				):
+					return false
+	return true
 
 
 static func _validated_snapshot(value: Dictionary) -> Dictionary:

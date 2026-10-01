@@ -15,6 +15,7 @@ signal weapon_action_committed(weapon_id: StringName, action_id: StringName, tok
 signal weapon_cue_requested(weapon_id: StringName, action_id: StringName, token: int, cue: Dictionary)
 signal weapon_resource_changed(weapon_id: StringName, resource_id: StringName, current: float, maximum: float, reason: StringName)
 signal weapon_hit_confirmed(weapon_id: StringName, action_id: StringName, token: int, target_id: int, context: Dictionary)
+signal weapon_mastery_confirmed(weapon_id: StringName, mastery_family: StringName, mastery_id: StringName, action_id: StringName, token: int, generation: int, target_id: int, context: Dictionary)
 signal enemy_spawned(enemy: Node, context: Dictionary)
 signal run_started(run_id: String, snapshot: Dictionary)
 signal run_ended(run_id: String, result: Dictionary, revision: int)

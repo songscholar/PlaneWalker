@@ -114,7 +114,21 @@ func load_full_player_replay(
 	var validation := _validate_full_player_replay(replay, identity)
 	if not bool(validation.get("ok", false)):
 		return validation
-	_full_player_replay = replay.duplicate(true)
+	var normalization := ReplayRecorderScript.normalize_full_player_replay(replay)
+	if not bool(normalization.get("ok", false)):
+		return normalization
+	var normalized_replay := (
+		(normalization.get("context", {}) as Dictionary).get("replay", {}) as Dictionary
+	)
+	var normalized_validation := _validate_full_player_replay(normalized_replay, identity)
+	if not bool(normalized_validation.get("ok", false)):
+		return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID", {
+			"reason": normalized_validation.get(
+				"code",
+				&"FULL_PLAYER_REPLAY_SNAPSHOT_INVALID"
+			),
+		})
+	_full_player_replay = normalized_replay.duplicate(true)
 	_full_player_cursor = -1
 	return _success({"summary": full_player_summary()})
 

@@ -36,10 +36,11 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var rows: VBoxContainer = panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows")
-	_suite.assert_equal(rows.get_child_count(), 14, "panel renders movement and fourteen semantic-profile rows")
+	_suite.assert_equal(rows.get_child_count(), 15, "panel renders the complete schema-three remap profile")
 	for semantic_row: String in [
 		"Row_weapon_primary", "Row_weapon_secondary", "Row_weapon_utility",
 		"Row_weapon_skill", "Row_weapon_ultimate", "Row_time_slot_1", "Row_time_slot_2",
+		"Row_character_skill",
 	]:
 		_suite.assert_true(rows.has_node(semantic_row), "panel exposes semantic remap row %s" % semantic_row)
 	_suite.assert_true(not rows.has_node("Row_attack"), "legacy Attack row leaves the schema two UI")
@@ -52,6 +53,11 @@ func _run() -> void:
 		panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_time_slot_1/ActionLabel").text,
 		tr("INPUT_ACTION_TIME_SLOT_1"),
 		"time slot row uses its localized display name"
+	)
+	_suite.assert_equal(
+		panel.get_node("SafeArea/PanelRoot/Layout/Scroll/Rows/Row_character_skill/ActionLabel").text,
+		tr("INPUT_ACTION_CHARACTER_SKILL"),
+		"character skill row uses its localized display name"
 	)
 	_suite.assert_true(panel.get_node("SafeArea/PanelRoot").size.x <= 608.0, "panel fits horizontal safe area")
 	_suite.assert_true(panel.get_node("SafeArea/PanelRoot").size.y <= 328.0, "panel fits vertical safe area")

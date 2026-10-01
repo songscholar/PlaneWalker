@@ -106,7 +106,7 @@ static func _is_valid_record(record: Dictionary) -> bool:
 				_has_exact_fields(record, BUTTON_FIELDS)
 				and typeof(record.get("button_index")) == TYPE_INT
 				and int(record["button_index"]) >= 0
-				and int(record["button_index"]) <= 23
+				and int(record["button_index"]) <= 31
 			)
 		"joypad_axis":
 			return (

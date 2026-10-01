@@ -28,8 +28,9 @@ SEMANTIC_INPUT_TRANSLATIONS = {
     "INPUT_ACTION_WEAPON_UTILITY": ("Weapon Utility", "武器功能"),
     "INPUT_ACTION_WEAPON_SKILL": ("Weapon Skill", "武器技能"),
     "INPUT_ACTION_WEAPON_ULTIMATE": ("Weapon Ultimate", "武器终极技"),
-    "INPUT_ACTION_TIME_SLOT_1": ("Time Ability 1", "时间能力 1"),
-    "INPUT_ACTION_TIME_SLOT_2": ("Time Ability 2", "时间能力 2"),
+	"INPUT_ACTION_TIME_SLOT_1": ("Time Ability 1", "时间能力 1"),
+	"INPUT_ACTION_TIME_SLOT_2": ("Time Ability 2", "时间能力 2"),
+	"INPUT_ACTION_CHARACTER_SKILL": ("Character Skill", "角色技能"),
 }
 
 

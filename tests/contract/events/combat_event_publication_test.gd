@@ -5,12 +5,22 @@ const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const HealthComponentScript := preload("res://scripts/combat/health_component.gd")
 const PlayerScene := preload("res://scenes/player/player.tscn")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const CharacterActionCoordinatorScript := preload(
+	"res://scripts/player/characters/character_action_coordinator.gd"
+)
 
 const PRODUCER_PATHS: Array[String] = [
 	"res://scripts/combat/health_component.gd",
 	"res://scripts/combat/sword_weapon.gd",
 	"res://scripts/combat/bow_weapon.gd",
+	"res://scripts/combat/weapons/weapon_runtime.gd",
+	"res://scripts/combat/weapons/sword_weapon_runtime.gd",
+	"res://scripts/combat/weapons/bow_weapon_runtime.gd",
+	"res://scripts/combat/weapons/gun_weapon_runtime.gd",
+	"res://scripts/combat/weapons/staff_weapon_runtime.gd",
+	"res://scripts/combat/weapons/gauntlets_weapon_runtime.gd",
 	"res://scripts/player/player_controller.gd",
+	"res://scripts/player/characters/character_action_coordinator.gd",
 	"res://scripts/time_system/time_manager.gd",
 	"res://scripts/time_system/time_rift.gd",
 	"res://scripts/dungeon/room_controller.gd",
@@ -80,6 +90,7 @@ class EventRecorder:
 	var time_ended: Dictionary = {}
 	var time_start_contexts: Dictionary = {}
 	var rejected_skill_events: int = 0
+	var weapon_mastery_facts: Array[Dictionary] = []
 
 	func on_damage_about(_damage_info: Variant, _target: Node) -> void:
 		damage_about_count += 1
@@ -124,11 +135,58 @@ class EventRecorder:
 	func on_time_ended(skill_id: StringName, _context: Dictionary) -> void:
 		time_ended[skill_id] = int(time_ended.get(skill_id, 0)) + 1
 
+	func on_weapon_mastery_confirmed(
+		weapon_id: StringName,
+		mastery_family: StringName,
+		mastery_id: StringName,
+		action_id: StringName,
+		token: int,
+		generation: int,
+		target_id: int,
+		context: Dictionary
+	) -> void:
+		weapon_mastery_facts.append({
+			"weapon_id": weapon_id,
+			"mastery_family": mastery_family,
+			"mastery_id": mastery_id,
+			"action_id": action_id,
+			"token": token,
+			"generation": generation,
+			"target_id": target_id,
+			"context": context.duplicate(true),
+		})
+
 	func time_started_total() -> int:
 		var total := 0
 		for count: Variant in time_started.values():
 			total += int(count)
 		return total
+
+
+class MasteryRuntimeStub extends RefCounted:
+	var revision: int = 0
+
+	func advance_frame(_context: Dictionary) -> Array[Dictionary]:
+		return []
+
+	func snapshot() -> Dictionary:
+		return {"revision": revision}
+
+	func can_restore_snapshot(value: Dictionary) -> bool:
+		return value.size() == 1 and typeof(value.get("revision")) == TYPE_INT
+
+	func restore_snapshot(value: Dictionary) -> bool:
+		if not can_restore_snapshot(value):
+			return false
+		revision = int(value["revision"])
+		return true
+
+	func reset_runtime_state(_reason: StringName) -> void:
+		revision += 1
+
+	func on_weapon_mastery_confirmed(_context: Dictionary) -> Array[Dictionary]:
+		revision += 1
+		return []
 
 
 var _suite
@@ -146,6 +204,7 @@ func _run() -> void:
 	_test_producers_have_no_generic_publication()
 	await _test_damage_and_death_publish_once()
 	await _test_committed_player_actions_publish_once()
+	_test_weapon_mastery_fact_publishes_once()
 	await _test_time_skill_lifecycle_and_rejections()
 	await _test_summoned_instances_publish_once()
 	_disconnect_recorder()
@@ -343,6 +402,53 @@ func _test_committed_player_actions_publish_once() -> void:
 	await get_tree().process_frame
 
 
+func _test_weapon_mastery_fact_publishes_once() -> void:
+	var coordinator: RefCounted = CharacterActionCoordinatorScript.new()
+	_suite.assert_true(coordinator.call("configure", MasteryRuntimeStub.new()), "mastery producer configures")
+	var generation := int(coordinator.call("generation"))
+	var context := {"pellet": 0, "nested": {"value": 7}}
+	var fact := {
+		"weapon_id": &"gun",
+		"mastery_family": &"gun",
+		"mastery_id": &"gun_magazine_finisher",
+		"action_id": &"normal_shot",
+		"generation": generation,
+		"action_token": 77,
+		"target_id": 9001,
+		"context": context,
+	}
+	var before_count := _recorder.weapon_mastery_facts.size()
+	_suite.assert_true(coordinator.call("confirm_weapon_mastery", fact), "accepted mastery publishes")
+	_suite.assert_true(not coordinator.call("confirm_weapon_mastery", fact), "duplicate mastery rejects")
+	var echo_fact := fact.duplicate(true)
+	echo_fact.action_token = 78
+	(echo_fact.context as Dictionary).is_echo = true
+	_suite.assert_true(not coordinator.call("confirm_weapon_mastery", echo_fact), "echo mastery rejects")
+	_suite.assert_equal(
+		_recorder.weapon_mastery_facts.size(),
+		before_count + 1,
+		"accepted mastery publishes exactly one typed fact"
+	)
+	if _recorder.weapon_mastery_facts.size() == before_count + 1:
+		var published: Dictionary = _recorder.weapon_mastery_facts[before_count]
+		_suite.assert_equal(published, {
+			"weapon_id": &"gun",
+			"mastery_family": &"gun",
+			"mastery_id": &"gun_magazine_finisher",
+			"action_id": &"normal_shot",
+			"token": 77,
+			"generation": generation,
+			"target_id": 9001,
+			"context": {"pellet": 0, "nested": {"value": 7}},
+		}, "typed mastery payload is exact")
+	context.nested.value = 99
+	_suite.assert_equal(
+		(_recorder.weapon_mastery_facts[before_count] as Dictionary).context.nested.value,
+		7,
+		"caller mutation cannot rewrite the published mastery fact"
+	)
+
+
 func _test_time_skill_lifecycle_and_rejections() -> void:
 	var player := PlayerScene.instantiate()
 	add_child(player)
@@ -462,6 +568,7 @@ func _connect_recorder() -> void:
 	EventBus.enemy_spawned.connect(_recorder.on_enemy_spawned)
 	EventBus.time_skill_started.connect(_recorder.on_time_started)
 	EventBus.time_skill_ended.connect(_recorder.on_time_ended)
+	EventBus.weapon_mastery_confirmed.connect(_recorder.on_weapon_mastery_confirmed)
 
 
 func _disconnect_recorder() -> void:
@@ -474,3 +581,4 @@ func _disconnect_recorder() -> void:
 	EventBus.enemy_spawned.disconnect(_recorder.on_enemy_spawned)
 	EventBus.time_skill_started.disconnect(_recorder.on_time_started)
 	EventBus.time_skill_ended.disconnect(_recorder.on_time_ended)
+	EventBus.weapon_mastery_confirmed.disconnect(_recorder.on_weapon_mastery_confirmed)

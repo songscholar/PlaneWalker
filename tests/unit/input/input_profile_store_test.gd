@@ -45,11 +45,11 @@ func _run() -> void:
 	var recovered: Dictionary = store.load()
 	_suite.assert_true(bool(recovered.get("ok", false)), "corrupt primary recovers")
 	_suite.assert_equal(recovered.get("code", ""), "RECOVERED", "recovery is explicit")
-	_suite.assert_equal(recovered.get("source", ""), "backup_2", "backup is recovery source")
+	_suite.assert_equal(recovered.get("source", ""), "backup_3", "schema-three backup is recovery source")
 	_suite.assert_equal(recovered.get("profile", {}), profile_a, "recovery returns last verified backup")
 
 	_test_invalid_profiles_preserve_primary(store, profile_b)
-	_test_legacy_primary_and_backup_are_available_for_migration()
+	_test_recovery_order_across_all_supported_schemas()
 	_suite.finish(get_tree())
 
 
@@ -59,7 +59,7 @@ func _test_invalid_profiles_preserve_primary(store, valid_profile: Dictionary) -
 	var invalid_profiles: Array[Dictionary] = []
 
 	var forward := valid_profile.duplicate(true)
-	forward["schema_version"] = 3
+	forward["schema_version"] = 4
 	invalid_profiles.append(forward)
 
 	var unknown_action := valid_profile.duplicate(true)
@@ -88,24 +88,49 @@ func _test_invalid_profiles_preserve_primary(store, valid_profile: Dictionary) -
 		_suite.assert_true(not FileAccess.file_exists(store.pending_path()), "rejection leaves no pending file")
 
 
-func _test_legacy_primary_and_backup_are_available_for_migration() -> void:
+func _test_recovery_order_across_all_supported_schemas() -> void:
 	var store = InputProfileStoreScript.new()
 	store.configure(_unique_test_root())
 	DirAccess.make_dir_recursive_absolute(store.primary_path().get_base_dir())
+	var current := _default_profile()
+	var schema_two := _normalize_integral_numbers(_schema_two_fixture()) as Dictionary
 	var legacy := _legacy_profile()
-	_write_text(store.legacy_primary_path(), JSON.stringify(legacy))
-	var primary_result: Dictionary = store.load()
-	_suite.assert_true(bool(primary_result.get("ok", false)), "legacy primary remains readable for production migration")
-	_suite.assert_equal(primary_result.get("code", ""), "MIGRATION_REQUIRED", "legacy primary is never mistaken for current schema")
-	_suite.assert_equal(primary_result.get("source", ""), "legacy_primary", "legacy primary source is explicit")
-	_suite.assert_equal(primary_result.get("profile", {}), legacy, "legacy primary round-trips before migration")
-
 	_write_text(store.legacy_backup_path(), JSON.stringify(legacy))
+	_write_text(store.legacy_primary_path(), JSON.stringify(legacy))
+	_write_text(store.schema_two_backup_path(), JSON.stringify(schema_two))
+	_write_text(store.schema_two_primary_path(), JSON.stringify(schema_two))
+	_write_text(store.backup_path(), JSON.stringify(current))
+	_write_text(store.primary_path(), JSON.stringify(current))
+
+	var current_primary: Dictionary = store.load()
+	_suite.assert_equal(current_primary.get("source", ""), "primary", "verified v3 primary wins the recovery chain")
+
+	_write_text(store.primary_path(), "{")
+	var current_backup: Dictionary = store.load()
+	_suite.assert_equal(current_backup.get("source", ""), "backup_3", "verified v3 backup follows corrupt v3 primary")
+	_suite.assert_equal(current_backup.get("code", ""), "RECOVERED", "v3 backup recovery is explicit")
+
+	_write_text(store.backup_path(), "{")
+	var schema_two_primary: Dictionary = store.load()
+	_suite.assert_equal(schema_two_primary.get("source", ""), "schema_two_primary", "verified v2 primary follows both v3 candidates")
+	_suite.assert_equal(schema_two_primary.get("code", ""), "MIGRATION_REQUIRED", "v2 primary requires promotion")
+	_suite.assert_equal(schema_two_primary.get("profile", {}), schema_two, "v2 primary returns without mutation")
+
+	_write_text(store.schema_two_primary_path(), "{")
+	var schema_two_backup: Dictionary = store.load()
+	_suite.assert_equal(schema_two_backup.get("source", ""), "schema_two_backup", "verified v2 backup follows corrupt v2 primary")
+	_suite.assert_equal(schema_two_backup.get("code", ""), "RECOVERED_MIGRATION_REQUIRED", "v2 backup keeps recovery provenance")
+
+	_write_text(store.schema_two_backup_path(), "{")
+	var legacy_primary: Dictionary = store.load()
+	_suite.assert_equal(legacy_primary.get("source", ""), "legacy_primary", "verified v1 primary follows all v3/v2 candidates")
+	_suite.assert_equal(legacy_primary.get("code", ""), "MIGRATION_REQUIRED", "v1 primary requires chained migration")
+
 	_write_text(store.legacy_primary_path(), "{")
-	var backup_result: Dictionary = store.load()
-	_suite.assert_true(bool(backup_result.get("ok", false)), "legacy backup remains a migration rollback point")
-	_suite.assert_equal(backup_result.get("code", ""), "RECOVERED_MIGRATION_REQUIRED", "legacy backup recovery is explicit")
-	_suite.assert_equal(backup_result.get("source", ""), "legacy_backup", "legacy backup source is explicit")
+	var legacy_backup: Dictionary = store.load()
+	_suite.assert_true(bool(legacy_backup.get("ok", false)), "legacy backup remains the final migration rollback point")
+	_suite.assert_equal(legacy_backup.get("code", ""), "RECOVERED_MIGRATION_REQUIRED", "legacy backup recovery is explicit")
+	_suite.assert_equal(legacy_backup.get("source", ""), "legacy_backup", "legacy backup is last in the recovery chain")
 
 
 func _default_profile() -> Dictionary:
@@ -123,14 +148,38 @@ func _default_profile() -> Dictionary:
 			(families[family] as Array).append(record)
 		bindings[str(action)] = families
 	return {
-		"schema_version": 2,
+		"schema_version": 3,
 		"bindings": bindings,
 	}
 
 
+func _schema_two_fixture() -> Dictionary:
+	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://tests/fixtures/input/input_profile_v2.json"
+	))
+	_suite.assert_true(value is Dictionary, "checked-in schema-two profile parses")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func _normalize_integral_numbers(value: Variant) -> Variant:
+	if value is Dictionary:
+		var normalized := {}
+		for key: Variant in (value as Dictionary).keys():
+			normalized[key] = _normalize_integral_numbers((value as Dictionary)[key])
+		return normalized
+	if value is Array:
+		var normalized: Array = []
+		for item: Variant in value as Array:
+			normalized.append(_normalize_integral_numbers(item))
+		return normalized
+	if typeof(value) == TYPE_FLOAT and is_equal_approx(float(value), floorf(float(value))):
+		return int(value)
+	return value
+
+
 func _legacy_profile() -> Dictionary:
 	var bindings := {}
-	for action: StringName in InputActionContractScript.required_actions():
+	for action: StringName in InputActionContractScript.legacy_profile_actions():
 		var families := {
 			"keyboard_mouse": [],
 			"controller": [],

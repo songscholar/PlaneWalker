@@ -21,8 +21,19 @@ func _run() -> void:
 	_suite.assert_equal(
 		InputActionContractScript.missing_semantic_bindings(),
 		[],
-		"every semantic weapon/time slot has keyboard/mouse and controller bindings"
+		"every semantic weapon/time/character slot has keyboard/mouse and controller bindings"
 	)
+	for retired_time_action: StringName in [
+		&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate",
+	]:
+		_suite.assert_true(
+			not InputActionContractScript.required_actions().has(retired_time_action),
+			"fixed legacy time action is not a current binding requirement: %s" % retired_time_action
+		)
+		_suite.assert_true(
+			InputActionContractScript.legacy_profile_actions().has(retired_time_action),
+			"schema-one compatibility retains legacy action identity: %s" % retired_time_action
+		)
 
 	var expected_controller_bindings := {
 		&"move_up": ["axis:1:-1", "button:11"],
@@ -48,6 +59,7 @@ func _run() -> void:
 		&"weapon_ultimate": ["button:7"],
 		&"time_slot_1": ["button:9"],
 		&"time_slot_2": ["button:10"],
+		&"character_skill": ["button:8"],
 	}
 	for action: StringName in expected_controller_bindings:
 		_suite.assert_equal(

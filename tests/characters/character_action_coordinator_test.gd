@@ -22,6 +22,11 @@ class FakeCharacterRuntime extends RefCounted:
 	var return_malformed_events: bool = false
 	var reject_restore: bool = false
 	var mutate_then_reject_restore_once: bool = false
+	var character_action_active: bool = false
+	var character_action_committed: bool = false
+	var reject_character_cancel: bool = false
+	var malformed_character_cancel: bool = false
+	var character_cancel_reasons: Array[StringName] = []
 
 
 	func advance_frame(context: Dictionary) -> Variant:
@@ -87,18 +92,24 @@ class FakeCharacterRuntime extends RefCounted:
 			"revision": revision,
 			"received_contexts": received_contexts.duplicate(true),
 			"reset_reasons": reset_reasons.duplicate(),
+			"character_action_active": character_action_active,
+			"character_action_committed": character_action_committed,
+			"character_cancel_reasons": character_cancel_reasons.duplicate(),
 		}
 
 
 	func can_restore_snapshot(value: Dictionary) -> bool:
 		return (
-			value.size() == 4
+			value.size() == 7
 			and typeof(value.get("last_runtime_frame")) == TYPE_INT
 			and int(value.get("last_runtime_frame", -2)) >= -1
 			and typeof(value.get("revision")) == TYPE_INT
 			and int(value.get("revision", -1)) >= 0
 			and value.get("received_contexts") is Array
 			and value.get("reset_reasons") is Array
+			and typeof(value.get("character_action_active")) == TYPE_BOOL
+			and typeof(value.get("character_action_committed")) == TYPE_BOOL
+			and value.get("character_cancel_reasons") is Array
 		)
 
 
@@ -116,6 +127,9 @@ class FakeCharacterRuntime extends RefCounted:
 		revision = int(value["revision"])
 		received_contexts = (value["received_contexts"] as Array).duplicate(true)
 		reset_reasons = (value["reset_reasons"] as Array).duplicate()
+		character_action_active = bool(value["character_action_active"])
+		character_action_committed = bool(value["character_action_committed"])
+		character_cancel_reasons = (value["character_cancel_reasons"] as Array).duplicate()
 		return true
 
 
@@ -124,6 +138,32 @@ class FakeCharacterRuntime extends RefCounted:
 		revision += 1
 		received_contexts.clear()
 		reset_reasons.append(reason)
+		character_action_active = false
+		character_action_committed = false
+
+
+	func character_action_cancellation_state() -> Dictionary:
+		return {
+			"active": character_action_active,
+			"committed": character_action_committed,
+		}
+
+
+	func cancel_uncommitted_action(reason: StringName) -> Variant:
+		character_cancel_reasons.append(reason)
+		if malformed_character_cancel:
+			character_action_active = false
+			revision += 1
+			return ["malformed"]
+		if reject_character_cancel:
+			character_action_active = false
+			revision += 1
+			return {"ok": false, "cancelled": false}
+		if character_action_active and not character_action_committed:
+			character_action_active = false
+			revision += 1
+			return {"ok": true, "cancelled": true}
+		return {"ok": true, "cancelled": false}
 
 
 	func presentation_snapshot() -> Dictionary:
@@ -153,6 +193,8 @@ func _run() -> void:
 	_test_invalid_snapshots_fail_without_mutation()
 	_test_runtime_restore_rejection_is_atomic()
 	_test_runtime_partial_restore_rejection_rolls_back_exactly()
+	_test_uncommitted_character_cancellation_is_transactional()
+	_test_committed_character_action_is_never_cancelled()
 	_test_reset_is_safe_with_and_without_runtime()
 	_suite.finish(get_tree())
 
@@ -417,6 +459,75 @@ func _test_runtime_partial_restore_rejection_rolls_back_exactly() -> void:
 	runtime.mutate_then_reject_restore_once = true
 	_suite.assert_true(not coordinator.restore_snapshot(target), "partially mutating runtime rejection fails")
 	_suite.assert_equal(coordinator.snapshot(), before, "partial runtime rejection restores the exact live state")
+
+
+func _test_uncommitted_character_cancellation_is_transactional() -> void:
+	var coordinator = CharacterActionCoordinatorScript.new()
+	var runtime := FakeCharacterRuntime.new()
+	_suite.assert_true(coordinator.configure(runtime), "runtime configures for cancellation coverage")
+	runtime.character_action_active = true
+	coordinator.set("_current_token", 4)
+	coordinator.set("_next_token", 5)
+	coordinator.set("_committed_plan", {"skill_id": "chrono_fortress"})
+	_suite.assert_true(coordinator.has_uncommitted_action(), "runtime exposes an uncommitted character action")
+	_suite.assert_true(
+		coordinator.owns_action(coordinator.generation(), 4),
+		"coordinator owns the active character token"
+	)
+	_suite.assert_true(
+		coordinator.cancel_uncommitted_action(&"dash"),
+		"Dash cancels an uncommitted character action"
+	)
+	_suite.assert_equal(runtime.character_cancel_reasons, [&"dash"], "typed reason reaches runtime")
+	_suite.assert_true(not coordinator.has_uncommitted_action(), "successful cancellation clears runtime phase")
+	_suite.assert_equal(coordinator.current_token(), 0, "successful cancellation releases current token ownership")
+	_suite.assert_equal(
+		coordinator.action_snapshot().get("committed_plan"),
+		{},
+		"successful cancellation drops only the uncommitted plan"
+	)
+	_suite.assert_true(
+		not coordinator.owns_action(coordinator.generation(), 4),
+		"cancelled token is no longer owned"
+	)
+
+	runtime.character_action_active = true
+	coordinator.set("_current_token", 5)
+	coordinator.set("_next_token", 6)
+	coordinator.set("_committed_plan", {"skill_id": "void_devour"})
+	var before: Dictionary = coordinator.snapshot()
+	var action_before: Dictionary = coordinator.action_snapshot()
+	runtime.malformed_character_cancel = true
+	_suite.assert_true(
+		not coordinator.cancel_uncommitted_action(&"gameplay_rewind"),
+		"malformed runtime cancellation fails closed"
+	)
+	_suite.assert_equal(coordinator.snapshot(), before, "malformed cancellation restores runtime exactly")
+	_suite.assert_equal(
+		coordinator.action_snapshot(),
+		action_before,
+		"malformed cancellation preserves coordinator action authority"
+	)
+
+
+func _test_committed_character_action_is_never_cancelled() -> void:
+	var coordinator = CharacterActionCoordinatorScript.new()
+	var runtime := FakeCharacterRuntime.new()
+	_suite.assert_true(coordinator.configure(runtime), "runtime configures for committed boundary coverage")
+	runtime.character_action_active = true
+	runtime.character_action_committed = true
+	coordinator.set("_current_token", 9)
+	coordinator.set("_next_token", 10)
+	coordinator.set("_committed_plan", {"skill_id": "codex_dominion"})
+	var before: Dictionary = coordinator.snapshot()
+	var action_before: Dictionary = coordinator.action_snapshot()
+	_suite.assert_true(
+		coordinator.cancel_uncommitted_action(&"hitstun"),
+		"committed actions make cancellation a successful no-op"
+	)
+	_suite.assert_equal(runtime.character_cancel_reasons, [], "committed runtime never receives a refund request")
+	_suite.assert_equal(coordinator.snapshot(), before, "committed runtime state remains authoritative")
+	_suite.assert_equal(coordinator.action_snapshot(), action_before, "committed token and plan remain authoritative")
 
 
 func _test_reset_is_safe_with_and_without_runtime() -> void:

@@ -1,9 +1,117 @@
 class_name WeaponRuntime
 extends RefCounted
 
+const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
+const MASTERY_CONFIRMATION_FIELDS: Array[String] = [
+	"confirmed",
+	"hit_confirmed",
+	"hit",
+]
+
 
 func weapon_id() -> StringName:
 	return &""
+
+
+func mastery_family() -> StringName:
+	return weapon_id()
+
+
+func mastery_ids() -> Array[StringName]:
+	return []
+
+
+func build_mastery_fact(
+	mastery_id: StringName,
+	action_id: StringName,
+	generation: int,
+	action_token: int,
+	target_id: int,
+	payload_result: Variant,
+	context: Variant = {}
+) -> Dictionary:
+	var family := mastery_family()
+	if (
+		family == &""
+		or not mastery_ids().has(mastery_id)
+		or str(action_id).strip_edges().is_empty()
+		or generation <= 0
+		or action_token <= 0
+		or target_id < 0
+		or not payload_result is Dictionary
+		or not context is Dictionary
+	):
+		return {}
+	if (
+		not _mastery_payload_is_eligible(payload_result as Dictionary)
+		or not _mastery_metadata_is_eligible(context as Dictionary)
+	):
+		return {}
+	return {
+		"weapon_id": weapon_id(),
+		"mastery_family": family,
+		"mastery_id": mastery_id,
+		"action_id": action_id,
+		"generation": generation,
+		"action_token": action_token,
+		"target_id": target_id,
+		"context": (context as Dictionary).duplicate(true),
+	}
+
+
+func _mastery_payload_is_eligible(payload_result: Dictionary) -> bool:
+	var confirmed := false
+	for field: String in MASTERY_CONFIRMATION_FIELDS:
+		if not payload_result.has(field):
+			continue
+		if typeof(payload_result[field]) != TYPE_BOOL:
+			return false
+		confirmed = confirmed or bool(payload_result[field])
+	if not confirmed:
+		var result_type_value: Variant = payload_result.get("type", payload_result.get("result_type", &""))
+		if typeof(result_type_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		confirmed = StringName(str(result_type_value)) == &"hit_confirmed"
+	if not confirmed:
+		return false
+	if payload_result.has("ok"):
+		if typeof(payload_result["ok"]) != TYPE_BOOL or not bool(payload_result["ok"]):
+			return false
+	return _mastery_metadata_is_eligible(payload_result)
+
+
+func _mastery_metadata_is_eligible(value: Dictionary, depth: int = 0) -> bool:
+	if depth > 8 or not ReplaySafeValueScript.is_supported(value):
+		return false
+	for flag: String in ["is_echo", "recursive_echo", "rejected"]:
+		if value.has(flag):
+			if typeof(value[flag]) != TYPE_BOOL or bool(value[flag]):
+				return false
+	if value.has("mastery_eligible"):
+		if typeof(value["mastery_eligible"]) != TYPE_BOOL or not bool(value["mastery_eligible"]):
+			return false
+	if value.has("accepted"):
+		if typeof(value["accepted"]) != TYPE_BOOL or not bool(value["accepted"]):
+			return false
+	if value.has("tags"):
+		var tags_value: Variant = value["tags"]
+		if not tags_value is Array and not tags_value is PackedStringArray:
+			return false
+		for tag_value: Variant in tags_value:
+			if typeof(tag_value) not in [TYPE_STRING, TYPE_STRING_NAME] or str(tag_value) == "no_mastery":
+				return false
+	for child_value: Variant in value.values():
+		if child_value is Dictionary:
+			if not _mastery_metadata_is_eligible(child_value as Dictionary, depth + 1):
+				return false
+		elif child_value is Array:
+			for nested_value: Variant in child_value:
+				if nested_value is Dictionary and not _mastery_metadata_is_eligible(
+					nested_value as Dictionary,
+					depth + 1
+				):
+					return false
+	return true
 
 
 func configure(_owner: Node, _profile: Variant, _modifiers: Variant) -> bool:

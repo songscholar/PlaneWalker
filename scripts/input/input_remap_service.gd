@@ -53,7 +53,7 @@ func load_or_defaults() -> Dictionary:
 	var loaded: Dictionary = _store.load()
 	if bool(loaded.get("ok", false)):
 		var profile: Dictionary = loaded.get("profile", {})
-		if int(profile.get("schema_version", 0)) == WeaponIntentRouterScript.LEGACY_SCHEMA_VERSION:
+		if int(profile.get("schema_version", 0)) != InputProfileStoreScript.SCHEMA_VERSION:
 			return _migrate_loaded_profile(loaded, profile)
 		if not _apply_profile(profile):
 			return _failure("APPLY_FAILED")
@@ -202,17 +202,35 @@ func snapshot_profile() -> Dictionary:
 	return _profile_from_runtime()
 
 
-func _migrate_loaded_profile(loaded: Dictionary, legacy_profile: Dictionary) -> Dictionary:
-	var migrated: Dictionary = WeaponIntentRouterScript.new().migrate_profile(legacy_profile)
-	if migrated.is_empty():
+func _migrate_loaded_profile(loaded: Dictionary, source_profile: Dictionary) -> Dictionary:
+	var router = WeaponIntentRouterScript.new()
+	var semantic_profile := source_profile.duplicate(true)
+	var source_schema := int(source_profile.get("schema_version", 0))
+	if source_schema == WeaponIntentRouterScript.LEGACY_SCHEMA_VERSION:
+		semantic_profile = router.migrate_legacy_profile_to_schema_two(source_profile)
+		if semantic_profile.is_empty():
+			return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
+		var semantic_bindings: Dictionary = semantic_profile.get("bindings", {})
+		for action: StringName in InputProfileStoreScript.schema_two_profile_actions():
+			var action_id := str(action)
+			if semantic_bindings.has(action_id):
+				continue
+			semantic_bindings[action_id] = _default_profile["bindings"][action_id].duplicate(true)
+		semantic_profile["bindings"] = semantic_bindings
+		var semantic_validation: Dictionary = _store.validate_schema_two_profile(semantic_profile)
+		if not bool(semantic_validation.get("ok", false)):
+			return _failure("MIGRATION_FAILED", {
+				"source": loaded.get("source", "unknown"),
+				"cause": semantic_validation,
+			})
+	elif source_schema != InputProfileStoreScript.SCHEMA_TWO_VERSION:
 		return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
-	var migrated_bindings: Dictionary = migrated.get("bindings", {})
-	for action: StringName in remappable_actions():
-		var action_id := str(action)
-		if migrated_bindings.has(action_id):
-			continue
-		migrated_bindings[action_id] = _default_profile["bindings"][action_id].duplicate(true)
-	migrated["bindings"] = migrated_bindings
+
+	var migrated: Dictionary = router.migrate_profile(semantic_profile)
+	if migrated.get("code", "") == "NO_REACHABLE_CHARACTER_SKILL":
+		return migrated.duplicate(true)
+	if migrated.is_empty() or migrated.has("ok"):
+		return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
 
 	var validation: Dictionary = _store.validate_profile(migrated)
 	if not bool(validation.get("ok", false)):

@@ -199,6 +199,23 @@ const FULL_PLAYER_SNAPSHOT_FIELDS: Array[String] = [
 	"weapon_replay_capture_invalid_reason",
 	"weapon_replay_restore_invalid_reason",
 ]
+const LEGACY_CHARACTER_ACTION_SNAPSHOT_V1_FIELDS: Array[String] = [
+	"schema_version",
+	"generation",
+	"next_token",
+	"current_token",
+	"committed_plan",
+	"revision",
+]
+const CHARACTER_ACTION_SNAPSHOT_V2_FIELDS: Array[String] = [
+	"schema_version",
+	"generation",
+	"next_token",
+	"current_token",
+	"committed_plan",
+	"mastery_claims",
+	"revision",
+]
 const FULL_PLAYER_FRAME_INTENT_FIELDS: Array[String] = [
 	"dash",
 	"time",
@@ -1105,6 +1122,122 @@ static func full_player_replay_summary(replay: Dictionary) -> Dictionary:
 		"terminal_snapshot_digest": replay.get("terminal_snapshot_digest"),
 		"terminal_digest": replay.get("terminal_digest"),
 	}
+
+
+static func normalize_full_player_character_action_state(value: Dictionary) -> Dictionary:
+	if value.is_empty() or not replay_value_is_safe(value):
+		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_INVALID")
+	if not _is_positive_integer(value.get("schema_version")):
+		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_SCHEMA_MISMATCH")
+	var schema_version := int(value["schema_version"])
+	var fields: Array[String]
+	match schema_version:
+		1:
+			fields = LEGACY_CHARACTER_ACTION_SNAPSHOT_V1_FIELDS
+		2:
+			fields = CHARACTER_ACTION_SNAPSHOT_V2_FIELDS
+		_:
+			return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_SCHEMA_MISMATCH", {
+				"schema_version": schema_version,
+			})
+	if not _has_exact_fields_static(value, fields):
+		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_FIELDS_MISMATCH", {
+			"schema_version": schema_version,
+		})
+	if (
+		not _is_positive_integer(value.get("generation"))
+		or not _is_positive_integer(value.get("next_token"))
+		or not _is_non_negative_integer(value.get("current_token"))
+		or int(value["current_token"]) >= int(value["next_token"])
+		or not value.get("committed_plan") is Dictionary
+		or not _is_non_negative_integer(value.get("revision"))
+		or (
+			int(value["current_token"]) == 0
+			and not (value["committed_plan"] as Dictionary).is_empty()
+		)
+		or (schema_version == 2 and not value.get("mastery_claims") is Array)
+	):
+		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_INVALID", {
+			"schema_version": schema_version,
+		})
+	var normalized := value.duplicate(true)
+	if schema_version == 1:
+		normalized["schema_version"] = 2
+		normalized["mastery_claims"] = []
+	return _success({
+		"snapshot": normalized,
+		"migrated": schema_version == 1,
+	})
+
+
+static func normalize_full_player_snapshot(snapshot: Dictionary) -> Dictionary:
+	var action_value: Variant = snapshot.get("character_action_state")
+	if not action_value is Dictionary:
+		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_INVALID")
+	var action_result := normalize_full_player_character_action_state(
+		action_value as Dictionary
+	)
+	if not bool(action_result.get("ok", false)):
+		return action_result
+	var normalized := snapshot.duplicate(true)
+	var action_context := action_result.get("context", {}) as Dictionary
+	normalized["character_action_state"] = (
+		action_context.get("snapshot", {}) as Dictionary
+	).duplicate(true)
+	return _success({
+		"snapshot": normalized,
+		"migrated": bool(action_context.get("migrated", false)),
+	})
+
+
+static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
+	var normalized := replay.duplicate(true)
+	var frames_value: Variant = normalized.get("frames")
+	if not frames_value is Array or (frames_value as Array).is_empty():
+		return _failure(&"FULL_PLAYER_REPLAY_FRAMES_INVALID")
+	var migrated := false
+	var frames := frames_value as Array
+	for index: int in range(frames.size()):
+		var frame_value: Variant = frames[index]
+		if not frame_value is Dictionary:
+			return _failure(&"FULL_PLAYER_REPLAY_FRAME_INVALID", {"index": index})
+		var frame := frame_value as Dictionary
+		var snapshot_value: Variant = frame.get("snapshot")
+		if not snapshot_value is Dictionary:
+			return _failure(&"FULL_PLAYER_REPLAY_SNAPSHOT_INVALID", {"index": index})
+		var snapshot_result := normalize_full_player_snapshot(snapshot_value as Dictionary)
+		if not bool(snapshot_result.get("ok", false)):
+			var failure_context := (
+				snapshot_result.get("context", {}) as Dictionary
+			).duplicate(true)
+			failure_context["index"] = index
+			return _failure(
+				snapshot_result.get(
+					"code",
+					&"FULL_PLAYER_CHARACTER_ACTION_STATE_INVALID"
+				) as StringName,
+				failure_context
+			)
+		var snapshot_context := snapshot_result.get("context", {}) as Dictionary
+		frame["snapshot"] = (
+			snapshot_context.get("snapshot", {}) as Dictionary
+		).duplicate(true)
+		migrated = migrated or bool(snapshot_context.get("migrated", false))
+		frame["digest"] = full_player_frame_digest(frame)
+		if not _is_sha256(frame["digest"]):
+			return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID", {"index": index})
+	var terminal_snapshot := (frames[-1] as Dictionary).get("snapshot", {}) as Dictionary
+	normalized["terminal_snapshot_digest"] = value_digest(terminal_snapshot)
+	normalized["terminal_digest"] = full_player_terminal_digest(normalized)
+	if (
+		not _is_sha256(normalized["terminal_snapshot_digest"])
+		or not _is_sha256(normalized["terminal_digest"])
+	):
+		return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID")
+	return _success({
+		"replay": normalized,
+		"migrated": migrated,
+	})
 
 
 static func _full_player_intent_action_matches_category(

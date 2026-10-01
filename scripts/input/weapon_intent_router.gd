@@ -2,7 +2,8 @@ class_name WeaponIntentRouter
 extends RefCounted
 
 const LEGACY_SCHEMA_VERSION := 1
-const CURRENT_SCHEMA_VERSION := 2
+const SEMANTIC_SCHEMA_VERSION := 2
+const CURRENT_SCHEMA_VERSION := 3
 const LEGACY_ACTIONS := {
 	&"attack": &"weapon_primary",
 	&"ranged_attack": &"weapon_primary",
@@ -29,6 +30,7 @@ const SEMANTIC_ACTIONS: Array[StringName] = [
 	&"weapon_ultimate",
 	&"time_slot_1",
 	&"time_slot_2",
+	&"character_skill",
 	&"dash",
 	&"interact",
 	&"pause",
@@ -43,7 +45,7 @@ var _held_frames: Dictionary = {}
 func migrate_profile(profile: Dictionary) -> Dictionary:
 	if not _has_exact_fields(profile, ["schema_version", "bindings"]):
 		return {}
-	if typeof(profile.get("schema_version")) != TYPE_INT:
+	if not _is_integral_number(profile.get("schema_version")):
 		return {}
 	if not profile.get("bindings") is Dictionary:
 		return {}
@@ -51,10 +53,28 @@ func migrate_profile(profile: Dictionary) -> Dictionary:
 	var schema_version := int(profile["schema_version"])
 	var source_bindings: Dictionary = profile["bindings"]
 	if schema_version == CURRENT_SCHEMA_VERSION:
-		if not _bindings_are_valid(source_bindings, true):
+		if (
+			not _bindings_are_valid(source_bindings, true)
+			or _existing_key(source_bindings, &"character_skill") == null
+		):
 			return {}
 		return profile.duplicate(true)
-	if schema_version != LEGACY_SCHEMA_VERSION or not _bindings_are_valid(source_bindings, false):
+	if schema_version == SEMANTIC_SCHEMA_VERSION:
+		return _migrate_schema_two_to_three(source_bindings)
+	return {}
+
+
+func migrate_legacy_profile_to_schema_two(profile: Dictionary) -> Dictionary:
+	if not _has_exact_fields(profile, ["schema_version", "bindings"]):
+		return {}
+	if (
+		not _is_integral_number(profile.get("schema_version"))
+		or int(profile["schema_version"]) != LEGACY_SCHEMA_VERSION
+		or not profile.get("bindings") is Dictionary
+	):
+		return {}
+	var source_bindings: Dictionary = profile["bindings"]
+	if not _bindings_are_valid(source_bindings, false):
 		return {}
 
 	for semantic_action: StringName in LEGACY_ACTIONS.values():
@@ -86,8 +106,97 @@ func migrate_profile(profile: Dictionary) -> Dictionary:
 		migrated_bindings[target_key] = merged
 
 	return {
+		"schema_version": SEMANTIC_SCHEMA_VERSION,
+		"bindings": migrated_bindings,
+	}
+
+
+func _migrate_schema_two_to_three(source_bindings: Dictionary) -> Dictionary:
+	if (
+		not _bindings_are_valid(source_bindings, true)
+		or _existing_key(source_bindings, &"character_skill") != null
+	):
+		return {}
+	var used_keys := _used_physical_keycodes(source_bindings)
+	var used_buttons := _used_joypad_buttons(source_bindings)
+	var keycode := _available_character_keycode(used_keys)
+	if keycode < 0:
+		return _migration_failure("keyboard_mouse")
+	var button_index := _available_character_button(used_buttons)
+	if button_index < 0:
+		return _migration_failure("controller")
+
+	var migrated_bindings := source_bindings.duplicate(true)
+	migrated_bindings["character_skill"] = {
+		"keyboard_mouse": [{"type": "key", "physical_keycode": keycode}],
+		"controller": [{"type": "joypad_button", "button_index": button_index}],
+	}
+	return {
 		"schema_version": CURRENT_SCHEMA_VERSION,
 		"bindings": migrated_bindings,
+	}
+
+
+func _used_physical_keycodes(bindings: Dictionary) -> Dictionary:
+	var used := {}
+	for binding_value: Variant in bindings.values():
+		for record_value: Variant in _all_binding_records(binding_value):
+			if (
+				record_value is Dictionary
+				and str((record_value as Dictionary).get("type", "")) == "key"
+				and typeof((record_value as Dictionary).get("physical_keycode")) in [TYPE_INT, TYPE_FLOAT]
+			):
+				used[int((record_value as Dictionary)["physical_keycode"])] = true
+	return used
+
+
+func _used_joypad_buttons(bindings: Dictionary) -> Dictionary:
+	var used := {}
+	for binding_value: Variant in bindings.values():
+		for record_value: Variant in _all_binding_records(binding_value):
+			if (
+				record_value is Dictionary
+				and str((record_value as Dictionary).get("type", "")) == "joypad_button"
+				and typeof((record_value as Dictionary).get("button_index")) in [TYPE_INT, TYPE_FLOAT]
+			):
+				used[int((record_value as Dictionary)["button_index"])] = true
+	return used
+
+
+func _all_binding_records(binding_value: Variant) -> Array:
+	if binding_value is Array:
+		return binding_value as Array
+	var records: Array = []
+	if binding_value is Dictionary:
+		for family_value: Variant in (binding_value as Dictionary).values():
+			if family_value is Array:
+				records.append_array(family_value as Array)
+	return records
+
+
+func _available_character_keycode(used: Dictionary) -> int:
+	if not used.has(KEY_C):
+		return KEY_C
+	for keycode: int in range(KEY_SPACE, KEY_ASCIITILDE + 1):
+		if not used.has(keycode):
+			return keycode
+	return -1
+
+
+func _available_character_button(used: Dictionary) -> int:
+	if not used.has(8):
+		return 8
+	for button_index: int in range(32):
+		if not used.has(button_index):
+			return button_index
+	return -1
+
+
+func _migration_failure(family: String) -> Dictionary:
+	return {
+		"ok": false,
+		"code": "NO_REACHABLE_CHARACTER_SKILL",
+		"details": {"family": family},
 	}
 
 
@@ -220,6 +329,8 @@ func _normalize_toggle_edge(action_id: StringName, raw_edge: StringName, frames:
 
 
 func _bindings_are_valid(bindings: Dictionary, reject_legacy_weapon_actions: bool) -> bool:
+	if bindings.is_empty():
+		return false
 	for key_value: Variant in bindings.keys():
 		if typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
 			return false
@@ -296,3 +407,13 @@ func _has_exact_fields(value: Dictionary, expected_fields: Array[String]) -> boo
 		if not value.has(field):
 			return false
 	return true
+
+
+func _is_integral_number(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+	return (
+		typeof(value) == TYPE_FLOAT
+		and is_finite(float(value))
+		and is_equal_approx(float(value), floorf(float(value)))
+	)

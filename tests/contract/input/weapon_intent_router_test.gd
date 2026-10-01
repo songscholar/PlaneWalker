@@ -60,9 +60,14 @@ func _test_legacy_profile_migration() -> void:
 		},
 	}
 	var original := legacy.duplicate(true)
-	var migrated: Dictionary = router.migrate_profile(legacy)
+	_suite.assert_equal(
+		router.migrate_profile(legacy),
+		{},
+		"schema one cannot bypass the certified semantic schema-two stage"
+	)
+	var migrated: Dictionary = router.migrate_legacy_profile_to_schema_two(legacy)
 
-	_suite.assert_equal(migrated.get("schema_version"), 2, "legacy profile advances exactly one schema version")
+	_suite.assert_equal(migrated.get("schema_version"), 2, "legacy mapper advances exactly one schema version")
 	_suite.assert_equal(
 		migrated.get("bindings", {}).get("weapon_primary", []),
 		{
@@ -126,6 +131,10 @@ func _test_legacy_profile_migration() -> void:
 			not migrated.get("bindings", {}).has(legacy_time_action),
 			"legacy fixed time key is retired after slot migration: %s" % legacy_time_action
 		)
+	_suite.assert_true(
+		not migrated.get("bindings", {}).has("character_skill"),
+		"schema-two stage does not add the schema-three character semantic"
+	)
 
 	(migrated["bindings"]["weapon_primary"]["keyboard_mouse"] as Array)[0]["physical_keycode"] = KEY_K
 	_suite.assert_equal(legacy, original, "migration never mutates the persisted source profile")
@@ -134,7 +143,7 @@ func _test_legacy_profile_migration() -> void:
 func _test_legacy_time_bindings_merge_in_stable_slot_order() -> void:
 	var router = WeaponIntentRouterScript.new()
 	var duplicate_q := {"type": "key", "physical_keycode": KEY_Q}
-	var migrated: Dictionary = router.migrate_profile({
+	var migrated: Dictionary = router.migrate_legacy_profile_to_schema_two({
 		"schema_version": 1,
 		"bindings": {
 			"time_stop": {"keyboard_mouse": [duplicate_q], "controller": []},
@@ -162,6 +171,7 @@ func _test_migration_rejects_ambiguous_or_invalid_profiles() -> void:
 	var router = WeaponIntentRouterScript.new()
 	var invalid_profiles: Array[Dictionary] = [
 		{},
+		{"schema_version": 4, "bindings": {}},
 		{"schema_version": 3, "bindings": {}},
 		{"schema_version": 1, "bindings": []},
 		{"schema_version": 1, "bindings": {"attack": "KEY_J"}},
@@ -189,12 +199,35 @@ func _test_schema_two_profiles_are_isolated() -> void:
 		},
 	}
 	var migrated: Dictionary = router.migrate_profile(current)
-	_suite.assert_equal(migrated, current, "current profiles pass through without semantic drift")
+	_suite.assert_equal(migrated.get("schema_version"), 3, "schema two advances to schema three")
+	_suite.assert_equal(
+		migrated.get("bindings", {}).get("weapon_primary", {}),
+		current["bindings"]["weapon_primary"],
+		"schema-two records survive without semantic drift"
+	)
+	_suite.assert_equal(
+		migrated.get("bindings", {}).get("character_skill", {}),
+		{
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_C}],
+			"controller": [{"type": "joypad_button", "button_index": 8}],
+		},
+		"schema two receives the character semantic defaults"
+	)
 	(migrated["bindings"]["weapon_primary"]["keyboard_mouse"] as Array)[0]["physical_keycode"] = KEY_K
 	_suite.assert_equal(
 		current["bindings"]["weapon_primary"]["keyboard_mouse"][0]["physical_keycode"],
 		KEY_J,
 		"current profile pass-through is a deep copy"
+	)
+
+	var current_v3 := migrated.duplicate(true)
+	var pass_through: Dictionary = router.migrate_profile(current_v3)
+	_suite.assert_equal(pass_through, current_v3, "schema-three profiles pass through exactly")
+	(pass_through["bindings"]["character_skill"]["controller"] as Array)[0]["button_index"] = 31
+	_suite.assert_equal(
+		current_v3["bindings"]["character_skill"]["controller"][0]["button_index"],
+		8,
+		"schema-three pass-through is a deep copy"
 	)
 
 
@@ -221,6 +254,11 @@ func _test_hold_and_toggle_modes_emit_equivalent_edges() -> void:
 	_suite.assert_equal(toggle_edges, hold_edges, "hold and toggle normalize to the same semantic edge sequence")
 	_suite.assert_equal(hold_edges[0], {"id": &"weapon_primary", "edge": &"pressed", "held_frames": 0}, "legacy attack normalizes to semantic primary")
 	_suite.assert_equal(hold_edges[2].get("held_frames"), 18, "release preserves the authoritative held-frame count")
+	_suite.assert_equal(
+		WeaponIntentRouterScript.new().normalize_edge(&"character_skill", &"pressed", 0, &"hold"),
+		{"id": &"character_skill", "edge": &"pressed", "held_frames": 0},
+		"character skill participates in the same semantic edge grammar"
+	)
 
 
 func _test_press_mode_is_stateless() -> void:
