@@ -1,42 +1,606 @@
 [
   {
-    "id": "accelerant_window",
+    "id": "frozen_burst",
     "category": "item",
     "availability": [
-      "NEXT"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
-    "name_key": "ACCELERANT_WINDOW_NAME",
-    "description_key": "ACCELERANT_WINDOW_DESC",
+    "name_key": "FROZEN_BURST_NAME",
+    "description_key": "FROZEN_BURST_DESC",
     "tags": [
-      "accelerated_combo",
+      "freeze_burst",
+      "passive",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
+    "effects": {
+      "time_stop_duration_bonus": 0.75,
+      "time_stop_cost_multiplier": 0.9
+    },
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_frozen_burst",
+    "item_mode": "passive"
+  },
+  {
+    "id": "stasis_lens",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "STASIS_LENS_NAME",
+    "description_key": "STASIS_LENS_DESC",
+    "tags": [
+      "freeze_burst",
+      "passive",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
+    "effects": {
+      "time_stop_duration_bonus": 0.45,
+      "time_stop_cost_multiplier": 0.92
+    },
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_stasis_lens",
+    "item_mode": "passive"
+  },
+  {
+    "id": "brittle_clock",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "BRITTLE_CLOCK_NAME",
+    "description_key": "BRITTLE_CLOCK_DESC",
+    "tags": [
+      "freeze_burst",
+      "passive",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
+    "effects": {
+      "attack_multiplier": 1.08,
+      "time_stop_duration_bonus": 0.6
+    },
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_brittle_clock",
+    "item_mode": "passive"
+  },
+  {
+    "id": "weakpoint_prism",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WEAKPOINT_PRISM_NAME",
+    "description_key": "WEAKPOINT_PRISM_DESC",
+    "tags": [
+      "freeze_burst",
+      "passive",
+      "payoff",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
+    "effects": {
+      "attack_multiplier": 1.15,
+      "time_stop_duration_bonus": 0.4
+    },
+    "kind": "weapon",
+    "archetype": "freeze_burst",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_weakpoint_prism",
+    "item_mode": "passive"
+  },
+  {
+    "id": "frozen_afterimage",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "FROZEN_AFTERIMAGE_NAME",
+    "description_key": "FROZEN_AFTERIMAGE_DESC",
+    "tags": [
+      "freeze_burst",
+      "passive",
       "payoff",
       "time"
     ],
-    "compatibility": {},
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
     "effects": {
-      "time_accelerate_duration_bonus": 0.8,
-      "time_accelerate_multiplier_bonus": 0.2
+      "attack_speed_multiplier": 1.1,
+      "time_stop_duration_bonus": 0.35
     },
     "kind": "time",
-    "archetype": "accelerated_combo",
+    "archetype": "freeze_burst",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_frozen_afterimage",
+    "item_mode": "passive"
+  },
+  {
+    "id": "absolute_zero_device",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "ABSOLUTE_ZERO_DEVICE_NAME",
+    "description_key": "ABSOLUTE_ZERO_DEVICE_DESC",
+    "tags": [
+      "active",
+      "freeze_burst",
+      "risk",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "freeze_burst"
+      ]
+    },
+    "effects": {},
+    "kind": "time",
+    "archetype": "freeze_burst",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_absolute_zero_device",
+    "item_mode": "active",
+    "active_handler_id": "absolute_zero",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "radius": 180.0,
+      "duration_frames": 180,
+      "weakpoint_bonus": 0.5,
+      "energy_cost": 35.0
+    }
+  },
+  {
+    "id": "rewind_echo",
+    "category": "item",
+    "availability": [
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "REWIND_ECHO_NAME",
+    "description_key": "REWIND_ECHO_DESC",
+    "tags": [
+      "passive",
+      "rewind_echo",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
+    "effects": {
+      "rewind_heal": 28.0,
+      "rewind_echo_enabled": true
+    },
+    "kind": "time",
+    "archetype": "rewind_echo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_rewind_echo",
+    "item_mode": "passive"
+  },
+  {
+    "id": "anchor_thread",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "ANCHOR_THREAD_NAME",
+    "description_key": "ANCHOR_THREAD_DESC",
+    "tags": [
+      "passive",
+      "rewind_echo",
+      "starter",
+      "survival"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
+    "effects": {
+      "max_hp_bonus": 12.0,
+      "rewind_heal": 12.0
+    },
+    "kind": "survival",
+    "archetype": "rewind_echo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_anchor_thread",
+    "item_mode": "passive"
+  },
+  {
+    "id": "history_blade",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "HISTORY_BLADE_NAME",
+    "description_key": "HISTORY_BLADE_DESC",
+    "tags": [
+      "passive",
+      "rewind_echo",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
+    "effects": {
+      "attack_multiplier": 1.12,
+      "rewind_heal": 6.0
+    },
+    "kind": "weapon",
+    "archetype": "rewind_echo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_history_blade",
+    "item_mode": "passive"
+  },
+  {
+    "id": "echo_reservoir",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "ECHO_RESERVOIR_NAME",
+    "description_key": "ECHO_RESERVOIR_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "rewind_echo",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
+    "effects": {
+      "rewind_heal": 18.0,
+      "time_energy_max_bonus": 15.0
+    },
+    "kind": "time",
+    "archetype": "rewind_echo",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_echo_reservoir",
+    "item_mode": "passive"
+  },
+  {
+    "id": "pathbreaker_lens",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "PATHBREAKER_LENS_NAME",
+    "description_key": "PATHBREAKER_LENS_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "rewind_echo",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
+    "effects": {
+      "attack_speed_multiplier": 1.1,
+      "rewind_heal": 10.0
+    },
+    "kind": "weapon",
+    "archetype": "rewind_echo",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_pathbreaker_lens",
+    "item_mode": "passive"
+  },
+  {
+    "id": "paradox_beacon",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "PARADOX_BEACON_NAME",
+    "description_key": "PARADOX_BEACON_DESC",
+    "tags": [
+      "active",
+      "rewind_echo",
+      "risk",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rewind_echo"
+      ]
+    },
+    "effects": {},
+    "kind": "time",
+    "archetype": "rewind_echo",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_paradox_beacon",
+    "item_mode": "active",
+    "active_handler_id": "paradox_beacon",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "rewind_frames": 180,
+      "echo_damage_multiplier": 0.8,
+      "energy_cost": 30.0
+    }
+  },
+  {
+    "id": "rift_engine",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "RIFT_ENGINE_NAME",
+    "description_key": "RIFT_ENGINE_DESC",
+    "tags": [
+      "passive",
+      "rift_trap",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rift_trap"
+      ]
+    },
+    "effects": {
+      "time_energy_max_bonus": 20.0,
+      "time_energy_regen_bonus": 0.8
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_rift_engine",
+    "item_mode": "passive"
+  },
+  {
+    "id": "rift_anchor",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "RIFT_ANCHOR_NAME",
+    "description_key": "RIFT_ANCHOR_DESC",
+    "tags": [
+      "passive",
+      "rift_trap",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rift_trap"
+      ]
+    },
+    "effects": {
+      "time_rift_duration_bonus": 0.75,
+      "time_rift_radius_bonus": 16.0
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_rift_anchor",
+    "item_mode": "passive"
+  },
+  {
+    "id": "folded_corridor",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "FOLDED_CORRIDOR_NAME",
+    "description_key": "FOLDED_CORRIDOR_DESC",
+    "tags": [
+      "passive",
+      "rift_trap",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rift_trap"
+      ]
+    },
+    "effects": {
+      "time_rift_radius_bonus": 28.0,
+      "time_rift_slow_bonus": 0.06
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_folded_corridor",
+    "item_mode": "passive"
+  },
+  {
+    "id": "rift_conductor",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "RIFT_CONDUCTOR_NAME",
+    "description_key": "RIFT_CONDUCTOR_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "rift_trap",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rift_trap"
+      ]
+    },
+    "effects": {
+      "time_rift_cost_multiplier": 0.85,
+      "time_energy_regen_bonus": 0.6
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
     "role": "payoff",
     "rarity": "common",
-    "icon_id": "content_accelerant_window"
+    "icon_id": "content_rift_conductor",
+    "item_mode": "passive"
+  },
+  {
+    "id": "rift_snare",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "RIFT_SNARE_NAME",
+    "description_key": "RIFT_SNARE_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "rift_trap",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rift_trap"
+      ]
+    },
+    "effects": {
+      "time_rift_duration_bonus": 1.0,
+      "time_rift_radius_bonus": 22.0,
+      "time_rift_slow_bonus": 0.12
+    },
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_rift_snare",
+    "item_mode": "passive"
+  },
+  {
+    "id": "gravity_snare_device",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "GRAVITY_SNARE_DEVICE_NAME",
+    "description_key": "GRAVITY_SNARE_DEVICE_DESC",
+    "tags": [
+      "active",
+      "rift_trap",
+      "risk",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "rift_trap"
+      ]
+    },
+    "effects": {},
+    "kind": "time",
+    "archetype": "rift_trap",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_gravity_snare_device",
+    "item_mode": "active",
+    "active_handler_id": "gravity_snare",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "radius": 220.0,
+      "duration_frames": 240,
+      "slow_ratio": 0.45,
+      "energy_cost": 35.0
+    }
   },
   {
     "id": "accelerated_combo",
     "category": "item",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "ACCELERATED_COMBO_NAME",
     "description_key": "ACCELERATED_COMBO_DESC",
     "tags": [
       "accelerated_combo",
+      "passive",
       "starter",
       "weapon"
     ],
-    "compatibility": {},
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
     "effects": {
       "attack_speed_multiplier": 1.08,
       "combo_finisher_multiplier_bonus": 0.35
@@ -45,17 +609,857 @@
     "archetype": "accelerated_combo",
     "role": "starter",
     "rarity": "common",
-    "icon_id": "content_accelerated_combo"
+    "icon_id": "content_accelerated_combo",
+    "item_mode": "passive"
+  },
+  {
+    "id": "cadence_core",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CADENCE_CORE_NAME",
+    "description_key": "CADENCE_CORE_DESC",
+    "tags": [
+      "accelerated_combo",
+      "passive",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "attack_speed_multiplier": 1.1,
+      "combo_finisher_multiplier_bonus": 0.2
+    },
+    "kind": "weapon",
+    "archetype": "accelerated_combo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_cadence_core",
+    "item_mode": "passive"
+  },
+  {
+    "id": "overdrive_heart",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "OVERDRIVE_HEART_NAME",
+    "description_key": "OVERDRIVE_HEART_DESC",
+    "tags": [
+      "accelerated_combo",
+      "passive",
+      "starter",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ]
+    },
+    "effects": {
+      "time_accelerate_duration_bonus": 0.6,
+      "time_accelerate_multiplier_bonus": 0.12
+    },
+    "kind": "time",
+    "archetype": "accelerated_combo",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_overdrive_heart",
+    "item_mode": "passive"
+  },
+  {
+    "id": "accelerant_window",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "ACCELERANT_WINDOW_NAME",
+    "description_key": "ACCELERANT_WINDOW_DESC",
+    "tags": [
+      "accelerated_combo",
+      "passive",
+      "payoff",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ]
+    },
+    "effects": {
+      "time_accelerate_duration_bonus": 0.8,
+      "time_accelerate_multiplier_bonus": 0.2
+    },
+    "kind": "time",
+    "archetype": "accelerated_combo",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_accelerant_window",
+    "item_mode": "passive"
+  },
+  {
+    "id": "efficient_overdrive",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "EFFICIENT_OVERDRIVE_NAME",
+    "description_key": "EFFICIENT_OVERDRIVE_DESC",
+    "tags": [
+      "accelerated_combo",
+      "passive",
+      "payoff",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ]
+    },
+    "effects": {
+      "time_accelerate_cost_multiplier": 0.85,
+      "attack_speed_multiplier": 1.06
+    },
+    "kind": "time",
+    "archetype": "accelerated_combo",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_efficient_overdrive",
+    "item_mode": "passive"
+  },
+  {
+    "id": "redline_injector",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "REDLINE_INJECTOR_NAME",
+    "description_key": "REDLINE_INJECTOR_DESC",
+    "tags": [
+      "accelerated_combo",
+      "active",
+      "risk",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "accelerated_combo"
+      ]
+    },
+    "effects": {},
+    "kind": "risk",
+    "archetype": "accelerated_combo",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_redline_injector",
+    "item_mode": "active",
+    "active_handler_id": "redline_injector",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "duration_frames": 240,
+      "speed_multiplier": 1.5,
+      "health_cost_ratio": 0.12
+    }
+  },
+  {
+    "id": "void_brink",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "VOID_BRINK_NAME",
+    "description_key": "VOID_BRINK_DESC",
+    "tags": [
+      "low_hp_void",
+      "passive",
+      "risk",
+      "starter"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "low_hp_void"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "low_hp_damage_multiplier_bonus": 0.45
+    },
+    "kind": "risk",
+    "archetype": "low_hp_void",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_void_brink",
+    "item_mode": "passive"
+  },
+  {
+    "id": "void_contract",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "VOID_CONTRACT_NAME",
+    "description_key": "VOID_CONTRACT_DESC",
+    "tags": [
+      "low_hp_void",
+      "passive",
+      "risk",
+      "starter"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "low_hp_void"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "low_hp_damage_multiplier_bonus": 0.25,
+      "max_hp_bonus": 10.0
+    },
+    "kind": "risk",
+    "archetype": "low_hp_void",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_void_contract",
+    "item_mode": "passive"
+  },
+  {
+    "id": "hunger_edge",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "HUNGER_EDGE_NAME",
+    "description_key": "HUNGER_EDGE_DESC",
+    "tags": [
+      "low_hp_void",
+      "passive",
+      "payoff",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "low_hp_void"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "attack_speed_multiplier": 1.08,
+      "low_hp_damage_multiplier_bonus": 0.55
+    },
+    "kind": "weapon",
+    "archetype": "low_hp_void",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_hunger_edge",
+    "item_mode": "passive"
+  },
+  {
+    "id": "abyssal_siphon",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "ABYSSAL_SIPHON_NAME",
+    "description_key": "ABYSSAL_SIPHON_DESC",
+    "tags": [
+      "low_hp_void",
+      "passive",
+      "payoff",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "low_hp_void"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "attack_multiplier": 1.1,
+      "low_hp_damage_multiplier_bonus": 0.3
+    },
+    "kind": "weapon",
+    "archetype": "low_hp_void",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_abyssal_siphon",
+    "item_mode": "passive"
+  },
+  {
+    "id": "blood_price_relic",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "BLOOD_PRICE_RELIC_NAME",
+    "description_key": "BLOOD_PRICE_RELIC_DESC",
+    "tags": [
+      "active",
+      "low_hp_void",
+      "risk",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "low_hp_void"
+      ]
+    },
+    "effects": {},
+    "kind": "risk",
+    "archetype": "low_hp_void",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_blood_price_relic",
+    "item_mode": "active",
+    "active_handler_id": "blood_price",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "duration_frames": 240,
+      "damage_multiplier": 1.8,
+      "health_cost_ratio": 0.18
+    }
+  },
+  {
+    "id": "cleaving_moment",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "CLEAVING_MOMENT_NAME",
+    "description_key": "CLEAVING_MOMENT_DESC",
+    "tags": [
+      "passive",
+      "perfect_guard",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "perfect_guard"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "heavy_damage_multiplier_bonus": 0.4
+    },
+    "kind": "weapon",
+    "archetype": "perfect_guard",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_cleaving_moment",
+    "item_mode": "passive"
+  },
+  {
+    "id": "evasive_guard_route",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "EVASIVE_GUARD_ROUTE_NAME",
+    "description_key": "EVASIVE_GUARD_ROUTE_DESC",
+    "tags": [
+      "passive",
+      "perfect_guard",
+      "starter",
+      "survival"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "perfect_guard"
+      ]
+    },
+    "effects": {
+      "defense_bonus": 3.0,
+      "dash_invulnerable_bonus": 0.08
+    },
+    "kind": "survival",
+    "archetype": "perfect_guard",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_evasive_guard_route",
+    "item_mode": "passive"
+  },
+  {
+    "id": "counter_battery",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "COUNTER_BATTERY_NAME",
+    "description_key": "COUNTER_BATTERY_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "perfect_guard",
+      "survival"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "perfect_guard"
+      ]
+    },
+    "effects": {
+      "defense_bonus": 2.0,
+      "time_energy_max_bonus": 15.0
+    },
+    "kind": "survival",
+    "archetype": "perfect_guard",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_counter_battery",
+    "item_mode": "passive"
+  },
+  {
+    "id": "warded_edge",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "WARDED_EDGE_NAME",
+    "description_key": "WARDED_EDGE_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "perfect_guard",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "perfect_guard"
+      ],
+      "weapon_ids": [
+        "sword"
+      ]
+    },
+    "effects": {
+      "defense_bonus": 2.0,
+      "heavy_damage_multiplier_bonus": 0.25
+    },
+    "kind": "weapon",
+    "archetype": "perfect_guard",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_warded_edge",
+    "item_mode": "passive"
+  },
+  {
+    "id": "aegis_reversal",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "AEGIS_REVERSAL_NAME",
+    "description_key": "AEGIS_REVERSAL_DESC",
+    "tags": [
+      "active",
+      "perfect_guard",
+      "risk",
+      "survival"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "perfect_guard"
+      ]
+    },
+    "effects": {},
+    "kind": "survival",
+    "archetype": "perfect_guard",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_aegis_reversal",
+    "item_mode": "active",
+    "active_handler_id": "aegis_reversal",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "duration_frames": 180,
+      "counter_multiplier": 1.5,
+      "energy_cost": 25.0
+    }
+  },
+  {
+    "id": "piercing_draw",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "PIERCING_DRAW_NAME",
+    "description_key": "PIERCING_DRAW_DESC",
+    "tags": [
+      "passive",
+      "piercing_barrage",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "piercing_barrage"
+      ],
+      "weapon_ids": [
+        "bow"
+      ]
+    },
+    "effects": {
+      "bow_charge_rate_bonus": 0.25,
+      "bow_pierce_bonus": 1
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_piercing_draw",
+    "item_mode": "passive"
+  },
+  {
+    "id": "tempo_barrage",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "TEMPO_BARRAGE_NAME",
+    "description_key": "TEMPO_BARRAGE_DESC",
+    "tags": [
+      "passive",
+      "piercing_barrage",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "piercing_barrage"
+      ],
+      "weapon_ids": [
+        "bow"
+      ]
+    },
+    "effects": {
+      "attack_speed_multiplier": 1.1,
+      "time_energy_max_bonus": 15.0
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_tempo_barrage",
+    "item_mode": "passive"
+  },
+  {
+    "id": "focused_draw",
+    "category": "item",
+    "availability": [
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "FOCUSED_DRAW_NAME",
+    "description_key": "FOCUSED_DRAW_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "piercing_barrage",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "piercing_barrage"
+      ],
+      "weapon_ids": [
+        "bow"
+      ]
+    },
+    "effects": {
+      "bow_charge_rate_bonus": 0.15,
+      "bow_full_charge_damage_multiplier_bonus": 0.35
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "payoff",
+    "rarity": "common",
+    "icon_id": "content_focused_draw",
+    "item_mode": "passive"
+  },
+  {
+    "id": "ricochet_matrix",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "RICOCHET_MATRIX_NAME",
+    "description_key": "RICOCHET_MATRIX_DESC",
+    "tags": [
+      "passive",
+      "payoff",
+      "piercing_barrage",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "piercing_barrage"
+      ],
+      "weapon_ids": [
+        "bow"
+      ]
+    },
+    "effects": {
+      "attack_speed_multiplier": 1.05,
+      "bow_pierce_bonus": 1
+    },
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_ricochet_matrix",
+    "item_mode": "passive"
+  },
+  {
+    "id": "railshot_module",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "RAILSHOT_MODULE_NAME",
+    "description_key": "RAILSHOT_MODULE_DESC",
+    "tags": [
+      "active",
+      "piercing_barrage",
+      "risk",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "piercing_barrage"
+      ]
+    },
+    "effects": {},
+    "kind": "weapon",
+    "archetype": "piercing_barrage",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_railshot_module",
+    "item_mode": "active",
+    "active_handler_id": "railshot",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "pierce_bonus": 4,
+      "damage_multiplier": 1.6,
+      "ammo_refund": 2
+    }
+  },
+  {
+    "id": "mirror_seed",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "MIRROR_SEED_NAME",
+    "description_key": "MIRROR_SEED_DESC",
+    "tags": [
+      "echo_legion",
+      "passive",
+      "starter",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "echo_legion"
+      ]
+    },
+    "effects": {
+      "attack_speed_multiplier": 1.06,
+      "max_hp_bonus": 8.0
+    },
+    "kind": "weapon",
+    "archetype": "echo_legion",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_mirror_seed",
+    "item_mode": "passive"
+  },
+  {
+    "id": "phantom_lens",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "PHANTOM_LENS_NAME",
+    "description_key": "PHANTOM_LENS_DESC",
+    "tags": [
+      "echo_legion",
+      "passive",
+      "starter",
+      "survival"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "echo_legion"
+      ]
+    },
+    "effects": {
+      "attack_multiplier": 1.08,
+      "dash_invulnerable_bonus": 0.04
+    },
+    "kind": "survival",
+    "archetype": "echo_legion",
+    "role": "starter",
+    "rarity": "common",
+    "icon_id": "content_phantom_lens",
+    "item_mode": "passive"
+  },
+  {
+    "id": "legion_core",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "LEGION_CORE_NAME",
+    "description_key": "LEGION_CORE_DESC",
+    "tags": [
+      "echo_legion",
+      "passive",
+      "payoff",
+      "weapon"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "echo_legion"
+      ]
+    },
+    "effects": {
+      "attack_multiplier": 1.15,
+      "time_energy_max_bonus": 10.0
+    },
+    "kind": "weapon",
+    "archetype": "echo_legion",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_legion_core",
+    "item_mode": "passive"
+  },
+  {
+    "id": "decoy_crown",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "DECOY_CROWN_NAME",
+    "description_key": "DECOY_CROWN_DESC",
+    "tags": [
+      "echo_legion",
+      "passive",
+      "payoff",
+      "survival"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "echo_legion"
+      ]
+    },
+    "effects": {
+      "dash_invulnerable_bonus": 0.06,
+      "defense_bonus": 3.0
+    },
+    "kind": "survival",
+    "archetype": "echo_legion",
+    "role": "payoff",
+    "rarity": "uncommon",
+    "icon_id": "content_decoy_crown",
+    "item_mode": "passive"
+  },
+  {
+    "id": "army_of_yesterday",
+    "category": "item",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "name_key": "ARMY_OF_YESTERDAY_NAME",
+    "description_key": "ARMY_OF_YESTERDAY_DESC",
+    "tags": [
+      "active",
+      "echo_legion",
+      "risk",
+      "time"
+    ],
+    "compatibility": {
+      "archetype_ids": [
+        "echo_legion"
+      ]
+    },
+    "effects": {},
+    "kind": "time",
+    "archetype": "echo_legion",
+    "role": "risk",
+    "rarity": "rare",
+    "icon_id": "content_army_of_yesterday",
+    "item_mode": "active",
+    "active_handler_id": "army_of_yesterday",
+    "cooldown_frames": 900,
+    "active_parameters": {
+      "echo_count": 3,
+      "duration_frames": 300,
+      "echo_damage_multiplier": 0.45,
+      "energy_cost": 40.0
+    }
   },
   {
     "id": "chronal_battery",
     "category": "item",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "CHRONAL_BATTERY_NAME",
     "description_key": "CHRONAL_BATTERY_DESC",
     "tags": [
+      "generalist",
+      "passive",
       "time",
       "utility"
     ],
@@ -68,160 +1472,22 @@
     "archetype": "",
     "role": "utility",
     "rarity": "common",
-    "icon_id": "content_chronal_battery"
-  },
-  {
-    "id": "cleaving_moment",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "CLEAVING_MOMENT_NAME",
-    "description_key": "CLEAVING_MOMENT_DESC",
-    "tags": [
-      "perfect_guard",
-      "starter",
-      "weapon"
-    ],
-    "compatibility": {},
-    "effects": {
-      "heavy_damage_multiplier_bonus": 0.4
-    },
-    "kind": "weapon",
-    "archetype": "perfect_guard",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_cleaving_moment"
-  },
-  {
-    "id": "efficient_overdrive",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "EFFICIENT_OVERDRIVE_NAME",
-    "description_key": "EFFICIENT_OVERDRIVE_DESC",
-    "tags": [
-      "accelerated_combo",
-      "payoff",
-      "time"
-    ],
-    "compatibility": {},
-    "effects": {
-      "time_accelerate_cost_multiplier": 0.85,
-      "attack_speed_multiplier": 1.06
-    },
-    "kind": "time",
-    "archetype": "accelerated_combo",
-    "role": "payoff",
-    "rarity": "common",
-    "icon_id": "content_efficient_overdrive"
-  },
-  {
-    "id": "evasive_guard_route",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "EVASIVE_GUARD_ROUTE_NAME",
-    "description_key": "EVASIVE_GUARD_ROUTE_DESC",
-    "tags": [
-      "perfect_guard",
-      "starter",
-      "survival"
-    ],
-    "compatibility": {},
-    "effects": {
-      "defense_bonus": 3.0,
-      "dash_invulnerable_bonus": 0.08
-    },
-    "kind": "survival",
-    "archetype": "perfect_guard",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_evasive_guard_route"
-  },
-  {
-    "id": "focused_draw",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "FOCUSED_DRAW_NAME",
-    "description_key": "FOCUSED_DRAW_DESC",
-    "tags": [
-      "payoff",
-      "piercing_barrage",
-      "weapon"
-    ],
-    "compatibility": {},
-    "effects": {
-      "bow_charge_rate_bonus": 0.15,
-      "bow_full_charge_damage_multiplier_bonus": 0.35
-    },
-    "kind": "weapon",
-    "archetype": "piercing_barrage",
-    "role": "payoff",
-    "rarity": "common",
-    "icon_id": "content_focused_draw"
-  },
-  {
-    "id": "frozen_burst",
-    "category": "item",
-    "availability": [
-      "M1"
-    ],
-    "name_key": "FROZEN_BURST_NAME",
-    "description_key": "FROZEN_BURST_DESC",
-    "tags": [
-      "freeze_burst",
-      "starter",
-      "time"
-    ],
-    "compatibility": {},
-    "effects": {
-      "time_stop_duration_bonus": 0.75,
-      "time_stop_cost_multiplier": 0.9
-    },
-    "kind": "time",
-    "archetype": "freeze_burst",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_frozen_burst"
-  },
-  {
-    "id": "piercing_draw",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "PIERCING_DRAW_NAME",
-    "description_key": "PIERCING_DRAW_DESC",
-    "tags": [
-      "piercing_barrage",
-      "starter",
-      "weapon"
-    ],
-    "compatibility": {},
-    "effects": {
-      "bow_charge_rate_bonus": 0.25,
-      "bow_pierce_bonus": 1
-    },
-    "kind": "weapon",
-    "archetype": "piercing_barrage",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_piercing_draw"
+    "icon_id": "content_chronal_battery",
+    "item_mode": "passive"
   },
   {
     "id": "quickened_blade",
     "category": "item",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "QUICKENED_BLADE_NAME",
     "description_key": "QUICKENED_BLADE_DESC",
     "tags": [
+      "generalist",
+      "passive",
       "utility",
       "weapon"
     ],
@@ -233,41 +1499,22 @@
     "archetype": "",
     "role": "utility",
     "rarity": "common",
-    "icon_id": "content_quickened_blade"
-  },
-  {
-    "id": "rewind_echo",
-    "category": "item",
-    "availability": [
-      "M1"
-    ],
-    "name_key": "REWIND_ECHO_NAME",
-    "description_key": "REWIND_ECHO_DESC",
-    "tags": [
-      "rewind_echo",
-      "starter",
-      "time"
-    ],
-    "compatibility": {},
-    "effects": {
-      "rewind_heal": 28.0,
-      "rewind_echo_enabled": true
-    },
-    "kind": "time",
-    "archetype": "rewind_echo",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_rewind_echo"
+    "icon_id": "content_quickened_blade",
+    "item_mode": "passive"
   },
   {
     "id": "rewind_salve",
     "category": "item",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "REWIND_SALVE_NAME",
     "description_key": "REWIND_SALVE_DESC",
     "tags": [
+      "generalist",
+      "passive",
       "survival",
       "utility"
     ],
@@ -280,41 +1527,22 @@
     "archetype": "",
     "role": "utility",
     "rarity": "common",
-    "icon_id": "content_rewind_salve"
-  },
-  {
-    "id": "rift_conductor",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "RIFT_CONDUCTOR_NAME",
-    "description_key": "RIFT_CONDUCTOR_DESC",
-    "tags": [
-      "payoff",
-      "rift_trap",
-      "time"
-    ],
-    "compatibility": {},
-    "effects": {
-      "time_rift_cost_multiplier": 0.85,
-      "time_energy_regen_bonus": 0.6
-    },
-    "kind": "time",
-    "archetype": "rift_trap",
-    "role": "payoff",
-    "rarity": "common",
-    "icon_id": "content_rift_conductor"
+    "icon_id": "content_rewind_salve",
+    "item_mode": "passive"
   },
   {
     "id": "rift_current",
     "category": "item",
     "availability": [
-      "NEXT"
+      "NEXT",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "RIFT_CURRENT_NAME",
     "description_key": "RIFT_CURRENT_DESC",
     "tags": [
+      "generalist",
+      "passive",
       "time",
       "utility"
     ],
@@ -326,66 +1554,22 @@
     "archetype": "",
     "role": "utility",
     "rarity": "common",
-    "icon_id": "content_rift_current"
-  },
-  {
-    "id": "rift_engine",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "RIFT_ENGINE_NAME",
-    "description_key": "RIFT_ENGINE_DESC",
-    "tags": [
-      "rift_trap",
-      "starter",
-      "time"
-    ],
-    "compatibility": {},
-    "effects": {
-      "time_energy_max_bonus": 20.0,
-      "time_energy_regen_bonus": 0.8
-    },
-    "kind": "time",
-    "archetype": "rift_trap",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_rift_engine"
-  },
-  {
-    "id": "rift_snare",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "RIFT_SNARE_NAME",
-    "description_key": "RIFT_SNARE_DESC",
-    "tags": [
-      "payoff",
-      "rift_trap",
-      "time"
-    ],
-    "compatibility": {},
-    "effects": {
-      "time_rift_duration_bonus": 1.0,
-      "time_rift_radius_bonus": 22.0,
-      "time_rift_slow_bonus": 0.12
-    },
-    "kind": "time",
-    "archetype": "rift_trap",
-    "role": "payoff",
-    "rarity": "common",
-    "icon_id": "content_rift_snare"
+    "icon_id": "content_rift_current",
+    "item_mode": "passive"
   },
   {
     "id": "sword_edge",
     "category": "item",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "SWORD_EDGE_NAME",
     "description_key": "SWORD_EDGE_DESC",
     "tags": [
+      "generalist",
+      "passive",
       "utility",
       "weapon"
     ],
@@ -397,17 +1581,22 @@
     "archetype": "",
     "role": "utility",
     "rarity": "common",
-    "icon_id": "content_sword_edge"
+    "icon_id": "content_sword_edge",
+    "item_mode": "passive"
   },
   {
     "id": "tempered_guard",
     "category": "item",
     "availability": [
-      "M1"
+      "M1",
+      "LAUNCH",
+      "EXPANSION"
     ],
     "name_key": "TEMPERED_GUARD_NAME",
     "description_key": "TEMPERED_GUARD_DESC",
     "tags": [
+      "generalist",
+      "passive",
       "survival",
       "utility"
     ],
@@ -420,53 +1609,7 @@
     "archetype": "",
     "role": "utility",
     "rarity": "common",
-    "icon_id": "content_tempered_guard"
-  },
-  {
-    "id": "tempo_barrage",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "TEMPO_BARRAGE_NAME",
-    "description_key": "TEMPO_BARRAGE_DESC",
-    "tags": [
-      "piercing_barrage",
-      "starter",
-      "weapon"
-    ],
-    "compatibility": {},
-    "effects": {
-      "attack_speed_multiplier": 1.1,
-      "time_energy_max_bonus": 15.0
-    },
-    "kind": "weapon",
-    "archetype": "piercing_barrage",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_tempo_barrage"
-  },
-  {
-    "id": "void_brink",
-    "category": "item",
-    "availability": [
-      "NEXT"
-    ],
-    "name_key": "VOID_BRINK_NAME",
-    "description_key": "VOID_BRINK_DESC",
-    "tags": [
-      "low_hp_void",
-      "risk",
-      "starter"
-    ],
-    "compatibility": {},
-    "effects": {
-      "low_hp_damage_multiplier_bonus": 0.45
-    },
-    "kind": "risk",
-    "archetype": "low_hp_void",
-    "role": "starter",
-    "rarity": "common",
-    "icon_id": "content_void_brink"
+    "icon_id": "content_tempered_guard",
+    "item_mode": "passive"
   }
 ]

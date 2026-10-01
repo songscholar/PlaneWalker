@@ -27,12 +27,12 @@
     "content/character_runtime_profiles.json": "c1d148fee2a0ab2d79efc14aeb684c3ea4b2e6954b830a75cc8dee14058bc3ff",
     "content/characters.json": "8fd8aef62d60112cc0db8600e76e7c9ba9f9a1cbbfec7a1d007a834413ce8f3a",
     "content/curses.json": "182bab81b4739950ace61f42b669cc901a33152dae0bf3a5e89b6a0d993cc9a9",
-    "content/items.json": "768f372baffcd5dcc3d8d72ef139a788e151f777524bb864b6d9078d125fc822",
+    "content/items.json": "629cf16f94ad5783b55bc2679064bfeecf75f04ec76cc551a21eedf8411e0f25",
     "content/talents.json": "8ed24bbcf544f8aa165316ed603e5e6f72d2e8c2e915494bcc1701389f9abb13",
     "content/time_abilities.json": "33401f7d8a9fd5fdb705e51b3eb287ab8d995fe6b2f6f3049ab2c21cb9e76a15",
     "content/weapon_runtime_profiles.json": "e9d17db1458bc5b2ea5372d446c7d53c699c377a6d2d1a67316e9a7181808d40",
     "content/weapons.json": "e97d8e4aa3fa276a9058800fb0b9f5cbe497201cc066e1a0d5da3d549a1afd8a",
-    "localization/translations.csv": "e73c258267f0af5aa2548f76cd468ad160856965b2f8edf0fa122d2dd9255f2d"
+    "localization/translations.csv": "6fbf97b800cd3ee9684e0ddfaf1332b580d89de53376f4426703a1c5af38662d"
   },
   "entitlement_tag": ""
 }

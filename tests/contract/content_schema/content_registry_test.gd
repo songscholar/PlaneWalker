@@ -7,6 +7,18 @@ const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effec
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 const CharacterRuntimeProfileScript := preload("res://scripts/player/characters/character_runtime_profile.gd")
 const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
+const EXPECTED_BASE_CATEGORY_COUNTS := {
+	"character": 5,
+	"character_runtime_profile": 6,
+	"weapon": 5,
+	"weapon_runtime_profile": 7,
+	"archetype_profile": 8,
+	"time_ability": 4,
+	"item": 50,
+	"blessing": 4,
+	"curse": 6,
+	"talent": 15,
+}
 
 
 func _ready() -> void:
@@ -48,17 +60,13 @@ func _test_project_base_pack_v2(suite) -> void:
 	if report.has_blocking_errors():
 		return
 	suite.assert_equal(report.active_pack_count, 1, "project base pack is the only active pack")
-	suite.assert_equal(report.loaded_count, 80, "project base pack loads rewards, profiles, and eight Launch archetypes")
-	suite.assert_equal(report.content_count_by_category.get("character"), 5, "base pack registers five characters")
-	suite.assert_equal(report.content_count_by_category.get("character_runtime_profile"), 6, "base pack registers six milestone-aware character profiles")
-	suite.assert_equal(report.content_count_by_category.get("weapon"), 5, "base pack registers five weapons")
-	suite.assert_equal(report.content_count_by_category.get("weapon_runtime_profile"), 7, "base pack registers seven milestone-aware weapon profiles")
-	suite.assert_equal(report.content_count_by_category.get("archetype_profile"), 8, "base pack registers the exact Launch archetype catalog")
-	suite.assert_equal(report.content_count_by_category.get("time_ability"), 4, "base pack registers four time abilities")
-	suite.assert_equal(report.content_count_by_category.get("item"), 20, "base pack preserves twenty items")
-	suite.assert_equal(report.content_count_by_category.get("blessing"), 4, "base pack preserves four blessings")
-	suite.assert_equal(report.content_count_by_category.get("curse"), 6, "base pack preserves six curses")
-	suite.assert_equal(report.content_count_by_category.get("talent"), 15, "base pack registers exactly fifteen talents")
+	suite.assert_equal(report.loaded_count, _expected_base_content_total(), "project base pack count matches its exact category contract")
+	for category: String in EXPECTED_BASE_CATEGORY_COUNTS:
+		suite.assert_equal(
+			report.content_count_by_category.get(category),
+			EXPECTED_BASE_CATEGORY_COUNTS[category],
+			"base pack %s count is exact" % category
+		)
 	suite.assert_equal(report.metadata.get("activation_order"), ["base"], "base activation order is recorded")
 	suite.assert_true(registry.has_method("get_archetype_profiles"), "Registry exposes milestone-aware archetype queries")
 	suite.assert_true(registry.has_method("get_archetype_profile"), "Registry exposes archetype identity lookup")
@@ -614,7 +622,7 @@ func _test_optional_pack_isolation(suite) -> void:
 	suite.assert_true(not report.has_blocking_errors(), "invalid optional pack does not block base content")
 	suite.assert_true(report.isolated_pack_ids.has("fixture_invalid_script"), "invalid optional pack is isolated")
 	suite.assert_equal(report.active_pack_count, 1, "only base remains active")
-	suite.assert_equal(report.loaded_count, 80, "optional pack failure cannot remove base definitions")
+	suite.assert_equal(report.loaded_count, _expected_base_content_total(), "optional pack failure cannot remove base definitions")
 	suite.assert_true(registry.get_content(&"fixture_scripted_edge").is_empty(), "hostile optional entry is not indexed")
 
 
@@ -967,3 +975,10 @@ func _known_ids(definitions: Array[Dictionary]) -> Dictionary:
 	for definition: Dictionary in definitions:
 		result[str(definition.get("id", ""))] = true
 	return result
+
+
+func _expected_base_content_total() -> int:
+	var total := 0
+	for category: String in EXPECTED_BASE_CATEGORY_COUNTS:
+		total += int(EXPECTED_BASE_CATEGORY_COUNTS[category])
+	return total
