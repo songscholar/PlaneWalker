@@ -200,36 +200,77 @@ func can_restore_transaction_snapshot(value: Dictionary) -> bool:
 		restored_order.append(str(archetype_value))
 	if restored_order != expected_order:
 		return false
-	var selected: Dictionary = {}
-	for collection: String in ["items", "blessings", "curses", "talents"]:
+	var selected_categories: Dictionary = {}
+	var selected_count := 0
+	for category: String in CONTENT_COLLECTIONS:
+		var collection := str(CONTENT_COLLECTIONS[category])
 		if not value[collection] is Array:
 			return false
 		for content_id_value: Variant in value[collection]:
 			if typeof(content_id_value) != TYPE_STRING or str(content_id_value).is_empty():
 				return false
 			var content_id := str(content_id_value)
-			if selected.has(content_id):
+			if selected_categories.has(content_id):
 				return false
-			selected[content_id] = true
+			selected_categories[content_id] = category
+			selected_count += 1
+	if (value["reward_history"] as Array).size() != selected_count:
+		return false
+	var recomputed_archetypes: Dictionary = {}
+	for archetype_id: String in expected_order:
+		recomputed_archetypes[archetype_id] = 0
+	var history_ids: Dictionary = {}
+	for history_value: Variant in value["reward_history"]:
+		if not history_value is Dictionary:
+			return false
+		var history := history_value as Dictionary
+		if (
+			typeof(history.get("id")) != TYPE_STRING
+			or str(history["id"]).is_empty()
+			or typeof(history.get("category")) != TYPE_STRING
+			or typeof(history.get("archetype")) != TYPE_STRING
+			or not history.get("effects") is Dictionary
+		):
+			return false
+		var history_id := str(history["id"])
+		var history_category := str(history["category"])
+		if (
+			not CONTENT_COLLECTIONS.has(history_category)
+			or not selected_categories.has(history_id)
+			or str(selected_categories[history_id]) != history_category
+			or history_ids.has(history_id)
+		):
+			return false
+		history_ids[history_id] = true
+		var history_archetype := str(history["archetype"])
+		if not history_archetype.is_empty():
+			if not recomputed_archetypes.has(history_archetype):
+				return false
+			recomputed_archetypes[history_archetype] = (
+				int(recomputed_archetypes[history_archetype]) + 1
+			)
+	if history_ids.size() != selected_count:
+		return false
+	for content_id: String in selected_categories:
+		if not history_ids.has(content_id):
+			return false
 	var restored_archetypes := value["archetypes"] as Dictionary
 	if restored_archetypes.size() != expected_order.size():
 		return false
 	var best_id := ""
 	var best_count := 0
 	for archetype_id: String in expected_order:
-		if typeof(restored_archetypes.get(archetype_id)) != TYPE_INT:
+		if (
+			typeof(restored_archetypes.get(archetype_id)) != TYPE_INT
+			or int(restored_archetypes[archetype_id]) != int(recomputed_archetypes[archetype_id])
+		):
 			return false
 		var count := int(restored_archetypes[archetype_id])
-		if count < 0:
-			return false
 		if count > best_count:
 			best_id = archetype_id
 			best_count = count
 	if str(value["dominant_archetype"]) != best_id:
 		return false
-	for history_value: Variant in value["reward_history"]:
-		if not history_value is Dictionary:
-			return false
 	return true
 
 
