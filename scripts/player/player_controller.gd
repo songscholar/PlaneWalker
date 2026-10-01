@@ -9445,13 +9445,20 @@ func _cancel_weapon_action(reason: StringName) -> void:
 
 
 func _time_skill_context(skill_id: StringName) -> Dictionary:
+	var context := {
+		"attack": float(stats.attack) if stats != null else 0.0,
+		"equipped_time_abilities": (
+			loadout_runtime.time_ability_ids()
+			if loadout_runtime != null and loadout_runtime.has_method("time_ability_ids")
+			else []
+		),
+	}
 	match time_manager.canonical_skill_id(skill_id):
 		&"rewind":
-			return {"recorder": rewind_recorder}
+			context["recorder"] = rewind_recorder
 		&"rift":
-			return {"position": global_position}
-		_:
-			return {}
+			context["position"] = global_position
+	return context
 
 
 func _time_slot_action_id(slot_action_id: StringName) -> StringName:

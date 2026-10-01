@@ -1220,13 +1220,23 @@ func apply_invulnerability(duration: float) -> void:
 	var token := _invulnerability_token
 	_active_invulnerability_tokens[token] = true
 	_refresh_invulnerability_state()
-	_expire_invulnerability(token, duration)
+	var expiry_timer := Timer.new()
+	expiry_timer.one_shot = true
+	expiry_timer.process_mode = Node.PROCESS_MODE_PAUSABLE
+	expiry_timer.wait_time = duration
+	add_child(expiry_timer)
+	expiry_timer.timeout.connect(
+		_expire_invulnerability.bind(token, expiry_timer),
+		CONNECT_ONE_SHOT
+	)
+	expiry_timer.start()
 
 
-func _expire_invulnerability(token: int, duration: float) -> void:
-	await get_tree().create_timer(duration, false).timeout
+func _expire_invulnerability(token: int, expiry_timer: Timer) -> void:
 	_active_invulnerability_tokens.erase(token)
 	_refresh_invulnerability_state()
+	if is_instance_valid(expiry_timer):
+		expiry_timer.queue_free()
 
 
 func acquire_invulnerability_source(source_id: StringName) -> bool:

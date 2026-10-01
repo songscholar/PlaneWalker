@@ -123,6 +123,16 @@ func _test_overlapping_invulnerability(health: HealthComponent) -> void:
 	await get_tree().create_timer(0.10).timeout
 	_suite.assert_true(not health.invulnerable, "invulnerability expires after gameplay resumes")
 
+	var owner := health.get_parent()
+	owner.process_mode = Node.PROCESS_MODE_DISABLED
+	health.apply_invulnerability(0.08)
+	await get_tree().create_timer(0.10).timeout
+	_suite.assert_true(
+		not health.invulnerable,
+		"owner-disabled gameplay still advances the owner-bound expiry timer"
+	)
+	owner.process_mode = Node.PROCESS_MODE_INHERIT
+
 
 func _test_accessibility_snapshot(owner: DamageOwner, health: HealthComponent) -> void:
 	var settings := GameState.normalized_settings()
