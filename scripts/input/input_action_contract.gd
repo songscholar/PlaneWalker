@@ -38,6 +38,7 @@ const SEMANTIC_ACTIONS: Array[StringName] = [
 	&"time_slot_1",
 	&"time_slot_2",
 	&"character_skill",
+	&"active_item",
 	&"dash",
 	&"interact",
 	&"pause",

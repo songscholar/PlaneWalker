@@ -45,8 +45,11 @@ func _run() -> void:
 	var recovered: Dictionary = store.load()
 	_suite.assert_true(bool(recovered.get("ok", false)), "corrupt primary recovers")
 	_suite.assert_equal(recovered.get("code", ""), "RECOVERED", "recovery is explicit")
-	_suite.assert_equal(recovered.get("source", ""), "backup_3", "schema-three backup is recovery source")
+	_suite.assert_equal(recovered.get("source", ""), "backup_4", "schema-four backup is recovery source")
 	_suite.assert_equal(recovered.get("profile", {}), profile_a, "recovery returns last verified backup")
+	_suite.assert_equal(InputProfileStoreScript.SCHEMA_VERSION, 4, "input profiles advance exactly to schema four")
+	_suite.assert_equal(InputProfileStoreScript.profile_actions().size(), 16, "schema four has one active-item action")
+	_suite.assert_true(InputProfileStoreScript.profile_actions().has(&"active_item"), "schema four owns active_item")
 
 	_test_invalid_profiles_preserve_primary(store, profile_b)
 	_test_recovery_order_across_all_supported_schemas()
@@ -59,7 +62,7 @@ func _test_invalid_profiles_preserve_primary(store, valid_profile: Dictionary) -
 	var invalid_profiles: Array[Dictionary] = []
 
 	var forward := valid_profile.duplicate(true)
-	forward["schema_version"] = 4
+	forward["schema_version"] = 5
 	invalid_profiles.append(forward)
 
 	var unknown_action := valid_profile.duplicate(true)
@@ -93,26 +96,40 @@ func _test_recovery_order_across_all_supported_schemas() -> void:
 	store.configure(_unique_test_root())
 	DirAccess.make_dir_recursive_absolute(store.primary_path().get_base_dir())
 	var current := _default_profile()
+	var schema_three := _schema_three_profile(current)
 	var schema_two := _normalize_integral_numbers(_schema_two_fixture()) as Dictionary
 	var legacy := _legacy_profile()
 	_write_text(store.legacy_backup_path(), JSON.stringify(legacy))
 	_write_text(store.legacy_primary_path(), JSON.stringify(legacy))
 	_write_text(store.schema_two_backup_path(), JSON.stringify(schema_two))
 	_write_text(store.schema_two_primary_path(), JSON.stringify(schema_two))
+	_write_text(store.schema_three_backup_path(), JSON.stringify(schema_three))
+	_write_text(store.schema_three_primary_path(), JSON.stringify(schema_three))
 	_write_text(store.backup_path(), JSON.stringify(current))
 	_write_text(store.primary_path(), JSON.stringify(current))
 
 	var current_primary: Dictionary = store.load()
-	_suite.assert_equal(current_primary.get("source", ""), "primary", "verified v3 primary wins the recovery chain")
+	_suite.assert_equal(current_primary.get("source", ""), "primary", "verified v4 primary wins the recovery chain")
 
 	_write_text(store.primary_path(), "{")
 	var current_backup: Dictionary = store.load()
-	_suite.assert_equal(current_backup.get("source", ""), "backup_3", "verified v3 backup follows corrupt v3 primary")
-	_suite.assert_equal(current_backup.get("code", ""), "RECOVERED", "v3 backup recovery is explicit")
+	_suite.assert_equal(current_backup.get("source", ""), "backup_4", "verified v4 backup follows corrupt v4 primary")
+	_suite.assert_equal(current_backup.get("code", ""), "RECOVERED", "v4 backup recovery is explicit")
 
 	_write_text(store.backup_path(), "{")
+	var schema_three_primary: Dictionary = store.load()
+	_suite.assert_equal(schema_three_primary.get("source", ""), "schema_three_primary", "verified v3 primary follows both v4 candidates")
+	_suite.assert_equal(schema_three_primary.get("code", ""), "MIGRATION_REQUIRED", "v3 primary requires promotion")
+	_suite.assert_equal(schema_three_primary.get("profile", {}), schema_three, "v3 primary returns without mutation")
+
+	_write_text(store.schema_three_primary_path(), "{")
+	var schema_three_backup: Dictionary = store.load()
+	_suite.assert_equal(schema_three_backup.get("source", ""), "schema_three_backup", "verified v3 backup follows corrupt v3 primary")
+	_suite.assert_equal(schema_three_backup.get("code", ""), "RECOVERED_MIGRATION_REQUIRED", "v3 backup keeps recovery provenance")
+
+	_write_text(store.schema_three_backup_path(), "{")
 	var schema_two_primary: Dictionary = store.load()
-	_suite.assert_equal(schema_two_primary.get("source", ""), "schema_two_primary", "verified v2 primary follows both v3 candidates")
+	_suite.assert_equal(schema_two_primary.get("source", ""), "schema_two_primary", "verified v2 primary follows v4/v3 candidates")
 	_suite.assert_equal(schema_two_primary.get("code", ""), "MIGRATION_REQUIRED", "v2 primary requires promotion")
 	_suite.assert_equal(schema_two_primary.get("profile", {}), schema_two, "v2 primary returns without mutation")
 
@@ -148,9 +165,16 @@ func _default_profile() -> Dictionary:
 			(families[family] as Array).append(record)
 		bindings[str(action)] = families
 	return {
-		"schema_version": 3,
+		"schema_version": 4,
 		"bindings": bindings,
 	}
+
+
+func _schema_three_profile(current: Dictionary) -> Dictionary:
+	var schema_three := current.duplicate(true)
+	schema_three["schema_version"] = 3
+	schema_three["bindings"].erase("active_item")
+	return schema_three
 
 
 func _schema_two_fixture() -> Dictionary:

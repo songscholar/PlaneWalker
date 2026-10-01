@@ -22,6 +22,9 @@ class FailingStore:
 	func validate_schema_two_profile(profile: Dictionary) -> Dictionary:
 		return validator.validate_schema_two_profile(profile)
 
+	func validate_schema_three_profile(profile: Dictionary) -> Dictionary:
+		return validator.validate_schema_three_profile(profile)
+
 	func save(_profile: Dictionary) -> Dictionary:
 		return {"ok": false, "code": "IO_ERROR", "details": {"injected": true}}
 
@@ -47,16 +50,24 @@ func _run() -> void:
 	var initial: Dictionary = service.load_or_defaults()
 	_suite.assert_true(bool(initial.get("ok", false)), "missing profile creates verified defaults")
 	_suite.assert_equal(initial.get("code", ""), "DEFAULTS_CREATED", "default creation is explicit")
-	_suite.assert_equal(initial.get("profile", {}).get("schema_version"), 3, "new defaults persist semantic schema three")
+	_suite.assert_equal(initial.get("profile", {}).get("schema_version"), 4, "new defaults persist semantic schema four")
 	_suite.assert_equal(
 		service.remappable_actions(),
 		[
 			&"move_up", &"move_down", &"move_left", &"move_right",
 			&"weapon_primary", &"weapon_secondary", &"weapon_utility", &"weapon_skill",
 			&"weapon_ultimate", &"time_slot_1", &"time_slot_2", &"character_skill",
-			&"dash", &"interact", &"pause",
+			&"active_item", &"dash", &"interact", &"pause",
 		],
 		"remap data source exposes movement and semantic runtime slots only"
+	)
+	_suite.assert_equal(
+		initial.get("profile", {}).get("bindings", {}).get("active_item", {}),
+		{
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_R}],
+			"controller": [{"type": "joypad_button", "button_index": 15}],
+		},
+		"fresh schema-four defaults bind active item to R and controller button 15"
 	)
 	_assert_default_controller_grammar("defaults load")
 
@@ -111,6 +122,9 @@ func _run() -> void:
 	_assert_profile_actions_reachable("reset all")
 	_test_legacy_primary_and_backup_migrate_atomically()
 	_test_schema_two_primary_migrates_atomically()
+	_test_schema_three_primary_migrates_atomically()
+	_test_schema_three_collisions_use_deterministic_fallbacks()
+	_test_exhausted_schema_three_migration_preserves_source()
 	_test_exhausted_schema_two_migration_preserves_source()
 	_test_failed_legacy_migration_rolls_runtime_back(validation_store)
 	_suite.finish(get_tree())
@@ -131,6 +145,7 @@ func _assert_default_controller_grammar(label: String) -> void:
 		&"time_slot_1": ["button:9"],
 		&"time_slot_2": ["button:10"],
 		&"character_skill": ["button:8"],
+		&"active_item": ["button:15"],
 		&"interact": ["button:0"],
 		&"pause": ["button:6"],
 	}
@@ -168,7 +183,7 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 	var migrated: Dictionary = service.load_or_defaults()
 	_suite.assert_true(bool(migrated.get("ok", false)), "legacy primary migrates through the production load chain")
 	_suite.assert_equal(migrated.get("code", ""), "MIGRATED", "legacy primary migration is explicit")
-	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 3, "migration persists schema three")
+	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 4, "migration persists schema four")
 	_suite.assert_equal(
 		_controller_binding_ids(&"weapon_primary"),
 		["button:2", "axis:5:1"],
@@ -189,6 +204,11 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 		["button:15"],
 		"schema one reaches schema three through a complete schema-two profile before collision selection"
 	)
+	_suite.assert_equal(
+		_controller_binding_ids(&"active_item"),
+		["button:16"],
+		"schema one reaches schema four after character-skill ownership is finalized"
+	)
 	for legacy_action: StringName in [
 		&"attack", &"heavy_attack", &"ranged_attack",
 		&"time_stop", &"time_rewind", &"time_rift", &"time_accelerate",
@@ -199,7 +219,7 @@ func _test_legacy_primary_and_backup_migrate_atomically() -> void:
 			"schema two deactivates legacy runtime binding %s" % legacy_action
 		)
 	var persisted: Dictionary = store.load()
-	_suite.assert_equal(persisted.get("source", ""), "primary", "migrated schema three becomes authoritative")
+	_suite.assert_equal(persisted.get("source", ""), "primary", "migrated schema four becomes authoritative")
 	_suite.assert_equal(persisted.get("profile", {}), migrated.get("profile", {}), "persisted chained migration matches applied profile")
 	_suite.assert_true(FileAccess.file_exists(store.legacy_primary_path()), "legacy primary remains as a rollback point")
 
@@ -231,7 +251,7 @@ func _test_schema_two_primary_migrates_atomically() -> void:
 	_suite.assert_true(bool(migrated.get("ok", false)), "schema-two primary migrates through the production load chain")
 	_suite.assert_equal(migrated.get("code", ""), "MIGRATED", "schema-two promotion is explicit")
 	_suite.assert_equal(migrated.get("source", ""), "schema_two_primary", "schema-two provenance is retained")
-	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 3, "schema-two promotion persists schema three")
+	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 4, "schema-two promotion persists schema four")
 	_suite.assert_equal(
 		migrated.get("profile", {}).get("bindings", {}).get("character_skill", {}),
 		{
@@ -240,14 +260,133 @@ func _test_schema_two_primary_migrates_atomically() -> void:
 		},
 		"schema-two promotion adds the fresh character binding"
 	)
+	_suite.assert_equal(
+		migrated.get("profile", {}).get("bindings", {}).get("active_item", {}),
+		{
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_R}],
+			"controller": [{"type": "joypad_button", "button_index": 15}],
+		},
+		"schema-two promotion then adds the fresh active-item binding"
+	)
 	for action_value: Variant in source["bindings"].keys():
 		_suite.assert_equal(
 			migrated["profile"]["bindings"][action_value],
 			source["bindings"][action_value],
 			"schema-two promotion preserves %s binding records" % action_value
 		)
-	_suite.assert_true(FileAccess.file_exists(store.primary_path()), "successful promotion creates the v3 primary")
+	_suite.assert_true(FileAccess.file_exists(store.primary_path()), "successful promotion creates the v4 primary")
 	_suite.assert_true(FileAccess.file_exists(store.schema_two_primary_path()), "successful promotion preserves the verified v2 rollback source")
+
+
+func _test_schema_three_primary_migrates_atomically() -> void:
+	var root := _unique_test_root()
+	var store = InputProfileStoreScript.new()
+	store.configure(root)
+	DirAccess.make_dir_recursive_absolute(root)
+	var source := _schema_three_profile_from_project_settings()
+	var original := source.duplicate(true)
+	_write_text(store.schema_three_primary_path(), JSON.stringify(source))
+
+	var service = InputRemapServiceScript.new()
+	service.configure(root)
+	var migrated: Dictionary = service.load_or_defaults()
+	_suite.assert_true(bool(migrated.get("ok", false)), "schema-three primary migrates through the production load chain")
+	_suite.assert_equal(migrated.get("code", ""), "MIGRATED", "schema-three promotion is explicit")
+	_suite.assert_equal(migrated.get("source", ""), "schema_three_primary", "schema-three provenance is retained")
+	_suite.assert_equal(migrated.get("profile", {}).get("schema_version"), 4, "schema-three promotion persists schema four")
+	_suite.assert_equal(
+		migrated.get("profile", {}).get("bindings", {}).get("active_item", {}),
+		{
+			"keyboard_mouse": [{"type": "key", "physical_keycode": KEY_R}],
+			"controller": [{"type": "joypad_button", "button_index": 15}],
+		},
+		"fresh schema-four migration uses R and controller button 15"
+	)
+	for action_value: Variant in source["bindings"].keys():
+		_suite.assert_equal(
+			migrated["profile"]["bindings"][action_value],
+			source["bindings"][action_value],
+			"schema-three promotion preserves %s binding records" % action_value
+		)
+	_suite.assert_equal(source, original, "successful schema-three migration never mutates its source")
+	_suite.assert_true(FileAccess.file_exists(store.primary_path()), "schema-three promotion creates the v4 primary")
+	_suite.assert_true(FileAccess.file_exists(store.schema_three_primary_path()), "schema-three rollback source remains intact")
+
+
+func _test_schema_three_collisions_use_deterministic_fallbacks() -> void:
+	var root := _unique_test_root()
+	var store = InputProfileStoreScript.new()
+	store.configure(root)
+	DirAccess.make_dir_recursive_absolute(root)
+	var source := _schema_three_profile_from_project_settings()
+	source["bindings"]["weapon_utility"]["keyboard_mouse"] = [{
+		"type": "key",
+		"physical_keycode": KEY_R,
+	}]
+	source["bindings"]["weapon_ultimate"]["controller"] = [{
+		"type": "joypad_button",
+		"button_index": 15,
+	}]
+	_write_text(store.schema_three_primary_path(), JSON.stringify(source))
+
+	var service = InputRemapServiceScript.new()
+	service.configure(root)
+	var migrated: Dictionary = service.load_or_defaults()
+	_suite.assert_equal(
+		migrated.get("profile", {}).get("bindings", {}).get("active_item", {}).get("keyboard_mouse", []),
+		[{"type": "key", "physical_keycode": KEY_SPACE}],
+		"occupied R falls back to the lowest free printable physical keycode"
+	)
+	_suite.assert_equal(
+		migrated.get("profile", {}).get("bindings", {}).get("active_item", {}).get("controller", []),
+		[{"type": "joypad_button", "button_index": 7}],
+		"occupied button 15 falls back through 0..31 in ascending order"
+	)
+
+
+func _test_exhausted_schema_three_migration_preserves_source() -> void:
+	_test_exhausted_schema_three_family("keyboard_mouse")
+	_test_exhausted_schema_three_family("controller")
+
+
+func _test_exhausted_schema_three_family(family: String) -> void:
+	var root := _unique_test_root()
+	var store = InputProfileStoreScript.new()
+	store.configure(root)
+	DirAccess.make_dir_recursive_absolute(root)
+	var source := _schema_three_profile_from_project_settings()
+	var actions: Array = source["bindings"].keys()
+	for action_value: Variant in actions:
+		source["bindings"][action_value][family] = []
+	var candidate_index := 0
+	if family == "keyboard_mouse":
+		for keycode: int in range(KEY_SPACE, KEY_ASCIITILDE + 1):
+			var action_value: Variant = actions[candidate_index % actions.size()]
+			source["bindings"][action_value][family].append({
+				"type": "key",
+				"physical_keycode": keycode,
+			})
+			candidate_index += 1
+	else:
+		for button_index: int in range(32):
+			var action_value: Variant = actions[candidate_index % actions.size()]
+			source["bindings"][action_value][family].append({
+				"type": "joypad_button",
+				"button_index": button_index,
+			})
+			candidate_index += 1
+	var serialized := JSON.stringify(source)
+	_write_text(store.schema_three_primary_path(), serialized)
+
+	var service = InputRemapServiceScript.new()
+	service.configure(root)
+	var runtime_before := service.snapshot_profile()
+	var rejected: Dictionary = service.load_or_defaults()
+	_suite.assert_equal(rejected.get("code", ""), "NO_REACHABLE_ACTIVE_ITEM", "%s exhaustion rejects schema-four promotion" % family)
+	_suite.assert_equal(rejected.get("details", {}).get("family", ""), family, "failure identifies the exhausted family")
+	_suite.assert_equal(service.snapshot_profile(), runtime_before, "failed schema-four promotion leaves runtime bindings untouched")
+	_suite.assert_equal(FileAccess.get_file_as_string(store.schema_three_primary_path()), serialized, "failed schema-four promotion preserves the v3 source byte-for-byte")
+	_suite.assert_true(not FileAccess.file_exists(store.primary_path()), "failed schema-four promotion does not create a partial v4 primary")
 
 
 func _test_exhausted_schema_two_migration_preserves_source() -> void:
@@ -316,6 +455,25 @@ func _legacy_profile_from_project_settings() -> Dictionary:
 			(families[family] as Array).append(record)
 		bindings[str(action)] = families
 	return {"schema_version": 1, "bindings": bindings}
+
+
+func _schema_three_profile_from_project_settings() -> Dictionary:
+	var bindings := {}
+	for action: StringName in InputProfileStoreScript.schema_three_profile_actions():
+		var action_setting: Dictionary = ProjectSettings.get_setting("input/%s" % action, {})
+		var families := {"keyboard_mouse": [], "controller": []}
+		for event_value: Variant in action_setting.get("events", []):
+			if not event_value is InputEvent:
+				continue
+			var event := (event_value as InputEvent).duplicate(true) as InputEvent
+			event.device = -1
+			var record: Dictionary = InputBindingCodecScript.encode(event)
+			if record.is_empty():
+				continue
+			var family := InputBindingCodecScript.binding_family(record)
+			(families[family] as Array).append(record)
+		bindings[str(action)] = families
+	return {"schema_version": 3, "bindings": bindings}
 
 
 func _restore_legacy_runtime_defaults() -> void:

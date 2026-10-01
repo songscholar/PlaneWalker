@@ -60,7 +60,12 @@ func _run() -> void:
 		&"time_slot_1": ["button:9"],
 		&"time_slot_2": ["button:10"],
 		&"character_skill": ["button:8"],
+		&"active_item": ["button:15"],
 	}
+	_suite.assert_true(
+		InputActionContractScript.semantic_actions().has(&"active_item"),
+		"active item is a first-class semantic action"
+	)
 	for action: StringName in expected_controller_bindings:
 		_suite.assert_equal(
 			InputActionContractScript.controller_binding_ids(action),

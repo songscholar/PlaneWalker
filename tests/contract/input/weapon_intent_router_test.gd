@@ -259,6 +259,11 @@ func _test_hold_and_toggle_modes_emit_equivalent_edges() -> void:
 		{"id": &"character_skill", "edge": &"pressed", "held_frames": 0},
 		"character skill participates in the same semantic edge grammar"
 	)
+	_suite.assert_equal(
+		WeaponIntentRouterScript.new().normalize_edge(&"active_item", &"pressed", 0, &"press"),
+		{"id": &"active_item", "edge": &"pressed", "held_frames": 0},
+		"active item participates in the same semantic edge grammar"
+	)
 
 
 func _test_press_mode_is_stateless() -> void:

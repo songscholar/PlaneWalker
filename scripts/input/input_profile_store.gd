@@ -4,18 +4,39 @@ extends RefCounted
 const InputActionContractScript := preload("res://scripts/input/input_action_contract.gd")
 const InputBindingCodecScript := preload("res://scripts/input/input_binding_codec.gd")
 
-const SCHEMA_VERSION := 3
+const SCHEMA_VERSION := 4
+const SCHEMA_THREE_VERSION := 3
 const SCHEMA_TWO_VERSION := 2
 const LEGACY_SCHEMA_VERSION := 1
-const PRIMARY_FILE := "input_profile_v3.json"
+const PRIMARY_FILE := "input_profile_v4.json"
 const PENDING_FILE := "pending.tmp"
-const BACKUP_FILE := "backup_3.json"
+const BACKUP_FILE := "backup_4.json"
+const SCHEMA_THREE_PRIMARY_FILE := "input_profile_v3.json"
+const SCHEMA_THREE_BACKUP_FILE := "backup_3.json"
 const SCHEMA_TWO_PRIMARY_FILE := "input_profile_v2.json"
 const SCHEMA_TWO_BACKUP_FILE := "backup_2.json"
 const LEGACY_PRIMARY_FILE := "input_profile_v1.json"
 const LEGACY_BACKUP_FILE := "backup_1.json"
 const BINDING_FAMILIES: Array[String] = ["keyboard_mouse", "controller"]
 const PROFILE_ACTIONS: Array[StringName] = [
+	&"move_up",
+	&"move_down",
+	&"move_left",
+	&"move_right",
+	&"weapon_primary",
+	&"weapon_secondary",
+	&"weapon_utility",
+	&"weapon_skill",
+	&"weapon_ultimate",
+	&"time_slot_1",
+	&"time_slot_2",
+	&"character_skill",
+	&"active_item",
+	&"dash",
+	&"interact",
+	&"pause",
+]
+const SCHEMA_THREE_PROFILE_ACTIONS: Array[StringName] = [
 	&"move_up",
 	&"move_down",
 	&"move_left",
@@ -68,6 +89,14 @@ func backup_path() -> String:
 	return _path(BACKUP_FILE)
 
 
+func schema_three_primary_path() -> String:
+	return _path(SCHEMA_THREE_PRIMARY_FILE)
+
+
+func schema_three_backup_path() -> String:
+	return _path(SCHEMA_THREE_BACKUP_FILE)
+
+
 func schema_two_primary_path() -> String:
 	return _path(SCHEMA_TWO_PRIMARY_FILE)
 
@@ -86,6 +115,10 @@ func legacy_backup_path() -> String:
 
 static func profile_actions() -> Array[StringName]:
 	return PROFILE_ACTIONS.duplicate()
+
+
+static func schema_three_profile_actions() -> Array[StringName]:
+	return SCHEMA_THREE_PROFILE_ACTIONS.duplicate()
 
 
 static func schema_two_profile_actions() -> Array[StringName]:
@@ -153,7 +186,7 @@ func load() -> Dictionary:
 	var primary_result := _load_candidate(primary_path(), "primary", SCHEMA_VERSION)
 	if bool(primary_result["ok"]):
 		return primary_result
-	var backup_result := _load_candidate(backup_path(), "backup_3", SCHEMA_VERSION)
+	var backup_result := _load_candidate(backup_path(), "backup_4", SCHEMA_VERSION)
 	if bool(backup_result["ok"]):
 		backup_result["code"] = "RECOVERED"
 		backup_result["diagnostics"] = [{
@@ -161,6 +194,27 @@ func load() -> Dictionary:
 			"code": primary_result.get("code", "CORRUPT"),
 		}]
 		return backup_result
+
+	var schema_three_primary_result := _load_candidate(
+		schema_three_primary_path(),
+		"schema_three_primary",
+		SCHEMA_THREE_VERSION
+	)
+	if bool(schema_three_primary_result["ok"]):
+		schema_three_primary_result["code"] = "MIGRATION_REQUIRED"
+		return schema_three_primary_result
+	var schema_three_backup_result := _load_candidate(
+		schema_three_backup_path(),
+		"schema_three_backup",
+		SCHEMA_THREE_VERSION
+	)
+	if bool(schema_three_backup_result["ok"]):
+		schema_three_backup_result["code"] = "RECOVERED_MIGRATION_REQUIRED"
+		schema_three_backup_result["diagnostics"] = [{
+			"candidate": "schema_three_primary",
+			"code": schema_three_primary_result.get("code", "CORRUPT"),
+		}]
+		return schema_three_backup_result
 
 	var schema_two_primary_result := _load_candidate(
 		schema_two_primary_path(),
@@ -207,6 +261,8 @@ func load() -> Dictionary:
 	if (
 		primary_result.get("code") == "NOT_FOUND"
 		and backup_result.get("code") == "NOT_FOUND"
+		and schema_three_primary_result.get("code") == "NOT_FOUND"
+		and schema_three_backup_result.get("code") == "NOT_FOUND"
 		and schema_two_primary_result.get("code") == "NOT_FOUND"
 		and schema_two_backup_result.get("code") == "NOT_FOUND"
 		and legacy_primary_result.get("code") == "NOT_FOUND"
@@ -215,7 +271,9 @@ func load() -> Dictionary:
 		return _failure("NOT_FOUND")
 	return _failure("CORRUPT", {
 		"primary": primary_result,
-		"backup_3": backup_result,
+		"backup_4": backup_result,
+		"schema_three_primary": schema_three_primary_result,
+		"schema_three_backup": schema_three_backup_result,
 		"schema_two_primary": schema_two_primary_result,
 		"schema_two_backup": schema_two_backup_result,
 		"legacy_primary": legacy_primary_result,
@@ -225,6 +283,14 @@ func load() -> Dictionary:
 
 func validate_profile(profile: Dictionary) -> Dictionary:
 	return _validate_profile_for_actions(profile, SCHEMA_VERSION, PROFILE_ACTIONS)
+
+
+func validate_schema_three_profile(profile: Dictionary) -> Dictionary:
+	return _validate_profile_for_actions(
+		profile,
+		SCHEMA_THREE_VERSION,
+		SCHEMA_THREE_PROFILE_ACTIONS
+	)
 
 
 func validate_schema_two_profile(profile: Dictionary) -> Dictionary:
@@ -336,6 +402,8 @@ func _load_candidate(path: String, source: String, expected_schema_version: int)
 			validation = _validate_legacy_profile(profile)
 		SCHEMA_TWO_VERSION:
 			validation = validate_schema_two_profile(profile)
+		SCHEMA_THREE_VERSION:
+			validation = validate_schema_three_profile(profile)
 		_:
 			validation = validate_profile(profile)
 	if not bool(validation["ok"]):

@@ -204,10 +204,10 @@ func snapshot_profile() -> Dictionary:
 
 func _migrate_loaded_profile(loaded: Dictionary, source_profile: Dictionary) -> Dictionary:
 	var router = WeaponIntentRouterScript.new()
-	var semantic_profile := source_profile.duplicate(true)
+	var schema_three_profile := source_profile.duplicate(true)
 	var source_schema := int(source_profile.get("schema_version", 0))
 	if source_schema == WeaponIntentRouterScript.LEGACY_SCHEMA_VERSION:
-		semantic_profile = router.migrate_legacy_profile_to_schema_two(source_profile)
+		var semantic_profile: Dictionary = router.migrate_legacy_profile_to_schema_two(source_profile)
 		if semantic_profile.is_empty():
 			return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
 		var semantic_bindings: Dictionary = semantic_profile.get("bindings", {})
@@ -223,11 +223,32 @@ func _migrate_loaded_profile(loaded: Dictionary, source_profile: Dictionary) -> 
 				"source": loaded.get("source", "unknown"),
 				"cause": semantic_validation,
 			})
-	elif source_schema != InputProfileStoreScript.SCHEMA_TWO_VERSION:
+		schema_three_profile = router.migrate_profile(semantic_profile)
+	elif source_schema == InputProfileStoreScript.SCHEMA_TWO_VERSION:
+		schema_three_profile = router.migrate_profile(source_profile)
+	elif source_schema == InputProfileStoreScript.SCHEMA_THREE_VERSION:
+		var source_validation: Dictionary = _store.validate_schema_three_profile(source_profile)
+		if not bool(source_validation.get("ok", false)):
+			return _failure("MIGRATION_FAILED", {
+				"source": loaded.get("source", "unknown"),
+				"cause": source_validation,
+			})
+	else:
 		return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
 
-	var migrated: Dictionary = router.migrate_profile(semantic_profile)
-	if migrated.get("code", "") == "NO_REACHABLE_CHARACTER_SKILL":
+	if schema_three_profile.get("code", "") == "NO_REACHABLE_CHARACTER_SKILL":
+		return schema_three_profile.duplicate(true)
+	if schema_three_profile.is_empty() or schema_three_profile.has("ok"):
+		return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
+	var schema_three_validation: Dictionary = _store.validate_schema_three_profile(schema_three_profile)
+	if not bool(schema_three_validation.get("ok", false)):
+		return _failure("MIGRATION_FAILED", {
+			"source": loaded.get("source", "unknown"),
+			"cause": schema_three_validation,
+		})
+
+	var migrated := _migrate_schema_three_to_four(schema_three_profile)
+	if migrated.get("code", "") == "NO_REACHABLE_ACTIVE_ITEM":
 		return migrated.duplicate(true)
 	if migrated.is_empty() or migrated.has("ok"):
 		return _failure("MIGRATION_FAILED", {"source": loaded.get("source", "unknown")})
@@ -255,6 +276,75 @@ func _migrate_loaded_profile(loaded: Dictionary, source_profile: Dictionary) -> 
 		),
 		"profile": migrated.duplicate(true),
 		"source": loaded.get("source", "legacy_primary"),
+	}
+
+
+func _migrate_schema_three_to_four(source_profile: Dictionary) -> Dictionary:
+	var source_bindings: Dictionary = source_profile.get("bindings", {})
+	if source_bindings.has("active_item") or source_bindings.has(&"active_item"):
+		return {}
+	var used_keys := _used_physical_keycodes(source_bindings)
+	var used_buttons := _used_joypad_buttons(source_bindings)
+	var keycode := _available_binding_id(used_keys, KEY_R, KEY_SPACE, KEY_ASCIITILDE + 1)
+	if keycode < 0:
+		return _active_item_migration_failure("keyboard_mouse")
+	var button_index := _available_binding_id(used_buttons, 15, 0, 32)
+	if button_index < 0:
+		return _active_item_migration_failure("controller")
+
+	var migrated_bindings := source_bindings.duplicate(true)
+	migrated_bindings["active_item"] = {
+		"keyboard_mouse": [{"type": "key", "physical_keycode": keycode}],
+		"controller": [{"type": "joypad_button", "button_index": button_index}],
+	}
+	return {
+		"schema_version": InputProfileStoreScript.SCHEMA_VERSION,
+		"bindings": migrated_bindings,
+	}
+
+
+func _used_physical_keycodes(bindings: Dictionary) -> Dictionary:
+	var used := {}
+	for binding_value: Variant in bindings.values():
+		for record_value: Variant in _all_binding_records(binding_value):
+			if record_value is Dictionary and str((record_value as Dictionary).get("type", "")) == "key":
+				used[int((record_value as Dictionary).get("physical_keycode", -1))] = true
+	return used
+
+
+func _used_joypad_buttons(bindings: Dictionary) -> Dictionary:
+	var used := {}
+	for binding_value: Variant in bindings.values():
+		for record_value: Variant in _all_binding_records(binding_value):
+			if record_value is Dictionary and str((record_value as Dictionary).get("type", "")) == "joypad_button":
+				used[int((record_value as Dictionary).get("button_index", -1))] = true
+	return used
+
+
+func _all_binding_records(binding_value: Variant) -> Array:
+	var records: Array = []
+	if not binding_value is Dictionary:
+		return records
+	for family_value: Variant in (binding_value as Dictionary).values():
+		if family_value is Array:
+			records.append_array(family_value as Array)
+	return records
+
+
+func _available_binding_id(used: Dictionary, preferred: int, start: int, end: int) -> int:
+	if not used.has(preferred):
+		return preferred
+	for candidate: int in range(start, end):
+		if not used.has(candidate):
+			return candidate
+	return -1
+
+
+func _active_item_migration_failure(family: String) -> Dictionary:
+	return {
+		"ok": false,
+		"code": "NO_REACHABLE_ACTIVE_ITEM",
+		"details": {"family": family},
 	}
 
 
