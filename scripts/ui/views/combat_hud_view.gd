@@ -119,7 +119,7 @@ func _render_state(state: Dictionary) -> void:
 
 	var build := state["build"] as Dictionary
 	var archetype := str(build["dominant_archetype"])
-	build_label.text = tr("HUD_BUILD_UNFORMED") if archetype.is_empty() else tr("HUD_BUILD_FMT") % tr("ARCHETYPE_" + archetype.to_upper())
+	build_label.text = tr("HUD_BUILD_UNFORMED") if archetype.is_empty() else tr("HUD_BUILD_FMT") % tr("ARCHETYPE_" + archetype.to_upper() + "_NAME")
 
 	var boss: Variant = state["boss"]
 	boss_panel.visible = boss != null

@@ -3,6 +3,22 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 
+const M1_ARCHETYPE_SCORES := {
+	"freeze_burst": 1,
+	"rewind_echo": 0,
+	"accelerated_combo": 0,
+}
+const LAUNCH_ARCHETYPE_SCORES := {
+	"freeze_burst": 1,
+	"rewind_echo": 0,
+	"rift_trap": 0,
+	"accelerated_combo": 0,
+	"low_hp_void": 0,
+	"perfect_guard": 0,
+	"piercing_barrage": 0,
+	"echo_legion": 0,
+}
+
 var _suite
 
 
@@ -14,15 +30,21 @@ func _run() -> void:
 	_suite = TestSuiteScript.new()
 
 	var combat := _load_json("res://tests/fixtures/ui/hud_combat.json")
+	_set_build_domain(combat, M1_ARCHETYPE_SCORES, "freeze_burst")
 	_suite.assert_true(not combat.is_empty(), "combat fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(combat).ok, "combat fixture validates")
 	_suite.assert_equal(RunViewStateScript.SCHEMA_VERSION, 4, "character union uses view-state schema 4")
 
 	var low_hp := _load_json("res://tests/fixtures/ui/hud_low_hp.json")
+	_set_build_domain(low_hp, M1_ARCHETYPE_SCORES, "freeze_burst")
 	_suite.assert_true(not low_hp.is_empty(), "low hp fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(low_hp).ok, "low hp fixture validates")
 
 	var boss := _load_json("res://tests/fixtures/ui/hud_boss.json")
+	var boss_scores := M1_ARCHETYPE_SCORES.duplicate(true)
+	boss_scores["freeze_burst"] = 3
+	boss_scores["rewind_echo"] = 1
+	_set_build_domain(boss, boss_scores, "freeze_burst")
 	_suite.assert_true(not boss.is_empty(), "boss fixture loads")
 	_suite.assert_true(RunViewStateScript.validate(boss).ok, "boss fixture validates")
 	_assert_slot_order(combat, ["stop", "rift"], ["time_stop", "time_rift"], "combat fixture")
@@ -284,9 +306,37 @@ func _run() -> void:
 	invalid_build_entry["build"]["items"] = [""]
 	_suite.assert_true(not RunViewStateScript.validate(invalid_build_entry).ok, "empty build ids are rejected")
 
+	var launch_build := combat.duplicate(true)
+	_set_build_domain(launch_build, LAUNCH_ARCHETYPE_SCORES, "freeze_burst")
+	_suite.assert_true(RunViewStateScript.validate(launch_build).ok, "exact eight-key Launch archetype domain validates")
+
+	var missing_archetype_score := combat.duplicate(true)
+	missing_archetype_score["build"]["archetype_scores"].erase("accelerated_combo")
+	_suite.assert_true(not RunViewStateScript.validate(missing_archetype_score).ok, "incomplete M1 archetype score domain is rejected")
+
+	var unknown_archetype_score := combat.duplicate(true)
+	unknown_archetype_score["build"]["archetype_scores"]["time_stop_burst"] = 1
+	_suite.assert_true(not RunViewStateScript.validate(unknown_archetype_score).ok, "unknown archetype score keys are rejected")
+
+	var negative_archetype_score := combat.duplicate(true)
+	negative_archetype_score["build"]["archetype_scores"]["freeze_burst"] = -1
+	_suite.assert_true(not RunViewStateScript.validate(negative_archetype_score).ok, "negative archetype scores are rejected")
+
 	var invalid_archetype_score := combat.duplicate(true)
-	invalid_archetype_score["build"]["archetype_scores"]["time_stop_burst"] = INF
+	invalid_archetype_score["build"]["archetype_scores"]["freeze_burst"] = INF
 	_suite.assert_true(not RunViewStateScript.validate(invalid_archetype_score).ok, "non-finite archetype scores are rejected")
+
+	var nan_archetype_score := combat.duplicate(true)
+	nan_archetype_score["build"]["archetype_scores"]["freeze_burst"] = NAN
+	_suite.assert_true(not RunViewStateScript.validate(nan_archetype_score).ok, "NaN archetype scores are rejected")
+
+	var outside_dominant := combat.duplicate(true)
+	outside_dominant["build"]["dominant_archetype"] = "rift_trap"
+	_suite.assert_true(not RunViewStateScript.validate(outside_dominant).ok, "dominant archetype outside the score map is rejected")
+
+	var internal_dominant := combat.duplicate(true)
+	internal_dominant["build"]["dominant_archetype"] = "time_stop_burst"
+	_suite.assert_true(not RunViewStateScript.validate(internal_dominant).ok, "internal mechanic tag cannot become dominant archetype")
 
 	var copied := RunViewStateScript.copy_of(boss)
 	_suite.assert_true(not copied.is_empty(), "valid time-slot state can be copied")
@@ -400,6 +450,13 @@ func _character_state(
 		"secondary_id": secondary_id,
 		"secondary_value": secondary_value,
 	}
+
+
+func _set_build_domain(state: Dictionary, scores: Dictionary, dominant_archetype: String) -> void:
+	if state.is_empty() or not state.get("build") is Dictionary:
+		return
+	state["build"]["archetype_scores"] = scores.duplicate(true)
+	state["build"]["dominant_archetype"] = dominant_archetype
 
 
 func _load_json(path: String) -> Dictionary:

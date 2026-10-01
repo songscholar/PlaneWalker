@@ -5,6 +5,22 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 const RunViewStateProjectorScript := preload("res://scripts/application/run_view_state_projector.gd")
 
+const M1_ARCHETYPE_SCORES := {
+	"freeze_burst": 2,
+	"rewind_echo": 0,
+	"accelerated_combo": 0,
+}
+const LAUNCH_ARCHETYPE_SCORES := {
+	"freeze_burst": 2,
+	"rewind_echo": 0,
+	"rift_trap": 0,
+	"accelerated_combo": 0,
+	"low_hp_void": 0,
+	"perfect_guard": 0,
+	"piercing_barrage": 0,
+	"echo_legion": 0,
+}
+
 
 func _ready() -> void:
 	call_deferred("_run")
@@ -17,6 +33,7 @@ func _run() -> void:
 	_test_weapon_presentations_project_to_union(suite)
 	_test_phase_flags_and_optional_payloads(suite)
 	_test_new_run_resets_view_revision(suite)
+	_test_archetype_projection_contract(suite)
 	_test_invalid_inputs_are_rejected(suite)
 	suite.finish(get_tree())
 
@@ -34,7 +51,7 @@ func _test_live_view_revision_is_independent(suite) -> void:
 	suite.assert_equal(first_view["revision"], 0, "first view revision begins at zero")
 	suite.assert_equal(first_view["phase"], "COMBAT_ACTIVE", "numeric run phase maps to the view contract")
 	suite.assert_equal(first_view["room"]["index"], 1, "authoritative room index projects")
-	suite.assert_equal(first_view["build"]["archetype_scores"], {"time_stop_burst": 2}, "build archetypes map to view scores")
+	suite.assert_equal(first_view["build"]["archetype_scores"], M1_ARCHETYPE_SCORES, "M1 build archetypes map to the exact view-score domain")
 	suite.assert_equal(first_view["character_state"]["character_id"], "time_lord", "character presentation projects")
 	suite.assert_equal(first_view["character_state"]["status_id"], "primer", "Time Lord Primer projects as a short status")
 
@@ -411,6 +428,70 @@ func _test_new_run_resets_view_revision(suite) -> void:
 	suite.assert_equal(projector.latest_view_state()["run_id"], "view-run-two", "latest state belongs to the new run")
 
 
+func _test_archetype_projection_contract(suite) -> void:
+	var launch_projector = RunViewStateProjectorScript.new()
+	var launch := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	launch["run_id"] = "launch-archetype-view"
+	launch["config"]["milestone"] = "LAUNCH"
+	launch["build"]["archetypes"] = LAUNCH_ARCHETYPE_SCORES.duplicate(true)
+	var launch_result = launch_projector.project(
+		launch,
+		_room_definition(1, "combat"),
+		_player_snapshot(),
+		null,
+		1,
+		{}
+	)
+	suite.assert_true(launch_result.ok, "Launch authoritative build projects")
+	if launch_result.ok:
+		suite.assert_equal(
+			launch_result.context["view_state"]["build"]["archetype_scores"],
+			LAUNCH_ARCHETYPE_SCORES,
+			"Launch projection preserves exactly the eight-key score domain"
+		)
+
+	var invalid_cases: Array[Dictionary] = []
+	var unknown_score := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	unknown_score["build"]["archetypes"]["time_stop_burst"] = 1
+	invalid_cases.append({"state": unknown_score, "label": "unknown score key"})
+	var negative_score := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	negative_score["build"]["archetypes"]["freeze_burst"] = -1
+	invalid_cases.append({"state": negative_score, "label": "negative score"})
+	var infinite_score := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	infinite_score["build"]["archetypes"]["freeze_burst"] = INF
+	invalid_cases.append({"state": infinite_score, "label": "infinite score"})
+	var nan_score := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	nan_score["build"]["archetypes"]["freeze_burst"] = NAN
+	invalid_cases.append({"state": nan_score, "label": "NaN score"})
+	var outside_dominant := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	outside_dominant["build"]["dominant_archetype"] = "rift_trap"
+	invalid_cases.append({"state": outside_dominant, "label": "dominant archetype outside score domain"})
+	var internal_dominant := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	internal_dominant["build"]["dominant_archetype"] = "time_stop_burst"
+	invalid_cases.append({"state": internal_dominant, "label": "internal mechanic dominant tag"})
+	var launch_with_m1_domain := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	launch_with_m1_domain["config"]["milestone"] = "LAUNCH"
+	invalid_cases.append({"state": launch_with_m1_domain, "label": "Launch milestone with M1 score domain"})
+
+	for invalid_case: Dictionary in invalid_cases:
+		_assert_invalid_build_projection(suite, invalid_case["state"] as Dictionary, str(invalid_case["label"]))
+
+
+func _assert_invalid_build_projection(suite, authoritative: Dictionary, label: String) -> void:
+	var projector = RunViewStateProjectorScript.new()
+	var baseline := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	baseline["run_id"] = "baseline-%s" % label.replace(" ", "-")
+	var valid = projector.project(baseline, _room_definition(1, "combat"), _player_snapshot(), null, 1, {})
+	suite.assert_true(valid.ok, "%s fixture starts from a valid projection" % label)
+	if not valid.ok:
+		return
+	var latest_before: Dictionary = projector.latest_view_state()
+	authoritative["run_id"] = baseline["run_id"]
+	var rejected = projector.project(authoritative, _room_definition(1, "combat"), _player_snapshot(), null, 2, {})
+	suite.assert_equal(rejected.code, &"INVALID_ARGUMENT", "%s is rejected at the projection boundary" % label)
+	suite.assert_equal(projector.latest_view_state(), latest_before, "%s cannot overwrite the latest valid view" % label)
+
+
 func _test_invalid_inputs_are_rejected(suite) -> void:
 	var projector = RunViewStateProjectorScript.new()
 	var missing_run_id := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
@@ -418,6 +499,16 @@ func _test_invalid_inputs_are_rejected(suite) -> void:
 	var invalid_run = projector.project(missing_run_id, _room_definition(1, "combat"), _player_snapshot(), null, 0, {})
 	suite.assert_equal(invalid_run.code, &"INVALID_ARGUMENT", "empty run id is rejected")
 	suite.assert_equal(invalid_run.context.get("field", ""), "authoritative.run_id", "invalid run reports its field")
+
+	var missing_milestone := _authoritative(RunPhaseScript.Value.COMBAT_ACTIVE)
+	missing_milestone["config"].erase("milestone")
+	var invalid_milestone = projector.project(missing_milestone, _room_definition(1, "combat"), _player_snapshot(), null, 0, {})
+	suite.assert_equal(invalid_milestone.code, &"INVALID_ARGUMENT", "missing authoritative milestone is rejected")
+	suite.assert_equal(
+		invalid_milestone.context.get("field", ""),
+		"authoritative.config.milestone",
+		"missing milestone reports its exact field"
+	)
 
 	var invalid_player := _player_snapshot()
 	invalid_player["hp"] = 999.0
@@ -497,13 +588,13 @@ func _authoritative(phase: int) -> Dictionary:
 			"curses": [],
 			"talents": [],
 			"reward_history": [],
-			"archetypes": {"time_stop_burst": 2},
-			"dominant_archetype": "time_stop_burst",
+			"archetypes": M1_ARCHETYPE_SCORES.duplicate(true),
+			"dominant_archetype": "freeze_burst",
 		},
 		"open_offer": {},
 		"consumed_offer_ids": [],
 		"result": {},
-		"config": {},
+		"config": {"milestone": "M1"},
 	}
 
 

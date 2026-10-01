@@ -2,6 +2,12 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const HudScene := preload("res://scenes/ui/combat_hud_v2.tscn")
+const HUD_VIEW_PATH := "res://scripts/ui/views/combat_hud_view.gd"
+const M1_ARCHETYPE_SCORES := {
+	"freeze_burst": 1,
+	"rewind_echo": 0,
+	"accelerated_combo": 0,
+}
 
 var _suite
 
@@ -56,8 +62,14 @@ func _run() -> void:
 	_suite.assert_true(character_meter_label != null, "generic character meter label exists")
 	_suite.assert_true(character_status_label != null, "generic character status label exists")
 	_suite.assert_true(character_cooldown_label != null, "generic character cooldown label exists")
+	var hud_source := _read_text(HUD_VIEW_PATH)
+	_suite.assert_true(
+		hud_source.contains('archetype.to_upper() + "_NAME"'),
+		"HUD resolves dominant archetypes through the authoritative ARCHETYPE_<ID>_NAME key"
+	)
 
 	var combat := _load_json("res://tests/fixtures/ui/hud_combat.json")
+	_set_build_domain(combat, M1_ARCHETYPE_SCORES, "freeze_burst")
 	var combat_input := combat.duplicate(true)
 	var result = hud.render(combat)
 	_suite.assert_true(result.ok, "combat state renders")
@@ -66,6 +78,8 @@ func _run() -> void:
 	_suite.assert_close(hud.energy_bar.max_value, 100.0, "energy maximum renders")
 	_suite.assert_close(hud.energy_bar.value, 72.0, "energy current renders")
 	_suite.assert_equal(hud.room_label.text, "1 / 5", "room progress renders")
+	_suite.assert_true(hud.build_label.text.contains(tr("ARCHETYPE_FREEZE_BURST_NAME")), "build label uses the localized archetype name")
+	_suite.assert_true(not hud.build_label.text.contains("freeze_burst"), "build label never exposes the raw archetype id")
 	if weapon_name_label != null and weapon_meter_bar != null and weapon_meter_label != null and weapon_status_label != null:
 		_suite.assert_equal(weapon_name_label.text, tr("WEAPON_GUN_NAME"), "Gun name is localized")
 		_suite.assert_close(weapon_meter_bar.max_value, 6.0, "Gun ammo maximum renders")
@@ -109,6 +123,7 @@ func _run() -> void:
 	if character_panel != null:
 		_assert_control_fits(hud.hud_root, character_panel, "character panel fits 640x360")
 
+	var cached_archetype_id := str(hud.latest_state()["build"]["dominant_archetype"])
 	TranslationServer.set_locale("zh_CN")
 	await get_tree().process_frame
 	if slot_one != null and slot_two != null:
@@ -117,6 +132,8 @@ func _run() -> void:
 		_suite.assert_true(slot_two.text.contains("时间裂隙"), "locale change redraws cached Rift name")
 		_suite.assert_true(slot_two.text.contains("冷却"), "locale change redraws cached cooldown state")
 	_suite.assert_true(hud.build_label.text.contains("流派"), "locale change redraws cached build label")
+	_suite.assert_true(hud.build_label.text.contains(tr("ARCHETYPE_FREEZE_BURST_NAME")), "locale change redraws the localized archetype name")
+	_suite.assert_equal(hud.latest_state()["build"]["dominant_archetype"], cached_archetype_id, "locale refresh preserves the cached stable archetype id")
 	if weapon_name_label != null and weapon_meter_label != null and weapon_status_label != null:
 		_suite.assert_equal(weapon_name_label.text, "枪", "locale change redraws Gun name")
 		_suite.assert_true(weapon_meter_label.text.contains("弹药"), "locale change redraws Gun ammo meter")
@@ -136,6 +153,9 @@ func _run() -> void:
 	_suite.assert_equal(duplicate_result.code, &"STALE_REVISION", "same revision reports stable error code")
 
 	var low_hp := _load_json("res://tests/fixtures/ui/hud_low_hp.json")
+	var low_hp_scores := M1_ARCHETYPE_SCORES.duplicate(true)
+	low_hp_scores["freeze_burst"] = 2
+	_set_build_domain(low_hp, low_hp_scores, "freeze_burst")
 	_suite.assert_true(hud.render(low_hp).ok, "newer low hp state renders")
 	_suite.assert_true(hud.low_hp_indicator.visible, "low hp state shows danger indicator")
 	if slot_one != null and slot_two != null:
@@ -151,6 +171,10 @@ func _run() -> void:
 	_suite.assert_equal(older_result.code, &"STALE_REVISION", "older revision reports stable error code")
 
 	var boss := _load_json("res://tests/fixtures/ui/hud_boss.json")
+	var boss_scores := M1_ARCHETYPE_SCORES.duplicate(true)
+	boss_scores["freeze_burst"] = 3
+	boss_scores["rewind_echo"] = 1
+	_set_build_domain(boss, boss_scores, "freeze_burst")
 	_suite.assert_true(hud.render(boss).ok, "boss state renders")
 	_suite.assert_true(hud.boss_panel.visible, "boss state shows boss panel")
 	_suite.assert_close(hud.boss_hp_bar.max_value, 420.0, "boss hp maximum renders")
@@ -306,3 +330,19 @@ func _load_json(path: String) -> Dictionary:
 	if error != OK or not json.data is Dictionary:
 		return {}
 	return (json.data as Dictionary).duplicate(true)
+
+
+func _set_build_domain(state: Dictionary, scores: Dictionary, dominant_archetype: String) -> void:
+	if state.is_empty() or not state.get("build") is Dictionary:
+		return
+	state["build"]["archetype_scores"] = scores.duplicate(true)
+	state["build"]["dominant_archetype"] = dominant_archetype
+
+
+func _read_text(path: String) -> String:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var contents := file.get_as_text()
+	file.close()
+	return contents

@@ -2,6 +2,7 @@ class_name RunViewStateProjector
 extends RefCounted
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
@@ -52,6 +53,16 @@ func project(
 
 	var next_revision := 0 if run_id != _last_run_id else _view_revision + 1
 	var build: Dictionary = authoritative.get("build", {})
+	var build_domain_validation := _validate_build_domain(
+		build,
+		authoritative.get("config", {})
+	)
+	if not bool(build_domain_validation.get("ok", false)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			maxi(0, _view_revision),
+			{"field": str(build_domain_validation.get("field", "authoritative.build"))}
+		)
 	var open_offer: Dictionary = authoritative.get("open_offer", {})
 	var result: Dictionary = authoritative.get("result", {})
 	var suspended := bool(authoritative.get("suspended", false))
@@ -117,6 +128,32 @@ func project(
 
 func latest_view_state() -> Dictionary:
 	return _latest_view_state.duplicate(true)
+
+
+func _validate_build_domain(build: Dictionary, config_value: Variant) -> Dictionary:
+	if not config_value is Dictionary:
+		return {"ok": false, "field": "authoritative.config"}
+	var config := config_value as Dictionary
+	if typeof(config.get("milestone")) != TYPE_STRING:
+		return {"ok": false, "field": "authoritative.config.milestone"}
+	var milestone := str(config["milestone"])
+	var expected_ids: Array[String] = []
+	if milestone in ["M1", "CURRENT", "NEXT"]:
+		expected_ids = RunViewStateScript.M1_ARCHETYPE_IDS
+	elif milestone in ["LAUNCH", "EXPANSION"]:
+		expected_ids = ArchetypeProfileScript.ARCHETYPE_IDS
+	else:
+		return {"ok": false, "field": "authoritative.config.milestone"}
+	var scores_value: Variant = build.get("archetypes", {})
+	if not scores_value is Dictionary:
+		return {"ok": false, "field": "authoritative.build.archetypes"}
+	var scores := scores_value as Dictionary
+	if scores.size() != expected_ids.size():
+		return {"ok": false, "field": "authoritative.build.archetypes"}
+	for archetype_id: String in expected_ids:
+		if not scores.has(archetype_id):
+			return {"ok": false, "field": "authoritative.build.archetypes"}
+	return {"ok": true, "field": ""}
 
 
 func _character_view(value: Variant) -> Dictionary:

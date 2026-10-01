@@ -2,6 +2,13 @@ class_name RunViewState
 extends RefCounted
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
+
+const M1_ARCHETYPE_IDS: Array[String] = [
+	"freeze_burst",
+	"rewind_echo",
+	"accelerated_combo",
+]
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 
 const SCHEMA_VERSION := 4
@@ -507,13 +514,40 @@ static func _validate_build(value: Variant, revision: int):
 		return _failure(revision, "build.dominant_archetype", "expected string")
 	if typeof(build.get("archetype_scores")) != TYPE_DICTIONARY:
 		return _failure(revision, "build.archetype_scores", "expected dictionary")
-	for archetype: Variant in build["archetype_scores"]:
+	var scores: Dictionary = build["archetype_scores"]
+	var archetype_order: Array[String] = []
+	if _has_exact_keys(scores, M1_ARCHETYPE_IDS):
+		archetype_order = M1_ARCHETYPE_IDS
+	elif _has_exact_keys(scores, ArchetypeProfileScript.ARCHETYPE_IDS):
+		archetype_order = ArchetypeProfileScript.ARCHETYPE_IDS
+	else:
+		return _failure(revision, "build.archetype_scores", "unexpected archetype domain")
+	for archetype: Variant in scores:
 		if not _is_non_empty_string(archetype):
 			return _failure(revision, "build.archetype_scores", "archetype id cannot be empty")
-		var score: Variant = build["archetype_scores"][archetype]
-		if not _is_number(score) or float(score) < 0.0:
-			return _failure(revision, "build.archetype_scores.%s" % str(archetype), "expected non-negative number")
+		var score: Variant = scores[archetype]
+		if not _is_integer(score) or int(score) < 0:
+			return _failure(revision, "build.archetype_scores.%s" % str(archetype), "expected non-negative integer")
+	var dominant_archetype := str(build["dominant_archetype"])
+	var expected_dominant := ""
+	var highest_score := 0
+	for archetype_id: String in archetype_order:
+		var score := int(scores[archetype_id])
+		if score > highest_score:
+			highest_score = score
+			expected_dominant = archetype_id
+	if dominant_archetype != expected_dominant:
+		return _failure(revision, "build.dominant_archetype", "must match canonical score order")
 	return CommandResultScript.success(revision)
+
+
+static func _has_exact_keys(values: Dictionary, expected: Array[String]) -> bool:
+	if values.size() != expected.size():
+		return false
+	for key: String in expected:
+		if not values.has(key):
+			return false
+	return true
 
 
 static func _validate_boss(value: Variant, revision: int):
