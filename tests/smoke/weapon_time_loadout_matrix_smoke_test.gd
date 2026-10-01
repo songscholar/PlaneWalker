@@ -31,6 +31,16 @@ const TIME_PAIRS := [
 	["rift", "accelerate"],
 ]
 const MAX_ACTION_FRAMES := 240
+const LAUNCH_ARCHETYPE_SCORES := {
+	"freeze_burst": 0,
+	"rewind_echo": 0,
+	"rift_trap": 0,
+	"accelerated_combo": 0,
+	"low_hp_void": 0,
+	"perfect_guard": 0,
+	"piercing_barrage": 0,
+	"echo_legion": 0,
+}
 
 
 var _suite
@@ -650,13 +660,13 @@ func _authoritative(
 			"curses": [],
 			"talents": [],
 			"reward_history": [],
-			"archetypes": {},
+			"archetypes": LAUNCH_ARCHETYPE_SCORES.duplicate(true),
 			"dominant_archetype": "",
 		},
 		"open_offer": {},
 		"consumed_offer_ids": [],
 		"result": {},
-		"config": {},
+		"config": {"milestone": "LAUNCH"},
 	}
 
 

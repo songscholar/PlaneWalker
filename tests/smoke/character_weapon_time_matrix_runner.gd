@@ -12,6 +12,16 @@ const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.g
 
 const REQUIRED_LAUNCH_REPLAY_SCHEMA_VERSION := 4
 const MAX_ACTION_FRAMES := 96
+const LAUNCH_ARCHETYPE_SCORES := {
+	"freeze_burst": 0,
+	"rewind_echo": 0,
+	"rift_trap": 0,
+	"accelerated_combo": 0,
+	"low_hp_void": 0,
+	"perfect_guard": 0,
+	"piercing_barrage": 0,
+	"echo_legion": 0,
+}
 const WEAPONS: Array[StringName] = [
 	&"sword",
 	&"bow",
@@ -589,13 +599,14 @@ func _authoritative(
 			"curses": [],
 			"talents": [],
 			"reward_history": [],
-			"archetypes": {},
+			"archetypes": LAUNCH_ARCHETYPE_SCORES.duplicate(true),
 			"dominant_archetype": "",
 		},
 		"open_offer": {},
 		"consumed_offer_ids": [],
 		"result": {},
 		"config": {
+			"milestone": "LAUNCH",
 			"character_id": str(character_id),
 			"weapon_id": str(weapon_id),
 			"enabled_time_skills": time_pair.duplicate(true),

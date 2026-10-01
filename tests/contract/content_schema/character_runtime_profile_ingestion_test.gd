@@ -4,6 +4,7 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 
 const PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/character_runtime_profiles.json"
+const ARCHETYPE_PROFILE_CATALOG_PATH := "res://data/content_packs/base/content/archetype_profiles.json"
 const GAME_VERSION := "0.4.0-dev"
 
 
@@ -66,7 +67,7 @@ func _test_valid_real_pack(suite) -> void:
 		&"LAUNCH"
 	)
 	suite.assert_true(not report.has_blocking_errors(), "valid temporary character pack activates: %s" % str(report.blocking_errors))
-	suite.assert_equal(report.loaded_count, 16, "valid temporary pack loads its complete closed graph")
+	suite.assert_equal(report.loaded_count, 17, "valid temporary pack loads its complete closed graph")
 	suite.assert_equal(
 		registry.resolve_character_runtime_profile(&"time_guardian", &"LAUNCH").get("id"),
 		"time_guardian_launch_v1",
@@ -79,7 +80,7 @@ func _test_frozen_v2_compatibility_forms(suite) -> void:
 		{"label": "empty_character_ids", "compatibility": {"character_ids": []}},
 		{"label": "empty_weapon_ids", "compatibility": {"weapon_ids": []}},
 		{"label": "empty_time_ability_ids", "compatibility": {"time_ability_ids": []}},
-		{"label": "archetype_ids", "compatibility": {"archetype_ids": ["legacy_archetype"]}},
+		{"label": "archetype_ids", "compatibility": {"archetype_ids": ["freeze_burst"]}},
 		{"label": "modes", "compatibility": {"modes": ["normal"]}},
 	]
 	for index: int in range(cases.size()):
@@ -98,7 +99,7 @@ func _test_frozen_v2_compatibility_forms(suite) -> void:
 			not report.has_blocking_errors(),
 			"frozen v2 compatibility form %s remains loadable: %s" % [cases[index]["label"], str(report.blocking_errors)]
 		)
-		suite.assert_equal(registry.all_content().size(), 16, "%s activates the complete fixture graph" % cases[index]["label"])
+		suite.assert_equal(registry.all_content().size(), 17, "%s activates the complete fixture graph" % cases[index]["label"])
 
 
 func _valid_definitions() -> Array:
@@ -125,6 +126,7 @@ func _valid_definitions() -> Array:
 		talent["rarity"] = "common"
 		talent["icon_id"] = "content_%s" % talent_id
 		definitions.append(talent)
+	definitions.append(_base_archetype_profile())
 	definitions.append(profile)
 	return definitions
 
@@ -222,6 +224,19 @@ func _base_guardian_profile() -> Dictionary:
 	return {}
 
 
+func _base_archetype_profile() -> Dictionary:
+	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(ARCHETYPE_PROFILE_CATALOG_PATH))
+	if not value is Array:
+		return {}
+	for definition_value: Variant in value:
+		if definition_value is Dictionary and str((definition_value as Dictionary).get("id", "")) == "archetype_freeze_burst_v1":
+			var profile := (definition_value as Dictionary).duplicate(true)
+			profile["name_key"] = "TEST_NAME"
+			profile["description_key"] = "TEST_DESC"
+			return profile
+	return {}
+
+
 func _profile(definitions: Array) -> Dictionary:
 	return _by_id(definitions, "time_guardian_launch_v1")
 
@@ -244,7 +259,7 @@ func _write_pack(label: String, definitions: Array) -> String:
 	DirAccess.make_dir_recursive_absolute(absolute_root.path_join("content"))
 	DirAccess.make_dir_recursive_absolute(absolute_root.path_join("localization"))
 	var content_text := JSON.stringify(definitions, "\t")
-	var localization_text := "keys,en,zh_cn\n\"TEST_NAME\",\"Test\",\"测试\"\n\"TEST_DESC\",\"Test content.\",\"测试内容。\"\n"
+	var localization_text := "keys,en,zh_cn\n\"TEST_NAME\",\"Test\",\"测试\"\n\"TEST_DESC\",\"Test content.\",\"测试内容。\"\n\"ARCHETYPE_FREEZE_BURST_BOSS_RESPONSE\",\"Expose the weak point.\",\"暴露弱点。\"\n"
 	_write_text(root.path_join("content/all.json"), content_text)
 	_write_text(root.path_join("localization/translations.csv"), localization_text)
 	var pack := {
