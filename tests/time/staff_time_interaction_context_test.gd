@@ -216,6 +216,10 @@ func _spawn_staff(time_abilities: Array) -> Node:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		return null
+	_suite.assert_true(
+		player.advance_action_frame(),
+		"Staff time-context fixture binds the character runtime frame"
+	)
 	return player
 
 
