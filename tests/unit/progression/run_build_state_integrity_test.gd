@@ -24,6 +24,23 @@ func _run() -> void:
 	suite.assert_true(state.can_restore_transaction_snapshot(exact), "exact build transaction snapshot validates")
 	suite.assert_true(state.restore_transaction_snapshot(exact), "exact build transaction snapshot restores")
 
+	var legacy_state = RunBuildStateScript.new()
+	legacy_state.reset("LAUNCH")
+	var legacy_result: Dictionary = legacy_state.apply_definition({
+		"id": &"legacy_item",
+		"category": &"item",
+	})
+	suite.assert_true(bool(legacy_result.get("ok", false)), "legacy sparse definition remains accepted")
+	var legacy_snapshot: Dictionary = legacy_state.transaction_snapshot()
+	suite.assert_true(
+		legacy_state.can_restore_transaction_snapshot(legacy_snapshot),
+		"a snapshot emitted from an accepted legacy definition remains restorable"
+	)
+	suite.assert_true(
+		legacy_state.restore_transaction_snapshot(legacy_snapshot),
+		"accepted legacy definition round-trips through the transaction snapshot"
+	)
+
 	var mutations: Array[Dictionary] = []
 	var missing_history := exact.duplicate(true)
 	missing_history["reward_history"].pop_back()
@@ -49,6 +66,9 @@ func _run() -> void:
 	var duplicate_collection := exact.duplicate(true)
 	duplicate_collection["items"].append("blessing_a")
 	mutations.append({"label": "cross-category duplicate", "snapshot": duplicate_collection})
+	var non_finite_effect := exact.duplicate(true)
+	non_finite_effect["reward_history"][0]["effects"]["attack_multiplier"] = NAN
+	mutations.append({"label": "non-finite reward effect", "snapshot": non_finite_effect})
 
 	for mutation: Dictionary in mutations:
 		suite.assert_true(

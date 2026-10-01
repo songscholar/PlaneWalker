@@ -2,6 +2,7 @@ class_name RunBuildState
 extends RefCounted
 
 const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
+const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 
 const M1_ARCHETYPE_IDS: Array[String] = [
 	"freeze_burst",
@@ -94,6 +95,16 @@ func validate_definition(definition: Dictionary) -> Dictionary:
 	var archetype_id := str(archetype_value)
 	if not archetype_id.is_empty() and not _archetype_order.has(archetype_id):
 		return {"ok": false, "field": "definition.archetype", "reason": "unknown"}
+	var effects_value: Variant = definition.get("effects", {})
+	if not effects_value is Dictionary:
+		return {"ok": false, "field": "definition.effects", "reason": "type"}
+	var normalized_definition := definition.duplicate(true)
+	normalized_definition["id"] = content_id
+	normalized_definition["category"] = category
+	normalized_definition["archetype"] = archetype_id
+	normalized_definition["effects"] = (effects_value as Dictionary).duplicate(true)
+	if not ReplaySafeValueScript.is_supported(normalized_definition):
+		return {"ok": false, "field": "definition", "reason": "unsafe_snapshot_value"}
 	return {"ok": true, "field": "", "reason": ""}
 
 
@@ -115,6 +126,12 @@ func apply_definition(definition: Dictionary) -> Dictionary:
 	var target: Array[String] = get(str(CONTENT_COLLECTIONS[category]))
 	target.append(content_id)
 	var stored_definition := definition.duplicate(true)
+	stored_definition["id"] = content_id
+	stored_definition["category"] = category
+	stored_definition["archetype"] = str(definition.get("archetype", ""))
+	stored_definition["effects"] = (
+		(definition.get("effects", {}) as Dictionary).duplicate(true)
+	)
 	reward_history.append(stored_definition)
 	var archetype_id := str(definition.get("archetype", ""))
 	var score_before := 0
@@ -178,6 +195,8 @@ func can_restore_transaction_snapshot(value: Dictionary) -> bool:
 	for field: String in TRANSACTION_SNAPSHOT_FIELDS:
 		if not value.has(field):
 			return false
+	if not ReplaySafeValueScript.is_supported(value):
+		return false
 	if (
 		typeof(value["schema_version"]) != TYPE_INT
 		or int(value["schema_version"]) != 1
