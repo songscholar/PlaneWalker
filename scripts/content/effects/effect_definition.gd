@@ -4,6 +4,9 @@ extends RefCounted
 const ID_PATTERN := "^[a-z][a-z0-9_]{0,63}$"
 const VALUE_TYPES: Array[String] = ["boolean", "integer", "number"]
 const STACK_RULES: Array[String] = ["add", "maximum", "multiply", "replace", "set_true", "trigger"]
+const RUNTIME_DOMAINS: Array[String] = [
+	"stats", "health", "time", "weapon", "character", "trigger",
+]
 const CONTENT_CATEGORIES: Array[String] = ["blessing", "curse", "item", "talent"]
 const WEAPON_CAPABILITY_PATTERN := "^weapon\\.[a-z][a-z0-9_]{0,63}$"
 const WEAPON_CAPABILITY_STACK_RULES: Array[String] = ["add", "maximum", "multiply", "replace"]
@@ -15,6 +18,7 @@ const REQUIRED_FIELDS: Array[String] = [
 	"maximum",
 	"stack_rule",
 	"allowed_categories",
+	"runtime_domain",
 ]
 const OPTIONAL_FIELDS: Array[String] = ["weapon_capabilities"]
 
@@ -24,6 +28,7 @@ var minimum: Variant = null
 var maximum: Variant = null
 var stack_rule: String = ""
 var allowed_categories: Array[String] = []
+var runtime_domain: String = ""
 var weapon_capabilities: Array[Dictionary] = []
 
 
@@ -45,6 +50,12 @@ func configure(source: Dictionary) -> Dictionary:
 	var source_stack_rule: Variant = source["stack_rule"]
 	if typeof(source_stack_rule) != TYPE_STRING or not STACK_RULES.has(str(source_stack_rule)):
 		return _failure("stack_rule", "unsupported")
+	var source_runtime_domain: Variant = source["runtime_domain"]
+	if (
+		typeof(source_runtime_domain) != TYPE_STRING
+		or not RUNTIME_DOMAINS.has(str(source_runtime_domain))
+	):
+		return _failure("runtime_domain", "unsupported")
 
 	var categories_result := _normalize_categories(source["allowed_categories"])
 	if not bool(categories_result.get("ok", false)):
@@ -70,6 +81,7 @@ func configure(source: Dictionary) -> Dictionary:
 	maximum = source["maximum"]
 	stack_rule = str(source_stack_rule)
 	allowed_categories = categories_result["categories"]
+	runtime_domain = str(source_runtime_domain)
 	weapon_capabilities.clear()
 	for mapping_value: Variant in weapon_capabilities_result["weapon_capabilities"]:
 		weapon_capabilities.append((mapping_value as Dictionary).duplicate(true))
@@ -127,6 +139,7 @@ func snapshot() -> Dictionary:
 		"maximum": maximum,
 		"stack_rule": stack_rule,
 		"allowed_categories": allowed_categories.duplicate(),
+		"runtime_domain": runtime_domain,
 	}
 	if not weapon_capabilities.is_empty():
 		result["weapon_capabilities"] = weapon_capabilities.duplicate(true)

@@ -15,6 +15,18 @@ const CONTENT_COLLECTIONS := {
 	"curse": "curses",
 	"talent": "talents",
 }
+const TRANSACTION_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version",
+	"milestone",
+	"archetype_order",
+	"items",
+	"blessings",
+	"curses",
+	"talents",
+	"reward_history",
+	"archetypes",
+	"dominant_archetype",
+]
 
 var items: Array[String] = []
 var blessings: Array[String] = []
@@ -143,6 +155,101 @@ func to_dictionary() -> Dictionary:
 		"archetypes": archetypes.duplicate(true),
 		"dominant_archetype": dominant_archetype,
 	}
+
+
+func transaction_snapshot() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"milestone": milestone,
+		"archetype_order": _archetype_order.duplicate(),
+		"items": items.duplicate(),
+		"blessings": blessings.duplicate(),
+		"curses": curses.duplicate(),
+		"talents": talents.duplicate(),
+		"reward_history": reward_history.duplicate(true),
+		"archetypes": archetypes.duplicate(true),
+		"dominant_archetype": dominant_archetype,
+	}
+
+
+func can_restore_transaction_snapshot(value: Dictionary) -> bool:
+	if value.size() != TRANSACTION_SNAPSHOT_FIELDS.size():
+		return false
+	for field: String in TRANSACTION_SNAPSHOT_FIELDS:
+		if not value.has(field):
+			return false
+	if (
+		typeof(value["schema_version"]) != TYPE_INT
+		or int(value["schema_version"]) != 1
+		or typeof(value["milestone"]) != TYPE_STRING
+		or not value["archetype_order"] is Array
+		or not value["reward_history"] is Array
+		or not value["archetypes"] is Dictionary
+		or typeof(value["dominant_archetype"]) != TYPE_STRING
+	):
+		return false
+	var expected_order: Array[String] = (
+		M1_ARCHETYPE_IDS.duplicate()
+		if M1_COMPATIBLE_MILESTONES.has(str(value["milestone"]))
+		else ArchetypeProfileScript.ARCHETYPE_IDS.duplicate()
+	)
+	var restored_order: Array[String] = []
+	for archetype_value: Variant in value["archetype_order"]:
+		if typeof(archetype_value) != TYPE_STRING:
+			return false
+		restored_order.append(str(archetype_value))
+	if restored_order != expected_order:
+		return false
+	var selected: Dictionary = {}
+	for collection: String in ["items", "blessings", "curses", "talents"]:
+		if not value[collection] is Array:
+			return false
+		for content_id_value: Variant in value[collection]:
+			if typeof(content_id_value) != TYPE_STRING or str(content_id_value).is_empty():
+				return false
+			var content_id := str(content_id_value)
+			if selected.has(content_id):
+				return false
+			selected[content_id] = true
+	var restored_archetypes := value["archetypes"] as Dictionary
+	if restored_archetypes.size() != expected_order.size():
+		return false
+	var best_id := ""
+	var best_count := 0
+	for archetype_id: String in expected_order:
+		if typeof(restored_archetypes.get(archetype_id)) != TYPE_INT:
+			return false
+		var count := int(restored_archetypes[archetype_id])
+		if count < 0:
+			return false
+		if count > best_count:
+			best_id = archetype_id
+			best_count = count
+	if str(value["dominant_archetype"]) != best_id:
+		return false
+	for history_value: Variant in value["reward_history"]:
+		if not history_value is Dictionary:
+			return false
+	return true
+
+
+func restore_transaction_snapshot(value: Dictionary) -> bool:
+	if not can_restore_transaction_snapshot(value):
+		return false
+	milestone = str(value["milestone"])
+	_archetype_order.clear()
+	for archetype_value: Variant in value["archetype_order"]:
+		_archetype_order.append(str(archetype_value))
+	items.assign(value["items"])
+	blessings.assign(value["blessings"])
+	curses.assign(value["curses"])
+	talents.assign(value["talents"])
+	reward_history.clear()
+	for history_value: Variant in value["reward_history"]:
+		reward_history.append((history_value as Dictionary).duplicate(true))
+	archetypes = (value["archetypes"] as Dictionary).duplicate(true)
+	dominant_archetype = str(value["dominant_archetype"])
+	return transaction_snapshot() == value
 
 
 static func from_run(run_data: Dictionary) -> RefCounted:

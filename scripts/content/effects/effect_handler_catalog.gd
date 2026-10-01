@@ -132,6 +132,27 @@ func weapon_capability_routes(effects: Variant) -> Array[Dictionary]:
 	return routes
 
 
+func runtime_domain_for(effect_id: StringName) -> StringName:
+	if not _load_errors.is_empty():
+		return &""
+	var normalized_id := str(effect_id)
+	if _is_script_like(normalized_id) or not _definitions.has(normalized_id):
+		return &""
+	return StringName(str(_definitions[normalized_id].runtime_domain))
+
+
+func effect_descriptor(effect_id: StringName) -> Dictionary:
+	if not _load_errors.is_empty():
+		return {}
+	var normalized_id := str(effect_id)
+	if _is_script_like(normalized_id) or not _definitions.has(normalized_id):
+		return {}
+	var definition = _definitions[normalized_id]
+	var descriptor: Dictionary = definition.snapshot().duplicate(true)
+	descriptor["weapon_capabilities"] = definition.weapon_capability_snapshot()
+	return descriptor
+
+
 func snapshot() -> Array[Dictionary]:
 	var effect_ids: Array[String] = []
 	for effect_id_value: Variant in _definitions.keys():

@@ -14,6 +14,47 @@ class EmptyContentRegistry:
 		return []
 
 
+class FailingCloseDraft:
+	extends RefCounted
+
+	var base: RefCounted
+
+	func _init(source: RefCounted = null) -> void:
+		base = source
+
+	func resolve_option(offer: Dictionary, option_id: StringName):
+		if base == null:
+			return null
+		return base.call("resolve_option", offer.duplicate(true), option_id)
+
+	func close_offer(_offer_id: String) -> bool:
+		return false
+
+
+class FailingRestoreOrchestrator:
+	extends RefCounted
+
+	var base: RefCounted
+
+	func _init(source: RefCounted) -> void:
+		base = source
+
+	func revision() -> int:
+		return int(base.call("revision"))
+
+	func snapshot() -> Dictionary:
+		return base.call("snapshot").duplicate(true)
+
+	func selection_transaction_snapshot() -> Dictionary:
+		return base.call("selection_transaction_snapshot").duplicate(true)
+
+	func commit_selection_and_transition(definition: Dictionary):
+		return base.call("commit_selection_and_transition", definition.duplicate(true))
+
+	func restore_selection_transaction_snapshot(_value: Dictionary) -> bool:
+		return false
+
+
 func _ready() -> void:
 	call_deferred("_run")
 
@@ -24,6 +65,8 @@ func _run() -> void:
 	_test_boot_and_room_flow(suite)
 	_test_loadout_failure_is_atomic(suite)
 	_test_offer_creation_failure_is_atomic(suite)
+	_test_selection_reservation_is_atomic(suite)
+	_test_selection_restore_failure_is_integrity_failure(suite)
 	_test_contract_acceptance_is_idempotent(suite)
 	_test_terminal_and_pause_guards(suite)
 	_test_authoritative_clock_forwarding(suite)
@@ -227,6 +270,139 @@ func _test_offer_creation_failure_is_atomic(suite) -> void:
 	suite.assert_equal(after["revision"], before["revision"], "draft failure preserves revision")
 	suite.assert_true(after["open_offer"].is_empty(), "draft failure opens no offer")
 	suite.assert_true(after["consumed_offer_ids"].is_empty(), "draft failure consumes no offer")
+
+
+func _test_selection_reservation_is_atomic(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "reservation facade boots")
+	suite.assert_true(facade.start_run({"seed": FIXED_SEED}, "reservation-run").ok, "reservation run starts")
+	suite.assert_true(facade.enter_current_room().ok, "reservation room enters")
+	var completion = facade.complete_current_room()
+	suite.assert_true(completion.ok, "reservation offer opens")
+	var offer: Dictionary = completion.context["offer"]
+	var option_id := str(offer["options"][0]["option_id"])
+	var before: Dictionary = facade.snapshot()
+	suite.assert_true(facade.has_method("reserve_selection"), "facade exposes selection reservation")
+	suite.assert_true(facade.has_method("commit_reserved_selection"), "facade exposes reserved commit")
+	suite.assert_true(facade.has_method("cancel_reserved_selection"), "facade exposes reservation cancellation")
+	if not facade.has_method("reserve_selection"):
+		return
+	var reserved = facade.call(
+		"reserve_selection",
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	suite.assert_true(reserved.ok, "valid option reserves without mutation")
+	suite.assert_equal(facade.snapshot(), before, "reservation leaves authoritative state unchanged")
+	var reservation_id := str(reserved.context.get("reservation_id", ""))
+	suite.assert_true(not reservation_id.is_empty(), "reservation returns a stable identity")
+	reserved.context["definition"]["id"] = "forged"
+	suite.assert_equal(facade.snapshot(), before, "reservation context is isolated from authority")
+	var duplicate_reservation = facade.call(
+		"reserve_selection",
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	suite.assert_equal(duplicate_reservation.code, &"SELECTION_RESERVED", "one offer cannot own two in-flight reservations")
+	suite.assert_true(bool(facade.call("cancel_reserved_selection", reservation_id).ok), "reservation cancellation succeeds")
+	suite.assert_equal(facade.snapshot(), before, "cancellation leaves the offer and build unchanged")
+
+	reserved = facade.call(
+		"reserve_selection",
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	reservation_id = str(reserved.context.get("reservation_id", ""))
+	suite.assert_true(facade.pause_run().ok, "a concurrent authority command advances the revision")
+	var stale_commit = facade.call("commit_reserved_selection", reservation_id)
+	suite.assert_equal(stale_commit.code, &"STALE_REVISION", "reservation commit rejects authority revision drift")
+	var stale_snapshot: Dictionary = facade.snapshot()
+	suite.assert_equal(stale_snapshot.get("open_offer"), before.get("open_offer"), "stale commit keeps the offer open")
+	suite.assert_equal(stale_snapshot.get("consumed_offer_ids"), before.get("consumed_offer_ids"), "stale commit consumes no offer")
+	suite.assert_equal(stale_snapshot.get("build"), before.get("build"), "stale commit writes no build state")
+	suite.assert_true(bool(facade.call("cancel_reserved_selection", reservation_id).ok), "stale reservation remains explicitly cancellable")
+	suite.assert_true(facade.resume_run().ok, "reservation test restores the running suspension state")
+
+	reserved = facade.call(
+		"reserve_selection",
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	reservation_id = str(reserved.context.get("reservation_id", ""))
+	var before_close: Dictionary = facade.snapshot()
+	var original_draft: RefCounted = facade.get("_draft")
+	facade.set("_draft", FailingCloseDraft.new(original_draft))
+	var failed_commit = facade.call("commit_reserved_selection", reservation_id)
+	suite.assert_equal(failed_commit.code, &"COMMIT_FAILED", "draft close failure rejects the authoritative commit")
+	suite.assert_equal(facade.snapshot(), before_close, "failed close restores phase, revision, offer, consumption, and build")
+	facade.set("_draft", original_draft)
+	suite.assert_true(bool(facade.call("cancel_reserved_selection", reservation_id).ok), "failed reservation remains cancellable")
+
+	facade.set("_draft", FailingCloseDraft.new(original_draft))
+	var wrapped_failure = facade.submit_selection(
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	suite.assert_equal(wrapped_failure.code, &"COMMIT_FAILED", "compatibility selection reports Draft close failure")
+	facade.set("_draft", original_draft)
+	var retry_after_wrapped_failure = facade.reserve_selection(
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	suite.assert_true(retry_after_wrapped_failure.ok, "compatibility selection cancels its failed reservation")
+	suite.assert_true(facade.cancel_reserved_selection(str(retry_after_wrapped_failure.context.get("reservation_id", ""))).ok, "compatibility retry fixture cancels cleanly")
+
+	reserved = facade.call(
+		"reserve_selection",
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	reservation_id = str(reserved.context.get("reservation_id", ""))
+	var committed = facade.call("commit_reserved_selection", reservation_id)
+	suite.assert_true(committed.ok, "reserved selection commits atomically")
+	var after: Dictionary = facade.snapshot()
+	suite.assert_equal(after.get("phase"), RunPhaseScript.Value.ROOM_ENTERING, "atomic commit includes room transition")
+	suite.assert_equal(after.get("current_room"), 2, "atomic commit advances to the next room")
+	suite.assert_equal(after.get("open_offer"), {}, "atomic commit clears the offer")
+	suite.assert_true(after.get("consumed_offer_ids", []).has(str(offer["offer_id"])), "atomic commit consumes the offer")
+	suite.assert_equal(after.get("build", {}).get("reward_history", []).size(), 1, "atomic commit writes the build once")
+	var repeated = facade.call("commit_reserved_selection", reservation_id)
+	suite.assert_equal(repeated.code, &"RESERVATION_NOT_FOUND", "committed reservation cannot execute twice")
+	var replayed = facade.submit_selection(
+		str(offer["offer_id"]),
+		option_id,
+		int(offer["revision"])
+	)
+	suite.assert_equal(replayed.code, &"ALREADY_CONSUMED", "replayed selection cannot commit or publish twice")
+	suite.assert_equal(facade.snapshot().get("build", {}).get("reward_history", []).size(), 1, "selection replay keeps one authoritative build write")
+	suite.assert_true(facade.complete_transition().ok, "legacy transition call is an idempotent compatibility no-op")
+
+
+func _test_selection_restore_failure_is_integrity_failure(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "integrity facade boots")
+	suite.assert_true(facade.start_run({"seed": FIXED_SEED}, "integrity-run").ok, "integrity run starts")
+	suite.assert_true(facade.enter_current_room().ok, "integrity room enters")
+	var completion = facade.complete_current_room()
+	var offer: Dictionary = completion.context["offer"]
+	var reserved = facade.reserve_selection(
+		str(offer["offer_id"]),
+		str(offer["options"][0]["option_id"]),
+		int(offer["revision"])
+	)
+	var original_orchestrator: RefCounted = facade.get("_orchestrator")
+	facade.set("_orchestrator", FailingRestoreOrchestrator.new(original_orchestrator))
+	facade.set("_draft", FailingCloseDraft.new())
+	var result = facade.commit_reserved_selection(str(reserved.context.get("reservation_id", "")))
+	suite.assert_equal(result.code, &"INTEGRITY_FAILURE", "Draft close plus authority rollback failure is fail-closed")
+	suite.assert_equal(facade.snapshot().get("phase"), RunPhaseScript.Value.ROOM_ENTERING, "failed rollback is never reported as the pre-commit phase")
 
 
 func _test_terminal_and_pause_guards(suite) -> void:

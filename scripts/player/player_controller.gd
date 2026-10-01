@@ -3,6 +3,9 @@ extends CharacterBody2D
 
 const StatsResource := preload("res://scripts/core/stats.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
+const EffectHandlerCatalogScript := preload(
+	"res://scripts/content/effects/effect_handler_catalog.gd"
+)
 const PlayerActionStateScript := preload("res://scripts/player/player_action_state.gd")
 const PlayerLoadoutRuntimeScript := preload("res://scripts/player/player_loadout_runtime.gd")
 const CharacterRuntimeProfileScript := preload(
@@ -254,6 +257,10 @@ var _last_move_direction: Vector2 = Vector2.RIGHT
 var _last_weapon_aim_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
 var _runtime_frame: int = 0
+var _reward_effect_publication_active: bool = false
+var _reward_effect_publication_in_progress: bool = false
+var _reward_effect_pending_health_signal: Dictionary = {}
+var _reward_effect_pending_time_signal: Dictionary = {}
 var _dash_completion_token: int = 0
 var _dash_completed_at_runtime_frame: int = -1
 var _dash_direction: Vector2 = Vector2.RIGHT
@@ -9710,18 +9717,490 @@ func _seconds_to_frames(seconds: float) -> int:
 	return maxi(1, ceili(seconds * Engine.physics_ticks_per_second))
 
 
-func apply_reward(reward_data: Dictionary) -> void:
-	var effects: Dictionary = reward_data.get("effects", {})
-	_apply_effects(effects)
+func apply_reward(reward_data: Dictionary) -> Dictionary:
+	return _apply_effects(reward_data, "")
 
 
-func apply_curse(curse_data: Dictionary) -> void:
-	var effects: Dictionary = curse_data.get("effects", {})
-	_apply_effects(effects)
+func apply_curse(curse_data: Dictionary) -> Dictionary:
+	return _apply_effects(curse_data, "curse")
 
 
-func _apply_effects(effects: Dictionary) -> void:
-	ItemEffectScript.apply_to_player(self, effects)
+func reward_effect_begin_publication() -> bool:
+	if (
+		_reward_effect_publication_active
+		or _reward_effect_publication_in_progress
+		or health == null
+		or not health.has_method("publish_reward_healed")
+		or time_manager == null
+		or not time_manager.has_method("publish_reward_energy_changed")
+	):
+		return false
+	_reward_effect_publication_active = true
+	_reward_effect_pending_health_signal.clear()
+	_reward_effect_pending_time_signal.clear()
+	return true
+
+
+func reward_effect_publication_can_commit() -> bool:
+	if not _reward_effect_publication_active or _reward_effect_publication_in_progress:
+		return false
+	if not _reward_effect_pending_health_signal.is_empty():
+		var healed_amount := float(_reward_effect_pending_health_signal.get("amount", -1.0))
+		var resulting_hp := float(_reward_effect_pending_health_signal.get("current_hp", -1.0))
+		if (
+			not is_finite(healed_amount)
+			or healed_amount <= 0.0
+			or not is_finite(resulting_hp)
+			or resulting_hp < 0.0
+			or resulting_hp > float(health.get("max_hp"))
+		):
+			return false
+	if not _reward_effect_pending_time_signal.is_empty():
+		var current := float(_reward_effect_pending_time_signal.get("current", -1.0))
+		var maximum := float(_reward_effect_pending_time_signal.get("maximum", -1.0))
+		if (
+			not is_finite(current)
+			or not is_finite(maximum)
+			or maximum <= 0.0
+			or current < 0.0
+			or current > maximum
+		):
+			return false
+	return true
+
+
+func reward_effect_commit_publication() -> bool:
+	if not reward_effect_publication_can_commit():
+		return false
+	var health_signal := _reward_effect_pending_health_signal.duplicate(true)
+	var time_signal := _reward_effect_pending_time_signal.duplicate(true)
+	_reward_effect_publication_in_progress = true
+	_reward_effect_pending_health_signal.clear()
+	_reward_effect_pending_time_signal.clear()
+	var time_ok := true
+	if (
+		not time_signal.is_empty()
+	):
+		time_ok = bool(time_manager.call(
+			"publish_reward_energy_changed",
+			float(time_signal["current"]),
+			float(time_signal["maximum"])
+		))
+	var health_ok := true
+	if (
+		not health_signal.is_empty()
+	):
+		health_ok = bool(health.call(
+			"publish_reward_healed",
+			float(health_signal["amount"]),
+			float(health_signal["current_hp"])
+		))
+	_reward_effect_publication_active = false
+	_reward_effect_publication_in_progress = false
+	return time_ok and health_ok
+
+
+func reward_effect_rollback_publication() -> bool:
+	if not _reward_effect_publication_active or _reward_effect_publication_in_progress:
+		return false
+	_reward_effect_publication_active = false
+	_reward_effect_pending_health_signal.clear()
+	_reward_effect_pending_time_signal.clear()
+	return true
+
+
+func _apply_effects(definition: Dictionary, fallback_category: String) -> Dictionary:
+	var effects_value: Variant = definition.get("effects", {})
+	if not effects_value is Dictionary:
+		return {"ok": false, "code": &"INVALID_EFFECTS"}
+	var definition_id := str(definition.get("id", "legacy_reward")).strip_edges()
+	if definition_id.is_empty():
+		definition_id = "legacy_reward"
+	var category := str(definition.get("category", fallback_category))
+	return ItemEffectScript.apply_to_player(
+		self,
+		(effects_value as Dictionary).duplicate(true),
+		definition_id,
+		category
+	)
+
+
+func reward_effect_snapshot() -> Dictionary:
+	if (
+		stats == null
+		or not stats.has_method("snapshot")
+		or health == null
+		or not health.has_method("reward_effect_snapshot")
+		or not health.has_method("restore_reward_effect_snapshot")
+		or not health.has_method("apply_reward_invulnerability")
+		or time_manager == null
+		or not time_manager.has_method("reward_effect_snapshot")
+		or not time_manager.has_method("restore_reward_effect_snapshot")
+		or weapon_modifier_state == null
+		or not weapon_modifier_state.has_method("snapshot")
+		or not weapon_modifier_state.has_method("restore_snapshot")
+	):
+		return {}
+	var stats_value: Variant = stats.call("snapshot")
+	var health_value: Variant = health.call("reward_effect_snapshot")
+	var time_value: Variant = time_manager.call("reward_effect_snapshot")
+	var modifier_value: Variant = weapon_modifier_state.call("snapshot")
+	if (
+		not stats_value is Dictionary
+		or not health_value is Dictionary
+		or not time_value is Dictionary
+		or not modifier_value is Dictionary
+	):
+		return {}
+	var weapon_runtime_snapshot: Dictionary = {}
+	if weapon_runtime != null and weapon_runtime.has_method("snapshot"):
+		var runtime_value: Variant = weapon_runtime.call("snapshot")
+		if not runtime_value is Dictionary:
+			return {}
+		weapon_runtime_snapshot = (runtime_value as Dictionary).duplicate(true)
+	return {
+		"schema_version": 1,
+		"stats": (stats_value as Dictionary).duplicate(true),
+		"health": (health_value as Dictionary).duplicate(true),
+		"time": (time_value as Dictionary).duplicate(true),
+		"weapon": {
+			"modifiers": (modifier_value as Dictionary).duplicate(true),
+			"runtime": weapon_runtime_snapshot,
+		},
+		"character": {"dash_invulnerable_bonus": _dash_invulnerable_bonus},
+	}
+
+
+func restore_reward_effect_snapshot(value: Dictionary) -> bool:
+	if not _valid_reward_effect_snapshot(value):
+		return false
+	var before := reward_effect_snapshot()
+	if before.is_empty():
+		return false
+	if _install_reward_effect_snapshot(value) and reward_effect_snapshot() == value:
+		return true
+	if not _install_reward_effect_snapshot(before) or reward_effect_snapshot() != before:
+		push_error("Player reward-effect restore rollback failed")
+	return false
+
+
+func reward_effect_apply_operation(operation: Dictionary) -> Dictionary:
+	var validation := _validated_reward_effect_operation(operation)
+	if validation.is_empty():
+		return {"ok": false, "code": &"INVALID_OPERATION"}
+	var effect_id := StringName(str(validation["effect_id"]))
+	var runtime_domain := StringName(str(validation["runtime_domain"]))
+	var value: Variant = validation["value"]
+	var applied := false
+	match runtime_domain:
+		&"stats":
+			applied = _apply_reward_stats_operation(effect_id, value)
+		&"health":
+			applied = _apply_reward_health_operation(effect_id, value)
+		&"time":
+			applied = _apply_reward_time_operation(effect_id, value)
+		&"weapon":
+			applied = _apply_reward_weapon_operation(validation)
+		&"character":
+			applied = _apply_reward_character_operation(effect_id, value)
+		&"trigger":
+			applied = _apply_reward_trigger_operation(effect_id, value)
+	if not applied:
+		return {
+			"ok": false,
+			"code": &"OPERATION_REJECTED",
+			"effect_id": effect_id,
+			"runtime_domain": runtime_domain,
+		}
+	return {
+		"ok": true,
+		"code": &"OK",
+		"effect_id": effect_id,
+		"runtime_domain": runtime_domain,
+	}
+
+
+func _valid_reward_effect_snapshot(value: Dictionary) -> bool:
+	if not _dictionary_has_exact_fields(
+		value,
+		["schema_version", "stats", "health", "time", "weapon", "character"]
+	):
+		return false
+	if typeof(value["schema_version"]) != TYPE_INT or int(value["schema_version"]) != 1:
+		return false
+	for field: String in ["stats", "health", "time", "weapon", "character"]:
+		if not value[field] is Dictionary:
+			return false
+	var weapon := value["weapon"] as Dictionary
+	var character := value["character"] as Dictionary
+	return (
+		_dictionary_has_exact_fields(weapon, ["modifiers", "runtime"])
+		and weapon["modifiers"] is Dictionary
+		and weapon["runtime"] is Dictionary
+		and _dictionary_has_exact_fields(character, ["dash_invulnerable_bonus"])
+		and typeof(character["dash_invulnerable_bonus"]) in [TYPE_INT, TYPE_FLOAT]
+		and is_finite(float(character["dash_invulnerable_bonus"]))
+	)
+
+
+func _install_reward_effect_snapshot(value: Dictionary) -> bool:
+	var energy_before := float(time_manager.get("energy"))
+	var max_energy_before := float(time_manager.get("max_energy"))
+	if not _restore_reward_stats_snapshot(value["stats"] as Dictionary):
+		return false
+	_apply_stats_to_components(false, not _reward_effect_publication_active)
+	if (
+		_reward_effect_publication_active
+		and (
+			energy_before != float(time_manager.get("energy"))
+			or max_energy_before != float(time_manager.get("max_energy"))
+		)
+	):
+		_queue_reward_energy_signal()
+	if not bool(health.call(
+		"restore_reward_effect_snapshot",
+		(value["health"] as Dictionary).duplicate(true)
+	)):
+		return false
+	if not bool(time_manager.call(
+		"restore_reward_effect_snapshot",
+		(value["time"] as Dictionary).duplicate(true),
+		not _reward_effect_publication_active
+	)):
+		return false
+	if (
+		_reward_effect_publication_active
+		and (
+			energy_before != float(time_manager.get("energy"))
+			or max_energy_before != float(time_manager.get("max_energy"))
+		)
+	):
+		_queue_reward_energy_signal()
+	var weapon := value["weapon"] as Dictionary
+	if not bool(weapon_modifier_state.call(
+		"restore_snapshot",
+		(weapon["modifiers"] as Dictionary).duplicate(true)
+	)):
+		return false
+	var runtime_snapshot := weapon["runtime"] as Dictionary
+	if not runtime_snapshot.is_empty():
+		if (
+			weapon_runtime == null
+			or not weapon_runtime.has_method("restore_snapshot")
+			or not bool(weapon_runtime.call("restore_snapshot", runtime_snapshot.duplicate(true)))
+		):
+			return false
+	_dash_invulnerable_bonus = float((value["character"] as Dictionary)["dash_invulnerable_bonus"])
+	return true
+
+
+func _restore_reward_stats_snapshot(value: Dictionary) -> bool:
+	const FIELDS: Array[String] = [
+		"max_hp",
+		"attack",
+		"defense",
+		"move_speed",
+		"attack_speed",
+		"crit_chance",
+		"crit_multiplier",
+		"time_energy_max",
+		"time_energy_regen",
+	]
+	if not _dictionary_has_exact_fields(value, FIELDS):
+		return false
+	for field: String in FIELDS:
+		if typeof(value[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value[field])):
+			return false
+	if (
+		float(value["max_hp"]) <= 0.0
+		or float(value["attack"]) < 0.0
+		or float(value["move_speed"]) <= 0.0
+		or float(value["attack_speed"]) <= 0.0
+		or float(value["crit_chance"]) < 0.0
+		or float(value["crit_chance"]) > 1.0
+		or float(value["crit_multiplier"]) < 1.0
+		or float(value["time_energy_max"]) <= 0.0
+		or float(value["time_energy_regen"]) < 0.0
+	):
+		return false
+	for field: String in FIELDS:
+		stats.set(field, float(value[field]))
+	return stats.call("snapshot") == value
+
+
+func _validated_reward_effect_operation(operation: Dictionary) -> Dictionary:
+	if not _dictionary_has_exact_fields(
+		operation,
+		["effect_id", "runtime_domain", "value", "stack_rule", "weapon_capabilities"]
+	):
+		return {}
+	for field: String in ["effect_id", "runtime_domain", "stack_rule"]:
+		if typeof(operation[field]) != TYPE_STRING or str(operation[field]).is_empty():
+			return {}
+	if not operation["weapon_capabilities"] is Array:
+		return {}
+	var effect_id := StringName(str(operation["effect_id"]))
+	var catalog = EffectHandlerCatalogScript.new()
+	var descriptor: Dictionary = catalog.effect_descriptor(effect_id)
+	if descriptor.is_empty():
+		return {}
+	var normalized: Dictionary = catalog.normalize_effects({str(effect_id): operation["value"]})
+	if (
+		normalized.size() != 1
+		or not normalized.has(str(effect_id))
+		or normalized[str(effect_id)] != operation["value"]
+		or str(descriptor.get("runtime_domain", "")) != str(operation["runtime_domain"])
+		or str(descriptor.get("stack_rule", "")) != str(operation["stack_rule"])
+		or descriptor.get("weapon_capabilities", []) != operation["weapon_capabilities"]
+	):
+		return {}
+	return operation.duplicate(true)
+
+
+func _apply_reward_stats_operation(effect_id: StringName, value: Variant) -> bool:
+	var energy_before := float(time_manager.get("energy"))
+	var max_energy_before := float(time_manager.get("max_energy"))
+	var numeric := float(value)
+	var next_value: float
+	match effect_id:
+		&"max_hp_bonus":
+			next_value = float(stats.max_hp) + numeric
+			if not is_finite(next_value) or next_value <= 0.0:
+				return false
+			stats.max_hp = next_value
+		&"max_hp_multiplier":
+			next_value = float(stats.max_hp) * numeric
+			if not is_finite(next_value) or next_value <= 0.0:
+				return false
+			stats.max_hp = next_value
+		&"defense_bonus":
+			next_value = float(stats.defense) + numeric
+			if not is_finite(next_value):
+				return false
+			stats.defense = next_value
+		&"time_energy_max_bonus":
+			next_value = float(stats.time_energy_max) + numeric
+			if not is_finite(next_value) or next_value <= 0.0:
+				return false
+			stats.time_energy_max = next_value
+		&"time_energy_regen_bonus":
+			next_value = float(stats.time_energy_regen) + numeric
+			if not is_finite(next_value) or next_value < 0.0:
+				return false
+			stats.time_energy_regen = next_value
+		&"time_energy_regen_multiplier":
+			next_value = float(stats.time_energy_regen) * numeric
+			if not is_finite(next_value) or next_value < 0.0:
+				return false
+			stats.time_energy_regen = next_value
+		_:
+			return false
+	_apply_stats_to_components(false, not _reward_effect_publication_active)
+	if (
+		_reward_effect_publication_active
+		and (
+			energy_before != float(time_manager.get("energy"))
+			or max_energy_before != float(time_manager.get("max_energy"))
+		)
+	):
+		_queue_reward_energy_signal()
+	return true
+
+
+func _apply_reward_health_operation(effect_id: StringName, value: Variant) -> bool:
+	if effect_id != &"healing_multiplier":
+		return false
+	var next_value := float(health.get("healing_multiplier")) * float(value)
+	if not is_finite(next_value) or next_value < 0.0:
+		return false
+	health.set("healing_multiplier", next_value)
+	return true
+
+
+func _apply_reward_time_operation(effect_id: StringName, value: Variant) -> bool:
+	var current := float(time_manager.get(effect_id))
+	var numeric := float(value)
+	var next_value: Variant
+	match effect_id:
+		&"rewind_echo_enabled":
+			next_value = bool(value)
+		&"time_stop_cost_multiplier", &"rewind_cost_multiplier", \
+		&"time_rift_cost_multiplier", &"time_accelerate_cost_multiplier":
+			next_value = current * numeric
+		&"time_stop_weakpoint_duration", &"rewind_path_hit_multiplier", \
+		&"low_energy_regen_multiplier", &"low_energy_threshold":
+			next_value = maxf(current, numeric)
+		&"time_stop_duration_bonus", &"time_stop_weakpoint_damage_bonus", \
+		&"time_stop_self_damage", &"rewind_heal", &"rewind_self_damage", \
+		&"time_rift_duration_bonus", &"time_rift_radius_bonus", \
+		&"time_rift_slow_bonus", &"time_accelerate_duration_bonus", \
+		&"time_accelerate_multiplier_bonus":
+			next_value = current + numeric
+		_:
+			return false
+	if next_value is float and (not is_finite(float(next_value)) or float(next_value) < 0.0):
+		return false
+	time_manager.set(effect_id, next_value)
+	return true
+
+
+func _apply_reward_weapon_operation(operation: Dictionary) -> bool:
+	var routes: Array[Dictionary] = []
+	for mapping_value: Variant in operation["weapon_capabilities"] as Array:
+		if not mapping_value is Dictionary:
+			return false
+		var mapping := (mapping_value as Dictionary).duplicate(true)
+		mapping["effect_id"] = str(operation["effect_id"])
+		mapping["value"] = operation["value"]
+		mapping["stack_rule"] = str(operation["stack_rule"])
+		routes.append(mapping)
+	return not routes.is_empty() and apply_weapon_capability_effects(routes)
+
+
+func _apply_reward_character_operation(effect_id: StringName, value: Variant) -> bool:
+	if effect_id != &"dash_invulnerable_bonus":
+		return false
+	var next_value := _dash_invulnerable_bonus + float(value)
+	if not is_finite(next_value) or next_value < 0.0:
+		return false
+	_dash_invulnerable_bonus = next_value
+	return true
+
+
+func _apply_reward_trigger_operation(effect_id: StringName, value: Variant) -> bool:
+	match effect_id:
+		&"heal":
+			var healed_amount := float(health.call(
+				"heal",
+				float(value),
+				not _reward_effect_publication_active
+			))
+			if _reward_effect_publication_active and healed_amount > 0.0:
+				_reward_effect_pending_health_signal = {
+					"amount": healed_amount,
+					"current_hp": float(health.get("current_hp")),
+				}
+			return true
+		&"time_energy_restore":
+			time_manager.call(
+				"restore_energy",
+				float(value),
+				not _reward_effect_publication_active
+			)
+			if _reward_effect_publication_active:
+				_queue_reward_energy_signal()
+			return true
+		&"invulnerable_duration":
+			return bool(health.call("apply_reward_invulnerability", float(value)))
+		_:
+			return false
+
+
+func _queue_reward_energy_signal() -> void:
+	_reward_effect_pending_time_signal = {
+		"current": float(time_manager.get("energy")),
+		"maximum": float(time_manager.get("max_energy")),
+	}
 
 
 func apply_knockback(knockback: Vector2) -> void:
@@ -9858,10 +10337,10 @@ func _on_died(_killer: Variant) -> void:
 		cancel_active_time_effects(&"player_died")
 
 
-func _apply_stats_to_components(reset_health: bool) -> void:
+func _apply_stats_to_components(reset_health: bool, publish_signals: bool = true) -> void:
 	if reset_health:
 		health.configure_from_stats(stats)
 	else:
 		health.apply_stat_totals(stats)
-	time_manager.configure_from_stats(stats)
+	time_manager.configure_from_stats(stats, publish_signals)
 	_sync_weapon_adapter_stats()

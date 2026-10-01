@@ -5,6 +5,8 @@ const EnemyChaserScene := preload("res://scenes/enemies/enemy_chaser.tscn")
 const EnemyProjectileScene := preload("res://scenes/enemies/enemy_projectile.tscn")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const RunRuntimeHostScript := preload("res://scripts/application/run_runtime_host.gd")
 
 
 class LoadoutSpy:
@@ -62,6 +64,145 @@ class TerminalOrderRecorder:
 		events.append("run_ended")
 
 
+class SelectionFacade:
+	extends RefCounted
+
+	var fail_commit: bool = false
+	var commit_failure_code: StringName = &"COMMIT_FAILED"
+	var reserve_count: int = 0
+	var commit_count: int = 0
+	var cancel_count: int = 0
+	var death_count: int = 0
+	var last_terminal_context: Dictionary = {}
+	var state: Dictionary = {
+		"run_id": "selection-test-run",
+		"revision": 12,
+		"phase": RunPhaseScript.Value.ROOM_ENTERING,
+	}
+
+	func reserve_selection(_offer_id: String, _option_id: String, _revision: int):
+		reserve_count += 1
+		if commit_count > 0:
+			return CommandResultScript.failure(&"ALREADY_CONSUMED", int(state.get("revision", 0)))
+		return CommandResultScript.success(10, {
+			"reservation_id": "reservation-1",
+			"definition": {
+				"id": "selection_test_reward",
+				"category": "item",
+				"effects": {"max_hp_bonus": 25.0},
+			},
+		})
+
+	func commit_reserved_selection(_reservation_id: String):
+		commit_count += 1
+		if fail_commit:
+			return CommandResultScript.failure(commit_failure_code, 10)
+		return CommandResultScript.success(12, {"selection_revision": 11})
+
+	func cancel_reserved_selection(_reservation_id: String):
+		cancel_count += 1
+		return CommandResultScript.success(10)
+
+	func player_died(context: Dictionary = {}):
+		death_count += 1
+		last_terminal_context = context.duplicate(true)
+		state["revision"] = int(state.get("revision", 0)) + 1
+		state["phase"] = RunPhaseScript.Value.DEFEAT
+		state["result"] = context.duplicate(true)
+		return CommandResultScript.success(int(state["revision"]))
+
+	func snapshot() -> Dictionary:
+		return state.duplicate(true)
+
+
+class SelectionPlayer:
+	extends Node
+
+	var max_hp: float = 100.0
+	var fail_operation: bool = false
+	var fail_restore: bool = false
+	var publication_active: bool = false
+	var pending_signal_count: int = 0
+	var published_signal_count: int = 0
+
+	func reward_effect_begin_publication() -> bool:
+		if publication_active:
+			return false
+		publication_active = true
+		pending_signal_count = 0
+		return true
+
+	func reward_effect_publication_can_commit() -> bool:
+		return publication_active
+
+	func reward_effect_commit_publication() -> bool:
+		if not publication_active:
+			return false
+		publication_active = false
+		published_signal_count += pending_signal_count
+		pending_signal_count = 0
+		return true
+
+	func reward_effect_rollback_publication() -> bool:
+		if not publication_active:
+			return false
+		publication_active = false
+		pending_signal_count = 0
+		return true
+
+	func reward_effect_snapshot() -> Dictionary:
+		return {"max_hp": max_hp}
+
+	func restore_reward_effect_snapshot(value: Dictionary) -> bool:
+		if fail_restore:
+			return false
+		if typeof(value.get("max_hp")) not in [TYPE_INT, TYPE_FLOAT]:
+			return false
+		max_hp = float(value["max_hp"])
+		return reward_effect_snapshot() == {"max_hp": max_hp}
+
+	func reward_effect_apply_operation(operation: Dictionary) -> Dictionary:
+		if fail_operation:
+			return {"ok": false, "code": &"INJECTED_FAILURE"}
+		if (
+			str(operation.get("runtime_domain", "")) != "stats"
+			or str(operation.get("effect_id", "")) != "max_hp_bonus"
+		):
+			return {"ok": false, "code": &"UNSUPPORTED_OPERATION"}
+		max_hp += float(operation.get("value", 0.0))
+		pending_signal_count += 1
+		return {"ok": true, "code": &"OK"}
+
+
+class SelectionPanel:
+	extends Control
+
+	var rejection_count: int = 0
+	var close_count: int = 0
+
+	func show_rejection(_message_key: String) -> void:
+		rejection_count += 1
+
+	func close_panel() -> void:
+		close_count += 1
+
+
+class RewardSelectionRecorder:
+	extends RefCounted
+
+	var count: int = 0
+	var last_revision: int = -1
+	var reentrant_host: Node
+	var reentered: bool = false
+
+	func record(_run_id: String, _definition: Dictionary, revision: int) -> void:
+		count += 1
+		last_revision = revision
+		if reentrant_host != null and not reentered:
+			reentered = true
+			reentrant_host.call("_on_option_chosen", "offer-1", "option-1", 10)
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	call_deferred("_run")
@@ -69,6 +210,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
+	_assert_reward_selection_transaction(suite)
 	await _assert_main_gameplay_pause_boundary(suite)
 	var main := MainScene.instantiate()
 	add_child(main)
@@ -204,6 +346,131 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	suite.finish(get_tree())
+
+
+func _assert_reward_selection_transaction(suite) -> void:
+	var recorder := RewardSelectionRecorder.new()
+	EventBus.reward_selected.connect(recorder.record)
+
+	var success_host = RunRuntimeHostScript.new()
+	var success_facade := SelectionFacade.new()
+	var success_player := SelectionPlayer.new()
+	var success_panel := SelectionPanel.new()
+	success_host.set("_facade", success_facade)
+	success_host.set("_player", success_player)
+	success_host.set("_choice_panel", success_panel)
+	success_host.set("_active_run_id", "selection-test-run")
+	success_host.set("_published_run_id", "selection-test-run")
+	success_host.set("_selection_safety_active", true)
+	recorder.reentrant_host = success_host
+	success_host.call("_on_option_chosen", "offer-1", "option-1", 10)
+	suite.assert_close(success_player.max_hp, 125.0, "successful selection commits the player effect")
+	suite.assert_equal(success_facade.commit_count, 1, "successful selection commits authority once")
+	suite.assert_equal(success_facade.cancel_count, 0, "successful selection does not cancel")
+	suite.assert_equal(recorder.count, 1, "successful selection publishes exactly one reward fact")
+	suite.assert_equal(recorder.last_revision, 11, "reward fact uses the authoritative selection revision")
+	suite.assert_equal(success_panel.close_count, 1, "successful selection closes the panel")
+	suite.assert_equal(success_player.published_signal_count, 1, "successful authority commit releases buffered player feedback once")
+	suite.assert_true(recorder.reentered, "reward publication exercises a synchronous reentrant callback")
+	success_host.call("_on_option_chosen", "offer-1", "option-1", 10)
+	suite.assert_close(success_player.max_hp, 125.0, "replayed callback cannot apply the player effect twice")
+	suite.assert_equal(success_facade.commit_count, 1, "replayed callback cannot commit authority twice")
+	suite.assert_equal(recorder.count, 1, "replayed callback cannot publish the reward fact twice")
+	suite.assert_equal(success_player.published_signal_count, 1, "replayed callback cannot publish player feedback twice")
+
+	var failed_host = RunRuntimeHostScript.new()
+	var failed_facade := SelectionFacade.new()
+	failed_facade.fail_commit = true
+	var failed_player := SelectionPlayer.new()
+	var failed_panel := SelectionPanel.new()
+	failed_host.set("_facade", failed_facade)
+	failed_host.set("_player", failed_player)
+	failed_host.set("_choice_panel", failed_panel)
+	failed_host.set("_active_run_id", "selection-test-run")
+	failed_host.set("_published_run_id", "selection-test-run")
+	failed_host.call("_on_option_chosen", "offer-2", "option-2", 10)
+	suite.assert_close(failed_player.max_hp, 100.0, "authority failure rolls the player effect back exactly")
+	suite.assert_equal(failed_facade.commit_count, 1, "authority failure attempts one commit")
+	suite.assert_equal(failed_facade.cancel_count, 1, "authority failure cancels the reservation")
+	suite.assert_equal(recorder.count, 1, "authority failure publishes no reward fact")
+	suite.assert_equal(failed_panel.rejection_count, 1, "authority failure remains visible to the player")
+	suite.assert_equal(failed_player.published_signal_count, 0, "authority failure discards buffered player feedback")
+
+	var player_failed_host = RunRuntimeHostScript.new()
+	var player_failed_facade := SelectionFacade.new()
+	var player_failed := SelectionPlayer.new()
+	player_failed.fail_operation = true
+	var player_failed_panel := SelectionPanel.new()
+	player_failed_host.set("_facade", player_failed_facade)
+	player_failed_host.set("_player", player_failed)
+	player_failed_host.set("_choice_panel", player_failed_panel)
+	player_failed_host.call("_on_option_chosen", "offer-3", "option-3", 10)
+	suite.assert_close(player_failed.max_hp, 100.0, "player operation failure restores its pre-selection snapshot")
+	suite.assert_equal(player_failed_facade.commit_count, 0, "player failure cannot reach authoritative commit")
+	suite.assert_equal(player_failed_facade.cancel_count, 1, "player failure cancels the reservation")
+	suite.assert_equal(recorder.count, 1, "player failure publishes no reward fact")
+	suite.assert_equal(player_failed_panel.rejection_count, 1, "player failure is shown as a rejected choice")
+	suite.assert_equal(player_failed.published_signal_count, 0, "player operation failure publishes no feedback")
+
+	var rollback_failed_host = RunRuntimeHostScript.new()
+	var rollback_failed_facade := SelectionFacade.new()
+	rollback_failed_facade.fail_commit = true
+	var rollback_failed_player := SelectionPlayer.new()
+	rollback_failed_player.fail_restore = true
+	var rollback_failed_panel := SelectionPanel.new()
+	rollback_failed_host.set("_facade", rollback_failed_facade)
+	rollback_failed_host.set("_player", rollback_failed_player)
+	rollback_failed_host.set("_choice_panel", rollback_failed_panel)
+	rollback_failed_host.set("_active_run_id", "selection-test-run")
+	rollback_failed_host.set("_published_run_id", "selection-test-run")
+	rollback_failed_host.call("_on_option_chosen", "offer-4", "option-4", 10)
+	suite.assert_close(rollback_failed_player.max_hp, 125.0, "failed player rollback is never reported as restored")
+	suite.assert_equal(rollback_failed_facade.commit_count, 1, "rollback failure follows one rejected authority commit")
+	suite.assert_equal(rollback_failed_facade.cancel_count, 1, "rollback failure still cancels the reservation")
+	suite.assert_equal(rollback_failed_facade.death_count, 1, "rollback failure enters the fail-closed terminal path")
+	suite.assert_equal(rollback_failed_facade.last_terminal_context.get("reason"), "reward_transaction_integrity", "rollback failure records an integrity terminal reason")
+	suite.assert_equal(recorder.count, 1, "rollback failure publishes no reward fact")
+	suite.assert_equal(rollback_failed_player.published_signal_count, 0, "rollback failure publishes no buffered feedback")
+	suite.assert_true(not rollback_failed_player.publication_active, "rollback failure still closes the feedback transaction")
+	suite.assert_true(rollback_failed_player.reward_effect_begin_publication(), "terminal cleanup does not poison a later feedback transaction")
+	suite.assert_true(rollback_failed_player.reward_effect_rollback_publication(), "later feedback transaction remains reversible")
+
+	var integrity_failed_host = RunRuntimeHostScript.new()
+	var integrity_failed_facade := SelectionFacade.new()
+	integrity_failed_facade.fail_commit = true
+	integrity_failed_facade.commit_failure_code = &"INTEGRITY_FAILURE"
+	var integrity_failed_player := SelectionPlayer.new()
+	var integrity_failed_panel := SelectionPanel.new()
+	integrity_failed_host.set("_facade", integrity_failed_facade)
+	integrity_failed_host.set("_player", integrity_failed_player)
+	integrity_failed_host.set("_choice_panel", integrity_failed_panel)
+	integrity_failed_host.set("_active_run_id", "selection-test-run")
+	integrity_failed_host.set("_published_run_id", "selection-test-run")
+	integrity_failed_host.call("_on_option_chosen", "offer-5", "option-5", 10)
+	suite.assert_close(integrity_failed_player.max_hp, 100.0, "authority integrity failure first restores the player")
+	suite.assert_equal(integrity_failed_facade.death_count, 1, "authority integrity failure terminates the run")
+	suite.assert_equal(integrity_failed_facade.last_terminal_context.get("reason"), "reward_transaction_integrity", "authority integrity failure records a terminal reason")
+	suite.assert_equal(integrity_failed_panel.rejection_count, 0, "authority integrity failure is not downgraded to a retryable rejection")
+	suite.assert_equal(recorder.count, 1, "authority integrity failure publishes no reward fact")
+	suite.assert_equal(integrity_failed_player.published_signal_count, 0, "authority integrity failure discards buffered feedback")
+
+	if EventBus.reward_selected.is_connected(recorder.record):
+		EventBus.reward_selected.disconnect(recorder.record)
+	success_host.free()
+	success_player.free()
+	success_panel.free()
+	failed_host.free()
+	failed_player.free()
+	failed_panel.free()
+	player_failed_host.free()
+	player_failed.free()
+	player_failed_panel.free()
+	rollback_failed_host.free()
+	rollback_failed_player.free()
+	rollback_failed_panel.free()
+	integrity_failed_host.free()
+	integrity_failed_player.free()
+	integrity_failed_panel.free()
 
 
 func _assert_full_player_identity_generation(suite, player: Node, label: String) -> void:

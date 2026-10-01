@@ -2,94 +2,211 @@ class_name ItemEffect
 extends RefCounted
 
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
+const PlayerRewardEffectRuntimeScript := preload(
+	"res://scripts/items/player_reward_effect_runtime.gd"
+)
 
 
-static func apply_to_player(player: Node, effects: Dictionary) -> void:
-	if player == null or effects.is_empty():
-		return
-
-	if effects.has("max_hp_bonus"):
-		player.stats.max_hp += float(effects["max_hp_bonus"])
-	if effects.has("max_hp_multiplier"):
-		player.stats.max_hp *= float(effects["max_hp_multiplier"])
-	if effects.has("defense_bonus"):
-		player.stats.defense += float(effects["defense_bonus"])
-	if effects.has("time_energy_max_bonus"):
-		player.stats.time_energy_max += float(effects["time_energy_max_bonus"])
-	if effects.has("time_energy_regen_bonus"):
-		player.stats.time_energy_regen += float(effects["time_energy_regen_bonus"])
-	if effects.has("time_energy_regen_multiplier"):
-		player.stats.time_energy_regen *= float(effects["time_energy_regen_multiplier"])
-	if effects.has("time_stop_duration_bonus"):
-		player.time_manager.time_stop_duration_bonus += float(effects["time_stop_duration_bonus"])
-	if effects.has("time_stop_cost_multiplier"):
-		player.time_manager.time_stop_cost_multiplier *= float(effects["time_stop_cost_multiplier"])
-	if effects.has("time_stop_weakpoint_damage_bonus"):
-		player.time_manager.time_stop_weakpoint_damage_bonus += float(effects["time_stop_weakpoint_damage_bonus"])
-	if effects.has("time_stop_weakpoint_duration"):
-		player.time_manager.time_stop_weakpoint_duration = maxf(player.time_manager.time_stop_weakpoint_duration, float(effects["time_stop_weakpoint_duration"]))
-	if effects.has("time_stop_self_damage"):
-		player.time_manager.time_stop_self_damage += float(effects["time_stop_self_damage"])
-	if effects.has("rewind_cost_multiplier"):
-		player.time_manager.rewind_cost_multiplier *= float(effects["rewind_cost_multiplier"])
-	if effects.has("rewind_heal"):
-		player.time_manager.rewind_heal += float(effects["rewind_heal"])
-	if effects.has("rewind_echo_enabled"):
-		player.time_manager.rewind_echo_enabled = bool(effects["rewind_echo_enabled"])
-	if effects.has("rewind_path_hit_multiplier"):
-		player.time_manager.rewind_path_hit_multiplier = maxf(player.time_manager.rewind_path_hit_multiplier, float(effects["rewind_path_hit_multiplier"]))
-	if effects.has("rewind_self_damage"):
-		player.time_manager.rewind_self_damage += float(effects["rewind_self_damage"])
-	if effects.has("time_rift_cost_multiplier"):
-		player.time_manager.time_rift_cost_multiplier *= float(effects["time_rift_cost_multiplier"])
-	if effects.has("time_rift_duration_bonus"):
-		player.time_manager.time_rift_duration_bonus += float(effects["time_rift_duration_bonus"])
-	if effects.has("time_rift_radius_bonus"):
-		player.time_manager.time_rift_radius_bonus += float(effects["time_rift_radius_bonus"])
-	if effects.has("time_rift_slow_bonus"):
-		player.time_manager.time_rift_slow_bonus += float(effects["time_rift_slow_bonus"])
-	if effects.has("time_accelerate_cost_multiplier"):
-		player.time_manager.time_accelerate_cost_multiplier *= float(effects["time_accelerate_cost_multiplier"])
-	if effects.has("time_accelerate_duration_bonus"):
-		player.time_manager.time_accelerate_duration_bonus += float(effects["time_accelerate_duration_bonus"])
-	if effects.has("time_accelerate_multiplier_bonus"):
-		player.time_manager.time_accelerate_multiplier_bonus += float(effects["time_accelerate_multiplier_bonus"])
-	if effects.has("low_energy_regen_multiplier"):
-		player.time_manager.low_energy_regen_multiplier = maxf(player.time_manager.low_energy_regen_multiplier, float(effects["low_energy_regen_multiplier"]))
-	if effects.has("low_energy_threshold"):
-		player.time_manager.low_energy_threshold = maxf(player.time_manager.low_energy_threshold, float(effects["low_energy_threshold"]))
-	_apply_weapon_effects(player, effects)
-	if effects.has("dash_invulnerable_bonus"):
-		player._dash_invulnerable_bonus += float(effects["dash_invulnerable_bonus"])
-	if effects.has("healing_multiplier"):
-		player.health.healing_multiplier *= float(effects["healing_multiplier"])
-
-	player._apply_stats_to_components(false)
-
-	if effects.has("heal"):
-		player.health.heal(float(effects["heal"]))
-	if effects.has("time_energy_restore"):
-		player.time_manager.restore_energy(float(effects["time_energy_restore"]))
-	if effects.has("invulnerable_duration"):
-		player.health.apply_invulnerability(float(effects["invulnerable_duration"]))
+static func apply_to_player(
+	player: Node,
+	effects: Dictionary,
+	definition_id: String = "legacy_item_effect",
+	category: String = ""
+) -> Dictionary:
+	if player == null or not is_instance_valid(player):
+		return {"ok": false, "code": &"INVALID_PLAYER"}
+	if effects.is_empty():
+		return {"ok": true, "code": &"NO_EFFECTS", "receipt": {}}
+	if (
+		not player.has_method("reward_effect_snapshot")
+		or not player.has_method("reward_effect_begin_publication")
+		or not player.has_method("reward_effect_publication_can_commit")
+		or not player.has_method("reward_effect_commit_publication")
+		or not player.has_method("reward_effect_rollback_publication")
+	):
+		return {"ok": false, "code": &"INVALID_PLAYER"}
+	if not bool(player.call("reward_effect_begin_publication")):
+		return {"ok": false, "code": &"PUBLICATION_UNAVAILABLE"}
+	var result: Dictionary
+	if category.is_empty():
+		result = _apply_legacy_composite(player, effects, definition_id)
+	else:
+		result = _apply_definition(player, {
+			"id": definition_id,
+			"category": category,
+			"effects": effects.duplicate(true),
+		})
+	return _settle_publication(player, result)
 
 
-static func _apply_weapon_effects(player: Node, effects: Dictionary) -> void:
+static func _apply_definition(player: Node, definition: Dictionary) -> Dictionary:
+	var snapshot_value: Variant = player.call("reward_effect_snapshot")
+	if not snapshot_value is Dictionary or (snapshot_value as Dictionary).is_empty():
+		return {"ok": false, "code": &"INVALID_PLAYER_SNAPSHOT"}
+	var runtime = PlayerRewardEffectRuntimeScript.new()
+	var prepared: Dictionary = runtime.prepare(
+		definition.duplicate(true),
+		(snapshot_value as Dictionary).duplicate(true)
+	)
+	if not bool(prepared.get("ok", false)):
+		return prepared
+	return runtime.commit(
+		(prepared.get("plan", {}) as Dictionary).duplicate(true),
+		player
+	)
+
+
+static func _apply_legacy_composite(
+	player: Node,
+	effects: Dictionary,
+	definition_id: String
+) -> Dictionary:
+	var catalog = EffectHandlerCatalogScript.new()
+	var normalized: Dictionary = catalog.normalize_effects(effects)
+	if normalized.is_empty() or normalized.size() != effects.size():
+		return {"ok": false, "code": &"INVALID_EFFECTS"}
+	var effect_ids: Array[String] = []
+	for effect_id_value: Variant in normalized.keys():
+		effect_ids.append(str(effect_id_value))
+	effect_ids.sort()
+	var receipts: Array[Dictionary] = []
+	var runtime = PlayerRewardEffectRuntimeScript.new()
+	for effect_id: String in effect_ids:
+		var descriptor: Dictionary = catalog.effect_descriptor(StringName(effect_id))
+		if (
+			str(descriptor.get("runtime_domain", "")) == "weapon"
+			and not _legacy_weapon_effect_matches_player(
+				player,
+				descriptor.get("weapon_capabilities", []) as Array
+			)
+		):
+			continue
+		var categories_value: Variant = descriptor.get("allowed_categories", [])
+		if not categories_value is Array or (categories_value as Array).is_empty():
+			return _rollback_legacy_receipts(runtime, player, receipts, {
+				"ok": false,
+				"code": &"INVALID_EFFECTS",
+			})
+		var selected_category := str((categories_value as Array)[0])
+		var result := _apply_definition(player, {
+			"id": "%s:%s" % [definition_id, effect_id],
+			"category": selected_category,
+			"effects": {effect_id: normalized[effect_id]},
+		})
+		if not bool(result.get("ok", false)):
+			return _rollback_legacy_receipts(runtime, player, receipts, result)
+		var receipt_value: Variant = result.get("receipt", {})
+		if receipt_value is Dictionary and not (receipt_value as Dictionary).is_empty():
+			receipts.append((receipt_value as Dictionary).duplicate(true))
+	return {
+		"ok": true,
+		"code": &"OK",
+		"receipts": receipts.duplicate(true),
+	}
+
+
+static func _rollback_legacy_receipts(
+	runtime: RefCounted,
+	player: Node,
+	receipts: Array[Dictionary],
+	failure: Dictionary
+) -> Dictionary:
+	for receipt_index: int in range(receipts.size() - 1, -1, -1):
+		var rolled_back: Dictionary = runtime.call(
+			"rollback",
+			receipts[receipt_index].duplicate(true),
+			player
+		)
+		if not bool(rolled_back.get("ok", false)):
+			return {
+				"ok": false,
+				"code": &"ROLLBACK_FAILED",
+				"cause": failure.duplicate(true),
+				"rollback": rolled_back,
+			}
+	return failure.duplicate(true)
+
+
+static func _settle_publication(player: Node, result: Dictionary) -> Dictionary:
+	if not bool(result.get("ok", false)):
+		if not bool(player.call("reward_effect_rollback_publication")):
+			return {
+				"ok": false,
+				"code": &"ROLLBACK_FAILED",
+				"cause": result.duplicate(true),
+			}
+		return result
+	if not bool(player.call("reward_effect_publication_can_commit")):
+		var state_rollback := _rollback_committed_result(player, result)
+		var publication_rollback := bool(player.call("reward_effect_rollback_publication"))
+		return {
+			"ok": false,
+			"code": &"ROLLBACK_FAILED" if not state_rollback or not publication_rollback else &"PUBLICATION_REJECTED",
+		}
+	if not bool(player.call("reward_effect_commit_publication")):
+		return {"ok": false, "code": &"PUBLICATION_FAILED"}
+	return result
+
+
+static func _rollback_committed_result(player: Node, result: Dictionary) -> bool:
+	var receipts: Array[Dictionary] = []
+	var receipt_value: Variant = result.get("receipt", {})
+	if receipt_value is Dictionary and not (receipt_value as Dictionary).is_empty():
+		receipts.append((receipt_value as Dictionary).duplicate(true))
+	var receipts_value: Variant = result.get("receipts", [])
+	if receipts_value is Array:
+		for entry_value: Variant in receipts_value as Array:
+			if entry_value is Dictionary and not (entry_value as Dictionary).is_empty():
+				receipts.append((entry_value as Dictionary).duplicate(true))
+	var runtime = PlayerRewardEffectRuntimeScript.new()
+	for receipt_index: int in range(receipts.size() - 1, -1, -1):
+		var rolled_back: Dictionary = runtime.call(
+			"rollback",
+			receipts[receipt_index].duplicate(true),
+			player
+		)
+		if not bool(rolled_back.get("ok", false)):
+			return false
+	return true
+
+
+static func _legacy_weapon_effect_matches_player(
+	player: Node,
+	weapon_capabilities: Array
+) -> bool:
+	var loadout_value: Variant = player.get("loadout_runtime")
+	if not loadout_value is Object or not (loadout_value as Object).has_method("has_weapon"):
+		return false
+	for mapping_value: Variant in weapon_capabilities:
+		if (
+			mapping_value is Dictionary
+			and bool((loadout_value as Object).call(
+				"has_weapon",
+				StringName(str((mapping_value as Dictionary).get("weapon_id", "")))
+			))
+		):
+			return true
+	return false
+
+
+static func _apply_weapon_effects(player: Node, effects: Dictionary) -> bool:
 	var effect_catalog = EffectHandlerCatalogScript.new()
 	var routes: Array[Dictionary] = effect_catalog.weapon_capability_routes(effects)
 	if routes.is_empty():
-		return
+		return true
 	if player.has_method("apply_weapon_capability_effects"):
-		player.call("apply_weapon_capability_effects", routes)
-		return
+		return bool(player.call("apply_weapon_capability_effects", routes))
 	if not player.has_method("apply_weapon_capability_effect"):
-		return
+		return false
+	var applied_any := false
 	for route: Dictionary in routes:
-		player.call(
+		if bool(player.call(
 			"apply_weapon_capability_effect",
 			StringName(str(route["capability"])),
 			route["value"],
 			float(route["base_value"]),
 			StringName(str(route["stack_rule"])),
 			StringName(str(route["weapon_id"]))
-		)
+		)):
+			applied_any = true
+	return applied_any

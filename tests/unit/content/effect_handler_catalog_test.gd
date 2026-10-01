@@ -16,6 +16,48 @@ const SOURCE_CATEGORIES := {
 	"res://data/curses/mvp_curses.json": "curse",
 	"res://data/talents/mvp_talents.json": "talent",
 }
+const RUNTIME_DOMAIN_BY_EFFECT := {
+	"attack_multiplier": "weapon",
+	"attack_speed_multiplier": "weapon",
+	"bow_charge_rate_bonus": "weapon",
+	"bow_full_charge_damage_multiplier_bonus": "weapon",
+	"bow_pierce_bonus": "weapon",
+	"combo_finisher_multiplier_bonus": "weapon",
+	"dash_invulnerable_bonus": "character",
+	"defense_bonus": "stats",
+	"heal": "trigger",
+	"healing_multiplier": "health",
+	"heavy_damage_multiplier_bonus": "weapon",
+	"heavy_execute_multiplier_bonus": "weapon",
+	"heavy_execute_threshold": "weapon",
+	"invulnerable_duration": "trigger",
+	"low_energy_regen_multiplier": "time",
+	"low_energy_threshold": "time",
+	"low_hp_damage_multiplier_bonus": "weapon",
+	"max_hp_bonus": "stats",
+	"max_hp_multiplier": "stats",
+	"rewind_cost_multiplier": "time",
+	"rewind_echo_enabled": "time",
+	"rewind_heal": "time",
+	"rewind_path_hit_multiplier": "time",
+	"rewind_self_damage": "time",
+	"time_accelerate_cost_multiplier": "time",
+	"time_accelerate_duration_bonus": "time",
+	"time_accelerate_multiplier_bonus": "time",
+	"time_energy_max_bonus": "stats",
+	"time_energy_regen_bonus": "stats",
+	"time_energy_regen_multiplier": "stats",
+	"time_energy_restore": "trigger",
+	"time_rift_cost_multiplier": "time",
+	"time_rift_duration_bonus": "time",
+	"time_rift_radius_bonus": "time",
+	"time_rift_slow_bonus": "time",
+	"time_stop_cost_multiplier": "time",
+	"time_stop_duration_bonus": "time",
+	"time_stop_self_damage": "time",
+	"time_stop_weakpoint_damage_bonus": "time",
+	"time_stop_weakpoint_duration": "time",
+}
 
 
 func _ready() -> void:
@@ -26,6 +68,7 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	var catalog = EffectHandlerCatalogScript.new()
 	_test_catalog_covers_current_effects(suite, catalog)
+	_test_runtime_domain_authority(suite, catalog)
 	_test_known_effects_and_context(suite, catalog)
 	_test_script_like_and_unknown_ids(suite, catalog)
 	_test_scalar_types_and_numeric_bounds(suite, catalog)
@@ -50,6 +93,7 @@ func _test_catalog_covers_current_effects(suite, catalog) -> void:
 		"maximum",
 		"stack_rule",
 		"allowed_categories",
+		"runtime_domain",
 	]
 	for row: Dictionary in snapshot:
 		actual_ids.append(str(row.get("effect_id", "")))
@@ -71,6 +115,101 @@ func _test_catalog_covers_current_effects(suite, catalog) -> void:
 					not catalog.normalize_effects(effects).is_empty(),
 					"current content %s normalizes" % entry.get("id", "")
 				)
+
+
+func _test_runtime_domain_authority(suite, catalog) -> void:
+	var snapshot: Array[Dictionary] = catalog.snapshot()
+	var actual_domains: Dictionary = {}
+	for row: Dictionary in snapshot:
+		actual_domains[str(row.get("effect_id", ""))] = str(row.get("runtime_domain", ""))
+	suite.assert_equal(
+		actual_domains,
+		RUNTIME_DOMAIN_BY_EFFECT,
+		"every current effect has one exact runtime domain"
+	)
+	suite.assert_true(
+		catalog.has_method("runtime_domain_for"),
+		"catalog exposes runtime-domain lookup for typed effect planning"
+	)
+	if catalog.has_method("runtime_domain_for"):
+		suite.assert_equal(
+			str(catalog.call("runtime_domain_for", &"heal")),
+			"trigger",
+			"known effects expose their runtime domain"
+		)
+		suite.assert_equal(
+			str(catalog.call("runtime_domain_for", &"unknown_effect")),
+			"",
+			"unknown effects expose no runtime domain"
+		)
+		suite.assert_equal(
+			str(catalog.call("runtime_domain_for", &"res://hostile.gd")),
+			"",
+			"script-like effect ids expose no runtime domain"
+		)
+	suite.assert_true(
+		catalog.has_method("effect_descriptor"),
+		"catalog exposes a canonical effect descriptor for runtime planning"
+	)
+	if catalog.has_method("effect_descriptor"):
+		var descriptor: Dictionary = catalog.call("effect_descriptor", &"attack_multiplier")
+		suite.assert_equal(descriptor.get("runtime_domain"), "weapon", "descriptor exposes runtime domain")
+		suite.assert_equal(descriptor.get("stack_rule"), "multiply", "descriptor exposes stack rule")
+		suite.assert_equal(descriptor.get("value_type"), "number", "descriptor exposes value type")
+		suite.assert_equal(
+			(descriptor.get("weapon_capabilities", []) as Array).size(),
+			5,
+			"descriptor exposes declared weapon capability routes"
+		)
+		descriptor["runtime_domain"] = "mutated"
+		(descriptor.get("weapon_capabilities", []) as Array).clear()
+		var repeated_descriptor: Dictionary = catalog.call("effect_descriptor", &"attack_multiplier")
+		suite.assert_equal(
+			repeated_descriptor.get("runtime_domain"),
+			"weapon",
+			"descriptor mutation cannot change catalog authority"
+		)
+		suite.assert_equal(
+			(repeated_descriptor.get("weapon_capabilities", []) as Array).size(),
+			5,
+			"descriptor capability rows are deep copied"
+		)
+		suite.assert_equal(
+			catalog.call("effect_descriptor", &"unknown_effect"),
+			{},
+			"unknown effects expose no descriptor"
+		)
+
+	var definition_source := {
+		"effect_id": "fixture_domain_effect",
+		"value_type": "number",
+		"minimum": 0.0,
+		"maximum": 1.0,
+		"stack_rule": "add",
+		"allowed_categories": ["item"],
+		"runtime_domain": "stats",
+	}
+	var valid_definition = EffectDefinitionScript.new()
+	suite.assert_true(
+		bool(valid_definition.configure(definition_source).get("ok", false)),
+		"known runtime domains configure"
+	)
+	var missing_domain: Dictionary = definition_source.duplicate(true)
+	missing_domain.erase("runtime_domain")
+	var missing_result: Dictionary = EffectDefinitionScript.new().configure(missing_domain)
+	suite.assert_equal(
+		missing_result.get("context", {}).get("reason"),
+		"missing",
+		"missing runtime domain fails closed"
+	)
+	var unknown_domain: Dictionary = definition_source.duplicate(true)
+	unknown_domain["runtime_domain"] = "world"
+	var unknown_result: Dictionary = EffectDefinitionScript.new().configure(unknown_domain)
+	suite.assert_equal(
+		unknown_result.get("context", {}).get("reason"),
+		"unsupported",
+		"unknown runtime domain fails closed"
+	)
 
 
 func _test_known_effects_and_context(suite, catalog) -> void:
@@ -210,6 +349,7 @@ func _test_weapon_capability_schema_fails_closed(suite) -> void:
 		"maximum": 5.0,
 		"stack_rule": "add",
 		"allowed_categories": ["item"],
+		"runtime_domain": "weapon",
 		"weapon_capabilities": [
 			{"weapon_id": "sword", "capability": "weapon.damage", "base_value": 1.0},
 		],

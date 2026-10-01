@@ -9,6 +9,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_facade.gd")
 const RunViewStateProjectorScript := preload("res://scripts/application/run_view_state_projector.gd")
 const HostileThreatRegistryScript := preload("res://scripts/combat/hostile_threat_registry.gd")
+const PlayerRewardEffectRuntimeScript := preload("res://scripts/items/player_reward_effect_runtime.gd")
 
 const HUD_RENDER_INTERVAL := 0.1
 const BOSS_EXPOSURE_REPLAY_CHECKPOINT_SCHEMA_VERSION := 1
@@ -44,6 +45,7 @@ var _run_serial: int = 0
 var _hud_render_accumulator: float = 0.0
 var _selection_safety_active: bool = false
 var _player_process_mode: ProcessMode = Node.PROCESS_MODE_INHERIT
+var _reward_effect_runtime: RefCounted = PlayerRewardEffectRuntimeScript.new()
 
 
 func _ready() -> void:
@@ -446,28 +448,171 @@ func _open_offer(offer_value: Variant) -> void:
 
 
 func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> void:
-	if _facade == null or _choice_panel == null or _player == null or not _player.has_method("apply_reward"):
+	if (
+		_facade == null
+		or _choice_panel == null
+		or _player == null
+		or _reward_effect_runtime == null
+		or not _facade.has_method("reserve_selection")
+		or not _facade.has_method("commit_reserved_selection")
+		or not _facade.has_method("cancel_reserved_selection")
+	):
 		return
-	var result = _facade.call("submit_selection", offer_id, option_id, revision)
-	if not result.ok:
-		_choice_panel.show_rejection(_rejection_message_key(result))
+	var reserved = _facade.call("reserve_selection", offer_id, option_id, revision)
+	if not reserved.ok:
+		_choice_panel.show_rejection(_rejection_message_key(reserved))
 		return
-	var definition: Dictionary = result.context.get("definition", {}).duplicate(true)
-	var selection_revision := int(result.new_revision)
+	var reservation_id := str(reserved.context.get("reservation_id", ""))
+	var definition: Dictionary = reserved.context.get("definition", {}).duplicate(true)
+	var receipt: Dictionary = {}
+	var publication_started := false
+	if str(definition.get("id", "")) != "decline_contract":
+		if (
+			not _player.has_method("reward_effect_snapshot")
+			or not _player.has_method("reward_effect_begin_publication")
+			or not _player.has_method("reward_effect_publication_can_commit")
+			or not _player.has_method("reward_effect_commit_publication")
+			or not _player.has_method("reward_effect_rollback_publication")
+			or not bool(_player.call("reward_effect_begin_publication"))
+		):
+			_facade.call("cancel_reserved_selection", reservation_id)
+			_choice_panel.show_rejection("CHOICE_REJECTED")
+			return
+		publication_started = true
+		var snapshot_value: Variant = _player.call("reward_effect_snapshot")
+		if not snapshot_value is Dictionary or (snapshot_value as Dictionary).is_empty():
+			_facade.call("cancel_reserved_selection", reservation_id)
+			if not bool(_player.call("reward_effect_rollback_publication")):
+				_fail_reward_integrity({"stage": "player_snapshot"})
+			else:
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+			return
+		var prepared: Dictionary = _reward_effect_runtime.call(
+			"prepare",
+			definition.duplicate(true),
+			(snapshot_value as Dictionary).duplicate(true)
+		)
+		if not bool(prepared.get("ok", false)):
+			_facade.call("cancel_reserved_selection", reservation_id)
+			if not bool(_player.call("reward_effect_rollback_publication")):
+				_fail_reward_integrity({
+					"stage": "player_prepare",
+					"effect_result": prepared.duplicate(true),
+				})
+			else:
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+			return
+		var player_commit: Dictionary = _reward_effect_runtime.call(
+			"commit",
+			(prepared.get("plan", {}) as Dictionary).duplicate(true),
+			_player
+		)
+		if not bool(player_commit.get("ok", false)):
+			_facade.call("cancel_reserved_selection", reservation_id)
+			var publication_rollback_ok := bool(_player.call(
+				"reward_effect_rollback_publication"
+			))
+			publication_started = false
+			if (
+				StringName(str(player_commit.get("code", ""))) == &"ROLLBACK_FAILED"
+				or not publication_rollback_ok
+			):
+				_fail_reward_integrity({
+					"stage": "player_commit",
+					"effect_result": player_commit.duplicate(true),
+					"publication_rollback_ok": publication_rollback_ok,
+				})
+			else:
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+			return
+		receipt = (player_commit.get("receipt", {}) as Dictionary).duplicate(true)
+		if not bool(_player.call("reward_effect_publication_can_commit")):
+			_facade.call("cancel_reserved_selection", reservation_id)
+			var rolled_back: Dictionary = _reward_effect_runtime.call(
+				"rollback",
+				receipt.duplicate(true),
+				_player
+			)
+			var publication_rollback_ok := bool(_player.call(
+				"reward_effect_rollback_publication"
+			))
+			publication_started = false
+			if not bool(rolled_back.get("ok", false)) or not publication_rollback_ok:
+				_fail_reward_integrity({
+					"stage": "player_publication_preflight",
+					"rollback_result": rolled_back.duplicate(true),
+					"publication_rollback_ok": publication_rollback_ok,
+				})
+			else:
+				_choice_panel.show_rejection("CHOICE_REJECTED")
+			return
+	var committed = _facade.call("commit_reserved_selection", reservation_id)
+	if not committed.ok:
+		_facade.call("cancel_reserved_selection", reservation_id)
+		var state_rollback_ok := true
+		if not receipt.is_empty():
+			var rolled_back: Dictionary = _reward_effect_runtime.call(
+				"rollback",
+				receipt.duplicate(true),
+				_player
+			)
+			state_rollback_ok = bool(rolled_back.get("ok", false))
+		var publication_rollback_ok := true
+		if publication_started:
+			publication_rollback_ok = bool(_player.call(
+				"reward_effect_rollback_publication"
+			))
+			publication_started = false
+		if not state_rollback_ok or not publication_rollback_ok:
+			_fail_reward_integrity({
+				"stage": "authority_commit",
+				"authority_code": str(committed.code),
+				"state_rollback_ok": state_rollback_ok,
+				"publication_rollback_ok": publication_rollback_ok,
+			})
+			return
+		if committed.code == &"INTEGRITY_FAILURE":
+			_fail_reward_integrity({
+				"stage": "authority_commit",
+				"authority_code": str(committed.code),
+				"authority_context": committed.context.duplicate(true),
+			})
+			return
+		_choice_panel.show_rejection(_rejection_message_key(committed))
+		return
+	if publication_started:
+		if not bool(_player.call("reward_effect_commit_publication")):
+			_fail_reward_integrity({
+				"stage": "player_publication_commit",
+				"authority_revision": int(committed.new_revision),
+			})
+			return
+		publication_started = false
+	var selection_revision := int(committed.context.get("selection_revision", committed.new_revision))
 	var selection_state := runtime_snapshot()
 	var run_id := str(selection_state.get("run_id", ""))
-	if str(definition.get("id", "")) != "decline_contract":
-		_player.call("apply_reward", definition)
 	if not run_id.is_empty() and run_id == _active_run_id and run_id == _published_run_id:
 		EventBus.reward_selected.emit(run_id, definition.duplicate(true), selection_revision)
-	var transitioned = _facade.call("complete_transition")
-	if not transitioned.ok:
-		_choice_panel.show_rejection(_rejection_message_key(transitioned))
-		return
 	_choice_panel.close_panel()
 	_set_selection_safety(false)
 	if _room_runtime != null and is_instance_valid(_room_runtime):
 		_room_runtime.call_deferred("begin_current_room")
+
+
+func _fail_reward_integrity(context: Dictionary) -> void:
+	var terminal_context := {
+		"result": "runtime_error",
+		"reason": "reward_transaction_integrity",
+		"context": context.duplicate(true),
+	}
+	if _facade != null and _facade.has_method("player_died"):
+		var terminal = _facade.call("player_died", terminal_context)
+		if terminal != null and terminal.ok:
+			_on_terminal_committed(terminal_context, int(terminal.new_revision))
+			return
+	if _choice_panel != null:
+		_choice_panel.show_rejection("CHOICE_REJECTED")
+	_set_selection_safety(true)
 
 
 func _publish_terminal_result(authoritative_result: Dictionary) -> void:

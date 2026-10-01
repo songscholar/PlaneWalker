@@ -24,6 +24,9 @@ var _orchestrator: RefCounted
 var _room_definitions: Array[Dictionary] = []
 var _accepted_loadout: Dictionary = {}
 var _booted: bool = false
+var _selection_reservations: Dictionary = {}
+var _next_selection_reservation_id: int = 1
+var _last_atomic_transition_revision: int = -1
 
 
 func boot(
@@ -37,6 +40,9 @@ func boot(
 	_orchestrator = RunOrchestratorScript.new()
 	_room_definitions.clear()
 	_accepted_loadout.clear()
+	_selection_reservations.clear()
+	_next_selection_reservation_id = 1
+	_last_atomic_transition_revision = -1
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -106,6 +112,8 @@ func start_run(config: Dictionary, run_id: String):
 		int(_orchestrator.snapshot().get("run_seed", 0))
 	)
 	_draft.reset()
+	_selection_reservations.clear()
+	_last_atomic_transition_revision = -1
 	return _orchestrator.preparation_completed()
 
 
@@ -162,6 +170,17 @@ func complete_current_room():
 
 
 func submit_selection(offer_id: String, option_id: String, revision: int):
+	var reserved = reserve_selection(offer_id, option_id, revision)
+	if not reserved.ok:
+		return reserved
+	var reservation_id := str(reserved.context.get("reservation_id", ""))
+	var committed = commit_reserved_selection(reservation_id)
+	if not committed.ok:
+		cancel_reserved_selection(reservation_id)
+	return committed
+
+
+func reserve_selection(offer_id: String, option_id: String, revision: int):
 	var readiness = _require_booted("submit_selection")
 	if not readiness.ok:
 		return readiness
@@ -202,23 +221,118 @@ func submit_selection(offer_id: String, option_id: String, revision: int):
 	if not resolved.ok:
 		return resolved
 	var definition: Dictionary = resolved.context["definition"]
-	var committed = _orchestrator.selection_resolved(definition)
-	if not committed.ok:
-		return committed
-	_draft.close_offer(offer_id)
+	var validation = _orchestrator.validate_selection_commit(definition)
+	if not validation.ok:
+		return validation
+	for reservation_value: Variant in _selection_reservations.values():
+		if (
+			reservation_value is Dictionary
+			and str((reservation_value as Dictionary).get("offer_id", "")) == offer_id
+		):
+			return CommandResultScript.failure(
+				&"SELECTION_RESERVED",
+				_revision(),
+				{"offer_id": offer_id}
+			)
+	var reservation_id := "%s:reservation-%d" % [offer_id, _next_selection_reservation_id]
+	_next_selection_reservation_id += 1
+	_selection_reservations[reservation_id] = {
+		"reservation_id": reservation_id,
+		"offer_id": offer_id,
+		"option_id": option_id,
+		"offer_revision": revision,
+		"state_revision": _revision(),
+		"definition": definition.duplicate(true),
+	}
 	return CommandResultScript.success(
-		committed.new_revision,
+		_revision(),
 		{
-			"definition": definition,
+			"reservation_id": reservation_id,
+			"definition": definition.duplicate(true),
 			"offer_id": offer_id,
 		}
 	)
+
+
+func commit_reserved_selection(reservation_id: String):
+	var readiness = _require_booted("commit_reserved_selection")
+	if not readiness.ok:
+		return readiness
+	if not _selection_reservations.has(reservation_id):
+		return CommandResultScript.failure(
+			&"RESERVATION_NOT_FOUND",
+			_revision(),
+			{"reservation_id": reservation_id}
+		)
+	var reservation: Dictionary = _selection_reservations[reservation_id]
+	if int(reservation.get("state_revision", -1)) != _revision():
+		return CommandResultScript.failure(
+			&"STALE_REVISION",
+			_revision(),
+			{
+				"reservation_id": reservation_id,
+				"reserved_revision": int(reservation.get("state_revision", -1)),
+				"last_revision": _revision(),
+			}
+		)
+	var before: Dictionary = _orchestrator.selection_transaction_snapshot()
+	var committed = _orchestrator.commit_selection_and_transition(
+		(reservation.get("definition", {}) as Dictionary).duplicate(true)
+	)
+	if not committed.ok:
+		return committed
+	var offer_id := str(reservation.get("offer_id", ""))
+	if not _draft.close_offer(offer_id):
+		if not _orchestrator.restore_selection_transaction_snapshot(before):
+			push_error("Selection authority rollback failed after DraftService close rejection")
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"reservation_id": reservation_id, "offer_id": offer_id}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED",
+			_revision(),
+			{"reservation_id": reservation_id, "offer_id": offer_id}
+		)
+	_selection_reservations.erase(reservation_id)
+	_last_atomic_transition_revision = int(committed.new_revision)
+	return CommandResultScript.success(
+		committed.new_revision,
+		{
+			"reservation_id": reservation_id,
+			"definition": (reservation.get("definition", {}) as Dictionary).duplicate(true),
+			"offer_id": offer_id,
+			"selection_revision": int(committed.context.get("selection_revision", committed.new_revision)),
+			"transition_completed": true,
+		}
+	)
+
+
+func cancel_reserved_selection(reservation_id: String):
+	if not _selection_reservations.has(reservation_id):
+		return CommandResultScript.failure(
+			&"RESERVATION_NOT_FOUND",
+			_revision(),
+			{"reservation_id": reservation_id}
+		)
+	_selection_reservations.erase(reservation_id)
+	return CommandResultScript.success(_revision(), {"reservation_id": reservation_id})
 
 
 func complete_transition():
 	var readiness = _require_booted("complete_transition")
 	if not readiness.ok:
 		return readiness
+	if (
+		_orchestrator.phase() == RunPhaseScript.Value.ROOM_ENTERING
+		and _last_atomic_transition_revision == _revision()
+	):
+		_last_atomic_transition_revision = -1
+		return CommandResultScript.success(
+			_revision(),
+			{"already_completed": true}
+		)
 	return _orchestrator.transition_completed()
 
 

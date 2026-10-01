@@ -46,6 +46,8 @@ var healing_multiplier: float = 1.0
 var _invulnerability_token: int = 0
 var _active_invulnerability_tokens: Dictionary = {}
 var _active_invulnerability_sources: Dictionary = {}
+var _invulnerability_expiry_timers: Dictionary = {}
+var _reward_invulnerability_tokens: Dictionary = {}
 var _irreversible_ledger: RefCounted = IrreversibleCharacterLedgerScript.new()
 var _next_frame_signal_transaction_ticket_id: int = 1
 var _active_frame_signal_transaction: Dictionary = {}
@@ -947,15 +949,27 @@ func _resolution_finalized_damage(resolution: RefCounted) -> float:
 	return float(resolution.finalized_damage())
 
 
-func heal(amount: float) -> float:
+func heal(amount: float, publish_signal: bool = true) -> float:
 	if dead:
 		return 0.0
 	var previous_hp := current_hp
 	current_hp = minf(max_hp, current_hp + amount * healing_multiplier)
 	var healed_amount := current_hp - previous_hp
-	if healed_amount > 0.0:
+	if healed_amount > 0.0 and publish_signal:
 		_queue_or_flush_frame_signal_event(&"healed", [healed_amount, current_hp])
 	return healed_amount
+
+
+func publish_reward_healed(healed_amount: float, resulting_hp: float) -> bool:
+	if (
+		not is_finite(healed_amount)
+		or healed_amount <= 0.0
+		or not is_finite(resulting_hp)
+		or resulting_hp < 0.0
+	):
+		return false
+	_queue_or_flush_frame_signal_event(&"healed", [healed_amount, resulting_hp])
+	return true
 
 
 func lose_health(amount: float, source: Variant = null) -> float:
@@ -1213,30 +1227,158 @@ func _heavy_execute_threshold(damage_info: RefCounted) -> float:
 	return 0.3
 
 
+func reward_effect_snapshot() -> Dictionary:
+	var reward_tokens: Array[int] = []
+	for token_value: Variant in _reward_invulnerability_tokens.keys():
+		reward_tokens.append(int(token_value))
+	reward_tokens.sort()
+	return {
+		"current_hp": current_hp,
+		"max_hp": max_hp,
+		"defense": defense,
+		"healing_multiplier": healing_multiplier,
+		"dead": dead,
+		"invulnerable": invulnerable,
+		"invulnerability_token": _invulnerability_token,
+		"reward_invulnerability_tokens": reward_tokens,
+	}
+
+
+func restore_reward_effect_snapshot(value: Dictionary) -> bool:
+	const FIELDS: Array[String] = [
+		"current_hp",
+		"max_hp",
+		"defense",
+		"healing_multiplier",
+		"dead",
+		"invulnerable",
+		"invulnerability_token",
+		"reward_invulnerability_tokens",
+	]
+	if value.size() != FIELDS.size():
+		return false
+	for field: String in FIELDS:
+		if not value.has(field):
+			return false
+	for field: String in ["current_hp", "max_hp", "defense", "healing_multiplier"]:
+		if typeof(value[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value[field])):
+			return false
+	var restored_hp := float(value["current_hp"])
+	var restored_max_hp := float(value["max_hp"])
+	var restored_healing_multiplier := float(value["healing_multiplier"])
+	if (
+		restored_max_hp <= 0.0
+		or restored_hp < 0.0
+		or restored_hp > restored_max_hp
+		or restored_healing_multiplier < 0.0
+		or typeof(value["dead"]) != TYPE_BOOL
+		or bool(value["dead"]) != is_zero_approx(restored_hp)
+		or typeof(value["invulnerable"]) != TYPE_BOOL
+		or typeof(value["invulnerability_token"]) != TYPE_INT
+		or int(value["invulnerability_token"]) < 0
+		or not value["reward_invulnerability_tokens"] is Array
+	):
+		return false
+	var target_tokens: Array[int] = []
+	var prior_token := 0
+	for token_value: Variant in value["reward_invulnerability_tokens"] as Array:
+		if typeof(token_value) != TYPE_INT:
+			return false
+		var token := int(token_value)
+		if token <= prior_token or token > int(value["invulnerability_token"]):
+			return false
+		if (
+			not _reward_invulnerability_tokens.has(token)
+			or not _active_invulnerability_tokens.has(token)
+			or not _invulnerability_expiry_timers.has(token)
+		):
+			return false
+		target_tokens.append(token)
+		prior_token = token
+	var target_token_set: Dictionary = {}
+	for token: int in target_tokens:
+		target_token_set[token] = true
+	var removable_tokens: Array[int] = []
+	for token_value: Variant in _reward_invulnerability_tokens.keys():
+		var token := int(token_value)
+		if target_token_set.has(token):
+			continue
+		if not _active_invulnerability_tokens.has(token) or not _invulnerability_expiry_timers.has(token):
+			return false
+		removable_tokens.append(token)
+	for token_value: Variant in _active_invulnerability_tokens.keys():
+		var token := int(token_value)
+		if token > int(value["invulnerability_token"]) and not removable_tokens.has(token):
+			return false
+	var remaining_token_count := _active_invulnerability_tokens.size() - removable_tokens.size()
+	var restored_invulnerable := remaining_token_count > 0 or not _active_invulnerability_sources.is_empty()
+	if restored_invulnerable != bool(value["invulnerable"]):
+		return false
+	for token: int in removable_tokens:
+		_cancel_invulnerability_token(token)
+	current_hp = restored_hp
+	max_hp = restored_max_hp
+	defense = float(value["defense"])
+	healing_multiplier = restored_healing_multiplier
+	dead = bool(value["dead"])
+	_invulnerability_token = int(value["invulnerability_token"])
+	_refresh_invulnerability_state()
+	return reward_effect_snapshot() == value
+
+
 func apply_invulnerability(duration: float) -> void:
-	if duration <= 0.0:
-		return
+	_start_invulnerability(duration, false)
+
+
+func apply_reward_invulnerability(duration: float) -> bool:
+	if not is_finite(duration) or duration < 0.0:
+		return false
+	if is_zero_approx(duration):
+		return true
+	return _start_invulnerability(duration, true) > 0
+
+
+func _start_invulnerability(duration: float, reward_owned: bool) -> int:
+	if not is_finite(duration) or duration <= 0.0:
+		return 0
 	_invulnerability_token += 1
 	var token := _invulnerability_token
 	_active_invulnerability_tokens[token] = true
+	if reward_owned:
+		_reward_invulnerability_tokens[token] = true
 	_refresh_invulnerability_state()
 	var expiry_timer := Timer.new()
 	expiry_timer.one_shot = true
 	expiry_timer.process_mode = Node.PROCESS_MODE_PAUSABLE
 	expiry_timer.wait_time = duration
 	add_child(expiry_timer)
+	_invulnerability_expiry_timers[token] = expiry_timer
 	expiry_timer.timeout.connect(
 		_expire_invulnerability.bind(token, expiry_timer),
 		CONNECT_ONE_SHOT
 	)
 	expiry_timer.start()
+	return token
 
 
 func _expire_invulnerability(token: int, expiry_timer: Timer) -> void:
 	_active_invulnerability_tokens.erase(token)
+	_reward_invulnerability_tokens.erase(token)
+	_invulnerability_expiry_timers.erase(token)
 	_refresh_invulnerability_state()
 	if is_instance_valid(expiry_timer):
 		expiry_timer.queue_free()
+
+
+func _cancel_invulnerability_token(token: int) -> void:
+	var timer := _invulnerability_expiry_timers.get(token) as Timer
+	_active_invulnerability_tokens.erase(token)
+	_reward_invulnerability_tokens.erase(token)
+	_invulnerability_expiry_timers.erase(token)
+	if timer != null and is_instance_valid(timer):
+		timer.stop()
+		timer.queue_free()
+	_refresh_invulnerability_state()
 
 
 func acquire_invulnerability_source(source_id: StringName) -> bool:

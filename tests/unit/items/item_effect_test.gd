@@ -346,8 +346,12 @@ func _test_weapon_capability_ownership_tracks_equipment() -> void:
 
 func _test_missing_player_api_fails_safely() -> void:
 	var player := PlayerWithoutWeaponCapabilityApi.new()
-	ItemEffectScript.apply_to_player(player, {"bow_charge_rate_bonus": 0.25})
-	_suite.assert_equal(player.stats_sync_count, 1, "missing capability API leaves the remaining item pipeline usable")
+	var result: Dictionary = ItemEffectScript.apply_to_player(
+		player,
+		{"bow_charge_rate_bonus": 0.25}
+	)
+	_suite.assert_true(not bool(result.get("ok", false)), "missing transaction API fails closed")
+	_suite.assert_equal(player.stats_sync_count, 0, "missing transaction API does not partially mutate the player")
 	player.free()
 
 

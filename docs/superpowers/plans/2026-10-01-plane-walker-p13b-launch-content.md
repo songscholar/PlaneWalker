@@ -7,14 +7,14 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-01-plane-walker-p13b-launch-content-design.md`, `docs/current/2026-10-01-p13a-launch-archetype-authority-evidence.md`, `docs/contracts/content-pack-v2.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Task 1 is complete and verified; Task 2 typed effect plans and atomic reward selection is next. P13A authority remains certified at `4fbf9b1`; no live Launch pool completion is claimed yet
+- Implementation Status: Tasks 1 and 2 are complete and verified locally. Typed effect plans, the real Player adapter, atomic selection/transition authority, deferred reward feedback, failure rollback, and integrity fail-closed paths pass the complete repository gate; Task 3 exact fifty-item population is next. P13A authority remains certified at `4fbf9b1`; no complete live Launch pool is claimed yet
 - Exit Gate: Exact Launch counts, every effect executable and bounded, reward selection atomic, eight active items player-facing, fifteen talents data-authoritative and live-installable, deterministic drafting/build formation/Replay, 150-loadout regression, and full repository validation pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver the exact complete Launch item, blessing, curse, and talent pools through one typed effect and reward-transaction authority without changing the frozen M1/CURRENT/NEXT behavior.
 
-**Architecture:** ContentRegistry validates category-specific item mode and active-handler fields plus a closed scalar effect catalog. `PlayerRewardEffectRuntime` prepares and atomically commits persistent and trigger effects; `ActiveItemRuntime` owns one equipped active item; character talents consume versioned definition values. RunRuntimeFacade and RunRuntimeHost use a reserve/apply/commit transaction so BuildState and live player state cannot diverge.
+**Architecture:** ContentRegistry validates category-specific item mode and active-handler fields plus a closed scalar effect catalog. `PlayerRewardEffectRuntime` prepares digest-sealed, domain-ordered plans and commits them through a reversible Player adapter; `ActiveItemRuntime` owns one equipped active item; character talents consume versioned definition values. RunRuntimeFacade and RunRuntimeHost use reserve, prepare, Player commit, authoritative selection-and-transition commit, and publish sequencing so BuildState, the live Player, offer authority, room progression, and published facts cannot silently diverge.
 
 **Tech Stack:** Godot 4.6.1, typed GDScript, JSON Schema Draft 2020-12, Content Pack v2, deterministic SeedService channels, CSV localization, scene-based unit/contract/integration tests, Python content contracts, and local Git commits.
 
@@ -125,37 +125,57 @@ git commit -m "feat(content): close launch pool contract"
 
 ### Task 2: Build typed effect plans and atomic reward selection
 
+**Completion status (2026-10-01):** Typed plans, the real Player adapter, selection authority, Host orchestration, deferred reward feedback, failure injection, lifecycle compatibility, and the complete repository gate are verified. Task 3 is the next active implementation slice.
+
 **Files:**
 - Modify: `data/content/effect_catalog.json`
 - Modify: `scripts/content/effects/effect_definition.gd`
 - Modify: `scripts/content/effects/effect_handler_catalog.gd`
 - Create: `scripts/items/player_reward_effect_runtime.gd`
 - Modify: `scripts/items/item_effect.gd`
+- Modify: `scripts/application/command_result.gd`
+- Modify: `scripts/application/run_state.gd`
+- Modify: `scripts/progression/run_build_state.gd`
 - Modify: `scripts/application/run_runtime_facade.gd`
 - Modify: `scripts/application/run_runtime_host.gd`
 - Modify: `scripts/application/run_orchestrator.gd`
 - Modify: `scripts/player/player_controller.gd`
+- Modify: `scripts/combat/health_component.gd`
+- Modify: `scripts/time_system/time_manager.gd`
 - Modify: `tests/unit/content/effect_handler_catalog_test.gd`
 - Create: `tests/unit/items/player_reward_effect_runtime_test.gd`
 - Create: `tests/unit/items/player_reward_effect_runtime_test.tscn`
+- Create: `tests/unit/items/player_reward_effect_adapter_test.gd`
+- Create: `tests/unit/items/player_reward_effect_adapter_test.tscn`
+- Modify: `tests/unit/application/run_orchestrator_test.gd`
+- Modify: `tests/unit/application/run_runtime_facade_test.gd`
 - Modify: `tests/integration/application/run_runtime_host_test.gd`
-- Modify: `tests/reward_system_smoke.gd`
+- Verify: `tests/contract/application/run_authority_contract_test.gd`
+- Verify: `tests/contract/events/run_lifecycle_publication_test.gd`
+- Verify: `tests/reward_system_smoke.gd`
 
 **Interfaces:**
-- Consumes: normalized content definition and immutable player/run snapshots.
-- Produces: `prepare(definition, player_snapshot)`, `commit(plan, player)`, `rollback(receipt, player)`, `reserve_selection()`, `commit_reserved_selection()`, and `cancel_reserved_selection()`.
+- Consumes: normalized content definition, Effect Catalog runtime descriptors, immutable reward-effect Player snapshots, and immutable Run/Build selection snapshots.
+- Produces: `prepare(definition, player_snapshot) -> Dictionary`, `commit(plan, player) -> Dictionary`, `rollback(receipt, player) -> Dictionary`, `reward_effect_snapshot() -> Dictionary`, `restore_reward_effect_snapshot(snapshot) -> bool`, `reward_effect_apply_operation(operation) -> Dictionary`, `reserve_selection(offer_id, option_id, revision)`, `commit_reserved_selection(reservation_id)`, and `cancel_reserved_selection(reservation_id)`.
 
-- [ ] **Step 1: Write failure-injection tests**
+- [x] **Step 1: Write failure-injection tests**
 
-Cover invalid effect, missing target, non-finite value, capability rejection, trigger failure, authoritative commit failure, transition failure, duplicate submit, stale revision, rollback failure, and exactly-once event publication. Every failure asserts the offer, player snapshot, BuildState, revision, and published facts equal the pre-selection values.
+The implemented matrix covers invalid definitions/effects, missing runtime domain, plan and receipt tampering, stale Player snapshot, persistent-operation failure, trigger failure, real weapon-capability rejection, explicit rollback, automatic rollback, and rollback failure. Authority coverage includes duplicate/reentrant reservation, stale authority revision, missing or repeated reservation, BuildState rejection, Draft close rejection, authority snapshot-restore failure, legacy duplicate submit, and the idempotent legacy transition call. Host coverage includes Player failure before authority commit, authority failure after Player commit, Player rollback failure, authority integrity failure, synchronous reentrant publication, and exactly-once `reward_selected` publication.
 
-- [ ] **Step 2: Run RED**
+Every recoverable failure asserts exact restoration of the Player or authoritative snapshot and zero reward publication. Unrecoverable rollback or authority restoration is never reported as success: the Host enters the `reward_transaction_integrity` fail-closed terminal path. A standalone post-selection transition failure case is intentionally removed because `commit_reserved_selection()` now owns selection and room transition as one authoritative operation.
+
+- [x] **Step 2: Establish RED before implementation**
 
 ```bash
-./tools/run_tests.sh --filter "effect_handler_catalog|player_reward_effect_runtime|run_runtime_host|reward_system_smoke"
+./tools/run_tests.sh --filter player_reward_effect_runtime
+./tools/run_tests.sh --filter player_reward_effect_adapter
+./tools/run_tests.sh --filter run_runtime_facade_test
+./tools/run_tests.sh --filter run_runtime_host_test
 ```
 
-- [ ] **Step 3: Add effect runtime domains**
+RED was established for the missing typed runtime/reservation APIs and, later, for the real adapter's missing four-argument transactional `ItemEffect.apply_to_player()` contract and observable return values. This historical RED does not count as the final gate.
+
+- [x] **Step 3: Add effect runtime domains and the pure effect transaction**
 
 Every effect-catalog row gains one closed `runtime_domain`:
 
@@ -163,20 +183,54 @@ Every effect-catalog row gains one closed `runtime_domain`:
 stats | health | time | weapon | character | trigger
 ```
 
-`PlayerRewardEffectRuntime.prepare()` sorts effect IDs, validates catalog bounds/category/domain, stages persistent domains before triggers, and returns a digest-sealed plan. `commit()` records reversible before-values for every persistent domain; trigger effects execute only after persistent commits. `rollback()` restores in reverse order and verifies the exact pre-snapshot.
+`PlayerRewardEffectRuntime.prepare()` validates definition/category/bounds/domain, sorts effects by the fixed order `stats -> health -> time -> weapon -> character -> trigger`, freezes the Player snapshot, and returns a digest-sealed plan. `commit()` rejects plan tampering or snapshot drift, applies operations through the Player adapter, and returns a digest-sealed receipt. Any operation failure restores and verifies the exact pre-snapshot; explicit `rollback()` requires the exact receipt post-snapshot before restoration.
 
-- [ ] **Step 4: Split selection into reserve/apply/commit**
+- [x] **Step 4: Split selection into reserve, Player commit, authority commit, and publish**
 
-`RunRuntimeFacade.reserve_selection(offer_id, option_id, revision)` resolves but does not consume. Host prepares and commits the player plan, then calls `commit_reserved_selection(reservation_id)`. Any failure calls `cancel_reserved_selection()` and effect rollback. EventBus publishes only after both commits and transition success.
+The exact successful order is:
 
-- [ ] **Step 5: Run GREEN and commit**
+```text
+reserve_selection(offer_id, option_id, revision)
+-> PlayerRewardEffectRuntime.prepare(definition, player_snapshot)
+-> PlayerRewardEffectRuntime.commit(plan, player)
+-> commit_reserved_selection(reservation_id)
+   -> consume offer + write RunBuildState + clear open offer
+   -> advance selection revision
+   -> complete room transition + increment current room
+   -> close Draft offer, or restore the full authority snapshot
+-> publish reward_selected exactly once with selection_revision
+-> close the choice UI and begin the next room
+```
+
+`reserve_selection()` resolves and validates the option but changes no offer, BuildState, phase, room, or revision. `RunState` and `RunBuildState` provide strict transaction snapshots so `commit_reserved_selection()` can make offer consumption, BuildState writeback, selection revision, room transition, room increment, and Draft closure atomic from the Host's perspective. Player failure cancels the reservation before authority commit. Authority rejection rolls the Player back from its receipt. Player rollback failure or an authority `INTEGRITY_FAILURE` enters the fail-closed terminal path. EventBus is reached only after both sides commit, and uses `selection_revision`, not the later transition revision.
+
+Health and Time feedback is buffered separately from state mutation. Healing and energy signals remain invisible while the Player plan and authority commit are reversible; authority success releases the frozen feedback batch before `reward_selected`, while every rejection discards it. Publication rejects synchronous reward reentry, and even an unrecoverable Player-state rollback closes the feedback transaction before entering the integrity terminal path.
+
+- [x] **Step 5: Finish adapter GREEN, run the full gate, review, and commit**
+
+The real adapter snapshots and restores Stats, Health reward-owned invulnerability, Time energy/passive modifiers, WeaponModifierState/runtime, and character dash bonus. It validates every operation against the authoritative Effect Catalog and returns observable results from `ItemEffect`, `apply_reward()`, and `apply_curse()`.
 
 ```bash
-./tools/run_tests.sh --filter "effect_handler_catalog|item_effect|player_reward_effect_runtime|run_authority_contract|run_runtime_host|reward_system_smoke"
+./tools/run_tests.sh --filter effect_handler_catalog
+./tools/run_tests.sh --filter item_effect
+./tools/run_tests.sh --filter player_reward_effect_runtime
+./tools/run_tests.sh --filter player_reward_effect_adapter
+./tools/run_tests.sh --filter run_runtime_facade_test
+./tools/run_tests.sh --filter run_orchestrator_test
+./tools/run_tests.sh --filter run_runtime_host_test
+./tools/run_tests.sh --filter run_authority_contract
+./tools/run_tests.sh --filter run_lifecycle_publication_test
+./tools/run_tests.sh --filter reward_system_smoke
+./tools/run_tests.sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/contract/content_schema -p 'test_*.py'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
+python3 tools/document_governance.py --baseline tools/document_governance_baseline.json
 git diff --check
-git add -- data/content/effect_catalog.json scripts/content/effects/effect_definition.gd scripts/content/effects/effect_handler_catalog.gd scripts/items/player_reward_effect_runtime.gd scripts/items/item_effect.gd scripts/application/run_runtime_facade.gd scripts/application/run_runtime_host.gd scripts/application/run_orchestrator.gd scripts/player/player_controller.gd tests/unit/content/effect_handler_catalog_test.gd tests/unit/items/player_reward_effect_runtime_test.gd tests/unit/items/player_reward_effect_runtime_test.tscn tests/integration/application/run_runtime_host_test.gd tests/reward_system_smoke.gd
+git add -- data/content/effect_catalog.json scripts/content/effects/effect_definition.gd scripts/content/effects/effect_handler_catalog.gd scripts/items/player_reward_effect_runtime.gd scripts/items/item_effect.gd scripts/application/command_result.gd scripts/application/run_state.gd scripts/progression/run_build_state.gd scripts/application/run_runtime_facade.gd scripts/application/run_runtime_host.gd scripts/application/run_orchestrator.gd scripts/player/player_controller.gd scripts/combat/health_component.gd scripts/time_system/time_manager.gd tests/unit/content/effect_handler_catalog_test.gd tests/unit/items/player_reward_effect_runtime_test.gd tests/unit/items/player_reward_effect_runtime_test.tscn tests/unit/items/player_reward_effect_adapter_test.gd tests/unit/items/player_reward_effect_adapter_test.tscn tests/unit/application/run_orchestrator_test.gd tests/unit/application/run_runtime_facade_test.gd tests/integration/application/run_runtime_host_test.gd
 git commit -m "feat(rewards): apply content effects atomically"
 ```
+
+**Completion evidence (2026-10-01):** All focused effect, adapter, Facade, Orchestrator, Host, lifecycle-publication, and reward-smoke gates pass after the final feedback-publication fixes. The complete scene suite passes `159 / 159`; Python content-schema tests pass `23 / 23`; localization tests pass `8 / 8`; documentation governance reports zero violations; `git diff --check` is clean; and the final independent review reports no remaining P1/P2. The sole warning remains the pre-existing registered `reward_system_smoke.tscn` ObjectDB leak. Line coverage remains honestly unsupported by the current Godot runner.
 
 ---
 

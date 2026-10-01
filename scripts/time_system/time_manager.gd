@@ -73,6 +73,30 @@ const GAMEPLAY_REWIND_TRANSACTION_FIELDS: Array[String] = [
 	"self_damage_generation",
 	"next_self_damage_token",
 ]
+const REWARD_EFFECT_SNAPSHOT_FIELDS: Array[String] = [
+	"energy",
+	"max_energy",
+	"resource_revision",
+	"time_stop_duration_bonus",
+	"time_stop_cost_multiplier",
+	"time_stop_weakpoint_damage_bonus",
+	"time_stop_weakpoint_duration",
+	"time_stop_self_damage",
+	"rewind_cost_multiplier",
+	"rewind_heal",
+	"rewind_echo_enabled",
+	"rewind_path_hit_multiplier",
+	"rewind_self_damage",
+	"time_rift_cost_multiplier",
+	"time_rift_duration_bonus",
+	"time_rift_radius_bonus",
+	"time_rift_slow_bonus",
+	"time_accelerate_cost_multiplier",
+	"time_accelerate_duration_bonus",
+	"time_accelerate_multiplier_bonus",
+	"low_energy_regen_multiplier",
+	"low_energy_threshold",
+]
 
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
@@ -649,6 +673,97 @@ func replay_snapshot() -> Dictionary:
 		"rift_source_sequence": _time_rift_source_sequence,
 		"active_rifts": _active_rift_payload_descriptors(),
 	}
+
+
+func reward_effect_snapshot() -> Dictionary:
+	return {
+		"energy": energy,
+		"max_energy": max_energy,
+		"resource_revision": _resource_revision,
+		"time_stop_duration_bonus": time_stop_duration_bonus,
+		"time_stop_cost_multiplier": time_stop_cost_multiplier,
+		"time_stop_weakpoint_damage_bonus": time_stop_weakpoint_damage_bonus,
+		"time_stop_weakpoint_duration": time_stop_weakpoint_duration,
+		"time_stop_self_damage": time_stop_self_damage,
+		"rewind_cost_multiplier": rewind_cost_multiplier,
+		"rewind_heal": rewind_heal,
+		"rewind_echo_enabled": rewind_echo_enabled,
+		"rewind_path_hit_multiplier": rewind_path_hit_multiplier,
+		"rewind_self_damage": rewind_self_damage,
+		"time_rift_cost_multiplier": time_rift_cost_multiplier,
+		"time_rift_duration_bonus": time_rift_duration_bonus,
+		"time_rift_radius_bonus": time_rift_radius_bonus,
+		"time_rift_slow_bonus": time_rift_slow_bonus,
+		"time_accelerate_cost_multiplier": time_accelerate_cost_multiplier,
+		"time_accelerate_duration_bonus": time_accelerate_duration_bonus,
+		"time_accelerate_multiplier_bonus": time_accelerate_multiplier_bonus,
+		"low_energy_regen_multiplier": low_energy_regen_multiplier,
+		"low_energy_threshold": low_energy_threshold,
+	}
+
+
+func restore_reward_effect_snapshot(value: Dictionary, publish_signal: bool = true) -> bool:
+	if value.size() != REWARD_EFFECT_SNAPSHOT_FIELDS.size():
+		return false
+	for field: String in REWARD_EFFECT_SNAPSHOT_FIELDS:
+		if not value.has(field):
+			return false
+	for field: String in REWARD_EFFECT_SNAPSHOT_FIELDS:
+		if field == "rewind_echo_enabled" or field == "resource_revision":
+			continue
+		if typeof(value[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value[field])):
+			return false
+	if (
+		typeof(value["resource_revision"]) != TYPE_INT
+		or int(value["resource_revision"]) <= 0
+		or typeof(value["rewind_echo_enabled"]) != TYPE_BOOL
+		or float(value["max_energy"]) <= 0.0
+		or float(value["energy"]) < 0.0
+		or float(value["energy"]) > float(value["max_energy"])
+	):
+		return false
+	for field: String in REWARD_EFFECT_SNAPSHOT_FIELDS:
+		if field in ["energy", "max_energy", "resource_revision", "rewind_echo_enabled"]:
+			continue
+		if float(value[field]) < 0.0:
+			return false
+	for field: String in [
+		"time_stop_cost_multiplier",
+		"rewind_cost_multiplier",
+		"time_rift_cost_multiplier",
+		"time_accelerate_cost_multiplier",
+	]:
+		if float(value[field]) <= 0.0:
+			return false
+	var energy_changed_during_restore := (
+		energy != float(value["energy"])
+		or max_energy != float(value["max_energy"])
+	)
+	energy = float(value["energy"])
+	max_energy = float(value["max_energy"])
+	_resource_revision = int(value["resource_revision"])
+	time_stop_duration_bonus = float(value["time_stop_duration_bonus"])
+	time_stop_cost_multiplier = float(value["time_stop_cost_multiplier"])
+	time_stop_weakpoint_damage_bonus = float(value["time_stop_weakpoint_damage_bonus"])
+	time_stop_weakpoint_duration = float(value["time_stop_weakpoint_duration"])
+	time_stop_self_damage = float(value["time_stop_self_damage"])
+	rewind_cost_multiplier = float(value["rewind_cost_multiplier"])
+	rewind_heal = float(value["rewind_heal"])
+	rewind_echo_enabled = bool(value["rewind_echo_enabled"])
+	rewind_path_hit_multiplier = float(value["rewind_path_hit_multiplier"])
+	rewind_self_damage = float(value["rewind_self_damage"])
+	time_rift_cost_multiplier = float(value["time_rift_cost_multiplier"])
+	time_rift_duration_bonus = float(value["time_rift_duration_bonus"])
+	time_rift_radius_bonus = float(value["time_rift_radius_bonus"])
+	time_rift_slow_bonus = float(value["time_rift_slow_bonus"])
+	time_accelerate_cost_multiplier = float(value["time_accelerate_cost_multiplier"])
+	time_accelerate_duration_bonus = float(value["time_accelerate_duration_bonus"])
+	time_accelerate_multiplier_bonus = float(value["time_accelerate_multiplier_bonus"])
+	low_energy_regen_multiplier = float(value["low_energy_regen_multiplier"])
+	low_energy_threshold = float(value["low_energy_threshold"])
+	if energy_changed_during_restore and publish_signal:
+		_publish_energy_changed(energy, max_energy)
+	return reward_effect_snapshot() == value
 
 
 func can_restore_replay_snapshot(value: Dictionary) -> bool:
@@ -1607,7 +1722,7 @@ func _sync_active_rifts_from_authority() -> void:
 		_active_rift_generations[node] = int(descriptor.get("source_token", 0))
 
 
-func configure_from_stats(stats: Resource) -> void:
+func configure_from_stats(stats: Resource, publish_signal: bool = true) -> void:
 	var previous_max_energy := max_energy
 	var previous_energy := energy
 	max_energy = stats.time_energy_max
@@ -1617,7 +1732,8 @@ func configure_from_stats(stats: Resource) -> void:
 	energy = clampf(energy, 0.0, max_energy)
 	if max_energy != previous_max_energy or energy != previous_energy:
 		_resource_revision += 1
-	_publish_energy_changed(energy, max_energy)
+		if publish_signal:
+			_publish_energy_changed(energy, max_energy)
 
 
 func canonical_skill_id(skill_id: StringName) -> StringName:
@@ -1999,14 +2115,29 @@ func reset_runtime_state(reset_frame_clock: bool = false) -> void:
 	_retire_active_rifts(&"runtime_reset")
 
 
-func restore_energy(amount: float) -> void:
+func restore_energy(amount: float, publish_signal: bool = true) -> float:
 	if not is_finite(amount) or amount <= 0.0:
-		return
+		return 0.0
 	var energy_before := energy
 	energy = minf(max_energy, energy + amount)
 	if energy != energy_before:
 		_resource_revision += 1
-	_publish_energy_changed(energy, max_energy)
+	if publish_signal:
+		_publish_energy_changed(energy, max_energy)
+	return energy - energy_before
+
+
+func publish_reward_energy_changed(current: float, maximum: float) -> bool:
+	if (
+		not is_finite(current)
+		or not is_finite(maximum)
+		or maximum <= 0.0
+		or current < 0.0
+		or current > maximum
+	):
+		return false
+	_publish_energy_changed(current, maximum)
+	return true
 
 
 func gameplay_rewind_transaction_snapshot() -> Dictionary:

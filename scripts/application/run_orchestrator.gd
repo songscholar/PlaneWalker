@@ -34,6 +34,14 @@ func has_consumed_offer(offer_id: String) -> bool:
 	return _state.has_consumed_offer(offer_id)
 
 
+func selection_transaction_snapshot() -> Dictionary:
+	return _state.selection_transaction_snapshot().duplicate(true)
+
+
+func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
+	return _state.restore_selection_transaction_snapshot(value.duplicate(true))
+
+
 func enter_hub():
 	if _state.phase != RunPhaseScript.Value.BOOT:
 		return _reject_phase()
@@ -94,12 +102,80 @@ func selection_resolved(definition: Dictionary = {}):
 	var definition_validation = _validate_selected_definition(definition)
 	if not definition_validation.ok:
 		return definition_validation
+	var before: Dictionary = _state.selection_transaction_snapshot()
 	var offer_id := str(_state.open_offer.get("offer_id", ""))
 	if not _state.mark_offer_consumed(offer_id):
 		return CommandResultScript.failure(&"ALREADY_CONSUMED", _state.revision, {"offer_id": offer_id})
-	_record_selected_definition(definition)
+	var build_result := _record_selected_definition(definition)
+	if not bool(build_result.get("ok", false)):
+		if not _state.restore_selection_transaction_snapshot(before):
+			push_error("Legacy selection rollback failed after BuildState rejection")
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_state.revision,
+				{
+					"field": str(build_result.get("field", "build")),
+					"stage": "build_state_rollback",
+				}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED",
+			_state.revision,
+			{"field": str(build_result.get("field", "build"))}
+		)
 	_state.open_offer = {}
 	return _accept_phase(RunPhaseScript.Value.ROOM_TRANSITION)
+
+
+func validate_selection_commit(definition: Dictionary = {}):
+	if _state.phase != RunPhaseScript.Value.SELECTION_ACTIVE:
+		return _reject_phase()
+	return _validate_selected_definition(definition)
+
+
+func commit_selection_and_transition(definition: Dictionary = {}):
+	var validation = validate_selection_commit(definition)
+	if not validation.ok:
+		return validation
+	var before: Dictionary = _state.selection_transaction_snapshot()
+	var offer_id := str(_state.open_offer.get("offer_id", ""))
+	if not _state.mark_offer_consumed(offer_id):
+		return CommandResultScript.failure(
+			&"ALREADY_CONSUMED",
+			_state.revision,
+			{"offer_id": offer_id}
+		)
+	var build_result := _record_selected_definition(definition)
+	if not bool(build_result.get("ok", false)):
+		if not _state.restore_selection_transaction_snapshot(before):
+			push_error("Selection commit rollback failed after BuildState rejection")
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_state.revision,
+				{
+					"field": str(build_result.get("field", "build")),
+					"stage": "build_state_rollback",
+				}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED",
+			_state.revision,
+			{"field": str(build_result.get("field", "build"))}
+		)
+	_state.open_offer = {}
+	_state.phase = RunPhaseScript.Value.ROOM_TRANSITION
+	var selection_revision: int = int(_state.advance_revision())
+	_state.current_room += 1
+	_state.phase = RunPhaseScript.Value.ROOM_ENTERING
+	var transition_revision: int = int(_state.advance_revision())
+	return CommandResultScript.success(
+		transition_revision,
+		{
+			"offer_id": offer_id,
+			"selection_revision": selection_revision,
+			"build_result": build_result.duplicate(true),
+		}
+	)
 
 
 func transition_completed():
@@ -221,8 +297,10 @@ func _validate_selected_definition(definition: Dictionary):
 	return CommandResultScript.success(_state.revision)
 
 
-func _record_selected_definition(definition: Dictionary) -> void:
-	_state.build_state.apply_definition(definition)
+func _record_selected_definition(definition: Dictionary) -> Dictionary:
+	if definition.is_empty():
+		return {"ok": true, "changed": false}
+	return _state.build_state.apply_definition(definition)
 
 
 func _reject_phase():

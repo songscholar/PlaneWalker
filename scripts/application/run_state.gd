@@ -24,6 +24,17 @@ var consumed_offer_ids: Dictionary = {}
 var result: Dictionary = {}
 var config: Dictionary = {}
 
+const SELECTION_TRANSACTION_FIELDS: Array[String] = [
+	"schema_version",
+	"revision",
+	"phase",
+	"suspended",
+	"current_room",
+	"open_offer",
+	"consumed_offer_ids",
+	"build",
+]
+
 
 func _init() -> void:
 	build_state = RunBuildStateScript.new()
@@ -76,6 +87,55 @@ func mark_offer_consumed(offer_id: String) -> bool:
 		return false
 	consumed_offer_ids[offer_id] = true
 	return true
+
+
+func selection_transaction_snapshot() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"revision": revision,
+		"phase": phase,
+		"suspended": suspended,
+		"current_room": current_room,
+		"open_offer": open_offer.duplicate(true),
+		"consumed_offer_ids": consumed_offer_ids.duplicate(true),
+		"build": build_state.transaction_snapshot(),
+	}
+
+
+func can_restore_selection_transaction_snapshot(value: Dictionary) -> bool:
+	if value.size() != SELECTION_TRANSACTION_FIELDS.size():
+		return false
+	for field: String in SELECTION_TRANSACTION_FIELDS:
+		if not value.has(field):
+			return false
+	return (
+		typeof(value["schema_version"]) == TYPE_INT
+		and int(value["schema_version"]) == 1
+		and typeof(value["revision"]) == TYPE_INT
+		and int(value["revision"]) >= 0
+		and typeof(value["phase"]) == TYPE_INT
+		and typeof(value["suspended"]) == TYPE_BOOL
+		and typeof(value["current_room"]) == TYPE_INT
+		and int(value["current_room"]) > 0
+		and value["open_offer"] is Dictionary
+		and value["consumed_offer_ids"] is Dictionary
+		and value["build"] is Dictionary
+		and build_state.can_restore_transaction_snapshot(value["build"] as Dictionary)
+	)
+
+
+func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
+	if not can_restore_selection_transaction_snapshot(value):
+		return false
+	if not build_state.restore_transaction_snapshot(value["build"] as Dictionary):
+		return false
+	revision = int(value["revision"])
+	phase = int(value["phase"])
+	suspended = bool(value["suspended"])
+	current_room = int(value["current_room"])
+	open_offer = (value["open_offer"] as Dictionary).duplicate(true)
+	consumed_offer_ids = (value["consumed_offer_ids"] as Dictionary).duplicate(true)
+	return selection_transaction_snapshot() == value
 
 
 func snapshot() -> Dictionary:

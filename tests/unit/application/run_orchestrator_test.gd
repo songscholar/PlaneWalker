@@ -5,6 +5,37 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
 
 
+class FailingBuildState:
+	extends RefCounted
+
+	var base: RefCounted
+	var reject_restore: bool
+
+	func _init(source: RefCounted, p_reject_restore: bool = true) -> void:
+		base = source
+		reject_restore = p_reject_restore
+
+	func validate_definition(definition: Dictionary) -> Dictionary:
+		return base.call("validate_definition", definition).duplicate(true)
+
+	func apply_definition(_definition: Dictionary) -> Dictionary:
+		return {"ok": false, "field": "build", "reason": "injected"}
+
+	func transaction_snapshot() -> Dictionary:
+		return base.call("transaction_snapshot").duplicate(true)
+
+	func can_restore_transaction_snapshot(value: Dictionary) -> bool:
+		return bool(base.call("can_restore_transaction_snapshot", value))
+
+	func restore_transaction_snapshot(value: Dictionary) -> bool:
+		if reject_restore:
+			return false
+		return bool(base.call("restore_transaction_snapshot", value))
+
+	func to_dictionary() -> Dictionary:
+		return base.call("to_dictionary").duplicate(true)
+
+
 func _ready() -> void:
 	call_deferred("_run")
 
@@ -13,6 +44,8 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_legal_run_path(suite)
 	_test_selection_writeback(suite)
+	_test_legacy_selection_rollback(suite)
+	_test_selection_integrity_failure(suite)
 	_test_invalid_selection_definitions(suite)
 	_test_death_closes_active_selection(suite)
 	_test_invalid_transitions(suite)
@@ -183,6 +216,55 @@ func _test_invalid_selection_definitions(suite) -> void:
 		suite.assert_equal(after["open_offer"], offer_before, "%s leaves the offer open" % str(case["label"]))
 		suite.assert_true(not orchestrator.has_consumed_offer(offer_id), "%s does not consume the offer" % str(case["label"]))
 		suite.assert_equal(after["build"], build_before, "%s leaves build unchanged" % str(case["label"]))
+
+
+func _test_selection_integrity_failure(suite) -> void:
+	var orchestrator = _orchestrator_with_open_offer("run-integrity:build")
+	var state: RefCounted = orchestrator.get("_state")
+	var original_build: RefCounted = state.get("build_state")
+	state.set("build_state", FailingBuildState.new(original_build))
+	var result = orchestrator.commit_selection_and_transition({
+		"id": "frozen_burst",
+		"category": "item",
+		"archetype": "freeze_burst",
+		"effects": {},
+	})
+	suite.assert_equal(result.code, &"INTEGRITY_FAILURE", "unrecoverable BuildState rejection is an integrity failure")
+	suite.assert_equal(result.context.get("stage"), "build_state_rollback", "integrity failure identifies the rollback stage")
+	suite.assert_true(orchestrator.has_consumed_offer("run-integrity:build"), "failed authority rollback is never reported as restored")
+
+	var legacy = _orchestrator_with_open_offer("run-integrity:legacy")
+	var legacy_state: RefCounted = legacy.get("_state")
+	var legacy_build: RefCounted = legacy_state.get("build_state")
+	legacy_state.set("build_state", FailingBuildState.new(legacy_build))
+	var legacy_result = legacy.selection_resolved({
+		"id": "frozen_burst",
+		"category": "item",
+		"archetype": "freeze_burst",
+		"effects": {},
+	})
+	suite.assert_equal(legacy_result.code, &"INTEGRITY_FAILURE", "legacy selection reports an unrecoverable rollback as an integrity failure")
+	suite.assert_equal(legacy_result.context.get("stage"), "build_state_rollback", "legacy integrity failure identifies the rollback stage")
+	suite.assert_true(legacy.has_consumed_offer("run-integrity:legacy"), "legacy failed rollback is never reported as restored")
+
+
+func _test_legacy_selection_rollback(suite) -> void:
+	var offer_id := "run-rollback:legacy"
+	var orchestrator = _orchestrator_with_open_offer(offer_id)
+	var before: Dictionary = orchestrator.selection_transaction_snapshot()
+	var state: RefCounted = orchestrator.get("_state")
+	var original_build: RefCounted = state.get("build_state")
+	state.set("build_state", FailingBuildState.new(original_build, false))
+	var result = orchestrator.selection_resolved({
+		"id": "frozen_burst",
+		"category": "item",
+		"archetype": "freeze_burst",
+		"effects": {},
+	})
+	suite.assert_equal(result.code, &"COMMIT_FAILED", "legacy selection reports a recoverable BuildState rejection")
+	suite.assert_equal(orchestrator.selection_transaction_snapshot(), before, "legacy selection restores its complete authority snapshot")
+	suite.assert_true(not orchestrator.has_consumed_offer(offer_id), "legacy selection rollback restores offer consumption authority")
+	suite.assert_equal(orchestrator.phase(), RunPhaseScript.Value.SELECTION_ACTIVE, "legacy selection rollback keeps the offer active")
 
 
 func _test_death_closes_active_selection(suite) -> void:
