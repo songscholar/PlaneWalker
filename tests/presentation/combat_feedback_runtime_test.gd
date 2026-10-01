@@ -70,6 +70,7 @@ func _run() -> void:
 	await _assert_staff_feedback_contract()
 	await _assert_gauntlets_feedback_contract()
 	await _assert_character_profile_feedback_contract()
+	await _assert_active_item_feedback_contract()
 	await _assert_high_frequency_feedback_budget()
 	await _assert_unknown_weapon_fails_closed()
 	await _assert_audio_cleanup_contract()
@@ -430,6 +431,116 @@ func _assert_character_profile_feedback_contract() -> void:
 	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
 	_suite.assert_equal((budget.get("character_cues_accepted", {}) as Dictionary).get("time_lord"), limit, "Time Lord cue budget caps accepted cues")
 	_suite.assert_equal((budget.get("character_cues_rejected", {}) as Dictionary).get("time_lord"), 2, "Time Lord cue budget rejects overflow deterministically")
+
+	CombatFeedback.set_feedback_options({
+		"camera_shake_enabled": true,
+		"hit_flash_enabled": true,
+		"reduced_motion": false,
+		"high_contrast_danger": false,
+		"subtitles_enabled": true,
+		"subtitle_scale": 1.0,
+		"master_volume": 0.85,
+		"sfx_volume": 0.9,
+	})
+	player.queue_free()
+	await get_tree().process_frame
+
+
+func _assert_active_item_feedback_contract() -> void:
+	var player := SnapshotPlayer.new()
+	add_child(player)
+	await get_tree().process_frame
+	var proxy: Node = CombatFeedback.ensure_actor_proxy_for_test(player)
+	_suite.assert_true(proxy != null, "active-item feedback receives a player proxy")
+	_suite.assert_true(
+		CombatFeedback.has_method("present_active_item_result_for_test"),
+		"combat feedback exposes active-item presentation"
+	)
+	_suite.assert_true(
+		CombatFeedback.has_method("get_active_item_feedback_snapshot_for_test"),
+		"combat feedback exposes active-item accessibility evidence"
+	)
+	if (
+		proxy == null
+		or not CombatFeedback.has_method("present_active_item_result_for_test")
+		or not CombatFeedback.has_method("get_active_item_feedback_snapshot_for_test")
+	):
+		player.queue_free()
+		await get_tree().process_frame
+		return
+
+	CombatFeedback.reset_feedback_for_test()
+	CombatFeedback.set_feedback_options({
+		"camera_shake_enabled": true,
+		"hit_flash_enabled": true,
+		"reduced_motion": true,
+		"high_contrast_danger": true,
+		"subtitles_enabled": true,
+		"subtitle_scale": 1.5,
+		"master_volume": 0.85,
+		"sfx_volume": 0.9,
+	})
+	_suite.assert_true(
+		CombatFeedback.present_active_item_result_for_test(
+			player,
+			&"absolute_zero_device",
+			&"absolute_zero",
+			true,
+			&""
+		),
+		"accepted active item emits its bounded feedback cue"
+	)
+	var proxy_snapshot: Dictionary = proxy.get_snapshot_for_test()
+	_suite.assert_equal(proxy_snapshot.get("active_item_cue_id"), "absolute_zero", "active handler selects a closed pixel cue")
+	_suite.assert_equal(proxy_snapshot.get("active_item_cue_kind"), "success", "accepted active uses success geometry")
+	_suite.assert_true(bool(proxy_snapshot.get("active_item_cue_active", false)), "active cue remains visible under reduced motion")
+	_suite.assert_true(bool(proxy_snapshot.get("high_contrast_active_item_feedback", false)), "active cue respects high contrast")
+	_suite.assert_close(
+		float(CombatFeedback.get_camera_feedback_snapshot_for_test().get("trauma", -1.0)),
+		0.0,
+		"reduced motion suppresses active-item camera shake"
+	)
+	var accessible: Dictionary = CombatFeedback.get_active_item_feedback_snapshot_for_test()
+	_suite.assert_equal(accessible.get("content_id"), "absolute_zero_device", "feedback keeps content identity")
+	_suite.assert_equal(accessible.get("subtitle_key"), "ABSOLUTE_ZERO_DEVICE_NAME", "active subtitle uses a localized content key")
+	_suite.assert_equal(accessible.get("status_key"), "HUD_WEAPON_READY", "accepted subtitle status is localized")
+	_suite.assert_true(bool(accessible.get("subtitle_visible", false)), "subtitle preference is respected")
+	_suite.assert_equal(accessible.get("subtitle_scale"), 1.5, "active subtitle scale follows accessibility settings")
+	var audio_history: Array = CombatFeedback.get_audio_contract_for_test().get("history", [])
+	_suite.assert_true(audio_history.has(&"time_stop"), "active item routes through the synthesized audio contract")
+
+	proxy.advance_animation_for_test(1.0)
+	_suite.assert_true(
+		CombatFeedback.present_active_item_result_for_test(
+			player,
+			&"absolute_zero_device",
+			&"absolute_zero",
+			false,
+			&"cooldown_active"
+		),
+		"rejected active item emits a distinct accessible cue"
+	)
+	proxy_snapshot = proxy.get_snapshot_for_test()
+	_suite.assert_equal(proxy_snapshot.get("active_item_cue_kind"), "rejected", "active rejection uses distinct geometry")
+	accessible = CombatFeedback.get_active_item_feedback_snapshot_for_test()
+	_suite.assert_equal(accessible.get("reason"), "cooldown_active", "active rejection reason remains machine-readable")
+	_suite.assert_equal(accessible.get("status_key"), "HUD_WEAPON_COOLDOWN_FMT", "cooldown rejection exposes a localized status key")
+
+	CombatFeedback.reset_feedback_for_test()
+	var budget: Dictionary = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	var limit := int(budget.get("max_active_item_cues", 0))
+	_suite.assert_true(limit > 0, "active-item feedback has an explicit per-window budget")
+	for index: int in range(limit + 2):
+		CombatFeedback.present_active_item_result_for_test(
+			player,
+			&"absolute_zero_device",
+			&"absolute_zero",
+			true,
+			StringName("probe_%d" % index)
+		)
+	budget = CombatFeedback.get_feedback_budget_snapshot_for_test()
+	_suite.assert_equal(budget.get("active_item_cues_accepted"), limit, "active-item cue budget caps accepted cues")
+	_suite.assert_equal(budget.get("active_item_cues_rejected"), 2, "active-item cue budget rejects overflow deterministically")
 
 	CombatFeedback.set_feedback_options({
 		"camera_shake_enabled": true,

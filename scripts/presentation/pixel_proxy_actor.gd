@@ -8,6 +8,16 @@ const PIXEL_UNIT := 2
 const SCREEN_PIXEL_UNIT := 2.0
 const FLASH_BUDGET_WINDOW_SECONDS := 1.0
 const MAX_FLASH_EVENTS_PER_WINDOW := 3
+const ACTIVE_ITEM_HANDLER_IDS: Array[StringName] = [
+	&"absolute_zero",
+	&"paradox_beacon",
+	&"gravity_snare",
+	&"redline_injector",
+	&"blood_price",
+	&"aegis_reversal",
+	&"railshot",
+	&"army_of_yesterday",
+]
 
 const PALETTES := {
 	"player": {
@@ -187,6 +197,9 @@ var _character_cue_kind: String = ""
 var _character_success_remaining: float = 0.0
 var _character_rejection_remaining: float = 0.0
 var _high_contrast_character_feedback: bool = false
+var _active_item_cue_id: String = ""
+var _active_item_cue_kind: String = ""
+var _active_item_cue_remaining: float = 0.0
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -278,6 +291,22 @@ func play_character_cue(skill_id: StringName, accepted: bool) -> bool:
 		if _state in [&"cast", &"time_stop", &"time_rewind"]:
 			_state = &"idle"
 		queue_redraw()
+	return true
+
+
+func play_active_item_cue(handler_id: StringName, accepted: bool) -> bool:
+	if _role != "player" or handler_id not in ACTIVE_ITEM_HANDLER_IDS:
+		return false
+	_active_item_cue_id = str(handler_id)
+	_active_item_cue_kind = "success" if accepted else "rejected"
+	_active_item_cue_remaining = 0.34 if accepted else 0.65
+	if accepted:
+		play_action(&"cast", _active_item_cue_remaining)
+	else:
+		_action_remaining = 0.0
+		if _state in [&"cast", &"time_stop", &"time_rewind"]:
+			_state = &"idle"
+	queue_redraw()
 	return true
 
 
@@ -379,6 +408,10 @@ func get_snapshot_for_test() -> Dictionary:
 		"character_success_active": _character_success_remaining > 0.0,
 		"character_rejection_active": _character_rejection_remaining > 0.0,
 		"high_contrast_character_feedback": _high_contrast_character_feedback,
+		"active_item_cue_id": _active_item_cue_id,
+		"active_item_cue_kind": _active_item_cue_kind,
+		"active_item_cue_active": _active_item_cue_remaining > 0.0,
+		"high_contrast_active_item_feedback": _high_contrast_character_feedback,
 		"gauntlets_lead_fist": _gauntlets_lead_fist(),
 		"gauntlets_punch_wind_visible": _gauntlets_punch_wind_visible(),
 		"gauntlets_counter_line_visible": _gauntlets_counter_line_visible(),
@@ -405,8 +438,12 @@ func _advance_animation(delta: float) -> void:
 	_presentation_cue_remaining = maxf(0.0, _presentation_cue_remaining - delta)
 	_character_success_remaining = maxf(0.0, _character_success_remaining - delta)
 	_character_rejection_remaining = maxf(0.0, _character_rejection_remaining - delta)
+	_active_item_cue_remaining = maxf(0.0, _active_item_cue_remaining - delta)
 	if _character_success_remaining <= 0.0 and _character_rejection_remaining <= 0.0:
 		_character_cue_kind = ""
+	if _active_item_cue_remaining <= 0.0:
+		_active_item_cue_id = ""
+		_active_item_cue_kind = ""
 	if _presentation_cue_remaining <= 0.0:
 		_presentation_animation_id = ""
 		_presentation_vfx_id = ""
@@ -912,6 +949,8 @@ func _draw() -> void:
 		_draw_danger_crown(_palette["danger"])
 	if _role == "player" and not _character_profile.is_empty():
 		_draw_character_profile_cues()
+	if _role == "player" and _active_item_cue_remaining > 0.0:
+		_draw_active_item_cue()
 
 
 func _draw_shadow() -> void:
@@ -964,6 +1003,30 @@ func _draw_character_profile_cues() -> void:
 		draw_line(Vector2(-9, -9), Vector2(9, 9), rejection_color, 3.0)
 		draw_line(Vector2(9, -9), Vector2(-9, 9), rejection_color, 3.0)
 		draw_arc(Vector2.ZERO, 20.0, 0.0, TAU, 16, rejection_color, 2.0, false)
+
+
+func _draw_active_item_cue() -> void:
+	var cue_color := Color.WHITE if _high_contrast_character_feedback else _palette["accent"] as Color
+	if _active_item_cue_kind == "rejected":
+		cue_color = Color.WHITE if _high_contrast_character_feedback else _palette["danger"] as Color
+		draw_line(Vector2(-12, -18), Vector2(12, 6), cue_color, 3.0)
+		draw_line(Vector2(12, -18), Vector2(-12, 6), cue_color, 3.0)
+		return
+	var pulse := 0.0 if _reduced_motion else sin(_phase_clock * 16.0) * 2.0
+	var radius := 22.0 + pulse
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 20, cue_color, 2.0, false)
+	match _active_item_cue_id:
+		"absolute_zero", "gravity_snare":
+			draw_line(Vector2(-radius, 0), Vector2(radius, 0), cue_color, 2.0)
+			draw_line(Vector2(0, -radius), Vector2(0, radius), cue_color, 2.0)
+		"paradox_beacon", "army_of_yesterday":
+			draw_arc(Vector2.ZERO, radius - 6.0, -PI * 0.75, PI * 0.75, 14, cue_color, 2.0, false)
+		"redline_injector", "blood_price":
+			draw_colored_polygon(PackedVector2Array([Vector2(-5, -radius), Vector2(8, -6), Vector2(0, -6), Vector2(6, radius), Vector2(-9, 2), Vector2(-1, 2)]), cue_color)
+		"aegis_reversal":
+			draw_polyline(PackedVector2Array([Vector2(0, -radius), Vector2(radius - 5, -9), Vector2(radius - 8, 12), Vector2(0, radius), Vector2(-radius + 8, 12), Vector2(-radius + 5, -9), Vector2(0, -radius)]), cue_color, 2.0)
+		"railshot":
+			draw_line(Vector2(-radius, 0), Vector2(radius, 0), cue_color, 4.0)
 
 
 func _draw_player_bow(accent: Color) -> void:

@@ -11,6 +11,7 @@ const MAX_CAMERA_TRAUMA := 8.0
 const MAX_SCREEN_FLASHES_PER_WINDOW := 3
 const MAX_HIT_PAUSES_PER_WINDOW := 8
 const MAX_HIT_AUDIO_CUES_PER_WINDOW := 12
+const MAX_ACTIVE_ITEM_CUES_PER_WINDOW := 4
 const KNOWN_CHARACTER_IDS: Array[String] = [
 	"wanderer",
 	"time_guardian",
@@ -25,6 +26,16 @@ const KNOWN_WEAPON_IDS: Array[StringName] = [
 	&"staff",
 	&"gauntlets",
 ]
+const ACTIVE_ITEM_AUDIO_CUES := {
+	"absolute_zero": &"time_stop",
+	"paradox_beacon": &"time_rewind",
+	"gravity_snare": &"danger_windup",
+	"redline_injector": &"dash",
+	"blood_price": &"hit_heavy",
+	"aegis_reversal": &"gauntlets_counter",
+	"railshot": &"gun_aimed_fire",
+	"army_of_yesterday": &"time_rewind",
+}
 
 var _restore_scale: float = 1.0
 var _pause_token: int = 0
@@ -63,9 +74,12 @@ var _hit_pauses_accepted: int = 0
 var _hit_pauses_rejected: int = 0
 var _hit_audio_accepted: int = 0
 var _hit_audio_rejected: int = 0
+var _active_item_cues_accepted: int = 0
+var _active_item_cues_rejected: int = 0
 var _character_cues_accepted: Dictionary = {}
 var _character_cues_rejected: Dictionary = {}
 var _character_feedback_snapshot: Dictionary = {}
+var _active_item_feedback_snapshot: Dictionary = {}
 var _last_character_priority_frame: int = -1
 
 
@@ -233,6 +247,8 @@ func get_feedback_budget_snapshot_for_test() -> Dictionary:
 		"hit_pauses_rejected": _hit_pauses_rejected,
 		"hit_audio_accepted": _hit_audio_accepted,
 		"hit_audio_rejected": _hit_audio_rejected,
+		"active_item_cues_accepted": _active_item_cues_accepted,
+		"active_item_cues_rejected": _active_item_cues_rejected,
 		"character_cues_accepted": _character_cues_accepted.duplicate(true),
 		"character_cues_rejected": _character_cues_rejected.duplicate(true),
 		"character_profile_limits": _character_profile_limits_snapshot(),
@@ -242,11 +258,16 @@ func get_feedback_budget_snapshot_for_test() -> Dictionary:
 		"max_screen_flashes": MAX_SCREEN_FLASHES_PER_WINDOW,
 		"max_hit_pauses": MAX_HIT_PAUSES_PER_WINDOW,
 		"max_hit_audio": MAX_HIT_AUDIO_CUES_PER_WINDOW,
+		"max_active_item_cues": MAX_ACTIVE_ITEM_CUES_PER_WINDOW,
 	}
 
 
 func get_character_feedback_snapshot_for_test() -> Dictionary:
 	return _character_feedback_snapshot.duplicate(true)
+
+
+func get_active_item_feedback_snapshot_for_test() -> Dictionary:
+	return _active_item_feedback_snapshot.duplicate(true)
 
 
 func present_character_skill_result_for_test(
@@ -300,6 +321,66 @@ func present_character_skill_result(
 	}
 	if accepted:
 		add_camera_trauma(1.0)
+	return true
+
+
+func present_active_item_result_for_test(
+	actor: Node2D,
+	content_id: StringName,
+	handler_id: StringName,
+	accepted: bool,
+	reason: StringName
+) -> bool:
+	return present_active_item_result(actor, content_id, handler_id, accepted, reason)
+
+
+func present_active_item_result(
+	actor: Node2D,
+	content_id: StringName,
+	handler_id: StringName,
+	accepted: bool,
+	reason: StringName = &""
+) -> bool:
+	var content_key := str(content_id)
+	var handler_key := str(handler_id)
+	if (
+		actor == null
+		or not is_instance_valid(actor)
+		or content_key.is_empty()
+		or not ACTIVE_ITEM_AUDIO_CUES.has(handler_key)
+	):
+		return false
+	var proxy := _ensure_actor_proxy(actor)
+	if proxy == null or not proxy.has_method("play_active_item_cue"):
+		return false
+	if not _consume_feedback_budget(&"active_item"):
+		return false
+	if not bool(proxy.call("play_active_item_cue", handler_id, accepted)):
+		return false
+	var audio_cue: StringName = ACTIVE_ITEM_AUDIO_CUES[handler_key]
+	var audio_intensity := clampf(_master_volume * _sfx_volume, 0.0, 1.0)
+	if accepted and _audio != null:
+		_audio.play_cue(audio_cue, audio_intensity)
+	_active_item_feedback_snapshot = {
+		"content_id": content_key,
+		"handler_id": handler_key,
+		"accepted": accepted,
+		"reason": str(reason),
+		"subtitle_key": "%s_NAME" % content_key.to_upper(),
+		"status_key": (
+			"HUD_WEAPON_READY"
+			if accepted
+			else "HUD_WEAPON_COOLDOWN_FMT" if reason == &"cooldown_active" else "HUD_WEAPON_READY"
+		),
+		"subtitle_visible": _subtitles_enabled,
+		"subtitle_scale": _subtitle_scale,
+		"audio_cue": str(audio_cue) if accepted else "",
+		"audio_intensity": audio_intensity if accepted else 0.0,
+		"high_contrast": _high_contrast_danger,
+		"reduced_motion": _reduced_motion,
+	}
+	if accepted:
+		add_camera_trauma(2.0)
 	return true
 
 
@@ -677,6 +758,12 @@ func _consume_feedback_budget(kind: StringName) -> bool:
 				return false
 			_hit_audio_accepted += 1
 			return true
+		&"active_item":
+			if _active_item_cues_accepted >= MAX_ACTIVE_ITEM_CUES_PER_WINDOW:
+				_active_item_cues_rejected += 1
+				return false
+			_active_item_cues_accepted += 1
+			return true
 	return false
 
 
@@ -691,6 +778,8 @@ func _reset_feedback_budget_counts() -> void:
 	_hit_pauses_rejected = 0
 	_hit_audio_accepted = 0
 	_hit_audio_rejected = 0
+	_active_item_cues_accepted = 0
+	_active_item_cues_rejected = 0
 	_character_cues_accepted.clear()
 	_character_cues_rejected.clear()
 	for character_id: String in KNOWN_CHARACTER_IDS:
@@ -822,6 +911,7 @@ func _reset_feedback() -> void:
 	_played_weapon_cues.clear()
 	_played_weapon_cue_order.clear()
 	_character_feedback_snapshot.clear()
+	_active_item_feedback_snapshot.clear()
 	_last_character_priority_frame = -1
 	_restore_camera_offset()
 	if _audio != null and _audio.has_method("stop_all"):

@@ -9856,6 +9856,7 @@ func activate_equipped_active_item(context_override: Dictionary = {}) -> Diction
 	var prepared_value: Variant = active_item_runtime.call("plan_activate", context)
 	var prepared := (prepared_value as Dictionary) if prepared_value is Dictionary else {}
 	if not bool(prepared.get("ok", false)):
+		_present_active_item_feedback(prepared, false)
 		return prepared.duplicate(true)
 	var plan := (prepared.get("plan", {}) as Dictionary).duplicate(true)
 	var runtime_before := active_item_snapshot()
@@ -9868,13 +9869,17 @@ func activate_equipped_active_item(context_override: Dictionary = {}) -> Diction
 	)
 	var committed := (committed_value as Dictionary) if committed_value is Dictionary else {}
 	if not bool(committed.get("ok", false)):
+		_present_active_item_feedback(committed, false)
 		return committed.duplicate(true)
 	var claims := committed.get("resource_claims", {}) as Dictionary
 	var settlement := _settle_active_item_claims(claims, time_before, health_before)
 	if not bool(settlement.get("ok", false)):
 		if not bool(active_item_runtime.call("restore_snapshot", runtime_before)):
 			set_physics_process(false)
-			return {"ok": false, "code": &"ROLLBACK_FAILED", "context": settlement}
+			var rollback_failure := {"ok": false, "code": &"ROLLBACK_FAILED", "context": settlement}
+			_present_active_item_feedback(rollback_failure, false)
+			return rollback_failure
+		_present_active_item_feedback(settlement, false)
 		return settlement
 	var definition := runtime_before.get("definition", {}) as Dictionary
 	var result := committed.duplicate(true)
@@ -9882,7 +9887,30 @@ func activate_equipped_active_item(context_override: Dictionary = {}) -> Diction
 	result["handler_id"] = str(definition.get("active_handler_id", ""))
 	result["runtime_frame"] = _runtime_frame
 	_active_item_last_activation = result.duplicate(true)
+	_present_active_item_feedback(result, true)
 	return result
+
+
+func _present_active_item_feedback(result: Dictionary, accepted: bool) -> void:
+	if not CombatFeedback.has_method("present_active_item_result"):
+		return
+	var snapshot := active_item_snapshot()
+	var definition_value: Variant = snapshot.get("definition", {})
+	if not definition_value is Dictionary:
+		return
+	var definition := definition_value as Dictionary
+	var content_id := StringName(str(definition.get("id", "")))
+	var handler_id := StringName(str(definition.get("active_handler_id", "")))
+	if content_id == &"" or handler_id == &"":
+		return
+	CombatFeedback.call(
+		"present_active_item_result",
+		self,
+		content_id,
+		handler_id,
+		accepted,
+		&"" if accepted else StringName(str(result.get("code", "rejected")).to_lower())
+	)
 
 
 func _settle_active_item_claims(
