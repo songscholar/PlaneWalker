@@ -335,11 +335,19 @@ func _filter_candidates(
 	milestone: String = "M1"
 ) -> Array[Dictionary]:
 	var filtered: Array[Dictionary] = []
+	var allowed_archetypes := (
+		M1_ARCHETYPES
+		if M1_COMPATIBLE_MILESTONES.has(milestone)
+		else LAUNCH_ARCHETYPES
+	)
 	for definition: Dictionary in candidates:
 		var content_id := str(definition.get("id", ""))
 		if content_id.is_empty() or owned_ids.has(content_id):
 			continue
 		if not definition.get("availability", []).has(milestone):
+			continue
+		var archetype := str(definition.get("archetype", ""))
+		if not archetype.is_empty() and not allowed_archetypes.has(archetype):
 			continue
 		filtered.append(definition.duplicate(true))
 	return filtered

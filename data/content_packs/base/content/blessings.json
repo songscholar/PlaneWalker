@@ -57,9 +57,9 @@
     "name_key": "BLS_SURVIVE_THREAD_NAME",
     "description_key": "BLS_SURVIVE_THREAD_DESC",
     "tags": [
-      "payoff",
-      "perfect_guard",
-      "survival"
+      "generalist",
+      "survival",
+      "utility"
     ],
     "compatibility": {},
     "effects": {
@@ -68,8 +68,8 @@
       "invulnerable_duration": 0.8
     },
     "kind": "survival",
-    "archetype": "perfect_guard",
-    "role": "payoff",
+    "archetype": "",
+    "role": "utility",
     "rarity": "common",
     "icon_id": "content_bls_survive_thread"
   },

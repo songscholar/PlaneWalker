@@ -13,6 +13,7 @@
     "description_key": "TAL_ETERNITY_RESERVE_DESC",
     "tags": [
       "eternity",
+      "generalist",
       "utility"
     ],
     "compatibility": {"character_ids": ["wanderer"]},
@@ -39,9 +40,9 @@
     "name_key": "TAL_RUIN_EXECUTE_NAME",
     "description_key": "TAL_RUIN_EXECUTE_DESC",
     "tags": [
-      "perfect_guard",
-      "route",
-      "ruin"
+      "generalist",
+      "ruin",
+      "utility"
     ],
     "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
@@ -49,8 +50,8 @@
       "heavy_execute_threshold": 0.3
     },
     "kind": "ruin",
-    "archetype": "perfect_guard",
-    "role": "route",
+    "archetype": "",
+    "role": "utility",
     "rarity": "common",
     "icon_id": "content_tal_ruin_execute"
   },
@@ -67,9 +68,9 @@
     "name_key": "TAL_STEEL_RECOVER_NAME",
     "description_key": "TAL_STEEL_RECOVER_DESC",
     "tags": [
-      "perfect_guard",
-      "route",
-      "steel"
+      "generalist",
+      "steel",
+      "utility"
     ],
     "compatibility": {"character_ids": ["wanderer"]},
     "effects": {
@@ -77,8 +78,8 @@
       "heal": 20.0
     },
     "kind": "steel",
-    "archetype": "perfect_guard",
-    "role": "route",
+    "archetype": "",
+    "role": "utility",
     "rarity": "common",
     "icon_id": "content_tal_steel_recover"
   },

@@ -2,6 +2,8 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const GAME_STATE_PATH := "res://autoload/game_state.gd"
+const RUN_BUILD_STATE_PATH := "res://scripts/progression/run_build_state.gd"
+const RUN_ORCHESTRATOR_PATH := "res://scripts/application/run_orchestrator.gd"
 const PRODUCTION_ROOTS: Array[String] = [
 	"res://autoload",
 	"res://scripts",
@@ -75,6 +77,7 @@ func _run() -> void:
 		"GameState exposes only a narrow persisted run-summary helper"
 	)
 	_assert_production_authority(suite)
+	_assert_build_definition_authority(suite)
 	_test_profile_summary_persistence(suite)
 	suite.finish(get_tree())
 
@@ -92,6 +95,31 @@ func _assert_production_authority(suite) -> void:
 				not source.contains(token),
 				"%s contains no retired run-authority token: %s" % [path, token]
 			)
+
+
+func _assert_build_definition_authority(suite) -> void:
+	var build_source := _read_text(RUN_BUILD_STATE_PATH)
+	var orchestrator_source := _read_text(RUN_ORCHESTRATOR_PATH)
+	suite.assert_true(not build_source.is_empty(), "RunBuildState source is readable")
+	suite.assert_true(not orchestrator_source.is_empty(), "RunOrchestrator source is readable")
+	suite.assert_true(
+		build_source.contains("func apply_definition("),
+		"RunBuildState owns the single resolved-definition application boundary"
+	)
+	suite.assert_true(
+		orchestrator_source.contains("build_state.apply_definition(definition)"),
+		"RunOrchestrator delegates selected definitions to RunBuildState authority"
+	)
+	for legacy_route: String in [
+		"build_state.record_item(",
+		"build_state.record_blessing(",
+		"build_state.record_curse(",
+		"build_state.record_talent(",
+	]:
+		suite.assert_true(
+			not orchestrator_source.contains(legacy_route),
+			"RunOrchestrator no longer branches build scoring through %s" % legacy_route
+		)
 
 
 func _test_profile_summary_persistence(suite) -> void:

@@ -5,6 +5,7 @@ const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
 const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
 
 const FIXTURE_PATH := "res://tests/fixtures/content/draft_entries.json"
 
@@ -55,6 +56,7 @@ func _run() -> void:
 	_test_reinforcement_offer(suite, service, registry, rooms[1])
 	_test_talent_offer(suite, service, registry, rooms[2])
 	_test_real_talent_offer(suite, rooms[2])
+	_test_real_m1_pool_build_compatibility(suite, rooms)
 	_test_contract_offer(suite, service, registry, rooms[3])
 	_test_no_boss_reward(suite, service, registry, rooms[4])
 	_test_resolution(suite, service, registry, rooms[0])
@@ -123,7 +125,46 @@ func _test_real_talent_offer(suite, room: Dictionary) -> void:
 		return
 	var definitions := _definitions(service, result.context["offer"])
 	suite.assert_equal(definitions.size(), 3, "real talent offer has three definitions")
-	suite.assert_true(definitions.all(func(entry): return str(entry["archetype"]) != "rift_trap"), "real talent offer does not leak rift route")
+	for definition: Dictionary in definitions:
+		var archetype := str(definition["archetype"])
+		suite.assert_true(
+			archetype.is_empty() or DraftServiceScript.M1_ARCHETYPES.has(archetype),
+			"real talent offer stays inside the M1 archetype domain"
+		)
+
+
+func _test_real_m1_pool_build_compatibility(suite, rooms: Array[Dictionary]) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		"0.4.0-dev",
+		&"M1"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "real Base Pack loads for M1 build compatibility")
+	if report.has_blocking_errors():
+		return
+	var build_state = RunBuildStateScript.new()
+	build_state.reset("M1")
+	for seed_value: int in range(30):
+		var service = DraftServiceScript.new()
+		for room_index: int in range(4):
+			var state := _state(20260901 + seed_value, room_index + 1)
+			state["config"] = {"milestone": "M1"}
+			state["build"]["dominant_archetype"] = "freeze_burst"
+			var created = service.create_offer(registry, state, rooms[room_index])
+			suite.assert_true(created.ok, "M1 seed %d room %d creates an offer" % [seed_value, room_index + 1])
+			if not created.ok:
+				continue
+			for definition: Dictionary in _definitions(service, created.context["offer"]):
+				var validation: Dictionary = build_state.validate_definition(definition)
+				suite.assert_true(
+					bool(validation.get("ok", false)),
+					"M1 seed %d room %d definition %s fits the authoritative build domain" % [
+						seed_value,
+						room_index + 1,
+						str(definition.get("id", "")),
+					]
+				)
 
 
 func _test_contract_offer(suite, service, registry, room: Dictionary) -> void:

@@ -208,19 +208,21 @@ func _validate_selected_definition(definition: Dictionary):
 			_state.revision,
 			{"field": "definition.id"}
 		)
+	var build_validation: Dictionary = _state.build_state.validate_definition(definition)
+	if not bool(build_validation.get("ok", false)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{
+				"field": str(build_validation.get("field", "definition")),
+				"reason": str(build_validation.get("reason", "invalid")),
+			}
+		)
 	return CommandResultScript.success(_state.revision)
 
 
 func _record_selected_definition(definition: Dictionary) -> void:
-	match str(definition.get("category", "")):
-		"item":
-			_state.build_state.record_item(definition)
-		"blessing":
-			_state.build_state.record_blessing(definition)
-		"curse":
-			_state.build_state.record_curse(definition)
-		"talent":
-			_state.build_state.record_talent(definition)
+	_state.build_state.apply_definition(definition)
 
 
 func _reject_phase():

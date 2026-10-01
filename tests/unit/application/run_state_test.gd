@@ -22,7 +22,7 @@ func _run() -> void:
 	suite.assert_equal(state.stats, {"kills": 0}, "reset initializes run statistics")
 	suite.assert_equal(state.events, [], "reset initializes run events")
 
-	state.build_state.record_item({"id": "frozen_burst", "archetype": "time_stop_burst"})
+	state.build_state.record_item({"id": "frozen_burst", "archetype": "freeze_burst"})
 	state.open_offer = {"offer_id": "offer-one", "options": [{"option_id": "frozen_burst"}]}
 	state.result = {"result": "old"}
 	state.suspended = true

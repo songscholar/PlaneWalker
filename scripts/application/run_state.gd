@@ -44,7 +44,7 @@ func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
 	events = []
 	if build_state == null:
 		build_state = RunBuildStateScript.new()
-	build_state.reset()
+	build_state.reset(str(config["milestone"]))
 	open_offer = {}
 	consumed_offer_ids = {}
 	result = {}

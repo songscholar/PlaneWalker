@@ -78,13 +78,13 @@ func _test_selection_writeback(suite) -> void:
 			"category": "item",
 			"id": "frozen_burst",
 			"field": "items",
-			"archetype": "time_stop_burst",
+			"archetype": "freeze_burst",
 		},
 		{
 			"category": "blessing",
 			"id": "bls_stop_weakpoint",
 			"field": "blessings",
-			"archetype": "time_stop_burst",
+			"archetype": "freeze_burst",
 		},
 		{
 			"category": "curse",
@@ -115,7 +115,7 @@ func _test_selection_writeback(suite) -> void:
 		suite.assert_true(recorded.has(str(case["id"])), "%s writes to authoritative build" % str(case["category"]))
 		suite.assert_equal(build["reward_history"].size(), 1, "%s records one build history entry" % str(case["category"]))
 		if str(case["category"]) == "item":
-			suite.assert_equal(build["dominant_archetype"], "time_stop_burst", "item updates dominant archetype")
+			suite.assert_equal(build["dominant_archetype"], "freeze_burst", "item updates dominant archetype")
 
 	var decline = _orchestrator_with_open_offer("run-writeback:decline")
 	var declined = decline.selection_resolved({
@@ -136,7 +136,7 @@ func _test_selection_writeback(suite) -> void:
 	var duplicate_definition := {
 		"id": "frozen_burst",
 		"category": "item",
-		"archetype": "time_stop_burst",
+		"archetype": "freeze_burst",
 		"effects": {},
 	}
 	suite.assert_true(duplicate.selection_resolved(duplicate_definition).ok, "first canonical selection resolves")
@@ -288,7 +288,7 @@ func _offer(revision: int, offer_id: String = "") -> Dictionary:
 			"content_id": "frozen_burst",
 			"name_key": "FROZEN_BURST_NAME",
 			"description_key": "FROZEN_BURST_DESC",
-			"archetype_key": "ARCHETYPE_TIME_STOP_BURST",
+			"archetype_key": "ARCHETYPE_FREEZE_BURST_NAME",
 			"role_key": "ROLE_STARTER",
 			"rarity": "common",
 			"icon_id": "item_frozen_burst",

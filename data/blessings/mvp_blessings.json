@@ -34,8 +34,8 @@
 		"name": "BLS_SURVIVE_THREAD_NAME",
 		"category": "blessing",
 		"kind": "survival",
-		"archetype": "evasive_guard",
-		"role": "payoff",
+		"archetype": "",
+		"role": "utility",
 		"description": "BLS_SURVIVE_THREAD_DESC",
 		"effects": {"max_hp_bonus": 20.0, "time_energy_max_bonus": 15.0, "invulnerable_duration": 0.8}
 	}

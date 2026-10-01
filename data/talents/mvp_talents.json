@@ -4,8 +4,8 @@
 		"name": "TAL_RUIN_EXECUTE_NAME",
 		"category": "talent",
 		"kind": "ruin",
-		"archetype": "heavy_cleave",
-		"role": "route",
+		"archetype": "",
+		"role": "utility",
 		"description": "TAL_RUIN_EXECUTE_DESC",
 		"effects": {"heavy_execute_multiplier_bonus": 0.5, "heavy_execute_threshold": 0.3}
 	},
@@ -14,8 +14,8 @@
 		"name": "TAL_STEEL_RECOVER_NAME",
 		"category": "talent",
 		"kind": "steel",
-		"archetype": "evasive_guard",
-		"role": "route",
+		"archetype": "",
+		"role": "utility",
 		"description": "TAL_STEEL_RECOVER_DESC",
 		"effects": {"max_hp_bonus": 20.0, "heal": 20.0}
 	},
@@ -24,8 +24,8 @@
 		"name": "TAL_ETERNITY_RESERVE_NAME",
 		"category": "talent",
 		"kind": "eternity",
-		"archetype": "rift_control",
-		"role": "route",
+		"archetype": "",
+		"role": "utility",
 		"description": "TAL_ETERNITY_RESERVE_DESC",
 		"effects": {"low_energy_regen_multiplier": 2.0, "low_energy_threshold": 30.0}
 	}

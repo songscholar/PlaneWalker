@@ -181,7 +181,7 @@ func _test_project_base_pack_v2(suite) -> void:
 	suite.assert_equal(frozen_burst.get("archetype"), "freeze_burst", "v2 content uses authoritative freeze archetype")
 	suite.assert_equal(registry.get_content(&"rift_snare").get("archetype"), "rift_trap", "v2 content uses authoritative rift archetype")
 	suite.assert_equal(registry.get_content(&"piercing_draw").get("archetype"), "piercing_barrage", "v2 content uses authoritative ranged archetype")
-	suite.assert_equal(registry.get_content(&"tal_ruin_execute").get("archetype"), "perfect_guard", "v2 content removes mechanic-tag top-level archetypes")
+	suite.assert_equal(registry.get_content(&"tal_ruin_execute").get("archetype"), "", "M1 character talent remains a generalist instead of leaking a Launch-only route")
 	suite.assert_true(registry.get_content(&"piercing_draw").get("availability", []).has("NEXT"), "future bow content remains preserved")
 	suite.assert_equal(registry.get_by_category(&"item", &"M1").size(), 8, "M1 item eligibility remains unchanged")
 	suite.assert_true(not registry.get_by_tag(&"piercing_barrage", &"NEXT").is_empty(), "tag query exposes normalized route")
