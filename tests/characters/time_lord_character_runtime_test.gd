@@ -11,6 +11,7 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const PROFILE_CATALOG_PATH := (
 	"res://data/content_packs/base/content/character_runtime_profiles.json"
 )
+const TALENT_CATALOG_PATH := "res://data/content_packs/base/content/talents.json"
 
 var _suite
 var _definition: Dictionary = {}
@@ -166,6 +167,10 @@ func _fixture(talents: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var runtime: Variant = CharacterRuntimeFactoryScript.create(&"time_lord")
 	_suite.assert_true(profile != null, "Time Lord profile parses")
 	_suite.assert_true(runtime.configure(owner, profile, talents), "Time Lord runtime configures")
+	_suite.assert_true(
+		runtime.configure_talent_definitions(_talent_definitions(talents)),
+		"Time Lord installs authoritative Talent definitions"
+	)
 	return {"owner": owner, "runtime": runtime}
 
 
@@ -233,3 +238,18 @@ func _load_definition(profile_id: String) -> Dictionary:
 		if value is Dictionary and str((value as Dictionary).get("id", "")) == profile_id:
 			return (value as Dictionary).duplicate(true)
 	return {}
+
+
+func _talent_definitions(ids: PackedStringArray) -> Array[Dictionary]:
+	var parsed: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(TALENT_CATALOG_PATH)
+	)
+	var requested: Dictionary = {}
+	for talent_id: String in ids:
+		requested[talent_id] = true
+	var result: Array[Dictionary] = []
+	if parsed is Array:
+		for value: Variant in parsed:
+			if value is Dictionary and requested.has(str((value as Dictionary).get("id", ""))):
+				result.append((value as Dictionary).duplicate(true))
+	return result
