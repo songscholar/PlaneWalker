@@ -288,7 +288,7 @@ The foundation is executed as hard-gated phases:
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
 
-Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, and the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md) is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
+Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md), the [P12 five-character program](../../current/2026-09-30-p12-five-characters-evidence.md), and [P13A Launch archetype authority](../../current/2026-10-01-p13a-launch-archetype-authority-evidence.md) is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
 
 ## 10. Delivery Sequence After Foundation
 
@@ -311,6 +311,10 @@ After P0–P9, work continues in dependency order:
 P10A completed the canonical `5 / 5 / 4` character, weapon, and time-ability identity catalog, candidate-only Bow/Rift/Accelerate runtime, configuration-driven two-slot HUD, local Candidate Lab, and all six legal time-pair verification on 2026-09-29. This is locally verified preparation for the evidence-based promotion decision. It does not satisfy delivery step 2, change Quick Start, or promote Bow, Rift, or Accelerate to Current; authentic external playtest evidence remains `0 / 20`.
 
 P11A–P11H completed delivery step 4 at implementation commit `01c3712` on 2026-09-30: all five weapons use the shared action authority, the formal Launch Loadout reaches every weapon and legal time pair, deterministic weapon Replay and external-fact validation pass, and the 30-loadout matrix plus synthetic simulation report are locally certified. This does not complete five character-specific gameplay kits, the 150-loadout matrix, full player-facing replay productization, or any later floor, Boss, Hub, narrative, ranking, Mod, or DLC gate. Formal M1 and external export/release boundaries are unchanged.
+
+P12 completed delivery step 5 at implementation commit `e7b1ef9` on 2026-10-01: five complete Launch character runtimes, fifteen character talents, player-facing character UI/feedback, deterministic Replay, all 150 loadouts, 40 talent subsets, 30 pairwise integrations, and two byte-identical 4500-sample reports are locally certified.
+
+P13A completed the authority half of delivery step 6 at implementation commit `efebc11` on 2026-10-01: exactly eight versioned archetype profiles, milestone-aware Registry references and drafts, authoritative three-key/eight-key build domains, Replay-compatible snapshots, strict ViewState projection, and localized HUD identity pass the `156 / 156` scene gate. P13B remains responsible for the real `50 items / 28 blessings / 18 curses / 15 run talents` pools and typed effect certification. Formal M1, human-playtest, line-coverage, export, signing, and publication status are unchanged.
 
 Parallel agents may work on independent lanes, but shared contracts, manifests, autoloads, and assembly scenes have one integration owner.
 

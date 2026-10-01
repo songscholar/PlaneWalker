@@ -1,13 +1,14 @@
 # Plane Walker P13A Launch Archetype Authority Implementation Plan
 
-- Status: Active / Current
-- Document Role: Current implementation plan
+- Status: Completed / Historical
+- Document Role: Historical implementation plan and execution record
 - Authority Level: Executable P13A work breakdown under the approved Full Product Completion Design
 - Applies To: Eight Launch archetype identities, content cross-references, milestone-aware draft routing, build-state validation, UI projection, tests, and local certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/0_深度收敛与系统职责设计.md`, `docs/contracts/content-pack-v2.md`, `docs/current/2026-09-30-p12-five-characters-evidence.md`
 - Last Verified: 2026-10-01
-- Implementation Status: Tasks 1-3 complete locally; Task 4 build-state and HUD contracts are next
+- Implementation Status: Completed at implementation certification commit `efebc11`; eight versioned archetype profiles, milestone-aware content/draft/build domains, localized HUD projection, M1 compatibility, and the `156 / 156` repository scene gate are locally certified
+- Completion Evidence: `docs/current/2026-10-01-p13a-launch-archetype-authority-evidence.md`; exact eight-profile authority, M1 1000-seed parity, Launch 30-seed determinism, first-four-room BuildState compatibility, player-facing projection, hashes, and the complete repository gate
 - Exit Gate: Exactly eight versioned Launch archetype profiles resolve through ContentRegistry, every non-empty content archetype reference is validated, M1 drafting remains byte-for-byte compatible, Launch drafting is milestone-aware, build/UI state rejects unknown archetypes, and the complete repository gate remains green
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -298,13 +299,13 @@ git commit -m "feat(rewards): route drafts through launch archetypes"
 - Consumes: resolved content definition, authoritative archetype IDs, and immutable RunState snapshots.
 - Produces: exact eight-key archetype scores, deterministic dominant route, and localized player-facing HUD identity.
 
-- [ ] **Step 1: Write failing build and UI tests**
+- [x] **Step 1: Write failing build and UI tests**
 
 After a selected definition is applied, increment only its authoritative archetype score. Utilities with an empty archetype increment no route. Ties resolve by the approved profile order. Unknown keys, negative/non-finite scores, a dominant ID outside the score map, and internal mechanic tags in `dominant_archetype` fail closed.
 
 The HUD must render `ARCHETYPE_<ID>_NAME` and never display the raw ID. Locale refresh changes the visible label while preserving the cached stable ID.
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 ```bash
 ./tools/run_tests.sh --filter run_state_snapshot_contract
@@ -313,13 +314,13 @@ The HUD must render `ARCHETYPE_<ID>_NAME` and never display the raw ID. Locale r
 ./tools/run_tests.sh --filter combat_hud
 ```
 
-- [ ] **Step 3: Implement strict build projection**
+- [x] **Step 3: Implement strict build projection**
 
 Initialize all eight score keys to zero for Launch/Expansion and the frozen three keys for M1. `RunBuildState.apply_definition(definition)` accepts only content resolved by the Registry, appends the stable ID to the correct collection, increments a non-empty archetype once, recomputes dominant route by score then approved order, and returns an immutable change fact.
 
 `RunViewState` validates the exact milestone-specific score domain. `CombatHudView` uses the localized archetype name key supplied by the projector.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 ```bash
 ./tools/run_tests.sh --filter run_state_snapshot_contract
@@ -346,7 +347,7 @@ git commit -m "feat(ui): project authoritative build archetypes"
 - Consumes: Tasks 1-4 implementation commits and complete repository validation.
 - Produces: Historical P13A plan, current evidence, and an explicit P13B next step for the real `50 / 28 / 18 / 15` Launch pools.
 
-- [ ] **Step 1: Run focused and complete certification**
+- [x] **Step 1: Run focused and complete certification**
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.content_schema.test_archetype_profile_schema tests.contract.documentation.test_document_governance tests.contract.localization.test_validate_localization
@@ -362,11 +363,11 @@ git diff --check
 
 Expected: all tests pass with only the registered `reward_system_smoke.tscn` warning; line coverage and export boundaries remain honestly unavailable/external.
 
-- [ ] **Step 2: Write evidence and mark Historical**
+- [x] **Step 2: Write evidence and mark Historical**
 
 Record exact commits, eight IDs, schema/catalog digests, M1 parity results, Launch 30-seed draft determinism, scene count, registered warning, `0 / 20` human playtests, and external export/signing/publication boundaries. Mark this plan `Completed / Historical` with `Completion Evidence` metadata.
 
-- [ ] **Step 3: Commit certification**
+- [x] **Step 3: Commit certification**
 
 ```bash
 git add -- docs/current/2026-10-01-p13a-launch-archetype-authority-evidence.md docs/README.md docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md docs/superpowers/plans/2026-10-01-plane-walker-p13a-launch-archetype-authority.md
@@ -375,12 +376,12 @@ git commit -m "docs(builds): certify p13a archetype authority"
 
 ## P13A Exit Gate
 
-- [ ] Exactly eight Launch/Expansion archetype profiles exist in approved order.
-- [ ] The schema, parser, generic entry contract, Registry, pack manifest, localization, and integrity hashes agree.
-- [ ] Unknown, unavailable, duplicate, empty, or mechanic-tag archetype references fail before pack activation.
-- [ ] M1 drafting remains restricted to the frozen three routes with deterministic parity.
-- [ ] Launch drafting reads all eight routes through the Registry and keeps three-option choice load.
-- [ ] RunBuildState, Replay snapshots, ViewState, and HUD accept only the milestone-specific archetype domain.
-- [ ] P13A does not claim the final Launch pool counts; P13B owns the real `50 / 28 / 18 / 15` content and effect certification.
-- [ ] Full repository validation is green with only registered warnings.
-- [ ] Evidence remains local and does not change M1, human-playtest, line-coverage, export, signing, or publication status.
+- [x] Exactly eight Launch/Expansion archetype profiles exist in approved order.
+- [x] The schema, parser, generic entry contract, Registry, pack manifest, localization, and integrity hashes agree.
+- [x] Unknown, unavailable, duplicate, empty, or mechanic-tag archetype references fail before pack activation.
+- [x] M1 drafting remains restricted to the frozen three routes with deterministic parity.
+- [x] Launch drafting reads all eight routes through the Registry and keeps three-option choice load.
+- [x] RunBuildState, Replay snapshots, ViewState, and HUD accept only the milestone-specific archetype domain.
+- [x] P13A does not claim the final Launch pool counts; P13B owns the real `50 / 28 / 18 / 15` content and effect certification.
+- [x] Full repository validation is green with only registered warnings.
+- [x] Evidence remains local and does not change M1, human-playtest, line-coverage, export, signing, or publication status.
