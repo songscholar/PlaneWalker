@@ -111,6 +111,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P12 Five Complete Characters Evidence](current/2026-09-30-p12-five-characters-evidence.md) | 五角色、15 Talents、角色 UI/反馈、Replay、150 组合、40 Talent 子集、30 pairwise、4500 synthetic samples 与 154 场景最终认证 | Verified Locally / Current |
 | [P13A Launch Archetype Authority Plan](superpowers/plans/2026-10-01-plane-walker-p13a-launch-archetype-authority.md) | 八个顶层 Launch 流派、内容引用、Draft、BuildState 与 HUD 权威的执行记录 | Completed / Historical |
 | [P13A Launch Archetype Authority Evidence](current/2026-10-01-p13a-launch-archetype-authority-evidence.md) | 八流派 Profile、跨引用、里程碑 Draft/Build/UI、哈希、确定性与 156 场景整库认证 | Verified Locally / Current |
+| [P13B Complete Launch Pools Design](superpowers/specs/2026-10-01-plane-walker-p13b-launch-content-design.md) | 精确 `50 / 28 / 18 / 15` 内容目录、效果事务、8 主动道具、Talent 数据权威、UI/Replay 与认证 Gate | Approved / Current authority |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |
 | [P11C Bow Candidate Migration Evidence](current/2026-09-29-p11c-bow-candidate-evidence.md) | Bow Candidate 同 token HOLD/release、道具能力迁移、反馈、legacy 时钟退休及 75 场景全量认证 | Verified Locally / Current |

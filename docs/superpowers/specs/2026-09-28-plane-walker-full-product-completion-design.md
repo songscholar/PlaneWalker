@@ -4,12 +4,12 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P2, P3, P4/P5, P6, P8, P10A candidate loadouts, and P11A–P11H five complete weapon runtimes with Launch Loadout UI, deterministic weapon Replay, and the 30-loadout matrix are locally certified; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
+- Implementation Status: Active; P2, P3, P4/P5, P6, P8, P10A, P11 five complete weapons, P12 five complete characters, and P13A Launch archetype authority are locally certified; P13B complete `50 / 28 / 18 / 15` Launch pools and effect certification is the active content stage; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
 - Preserves: All verified Wave 0/1, Wave 2, Wave 3A, and Wave 3B contracts and regression evidence
-- Last Verified: 2026-09-30
+- Last Verified: 2026-10-01
 - Contract References: `AGENTS.md`, future approved ADRs, `docs/contracts/`, current implementation plans
 
 ## 1. Decision
