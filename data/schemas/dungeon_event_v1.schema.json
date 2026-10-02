@@ -34,24 +34,77 @@
   ],
   "$defs": {
     "localization_key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" },
+    "stable_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "event_id": { "type": "string", "enum": ["event_chronal_altar", "event_trapped_traveler", "event_cursed_pool", "event_smiths_legacy", "event_memory_mirror", "event_planar_merchant", "event_void_rift", "event_sleeping_guardian", "event_twisted_well", "event_soul_contract", "event_time_paradox", "event_sacrificial_altar", "event_lost_journal", "event_rift_garden", "event_final_choice", "event_void_whispers", "event_perfect_rewind", "event_old_reunion"] },
-    "option": { "type": "object", "additionalProperties": false, "required": ["id", "label_key", "outcome_key", "outcome_visibility", "requirements", "consequences"], "properties": {
-      "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
-      "label_key": { "$ref": "#/$defs/localization_key" },
-      "outcome_key": { "$ref": "#/$defs/localization_key" },
-      "outcome_visibility": { "type": "string", "enum": ["preview_exact", "preview_category", "hidden_until_commit"] },
-      "requirements": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/requirement" } },
-      "consequences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/consequence" } }
-    } },
-    "requirement": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": {
-      "operation": { "type": "string", "enum": ["resource_min", "health_min", "health_max_ratio", "gold_min", "has_reward_tag", "lacks_curse", "narrative_flag", "floor_index_min"] },
-      "arguments": { "$ref": "#/$defs/arguments" }
-    } },
-    "consequence": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": {
-      "operation": { "type": "string", "enum": ["resource_delta", "health_delta", "reward_draft", "curse_add", "curse_remove", "temporary_modifier", "map_reveal", "encounter_start", "route_skip", "narrative_flag"] },
-      "arguments": { "$ref": "#/$defs/arguments" }
-    } },
-    "arguments": { "type": "object", "minProperties": 1, "propertyNames": { "allOf": [{ "pattern": "^[a-z][a-z0-9_]{0,63}$" }, { "not": { "enum": ["script", "script_path", "callable", "method", "method_name", "handler", "handler_id"] } }] }, "additionalProperties": { "$ref": "#/$defs/scalar" } },
-    "scalar": { "oneOf": [{ "type": "number" }, { "type": "boolean" }, { "type": "string", "minLength": 1, "maxLength": 96, "pattern": "^(?!res://)(?!.*\\.gd$)[A-Za-z0-9_.:-]+$" }] }
+    "resource_id": { "type": "string", "enum": ["gold", "time_shard", "forge_essence"] },
+    "reward_pool_id": { "type": "string", "enum": ["item", "blessing", "rare_item", "rare_blessing"] },
+    "modifier_id": { "type": "string", "enum": ["chronal_grace", "weapon_temper", "past_strength", "paradox_echo", "tranquility", "void_bargain_power", "void_bargain_guard", "heroic_guard", "heroic_assault"] },
+    "curse_id": { "type": "string", "enum": ["curse_stasis_fracture", "curse_thaw_debt", "curse_blood_memory", "curse_erased_present", "curse_starved_horizon", "curse_folded_hunger", "curse_glass_cadence", "curse_burnout_clock", "curse_brittle_pact", "curse_empty_veins", "curse_narrow_counter", "curse_shattered_aegis", "curse_recoil_tax", "curse_empty_magazine", "curse_divided_self", "curse_phantom_attention", "curse_fickle_time", "curse_brittle_fortune"] },
+    "encounter_id": { "type": "string", "enum": ["encounter_profile_ruins_adapter_v1", "encounter_profile_forest_adapter_v1", "encounter_profile_rift_adapter_v1", "encounter_profile_forge_adapter_v1", "encounter_profile_throne_adapter_v1", "boss_encounter_ruin_king_adapter_v1", "boss_encounter_forest_heart_adapter_v1", "boss_encounter_time_sovereign_adapter_v1", "boss_encounter_forge_colossus_adapter_v1", "boss_encounter_void_throne_adapter_v1"] },
+    "nonzero_integer": { "type": "integer", "minimum": -9999, "maximum": 9999, "not": { "const": 0 } },
+    "nonzero_number": { "type": "number", "minimum": -9999, "maximum": 9999, "not": { "const": 0 } },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label_key", "outcome_visibility", "requirements", "outcomes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "label_key": { "$ref": "#/$defs/localization_key" },
+        "outcome_visibility": { "type": "string", "enum": ["preview_exact", "preview_category", "hidden_until_commit"] },
+        "requirements": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/requirement" } },
+        "outcomes": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/outcome" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome_visibility": { "const": "hidden_until_commit" } }, "required": ["outcome_visibility"] },
+          "then": { "properties": { "outcomes": { "minItems": 2 } } }
+        }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "weight", "outcome_key", "consequences"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "weight": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "outcome_key": { "$ref": "#/$defs/localization_key" },
+        "consequences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/consequence" } }
+      }
+    },
+    "requirement": {
+      "oneOf": [
+        { "$ref": "#/$defs/requirement_resource_min" }, { "$ref": "#/$defs/requirement_health_min" },
+        { "$ref": "#/$defs/requirement_health_max_ratio" }, { "$ref": "#/$defs/requirement_gold_min" },
+        { "$ref": "#/$defs/requirement_has_reward_tag" }, { "$ref": "#/$defs/requirement_lacks_curse" },
+        { "$ref": "#/$defs/operation_narrative_flag" }, { "$ref": "#/$defs/requirement_floor_index_min" }
+      ]
+    },
+    "consequence": {
+      "oneOf": [
+        { "$ref": "#/$defs/consequence_resource_delta" }, { "$ref": "#/$defs/consequence_health_delta" },
+        { "$ref": "#/$defs/consequence_reward_draft" }, { "$ref": "#/$defs/consequence_curse_add" },
+        { "$ref": "#/$defs/consequence_curse_remove" }, { "$ref": "#/$defs/consequence_temporary_modifier" },
+        { "$ref": "#/$defs/consequence_map_reveal" }, { "$ref": "#/$defs/consequence_encounter_start" },
+        { "$ref": "#/$defs/consequence_route_skip" }, { "$ref": "#/$defs/operation_narrative_flag" }
+      ]
+    },
+    "requirement_resource_min": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "resource_min" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["resource", "amount"], "properties": { "resource": { "$ref": "#/$defs/resource_id" }, "amount": { "type": "integer", "minimum": 1, "maximum": 9999 } } } } },
+    "requirement_health_min": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "health_min" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["amount"], "properties": { "amount": { "type": "number", "exclusiveMinimum": 0, "maximum": 9999 } } } } },
+    "requirement_health_max_ratio": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "health_max_ratio" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["ratio"], "properties": { "ratio": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 } } } } },
+    "requirement_gold_min": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "gold_min" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["amount"], "properties": { "amount": { "type": "integer", "minimum": 1, "maximum": 999999 } } } } },
+    "requirement_has_reward_tag": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "has_reward_tag" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["tag"], "properties": { "tag": { "$ref": "#/$defs/stable_id" } } } } },
+    "requirement_lacks_curse": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "lacks_curse" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["curse_id"], "properties": { "curse_id": { "$ref": "#/$defs/curse_id" } } } } },
+    "requirement_floor_index_min": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "floor_index_min" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["value"], "properties": { "value": { "type": "integer", "minimum": 1, "maximum": 5 } } } } },
+    "operation_narrative_flag": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "narrative_flag" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["flag", "value"], "properties": { "flag": { "$ref": "#/$defs/stable_id" }, "value": { "type": "boolean" } } } } },
+    "consequence_resource_delta": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "resource_delta" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["resource", "amount"], "properties": { "resource": { "$ref": "#/$defs/resource_id" }, "amount": { "$ref": "#/$defs/nonzero_integer" } } } } },
+    "consequence_health_delta": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "health_delta" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["amount", "nonlethal"], "properties": { "amount": { "$ref": "#/$defs/nonzero_number" }, "nonlethal": { "type": "boolean" } } } } },
+    "consequence_reward_draft": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "reward_draft" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["pool_id", "count"], "properties": { "pool_id": { "$ref": "#/$defs/reward_pool_id" }, "count": { "type": "integer", "minimum": 1, "maximum": 3 } } } } },
+    "consequence_curse_add": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "curse_add" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["curse_id"], "properties": { "curse_id": { "$ref": "#/$defs/curse_id" } } } } },
+    "consequence_curse_remove": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "curse_remove" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["curse_id"], "properties": { "curse_id": { "$ref": "#/$defs/curse_id" } } } } },
+    "consequence_temporary_modifier": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "temporary_modifier" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["modifier_id", "duration_rooms", "magnitude"], "properties": { "modifier_id": { "$ref": "#/$defs/modifier_id" }, "duration_rooms": { "type": "integer", "minimum": 1, "maximum": 5 }, "magnitude": { "type": "number", "exclusiveMinimum": 0, "maximum": 10 } } } } },
+    "consequence_map_reveal": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "map_reveal" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["depth"], "properties": { "depth": { "type": "integer", "minimum": 1, "maximum": 5 } } } } },
+    "consequence_encounter_start": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "encounter_start" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["encounter_id"], "properties": { "encounter_id": { "$ref": "#/$defs/encounter_id" } } } } },
+    "consequence_route_skip": { "type": "object", "additionalProperties": false, "required": ["operation", "arguments"], "properties": { "operation": { "const": "route_skip" }, "arguments": { "type": "object", "additionalProperties": false, "required": ["rooms"], "properties": { "rooms": { "type": "integer", "minimum": 1, "maximum": 2 } } } } }
   }
 }

@@ -7,8 +7,9 @@ const ROOT_FIELDS: Array[String] = [
 	"trigger_predicate_id", "outcome_channel", "options",
 ]
 const OPTION_FIELDS: Array[String] = [
-	"id", "label_key", "outcome_key", "outcome_visibility", "requirements", "consequences",
+	"id", "label_key", "outcome_visibility", "requirements", "outcomes",
 ]
+const OUTCOME_FIELDS: Array[String] = ["id", "weight", "outcome_key", "consequences"]
 const OPERATION_FIELDS: Array[String] = ["operation", "arguments"]
 const AVAILABILITY: Array[String] = ["LAUNCH", "EXPANSION"]
 const EVENT_IDS: Array[String] = [
@@ -35,6 +36,20 @@ const REQUIREMENT_OPERATIONS: Array[String] = [
 const CONSEQUENCE_OPERATIONS: Array[String] = [
 	"resource_delta", "health_delta", "reward_draft", "curse_add", "curse_remove",
 	"temporary_modifier", "map_reveal", "encounter_start", "route_skip", "narrative_flag",
+]
+const RESOURCE_IDS: Array[String] = ["gold", "time_shard", "forge_essence"]
+const REWARD_POOL_IDS: Array[String] = ["item", "blessing", "rare_item", "rare_blessing"]
+const MODIFIER_IDS: Array[String] = [
+	"chronal_grace", "weapon_temper", "past_strength", "paradox_echo", "tranquility",
+	"void_bargain_power", "void_bargain_guard", "heroic_guard", "heroic_assault",
+]
+const CURSE_IDS: Array[String] = [
+	"curse_stasis_fracture", "curse_thaw_debt", "curse_blood_memory",
+	"curse_erased_present", "curse_starved_horizon", "curse_folded_hunger",
+	"curse_glass_cadence", "curse_burnout_clock", "curse_brittle_pact",
+	"curse_empty_veins", "curse_narrow_counter", "curse_shattered_aegis",
+	"curse_recoil_tax", "curse_empty_magazine", "curse_divided_self",
+	"curse_phantom_attention", "curse_fickle_time", "curse_brittle_fortune",
 ]
 const ENCOUNTER_ADAPTER_IDS: Array[String] = [
 	"encounter_profile_ruins_adapter_v1", "encounter_profile_forest_adapter_v1",
@@ -146,9 +161,8 @@ func _normalize_options(value: Variant) -> Dictionary:
 		if seen.has(option_id):
 			return _failure("options[%d].id" % index, "duplicate")
 		seen[option_id] = true
-		for field: String in ["label_key", "outcome_key"]:
-			if not _valid_localization_key(option[field]):
-				return _failure("options[%d].%s" % [index, field], "invalid")
+		if not _valid_localization_key(option["label_key"]):
+			return _failure("options[%d].label_key" % index, "invalid")
 		if typeof(option["outcome_visibility"]) != TYPE_STRING or not OUTCOME_VISIBILITY.has(str(option["outcome_visibility"])):
 			return _failure("options[%d].outcome_visibility" % index, "unsupported")
 		var requirements_result := _normalize_operations(
@@ -156,17 +170,58 @@ func _normalize_options(value: Variant) -> Dictionary:
 		)
 		if not bool(requirements_result.get("ok", false)):
 			return requirements_result
+		var outcomes_result := _normalize_outcomes(
+			option["outcomes"], str(option["outcome_visibility"]), "options[%d].outcomes" % index
+		)
+		if not bool(outcomes_result.get("ok", false)):
+			return outcomes_result
+		values.append({
+			"id": option_id,
+			"label_key": str(option["label_key"]),
+			"outcome_visibility": str(option["outcome_visibility"]),
+			"requirements": (requirements_result["values"] as Array).duplicate(true),
+			"outcomes": (outcomes_result["values"] as Array).duplicate(true),
+		})
+	return {"ok": true, "values": values, "context": {}}
+
+
+func _normalize_outcomes(value: Variant, visibility: String, path: String) -> Dictionary:
+	if not value is Array or (value as Array).is_empty() or (value as Array).size() > 4:
+		return _failure(path, "expected_one_to_four")
+	if visibility == "hidden_until_commit" and (value as Array).size() < 2:
+		return _failure(path, "hidden_requires_multiple_outcomes")
+	var values: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	for index: int in range((value as Array).size()):
+		var outcome_value: Variant = (value as Array)[index]
+		if not outcome_value is Dictionary:
+			return _failure("%s[%d]" % [path, index], "expected_dictionary")
+		var outcome: Dictionary = outcome_value
+		var fields_error := _exact_fields_error(outcome, OUTCOME_FIELDS, "%s[%d]" % [path, index])
+		if not fields_error.is_empty():
+			return fields_error
+		if not _valid_id(outcome["id"]):
+			return _failure("%s[%d].id" % [path, index], "invalid")
+		var outcome_id := str(outcome["id"])
+		if seen.has(outcome_id):
+			return _failure("%s[%d].id" % [path, index], "duplicate")
+		seen[outcome_id] = true
+		if not _is_integer_in_range(outcome["weight"], 1, 100):
+			return _failure("%s[%d].weight" % [path, index], "out_of_range")
+		if not _valid_localization_key(outcome["outcome_key"]):
+			return _failure("%s[%d].outcome_key" % [path, index], "invalid")
 		var consequences_result := _normalize_operations(
-			option["consequences"], CONSEQUENCE_OPERATIONS, false, "options[%d].consequences" % index
+			outcome["consequences"],
+			CONSEQUENCE_OPERATIONS,
+			false,
+			"%s[%d].consequences" % [path, index]
 		)
 		if not bool(consequences_result.get("ok", false)):
 			return consequences_result
 		values.append({
-			"id": option_id,
-			"label_key": str(option["label_key"]),
-			"outcome_key": str(option["outcome_key"]),
-			"outcome_visibility": str(option["outcome_visibility"]),
-			"requirements": (requirements_result["values"] as Array).duplicate(true),
+			"id": outcome_id,
+			"weight": int(outcome["weight"]),
+			"outcome_key": str(outcome["outcome_key"]),
 			"consequences": (consequences_result["values"] as Array).duplicate(true),
 		})
 	return {"ok": true, "values": values, "context": {}}
@@ -233,13 +288,85 @@ func _normalize_arguments(value: Variant, path: String) -> Dictionary:
 
 
 func _operation_arguments_error(operation: String, arguments: Dictionary, path: String) -> Dictionary:
-	if operation != "encounter_start":
-		return {}
-	if arguments.size() != 1 or not arguments.has("encounter_id"):
-		return _failure(path, "encounter_id_required")
-	if typeof(arguments["encounter_id"]) != TYPE_STRING or not ENCOUNTER_ADAPTER_IDS.has(str(arguments["encounter_id"])):
-		return _failure("%s.encounter_id" % path, "unsupported_adapter")
+	var expected_fields: Array[String] = []
+	match operation:
+		"resource_min", "resource_delta": expected_fields = ["resource", "amount"]
+		"health_min", "gold_min": expected_fields = ["amount"]
+		"health_max_ratio": expected_fields = ["ratio"]
+		"has_reward_tag": expected_fields = ["tag"]
+		"lacks_curse", "curse_add", "curse_remove": expected_fields = ["curse_id"]
+		"narrative_flag": expected_fields = ["flag", "value"]
+		"floor_index_min": expected_fields = ["value"]
+		"health_delta": expected_fields = ["amount", "nonlethal"]
+		"reward_draft": expected_fields = ["pool_id", "count"]
+		"temporary_modifier": expected_fields = ["modifier_id", "duration_rooms", "magnitude"]
+		"map_reveal": expected_fields = ["depth"]
+		"encounter_start": expected_fields = ["encounter_id"]
+		"route_skip": expected_fields = ["rooms"]
+		_: return _failure(path, "unsupported_operation")
+	var fields_error := _exact_argument_fields_error(arguments, expected_fields, path)
+	if not fields_error.is_empty():
+		return fields_error
+	match operation:
+		"resource_min":
+			if not _string_in(arguments["resource"], RESOURCE_IDS): return _failure("%s.resource" % path, "unsupported_reference")
+			if not _is_integer_in_range(arguments["amount"], 1, 9999): return _failure("%s.amount" % path, "out_of_range")
+		"health_min":
+			if not _number_in_range(arguments["amount"], 0.0, 9999.0, false, true): return _failure("%s.amount" % path, "out_of_range")
+		"health_max_ratio":
+			if not _number_in_range(arguments["ratio"], 0.0, 1.0, false, false): return _failure("%s.ratio" % path, "out_of_range")
+		"gold_min":
+			if not _is_integer_in_range(arguments["amount"], 1, 999999): return _failure("%s.amount" % path, "out_of_range")
+		"has_reward_tag":
+			if not _valid_id(arguments["tag"]): return _failure("%s.tag" % path, "invalid")
+		"lacks_curse", "curse_add", "curse_remove":
+			if not _string_in(arguments["curse_id"], CURSE_IDS): return _failure("%s.curse_id" % path, "unsupported_reference")
+		"narrative_flag":
+			if not _valid_id(arguments["flag"]): return _failure("%s.flag" % path, "invalid")
+			if typeof(arguments["value"]) != TYPE_BOOL: return _failure("%s.value" % path, "expected_boolean")
+		"floor_index_min":
+			if not _is_integer_in_range(arguments["value"], 1, 5): return _failure("%s.value" % path, "out_of_range")
+		"resource_delta":
+			if not _string_in(arguments["resource"], RESOURCE_IDS): return _failure("%s.resource" % path, "unsupported_reference")
+			if not _is_integer_in_range(arguments["amount"], -9999, 9999) or int(arguments["amount"]) == 0: return _failure("%s.amount" % path, "out_of_range")
+		"health_delta":
+			if not _number_in_range(arguments["amount"], -9999.0, 9999.0, true, true) or is_zero_approx(float(arguments["amount"])): return _failure("%s.amount" % path, "out_of_range")
+			if typeof(arguments["nonlethal"]) != TYPE_BOOL: return _failure("%s.nonlethal" % path, "expected_boolean")
+		"reward_draft":
+			if not _string_in(arguments["pool_id"], REWARD_POOL_IDS): return _failure("%s.pool_id" % path, "unsupported_reference")
+			if not _is_integer_in_range(arguments["count"], 1, 3): return _failure("%s.count" % path, "out_of_range")
+		"temporary_modifier":
+			if not _string_in(arguments["modifier_id"], MODIFIER_IDS): return _failure("%s.modifier_id" % path, "unsupported_reference")
+			if not _is_integer_in_range(arguments["duration_rooms"], 1, 5): return _failure("%s.duration_rooms" % path, "out_of_range")
+			if not _number_in_range(arguments["magnitude"], 0.0, 10.0, false, true): return _failure("%s.magnitude" % path, "out_of_range")
+		"map_reveal":
+			if not _is_integer_in_range(arguments["depth"], 1, 5): return _failure("%s.depth" % path, "out_of_range")
+		"encounter_start":
+			if not _string_in(arguments["encounter_id"], ENCOUNTER_ADAPTER_IDS): return _failure("%s.encounter_id" % path, "unsupported_adapter")
+		"route_skip":
+			if not _is_integer_in_range(arguments["rooms"], 1, 2): return _failure("%s.rooms" % path, "out_of_range")
 	return {}
+
+
+func _exact_argument_fields_error(arguments: Dictionary, fields: Array[String], path: String) -> Dictionary:
+	for field: String in fields:
+		if not arguments.has(field):
+			return _failure("%s.%s" % [path, field], "missing")
+	for key: Variant in arguments.keys():
+		if typeof(key) != TYPE_STRING or not fields.has(str(key)):
+			return _failure("%s.%s" % [path, str(key)], "unknown")
+	return {}
+
+
+func _string_in(value: Variant, allowed: Array[String]) -> bool:
+	return typeof(value) == TYPE_STRING and allowed.has(str(value))
+
+
+func _number_in_range(value: Variant, minimum: float, maximum: float, include_minimum: bool, include_maximum: bool) -> bool:
+	if not _is_finite_number(value):
+		return false
+	var numeric := float(value)
+	return (numeric >= minimum if include_minimum else numeric > minimum) and (numeric <= maximum if include_maximum else numeric < maximum)
 
 
 func _is_executable_key(value: String) -> bool:

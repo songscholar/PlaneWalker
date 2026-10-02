@@ -53,6 +53,7 @@ func _run() -> void:
 	_test_floor_fail_closed(suite)
 	_test_room_fail_closed(suite)
 	_test_event_fail_closed(suite)
+	_test_event_exact_operation_arguments(suite)
 	_test_merchant_fail_closed(suite)
 	_test_economy_fail_closed(suite)
 	suite.finish(get_tree())
@@ -192,12 +193,89 @@ func _test_event_fail_closed(suite) -> void:
 		_case("duplicate option", func(value): value["options"].append(value["options"][0].duplicate(true))),
 		_case("visibility enum", func(value): value["options"][0]["outcome_visibility"] = "always_hidden"),
 		_case("unknown requirement", func(value): value["options"][0]["requirements"][0]["operation"] = "run_method"),
-		_case("unknown consequence", func(value): value["options"][0]["consequences"][0]["operation"] = "load_script"),
+		_case("unknown consequence", func(value): value["options"][0]["outcomes"][0]["consequences"][0]["operation"] = "load_script"),
 		_case("non scalar argument", func(value): value["options"][0]["requirements"][0]["arguments"]["amount"] = {"nested": 1}),
-		_case("executable key", func(value): value["options"][0]["consequences"][0]["arguments"]["method_name"] = "queue_free"),
-		_case("executable string", func(value): value["options"][0]["consequences"][0]["arguments"]["flag"] = "res://hostile.gd"),
+		_case("executable key", func(value): value["options"][0]["outcomes"][0]["consequences"][0]["arguments"]["method_name"] = "queue_free"),
+		_case("executable string", func(value): value["options"][0]["outcomes"][0]["consequences"][0]["arguments"]["resource"] = "res://hostile.gd"),
+		_case("zero outcome weight", func(value): value["options"][0]["outcomes"][0]["weight"] = 0),
+		_case("duplicate outcome", func(value): value["options"][0]["outcomes"].append(value["options"][0]["outcomes"][0].duplicate(true))),
 	]
 	_assert_cases_fail(suite, parser, Callable(self, "_event_fixture"), cases, "event")
+
+
+func _test_event_exact_operation_arguments(suite) -> void:
+	var parser = _new_parser(PARSER_CASES[2]["path"], suite, "dungeon event operation arguments")
+	if parser == null:
+		return
+	var contracts: Array[Dictionary] = [
+		_operation_contract("requirement", "resource_min", {"resource": "time_shard", "amount": 1}, {"resource": "time_shard", "amount": -1}),
+		_operation_contract("requirement", "health_min", {"amount": 1.0}, {"amount": 0.0}),
+		_operation_contract("requirement", "health_max_ratio", {"ratio": 0.5}, {"ratio": 1.0}),
+		_operation_contract("requirement", "gold_min", {"amount": 1}, {"amount": 0}),
+		_operation_contract("requirement", "has_reward_tag", {"tag": "weapon"}, {"tag": "INVALID"}),
+		_operation_contract("requirement", "lacks_curse", {"curse_id": "curse_fickle_time"}, {"curse_id": "curse_unknown"}),
+		_operation_contract("requirement", "narrative_flag", {"flag": "met_archivist", "value": true}, {"flag": "INVALID", "value": true}),
+		_operation_contract("requirement", "floor_index_min", {"value": 1}, {"value": 6}),
+		_operation_contract("consequence", "resource_delta", {"resource": "gold", "amount": -1}, {"resource": "gold", "amount": 0}),
+		_operation_contract("consequence", "health_delta", {"amount": -10.0, "nonlethal": true}, {"amount": 0.0, "nonlethal": true}),
+		_operation_contract("consequence", "reward_draft", {"pool_id": "blessing", "count": 2}, {"pool_id": "blessing", "count": 4}),
+		_operation_contract("consequence", "curse_add", {"curse_id": "curse_fickle_time"}, {"curse_id": "curse_unknown"}),
+		_operation_contract("consequence", "curse_remove", {"curse_id": "curse_fickle_time"}, {"curse_id": "curse_unknown"}),
+		_operation_contract("consequence", "temporary_modifier", {"modifier_id": "chronal_grace", "duration_rooms": 3, "magnitude": 1.15}, {"modifier_id": "chronal_grace", "duration_rooms": 0, "magnitude": 1.15}),
+		_operation_contract("consequence", "map_reveal", {"depth": 1}, {"depth": 0}),
+		_operation_contract("consequence", "encounter_start", {"encounter_id": "encounter_profile_ruins_adapter_v1"}, {"encounter_id": "encounter_unknown"}),
+		_operation_contract("consequence", "route_skip", {"rooms": 2}, {"rooms": 3}),
+		_operation_contract("consequence", "narrative_flag", {"flag": "met_archivist", "value": true}, {"flag": "INVALID", "value": true}),
+	]
+	for contract: Dictionary in contracts:
+		var valid := _event_operation_fixture(contract)
+		var accepted: Dictionary = parser.call("configure", valid)
+		suite.assert_true(
+			bool(accepted.get("ok", false)),
+			"%s accepts its exact arguments: %s" % [contract["operation"], str(accepted.get("context", {}))]
+		)
+		var argument_keys: Array = (contract["valid_arguments"] as Dictionary).keys()
+		var first_key := str(argument_keys[0])
+		var mutations: Array[Dictionary] = [
+			{"label": "missing", "arguments": (contract["valid_arguments"] as Dictionary).duplicate(true)},
+			{"label": "extra", "arguments": (contract["valid_arguments"] as Dictionary).duplicate(true)},
+			{"label": "wrong_type", "arguments": (contract["valid_arguments"] as Dictionary).duplicate(true)},
+			{"label": "out_of_range", "arguments": (contract["out_of_range_arguments"] as Dictionary).duplicate(true)},
+		]
+		(mutations[0]["arguments"] as Dictionary).erase(first_key)
+		(mutations[1]["arguments"] as Dictionary)["extra"] = 1
+		(mutations[2]["arguments"] as Dictionary)[first_key] = []
+		for mutation: Dictionary in mutations:
+			var hostile_contract := contract.duplicate(true)
+			hostile_contract["valid_arguments"] = mutation["arguments"]
+			var result: Dictionary = parser.call("configure", _event_operation_fixture(hostile_contract))
+			suite.assert_true(
+				not bool(result.get("ok", false)),
+				"%s rejects %s arguments" % [contract["operation"], mutation["label"]]
+			)
+			suite.assert_equal(parser.call("snapshot"), {}, "%s failure clears parser state" % contract["operation"])
+
+
+func _operation_contract(kind: String, operation: String, valid_arguments: Dictionary, out_of_range_arguments: Dictionary) -> Dictionary:
+	return {
+		"kind": kind,
+		"operation": operation,
+		"valid_arguments": valid_arguments,
+		"out_of_range_arguments": out_of_range_arguments,
+	}
+
+
+func _event_operation_fixture(contract: Dictionary) -> Dictionary:
+	var fixture := _event_fixture()
+	var operation := {
+		"operation": str(contract["operation"]),
+		"arguments": (contract["valid_arguments"] as Dictionary).duplicate(true),
+	}
+	if str(contract["kind"]) == "requirement":
+		fixture["options"][0]["requirements"] = [operation]
+	else:
+		fixture["options"][0]["outcomes"][0]["consequences"] = [operation]
+	return fixture
 
 
 func _test_merchant_fail_closed(suite) -> void:
@@ -375,26 +453,38 @@ func _event_fixture() -> Dictionary:
 			{
 				"id": "offer_gold",
 				"label_key": "EVENT_CHRONAL_ALTAR_OFFER_LABEL",
-				"outcome_key": "EVENT_CHRONAL_ALTAR_OFFER_OUTCOME",
 				"outcome_visibility": "preview_exact",
 				"requirements": [
 					{"operation": "gold_min", "arguments": {"amount": 25}},
 				],
-				"consequences": [
-					{"operation": "resource_delta", "arguments": {"resource_id": "gold", "amount": -25}},
-					{"operation": "reward_draft", "arguments": {"pool_id": "blessing", "count": 1}},
+				"outcomes": [
+					{
+						"id": "accepted",
+						"weight": 1,
+						"outcome_key": "EVENT_CHRONAL_ALTAR_OFFER_OUTCOME",
+						"consequences": [
+							{"operation": "resource_delta", "arguments": {"resource": "gold", "amount": -25}},
+							{"operation": "reward_draft", "arguments": {"pool_id": "blessing", "count": 1}},
+						],
+					},
 				],
 			},
 			{
 				"id": "leave",
 				"label_key": "EVENT_COMMON_LEAVE_LABEL",
-				"outcome_key": "EVENT_COMMON_LEAVE_OUTCOME",
 				"outcome_visibility": "preview_category",
 				"requirements": [
 					{"operation": "floor_index_min", "arguments": {"value": 1}},
 				],
-				"consequences": [
-					{"operation": "narrative_flag", "arguments": {"flag": "chronal_altar_declined", "value": true}},
+				"outcomes": [
+					{
+						"id": "declined",
+						"weight": 1,
+						"outcome_key": "EVENT_COMMON_LEAVE_OUTCOME",
+						"consequences": [
+							{"operation": "narrative_flag", "arguments": {"flag": "chronal_altar_declined", "value": true}},
+						],
+					},
 				],
 			},
 		],

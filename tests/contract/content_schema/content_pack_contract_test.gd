@@ -10,6 +10,8 @@ const VALID_PACK_PATH := "res://tests/fixtures/content_packs/valid_base/pack.jso
 const VALID_ENTRY_PATH := "res://tests/fixtures/content_packs/valid_base/content/items.json"
 const HOSTILE_PACK_PATH := "res://tests/fixtures/content_packs/invalid_script/pack.json"
 const HOSTILE_ENTRY_PATH := "res://tests/fixtures/content_packs/invalid_script/content/items.json"
+const BASE_PACK_PATH := "res://data/content_packs/base/pack.json"
+const BASE_EVENT_PATH := "res://data/content_packs/base/content/dungeon_events.json"
 const SPECIALIZED_SCHEMAS := {
 	"floor_definition": "res://data/schemas/floor_definition_v1.schema.json",
 	"room_template": "res://data/schemas/room_template_v1.schema.json",
@@ -31,6 +33,7 @@ func _run() -> void:
 	_test_archetype_profile_entry_schema(suite)
 	_test_registered_specialized_schemas(suite)
 	_test_pack_fixtures(suite)
+	_test_base_event_integrity_hash(suite)
 	suite.finish(get_tree())
 
 
@@ -206,6 +209,19 @@ func _test_pack_fixtures(suite) -> void:
 	suite.assert_equal(valid_entries[0].get("id"), "fixture_chronal_edge", "valid fixture has deterministic content")
 	suite.assert_equal(hostile_pack.get("pack_id"), "fixture_invalid_script", "hostile fixture remains identifiable")
 	suite.assert_true(hostile_entries[0].has("script_path"), "hostile fixture exercises arbitrary script rejection")
+
+
+func _test_base_event_integrity_hash(suite) -> void:
+	var pack: Dictionary = _read_json(BASE_PACK_PATH, suite)
+	var event_text := _read_text(BASE_EVENT_PATH, suite)
+	if pack.is_empty() or event_text.is_empty():
+		return
+	var expected := str(pack.get("integrity_hashes", {}).get("content/dungeon_events.json", ""))
+	var hashing := HashingContext.new()
+	suite.assert_equal(hashing.start(HashingContext.HASH_SHA256), OK, "event hash context starts")
+	suite.assert_equal(hashing.update(event_text.to_utf8_buffer()), OK, "event bytes enter hash context")
+	var actual := hashing.finish().hex_encode()
+	suite.assert_equal(expected, actual, "Base Pack dungeon event integrity hash matches authored bytes")
 
 
 func _assert_required_fields(suite, schema: Dictionary, expected: Array, label: String) -> void:

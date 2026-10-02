@@ -304,7 +304,9 @@ func _test_specialized_nested_localization_and_reference_closure(suite) -> void:
 			"options": [
 				{
 					"label_key": "KNOWN_OPTION",
-					"outcomes": {"success": {"description_key": "KNOWN_OUTCOME"}},
+					"outcomes": [
+						{"id": "success", "outcome_key": "KNOWN_OUTCOME"},
+					],
 				},
 			],
 		}
@@ -327,7 +329,7 @@ func _test_specialized_nested_localization_and_reference_closure(suite) -> void:
 		)
 		suite.assert_equal(
 			localization_error.get("field"),
-			"options[0].outcomes.success.description_key",
+			"options[0].outcomes[0].outcome_key",
 			"recursive localization identifies the exact nested field"
 		)
 		suite.assert_equal(
@@ -360,33 +362,47 @@ func _test_specialized_nested_localization_and_reference_closure(suite) -> void:
 	suite.assert_equal(reference_error.get("field"), "economy_profile_id", "cross-reference error identifies the specialized field")
 	suite.assert_equal(reference_error.get("reference_id"), "missing_economy_profile", "cross-reference error identifies the missing target")
 
-	definitions = registry.all_content()
-	for index: int in range(definitions.size()):
-		if str(definitions[index].get("id", "")) != "event_sleeping_guardian":
+	var launch_curse_ids: Array[String] = []
+	for curse_value: Variant in registry.get_by_category(&"curse", &"LAUNCH"):
+		if curse_value is Dictionary:
+			launch_curse_ids.append(str((curse_value as Dictionary).get("id", "")))
+	var launch_reward_pools := {
+		"item": registry.get_by_category(&"item", &"LAUNCH"),
+		"blessing": registry.get_by_category(&"blessing", &"LAUNCH"),
+		"rare_item": _content_with_rarity(registry.get_by_category(&"item", &"LAUNCH"), "rare"),
+		"rare_blessing": _content_with_rarity(registry.get_by_category(&"blessing", &"LAUNCH"), "rare"),
+	}
+	var closed_resources: Array[String] = ["gold", "time_shard", "forge_essence"]
+	var closed_modifiers: Array[String] = [
+		"chronal_grace", "weapon_temper", "past_strength", "paradox_echo",
+		"tranquility", "void_bargain_power", "void_bargain_guard", "heroic_guard",
+		"heroic_assault",
+	]
+	for pool_id: String in launch_reward_pools:
+		suite.assert_true(not (launch_reward_pools[pool_id] as Array).is_empty(), "%s resolves a real Launch reward pool" % pool_id)
+	for event_value: Variant in registry.get_by_category(&"dungeon_event", &"LAUNCH"):
+		if not event_value is Dictionary:
 			continue
-		var broken_event: Dictionary = definitions[index].duplicate(true)
-		var options: Array = broken_event.get("options", [])
-		for option_index: int in range(options.size()):
-			var consequences: Array = (options[option_index] as Dictionary).get("consequences", [])
-			for consequence_index: int in range(consequences.size()):
-				if str((consequences[consequence_index] as Dictionary).get("operation", "")) != "encounter_start":
+		var event: Dictionary = event_value
+		for option_value: Variant in event.get("options", []):
+			if not option_value is Dictionary:
+				continue
+			var option: Dictionary = option_value
+			for outcome_value: Variant in option.get("outcomes", []):
+				if not outcome_value is Dictionary:
 					continue
-				(consequences[consequence_index] as Dictionary)["arguments"]["encounter_id"] = "unknown_encounter_adapter"
-				(options[option_index] as Dictionary)["consequences"] = consequences
-		broken_event["options"] = options
-		definitions[index] = broken_event
-		break
-	var nested_reference_error: Dictionary = registry.call(
-		"_first_reference_error",
-		definitions,
-		_known_ids(definitions)
-	)
-	suite.assert_equal(nested_reference_error.get("content_id"), "event_sleeping_guardian", "nested reference error identifies the event")
-	suite.assert_true(
-		str(nested_reference_error.get("field", "")).ends_with("arguments.encounter_id"),
-		"nested reference error identifies the encounter argument"
-	)
-	suite.assert_equal(nested_reference_error.get("reason"), "closed_adapter_id", "nested encounter reference fails closed")
+				for consequence_value: Variant in (outcome_value as Dictionary).get("consequences", []):
+					if not consequence_value is Dictionary:
+						continue
+					var arguments: Dictionary = (consequence_value as Dictionary).get("arguments", {})
+					if arguments.has("curse_id"):
+						suite.assert_true(launch_curse_ids.has(str(arguments["curse_id"])), "event curse reference closes against Launch content")
+					if arguments.has("pool_id"):
+						suite.assert_true(launch_reward_pools.has(str(arguments["pool_id"])), "event reward pool reference is closed")
+					if arguments.has("resource"):
+						suite.assert_true(closed_resources.has(str(arguments["resource"])), "event resource reference is closed")
+					if arguments.has("modifier_id"):
+						suite.assert_true(closed_modifiers.has(str(arguments["modifier_id"])), "event modifier reference is closed")
 
 
 func _test_required_specialized_pack_failure_is_atomic(suite) -> void:
@@ -1235,6 +1251,14 @@ func _archetype_reward_definition(id: String, archetype: String, milestones: Arr
 		"icon_id": "content_%s" % id,
 		"references": [],
 	}
+
+
+func _content_with_rarity(content: Array, rarity: String) -> Array:
+	var result: Array = []
+	for value: Variant in content:
+		if value is Dictionary and str((value as Dictionary).get("rarity", "")) == rarity:
+			result.append(value)
+	return result
 
 
 func _known_ids(definitions: Array[Dictionary]) -> Dictionary:

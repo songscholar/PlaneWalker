@@ -150,6 +150,39 @@ CONSEQUENCE_OPERATIONS = {
     "route_skip",
     "narrative_flag",
 }
+EVENT_RESOURCES = {"gold", "time_shard", "forge_essence"}
+EVENT_REWARD_POOLS = {"item", "blessing", "rare_item", "rare_blessing"}
+EVENT_MODIFIER_IDS = {
+    "chronal_grace",
+    "weapon_temper",
+    "past_strength",
+    "paradox_echo",
+    "tranquility",
+    "void_bargain_power",
+    "void_bargain_guard",
+    "heroic_guard",
+    "heroic_assault",
+}
+OPERATION_CONTRACTS = {
+    "resource_min": ("requirement", {"resource": "time_shard", "amount": 1}, {"resource": "time_shard", "amount": -1}),
+    "health_min": ("requirement", {"amount": 1.0}, {"amount": 0.0}),
+    "health_max_ratio": ("requirement", {"ratio": 0.5}, {"ratio": 1.0}),
+    "gold_min": ("requirement", {"amount": 1}, {"amount": 0}),
+    "has_reward_tag": ("requirement", {"tag": "weapon"}, {"tag": "INVALID"}),
+    "lacks_curse": ("requirement", {"curse_id": "curse_fickle_time"}, {"curse_id": "curse_unknown"}),
+    "narrative_flag_requirement": ("requirement", {"flag": "met_archivist", "value": True}, {"flag": "INVALID", "value": True}),
+    "floor_index_min": ("requirement", {"value": 1}, {"value": 6}),
+    "resource_delta": ("consequence", {"resource": "gold", "amount": -1}, {"resource": "gold", "amount": 0}),
+    "health_delta": ("consequence", {"amount": -10.0, "nonlethal": True}, {"amount": 0.0, "nonlethal": True}),
+    "reward_draft": ("consequence", {"pool_id": "blessing", "count": 2}, {"pool_id": "blessing", "count": 4}),
+    "curse_add": ("consequence", {"curse_id": "curse_fickle_time"}, {"curse_id": "curse_unknown"}),
+    "curse_remove": ("consequence", {"curse_id": "curse_fickle_time"}, {"curse_id": "curse_unknown"}),
+    "temporary_modifier": ("consequence", {"modifier_id": "chronal_grace", "duration_rooms": 3, "magnitude": 1.15}, {"modifier_id": "chronal_grace", "duration_rooms": 0, "magnitude": 1.15}),
+    "map_reveal": ("consequence", {"depth": 1}, {"depth": 0}),
+    "encounter_start": ("consequence", {"encounter_id": "encounter_profile_ruins_adapter_v1"}, {"encounter_id": "encounter_unknown"}),
+    "route_skip": ("consequence", {"rooms": 2}, {"rooms": 3}),
+    "narrative_flag_consequence": ("consequence", {"flag": "met_archivist", "value": True}, {"flag": "INVALID", "value": True}),
+}
 MERCHANT_SERVICES = {
     "purchase_reward",
     "heal",
@@ -441,11 +474,23 @@ class P14DungeonSchemasTest(unittest.TestCase):
                     self.assertTrue(
                         {op["operation"] for op in option["requirements"]}.issubset(REQUIREMENT_OPERATIONS)
                     )
-                    self.assertTrue(option["consequences"])
-                    self.assertTrue(
-                        {op["operation"] for op in option["consequences"]}.issubset(CONSEQUENCE_OPERATIONS)
+                    self.assertTrue(option["outcomes"])
+                    self.assertEqual(
+                        len({outcome["id"] for outcome in option["outcomes"]}),
+                        len(option["outcomes"]),
                     )
-                    for operation in option["requirements"] + option["consequences"]:
+                    for outcome in option["outcomes"]:
+                        self.assertGreater(outcome["weight"], 0)
+                        self.assertTrue(outcome["consequences"])
+                        self.assertTrue(
+                            {op["operation"] for op in outcome["consequences"]}.issubset(CONSEQUENCE_OPERATIONS)
+                        )
+                    operations = option["requirements"] + [
+                        operation
+                        for outcome in option["outcomes"]
+                        for operation in outcome["consequences"]
+                    ]
+                    for operation in operations:
                         self.assertTrue(operation["arguments"])
                         self.assertTrue(
                             all(isinstance(value, (str, int, float, bool)) for value in operation["arguments"].values())
@@ -455,6 +500,68 @@ class P14DungeonSchemasTest(unittest.TestCase):
                                 operation["arguments"].get("encounter_id"),
                                 ENCOUNTER_PROFILE_IDS + BOSS_ENCOUNTER_IDS,
                             )
+                for option in row["options"]:
+                    if option["outcome_visibility"] == "hidden_until_commit":
+                        self.assertGreaterEqual(len(option["outcomes"]), 2)
+
+    def test_event_operations_require_exact_arguments_types_and_ranges(self) -> None:
+        validator = self.validators["dungeon_event"]
+        for contract_name, (kind, valid_arguments, out_of_range_arguments) in OPERATION_CONTRACTS.items():
+            operation = contract_name.replace("_requirement", "").replace("_consequence", "")
+            valid = self._event_operation_fixture(kind, operation, valid_arguments)
+            with self.subTest(operation=contract_name, mutation="valid"):
+                self.assertFalse(list(validator.iter_errors(valid)))
+            first_key = next(iter(valid_arguments))
+            missing = copy.deepcopy(valid_arguments)
+            missing.pop(first_key)
+            extra = copy.deepcopy(valid_arguments)
+            extra["extra"] = 1
+            wrong_type = copy.deepcopy(valid_arguments)
+            wrong_type[first_key] = []
+            for mutation, arguments in [
+                ("missing", missing),
+                ("extra", extra),
+                ("wrong_type", wrong_type),
+                ("out_of_range", out_of_range_arguments),
+            ]:
+                hostile = self._event_operation_fixture(kind, operation, arguments)
+                with self.subTest(operation=contract_name, mutation=mutation):
+                    self.assertTrue(list(validator.iter_errors(hostile)))
+
+    def test_event_references_close_against_launch_content(self) -> None:
+        curses = json.loads((CONTENT_ROOT / "curses.json").read_text(encoding="utf-8"))
+        rewards = []
+        for filename in ["items.json", "blessings.json"]:
+            rewards.extend(json.loads((CONTENT_ROOT / filename).read_text(encoding="utf-8")))
+        launch_curse_ids = {
+            row["id"] for row in curses if "LAUNCH" in row["availability"]
+        }
+        launch_rewards = [row for row in rewards if "LAUNCH" in row["availability"]]
+        pool_members = {
+            "item": [row for row in launch_rewards if row["category"] == "item"],
+            "blessing": [row for row in launch_rewards if row["category"] == "blessing"],
+            "rare_item": [row for row in launch_rewards if row["category"] == "item" and row["rarity"] == "rare"],
+            "rare_blessing": [row for row in launch_rewards if row["category"] == "blessing" and row["rarity"] == "rare"],
+        }
+        self.assertEqual(set(pool_members), EVENT_REWARD_POOLS)
+        self.assertTrue(all(pool_members.values()))
+        for row in self.catalogs["dungeon_event"]:
+            for option in row["options"]:
+                for operation in option["requirements"] + [
+                    consequence
+                    for outcome in option["outcomes"]
+                    for consequence in outcome["consequences"]
+                ]:
+                    arguments = operation["arguments"]
+                    if "curse_id" in arguments:
+                        self.assertIn(arguments["curse_id"], launch_curse_ids)
+                    if "pool_id" in arguments:
+                        self.assertIn(arguments["pool_id"], EVENT_REWARD_POOLS)
+                        self.assertTrue(pool_members[arguments["pool_id"]])
+                    if "modifier_id" in arguments:
+                        self.assertIn(arguments["modifier_id"], EVENT_MODIFIER_IDS)
+                    if "resource" in arguments:
+                        self.assertIn(arguments["resource"], EVENT_RESOURCES)
 
     def test_event_schema_rejects_unknown_operations_nested_arguments_and_executable_payloads(self) -> None:
         validator = self.validators["dungeon_event"]
@@ -464,16 +571,16 @@ class P14DungeonSchemasTest(unittest.TestCase):
         unknown_requirement["options"][0]["requirements"][0]["operation"] = "call_script"
         mutations.append(("unknown_requirement", unknown_requirement))
         unknown_consequence = copy.deepcopy(base)
-        unknown_consequence["options"][0]["consequences"][0]["operation"] = "call_method"
+        unknown_consequence["options"][0]["outcomes"][0]["consequences"][0]["operation"] = "call_method"
         mutations.append(("unknown_consequence", unknown_consequence))
         nested = copy.deepcopy(base)
-        nested["options"][0]["consequences"][0]["arguments"]["payload"] = {"nested": True}
+        nested["options"][0]["outcomes"][0]["consequences"][0]["arguments"]["payload"] = {"nested": True}
         mutations.append(("nested_arguments", nested))
         executable_key = copy.deepcopy(base)
-        executable_key["options"][0]["consequences"][0]["arguments"]["script_path"] = "safe_id"
+        executable_key["options"][0]["outcomes"][0]["consequences"][0]["arguments"]["script_path"] = "safe_id"
         mutations.append(("script_path_key", executable_key))
         executable_value = copy.deepcopy(base)
-        executable_value["options"][0]["consequences"][0]["arguments"]["modifier_id"] = "res://hostile.gd"
+        executable_value["options"][0]["outcomes"][0]["consequences"][0]["arguments"]["resource"] = "res://hostile.gd"
         mutations.append(("script_path_value", executable_value))
         wrong_special = copy.deepcopy(base)
         wrong_special["special"] = True
@@ -481,6 +588,29 @@ class P14DungeonSchemasTest(unittest.TestCase):
         for label, hostile in mutations:
             with self.subTest(mutation=label):
                 self.assertTrue(list(validator.iter_errors(hostile)))
+
+    def _event_operation_fixture(
+        self,
+        kind: str,
+        operation: str,
+        arguments: dict[str, object],
+    ) -> dict[str, object]:
+        fixture = copy.deepcopy(self.catalogs["dungeon_event"][0])
+        for option in fixture["options"]:
+            if "outcomes" not in option:
+                outcome = {
+                    "id": "resolved",
+                    "weight": 1,
+                    "outcome_key": option.pop("outcome_key"),
+                    "consequences": option.pop("consequences"),
+                }
+                option["outcomes"] = [outcome]
+        operation_row = {"operation": operation, "arguments": copy.deepcopy(arguments)}
+        if kind == "requirement":
+            fixture["options"][0]["requirements"] = [operation_row]
+        else:
+            fixture["options"][0]["outcomes"][0]["consequences"] = [operation_row]
+        return fixture
 
     def test_merchants_use_exact_closed_services_and_shop_shells(self) -> None:
         for row in self.catalogs["merchant_definition"]:
