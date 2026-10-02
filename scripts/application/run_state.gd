@@ -7,6 +7,7 @@ const RunBuildStateScript := preload("res://scripts/progression/run_build_state.
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
 const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
+const DungeonEventRunStateScript := preload("res://scripts/events/dungeon_event_run_state.gd")
 
 const REWARD_REPLAY_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -33,6 +34,7 @@ var floor_plan: Dictionary = {}
 var completed_floor_ids: Array[String] = []
 var run_economy: Dictionary = {}
 var seen_event_ids: Array[String] = []
+var dungeon_event_runtime: Dictionary = {}
 var merchant_state: Dictionary = {}
 var floor_rule_state: Dictionary = {}
 
@@ -63,6 +65,7 @@ const FLOOR_TRANSACTION_FIELDS: Array[String] = [
 	"completed_floor_ids",
 	"run_economy",
 	"seen_event_ids",
+	"dungeon_event_runtime",
 	"merchant_state",
 	"floor_rule_state",
 	"floor_definition",
@@ -100,6 +103,23 @@ const RUN_SNAPSHOT_FIELDS: Array[String] = [
 	"stats", "events", "build", "open_offer", "consumed_offer_ids", "result",
 	"config", "current_floor_index", "floor_plan", "completed_floor_ids",
 	"run_economy", "seen_event_ids", "merchant_state", "floor_rule_state",
+	"dungeon_event_runtime",
+]
+const EVENT_RUNTIME_FIELDS: Array[String] = [
+	"active_event_id", "active_node_key", "consequence_runtime",
+	"emitted_fact_ids", "encounter_success_by_transaction", "pending_facts",
+	"publication_digest", "publication_ledger", "schema_id", "schema_version",
+]
+const EVENT_CONSEQUENCE_FIELDS: Array[String] = [
+	"completed_transaction_ids", "integrity_failure", "participant_snapshots",
+	"publications", "revision", "schema_id", "schema_version",
+]
+const EVENT_PARTICIPANT_FIELDS: Array[String] = [
+	"economy", "event_state", "health", "modifier", "resource", "route",
+]
+const EVENT_RESOURCE_BUNDLE_FIELDS: Array[String] = ["health", "resource"]
+const EVENT_CANDIDATE_FIELDS: Array[String] = [
+	"build", "dungeon_event_runtime", "floor_plan", "resources", "run_economy",
 ]
 
 
@@ -131,6 +151,7 @@ func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
 	completed_floor_ids = []
 	run_economy = {}
 	seen_event_ids = []
+	dungeon_event_runtime = {}
 	merchant_state = {}
 	floor_rule_state = {}
 	_floor_definition = {}
@@ -338,6 +359,80 @@ func initialize_launch_economy_state(
 	return true
 
 
+func initialize_launch_event_state(runtime_snapshot: Dictionary) -> bool:
+	if (
+		not is_launch_floor_mode()
+		or not dungeon_event_runtime.is_empty()
+		or runtime_snapshot.is_empty()
+	):
+		return false
+	var parts := _event_runtime_parts(runtime_snapshot)
+	if parts.is_empty():
+		return false
+	var candidate_resources := {
+		"resource": (parts["resource"] as Dictionary).duplicate(true),
+		"health": (parts["health"] as Dictionary).duplicate(true),
+	}
+	if not _event_candidate_matches_domains(
+		runtime_snapshot,
+		run_economy,
+		floor_plan,
+		candidate_resources,
+		build_state.transaction_snapshot(),
+		true
+	):
+		return false
+	dungeon_event_runtime = runtime_snapshot.duplicate(true)
+	resources = candidate_resources.duplicate(true)
+	seen_event_ids = _event_seen_ids(runtime_snapshot)
+	return true
+
+
+func commit_event_transaction_state(candidate: Dictionary) -> bool:
+	var current_node := current_floor_node()
+	if (
+		not is_launch_floor_mode()
+		or phase != RunPhaseScript.Value.ROOM_ACTIVE
+		or current_node.is_empty()
+		or str(current_node.get("room_type", "")) != "event"
+		or dungeon_event_runtime.is_empty()
+		or not _has_exact_fields(candidate, EVENT_CANDIDATE_FIELDS)
+		or not candidate["dungeon_event_runtime"] is Dictionary
+		or not candidate["run_economy"] is Dictionary
+		or not candidate["floor_plan"] is Dictionary
+		or not candidate["resources"] is Dictionary
+		or not candidate["build"] is Dictionary
+	):
+		return false
+	var runtime_value := candidate["dungeon_event_runtime"] as Dictionary
+	var economy_value := candidate["run_economy"] as Dictionary
+	var floor_value := candidate["floor_plan"] as Dictionary
+	var resources_value := candidate["resources"] as Dictionary
+	var build_value := candidate["build"] as Dictionary
+	if not _event_candidate_matches_domains(
+		runtime_value, economy_value, floor_value, resources_value, build_value, false
+	):
+		return false
+	if not _event_runtime_identity_matches_current_node(runtime_value, current_node):
+		return false
+	if not _is_event_economy_transition(run_economy, economy_value):
+		return false
+	if not build_state.can_restore_transaction_snapshot(build_value):
+		return false
+	var before_build: Dictionary = build_state.transaction_snapshot()
+	if not build_state.restore_transaction_snapshot(build_value):
+		return false
+	dungeon_event_runtime = runtime_value.duplicate(true)
+	run_economy = economy_value.duplicate(true)
+	floor_plan = floor_value.duplicate(true)
+	resources = resources_value.duplicate(true)
+	seen_event_ids = _event_seen_ids(runtime_value)
+	if build_state.transaction_snapshot() != build_value:
+		build_state.restore_transaction_snapshot(before_build)
+		return false
+	return true
+
+
 func commit_merchant_transaction_state(
 	economy_snapshot: Dictionary,
 	merchant_snapshot: Dictionary
@@ -435,6 +530,7 @@ func floor_transaction_snapshot() -> Dictionary:
 		"completed_floor_ids": completed_floor_ids.duplicate(),
 		"run_economy": run_economy.duplicate(true),
 		"seen_event_ids": seen_event_ids.duplicate(),
+		"dungeon_event_runtime": dungeon_event_runtime.duplicate(true),
 		"merchant_state": merchant_state.duplicate(true),
 		"floor_rule_state": floor_rule_state.duplicate(true),
 		"floor_definition": _floor_definition.duplicate(true),
@@ -470,6 +566,7 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 		or not value["completed_floor_ids"] is Array
 		or not value["run_economy"] is Dictionary
 		or not value["seen_event_ids"] is Array
+		or not value["dungeon_event_runtime"] is Dictionary
 		or not value["merchant_state"] is Dictionary
 		or not value["floor_rule_state"] is Dictionary
 		or not value["floor_definition"] is Dictionary
@@ -491,6 +588,7 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	var room_templates: Array = value["room_templates"]
 	var floor_index := int(value["current_floor_index"])
 	var economy_value := value["run_economy"] as Dictionary
+	var event_runtime_value := value["dungeon_event_runtime"] as Dictionary
 	var merchant_value := value["merchant_state"] as Dictionary
 	if economy_value.is_empty() != merchant_value.is_empty():
 		return false
@@ -499,6 +597,31 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 		and not _valid_economy_merchant_pair(economy_value, merchant_value)
 	):
 		return false
+	if event_runtime_value.is_empty():
+		if not (value["seen_event_ids"] as Array).is_empty():
+			return false
+	else:
+		var event_parts := _event_runtime_parts(event_runtime_value)
+		if event_parts.is_empty() or _event_seen_ids(event_runtime_value) != value["seen_event_ids"]:
+			return false
+		if (
+			not dungeon_event_runtime.is_empty()
+			and _event_content_fingerprint(event_runtime_value)
+			!= _event_content_fingerprint(dungeon_event_runtime)
+		):
+			return false
+		if not plan.is_empty() and not _event_candidate_matches_domains(
+			event_runtime_value,
+			economy_value,
+			plan,
+			{
+				"resource": (event_parts["resource"] as Dictionary).duplicate(true),
+				"health": (event_parts["health"] as Dictionary).duplicate(true),
+			},
+			build_state.transaction_snapshot(),
+			true
+		):
+			return false
 	if plan.is_empty():
 		return (
 			floor_index == -1
@@ -602,6 +725,7 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	completed_floor_ids.assign(value["completed_floor_ids"] as Array)
 	run_economy = (value["run_economy"] as Dictionary).duplicate(true)
 	seen_event_ids.assign(value["seen_event_ids"] as Array)
+	dungeon_event_runtime = (value["dungeon_event_runtime"] as Dictionary).duplicate(true)
 	merchant_state = (value["merchant_state"] as Dictionary).duplicate(true)
 	floor_rule_state = (value["floor_rule_state"] as Dictionary).duplicate(true)
 	_floor_definition = (value["floor_definition"] as Dictionary).duplicate(true)
@@ -666,6 +790,9 @@ func restore_launch_run_snapshot(
 		"completed_floor_ids": (value.get("completed_floor_ids", []) as Array).duplicate(),
 		"run_economy": (value.get("run_economy", {}) as Dictionary).duplicate(true),
 		"seen_event_ids": (value.get("seen_event_ids", []) as Array).duplicate(),
+		"dungeon_event_runtime": (
+			value.get("dungeon_event_runtime", {}) as Dictionary
+		).duplicate(true),
 		"merchant_state": (value.get("merchant_state", {}) as Dictionary).duplicate(true),
 		"floor_rule_state": (value.get("floor_rule_state", {}) as Dictionary).duplicate(true),
 		"floor_definition": floor_definition.duplicate(true),
@@ -751,9 +878,172 @@ func snapshot() -> Dictionary:
 		"completed_floor_ids": completed_floor_ids.duplicate(),
 		"run_economy": run_economy.duplicate(true),
 		"seen_event_ids": seen_event_ids.duplicate(),
+		"dungeon_event_runtime": dungeon_event_runtime.duplicate(true),
 		"merchant_state": merchant_state.duplicate(true),
 		"floor_rule_state": floor_rule_state.duplicate(true),
 	}
+
+
+func _event_runtime_parts(runtime_snapshot: Dictionary) -> Dictionary:
+	if (
+		not _has_exact_fields(runtime_snapshot, EVENT_RUNTIME_FIELDS)
+		or str(runtime_snapshot.get("schema_id", "")) != "planewalker.dungeon_event_runtime"
+		or typeof(runtime_snapshot.get("schema_version")) != TYPE_INT
+		or int(runtime_snapshot.get("schema_version", -1)) != 1
+		or not runtime_snapshot.get("consequence_runtime") is Dictionary
+	):
+		return {}
+	var consequence := runtime_snapshot["consequence_runtime"] as Dictionary
+	if (
+		not _has_exact_fields(consequence, EVENT_CONSEQUENCE_FIELDS)
+		or str(consequence.get("schema_id", "")) != "planewalker.dungeon_event_consequence_runtime"
+		or typeof(consequence.get("schema_version")) != TYPE_INT
+		or int(consequence.get("schema_version", -1)) != 1
+		or not consequence.get("participant_snapshots") is Dictionary
+	):
+		return {}
+	var participants := consequence["participant_snapshots"] as Dictionary
+	if not _has_exact_fields(participants, EVENT_PARTICIPANT_FIELDS):
+		return {}
+	for field: String in EVENT_PARTICIPANT_FIELDS:
+		if not participants[field] is Dictionary or (participants[field] as Dictionary).is_empty():
+			return {}
+	var event_state := participants["event_state"] as Dictionary
+	var fingerprint := str(event_state.get("content_fingerprint", ""))
+	var validator = DungeonEventRunStateScript.new()
+	if (
+		fingerprint.length() != 64
+		or not bool(validator.configure(fingerprint).get("ok", false))
+		or not validator.can_restore_snapshot(event_state)
+	):
+		return {}
+	return participants.duplicate(true)
+
+
+func _event_seen_ids(runtime_snapshot: Dictionary) -> Array[String]:
+	var parts := _event_runtime_parts(runtime_snapshot)
+	if parts.is_empty():
+		return []
+	var event_state := parts["event_state"] as Dictionary
+	var result: Array[String] = []
+	for value: Variant in event_state.get("seen_run_event_ids", []):
+		if typeof(value) != TYPE_STRING:
+			return []
+		result.append(str(value))
+	return result
+
+
+func _event_content_fingerprint(runtime_snapshot: Dictionary) -> String:
+	var parts := _event_runtime_parts(runtime_snapshot)
+	if parts.is_empty():
+		return ""
+	return str((parts["event_state"] as Dictionary).get("content_fingerprint", ""))
+
+
+func _event_candidate_matches_domains(
+	runtime_snapshot: Dictionary,
+	economy_snapshot: Dictionary,
+	plan_snapshot: Dictionary,
+	resource_bundle: Dictionary,
+	build_snapshot: Dictionary,
+	allow_uninitialized: bool
+) -> bool:
+	var parts := _event_runtime_parts(runtime_snapshot)
+	if (
+		parts.is_empty()
+		or not _has_exact_fields(resource_bundle, EVENT_RESOURCE_BUNDLE_FIELDS)
+		or not resource_bundle["resource"] is Dictionary
+		or not resource_bundle["health"] is Dictionary
+		or not build_state.can_restore_transaction_snapshot(build_snapshot)
+		or parts["economy"] != economy_snapshot
+		or parts["resource"] != resource_bundle["resource"]
+		or parts["health"] != resource_bundle["health"]
+	):
+		return false
+	var route := parts["route"] as Dictionary
+	if not route.get("plan") is Dictionary or route["plan"] != plan_snapshot:
+		return false
+	if not plan_snapshot.is_empty() and _configured_floor_plan(
+		plan_snapshot, _floor_definition, _room_templates
+	) == null:
+		return false
+	var modifier := parts["modifier"] as Dictionary
+	var event_state := parts["event_state"] as Dictionary
+	var build_curses: Array = build_snapshot.get("curses", [])
+	if (
+		not modifier.get("curse_ids") is Array
+		or (modifier["curse_ids"] as Array) != build_curses
+		or modifier.get("narrative_flags", {}) != event_state.get("narrative_flags", {})
+		or modifier.get("temporary_modifiers", []) != event_state.get("temporary_modifiers", [])
+	):
+		return false
+	if not allow_uninitialized and not dungeon_event_runtime.is_empty():
+		var before_parts := _event_runtime_parts(dungeon_event_runtime)
+		if (
+			before_parts.is_empty()
+			or str((before_parts["event_state"] as Dictionary).get("content_fingerprint", ""))
+			!= str(event_state.get("content_fingerprint", ""))
+		):
+			return false
+	return true
+
+
+func _event_runtime_identity_matches_current_node(
+	runtime_snapshot: Dictionary,
+	current_node: Dictionary
+) -> bool:
+	var parts := _event_runtime_parts(runtime_snapshot)
+	if parts.is_empty():
+		return false
+	var event_state := parts["event_state"] as Dictionary
+	var assignments := event_state.get("selected_event_by_node", {}) as Dictionary
+	var node_key := "%s:%s" % [
+		str(floor_plan.get("floor_id", "")),
+		str(current_node.get("id", "")),
+	]
+	var active_node_key := str(runtime_snapshot.get("active_node_key", ""))
+	var active_event_id := str(runtime_snapshot.get("active_event_id", ""))
+	if active_node_key != node_key or active_event_id.is_empty() or not assignments.has(node_key):
+		return false
+	var assignment := assignments[node_key] as Dictionary
+	return (
+		str(assignment.get("event_id", "")) == active_event_id
+		and str(assignment.get("floor_id", "")) == str(floor_plan.get("floor_id", ""))
+		and int(assignment.get("floor_index", -1)) == current_floor_index
+		and str(assignment.get("node_id", "")) == str(current_node.get("id", ""))
+	)
+
+
+func _is_event_economy_transition(before: Dictionary, after: Dictionary) -> bool:
+	if before == after:
+		return true
+	if before.is_empty() or after.is_empty():
+		return false
+	if (
+		str(before.get("schema_id", "")) != str(after.get("schema_id", ""))
+		or int(before.get("schema_version", -1)) != int(after.get("schema_version", -1))
+		or str(before.get("profile_id", "")) != str(after.get("profile_id", ""))
+		or int(before.get("initial_gold", -1)) != int(after.get("initial_gold", -1))
+		or int(after.get("revision", -1)) != int(before.get("revision", -1)) + 1
+		or before.get("settled_floor_indices", []) != after.get("settled_floor_indices", [])
+	):
+		return false
+	var before_ledger := before.get("ledger", []) as Array
+	var after_ledger := after.get("ledger", []) as Array
+	if after_ledger.size() != before_ledger.size() + 1:
+		return false
+	for index: int in range(before_ledger.size()):
+		if before_ledger[index] != after_ledger[index]:
+			return false
+	var entry := after_ledger.back() as Dictionary
+	var amount := int(entry.get("amount", 0))
+	return (
+		str(entry.get("operation", "")) == "gold_delta"
+		and amount != 0
+		and int(entry.get("revision", -1)) == int(after.get("revision", -1))
+		and int(before.get("balance", -1)) + amount == int(after.get("balance", -1))
+		and int(after.get("balance", -1)) >= 0
+	)
 
 
 func _configured_floor_plan(

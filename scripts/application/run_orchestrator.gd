@@ -102,6 +102,48 @@ func initialize_launch_economy(
 	)
 
 
+func initialize_launch_events(runtime_snapshot: Dictionary, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("initialize_launch_events")
+	if not _state.initialize_launch_event_state(runtime_snapshot.duplicate(true)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "dungeon_event_runtime"}
+		)
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{"dungeon_event_runtime": _state.dungeon_event_runtime.duplicate(true)}
+	)
+
+
+func commit_event_transaction(candidate: Dictionary, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("commit_event_transaction")
+	if not _state.commit_event_transaction_state(candidate.duplicate(true)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "event_transaction"}
+		)
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{
+			"dungeon_event_runtime": _state.dungeon_event_runtime.duplicate(true),
+			"run_economy": _state.run_economy.duplicate(true),
+			"floor_plan": _state.floor_plan.duplicate(true),
+			"resources": _state.resources.duplicate(true),
+			"build": _state.build_state.transaction_snapshot().duplicate(true),
+		}
+	)
+
+
 func commit_merchant_transaction(
 	economy_snapshot: Dictionary,
 	merchant_snapshot: Dictionary,
