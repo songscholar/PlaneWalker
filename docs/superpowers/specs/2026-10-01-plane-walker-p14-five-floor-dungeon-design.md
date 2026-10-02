@@ -7,11 +7,11 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/3.5_地牢生成与关卡设计.md`, `docs/current/2026-10-01-p13b-launch-content-evidence.md`, `docs/contracts/content-pack-v2.md`
 - Supersedes: The continuous `200 x 200` BSP world and corridor-instantiation proposal in `docs/3.5_地牢生成与关卡设计.md`; its floor themes, room intentions, event catalog, and economy targets remain product references
-- Last Verified: 2026-10-01
+- Last Verified: 2026-10-02
 
 ## 1. Decision
 
-P14 implements delivery step 7 of the Full Product Completion Design as a deterministic route graph whose nodes stream hand-authored Godot room scenes. It does not build one continuous BSP dungeon. A route graph preserves meaningful branch choices, seed reproducibility, Save/Replay stability, and map readability; hand-authored scenes preserve combat framing, telegraph space, pixel composition, and controller navigation.
+P14 implements delivery step 7 of the Full Product Completion Design as a deterministic route graph whose nodes stream native Godot room scenes generated from authoritative room templates and then validated as player-facing assets. It does not build one continuous BSP dungeon. A route graph preserves meaningful branch choices, seed reproducibility, Save/Replay stability, and map readability; template-driven scenes preserve contract-checked combat framing, telegraph space, pixel composition, and controller navigation while allowing reproducible regeneration and integrity sealing.
 
 The Launch program exposes exactly:
 
@@ -133,7 +133,7 @@ P14 validates these as closed adapter IDs. P15 replaces their implementation beh
 
 ### 3.2 Exact room-template catalog
 
-Every room template is a versioned content definition with a stable scene path, floor eligibility, door anchors, camera bounds, spawn anchors, interaction anchors, supported environment rules, accessibility-safe hazard zones, and thumbnail/icon references. Launch room scenes live under `res://data/content_packs/base/assets/rooms/launch/` and are declared in the Base Pack `asset_manifest` with SHA-256 integrity entries when P14D authors them. P14A validates the closed path prefix and `.tscn` suffix without claiming that the not-yet-authored scenes already exist.
+Every room template is a versioned content definition with a stable scene path, floor eligibility, door anchors, camera bounds, spawn anchors, interaction anchors, supported environment rules, accessibility-safe hazard zones, and thumbnail/icon references. Launch room scenes live under `res://data/content_packs/base/assets/rooms/launch/` and are declared in the Base Pack `asset_manifest` with SHA-256 integrity entries. Every authored path is the flat form `res://data/content_packs/base/assets/rooms/launch/<room-template-id>.tscn`; category subdirectories are not part of the contract and are rejected by the schema/parser path rule. `tools/generate_launch_room_scenes.py` derives the thirty scenes from `room_templates.json`, writes each exact declared `scene_path`, and refreshes the shared-base-plus-thirty asset manifest and integrity hashes without becoming a second content authority. P14A's closed path prefix and `.tscn` validation therefore remains the generation and runtime loading contract used by P14D.
 
 | Category | Exact template IDs |
 |---|---|
@@ -265,20 +265,23 @@ Selecting an edge is an authoritative transaction. It marks exactly one outgoing
 
 ## 5. Scene streaming and room lifecycle
 
-`RoomSceneHost` owns one active room scene and one staged room scene. It resolves only scene paths validated by the ContentRegistry. The successful transition order is:
+`RoomSceneHost` owns one active room scene, one staged room scene, and one opaque transition ticket. It resolves only scene paths validated by the ContentRegistry. `RunRuntimeHost` coordinates scene and route transactions so the authoritative route is not published or made irreversible before the new scene is active. The successful transition order is:
 
 ```text
-resolve authoritative target node
--> load PackedScene
+begin authoritative route transition and retain its before snapshot
+-> resolve authoritative target node and load PackedScene
 -> instantiate under a detached staging root
 -> validate RoomSceneContract and required anchors
 -> bind floor palette, environment rule, encounter/interaction authority
--> atomically attach staged scene and activate camera bounds
--> retire the previous scene
--> publish room-entered fact exactly once
+-> finalize route entry while retaining compensation state
+-> attach staged scene and activate camera/input bounds
+-> preflight authoritative route confirmation without mutation
+-> confirm the scene and retire the previous scene
+-> confirm authoritative route transition and clear compensation state
+-> publish route-selected and room-entered facts exactly once
 ```
 
-If loading, validation, binding, or activation fails, the previous room and authoritative node remain intact. No partially loaded room publishes lifecycle facts. Room nodes never mutate RunState directly.
+The exact final sequence is `RunRuntimeFacade.can_confirm_route_transition` → `RoomSceneHost.confirm_transition` → `RunRuntimeFacade.confirm_route_transition`. The preflight is observation-only and guarantees the last Facade call has no new validation branch after the scene releases its prior room. If loading, validation, binding, finalize, activation, commit, or preflight fails before scene confirmation, both transactions roll back to the exact previous room and authoritative node. A reset frees active and staged roots, invalidates tickets, and cannot publish late notifications. No partially loaded room publishes lifecycle facts. Room nodes never mutate RunState directly.
 
 `RoomRuntime` gains room-type handlers:
 
@@ -305,7 +308,7 @@ floor_rule_state
 
 The M1 five-room fields remain readable through a compatibility adapter and are not reinterpreted as a Launch FloorPlan. P14 introduces an explicit Save migration from schema v2 to the next schema. The migration adds empty P14 run fields only when no active Launch run exists; an older active Launch run without a FloorPlan cannot be invented and fails closed with a player-facing recovery path.
 
-Save snapshots include the complete authoritative FloorPlan, selected/visited/abandoned nodes, current floor, economy ledger, merchant purchase/reroll state, seen events, pending event/shop transaction, floor-rule state, and content fingerprint. Load validates every stable reference against the current pack before scene instantiation.
+Save snapshots include the complete authoritative FloorPlan, selected/visited/abandoned nodes, current floor, economy ledger, merchant purchase/reroll state, seen events, pending event/shop transaction, floor-rule state, and content fingerprint. Load validates every stable reference against the current pack before scene instantiation. Floor-rule validation reconstructs the exact rule runtime and requires `phase`, `cycle_index`, `active_zone_id`, and rule revision to be consistent with the serialized `runtime_frame`; a structurally valid but impossible phase/frame combination is corrupt and fails closed.
 
 Replay records route selections, room entry/clear facts, economy transactions, merchant inventory/purchases, event options/outcomes, rest choices, floor transitions, and floor-rule state. Replays seal generator version and content fingerprint. Unknown generators, changed room definitions, invalid route prefixes, changed event consequences, or economy-ledger drift fail closed.
 
@@ -322,6 +325,10 @@ Each floor rule is deterministic, bounded, telegraphed, and independently suppre
 | `rule_collapsing_plane` | predeclared zones lock after warning; the playable safe area never becomes invalid | black-white fracture telegraph, edge outline, no surprise instant death |
 
 P14 hazards use Player/World payload authorities and typed damage or modifier facts. They do not bypass HealthComponent, time authority, invulnerability, accessibility settings, or Replay.
+
+`floor_rule_state` is authoritative RunState data rather than Node-local presentation state. Rule configuration, monotonic frame advancement, accepted effect commit, snapshot restore, and room/floor cleanup execute through RunOrchestrator/RunRuntimeFacade/RunRuntimeHost commands. Configuration and explicit restore are commands; high-frequency frame observations mutate only the validated rule snapshot and its local rule revision, not the global command revision. A route revision cached before hazard frames therefore remains legal for confirmation. Rejected effect authority, stale frames, invalid snapshots, and reduced-motion presentation changes leave the gameplay snapshot unchanged; Save and Replay round-trip and digest the same validated rule snapshot.
+
+`FloorRuleEffectAuthority` is the production boundary for gameplay effects. It validates the complete fact batch before mutation, binds facts to the active RoomSceneHost room and declared hazard zone, filters the Player target, applies nonlethal damage through the Player/HealthComponent damage authority, applies or removes Player movement and TimeManager cost modifiers, deduplicates stable effect identities, and restores captured health/modifier snapshots on a partial commit failure. Main owns the Launch RoomSceneHost and installs one configured production authority on RunRuntimeHost; an end-to-end Main test must stream a real Launch room, configure its floor rule, place the real Player in an active hazard, and observe the authoritative damage or modifier result.
 
 ## 8. Economy, merchants, events, treasure, and rest
 
@@ -369,7 +376,9 @@ P14 is locally complete only when all of the following pass:
 - all entry-to-Boss paths satisfy actionable room count, route budgets, reachability, no-cycle, no-overlong-combat, rest, event, and economy invariants;
 - stale/duplicate route, purchase, event, treasure, rest, and floor-transition commands are atomic and publish no facts;
 - room streaming rollback preserves the previous room and authority under load, contract, bind, and activation failures;
-- all five floor rules pass warning, activation, cleanup, damage/modifier authority, accessibility, Save, and Replay tests;
+- route confirmation passes the observation-only Facade preflight before SceneHost confirmation and the final Facade commit;
+- all five floor rules pass warning, activation, cleanup, production damage/modifier authority, accessibility, strict Save phase/frame, Replay digest, and high-frequency observation revision-isolation tests;
+- Main streams a Launch room through the production RoomSceneHost and FloorRuleEffectAuthority and proves a real Player hazard effect end to end;
 - economy simulation remains within approved bands without negative balances, duplicate rewards, free rerolls, or guaranteed all-buy paths;
 - M1 five-room behavior and P13B reward/draft compatibility remain green;
 - Save migration, corruption recovery, FloorPlan round-trip, Replay divergence, controller-only flows, visual QA, 150-loadout smoke, and full repository validation pass;
@@ -391,5 +400,7 @@ P14F fifteen regular plus three special events
 P14G map, shop, event, treasure, rest, and transition UI
 P14H simulation, visual QA, 150-loadout regression, and certification
 ```
+
+P14D completed locally on 2026-10-02. Its generated room assets, streaming and compensation protocol, five floor-rule runtimes, production effect authority, strict Save/Replay validation, Main end-to-end path, visual contracts, and new-run/error cleanup pass the clean repository gate: `181 passed, 0 failed`, with only the registered `reward_system_smoke` ObjectDB leak warning. P14E is the next active slice; this does not advance the formal M1 status or the authentic external playtest count.
 
 P15 begins only after P14H certification and owns twenty-two Launch enemies, elite affixes, encounter composition depth, and five complete Boss behavior kits. P14 may use existing enemy/Boss adapters to exercise lifecycle paths, but its evidence must label those adapters honestly.

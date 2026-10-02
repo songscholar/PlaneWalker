@@ -6,6 +6,21 @@ const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
+const CrumblingGroundRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
+)
+const VoidSporesRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/void_spores_rule.gd"
+)
+const TemporalDistortionRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/temporal_distortion_rule.gd"
+)
+const ForgeVentsRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/forge_vents_rule.gd"
+)
+const CollapsingPlaneRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/collapsing_plane_rule.gd"
+)
 
 const MAGIC := "PWSAVE"
 const SCHEMA_VERSION := 3
@@ -82,6 +97,18 @@ const FLOOR_IDS: Array[String] = [
 	"floor_time_rift",
 	"floor_plane_forge",
 	"floor_throne_of_void",
+]
+const FLOOR_RULE_IDS: Array[String] = [
+	"rule_crumbling_ground",
+	"rule_void_spores",
+	"rule_temporal_distortion",
+	"rule_forge_vents",
+	"rule_collapsing_plane",
+]
+const FLOOR_RULE_STATE_FIELDS: Array[String] = [
+	"schema_version", "rule_id", "configured", "room_id", "room_seed", "zones",
+	"safe_zone_ids", "runtime_frame", "phase", "cycle_index", "active_zone_id",
+	"revision", "reduced_motion", "hit_flash_enabled",
 ]
 const FLOOR_PLAN_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -421,7 +448,8 @@ static func _normalize_persisted_integer_fields(value: Variant, parent_field: St
 		"damage_action_token", "guard_generation", "guard_elapsed_frames",
 		"next_fallback_attack_generation", "phase", "run_seed", "current_floor",
 		"current_room", "room_total", "run_time_ms", "current_floor_index",
-		"floor_index", "layer", "choice_order", "kills", "seed",
+		"floor_index", "room_seed", "cycle_index", "layer", "choice_order",
+		"kills", "seed",
 	]
 	const INTEGER_ARRAY_FIELDS: Array[String] = [
 		"reward_invulnerability_tokens", "claimed_rewind_generations",
@@ -564,6 +592,13 @@ static func _active_run_state_error(value: Variant) -> Dictionary:
 		return _run_error("floor_plan.floor_id", "index_mismatch")
 	if int(run["current_room"]) != (floor_plan["selected_edge_ids"] as Array).size():
 		return _run_error("current_room", "plan_mismatch")
+	var floor_rule_error := _floor_rule_state_error(
+		run["floor_rule_state"] as Dictionary,
+		floor_plan,
+		floor_index
+	)
+	if not floor_rule_error.is_empty():
+		return floor_rule_error
 	var boss_node := _plan_node(floor_plan, str(floor_plan["boss_node_id"]))
 	if boss_node.is_empty() or int(run["room_total"]) != int(boss_node["layer"]):
 		return _run_error("room_total", "plan_mismatch")
@@ -573,6 +608,89 @@ static func _active_run_state_error(value: Variant) -> Dictionary:
 	):
 		return _run_error("completed_floor_ids", "current_floor_not_complete")
 	return {}
+
+
+static func _floor_rule_state_error(
+	value: Dictionary,
+	floor_plan: Dictionary,
+	floor_index: int
+) -> Dictionary:
+	if value.is_empty():
+		return {}
+	if not _has_exact_fields(value, FLOOR_RULE_STATE_FIELDS):
+		return _run_error("floor_rule_state", "fields")
+	var current_node := _plan_node(floor_plan, str(floor_plan.get("current_node_id", "")))
+	if current_node.is_empty():
+		return _run_error("floor_rule_state.room_id", "node_missing")
+	if (
+		typeof(value["schema_version"]) != TYPE_INT
+		or int(value["schema_version"]) != 1
+		or typeof(value["rule_id"]) != TYPE_STRING
+		or str(value["rule_id"]) != FLOOR_RULE_IDS[floor_index]
+		or typeof(value["configured"]) != TYPE_BOOL
+		or not bool(value["configured"])
+		or typeof(value["room_id"]) != TYPE_STRING
+		or str(value["room_id"]) != str(current_node.get("id", ""))
+		or typeof(value["room_seed"]) != TYPE_INT
+		or not value["zones"] is Array
+		or not value["safe_zone_ids"] is Array
+		or (value["zones"] as Array).is_empty()
+		or (value["safe_zone_ids"] as Array).is_empty()
+		or typeof(value["runtime_frame"]) != TYPE_INT
+		or int(value["runtime_frame"]) < -1
+		or typeof(value["phase"]) != TYPE_STRING
+		or str(value["phase"]) not in ["idle", "warning", "active", "recovery", "completed"]
+		or typeof(value["cycle_index"]) != TYPE_INT
+		or typeof(value["active_zone_id"]) != TYPE_STRING
+		or typeof(value["revision"]) != TYPE_INT
+		or int(value["revision"]) < 0
+		or typeof(value["reduced_motion"]) != TYPE_BOOL
+		or typeof(value["hit_flash_enabled"]) != TYPE_BOOL
+	):
+		return _run_error("floor_rule_state", "value")
+	var zone_ids: Dictionary = {}
+	for zone_value: Variant in value["zones"] as Array:
+		if not zone_value is Dictionary:
+			return _run_error("floor_rule_state.zones", "type")
+		var zone := zone_value as Dictionary
+		var zone_id := str(zone.get("id", ""))
+		if (
+			not _has_exact_fields(zone, ["id", "bounds"])
+			or zone_id.is_empty()
+			or zone_ids.has(zone_id)
+			or not zone.get("bounds") is Dictionary
+		):
+			return _run_error("floor_rule_state.zones", "value")
+		zone_ids[zone_id] = true
+	var safe_ids: Dictionary = {}
+	for safe_value: Variant in value["safe_zone_ids"] as Array:
+		if typeof(safe_value) != TYPE_STRING:
+			return _run_error("floor_rule_state.safe_zone_ids", "type")
+		var safe_id := str(safe_value)
+		if not zone_ids.has(safe_id) or safe_ids.has(safe_id):
+			return _run_error("floor_rule_state.safe_zone_ids", "value")
+		safe_ids[safe_id] = true
+	if safe_ids.size() >= zone_ids.size():
+		return _run_error("floor_rule_state.safe_zone_ids", "range")
+	var runtime := _floor_rule_runtime(str(value["rule_id"]))
+	if runtime == null or not bool(runtime.call("can_restore_snapshot", value.duplicate(true))):
+		return _run_error("floor_rule_state", "value")
+	return {}
+
+
+static func _floor_rule_runtime(rule_id: String) -> RefCounted:
+	match rule_id:
+		"rule_crumbling_ground":
+			return CrumblingGroundRuleScript.new()
+		"rule_void_spores":
+			return VoidSporesRuleScript.new()
+		"rule_temporal_distortion":
+			return TemporalDistortionRuleScript.new()
+		"rule_forge_vents":
+			return ForgeVentsRuleScript.new()
+		"rule_collapsing_plane":
+			return CollapsingPlaneRuleScript.new()
+	return null
 
 
 static func _floor_plan_error(plan: Dictionary, run_seed: int) -> Dictionary:

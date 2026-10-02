@@ -143,6 +143,7 @@ var low_energy_regen_multiplier: float = 1.0
 var low_energy_threshold: float = 30.0
 var time_stop_self_damage: float = 0.0
 var rewind_self_damage: float = 0.0
+var _floor_rule_cost_multiplier: float = 1.0
 var _cooldowns: Dictionary = {
 	&"time_stop": 0.0,
 	&"time_rewind": 0.0,
@@ -213,6 +214,21 @@ func _process(_delta: float) -> void:
 	# Gameplay time advances only through advance_frame(). This callback remains
 	# available for presentation-only projection and must stay gameplay-pure.
 	pass
+
+
+func set_floor_rule_cost_multiplier(value: float) -> bool:
+	if not is_finite(value) or value <= 0.0:
+		return false
+	_floor_rule_cost_multiplier = value
+	return true
+
+
+func floor_rule_cost_multiplier() -> float:
+	return _floor_rule_cost_multiplier
+
+
+func _floor_rule_adjusted_cost(base_cost: float, reward_multiplier: float) -> float:
+	return base_cost * reward_multiplier * _floor_rule_cost_multiplier
 
 
 static func _seconds_to_authoritative_frames(seconds: float) -> int:
@@ -1270,7 +1286,10 @@ func _prepare_time_action_settlement(
 ) -> Dictionary:
 	match ability_id:
 		&"stop":
-			var stop_cost := time_stop_cost * time_stop_cost_multiplier
+			var stop_cost := _floor_rule_adjusted_cost(
+				time_stop_cost,
+				time_stop_cost_multiplier
+			)
 			if (
 				not _valid_nonnegative_scalar(stop_cost)
 				or not _valid_nonnegative_scalar(time_stop_cooldown)
@@ -1323,7 +1342,10 @@ func _prepare_time_action_settlement(
 				or not owner_entity.has_method("owner_character_generation")
 			):
 				return {}
-			var rift_cost := time_rift_cost * time_rift_cost_multiplier
+			var rift_cost := _floor_rule_adjusted_cost(
+				time_rift_cost,
+				time_rift_cost_multiplier
+			)
 			var rift_duration := maxf(0.0, time_rift_duration + time_rift_duration_bonus)
 			var rift_radius := time_rift_radius + time_rift_radius_bonus
 			var rift_slow := clampf(
@@ -1378,8 +1400,9 @@ func _prepare_time_action_settlement(
 				},
 			}
 		&"accelerate":
-			var accelerate_cost := (
-				time_accelerate_cost * time_accelerate_cost_multiplier
+			var accelerate_cost := _floor_rule_adjusted_cost(
+				time_accelerate_cost,
+				time_accelerate_cost_multiplier
 			)
 			var accelerate_duration := (
 				time_accelerate_duration + time_accelerate_duration_bonus
@@ -1781,12 +1804,18 @@ func try_use(skill_id: StringName, context: Dictionary) -> bool:
 
 
 func can_time_stop() -> bool:
-	var effective_cost := time_stop_cost * time_stop_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(
+		time_stop_cost,
+		time_stop_cost_multiplier
+	)
 	return not _time_stop_active and _can_pay(&"time_stop", effective_cost)
 
 
 func try_time_stop() -> bool:
-	var effective_cost := time_stop_cost * time_stop_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(
+		time_stop_cost,
+		time_stop_cost_multiplier
+	)
 	var effective_duration := time_stop_duration + time_stop_duration_bonus
 	var duration_frames := _seconds_to_authoritative_frames(effective_duration)
 	var authoritative_duration := _frames_to_seconds(duration_frames)
@@ -1853,7 +1882,7 @@ func _end_time_stop(publish_end_event: bool) -> bool:
 func can_rewind(recorder: Node) -> bool:
 	if recorder == null or not recorder.has_method("has_snapshot") or not recorder.has_snapshot():
 		return false
-	var effective_cost := rewind_cost * rewind_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(rewind_cost, rewind_cost_multiplier)
 	if not _can_pay(&"time_rewind", effective_cost):
 		return false
 	return (
@@ -1873,7 +1902,10 @@ func try_rewind(recorder: Node) -> bool:
 
 
 func can_time_rift(_rift_position: Vector2 = Vector2.ZERO) -> bool:
-	var effective_cost := time_rift_cost * time_rift_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(
+		time_rift_cost,
+		time_rift_cost_multiplier
+	)
 	var owner_entity := get_parent()
 	return (
 		owner_entity != null
@@ -1884,7 +1916,10 @@ func can_time_rift(_rift_position: Vector2 = Vector2.ZERO) -> bool:
 
 
 func try_time_rift(rift_position: Vector2) -> bool:
-	var effective_cost := time_rift_cost * time_rift_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(
+		time_rift_cost,
+		time_rift_cost_multiplier
+	)
 	if not can_time_rift(rift_position):
 		return false
 	var owner_entity := get_parent()
@@ -2018,7 +2053,10 @@ func _retire_time_rift_payload(payload_id: StringName, reason: StringName) -> Di
 
 
 func can_time_accelerate() -> bool:
-	var effective_cost := time_accelerate_cost * time_accelerate_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(
+		time_accelerate_cost,
+		time_accelerate_cost_multiplier
+	)
 	var owner_entity := get_parent()
 	if owner_entity == null:
 		return false
@@ -2028,7 +2066,10 @@ func can_time_accelerate() -> bool:
 
 
 func try_time_accelerate() -> bool:
-	var effective_cost := time_accelerate_cost * time_accelerate_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(
+		time_accelerate_cost,
+		time_accelerate_cost_multiplier
+	)
 	var effective_duration := time_accelerate_duration + time_accelerate_duration_bonus
 	var duration_frames := _seconds_to_authoritative_frames(effective_duration)
 	var authoritative_duration := _frames_to_seconds(duration_frames)
@@ -2110,6 +2151,7 @@ func reset_runtime_state(reset_frame_clock: bool = false) -> void:
 	if reset_frame_clock:
 		_last_runtime_frame = 0
 	_energy_regen_remainder = 0
+	_floor_rule_cost_multiplier = 1.0
 	energy = max_energy
 	# A full runtime reset invalidates any prepared external-resource ticket even
 	# when the numeric balance was already at maximum.
@@ -2203,7 +2245,7 @@ func restore_fixed_frame_transaction_snapshot(value: Dictionary) -> bool:
 
 
 func prepare_gameplay_rewind_settlement_context() -> Dictionary:
-	var effective_cost := rewind_cost * rewind_cost_multiplier
+	var effective_cost := _floor_rule_adjusted_cost(rewind_cost, rewind_cost_multiplier)
 	var health_component := get_parent().get_node_or_null("HealthComponent")
 	if (
 		health_component == null

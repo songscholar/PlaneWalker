@@ -58,6 +58,42 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	return _state.restore_floor_transaction_snapshot(value.duplicate(true))
 
 
+func commit_floor_rule_state(value: Dictionary, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("commit_floor_rule_state")
+	if not _state.commit_floor_rule_state(value.duplicate(true)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "floor_rule_state"}
+		)
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{"floor_rule_state": _state.floor_rule_state.duplicate(true)}
+	)
+
+
+func commit_floor_rule_observation(value: Dictionary, expected_revision: int):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("commit_floor_rule_observation")
+	if not _state.commit_floor_rule_state(value.duplicate(true)):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_state.revision,
+			{"field": "floor_rule_state"}
+		)
+	return CommandResultScript.success(
+		_state.revision,
+		{"floor_rule_state": _state.floor_rule_state.duplicate(true)}
+	)
+
+
 func reward_replay_build_snapshot() -> Dictionary:
 	return _state.reward_replay_build_snapshot().duplicate(true)
 

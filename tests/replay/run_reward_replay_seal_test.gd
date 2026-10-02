@@ -176,6 +176,14 @@ func _complete_and_select_effectful_reward(
 	suite.assert_true(finalized.ok, "%s route transition enters its selected room" % label)
 	if not finalized.ok:
 		return {}
+	var confirmed = facade.call(
+		"confirm_route_transition",
+		str(begun.context.get("transition_id", "")),
+		int(finalized.new_revision)
+	)
+	suite.assert_true(confirmed.ok, "%s route transition confirms its compensation boundary" % label)
+	if not confirmed.ok:
+		return {}
 	var entered_room: Dictionary = facade.call("current_room_definition")
 	suite.assert_equal(
 		str(entered_room.get("node_id", "")),

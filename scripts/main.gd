@@ -2,6 +2,9 @@ extends Node
 
 const DEFAULT_LOCALE := "zh_CN"
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
+const FloorRuleEffectAuthorityScript := preload(
+	"res://scripts/dungeon/floor_rule_effect_authority.gd"
+)
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -14,6 +17,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var runtime_host: Node = $RunRuntimeHost
+@onready var launch_room_scene_host: Node = $LaunchRoomSceneHost
 @onready var accessibility_runtime: Node = $AccessibilityRuntime
 @onready var input_remap_panel: Control = $InputRemapLayer/InputRemapPanel
 @onready var accessibility_settings_panel: Control = $AccessibilitySettingsLayer/AccessibilitySettingsPanel
@@ -21,10 +25,12 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 @onready var launch_loadout_panel: Control = $LaunchLoadoutLayer/LaunchLoadoutPanel
 
 var _lang_button: Button
+var _floor_rule_effect_authority: RefCounted
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_configure_launch_dungeon_runtime()
 	_apply_locale()
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
@@ -43,6 +49,26 @@ func _ready() -> void:
 	_show_start_menu()
 	call_deferred("_apply_accessibility_to_runtime")
 	_print_input_map()
+
+
+func _configure_launch_dungeon_runtime() -> void:
+	_floor_rule_effect_authority = FloorRuleEffectAuthorityScript.new()
+	var player := combat_room.get_node_or_null("Player")
+	var authority_configured := bool(_floor_rule_effect_authority.call(
+		"configure", player, launch_room_scene_host
+	))
+	var route_adapter_configured := bool(runtime_host.call(
+		"configure_route_scene_adapter", launch_room_scene_host
+	))
+	var effect_authority_configured := bool(runtime_host.call(
+		"configure_floor_rule_effect_authority", _floor_rule_effect_authority
+	))
+	if (
+		not authority_configured
+		or not route_adapter_configured
+		or not effect_authority_configured
+	):
+		push_error("Launch dungeon runtime configuration failed")
 
 
 func _apply_locale() -> void:

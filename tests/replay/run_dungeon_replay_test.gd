@@ -5,6 +5,9 @@ const ContentRegistryScript := preload("res://scripts/content/content_registry.g
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const CrumblingGroundRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
+)
 
 const SEAL_PATH := "res://scripts/replay/run_dungeon_replay_seal.gd"
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
@@ -52,6 +55,13 @@ class DriftRegistry:
 		availability: StringName = &""
 	) -> Array[Dictionary]:
 		return base.call("get_by_category", category, availability)
+
+
+class AcceptingFloorRuleEffectAuthority:
+	extends RefCounted
+
+	func commit_floor_rule_effects(_facts: Array) -> bool:
+		return true
 
 
 func _ready() -> void:
@@ -149,7 +159,7 @@ func _run() -> void:
 		suite.finish(get_tree())
 		return
 	suite.assert_equal(snapshot.get("schema_id"), "planewalker.run_dungeon_replay", "seal owns schema id")
-	suite.assert_equal(snapshot.get("schema_version"), 1, "seal owns schema version")
+	suite.assert_equal(snapshot.get("schema_version"), 2, "seal owns schema version")
 	suite.assert_equal(snapshot.get("generator_version"), "floor_plan_v1", "seal owns generator version")
 	suite.assert_equal(snapshot.get("plan_digest"), plan.get("generation_digest"), "seal owns plan digest")
 	suite.assert_equal(snapshot.get("route_prefix"), route_prefix, "seal owns route prefix")
@@ -168,6 +178,10 @@ func _run() -> void:
 	)
 	suite.assert_true(bool(valid.get("ok", false)), "valid dungeon Replay seal verifies")
 	suite.assert_equal(valid.get("snapshot"), snapshot, "validation returns byte-identical historical snapshot")
+	_test_floor_rule_replay_round_trip(
+		suite, seal, registry, plan, route_prefix, room_facts,
+		economy_ledger, event_resolutions, floor_transitions
+	)
 
 	var forged_plan := _resigned_plan_with_reordered_siblings(plan)
 	suite.assert_true(not forged_plan.is_empty(), "forged-plan fixture can alter canonical generation bytes")
@@ -446,6 +460,52 @@ func _assert_rejected(
 	)
 	suite.assert_equal(result.get("ok"), false, "%s fails closed" % label)
 	suite.assert_equal(result.get("code"), expected_code, "%s reports stable code" % label)
+
+
+func _test_floor_rule_replay_round_trip(
+	suite,
+	seal: RefCounted,
+	registry: RefCounted,
+	plan: Dictionary,
+	route_prefix: Array,
+	room_facts: Array,
+	economy_ledger: Array,
+	event_resolutions: Array,
+	floor_transitions: Array
+) -> void:
+	var runtime: RefCounted = CrumblingGroundRuleScript.new()
+	var configured: Dictionary = runtime.call("configure", {
+		"room_id": str(plan.get("current_node_id", "")),
+		"room_seed": 20261002,
+		"zones": [
+			{"id": "hazard_west", "bounds": {"x": 32.0, "y": 48.0, "width": 160.0, "height": 120.0}},
+			{"id": "safe_core", "bounds": {"x": 224.0, "y": 96.0, "width": 192.0, "height": 168.0}},
+		],
+		"safe_zone_ids": ["safe_core"],
+		"reduced_motion": false,
+		"hit_flash_enabled": true,
+	}, AcceptingFloorRuleEffectAuthority.new())
+	suite.assert_true(bool(configured.get("ok", false)), "Replay floor-rule fixture configures")
+	var advanced: Dictionary = runtime.call("advance_frame", 0)
+	suite.assert_true(bool(advanced.get("ok", false)), "Replay floor-rule fixture advances")
+	var floor_rule_state: Dictionary = runtime.call("snapshot")
+	var sealed: Dictionary = seal.call(
+		"capture", registry, plan, route_prefix, room_facts,
+		economy_ledger, event_resolutions, floor_transitions, floor_rule_state
+	)
+	suite.assert_true(not sealed.is_empty(), "dungeon Replay seals floor-rule state")
+	var valid: Dictionary = seal.call(
+		"validate", sealed, registry, plan, economy_ledger, event_resolutions,
+		floor_rule_state
+	)
+	suite.assert_true(bool(valid.get("ok", false)), "sealed floor-rule state validates")
+	var drifted := floor_rule_state.duplicate(true)
+	drifted["runtime_frame"] = int(drifted["runtime_frame"]) + 1
+	var rejected: Dictionary = seal.call(
+		"validate", sealed, registry, plan, economy_ledger, event_resolutions,
+		drifted
+	)
+	suite.assert_equal(rejected.get("code"), &"FLOOR_RULE_STATE_DRIFT", "Replay rejects floor-rule frame drift")
 
 
 func _test_later_floor_transition_authority(

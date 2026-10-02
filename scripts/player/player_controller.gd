@@ -265,6 +265,7 @@ var _reward_effect_publication_active: bool = false
 var _reward_effect_publication_in_progress: bool = false
 var _reward_effect_pending_health_signal: Dictionary = {}
 var _reward_effect_pending_time_signal: Dictionary = {}
+var _floor_rule_modifiers: Dictionary = {}
 var active_item_runtime: RefCounted = ActiveItemRuntimeScript.new()
 var _active_item_last_activation: Dictionary = {}
 var _active_item_last_events: Array[Dictionary] = []
@@ -1878,7 +1879,7 @@ func _apply_frame_movement(input_vector: Vector2) -> void:
 		_last_move_direction = input_vector.normalized()
 
 	if action_state.current_state == PlayerActionStateScript.State.DASH:
-		velocity = _dash_velocity + _knockback_velocity
+		velocity = _dash_velocity * _floor_rule_movement_multiplier() + _knockback_velocity
 	else:
 		velocity = input_vector * stats.move_speed * _time_acceleration_multiplier * get_action_movement_multiplier() + _knockback_velocity
 	var remaining_motion := velocity * FIXED_FRAME_SECONDS
@@ -2381,6 +2382,7 @@ func reset_runtime_state() -> bool:
 	_knockback_velocity = Vector2.ZERO
 	velocity = Vector2.ZERO
 	_last_move_direction = Vector2.RIGHT
+	_floor_rule_modifiers.clear()
 	if weapon_action_coordinator != null:
 		weapon_action_coordinator.reset_runtime_state(&"player_runtime_reset")
 		_capture_next_weapon_action_token_floor()
@@ -3233,17 +3235,165 @@ func _restore_rewind_run_configuration_snapshot(value: Dictionary) -> bool:
 
 func get_action_movement_multiplier() -> float:
 	var character_multiplier := _character_movement_multiplier()
+	var floor_rule_multiplier := _floor_rule_movement_multiplier()
 	if weapon_action_coordinator != null and weapon_action_coordinator.phase_name() != &"READY":
-		return weapon_action_coordinator.movement_multiplier() * character_multiplier
+		return (
+			weapon_action_coordinator.movement_multiplier()
+			* character_multiplier
+			* floor_rule_multiplier
+		)
 	match action_state.current_state:
 		PlayerActionStateScript.State.DASH:
-			return float(_mobility_profile["dash_speed"]) / maxf(1.0, float(stats.move_speed))
+			return (
+				float(_mobility_profile["dash_speed"])
+				/ maxf(1.0, float(stats.move_speed))
+				* floor_rule_multiplier
+			)
 		PlayerActionStateScript.State.TIME_CAST:
-			return TIME_CAST_MOVEMENT_MULTIPLIER * character_multiplier
+			return TIME_CAST_MOVEMENT_MULTIPLIER * character_multiplier * floor_rule_multiplier
 		PlayerActionStateScript.State.HITSTUN, PlayerActionStateScript.State.DEAD:
 			return 0.0
 		_:
-			return character_multiplier
+			return character_multiplier * floor_rule_multiplier
+
+
+func floor_rule_effect_snapshot() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"modifiers": _floor_rule_modifiers.duplicate(true),
+	}
+
+
+func restore_floor_rule_effect_snapshot(value: Dictionary) -> bool:
+	if not _valid_floor_rule_effect_snapshot(value):
+		return false
+	var before := _floor_rule_modifiers.duplicate(true)
+	_floor_rule_modifiers = (value["modifiers"] as Dictionary).duplicate(true)
+	if (
+		_sync_floor_rule_time_cost_multiplier()
+		and floor_rule_effect_snapshot() == value
+	):
+		return true
+	_floor_rule_modifiers = before
+	if not _sync_floor_rule_time_cost_multiplier():
+		push_error("Floor-rule modifier rollback failed")
+	return false
+
+
+func apply_floor_rule_modifier(
+	source_id: StringName,
+	modifier_id: StringName,
+	operation: StringName,
+	values: Dictionary
+) -> bool:
+	if source_id == &"" or modifier_id == &"" or operation not in [&"apply", &"remove"]:
+		return false
+	var key := "%s|%s" % [str(source_id), str(modifier_id)]
+	var before := _floor_rule_modifiers.duplicate(true)
+	if operation == &"remove":
+		if not values.is_empty():
+			return false
+		_floor_rule_modifiers.erase(key)
+	else:
+		if not _valid_floor_rule_modifier_values(values):
+			return false
+		_floor_rule_modifiers[key] = {
+			"source_id": str(source_id),
+			"modifier_id": str(modifier_id),
+			"values": values.duplicate(true),
+		}
+	if _sync_floor_rule_time_cost_multiplier():
+		return true
+	_floor_rule_modifiers = before
+	if not _sync_floor_rule_time_cost_multiplier():
+		push_error("Floor-rule modifier apply rollback failed")
+	return false
+
+
+func _valid_floor_rule_effect_snapshot(value: Dictionary) -> bool:
+	if not _dictionary_has_exact_fields(value, ["schema_version", "modifiers"]):
+		return false
+	if typeof(value["schema_version"]) != TYPE_INT or int(value["schema_version"]) != 1:
+		return false
+	if not value["modifiers"] is Dictionary:
+		return false
+	for key_value: Variant in (value["modifiers"] as Dictionary).keys():
+		if typeof(key_value) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			return false
+		var entry_value: Variant = (value["modifiers"] as Dictionary)[key_value]
+		if not entry_value is Dictionary:
+			return false
+		var entry := entry_value as Dictionary
+		if not _dictionary_has_exact_fields(entry, ["source_id", "modifier_id", "values"]):
+			return false
+		var source_id := StringName(str(entry["source_id"]))
+		var modifier_id := StringName(str(entry["modifier_id"]))
+		if (
+			source_id == &""
+			or modifier_id == &""
+			or str(key_value) != "%s|%s" % [str(source_id), str(modifier_id)]
+			or not entry["values"] is Dictionary
+			or not _valid_floor_rule_modifier_values(entry["values"] as Dictionary)
+		):
+			return false
+	return true
+
+
+func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
+	if values.is_empty():
+		return false
+	for key_value: Variant in values.keys():
+		if str(key_value) not in [
+			"movement_multiplier",
+			"time_cost_multiplier",
+			"zone_locked",
+			"safe_area_required",
+		]:
+			return false
+	if values.has("movement_multiplier"):
+		var movement_value: Variant = values["movement_multiplier"]
+		if (
+			typeof(movement_value) not in [TYPE_INT, TYPE_FLOAT]
+			or not is_finite(float(movement_value))
+			or float(movement_value) < 0.0
+		):
+			return false
+	if values.has("time_cost_multiplier"):
+		var time_value: Variant = values["time_cost_multiplier"]
+		if (
+			typeof(time_value) not in [TYPE_INT, TYPE_FLOAT]
+			or not is_finite(float(time_value))
+			or float(time_value) <= 0.0
+		):
+			return false
+	for field: String in ["zone_locked", "safe_area_required"]:
+		if values.has(field) and typeof(values[field]) != TYPE_BOOL:
+			return false
+	return true
+
+
+func _floor_rule_movement_multiplier() -> float:
+	var multiplier := 1.0
+	for entry_value: Variant in _floor_rule_modifiers.values():
+		if not entry_value is Dictionary:
+			continue
+		var values := (entry_value as Dictionary).get("values", {}) as Dictionary
+		if bool(values.get("zone_locked", false)):
+			return 0.0
+		multiplier *= float(values.get("movement_multiplier", 1.0))
+	return multiplier
+
+
+func _sync_floor_rule_time_cost_multiplier() -> bool:
+	if time_manager == null or not time_manager.has_method("set_floor_rule_cost_multiplier"):
+		return false
+	var multiplier := 1.0
+	for entry_value: Variant in _floor_rule_modifiers.values():
+		if not entry_value is Dictionary:
+			return false
+		var values := (entry_value as Dictionary).get("values", {}) as Dictionary
+		multiplier *= float(values.get("time_cost_multiplier", 1.0))
+	return bool(time_manager.call("set_floor_rule_cost_multiplier", multiplier))
 
 
 func _character_movement_multiplier() -> float:

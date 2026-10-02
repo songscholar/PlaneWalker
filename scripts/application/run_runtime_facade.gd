@@ -20,6 +20,22 @@ const RoomTemplateDefinitionScript := preload(
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 const RoomRuntimeScript := preload("res://scripts/dungeon/room_runtime.gd")
 const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
+const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
+const CrumblingGroundRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
+)
+const VoidSporesRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/void_spores_rule.gd"
+)
+const TemporalDistortionRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/temporal_distortion_rule.gd"
+)
+const ForgeVentsRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/forge_vents_rule.gd"
+)
+const CollapsingPlaneRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/collapsing_plane_rule.gd"
+)
 
 const GAME_VERSION := "0.4.0-dev"
 const DEFAULT_CONTENT_PATH := "res://data/content_packs/base/pack.json"
@@ -40,6 +56,8 @@ var _director: Node
 var _floor_definitions: Array[Dictionary] = []
 var _room_templates: Array[Dictionary] = []
 var _route_transactions: Dictionary = {}
+var _floor_rule_runtime: RefCounted
+var _floor_rule_effect_authority: Variant = null
 
 
 func _notification(what: int) -> void:
@@ -71,6 +89,8 @@ func boot(
 	_floor_definitions.clear()
 	_room_templates.clear()
 	_route_transactions.clear()
+	_floor_rule_runtime = null
+	_floor_rule_effect_authority = null
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -183,6 +203,8 @@ func start_run(config: Dictionary, run_id: String):
 	_selection_reservations.clear()
 	_last_atomic_transition_revision = -1
 	_route_transactions.clear()
+	_floor_rule_runtime = null
+	_floor_rule_effect_authority = null
 	return accepted_result
 
 
@@ -195,7 +217,11 @@ func start_next_floor():
 			&"INVALID_ARGUMENT", _revision(), {"operation": "start_next_floor"}
 		)
 	var completed: Array = _orchestrator.snapshot().get("completed_floor_ids", [])
-	return _start_floor_at(completed.size())
+	var started = _start_floor_at(completed.size())
+	if started.ok:
+		_floor_rule_runtime = null
+		_floor_rule_effect_authority = null
+	return started
 
 
 func route_choices() -> Array[Dictionary]:
@@ -250,6 +276,10 @@ func begin_route_transition(edge_id: StringName, expected_revision: int):
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT", _revision(), {"operation": "begin_route_transition"}
 		)
+	if not _route_transactions.is_empty():
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "begin_route_transition"}
+		)
 	var before: Dictionary = _orchestrator.floor_transaction_snapshot()
 	var begun = _orchestrator.begin_route_transition(edge_id, expected_revision)
 	if not begun.ok:
@@ -259,9 +289,13 @@ func begin_route_transition(edge_id: StringName, expected_revision: int):
 		"before": before.duplicate(true),
 		"edge_id": str(edge_id),
 		"node_id": str(begun.context.get("node_id", "")),
+		"stage": "begun",
+		"floor_rule_runtime": _floor_rule_runtime,
+		"floor_rule_effect_authority": _floor_rule_effect_authority,
 	}
 	var context: Dictionary = begun.context.duplicate(true)
 	context["target"] = current_room_definition()
+	context["scene_context"] = _scene_context_for_target(context["target"] as Dictionary)
 	return CommandResultScript.success(begun.new_revision, context)
 
 
@@ -274,6 +308,10 @@ func finalize_route_transition(transition_id: String, expected_revision: int):
 			&"INVALID_ARGUMENT", _revision(), {"field": "transition_id"}
 		)
 	var reservation: Dictionary = _route_transactions[transition_id]
+	if str(reservation.get("stage", "")) != "begun":
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "finalize_route_transition"}
+		)
 	var finalized = _orchestrator.finalize_route_transition(
 		transition_id, expected_revision
 	)
@@ -298,7 +336,9 @@ func finalize_route_transition(transition_id: String, expected_revision: int):
 		return CommandResultScript.failure(
 			entered.code, _revision(), failure_context, entered.message_key
 		)
-	_route_transactions.erase(transition_id)
+	reservation["stage"] = "finalized"
+	reservation["final_revision"] = int(entered.new_revision)
+	_route_transactions[transition_id] = reservation
 	var context: Dictionary = finalized.context.duplicate(true)
 	context["target"] = target.duplicate(true)
 	context["enter_revision"] = int(entered.new_revision)
@@ -313,12 +353,207 @@ func rollback_route_transition(transition_id: String, expected_revision: int):
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT", _revision(), {"field": "transition_id"}
 		)
-	var rolled_back = _orchestrator.rollback_route_transition(
-		transition_id, expected_revision
-	)
+	if expected_revision != _revision():
+		return CommandResultScript.failure(
+			&"STALE_REVISION",
+			_revision(),
+			{"received_revision": expected_revision, "last_revision": _revision()}
+		)
+	var reservation: Dictionary = _route_transactions[transition_id]
+	var rolled_back = null
+	if str(reservation.get("stage", "")) == "begun":
+		rolled_back = _orchestrator.rollback_route_transition(
+			transition_id, expected_revision
+		)
+	else:
+		var before: Dictionary = reservation.get("before", {}).duplicate(true)
+		if not _orchestrator.restore_floor_transaction_snapshot(before):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_finalized_rollback", "transition_id": transition_id}
+			)
+		rolled_back = CommandResultScript.success(
+			_revision(), {"transition_id": transition_id, "rolled_back": true}
+		)
 	if rolled_back.ok:
+		_floor_rule_runtime = reservation.get("floor_rule_runtime") as RefCounted
+		_floor_rule_effect_authority = reservation.get("floor_rule_effect_authority")
 		_route_transactions.erase(transition_id)
 	return rolled_back
+
+
+func confirm_route_transition(transition_id: String, expected_revision: int):
+	var readiness = _require_booted("confirm_route_transition")
+	if not readiness.ok:
+		return readiness
+	var preflight = can_confirm_route_transition(transition_id, expected_revision)
+	if not preflight.ok:
+		return preflight
+	_route_transactions.erase(transition_id)
+	if _orchestrator.snapshot().get("floor_rule_state", {}).is_empty():
+		_floor_rule_runtime = null
+		_floor_rule_effect_authority = null
+	return CommandResultScript.success(
+		_revision(), {"transition_id": transition_id, "confirmed": true}
+	)
+
+
+func can_confirm_route_transition(transition_id: String, expected_revision: int):
+	var readiness = _require_booted("can_confirm_route_transition")
+	if not readiness.ok:
+		return readiness
+	if expected_revision != _revision():
+		return CommandResultScript.failure(
+			&"STALE_REVISION",
+			_revision(),
+			{"received_revision": expected_revision, "last_revision": _revision()}
+		)
+	if not _route_transactions.has(transition_id):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "transition_id"}
+		)
+	var reservation: Dictionary = _route_transactions[transition_id]
+	if str(reservation.get("stage", "")) != "finalized":
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "confirm_route_transition"}
+		)
+	return CommandResultScript.success(
+		_revision(), {"transition_id": transition_id, "confirmable": true}
+	)
+
+
+func configure_floor_rule(
+	rule_id: StringName,
+	configuration: Dictionary,
+	effect_authority: Variant,
+	expected_revision: int
+):
+	var readiness = _require_booted("configure_floor_rule")
+	if not readiness.ok:
+		return readiness
+	if expected_revision != _revision():
+		return CommandResultScript.failure(
+			&"STALE_REVISION",
+			_revision(),
+			{"received_revision": expected_revision, "last_revision": _revision()}
+		)
+	if not (_orchestrator.snapshot().get("floor_rule_state", {}) as Dictionary).is_empty():
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "configure_floor_rule"}
+		)
+	var runtime := _new_floor_rule_runtime(rule_id)
+	if runtime == null:
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "rule_id", "rule_id": str(rule_id)}
+		)
+	var configured: Dictionary = runtime.call(
+		"configure", configuration.duplicate(true), effect_authority
+	)
+	if not bool(configured.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(configured.get("code", &"INVALID_ARGUMENT"))),
+			_revision(),
+			(configured.get("context", {}) as Dictionary).duplicate(true)
+		)
+	var committed = _orchestrator.commit_floor_rule_state(
+		(configured.get("snapshot", {}) as Dictionary).duplicate(true), expected_revision
+	)
+	if not committed.ok:
+		return committed
+	_floor_rule_runtime = runtime
+	_floor_rule_effect_authority = effect_authority
+	return committed
+
+
+func advance_floor_rule_frame(
+	runtime_frame: int,
+	context: Dictionary,
+	expected_revision: int
+):
+	var readiness = _require_booted("advance_floor_rule_frame")
+	if not readiness.ok:
+		return readiness
+	if expected_revision != _revision():
+		return CommandResultScript.failure(
+			&"STALE_REVISION",
+			_revision(),
+			{"received_revision": expected_revision, "last_revision": _revision()}
+		)
+	if _floor_rule_runtime == null:
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "advance_floor_rule_frame"}
+		)
+	var before: Dictionary = _floor_rule_runtime.call("snapshot")
+	if before != _orchestrator.snapshot().get("floor_rule_state", {}):
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(), {"stage": "floor_rule_runtime_drift"}
+		)
+	var advanced: Dictionary = _floor_rule_runtime.call(
+		"advance_frame", runtime_frame, context.duplicate(true)
+	)
+	if not bool(advanced.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(advanced.get("code", &"INVALID_ARGUMENT"))),
+			_revision(),
+			(advanced.get("context", {}) as Dictionary).duplicate(true)
+		)
+	var committed = _orchestrator.commit_floor_rule_observation(
+		(advanced.get("snapshot", {}) as Dictionary).duplicate(true), expected_revision
+	)
+	if not committed.ok:
+		_floor_rule_runtime.call("restore_snapshot", before)
+		return committed
+	var result_context: Dictionary = committed.context.duplicate(true)
+	result_context["facts"] = (advanced.get("facts", []) as Array).duplicate(true)
+	result_context["presentation"] = (advanced.get("presentation", []) as Array).duplicate(true)
+	return CommandResultScript.success(committed.new_revision, result_context)
+
+
+func restore_floor_rule_snapshot(
+	value: Dictionary,
+	effect_authority: Variant,
+	expected_revision: int
+):
+	var readiness = _require_booted("restore_floor_rule_snapshot")
+	if not readiness.ok:
+		return readiness
+	if expected_revision != _revision():
+		return CommandResultScript.failure(
+			&"STALE_REVISION", _revision(),
+			{"received_revision": expected_revision, "last_revision": _revision()}
+		)
+	for field: String in ["rule_id", "room_id", "room_seed", "zones", "safe_zone_ids", "reduced_motion", "hit_flash_enabled"]:
+		if not value.has(field):
+			return CommandResultScript.failure(
+				&"INVALID_ARGUMENT", _revision(), {"field": "floor_rule_state.%s" % field}
+			)
+	if not value["zones"] is Array or not value["safe_zone_ids"] is Array:
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "floor_rule_state"}
+		)
+	var runtime := _new_floor_rule_runtime(StringName(str(value.get("rule_id", ""))))
+	if runtime == null:
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "rule_id"})
+	var configuration := {
+		"room_id": value.get("room_id"),
+		"room_seed": value.get("room_seed"),
+		"zones": (value.get("zones", []) as Array).duplicate(true),
+		"safe_zone_ids": (value.get("safe_zone_ids", []) as Array).duplicate(),
+		"reduced_motion": value.get("reduced_motion"),
+		"hit_flash_enabled": value.get("hit_flash_enabled"),
+	}
+	var configured: Dictionary = runtime.call("configure", configuration, effect_authority)
+	if not bool(configured.get("ok", false)) or not bool(runtime.call("restore_snapshot", value.duplicate(true))):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "floor_rule_state"}
+		)
+	var committed = _orchestrator.commit_floor_rule_state(value.duplicate(true), expected_revision)
+	if not committed.ok:
+		return committed
+	_floor_rule_runtime = runtime
+	_floor_rule_effect_authority = effect_authority
+	return committed
 
 
 func enter_current_room():
@@ -350,6 +585,10 @@ func complete_current_room():
 		return readiness
 	if _orchestrator.is_terminal():
 		return CommandResultScript.failure(&"TERMINAL_STATE", _revision())
+	if not _route_transactions.is_empty():
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "complete_current_room"}
+		)
 
 	var room := current_room_definition()
 	if _is_floor_plan_run():
@@ -373,6 +612,9 @@ func complete_current_room():
 			},
 			completed.new_revision
 		)
+		if floor_completed.ok:
+			_floor_rule_runtime = null
+			_floor_rule_effect_authority = null
 		return floor_completed
 	if str(room.get("type", "")) == "boss":
 		return CommandResultScript.failure(
@@ -935,3 +1177,45 @@ func _active_phase_for_room_type(room_type: String) -> int:
 	if room_type == "combat" or room_type == "elite":
 		return RunPhaseScript.Value.COMBAT_ACTIVE
 	return RunPhaseScript.Value.ROOM_ACTIVE
+
+
+func _new_floor_rule_runtime(rule_id: StringName) -> RefCounted:
+	match str(rule_id):
+		"rule_crumbling_ground":
+			return CrumblingGroundRuleScript.new()
+		"rule_void_spores":
+			return VoidSporesRuleScript.new()
+		"rule_temporal_distortion":
+			return TemporalDistortionRuleScript.new()
+		"rule_forge_vents":
+			return ForgeVentsRuleScript.new()
+		"rule_collapsing_plane":
+			return CollapsingPlaneRuleScript.new()
+	return null
+
+
+func _scene_context_for_target(target: Dictionary) -> Dictionary:
+	if target.is_empty() or _orchestrator == null:
+		return {}
+	var state: Dictionary = _orchestrator.snapshot()
+	var floor_index := int(state.get("current_floor_index", -1))
+	if floor_index < 0 or floor_index >= _floor_definitions.size():
+		return {}
+	var floor: Dictionary = _floor_definitions[floor_index]
+	var node_id := str(target.get("node_id", ""))
+	var floor_id := str(floor.get("id", ""))
+	if node_id.is_empty() or floor_id.is_empty():
+		return {}
+	return {
+		"floor_id": floor_id,
+		"palette_id": str(floor.get("palette_id", "")),
+		"environment_rule_id": str(floor.get("environment_rule_id", "")),
+		"room_seed": SeedServiceScript.derive_node_seed(
+			int(state.get("run_seed", 0)),
+			StringName(floor_id),
+			StringName(node_id),
+			&"room_scene"
+		),
+		"reduced_motion": false,
+		"hit_flash_enabled": true,
+	}

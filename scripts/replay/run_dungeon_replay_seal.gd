@@ -14,7 +14,7 @@ const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 
 const SCHEMA_ID := "planewalker.run_dungeon_replay"
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 2
 const SUPPORTED_GENERATOR_VERSIONS: Array[String] = ["floor_plan_v1"]
 const SNAPSHOT_FIELDS: Array[String] = [
 	"schema_id",
@@ -27,6 +27,7 @@ const SNAPSHOT_FIELDS: Array[String] = [
 	"room_facts",
 	"economy_ledger_digest",
 	"event_resolution_digest",
+	"floor_rule_state_digest",
 	"floor_transitions",
 	"snapshot_digest",
 ]
@@ -65,7 +66,8 @@ func capture(
 	room_fact_inputs: Array,
 	economy_ledger: Array,
 	event_resolutions: Array,
-	floor_transitions: Array
+	floor_transitions: Array,
+	floor_rule_state: Dictionary = {}
 ) -> Dictionary:
 	var content_snapshot := ContentSnapshotProviderScript.snapshot(registry)
 	if content_snapshot.is_empty():
@@ -86,7 +88,13 @@ func capture(
 	var event_digest := _event_resolution_digest(
 		registry, floor_plan, route_prefix, event_resolutions
 	)
-	if not _is_sha256(economy_digest) or not _is_sha256(event_digest):
+	var floor_rule_digest := ReplayRecorderScript.value_digest(floor_rule_state)
+	if (
+		not _is_sha256(economy_digest)
+		or not _is_sha256(event_digest)
+		or not _is_sha256(floor_rule_digest)
+		or not ReplaySafeValueScript.is_supported(floor_rule_state)
+	):
 		return {}
 	var transition_result := _expected_floor_transitions(floor_plan, plan_validation)
 	if (
@@ -108,6 +116,7 @@ func capture(
 		"room_facts": (room_result["facts"] as Array).duplicate(true),
 		"economy_ledger_digest": economy_digest,
 		"event_resolution_digest": event_digest,
+		"floor_rule_state_digest": floor_rule_digest,
 		"floor_transitions": floor_transitions.duplicate(true),
 	}
 	result["snapshot_digest"] = snapshot_digest(result)
@@ -119,7 +128,8 @@ func validate(
 	registry: Variant,
 	floor_plan: Dictionary,
 	economy_ledger: Array,
-	event_resolutions: Array
+	event_resolutions: Array,
+	floor_rule_state: Dictionary = {}
 ) -> Dictionary:
 	if not _has_exact_fields(value, SNAPSHOT_FIELDS):
 		return _failure(&"INVALID_FIELDS")
@@ -143,6 +153,7 @@ func validate(
 		or not _is_sha256(value["plan_digest"])
 		or not _is_sha256(value["economy_ledger_digest"])
 		or not _is_sha256(value["event_resolution_digest"])
+		or not _is_sha256(value["floor_rule_state_digest"])
 	):
 		return _failure(&"INVALID_SHAPE")
 	var generator_version := str(value["generator_version"])
@@ -188,6 +199,12 @@ func validate(
 		return _failure(&"EVENT_RESOLUTION_INVALID")
 	if event_digest != str(value["event_resolution_digest"]):
 		return _failure(&"EVENT_RESOLUTION_DRIFT")
+	if (
+		not ReplaySafeValueScript.is_supported(floor_rule_state)
+		or ReplayRecorderScript.value_digest(floor_rule_state)
+		!= str(value["floor_rule_state_digest"])
+	):
+		return _failure(&"FLOOR_RULE_STATE_DRIFT")
 	var transition_result := _expected_floor_transitions(floor_plan, plan_validation)
 	if (
 		not bool(transition_result.get("ok", false))
@@ -299,9 +316,6 @@ func _authority_bundle(registry: Variant) -> Dictionary:
 			(floor_result.get("definition", {}) as Dictionary).duplicate(true)
 		)
 	var templates: Array[Dictionary] = []
-	for template_value: Variant in templates:
-		if not template_value is Dictionary:
-			return _failure(&"PLAN_INVALID")
 	var template_ids: Dictionary = {}
 	for template_value: Variant in templates_value as Array:
 		var template_source := _closed_definition(

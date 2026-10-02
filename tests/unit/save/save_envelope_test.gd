@@ -7,11 +7,21 @@ const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
+const CrumblingGroundRuleScript := preload(
+	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
+)
 const PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v3.json"
 const HISTORICAL_PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v2.json"
 const SNAPSHOT_FIXTURE_PATH := "res://tests/fixtures/save/pack_snapshots/base_a.json"
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
+
+
+class AcceptingFloorRuleEffectAuthority:
+	extends RefCounted
+
+	func commit_floor_rule_effects(_facts: Array) -> bool:
+		return true
 
 
 func _ready() -> void:
@@ -32,6 +42,7 @@ func _run() -> void:
 	_test_native_v3_active_run_round_trip(suite)
 	_test_completed_floor_active_run_round_trip(suite)
 	_test_native_v3_active_run_validation_fails_closed(suite)
+	_test_native_v3_floor_rule_phase_frame_validation_fails_closed(suite)
 	_test_settings_envelope_round_trip(suite)
 	_test_settings_v1_backward_compatibility(suite)
 	_test_accessibility_settings_validation(suite)
@@ -396,6 +407,55 @@ func _test_native_v3_active_run_validation_fails_closed(suite) -> void:
 	)
 
 
+func _test_native_v3_floor_rule_phase_frame_validation_fails_closed(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var plan := _generated_floor_plan()
+	if fixture.is_empty() or plan.is_empty():
+		return
+	var active_run := _active_run_fixture("LAUNCH", plan)
+	var floor_rule_state := _configured_floor_rule_snapshot(plan)
+	suite.assert_true(not floor_rule_state.is_empty(), "canonical floor-rule fixture configures")
+	if floor_rule_state.is_empty():
+		return
+	active_run["floor_rule_state"] = floor_rule_state
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 18, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:30:00Z",
+		fixture.get("content_snapshot", {}),
+		{"active_run_state": active_run}
+	)
+	suite.assert_true(created.ok, "canonical floor-rule Save fixture creates")
+	if not created.ok:
+		return
+	var canonical = SaveEnvelopeScript.validate(created.payload, &"profile", "slot_1", "base")
+	suite.assert_true(canonical.ok, "canonical floor-rule Save fixture validates after JSON sealing")
+	if not canonical.ok:
+		return
+	for mutation: Dictionary in [
+		{
+			"label": "phase does not match runtime frame",
+			"mutate": func(state: Dictionary): state["phase"] = "warning",
+		},
+		{
+			"label": "runtime frame does not match phase",
+			"mutate": func(state: Dictionary): state["runtime_frame"] = 0,
+		},
+	]:
+		var candidate: Dictionary = canonical.payload.duplicate(true)
+		var state := (
+			candidate["payload"]["active_run_state"]["floor_rule_state"] as Dictionary
+		)
+		(mutation["mutate"] as Callable).call(state)
+		_resign(candidate)
+		var result = SaveEnvelopeScript.validate(candidate, &"profile", "slot_1", "base")
+		suite.assert_equal(result.code, &"CORRUPT", "%s fails closed" % mutation["label"])
+		suite.assert_equal(
+			result.metadata.get("field"),
+			"payload.active_run_state.floor_rule_state",
+			"%s identifies the floor-rule boundary" % mutation["label"]
+		)
+
+
 func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionary:
 	var floor_index := int(floor_plan.get("floor_index", -1))
 	var selected_count := (floor_plan.get("selected_edge_ids", []) as Array).size()
@@ -426,6 +486,26 @@ func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionar
 		"merchant_state": {},
 		"floor_rule_state": {},
 	}
+
+
+func _configured_floor_rule_snapshot(plan: Dictionary) -> Dictionary:
+	var runtime = CrumblingGroundRuleScript.new()
+	var configured: Dictionary = runtime.configure({
+		"room_id": str(plan.get("current_node_id", "")),
+		"room_seed": 20261001,
+		"zones": [
+			{"id": "safe", "bounds": {"x": 16.0, "y": 16.0, "width": 96.0, "height": 72.0}},
+			{"id": "hazard_a", "bounds": {"x": 160.0, "y": 96.0, "width": 96.0, "height": 72.0}},
+			{"id": "hazard_b", "bounds": {"x": 320.0, "y": 192.0, "width": 96.0, "height": 72.0}},
+		],
+		"safe_zone_ids": ["safe"],
+		"reduced_motion": false,
+		"hit_flash_enabled": true,
+	}, AcceptingFloorRuleEffectAuthority.new())
+	if not bool(configured.get("ok", false)):
+		return {}
+	var advanced: Dictionary = runtime.advance_frame(45, {"target_ids": ["player"]})
+	return (advanced.get("snapshot", {}) as Dictionary).duplicate(true)
 
 
 func _generated_floor_plan() -> Dictionary:

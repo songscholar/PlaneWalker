@@ -67,6 +67,22 @@ const FLOOR_TRANSACTION_FIELDS: Array[String] = [
 	"floor_definition",
 	"room_templates",
 ]
+const FLOOR_RULE_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version",
+	"rule_id",
+	"configured",
+	"room_id",
+	"room_seed",
+	"zones",
+	"safe_zone_ids",
+	"runtime_frame",
+	"phase",
+	"cycle_index",
+	"active_zone_id",
+	"revision",
+	"reduced_motion",
+	"hit_flash_enabled",
+]
 
 
 func _init() -> void:
@@ -252,12 +268,35 @@ func select_floor_edge(edge_id: StringName) -> Dictionary:
 		return selected.duplicate(true)
 	floor_plan = candidate.snapshot()
 	current_room = (floor_plan["selected_edge_ids"] as Array).size()
+	floor_rule_state = {}
 	return {
 		"ok": true,
 		"new_revision": int(selected.get("new_revision", -1)),
 		"node_id": StringName(str(selected.get("node_id", ""))),
 		"plan": floor_plan.duplicate(true),
 	}
+
+
+func can_commit_floor_rule_state(value: Dictionary) -> bool:
+	var current_node := current_floor_node()
+	return (
+		not current_node.is_empty()
+		and not bool(current_node.get("cleared", false))
+		and _floor_rule_state_matches_context(
+			value, floor_plan, _floor_definition, current_node, phase
+		)
+	)
+
+
+func commit_floor_rule_state(value: Dictionary) -> bool:
+	if not can_commit_floor_rule_state(value):
+		return false
+	floor_rule_state = value.duplicate(true)
+	return true
+
+
+func clear_floor_rule_state() -> void:
+	floor_rule_state = {}
 
 
 func complete_current_floor_node(node_id: String) -> Dictionary:
@@ -301,6 +340,7 @@ func append_completed_floor() -> bool:
 	):
 		return false
 	completed_floor_ids.append(floor_id)
+	floor_rule_state = {}
 	return true
 
 
@@ -431,10 +471,20 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	var current_node := _plan_node_by_id(plan, str(plan.get("current_node_id", "")))
 	if current_node.is_empty():
 		return false
+	var floor_rule_value := value["floor_rule_state"] as Dictionary
+	if not floor_rule_value.is_empty() and not _floor_rule_state_matches_context(
+		floor_rule_value,
+		plan,
+		floor_definition,
+		current_node,
+		int(value["phase"])
+	):
+		return false
 	if completed == current_completed:
 		if (
 			str(current_node.get("id", "")) != str(plan.get("boss_node_id", ""))
 			or not bool(boss_node.get("cleared", false))
+			or not floor_rule_value.is_empty()
 		):
 			return false
 		var expected_completed_phase := (
@@ -548,6 +598,88 @@ func _is_unique_string_array(value: Array) -> bool:
 	return true
 
 
+func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
+	if value.size() != fields.size():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	return true
+
+
+func _floor_rule_state_matches_context(
+	value: Dictionary,
+	plan: Dictionary,
+	floor_definition: Dictionary,
+	current_node: Dictionary,
+	candidate_phase: int
+) -> bool:
+	if (
+		not _has_exact_fields(value, FLOOR_RULE_SNAPSHOT_FIELDS)
+		or str(current_node.get("id", "")) == str(plan.get("entry_node_id", "entry"))
+		or candidate_phase not in [
+			_active_phase_for_room_type(str(current_node.get("room_type", ""))),
+			RunPhaseScript.Value.ROOM_RESOLVING,
+		]
+	):
+		return false
+	if (
+		typeof(value["schema_version"]) != TYPE_INT
+		or int(value["schema_version"]) != 1
+		or typeof(value["rule_id"]) != TYPE_STRING
+		or str(value["rule_id"]) != str(floor_definition.get("environment_rule_id", ""))
+		or typeof(value["configured"]) != TYPE_BOOL
+		or not bool(value["configured"])
+		or typeof(value["room_id"]) != TYPE_STRING
+		or str(value["room_id"]) != str(current_node.get("id", ""))
+		or typeof(value["room_seed"]) != TYPE_INT
+		or not value["zones"] is Array
+		or not value["safe_zone_ids"] is Array
+		or (value["zones"] as Array).is_empty()
+		or (value["safe_zone_ids"] as Array).is_empty()
+		or typeof(value["runtime_frame"]) != TYPE_INT
+		or int(value["runtime_frame"]) < -1
+		or typeof(value["phase"]) != TYPE_STRING
+		or str(value["phase"]) not in ["idle", "warning", "active", "recovery", "completed"]
+		or typeof(value["cycle_index"]) != TYPE_INT
+		or typeof(value["active_zone_id"]) != TYPE_STRING
+		or typeof(value["revision"]) != TYPE_INT
+		or int(value["revision"]) < 0
+		or typeof(value["reduced_motion"]) != TYPE_BOOL
+		or typeof(value["hit_flash_enabled"]) != TYPE_BOOL
+	):
+		return false
+	var zone_ids: Dictionary = {}
+	for zone_value: Variant in value["zones"] as Array:
+		if not zone_value is Dictionary:
+			return false
+		var zone := zone_value as Dictionary
+		if not _has_exact_fields(zone, ["id", "bounds"]):
+			return false
+		var zone_id := str(zone.get("id", ""))
+		if zone_id.is_empty() or zone_ids.has(zone_id) or not zone.get("bounds") is Dictionary:
+			return false
+		zone_ids[zone_id] = true
+	var safe_ids: Dictionary = {}
+	for safe_value: Variant in value["safe_zone_ids"] as Array:
+		if typeof(safe_value) != TYPE_STRING:
+			return false
+		var safe_id := str(safe_value)
+		if not zone_ids.has(safe_id) or safe_ids.has(safe_id):
+			return false
+		safe_ids[safe_id] = true
+	if safe_ids.size() >= zone_ids.size():
+		return false
+	if int(value["runtime_frame"]) == -1:
+		return (
+			str(value["phase"]) == "idle"
+			and int(value["cycle_index"]) == -1
+			and str(value["active_zone_id"]).is_empty()
+			and int(value["revision"]) == 0
+		)
+	return str(value["phase"]) != "idle" and int(value["revision"]) > 0
+
+
 func _active_floor_phase_is_valid(
 	candidate_phase: int,
 	plan: Dictionary,
@@ -569,6 +701,14 @@ func _active_floor_phase_is_valid(
 	if room_type == "combat" or room_type == "elite":
 		return candidate_phase == RunPhaseScript.Value.COMBAT_ACTIVE
 	return candidate_phase == RunPhaseScript.Value.ROOM_ACTIVE
+
+
+func _active_phase_for_room_type(room_type: String) -> int:
+	if room_type == "boss":
+		return RunPhaseScript.Value.BOSS_ACTIVE
+	if room_type == "combat" or room_type == "elite":
+		return RunPhaseScript.Value.COMBAT_ACTIVE
+	return RunPhaseScript.Value.ROOM_ACTIVE
 
 
 func _plan_node_by_id(plan: Dictionary, node_id: String) -> Dictionary:

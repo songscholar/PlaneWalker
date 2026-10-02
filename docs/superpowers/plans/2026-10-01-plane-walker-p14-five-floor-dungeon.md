@@ -11,7 +11,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver a deterministic five-floor Launch dungeon with meaningful route choices, thirty streamed hand-authored room scenes, floor rules, economy, merchants, events, complete interaction UI, and sealed Save/Replay behavior.
+**Goal:** Deliver a deterministic five-floor Launch dungeon with meaningful route choices, thirty streamed player-facing room scenes generated from authoritative templates, floor rules, economy, merchants, events, complete interaction UI, and sealed Save/Replay behavior.
 
 **Architecture:** ContentRegistry owns five floor definitions, thirty room templates, fifteen regular plus three special events, five merchants, and one economy profile. A pure `FloorPlanGenerator` produces a versioned layered DAG from isolated SeedService channels; RunState and FloorPlan own route selection, while `RoomSceneHost` stages one validated scene at a time. Economy, merchant, event, treasure, rest, floor-rule, Save, Replay, ViewState, and UI systems use stable IDs and two-phase transactions.
 
@@ -353,64 +353,87 @@ git commit -m "feat(dungeon): integrate five-floor lifecycle"
 
 ### Task 4: P14D — Stream thirty room scenes and implement five floor rules
 
+**Completion status (2026-10-02):** Completed. The thirty generated Launch room scenes, shared base scene, room contract/host, five deterministic floor rules, compensated route/scene transaction, authoritative `floor_rule_state`, strict Save/Replay sealing, high-frequency observation revision isolation, production `FloorRuleEffectAuthority`, Main production assembly, new-run cleanup, and one-shot runtime-integrity failure handling are implemented. The generator is idempotent, every focused P14D filter is green, both clean Godot imports pass, and repository validation reports `181 passed, 0 failed`; the only warning is the pre-registered `reward_system_smoke` ObjectDB leak.
+
 **Files:**
 - Create: `scripts/dungeon/room_scene_contract.gd`
 - Create: `scripts/dungeon/room_scene_host.gd`
 - Create: `scripts/dungeon/launch_room_scene.gd`
 - Create: `scripts/dungeon/floor_rule_runtime.gd`
+- Create: `scripts/dungeon/floor_rule_effect_authority.gd`
 - Create: `scripts/dungeon/floor_rules/crumbling_ground_rule.gd`
 - Create: `scripts/dungeon/floor_rules/void_spores_rule.gd`
 - Create: `scripts/dungeon/floor_rules/temporal_distortion_rule.gd`
 - Create: `scripts/dungeon/floor_rules/forge_vents_rule.gd`
 - Create: `scripts/dungeon/floor_rules/collapsing_plane_rule.gd`
+- Create: `tools/generate_launch_room_scenes.py`
 - Create: `data/content_packs/base/assets/rooms/launch/launch_room_base.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_pillared_hall.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_split_chambers.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_open_field.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_l_corner.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_crossroads.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_high_ground.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_void_grove.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_ring.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_bridge.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/combat/room_combat_clockwork.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/elite/room_elite_arena.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/elite/room_elite_guard_corridor.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/elite/room_elite_altar_defense.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/elite/room_elite_trap_arena.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/elite/room_elite_twin_hall.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/treasure/room_treasure_vault.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/treasure/room_treasure_wishing_pool.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/treasure/room_treasure_chronovault.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/shop/room_shop_wayfarer_tent.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/shop/room_shop_chrono_emporium.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/event/room_event_shrine.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/event/room_event_crossroads.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/event/room_event_mirror_hall.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/boss/room_boss_ruin_king.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/boss/room_boss_forest_heart.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/boss/room_boss_time_sovereign.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/boss/room_boss_forge_colossus.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/boss/room_boss_void_throne.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/rest/room_rest_campfire.tscn`
-- Create: `data/content_packs/base/assets/rooms/launch/rest/room_rest_sanctuary.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_pillared_hall.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_split_chambers.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_open_field.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_l_corner.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_crossroads.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_high_ground.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_void_grove.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_ring.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_bridge.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_combat_clockwork.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_elite_arena.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_elite_guard_corridor.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_elite_altar_defense.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_elite_trap_arena.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_elite_twin_hall.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_treasure_vault.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_treasure_wishing_pool.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_treasure_chronovault.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_shop_wayfarer_tent.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_shop_chrono_emporium.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_event_shrine.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_event_crossroads.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_event_mirror_hall.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_boss_ruin_king.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_boss_forest_heart.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_boss_time_sovereign.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_boss_forge_colossus.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_boss_void_throne.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_rest_campfire.tscn`
+- Generate: `data/content_packs/base/assets/rooms/launch/room_rest_sanctuary.tscn`
 - Modify: `data/content_packs/base/pack.json`
 - Modify: `tests/unit/content/content_pack_resolver_test.gd`
-- Modify: `scenes/rooms/combat_room_01.tscn`
+- Modify: `scripts/application/run_state.gd`
+- Modify: `scripts/application/run_orchestrator.gd`
+- Modify: `scripts/application/run_runtime_facade.gd`
+- Modify: `scripts/application/run_runtime_host.gd`
+- Modify: `scripts/player/player_controller.gd`
+- Modify: `scripts/time_system/time_manager.gd`
+- Modify: `scripts/save/save_envelope.gd`
+- Modify: `scripts/replay/run_dungeon_replay_seal.gd`
+- Modify: `scripts/main.gd`
+- Modify: `scenes/main.tscn`
 - Create: `tests/contract/dungeon/room_scene_contract_test.gd`
 - Create: `tests/contract/dungeon/room_scene_contract_test.tscn`
 - Create: `tests/integration/dungeon/room_scene_host_test.gd`
 - Create: `tests/integration/dungeon/room_scene_host_test.tscn`
 - Create: `tests/integration/dungeon/floor_rule_runtime_test.gd`
 - Create: `tests/integration/dungeon/floor_rule_runtime_test.tscn`
+- Create: `tests/integration/dungeon/floor_rule_effect_authority_test.gd`
+- Create: `tests/integration/dungeon/floor_rule_effect_authority_test.tscn`
 - Create: `tests/visual/p14_room_visual_contract_test.gd`
 - Create: `tests/visual/p14_room_visual_contract_test.tscn`
+- Modify: `tests/unit/application/run_floor_plan_state_test.gd`
+- Modify: `tests/integration/application/run_floor_lifecycle_test.gd`
+- Modify: `tests/integration/application/run_runtime_host_test.gd`
+- Create: `tests/integration/application/main_launch_floor_rule_test.gd`
+- Create: `tests/integration/application/main_launch_floor_rule_test.tscn`
+- Modify: `tests/unit/save/save_envelope_test.gd`
+- Modify: `tests/replay/run_dungeon_replay_test.gd`
+- Modify: `tests/replay/run_reward_replay_seal_test.gd`
 
 **Interfaces:**
-- Consumes: room template definitions, FloorPlan target nodes, Player/World authorities, and accessibility settings.
-- Produces: `RoomSceneContract.validate(scene, template)`, `RoomSceneHost.transition_to(node, template, context)`, and five deterministic floor-rule runtimes with `configure`, `advance_frame`, `snapshot`, `can_restore_snapshot`, `restore_snapshot`, and `reset`.
+- Consumes: the exact flat `scene_path` values and anchors declared by `room_templates.json`, FloorPlan target nodes, Player/World effect authorities, and accessibility settings.
+- Produces: `RoomSceneContract.validate(scene, template)`; `RoomSceneHost.prepare_transition`, `commit_transition`, `confirm_transition`, and `rollback_transition` tickets; the compatibility `transition_to`; application route transactions that retain compensation state until scene and Facade confirmation; five deterministic floor-rule runtimes with `configure`, `advance_frame`, `snapshot`, `can_restore_snapshot`, `restore_snapshot`, and `reset`; and `FloorRuleEffectAuthority.configure(player, room_scene_host)` plus atomic `commit_floor_rule_effects(facts)`.
 
-- [ ] **Step 1: Write failing scene-contract, transition-failure, and hazard tests**
+- [x] **Step 1: Write failing scene-contract, transition-failure, and hazard tests**
 
 Every scene must expose exact named anchors:
 
@@ -425,44 +448,95 @@ FloorRuleAnchors
 PixelProxyLayer
 ```
 
-Tests instantiate all thirty scenes, verify one room script, valid camera bounds inside the `640 x 360` design canvas, accessible collision/door widths, category-required anchors, no missing resources, and correct content ID metadata. Host tests inject load, instantiate, contract, bind, and activation failure and assert the previous room and RunState remain exact. Floor-rule tests assert warning frames, bounded active frames, typed damage/modifier routing, cleanup, reduced-motion alternatives, no surprise instant death, Save/Replay round-trip, and zero late notifications on rejected transactions.
+Tests instantiate all thirty scenes from the exact flat paths declared by `room_templates.json`, verify one room script, valid camera bounds inside the `640 x 360` design canvas, accessible collision/door widths, category-required anchors, no missing resources, and correct content ID metadata. Resolver tests require the shared base plus all thirty scenes in `asset_manifest` with matching SHA-256 entries. Host tests inject load, instantiate, contract, bind, prepare, activation, commit, confirmation, and rollback failure and assert the previous room and RunState remain byte-identical with no leaked staged root or late fact. Floor-rule tests assert warning frames, bounded active frames, typed damage/modifier routing, cleanup, reduced-motion alternatives, no surprise instant death, rejected-authority immutability, authoritative RunState/Save/Replay round-trip, room/floor cleanup, high-frequency observation revision isolation, Save phase/frame consistency, production Main assembly, and zero late notifications after `reset()`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Re-run the focused P14D integration baseline**
 
 ```bash
+python3 tools/generate_launch_room_scenes.py
 ./tools/run_tests.sh --filter room_scene_contract
 ./tools/run_tests.sh --filter room_scene_host
 ./tools/run_tests.sh --filter floor_rule_runtime
+./tools/run_tests.sh --filter floor_rule_effect_authority
 ./tools/run_tests.sh --filter p14_room_visual_contract
+./tools/run_tests.sh --filter content_pack_resolver
+./tools/run_tests.sh --filter run_floor_lifecycle
+./tools/run_tests.sh --filter run_runtime_host
+./tools/run_tests.sh --filter save_envelope
+./tools/run_tests.sh --filter run_dungeon_replay
+./tools/run_tests.sh --filter main_launch_floor_rule
 ```
 
-- [ ] **Step 3: Implement staged scene transition and shared room base**
+Expected before final integration: every filter is green, floor-rule observations do not consume the global command revision, a rejected effect batch terminates exactly once without retry, and the Main production path proves a streamed Launch hazard reaches the real Player authority.
 
-`RoomSceneHost.transition_to()` instantiates under a detached staging root, validates and binds before changing the active root, and disposes the staged root on any failure. A successful commit attaches the staged root, activates the camera and input boundary, then retires the old root. It returns a receipt containing prior/target content IDs and instance generations for compensation tests.
+Final focused evidence on 2026-10-02: every listed filter passes. A rejected effect batch enters and publishes `runtime_error` exactly once without a retry; starting the same seed again clears the old scene and effect-id runtime state while retaining authority configuration; `main_launch_floor_rule` streams and confirms a real room and proves its scheduled hazard reaches the real Player health authority.
+
+- [x] **Step 3: Integrate staged scene and floor-rule transactions with the application runtime**
+
+`RoomSceneHost.prepare_transition()` instantiates under a detached staging root, validates and binds before changing the active root, and returns an opaque ticket. `commit_transition()` attaches and activates the staged room while retaining enough prior-scene state for compensation; `confirm_transition()` retires the prior scene; `rollback_transition()` frees the staged or provisionally committed scene and restores the prior active room. `reset()` frees both active and pending roots, clears tickets, and cannot emit a late transition notification. `transition_to()` remains only as a compatibility wrapper over the ticket protocol.
+
+`RunRuntimeHost.select_route()` coordinates the full application transaction:
+
+```text
+RunRuntimeFacade.begin_route_transition
+-> RoomSceneHost.prepare_transition
+-> RunRuntimeFacade.finalize_route_transition
+-> RoomSceneHost.commit_transition
+-> RunRuntimeFacade.can_confirm_route_transition
+-> RoomSceneHost.confirm_transition
+-> RunRuntimeFacade.confirm_route_transition
+-> publish route_selected and room_started exactly once
+```
+
+`RunOrchestrator` and `RunRuntimeFacade` retain the pre-route `floor_transaction_snapshot` after finalize/enter and delete it only on `confirm_route_transition`. `can_confirm_route_transition` is observation-only and must succeed before the scene host releases its prior room; the subsequent Facade confirmation is therefore a no-new-failure commit. Any earlier failure rolls the scene ticket and route transaction back, restores the exact prior RunState and active scene, and publishes zero route or room facts. Callable scene adapters remain a compatibility path and are treated as an immediate prepare/commit/confirm adapter.
+
+`RunState` validates and owns the authoritative `floor_rule_state`. `RunOrchestrator`, `RunRuntimeFacade`, and `RunRuntimeHost` configure a rule for the active room, advance an integer frame monotonically through the injected Player/World effect authority, commit snapshots only after accepted effects, restore Save/Replay snapshots through `can_restore_snapshot`, and reset rule state on room/floor exit or run termination. Initial configuration and explicit restore are commands; ordinary frame observations update the rule snapshot and its own rule revision without incrementing the global run command revision, so a cached route-confirm revision remains valid. Rejected effects, stale frames, invalid restore data, and cleanup cannot mutate the authoritative snapshot or publish late facts.
+
+`FloorRuleEffectAuthority` is the production adapter between FloorRule facts, the active `RoomSceneHost`, Player, HealthComponent, DamageInfo, Player floor-rule modifiers, and TimeManager cost multipliers. It prevalidates a whole batch, filters effects by the active room zone and target, enforces nonlethal minimum health, deduplicates stable effect identities, and restores health/modifier snapshots if any effect in the batch fails. `Main` must own the Launch `RoomSceneHost`, construct/configure this authority with the real Player, install both adapters on `RunRuntimeHost`, and pass `main_launch_floor_rule` by streaming a room, configuring its rule, placing Player inside an active hazard, and observing the authoritative health/modifier result.
+
+SaveEnvelope recomputes the rule state through the exact rule runtime before accepting a Launch save. A serialized `phase`, `cycle_index`, or `active_zone_id` that does not match `runtime_frame` is `CORRUPT`, even when all fields and IDs are otherwise valid. Replay seals the same rule snapshot digest so phase/frame drift cannot be normalized away.
 
 `LaunchRoomScene` binds a floor palette and exposes category handlers but never writes RunState.
 
-- [ ] **Step 4: Author all thirty player-facing scenes and five rules**
+- [x] **Step 4: Author all thirty player-facing scenes and five rules**
+
+`tools/generate_launch_room_scenes.py` reads `data/content_packs/base/content/room_templates.json` and writes every generated scene to that template's exact `scene_path`. All thirty paths are flat children of `res://data/content_packs/base/assets/rooms/launch/`; category subdirectories are invalid because the content schema and parser reject extra path segments. The generator derives content ID, room type, anchors, camera bounds, hazard-safe zones, and visual signature from the authoritative template instead of maintaining a second catalog.
 
 Use native Node2D/Control/CollisionShape2D/Marker2D structures, real door and spawn anchors, restrained pixel-proxy geometry, floor palette overlays, and category-specific interactions. Do not duplicate runtime logic in scene scripts. Each floor rule uses deterministic node channels and an authoritative integer frame clock; visual animation derives from that state.
 
-Declare all thirty room scenes plus the shared base in the Base Pack `asset_manifest` and add their exact SHA-256 entries to `integrity_hashes`. Loading a room whose bytes no longer match the activated pack fingerprint fails before instantiation.
+After any generator, shared-base, or generated-scene change, run `python3 tools/generate_launch_room_scenes.py`. It rewrites the thirty declared scene paths, seals the shared base plus those scenes as exactly `31` Base Pack assets, and refreshes their SHA-256 entries while preserving content/localization integrity rows. Loading a room whose bytes no longer match the activated pack fingerprint fails before instantiation.
 
 The M1 room scene keeps its existing gameplay and may adopt only the shared contract adapter needed for host compatibility.
 
-- [ ] **Step 5: Run GREEN, inspect affected scenes, and commit**
+- [x] **Step 5: Run GREEN, inspect affected scenes, and commit**
 
 ```bash
+python3 tools/generate_launch_room_scenes.py
 ./tools/run_tests.sh --filter room_scene_contract
 ./tools/run_tests.sh --filter room_scene_host
 ./tools/run_tests.sh --filter floor_rule_runtime
+./tools/run_tests.sh --filter floor_rule_effect_authority
 ./tools/run_tests.sh --filter p14_room_visual_contract
+./tools/run_tests.sh --filter content_pack_resolver
+./tools/run_tests.sh --filter run_floor_lifecycle
+./tools/run_tests.sh --filter run_runtime_host
+./tools/run_tests.sh --filter save_envelope
+./tools/run_tests.sh --filter run_dungeon_replay
+./tools/run_tests.sh --filter main_launch_floor_rule
 ./tools/run_tests.sh --filter m1_room_plan
 ./tools/run_tests.sh --filter room_runtime
 git diff --check
-git add -- scripts/dungeon/room_scene_contract.gd scripts/dungeon/room_scene_host.gd scripts/dungeon/launch_room_scene.gd scripts/dungeon/floor_rule_runtime.gd scripts/dungeon/floor_rules data/content_packs/base/assets/rooms/launch data/content_packs/base/pack.json tests/unit/content/content_pack_resolver_test.gd scenes/rooms/combat_room_01.tscn tests/contract/dungeon/room_scene_contract_test.gd tests/contract/dungeon/room_scene_contract_test.tscn tests/integration/dungeon/room_scene_host_test.gd tests/integration/dungeon/room_scene_host_test.tscn tests/integration/dungeon/floor_rule_runtime_test.gd tests/integration/dungeon/floor_rule_runtime_test.tscn tests/visual/p14_room_visual_contract_test.gd tests/visual/p14_room_visual_contract_test.tscn
+./tools/validate_project.sh
+git add -- tools/generate_launch_room_scenes.py scripts/dungeon/room_scene_contract.gd scripts/dungeon/room_scene_host.gd scripts/dungeon/launch_room_scene.gd scripts/dungeon/floor_rule_runtime.gd scripts/dungeon/floor_rule_effect_authority.gd scripts/dungeon/floor_rules scripts/application/run_state.gd scripts/application/run_orchestrator.gd scripts/application/run_runtime_facade.gd scripts/application/run_runtime_host.gd scripts/player/player_controller.gd scripts/time_system/time_manager.gd scripts/save/save_envelope.gd scripts/replay/run_dungeon_replay_seal.gd scripts/main.gd scenes/main.tscn data/content_packs/base/assets/rooms/launch data/content_packs/base/pack.json tests/unit/content/content_pack_resolver_test.gd tests/unit/application/run_floor_plan_state_test.gd tests/unit/save/save_envelope_test.gd tests/replay/run_dungeon_replay_test.gd tests/replay/run_reward_replay_seal_test.gd tests/integration/application/run_floor_lifecycle_test.gd tests/integration/application/run_runtime_host_test.gd tests/integration/application/main_launch_floor_rule_test.gd tests/integration/application/main_launch_floor_rule_test.tscn tests/contract/dungeon/room_scene_contract_test.gd tests/contract/dungeon/room_scene_contract_test.tscn tests/integration/dungeon/room_scene_host_test.gd tests/integration/dungeon/room_scene_host_test.tscn tests/integration/dungeon/floor_rule_runtime_test.gd tests/integration/dungeon/floor_rule_runtime_test.tscn tests/integration/dungeon/floor_rule_effect_authority_test.gd tests/integration/dungeon/floor_rule_effect_authority_test.tscn tests/visual/p14_room_visual_contract_test.gd tests/visual/p14_room_visual_contract_test.tscn
 git commit -m "feat(dungeon): stream launch room scenes"
 ```
+
+Final local evidence on 2026-10-02:
+
+- `python3 tools/generate_launch_room_scenes.py` regenerated thirty rooms and sealed exactly thirty-one assets without residual drift.
+- The focused runtime, room contract/host, floor-rule, visual, Save, Replay, M1 compatibility, and Main production filters pass with zero unknown leak warnings.
+- `git diff --check` passes.
+- `./tools/validate_project.sh` passes after bootstrap and clean second import with `181 passed, 0 failed, 181 total` and one registered `reward_system_smoke` ObjectDB leak warning. Validation log: `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-validation.lAbghR`.
 
 ---
 

@@ -81,6 +81,23 @@ func _test_project_base_pack(suite) -> void:
 	for relative_path: String in P14_MANIFEST_PATHS:
 		suite.assert_true(content_manifest.has(relative_path), "project base pack registers %s" % relative_path)
 	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
+	var asset_manifest := descriptor.get("asset_manifest", []) as Array
+	suite.assert_equal(asset_manifest.size(), 31, "P14D registers the shared base and thirty Launch room scenes")
+	suite.assert_true(
+		asset_manifest.has("assets/rooms/launch/launch_room_base.tscn"),
+		"P14D registers the shared Launch room base"
+	)
+	for asset_value: Variant in asset_manifest:
+		var asset_path := str(asset_value)
+		suite.assert_true(
+			asset_path.begins_with("assets/rooms/launch/") and asset_path.ends_with(".tscn"),
+			"P14D room asset stays inside the approved Launch scene boundary: %s" % asset_path
+		)
+	suite.assert_equal(
+		(descriptor.get("integrity_hashes", {}) as Dictionary).size(),
+		47,
+		"Base Pack integrity closes all content, localization, and P14D room assets"
+	)
 
 	var entries: Array[Dictionary] = []
 	for relative_path_value: Variant in descriptor.get("content_manifest", []):

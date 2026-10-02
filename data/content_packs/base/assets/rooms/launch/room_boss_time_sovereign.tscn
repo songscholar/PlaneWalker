@@ -1,0 +1,150 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/launch_room_scene.gd" id="1_scene"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_camera"]
+size = Vector2(640, 360)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hazard_1"]
+size = Vector2(128, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hazard_2"]
+size = Vector2(128, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hazard_3"]
+size = Vector2(128, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hazard_4"]
+size = Vector2(128, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hazard_5"]
+size = Vector2(128, 48)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hazard_6"]
+size = Vector2(128, 48)
+
+[node name="LaunchRoomScene" type="Node2D"]
+script = ExtResource("1_scene")
+content_id = &"room_boss_time_sovereign"
+room_type = "boss"
+metadata/content_id = "room_boss_time_sovereign"
+metadata/room_type = "boss"
+metadata/layout_variant = "boss_time_sovereign"
+metadata/visual_signature = "1c90f70a870b0c84"
+
+[node name="PixelProxyLayer" type="Node2D" parent="."]
+metadata/visual_signature = "1c90f70a870b0c84"
+
+[node name="Background" type="Polygon2D" parent="PixelProxyLayer"]
+polygon = PackedVector2Array(0, 0, 640, 0, 640, 360, 0, 360)
+color = Color(0.25, 0.10, 0.12, 1)
+
+[node name="Ground" type="Polygon2D" parent="PixelProxyLayer"]
+polygon = PackedVector2Array(0, 264, 640, 264, 640, 360, 0, 360)
+color = Color(0.07, 0.09, 0.12, 1)
+
+[node name="LandmarkPrimary" type="Polygon2D" parent="PixelProxyLayer"]
+polygon = PackedVector2Array(274, 198, 294, 134, 314, 198)
+color = Color(0.78, 0.72, 0.52, 1)
+
+[node name="DoorVisualWest" type="Polygon2D" parent="PixelProxyLayer"]
+polygon = PackedVector2Array(0, 144, 32, 144, 32, 216, 0, 216)
+color = Color(0.68, 0.72, 0.78, 1)
+
+[node name="DoorVisualEast" type="Polygon2D" parent="PixelProxyLayer"]
+polygon = PackedVector2Array(608, 144, 640, 144, 640, 216, 608, 216)
+color = Color(0.68, 0.72, 0.78, 1)
+
+[node name="HazardCue" type="Polygon2D" parent="PixelProxyLayer"]
+polygon = PackedVector2Array(170, 320, 186, 296, 202, 320)
+color = Color(0.92, 0.32, 0.28, 1)
+
+[node name="PlayerEntry" type="Marker2D" parent="."]
+position = Vector2(160, 280)
+metadata/anchor_id = "player_entry"
+
+[node name="PlayerExit" type="Marker2D" parent="."]
+position = Vector2(608, 180)
+metadata/anchor_id = "room_exit"
+
+[node name="CameraBounds" type="Area2D" parent="."]
+position = Vector2(320, 180)
+metadata/anchor_id = "camera_bounds"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CameraBounds"]
+shape = SubResource("RectangleShape2D_camera")
+
+[node name="DoorAnchors" type="Node2D" parent="."]
+[node name="door_west" type="Marker2D" parent="DoorAnchors"]
+position = Vector2(16, 180)
+metadata/anchor_id = "door_west"
+metadata/direction = "west"
+metadata/clear_width = 48
+metadata/clear_width_pixels = 48
+
+[node name="door_east" type="Marker2D" parent="DoorAnchors"]
+position = Vector2(624, 180)
+metadata/anchor_id = "door_east"
+metadata/direction = "east"
+metadata/clear_width = 48
+metadata/clear_width_pixels = 48
+
+[node name="EncounterAnchors" type="Node2D" parent="."]
+[node name="boss_primary" type="Marker2D" parent="EncounterAnchors"]
+position = Vector2(320, 144)
+metadata/anchor_id = "boss_primary"
+metadata/kind = "boss"
+
+[node name="InteractionAnchors" type="Node2D" parent="."]
+[node name="room_exit" type="Marker2D" parent="InteractionAnchors"]
+position = Vector2(608, 180)
+metadata/anchor_id = "room_exit"
+metadata/kind = "exit"
+
+[node name="FloorRuleAnchors" type="Node2D" parent="."]
+[node name="safe_core" type="Marker2D" parent="FloorRuleAnchors"]
+position = Vector2(320, 180)
+metadata/anchor_id = "safe_core"
+metadata/bounds = Rect2(224, 96, 192, 168)
+
+[node name="HazardZone1" type="Area2D" parent="FloorRuleAnchors"]
+position = Vector2(96, 56)
+metadata/zone_id = "room_boss_time_sovereign_hazard_1"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorRuleAnchors/HazardZone1"]
+shape = SubResource("RectangleShape2D_hazard_1")
+
+[node name="HazardZone2" type="Area2D" parent="FloorRuleAnchors"]
+position = Vector2(544, 56)
+metadata/zone_id = "room_boss_time_sovereign_hazard_2"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorRuleAnchors/HazardZone2"]
+shape = SubResource("RectangleShape2D_hazard_2")
+
+[node name="HazardZone3" type="Area2D" parent="FloorRuleAnchors"]
+position = Vector2(96, 304)
+metadata/zone_id = "room_boss_time_sovereign_hazard_3"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorRuleAnchors/HazardZone3"]
+shape = SubResource("RectangleShape2D_hazard_3")
+
+[node name="HazardZone4" type="Area2D" parent="FloorRuleAnchors"]
+position = Vector2(544, 304)
+metadata/zone_id = "room_boss_time_sovereign_hazard_4"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorRuleAnchors/HazardZone4"]
+shape = SubResource("RectangleShape2D_hazard_4")
+
+[node name="HazardZone5" type="Area2D" parent="FloorRuleAnchors"]
+position = Vector2(76, 180)
+metadata/zone_id = "room_boss_time_sovereign_hazard_5"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorRuleAnchors/HazardZone5"]
+shape = SubResource("RectangleShape2D_hazard_5")
+
+[node name="HazardZone6" type="Area2D" parent="FloorRuleAnchors"]
+position = Vector2(564, 180)
+metadata/zone_id = "room_boss_time_sovereign_hazard_6"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FloorRuleAnchors/HazardZone6"]
+shape = SubResource("RectangleShape2D_hazard_6")

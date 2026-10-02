@@ -47,6 +47,8 @@ var _selection_safety_active: bool = false
 var _player_process_mode: ProcessMode = Node.PROCESS_MODE_INHERIT
 var _reward_effect_runtime: RefCounted = PlayerRewardEffectRuntimeScript.new()
 var _route_scene_adapter: Variant = null
+var _floor_rule_effect_authority: Variant = null
+var _floor_rule_frame_origin: int = -1
 var _published_route_transition_ids: Dictionary = {}
 var _published_floor_start_ids: Dictionary = {}
 var _published_floor_completion_ids: Dictionary = {}
@@ -80,6 +82,7 @@ func _process(delta: float) -> void:
 	if not _active or _facade == null or _active_run_id.is_empty():
 		return
 	_facade.call("advance_time", maxf(0.0, delta))
+	_advance_floor_rule_from_host()
 	_hud_render_accumulator += maxf(0.0, delta)
 	if _hud_render_accumulator < HUD_RENDER_INTERVAL:
 		return
@@ -114,8 +117,14 @@ func start_run(config: Dictionary) -> Variant:
 	_published_route_transition_ids.clear()
 	_published_floor_start_ids.clear()
 	_published_floor_completion_ids.clear()
+	_floor_rule_frame_origin = -1
 	_ended_run_id = ""
 	_hud_render_accumulator = 0.0
+	if not _reset_floor_rule_runtime_for_new_run():
+		return _fail_start(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			{"floor_rule_runtime_reset": false}
+		)
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
@@ -263,9 +272,37 @@ func configure_route_scene_adapter(adapter: Variant) -> bool:
 	if typeof(adapter) == TYPE_CALLABLE:
 		_route_scene_adapter = adapter
 		return true
-	if adapter is Object and (adapter as Object).has_method("prepare_route_transition"):
+	if adapter is Object and (
+		(adapter as Object).has_method("prepare_route_transition")
+		or (adapter as Object).has_method("prepare_transition")
+	):
 		_route_scene_adapter = adapter
 		return true
+	return false
+
+
+func configure_floor_rule_effect_authority(authority: Variant) -> bool:
+	if authority is Callable and (authority as Callable).is_valid():
+		_floor_rule_effect_authority = authority
+		return true
+	if authority is Object and (
+		(authority as Object).has_method("commit_floor_rule_effects")
+		or (authority as Object).has_method("commit_floor_rule_effect")
+	):
+		_floor_rule_effect_authority = authority
+		return true
+	return false
+
+
+func commit_floor_rule_effects(facts: Array) -> bool:
+	if _floor_rule_effect_authority is Callable:
+		return bool((_floor_rule_effect_authority as Callable).call(facts.duplicate(true)))
+	if _floor_rule_effect_authority is Object:
+		var authority := _floor_rule_effect_authority as Object
+		if authority.has_method("commit_floor_rule_effects"):
+			return bool(authority.call("commit_floor_rule_effects", facts.duplicate(true)))
+		if facts.size() == 1 and authority.has_method("commit_floor_rule_effect"):
+			return bool(authority.call("commit_floor_rule_effect", facts[0].duplicate(true)))
 	return false
 
 
@@ -285,6 +322,16 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 		return CommandResultScript.failure(
 			&"INVALID_PHASE", _revision(), {"operation": "select_route"}
 		)
+	if (
+		_route_scene_adapter is Object
+		and (_route_scene_adapter as Object).has_method("prepare_transition")
+		and not _floor_rule_effect_authority_is_valid()
+	):
+		return CommandResultScript.failure(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			_revision(),
+			{"operation": "select_route", "authority": "floor_rule_effects"}
+		)
 	if expected_revision < 0:
 		expected_revision = _revision()
 	var begun: Variant = _facade.call(
@@ -303,8 +350,10 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 		"edge_id": str(edge_id),
 		"target": target.duplicate(true),
 		"revision": int(begun.new_revision),
+		"scene_context": (begun_context.get("scene_context", {}) as Dictionary).duplicate(true),
 	}
-	if not _prepare_route_scene(target, adapter_context):
+	var prepared_scene := _prepare_route_scene(target, adapter_context)
+	if not bool(prepared_scene.get("ok", false)):
 		var rolled_back: Variant = _facade.call(
 			"rollback_route_transition", transition_id, int(begun.new_revision)
 		)
@@ -323,8 +372,16 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 		"finalize_route_transition", transition_id, int(begun.new_revision)
 	)
 	if finalized == null:
+		_rollback_route_scene(prepared_scene, adapter_context)
 		return finalized
 	if not bool(finalized.get("ok")):
+		var scene_rolled_back := _rollback_route_scene(prepared_scene, adapter_context)
+		if not bool(scene_rolled_back.get("ok", false)):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_scene_prepare_rollback", "transition_id": transition_id}
+			)
 		var finalized_context: Dictionary = (
 			finalized.context as Dictionary
 		).duplicate(true)
@@ -346,6 +403,134 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 			finalized_context,
 			finalized.message_key
 		)
+	adapter_context["revision"] = int(finalized.new_revision)
+	var scene_committed := _commit_route_scene(
+		prepared_scene, target, adapter_context
+	)
+	var route_revision := int(finalized.new_revision)
+	if not bool(scene_committed.get("ok", false)):
+		var scene_rollback := _rollback_route_scene(prepared_scene, adapter_context)
+		if not bool(scene_rollback.get("ok", false)):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(),
+				{"stage": "route_scene_commit_rollback", "transition_id": transition_id}
+			)
+		var authority_rollback: Variant = _facade.call(
+			"rollback_route_transition", transition_id, int(finalized.new_revision)
+		)
+		if authority_rollback == null or not bool(authority_rollback.get("ok")):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(),
+				{"stage": "route_scene_commit_authority_rollback", "transition_id": transition_id}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED", _revision(),
+			{"stage": "route_scene_commit", "transition_id": transition_id}
+		)
+	var floor_rule_configuration := _floor_rule_configuration_for_scene(prepared_scene)
+	if str(prepared_scene.get("adapter_kind", "")) == "room_scene_host":
+		if floor_rule_configuration.is_empty():
+			var missing_rule_scene_rollback := _rollback_route_scene(prepared_scene, adapter_context)
+			if not bool(missing_rule_scene_rollback.get("ok", false)):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(),
+					{"stage": "floor_rule_configuration_scene_rollback", "transition_id": transition_id}
+				)
+			var missing_rule_authority_rollback: Variant = _facade.call(
+				"rollback_route_transition", transition_id, route_revision
+			)
+			if missing_rule_authority_rollback == null or not bool(missing_rule_authority_rollback.get("ok")):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(),
+					{"stage": "floor_rule_configuration_authority_rollback", "transition_id": transition_id}
+				)
+			return CommandResultScript.failure(
+				&"COMMIT_FAILED", _revision(),
+				{"stage": "floor_rule_configuration", "transition_id": transition_id}
+			)
+		var rule_id := StringName(str(
+			(adapter_context.get("scene_context", {}) as Dictionary).get(
+				"environment_rule_id", ""
+			)
+		))
+		var configured_rule: Variant = _facade.call(
+			"configure_floor_rule",
+			rule_id,
+			floor_rule_configuration,
+			_floor_rule_effect_authority,
+			route_revision
+		)
+		if configured_rule == null or not bool(configured_rule.get("ok")):
+			var rule_scene_rollback := _rollback_route_scene(prepared_scene, adapter_context)
+			if not bool(rule_scene_rollback.get("ok", false)):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(),
+					{"stage": "floor_rule_scene_rollback", "transition_id": transition_id}
+				)
+			var rule_authority_rollback: Variant = _facade.call(
+				"rollback_route_transition", transition_id, _revision()
+			)
+			if rule_authority_rollback == null or not bool(rule_authority_rollback.get("ok")):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(),
+					{"stage": "floor_rule_authority_rollback", "transition_id": transition_id}
+				)
+			return CommandResultScript.failure(
+				&"COMMIT_FAILED", _revision(),
+				{"stage": "floor_rule_commit", "transition_id": transition_id}
+			)
+		route_revision = int(configured_rule.new_revision)
+		adapter_context["revision"] = route_revision
+		_floor_rule_frame_origin = _host_runtime_frame()
+	var confirmable: Variant = _facade.call(
+		"can_confirm_route_transition", transition_id, route_revision
+	)
+	if confirmable == null or not bool(confirmable.get("ok")):
+		var confirm_preflight_scene_rollback := _rollback_route_scene(
+			prepared_scene, adapter_context
+		)
+		if not bool(confirm_preflight_scene_rollback.get("ok", false)):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(),
+				{"stage": "route_confirm_preflight_scene_rollback", "transition_id": transition_id}
+			)
+		var confirm_preflight_authority_rollback: Variant = _facade.call(
+			"rollback_route_transition", transition_id, _revision()
+		)
+		if confirm_preflight_authority_rollback == null or not bool(confirm_preflight_authority_rollback.get("ok")):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(),
+				{"stage": "route_confirm_preflight_authority_rollback", "transition_id": transition_id}
+			)
+		return confirmable
+	var scene_confirmed := _confirm_route_scene(prepared_scene, adapter_context)
+	if not bool(scene_confirmed.get("ok", false)):
+		var confirm_scene_rollback := _rollback_route_scene(prepared_scene, adapter_context)
+		if not bool(confirm_scene_rollback.get("ok", false)):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(),
+				{"stage": "route_scene_confirm_rollback", "transition_id": transition_id}
+			)
+		var confirm_authority_rollback: Variant = _facade.call(
+			"rollback_route_transition", transition_id, _revision()
+		)
+		if confirm_authority_rollback == null or not bool(confirm_authority_rollback.get("ok")):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(),
+				{"stage": "route_scene_confirm_authority_rollback", "transition_id": transition_id}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED", _revision(),
+			{"stage": "route_scene_confirm", "transition_id": transition_id}
+		)
+	var confirmed: Variant = _facade.call(
+		"confirm_route_transition", transition_id, route_revision
+	)
+	if confirmed == null or not bool(confirmed.get("ok")):
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(),
+			{"stage": "route_authority_confirm_after_preflight", "transition_id": transition_id}
+		)
 	if _published_route_transition_ids.has(transition_id):
 		return CommandResultScript.failure(
 			&"ALREADY_CONSUMED",
@@ -356,12 +541,12 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 	var context: Dictionary = (finalized.context as Dictionary).duplicate(true)
 	var floor_id := StringName(str(context.get("floor_id", "")))
 	var node_id := StringName(str(context.get("node_id", "")))
-	var revision := int(finalized.new_revision)
+	var revision := route_revision
 	EventBus.route_selected.emit(
 		_active_run_id, floor_id, StringName(str(edge_id)), node_id, revision
 	)
 	EventBus.room_started.emit(_active_run_id, node_id, revision)
-	return finalized
+	return CommandResultScript.success(route_revision, context)
 
 
 func start_next_floor() -> Variant:
@@ -1035,28 +1220,234 @@ func _publish_room_cleared(run_id: String, room_id: StringName, revision: int) -
 		_open_offer(state.get("open_offer", {}))
 
 
-func _prepare_route_scene(target: Dictionary, context: Dictionary) -> bool:
+func _prepare_route_scene(target: Dictionary, context: Dictionary) -> Dictionary:
 	if target.is_empty() or str(target.get("scene_path", "")).is_empty():
-		return false
+		return {"ok": false, "code": &"ROOM_SCENE_TARGET_INVALID"}
 	var result: Variant = null
 	if typeof(_route_scene_adapter) == TYPE_CALLABLE:
 		result = (_route_scene_adapter as Callable).call(
 			target.duplicate(true), context.duplicate(true)
 		)
+		return {
+			"ok": _adapter_result_ok(result),
+			"adapter_kind": "callable",
+			"ticket": {},
+		}
 	elif _route_scene_adapter is Object and (
 		_route_scene_adapter as Object
 	).has_method("prepare_route_transition"):
 		result = (_route_scene_adapter as Object).call(
 			"prepare_route_transition", target.duplicate(true), context.duplicate(true)
 		)
+		var normalized := _adapter_result_dictionary(result)
+		normalized["adapter_kind"] = "route_protocol"
+		return normalized
+	elif _route_scene_adapter is Object and (
+		_route_scene_adapter as Object
+	).has_method("prepare_transition"):
+		var template: Dictionary = (target.get("template", {}) as Dictionary).duplicate(true)
+		var node := {
+			"id": str(target.get("node_id", "")),
+			"template_id": str(target.get("template_id", "")),
+			"room_type": str(target.get("room_type", "")),
+		}
+		result = (_route_scene_adapter as Object).call(
+			"prepare_transition",
+			node,
+			template,
+			(context.get("scene_context", {}) as Dictionary).duplicate(true)
+		)
+		var normalized := _adapter_result_dictionary(result)
+		normalized["adapter_kind"] = "room_scene_host"
+		return normalized
 	else:
-		return false
-	if typeof(result) == TYPE_BOOL:
-		return bool(result)
+		return {"ok": false, "code": &"ROOM_SCENE_ADAPTER_INVALID"}
+
+
+func _commit_route_scene(
+	prepared: Dictionary,
+	target: Dictionary,
+	context: Dictionary
+) -> Dictionary:
+	var kind := str(prepared.get("adapter_kind", ""))
+	if kind == "callable":
+		return {"ok": true}
+	if not _route_scene_adapter is Object:
+		return {"ok": false}
+	var ticket: Dictionary = (prepared.get("ticket", {}) as Dictionary).duplicate(true)
+	var result: Variant = null
+	if kind == "route_protocol" and (_route_scene_adapter as Object).has_method("commit_route_transition"):
+		result = (_route_scene_adapter as Object).call(
+			"commit_route_transition", ticket, target.duplicate(true), context.duplicate(true)
+		)
+	elif kind == "room_scene_host" and (_route_scene_adapter as Object).has_method("commit_transition"):
+		result = (_route_scene_adapter as Object).call("commit_transition", ticket)
+	return _adapter_result_dictionary(result)
+
+
+func _confirm_route_scene(prepared: Dictionary, context: Dictionary) -> Dictionary:
+	var kind := str(prepared.get("adapter_kind", ""))
+	if kind == "callable":
+		return {"ok": true}
+	if not _route_scene_adapter is Object:
+		return {"ok": false}
+	var ticket: Dictionary = (prepared.get("ticket", {}) as Dictionary).duplicate(true)
+	var result: Variant = null
+	if kind == "route_protocol" and (_route_scene_adapter as Object).has_method("confirm_route_transition"):
+		result = (_route_scene_adapter as Object).call(
+			"confirm_route_transition", ticket, context.duplicate(true)
+		)
+	elif kind == "room_scene_host" and (_route_scene_adapter as Object).has_method("confirm_transition"):
+		result = (_route_scene_adapter as Object).call("confirm_transition", ticket)
+	return _adapter_result_dictionary(result)
+
+
+func _rollback_route_scene(prepared: Dictionary, context: Dictionary) -> Dictionary:
+	var kind := str(prepared.get("adapter_kind", ""))
+	if kind == "callable":
+		return {"ok": true}
+	if not _route_scene_adapter is Object:
+		return {"ok": false}
+	var ticket: Dictionary = (prepared.get("ticket", {}) as Dictionary).duplicate(true)
+	var result: Variant = null
+	if kind == "route_protocol" and (_route_scene_adapter as Object).has_method("rollback_route_transition"):
+		result = (_route_scene_adapter as Object).call(
+			"rollback_route_transition", ticket, context.duplicate(true)
+		)
+	elif kind == "room_scene_host" and (_route_scene_adapter as Object).has_method("rollback_transition"):
+		result = (_route_scene_adapter as Object).call("rollback_transition", ticket)
+	return _adapter_result_dictionary(result)
+
+
+func _floor_rule_configuration_for_scene(prepared: Dictionary) -> Dictionary:
+	if not _route_scene_adapter is Object:
+		return {}
+	var ticket: Dictionary = (prepared.get("ticket", {}) as Dictionary).duplicate(true)
+	var adapter := _route_scene_adapter as Object
+	if adapter.has_method("floor_rule_configuration"):
+		var value: Variant = adapter.call("floor_rule_configuration", ticket)
+		return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+	return {}
+
+
+func _advance_floor_rule_from_host() -> void:
+	if (
+		_facade == null
+		or _room_controller == null
+		or not _room_controller.has_method("character_boss_exposure_runtime_frame")
+		or not _facade.has_method("advance_floor_rule_frame")
+	):
+		return
+	var state := runtime_snapshot()
+	if RunPhaseScript.is_terminal(int(state.get("phase", -1))):
+		return
+	var floor_rule_state: Dictionary = state.get("floor_rule_state", {})
+	if floor_rule_state.is_empty():
+		_floor_rule_frame_origin = -1
+		return
+	var authority_frame := _host_runtime_frame()
+	if _floor_rule_frame_origin < 0:
+		_floor_rule_frame_origin = authority_frame - int(floor_rule_state.get("runtime_frame", -1)) - 1
+	var runtime_frame := authority_frame - _floor_rule_frame_origin
+	if runtime_frame <= int(floor_rule_state.get("runtime_frame", -1)):
+		return
+	var advanced: Variant = _facade.call(
+		"advance_floor_rule_frame",
+		runtime_frame,
+		{},
+		int(state.get("revision", -1))
+	)
+	if advanced == null or not _adapter_result_ok(advanced):
+		_fail_floor_rule_frame_advance(advanced, runtime_frame)
+
+
+func _reset_floor_rule_runtime_for_new_run() -> bool:
+	if _route_scene_adapter is Object:
+		var adapter := _route_scene_adapter as Object
+		if (
+			adapter.has_method("prepare_transition")
+			and adapter.has_method("active_snapshot")
+			and adapter.has_method("reset")
+		):
+			adapter.call("reset")
+	if _floor_rule_effect_authority is Object:
+		var authority := _floor_rule_effect_authority as Object
+		if authority.has_method("reset_runtime_state"):
+			return bool(authority.call("reset_runtime_state"))
+	return true
+
+
+func _fail_floor_rule_frame_advance(result: Variant, runtime_frame: int) -> void:
+	var state := runtime_snapshot()
+	if RunPhaseScript.is_terminal(int(state.get("phase", -1))):
+		return
+	var code := "INVALID_RESULT"
+	var failure_context: Dictionary = {}
 	if result is Dictionary:
-		return bool((result as Dictionary).get("ok", false))
-	if result is Object:
-		return bool((result as Object).get("ok"))
+		code = str((result as Dictionary).get("code", code))
+		var dictionary_context: Variant = (result as Dictionary).get("context", {})
+		if dictionary_context is Dictionary:
+			failure_context = (dictionary_context as Dictionary).duplicate(true)
+	elif result is Object:
+		code = str((result as Object).get("code"))
+		var object_context: Variant = (result as Object).get("context")
+		if object_context is Dictionary:
+			failure_context = (object_context as Dictionary).duplicate(true)
+	var terminal_context := {
+		"result": "runtime_error",
+		"reason": "floor_rule_frame_advance",
+		"runtime_frame": runtime_frame,
+		"floor_rule_error_code": code,
+		"floor_rule_error_context": failure_context,
+	}
+	_floor_rule_frame_origin = -1
+	if _facade == null or not _facade.has_method("player_died"):
+		_on_runtime_failed(terminal_context)
+		return
+	var terminal: Variant = _facade.call("player_died", terminal_context)
+	if terminal != null and _adapter_result_ok(terminal):
+		_on_terminal_committed(terminal_context, int(terminal.get("new_revision")))
+		return
+	_on_runtime_failed(terminal_context)
+
+
+func _host_runtime_frame() -> int:
+	if (
+		_room_controller != null
+		and _room_controller.has_method("character_boss_exposure_runtime_frame")
+	):
+		return int(_room_controller.call("character_boss_exposure_runtime_frame"))
+	return maxi(0, int(Engine.get_physics_frames()))
+
+
+func _floor_rule_effect_authority_is_valid() -> bool:
+	if _floor_rule_effect_authority is Callable:
+		return (_floor_rule_effect_authority as Callable).is_valid()
+	return (
+		_floor_rule_effect_authority is Object
+		and (
+			(_floor_rule_effect_authority as Object).has_method("commit_floor_rule_effects")
+			or (_floor_rule_effect_authority as Object).has_method("commit_floor_rule_effect")
+		)
+	)
+
+
+func _adapter_result_dictionary(value: Variant) -> Dictionary:
+	if value is Dictionary:
+		var result := (value as Dictionary).duplicate(true)
+		if not result.has("ok"):
+			result["ok"] = false
+		return result
+	return {"ok": _adapter_result_ok(value)}
+
+
+func _adapter_result_ok(value: Variant) -> bool:
+	if typeof(value) == TYPE_BOOL:
+		return bool(value)
+	if value is Dictionary:
+		return bool((value as Dictionary).get("ok", false))
+	if value is Object:
+		return bool((value as Object).get("ok"))
 	return false
 
 

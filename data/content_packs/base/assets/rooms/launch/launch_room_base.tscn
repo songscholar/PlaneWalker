@@ -1,0 +1,26 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/launch_room_scene.gd" id="1_scene"]
+
+[node name="LaunchRoomScene" type="Node2D"]
+script = ExtResource("1_scene")
+metadata/content_id = ""
+metadata/room_type = ""
+metadata/layout_variant = "base"
+metadata/visual_signature = "launch-room-base-v1"
+
+[node name="PixelProxyLayer" type="Node2D" parent="."]
+
+[node name="PlayerEntry" type="Marker2D" parent="."]
+
+[node name="PlayerExit" type="Marker2D" parent="."]
+
+[node name="CameraBounds" type="Area2D" parent="."]
+
+[node name="DoorAnchors" type="Node2D" parent="."]
+
+[node name="EncounterAnchors" type="Node2D" parent="."]
+
+[node name="InteractionAnchors" type="Node2D" parent="."]
+
+[node name="FloorRuleAnchors" type="Node2D" parent="."]

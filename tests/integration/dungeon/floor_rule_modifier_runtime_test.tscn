@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/dungeon/floor_rule_modifier_runtime_test.gd" id="1_floor_rule_modifier_runtime"]
+
+[node name="FloorRuleModifierRuntimeTest" type="Node"]
+script = ExtResource("1_floor_rule_modifier_runtime")

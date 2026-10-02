@@ -6,6 +6,7 @@ const RunOrchestratorScript := preload("res://scripts/application/run_orchestrat
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_facade.gd")
 const RunRuntimeHostScript := preload("res://scripts/application/run_runtime_host.gd")
+const RoomSceneHostScript := preload("res://scripts/dungeon/room_scene_host.gd")
 
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
@@ -74,6 +75,92 @@ class RouteLifecycleRecorder:
 		})
 
 
+class AtomicRouteSceneAdapter:
+	extends RefCounted
+
+	var active_snapshot: Dictionary = {"content_id": "entry", "instance_generation": 1}
+	var prior_snapshot: Dictionary = {}
+	var prepared_ticket: Dictionary = {}
+	var fail_prepare: bool = false
+	var fail_commit: bool = false
+	var fail_confirm: bool = false
+
+	func prepare_route_transition(target: Dictionary, _context: Dictionary) -> Dictionary:
+		if fail_prepare or not prepared_ticket.is_empty():
+			return {"ok": false, "code": &"PREPARE_FAILED"}
+		prior_snapshot = active_snapshot.duplicate(true)
+		prepared_ticket = {
+			"ticket_id": 1,
+			"target_content_id": str(target.get("template_id", "")),
+		}
+		return {"ok": true, "ticket": prepared_ticket.duplicate(true)}
+
+	func commit_route_transition(ticket: Dictionary, target: Dictionary, _context: Dictionary) -> Dictionary:
+		if fail_commit or ticket != prepared_ticket:
+			return {"ok": false, "code": &"COMMIT_FAILED"}
+		active_snapshot = {
+			"content_id": str(target.get("template_id", "")),
+			"instance_generation": int(prior_snapshot.get("instance_generation", 0)) + 1,
+		}
+		return {"ok": true}
+
+	func confirm_route_transition(ticket: Dictionary, _context: Dictionary) -> Dictionary:
+		if fail_confirm or ticket != prepared_ticket:
+			return {"ok": false, "code": &"CONFIRM_FAILED"}
+		prepared_ticket.clear()
+		prior_snapshot.clear()
+		return {"ok": true}
+
+	func rollback_route_transition(ticket: Dictionary, _context: Dictionary) -> Dictionary:
+		if ticket != prepared_ticket:
+			return {"ok": false, "code": &"ROLLBACK_FAILED"}
+		active_snapshot = prior_snapshot.duplicate(true)
+		prepared_ticket.clear()
+		prior_snapshot.clear()
+		return {"ok": true}
+
+
+class RecordingFloorRuleEffectAuthority:
+	extends RefCounted
+
+	var batches: Array[Array] = []
+
+	func commit_floor_rule_effects(facts: Array) -> bool:
+		batches.append(facts.duplicate(true))
+		return true
+
+
+class RejectingFloorRuleEffectAuthority:
+	extends RefCounted
+
+	var calls: int = 0
+
+	func commit_floor_rule_effects(_facts: Array) -> bool:
+		calls += 1
+		return false
+
+
+class FloorRuleFrameController:
+	extends Node
+
+	var runtime_frame: int = 45
+
+	func character_boss_exposure_runtime_frame() -> int:
+		return runtime_frame
+
+
+class FloorRuleRuntimeFailureRecorder:
+	extends RefCounted
+
+	var events: Array[Dictionary] = []
+
+	func record_run_ended(run_id: String, result: Dictionary, revision: int) -> void:
+		events.append({
+			"run_id": run_id,
+			"result": result.duplicate(true),
+			"revision": revision,
+		})
+
 func _ready() -> void:
 	call_deferred("_run")
 
@@ -91,6 +178,9 @@ func _run() -> void:
 	_test_event_bus_floor_signal_contract(suite)
 	_test_runtime_host_launch_start_failure_is_atomic(suite)
 	_test_runtime_host_route_transaction_and_publication(suite)
+	_test_facade_finalized_route_compensation_and_confirmation(suite)
+	_test_floor_rule_state_runtime_round_trip(suite)
+	_test_floor_rule_advance_failure_is_terminal_once(suite)
 	suite.finish(get_tree())
 
 
@@ -220,9 +310,51 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 	suite.assert_equal(recorder.route_events.size(), 0, "stale route finalization publishes no route fact")
 	suite.assert_equal(recorder.room_started_events.size(), 0, "stale route finalization publishes no room-start fact")
 
+	var atomic_adapter := AtomicRouteSceneAdapter.new()
+	atomic_adapter.fail_confirm = true
 	suite.assert_true(
-		host.call("configure_route_scene_adapter", func(_target: Dictionary, _context: Dictionary): return true),
-		"Host accepts a successful route scene adapter"
+		host.call("configure_route_scene_adapter", atomic_adapter),
+		"Host accepts a two-phase route scene adapter"
+	)
+	var before_confirm_failure: Dictionary = facade.snapshot()
+	var scene_before_confirm_failure: Dictionary = atomic_adapter.active_snapshot.duplicate(true)
+	var confirm_failed = host.call("select_route", first_edge_id)
+	suite.assert_true(not confirm_failed.ok, "scene confirmation failure compensates the route")
+	suite.assert_equal(facade.snapshot(), before_confirm_failure, "confirmation failure restores exact RunState")
+	suite.assert_equal(atomic_adapter.active_snapshot, scene_before_confirm_failure, "confirmation failure restores the prior active scene")
+	suite.assert_equal(recorder.route_events.size(), 0, "confirmation failure publishes no route fact")
+	suite.assert_equal(recorder.room_started_events.size(), 0, "confirmation failure publishes no room-start fact")
+
+	var room_scene_host := RoomSceneHostScript.new()
+	add_child(room_scene_host)
+	suite.assert_true(
+		host.call("configure_route_scene_adapter", room_scene_host),
+		"Host accepts the real two-phase RoomSceneHost"
+	)
+	var before_missing_effect_authority: Dictionary = facade.snapshot()
+	var missing_effect_authority = host.call("select_route", first_edge_id)
+	suite.assert_true(
+		not missing_effect_authority.ok,
+		"real room transition fails before prepare without floor-rule effect authority"
+	)
+	suite.assert_equal(
+		str(missing_effect_authority.code),
+		"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+		"missing floor-rule effect authority reports a stable configuration failure"
+	)
+	suite.assert_equal(
+		facade.snapshot(),
+		before_missing_effect_authority,
+		"missing floor-rule effect authority preserves the exact RunState"
+	)
+	suite.assert_equal(
+		room_scene_host.call("active_snapshot").get("instance_id"),
+		0,
+		"missing floor-rule effect authority does not prepare or activate a room scene"
+	)
+	suite.assert_true(
+		host.call("configure_floor_rule_effect_authority", RecordingFloorRuleEffectAuthority.new()),
+		"Host accepts the floor-rule effect authority"
 	)
 	host.call("_publish_floor_started_once", facade.snapshot())
 	host.call("_publish_floor_started_once", facade.snapshot())
@@ -240,6 +372,10 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 		suite.assert_true(selected.ok, "successful route transition commits")
 		if not selected.ok:
 			break
+		suite.assert_true(
+			not (facade.snapshot().get("floor_rule_state", {}) as Dictionary).is_empty(),
+			"real room transition commits its floor-rule snapshot before publication"
+		)
 		suite.assert_equal(recorder.route_events.size(), route_count_before + 1, "route selection publishes one route fact")
 		suite.assert_equal(recorder.room_started_events.size(), room_start_count_before + 1, "route selection publishes one room-start fact")
 		var room: Dictionary = facade.current_room_definition()
@@ -262,7 +398,157 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 	suite.assert_equal(recorder.floor_completed_events.size(), 1, "duplicate floor-completion publication is suppressed")
 
 	_disconnect_route_recorder(recorder)
+	room_scene_host.reset()
+	room_scene_host.free()
 	host.free()
+
+
+func _test_facade_finalized_route_compensation_and_confirmation(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "route compensation facade boots")
+	suite.assert_true(facade.start_run(_launch_config(), "run-route-compensation").ok, "route compensation run starts")
+	var before: Dictionary = facade.snapshot()
+	var choice := (facade.route_choices() as Array)[0] as Dictionary
+	var begun = facade.begin_route_transition(StringName(str(choice["edge_id"])), int(before["revision"]))
+	suite.assert_true(begun.ok, "compensation route begins")
+	var transition_id := str(begun.context.get("transition_id", ""))
+	var finalized = facade.finalize_route_transition(transition_id, int(begun.new_revision))
+	suite.assert_true(finalized.ok, "compensation route finalizes without discarding its before snapshot")
+	var rolled_back = facade.rollback_route_transition(transition_id, int(finalized.new_revision))
+	suite.assert_true(rolled_back.ok, "finalized route remains compensatable before confirmation")
+	suite.assert_equal(facade.snapshot(), before, "finalized compensation restores byte-identical RunState")
+
+	choice = (facade.route_choices() as Array)[0] as Dictionary
+	begun = facade.begin_route_transition(StringName(str(choice["edge_id"])), int(facade.snapshot()["revision"]))
+	transition_id = str(begun.context.get("transition_id", ""))
+	finalized = facade.finalize_route_transition(transition_id, int(begun.new_revision))
+	var confirmed = facade.confirm_route_transition(transition_id, int(finalized.new_revision))
+	suite.assert_true(confirmed.ok, "confirmed route releases its compensation snapshot")
+	var late_rollback = facade.rollback_route_transition(transition_id, int(confirmed.new_revision))
+	suite.assert_true(not late_rollback.ok, "confirmed route cannot be rolled back")
+
+
+func _test_floor_rule_state_runtime_round_trip(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "floor-rule facade boots")
+	suite.assert_true(facade.start_run(_launch_config(), "run-floor-rule-state").ok, "floor-rule run starts")
+	var choice := (facade.route_choices() as Array)[0] as Dictionary
+	var begun = facade.begin_route_transition(StringName(str(choice["edge_id"])), int(facade.snapshot()["revision"]))
+	var transition_id := str(begun.context.get("transition_id", ""))
+	var finalized = facade.finalize_route_transition(transition_id, int(begun.new_revision))
+	suite.assert_true(finalized.ok, "floor-rule room enters")
+	var authority := RecordingFloorRuleEffectAuthority.new()
+	var configured = facade.configure_floor_rule(
+		&"rule_crumbling_ground",
+		_floor_rule_configuration(str(choice["node_id"])),
+		authority,
+		int(finalized.new_revision)
+	)
+	suite.assert_true(configured.ok, "current floor rule configures through facade authority")
+	var initial_rule: Dictionary = facade.snapshot().get("floor_rule_state", {}).duplicate(true)
+	suite.assert_true(not initial_rule.is_empty(), "configured floor rule is stored in RunState")
+	var cached_command_revision := int(configured.new_revision)
+	var advanced = facade.advance_floor_rule_frame(0, {}, int(configured.new_revision))
+	suite.assert_true(advanced.ok, "floor-rule frame advances through facade")
+	suite.assert_equal(
+		advanced.new_revision,
+		cached_command_revision,
+		"floor-rule frame observation does not consume the command revision"
+	)
+	var frame_zero: Dictionary = facade.snapshot().get("floor_rule_state", {}).duplicate(true)
+	suite.assert_equal(frame_zero.get("runtime_frame"), 0, "RunState records the monotonic runtime frame")
+	var still_confirmable = facade.can_confirm_route_transition(
+		transition_id,
+		cached_command_revision
+	)
+	suite.assert_true(
+		still_confirmable.ok,
+		"cached route command revision survives floor-rule frame observations"
+	)
+	var stale = facade.advance_floor_rule_frame(0, {}, int(advanced.new_revision))
+	suite.assert_true(not stale.ok, "duplicate floor-rule frame fails closed")
+	suite.assert_equal(facade.snapshot().get("floor_rule_state"), frame_zero, "rejected frame preserves exact floor-rule state")
+	var restored = facade.restore_floor_rule_snapshot(initial_rule, authority, int(advanced.new_revision))
+	suite.assert_true(restored.ok, "canonical floor-rule snapshot restores through facade")
+	suite.assert_equal(facade.snapshot().get("floor_rule_state"), initial_rule, "floor-rule Save/Replay restore is byte-identical")
+	var confirmed = facade.confirm_route_transition(transition_id, int(restored.new_revision))
+	suite.assert_true(confirmed.ok, "route can confirm after floor-rule state joins the transaction")
+	var completed = facade.complete_current_room()
+	suite.assert_true(completed.ok, "floor-rule room completes")
+	var next_choice := (facade.route_choices() as Array)[0] as Dictionary
+	var next_begun = facade.begin_route_transition(StringName(str(next_choice["edge_id"])), int(completed.new_revision))
+	suite.assert_true(next_begun.ok, "next route begins")
+	suite.assert_equal(facade.snapshot().get("floor_rule_state"), {}, "room transition clears the prior floor-rule state")
+	var next_rollback = facade.rollback_route_transition(str(next_begun.context.get("transition_id", "")), int(next_begun.new_revision))
+	suite.assert_true(next_rollback.ok, "next route rollback succeeds")
+	suite.assert_equal(facade.snapshot().get("floor_rule_state"), initial_rule, "route rollback restores the prior floor-rule snapshot")
+
+
+func _test_floor_rule_advance_failure_is_terminal_once(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "floor-rule failure facade boots")
+	var run_id := "run-floor-rule-runtime-failure"
+	suite.assert_true(facade.start_run(_launch_config(), run_id).ok, "floor-rule failure run starts")
+	var choice := (facade.route_choices() as Array)[0] as Dictionary
+	var begun = facade.begin_route_transition(
+		StringName(str(choice["edge_id"])),
+		int(facade.snapshot()["revision"])
+	)
+	var transition_id := str(begun.context.get("transition_id", ""))
+	var finalized = facade.finalize_route_transition(transition_id, int(begun.new_revision))
+	var authority := RejectingFloorRuleEffectAuthority.new()
+	var configured = facade.configure_floor_rule(
+		&"rule_crumbling_ground",
+		_floor_rule_configuration(str(choice["node_id"])),
+		authority,
+		int(finalized.new_revision)
+	)
+	suite.assert_true(configured.ok, "rejecting floor-rule authority configures before the active frame")
+	var confirmed = facade.confirm_route_transition(transition_id, int(configured.new_revision))
+	suite.assert_true(confirmed.ok, "floor-rule failure route confirms")
+
+	var host := RunRuntimeHostScript.new()
+	var frame_controller := FloorRuleFrameController.new()
+	add_child(frame_controller)
+	add_child(host)
+	host.set("_facade", facade)
+	host.set("_room_controller", frame_controller)
+	host.set("_active_run_id", run_id)
+	host.set("_published_run_id", run_id)
+	host.set("_floor_rule_frame_origin", 0)
+	var recorder := FloorRuleRuntimeFailureRecorder.new()
+	EventBus.run_ended.connect(recorder.record_run_ended)
+
+	host.call("_advance_floor_rule_from_host")
+	var terminal_state: Dictionary = facade.snapshot()
+	suite.assert_equal(authority.calls, 1, "first active frame reaches the rejecting authority once")
+	suite.assert_equal(
+		int(terminal_state.get("phase", -1)),
+		RunPhaseScript.Value.DEFEAT,
+		"floor-rule rejection enters the terminal runtime-error phase"
+	)
+	suite.assert_equal(
+		str((terminal_state.get("result", {}) as Dictionary).get("result", "")),
+		"runtime_error",
+		"floor-rule rejection records runtime_error as the authoritative result"
+	)
+	suite.assert_equal(recorder.events.size(), 1, "floor-rule rejection publishes one run-ended fact")
+	if not recorder.events.is_empty():
+		suite.assert_equal(
+			str((recorder.events[0]["result"] as Dictionary).get("reason", "")),
+			"floor_rule_frame_advance",
+			"published runtime error identifies floor-rule frame advancement"
+		)
+
+	frame_controller.runtime_frame = 46
+	host.call("_advance_floor_rule_from_host")
+	suite.assert_equal(authority.calls, 1, "terminal host does not retry the rejected floor-rule frame")
+	suite.assert_equal(recorder.events.size(), 1, "terminal host never republishes the runtime error")
+
+	if EventBus.run_ended.is_connected(recorder.record_run_ended):
+		EventBus.run_ended.disconnect(recorder.record_run_ended)
+	host.free()
+	frame_controller.free()
 
 
 func _test_runtime_host_launch_start_failure_is_atomic(suite) -> void:
@@ -391,3 +677,17 @@ func _load_json_array(path: String) -> Array:
 		return []
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	return parsed if parsed is Array else []
+
+
+func _floor_rule_configuration(room_id: String) -> Dictionary:
+	return {
+		"room_id": room_id,
+		"room_seed": 20261002,
+		"zones": [
+			{"id": "hazard_west", "bounds": {"x": 32.0, "y": 48.0, "width": 160.0, "height": 120.0}},
+			{"id": "safe_core", "bounds": {"x": 224.0, "y": 96.0, "width": 192.0, "height": 168.0}},
+		],
+		"safe_zone_ids": ["safe_core"],
+		"reduced_motion": false,
+		"hit_flash_enabled": true,
+	}
