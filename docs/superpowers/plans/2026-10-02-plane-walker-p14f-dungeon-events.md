@@ -238,11 +238,11 @@ The final review also verifies zero-side-effect preparation, `RunEconomyState` a
 **Interfaces:**
 - Produces `open_event`, `view_state`, `choose_option`, `complete_reward`, `complete_encounter`, `dismiss_result`, `snapshot`, and `restore_snapshot`.
 
-- [ ] **Step 1: Write RED tests for reopen, disabled options, redaction, weighted outcome, pending continuations, restore, duplicate choice, result dismissal, and exactly-once facts**
+- [x] **Step 1: Write RED tests for reopen, disabled options, redaction, weighted outcome, pending continuations, restore, duplicate choice, result dismissal, and exactly-once facts**
 
-- [ ] **Step 2: Run `./tools/run_tests.sh --filter dungeon_event_runtime` and require RED**
+- [x] **Step 2: Run `./tools/run_tests.sh --filter dungeon_event_runtime` and require RED**
 
-- [ ] **Step 3: Implement UI-safe fields only**
+- [x] **Step 3: Implement UI-safe fields only**
 
 ```text
 phase, event_id, name_key, description_key, prompt_key,
@@ -250,7 +250,18 @@ options[id,label_key,eligible,disabled_reason_key,outcome_visibility,visible_pre
 revision, result_key, pending_kind
 ```
 
-- [ ] **Step 4: Run GREEN and commit `feat(events): coordinate dungeon event flow`**
+- [x] **Step 4: Run GREEN and commit `feat(events): coordinate dungeon event flow`**
+
+**Completed:** `ba45f57 feat(events): coordinate dungeon event flow`
+
+**Focused verification (2026-10-02):**
+
+```text
+./tools/run_tests.sh --filter dungeon_event_runtime
+PASS — 2 consecutive runs; each run discovered 1 scene with 0 failures and 0 known leak warnings
+```
+
+Final review also verifies synchronous publication reentry rejection, durable pending-fact retry, same-secret restore and wrong-secret rejection, sealed publication ledger integrity, pending/emitted partition tamper rejection, authoritative encounter success facts, and zero-based floor requirement context.
 
 ---
 
