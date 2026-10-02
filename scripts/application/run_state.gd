@@ -269,7 +269,15 @@ func configure_floor_plan(
 			"code": &"INVALID_ARGUMENT",
 			"context": {"field": "floor_plan.run_seed", "reason": "run_seed_mismatch"},
 		}
+	var previous_plan := floor_plan.duplicate(true)
 	floor_plan = accepted
+	if not _sync_event_runtime_route_plan():
+		floor_plan = previous_plan
+		return {
+			"ok": false,
+			"code": &"INTEGRITY_FAILURE",
+			"context": {"field": "dungeon_event_runtime.route"},
+		}
 	_floor_definition = floor_definition.duplicate(true)
 	_room_templates = room_templates.duplicate(true)
 	current_floor_index = int(floor_plan["floor_index"])
@@ -305,7 +313,17 @@ func select_floor_edge(edge_id: StringName) -> Dictionary:
 	var selected: Dictionary = candidate.select_edge(edge_id, candidate.revision())
 	if not bool(selected.get("ok", false)):
 		return selected.duplicate(true)
+	var previous_plan := floor_plan.duplicate(true)
+	var previous_event_runtime := dungeon_event_runtime.duplicate(true)
 	floor_plan = candidate.snapshot()
+	if not _sync_event_runtime_route_plan():
+		floor_plan = previous_plan
+		dungeon_event_runtime = previous_event_runtime
+		return {
+			"ok": false,
+			"code": &"INTEGRITY_FAILURE",
+			"context": {"field": "dungeon_event_runtime.route"},
+		}
 	current_room = (floor_plan["selected_edge_ids"] as Array).size()
 	floor_rule_state = {}
 	return {
@@ -354,8 +372,16 @@ func initialize_launch_economy_state(
 		or not (merchant_snapshot.get("nodes", []) as Array).is_empty()
 	):
 		return false
+	var previous_economy := run_economy.duplicate(true)
+	var previous_merchant := merchant_state.duplicate(true)
+	var previous_event_runtime := dungeon_event_runtime.duplicate(true)
 	run_economy = economy_snapshot.duplicate(true)
 	merchant_state = merchant_snapshot.duplicate(true)
+	if not _sync_event_runtime_external_domains():
+		run_economy = previous_economy
+		merchant_state = previous_merchant
+		dungeon_event_runtime = previous_event_runtime
+		return false
 	return true
 
 
@@ -448,8 +474,16 @@ func commit_merchant_transaction_state(
 		or not _merchant_snapshot_matches_current_node(merchant_snapshot, current_node)
 	):
 		return false
+	var previous_economy := run_economy.duplicate(true)
+	var previous_merchant := merchant_state.duplicate(true)
+	var previous_event_runtime := dungeon_event_runtime.duplicate(true)
 	run_economy = economy_snapshot.duplicate(true)
 	merchant_state = merchant_snapshot.duplicate(true)
+	if not _sync_event_runtime_external_domains():
+		run_economy = previous_economy
+		merchant_state = previous_merchant
+		dungeon_event_runtime = previous_event_runtime
+		return false
 	return true
 
 
@@ -466,7 +500,13 @@ func commit_economy_transaction_state(
 		or not _is_single_economy_only_transition(run_economy, economy_snapshot)
 	):
 		return false
+	var previous_economy := run_economy.duplicate(true)
+	var previous_event_runtime := dungeon_event_runtime.duplicate(true)
 	run_economy = economy_snapshot.duplicate(true)
+	if not _sync_event_runtime_external_domains():
+		run_economy = previous_economy
+		dungeon_event_runtime = previous_event_runtime
+		return false
 	return true
 
 
@@ -496,7 +536,17 @@ func complete_current_floor_node(node_id: String) -> Dictionary:
 	)
 	if candidate == null:
 		return {"ok": false, "code": &"INTEGRITY_FAILURE", "context": {"field": "floor_plan"}}
+	var previous_plan := floor_plan.duplicate(true)
+	var previous_event_runtime := dungeon_event_runtime.duplicate(true)
 	floor_plan = candidate.snapshot()
+	if not _sync_event_runtime_route_plan():
+		floor_plan = previous_plan
+		dungeon_event_runtime = previous_event_runtime
+		return {
+			"ok": false,
+			"code": &"INTEGRITY_FAILURE",
+			"context": {"field": "dungeon_event_runtime.route"},
+		}
 	return {"ok": true, "node": current_floor_node(), "plan": floor_plan.duplicate(true)}
 
 
@@ -619,7 +669,9 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 				"health": (event_parts["health"] as Dictionary).duplicate(true),
 			},
 			build_state.transaction_snapshot(),
-			true
+			true,
+			floor_definition,
+			room_templates
 		):
 			return false
 	if plan.is_empty():
@@ -798,14 +850,15 @@ func restore_launch_run_snapshot(
 		"floor_definition": floor_definition.duplicate(true),
 		"room_templates": room_templates.duplicate(true),
 	}
-	if not can_restore_floor_transaction_snapshot(floor_value):
-		return false
 	var before_floor: Dictionary = floor_transaction_snapshot()
 	var before_build: Dictionary = build_state.transaction_snapshot()
-	if not restore_floor_transaction_snapshot(floor_value):
-		return false
 	if not build_state.restore_transaction_snapshot(target_build):
-		restore_floor_transaction_snapshot(before_floor)
+		return false
+	if not can_restore_floor_transaction_snapshot(floor_value):
+		build_state.restore_transaction_snapshot(before_build)
+		return false
+	if not restore_floor_transaction_snapshot(floor_value):
+		build_state.restore_transaction_snapshot(before_build)
 		return false
 	run_time_ms = int(value["run_time_ms"])
 	_run_time_fraction_ms = 0.0
@@ -940,13 +993,62 @@ func _event_content_fingerprint(runtime_snapshot: Dictionary) -> String:
 	return str((parts["event_state"] as Dictionary).get("content_fingerprint", ""))
 
 
+func _sync_event_runtime_route_plan() -> bool:
+	if dungeon_event_runtime.is_empty():
+		return true
+	var parts := _event_runtime_parts(dungeon_event_runtime)
+	if parts.is_empty() or floor_plan.is_empty():
+		return false
+	var candidate := dungeon_event_runtime.duplicate(true)
+	var consequence := candidate.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	var route := participants.get("route", {}) as Dictionary
+	if route.is_empty():
+		return false
+	route["plan"] = floor_plan.duplicate(true)
+	participants["route"] = route
+	consequence["participant_snapshots"] = participants
+	candidate["consequence_runtime"] = consequence
+	if _event_runtime_parts(candidate).is_empty():
+		return false
+	dungeon_event_runtime = candidate
+	return true
+
+
+func _sync_event_runtime_external_domains() -> bool:
+	if dungeon_event_runtime.is_empty():
+		return true
+	var parts := _event_runtime_parts(dungeon_event_runtime)
+	if parts.is_empty():
+		return false
+	var candidate := dungeon_event_runtime.duplicate(true)
+	var consequence := candidate.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	var modifier := participants.get("modifier", {}) as Dictionary
+	if modifier.is_empty():
+		return false
+	participants["economy"] = run_economy.duplicate(true)
+	modifier["curse_ids"] = (
+		build_state.transaction_snapshot().get("curses", []) as Array
+	).duplicate()
+	participants["modifier"] = modifier
+	consequence["participant_snapshots"] = participants
+	candidate["consequence_runtime"] = consequence
+	if _event_runtime_parts(candidate).is_empty():
+		return false
+	dungeon_event_runtime = candidate
+	return true
+
+
 func _event_candidate_matches_domains(
 	runtime_snapshot: Dictionary,
 	economy_snapshot: Dictionary,
 	plan_snapshot: Dictionary,
 	resource_bundle: Dictionary,
 	build_snapshot: Dictionary,
-	allow_uninitialized: bool
+	allow_uninitialized: bool,
+	validation_floor_definition: Dictionary = {},
+	validation_room_templates: Array = []
 ) -> bool:
 	var parts := _event_runtime_parts(runtime_snapshot)
 	if (
@@ -963,8 +1065,18 @@ func _event_candidate_matches_domains(
 	var route := parts["route"] as Dictionary
 	if not route.get("plan") is Dictionary or route["plan"] != plan_snapshot:
 		return false
+	var floor_definition := (
+		validation_floor_definition
+		if not validation_floor_definition.is_empty()
+		else _floor_definition
+	)
+	var room_templates := (
+		validation_room_templates
+		if not validation_room_templates.is_empty()
+		else _room_templates
+	)
 	if not plan_snapshot.is_empty() and _configured_floor_plan(
-		plan_snapshot, _floor_definition, _room_templates
+		plan_snapshot, floor_definition, room_templates
 	) == null:
 		return false
 	var modifier := parts["modifier"] as Dictionary

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/application/event_facade_flow_test.gd" id="1_test"]
+
+[node name="EventFacadeFlowTest" type="Node"]
+script = ExtResource("1_test")

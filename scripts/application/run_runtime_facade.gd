@@ -17,6 +17,9 @@ const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_gene
 const RoomTemplateDefinitionScript := preload(
 	"res://scripts/dungeon/room_template_definition.gd"
 )
+const DungeonEventDefinitionScript := preload(
+	"res://scripts/dungeon/dungeon_event_definition.gd"
+)
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 const RoomRuntimeScript := preload("res://scripts/dungeon/room_runtime.gd")
 const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
@@ -63,6 +66,17 @@ const MerchantHealthTradeAuthorityScript := preload(
 )
 const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
 const ShopPriceServiceScript := preload("res://scripts/economy/shop_price_service.gd")
+const DungeonEventRuntimeScript := preload("res://scripts/events/dungeon_event_runtime.gd")
+const DungeonEventSelectorScript := preload("res://scripts/events/dungeon_event_selector.gd")
+const DungeonEventRunStateScript := preload("res://scripts/events/dungeon_event_run_state.gd")
+const EventRequirementServiceScript := preload("res://scripts/events/event_requirement_service.gd")
+const DungeonEventConsequenceRuntimeScript := preload(
+	"res://scripts/events/dungeon_event_consequence_runtime.gd"
+)
+const EventResourceAuthorityScript := preload("res://scripts/events/event_resource_authority.gd")
+const EventHealthAuthorityScript := preload("res://scripts/events/event_health_authority.gd")
+const EventModifierAuthorityScript := preload("res://scripts/events/event_modifier_authority.gd")
+const EventRouteAuthorityScript := preload("res://scripts/events/event_route_authority.gd")
 
 const GAME_VERSION := "0.4.0-dev"
 const DEFAULT_CONTENT_PATH := "res://data/content_packs/base/pack.json"
@@ -96,6 +110,9 @@ var _merchant_sessions: Dictionary = {}
 var _merchant_reward_runtime: Object
 var _merchant_player: Object
 var _merchant_run_start_player_baseline: Dictionary = {}
+var _event_definitions: Array[Dictionary] = []
+var _event_content_fingerprint: String = ""
+var _event_runtime: RefCounted
 
 
 func _notification(what: int) -> void:
@@ -140,6 +157,9 @@ func boot(
 	_merchant_reward_runtime = null
 	_merchant_player = null
 	_merchant_run_start_player_baseline.clear()
+	_event_definitions.clear()
+	_event_content_fingerprint = ""
+	_event_runtime = null
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -227,6 +247,7 @@ func start_run(config: Dictionary, run_id: String):
 	var candidate_rooms: Array[Dictionary] = []
 	var candidate_economy: RefCounted = null
 	var candidate_merchant_state: RefCounted = null
+	var candidate_event_runtime: RefCounted = null
 	if floor_plan_run:
 		candidate_economy = RunEconomyStateScript.new()
 		var economy_configured: Dictionary = candidate_economy.call(
@@ -257,6 +278,25 @@ func start_run(config: Dictionary, run_id: String):
 		accepted_result = _start_floor_at(
 			0, candidate_orchestrator, candidate_director
 		)
+		if accepted_result.ok:
+			var event_candidate := _event_runtime_candidate(
+				candidate_orchestrator,
+				candidate_director,
+				candidate_economy,
+				{}
+			)
+			if not bool(event_candidate.get("ok", false)):
+				candidate_director.free()
+				return CommandResultScript.failure(
+					&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+					_revision(),
+					(event_candidate.get("context", {}) as Dictionary).duplicate(true)
+				)
+			candidate_event_runtime = event_candidate["runtime"] as RefCounted
+			accepted_result = candidate_orchestrator.initialize_launch_events(
+				candidate_event_runtime.call("snapshot"),
+				candidate_orchestrator.revision()
+			)
 	else:
 		candidate_rooms = M1RoomPlanScript.definitions(
 			_encounter_catalog,
@@ -284,6 +324,7 @@ func start_run(config: Dictionary, run_id: String):
 	_floor_rule_effect_authority = null
 	_economy_state = candidate_economy
 	_merchant_run_state = candidate_merchant_state
+	_event_runtime = candidate_event_runtime
 	_merchant_sessions.clear()
 	return accepted_result
 
@@ -1093,6 +1134,194 @@ func current_encounter_definition() -> Dictionary:
 	)
 
 
+func open_current_event(runtime_context: Dictionary = {}):
+	var readiness = _require_event_room("open_current_event")
+	if not readiness.ok:
+		return readiness
+	if not _sync_event_runtime_floor_plan():
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(), {"stage": "event_route_sync"}
+		)
+	var room := current_room_definition()
+	var opened: Dictionary = _event_runtime.call(
+		"open_event",
+		{
+			"floor_id": str(room.get("floor_id", "")),
+			"floor_index": int(room.get("floor_index", -1)),
+			"node_id": str(room.get("node_id", "")),
+			"primary_event_id": str(room.get("event_id", "")),
+		},
+		runtime_context.duplicate(true)
+	)
+	if bool(opened.get("ok", false)):
+		if not _overlay_event_assignments(_director, _event_runtime.call("snapshot")):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE", _revision(), {"stage": "event_open_overlay"}
+			)
+	return _event_command_result(opened)
+
+
+func event_view_state() -> Dictionary:
+	if _event_runtime == null:
+		return {}
+	var value: Variant = _event_runtime.call("view_state")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func choose_current_event_option(option_id: StringName, expected_revision: int):
+	var readiness = _require_event_room("choose_current_event_option")
+	if not readiness.ok:
+		return readiness
+	return _event_command_result(
+		_event_runtime.call("choose_option", option_id, expected_revision)
+	)
+
+
+func complete_current_event_reward(
+	continuation_id: String,
+	result: Dictionary,
+	expected_revision: int
+):
+	var readiness = _require_event_room("complete_current_event_reward")
+	if not readiness.ok:
+		return readiness
+	return _event_command_result(_event_runtime.call(
+		"complete_reward",
+		continuation_id,
+		result.duplicate(true),
+		expected_revision
+	))
+
+
+func complete_current_event_encounter(
+	continuation_id: String,
+	success: bool,
+	context: Dictionary,
+	expected_revision: int
+):
+	var readiness = _require_event_room("complete_current_event_encounter")
+	if not readiness.ok:
+		return readiness
+	return _event_command_result(_event_runtime.call(
+		"complete_encounter",
+		continuation_id,
+		success,
+		context.duplicate(true),
+		expected_revision
+	))
+
+
+func dismiss_current_event(expected_revision: int):
+	var readiness = _require_event_room("dismiss_current_event")
+	if not readiness.ok:
+		return readiness
+	return _event_command_result(
+		_event_runtime.call("dismiss_result", expected_revision)
+	)
+
+
+func _require_event_room(operation: String):
+	var readiness = _require_booted(operation)
+	if not readiness.ok:
+		return readiness
+	var room := current_room_definition()
+	if (
+		_event_runtime == null
+		or room.is_empty()
+		or str(room.get("runtime_mode", "")) != "launch"
+		or str(room.get("room_type", room.get("type", ""))) != "event"
+	):
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": operation}
+		)
+	return CommandResultScript.success(_revision())
+
+
+func _event_command_result(value: Variant):
+	if not value is Dictionary:
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(), {"stage": "event_result_shape"}
+		)
+	var result := value as Dictionary
+	if not bool(result.get("ok", false)):
+		var failure_context := (
+			(result.get("context", {}) as Dictionary).duplicate(true)
+			if result.get("context", {}) is Dictionary
+			else {}
+		)
+		if bool(result.get("committed", false)):
+			failure_context["committed"] = true
+			failure_context["pending_publication"] = bool(
+				result.get("pending_publication", false)
+			)
+		return CommandResultScript.failure(
+			StringName(str(result.get("code", "INVALID_ARGUMENT"))),
+			_revision(),
+			failure_context
+		)
+	var view_value: Variant = result.get("view_state", event_view_state())
+	var view := (
+		(view_value as Dictionary).duplicate(true)
+		if view_value is Dictionary
+		else event_view_state()
+	)
+	var context := {"view_state": view}
+	var continuation := _current_event_continuation()
+	if not continuation.is_empty():
+		context["continuation"] = continuation
+	return CommandResultScript.success(_revision(), context)
+
+
+func _sync_event_runtime_floor_plan() -> bool:
+	if _event_runtime == null or _orchestrator == null or _economy_state == null:
+		return false
+	var runtime_snapshot: Dictionary = _event_runtime.call("snapshot")
+	var current_plan := _orchestrator.snapshot().get("floor_plan", {}) as Dictionary
+	var consequence := runtime_snapshot.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	var route := participants.get("route", {}) as Dictionary
+	if current_plan.is_empty() or route.is_empty():
+		return false
+	if route.get("plan", {}) == current_plan:
+		return true
+	route["plan"] = current_plan.duplicate(true)
+	participants["route"] = route
+	consequence["participant_snapshots"] = participants
+	runtime_snapshot["consequence_runtime"] = consequence
+	var candidate := _event_runtime_candidate(
+		_orchestrator, _director, _economy_state, runtime_snapshot
+	)
+	if not bool(candidate.get("ok", false)):
+		return false
+	_event_runtime = candidate["runtime"] as RefCounted
+	return true
+
+
+func _current_event_continuation() -> Dictionary:
+	if _event_runtime == null:
+		return {}
+	var runtime_snapshot: Dictionary = _event_runtime.call("snapshot")
+	var consequence := runtime_snapshot.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	var event_state := participants.get("event_state", {}) as Dictionary
+	var reward := event_state.get("pending_reward", {}) as Dictionary
+	if not reward.is_empty():
+		return {
+			"kind": "reward",
+			"continuation_id": str(reward.get("continuation_id", "")),
+			"pool_id": str(reward.get("pool_id", "")),
+			"count": int(reward.get("count", 0)),
+		}
+	var encounter := event_state.get("pending_encounter", {}) as Dictionary
+	if not encounter.is_empty():
+		return {
+			"kind": "encounter",
+			"continuation_id": str(encounter.get("continuation_id", "")),
+			"encounter_id": str(encounter.get("encounter_id", "")),
+		}
+	return {}
+
+
 func room_plan() -> Array[Dictionary]:
 	if _is_floor_plan_run() and _director != null:
 		var definitions: Array[Dictionary] = []
@@ -1316,6 +1545,24 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT", _revision(), {"field": "run_economy_or_merchant_state"}
 		)
+	var event_value := value.get("dungeon_event_runtime", {}) as Dictionary
+	var event_candidate := _event_runtime_candidate(
+		candidate_orchestrator,
+		candidate_director,
+		candidate_economy,
+		event_value
+	)
+	if not bool(event_candidate.get("ok", false)):
+		candidate_director.free()
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_revision(),
+			{
+				"field": "dungeon_event_runtime",
+				"cause": (event_candidate.get("context", {}) as Dictionary).duplicate(true),
+			}
+		)
+	var candidate_event_runtime := event_candidate["runtime"] as RefCounted
 	var candidate_floor_rule_runtime: RefCounted = null
 	var floor_rule_value := value.get("floor_rule_state", {}) as Dictionary
 	if not floor_rule_value.is_empty():
@@ -1338,12 +1585,14 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 	var previous_merchant = _merchant_run_state
 	var previous_floor_rule_runtime = _floor_rule_runtime
 	var previous_floor_rule_effect_authority: Variant = _floor_rule_effect_authority
+	var previous_event_runtime = _event_runtime
 	var previous_loadout := _accepted_loadout.duplicate(true)
 	var previous_sessions := _merchant_sessions.duplicate()
 	_orchestrator = candidate_orchestrator
 	_director = candidate_director
 	_economy_state = candidate_economy
 	_merchant_run_state = candidate_merchant
+	_event_runtime = candidate_event_runtime
 	_accepted_loadout = (
 		(loadout_validation.context.get("loadout", {}) as Dictionary).duplicate(true)
 	)
@@ -1360,6 +1609,7 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 		_director = previous_director
 		_economy_state = previous_economy
 		_merchant_run_state = previous_merchant
+		_event_runtime = previous_event_runtime
 		_floor_rule_runtime = previous_floor_rule_runtime
 		_floor_rule_effect_authority = previous_floor_rule_effect_authority
 		_accepted_loadout = previous_loadout
@@ -2137,6 +2387,306 @@ func _merchant_compatibility_context() -> Dictionary:
 	return {"archetype_ids": archetype_ids, "weapon_ids": weapon_ids}
 
 
+func _event_runtime_candidate(
+	orchestrator: RefCounted,
+	director: Node,
+	economy: RefCounted,
+	restore_value: Dictionary
+) -> Dictionary:
+	if (
+		orchestrator == null
+		or director == null
+		or economy == null
+		or _event_definitions.size() != 18
+		or _event_content_fingerprint.length() != 64
+	):
+		return {"ok": false, "context": {"stage": "event_dependencies"}}
+	var state: Dictionary = orchestrator.call("snapshot")
+	var plan := state.get("floor_plan", {}) as Dictionary
+	if plan.is_empty():
+		return {"ok": false, "context": {"stage": "event_floor_plan"}}
+	var build := state.get("build", {}) as Dictionary
+	var participants: Dictionary = {}
+	if not restore_value.is_empty():
+		var consequence_value := restore_value.get("consequence_runtime", {}) as Dictionary
+		participants = (
+			consequence_value.get("participant_snapshots", {}) as Dictionary
+		).duplicate(true)
+		if participants.size() != 6:
+			return {"ok": false, "context": {"stage": "event_restore_participants"}}
+
+	var resource = EventResourceAuthorityScript.new()
+	var resource_values := {"time_shard": 2, "forge_essence": 1}
+	if not participants.is_empty():
+		resource_values = (
+			(participants.get("resource", {}) as Dictionary).get("resources", {}) as Dictionary
+		).duplicate(true)
+	if not resource.configure(resource_values):
+		return {"ok": false, "context": {"stage": "event_resource"}}
+
+	var health = EventHealthAuthorityScript.new()
+	var health_current := 100.0
+	var health_maximum := 100.0
+	if not participants.is_empty():
+		var health_value := participants.get("health", {}) as Dictionary
+		health_current = float(health_value.get("current", 0.0))
+		health_maximum = float(health_value.get("maximum", 0.0))
+	if not health.configure(health_current, health_maximum):
+		return {"ok": false, "context": {"stage": "event_health"}}
+
+	var modifier = EventModifierAuthorityScript.new()
+	var curse_ids: Array = (build.get("curses", []) as Array).duplicate()
+	var narrative_flags: Dictionary = {}
+	var temporary_modifiers: Array = []
+	if not participants.is_empty():
+		var modifier_value := participants.get("modifier", {}) as Dictionary
+		curse_ids = (modifier_value.get("curse_ids", []) as Array).duplicate()
+		narrative_flags = (
+			modifier_value.get("narrative_flags", {}) as Dictionary
+		).duplicate(true)
+		temporary_modifiers = (
+			modifier_value.get("temporary_modifiers", []) as Array
+		).duplicate(true)
+	if not modifier.configure(curse_ids, narrative_flags, temporary_modifiers):
+		return {"ok": false, "context": {"stage": "event_modifier"}}
+
+	var route = EventRouteAuthorityScript.new()
+	var route_plan := plan.duplicate(true)
+	if not participants.is_empty():
+		route_plan = (
+			(participants.get("route", {}) as Dictionary).get("plan", {}) as Dictionary
+		).duplicate(true)
+	if route_plan != plan or not route.configure(route_plan):
+		return {"ok": false, "context": {"stage": "event_route"}}
+
+	var event_state = DungeonEventRunStateScript.new()
+	if not bool(event_state.configure(_event_content_fingerprint).get("ok", false)):
+		return {"ok": false, "context": {"stage": "event_state"}}
+	var consequence = DungeonEventConsequenceRuntimeScript.new()
+	if not consequence.configure(resource, health, economy, modifier, route, event_state):
+		return {"ok": false, "context": {"stage": "event_consequence"}}
+	var runtime = DungeonEventRuntimeScript.new()
+	var publication_secret := _digest_canonical({
+		"schema": "event_publication_secret_v1",
+		"content_fingerprint": _event_content_fingerprint,
+		"run_id": str(state.get("run_id", "")),
+		"run_seed": int(state.get("run_seed", 0)),
+	})
+	if not runtime.configure(
+		_event_definitions,
+		DungeonEventSelectorScript.new(),
+		event_state,
+		EventRequirementServiceScript.new(),
+		consequence,
+		Callable(self, "_event_runtime_context"),
+		Callable(self, "_commit_event_runtime_state"),
+		Callable(self, "_publish_event_fact"),
+		publication_secret
+	):
+		return {"ok": false, "context": {"stage": "event_runtime"}}
+	if not restore_value.is_empty() and not runtime.restore_snapshot(restore_value):
+		return {"ok": false, "context": {"stage": "event_runtime_restore"}}
+	if not restore_value.is_empty() and not _overlay_event_assignments(
+		director, runtime.snapshot()
+	):
+		return {"ok": false, "context": {"stage": "event_director_overlay"}}
+	return {"ok": true, "runtime": runtime, "context": {}}
+
+
+func _event_runtime_context() -> Dictionary:
+	if _event_runtime == null or _orchestrator == null:
+		return {}
+	var runtime_snapshot: Dictionary = _event_runtime.call("snapshot")
+	var consequence := runtime_snapshot.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	if participants.size() != 6:
+		return {}
+	var resource := participants.get("resource", {}) as Dictionary
+	var health := participants.get("health", {}) as Dictionary
+	var economy := participants.get("economy", {}) as Dictionary
+	var modifier := participants.get("modifier", {}) as Dictionary
+	var state: Dictionary = _orchestrator.snapshot()
+	var config := state.get("config", {}) as Dictionary
+	var resources := (
+		resource.get("resources", {}) as Dictionary
+	).duplicate(true)
+	var health_context := {
+		"current": float(health.get("current", 0.0)),
+		"maximum": float(health.get("maximum", 0.0)),
+	}
+	var curse_ids := (modifier.get("curse_ids", []) as Array).duplicate()
+	var narrative_flags := (
+		modifier.get("narrative_flags", {}) as Dictionary
+	).duplicate(true)
+	var enabled_time_skills := config.get("enabled_time_skills", []) as Array
+	return {
+		"global_revision": _revision(),
+		"requirements": {
+			"resources": resources.duplicate(true),
+			"health": health_context.duplicate(true),
+			"gold": int(economy.get("balance", 0)),
+			"reward_tags": [],
+			"curse_ids": curse_ids.duplicate(),
+			"narrative_flags": narrative_flags.duplicate(true),
+			"floor_index": int(state.get("current_floor_index", -1)),
+		},
+		"selection": {
+			"run_seed": int(state.get("run_seed", 0)),
+			"floor_index": int(state.get("current_floor_index", -1)),
+			"availability": str(config.get("milestone", "LAUNCH")),
+			"health": health_context.duplicate(true),
+			"economy": {"gold": int(economy.get("balance", 0))},
+			"build": {"curse_ids": curse_ids.duplicate()},
+			"resources": resources.duplicate(true),
+			"flags": narrative_flags.duplicate(true),
+			"meta": {
+				"perfect_rewind_available": (
+					enabled_time_skills.has("rewind")
+					and not bool(narrative_flags.get("perfect_rewind_claimed", false))
+				),
+				"old_reunion_eligible": bool(
+					narrative_flags.get("old_reunion_eligible", false)
+				),
+			},
+		},
+	}
+
+
+func _commit_event_runtime_state(command: Dictionary, expected_revision: int) -> Dictionary:
+	if _event_runtime == null or _orchestrator == null:
+		return {"ok": false, "code": &"INVALID_PHASE", "new_revision": _revision(), "context": {}}
+	var runtime_snapshot: Dictionary = _event_runtime.call("snapshot")
+	var publication := command.get("publication_state", {}) as Dictionary
+	var event_state := command.get("event_state", {}) as Dictionary
+	if runtime_snapshot.is_empty() or publication.is_empty() or event_state.is_empty():
+		return {"ok": false, "code": &"INVALID_ARGUMENT", "new_revision": _revision(), "context": {}}
+	for field: String in [
+		"emitted_fact_ids", "pending_facts", "encounter_success_by_transaction",
+		"publication_ledger", "publication_digest",
+	]:
+		if not publication.has(field):
+			return {"ok": false, "code": &"INVALID_ARGUMENT", "new_revision": _revision(), "context": {}}
+		runtime_snapshot[field] = (
+			publication[field].duplicate(true)
+			if publication[field] is Array or publication[field] is Dictionary
+			else publication[field]
+		)
+	var consequence := runtime_snapshot.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	if participants.size() != 6:
+		return {"ok": false, "code": &"INVALID_ARGUMENT", "new_revision": _revision(), "context": {}}
+	participants["event_state"] = event_state.duplicate(true)
+	consequence["participant_snapshots"] = participants
+	runtime_snapshot["consequence_runtime"] = consequence
+	var modifier := participants.get("modifier", {}) as Dictionary
+	var build_participant: Variant = _orchestrator.call("reward_build_participant")
+	if build_participant == null or not build_participant.has_method("transaction_snapshot"):
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_build_participant"}}
+	var build := (build_participant.call("transaction_snapshot") as Dictionary).duplicate(true)
+	build["curses"] = (modifier.get("curse_ids", []) as Array).duplicate()
+	var route := participants.get("route", {}) as Dictionary
+	var candidate := {
+		"dungeon_event_runtime": runtime_snapshot.duplicate(true),
+		"run_economy": (participants.get("economy", {}) as Dictionary).duplicate(true),
+		"floor_plan": (route.get("plan", {}) as Dictionary).duplicate(true),
+		"resources": {
+			"resource": (participants.get("resource", {}) as Dictionary).duplicate(true),
+			"health": (participants.get("health", {}) as Dictionary).duplicate(true),
+		},
+		"build": build,
+	}
+	if _economy_state == null or _economy_state.call("snapshot") != candidate["run_economy"]:
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_economy_drift"}}
+	var candidate_director = RunDirectorScript.new()
+	if not candidate_director.configure_launch_plan(candidate["floor_plan"], _registry):
+		candidate_director.free()
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_director_plan"}}
+	if not _overlay_event_assignments(candidate_director, runtime_snapshot):
+		candidate_director.free()
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_director_overlay"}}
+	var committed = _orchestrator.commit_event_transaction(candidate, expected_revision)
+	if not committed.ok:
+		candidate_director.free()
+		return {
+			"ok": false,
+			"code": committed.code,
+			"new_revision": committed.new_revision,
+			"context": committed.context.duplicate(true),
+		}
+	var previous_director = _director
+	_director = candidate_director
+	if previous_director != null and is_instance_valid(previous_director):
+		previous_director.free()
+	return {
+		"ok": true,
+		"code": &"OK",
+		"new_revision": committed.new_revision,
+		"context": committed.context.duplicate(true),
+	}
+
+
+func _overlay_event_assignments(director: Node, runtime_snapshot: Dictionary) -> bool:
+	if director == null or runtime_snapshot.is_empty():
+		return false
+	var consequence := runtime_snapshot.get("consequence_runtime", {}) as Dictionary
+	var participants := consequence.get("participant_snapshots", {}) as Dictionary
+	var event_state := participants.get("event_state", {}) as Dictionary
+	var assignments := event_state.get("selected_event_by_node", {}) as Dictionary
+	var route := participants.get("route", {}) as Dictionary
+	var floor_id := str((route.get("plan", {}) as Dictionary).get("floor_id", ""))
+	for node_key_value: Variant in assignments.keys():
+		var assignment := assignments[node_key_value] as Dictionary
+		if not floor_id.is_empty() and str(assignment.get("floor_id", "")) != floor_id:
+			continue
+		if not director.call(
+			"overlay_event_assignment",
+			StringName(str(assignment.get("node_id", ""))),
+			StringName(str(assignment.get("event_id", "")))
+		):
+			return false
+	return true
+
+
+func _publish_event_fact(_fact_id: String, payload: Dictionary) -> bool:
+	if _orchestrator == null:
+		return false
+	var run_id := str(_orchestrator.snapshot().get("run_id", ""))
+	var event_id := StringName(str(payload.get("event_id", "")))
+	var node_key := str(payload.get("node_key", ""))
+	if run_id.is_empty() or str(event_id).is_empty() or node_key.is_empty():
+		return false
+	match str(payload.get("kind", "")):
+		"event_opened":
+			EventBus.event_opened.emit(run_id, event_id, node_key, _revision())
+		"event_committed":
+			EventBus.event_committed.emit(
+				run_id, event_id, node_key,
+				StringName(str(payload.get("phase", ""))),
+				StringName(str(payload.get("pending_kind", ""))),
+				StringName(str(payload.get("result_key", ""))),
+				_revision()
+			)
+		"event_reward_completed":
+			EventBus.event_reward_completed.emit(
+				run_id, event_id, node_key,
+				StringName(str(payload.get("result_key", ""))), _revision()
+			)
+		"event_encounter_completed":
+			EventBus.event_encounter_completed.emit(
+				run_id, event_id, node_key,
+				StringName(str(payload.get("result_key", ""))),
+				bool(payload.get("success", false)), _revision()
+			)
+		"event_dismissed":
+			EventBus.event_dismissed.emit(
+				run_id, event_id, node_key,
+				StringName(str(payload.get("result_key", ""))), _revision()
+			)
+		_:
+			return false
+	return true
+
+
 func _require_booted(operation: String):
 	if _booted and _orchestrator != null:
 		return CommandResultScript.success(_revision())
@@ -2158,6 +2708,7 @@ func _configure_launch_content(milestone: StringName):
 	var canonical_templates: Array[Dictionary] = []
 	var canonical_merchants: Array[Dictionary] = []
 	var canonical_rewards: Array[Dictionary] = []
+	var canonical_events: Array[Dictionary] = []
 	var economy_profile: Dictionary = {}
 	for floor_value: Variant in _registry.call("get_floor_definitions", milestone):
 		if not floor_value is Dictionary:
@@ -2229,10 +2780,31 @@ func _configure_launch_content(milestone: StringName):
 		for definition_value: Variant in _registry.call("get_by_category", category, milestone):
 			if definition_value is Dictionary:
 				canonical_rewards.append((definition_value as Dictionary).duplicate(true))
+	for event_value: Variant in _registry.call(
+		"get_by_category", &"dungeon_event", milestone
+	):
+		if not event_value is Dictionary:
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE", _revision(), {"category": "dungeon_event"}
+			)
+		var event_source := _definition_fields(
+			event_value as Dictionary, DungeonEventDefinitionScript.ROOT_FIELDS
+		)
+		var event_result: Dictionary = DungeonEventDefinitionScript.new().configure(
+			event_source
+		)
+		if not bool(event_result.get("ok", false)):
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE", _revision(), {"category": "dungeon_event"}
+			)
+		canonical_events.append(
+			(event_result.get("definition", {}) as Dictionary).duplicate(true)
+		)
 	if (
 		canonical_floors.size() != 5
 		or canonical_templates.size() != 30
 		or canonical_merchants.size() != 5
+		or canonical_events.size() != 18
 		or economy_profile.is_empty()
 		or canonical_rewards.is_empty()
 	):
@@ -2243,6 +2815,7 @@ func _configure_launch_content(milestone: StringName):
 				"floor_count": canonical_floors.size(),
 				"room_template_count": canonical_templates.size(),
 				"merchant_count": canonical_merchants.size(),
+				"event_count": canonical_events.size(),
 				"economy_profile_count": 0 if economy_profile.is_empty() else 1,
 				"merchant_reward_count": canonical_rewards.size(),
 			}
@@ -2255,6 +2828,8 @@ func _configure_launch_content(milestone: StringName):
 	for merchant: Dictionary in _merchant_definitions:
 		_merchant_definitions_by_id[str(merchant["id"])] = merchant.duplicate(true)
 	_merchant_reward_definitions = canonical_rewards.duplicate(true)
+	_event_definitions = canonical_events.duplicate(true)
+	_event_content_fingerprint = _digest_canonical({"events": _event_definitions})
 	_launch_content_fingerprint = _digest_canonical({
 		"economy_profile": _economy_profile,
 		"merchants": _merchant_definitions,

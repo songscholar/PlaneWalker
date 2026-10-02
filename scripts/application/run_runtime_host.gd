@@ -199,14 +199,6 @@ func start_run(config: Dictionary) -> Variant:
 			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
 			{"merchant_effect_authority": false}
 		)
-	if _is_floor_plan_snapshot(accepted_snapshot):
-		var start_snapshot := runtime_snapshot()
-		_published_run_id = run_id
-		_initializing_run_id = ""
-		EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
-		_publish_floor_started_once(start_snapshot)
-		return started
-
 	var runner_value: Variant = _room_controller.call("encounter_runner")
 	if not runner_value is Node:
 		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"has_runner": false})
@@ -232,6 +224,13 @@ func start_run(config: Dictionary) -> Variant:
 	if not configured:
 		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"configured": false})
 	_connect_room_runtime()
+	if _is_floor_plan_snapshot(accepted_snapshot):
+		var start_snapshot := runtime_snapshot()
+		_published_run_id = run_id
+		_initializing_run_id = ""
+		EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
+		_publish_floor_started_once(start_snapshot)
+		return started
 	var entered: Variant = _room_runtime.call("begin_current_room")
 	if entered == null or not bool(entered.get("ok")):
 		if entered != null and entered.get("code") is StringName:
@@ -558,7 +557,23 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 	EventBus.route_selected.emit(
 		_active_run_id, floor_id, StringName(str(edge_id)), node_id, revision
 	)
-	EventBus.room_started.emit(_active_run_id, node_id, revision)
+	if _room_runtime != null and is_instance_valid(_room_runtime):
+		var entered: Variant = _room_runtime.call("begin_current_room")
+		if entered == null or not bool(entered.get("ok")):
+			return CommandResultScript.failure(
+				&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+				_revision(),
+				{
+					"stage": "route_room_runtime_entry",
+					"transition_id": transition_id,
+					"code": str(entered.get("code")) if entered != null else "INVALID_RESULT",
+				}
+			)
+	else:
+		# Headless transaction harnesses may exercise route publication without
+		# constructing the production RoomRuntime. Production start_run always
+		# owns a runtime and publishes room_started through its signal callback.
+		EventBus.room_started.emit(_active_run_id, node_id, revision)
 	return CommandResultScript.success(route_revision, context)
 
 

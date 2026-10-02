@@ -251,11 +251,37 @@ func _normalize_operations(value: Variant, allowed: Array[String], allow_empty: 
 		)
 		if not operation_arguments_error.is_empty():
 			return operation_arguments_error
+		var canonical_arguments := _canonical_operation_arguments(
+			str(operation["operation"]),
+			arguments_result["value"] as Dictionary
+		)
 		values.append({
 			"operation": str(operation["operation"]),
-			"arguments": (arguments_result["value"] as Dictionary).duplicate(),
+			"arguments": canonical_arguments,
 		})
 	return {"ok": true, "values": values, "context": {}}
+
+
+func _canonical_operation_arguments(
+	operation: String,
+	arguments: Dictionary
+) -> Dictionary:
+	var canonical := arguments.duplicate(true)
+	match operation:
+		"resource_min", "gold_min", "resource_delta":
+			canonical["amount"] = int(canonical["amount"])
+		"floor_index_min":
+			canonical["value"] = int(canonical["value"])
+		"reward_draft":
+			canonical["count"] = int(canonical["count"])
+		"temporary_modifier":
+			canonical["duration_rooms"] = int(canonical["duration_rooms"])
+			canonical["magnitude"] = float(canonical["magnitude"])
+		"map_reveal":
+			canonical["depth"] = int(canonical["depth"])
+		"route_skip":
+			canonical["rooms"] = int(canonical["rooms"])
+	return canonical
 
 
 func _normalize_arguments(value: Variant, path: String) -> Dictionary:

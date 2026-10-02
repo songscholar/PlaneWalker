@@ -22,3 +22,40 @@ signal weapon_mastery_confirmed(weapon_id: StringName, mastery_family: StringNam
 signal enemy_spawned(enemy: Node, context: Dictionary)
 signal run_started(run_id: String, snapshot: Dictionary)
 signal run_ended(run_id: String, result: Dictionary, revision: int)
+signal event_opened(
+	run_id: String,
+	event_id: StringName,
+	node_key: String,
+	revision: int
+)
+signal event_committed(
+	run_id: String,
+	event_id: StringName,
+	node_key: String,
+	phase: StringName,
+	pending_kind: StringName,
+	result_key: StringName,
+	revision: int
+)
+signal event_reward_completed(
+	run_id: String,
+	event_id: StringName,
+	node_key: String,
+	result_key: StringName,
+	revision: int
+)
+signal event_encounter_completed(
+	run_id: String,
+	event_id: StringName,
+	node_key: String,
+	result_key: StringName,
+	success: bool,
+	revision: int
+)
+signal event_dismissed(
+	run_id: String,
+	event_id: StringName,
+	node_key: String,
+	result_key: StringName,
+	revision: int
+)
