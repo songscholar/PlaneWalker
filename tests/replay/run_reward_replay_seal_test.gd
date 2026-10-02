@@ -44,10 +44,13 @@ func _run() -> void:
 
 	var facade = RunRuntimeFacadeScript.new()
 	suite.assert_true(facade.boot().ok, "Launch reward Replay fixture boots")
-	suite.assert_true(
-		facade.start_run(_config("LAUNCH", 20260917), "run-reward-replay-seal").ok,
-		"Launch reward Replay fixture starts"
+	var launch_started = facade.start_run(
+		_config("LAUNCH", 20260917), "run-reward-replay-seal"
 	)
+	suite.assert_true(launch_started.ok, "Launch reward Replay fixture starts")
+	if not launch_started.ok:
+		suite.finish(get_tree())
+		return
 	suite.assert_true(facade.has_method("reward_replay_snapshot"), "Facade exposes reward Replay capture")
 	suite.assert_true(
 		facade.has_method("can_restore_reward_replay_snapshot"),
@@ -64,6 +67,9 @@ func _run() -> void:
 	var first_definition := _complete_and_select_effectful_reward(suite, facade, "first")
 	var checkpoint: Dictionary = facade.call("reward_replay_snapshot")
 	_assert_complete_seal(suite, checkpoint, first_definition, 1, "first checkpoint")
+	if (checkpoint.get("reward_facts", []) as Array).is_empty():
+		suite.finish(get_tree())
+		return
 
 	var second_definition := _complete_and_select_effectful_reward(suite, facade, "second")
 	var current: Dictionary = facade.call("reward_replay_snapshot")
@@ -148,12 +154,64 @@ func _complete_and_select_effectful_reward(
 	facade: RefCounted,
 	label: String
 ) -> Dictionary:
-	suite.assert_true(facade.call("enter_current_room").ok, "%s room enters" % label)
+	var choices: Array = facade.call("route_choices")
+	suite.assert_true(not choices.is_empty(), "%s route exposes a legal choice" % label)
+	if choices.is_empty():
+		return {}
+	var choice := choices[0] as Dictionary
+	var before_route: Dictionary = facade.call("snapshot")
+	var begun = facade.call(
+		"begin_route_transition",
+		StringName(str(choice.get("edge_id", ""))),
+		int(before_route.get("revision", -1))
+	)
+	suite.assert_true(begun.ok, "%s route transition begins" % label)
+	if not begun.ok:
+		return {}
+	var finalized = facade.call(
+		"finalize_route_transition",
+		str(begun.context.get("transition_id", "")),
+		int(begun.new_revision)
+	)
+	suite.assert_true(finalized.ok, "%s route transition enters its selected room" % label)
+	if not finalized.ok:
+		return {}
+	var entered_room: Dictionary = facade.call("current_room_definition")
+	suite.assert_equal(
+		str(entered_room.get("node_id", "")),
+		str(choice.get("node_id", "")),
+		"%s route enters the selected FloorPlan node" % label
+	)
 	var completion = facade.call("complete_current_room")
-	suite.assert_true(completion.ok, "%s room opens a reward" % label)
+	suite.assert_true(completion.ok, "%s route room completes through FloorPlan authority" % label)
 	if not completion.ok:
 		return {}
-	var offer := completion.context.get("offer", {}) as Dictionary
+	var orchestrator: RefCounted = facade.get("_orchestrator")
+	var draft: RefCounted = facade.get("_draft")
+	var floor_checkpoint: Dictionary = orchestrator.call("floor_transaction_snapshot")
+	var state: Dictionary = facade.call("snapshot")
+	var reward_kind := (
+		"starter"
+		if (state.get("build", {}).get("reward_history", []) as Array).is_empty()
+		else "reinforcement"
+	)
+	var created = draft.call(
+		"create_offer",
+		facade.call("content_registry"),
+		state,
+		{
+			"reward_kind": reward_kind,
+			"room_number": int(state.get("current_room", 0)),
+		}
+	)
+	suite.assert_true(created.ok, "%s completed route room creates an authoritative reward" % label)
+	if not created.ok:
+		return {}
+	var offer := created.context.get("offer", {}) as Dictionary
+	var opened = orchestrator.call("open_selection", offer)
+	suite.assert_true(opened.ok, "%s reward opens through RunOrchestrator" % label)
+	if not opened.ok:
+		return {}
 	var registry: RefCounted = facade.call("content_registry")
 	var selected_option := ""
 	var selected_definition: Dictionary = {}
@@ -184,6 +242,12 @@ func _complete_and_select_effectful_reward(
 		int(offer.get("revision", -1))
 	)
 	suite.assert_true(selected.ok, "%s reward commits through authority" % label)
+	if not selected.ok:
+		return {}
+	suite.assert_true(
+		bool(orchestrator.call("restore_floor_transaction_snapshot", floor_checkpoint)),
+		"%s reward fixture restores the completed FloorPlan route checkpoint" % label
+	)
 	return selected_definition
 
 
