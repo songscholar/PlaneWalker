@@ -45,7 +45,7 @@
 **Interfaces:**
 - Produces normalized options with `outcomes: Array[Dictionary]`; every outcome has `id`, `weight`, `outcome_key`, and `consequences`.
 
-- [ ] **Step 1: Write failing exact-argument tests**
+- [x] **Step 1: Write failing exact-argument tests**
 
 Add table-driven missing-field, extra-field, wrong-type, and out-of-range cases for:
 
@@ -69,7 +69,7 @@ encounter_start(encounter_id)
 route_skip(rooms)
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 python3 -m unittest tests.contract.content_schema.test_p14_dungeon_schemas
@@ -77,11 +77,29 @@ python3 -m unittest tests.contract.content_schema.test_p14_dungeon_schemas
 ./tools/run_tests.sh --filter content_registry
 ```
 
-- [ ] **Step 3: Implement the closed schema, parser, references, and weighted outcomes**
+- [x] **Step 3: Implement the closed schema, parser, references, and weighted outcomes**
 
 Replace option-level outcome authority with stable `outcomes`, require positive weights, close every curse/reward-pool/modifier/resource/encounter reference, add real multi-variant authored outcomes where visibility is hidden, and refresh Base Pack hashes.
 
-- [ ] **Step 4: Run GREEN and commit `feat(events): close dungeon event contracts`**
+- [x] **Step 4: Run GREEN and commit `feat(events): close dungeon event contracts`**
+
+**Completed:** `c2fea34 feat(events): close dungeon event contracts`
+
+**Focused verification (2026-10-02):**
+
+```text
+python3 -m unittest tests.contract.content_schema.test_p14_dungeon_schemas
+PASS — 16 tests
+
+./tools/run_tests.sh --filter p14_dungeon_content_contract
+PASS — 1 scene, 0 failures, 0 known leak warnings
+
+./tools/run_tests.sh --filter content_pack_contract
+PASS — 1 scene, 0 failures, 0 known leak warnings
+
+./tools/run_tests.sh --filter content_registry
+PASS — 1 scene, 0 failures, 0 known leak warnings
+```
 
 ---
 
@@ -96,17 +114,26 @@ Replace option-level outcome authority with stable `outcomes`, require positive 
 - Consumes `select(event_definitions: Array, context: Dictionary) -> Dictionary` with run/floor/node seed facts, primary candidate, repeat history, health, economy, build, resources, flags, and meta facts.
 - Produces `{ok, event_id, channel, roll, eligible_ids, predicate_facts}` without mutation.
 
-- [ ] **Step 1: Write RED coverage for all eighteen events**
+- [x] **Step 1: Write RED coverage for all eighteen events**
 
 Cover eligible/ineligible states, floor bounds, availability, three repeat policies, eight predicates, exact special priority, weighted regular selection, primary-candidate ordering, byte equality, and seed/node/floor isolation.
 
-- [ ] **Step 2: Run `./tools/run_tests.sh --filter dungeon_event_selector` and require RED**
+- [x] **Step 2: Run `./tools/run_tests.sh --filter dungeon_event_selector` and require RED**
 
-- [ ] **Step 3: Implement the pure selector**
+- [x] **Step 3: Implement the pure selector**
 
 Evaluate special events in this order: `event_void_whispers`, `event_perfect_rewind`, `event_old_reunion`. If none qualify, perform a stable weighted regular roll. Return `NO_ELIGIBLE_EVENT` for an empty pool.
 
-- [ ] **Step 4: Run the filter three times and commit `feat(events): select launch dungeon events`**
+- [x] **Step 4: Run the filter three times and commit `feat(events): select launch dungeon events`**
+
+**Completed:** `bdecd9e feat(events): select launch dungeon events`
+
+**Focused verification (2026-10-02):**
+
+```text
+./tools/run_tests.sh --filter dungeon_event_selector
+PASS — 3 consecutive runs; each run discovered 1 scene with 0 failures and 0 known leak warnings
+```
 
 ---
 
@@ -120,13 +147,13 @@ Evaluate special events in this order: `event_void_whispers`, `event_perfect_rew
 **Interfaces:**
 - Produces `snapshot`, `can_restore_snapshot`, `restore_snapshot`, `assign_event`, `reserve_option`, `mark_pending_reward`, `mark_pending_encounter`, `resolve_option`, `dismiss_result`, and `rollback_transaction`.
 
-- [ ] **Step 1: Write state-machine RED tests**
+- [x] **Step 1: Write state-machine RED tests**
 
 Assert `unassigned -> open -> reserved -> pending_reward|pending_encounter|resolved -> dismissed`, plus stale/tampered/duplicate rejection, once-per-run/floor/repeatable behavior, sorted completed IDs, pending round trip, result retention, fingerprint drift, and byte-identical rollback.
 
-- [ ] **Step 2: Run `./tools/run_tests.sh --filter dungeon_event_run_state` and require RED**
+- [x] **Step 2: Run `./tools/run_tests.sh --filter dungeon_event_run_state` and require RED**
 
-- [ ] **Step 3: Implement the exact snapshot**
+- [x] **Step 3: Implement the exact snapshot**
 
 ```text
 schema_id, schema_version, content_fingerprint, selected_event_by_node,
@@ -135,7 +162,16 @@ pending_reward, pending_encounter, completed_transaction_ids, narrative_flags,
 temporary_modifiers, revision
 ```
 
-- [ ] **Step 4: Run GREEN and commit `feat(events): add dungeon event state`**
+- [x] **Step 4: Run GREEN and commit `feat(events): add dungeon event state`**
+
+**Completed:** `6902483 feat(events): add dungeon event state`
+
+**Focused verification (2026-10-02):**
+
+```text
+./tools/run_tests.sh --filter dungeon_event_run_state
+PASS — 1 scene, 0 failures, 0 known leak warnings
+```
 
 ---
 
@@ -167,7 +203,9 @@ requirements -> costs -> Player/Build -> economy -> map/route -> flags/modifiers
 -> reward/encounter reservation -> RunState sink -> exactly-once publication
 ```
 
-`route_skip(2)` follows the lowest-choice-order viable chain, rejects Boss/rest/shop traversal or insufficient depth, marks skipped nodes abandoned, and lands once through one authenticated FloorPlan receipt.
+`route_skip(rooms)` prevalidates the complete lowest-choice-order viable chain before mutation, then performs a legal FloorPlan traversal one selected edge at a time. It must traverse exactly the authored `rooms` edge count; every intermediate destination becomes visited and cleared, the final destination becomes visited but remains uncleared as the landing room, and no traversed node is represented as abandoned. Any chain that would enter or pass through a Boss, rest, or shop room, or that has fewer than the authored number of edges, is rejected atomically with the original FloorPlan byte-identical. The successful operation returns one authenticated receipt covering the ordered edge chain and rollback snapshot.
+
+`map_reveal(depth)` treats the authored `arguments.depth` as authoritative rather than using a fixed reveal distance. Preparation validates `depth`, reveals every reachable node within one through `depth` forward edge traversals from the current node, and records the authored depth and exact revealed node IDs in the authenticated receipt so commit, rollback, Save, and Replay cannot reinterpret it.
 
 - [ ] **Step 4: Run GREEN and commit `feat(events): execute atomic event consequences`**
 
@@ -219,9 +257,15 @@ revision, result_key, pending_kind
 
 - [ ] **Step 1: Write real Base Pack and generated-FloorPlan RED tests**
 
+Cover the Launch production path, not only direct Facade calls: `RunRuntimeHost.start_run()` must create, configure, attach, and connect a `RoomRuntime` for FloorPlan runs; the Host and RoomRuntime must have one explicit `room_started` publication owner; event rooms cannot clear before an authenticated pending continuation resolves and the result is dismissed. Restore coverage must prove that actual selected-event overlay is rebuilt without changing the generated FloorPlan digest.
+
 - [ ] **Step 2: Implement `RunState.commit_event_transaction_state` and `RunOrchestrator.commit_event_transaction` with full candidate prevalidation**
 
-- [ ] **Step 3: Overlay selected events in RunDirector and require authenticated continuation before RoomRuntime clear**
+Make the complete `dungeon_event_state` snapshot the sole event authority in RunState. Include assignment, repeat history, resolved outcomes, pending transaction/reward/encounter, completed transaction IDs, flags, modifiers, and event revision in the main RunState snapshot, floor transaction snapshot, strict candidate validation, rollback, reset, Save restoration, and Replay-facing state. Remove or migrate the legacy shallow `seen_event_ids` source so two event histories cannot drift.
+
+- [ ] **Step 3: Integrate Launch Host/RoomRuntime ownership, selected-event overlay, and clear gating**
+
+The FloorPlan node `event_id` remains only the deterministic primary candidate and stays inside the generation digest. After `DungeonEventSelector` freezes the actual assignment, RunDirector and Facade must overlay that selected event into the runtime room definition without mutating the FloorPlan; restore must reconstruct the same overlay from `dungeon_event_state`. The Launch Host production path must create and connect RoomRuntime before entering the first FloorPlan room, and RoomRuntime may clear an event room only after the authenticated reward/encounter continuation resolves and the resolved result is dismissed.
 
 - [ ] **Step 4: Run event Facade/lifecycle plus floor lifecycle GREEN and commit `feat(events): integrate launch event runtime`**
 
