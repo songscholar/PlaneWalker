@@ -102,6 +102,33 @@ func room_definition_for_node(node_id: StringName) -> Dictionary:
 	return (_launch_nodes_by_id.get(str(node_id), {}) as Dictionary).duplicate(true)
 
 
+func overlay_event_assignment(node_id: StringName, event_id: StringName) -> bool:
+	var node_key := str(node_id)
+	var selected_event_id := str(event_id)
+	if node_key.is_empty() or selected_event_id.is_empty():
+		return false
+	var existing_value: Variant = _launch_nodes_by_id.get(node_key, {})
+	if not existing_value is Dictionary or (existing_value as Dictionary).is_empty():
+		return false
+	var existing := existing_value as Dictionary
+	if str(existing.get("room_type", existing.get("type", ""))) != ROOM_TYPE_EVENT:
+		return false
+	var sequence_index := -1
+	for index: int in range(room_sequence.size()):
+		if str(room_sequence[index].get("node_id", "")) != node_key:
+			continue
+		if sequence_index >= 0:
+			return false
+		sequence_index = index
+	if sequence_index < 0:
+		return false
+	var overlaid := existing.duplicate(true)
+	overlaid["event_id"] = selected_event_id
+	_launch_nodes_by_id[node_key] = overlaid.duplicate(true)
+	room_sequence[sequence_index] = overlaid.duplicate(true)
+	return true
+
+
 func configure_fixed_sequence(
 	room_count: int,
 	event_rooms: Array[int] = [],

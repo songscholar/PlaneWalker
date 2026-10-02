@@ -20,6 +20,8 @@ var _room_terminal: bool = false
 var _failure: Dictionary = {}
 var _current_room: Dictionary = {}
 var _current_room_id: StringName = &""
+var _emit_room_started: bool = true
+var _event_continuation: Dictionary = {}
 
 
 func configure(
@@ -27,7 +29,8 @@ func configure(
 	encounter_catalog: RefCounted,
 	_room_definitions: Array[Dictionary],
 	run_seed: int,
-	encounter_runner: Node
+	encounter_runner: Node,
+	emit_room_started: bool = true
 ) -> void:
 	_disconnect_runner()
 	_facade = facade
@@ -39,6 +42,8 @@ func configure(
 	_failure.clear()
 	_current_room.clear()
 	_current_room_id = &""
+	_emit_room_started = emit_room_started
+	_event_continuation.clear()
 	_connect_runner()
 
 
@@ -67,13 +72,38 @@ func begin_current_room() -> Variant:
 		return entered
 	_room_active = true
 	_room_terminal = false
-	room_started.emit(_current_room_id, _result_revision(entered))
+	_event_continuation.clear()
+	if _emit_room_started:
+		room_started.emit(_current_room_id, _result_revision(entered))
 
 	var room_type := str(_current_room.get("type", "combat"))
 	var launch_mode := str(_current_room.get("runtime_mode", "")) == "launch"
 	if room_type == "event" and not launch_mode:
 		_complete_current_room()
 		return entered
+	if launch_mode and room_type == "event":
+		if (
+			not _facade.has_method("open_current_event")
+			or not _facade.has_method("event_view_state")
+		):
+			_fail_runtime(&"EVENT_RUNTIME_UNAVAILABLE", {"room_id": str(_current_room_id)})
+			return _failure_result(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED")
+		var opened: Variant = _facade.call("open_current_event", {
+			"room_id": str(_current_room_id),
+			"run_seed": _run_seed,
+		})
+		if not _result_ok(opened):
+			_fail_runtime(&"EVENT_RUNTIME_UNAVAILABLE", {
+				"room_id": str(_current_room_id),
+				"code": str(opened.get("code")) if opened != null else "INVALID_RESULT",
+			})
+			return opened
+		if not sync_event_result(opened):
+			_fail_runtime(&"EVENT_RUNTIME_CONFIGURATION_FAILED", {
+				"room_id": str(_current_room_id),
+			})
+			return _failure_result(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED")
+		return opened
 	if launch_mode and room_type == "shop":
 		if not _facade.has_method("open_current_merchant"):
 			_fail_runtime(&"MERCHANT_RUNTIME_UNAVAILABLE", {"room_id": str(_current_room_id)})
@@ -113,6 +143,108 @@ func begin_current_room() -> Variant:
 
 func complete_current_room() -> Variant:
 	return _complete_current_room()
+
+
+func event_view_state() -> Dictionary:
+	if not _is_active_launch_event() or not _facade.has_method("event_view_state"):
+		return {}
+	var value: Variant = _facade.call("event_view_state")
+	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
+
+
+func choose_current_event_option(
+	option_id: StringName,
+	expected_revision: int = -1
+) -> Variant:
+	if not _is_active_launch_event() or not _facade.has_method("choose_current_event_option"):
+		return _failure_result(&"INVALID_PHASE", {"operation": "choose_current_event_option"})
+	var revision := _resolved_expected_revision(expected_revision)
+	var result: Variant = _facade.call("choose_current_event_option", option_id, revision)
+	if _result_ok(result) and not sync_event_result(result):
+		return _event_sync_failure("choose_current_event_option")
+	return result
+
+
+func complete_current_event_reward(
+	continuation_id: String,
+	result: Dictionary,
+	expected_revision: int = -1
+) -> Variant:
+	if not _is_active_launch_event() or not _facade.has_method("complete_current_event_reward"):
+		return _failure_result(&"INVALID_PHASE", {"operation": "complete_current_event_reward"})
+	if (
+		str(_event_continuation.get("kind", "")) != "reward"
+		or continuation_id.is_empty()
+		or continuation_id != str(_event_continuation.get("continuation_id", ""))
+	):
+		return _failure_result(&"INVALID_ARGUMENT", {
+			"operation": "complete_current_event_reward",
+			"reason": "continuation_mismatch",
+		})
+	var revision := _resolved_expected_revision(expected_revision)
+	var completed: Variant = _facade.call(
+		"complete_current_event_reward",
+		continuation_id,
+		result.duplicate(true),
+		revision
+	)
+	if _result_ok(completed) and not sync_event_result(completed):
+		return _event_sync_failure("complete_current_event_reward")
+	return completed
+
+
+func dismiss_current_event(expected_revision: int = -1) -> Variant:
+	if not _is_active_launch_event() or not _facade.has_method("dismiss_current_event"):
+		return _failure_result(&"INVALID_PHASE", {"operation": "dismiss_current_event"})
+	var revision := _resolved_expected_revision(expected_revision)
+	var dismissed: Variant = _facade.call("dismiss_current_event", revision)
+	if _result_ok(dismissed) and not sync_event_result(dismissed):
+		return _event_sync_failure("dismiss_current_event")
+	return dismissed
+
+
+func sync_event_result(result: Variant) -> bool:
+	if not _is_active_launch_event() or not _result_ok(result):
+		return false
+	var context := _result_context(result)
+	var view_value: Variant = context.get("view_state", {})
+	if not view_value is Dictionary or (view_value as Dictionary).is_empty():
+		return false
+	var view := view_value as Dictionary
+	var phase := str(view.get("phase", ""))
+	var pending_kind := str(view.get("pending_kind", ""))
+	var continuation_value: Variant = context.get("continuation", {})
+	if phase in ["pending_reward", "pending_encounter"]:
+		if not continuation_value is Dictionary:
+			return false
+		var continuation := continuation_value as Dictionary
+		var kind := str(continuation.get("kind", ""))
+		var continuation_id := str(continuation.get("continuation_id", ""))
+		var expected_kind := "reward" if phase == "pending_reward" else "encounter"
+		if kind != expected_kind or pending_kind != expected_kind or continuation_id.is_empty():
+			return false
+		if kind == "reward":
+			if (
+				str(continuation.get("pool_id", "")).is_empty()
+				or int(continuation.get("count", 0)) < 1
+			):
+				return false
+			if _runner != null and bool(_runner.call("is_active")):
+				return false
+		else:
+			var encounter_id := str(continuation.get("encounter_id", ""))
+			if encounter_id.is_empty():
+				return false
+			if not _start_event_encounter(encounter_id, continuation_id):
+				return false
+		_event_continuation = continuation.duplicate(true)
+		return true
+	if not pending_kind.is_empty() or (continuation_value is Dictionary and not (continuation_value as Dictionary).is_empty()):
+		return false
+	_event_continuation.clear()
+	if _runner != null and bool(_runner.call("is_active")):
+		_cancel_runner()
+	return phase in ["open", "resolved", "dismissed"]
 
 
 func leave_current_shop() -> Variant:
@@ -173,6 +305,7 @@ func snapshot() -> Dictionary:
 		"room_id": str(_current_room_id),
 		"room_definition": _current_room.duplicate(true),
 		"run_seed": _run_seed,
+		"event_continuation": _event_continuation.duplicate(true),
 		"failure": _failure.duplicate(true),
 		"runner": _runner.call("snapshot") if _runner != null and _runner.has_method("snapshot") else {},
 	}
@@ -217,6 +350,17 @@ func _on_spawn_requested(spawn_definition: Dictionary) -> void:
 func _on_encounter_completed(encounter_id: StringName) -> void:
 	if not _room_active or _room_terminal:
 		return
+	if _is_active_launch_event():
+		if (
+			str(_event_continuation.get("kind", "")) != "encounter"
+			or str(encounter_id) != str(_event_continuation.get("encounter_id", ""))
+		):
+			return
+		_complete_event_encounter(true, {
+			"encounter_id": str(encounter_id),
+			"result": "victory",
+		})
+		return
 	var expected := str(_current_room.get("encounter_id", ""))
 	if not expected.is_empty() and str(encounter_id) != expected:
 		return
@@ -225,6 +369,17 @@ func _on_encounter_completed(encounter_id: StringName) -> void:
 
 func _on_encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary) -> void:
 	if not _room_active or _room_terminal:
+		return
+	if _is_active_launch_event():
+		if (
+			str(_event_continuation.get("kind", "")) != "encounter"
+			or str(encounter_id) != str(_event_continuation.get("encounter_id", ""))
+		):
+			return
+		var completion_context := context.duplicate(true)
+		completion_context["encounter_id"] = str(encounter_id)
+		completion_context["reason"] = str(reason)
+		_complete_event_encounter(false, completion_context)
 		return
 	_fail_runtime(reason, {
 		"room_id": str(_current_room_id),
@@ -236,6 +391,14 @@ func _on_encounter_failed(encounter_id: StringName, reason: StringName, context:
 func _complete_current_room() -> Variant:
 	if not _room_active or _room_terminal:
 		return _failure_result(&"TERMINAL_STATE", {"operation": "complete_current_room"})
+	if _is_active_launch_event():
+		var view := event_view_state()
+		if str(view.get("phase", "")) != "dismissed":
+			return _failure_result(&"INVALID_PHASE", {
+				"operation": "complete_current_room",
+				"reason": "event_result_not_dismissed",
+				"phase": str(view.get("phase", "")),
+			})
 	_room_terminal = true
 	_room_active = false
 	_cancel_runner()
@@ -274,6 +437,32 @@ func _complete_current_room() -> Variant:
 	return result
 
 
+func _complete_event_encounter(success: bool, context: Dictionary) -> void:
+	if not _facade.has_method("complete_current_event_encounter"):
+		_fail_runtime(&"EVENT_RUNTIME_UNAVAILABLE", {"operation": "complete_event_encounter"})
+		return
+	var continuation_id := str(_event_continuation.get("continuation_id", ""))
+	if continuation_id.is_empty():
+		return
+	var completed: Variant = _facade.call(
+		"complete_current_event_encounter",
+		continuation_id,
+		success,
+		context.duplicate(true),
+		_current_revision()
+	)
+	if not _result_ok(completed):
+		_fail_runtime(&"EVENT_CONTINUATION_FAILED", {
+			"continuation_id": continuation_id,
+			"code": str(completed.get("code")) if completed != null else "INVALID_RESULT",
+		})
+		return
+	if not sync_event_result(completed):
+		_fail_runtime(&"EVENT_RUNTIME_CONFIGURATION_FAILED", {
+			"operation": "complete_event_encounter",
+		})
+
+
 func _fail_runtime(reason: StringName, context: Dictionary) -> void:
 	if _room_terminal or not _failure.is_empty():
 		return
@@ -305,6 +494,60 @@ func _can_delegate_spawn() -> bool:
 func _cancel_runner() -> void:
 	if _runner != null and is_instance_valid(_runner) and _runner.has_method("cancel"):
 		_runner.call("cancel")
+
+
+func _start_event_encounter(encounter_id: String, continuation_id: String) -> bool:
+	if _runner == null or _catalog == null:
+		return false
+	if bool(_runner.call("is_active")):
+		return (
+			str(_event_continuation.get("kind", "")) == "encounter"
+			and str(_event_continuation.get("continuation_id", "")) == continuation_id
+			and str(_event_continuation.get("encounter_id", "")) == encounter_id
+		)
+	var encounter_value: Variant = _catalog.call(
+		"encounter_definition",
+		encounter_id,
+		_run_seed,
+		int(_current_room.get("room_number", 0))
+	)
+	if not encounter_value is Dictionary or (encounter_value as Dictionary).is_empty():
+		return false
+	_runner.call(
+		"start_encounter",
+		(encounter_value as Dictionary).duplicate(true),
+		_run_seed,
+		int(_current_room.get("room_number", 0))
+	)
+	return true
+
+
+func _is_active_launch_event() -> bool:
+	return (
+		_room_active
+		and not _room_terminal
+		and str(_current_room.get("runtime_mode", "")) == "launch"
+		and str(_current_room.get("room_type", _current_room.get("type", ""))) == "event"
+	)
+
+
+func _resolved_expected_revision(expected_revision: int) -> int:
+	return _current_revision() if expected_revision < 0 else expected_revision
+
+
+func _event_sync_failure(operation: String) -> Variant:
+	_fail_runtime(&"EVENT_RUNTIME_CONFIGURATION_FAILED", {"operation": operation})
+	return _failure_result(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"operation": operation})
+
+
+func _result_context(result: Variant) -> Dictionary:
+	if result is Dictionary:
+		var dictionary_value: Variant = (result as Dictionary).get("context", {})
+		return (dictionary_value as Dictionary).duplicate(true) if dictionary_value is Dictionary else {}
+	if result is Object:
+		var object_value: Variant = (result as Object).get("context")
+		return (object_value as Dictionary).duplicate(true) if object_value is Dictionary else {}
+	return {}
 
 
 func _room_id(room_definition: Dictionary) -> StringName:
