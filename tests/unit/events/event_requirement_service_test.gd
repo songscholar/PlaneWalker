@@ -15,6 +15,8 @@ func _run() -> void:
 	_test_all_requirement_operations(suite)
 	_test_failures_are_stable_and_non_mutating(suite)
 	_test_invalid_inputs_fail_closed(suite)
+	_test_context_is_closed_and_strict(suite)
+	_test_runtime_floor_index_boundaries(suite)
 	suite.finish(get_tree())
 
 
@@ -78,6 +80,55 @@ func _test_invalid_inputs_fail_closed(suite) -> void:
 		suite.assert_equal(result.get("code"), &"INVALID_REQUIREMENT", "%s returns typed failure" % str(case["label"]))
 
 
+func _test_context_is_closed_and_strict(suite) -> void:
+	var service = EventRequirementServiceScript.new()
+	var requirements: Array = [
+		{"operation": "resource_min", "arguments": {"resource": "time_shard", "amount": 1}},
+	]
+	var cases: Array[Dictionary] = []
+	var extra := _context()
+	extra["debug_override"] = true
+	cases.append({"label": "unknown context field", "context": extra})
+	var unknown_resource := _context()
+	(unknown_resource["resources"] as Dictionary)["Bad Resource"] = 1
+	cases.append({"label": "invalid resource identity", "context": unknown_resource})
+	var duplicate_tag := _context()
+	duplicate_tag["reward_tags"] = ["arcane", "arcane"]
+	cases.append({"label": "duplicate identity list", "context": duplicate_tag})
+	var non_boolean_flag := _context()
+	(non_boolean_flag["narrative_flags"] as Dictionary)["bad"] = 1
+	cases.append({"label": "non boolean flag", "context": non_boolean_flag})
+	for case: Dictionary in cases:
+		var before := (case["context"] as Dictionary).duplicate(true)
+		var result: Dictionary = service.evaluate(requirements, case["context"] as Dictionary)
+		suite.assert_true(not bool(result.get("ok", true)), "%s fails closed" % str(case["label"]))
+		suite.assert_equal(result.get("code"), &"INVALID_CONTEXT", "%s is a context failure" % str(case["label"]))
+		suite.assert_equal(case["context"], before, "%s remains non-mutating" % str(case["label"]))
+
+
+func _test_runtime_floor_index_boundaries(suite) -> void:
+	var service = EventRequirementServiceScript.new()
+	var floor_one := _context()
+	floor_one["floor_index"] = 0
+	var first: Dictionary = service.evaluate(
+		[{"operation": "floor_index_min", "arguments": {"value": 1}}], floor_one
+	)
+	suite.assert_true(bool(first.get("ok", false)), "runtime floor zero is valid")
+	suite.assert_true(bool(first.get("eligible", false)), "runtime floor zero satisfies authored floor one")
+	var floor_five := _context()
+	floor_five["floor_index"] = 4
+	var fifth: Dictionary = service.evaluate(
+		[{"operation": "floor_index_min", "arguments": {"value": 5}}], floor_five
+	)
+	suite.assert_true(bool(fifth.get("ok", false)), "runtime floor four is valid")
+	suite.assert_true(bool(fifth.get("eligible", false)), "runtime floor four satisfies authored floor five")
+	for invalid_index: int in [-1, 5]:
+		var invalid := _context()
+		invalid["floor_index"] = invalid_index
+		var rejected: Dictionary = service.evaluate([], invalid)
+		suite.assert_equal(rejected.get("code"), &"INVALID_CONTEXT", "runtime floor %d rejects" % invalid_index)
+
+
 func _context() -> Dictionary:
 	return {
 		"resources": {"time_shard": 2},
@@ -86,5 +137,5 @@ func _context() -> Dictionary:
 		"reward_tags": ["arcane", "time"],
 		"curse_ids": ["curse_owned"],
 		"narrative_flags": {"met_archivist": true},
-		"floor_index": 3,
+		"floor_index": 2,
 	}

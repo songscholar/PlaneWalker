@@ -11,6 +11,10 @@ const OPERATIONS: Array[String] = [
 	"narrative_flag",
 	"floor_index_min",
 ]
+const CONTEXT_FIELDS: Array[String] = [
+	"resources", "health", "gold", "reward_tags", "curse_ids",
+	"narrative_flags", "floor_index",
+]
 
 
 func evaluate(requirements: Array, context: Dictionary) -> Dictionary:
@@ -91,7 +95,7 @@ func _evaluate_one(
 			required = bool(arguments["value"])
 			passed = typeof(actual) == TYPE_BOOL and bool(actual) == bool(required)
 		"floor_index_min":
-			actual = int(context["floor_index"])
+			actual = int(context["floor_index"]) + 1
 			required = int(arguments["value"])
 			passed = int(actual) >= int(required)
 	return {
@@ -155,10 +159,11 @@ func _requirement_error(value: Dictionary) -> Dictionary:
 
 
 func _context_error(context: Dictionary) -> Dictionary:
-	for field: String in [
-		"resources", "health", "gold", "reward_tags", "curse_ids",
-		"narrative_flags", "floor_index",
-	]:
+	var expected_fields := CONTEXT_FIELDS.duplicate()
+	expected_fields.sort()
+	if _sorted_keys(context) != expected_fields:
+		return {"field": "fields"}
+	for field: String in CONTEXT_FIELDS:
 		if not context.has(field):
 			return {"field": field}
 	if (
@@ -170,8 +175,8 @@ func _context_error(context: Dictionary) -> Dictionary:
 		or typeof(context["gold"]) != TYPE_INT
 		or int(context["gold"]) < 0
 		or typeof(context["floor_index"]) != TYPE_INT
-		or int(context["floor_index"]) < 1
-		or int(context["floor_index"]) > 5
+		or int(context["floor_index"]) < 0
+		or int(context["floor_index"]) > 4
 	):
 		return {"field": "context"}
 	var health := context["health"] as Dictionary
@@ -182,8 +187,12 @@ func _context_error(context: Dictionary) -> Dictionary:
 		or float(health["current"]) > float(health["maximum"])
 	):
 		return {"field": "health"}
-	for amount: Variant in (context["resources"] as Dictionary).values():
-		if not _nonnegative_integer(amount):
+	for resource_value: Variant in (context["resources"] as Dictionary).keys():
+		if (
+			typeof(resource_value) != TYPE_STRING
+			or not _valid_id(resource_value)
+			or not _nonnegative_integer((context["resources"] as Dictionary)[resource_value])
+		):
 			return {"field": "resources"}
 	for values: Array in [context["reward_tags"] as Array, context["curse_ids"] as Array]:
 		var seen: Dictionary = {}
