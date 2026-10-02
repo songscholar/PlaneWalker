@@ -46,6 +46,10 @@ var _hud_render_accumulator: float = 0.0
 var _selection_safety_active: bool = false
 var _player_process_mode: ProcessMode = Node.PROCESS_MODE_INHERIT
 var _reward_effect_runtime: RefCounted = PlayerRewardEffectRuntimeScript.new()
+var _route_scene_adapter: Variant = null
+var _published_route_transition_ids: Dictionary = {}
+var _published_floor_start_ids: Dictionary = {}
+var _published_floor_completion_ids: Dictionary = {}
 
 
 func _ready() -> void:
@@ -107,6 +111,9 @@ func start_run(config: Dictionary) -> Variant:
 	_pending_initial_room_started.clear()
 	_pending_initial_room_cleared.clear()
 	_pending_initial_runtime_failure.clear()
+	_published_route_transition_ids.clear()
+	_published_floor_start_ids.clear()
+	_published_floor_completion_ids.clear()
 	_ended_run_id = ""
 	_hud_render_accumulator = 0.0
 	_set_selection_safety(false)
@@ -170,6 +177,13 @@ func start_run(config: Dictionary) -> Variant:
 	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
 	if not bool(_player.call("configure_loadout", accepted_config)):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
+	if _is_floor_plan_snapshot(accepted_snapshot):
+		var start_snapshot := runtime_snapshot()
+		_published_run_id = run_id
+		_initializing_run_id = ""
+		EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
+		_publish_floor_started_once(start_snapshot)
+		return started
 
 	var runner_value: Variant = _room_controller.call("encounter_runner")
 	if not runner_value is Node:
@@ -243,6 +257,122 @@ func runtime_snapshot() -> Dictionary:
 	if _facade == null:
 		return {}
 	return (_facade.call("snapshot") as Dictionary).duplicate(true)
+
+
+func configure_route_scene_adapter(adapter: Variant) -> bool:
+	if typeof(adapter) == TYPE_CALLABLE:
+		_route_scene_adapter = adapter
+		return true
+	if adapter is Object and (adapter as Object).has_method("prepare_route_transition"):
+		_route_scene_adapter = adapter
+		return true
+	return false
+
+
+func route_choices() -> Array[Dictionary]:
+	if _facade == null or not _facade.has_method("route_choices"):
+		return []
+	return (_facade.call("route_choices") as Array).duplicate(true)
+
+
+func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
+	if (
+		_facade == null
+		or _active_run_id.is_empty()
+		or _active_run_id != _published_run_id
+		or not _facade.has_method("begin_route_transition")
+	):
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "select_route"}
+		)
+	if expected_revision < 0:
+		expected_revision = _revision()
+	var begun: Variant = _facade.call(
+		"begin_route_transition", edge_id, expected_revision
+	)
+	if begun == null or not bool(begun.get("ok")):
+		return begun
+	var begun_context: Dictionary = (begun.context as Dictionary).duplicate(true)
+	var transition_id := str(begun_context.get("transition_id", ""))
+	var target: Dictionary = (
+		begun_context.get("target", {}) as Dictionary
+	).duplicate(true)
+	var adapter_context := {
+		"run_id": _active_run_id,
+		"transition_id": transition_id,
+		"edge_id": str(edge_id),
+		"target": target.duplicate(true),
+		"revision": int(begun.new_revision),
+	}
+	if not _prepare_route_scene(target, adapter_context):
+		var rolled_back: Variant = _facade.call(
+			"rollback_route_transition", transition_id, int(begun.new_revision)
+		)
+		if rolled_back == null or not bool(rolled_back.get("ok")):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_scene_adapter_rollback", "transition_id": transition_id}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED",
+			_revision(),
+			{"stage": "route_scene_adapter", "transition_id": transition_id}
+		)
+	var finalized: Variant = _facade.call(
+		"finalize_route_transition", transition_id, int(begun.new_revision)
+	)
+	if finalized == null:
+		return finalized
+	if not bool(finalized.get("ok")):
+		var finalized_context: Dictionary = (
+			finalized.context as Dictionary
+		).duplicate(true)
+		if not bool(finalized_context.get("route_rolled_back", false)):
+			var rolled_back: Variant = _facade.call(
+				"rollback_route_transition",
+				transition_id,
+				int(finalized.new_revision)
+			)
+			if rolled_back == null or not bool(rolled_back.get("ok")):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE",
+					_revision(),
+					{"stage": "route_finalize_rollback", "transition_id": transition_id}
+				)
+		return CommandResultScript.failure(
+			finalized.code,
+			_revision(),
+			finalized_context,
+			finalized.message_key
+		)
+	if _published_route_transition_ids.has(transition_id):
+		return CommandResultScript.failure(
+			&"ALREADY_CONSUMED",
+			_revision(),
+			{"transition_id": transition_id}
+		)
+	_published_route_transition_ids[transition_id] = true
+	var context: Dictionary = (finalized.context as Dictionary).duplicate(true)
+	var floor_id := StringName(str(context.get("floor_id", "")))
+	var node_id := StringName(str(context.get("node_id", "")))
+	var revision := int(finalized.new_revision)
+	EventBus.route_selected.emit(
+		_active_run_id, floor_id, StringName(str(edge_id)), node_id, revision
+	)
+	EventBus.room_started.emit(_active_run_id, node_id, revision)
+	return finalized
+
+
+func start_next_floor() -> Variant:
+	if _facade == null or not _facade.has_method("start_next_floor"):
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "start_next_floor"}
+		)
+	var started: Variant = _facade.call("start_next_floor")
+	if started != null and bool(started.get("ok")):
+		_publish_floor_started_once(runtime_snapshot())
+	return started
 
 
 func room_plan() -> Array[Dictionary]:
@@ -425,6 +555,7 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 	if run_id != _published_run_id:
 		return
 	_publish_room_cleared(run_id, active_room_id, revision)
+	_publish_floor_completed_if_new(state, revision)
 
 
 func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
@@ -902,6 +1033,69 @@ func _publish_room_cleared(run_id: String, room_id: StringName, revision: int) -
 	var state := runtime_snapshot()
 	if int(state.get("phase", -1)) == RunPhaseScript.Value.SELECTION_ACTIVE:
 		_open_offer(state.get("open_offer", {}))
+
+
+func _prepare_route_scene(target: Dictionary, context: Dictionary) -> bool:
+	if target.is_empty() or str(target.get("scene_path", "")).is_empty():
+		return false
+	var result: Variant = null
+	if typeof(_route_scene_adapter) == TYPE_CALLABLE:
+		result = (_route_scene_adapter as Callable).call(
+			target.duplicate(true), context.duplicate(true)
+		)
+	elif _route_scene_adapter is Object and (
+		_route_scene_adapter as Object
+	).has_method("prepare_route_transition"):
+		result = (_route_scene_adapter as Object).call(
+			"prepare_route_transition", target.duplicate(true), context.duplicate(true)
+		)
+	else:
+		return false
+	if typeof(result) == TYPE_BOOL:
+		return bool(result)
+	if result is Dictionary:
+		return bool((result as Dictionary).get("ok", false))
+	if result is Object:
+		return bool((result as Object).get("ok"))
+	return false
+
+
+func _publish_floor_started_once(state: Dictionary) -> void:
+	var plan: Dictionary = state.get("floor_plan", {})
+	var run_id := str(state.get("run_id", ""))
+	var floor_id := str(plan.get("floor_id", ""))
+	var floor_index := int(state.get("current_floor_index", -1))
+	if run_id.is_empty() or floor_id.is_empty() or floor_index < 0:
+		return
+	var event_id := "%s:%s:%d" % [run_id, floor_id, floor_index]
+	if _published_floor_start_ids.has(event_id):
+		return
+	_published_floor_start_ids[event_id] = true
+	EventBus.floor_started.emit(
+		run_id, StringName(floor_id), floor_index, int(state.get("revision", 0))
+	)
+
+
+func _publish_floor_completed_if_new(state: Dictionary, revision: int) -> void:
+	var run_id := str(state.get("run_id", ""))
+	var completed: Array = state.get("completed_floor_ids", [])
+	if run_id.is_empty() or completed.is_empty():
+		return
+	var floor_id := str(completed[-1])
+	var floor_index := completed.size() - 1
+	var event_id := "%s:%s:%d" % [run_id, floor_id, floor_index]
+	if _published_floor_completion_ids.has(event_id):
+		return
+	_published_floor_completion_ids[event_id] = true
+	EventBus.floor_completed.emit(
+		run_id, StringName(floor_id), floor_index, revision
+	)
+
+
+func _is_floor_plan_snapshot(state: Dictionary) -> bool:
+	return str(state.get("config", {}).get("milestone", "")) in [
+		"LAUNCH", "EXPANSION",
+	]
 
 
 func _set_selection_safety(active_selection: bool) -> void:

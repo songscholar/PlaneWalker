@@ -1,20 +1,105 @@
 class_name RunDirector
 extends Node
 
+const RoomTemplateDefinitionScript := preload(
+	"res://scripts/dungeon/room_template_definition.gd"
+)
+
 const ROOM_TYPE_COMBAT := "combat"
 const ROOM_TYPE_EVENT := "event"
 const ROOM_TYPE_ELITE := "elite"
 const ROOM_TYPE_BOSS := "boss"
+const ROOM_TYPE_TREASURE := "treasure"
+const ROOM_TYPE_SHOP := "shop"
+const ROOM_TYPE_REST := "rest"
 
 var room_sequence: Array[Dictionary] = [
 	{"scene": "res://scenes/rooms/combat_room_01.tscn", "type": ROOM_TYPE_COMBAT},
 ]
 var current_room_index: int = 0
+var _launch_nodes_by_id: Dictionary = {}
 
 
 func configure_from_definitions(definitions: Array[Dictionary]) -> void:
 	room_sequence = definitions.duplicate(true)
 	current_room_index = 0
+	_launch_nodes_by_id.clear()
+
+
+func configure_launch_plan(plan: Dictionary, registry: RefCounted) -> bool:
+	room_sequence.clear()
+	_launch_nodes_by_id.clear()
+	current_room_index = 0
+	if registry == null or not registry.has_method("resolve_room_template"):
+		return false
+	var floor_id := str(plan.get("floor_id", ""))
+	var floor_index := int(plan.get("floor_index", -1))
+	if floor_id.is_empty() or floor_index < 0 or not plan.get("nodes", []) is Array:
+		return false
+	for node_value: Variant in plan.get("nodes", []):
+		if not node_value is Dictionary:
+			return false
+		var node: Dictionary = node_value
+		var node_id := str(node.get("id", ""))
+		if node_id == str(plan.get("entry_node_id", "entry")):
+			continue
+		var template_id := str(node.get("template_id", ""))
+		var template_value: Variant = registry.call(
+			"resolve_room_template", StringName(template_id)
+		)
+		if not template_value is Dictionary or (template_value as Dictionary).is_empty():
+			room_sequence.clear()
+			_launch_nodes_by_id.clear()
+			return false
+		var parser_source: Dictionary = {}
+		for field: String in RoomTemplateDefinitionScript.ROOT_FIELDS:
+			if not (template_value as Dictionary).has(field):
+				continue
+			var value: Variant = (template_value as Dictionary)[field]
+			parser_source[field] = (
+				value.duplicate(true) if value is Array or value is Dictionary else value
+			)
+		var template_result: Dictionary = RoomTemplateDefinitionScript.new().configure(
+			parser_source
+		)
+		if not bool(template_result.get("ok", false)):
+			room_sequence.clear()
+			_launch_nodes_by_id.clear()
+			return false
+		var template: Dictionary = (
+			template_result.get("definition", {}) as Dictionary
+		).duplicate(true)
+		var definition := {
+			"id": node_id,
+			"node_id": node_id,
+			"floor_id": floor_id,
+			"floor_index": floor_index,
+			"room_number": int(node.get("layer", 0)),
+			"type": str(node.get("room_type", "")),
+			"room_type": str(node.get("room_type", "")),
+			"template_id": template_id,
+			"scene": str(template.get("scene_path", "")),
+			"scene_path": str(template.get("scene_path", "")),
+			"encounter_id": str(node.get("encounter_id", "")),
+			"event_id": str(node.get("event_id", "")),
+			"merchant_id": str(node.get("merchant_id", "")),
+			"reward_policy_id": str(node.get("reward_policy_id", "")),
+			"runtime_mode": "launch",
+			"template": template.duplicate(true),
+		}
+		_launch_nodes_by_id[node_id] = definition.duplicate(true)
+		room_sequence.append(definition)
+	room_sequence.sort_custom(
+		func(left: Dictionary, right: Dictionary) -> bool:
+			if int(left["room_number"]) != int(right["room_number"]):
+				return int(left["room_number"]) < int(right["room_number"])
+			return str(left["node_id"]) < str(right["node_id"])
+	)
+	return not room_sequence.is_empty()
+
+
+func room_definition_for_node(node_id: StringName) -> Dictionary:
+	return (_launch_nodes_by_id.get(str(node_id), {}) as Dictionary).duplicate(true)
 
 
 func configure_fixed_sequence(

@@ -22,12 +22,16 @@ class FacadeSpy:
 	var boss_defeated_calls: int = 0
 	var player_died_calls: int = 0
 	var reject_player_died: bool = false
+	var launch_encounter_definition: Dictionary = {}
 
 	func current_room_definition() -> Dictionary:
 		return room_definition.duplicate(true)
 
 	func snapshot() -> Dictionary:
 		return state.duplicate(true)
+
+	func current_encounter_definition() -> Dictionary:
+		return launch_encounter_definition.duplicate(true)
 
 	func enter_current_room():
 		enter_room_calls += 1
@@ -114,6 +118,8 @@ func _run() -> void:
 	_test_room_clear_is_idempotent(suite)
 	_test_boss_completion(suite)
 	_test_event_room_completes_without_runner(suite)
+	_test_launch_non_combat_room_does_not_start_encounter(suite)
+	_test_launch_combat_missing_encounter_fails_closed(suite)
 	_test_spawn_and_failure_paths(suite)
 	_test_player_death_is_idempotent(suite)
 	_test_rejected_player_death_preserves_active_room(suite)
@@ -166,6 +172,48 @@ func _test_event_room_completes_without_runner(suite) -> void:
 	suite.assert_true(result.ok, "event room resolves through the room authority")
 	suite.assert_equal(runner.start_calls, 0, "event room starts no encounter runner")
 	suite.assert_equal(facade.complete_room_calls, 1, "event room submits one completion command")
+	_free_fixture(fixture)
+
+
+func _test_launch_non_combat_room_does_not_start_encounter(suite) -> void:
+	var room := _room(&"shop", "", 2)
+	room["id"] = "floor_01_shop_a"
+	room["node_id"] = "floor_01_shop_a"
+	room["runtime_mode"] = "launch"
+	var fixture := _fixture(room)
+	var runtime: Node = fixture["runtime"]
+	var facade: RefCounted = fixture["facade"]
+	var runner: Node = fixture["runner"]
+	var result = runtime.begin_current_room()
+	var active_snapshot: Dictionary = runtime.snapshot()
+	suite.assert_true(result.ok, "Launch shop enters through the room authority")
+	suite.assert_equal(runner.start_calls, 0, "Launch shop never starts EncounterRunner")
+	suite.assert_equal(facade.complete_room_calls, 0, "Launch shop waits for its interaction authority")
+	suite.assert_true(bool(active_snapshot.get("room_active", false)), "Launch shop remains active until interaction completion")
+	suite.assert_true(runtime.complete_current_room().ok, "Launch shop can complete through its explicit handler boundary")
+	suite.assert_equal(facade.complete_room_calls, 1, "Launch shop completion submits one authoritative command")
+	_free_fixture(fixture)
+
+
+func _test_launch_combat_missing_encounter_fails_closed(suite) -> void:
+	var room := _room(&"combat", "encounter_adapter_missing", 2)
+	room["id"] = "floor_01_combat_a"
+	room["node_id"] = "floor_01_combat_a"
+	room["runtime_mode"] = "launch"
+	var fixture := _fixture(room)
+	var runtime: Node = fixture["runtime"]
+	var facade: RefCounted = fixture["facade"]
+	var runner: Node = fixture["runner"]
+	var failures: Array[Dictionary] = []
+	runtime.runtime_failed.connect(
+		func(context: Dictionary): failures.append(context.duplicate(true))
+	)
+	var result = runtime.begin_current_room()
+	suite.assert_true(not result.ok, "Launch combat rejects a missing encounter adapter")
+	suite.assert_equal(str(result.code), "CONTENT_NOT_AVAILABLE", "missing Launch encounter uses the stable content failure")
+	suite.assert_equal(runner.start_calls, 0, "missing Launch encounter never starts EncounterRunner")
+	suite.assert_equal(facade.player_died_calls, 1, "missing Launch encounter terminates through authoritative failure")
+	suite.assert_equal(failures.size(), 1, "missing Launch encounter publishes one runtime failure")
 	_free_fixture(fixture)
 
 

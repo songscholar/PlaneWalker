@@ -9,6 +9,7 @@ signal terminal_committed(context: Dictionary, revision: int)
 signal runtime_failed(context: Dictionary)
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
+const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 
 var _facade: RefCounted
 var _catalog: RefCounted
@@ -69,17 +70,24 @@ func begin_current_room() -> Variant:
 	room_started.emit(_current_room_id, _result_revision(entered))
 
 	var room_type := str(_current_room.get("type", "combat"))
-	if room_type == "event":
+	var launch_mode := str(_current_room.get("runtime_mode", "")) == "launch"
+	if room_type == "event" and not launch_mode:
 		_complete_current_room()
+		return entered
+	if launch_mode and room_type not in ["combat", "elite", "boss"]:
 		return entered
 
 	var encounter_id := str(_current_room.get("encounter_id", ""))
 	var room_number := int(_current_room.get("room_number", 0))
-	var encounter_value: Variant = _catalog.call(
-		"encounter_definition",
-		encounter_id,
-		_run_seed,
-		room_number
+	var encounter_value: Variant = (
+		_facade.call("current_encounter_definition")
+		if launch_mode and _facade.has_method("current_encounter_definition")
+		else _catalog.call(
+			"encounter_definition",
+			encounter_id,
+			_run_seed,
+			room_number
+		)
 	)
 	if not encounter_value is Dictionary or (encounter_value as Dictionary).is_empty():
 		_fail_runtime(&"ENCOUNTER_NOT_AVAILABLE", {
@@ -89,6 +97,10 @@ func begin_current_room() -> Variant:
 		return _failure_result(&"CONTENT_NOT_AVAILABLE", {"encounter_id": encounter_id})
 	_runner.call("start_encounter", (encounter_value as Dictionary).duplicate(true), _run_seed, room_number)
 	return entered
+
+
+func complete_current_room() -> Variant:
+	return _complete_current_room()
 
 
 func register_spawned(entity: Node, spawn_definition: Dictionary = {}) -> bool:
@@ -207,7 +219,8 @@ func _complete_current_room() -> Variant:
 	var room_type := str(_current_room.get("type", "combat"))
 	var result: Variant
 	var terminal_context: Dictionary = {}
-	if room_type == "boss":
+	var launch_mode := str(_current_room.get("runtime_mode", "")) == "launch"
+	if room_type == "boss" and not launch_mode:
 		terminal_context = {
 			"result": "victory",
 			"room_id": str(_current_room_id),
@@ -219,6 +232,13 @@ func _complete_current_room() -> Variant:
 	if _result_ok(result):
 		var revision := _result_revision(result)
 		room_cleared.emit(_current_room_id, revision)
+		var facade_snapshot: Dictionary = (
+			_facade.call("snapshot") as Dictionary
+			if _facade != null and _facade.has_method("snapshot")
+			else {}
+		)
+		if launch_mode and RunPhaseScript.is_terminal(int(facade_snapshot.get("phase", -1))):
+			terminal_context = (facade_snapshot.get("result", {}) as Dictionary).duplicate(true)
 		if not terminal_context.is_empty():
 			terminal_committed.emit(terminal_context.duplicate(true), revision)
 	else:

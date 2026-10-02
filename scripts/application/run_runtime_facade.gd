@@ -12,6 +12,11 @@ const RunRewardReplaySealScript := preload(
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
+const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
+const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
+const RoomTemplateDefinitionScript := preload(
+	"res://scripts/dungeon/room_template_definition.gd"
+)
 const RunDirectorScript := preload("res://scripts/dungeon/run_director.gd")
 const RoomRuntimeScript := preload("res://scripts/dungeon/room_runtime.gd")
 const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
@@ -31,6 +36,18 @@ var _selection_reservations: Dictionary = {}
 var _next_selection_reservation_id: int = 1
 var _last_atomic_transition_revision: int = -1
 var _reward_replay_seal: RefCounted
+var _director: Node
+var _floor_definitions: Array[Dictionary] = []
+var _room_templates: Array[Dictionary] = []
+var _route_transactions: Dictionary = {}
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	if _director != null and is_instance_valid(_director):
+		_director.free()
+	_director = null
 
 
 func boot(
@@ -48,6 +65,12 @@ func boot(
 	_next_selection_reservation_id = 1
 	_last_atomic_transition_revision = -1
 	_reward_replay_seal = RunRewardReplaySealScript.new()
+	if _director != null and is_instance_valid(_director):
+		_director.free()
+	_director = RunDirectorScript.new()
+	_floor_definitions.clear()
+	_room_templates.clear()
+	_route_transactions.clear()
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -72,11 +95,9 @@ func boot(
 			{"errors": encounter_report.blocking_errors.duplicate(true)}
 		)
 
-	var director = RunDirectorScript.new()
-	director.configure_from_definitions(M1RoomPlanScript.definitions(_encounter_catalog, 0))
-	for room_number: int in range(1, director.room_count() + 1):
-		_room_definitions.append(director.room_definition_for(room_number))
-	director.free()
+	_director.configure_from_definitions(M1RoomPlanScript.definitions(_encounter_catalog, 0))
+	for room_number: int in range(1, _director.room_count() + 1):
+		_room_definitions.append(_director.room_definition_for(room_number))
 	var hub_result = _orchestrator.enter_hub()
 	_booted = hub_result.ok
 	return hub_result
@@ -108,18 +129,196 @@ func start_run(config: Dictionary, run_id: String):
 			_revision(),
 			{"field": "loadout", "reason": "validated_context_missing"}
 		)
-	var started = _orchestrator.start_run(normalized, run_id)
-	if not started.ok:
-		return started
-	_accepted_loadout = (loadout_value as Dictionary).duplicate(true)
-	_room_definitions = M1RoomPlanScript.definitions(
-		_encounter_catalog,
-		int(_orchestrator.snapshot().get("run_seed", 0))
+	if _orchestrator.phase() != RunPhaseScript.Value.HUB:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var floor_plan_run := _is_floor_plan_milestone(
+		str(normalized.get("milestone", ""))
 	)
+	if floor_plan_run:
+		var launch_content = _configure_launch_content(
+			StringName(str(normalized.get("milestone", "")))
+		)
+		if not launch_content.ok:
+			return launch_content
+
+	var candidate_orchestrator = RunOrchestratorScript.new()
+	var candidate_director = RunDirectorScript.new()
+	var candidate_hub = candidate_orchestrator.enter_hub()
+	if not candidate_hub.ok:
+		candidate_director.free()
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(), {"stage": "candidate_enter_hub"}
+		)
+	var started = candidate_orchestrator.start_run(normalized, run_id)
+	if not started.ok:
+		candidate_director.free()
+		return CommandResultScript.failure(started.code, _revision(), started.context)
+
+	var accepted_result = started
+	var candidate_rooms: Array[Dictionary] = []
+	if floor_plan_run:
+		accepted_result = _start_floor_at(
+			0, candidate_orchestrator, candidate_director
+		)
+	else:
+		candidate_rooms = M1RoomPlanScript.definitions(
+			_encounter_catalog,
+			int(candidate_orchestrator.snapshot().get("run_seed", 0))
+		)
+		candidate_director.configure_from_definitions(candidate_rooms)
+		accepted_result = candidate_orchestrator.preparation_completed()
+	if not accepted_result.ok:
+		candidate_director.free()
+		return CommandResultScript.failure(
+			accepted_result.code, _revision(), accepted_result.context
+		)
+
+	if _director != null and is_instance_valid(_director):
+		_director.free()
+	_orchestrator = candidate_orchestrator
+	_director = candidate_director
+	_room_definitions = candidate_rooms.duplicate(true)
+	_accepted_loadout = (loadout_value as Dictionary).duplicate(true)
 	_draft.reset()
 	_selection_reservations.clear()
 	_last_atomic_transition_revision = -1
-	return _orchestrator.preparation_completed()
+	_route_transactions.clear()
+	return accepted_result
+
+
+func start_next_floor():
+	var readiness = _require_booted("start_next_floor")
+	if not readiness.ok:
+		return readiness
+	if not _is_floor_plan_run():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"operation": "start_next_floor"}
+		)
+	var completed: Array = _orchestrator.snapshot().get("completed_floor_ids", [])
+	return _start_floor_at(completed.size())
+
+
+func route_choices() -> Array[Dictionary]:
+	if not _is_floor_plan_run():
+		return []
+	var state: Dictionary = _orchestrator.snapshot()
+	var plan: Dictionary = state.get("floor_plan", {})
+	var source_id := str(plan.get("current_node_id", ""))
+	var abandoned: Array = plan.get("abandoned_node_ids", [])
+	var selected: Array = plan.get("selected_edge_ids", [])
+	var choices: Array[Dictionary] = []
+	for edge_value: Variant in plan.get("edges", []):
+		if not edge_value is Dictionary:
+			continue
+		var edge: Dictionary = edge_value
+		var destination_id := str(edge.get("destination_node_id", ""))
+		if (
+			str(edge.get("source_node_id", "")) != source_id
+			or bool(edge.get("locked", false))
+			or selected.has(str(edge.get("id", "")))
+			or abandoned.has(destination_id)
+		):
+			continue
+		var target: Dictionary = _director.room_definition_for_node(StringName(destination_id))
+		if target.is_empty():
+			continue
+		choices.append({
+			"edge_id": str(edge.get("id", "")),
+			"choice_order": int(edge.get("choice_order", 0)),
+			"node_id": destination_id,
+			"floor_id": str(plan.get("floor_id", "")),
+			"floor_index": int(plan.get("floor_index", -1)),
+			"room_type": str(target.get("room_type", "")),
+			"template_id": str(target.get("template_id", "")),
+			"scene_path": str(target.get("scene_path", "")),
+			"route_summary_facts": (
+				(edge.get("route_summary_facts", {}) as Dictionary).duplicate(true)
+			),
+		})
+	choices.sort_custom(
+		func(left: Dictionary, right: Dictionary) -> bool:
+			return int(left["choice_order"]) < int(right["choice_order"])
+	)
+	return choices
+
+
+func begin_route_transition(edge_id: StringName, expected_revision: int):
+	var readiness = _require_booted("begin_route_transition")
+	if not readiness.ok:
+		return readiness
+	if not _is_floor_plan_run():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"operation": "begin_route_transition"}
+		)
+	var before: Dictionary = _orchestrator.floor_transaction_snapshot()
+	var begun = _orchestrator.begin_route_transition(edge_id, expected_revision)
+	if not begun.ok:
+		return begun
+	var transition_id := str(begun.context.get("transition_id", ""))
+	_route_transactions[transition_id] = {
+		"before": before.duplicate(true),
+		"edge_id": str(edge_id),
+		"node_id": str(begun.context.get("node_id", "")),
+	}
+	var context: Dictionary = begun.context.duplicate(true)
+	context["target"] = current_room_definition()
+	return CommandResultScript.success(begun.new_revision, context)
+
+
+func finalize_route_transition(transition_id: String, expected_revision: int):
+	var readiness = _require_booted("finalize_route_transition")
+	if not readiness.ok:
+		return readiness
+	if not _route_transactions.has(transition_id):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "transition_id"}
+		)
+	var reservation: Dictionary = _route_transactions[transition_id]
+	var finalized = _orchestrator.finalize_route_transition(
+		transition_id, expected_revision
+	)
+	if not finalized.ok:
+		return finalized
+	var target: Dictionary = current_room_definition()
+	var entered = _orchestrator.enter_floor_node(
+		str(target.get("node_id", "")), finalized.new_revision
+	)
+	if not entered.ok:
+		var before: Dictionary = reservation.get("before", {}).duplicate(true)
+		if not _orchestrator.restore_floor_transaction_snapshot(before):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_finalize_entry_rollback", "transition_id": transition_id}
+			)
+		_route_transactions.erase(transition_id)
+		var failure_context: Dictionary = entered.context.duplicate(true)
+		failure_context["route_rolled_back"] = true
+		failure_context["transition_id"] = transition_id
+		return CommandResultScript.failure(
+			entered.code, _revision(), failure_context, entered.message_key
+		)
+	_route_transactions.erase(transition_id)
+	var context: Dictionary = finalized.context.duplicate(true)
+	context["target"] = target.duplicate(true)
+	context["enter_revision"] = int(entered.new_revision)
+	return CommandResultScript.success(entered.new_revision, context)
+
+
+func rollback_route_transition(transition_id: String, expected_revision: int):
+	var readiness = _require_booted("rollback_route_transition")
+	if not readiness.ok:
+		return readiness
+	if not _route_transactions.has(transition_id):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "transition_id"}
+		)
+	var rolled_back = _orchestrator.rollback_route_transition(
+		transition_id, expected_revision
+	)
+	if rolled_back.ok:
+		_route_transactions.erase(transition_id)
+	return rolled_back
 
 
 func enter_current_room():
@@ -133,6 +332,15 @@ func enter_current_room():
 			_revision(),
 			{"operation": "enter_current_room"}
 		)
+	if _is_floor_plan_run():
+		var active_phase := _active_phase_for_room_type(str(room.get("room_type", "")))
+		if _orchestrator.phase() == active_phase:
+			return CommandResultScript.success(
+				_revision(), {"already_entered": true, "node_id": str(room.get("node_id", ""))}
+			)
+		return _orchestrator.enter_floor_node(
+			str(room.get("node_id", "")), _revision()
+		)
 	return _orchestrator.room_entered(str(room.get("type", "")) == "boss")
 
 
@@ -144,6 +352,28 @@ func complete_current_room():
 		return CommandResultScript.failure(&"TERMINAL_STATE", _revision())
 
 	var room := current_room_definition()
+	if _is_floor_plan_run():
+		if room.is_empty():
+			return CommandResultScript.failure(
+				&"INVALID_PHASE", _revision(), {"operation": "complete_current_room"}
+			)
+		var completed = _orchestrator.complete_floor_node(
+			str(room.get("node_id", "")), _revision()
+		)
+		if not completed.ok:
+			return completed
+		if str(room.get("room_type", "")) != "boss":
+			return completed
+		var floor_completed = _orchestrator.complete_floor(
+			{
+				"result": "victory",
+				"room_id": str(room.get("node_id", "")),
+				"floor_id": str(room.get("floor_id", "")),
+				"current_room": int(room.get("room_number", 0)),
+			},
+			completed.new_revision
+		)
+		return floor_completed
 	if str(room.get("type", "")) == "boss":
 		return CommandResultScript.failure(
 			&"INVALID_PHASE",
@@ -441,7 +671,23 @@ func active_loadout() -> Dictionary:
 
 
 func current_room_definition() -> Dictionary:
-	if not _booted or _orchestrator == null or _room_definitions.is_empty():
+	if not _booted or _orchestrator == null:
+		return {}
+	if _is_floor_plan_run():
+		var plan: Dictionary = _orchestrator.snapshot().get("floor_plan", {})
+		var node_id := str(plan.get("current_node_id", ""))
+		if node_id.is_empty() or node_id == str(plan.get("entry_node_id", "entry")):
+			return {}
+		var launch_definition: Dictionary = _director.room_definition_for_node(
+			StringName(node_id)
+		)
+		if launch_definition.is_empty():
+			return {}
+		launch_definition["room_number"] = int(
+			_orchestrator.snapshot().get("current_room", 0)
+		)
+		return launch_definition
+	if _room_definitions.is_empty():
 		return {}
 	var room_number := int(_orchestrator.snapshot().get("current_room", 0))
 	if room_number <= 0 or room_number > _room_definitions.size():
@@ -455,6 +701,15 @@ func current_encounter_definition() -> Dictionary:
 	var room := current_room_definition()
 	if room.is_empty():
 		return {}
+	if _is_floor_plan_run():
+		var encounter_id := str(room.get("encounter_id", ""))
+		if encounter_id.is_empty():
+			return {}
+		return _encounter_catalog.encounter_definition(
+			encounter_id,
+			int(_orchestrator.snapshot().get("run_seed", 0)),
+			int(room.get("room_number", 0))
+		)
 	return _encounter_catalog.encounter_definition(
 		str(room.get("encounter_id", "")),
 		int(_orchestrator.snapshot().get("run_seed", 0)),
@@ -463,6 +718,11 @@ func current_encounter_definition() -> Dictionary:
 
 
 func room_plan() -> Array[Dictionary]:
+	if _is_floor_plan_run() and _director != null:
+		var definitions: Array[Dictionary] = []
+		for room_number: int in range(1, _director.room_count() + 1):
+			definitions.append(_director.room_definition_for(room_number))
+		return definitions
 	return _room_definitions.duplicate(true)
 
 
@@ -502,3 +762,176 @@ func _revision() -> int:
 	if _orchestrator == null:
 		return 0
 	return _orchestrator.revision()
+
+
+func _configure_launch_content(milestone: StringName):
+	var canonical_floors: Array[Dictionary] = []
+	var canonical_templates: Array[Dictionary] = []
+	for floor_value: Variant in _registry.call("get_floor_definitions", milestone):
+		if not floor_value is Dictionary:
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE",
+				_revision(),
+				{"category": "floor_definition", "reason": "expected_dictionary"}
+			)
+		var canonical_floor := _canonical_floor_definition(floor_value as Dictionary)
+		if not bool(canonical_floor.get("ok", false)):
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE",
+				_revision(),
+				(canonical_floor.get("context", {}) as Dictionary).duplicate(true)
+			)
+		canonical_floors.append(
+			(canonical_floor.get("definition", {}) as Dictionary).duplicate(true)
+		)
+	for template_value: Variant in _registry.call(
+		"get_by_category", &"room_template", milestone
+	):
+		if not template_value is Dictionary:
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE",
+				_revision(),
+				{"category": "room_template", "reason": "expected_dictionary"}
+			)
+		var canonical_template := _canonical_room_template(template_value as Dictionary)
+		if not bool(canonical_template.get("ok", false)):
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE",
+				_revision(),
+				(canonical_template.get("context", {}) as Dictionary).duplicate(true)
+			)
+		canonical_templates.append(
+			(canonical_template.get("definition", {}) as Dictionary).duplicate(true)
+		)
+	if canonical_floors.size() != 5 or canonical_templates.size() != 30:
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			_revision(),
+			{
+				"floor_count": canonical_floors.size(),
+				"room_template_count": canonical_templates.size(),
+			}
+		)
+	_floor_definitions = canonical_floors.duplicate(true)
+	_room_templates = canonical_templates.duplicate(true)
+	return CommandResultScript.success(_revision())
+
+
+func _canonical_floor_definition(source: Dictionary) -> Dictionary:
+	var parser_source := _definition_fields(source, FloorDefinitionScript.ROOT_FIELDS)
+	var result: Dictionary = FloorDefinitionScript.new().configure(parser_source)
+	if bool(result.get("ok", false)):
+		return {
+			"ok": true,
+			"definition": (result.get("definition", {}) as Dictionary).duplicate(true),
+			"context": {},
+		}
+	var context: Dictionary = (result.get("context", {}) as Dictionary).duplicate(true)
+	context["category"] = "floor_definition"
+	context["content_id"] = str(source.get("id", ""))
+	return {"ok": false, "definition": {}, "context": context}
+
+
+func _canonical_room_template(source: Dictionary) -> Dictionary:
+	var parser_source := _definition_fields(
+		source, RoomTemplateDefinitionScript.ROOT_FIELDS
+	)
+	var result: Dictionary = RoomTemplateDefinitionScript.new().configure(parser_source)
+	if bool(result.get("ok", false)):
+		return {
+			"ok": true,
+			"definition": (result.get("definition", {}) as Dictionary).duplicate(true),
+			"context": {},
+		}
+	var context: Dictionary = (result.get("context", {}) as Dictionary).duplicate(true)
+	context["category"] = "room_template"
+	context["content_id"] = str(source.get("id", ""))
+	return {"ok": false, "definition": {}, "context": context}
+
+
+func _definition_fields(source: Dictionary, fields: Array[String]) -> Dictionary:
+	var canonical_source: Dictionary = {}
+	for field: String in fields:
+		if not source.has(field):
+			continue
+		var value: Variant = source[field]
+		canonical_source[field] = (
+			value.duplicate(true) if value is Array or value is Dictionary else value
+		)
+	return canonical_source
+
+
+func _start_floor_at(
+	floor_index: int,
+	orchestrator_override: RefCounted = null,
+	director_override: Node = null
+):
+	var run_authority = (
+		orchestrator_override if orchestrator_override != null else _orchestrator
+	)
+	var run_director: Node = (
+		director_override if director_override != null else _director
+	)
+	var authority_revision := int(run_authority.revision())
+	if floor_index < 0 or floor_index >= _floor_definitions.size():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			authority_revision,
+			{"field": "floor_index", "floor_index": floor_index}
+		)
+	var floor: Dictionary = _floor_definitions[floor_index]
+	var generated: Dictionary = FloorPlanGeneratorScript.new().generate(
+		int(run_authority.snapshot().get("run_seed", 0)),
+		floor,
+		_room_templates
+	)
+	if not bool(generated.get("ok", false)):
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			authority_revision,
+			(generated.get("context", {}) as Dictionary).duplicate(true)
+		)
+	var before: Dictionary = run_authority.floor_transaction_snapshot()
+	var started = run_authority.start_floor(
+		(generated.get("plan", {}) as Dictionary).duplicate(true),
+		floor.duplicate(true),
+		_room_templates.duplicate(true),
+		authority_revision
+	)
+	if not started.ok:
+		return started
+	if not run_director.configure_launch_plan(
+		run_authority.snapshot().get("floor_plan", {}), _registry
+	):
+		if not run_authority.restore_floor_transaction_snapshot(before):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				int(run_authority.revision()),
+				{"stage": "launch_director_configuration_rollback"}
+			)
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE",
+			int(run_authority.revision()),
+			{"field": "floor_plan", "reason": "launch_director_configuration_failed"}
+		)
+	return started
+
+
+func _is_floor_plan_run() -> bool:
+	if _orchestrator == null:
+		return false
+	return _is_floor_plan_milestone(
+		str(_orchestrator.snapshot().get("config", {}).get("milestone", ""))
+	)
+
+
+func _is_floor_plan_milestone(milestone: String) -> bool:
+	return milestone in ["LAUNCH", "EXPANSION"]
+
+
+func _active_phase_for_room_type(room_type: String) -> int:
+	if room_type == "boss":
+		return RunPhaseScript.Value.BOSS_ACTIVE
+	if room_type == "combat" or room_type == "elite":
+		return RunPhaseScript.Value.COMBAT_ACTIVE
+	return RunPhaseScript.Value.ROOM_ACTIVE
