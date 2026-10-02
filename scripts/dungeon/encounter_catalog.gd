@@ -3,6 +3,7 @@ extends RefCounted
 
 const ValidationReportScript := preload("res://scripts/content/content_validation_report.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
+const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
 
 const DEFAULT_PATH := "res://data/encounters/m1_encounters.json"
 const AUTHORITATIVE_ROOM_SCENE := "res://scenes/rooms/combat_room_01.tscn"
@@ -89,13 +90,45 @@ func room_definitions(run_seed: int = 0) -> Array[Dictionary]:
 	return definitions
 
 
-func encounter_definition(encounter_id: String, run_seed: int = 0, room_number: int = 0) -> Dictionary:
-	var source: Dictionary = _encounters.get(encounter_id, {})
+func encounter_definition(
+	encounter_id: String,
+	run_seed: int = 0,
+	room_number: int = 0,
+	room_type: String = ""
+) -> Dictionary:
+	var source_id := encounter_id
+	if not _encounters.has(source_id):
+		source_id = _launch_adapter_source(encounter_id, room_number, room_type)
+	var source: Dictionary = _encounters.get(source_id, {})
 	if source.is_empty():
 		return {}
 	var resolved := source.duplicate(true)
+	resolved["id"] = encounter_id
 	_resolve_choices(resolved, run_seed, room_number)
 	return resolved
+
+
+func _launch_adapter_source(encounter_id: String, room_number: int, room_type: String) -> String:
+	# P14 keeps the authored M1 behaviors behind the closed Launch references
+	# until P15 supplies their enemy and Boss implementations.
+	var source_type := ""
+	if encounter_id in FloorDefinitionScript.ENCOUNTER_PROFILE_IDS:
+		source_type = "combat" if room_type.is_empty() else room_type
+		if source_type not in ["combat", "elite"]:
+			return ""
+	elif encounter_id in FloorDefinitionScript.BOSS_ENCOUNTER_IDS:
+		if room_type not in ["", "boss"]:
+			return ""
+		source_type = "boss"
+	else:
+		return ""
+	var candidates: Array[String] = []
+	for room: Dictionary in _rooms:
+		if str(room.get("type", "")) == source_type:
+			candidates.append(str(room.get("encounter_id", "")))
+	if candidates.is_empty():
+		return ""
+	return candidates[posmod(maxi(1, room_number) - 1, candidates.size())]
 
 
 func enemy_definition(enemy_id: String) -> Dictionary:

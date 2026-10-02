@@ -16,6 +16,9 @@ func _run() -> void:
 	await get_tree().process_frame
 	var host: Node = main.get_node("RunRuntimeHost")
 	var room_scene_host: Node = main.get_node_or_null("LaunchRoomSceneHost")
+	# This fixture advances floor-rule frames directly and tears down immediately.
+	# Keep encounter telegraphs synchronous so no timer outlives the test scene.
+	main.get_node("CombatRoom01").set("spawn_warning_duration", 0.0)
 	suite.assert_true(room_scene_host != null, "Main owns the production Launch RoomSceneHost")
 	var started = host.call("start_run", _launch_config())
 	suite.assert_true(started.ok, "Main production host starts a Launch run")

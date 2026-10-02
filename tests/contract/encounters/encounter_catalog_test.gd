@@ -2,6 +2,7 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
+const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
 
 const CATALOG_PATH := "res://data/encounters/m1_encounters.json"
 const FIXED_SEED := 20260928
@@ -14,6 +15,7 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_authoritative_catalog(suite)
+	_test_launch_compatibility_adapters(suite)
 	_test_deterministic_resolution(suite)
 	_test_real_choice_determinism(suite)
 	_test_invalid_references_are_rejected(suite)
@@ -56,6 +58,69 @@ func _test_authoritative_catalog(suite) -> void:
 		catalog.encounter_definition("m1_room_04_elite", FIXED_SEED, 4)["waves"][0]["spawns"][0]["enemy_id"],
 		"tank",
 		"encounter definitions are deep copies"
+	)
+
+
+func _test_launch_compatibility_adapters(suite) -> void:
+	var catalog = EncounterCatalogScript.new()
+	catalog.load_path(CATALOG_PATH)
+	var m1_rooms: Array[Dictionary] = catalog.room_definitions(FIXED_SEED)
+	var m1_combat: Dictionary = catalog.encounter_definition("m1_room_01", FIXED_SEED, 1)
+	var m1_boss: Dictionary = catalog.encounter_definition("m1_room_05_boss", FIXED_SEED, 5)
+	for encounter_id: String in FloorDefinitionScript.ENCOUNTER_PROFILE_IDS:
+		var encounter: Dictionary = catalog.encounter_definition(encounter_id, FIXED_SEED, 1)
+		suite.assert_true(not encounter.is_empty(), "%s resolves its compatibility combat" % encounter_id)
+		if encounter.is_empty():
+			continue
+		suite.assert_equal(encounter.get("id"), encounter_id, "adapter preserves the authoritative encounter identity")
+		suite.assert_equal(encounter.get("waves"), m1_combat["waves"], "Launch combat reuses validated authored waves")
+		suite.assert_equal(
+			catalog.encounter_definition(encounter_id, FIXED_SEED, 1), encounter,
+			"Launch adapter resolution is deterministic"
+		)
+		encounter["waves"][0]["spawns"][0]["enemy_id"] = "changed"
+		suite.assert_equal(
+			catalog.encounter_definition(encounter_id, FIXED_SEED, 1)["waves"],
+			m1_combat["waves"], "Launch adapters return deep copies"
+		)
+		var elite: Dictionary = catalog.encounter_definition(encounter_id, FIXED_SEED, 4, "elite")
+		suite.assert_equal(
+			elite.get("waves"), catalog.encounter_definition("m1_room_04_elite", FIXED_SEED, 4)["waves"],
+			"Launch elite rooms use the authored overload-pulse Tank"
+		)
+		suite.assert_true(
+			catalog.encounter_definition(encounter_id, FIXED_SEED, 1, "boss").is_empty(),
+			"combat adapters reject incompatible room types"
+		)
+	for encounter_id: String in FloorDefinitionScript.BOSS_ENCOUNTER_IDS:
+		var encounter: Dictionary = catalog.encounter_definition(encounter_id, FIXED_SEED, 5)
+		suite.assert_true(not encounter.is_empty(), "%s resolves its compatibility Boss" % encounter_id)
+		suite.assert_equal(encounter.get("id"), encounter_id, "Boss adapter preserves its stable identity")
+		suite.assert_equal(encounter.get("waves"), m1_boss["waves"], "P14 Boss uses the existing Chrono Warden behavior")
+		suite.assert_true(
+			catalog.encounter_definition(encounter_id, FIXED_SEED, 1, "combat").is_empty(),
+			"Boss adapters reject incompatible room types"
+		)
+	for room_number: int in range(1, 10):
+		var encounter: Dictionary = catalog.encounter_definition(
+			FloorDefinitionScript.ENCOUNTER_PROFILE_IDS[0], FIXED_SEED, room_number, "combat"
+		)
+		var source_id := "m1_room_%02d" % (posmod(room_number - 1, 3) + 1)
+		suite.assert_equal(
+			encounter.get("waves"), catalog.encounter_definition(source_id, FIXED_SEED, room_number)["waves"],
+			"Launch combat cycles through the three authored combat definitions by route room number"
+		)
+	for unknown_id: String in ["encounter_profile_unknown_adapter_v1", "boss_encounter_unknown_adapter_v1"]:
+		suite.assert_true(catalog.encounter_definition(unknown_id).is_empty(), "unknown adapter IDs fail closed")
+	suite.assert_equal(catalog.room_definitions(FIXED_SEED), m1_rooms, "Launch resolution preserves the frozen M1 plan")
+	suite.assert_equal(
+		catalog.encounter_definition("m1_room_01", FIXED_SEED, 1), m1_combat,
+		"Launch resolution never mutates M1 encounter content"
+	)
+	var unloaded_catalog = EncounterCatalogScript.new()
+	suite.assert_true(
+		unloaded_catalog.encounter_definition(FloorDefinitionScript.ENCOUNTER_PROFILE_IDS[0]).is_empty(),
+		"Launch adapters require a validated source catalog"
 	)
 
 
