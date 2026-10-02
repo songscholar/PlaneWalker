@@ -192,11 +192,11 @@ PASS — 1 scene, 0 failures, 0 known leak warnings
 **Interfaces:**
 - Produces `prepare_consequences`, `commit_consequences`, `rollback_consequences`, `snapshot`, `can_restore_snapshot`, and `restore_snapshot`.
 
-- [ ] **Step 1: Write RED tests for eight requirements, ten consequences, and every failure stage**
+- [x] **Step 1: Write RED tests for eight requirements, ten consequences, and every failure stage**
 
-- [ ] **Step 2: Run requirement and consequence filters and require RED**
+- [x] **Step 2: Run requirement and consequence filters and require RED**
 
-- [ ] **Step 3: Implement fixed ordering**
+- [x] **Step 3: Implement fixed ordering**
 
 ```text
 requirements -> costs -> Player/Build -> economy -> map/route -> flags/modifiers
@@ -207,7 +207,24 @@ requirements -> costs -> Player/Build -> economy -> map/route -> flags/modifiers
 
 `map_reveal(depth)` treats the authored `arguments.depth` as authoritative rather than using a fixed reveal distance. Preparation validates `depth`, reveals every reachable node within one through `depth` forward edge traversals from the current node, and records the authored depth and exact revealed node IDs in the authenticated receipt so commit, rollback, Save, and Replay cannot reinterpret it.
 
-- [ ] **Step 4: Run GREEN and commit `feat(events): execute atomic event consequences`**
+- [x] **Step 4: Run GREEN and commit `feat(events): execute atomic event consequences`**
+
+**Completed:** `7bf2d81 feat(events): execute atomic event consequences`
+
+**Focused verification (2026-10-02):**
+
+```text
+./tools/run_tests.sh --filter event_requirement_service
+PASS — 1 scene, 0 failures, 0 known leak warnings
+
+./tools/run_tests.sh --filter event_resource_authority
+PASS — 1 scene, 0 failures, 0 known leak warnings
+
+./tools/run_tests.sh --filter dungeon_event_consequence_runtime
+PASS — 1 scene, 0 failures, 0 known leak warnings
+```
+
+The final review also verifies zero-side-effect preparation, `RunEconomyState` as the sole gold writer, restore-invalidated capabilities, strict FloorPlan route restoration, exact rollback, typed malformed-ticket rejection, reverse compensation, and integrity-terminal escalation.
 
 ---
 
