@@ -6,7 +6,7 @@
 - Applies To: Five floors, FloorPlan generation, thirty streamed room scenes, floor rules, economy, merchants, events, map and interaction UI, Save/Replay, simulation, and certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-01-plane-walker-p14-five-floor-dungeon-design.md`, `docs/current/2026-10-01-p13b-launch-content-evidence.md`, `docs/contracts/content-pack-v2.md`
-- Last Verified: 2026-10-01
+- Last Verified: 2026-10-02
 - Exit Gate: Exact P14 content counts, deterministic routes, atomic lifecycle/economy/events, thirty valid player-facing room scenes, Save/Replay, controller UI, simulation, and complete repository validation pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -256,6 +256,8 @@ git commit -m "feat(dungeon): generate deterministic floor plans"
 
 ### Task 3: P14C — Integrate FloorPlan with RunState, lifecycle, Save v3, and Replay
 
+**Completion status (2026-10-02):** Completed in `d4ae495`, `17543fa`, `ba000e9`, and `3f56bb3`. Five-floor lifecycle, strict Save v3 migration/validation, atomic Launch Runtime routing, M1 parity, and dungeon Replay authority are locally verified. P14D is the active slice.
+
 **Files:**
 - Modify: `scripts/application/run_state.gd`
 - Modify: `scripts/application/run_orchestrator.gd`
@@ -283,7 +285,7 @@ git commit -m "feat(dungeon): generate deterministic floor plans"
 - Consumes: Task 2 FloorPlan and existing authoritative run commands.
 - Produces: `start_floor`, `select_route`, `enter_floor_node`, `complete_floor_node`, `complete_floor`, FloorPlan Save snapshots, schema v2-to-v3 migration, and `RunDungeonReplaySeal` validation.
 
-- [ ] **Step 1: Write failing lifecycle, migration, and Replay tests**
+- [x] **Step 1: Write failing lifecycle, migration, and Replay tests**
 
 Tests cover five-floor progression, stale/duplicate selection, wrong-node completion, floor transition, final Boss victory, M1 five-room parity, Save v3 round-trip, v2 migration without active Launch run, v2 active Launch run fail-closed, content fingerprint drift, plan digest drift, event/economy prefix drift, and atomic recovery from a rejected node transition.
 
@@ -297,7 +299,7 @@ for field: String in [
 	suite.assert_true(snapshot.has(field), "Launch run snapshot seals %s" % field)
 ```
 
-- [ ] **Step 2: Run RED for each filter**
+- [x] **Step 2: Run RED for each filter**
 
 ```bash
 ./tools/run_tests.sh --filter run_floor_plan_state
@@ -309,7 +311,7 @@ for field: String in [
 ./tools/run_tests.sh --filter m1_room_plan
 ```
 
-- [ ] **Step 3: Add FloorPlan transaction state and Launch lifecycle commands**
+- [x] **Step 3: Add FloorPlan transaction state and Launch lifecycle commands**
 
 RunState owns one `FloorPlan` snapshot and exposes strict transaction snapshots. RunOrchestrator is the sole phase/floor/node writer. A successful route selection follows:
 
@@ -324,13 +326,13 @@ validate open route choice + expected revision
 
 Scene load failure compensates the authoritative selection from the transaction snapshot before any publication. M1 continues to resolve `M1RoomPlan.definitions()` and never constructs a FloorPlan.
 
-- [ ] **Step 4: Activate Save schema v3 and dungeon Replay sealing**
+- [x] **Step 4: Activate Save schema v3 and dungeon Replay sealing**
 
 `SaveMigrationV2ToV3` adds exact empty P14 fields only to profiles with no active Launch run. For a saved active Launch run that lacks `floor_plan`, return `MIGRATION_UNSAFE_ACTIVE_RUN`. Settings migrate by version only. SaveEnvelope v3 validates FloorPlan, economy, event, merchant, and floor-rule fields through JSON-boundary normalization before returning runtime data.
 
 `RunDungeonReplaySeal` stores generator version, plan digest, route prefix, room facts, economy ledger digest, event resolution digest, and floor transitions. Validation authenticates the historical bytes before normalization and rejects unknown generator versions.
 
-- [ ] **Step 5: Run GREEN, full related regression, and commit**
+- [x] **Step 5: Run GREEN, full related regression, and commit**
 
 ```bash
 ./tools/run_tests.sh --filter run_floor_plan_state

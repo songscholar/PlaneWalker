@@ -4,11 +4,11 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, P11 five weapons, P12 five characters, P13A eight-archetype authority, and P13B exact `50 / 28 / 18 / 15` Launch pools/effects are certified locally; Replay schema 6, SaveEnvelope schema 2, deterministic formation, active-item UI, and the 150-loadout matrix are complete; P14 five-floor dungeon delivery is active; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, P11 five weapons, P12 five characters, P13A eight-archetype authority, and P13B exact `50 / 28 / 18 / 15` Launch pools/effects are certified locally; Replay schema 6, SaveEnvelope schema 3, deterministic formation, active-item UI, and the 150-loadout matrix are complete; P14A–P14C content authority, deterministic FloorPlan, five-floor lifecycle, Save v3, Runtime routing, and dungeon Replay are complete, with P14D room streaming and floor rules active; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
-- Last Verified: 2026-10-01
+- Last Verified: 2026-10-02
 - Contract References: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 
 ## 当前执行结论
@@ -50,7 +50,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
-| Full Product Content | Active / Phased program | P11 五武器、P12 五角色、P13A 八流派权威和 P13B 真实 `50 / 28 / 18 / 15` 内容池/效果已本地认证，包含 8 主动道具 UI、15 天赋、Replay schema 6、Save schema 2、240 synthetic samples 与 150 组合矩阵；当前进入 P14 五层、30 房、经济/商人/事件/UI，后续继续 P15 五 Boss、Hub、叙事与 Expansion 系统 |
+| Full Product Content | Active / Phased program | P11 五武器、P12 五角色、P13A 八流派权威和 P13B 真实 `50 / 28 / 18 / 15` 内容池/效果已本地认证，包含 8 主动道具 UI、15 天赋、Replay schema 6、Save schema 3、240 synthetic samples 与 150 组合矩阵；P14A–P14C 已完成，当前实施 P14D 的 30 房流送与五楼层规则，后续继续经济/商人/事件/UI、P15 五 Boss、Hub、叙事与 Expansion 系统 |
 | Launch / Expansion Systems | Active / Phased program | P14 五层地牢是当前仓库阶段；Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod 管理、外观和 DLC 内容包继续按批准顺序实施；现有 Replay 运行时权威不等同于完整回放产品体验 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
@@ -80,8 +80,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
 | [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
 | [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
-| [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Current contract |
-| [SaveService v2 Contract](contracts/save-service-v2.md) | Launch 奖励/主动道具运行时状态、v1→v2 迁移、JSON 规范化和生产回写边界 | Approved / Current contract |
+| [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Historical contract |
+| [SaveService v2 Contract](contracts/save-service-v2.md) | Launch 奖励/主动道具运行时状态、v1→v2 迁移、JSON 规范化和生产回写边界 | Approved / Historical contract |
+| [SaveService v3 Contract](contracts/save-service-v3.md) | FloorPlan、五层运行状态、v2→v3 fail-closed 迁移、Save/Replay 恢复边界 | Approved / Current contract |
 | [Content Pack v2 Contract](contracts/content-pack-v2.md) | Base/更新/Mod/DLC 内容包、完整性与声明式效果边界 | Frozen / Current contract |
 | [M1 Playtest Protocol](current/2026-09-28-m1-playtest-protocol.md) | 真实外部试玩、匿名化、cohort、观察和证明合同 | Approved / Current protocol |
 | [M1 Release Report](current/2026-09-28-m1-release-report.md) | 30 Seed 仓库证据、真实玩家门禁与正式 M1 结论 | External Validation Pending / Current |

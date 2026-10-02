@@ -398,7 +398,10 @@ func _test_required_specialized_pack_failure_is_atomic(suite) -> void:
 	var invalid_floor: Dictionary = valid_floor.duplicate(true)
 	invalid_floor["id"] = "floor_atomic_invalid"
 	invalid_floor["schema_version"] = 2
-	var root_path := "user://p14_atomic_registry_pack"
+	var test_data_root := OS.get_environment("PLANEWALKER_TEST_DATA_DIR")
+	if test_data_root.is_empty():
+		test_data_root = OS.get_temp_dir().path_join("planewalker-tests")
+	var root_path := test_data_root.path_join("p14_atomic_registry_pack")
 	var content_path := root_path.path_join("content/floors.json")
 	var localization_path := root_path.path_join("localization/translations.csv")
 	var pack_path := root_path.path_join("pack.json")
