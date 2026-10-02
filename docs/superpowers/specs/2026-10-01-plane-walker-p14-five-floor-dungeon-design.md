@@ -401,6 +401,8 @@ P14G map, shop, event, treasure, rest, and transition UI
 P14H simulation, visual QA, 150-loadout regression, and certification
 ```
 
-P14D completed locally on 2026-10-02. Its generated room assets, streaming and compensation protocol, five floor-rule runtimes, production effect authority, strict Save/Replay validation, Main end-to-end path, visual contracts, and new-run/error cleanup pass the clean repository gate: `181 passed, 0 failed`, with only the registered `reward_system_smoke` ObjectDB leak warning. P14E is the next active slice; this does not advance the formal M1 status or the authentic external playtest count.
+P14D completed locally on 2026-10-02. Its generated room assets, streaming and compensation protocol, five floor-rule runtimes, production effect authority, strict Save/Replay validation, Main end-to-end path, visual contracts, and new-run/error cleanup passed its clean repository gate: `181 passed, 0 failed`, with only the registered `reward_system_smoke` ObjectDB leak warning.
+
+P14E completed locally on 2026-10-02 in `af5280a`. `RunEconomyState` is the sole gold writer; deterministic inventory, all five merchant identities, purchase/reroll/heal/weapon-upgrade/health-trade/curse-cleanse/reward-sale/route-reveal services, floor cap/decay settlement, Player/Build/route compensation, strict Save/Replay cross-domain validation, and active floor-rule Launch restore are implemented. The clean repository gate reports `197 passed, 0 failed`, with the same registered leak warning. P14F is the next active slice; this does not advance the formal M1 status or the authentic external playtest count.
 
 P15 begins only after P14H certification and owns twenty-two Launch enemies, elite affixes, encounter composition depth, and five complete Boss behavior kits. P14 may use existing enemy/Boss adapters to exercise lifecycle paths, but its evidence must label those adapters honestly.

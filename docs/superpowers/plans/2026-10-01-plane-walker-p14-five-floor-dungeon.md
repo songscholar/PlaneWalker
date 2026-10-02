@@ -542,6 +542,8 @@ Final local evidence on 2026-10-02:
 
 ### Task 5: P14E — Implement atomic economy and five merchants
 
+**Completion status (2026-10-02):** Completed in `af5280a`. The authoritative Launch economy, deterministic merchant inventories, all typed merchant services, floor settlement, transactional Player/Build/route compensation, strict Save/Replay sealing, active floor-rule restore, and real Wayfarer purchase/heal/sell/restore path are implemented. Every focused P14E filter is green and repository validation reports `197 passed, 0 failed`; the only warning is the pre-registered `reward_system_smoke` ObjectDB leak. P14F is the active slice.
+
 **Files:**
 - Create: `scripts/economy/run_economy_state.gd`
 - Create: `scripts/economy/shop_price_service.gd`
@@ -564,11 +566,11 @@ Final local evidence on 2026-10-02:
 - Consumes: `launch_economy_v1`, merchant definitions, content compatibility, PlayerRewardEffectRuntime, and FloorPlan node context.
 - Produces: deterministic inventories, stable offer IDs, `prepare_transaction`, `commit_transaction`, `rollback_transaction`, `purchase`, `reroll`, `sell`, `heal`, `cleanse`, `upgrade`, `health_trade`, and `route_reveal`.
 
-- [ ] **Step 1: Write failing pricing, inventory, and failure-injection tests**
+- [x] **Step 1: Write failing pricing, inventory, and failure-injection tests**
 
 Cover every merchant, floor, rarity, reroll count, compatibility filter, sold state, Save/Replay restore, insufficient gold/health, stale inventory revision, duplicate transaction ID, reward failure, authority failure, rollback failure, recovery, cap/overflow decay, and deterministic inventory reopening. Assert no balance, Player, inventory, or publication change on recoverable failure.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 ./tools/run_tests.sh --filter run_economy_state
@@ -577,7 +579,7 @@ Cover every merchant, floor, rarity, reroll count, compatibility filter, sold st
 ./tools/run_tests.sh --filter merchant_runtime
 ```
 
-- [ ] **Step 3: Implement deterministic pricing and inventory**
+- [x] **Step 3: Implement deterministic pricing and inventory**
 
 Price calculation is integer and data-driven:
 
@@ -588,11 +590,11 @@ static func price(base_price: int, floor_multiplier: float, rarity_multiplier: f
 
 Inventory generation uses `merchant_inventory_v1:<merchant_id>:<node_id>:<reroll_count>`. It stores the resolved definitions and prices in the authoritative merchant node state. Reopen and Save load read stored offers rather than rerolling.
 
-- [ ] **Step 4: Implement atomic merchant services and economy ledger**
+- [x] **Step 4: Implement atomic merchant services and economy ledger**
 
 The commit order is cost reserve, effect/service prepare, Player/route commit, economy commit, inventory sold/reroll commit, then exactly-once publication. Every receipt contains transaction ID, inventory revision, before/after economy snapshots, service receipt, and content fingerprint. Recoverable failure rolls every participant back; rollback failure enters a typed integrity terminal path.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 ```bash
 ./tools/run_tests.sh --filter run_economy_state
