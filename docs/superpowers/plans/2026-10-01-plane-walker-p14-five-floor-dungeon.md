@@ -611,6 +611,8 @@ git commit -m "feat(economy): add launch merchants"
 
 ### Task 6: P14F — Implement fifteen regular and three special event runtimes
 
+**Execution detail:** The audited, task-by-task P14F implementation plan is `docs/superpowers/plans/2026-10-02-plane-walker-p14f-dungeon-events.md`. It extends this overview with strict event state, exact operation schemas, weighted outcome variants, atomic multi-domain commits, pending reward/combat continuations, UI-safe ViewState, Save/Replay sealing, and exhaustive certification. That plan is the active execution authority for Task 6.
+
 **Files:**
 - Create: `scripts/events/dungeon_event_selector.gd`
 - Create: `scripts/events/dungeon_event_runtime.gd`
