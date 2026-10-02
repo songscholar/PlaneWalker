@@ -21,6 +21,7 @@ class FacadeSpy:
 	var complete_room_calls: int = 0
 	var boss_defeated_calls: int = 0
 	var player_died_calls: int = 0
+	var open_merchant_calls: int = 0
 	var reject_player_died: bool = false
 	var launch_encounter_definition: Dictionary = {}
 
@@ -42,6 +43,13 @@ class FacadeSpy:
 		complete_room_calls += 1
 		state["revision"] = int(state["revision"]) + 1
 		return CommandResultScript.success(int(state["revision"]), {"offer": {"offer_id": "offer"}})
+
+	func open_current_merchant():
+		open_merchant_calls += 1
+		state["revision"] = int(state["revision"]) + 1
+		return CommandResultScript.success(
+			int(state["revision"]), {"merchant": {"merchant_id": "merchant_wayfarer"}}
+		)
 
 	func boss_defeated(context: Dictionary = {}):
 		boss_defeated_calls += 1
@@ -187,6 +195,7 @@ func _test_launch_non_combat_room_does_not_start_encounter(suite) -> void:
 	var result = runtime.begin_current_room()
 	var active_snapshot: Dictionary = runtime.snapshot()
 	suite.assert_true(result.ok, "Launch shop enters through the room authority")
+	suite.assert_equal(facade.open_merchant_calls, 1, "Launch shop opens one merchant session")
 	suite.assert_equal(runner.start_calls, 0, "Launch shop never starts EncounterRunner")
 	suite.assert_equal(facade.complete_room_calls, 0, "Launch shop waits for its interaction authority")
 	suite.assert_true(bool(active_snapshot.get("room_active", false)), "Launch shop remains active until interaction completion")

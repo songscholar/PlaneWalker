@@ -4,7 +4,9 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
+const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
 const CrumblingGroundRuleScript := preload(
 	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
 )
@@ -44,6 +46,9 @@ class DriftRegistry:
 			if event_overrides.has(key)
 			else base.call("resolve_dungeon_event", content_id)
 		)
+
+	func resolve_economy_profile(content_id: StringName) -> Dictionary:
+		return base.call("resolve_economy_profile", content_id)
 
 	func get_floor_definitions(availability: StringName = &"") -> Array[Dictionary]:
 		if not floors_override.is_empty():
@@ -131,9 +136,18 @@ func _run() -> void:
 	var plan: Dictionary = floor_plan.snapshot()
 	var route_prefix: Array = plan.get("selected_edge_ids", []).duplicate(true)
 	var room_facts: Array = _room_fact_inputs_for_plan(plan)
-	var economy_ledger: Array = [
-		{"transaction_id": "tx_reward_0001", "operation": "gold_delta", "amount": 12, "revision": 1},
-	]
+	var run_economy: Dictionary = _run_economy_fixture(registry)
+	var merchant_state: Dictionary = _merchant_state_fixture()
+	suite.assert_true(not run_economy.is_empty(), "dungeon Replay economy fixture is authoritative")
+	suite.assert_true(not merchant_state.is_empty(), "dungeon Replay merchant fixture is authoritative")
+	suite.assert_true(
+		bool(seal_script.new().call("_run_economy_is_valid", run_economy, registry)),
+		"dungeon Replay economy fixture restores through its authority"
+	)
+	suite.assert_true(
+		bool(seal_script.new().call("_merchant_state_is_valid", merchant_state)),
+		"dungeon Replay merchant fixture restores through its authority"
+	)
 	var seal: RefCounted = seal_script.new()
 	var event_resolutions: Array = _event_resolutions_for_plan(seal, registry, plan)
 	var floor_transitions: Array = [
@@ -150,7 +164,8 @@ func _run() -> void:
 		plan,
 		route_prefix,
 		room_facts,
-		economy_ledger,
+		run_economy,
+		merchant_state,
 		event_resolutions,
 		floor_transitions
 	)
@@ -158,8 +173,16 @@ func _run() -> void:
 		suite.assert_true(false, "canonical dungeon Replay snapshot captures")
 		suite.finish(get_tree())
 		return
+	var legacy_merchant_state := _merchant_state_fixture(false)
+	suite.assert_true(
+		not seal.call(
+			"capture", registry, plan, route_prefix, room_facts, run_economy,
+			legacy_merchant_state, event_resolutions, floor_transitions
+		).is_empty(),
+		"Replay v3 retains the heal-only service snapshot compatibility path"
+	)
 	suite.assert_equal(snapshot.get("schema_id"), "planewalker.run_dungeon_replay", "seal owns schema id")
-	suite.assert_equal(snapshot.get("schema_version"), 2, "seal owns schema version")
+	suite.assert_equal(snapshot.get("schema_version"), 3, "seal owns schema version")
 	suite.assert_equal(snapshot.get("generator_version"), "floor_plan_v1", "seal owns generator version")
 	suite.assert_equal(snapshot.get("plan_digest"), plan.get("generation_digest"), "seal owns plan digest")
 	suite.assert_equal(snapshot.get("route_prefix"), route_prefix, "seal owns route prefix")
@@ -168,19 +191,26 @@ func _run() -> void:
 		room_facts.size(),
 		"seal owns the complete canonical room-fact log"
 	)
-	suite.assert_equal(str(snapshot.get("economy_ledger_digest", "")).length(), 64, "seal owns economy digest")
+	suite.assert_equal(str(snapshot.get("economy_state_digest", "")).length(), 64, "seal owns full economy digest")
+	suite.assert_equal(str(snapshot.get("merchant_state_digest", "")).length(), 64, "seal owns merchant-state digest")
+	suite.assert_equal(
+		snapshot.get("merchant_transaction_facts"),
+		_merchant_transaction_facts_fixture(),
+		"seal owns the globally ordered merchant transaction facts"
+	)
 	suite.assert_equal(str(snapshot.get("event_resolution_digest", "")).length(), 64, "seal owns event digest")
 	suite.assert_equal(snapshot.get("floor_transitions"), floor_transitions, "seal owns floor transitions")
 	suite.assert_equal(str(snapshot.get("snapshot_digest", "")).length(), 64, "seal authenticates historical bytes")
 
 	var valid: Dictionary = seal.call(
-		"validate", snapshot, registry, plan, economy_ledger, event_resolutions
+		"validate", snapshot, registry, plan, run_economy, merchant_state,
+		event_resolutions
 	)
 	suite.assert_true(bool(valid.get("ok", false)), "valid dungeon Replay seal verifies")
 	suite.assert_equal(valid.get("snapshot"), snapshot, "validation returns byte-identical historical snapshot")
 	_test_floor_rule_replay_round_trip(
 		suite, seal, registry, plan, route_prefix, room_facts,
-		economy_ledger, event_resolutions, floor_transitions
+		run_economy, merchant_state, event_resolutions, floor_transitions
 	)
 
 	var forged_plan := _resigned_plan_with_reordered_siblings(plan)
@@ -193,13 +223,13 @@ func _run() -> void:
 		)
 		_assert_rejected(
 			suite, seal, resigned_plan_snapshot, registry, forged_plan,
-			economy_ledger, event_resolutions, &"PLAN_DIGEST_MISMATCH",
+			run_economy, merchant_state, event_resolutions, &"PLAN_DIGEST_MISMATCH",
 			"re-signed non-canonical plan"
 		)
 		suite.assert_equal(
 			seal.call(
 				"capture", registry, forged_plan, route_prefix, room_facts,
-				economy_ledger, event_resolutions, floor_transitions
+				run_economy, merchant_state, event_resolutions, floor_transitions
 			),
 			{},
 			"capture rejects a self-consistent but non-canonical generated plan"
@@ -212,7 +242,7 @@ func _run() -> void:
 	)
 	_assert_rejected(
 		suite, seal, snapshot, floor_authority_drift, plan,
-		economy_ledger, event_resolutions, &"PLAN_DIGEST_MISMATCH",
+		run_economy, merchant_state, event_resolutions, &"PLAN_DIGEST_MISMATCH",
 		"registry floor authority drift"
 	)
 
@@ -222,7 +252,7 @@ func _run() -> void:
 	)
 	deleted_room_fact["snapshot_digest"] = seal.call("snapshot_digest", deleted_room_fact)
 	_assert_rejected(
-		suite, seal, deleted_room_fact, registry, plan, economy_ledger, event_resolutions,
+		suite, seal, deleted_room_fact, registry, plan, run_economy, merchant_state, event_resolutions,
 		&"ROOM_FACT_INVALID", "re-signed missing room fact"
 	)
 
@@ -237,7 +267,7 @@ func _run() -> void:
 		)
 		_assert_rejected(
 			suite, seal, reordered_room_facts, registry, plan,
-			economy_ledger, event_resolutions, &"ROOM_FACT_INVALID",
+			run_economy, merchant_state, event_resolutions, &"ROOM_FACT_INVALID",
 			"re-signed reordered room facts"
 		)
 
@@ -248,13 +278,13 @@ func _run() -> void:
 	)
 	_assert_rejected(
 		suite, seal, replaced_room_fact, registry, plan,
-		economy_ledger, event_resolutions, &"ROOM_FACT_INVALID",
+		run_economy, merchant_state, event_resolutions, &"ROOM_FACT_INVALID",
 		"re-signed room fact outside the selected route order"
 	)
 
 	var uncleared_plan := _with_current_node_cleared(plan, false)
 	_assert_rejected(
-		suite, seal, snapshot, registry, uncleared_plan, economy_ledger, event_resolutions,
+		suite, seal, snapshot, registry, uncleared_plan, run_economy, merchant_state, event_resolutions,
 		&"ROOM_FACT_INVALID", "room clear fact contradicts current FloorPlan state"
 	)
 
@@ -262,7 +292,7 @@ func _run() -> void:
 	(forged_transition["floor_transitions"] as Array)[0]["to_floor_id"] = "floor_forged"
 	forged_transition["snapshot_digest"] = seal.call("snapshot_digest", forged_transition)
 	_assert_rejected(
-		suite, seal, forged_transition, registry, plan, economy_ledger, event_resolutions,
+		suite, seal, forged_transition, registry, plan, run_economy, merchant_state, event_resolutions,
 		&"FLOOR_TRANSITION_INVALID", "re-signed fictional floor transition"
 	)
 	var missing_transition := snapshot.duplicate(true)
@@ -272,19 +302,24 @@ func _run() -> void:
 	)
 	_assert_rejected(
 		suite, seal, missing_transition, registry, plan,
-		economy_ledger, event_resolutions, &"FLOOR_TRANSITION_INVALID",
+		run_economy, merchant_state, event_resolutions, &"FLOOR_TRANSITION_INVALID",
 		"re-signed transition chain deletion"
 	)
 
 	_test_later_floor_transition_authority(
-		suite, seal, registry, floors, templates, economy_ledger
+		suite, seal, registry, floors, templates, run_economy, merchant_state
 	)
 
-	var duplicate_economy := economy_ledger.duplicate(true)
-	duplicate_economy.append(duplicate_economy[0].duplicate(true))
-	duplicate_economy[1]["revision"] = 2
+	var duplicate_economy := run_economy.duplicate(true)
+	duplicate_economy["ledger"].append(duplicate_economy["ledger"][0].duplicate(true))
+	var duplicate_index: int = (duplicate_economy["ledger"] as Array).size() - 1
+	duplicate_economy["ledger"][duplicate_index]["revision"] = 5
+	duplicate_economy["revision"] = 5
+	duplicate_economy["balance"] += int(
+		duplicate_economy["ledger"][duplicate_index]["amount"]
+	)
 	var duplicate_economy_snapshot := snapshot.duplicate(true)
-	duplicate_economy_snapshot["economy_ledger_digest"] = ReplayRecorderScript.value_digest(
+	duplicate_economy_snapshot["economy_state_digest"] = ReplayRecorderScript.value_digest(
 		duplicate_economy
 	)
 	duplicate_economy_snapshot["snapshot_digest"] = seal.call(
@@ -292,45 +327,45 @@ func _run() -> void:
 	)
 	_assert_rejected(
 		suite, seal, duplicate_economy_snapshot, registry, plan,
-		duplicate_economy, event_resolutions, &"ECONOMY_LEDGER_INVALID",
+		duplicate_economy, merchant_state, event_resolutions, &"ECONOMY_STATE_INVALID",
 		"duplicate economy transaction id"
 	)
-	var invalid_economy := economy_ledger.duplicate(true)
-	invalid_economy[0]["operation"] = "mint_everything"
+	var invalid_economy := run_economy.duplicate(true)
+	invalid_economy["ledger"][0]["operation"] = "mint_everything"
 	suite.assert_equal(
 		seal.call(
 			"capture", registry, plan, route_prefix, room_facts,
-			invalid_economy, event_resolutions, floor_transitions
+			invalid_economy, merchant_state, event_resolutions, floor_transitions
 		),
 		{},
 		"capture rejects unsupported economy operations"
 	)
-	var extra_field_economy := economy_ledger.duplicate(true)
-	extra_field_economy[0]["memo"] = "forged"
+	var extra_field_economy := run_economy.duplicate(true)
+	extra_field_economy["ledger"][0]["memo"] = "forged"
 	suite.assert_equal(
 		seal.call(
 			"capture", registry, plan, route_prefix, room_facts,
-			extra_field_economy, event_resolutions, floor_transitions
+			extra_field_economy, merchant_state, event_resolutions, floor_transitions
 		),
 		{},
 		"capture rejects economy entries outside the closed field set"
 	)
-	var zero_amount_economy := economy_ledger.duplicate(true)
-	zero_amount_economy[0]["amount"] = 0
+	var zero_amount_economy := run_economy.duplicate(true)
+	zero_amount_economy["ledger"][0]["amount"] = 0
 	suite.assert_equal(
 		seal.call(
 			"capture", registry, plan, route_prefix, room_facts,
-			zero_amount_economy, event_resolutions, floor_transitions
+			zero_amount_economy, merchant_state, event_resolutions, floor_transitions
 		),
 		{},
 		"capture rejects zero-value economy transactions"
 	)
-	var skipped_revision_economy := economy_ledger.duplicate(true)
-	skipped_revision_economy[0]["revision"] = 2
+	var skipped_revision_economy := run_economy.duplicate(true)
+	skipped_revision_economy["ledger"][0]["revision"] = 2
 	suite.assert_equal(
 		seal.call(
 			"capture", registry, plan, route_prefix, room_facts,
-			skipped_revision_economy, event_resolutions, floor_transitions
+			skipped_revision_economy, merchant_state, event_resolutions, floor_transitions
 		),
 		{},
 		"capture rejects non-contiguous economy revisions"
@@ -343,7 +378,7 @@ func _run() -> void:
 		suite.assert_equal(
 			seal.call(
 				"capture", registry, plan, route_prefix, room_facts,
-				economy_ledger, duplicate_events, floor_transitions
+				run_economy, merchant_state, duplicate_events, floor_transitions
 			),
 			{},
 			"capture rejects duplicate event resolutions"
@@ -353,7 +388,7 @@ func _run() -> void:
 		suite.assert_equal(
 			seal.call(
 				"capture", registry, plan, route_prefix, room_facts,
-				economy_ledger, wrong_event_node, floor_transitions
+				run_economy, merchant_state, wrong_event_node, floor_transitions
 			),
 			{},
 			"capture rejects event resolutions outside the cleared route node"
@@ -362,7 +397,8 @@ func _run() -> void:
 	var unauthenticated := snapshot.duplicate(true)
 	unauthenticated["route_prefix"] = ["forged_edge"]
 	var unauthenticated_result: Dictionary = seal.call(
-		"validate", unauthenticated, registry, plan, economy_ledger, event_resolutions
+		"validate", unauthenticated, registry, plan, run_economy, merchant_state,
+		event_resolutions
 	)
 	suite.assert_equal(
 		unauthenticated_result.get("code"),
@@ -374,7 +410,7 @@ func _run() -> void:
 	invalid_route["route_prefix"] = ["forged_edge"]
 	invalid_route["snapshot_digest"] = seal.call("snapshot_digest", invalid_route)
 	_assert_rejected(
-		suite, seal, invalid_route, registry, plan, economy_ledger, event_resolutions,
+		suite, seal, invalid_route, registry, plan, run_economy, merchant_state, event_resolutions,
 		&"ROUTE_PREFIX_INVALID", "invalid route prefix"
 	)
 
@@ -382,29 +418,86 @@ func _run() -> void:
 	unknown_generator["generator_version"] = "floor_plan_v999"
 	unknown_generator["snapshot_digest"] = seal.call("snapshot_digest", unknown_generator)
 	_assert_rejected(
-		suite, seal, unknown_generator, registry, plan, economy_ledger, event_resolutions,
+		suite, seal, unknown_generator, registry, plan, run_economy, merchant_state, event_resolutions,
 		&"GENERATOR_VERSION_UNSUPPORTED", "unknown generator"
 	)
 
 	var changed_plan := plan.duplicate(true)
 	changed_plan["generation_digest"] = "0".repeat(64)
 	_assert_rejected(
-		suite, seal, snapshot, registry, changed_plan, economy_ledger, event_resolutions,
+		suite, seal, snapshot, registry, changed_plan, run_economy, merchant_state, event_resolutions,
 		&"PLAN_DIGEST_MISMATCH", "plan digest drift"
 	)
 
-	var changed_economy := economy_ledger.duplicate(true)
-	changed_economy[0]["amount"] = 13
+	var changed_economy := run_economy.duplicate(true)
+	changed_economy["ledger"][0]["amount"] = 301
+	changed_economy["balance"] += 1
 	_assert_rejected(
-		suite, seal, snapshot, registry, plan, changed_economy, event_resolutions,
-		&"ECONOMY_LEDGER_DRIFT", "economy prefix drift"
+		suite, seal, snapshot, registry, plan, changed_economy, merchant_state,
+		event_resolutions, &"ECONOMY_STATE_DRIFT", "full economy state drift"
+	)
+
+	var sold_drift := merchant_state.duplicate(true)
+	sold_drift["nodes"][0]["inventory"]["offers"][0]["sold"] = false
+	_assert_rejected(
+		suite, seal, snapshot, registry, plan, run_economy, sold_drift,
+		event_resolutions, &"MERCHANT_SOLD_STATE_DRIFT", "merchant sold-state drift",
+		"sold_offer_ids"
+	)
+	var reroll_drift := merchant_state.duplicate(true)
+	reroll_drift["nodes"][0]["inventory"]["reroll_count"] = 2
+	_assert_rejected(
+		suite, seal, snapshot, registry, plan, run_economy, reroll_drift,
+		event_resolutions, &"MERCHANT_REROLL_STATE_DRIFT", "merchant reroll-count drift",
+		"reroll_count"
+	)
+	var completed_drift := merchant_state.duplicate(true)
+	completed_drift["nodes"][0]["runtime"]["completed_transaction_ids"].append(
+		"tx_service_9999"
+	)
+	_assert_rejected(
+		suite, seal, snapshot, registry, plan, run_economy, completed_drift,
+		event_resolutions, &"MERCHANT_COMPLETED_TRANSACTION_DRIFT",
+		"merchant completed-transaction drift", "completed_transaction_ids"
+	)
+	var transaction_drift := merchant_state.duplicate(true)
+	transaction_drift["nodes"][0]["transactions"][0]["inventory_revision"] = 9
+	_assert_rejected(
+		suite, seal, snapshot, registry, plan, run_economy, transaction_drift,
+		event_resolutions, &"MERCHANT_TRANSACTION_DRIFT",
+		"merchant ordered transaction-fact drift", "transactions"
+	)
+	var sell_payout_drift := merchant_state.duplicate(true)
+	sell_payout_drift["nodes"][0]["transactions"][2]["amount"] = 51
+	suite.assert_equal(
+		seal.call(
+			"capture", registry, plan, route_prefix, room_facts, run_economy,
+			sell_payout_drift, event_resolutions, floor_transitions
+		),
+		{},
+		"capture rejects sold-reward payout drift against the positive gold delta"
+	)
+	var forged_sell_snapshot := snapshot.duplicate(true)
+	forged_sell_snapshot["merchant_state_digest"] = ReplayRecorderScript.value_digest(
+		sell_payout_drift
+	)
+	forged_sell_snapshot["merchant_transaction_facts"] = seal.call(
+		"_merchant_transaction_facts", sell_payout_drift
+	)
+	forged_sell_snapshot["snapshot_digest"] = seal.call(
+		"snapshot_digest", forged_sell_snapshot
+	)
+	_assert_rejected(
+		suite, seal, forged_sell_snapshot, registry, plan, run_economy,
+		sell_payout_drift, event_resolutions, &"MERCHANT_ECONOMY_DRIFT",
+		"re-signed sold-reward payout drift"
 	)
 
 	if not event_resolutions.is_empty():
 		var changed_events := event_resolutions.duplicate(true)
 		changed_events[0]["outcome_id"] = "forged_outcome"
 		_assert_rejected(
-			suite, seal, snapshot, registry, plan, economy_ledger, changed_events,
+			suite, seal, snapshot, registry, plan, run_economy, merchant_state, changed_events,
 			&"EVENT_RESOLUTION_INVALID", "event outcome authority drift"
 		)
 		var event_definition_drift = DriftRegistry.new(registry)
@@ -418,7 +511,7 @@ func _run() -> void:
 		event_definition_drift.event_overrides[event_id] = changed_event
 		_assert_rejected(
 			suite, seal, snapshot, event_definition_drift, plan,
-			economy_ledger, event_resolutions, &"EVENT_RESOLUTION_INVALID",
+			run_economy, merchant_state, event_resolutions, &"EVENT_RESOLUTION_INVALID",
 			"event consequence definition drift"
 		)
 
@@ -426,7 +519,7 @@ func _run() -> void:
 	fingerprint_drift.packs_override = registry.active_packs()
 	fingerprint_drift.packs_override[0]["fingerprint_sha256"] = "0".repeat(64)
 	_assert_rejected(
-		suite, seal, snapshot, fingerprint_drift, plan, economy_ledger, event_resolutions,
+		suite, seal, snapshot, fingerprint_drift, plan, run_economy, merchant_state, event_resolutions,
 		&"CONTENT_FINGERPRINT_MISMATCH", "content fingerprint drift"
 	)
 
@@ -437,7 +530,7 @@ func _run() -> void:
 	changed_room["description_key"] = "ROOM_DESCRIPTION_FORGED"
 	room_drift.room_overrides[room_id] = changed_room
 	_assert_rejected(
-		suite, seal, snapshot, room_drift, plan, economy_ledger, event_resolutions,
+		suite, seal, snapshot, room_drift, plan, run_economy, merchant_state, event_resolutions,
 		&"ROOM_DEFINITION_DRIFT", "room definition drift"
 	)
 
@@ -450,16 +543,25 @@ func _assert_rejected(
 	snapshot: Dictionary,
 	registry: Variant,
 	plan: Dictionary,
-	economy_ledger: Array,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
 	event_resolutions: Array,
 	expected_code: StringName,
-	label: String
+	label: String,
+	expected_field: String = ""
 ) -> void:
 	var result: Dictionary = seal.call(
-		"validate", snapshot, registry, plan, economy_ledger, event_resolutions
+		"validate", snapshot, registry, plan, run_economy, merchant_state,
+		event_resolutions
 	)
 	suite.assert_equal(result.get("ok"), false, "%s fails closed" % label)
 	suite.assert_equal(result.get("code"), expected_code, "%s reports stable code" % label)
+	if not expected_field.is_empty():
+		suite.assert_equal(
+			(result.get("context", {}) as Dictionary).get("field"),
+			expected_field,
+			"%s locates the divergent merchant boundary" % label
+		)
 
 
 func _test_floor_rule_replay_round_trip(
@@ -469,7 +571,8 @@ func _test_floor_rule_replay_round_trip(
 	plan: Dictionary,
 	route_prefix: Array,
 	room_facts: Array,
-	economy_ledger: Array,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
 	event_resolutions: Array,
 	floor_transitions: Array
 ) -> void:
@@ -491,18 +594,21 @@ func _test_floor_rule_replay_round_trip(
 	var floor_rule_state: Dictionary = runtime.call("snapshot")
 	var sealed: Dictionary = seal.call(
 		"capture", registry, plan, route_prefix, room_facts,
-		economy_ledger, event_resolutions, floor_transitions, floor_rule_state
+		run_economy, merchant_state, event_resolutions, floor_transitions,
+		floor_rule_state
 	)
 	suite.assert_true(not sealed.is_empty(), "dungeon Replay seals floor-rule state")
 	var valid: Dictionary = seal.call(
-		"validate", sealed, registry, plan, economy_ledger, event_resolutions,
+		"validate", sealed, registry, plan, run_economy, merchant_state,
+		event_resolutions,
 		floor_rule_state
 	)
 	suite.assert_true(bool(valid.get("ok", false)), "sealed floor-rule state validates")
 	var drifted := floor_rule_state.duplicate(true)
 	drifted["runtime_frame"] = int(drifted["runtime_frame"]) + 1
 	var rejected: Dictionary = seal.call(
-		"validate", sealed, registry, plan, economy_ledger, event_resolutions,
+		"validate", sealed, registry, plan, run_economy, merchant_state,
+		event_resolutions,
 		drifted
 	)
 	suite.assert_equal(rejected.get("code"), &"FLOOR_RULE_STATE_DRIFT", "Replay rejects floor-rule frame drift")
@@ -514,7 +620,8 @@ func _test_later_floor_transition_authority(
 	registry: RefCounted,
 	floors: Array,
 	templates: Array,
-	economy_ledger: Array
+	run_economy: Dictionary,
+	merchant_state: Dictionary
 ) -> void:
 	var generated: Dictionary = FloorPlanGeneratorScript.new().generate(
 		20261001, floors[1], templates
@@ -544,20 +651,22 @@ func _test_later_floor_transition_authority(
 		},
 	]
 	var later_snapshot: Dictionary = seal.call(
-		"capture", registry, later_plan, [], [], economy_ledger, [], transitions
+		"capture", registry, later_plan, [], [], run_economy, merchant_state,
+		[], transitions
 	)
 	suite.assert_true(not later_snapshot.is_empty(), "later-floor canonical transition chain captures")
 	if later_snapshot.is_empty():
 		return
 	var valid: Dictionary = seal.call(
-		"validate", later_snapshot, registry, later_plan, economy_ledger, []
+		"validate", later_snapshot, registry, later_plan, run_economy,
+		merchant_state, []
 	)
 	suite.assert_true(bool(valid.get("ok", false)), "later-floor canonical transition chain validates")
 	var forged := later_snapshot.duplicate(true)
 	forged["floor_transitions"][1]["completed_plan_digest"] = "0".repeat(64)
 	forged["snapshot_digest"] = seal.call("snapshot_digest", forged)
 	_assert_rejected(
-		suite, seal, forged, registry, later_plan, economy_ledger, [],
+		suite, seal, forged, registry, later_plan, run_economy, merchant_state, [],
 		&"FLOOR_TRANSITION_INVALID", "re-signed prior floor digest drift"
 	)
 
@@ -663,6 +772,136 @@ func _resigned_plan_with_reordered_siblings(plan: Dictionary) -> Dictionary:
 			result["generation_digest"] = FloorPlanScript.compute_generation_digest(result)
 			return result
 	return {}
+
+
+func _run_economy_fixture(registry: RefCounted) -> Dictionary:
+	var source: Dictionary = registry.resolve_economy_profile(&"launch_economy_v1")
+	var profile: Dictionary = {}
+	for field: String in EconomyProfileScript.ROOT_FIELDS:
+		if source.has(field):
+			var value: Variant = source[field]
+			profile[field] = value.duplicate(true) if value is Array or value is Dictionary else value
+	var state = RunEconomyStateScript.new()
+	if profile.is_empty() or not bool(state.configure(profile, 0).get("ok", false)):
+		return {}
+	for transaction: Dictionary in [
+		{"id": "tx_reward_0001", "delta": 300, "operation": "gold_delta"},
+		{"id": "tx_reroll_0001", "delta": -40, "operation": "gold_reroll"},
+		{"id": "tx_purchase_0001", "delta": -80, "operation": "gold_purchase"},
+		{"id": "tx_sell_reward_0001", "delta": 50, "operation": "gold_delta"},
+	]:
+		var prepared: Dictionary = state.prepare_transaction(
+			transaction["id"], transaction["delta"], state.revision(),
+			{"operation": transaction["operation"]}
+		)
+		if not bool(prepared.get("ok", false)):
+			return {}
+		if not bool(state.commit_transaction(prepared["ticket"]).get("ok", false)):
+			return {}
+	return state.snapshot()
+
+
+func _merchant_state_fixture(composite_service: bool = true) -> Dictionary:
+	var service_snapshot: Dictionary = (
+		{
+			"schema_id": "planewalker.merchant_service_router",
+			"schema_version": 1,
+			"authorities": {
+				"heal": {"completed_transaction_ids": []},
+				"route_reveal": {"completed_transaction_ids": []},
+				"sell_reward": {"completed_transaction_ids": ["tx_sell_reward_0001"]},
+			},
+		}
+		if composite_service
+		else {"completed_transaction_ids": ["tx_sell_reward_0001"]}
+	)
+	return {
+		"schema_id": "planewalker.merchant_state",
+		"schema_version": 1,
+		"content_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		"nodes": [{
+			"floor_id": "floor_ruins_of_remnant",
+			"floor_index": 0,
+			"node_id": "shop_a",
+			"merchant_id": "merchant_wayfarer",
+			"inventory": {
+				"schema_version": 1,
+				"merchant_id": "merchant_wayfarer",
+				"node_id": "shop_a",
+				"floor_index": 1,
+				"reroll_count": 1,
+				"revision": 3,
+				"offers": [{
+					"offer_id": "offer_a",
+					"reward_id": "item_a",
+					"category": "item",
+					"rarity": "common",
+					"price": 80,
+					"sold": true,
+				}],
+			},
+			"runtime": {
+				"schema_id": "planewalker.merchant_runtime",
+				"schema_version": 1,
+				"completed_transaction_ids": [
+					"tx_purchase_0001", "tx_reroll_0001", "tx_sell_reward_0001",
+				],
+			},
+			"service": service_snapshot,
+			"visibility": {"revealed": true},
+			"transactions": [
+				{
+					"sequence": 1,
+					"transaction_id": "tx_reroll_0001",
+					"kind": "reroll",
+					"offer_id": "",
+					"reward_id": "",
+					"service_id": "",
+					"cost_kind": "gold",
+					"amount": 40,
+					"economy_revision": 2,
+					"inventory_revision": 2,
+				},
+				{
+					"sequence": 2,
+					"transaction_id": "tx_purchase_0001",
+					"kind": "purchase",
+					"offer_id": "offer_a",
+					"reward_id": "item_a",
+					"service_id": "",
+					"cost_kind": "gold",
+					"amount": 80,
+					"economy_revision": 3,
+					"inventory_revision": 3,
+				},
+				{
+					"sequence": 3,
+					"transaction_id": "tx_sell_reward_0001",
+					"kind": "service",
+					"offer_id": "",
+					"reward_id": "item_sold",
+					"service_id": "sell_reward",
+					"cost_kind": "reward",
+					"amount": 50,
+					"economy_revision": 4,
+					"inventory_revision": 3,
+				},
+			],
+		}],
+		"pending_transaction": {},
+	}
+
+
+func _merchant_transaction_facts_fixture() -> Array:
+	var node := (_merchant_state_fixture()["nodes"] as Array)[0] as Dictionary
+	var result: Array[Dictionary] = []
+	for transaction_value: Variant in node["transactions"]:
+		var fact := (transaction_value as Dictionary).duplicate(true)
+		fact["floor_id"] = node["floor_id"]
+		fact["node_id"] = node["node_id"]
+		fact["merchant_id"] = node["merchant_id"]
+		result.append(fact)
+	return result
 
 
 func _load_json_array(path: String) -> Array:

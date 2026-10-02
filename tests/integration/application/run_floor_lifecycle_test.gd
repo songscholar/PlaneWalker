@@ -180,6 +180,7 @@ func _run() -> void:
 	_test_runtime_host_route_transaction_and_publication(suite)
 	_test_facade_finalized_route_compensation_and_confirmation(suite)
 	_test_floor_rule_state_runtime_round_trip(suite)
+	_test_launch_restore_rebuilds_active_floor_rule_runtime(suite)
 	_test_floor_rule_advance_failure_is_terminal_once(suite)
 	suite.finish(get_tree())
 
@@ -391,6 +392,24 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 
 	var final_snapshot: Dictionary = facade.snapshot()
 	suite.assert_equal((final_snapshot.get("completed_floor_ids", []) as Array).size(), 1, "first Launch floor completes once")
+	suite.assert_equal(
+		final_snapshot.get("run_economy", {}).get("settled_floor_indices"),
+		[0],
+		"first Boss completion settles floor-one economy exactly once"
+	)
+	var economy_ledger: Array = final_snapshot.get("run_economy", {}).get("ledger", [])
+	suite.assert_equal(economy_ledger.size(), 1, "floor settlement appends one economy fact")
+	if economy_ledger.size() == 1:
+		suite.assert_equal(
+			economy_ledger[0],
+			{
+				"transaction_id": "tx_floor_1_settlement",
+				"operation": "gold_decay",
+				"amount": 0,
+				"revision": 1,
+			},
+			"under-cap floor settlement records the canonical zero-decay fact"
+		)
 	suite.assert_equal(recorder.route_events.size(), recorder.room_started_events.size(), "every committed route publishes one room start")
 	suite.assert_equal(recorder.route_events.size(), recorder.room_cleared_events.size(), "every entered room publishes one room clear")
 	suite.assert_equal(recorder.floor_completed_events.size(), 1, "floor completion publishes exactly once")
@@ -482,6 +501,56 @@ func _test_floor_rule_state_runtime_round_trip(suite) -> void:
 	var next_rollback = facade.rollback_route_transition(str(next_begun.context.get("transition_id", "")), int(next_begun.new_revision))
 	suite.assert_true(next_rollback.ok, "next route rollback succeeds")
 	suite.assert_equal(facade.snapshot().get("floor_rule_state"), initial_rule, "route rollback restores the prior floor-rule snapshot")
+
+
+func _test_launch_restore_rebuilds_active_floor_rule_runtime(suite) -> void:
+	var source = RunRuntimeFacadeScript.new()
+	suite.assert_true(source.boot().ok, "floor-rule restore source boots")
+	suite.assert_true(
+		source.start_run(_launch_config(), "run-floor-rule-launch-restore").ok,
+		"floor-rule restore source run starts"
+	)
+	var choice: Dictionary = {}
+	for value: Variant in source.route_choices():
+		if value is Dictionary and str((value as Dictionary).get("room_type", "")) != "shop":
+			choice = (value as Dictionary).duplicate(true)
+			break
+	suite.assert_true(not choice.is_empty(), "floor-rule restore fixture finds a non-shop room")
+	if choice.is_empty():
+		return
+	var begun = source.begin_route_transition(
+		StringName(str(choice["edge_id"])), int(source.snapshot()["revision"])
+	)
+	var transition_id := str(begun.context.get("transition_id", ""))
+	var finalized = source.finalize_route_transition(transition_id, int(begun.new_revision))
+	suite.assert_true(finalized.ok, "floor-rule restore source enters its room")
+	var source_authority := RecordingFloorRuleEffectAuthority.new()
+	var configured = source.configure_floor_rule(
+		&"rule_crumbling_ground",
+		_floor_rule_configuration(str(choice["node_id"])),
+		source_authority,
+		int(finalized.new_revision)
+	)
+	suite.assert_true(configured.ok, "floor-rule restore source configures its rule")
+	var advanced = source.advance_floor_rule_frame(0, {}, int(configured.new_revision))
+	suite.assert_true(advanced.ok, "floor-rule restore source advances before save")
+	var saved: Dictionary = source.snapshot().duplicate(true)
+
+	var restored = RunRuntimeFacadeScript.new()
+	suite.assert_true(restored.boot().ok, "floor-rule restore target boots")
+	var restored_authority := RecordingFloorRuleEffectAuthority.new()
+	var result = restored.restore_launch_run(saved, restored_authority)
+	suite.assert_true(result.ok, "Launch restore accepts an active floor-rule snapshot")
+	if not result.ok:
+		return
+	suite.assert_equal(restored.snapshot(), saved, "Launch restore keeps the complete RunState byte-identical")
+	var next_frame = restored.advance_floor_rule_frame(1, {}, int(result.new_revision))
+	suite.assert_true(next_frame.ok, "restored floor-rule runtime continues from the saved frame")
+	suite.assert_equal(
+		(restored.snapshot().get("floor_rule_state", {}) as Dictionary).get("runtime_frame"),
+		1,
+		"restored floor-rule runtime owns the next monotonic frame"
+	)
 
 
 func _test_floor_rule_advance_failure_is_terminal_once(suite) -> void:

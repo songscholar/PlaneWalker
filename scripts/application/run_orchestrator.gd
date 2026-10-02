@@ -58,6 +58,102 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	return _state.restore_floor_transaction_snapshot(value.duplicate(true))
 
 
+func reward_build_participant() -> Object:
+	return _state.build_state
+
+
+func restore_launch_run_snapshot(
+	value: Dictionary,
+	floor_definition: Dictionary,
+	room_templates: Array
+) -> bool:
+	if not _pending_route_transition.is_empty():
+		return false
+	return _state.restore_launch_run_snapshot(
+		value.duplicate(true),
+		floor_definition.duplicate(true),
+		room_templates.duplicate(true)
+	)
+
+
+func initialize_launch_economy(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary,
+	expected_revision: int
+):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("initialize_launch_economy")
+	if not _state.initialize_launch_economy_state(
+		economy_snapshot.duplicate(true), merchant_snapshot.duplicate(true)
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _state.revision,
+			{"field": "run_economy_or_merchant_state"}
+		)
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{
+			"run_economy": _state.run_economy.duplicate(true),
+			"merchant_state": _state.merchant_state.duplicate(true),
+		}
+	)
+
+
+func commit_merchant_transaction(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary,
+	expected_revision: int
+):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("commit_merchant_transaction")
+	if not _state.commit_merchant_transaction_state(
+		economy_snapshot.duplicate(true), merchant_snapshot.duplicate(true)
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _state.revision,
+			{"field": "run_economy_or_merchant_state"}
+		)
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{
+			"run_economy": _state.run_economy.duplicate(true),
+			"merchant_state": _state.merchant_state.duplicate(true),
+		}
+	)
+
+
+func commit_economy_transaction(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary,
+	expected_revision: int
+):
+	var revision_validation = _validate_expected_revision(expected_revision)
+	if not revision_validation.ok:
+		return revision_validation
+	if not _pending_route_transition.is_empty():
+		return _reject_floor_operation("commit_economy_transaction")
+	if not _state.commit_economy_transaction_state(
+		economy_snapshot.duplicate(true), merchant_snapshot.duplicate(true)
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _state.revision,
+			{"field": "run_economy_or_merchant_state"}
+		)
+	return CommandResultScript.success(
+		_state.advance_revision(),
+		{
+			"run_economy": _state.run_economy.duplicate(true),
+			"merchant_state": _state.merchant_state.duplicate(true),
+		}
+	)
+
+
 func commit_floor_rule_state(value: Dictionary, expected_revision: int):
 	var revision_validation = _validate_expected_revision(expected_revision)
 	if not revision_validation.ok:

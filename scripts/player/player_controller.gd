@@ -405,6 +405,32 @@ const WEAPON_ADAPTER_IDS: Array[StringName] = [
 	&"staff",
 	&"gauntlets",
 ]
+const WEAPON_UPGRADE_SNAPSHOT_SCHEMA_VERSION := 1
+const NONLETHAL_HEALTH_TICKET_SCHEMA_ID := "player_nonlethal_health_cost_ticket_v1"
+const NONLETHAL_HEALTH_RECEIPT_SCHEMA_ID := "player_nonlethal_health_cost_receipt_v1"
+const NONLETHAL_HEALTH_TRANSACTION_PATTERN := "^[a-z0-9][a-z0-9_:-]{0,95}$"
+const NONLETHAL_HEALTH_TICKET_FIELDS: Array[String] = [
+	"schema_id",
+	"owner_instance_id",
+	"transaction_id",
+	"cost",
+	"before_snapshot",
+	"after_snapshot",
+	"fingerprint",
+]
+const NONLETHAL_HEALTH_RECEIPT_FIELDS: Array[String] = [
+	"schema_id",
+	"owner_instance_id",
+	"transaction_id",
+	"cost",
+	"before_snapshot",
+	"after_snapshot",
+	"ticket_fingerprint",
+	"fingerprint",
+]
+
+var _pending_nonlethal_health_costs: Dictionary = {}
+var _committed_nonlethal_health_costs: Dictionary = {}
 
 
 func _discover_weapon_adapters() -> bool:
@@ -7874,17 +7900,92 @@ func apply_weapon_modifier(capability: StringName, value: Variant) -> bool:
 func apply_weapon_capability_effect(
 	capability: StringName,
 	value: Variant,
-	base_value: float,
-	stack_rule: StringName,
-	required_weapon_id: StringName
+	base_value: float = 1.0,
+	stack_rule: StringName = &"multiply",
+	required_weapon_id: StringName = &""
 ) -> bool:
+	var resolved_weapon_id := required_weapon_id
+	if resolved_weapon_id == &"":
+		if loadout_runtime == null or not loadout_runtime.has_method("weapon_id"):
+			return false
+		resolved_weapon_id = StringName(str(loadout_runtime.call("weapon_id")))
 	return apply_weapon_capability_effects([{
 		"capability": str(capability),
 		"value": value,
 		"base_value": base_value,
 		"stack_rule": str(stack_rule),
-		"weapon_id": str(required_weapon_id),
+		"weapon_id": str(resolved_weapon_id),
 	}])
+
+
+func weapon_upgrade_snapshot() -> Dictionary:
+	if (
+		loadout_runtime == null
+		or not loadout_runtime.has_method("weapon_id")
+		or weapon_modifier_state == null
+		or not weapon_modifier_state.has_method("snapshot")
+	):
+		return {}
+	var weapon_id := StringName(str(loadout_runtime.call("weapon_id")))
+	if weapon_id not in WEAPON_ADAPTER_IDS:
+		return {}
+	var modifiers_value: Variant = weapon_modifier_state.call("snapshot")
+	if not modifiers_value is Dictionary:
+		return {}
+	var modifiers := (modifiers_value as Dictionary).duplicate(true)
+	return {
+		"schema_version": WEAPON_UPGRADE_SNAPSHOT_SCHEMA_VERSION,
+		"weapon_id": str(weapon_id),
+		"modifiers": modifiers,
+	}
+
+
+func can_restore_weapon_upgrade_snapshot(value: Dictionary) -> bool:
+	if not _dictionary_has_exact_fields(
+		value,
+		["schema_version", "weapon_id", "modifiers"]
+	):
+		return false
+	if (
+		typeof(value["schema_version"]) != TYPE_INT
+		or int(value["schema_version"]) != WEAPON_UPGRADE_SNAPSHOT_SCHEMA_VERSION
+		or typeof(value["weapon_id"]) != TYPE_STRING
+		or not value["modifiers"] is Dictionary
+		or loadout_runtime == null
+		or not loadout_runtime.has_method("weapon_id")
+		or str(value["weapon_id"]) != str(loadout_runtime.call("weapon_id"))
+		or StringName(str(value["weapon_id"])) not in WEAPON_ADAPTER_IDS
+		or weapon_modifier_state == null
+		or not weapon_modifier_state.has_method("can_restore_snapshot")
+		or not bool(weapon_modifier_state.call(
+			"can_restore_snapshot",
+			(value["modifiers"] as Dictionary).duplicate(true)
+		))
+	):
+		return false
+	return true
+
+
+func restore_weapon_upgrade_snapshot(value: Dictionary) -> bool:
+	if not can_restore_weapon_upgrade_snapshot(value):
+		return false
+	var before := weapon_upgrade_snapshot()
+	if before.is_empty():
+		return false
+	if before == value:
+		return true
+	var target_modifiers := (value["modifiers"] as Dictionary).duplicate(true)
+	if bool(weapon_modifier_state.call(
+		"restore_snapshot", target_modifiers
+	)) and weapon_upgrade_snapshot() == value:
+		return true
+	var before_modifiers := (before["modifiers"] as Dictionary).duplicate(true)
+	var modifier_rollback_ok := bool(weapon_modifier_state.call(
+		"restore_snapshot", before_modifiers
+	))
+	if not modifier_rollback_ok or weapon_upgrade_snapshot() != before:
+		push_error("Player weapon-upgrade snapshot rollback failed")
+	return false
 
 
 func apply_weapon_capability_effects(routes: Array) -> bool:
@@ -10744,6 +10845,237 @@ func reward_effect_rollback_publication() -> bool:
 	_reward_effect_pending_health_signal.clear()
 	_reward_effect_pending_time_signal.clear()
 	return true
+
+
+func prepare_nonlethal_health_cost(
+	transaction_id: String,
+	cost: int,
+	frozen_snapshot: Dictionary
+) -> Dictionary:
+	if not _valid_nonlethal_health_transaction_id(transaction_id):
+		return _nonlethal_health_failure(&"HEALTH_COST_TRANSACTION_INVALID")
+	if (
+		_pending_nonlethal_health_costs.has(transaction_id)
+		or _committed_nonlethal_health_costs.has(transaction_id)
+	):
+		return _nonlethal_health_failure(&"HEALTH_COST_DUPLICATE")
+	if cost <= 0:
+		return _nonlethal_health_failure(&"HEALTH_COST_INVALID")
+	var current := reward_effect_snapshot()
+	if (
+		current.is_empty()
+		or current != frozen_snapshot
+		or not can_restore_reward_effect_snapshot(frozen_snapshot.duplicate(true))
+	):
+		return _nonlethal_health_failure(&"HEALTH_COST_STALE")
+	var health_value: Variant = frozen_snapshot.get("health")
+	if not health_value is Dictionary:
+		return _nonlethal_health_failure(&"HEALTH_COST_SNAPSHOT_INVALID")
+	var health_snapshot := health_value as Dictionary
+	var current_hp_value: Variant = health_snapshot.get("current_hp")
+	if (
+		typeof(current_hp_value) not in [TYPE_INT, TYPE_FLOAT]
+		or not is_finite(float(current_hp_value))
+		or float(current_hp_value) - float(cost) < 1.0
+	):
+		return _nonlethal_health_failure(&"HEALTH_COST_LETHAL")
+	var after := frozen_snapshot.duplicate(true)
+	var after_health := after["health"] as Dictionary
+	after_health["current_hp"] = float(current_hp_value) - float(cost)
+	after_health["dead"] = false
+	if not can_restore_reward_effect_snapshot(after.duplicate(true)):
+		return _nonlethal_health_failure(&"HEALTH_COST_SNAPSHOT_INVALID")
+	var unsigned_ticket := {
+		"schema_id": NONLETHAL_HEALTH_TICKET_SCHEMA_ID,
+		"owner_instance_id": get_instance_id(),
+		"transaction_id": transaction_id,
+		"cost": cost,
+		"before_snapshot": frozen_snapshot.duplicate(true),
+		"after_snapshot": after.duplicate(true),
+	}
+	var ticket := unsigned_ticket.duplicate(true)
+	ticket["fingerprint"] = _merchant_participant_digest(unsigned_ticket)
+	_pending_nonlethal_health_costs[transaction_id] = ticket.duplicate(true)
+	return _nonlethal_health_success({"ticket": ticket.duplicate(true)})
+
+
+func commit_nonlethal_health_cost(ticket: Dictionary) -> Dictionary:
+	if not _valid_nonlethal_health_ticket(ticket):
+		return _nonlethal_health_failure(&"HEALTH_COST_TICKET_INVALID")
+	var transaction_id := str(ticket["transaction_id"])
+	if _committed_nonlethal_health_costs.has(transaction_id):
+		return _nonlethal_health_failure(&"HEALTH_COST_DUPLICATE")
+	if (
+		not _pending_nonlethal_health_costs.has(transaction_id)
+		or _pending_nonlethal_health_costs[transaction_id] != ticket
+	):
+		return _nonlethal_health_failure(&"HEALTH_COST_TICKET_STALE")
+	var before := ticket["before_snapshot"] as Dictionary
+	if reward_effect_snapshot() != before:
+		return _nonlethal_health_failure(&"HEALTH_COST_STALE")
+	var after := ticket["after_snapshot"] as Dictionary
+	if (
+		not restore_reward_effect_snapshot(after.duplicate(true), false)
+		or reward_effect_snapshot() != after
+	):
+		if reward_effect_snapshot() != before:
+			restore_reward_effect_snapshot(before.duplicate(true), false)
+		return _nonlethal_health_failure(&"HEALTH_COST_APPLY_FAILED")
+	var unsigned_receipt := {
+		"schema_id": NONLETHAL_HEALTH_RECEIPT_SCHEMA_ID,
+		"owner_instance_id": get_instance_id(),
+		"transaction_id": transaction_id,
+		"cost": int(ticket["cost"]),
+		"before_snapshot": before.duplicate(true),
+		"after_snapshot": after.duplicate(true),
+		"ticket_fingerprint": str(ticket["fingerprint"]),
+	}
+	var receipt := unsigned_receipt.duplicate(true)
+	receipt["fingerprint"] = _merchant_participant_digest(unsigned_receipt)
+	_pending_nonlethal_health_costs.erase(transaction_id)
+	_committed_nonlethal_health_costs[transaction_id] = receipt.duplicate(true)
+	return _nonlethal_health_success({"receipt": receipt.duplicate(true)})
+
+
+func rollback_nonlethal_health_cost(receipt_or_ticket: Dictionary) -> Dictionary:
+	if _valid_nonlethal_health_ticket(receipt_or_ticket):
+		var pending_id := str(receipt_or_ticket["transaction_id"])
+		if (
+			not _pending_nonlethal_health_costs.has(pending_id)
+			or _pending_nonlethal_health_costs[pending_id] != receipt_or_ticket
+			or reward_effect_snapshot() != receipt_or_ticket["before_snapshot"]
+		):
+			return _nonlethal_health_failure(&"HEALTH_COST_TICKET_STALE")
+		_pending_nonlethal_health_costs.erase(pending_id)
+		return _nonlethal_health_success({
+			"transaction_id": pending_id,
+			"rolled_back": "pending",
+		})
+	if not _valid_nonlethal_health_receipt(receipt_or_ticket):
+		return _nonlethal_health_failure(&"HEALTH_COST_RECEIPT_INVALID")
+	var transaction_id := str(receipt_or_ticket["transaction_id"])
+	if (
+		not _committed_nonlethal_health_costs.has(transaction_id)
+		or _committed_nonlethal_health_costs[transaction_id] != receipt_or_ticket
+		or reward_effect_snapshot() != receipt_or_ticket["after_snapshot"]
+	):
+		return _nonlethal_health_failure(&"HEALTH_COST_RECEIPT_STALE")
+	var before := receipt_or_ticket["before_snapshot"] as Dictionary
+	if (
+		not restore_reward_effect_snapshot(before.duplicate(true), false)
+		or reward_effect_snapshot() != before
+	):
+		return _nonlethal_health_failure(&"HEALTH_COST_ROLLBACK_FAILED")
+	_committed_nonlethal_health_costs.erase(transaction_id)
+	return _nonlethal_health_success({
+		"transaction_id": transaction_id,
+		"rolled_back": "committed",
+	})
+
+
+func _valid_nonlethal_health_ticket(ticket: Dictionary) -> bool:
+	if not _dictionary_has_exact_fields(ticket, NONLETHAL_HEALTH_TICKET_FIELDS):
+		return false
+	if (
+		typeof(ticket["schema_id"]) != TYPE_STRING
+		or str(ticket["schema_id"]) != NONLETHAL_HEALTH_TICKET_SCHEMA_ID
+		or typeof(ticket["owner_instance_id"]) != TYPE_INT
+		or int(ticket["owner_instance_id"]) != get_instance_id()
+		or typeof(ticket["transaction_id"]) != TYPE_STRING
+		or not _valid_nonlethal_health_transaction_id(str(ticket["transaction_id"]))
+		or typeof(ticket["cost"]) != TYPE_INT
+		or int(ticket["cost"]) <= 0
+		or not ticket["before_snapshot"] is Dictionary
+		or not ticket["after_snapshot"] is Dictionary
+		or typeof(ticket["fingerprint"]) != TYPE_STRING
+	):
+		return false
+	var before := ticket["before_snapshot"] as Dictionary
+	var after := ticket["after_snapshot"] as Dictionary
+	if (
+		not can_restore_reward_effect_snapshot(before.duplicate(true))
+		or not can_restore_reward_effect_snapshot(after.duplicate(true))
+		or not _nonlethal_health_transition_matches(before, after, int(ticket["cost"]))
+	):
+		return false
+	var unsigned := ticket.duplicate(true)
+	unsigned.erase("fingerprint")
+	return str(ticket["fingerprint"]) == _merchant_participant_digest(unsigned)
+
+
+func _valid_nonlethal_health_receipt(receipt: Dictionary) -> bool:
+	if not _dictionary_has_exact_fields(receipt, NONLETHAL_HEALTH_RECEIPT_FIELDS):
+		return false
+	if (
+		typeof(receipt["schema_id"]) != TYPE_STRING
+		or str(receipt["schema_id"]) != NONLETHAL_HEALTH_RECEIPT_SCHEMA_ID
+		or typeof(receipt["owner_instance_id"]) != TYPE_INT
+		or int(receipt["owner_instance_id"]) != get_instance_id()
+		or typeof(receipt["transaction_id"]) != TYPE_STRING
+		or not _valid_nonlethal_health_transaction_id(str(receipt["transaction_id"]))
+		or typeof(receipt["cost"]) != TYPE_INT
+		or int(receipt["cost"]) <= 0
+		or not receipt["before_snapshot"] is Dictionary
+		or not receipt["after_snapshot"] is Dictionary
+		or typeof(receipt["ticket_fingerprint"]) != TYPE_STRING
+		or str(receipt["ticket_fingerprint"]).is_empty()
+		or typeof(receipt["fingerprint"]) != TYPE_STRING
+		or not _nonlethal_health_transition_matches(
+			receipt["before_snapshot"] as Dictionary,
+			receipt["after_snapshot"] as Dictionary,
+			int(receipt["cost"])
+		)
+	):
+		return false
+	var unsigned := receipt.duplicate(true)
+	unsigned.erase("fingerprint")
+	return str(receipt["fingerprint"]) == _merchant_participant_digest(unsigned)
+
+
+func _nonlethal_health_transition_matches(
+	before: Dictionary,
+	after: Dictionary,
+	cost: int
+) -> bool:
+	if cost <= 0 or before.size() != after.size():
+		return false
+	var expected := before.duplicate(true)
+	var health_value: Variant = expected.get("health")
+	if not health_value is Dictionary:
+		return false
+	var health_snapshot := health_value as Dictionary
+	var current_hp_value: Variant = health_snapshot.get("current_hp")
+	if typeof(current_hp_value) not in [TYPE_INT, TYPE_FLOAT]:
+		return false
+	var remaining_hp := float(current_hp_value) - float(cost)
+	if not is_finite(remaining_hp) or remaining_hp < 1.0:
+		return false
+	health_snapshot["current_hp"] = remaining_hp
+	health_snapshot["dead"] = false
+	return expected == after
+
+
+func _valid_nonlethal_health_transaction_id(value: String) -> bool:
+	var regex := RegEx.new()
+	return (
+		regex.compile(NONLETHAL_HEALTH_TRANSACTION_PATTERN) == OK
+		and regex.search(value) != null
+	)
+
+
+func _merchant_participant_digest(value: Dictionary) -> String:
+	return JSON.stringify(value).sha256_text()
+
+
+func _nonlethal_health_success(values: Dictionary = {}) -> Dictionary:
+	var result := {"ok": true, "code": &"OK", "context": {}}
+	for key_value: Variant in values.keys():
+		result[key_value] = values[key_value]
+	return result
+
+
+func _nonlethal_health_failure(code: StringName) -> Dictionary:
+	return {"ok": false, "code": code, "context": {}}
 
 
 func _apply_effects(definition: Dictionary, fallback_category: String) -> Dictionary:

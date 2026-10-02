@@ -70,6 +70,7 @@ func _run() -> void:
 	_test_contract_acceptance_is_idempotent(suite)
 	_test_terminal_and_pause_guards(suite)
 	_test_authoritative_clock_forwarding(suite)
+	_test_launch_gold_income_is_atomic(suite)
 	_test_boot_failure(suite)
 	suite.finish(get_tree())
 
@@ -432,12 +433,64 @@ func _test_authoritative_clock_forwarding(suite) -> void:
 	suite.assert_equal(facade.snapshot()["run_time_ms"], 250, "facade clock freezes while suspended")
 
 
+func _test_launch_gold_income_is_atomic(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "gold income facade boots")
+	suite.assert_true(
+		facade.start_run(_launch_config(), "launch-gold-income").ok,
+		"gold income Launch run starts"
+	)
+	suite.assert_true(facade.has_method("grant_run_gold"), "facade exposes controlled gold income")
+	if not facade.has_method("grant_run_gold"):
+		return
+	var before: Dictionary = facade.snapshot()
+	var granted = facade.call("grant_run_gold", "tx_room_reward_001", 75, "room_reward")
+	suite.assert_true(granted.ok, "positive room reward gold commits")
+	var after: Dictionary = facade.snapshot()
+	suite.assert_equal(after.get("run_economy", {}).get("balance"), 75, "gold income updates balance")
+	suite.assert_equal(
+		after.get("run_economy", {}).get("ledger", []),
+		[{
+			"transaction_id": "tx_room_reward_001",
+			"operation": "gold_delta",
+			"amount": 75,
+			"revision": 1,
+		}],
+		"gold income records one canonical ledger fact"
+	)
+	suite.assert_equal(after.get("merchant_state"), before.get("merchant_state"), "gold income preserves merchant state")
+	suite.assert_equal(int(after.get("revision", 0)), int(before.get("revision", 0)) + 1, "gold income consumes one command revision")
+
+	var duplicate = facade.call("grant_run_gold", "tx_room_reward_001", 75, "room_reward")
+	suite.assert_equal(
+		duplicate.code,
+		&"DUPLICATE_TRANSACTION",
+		"duplicate income rejects: %s" % str(duplicate.context)
+	)
+	suite.assert_equal(facade.snapshot(), after, "duplicate income mutates nothing")
+	var invalid = facade.call("grant_run_gold", "tx_invalid_reward", -1, "room_reward")
+	suite.assert_equal(invalid.code, &"INVALID_ARGUMENT", "negative income rejects")
+	suite.assert_equal(facade.snapshot(), after, "invalid income mutates nothing")
+
+
 func _test_boot_failure(suite) -> void:
 	var facade = RunRuntimeFacadeScript.new()
 	var booted = facade.boot("res://tests/fixtures/content/missing-runtime-manifest.json")
 	suite.assert_equal(booted.code, &"CONTENT_NOT_AVAILABLE", "missing manifest blocks facade boot")
 	suite.assert_true(not booted.context.get("errors", []).is_empty(), "boot failure includes validation errors")
 	suite.assert_equal(facade.start_run({"seed": FIXED_SEED}, "blocked-run").code, &"INVALID_PHASE", "blocked facade cannot start")
+
+
+func _launch_config() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"seed": FIXED_SEED,
+		"difficulty": "normal",
+		"character_id": "wanderer",
+		"weapon_id": "sword",
+		"enabled_time_skills": ["stop", "rewind"],
+		"milestone": "LAUNCH",
+	}
 
 
 func _select_first_and_finish_transition(suite, facade, offer: Dictionary, label: String) -> void:

@@ -5,6 +5,8 @@ const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
+const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const CrumblingGroundRuleScript := preload(
 	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
@@ -111,6 +113,7 @@ const FLOOR_RULE_STATE_FIELDS: Array[String] = [
 	"revision", "reduced_motion", "hit_flash_enabled",
 ]
 const FLOOR_PLAN_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
+const ECONOMY_PROFILE_PATH := "res://data/content_packs/base/content/economy_profiles.json"
 
 
 static func create_profile(
@@ -449,11 +452,12 @@ static func _normalize_persisted_integer_fields(value: Variant, parent_field: St
 		"next_fallback_attack_generation", "phase", "run_seed", "current_floor",
 		"current_room", "room_total", "run_time_ms", "current_floor_index",
 		"floor_index", "room_seed", "cycle_index", "layer", "choice_order",
-		"kills", "seed",
+		"kills", "seed", "initial_gold", "balance", "amount",
+		"economy_revision", "inventory_revision", "reroll_count",
 	]
 	const INTEGER_ARRAY_FIELDS: Array[String] = [
 		"reward_invulnerability_tokens", "claimed_rewind_generations",
-		"reward_eligible_tokens", "reward_claimed_tokens",
+		"reward_eligible_tokens", "reward_claimed_tokens", "settled_floor_indices",
 	]
 	const INTEGER_MAP_FIELDS: Array[String] = [
 		"resource_regen_frame_accumulators",
@@ -592,6 +596,17 @@ static func _active_run_state_error(value: Variant) -> Dictionary:
 		return _run_error("floor_plan.floor_id", "index_mismatch")
 	if int(run["current_room"]) != (floor_plan["selected_edge_ids"] as Array).size():
 		return _run_error("current_room", "plan_mismatch")
+	var economy_snapshot := run["run_economy"] as Dictionary
+	var merchant_snapshot := run["merchant_state"] as Dictionary
+	if economy_snapshot.is_empty() != merchant_snapshot.is_empty():
+		return _run_error("run_economy", "merchant_pair_missing")
+	if not economy_snapshot.is_empty():
+		if not _run_economy_snapshot_is_restorable(economy_snapshot):
+			return _run_error("run_economy", "invalid")
+		if not _merchant_snapshot_is_restorable(merchant_snapshot):
+			return _run_error("merchant_state", "invalid")
+		if not _economy_merchant_pair_is_consistent(economy_snapshot, merchant_snapshot):
+			return _run_error("merchant_state", "economy_mismatch")
 	var floor_rule_error := _floor_rule_state_error(
 		run["floor_rule_state"] as Dictionary,
 		floor_plan,
@@ -608,6 +623,86 @@ static func _active_run_state_error(value: Variant) -> Dictionary:
 	):
 		return _run_error("completed_floor_ids", "current_floor_not_complete")
 	return {}
+
+
+static func _run_economy_snapshot_is_restorable(value: Dictionary) -> bool:
+	var profile := _launch_economy_profile()
+	if profile.is_empty():
+		return false
+	var candidate = RunEconomyStateScript.new()
+	var configured: Dictionary = candidate.configure(
+		profile, int(value.get("initial_gold", -1))
+	)
+	return bool(configured.get("ok", false)) and candidate.can_restore_snapshot(value)
+
+
+static func _merchant_snapshot_is_restorable(value: Dictionary) -> bool:
+	var fingerprint_value: Variant = value.get("content_fingerprint")
+	if typeof(fingerprint_value) != TYPE_STRING:
+		return false
+	var candidate = MerchantRunStateScript.new()
+	var configured: Dictionary = candidate.configure(str(fingerprint_value))
+	return bool(configured.get("ok", false)) and candidate.can_restore_snapshot(value)
+
+
+static func _economy_merchant_pair_is_consistent(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary
+) -> bool:
+	var ledger_by_revision: Dictionary = {}
+	for entry_value: Variant in economy_snapshot.get("ledger", []):
+		if not entry_value is Dictionary:
+			return false
+		var entry := entry_value as Dictionary
+		ledger_by_revision[int(entry.get("revision", -1))] = entry
+	for node_value: Variant in merchant_snapshot.get("nodes", []):
+		if not node_value is Dictionary:
+			return false
+		for transaction_value: Variant in (node_value as Dictionary).get("transactions", []):
+			if not transaction_value is Dictionary:
+				return false
+			var transaction := transaction_value as Dictionary
+			var cost_kind := str(transaction.get("cost_kind", ""))
+			var is_sell_payout := (
+				cost_kind == "reward"
+				and str(transaction.get("kind", "")) == "service"
+				and str(transaction.get("service_id", "")) == "sell_reward"
+			)
+			if cost_kind != "gold" and not is_sell_payout:
+				continue
+			var economy_revision := int(transaction.get("economy_revision", -1))
+			if not ledger_by_revision.has(economy_revision):
+				return false
+			var entry := ledger_by_revision[economy_revision] as Dictionary
+			var expected_operation := (
+				"gold_delta"
+				if is_sell_payout
+				else "gold_%s" % str(transaction.get("kind", ""))
+			)
+			var ledger_amount := int(entry.get("amount", 0))
+			if (
+				str(entry.get("transaction_id", ""))
+				!= str(transaction.get("transaction_id", ""))
+				or str(entry.get("operation", "")) != expected_operation
+				or (is_sell_payout and ledger_amount <= 0)
+				or (
+					(ledger_amount if is_sell_payout else absi(ledger_amount))
+					!= int(transaction.get("amount", -1))
+				)
+			):
+				return false
+	return true
+
+
+static func _launch_economy_profile() -> Dictionary:
+	var file := FileAccess.open(ECONOMY_PROFILE_PATH, FileAccess.READ)
+	if file == null:
+		return {}
+	var value: Variant = JSON.parse_string(file.get_as_text())
+	if not value is Array or (value as Array).size() != 1:
+		return {}
+	var profile_value: Variant = (value as Array)[0]
+	return (profile_value as Dictionary).duplicate(true) if profile_value is Dictionary else {}
 
 
 static func _floor_rule_state_error(

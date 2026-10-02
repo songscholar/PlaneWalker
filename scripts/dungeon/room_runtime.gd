@@ -74,6 +74,18 @@ func begin_current_room() -> Variant:
 	if room_type == "event" and not launch_mode:
 		_complete_current_room()
 		return entered
+	if launch_mode and room_type == "shop":
+		if not _facade.has_method("open_current_merchant"):
+			_fail_runtime(&"MERCHANT_RUNTIME_UNAVAILABLE", {"room_id": str(_current_room_id)})
+			return _failure_result(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED")
+		var opened: Variant = _facade.call("open_current_merchant")
+		if not _result_ok(opened):
+			_fail_runtime(&"MERCHANT_RUNTIME_UNAVAILABLE", {
+				"room_id": str(_current_room_id),
+				"code": str(opened.get("code")) if opened != null else "INVALID_RESULT",
+			})
+			return opened
+		return opened
 	if launch_mode and room_type not in ["combat", "elite", "boss"]:
 		return entered
 
@@ -100,6 +112,17 @@ func begin_current_room() -> Variant:
 
 
 func complete_current_room() -> Variant:
+	return _complete_current_room()
+
+
+func leave_current_shop() -> Variant:
+	if (
+		not _room_active
+		or _room_terminal
+		or str(_current_room.get("runtime_mode", "")) != "launch"
+		or str(_current_room.get("room_type", "")) != "shop"
+	):
+		return _failure_result(&"INVALID_PHASE", {"operation": "leave_current_shop"})
 	return _complete_current_room()
 
 

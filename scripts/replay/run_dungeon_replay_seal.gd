@@ -10,11 +10,14 @@ const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_gene
 const RoomTemplateDefinitionScript := preload(
 	"res://scripts/dungeon/room_template_definition.gd"
 )
+const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
+const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
+const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 
 const SCHEMA_ID := "planewalker.run_dungeon_replay"
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
 const SUPPORTED_GENERATOR_VERSIONS: Array[String] = ["floor_plan_v1"]
 const SNAPSHOT_FIELDS: Array[String] = [
 	"schema_id",
@@ -25,7 +28,10 @@ const SNAPSHOT_FIELDS: Array[String] = [
 	"plan_digest",
 	"route_prefix",
 	"room_facts",
-	"economy_ledger_digest",
+	"economy_state_digest",
+	"merchant_state_digest",
+	"merchant_transaction_facts",
+	"merchant_audit_facts",
 	"event_resolution_digest",
 	"floor_rule_state_digest",
 	"floor_transitions",
@@ -46,15 +52,17 @@ const EVENT_RESOLUTION_FIELDS: Array[String] = [
 const FLOOR_TRANSITION_FIELDS: Array[String] = [
 	"sequence", "from_floor_id", "to_floor_id", "completed_plan_digest",
 ]
-const ECONOMY_LEDGER_FIELDS: Array[String] = [
-	"transaction_id", "operation", "amount", "revision",
+const MERCHANT_TRANSACTION_FIELDS: Array[String] = [
+	"sequence", "floor_id", "node_id", "merchant_id", "transaction_id", "kind",
+	"offer_id", "reward_id", "service_id", "cost_kind", "amount",
+	"economy_revision", "inventory_revision",
+]
+const MERCHANT_AUDIT_FIELDS: Array[String] = [
+	"floor_id", "node_id", "merchant_id", "sold_offer_ids", "reroll_count",
+	"completed_transaction_ids", "service_completed_transaction_ids",
 ]
 const VALID_ROOM_FACT_TYPES: Array[String] = ["room_entered", "room_cleared"]
-const VALID_ECONOMY_OPERATIONS: Array[String] = [
-	"gold_delta", "gold_purchase", "gold_reroll", "gold_service", "gold_decay",
-]
 const EVENT_OUTCOME_SCHEMA_ID := "event_outcome_v1"
-const MAX_ECONOMY_AMOUNT := 1000000
 const STABLE_ID_PATTERN := "^[a-z0-9][a-z0-9_:-]{0,95}$"
 const SHA256_PATTERN := "^[a-f0-9]{64}$"
 
@@ -64,7 +72,8 @@ func capture(
 	floor_plan: Dictionary,
 	route_prefix: Array,
 	room_fact_inputs: Array,
-	economy_ledger: Array,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
 	event_resolutions: Array,
 	floor_transitions: Array,
 	floor_rule_state: Dictionary = {}
@@ -82,15 +91,27 @@ func capture(
 	)
 	if not bool(room_result.get("ok", false)):
 		return {}
-	if not _economy_ledger_is_valid(economy_ledger):
+	if not _run_economy_is_valid(run_economy, registry):
 		return {}
-	var economy_digest := ReplayRecorderScript.value_digest(economy_ledger)
+	if not _merchant_state_is_valid(merchant_state):
+		return {}
+	var merchant_facts := _merchant_transaction_facts(merchant_state)
+	var merchant_audit := _merchant_audit_facts(merchant_state)
+	if (
+		merchant_facts.is_empty() and not _merchant_transactions_are_empty(merchant_state)
+		or merchant_audit.is_empty() and not (merchant_state.get("nodes", []) as Array).is_empty()
+		or not _economy_merchant_pair_is_consistent(run_economy, merchant_facts)
+	):
+		return {}
+	var economy_digest := ReplayRecorderScript.value_digest(run_economy)
+	var merchant_digest := ReplayRecorderScript.value_digest(merchant_state)
 	var event_digest := _event_resolution_digest(
 		registry, floor_plan, route_prefix, event_resolutions
 	)
 	var floor_rule_digest := ReplayRecorderScript.value_digest(floor_rule_state)
 	if (
 		not _is_sha256(economy_digest)
+		or not _is_sha256(merchant_digest)
 		or not _is_sha256(event_digest)
 		or not _is_sha256(floor_rule_digest)
 		or not ReplaySafeValueScript.is_supported(floor_rule_state)
@@ -114,7 +135,10 @@ func capture(
 		"plan_digest": str(floor_plan["generation_digest"]),
 		"route_prefix": route_prefix.duplicate(true),
 		"room_facts": (room_result["facts"] as Array).duplicate(true),
-		"economy_ledger_digest": economy_digest,
+		"economy_state_digest": economy_digest,
+		"merchant_state_digest": merchant_digest,
+		"merchant_transaction_facts": merchant_facts.duplicate(true),
+		"merchant_audit_facts": merchant_audit.duplicate(true),
 		"event_resolution_digest": event_digest,
 		"floor_rule_state_digest": floor_rule_digest,
 		"floor_transitions": floor_transitions.duplicate(true),
@@ -127,7 +151,8 @@ func validate(
 	value: Dictionary,
 	registry: Variant,
 	floor_plan: Dictionary,
-	economy_ledger: Array,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
 	event_resolutions: Array,
 	floor_rule_state: Dictionary = {}
 ) -> Dictionary:
@@ -150,8 +175,11 @@ func validate(
 		or not value["route_prefix"] is Array
 		or not value["room_facts"] is Array
 		or not value["floor_transitions"] is Array
+		or not value["merchant_transaction_facts"] is Array
+		or not value["merchant_audit_facts"] is Array
 		or not _is_sha256(value["plan_digest"])
-		or not _is_sha256(value["economy_ledger_digest"])
+		or not _is_sha256(value["economy_state_digest"])
+		or not _is_sha256(value["merchant_state_digest"])
 		or not _is_sha256(value["event_resolution_digest"])
 		or not _is_sha256(value["floor_rule_state_digest"])
 	):
@@ -188,10 +216,27 @@ func validate(
 		)
 	if (room_result["facts"] as Array) != value["room_facts"]:
 		return _failure(&"ROOM_DEFINITION_DRIFT")
-	if not _economy_ledger_is_valid(economy_ledger):
-		return _failure(&"ECONOMY_LEDGER_INVALID")
-	if ReplayRecorderScript.value_digest(economy_ledger) != str(value["economy_ledger_digest"]):
-		return _failure(&"ECONOMY_LEDGER_DRIFT")
+	if not _run_economy_is_valid(run_economy, registry):
+		return _failure(&"ECONOMY_STATE_INVALID")
+	if ReplayRecorderScript.value_digest(run_economy) != str(value["economy_state_digest"]):
+		return _failure(&"ECONOMY_STATE_DRIFT")
+	if not _merchant_state_is_valid(merchant_state):
+		return _failure(&"MERCHANT_STATE_INVALID")
+	var merchant_facts := _merchant_transaction_facts(merchant_state)
+	if merchant_facts != value["merchant_transaction_facts"]:
+		return _failure(&"MERCHANT_TRANSACTION_DRIFT", _first_array_drift(
+			value["merchant_transaction_facts"] as Array, merchant_facts, "transactions"
+		))
+	if not _economy_merchant_pair_is_consistent(run_economy, merchant_facts):
+		return _failure(&"MERCHANT_ECONOMY_DRIFT")
+	var audit_drift := _merchant_audit_drift(
+		value["merchant_audit_facts"] as Array,
+		_merchant_audit_facts(merchant_state)
+	)
+	if not audit_drift.is_empty():
+		return audit_drift
+	if ReplayRecorderScript.value_digest(merchant_state) != str(value["merchant_state_digest"]):
+		return _failure(&"MERCHANT_STATE_DRIFT")
 	var event_digest := _event_resolution_digest(
 		registry, floor_plan, route_prefix, event_resolutions
 	)
@@ -633,33 +678,290 @@ func _event_resolution_digest(
 	return ReplayRecorderScript.value_digest(sealed)
 
 
-func _economy_ledger_is_valid(ledger: Array) -> bool:
-	if not ReplaySafeValueScript.is_supported(ledger):
+func _run_economy_is_valid(value: Dictionary, registry: Variant) -> bool:
+	if (
+		registry == null
+		or not registry is Object
+		or not registry.has_method("resolve_economy_profile")
+	):
 		return false
-	var transaction_ids: Dictionary = {}
-	for index: int in range(ledger.size()):
-		var entry_value: Variant = ledger[index]
+	var profile_id_value: Variant = value.get("profile_id")
+	if typeof(profile_id_value) != TYPE_STRING:
+		return false
+	var profile_value: Variant = registry.call(
+		"resolve_economy_profile", StringName(str(profile_id_value))
+	)
+	if not profile_value is Dictionary or (profile_value as Dictionary).is_empty():
+		return false
+	var profile := _closed_definition(
+		profile_value as Dictionary, EconomyProfileScript.ROOT_FIELDS
+	)
+	if profile.is_empty():
+		return false
+	var candidate = RunEconomyStateScript.new()
+	var configured: Dictionary = candidate.configure(
+		profile, int(value.get("initial_gold", -1))
+	)
+	return bool(configured.get("ok", false)) and candidate.can_restore_snapshot(value)
+
+
+func _merchant_state_is_valid(value: Dictionary) -> bool:
+	var fingerprint_value: Variant = value.get("content_fingerprint")
+	if typeof(fingerprint_value) != TYPE_STRING:
+		return false
+	var candidate = MerchantRunStateScript.new()
+	var configured: Dictionary = candidate.configure(str(fingerprint_value))
+	return bool(configured.get("ok", false)) and candidate.can_restore_snapshot(value)
+
+
+func _merchant_transaction_facts(merchant_state: Dictionary) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for node_value: Variant in merchant_state.get("nodes", []):
+		if not node_value is Dictionary:
+			return []
+		var node := node_value as Dictionary
+		for transaction_value: Variant in node.get("transactions", []):
+			if not transaction_value is Dictionary:
+				return []
+			var transaction := transaction_value as Dictionary
+			var fact := {
+				"sequence": transaction.get("sequence"),
+				"floor_id": node.get("floor_id"),
+				"node_id": node.get("node_id"),
+				"merchant_id": node.get("merchant_id"),
+				"transaction_id": transaction.get("transaction_id"),
+				"kind": transaction.get("kind"),
+				"offer_id": transaction.get("offer_id"),
+				"reward_id": transaction.get("reward_id"),
+				"service_id": transaction.get("service_id"),
+				"cost_kind": transaction.get("cost_kind"),
+				"amount": transaction.get("amount"),
+				"economy_revision": transaction.get("economy_revision"),
+				"inventory_revision": transaction.get("inventory_revision"),
+			}
+			if not _has_exact_fields(fact, MERCHANT_TRANSACTION_FIELDS):
+				return []
+			result.append(fact)
+	result.sort_custom(
+		func(left: Dictionary, right: Dictionary) -> bool:
+			return int(left["sequence"]) < int(right["sequence"])
+	)
+	for index: int in range(result.size()):
+		if int(result[index].get("sequence", -1)) != index + 1:
+			return []
+	return result
+
+
+func _merchant_transactions_are_empty(merchant_state: Dictionary) -> bool:
+	for node_value: Variant in merchant_state.get("nodes", []):
+		if (
+			node_value is Dictionary
+			and not ((node_value as Dictionary).get("transactions", []) as Array).is_empty()
+		):
+			return false
+	return true
+
+
+func _merchant_audit_facts(merchant_state: Dictionary) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for node_value: Variant in merchant_state.get("nodes", []):
+		if not node_value is Dictionary:
+			return []
+		var node := node_value as Dictionary
+		var inventory_value: Variant = node.get("inventory")
+		var runtime_value: Variant = node.get("runtime")
+		var service_value: Variant = node.get("service")
+		if (
+			not inventory_value is Dictionary
+			or not runtime_value is Dictionary
+			or not service_value is Dictionary
+		):
+			return []
+		var inventory := inventory_value as Dictionary
+		var runtime := runtime_value as Dictionary
+		var service := service_value as Dictionary
+		if typeof(inventory.get("reroll_count")) != TYPE_INT or not inventory.get("offers") is Array:
+			return []
+		var sold_offer_ids: Array[String] = []
+		for offer_value: Variant in inventory["offers"]:
+			if (
+				not offer_value is Dictionary
+				or typeof((offer_value as Dictionary).get("offer_id")) != TYPE_STRING
+				or typeof((offer_value as Dictionary).get("sold")) != TYPE_BOOL
+			):
+				return []
+			if bool((offer_value as Dictionary)["sold"]):
+				sold_offer_ids.append(str((offer_value as Dictionary)["offer_id"]))
+		sold_offer_ids.sort()
+		var completed_ids: Variant = _sorted_stable_ids(
+			runtime.get("completed_transaction_ids")
+		)
+		var service_completed_ids: Variant = _completed_ids_from_snapshot(service)
+		if completed_ids == null or service_completed_ids == null:
+			return []
+		var fact := {
+			"floor_id": node.get("floor_id"),
+			"node_id": node.get("node_id"),
+			"merchant_id": node.get("merchant_id"),
+			"sold_offer_ids": sold_offer_ids,
+			"reroll_count": int(inventory["reroll_count"]),
+			"completed_transaction_ids": completed_ids,
+			"service_completed_transaction_ids": service_completed_ids,
+		}
+		if not _has_exact_fields(fact, MERCHANT_AUDIT_FIELDS):
+			return []
+		result.append(fact)
+	return result
+
+
+func _sorted_stable_ids(value: Variant) -> Variant:
+	if not value is Array:
+		return null
+	var result: Array[String] = []
+	var seen: Dictionary = {}
+	for id_value: Variant in value as Array:
+		if typeof(id_value) != TYPE_STRING:
+			return null
+		var stable_id := str(id_value)
+		if not _matches(STABLE_ID_PATTERN, stable_id) or seen.has(stable_id):
+			return null
+		seen[stable_id] = true
+		result.append(stable_id)
+	result.sort()
+	return result
+
+
+func _completed_ids_from_snapshot(snapshot: Dictionary) -> Variant:
+	if snapshot.has("completed_transaction_ids"):
+		return _sorted_stable_ids(snapshot["completed_transaction_ids"])
+	var found := false
+	var ids: Array[String] = []
+	var seen: Dictionary = {}
+	for key_value: Variant in snapshot.keys():
+		var child: Variant = snapshot[key_value]
+		var child_dictionaries: Array[Dictionary] = []
+		if child is Dictionary:
+			child_dictionaries.append(child as Dictionary)
+		elif child is Array:
+			for entry: Variant in child as Array:
+				if entry is Dictionary:
+					child_dictionaries.append(entry as Dictionary)
+		for child_dictionary: Dictionary in child_dictionaries:
+			var child_ids: Variant = _completed_ids_from_snapshot(child_dictionary)
+			if child_ids == null:
+				continue
+			found = true
+			for id_value: Variant in child_ids as Array:
+				var transaction_id := str(id_value)
+				if seen.has(transaction_id):
+					continue
+				seen[transaction_id] = true
+				ids.append(transaction_id)
+	if not found:
+		return null
+	ids.sort()
+	return ids
+
+
+func _economy_merchant_pair_is_consistent(
+	run_economy: Dictionary,
+	merchant_facts: Array[Dictionary]
+) -> bool:
+	var ledger_by_revision: Dictionary = {}
+	for entry_value: Variant in run_economy.get("ledger", []):
 		if not entry_value is Dictionary:
 			return false
 		var entry := entry_value as Dictionary
-		if not _has_exact_fields(entry, ECONOMY_LEDGER_FIELDS):
+		ledger_by_revision[int(entry.get("revision", -1))] = entry
+	for fact: Dictionary in merchant_facts:
+		var cost_kind := str(fact.get("cost_kind", ""))
+		var is_sell_payout := (
+			cost_kind == "reward"
+			and str(fact.get("kind", "")) == "service"
+			and str(fact.get("service_id", "")) == "sell_reward"
+		)
+		if cost_kind != "gold" and not is_sell_payout:
+			continue
+		var revision := int(fact.get("economy_revision", -1))
+		if not ledger_by_revision.has(revision):
 			return false
-		var transaction_id := str(entry.get("transaction_id", ""))
+		var ledger_entry := ledger_by_revision[revision] as Dictionary
+		var expected_operation := (
+			"gold_delta"
+			if is_sell_payout
+			else "gold_%s" % str(fact.get("kind", ""))
+		)
+		var ledger_amount := int(ledger_entry.get("amount", 0))
 		if (
-			typeof(entry.get("transaction_id")) != TYPE_STRING
-			or not _matches(STABLE_ID_PATTERN, transaction_id)
-			or transaction_ids.has(transaction_id)
-			or typeof(entry.get("operation")) != TYPE_STRING
-			or not VALID_ECONOMY_OPERATIONS.has(str(entry["operation"]))
-			or typeof(entry.get("amount")) != TYPE_INT
-			or int(entry["amount"]) == 0
-			or absi(int(entry["amount"])) > MAX_ECONOMY_AMOUNT
-			or typeof(entry.get("revision")) != TYPE_INT
-			or int(entry["revision"]) != index + 1
+			str(ledger_entry.get("transaction_id", ""))
+			!= str(fact.get("transaction_id", ""))
+			or str(ledger_entry.get("operation", "")) != expected_operation
+			or (is_sell_payout and ledger_amount <= 0)
+			or (
+				(ledger_amount if is_sell_payout else absi(ledger_amount))
+				!= int(fact.get("amount", -1))
+			)
 		):
 			return false
-		transaction_ids[transaction_id] = true
 	return true
+
+
+func _merchant_audit_drift(expected: Array, actual: Array) -> Dictionary:
+	if expected.size() != actual.size():
+		return _failure(&"MERCHANT_STATE_DRIFT", {
+			"field": "nodes", "expected_count": expected.size(), "actual_count": actual.size(),
+		})
+	for index: int in range(expected.size()):
+		if not expected[index] is Dictionary or not actual[index] is Dictionary:
+			return _failure(&"MERCHANT_STATE_DRIFT", {"field": "nodes", "index": index})
+		var expected_fact := expected[index] as Dictionary
+		var actual_fact := actual[index] as Dictionary
+		if (
+			not _has_exact_fields(expected_fact, MERCHANT_AUDIT_FIELDS)
+			or not _has_exact_fields(actual_fact, MERCHANT_AUDIT_FIELDS)
+		):
+			return _failure(&"MERCHANT_STATE_DRIFT", {
+				"field": "merchant_audit_facts", "index": index,
+			})
+		for identity_field: String in ["floor_id", "node_id", "merchant_id"]:
+			if expected_fact.get(identity_field) != actual_fact.get(identity_field):
+				return _failure(&"MERCHANT_STATE_DRIFT", {
+					"field": identity_field, "index": index,
+				})
+		var node_key := "%s:%s" % [
+			str(actual_fact.get("floor_id", "")), str(actual_fact.get("node_id", "")),
+		]
+		if expected_fact.get("sold_offer_ids") != actual_fact.get("sold_offer_ids"):
+			return _failure(&"MERCHANT_SOLD_STATE_DRIFT", {
+				"field": "sold_offer_ids", "node_key": node_key,
+			})
+		if expected_fact.get("reroll_count") != actual_fact.get("reroll_count"):
+			return _failure(&"MERCHANT_REROLL_STATE_DRIFT", {
+				"field": "reroll_count", "node_key": node_key,
+			})
+		if (
+			expected_fact.get("completed_transaction_ids")
+			!= actual_fact.get("completed_transaction_ids")
+			or expected_fact.get("service_completed_transaction_ids")
+			!= actual_fact.get("service_completed_transaction_ids")
+		):
+			return _failure(&"MERCHANT_COMPLETED_TRANSACTION_DRIFT", {
+				"field": "completed_transaction_ids", "node_key": node_key,
+			})
+	return {}
+
+
+func _first_array_drift(expected: Array, actual: Array, field: String) -> Dictionary:
+	var shared := mini(expected.size(), actual.size())
+	for index: int in range(shared):
+		if expected[index] != actual[index]:
+			return {"field": field, "sequence": index + 1}
+	return {
+		"field": field,
+		"sequence": shared + 1,
+		"expected_count": expected.size(),
+		"actual_count": actual.size(),
+	}
 
 
 func _expected_floor_transitions(

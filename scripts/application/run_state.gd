@@ -6,6 +6,7 @@ const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
+const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 
 const REWARD_REPLAY_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -82,6 +83,23 @@ const FLOOR_RULE_SNAPSHOT_FIELDS: Array[String] = [
 	"revision",
 	"reduced_motion",
 	"hit_flash_enabled",
+]
+const RUN_ECONOMY_FIELDS: Array[String] = [
+	"schema_id", "schema_version", "profile_id", "initial_gold", "balance",
+	"revision", "ledger", "settled_floor_indices",
+]
+const RUN_ECONOMY_LEDGER_FIELDS: Array[String] = [
+	"transaction_id", "operation", "amount", "revision",
+]
+const RUN_ECONOMY_OPERATIONS: Array[String] = [
+	"gold_delta", "gold_purchase", "gold_reroll", "gold_service", "gold_decay",
+]
+const RUN_SNAPSHOT_FIELDS: Array[String] = [
+	"schema_version", "run_id", "revision", "phase", "suspended", "run_seed",
+	"current_floor", "current_room", "room_total", "run_time_ms", "resources",
+	"stats", "events", "build", "open_offer", "consumed_offer_ids", "result",
+	"config", "current_floor_index", "floor_plan", "completed_floor_ids",
+	"run_economy", "seen_event_ids", "merchant_state", "floor_rule_state",
 ]
 
 
@@ -299,6 +317,64 @@ func clear_floor_rule_state() -> void:
 	floor_rule_state = {}
 
 
+func initialize_launch_economy_state(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary
+) -> bool:
+	if (
+		not is_launch_floor_mode()
+		or phase != RunPhaseScript.Value.RUN_PREPARING
+		or has_active_floor_plan()
+		or not run_economy.is_empty()
+		or not merchant_state.is_empty()
+		or not _valid_economy_merchant_pair(economy_snapshot, merchant_snapshot)
+		or int(economy_snapshot.get("revision", -1)) != 0
+		or not (economy_snapshot.get("ledger", []) as Array).is_empty()
+		or not (merchant_snapshot.get("nodes", []) as Array).is_empty()
+	):
+		return false
+	run_economy = economy_snapshot.duplicate(true)
+	merchant_state = merchant_snapshot.duplicate(true)
+	return true
+
+
+func commit_merchant_transaction_state(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary
+) -> bool:
+	var current_node := current_floor_node()
+	if (
+		not is_launch_floor_mode()
+		or phase != RunPhaseScript.Value.ROOM_ACTIVE
+		or current_node.is_empty()
+		or str(current_node.get("room_type", "")) != "shop"
+		or str(current_node.get("merchant_id", "")).is_empty()
+		or not _valid_economy_merchant_pair(economy_snapshot, merchant_snapshot)
+		or not _merchant_snapshot_matches_current_node(merchant_snapshot, current_node)
+	):
+		return false
+	run_economy = economy_snapshot.duplicate(true)
+	merchant_state = merchant_snapshot.duplicate(true)
+	return true
+
+
+func commit_economy_transaction_state(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary
+) -> bool:
+	if (
+		not is_launch_floor_mode()
+		or floor_plan.is_empty()
+		or phase in [RunPhaseScript.Value.BOOT, RunPhaseScript.Value.HUB, RunPhaseScript.Value.DEFEAT, RunPhaseScript.Value.VICTORY]
+		or merchant_snapshot != merchant_state
+		or not _valid_economy_merchant_pair(economy_snapshot, merchant_snapshot)
+		or not _is_single_economy_only_transition(run_economy, economy_snapshot)
+	):
+		return false
+	run_economy = economy_snapshot.duplicate(true)
+	return true
+
+
 func complete_current_floor_node(node_id: String) -> Dictionary:
 	var node := current_floor_node()
 	if (
@@ -414,6 +490,15 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	var floor_definition: Dictionary = value["floor_definition"]
 	var room_templates: Array = value["room_templates"]
 	var floor_index := int(value["current_floor_index"])
+	var economy_value := value["run_economy"] as Dictionary
+	var merchant_value := value["merchant_state"] as Dictionary
+	if economy_value.is_empty() != merchant_value.is_empty():
+		return false
+	if (
+		not economy_value.is_empty()
+		and not _valid_economy_merchant_pair(economy_value, merchant_value)
+	):
+		return false
 	if plan.is_empty():
 		return (
 			floor_index == -1
@@ -422,12 +507,18 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 			and int(value["room_total"]) == 5
 			and int(value["phase"]) == RunPhaseScript.Value.RUN_PREPARING
 			and (value["completed_floor_ids"] as Array).is_empty()
-			and (value["run_economy"] as Dictionary).is_empty()
 			and (value["seen_event_ids"] as Array).is_empty()
-			and (value["merchant_state"] as Dictionary).is_empty()
 			and (value["floor_rule_state"] as Dictionary).is_empty()
 			and floor_definition.is_empty()
 			and room_templates.is_empty()
+			and (
+				economy_value.is_empty()
+				or (
+					int(economy_value.get("revision", -1)) == 0
+					and (economy_value.get("ledger", []) as Array).is_empty()
+					and (merchant_value.get("nodes", []) as Array).is_empty()
+				)
+			)
 		)
 	if floor_index < 0 or floor_index >= FloorDefinitionScript.FLOOR_IDS.size():
 		return false
@@ -518,6 +609,94 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	return floor_transaction_snapshot() == value
 
 
+func restore_launch_run_snapshot(
+	value: Dictionary,
+	floor_definition: Dictionary,
+	room_templates: Array
+) -> bool:
+	if (
+		not is_launch_floor_mode()
+		or not _has_exact_fields(value, RUN_SNAPSHOT_FIELDS)
+		or typeof(value.get("schema_version")) != TYPE_INT
+		or int(value.get("schema_version", -1)) != 1
+		or typeof(value.get("run_id")) != TYPE_STRING
+		or str(value.get("run_id", "")) != run_id
+		or value.get("config") != config
+		or typeof(value.get("run_time_ms")) != TYPE_INT
+		or int(value.get("run_time_ms", -1)) < 0
+		or not value.get("resources") is Dictionary
+		or not value.get("stats") is Dictionary
+		or not value.get("events") is Array
+		or not value.get("build") is Dictionary
+		or not value.get("open_offer") is Dictionary
+		or not value.get("consumed_offer_ids") is Array
+		or not value.get("result") is Dictionary
+	):
+		return false
+	var consumed_values := value.get("consumed_offer_ids", []) as Array
+	if not _is_unique_string_array(consumed_values):
+		return false
+	var target_build: Dictionary = build_state.transaction_snapshot()
+	var build_value := value.get("build", {}) as Dictionary
+	for field: String in [
+		"items", "blessings", "curses", "talents", "reward_history",
+		"archetypes", "dominant_archetype",
+	]:
+		if not build_value.has(field):
+			return false
+		var field_value: Variant = build_value[field]
+		target_build[field] = (
+			field_value.duplicate(true)
+			if field_value is Array or field_value is Dictionary
+			else field_value
+		)
+	if not build_state.can_restore_transaction_snapshot(target_build):
+		return false
+	var floor_value: Dictionary = {
+		"schema_version": 1,
+		"revision": int(value.get("revision", -1)),
+		"phase": int(value.get("phase", -1)),
+		"suspended": bool(value.get("suspended", false)),
+		"run_seed": int(value.get("run_seed", 0)),
+		"current_floor": int(value.get("current_floor", 0)),
+		"current_room": int(value.get("current_room", 0)),
+		"room_total": int(value.get("room_total", 0)),
+		"current_floor_index": int(value.get("current_floor_index", -1)),
+		"floor_plan": (value.get("floor_plan", {}) as Dictionary).duplicate(true),
+		"completed_floor_ids": (value.get("completed_floor_ids", []) as Array).duplicate(),
+		"run_economy": (value.get("run_economy", {}) as Dictionary).duplicate(true),
+		"seen_event_ids": (value.get("seen_event_ids", []) as Array).duplicate(),
+		"merchant_state": (value.get("merchant_state", {}) as Dictionary).duplicate(true),
+		"floor_rule_state": (value.get("floor_rule_state", {}) as Dictionary).duplicate(true),
+		"floor_definition": floor_definition.duplicate(true),
+		"room_templates": room_templates.duplicate(true),
+	}
+	if not can_restore_floor_transaction_snapshot(floor_value):
+		return false
+	var before_floor: Dictionary = floor_transaction_snapshot()
+	var before_build: Dictionary = build_state.transaction_snapshot()
+	if not restore_floor_transaction_snapshot(floor_value):
+		return false
+	if not build_state.restore_transaction_snapshot(target_build):
+		restore_floor_transaction_snapshot(before_floor)
+		return false
+	run_time_ms = int(value["run_time_ms"])
+	_run_time_fraction_ms = 0.0
+	resources = (value["resources"] as Dictionary).duplicate(true)
+	stats = (value["stats"] as Dictionary).duplicate(true)
+	events = (value["events"] as Array).duplicate(true)
+	open_offer = (value["open_offer"] as Dictionary).duplicate(true)
+	consumed_offer_ids.clear()
+	for offer_id_value: Variant in consumed_values:
+		consumed_offer_ids[str(offer_id_value)] = true
+	result = (value["result"] as Dictionary).duplicate(true)
+	if snapshot() == value:
+		return true
+	build_state.restore_transaction_snapshot(before_build)
+	restore_floor_transaction_snapshot(before_floor)
+	return false
+
+
 func reward_replay_build_snapshot() -> Dictionary:
 	if not REWARD_REPLAY_MILESTONES.has(str(config.get("milestone", ""))):
 		return {}
@@ -605,6 +784,189 @@ func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
 		if not value.has(field):
 			return false
 	return true
+
+
+func _valid_economy_merchant_pair(
+	economy_snapshot: Dictionary,
+	merchant_snapshot: Dictionary
+) -> bool:
+	if not _valid_run_economy_snapshot_shape(economy_snapshot):
+		return false
+	var fingerprint_value: Variant = merchant_snapshot.get("content_fingerprint")
+	if typeof(fingerprint_value) != TYPE_STRING:
+		return false
+	var merchant_candidate = MerchantRunStateScript.new()
+	if not bool(merchant_candidate.configure(str(fingerprint_value)).get("ok", false)):
+		return false
+	if not merchant_candidate.can_restore_snapshot(merchant_snapshot):
+		return false
+	var ledger_by_revision: Dictionary = {}
+	for entry_value: Variant in economy_snapshot["ledger"]:
+		var entry := entry_value as Dictionary
+		ledger_by_revision[int(entry["revision"])] = entry
+	for node_value: Variant in merchant_snapshot["nodes"]:
+		var node := node_value as Dictionary
+		for transaction_value: Variant in node["transactions"]:
+			var transaction := transaction_value as Dictionary
+			var cost_kind := str(transaction["cost_kind"])
+			var kind := str(transaction["kind"])
+			var service_id := str(transaction["service_id"])
+			var requires_ledger := cost_kind == "gold" or (
+				cost_kind == "reward"
+				and kind == "service"
+				and service_id == "sell_reward"
+			)
+			if not requires_ledger:
+				continue
+			var economy_revision := int(transaction["economy_revision"])
+			if not ledger_by_revision.has(economy_revision):
+				return false
+			var entry := ledger_by_revision[economy_revision] as Dictionary
+			var expected_operation := (
+				"gold_delta"
+				if cost_kind == "reward"
+				else "gold_%s" % kind
+			)
+			if (
+				str(entry["transaction_id"]) != str(transaction["transaction_id"])
+				or str(entry["operation"]) != expected_operation
+				or absi(int(entry["amount"])) != int(transaction["amount"])
+				or (cost_kind == "reward" and int(entry["amount"]) <= 0)
+				or (cost_kind == "gold" and int(entry["amount"]) >= 0)
+			):
+				return false
+	return true
+
+
+func _valid_run_economy_snapshot_shape(value: Dictionary) -> bool:
+	if not _has_exact_fields(value, RUN_ECONOMY_FIELDS):
+		return false
+	if (
+		typeof(value["schema_id"]) != TYPE_STRING
+		or str(value["schema_id"]) != "planewalker.run_economy"
+		or typeof(value["schema_version"]) != TYPE_INT
+		or int(value["schema_version"]) != 1
+		or typeof(value["profile_id"]) != TYPE_STRING
+		or str(value["profile_id"]) != "launch_economy_v1"
+		or typeof(value["initial_gold"]) != TYPE_INT
+		or int(value["initial_gold"]) < 0
+		or typeof(value["balance"]) != TYPE_INT
+		or int(value["balance"]) < 0
+		or typeof(value["revision"]) != TYPE_INT
+		or int(value["revision"]) < 0
+		or not value["ledger"] is Array
+		or not value["settled_floor_indices"] is Array
+	):
+		return false
+	var computed_balance := int(value["initial_gold"])
+	var transaction_ids: Dictionary = {}
+	for index: int in range((value["ledger"] as Array).size()):
+		var entry_value: Variant = (value["ledger"] as Array)[index]
+		if not entry_value is Dictionary:
+			return false
+		var entry := entry_value as Dictionary
+		if not _has_exact_fields(entry, RUN_ECONOMY_LEDGER_FIELDS):
+			return false
+		var transaction_id := str(entry.get("transaction_id", ""))
+		var operation := str(entry.get("operation", ""))
+		var amount_value: Variant = entry.get("amount")
+		if (
+			typeof(entry.get("transaction_id")) != TYPE_STRING
+			or transaction_id.is_empty()
+			or transaction_ids.has(transaction_id)
+			or typeof(entry.get("operation")) != TYPE_STRING
+			or not RUN_ECONOMY_OPERATIONS.has(operation)
+			or typeof(amount_value) != TYPE_INT
+			or typeof(entry.get("revision")) != TYPE_INT
+			or int(entry["revision"]) != index + 1
+		):
+			return false
+		var amount := int(amount_value)
+		if (
+			(operation == "gold_delta" and amount == 0)
+			or (operation in ["gold_purchase", "gold_reroll", "gold_service"] and amount >= 0)
+			or (operation == "gold_decay" and amount > 0)
+		):
+			return false
+		computed_balance += amount
+		if computed_balance < 0:
+			return false
+		transaction_ids[transaction_id] = true
+	if int(value["revision"]) != (value["ledger"] as Array).size():
+		return false
+	if int(value["balance"]) != computed_balance:
+		return false
+	var settled: Array[int] = []
+	for floor_value: Variant in value["settled_floor_indices"]:
+		if typeof(floor_value) != TYPE_INT or int(floor_value) < 0 or int(floor_value) > 4:
+			return false
+		if settled.has(int(floor_value)):
+			return false
+		settled.append(int(floor_value))
+	var sorted_settled := settled.duplicate()
+	sorted_settled.sort()
+	return settled == sorted_settled
+
+
+func _is_single_economy_only_transition(
+	before: Dictionary,
+	after: Dictionary
+) -> bool:
+	if before.is_empty() or after.is_empty():
+		return false
+	if (
+		str(before.get("schema_id", "")) != str(after.get("schema_id", ""))
+		or int(before.get("schema_version", -1)) != int(after.get("schema_version", -1))
+		or str(before.get("profile_id", "")) != str(after.get("profile_id", ""))
+		or int(before.get("initial_gold", -1)) != int(after.get("initial_gold", -1))
+		or int(after.get("revision", -1)) != int(before.get("revision", -1)) + 1
+	):
+		return false
+	var before_ledger: Array = before.get("ledger", [])
+	var after_ledger: Array = after.get("ledger", [])
+	if after_ledger.size() != before_ledger.size() + 1:
+		return false
+	for index: int in range(before_ledger.size()):
+		if before_ledger[index] != after_ledger[index]:
+			return false
+	var entry_value: Variant = after_ledger.back()
+	if not entry_value is Dictionary:
+		return false
+	var entry := entry_value as Dictionary
+	var operation := str(entry.get("operation", ""))
+	if operation not in ["gold_delta", "gold_decay"]:
+		return false
+	if int(entry.get("revision", -1)) != int(after.get("revision", -1)):
+		return false
+	if int(before.get("balance", -1)) + int(entry.get("amount", 0)) != int(after.get("balance", -1)):
+		return false
+	var before_settled: Array = before.get("settled_floor_indices", [])
+	var after_settled: Array = after.get("settled_floor_indices", [])
+	if operation == "gold_delta":
+		return int(entry.get("amount", 0)) > 0 and before_settled == after_settled
+	if int(entry.get("amount", 1)) > 0 or after_settled.size() != before_settled.size() + 1:
+		return false
+	for index: int in range(before_settled.size()):
+		if before_settled[index] != after_settled[index]:
+			return false
+	return not before_settled.has(after_settled.back())
+
+
+func _merchant_snapshot_matches_current_node(
+	merchant_snapshot: Dictionary,
+	current_node: Dictionary
+) -> bool:
+	var floor_id := str(floor_plan.get("floor_id", ""))
+	var node_id := str(current_node.get("id", ""))
+	for node_value: Variant in merchant_snapshot.get("nodes", []):
+		var node := node_value as Dictionary
+		if str(node.get("floor_id", "")) != floor_id or str(node.get("node_id", "")) != node_id:
+			continue
+		return (
+			int(node.get("floor_index", -1)) == current_floor_index
+			and str(node.get("merchant_id", "")) == str(current_node.get("merchant_id", ""))
+		)
+	return false
 
 
 func _floor_rule_state_matches_context(

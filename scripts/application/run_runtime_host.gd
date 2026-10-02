@@ -186,6 +186,19 @@ func start_run(config: Dictionary) -> Variant:
 	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
 	if not bool(_player.call("configure_loadout", accepted_config)):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
+	if (
+		_is_floor_plan_snapshot(accepted_snapshot)
+		and (
+			not _facade.has_method("configure_merchant_effect_authority")
+			or not bool(_facade.call(
+				"configure_merchant_effect_authority", _reward_effect_runtime, _player
+			))
+		)
+	):
+		return _fail_start(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			{"merchant_effect_authority": false}
+		)
 	if _is_floor_plan_snapshot(accepted_snapshot):
 		var start_snapshot := runtime_snapshot()
 		_published_run_id = run_id

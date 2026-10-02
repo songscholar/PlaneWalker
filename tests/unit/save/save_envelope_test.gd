@@ -5,6 +5,8 @@ const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
+const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
+const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
 const CrumblingGroundRuleScript := preload(
@@ -15,6 +17,8 @@ const HISTORICAL_PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v2.j
 const SNAPSHOT_FIXTURE_PATH := "res://tests/fixtures/save/pack_snapshots/base_a.json"
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
+const ECONOMY_PATH := "res://data/content_packs/base/content/economy_profiles.json"
+const MERCHANT_FINGERPRINT := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 
 class AcceptingFloorRuleEffectAuthority:
@@ -40,6 +44,7 @@ func _run() -> void:
 	_test_native_v2_profile_runtime_fields_are_strict(suite)
 	_test_native_v2_runtime_state_survives_json_round_trip(suite)
 	_test_native_v3_active_run_round_trip(suite)
+	_test_native_v3_economy_and_merchant_authority_validation_fails_closed(suite)
 	_test_completed_floor_active_run_round_trip(suite)
 	_test_native_v3_active_run_validation_fails_closed(suite)
 	_test_native_v3_floor_rule_phase_frame_validation_fails_closed(suite)
@@ -326,6 +331,77 @@ func _test_completed_floor_active_run_round_trip(suite) -> void:
 	suite.assert_true(created.ok, "completed current floor remains a legal active-run snapshot: %s" % str(created.to_dictionary()))
 
 
+func _test_native_v3_economy_and_merchant_authority_validation_fails_closed(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var plan := _generated_floor_plan()
+	var economy := _economy_snapshot()
+	var merchant := _merchant_snapshot()
+	suite.assert_true(not economy.is_empty(), "economy Save fixture uses the real authority")
+	suite.assert_true(not merchant.is_empty(), "merchant Save fixture uses the real authority")
+	if fixture.is_empty() or plan.is_empty() or economy.is_empty() or merchant.is_empty():
+		return
+	var active_run := _active_run_fixture("LAUNCH", plan)
+	active_run["run_economy"] = economy
+	active_run["merchant_state"] = merchant
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 19, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:35:00Z",
+		fixture.get("content_snapshot", {}),
+		{"active_run_state": active_run}
+	)
+	suite.assert_true(created.ok, "canonical economy and merchant authorities seal into Save")
+	if not created.ok:
+		return
+	var canonical = SaveEnvelopeScript.validate(created.payload, &"profile", "slot_1", "base")
+	suite.assert_true(canonical.ok, "canonical economy and merchant authorities restore from Save")
+	if not canonical.ok:
+		return
+	var corruptions: Array[Dictionary] = [
+		{
+			"label": "economy balance no longer replays from its ledger",
+			"field": "payload.active_run_state.run_economy",
+			"mutate": func(run: Dictionary): run["run_economy"]["balance"] += 1,
+		},
+		{
+			"label": "economy purchase becomes an illegal positive credit",
+			"field": "payload.active_run_state.run_economy",
+			"mutate": func(run: Dictionary): run["run_economy"]["ledger"][2]["amount"] = 80,
+		},
+		{
+			"label": "merchant transaction sequence is no longer contiguous",
+			"field": "payload.active_run_state.merchant_state",
+			"mutate": func(run: Dictionary): run["merchant_state"]["nodes"][0]["transactions"][0]["sequence"] = 2,
+		},
+		{
+			"label": "merchant snapshot contains a pending transaction",
+			"field": "payload.active_run_state.merchant_state",
+			"mutate": func(run: Dictionary): run["merchant_state"]["pending_transaction"] = {"transaction_id": "tx_pending"},
+		},
+		{
+			"label": "merchant gold fact no longer matches the economy ledger",
+			"field": "payload.active_run_state.merchant_state",
+			"mutate": func(run: Dictionary): run["merchant_state"]["nodes"][0]["transactions"][1]["economy_revision"] = 2,
+		},
+		{
+			"label": "sold reward payout no longer matches its positive gold delta",
+			"field": "payload.active_run_state.merchant_state",
+			"mutate": func(run: Dictionary): run["merchant_state"]["nodes"][0]["transactions"][2]["amount"] = 51,
+		},
+	]
+	for corruption: Dictionary in corruptions:
+		var candidate: Dictionary = canonical.payload.duplicate(true)
+		var run := candidate["payload"]["active_run_state"] as Dictionary
+		(corruption["mutate"] as Callable).call(run)
+		_resign(candidate)
+		var result = SaveEnvelopeScript.validate(candidate, &"profile", "slot_1", "base")
+		suite.assert_equal(result.code, &"CORRUPT", "%s fails closed" % corruption["label"])
+		suite.assert_equal(
+			result.metadata.get("field"),
+			corruption["field"],
+			"%s identifies the authority boundary" % corruption["label"]
+		)
+
+
 func _test_native_v3_active_run_validation_fails_closed(suite) -> void:
 	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
 	if fixture.is_empty():
@@ -486,6 +562,93 @@ func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionar
 		"merchant_state": {},
 		"floor_rule_state": {},
 	}
+
+
+func _economy_snapshot() -> Dictionary:
+	var profiles := _read_json_array(ECONOMY_PATH)
+	if profiles.size() != 1:
+		return {}
+	var state = RunEconomyStateScript.new()
+	if not bool(state.configure(profiles[0], 0).get("ok", false)):
+		return {}
+	for transaction: Dictionary in [
+		{"id": "tx_reward_0001", "delta": 300, "operation": "gold_delta"},
+		{"id": "tx_reroll_0001", "delta": -40, "operation": "gold_reroll"},
+		{"id": "tx_purchase_0001", "delta": -80, "operation": "gold_purchase"},
+		{"id": "tx_sell_reward_0001", "delta": 50, "operation": "gold_delta"},
+	]:
+		var prepared: Dictionary = state.prepare_transaction(
+			transaction["id"], transaction["delta"], state.revision(),
+			{"operation": transaction["operation"]}
+		)
+		if not bool(prepared.get("ok", false)):
+			return {}
+		if not bool(state.commit_transaction(prepared["ticket"]).get("ok", false)):
+			return {}
+	return state.snapshot()
+
+
+func _merchant_snapshot() -> Dictionary:
+	var state = MerchantRunStateScript.new()
+	if not bool(state.configure(MERCHANT_FINGERPRINT).get("ok", false)):
+		return {}
+	var node := {
+		"floor_id": "floor_ruins_of_remnant",
+		"floor_index": 0,
+		"node_id": "shop_a",
+		"merchant_id": "merchant_wayfarer",
+		"inventory": {
+			"schema_version": 1,
+			"merchant_id": "merchant_wayfarer",
+			"node_id": "shop_a",
+			"floor_index": 1,
+			"reroll_count": 1,
+			"revision": 3,
+			"offers": [{
+				"offer_id": "offer_a",
+				"reward_id": "item_a",
+				"category": "item",
+				"rarity": "common",
+				"price": 80,
+				"sold": true,
+			}],
+		},
+		"runtime": {
+			"schema_id": "planewalker.merchant_runtime",
+			"schema_version": 1,
+			"completed_transaction_ids": [
+				"tx_purchase_0001", "tx_reroll_0001", "tx_sell_reward_0001",
+			],
+		},
+		"service": {"completed_transaction_ids": ["tx_sell_reward_0001"]},
+		"visibility": {"revealed": true},
+		"transactions": [],
+	}
+	if not bool(state.upsert_node(node).get("ok", false)):
+		return {}
+	for transaction: Dictionary in [
+		{
+			"sequence": 1, "transaction_id": "tx_reroll_0001", "kind": "reroll",
+			"offer_id": "", "reward_id": "", "service_id": "", "cost_kind": "gold",
+			"amount": 40, "economy_revision": 2, "inventory_revision": 2,
+		},
+		{
+			"sequence": 2, "transaction_id": "tx_purchase_0001", "kind": "purchase",
+			"offer_id": "offer_a", "reward_id": "item_a", "service_id": "", "cost_kind": "gold",
+			"amount": 80, "economy_revision": 3, "inventory_revision": 3,
+		},
+		{
+			"sequence": 3, "transaction_id": "tx_sell_reward_0001", "kind": "service",
+			"offer_id": "", "reward_id": "item_sold", "service_id": "sell_reward",
+			"cost_kind": "reward", "amount": 50, "economy_revision": 4,
+			"inventory_revision": 3,
+		},
+	]:
+		if not bool(state.record_transaction(
+			"floor_ruins_of_remnant:shop_a", transaction
+		).get("ok", false)):
+			return {}
+	return state.snapshot()
 
 
 func _configured_floor_rule_snapshot(plan: Dictionary) -> Dictionary:

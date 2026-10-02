@@ -36,6 +36,33 @@ const ForgeVentsRuleScript := preload(
 const CollapsingPlaneRuleScript := preload(
 	"res://scripts/dungeon/floor_rules/collapsing_plane_rule.gd"
 )
+const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
+const MerchantDefinitionScript := preload("res://scripts/dungeon/merchant_definition.gd")
+const MerchantInventoryServiceScript := preload(
+	"res://scripts/economy/merchant_inventory_service.gd"
+)
+const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
+const MerchantRuntimeScript := preload("res://scripts/economy/merchant_runtime.gd")
+const MerchantServiceAuthorityScript := preload(
+	"res://scripts/economy/merchant_service_authority.gd"
+)
+const MerchantServiceRouterScript := preload(
+	"res://scripts/economy/merchant_service_router.gd"
+)
+const FloorPlanVisibilityAuthorityScript := preload(
+	"res://scripts/economy/floor_plan_visibility_authority.gd"
+)
+const RewardBuildMutationAuthorityScript := preload(
+	"res://scripts/economy/reward_build_mutation_authority.gd"
+)
+const MerchantWeaponUpgradeAuthorityScript := preload(
+	"res://scripts/economy/merchant_weapon_upgrade_authority.gd"
+)
+const MerchantHealthTradeAuthorityScript := preload(
+	"res://scripts/economy/merchant_health_trade_authority.gd"
+)
+const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
+const ShopPriceServiceScript := preload("res://scripts/economy/shop_price_service.gd")
 
 const GAME_VERSION := "0.4.0-dev"
 const DEFAULT_CONTENT_PATH := "res://data/content_packs/base/pack.json"
@@ -58,6 +85,17 @@ var _room_templates: Array[Dictionary] = []
 var _route_transactions: Dictionary = {}
 var _floor_rule_runtime: RefCounted
 var _floor_rule_effect_authority: Variant = null
+var _economy_profile: Dictionary = {}
+var _merchant_definitions: Array[Dictionary] = []
+var _merchant_definitions_by_id: Dictionary = {}
+var _merchant_reward_definitions: Array[Dictionary] = []
+var _launch_content_fingerprint: String = ""
+var _economy_state: RefCounted
+var _merchant_run_state: RefCounted
+var _merchant_sessions: Dictionary = {}
+var _merchant_reward_runtime: Object
+var _merchant_player: Object
+var _merchant_run_start_player_baseline: Dictionary = {}
 
 
 func _notification(what: int) -> void:
@@ -91,6 +129,17 @@ func boot(
 	_route_transactions.clear()
 	_floor_rule_runtime = null
 	_floor_rule_effect_authority = null
+	_economy_profile.clear()
+	_merchant_definitions.clear()
+	_merchant_definitions_by_id.clear()
+	_merchant_reward_definitions.clear()
+	_launch_content_fingerprint = ""
+	_economy_state = null
+	_merchant_run_state = null
+	_merchant_sessions.clear()
+	_merchant_reward_runtime = null
+	_merchant_player = null
+	_merchant_run_start_player_baseline.clear()
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -176,7 +225,35 @@ func start_run(config: Dictionary, run_id: String):
 
 	var accepted_result = started
 	var candidate_rooms: Array[Dictionary] = []
+	var candidate_economy: RefCounted = null
+	var candidate_merchant_state: RefCounted = null
 	if floor_plan_run:
+		candidate_economy = RunEconomyStateScript.new()
+		var economy_configured: Dictionary = candidate_economy.call(
+			"configure", _economy_profile.duplicate(true), 0
+		)
+		candidate_merchant_state = MerchantRunStateScript.new()
+		var merchant_configured: Dictionary = candidate_merchant_state.call(
+			"configure", _launch_content_fingerprint
+		)
+		if (
+			not bool(economy_configured.get("ok", false))
+			or not bool(merchant_configured.get("ok", false))
+		):
+			candidate_director.free()
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE", _revision(), {"stage": "launch_economy_configuration"}
+			)
+		var initialized = candidate_orchestrator.initialize_launch_economy(
+			candidate_economy.call("snapshot"),
+			candidate_merchant_state.call("snapshot"),
+			candidate_orchestrator.revision()
+		)
+		if not initialized.ok:
+			candidate_director.free()
+			return CommandResultScript.failure(
+				initialized.code, _revision(), initialized.context
+			)
 		accepted_result = _start_floor_at(
 			0, candidate_orchestrator, candidate_director
 		)
@@ -205,6 +282,9 @@ func start_run(config: Dictionary, run_id: String):
 	_route_transactions.clear()
 	_floor_rule_runtime = null
 	_floor_rule_effect_authority = null
+	_economy_state = candidate_economy
+	_merchant_run_state = candidate_merchant_state
+	_merchant_sessions.clear()
 	return accepted_result
 
 
@@ -596,13 +676,58 @@ func complete_current_room():
 			return CommandResultScript.failure(
 				&"INVALID_PHASE", _revision(), {"operation": "complete_current_room"}
 			)
+		var is_boss := str(room.get("room_type", "")) == "boss"
+		var floor_before: Dictionary = (
+			_orchestrator.floor_transaction_snapshot() if is_boss else {}
+		)
+		var economy_before: Dictionary = (
+			_economy_state.call("snapshot")
+			if is_boss and _economy_state != null
+			else {}
+		)
 		var completed = _orchestrator.complete_floor_node(
 			str(room.get("node_id", "")), _revision()
 		)
 		if not completed.ok:
 			return completed
-		if str(room.get("room_type", "")) != "boss":
+		if not is_boss:
 			return completed
+		if _economy_state == null or _merchant_run_state == null:
+			if not _restore_floor_and_economy(floor_before, economy_before):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(), {"stage": "floor_settlement_missing_authority"}
+				)
+			return CommandResultScript.failure(
+				&"INVALID_PHASE", _revision(), {"operation": "floor_settlement"}
+			)
+		var floor_index := int(room.get("floor_index", -1))
+		var settlement: Dictionary = _economy_state.call(
+			"apply_floor_transition",
+			floor_index,
+			int(_economy_state.call("revision")),
+			"tx_floor_%d_settlement" % (floor_index + 1)
+		)
+		if not bool(settlement.get("ok", false)):
+			if not _restore_floor_and_economy(floor_before, economy_before):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(), {"stage": "floor_settlement_prepare_rollback"}
+				)
+			return CommandResultScript.failure(
+				StringName(str(settlement.get("code", &"COMMIT_FAILED"))),
+				_revision(),
+				(settlement.get("context", {}) as Dictionary).duplicate(true)
+			)
+		var economy_committed = _orchestrator.commit_economy_transaction(
+			_economy_state.call("snapshot"),
+			_merchant_run_state.call("snapshot"),
+			completed.new_revision
+		)
+		if not economy_committed.ok:
+			if not _restore_floor_and_economy(floor_before, economy_before):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(), {"stage": "floor_settlement_state_rollback"}
+				)
+			return economy_committed
 		var floor_completed = _orchestrator.complete_floor(
 			{
 				"result": "victory",
@@ -610,12 +735,21 @@ func complete_current_room():
 				"floor_id": str(room.get("floor_id", "")),
 				"current_room": int(room.get("room_number", 0)),
 			},
-			completed.new_revision
+			economy_committed.new_revision
 		)
-		if floor_completed.ok:
-			_floor_rule_runtime = null
-			_floor_rule_effect_authority = null
-		return floor_completed
+		if not floor_completed.ok:
+			if not _restore_floor_and_economy(floor_before, economy_before):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE", _revision(), {"stage": "floor_completion_rollback"}
+				)
+			return floor_completed
+		_floor_rule_runtime = null
+		_floor_rule_effect_authority = null
+		var completion_context: Dictionary = floor_completed.context.duplicate(true)
+		completion_context["economy_settlement"] = settlement.duplicate(true)
+		return CommandResultScript.success(
+			floor_completed.new_revision, completion_context, floor_completed.message_key
+		)
 	if str(room.get("type", "")) == "boss":
 		return CommandResultScript.failure(
 			&"INVALID_PHASE",
@@ -990,6 +1124,1019 @@ func create_room_runtime(encounter_runner: Node) -> Node:
 	return runtime
 
 
+func configure_merchant_effect_authority(
+	reward_runtime: Object,
+	player: Object
+) -> bool:
+	if (
+		reward_runtime == null
+		or not is_instance_valid(reward_runtime)
+		or player == null
+		or not is_instance_valid(player)
+	):
+		return false
+	for method_name: StringName in [&"prepare", &"commit", &"rollback"]:
+		if not reward_runtime.has_method(method_name):
+			return false
+	for method_name: StringName in [
+		&"reward_effect_snapshot",
+		&"restore_reward_effect_snapshot",
+		&"reward_effect_apply_operation",
+		&"reward_effect_begin_publication",
+		&"reward_effect_publication_can_commit",
+		&"reward_effect_commit_publication",
+		&"reward_effect_rollback_publication",
+	]:
+		if not player.has_method(method_name):
+			return false
+	_merchant_reward_runtime = reward_runtime
+	_merchant_player = player
+	var baseline_value: Variant = player.call("reward_effect_snapshot")
+	if baseline_value is Dictionary and not (baseline_value as Dictionary).is_empty():
+		_merchant_run_start_player_baseline = (baseline_value as Dictionary).duplicate(true)
+	return true
+
+
+func grant_run_gold(
+	transaction_id: String,
+	amount: int,
+	source_id: String
+):
+	var readiness = _require_booted("grant_run_gold")
+	if not readiness.ok:
+		return readiness
+	if (
+		not _is_floor_plan_run()
+		or _economy_state == null
+		or _merchant_run_state == null
+		or amount <= 0
+		or source_id.is_empty()
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT",
+			_revision(),
+			{"operation": "grant_run_gold"}
+		)
+	var prepared: Dictionary = _economy_state.call(
+		"prepare_transaction",
+		transaction_id,
+		amount,
+		int(_economy_state.call("revision")),
+		{"operation": "gold_delta", "source_id": source_id}
+	)
+	if not bool(prepared.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(prepared.get("code", &"PREPARE_FAILED"))),
+			_revision(),
+			(prepared.get("context", {}) as Dictionary).duplicate(true)
+		)
+	var ticket := (prepared.get("ticket", {}) as Dictionary).duplicate(true)
+	var committed: Dictionary = _economy_state.call("commit_transaction", ticket)
+	if not bool(committed.get("ok", false)):
+		_economy_state.call("rollback_transaction", ticket)
+		return CommandResultScript.failure(
+			StringName(str(committed.get("code", &"COMMIT_FAILED"))),
+			_revision(),
+			(committed.get("context", {}) as Dictionary).duplicate(true)
+		)
+	var receipt := (committed.get("receipt", {}) as Dictionary).duplicate(true)
+	var state_committed = _orchestrator.commit_economy_transaction(
+		_economy_state.call("snapshot"),
+		_merchant_run_state.call("snapshot"),
+		_revision()
+	)
+	if not state_committed.ok:
+		var rolled_back: Dictionary = _economy_state.call(
+			"rollback_transaction", receipt
+		)
+		if not bool(rolled_back.get("ok", false)):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "gold_income_state_rollback", "transaction_id": transaction_id}
+			)
+		return state_committed
+	return CommandResultScript.success(
+		state_committed.new_revision,
+		{
+			"transaction_id": transaction_id,
+			"amount": amount,
+			"source_id": source_id,
+			"balance": int(_economy_state.call("balance")),
+			"ledger_entry": (
+				(committed.get("ledger_entry", {}) as Dictionary).duplicate(true)
+			),
+		}
+	)
+
+
+func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
+	var readiness = _require_booted("restore_launch_run")
+	if not readiness.ok:
+		return readiness
+	if (
+		_orchestrator.phase() != RunPhaseScript.Value.HUB
+		or value.is_empty()
+		or not value.get("config") is Dictionary
+		or not value.get("floor_plan") is Dictionary
+		or (value.get("floor_plan", {}) as Dictionary).is_empty()
+	):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"operation": "restore_launch_run"}
+		)
+	var config := RunConfigScript.normalized(value.get("config", {}) as Dictionary)
+	var validation = RunConfigScript.validate(config)
+	if not validation.ok or not _is_floor_plan_milestone(str(config.get("milestone", ""))):
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "config"}
+		)
+	var loadout_validation = RunLoadoutPolicyScript.new().validate(config, _registry)
+	if not loadout_validation.ok:
+		return CommandResultScript.failure(
+			loadout_validation.code, _revision(), loadout_validation.context
+		)
+	var launch_content = _configure_launch_content(StringName(str(config["milestone"])))
+	if not launch_content.ok:
+		return launch_content
+	var floor_index := int(value.get("current_floor_index", -1))
+	if floor_index < 0 or floor_index >= _floor_definitions.size():
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "current_floor_index"}
+		)
+	var candidate_orchestrator = RunOrchestratorScript.new()
+	var candidate_director = RunDirectorScript.new()
+	if not candidate_orchestrator.enter_hub().ok:
+		candidate_director.free()
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision())
+	var candidate_started = candidate_orchestrator.start_run(
+		config,
+		str(value.get("run_id", ""))
+	)
+	if not candidate_started.ok:
+		candidate_director.free()
+		return CommandResultScript.failure(
+			candidate_started.code, _revision(), candidate_started.context
+		)
+	if not candidate_orchestrator.restore_launch_run_snapshot(
+		value.duplicate(true),
+		_floor_definitions[floor_index].duplicate(true),
+		_room_templates.duplicate(true)
+	):
+		candidate_director.free()
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "snapshot"}
+		)
+	if not candidate_director.configure_launch_plan(
+		value.get("floor_plan", {}) as Dictionary,
+		_registry
+	):
+		candidate_director.free()
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE", _revision(), {"field": "floor_plan"}
+		)
+	var economy_value := value.get("run_economy", {}) as Dictionary
+	var merchant_value := value.get("merchant_state", {}) as Dictionary
+	var candidate_economy = RunEconomyStateScript.new()
+	var economy_configured: Dictionary = candidate_economy.call(
+		"configure",
+		_economy_profile.duplicate(true),
+		int(economy_value.get("initial_gold", -1))
+	)
+	var candidate_merchant = MerchantRunStateScript.new()
+	var merchant_configured: Dictionary = candidate_merchant.call(
+		"configure", _launch_content_fingerprint
+	)
+	if (
+		not bool(economy_configured.get("ok", false))
+		or not bool(merchant_configured.get("ok", false))
+		or not bool(candidate_economy.call("restore_snapshot", economy_value.duplicate(true)))
+		or not bool(candidate_merchant.call("restore_snapshot", merchant_value.duplicate(true)))
+	):
+		candidate_director.free()
+		return CommandResultScript.failure(
+			&"INVALID_ARGUMENT", _revision(), {"field": "run_economy_or_merchant_state"}
+		)
+	var candidate_floor_rule_runtime: RefCounted = null
+	var floor_rule_value := value.get("floor_rule_state", {}) as Dictionary
+	if not floor_rule_value.is_empty():
+		var floor_rule_candidate := _floor_rule_runtime_restore_candidate(
+			floor_rule_value,
+			effect_authority
+		)
+		if not bool(floor_rule_candidate.get("ok", false)):
+			candidate_director.free()
+			return CommandResultScript.failure(
+				StringName(str(floor_rule_candidate.get("code", &"INVALID_ARGUMENT"))),
+				_revision(),
+				(floor_rule_candidate.get("context", {}) as Dictionary).duplicate(true)
+			)
+		candidate_floor_rule_runtime = floor_rule_candidate["runtime"] as RefCounted
+
+	var previous_orchestrator = _orchestrator
+	var previous_director = _director
+	var previous_economy = _economy_state
+	var previous_merchant = _merchant_run_state
+	var previous_floor_rule_runtime = _floor_rule_runtime
+	var previous_floor_rule_effect_authority: Variant = _floor_rule_effect_authority
+	var previous_loadout := _accepted_loadout.duplicate(true)
+	var previous_sessions := _merchant_sessions.duplicate()
+	_orchestrator = candidate_orchestrator
+	_director = candidate_director
+	_economy_state = candidate_economy
+	_merchant_run_state = candidate_merchant
+	_accepted_loadout = (
+		(loadout_validation.context.get("loadout", {}) as Dictionary).duplicate(true)
+	)
+	_room_definitions.clear()
+	_route_transactions.clear()
+	_selection_reservations.clear()
+	_floor_rule_runtime = candidate_floor_rule_runtime
+	_floor_rule_effect_authority = (
+		effect_authority if candidate_floor_rule_runtime != null else null
+	)
+	_merchant_sessions.clear()
+	if not _restore_current_merchant_session_from_snapshot():
+		_orchestrator = previous_orchestrator
+		_director = previous_director
+		_economy_state = previous_economy
+		_merchant_run_state = previous_merchant
+		_floor_rule_runtime = previous_floor_rule_runtime
+		_floor_rule_effect_authority = previous_floor_rule_effect_authority
+		_accepted_loadout = previous_loadout
+		_merchant_sessions = previous_sessions
+		candidate_director.free()
+		return CommandResultScript.failure(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			_revision(),
+			{"stage": "merchant_session_restore"}
+		)
+	if previous_director != null and is_instance_valid(previous_director):
+		previous_director.free()
+	return CommandResultScript.success(
+		_revision(), {"snapshot": snapshot(), "restored": true}
+	)
+
+
+func _floor_rule_runtime_restore_candidate(
+	value: Dictionary,
+	effect_authority: Variant
+) -> Dictionary:
+	for field: String in [
+		"rule_id", "room_id", "room_seed", "zones", "safe_zone_ids",
+		"reduced_motion", "hit_flash_enabled",
+	]:
+		if not value.has(field):
+			return {
+				"ok": false,
+				"code": &"INVALID_ARGUMENT",
+				"context": {"field": "floor_rule_state.%s" % field},
+			}
+	if not value["zones"] is Array or not value["safe_zone_ids"] is Array:
+		return {
+			"ok": false,
+			"code": &"INVALID_ARGUMENT",
+			"context": {"field": "floor_rule_state"},
+		}
+	var runtime := _new_floor_rule_runtime(StringName(str(value.get("rule_id", ""))))
+	if runtime == null:
+		return {
+			"ok": false,
+			"code": &"INVALID_ARGUMENT",
+			"context": {"field": "floor_rule_state.rule_id"},
+		}
+	var configuration := {
+		"room_id": value.get("room_id"),
+		"room_seed": value.get("room_seed"),
+		"zones": (value.get("zones", []) as Array).duplicate(true),
+		"safe_zone_ids": (value.get("safe_zone_ids", []) as Array).duplicate(),
+		"reduced_motion": value.get("reduced_motion"),
+		"hit_flash_enabled": value.get("hit_flash_enabled"),
+	}
+	var configured: Dictionary = runtime.call(
+		"configure",
+		configuration,
+		effect_authority
+	)
+	if (
+		not bool(configured.get("ok", false))
+		or not bool(runtime.call("restore_snapshot", value.duplicate(true)))
+		or runtime.call("snapshot") != value
+	):
+		return {
+			"ok": false,
+			"code": StringName(str(configured.get("code", &"INVALID_ARGUMENT"))),
+			"context": {"field": "floor_rule_state"},
+		}
+	return {"ok": true, "code": &"OK", "runtime": runtime}
+
+
+func open_current_merchant():
+	var readiness = _require_booted("open_current_merchant")
+	if not readiness.ok:
+		return readiness
+	var room := current_room_definition()
+	if (
+		not _is_floor_plan_run()
+		or str(room.get("room_type", "")) != "shop"
+		or _economy_state == null
+		or _merchant_run_state == null
+		or _merchant_player == null
+		or _merchant_reward_runtime == null
+	):
+		return CommandResultScript.failure(
+			&"INVALID_PHASE", _revision(), {"operation": "open_current_merchant"}
+		)
+	var merchant_id := str(room.get("merchant_id", ""))
+	var node_key := "%s:%s" % [str(room.get("floor_id", "")), str(room.get("node_id", ""))]
+	if merchant_id.is_empty() or not _merchant_definitions_by_id.has(merchant_id):
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE", _revision(), {"merchant_id": merchant_id}
+		)
+	if _merchant_sessions.has(node_key):
+		return CommandResultScript.success(
+			_revision(), {"merchant": merchant_view_state()}
+		)
+	var merchant: Dictionary = (
+		_merchant_definitions_by_id[merchant_id] as Dictionary
+	).duplicate(true)
+	var floor_number := int(room.get("floor_index", -1)) + 1
+	var price_service = ShopPriceServiceScript.new()
+	var inventory = MerchantInventoryServiceScript.new()
+	var inventory_configured: Dictionary = inventory.configure(
+		int(_orchestrator.snapshot().get("run_seed", 0)),
+		merchant,
+		_economy_profile,
+		floor_number,
+		StringName(str(room.get("node_id", ""))),
+		_merchant_reward_definitions,
+		_merchant_compatibility_context(),
+		Callable(price_service, "reward_price")
+	)
+	if not bool(inventory_configured.get("ok", false)):
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE", _revision(), inventory_configured.get("context", {})
+		)
+	var generated: Dictionary = inventory.generate()
+	if not bool(generated.get("ok", false)):
+		return CommandResultScript.failure(
+			&"CONTENT_NOT_AVAILABLE", _revision(), generated.get("context", {})
+		)
+	var service_result := _create_merchant_service_router(
+		merchant, floor_number, inventory, _orchestrator.snapshot().get("floor_plan", {})
+	)
+	if not bool(service_result.get("ok", false)):
+		return CommandResultScript.failure(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+			_revision(), service_result.get("context", {})
+		)
+	var service_authority: Object = service_result["router"]
+	var runtime = MerchantRuntimeScript.new()
+	if not runtime.configure(
+		_economy_state,
+		inventory,
+		_merchant_reward_runtime,
+		_merchant_player,
+		service_authority,
+		Callable(self, "_commit_merchant_state_payload").bind(node_key, merchant_id)
+	):
+		return CommandResultScript.failure(
+			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", _revision(), {"merchant_id": merchant_id}
+		)
+	var previous_merchant_snapshot: Dictionary = _merchant_run_state.call("snapshot")
+	var upserted: Dictionary = _merchant_run_state.call("upsert_node", {
+		"floor_id": str(room["floor_id"]),
+		"floor_index": int(room["floor_index"]),
+		"node_id": str(room["node_id"]),
+		"merchant_id": merchant_id,
+		"inventory": inventory.snapshot(),
+		"runtime": runtime.snapshot(),
+		"service": service_authority.snapshot(),
+		"visibility": service_authority.visibility_snapshot(),
+		"transactions": [],
+	})
+	if not bool(upserted.get("ok", false)):
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "merchant_node"})
+	var state_committed = _orchestrator.commit_merchant_transaction(
+		_economy_state.call("snapshot"),
+		_merchant_run_state.call("snapshot"),
+		_revision()
+	)
+	if not state_committed.ok:
+		_merchant_run_state.call("restore_snapshot", previous_merchant_snapshot)
+		return state_committed
+	_merchant_sessions[node_key] = {
+		"merchant": merchant,
+		"inventory": inventory,
+		"runtime": runtime,
+		"service": service_authority,
+		"price": price_service,
+	}
+	return CommandResultScript.success(
+		state_committed.new_revision, {"merchant": merchant_view_state()}
+	)
+
+
+func merchant_view_state() -> Dictionary:
+	var room := current_room_definition()
+	var node_key := "%s:%s" % [str(room.get("floor_id", "")), str(room.get("node_id", ""))]
+	if not _merchant_sessions.has(node_key) or _economy_state == null:
+		return {}
+	var session := _merchant_sessions[node_key] as Dictionary
+	var merchant := session["merchant"] as Dictionary
+	var inventory: Object = session["inventory"]
+	var service: Object = session["service"]
+	return {
+		"node_key": node_key,
+		"merchant_id": str(merchant["id"]),
+		"name_key": str(merchant["name_key"]),
+		"description_key": str(merchant["description_key"]),
+		"intro_key": str(merchant["intro_key"]),
+		"farewell_key": str(merchant["farewell_key"]),
+		"services": (merchant["services"] as Array).duplicate(),
+		"gold": int(_economy_state.call("balance")),
+		"economy_revision": int(_economy_state.call("revision")),
+		"inventory": inventory.call("snapshot"),
+		"service_state": service.call("snapshot"),
+		"visibility": (
+			service.call("visibility_snapshot")
+			if service.has_method("visibility_snapshot")
+			else {}
+		),
+	}
+
+
+func purchase_current_merchant(transaction_id: String, offer_id: String):
+	var session_result := _current_merchant_session("purchase_current_merchant")
+	if not bool(session_result.get("ok", false)):
+		return session_result["result"]
+	var session := session_result["session"] as Dictionary
+	var inventory: Object = session["inventory"]
+	var runtime: Object = session["runtime"]
+	var result: Dictionary = runtime.call(
+		"purchase_reward",
+		transaction_id,
+		offer_id,
+		int((inventory.call("snapshot") as Dictionary)["revision"]),
+		int(_economy_state.call("revision"))
+	)
+	if not bool(result.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(result.get("code", &"COMMIT_FAILED"))),
+			_revision(), result.get("context", {})
+		)
+	if not _refresh_current_reward_mutation_authority():
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(), {"stage": "merchant_reward_mutation_refresh"}
+		)
+	return CommandResultScript.success(
+		_revision(), {"transaction": result, "merchant": merchant_view_state()}
+	)
+
+
+func reroll_current_merchant(transaction_id: String):
+	var session_result := _current_merchant_session("reroll_current_merchant")
+	if not bool(session_result.get("ok", false)):
+		return session_result["result"]
+	var session := session_result["session"] as Dictionary
+	var inventory: Object = session["inventory"]
+	var runtime: Object = session["runtime"]
+	var result: Dictionary = runtime.call(
+		"reroll",
+		transaction_id,
+		int((inventory.call("snapshot") as Dictionary)["revision"]),
+		int(_economy_state.call("revision"))
+	)
+	if not bool(result.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(result.get("code", &"COMMIT_FAILED"))),
+			_revision(), result.get("context", {})
+		)
+	return CommandResultScript.success(
+		_revision(), {"transaction": result, "merchant": merchant_view_state()}
+	)
+
+
+func execute_current_merchant_service(
+	transaction_id: String,
+	service_id: StringName,
+	target_id: String = "player"
+):
+	var session_result := _current_merchant_session("execute_current_merchant_service")
+	if not bool(session_result.get("ok", false)):
+		return session_result["result"]
+	var runtime: Object = (session_result["session"] as Dictionary)["runtime"]
+	var result: Dictionary = runtime.call(
+		"execute_service",
+		transaction_id,
+		service_id,
+		target_id,
+		int(_economy_state.call("revision"))
+	)
+	if not bool(result.get("ok", false)):
+		return CommandResultScript.failure(
+			StringName(str(result.get("code", &"COMMIT_FAILED"))),
+			_revision(), result.get("context", {})
+		)
+	if not _refresh_current_reward_mutation_authority():
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE", _revision(), {"stage": "merchant_reward_mutation_refresh"}
+		)
+	return CommandResultScript.success(
+		_revision(), {"transaction": result, "merchant": merchant_view_state()}
+	)
+
+
+func _current_merchant_session(operation: String) -> Dictionary:
+	var room := current_room_definition()
+	var node_key := "%s:%s" % [str(room.get("floor_id", "")), str(room.get("node_id", ""))]
+	if (
+		str(room.get("room_type", "")) != "shop"
+		or not _merchant_sessions.has(node_key)
+		or _economy_state == null
+	):
+		return {
+			"ok": false,
+			"result": CommandResultScript.failure(
+				&"INVALID_PHASE", _revision(), {"operation": operation}
+			),
+		}
+	return {
+		"ok": true,
+		"session": (_merchant_sessions[node_key] as Dictionary).duplicate(),
+	}
+
+
+func _refresh_current_reward_mutation_authority() -> bool:
+	var room := current_room_definition()
+	var node_key := "%s:%s" % [str(room.get("floor_id", "")), str(room.get("node_id", ""))]
+	if not _merchant_sessions.has(node_key):
+		return false
+	var session := _merchant_sessions[node_key] as Dictionary
+	var router: Object = session["service"]
+	if not router.has_method("authority") or router.call("authority", "reward_mutation") == null:
+		return true
+	var node: Dictionary = _merchant_run_state.call("node_state", node_key)
+	var persisted_service := (node.get("service", {}) as Dictionary).duplicate(true)
+	var authorities := (
+		(persisted_service.get("authorities", {}) as Dictionary)
+		if persisted_service.get("authorities", {}) is Dictionary
+		else {}
+	)
+	var mutation_snapshot := (
+		(authorities.get("reward_mutation", {}) as Dictionary)
+		if authorities.get("reward_mutation", {}) is Dictionary
+		else {}
+	)
+	var baseline := (
+		(mutation_snapshot.get("run_start_player_baseline", {}) as Dictionary).duplicate(true)
+		if mutation_snapshot.get("run_start_player_baseline", {}) is Dictionary
+		else {}
+	)
+	if baseline.is_empty():
+		return false
+	var authority: Object = router.call("authority", "reward_mutation") as Object
+	if authority == null or not authority.has_method("synchronize_live_state"):
+		return false
+	var build_participant: Object = _orchestrator.reward_build_participant()
+	var build_snapshot: Dictionary = build_participant.call("transaction_snapshot")
+	var ledger: Array[Dictionary] = []
+	for definition_value: Variant in build_snapshot.get("reward_history", []):
+		if not definition_value is Dictionary:
+			return false
+		ledger.append((definition_value as Dictionary).duplicate(true))
+	var synchronized: Dictionary = authority.call(
+		"synchronize_live_state", ledger, build_snapshot
+	)
+	return (
+		bool(synchronized.get("ok", false))
+		and router.call("snapshot") == persisted_service
+	)
+
+
+func _restore_current_merchant_session_from_snapshot() -> bool:
+	var room := current_room_definition()
+	if str(room.get("room_type", "")) != "shop":
+		return true
+	if (
+		_merchant_player == null
+		or not is_instance_valid(_merchant_player)
+		or _merchant_reward_runtime == null
+		or not is_instance_valid(_merchant_reward_runtime)
+	):
+		return false
+	var merchant_id := str(room.get("merchant_id", ""))
+	var node_key := "%s:%s" % [str(room.get("floor_id", "")), str(room.get("node_id", ""))]
+	if not _merchant_definitions_by_id.has(merchant_id):
+		return false
+	var node: Dictionary = _merchant_run_state.call("node_state", node_key)
+	if node.is_empty() or str(node.get("merchant_id", "")) != merchant_id:
+		return false
+	var merchant := (
+		_merchant_definitions_by_id[merchant_id] as Dictionary
+	).duplicate(true)
+	var floor_number := int(room.get("floor_index", -1)) + 1
+	var price_service = ShopPriceServiceScript.new()
+	var inventory = MerchantInventoryServiceScript.new()
+	var inventory_configured: Dictionary = inventory.configure(
+		int(_orchestrator.snapshot().get("run_seed", 0)),
+		merchant,
+		_economy_profile,
+		floor_number,
+		StringName(str(room.get("node_id", ""))),
+		_merchant_reward_definitions,
+		_merchant_compatibility_context(),
+		Callable(price_service, "reward_price")
+	)
+	if (
+		not bool(inventory_configured.get("ok", false))
+		or not bool(inventory.call(
+			"restore_snapshot", (node.get("inventory", {}) as Dictionary).duplicate(true)
+		))
+	):
+		return false
+	var service_result := _create_merchant_service_router(
+		merchant,
+		floor_number,
+		inventory,
+		_orchestrator.snapshot().get("floor_plan", {}),
+		(node.get("service", {}) as Dictionary).duplicate(true)
+	)
+	if not bool(service_result.get("ok", false)):
+		return false
+	var service_authority: Object = service_result["router"]
+	if not bool(service_authority.call(
+		"restore_snapshot", (node.get("service", {}) as Dictionary).duplicate(true)
+	)):
+		return false
+	if service_authority.call("visibility_snapshot") != node.get("visibility", {}):
+		return false
+	var runtime = MerchantRuntimeScript.new()
+	if not runtime.configure(
+		_economy_state,
+		inventory,
+		_merchant_reward_runtime,
+		_merchant_player,
+		service_authority,
+		Callable(self, "_commit_merchant_state_payload").bind(node_key, merchant_id)
+	):
+		return false
+	if not bool(runtime.call(
+		"restore_snapshot", (node.get("runtime", {}) as Dictionary).duplicate(true)
+	)):
+		return false
+	_merchant_sessions[node_key] = {
+		"merchant": merchant,
+		"inventory": inventory,
+		"runtime": runtime,
+		"service": service_authority,
+		"price": price_service,
+	}
+	var matches: bool = merchant_view_state().get("inventory") == node.get("inventory")
+	return matches
+
+
+func _create_merchant_service_router(
+	merchant: Dictionary,
+	floor_number: int,
+	inventory: Object,
+	floor_plan_value: Variant,
+	restore_value: Dictionary = {}
+) -> Dictionary:
+	var services := merchant.get("services", []) as Array
+	var authorities: Dictionary = {}
+	if services.has("heal"):
+		var heal = MerchantServiceAuthorityScript.new()
+		var heal_configured: Dictionary = heal.configure(
+			merchant,
+			_economy_profile,
+			floor_number,
+			_merchant_player,
+			_merchant_reward_runtime
+		)
+		if not bool(heal_configured.get("ok", false)):
+			return _merchant_service_configuration_failure("heal", heal_configured)
+		authorities["heal"] = heal
+	if services.has("weapon_upgrade"):
+		var weapon_upgrade = MerchantWeaponUpgradeAuthorityScript.new()
+		var weapon_configured: Dictionary = weapon_upgrade.configure(
+			merchant, _economy_profile, floor_number, _merchant_player
+		)
+		if not bool(weapon_configured.get("ok", false)):
+			return _merchant_service_configuration_failure(
+				"weapon_upgrade", weapon_configured
+			)
+		authorities["weapon_upgrade"] = weapon_upgrade
+	if services.has("health_trade"):
+		var health_trade = MerchantHealthTradeAuthorityScript.new()
+		var health_configured: Dictionary = health_trade.configure(
+			merchant, _merchant_player, _merchant_reward_runtime, inventory
+		)
+		if not bool(health_configured.get("ok", false)):
+			return _merchant_service_configuration_failure(
+				"health_trade", health_configured
+			)
+		authorities["health_trade"] = health_trade
+	if services.has("route_reveal"):
+		if not floor_plan_value is Dictionary:
+			return _merchant_service_configuration_failure(
+				"route_reveal", {"code": &"FLOOR_PLAN_INVALID"}
+			)
+		var visibility = FloorPlanVisibilityAuthorityScript.new()
+		var visibility_configured: Dictionary = visibility.configure(
+			(floor_plan_value as Dictionary).duplicate(true)
+		)
+		if not bool(visibility_configured.get("ok", false)):
+			return _merchant_service_configuration_failure(
+				"route_reveal", visibility_configured
+			)
+		authorities["visibility"] = visibility
+	if services.has("cleanse_curse") or services.has("sell_reward"):
+		var baseline := _merchant_run_start_player_baseline.duplicate(true)
+		var saved_authorities := (
+			(restore_value.get("authorities", {}) as Dictionary)
+			if restore_value.get("authorities", {}) is Dictionary
+			else {}
+		)
+		var saved_mutation := (
+			(saved_authorities.get("reward_mutation", {}) as Dictionary)
+			if saved_authorities.get("reward_mutation", {}) is Dictionary
+			else {}
+		)
+		if saved_mutation.get("run_start_player_baseline", {}) is Dictionary:
+			var saved_baseline := saved_mutation.get(
+				"run_start_player_baseline", {}
+			) as Dictionary
+			if not saved_baseline.is_empty():
+				baseline = saved_baseline.duplicate(true)
+				_merchant_run_start_player_baseline = baseline.duplicate(true)
+		if baseline.is_empty():
+			return _merchant_service_configuration_failure(
+				"reward_mutation", {"code": &"BASELINE_INVALID"}
+			)
+		var build_participant: Object = _orchestrator.reward_build_participant()
+		var build_snapshot: Dictionary = build_participant.call(
+			"transaction_snapshot"
+		)
+		var definition_ledger: Array[Dictionary] = []
+		for definition_value: Variant in build_snapshot.get("reward_history", []):
+			if not definition_value is Dictionary:
+				return _merchant_service_configuration_failure(
+					"reward_mutation", {"code": &"LEDGER_INVALID"}
+				)
+			definition_ledger.append((definition_value as Dictionary).duplicate(true))
+		var mutation = RewardBuildMutationAuthorityScript.new()
+		var mutation_configured: Dictionary = mutation.configure(
+			baseline,
+			definition_ledger,
+			build_snapshot,
+			build_participant,
+			_merchant_player,
+			_merchant_reward_runtime
+		)
+		if not bool(mutation_configured.get("ok", false)):
+			return _merchant_service_configuration_failure(
+				"reward_mutation", mutation_configured
+			)
+		authorities["reward_mutation"] = mutation
+	var router = MerchantServiceRouterScript.new()
+	var floor_plan := (
+		(floor_plan_value as Dictionary).duplicate(true)
+		if floor_plan_value is Dictionary
+		else {}
+	)
+	var configured: Dictionary = router.configure(
+		merchant,
+		_economy_profile,
+		floor_number,
+		inventory,
+		floor_plan,
+		authorities
+	)
+	if not bool(configured.get("ok", false)):
+		return _merchant_service_configuration_failure("router", configured)
+	return {"ok": true, "code": &"OK", "router": router}
+
+
+func _merchant_service_configuration_failure(
+	service_id: String,
+	cause: Dictionary
+) -> Dictionary:
+	return {
+		"ok": false,
+		"code": StringName(str(cause.get("code", &"CONFIGURATION_FAILED"))),
+		"context": {
+			"service_id": service_id,
+			"cause": cause.duplicate(true),
+		},
+	}
+
+
+func _commit_merchant_state_payload(
+	payload: Dictionary,
+	node_key: String,
+	merchant_id: String
+) -> bool:
+	if (
+		_merchant_run_state == null
+		or _economy_state == null
+		or not _merchant_sessions.has(node_key)
+		or not payload.get("transaction") is Dictionary
+		or not payload.get("economy") is Dictionary
+		or not payload.get("inventory") is Dictionary
+		or not payload.get("runtime") is Dictionary
+		or not payload.get("service") is Dictionary
+		or not payload.get("visibility") is Dictionary
+	):
+		return false
+	var before: Dictionary = _merchant_run_state.call("snapshot")
+	var existing: Dictionary = _merchant_run_state.call("node_state", node_key)
+	if existing.is_empty():
+		return false
+	var transaction := payload["transaction"] as Dictionary
+	var economy_snapshot := payload["economy"] as Dictionary
+	var inventory_snapshot := payload["inventory"] as Dictionary
+	var runtime_snapshot := payload["runtime"] as Dictionary
+	var session := _merchant_sessions[node_key] as Dictionary
+	var service_router: Object = session["service"]
+	var build_participant: Object = _orchestrator.reward_build_participant()
+	var build_before: Dictionary = build_participant.call("transaction_snapshot")
+	var reward_definition := _merchant_transaction_reward_definition(transaction)
+	if not reward_definition.is_empty():
+		var build_applied: Dictionary = build_participant.call(
+			"apply_definition", reward_definition.duplicate(true)
+		)
+		if not bool(build_applied.get("ok", false)):
+			return false
+	var service_snapshot: Dictionary = service_router.call("snapshot")
+	if not reward_definition.is_empty():
+		service_snapshot = _service_snapshot_with_build_ledger(
+			service_snapshot,
+			build_participant.call("transaction_snapshot")
+		)
+		if service_snapshot.is_empty():
+			build_participant.call(
+				"restore_transaction_snapshot", build_before.duplicate(true)
+			)
+			return false
+	var visibility_snapshot: Dictionary = (
+		service_router.call("visibility_snapshot")
+		if service_router.has_method("visibility_snapshot")
+		else (payload["visibility"] as Dictionary).duplicate(true)
+	)
+	var node := existing.duplicate(true)
+	node["inventory"] = inventory_snapshot.duplicate(true)
+	node["runtime"] = runtime_snapshot.duplicate(true)
+	node["service"] = service_snapshot.duplicate(true)
+	node["visibility"] = visibility_snapshot.duplicate(true)
+	var upserted: Dictionary = _merchant_run_state.call("upsert_node", node)
+	if not bool(upserted.get("ok", false)):
+		build_participant.call("restore_transaction_snapshot", build_before.duplicate(true))
+		return false
+	var kind := str(transaction.get("kind", ""))
+	var inventory_receipt: Dictionary = (
+		(transaction.get("inventory_receipt", {}) as Dictionary).duplicate(true)
+		if transaction.get("inventory_receipt", {}) is Dictionary
+		else {}
+	)
+	var offer: Dictionary = (
+		(inventory_receipt.get("offer", {}) as Dictionary).duplicate(true)
+		if inventory_receipt.get("offer", {}) is Dictionary
+		else {}
+	)
+	var fact := {
+		"sequence": _merchant_transaction_count(before) + 1,
+		"transaction_id": str(transaction.get("transaction_id", "")),
+		"kind": kind,
+		"offer_id": str(transaction.get("offer_id", offer.get("offer_id", ""))),
+		"reward_id": str(transaction.get("reward_id", offer.get("reward_id", ""))),
+		"service_id": str(transaction.get("service_id", "")),
+		"cost_kind": str(transaction.get("cost_kind", "gold")),
+		"amount": int(transaction.get("amount", transaction.get("price", 0))),
+		"economy_revision": int(economy_snapshot.get("revision", -1)),
+		"inventory_revision": int(inventory_snapshot.get("revision", -1)),
+	}
+	var recorded: Dictionary = _merchant_run_state.call(
+		"record_transaction", node_key, fact
+	)
+	if not bool(recorded.get("ok", false)):
+		_merchant_run_state.call("restore_snapshot", before)
+		build_participant.call("restore_transaction_snapshot", build_before.duplicate(true))
+		return false
+	var committed = _orchestrator.commit_merchant_transaction(
+		economy_snapshot,
+		_merchant_run_state.call("snapshot"),
+		_revision()
+	)
+	if not committed.ok:
+		_merchant_run_state.call("restore_snapshot", before)
+		build_participant.call("restore_transaction_snapshot", build_before.duplicate(true))
+		return false
+	return true
+
+
+func _merchant_transaction_reward_definition(transaction: Dictionary) -> Dictionary:
+	var inventory_receipt := (
+		(transaction.get("inventory_receipt", {}) as Dictionary)
+		if transaction.get("inventory_receipt", {}) is Dictionary
+		else {}
+	)
+	if inventory_receipt.is_empty() and str(transaction.get("service_id", "")) == "health_trade":
+		var service_receipt := (
+			(transaction.get("service_receipt", {}) as Dictionary)
+			if transaction.get("service_receipt", {}) is Dictionary
+			else {}
+		)
+		var delegate_receipt := (
+			(service_receipt.get("delegate_receipt", {}) as Dictionary)
+			if service_receipt.get("delegate_receipt", {}) is Dictionary
+			else {}
+		)
+		inventory_receipt = (
+			(delegate_receipt.get("inventory_receipt", {}) as Dictionary)
+			if delegate_receipt.get("inventory_receipt", {}) is Dictionary
+			else {}
+		)
+	var offer := (
+		(inventory_receipt.get("offer", {}) as Dictionary)
+		if inventory_receipt.get("offer", {}) is Dictionary
+		else {}
+	)
+	return (
+		(offer.get("definition", {}) as Dictionary).duplicate(true)
+		if offer.get("definition", {}) is Dictionary
+		else {}
+	)
+
+
+func _service_snapshot_with_build_ledger(
+	service_snapshot: Dictionary,
+	build_snapshot: Variant
+) -> Dictionary:
+	if not build_snapshot is Dictionary:
+		return {}
+	var authorities := (
+		(service_snapshot.get("authorities", {}) as Dictionary).duplicate(true)
+		if service_snapshot.get("authorities", {}) is Dictionary
+		else {}
+	)
+	if not authorities.has("reward_mutation"):
+		return service_snapshot.duplicate(true)
+	var mutation := (
+		(authorities["reward_mutation"] as Dictionary).duplicate(true)
+		if authorities["reward_mutation"] is Dictionary
+		else {}
+	)
+	if mutation.is_empty() or not (build_snapshot as Dictionary).get("reward_history", []) is Array:
+		return {}
+	mutation["definition_ledger"] = (
+		((build_snapshot as Dictionary)["reward_history"] as Array).duplicate(true)
+	)
+	authorities["reward_mutation"] = mutation
+	var candidate := service_snapshot.duplicate(true)
+	candidate["authorities"] = authorities
+	return candidate
+
+
+func _merchant_transaction_count(snapshot_value: Dictionary) -> int:
+	var count := 0
+	for node_value: Variant in snapshot_value.get("nodes", []):
+		if node_value is Dictionary:
+			count += ((node_value as Dictionary).get("transactions", []) as Array).size()
+	return count
+
+
+func _restore_floor_and_economy(
+	floor_snapshot: Dictionary,
+	economy_snapshot: Dictionary
+) -> bool:
+	if floor_snapshot.is_empty() or economy_snapshot.is_empty():
+		return false
+	var floor_restored: bool = bool(_orchestrator.restore_floor_transaction_snapshot(
+		floor_snapshot.duplicate(true)
+	))
+	var economy_restored := bool(_economy_state.call(
+		"restore_snapshot", economy_snapshot.duplicate(true)
+	))
+	return floor_restored and economy_restored
+
+
+func _merchant_compatibility_context() -> Dictionary:
+	var archetype_ids: Array[String] = []
+	for definition_value: Variant in _registry.call("get_by_category", &"archetype_profile"):
+		if definition_value is Dictionary:
+			var archetype_id := str((definition_value as Dictionary).get("id", ""))
+			if not archetype_id.is_empty() and not archetype_ids.has(archetype_id):
+				archetype_ids.append(archetype_id)
+	archetype_ids.sort()
+	var weapon_ids: Array[String] = []
+	var weapon_value: Variant = _accepted_loadout.get("weapon", {})
+	if weapon_value is Dictionary:
+		var weapon_id := str((weapon_value as Dictionary).get("id", ""))
+		if not weapon_id.is_empty():
+			weapon_ids.append(weapon_id)
+	return {"archetype_ids": archetype_ids, "weapon_ids": weapon_ids}
+
+
 func _require_booted(operation: String):
 	if _booted and _orchestrator != null:
 		return CommandResultScript.success(_revision())
@@ -1009,6 +2156,9 @@ func _revision() -> int:
 func _configure_launch_content(milestone: StringName):
 	var canonical_floors: Array[Dictionary] = []
 	var canonical_templates: Array[Dictionary] = []
+	var canonical_merchants: Array[Dictionary] = []
+	var canonical_rewards: Array[Dictionary] = []
+	var economy_profile: Dictionary = {}
 	for floor_value: Variant in _registry.call("get_floor_definitions", milestone):
 		if not floor_value is Dictionary:
 			return CommandResultScript.failure(
@@ -1045,17 +2195,71 @@ func _configure_launch_content(milestone: StringName):
 		canonical_templates.append(
 			(canonical_template.get("definition", {}) as Dictionary).duplicate(true)
 		)
-	if canonical_floors.size() != 5 or canonical_templates.size() != 30:
+	for merchant_value: Variant in _registry.call(
+		"get_by_category", &"merchant_definition", milestone
+	):
+		if not merchant_value is Dictionary:
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE", _revision(), {"category": "merchant_definition"}
+			)
+		var merchant_source := _definition_fields(
+			merchant_value as Dictionary, MerchantDefinitionScript.ROOT_FIELDS
+		)
+		var merchant_result: Dictionary = MerchantDefinitionScript.new().configure(merchant_source)
+		if not bool(merchant_result.get("ok", false)):
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE", _revision(), {"category": "merchant_definition"}
+			)
+		canonical_merchants.append(
+			(merchant_result.get("definition", {}) as Dictionary).duplicate(true)
+		)
+	var economy_values: Array = _registry.call(
+		"get_by_category", &"economy_profile", milestone
+	)
+	if economy_values.size() == 1 and economy_values[0] is Dictionary:
+		var economy_source := _definition_fields(
+			economy_values[0] as Dictionary, EconomyProfileScript.ROOT_FIELDS
+		)
+		var economy_result: Dictionary = EconomyProfileScript.new().configure(economy_source)
+		if bool(economy_result.get("ok", false)):
+			economy_profile = (
+				economy_result.get("definition", {}) as Dictionary
+			).duplicate(true)
+	for category: StringName in [&"item", &"blessing", &"curse"]:
+		for definition_value: Variant in _registry.call("get_by_category", category, milestone):
+			if definition_value is Dictionary:
+				canonical_rewards.append((definition_value as Dictionary).duplicate(true))
+	if (
+		canonical_floors.size() != 5
+		or canonical_templates.size() != 30
+		or canonical_merchants.size() != 5
+		or economy_profile.is_empty()
+		or canonical_rewards.is_empty()
+	):
 		return CommandResultScript.failure(
 			&"CONTENT_NOT_AVAILABLE",
 			_revision(),
 			{
 				"floor_count": canonical_floors.size(),
 				"room_template_count": canonical_templates.size(),
+				"merchant_count": canonical_merchants.size(),
+				"economy_profile_count": 0 if economy_profile.is_empty() else 1,
+				"merchant_reward_count": canonical_rewards.size(),
 			}
 		)
 	_floor_definitions = canonical_floors.duplicate(true)
 	_room_templates = canonical_templates.duplicate(true)
+	_economy_profile = economy_profile.duplicate(true)
+	_merchant_definitions = canonical_merchants.duplicate(true)
+	_merchant_definitions_by_id.clear()
+	for merchant: Dictionary in _merchant_definitions:
+		_merchant_definitions_by_id[str(merchant["id"])] = merchant.duplicate(true)
+	_merchant_reward_definitions = canonical_rewards.duplicate(true)
+	_launch_content_fingerprint = _digest_canonical({
+		"economy_profile": _economy_profile,
+		"merchants": _merchant_definitions,
+		"rewards": _merchant_reward_definitions,
+	})
 	return CommandResultScript.success(_revision())
 
 
@@ -1101,6 +2305,34 @@ func _definition_fields(source: Dictionary, fields: Array[String]) -> Dictionary
 			value.duplicate(true) if value is Array or value is Dictionary else value
 		)
 	return canonical_source
+
+
+func _digest_canonical(value: Variant) -> String:
+	return var_to_bytes(_canonicalize_digest_value(value)).hex_encode().sha256_text()
+
+
+func _canonicalize_digest_value(value: Variant) -> Variant:
+	if value is Dictionary:
+		var source := value as Dictionary
+		var keys: Array[String] = []
+		var source_keys: Dictionary = {}
+		for key_value: Variant in source.keys():
+			var key := str(key_value)
+			keys.append(key)
+			source_keys[key] = key_value
+		keys.sort()
+		var normalized: Dictionary = {}
+		for key: String in keys:
+			normalized[key] = _canonicalize_digest_value(source[source_keys[key]])
+		return normalized
+	if value is Array:
+		var normalized_array: Array = []
+		for entry: Variant in value as Array:
+			normalized_array.append(_canonicalize_digest_value(entry))
+		return normalized_array
+	if typeof(value) == TYPE_STRING_NAME:
+		return str(value)
+	return value
 
 
 func _start_floor_at(
