@@ -1,7 +1,7 @@
 # Plane Walker Save Service v2 Contract
 
-- Status: Approved / Current
-- Document Role: Current contract
+- Status: Approved / Historical
+- Document Role: Historical schema-v2 contract; superseded by save-service-v3.md
 - Authority Level: Atomic persistence, migration, recovery, and compatibility contract
 - Applies To: Local profile saves, global settings, migration, recovery, and content-pack compatibility
 - Owner: Project integration lead
@@ -31,4 +31,4 @@ Recovery order remains primary, pending, backup 1, then backup 2. A migrated rec
 
 ## 5. Compatibility and completion
 
-Schema 3 and later return FORWARD_VERSION and never fall back to an older backup. Schema 0 and v1 fixtures remain historical migration inputs. The authoritative native fixture is tests/fixtures/save/profile_v2.json. The current save_profile_v2.schema.json and save_settings_v2.schema.json files are normative for the envelope and required top-level domains; GDScript runtime validators are normative for opaque nested runtime payloads.
+At the time this contract was current, schema 3 and later returned FORWARD_VERSION. Schema 3 is now current under save-service-v3.md, while schema 0, v1, and v2 remain historical migration inputs. The historical native fixture is tests/fixtures/save/profile_v2.json. The save_profile_v2.schema.json and save_settings_v2.schema.json files remain normative for historical v2 bytes; GDScript runtime validators remain normative for opaque nested runtime payloads.

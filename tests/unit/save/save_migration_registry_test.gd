@@ -3,9 +3,19 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SaveMigrationRegistryScript := preload("res://scripts/save/save_migration_registry.gd")
+const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
 
 const LEGACY_FIXTURE_PATH := "res://tests/fixtures/save/legacy_v0.json"
 const MIGRATED_FIXTURE_PATH := "res://tests/fixtures/save/migration_expected_v1.json"
+const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
+const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
+const FLOOR_IDS: Array[String] = [
+	"floor_ruins_of_remnant",
+	"floor_void_forest",
+	"floor_time_rift",
+	"floor_plane_forge",
+	"floor_throne_of_void",
+]
 
 var _nondeterministic_counter: int = 0
 
@@ -26,6 +36,12 @@ func _run() -> void:
 	_test_default_v1_to_v2_adds_runtime_defaults(suite)
 	_test_default_v1_to_v2_preserves_valid_runtime_state(suite)
 	_test_default_v1_to_v2_rejects_malformed_runtime_state(suite)
+	_test_default_v2_to_v3_adds_empty_active_run(suite)
+	_test_default_v2_to_v3_settings_only_advance_version(suite)
+	_test_default_v2_to_v3_adds_m1_dungeon_defaults(suite)
+	_test_default_v2_to_v3_preserves_complete_launch_floor_plans(suite)
+	_test_default_v2_to_v3_rejects_unsafe_active_launch_run(suite)
+	_test_legacy_v0_migrates_through_v3_defaults(suite)
 	suite.finish(get_tree())
 
 
@@ -247,6 +263,149 @@ func _test_default_v1_to_v2_rejects_malformed_runtime_state(suite) -> void:
 		suite.assert_equal(source, original, "%s preserves the source document" % invalid_case["label"])
 
 
+func _test_default_v2_to_v3_adds_empty_active_run(suite) -> void:
+	var source := {
+		"schema_version": 2,
+		"document_kind": "profile",
+		"payload": {
+			"active_item_state": _empty_active_item_state(),
+			"reward_effect_state": {},
+			"progress": {"runs_completed": 7},
+		},
+	}
+	var original := source.duplicate(true)
+	var result = SaveMigrationRegistryScript.new().migrate(source, 3)
+	_suite_result_ok(suite, result, "schema v2 profile migrates to v3")
+	suite.assert_equal(source, original, "v2 to v3 migration preserves caller-owned input")
+	if not result.ok:
+		return
+	suite.assert_equal(result.payload.get("schema_version"), 3, "v3 migration advances profile schema")
+	suite.assert_equal(
+		result.payload.get("payload", {}).get("active_run_state"),
+		{},
+		"v3 installs the explicit no-active-run sentinel"
+	)
+	suite.assert_equal(
+		result.payload.get("payload", {}).get("progress"),
+		{"runs_completed": 7},
+		"v3 migration preserves unrelated progress"
+	)
+
+
+func _test_default_v2_to_v3_settings_only_advance_version(suite) -> void:
+	var source := {
+		"schema_version": 2,
+		"document_kind": "settings",
+		"payload": {"locale": "zh_CN"},
+	}
+	var result = SaveMigrationRegistryScript.new().migrate(source, 3)
+	_suite_result_ok(suite, result, "schema v2 settings migrate to v3")
+	if not result.ok:
+		return
+	suite.assert_equal(result.payload.get("schema_version"), 3, "settings schema advances to v3")
+	suite.assert_equal(result.payload.get("payload"), {"locale": "zh_CN"}, "settings payload is lossless")
+	suite.assert_true(
+		not (result.payload.get("payload", {}) as Dictionary).has("active_run_state"),
+		"settings never receive profile run state"
+	)
+
+
+func _test_default_v2_to_v3_adds_m1_dungeon_defaults(suite) -> void:
+	var active_run := _legacy_active_run("M1")
+	var source := {
+		"schema_version": 2,
+		"document_kind": "profile",
+		"payload": {
+			"active_item_state": _empty_active_item_state(),
+			"reward_effect_state": {},
+			"active_run_state": active_run,
+		},
+	}
+	var result = SaveMigrationRegistryScript.new().migrate(source, 3)
+	_suite_result_ok(suite, result, "active M1 run migrates with empty P14 domains")
+	if not result.ok:
+		return
+	var migrated_run := result.payload.get("payload", {}).get("active_run_state", {}) as Dictionary
+	suite.assert_equal(migrated_run.get("current_floor_index"), -1, "M1 run receives no Launch floor index")
+	suite.assert_equal(migrated_run.get("floor_plan"), {}, "M1 migration never invents a FloorPlan")
+	suite.assert_equal(migrated_run.get("completed_floor_ids"), [], "M1 run receives an empty floor prefix")
+	suite.assert_equal(migrated_run.get("run_economy"), {}, "M1 run receives an empty economy domain")
+	suite.assert_equal(migrated_run.get("seen_event_ids"), [], "M1 run receives an empty event prefix")
+	suite.assert_equal(migrated_run.get("merchant_state"), {}, "M1 run receives an empty merchant domain")
+	suite.assert_equal(migrated_run.get("floor_rule_state"), {}, "M1 run receives an empty floor-rule domain")
+
+
+func _test_default_v2_to_v3_preserves_complete_launch_floor_plans(suite) -> void:
+	for floor_index: int in [0, 2]:
+		var plan := _generated_floor_plan(floor_index)
+		suite.assert_true(not plan.is_empty(), "v2 Launch floor %d fixture generates" % floor_index)
+		if plan.is_empty():
+			continue
+		var active_run := _complete_launch_active_run(plan)
+		var source := {
+			"schema_version": 2,
+			"document_kind": "profile",
+			"payload": {
+				"active_item_state": _empty_active_item_state(),
+				"reward_effect_state": {},
+				"active_run_state": active_run.duplicate(true),
+			},
+		}
+		var original := source.duplicate(true)
+		var result = SaveMigrationRegistryScript.new().migrate(source, 3)
+		_suite_result_ok(suite, result, "complete v2 Launch floor %d migrates to v3" % floor_index)
+		suite.assert_equal(source, original, "complete v2 Launch floor %d preserves source bytes" % floor_index)
+		if result.ok:
+			suite.assert_equal(
+				result.payload.get("payload", {}).get("active_run_state"),
+				active_run,
+				"complete v2 Launch floor %d remains lossless" % floor_index
+			)
+
+
+func _test_default_v2_to_v3_rejects_unsafe_active_launch_run(suite) -> void:
+	for milestone: String in ["LAUNCH", "EXPANSION"]:
+		var active_run := _legacy_active_run(milestone)
+		var source := {
+			"schema_version": 2,
+			"document_kind": "profile",
+			"payload": {
+				"active_item_state": _empty_active_item_state(),
+				"reward_effect_state": {},
+				"active_run_state": active_run,
+			},
+		}
+		var original := source.duplicate(true)
+		var result = SaveMigrationRegistryScript.new().migrate(source, 3)
+		suite.assert_true(not result.ok, "%s run without FloorPlan fails closed" % milestone)
+		suite.assert_equal(
+			result.code,
+			&"MIGRATION_UNSAFE_ACTIVE_RUN",
+			"%s unsafe migration has its public typed code" % milestone
+		)
+		suite.assert_equal(result.metadata.get("from_version"), 2, "unsafe migration identifies source version")
+		suite.assert_equal(result.metadata.get("to_version"), 3, "unsafe migration identifies target version")
+		suite.assert_true(result.player_notice_required, "unsafe active-run migration requires a player notice")
+		suite.assert_equal(source, original, "unsafe migration preserves source bytes")
+
+
+func _test_legacy_v0_migrates_through_v3_defaults(suite) -> void:
+	var legacy := _read_json(LEGACY_FIXTURE_PATH, suite)
+	if legacy.is_empty():
+		return
+	var result = SaveMigrationRegistryScript.new().migrate(legacy, 3)
+	_suite_result_ok(suite, result, "legacy v0 profile migrates through schema v3")
+	if not result.ok:
+		return
+	suite.assert_equal(result.migrated_from, 0, "legacy v3 chain records v0 source")
+	suite.assert_equal(result.migrated_to, 3, "legacy v3 chain records v3 target")
+	suite.assert_equal(
+		result.payload.get("payload", {}).get("active_run_state"),
+		{},
+		"legacy v3 chain installs the no-active-run sentinel"
+	)
+
+
 func _empty_active_item_state() -> Dictionary:
 	return {
 		"schema_version": 1,
@@ -313,6 +472,90 @@ func _reward_effect_state() -> Dictionary:
 		"weapon": {"modifiers": {}, "runtime": {}},
 		"character": {"dash_invulnerable_bonus": 0.0},
 	}
+
+
+func _legacy_active_run(milestone: String) -> Dictionary:
+	return {
+		"schema_version": 1,
+		"run_id": "legacy_active_run",
+		"revision": 3,
+		"phase": 2,
+		"suspended": false,
+		"run_seed": 20261002,
+		"current_floor": 1,
+		"current_room": 2,
+		"room_total": 5,
+		"run_time_ms": 12000,
+		"resources": {},
+		"stats": {"kills": 2},
+		"events": [],
+		"build": {},
+		"open_offer": {},
+		"consumed_offer_ids": [],
+		"result": {},
+		"config": {"milestone": milestone},
+	}
+
+
+func _complete_launch_active_run(plan: Dictionary) -> Dictionary:
+	var floor_index := int(plan.get("floor_index", -1))
+	var completed_floor_ids: Array[String] = []
+	for index: int in range(maxi(0, floor_index)):
+		completed_floor_ids.append(FLOOR_IDS[index])
+	return {
+		"schema_version": 1,
+		"run_id": "legacy_active_run",
+		"revision": 3,
+		"phase": 2,
+		"suspended": false,
+		"run_seed": int(plan.get("run_seed", 20261002)),
+		"current_floor": floor_index + 1,
+		"current_room": (plan.get("selected_edge_ids", []) as Array).size(),
+		"room_total": _plan_room_total(plan),
+		"run_time_ms": 12000,
+		"resources": {},
+		"stats": {"kills": 2},
+		"events": [],
+		"build": {},
+		"open_offer": {},
+		"consumed_offer_ids": [],
+		"result": {},
+		"config": {"milestone": "LAUNCH"},
+		"current_floor_index": floor_index,
+		"floor_plan": plan.duplicate(true),
+		"completed_floor_ids": completed_floor_ids,
+		"run_economy": {},
+		"seen_event_ids": [],
+		"merchant_state": {},
+		"floor_rule_state": {},
+	}
+
+
+func _generated_floor_plan(floor_index: int) -> Dictionary:
+	var floors := _read_json_array(FLOOR_PATH)
+	var templates := _read_json_array(TEMPLATE_PATH)
+	if floor_index < 0 or floor_index >= floors.size() or templates.is_empty():
+		return {}
+	var generated: Dictionary = FloorPlanGeneratorScript.new().generate(
+		20261002, floors[floor_index], templates
+	)
+	return (generated.get("plan", {}) as Dictionary).duplicate(true)
+
+
+func _plan_room_total(plan: Dictionary) -> int:
+	for node_value: Variant in plan.get("nodes", []):
+		var node := node_value as Dictionary
+		if str(node.get("id", "")) == str(plan.get("boss_node_id", "boss")):
+			return int(node.get("layer", 0))
+	return 0
+
+
+func _read_json_array(path: String) -> Array:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return []
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	return parsed if parsed is Array else []
 
 
 func _suite_result_ok(suite, result, message: String) -> void:

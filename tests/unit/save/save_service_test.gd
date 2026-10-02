@@ -4,11 +4,24 @@ const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const SaveServiceScript := preload("res://scripts/save/save_service.gd")
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const DraftServiceScript := preload("res://scripts/rewards/draft_service.gd")
+const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
+const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
+const RunStateScript := preload("res://scripts/application/run_state.gd")
 const PlayerScene := preload("res://scenes/player/player.tscn")
 
 const GAME_VERSION := "0.4.0-dev"
 const PROFILE_ID := "slot_1"
 const SAVE_DOMAIN := "base"
+const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
+const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
+const FLOOR_IDS: Array[String] = [
+	"floor_ruins_of_remnant",
+	"floor_void_forest",
+	"floor_time_rift",
+	"floor_plane_forge",
+	"floor_throne_of_void",
+]
 
 var _test_root: String = ""
 var _clock_tick: int = 0
@@ -31,6 +44,12 @@ func _run() -> void:
 
 	_test_first_save_and_settings_isolation(suite)
 	_test_v1_profile_and_settings_migrate_on_production_load(suite)
+	_test_v2_profile_and_settings_rewrite_to_v3(suite)
+	_test_v2_active_launch_runs_rewrite_to_v3(suite)
+	_test_native_v3_active_run_round_trip(suite)
+	_test_real_consumed_draft_offer_id_round_trip(suite)
+	_test_unsafe_active_launch_migration_refuses_recovery(suite)
+	_test_floor_plan_digest_corruption_fails_closed(suite)
 	await _test_real_launch_player_reward_state_survives_disk_round_trip(suite)
 	_test_profile_and_domain_isolation(suite)
 	_test_three_save_backup_order(suite)
@@ -199,6 +218,11 @@ func _test_v1_profile_and_settings_migrate_on_production_load(suite) -> void:
 		{},
 		"production profile migration installs explicit empty reward-effect state"
 	)
+	suite.assert_equal(
+		loaded_profile.payload.get("active_run_state"),
+		{},
+		"production profile migration installs explicit empty active-run state"
+	)
 
 	var settings_payload := _settings_payload("en", 0.6)
 	var settings_saved = service.save_settings(settings_payload)
@@ -220,6 +244,165 @@ func _test_v1_profile_and_settings_migrate_on_production_load(suite) -> void:
 		settings_payload,
 		"settings migration preserves the exact settings payload without profile defaults"
 	)
+	suite.assert_equal(
+		_read_json(settings_path, suite).get("schema_version"),
+		3.0,
+		"production settings migration rewrites the primary as schema v3"
+	)
+
+
+func _test_v2_profile_and_settings_rewrite_to_v3(suite) -> void:
+	var service = _new_service("v2_production_migration", _content_snapshot("0"), suite)
+	suite.assert_true(service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"runs_completed": 9}).ok, "v3 profile fixture saves before v2 downgrade")
+	var profile_path := _profile_path("v2_production_migration", "primary.json")
+	var legacy_profile := _read_json(profile_path, suite)
+	legacy_profile["schema_version"] = 2
+	(legacy_profile["payload"] as Dictionary).erase("active_run_state")
+	_resign(legacy_profile)
+	_write_text(profile_path, JSON.stringify(legacy_profile, "", true, true))
+	var loaded_profile = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_true(loaded_profile.ok, "schema v2 profile migrates through the production reader")
+	suite.assert_equal(loaded_profile.payload.get("active_run_state"), {}, "v2 profile gains no-active-run sentinel")
+	suite.assert_equal(_read_json(profile_path, suite).get("schema_version"), 3.0, "migrated profile primary rewrites as schema v3")
+
+	var settings_payload := _settings_payload("zh_CN", 0.55)
+	suite.assert_true(service.save_settings(settings_payload).ok, "v3 settings fixture saves before v2 downgrade")
+	var settings_path := _case_root("v2_production_migration").path_join("global/settings/primary.json")
+	var legacy_settings := _read_json(settings_path, suite)
+	legacy_settings["schema_version"] = 2
+	_resign(legacy_settings)
+	_write_text(settings_path, JSON.stringify(legacy_settings, "", true, true))
+	var loaded_settings = service.load_settings()
+	suite.assert_true(loaded_settings.ok, "schema v2 settings migrate through the production reader")
+	suite.assert_equal(loaded_settings.payload, settings_payload, "v2 settings payload remains lossless")
+	suite.assert_equal(_read_json(settings_path, suite).get("schema_version"), 3.0, "migrated settings primary rewrites as schema v3")
+
+
+func _test_v2_active_launch_runs_rewrite_to_v3(suite) -> void:
+	for floor_index: int in [0, 2]:
+		var case_name := "v2_active_launch_floor_%d" % floor_index
+		var plan := _generated_floor_plan(floor_index)
+		suite.assert_true(not plan.is_empty(), "%s generates its complete FloorPlan" % case_name)
+		if plan.is_empty():
+			continue
+		var active_run := _active_run_fixture("LAUNCH", plan)
+		var service = _new_service(case_name, _content_snapshot("%x" % (floor_index + 5)), suite)
+		suite.assert_true(
+			service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run}).ok,
+			"%s writes a native v3 setup fixture" % case_name
+		)
+		var profile_path := _profile_path(case_name, "primary.json")
+		var legacy_profile := _read_json(profile_path, suite)
+		legacy_profile["schema_version"] = 2
+		_resign(legacy_profile)
+		_write_text(profile_path, JSON.stringify(legacy_profile, "", true, true))
+
+		var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+		suite.assert_true(
+			loaded.ok,
+			"%s migrates a complete active Launch run: %s" % [case_name, str(loaded.to_dictionary())]
+		)
+		if loaded.ok:
+			suite.assert_equal(
+				loaded.payload.get("active_run_state"),
+				active_run,
+				"%s preserves the complete P14 state" % case_name
+			)
+		suite.assert_equal(
+			_read_json(profile_path, suite).get("schema_version"),
+			3.0,
+			"%s rewrites the migrated primary as schema v3" % case_name
+		)
+
+
+func _test_native_v3_active_run_round_trip(suite) -> void:
+	var plan := _generated_floor_plan()
+	suite.assert_true(not plan.is_empty(), "SaveService active-run fixture generates a FloorPlan")
+	if plan.is_empty():
+		return
+	var active_run := _active_run_fixture("LAUNCH", plan)
+	var service = _new_service("active_run_round_trip", _content_snapshot("3"), suite)
+	var saved = service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run})
+	suite.assert_true(saved.ok, "native v3 active run writes to disk: %s" % str(saved.to_dictionary()))
+	var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_true(loaded.ok, "native v3 active run loads from disk: %s" % str(loaded.to_dictionary()))
+	if loaded.ok:
+		suite.assert_equal(loaded.payload.get("active_run_state"), active_run, "active RunState and FloorPlan survive SaveService JSON I/O")
+
+
+func _test_real_consumed_draft_offer_id_round_trip(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report: RefCounted = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		GAME_VERSION,
+		&"M1"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "real DraftService Save fixture loads the M1 Base Pack")
+	if report.has_blocking_errors():
+		return
+	var state = RunStateScript.new()
+	state.reset_domain({"milestone": "M1", "seed": 20261002}, "run-save-service-draft")
+	state.current_room = 1
+	state.revision = 1
+	var rooms: Array[Dictionary] = M1RoomPlanScript.definitions()
+	var created = DraftServiceScript.new().create_offer(registry, state.snapshot(), rooms[0])
+	suite.assert_true(created.ok, "real DraftService creates the persisted offer")
+	if not created.ok:
+		return
+	var offer := created.context.get("offer", {}) as Dictionary
+	var offer_id := str(offer.get("offer_id", ""))
+	suite.assert_true(offer_id.contains(":"), "production DraftService offer ID uses its composite format")
+	state.open_offer = offer.duplicate(true)
+	suite.assert_true(state.mark_offer_consumed(offer_id), "RunState records the real consumed offer ID")
+	state.open_offer = {}
+	var active_run: Dictionary = state.snapshot()
+	var service = _new_service("real_draft_offer_round_trip", _content_snapshot("e"), suite)
+	var saved = service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run})
+	suite.assert_true(saved.ok, "consumed DraftService offer writes through SaveService: %s" % str(saved.to_dictionary()))
+	var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_true(loaded.ok, "consumed DraftService offer reloads through SaveService: %s" % str(loaded.to_dictionary()))
+	if loaded.ok:
+		suite.assert_equal(
+			loaded.payload.get("active_run_state"),
+			active_run,
+			"DraftService to RunState snapshot remains lossless after disk round trip"
+		)
+
+
+func _test_unsafe_active_launch_migration_refuses_recovery(suite) -> void:
+	var service = _new_service("unsafe_active_launch", _content_snapshot("4"), suite)
+	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "backup"})
+	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "primary"})
+	var primary_path := _profile_path("unsafe_active_launch", "primary.json")
+	var legacy := _read_json(primary_path, suite)
+	legacy["schema_version"] = 2
+	legacy["payload"]["active_run_state"] = _legacy_active_run("LAUNCH")
+	_resign(legacy)
+	var legacy_bytes := JSON.stringify(legacy, "", true, true)
+	_write_text(primary_path, legacy_bytes)
+
+	var result = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_equal(result.code, &"MIGRATION_UNSAFE_ACTIVE_RUN", "unsafe active Launch migration keeps its public typed failure")
+	suite.assert_true(result.player_notice_required, "unsafe active Launch migration requires a player notice")
+	suite.assert_equal(_read_text(primary_path), legacy_bytes, "unsafe active Launch bytes remain untouched")
+	suite.assert_equal(_quarantine_file_count("unsafe_active_launch"), 0, "unsafe migration never quarantines or rolls back to a backup")
+
+
+func _test_floor_plan_digest_corruption_fails_closed(suite) -> void:
+	var plan := _generated_floor_plan()
+	if plan.is_empty():
+		suite.assert_true(false, "digest corruption fixture generates")
+		return
+	var service = _new_service("floor_plan_digest_corruption", _content_snapshot("5"), suite)
+	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": _active_run_fixture("LAUNCH", plan)})
+	var primary_path := _profile_path("floor_plan_digest_corruption", "primary.json")
+	var corrupted := _read_json(primary_path, suite)
+	corrupted["payload"]["active_run_state"]["floor_plan"]["generation_digest"] = "0".repeat(64)
+	_resign(corrupted)
+	_write_text(primary_path, JSON.stringify(corrupted, "", true, true))
+	var result = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_equal(result.code, &"CORRUPT", "valid envelope integrity cannot hide FloorPlan digest drift")
+	suite.assert_true(_quarantine_file_count("floor_plan_digest_corruption") >= 1, "digest-drifted primary is preserved in quarantine")
 
 
 func _test_first_save_and_settings_isolation(suite) -> void:
@@ -235,7 +418,7 @@ func _test_first_save_and_settings_isolation(suite) -> void:
 	suite.assert_equal(
 		loaded.payload,
 		_native_profile_payload({"runs_completed": 1.0}),
-		"profile payload round trips through canonical JSON with v2 runtime defaults"
+		"profile payload round trips through canonical JSON with v3 runtime defaults"
 	)
 
 	var settings_payload := _settings_payload("en", 0.65)
@@ -385,7 +568,7 @@ func _test_forward_version_refuses_backup_fallback(suite) -> void:
 	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "backup"})
 	service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "primary"})
 	var future := _read_json(_profile_path("forward_refusal", "primary.json"), suite)
-	future["schema_version"] = 3
+	future["schema_version"] = 4
 	_write_text(_profile_path("forward_refusal", "primary.json"), JSON.stringify(future, "", true, true))
 
 	var result = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
@@ -648,7 +831,91 @@ func _native_profile_payload(values: Dictionary) -> Dictionary:
 	var payload := values.duplicate(true)
 	payload["active_item_state"] = _empty_active_item_state()
 	payload["reward_effect_state"] = {}
+	payload["active_run_state"] = {}
 	return payload
+
+
+func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionary:
+	var floor_index := int(floor_plan.get("floor_index", -1))
+	var selected_count := (floor_plan.get("selected_edge_ids", []) as Array).size()
+	var completed_floor_ids: Array[String] = []
+	for index: int in range(maxi(0, floor_index)):
+		completed_floor_ids.append(FLOOR_IDS[index])
+	return {
+		"schema_version": 1,
+		"run_id": "run-save-service-v3",
+		"revision": 0,
+		"phase": 1,
+		"suspended": false,
+		"run_seed": int(floor_plan.get("run_seed", 20261001)),
+		"current_floor": floor_index + 1 if floor_index >= 0 else 1,
+		"current_room": selected_count,
+		"room_total": _plan_room_total(floor_plan),
+		"run_time_ms": 0,
+		"resources": {},
+		"stats": {"kills": 0},
+		"events": [],
+		"build": {},
+		"open_offer": {},
+		"consumed_offer_ids": [],
+		"result": {},
+		"config": {"milestone": milestone},
+		"current_floor_index": floor_index,
+		"floor_plan": floor_plan.duplicate(true),
+		"completed_floor_ids": completed_floor_ids,
+		"run_economy": {},
+		"seen_event_ids": [],
+		"merchant_state": {},
+		"floor_rule_state": {},
+	}
+
+
+func _legacy_active_run(milestone: String) -> Dictionary:
+	var run := _active_run_fixture(milestone, {})
+	for field: String in [
+		"current_floor_index", "floor_plan", "completed_floor_ids", "run_economy",
+		"seen_event_ids", "merchant_state", "floor_rule_state",
+	]:
+		run.erase(field)
+	return run
+
+
+func _generated_floor_plan(floor_index: int = 0) -> Dictionary:
+	var floors := _read_json_array(FLOOR_PATH)
+	var templates := _read_json_array(TEMPLATE_PATH)
+	if floor_index < 0 or floor_index >= floors.size() or templates.is_empty():
+		return {}
+	var generated: Dictionary = FloorPlanGeneratorScript.new().generate(
+		20261001, floors[floor_index], templates
+	)
+	return (generated.get("plan", {}) as Dictionary).duplicate(true)
+
+
+func _read_json_array(path: String) -> Array:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return []
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	return parsed if parsed is Array else []
+
+
+func _plan_room_total(plan: Dictionary) -> int:
+	if plan.is_empty():
+		return 5
+	for node_value: Variant in plan.get("nodes", []):
+		var node := node_value as Dictionary
+		if str(node.get("id", "")) == str(plan.get("boss_node_id", "boss")):
+			return int(node.get("layer", 0))
+	return 0
+
+
+func _read_text(path: String) -> String:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var contents := file.get_as_text()
+	file.close()
+	return contents
 
 
 func _remove_tree(path: String) -> void:

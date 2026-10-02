@@ -5,9 +5,10 @@ const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 
 const MAGIC := "PWSAVE"
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
 const INTEGRITY_ALGORITHM := "sha256"
 const VALID_DOCUMENT_KINDS: Array[String] = ["profile", "settings"]
 const PROFILE_FIELDS: Array[String] = [
@@ -68,6 +69,21 @@ const LEGACY_SETTINGS_REQUIRED_FIELDS: Array[String] = [
 	"hit_flash_enabled",
 	"reduced_motion",
 ]
+const ACTIVE_RUN_FIELDS: Array[String] = [
+	"schema_version", "run_id", "revision", "phase", "suspended", "run_seed",
+	"current_floor", "current_room", "room_total", "run_time_ms", "resources",
+	"stats", "events", "build", "open_offer", "consumed_offer_ids", "result",
+	"config", "current_floor_index", "floor_plan", "completed_floor_ids",
+	"run_economy", "seen_event_ids", "merchant_state", "floor_rule_state",
+]
+const FLOOR_IDS: Array[String] = [
+	"floor_ruins_of_remnant",
+	"floor_void_forest",
+	"floor_time_rift",
+	"floor_plane_forge",
+	"floor_throne_of_void",
+]
+const FLOOR_PLAN_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
 
 static func create_profile(
@@ -91,6 +107,8 @@ static func create_profile(
 		normalized_payload["active_item_state"] = empty_active_item_state()
 	if not normalized_payload.has("reward_effect_state"):
 		normalized_payload["reward_effect_state"] = {}
+	if not normalized_payload.has("active_run_state"):
+		normalized_payload["active_run_state"] = {}
 	normalized_payload = _normalize_profile_payload(normalized_payload, SCHEMA_VERSION)
 	var common_error := _common_create_error(
 		sequence,
@@ -358,6 +376,13 @@ static func _profile_payload_error(payload: Dictionary, schema_version: int) -> 
 		and not ReplayRecorderScript.validate_full_player_reward_effect_state(reward_state)
 	):
 		return {"field": "payload.reward_effect_state", "reason": "invalid"}
+	if schema_version < 3:
+		return {}
+	if not payload.has("active_run_state"):
+		return {"field": "payload.active_run_state", "reason": "missing"}
+	var active_run_error := _active_run_state_error(payload["active_run_state"])
+	if not active_run_error.is_empty():
+		return active_run_error
 	return {}
 
 
@@ -365,7 +390,10 @@ static func _normalize_profile_payload(payload: Dictionary, schema_version: int)
 	var normalized := payload.duplicate(true)
 	if schema_version < 2:
 		return normalized
-	for field: String in ["active_item_state", "reward_effect_state"]:
+	var runtime_fields: Array[String] = ["active_item_state", "reward_effect_state"]
+	if schema_version >= 3:
+		runtime_fields.append("active_run_state")
+	for field: String in runtime_fields:
 		if normalized.get(field) is Dictionary:
 			normalized[field] = _normalize_persisted_integer_fields(
 				normalized[field],
@@ -391,7 +419,9 @@ static func _normalize_persisted_integer_fields(value: Variant, parent_field: St
 		"current_token", "revision", "next_sample_sequence",
 		"cooldown_remaining_frames", "damage_attack_generation",
 		"damage_action_token", "guard_generation", "guard_elapsed_frames",
-		"next_fallback_attack_generation",
+		"next_fallback_attack_generation", "phase", "run_seed", "current_floor",
+		"current_room", "room_total", "run_time_ms", "current_floor_index",
+		"floor_index", "layer", "choice_order", "kills", "seed",
 	]
 	const INTEGER_ARRAY_FIELDS: Array[String] = [
 		"reward_invulnerability_tokens", "claimed_rewind_generations",
@@ -400,6 +430,7 @@ static func _normalize_persisted_integer_fields(value: Variant, parent_field: St
 	const INTEGER_MAP_FIELDS: Array[String] = [
 		"resource_regen_frame_accumulators",
 		"reward_invulnerability_remaining",
+		"archetypes",
 	]
 	if typeof(value) == TYPE_STRING_NAME and parent_field == "code":
 		return str(value)
@@ -427,6 +458,355 @@ static func _normalize_persisted_integer_fields(value: Variant, parent_field: St
 		else:
 			normalized[key] = _normalize_persisted_integer_fields(child, key)
 	return normalized
+
+
+static func _active_run_state_error(value: Variant) -> Dictionary:
+	if not value is Dictionary:
+		return _run_error("", "type")
+	var run := value as Dictionary
+	if run.is_empty():
+		return {}
+	if not _has_exact_fields(run, ACTIVE_RUN_FIELDS):
+		return _run_error("", "fields")
+	if typeof(run["schema_version"]) != TYPE_INT or int(run["schema_version"]) != 1:
+		return _run_error("schema_version", "value")
+	if typeof(run["run_id"]) != TYPE_STRING or not _stable_identifier_is_valid(str(run["run_id"]), 96):
+		return _run_error("run_id", "value")
+	for field: String in ["revision", "run_seed", "current_floor", "current_room", "room_total", "run_time_ms"]:
+		if typeof(run[field]) != TYPE_INT:
+			return _run_error(field, "type")
+	for field: String in ["revision", "current_room", "run_time_ms"]:
+		if int(run[field]) < 0:
+			return _run_error(field, "range")
+	for field: String in ["current_floor", "room_total"]:
+		if int(run[field]) < 1:
+			return _run_error(field, "range")
+	if typeof(run["phase"]) != TYPE_INT or int(run["phase"]) < 0 or int(run["phase"]) > 11:
+		return _run_error("phase", "range")
+	if typeof(run["suspended"]) != TYPE_BOOL:
+		return _run_error("suspended", "type")
+	for field: String in [
+		"resources", "stats", "build", "open_offer", "result", "config",
+		"floor_plan", "run_economy", "merchant_state", "floor_rule_state",
+	]:
+		if not run[field] is Dictionary:
+			return _run_error(field, "type")
+	if not run["events"] is Array:
+		return _run_error("events", "type")
+	var consumed_error := _offer_unique_string_array_error(
+		run["consumed_offer_ids"], "consumed_offer_ids"
+	)
+	if not consumed_error.is_empty():
+		return consumed_error
+	if typeof(run["current_floor_index"]) != TYPE_INT:
+		return _run_error("current_floor_index", "type")
+	var completed_error := _stable_unique_string_array_error(
+		run["completed_floor_ids"], "completed_floor_ids"
+	)
+	if not completed_error.is_empty():
+		return completed_error
+	var event_error := _stable_unique_string_array_error(run["seen_event_ids"], "seen_event_ids")
+	if not event_error.is_empty():
+		return event_error
+
+	var config := run["config"] as Dictionary
+	if typeof(config.get("milestone")) != TYPE_STRING:
+		return _run_error("config.milestone", "type")
+	var milestone := str(config["milestone"])
+	if milestone not in ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]:
+		return _run_error("config.milestone", "value")
+	var floor_index := int(run["current_floor_index"])
+	var floor_plan := run["floor_plan"] as Dictionary
+	var completed: Array = run["completed_floor_ids"]
+	if not FLOOR_PLAN_MILESTONES.has(milestone):
+		if (
+			floor_index != -1
+			or not floor_plan.is_empty()
+			or not completed.is_empty()
+			or not (run["run_economy"] as Dictionary).is_empty()
+			or not (run["seen_event_ids"] as Array).is_empty()
+			or not (run["merchant_state"] as Dictionary).is_empty()
+			or not (run["floor_rule_state"] as Dictionary).is_empty()
+		):
+			return _run_error("floor_plan", "non_launch_state")
+		return {}
+
+	if floor_plan.is_empty():
+		if floor_index != -1:
+			return _run_error("current_floor_index", "plan_missing")
+		if not completed.is_empty():
+			return _run_error("completed_floor_ids", "before_floor_prefix")
+		if (
+			not (run["run_economy"] as Dictionary).is_empty()
+			or not (run["seen_event_ids"] as Array).is_empty()
+			or not (run["merchant_state"] as Dictionary).is_empty()
+			or not (run["floor_rule_state"] as Dictionary).is_empty()
+		):
+			return _run_error("floor_plan", "before_floor_state")
+		return {}
+	if floor_index < 0 or floor_index >= FLOOR_IDS.size():
+		return _run_error("current_floor_index", "range")
+	if typeof(floor_plan.get("floor_index")) != TYPE_INT or int(floor_plan["floor_index"]) != floor_index:
+		return _run_error("current_floor_index", "plan_mismatch")
+	if int(run["current_floor"]) != floor_index + 1:
+		return _run_error("current_floor", "floor_index_mismatch")
+	var prior_completed: Array[String] = []
+	for index: int in range(floor_index):
+		prior_completed.append(FLOOR_IDS[index])
+	var current_completed := prior_completed.duplicate()
+	current_completed.append(FLOOR_IDS[floor_index])
+	if completed != prior_completed and completed != current_completed:
+		return _run_error("completed_floor_ids", "prefix_mismatch")
+	var floor_plan_error := _floor_plan_error(floor_plan, int(run["run_seed"]))
+	if not floor_plan_error.is_empty():
+		return floor_plan_error
+	if str(floor_plan["floor_id"]) != FLOOR_IDS[floor_index]:
+		return _run_error("floor_plan.floor_id", "index_mismatch")
+	if int(run["current_room"]) != (floor_plan["selected_edge_ids"] as Array).size():
+		return _run_error("current_room", "plan_mismatch")
+	var boss_node := _plan_node(floor_plan, str(floor_plan["boss_node_id"]))
+	if boss_node.is_empty() or int(run["room_total"]) != int(boss_node["layer"]):
+		return _run_error("room_total", "plan_mismatch")
+	if completed == current_completed and (
+		str(floor_plan["current_node_id"]) != str(floor_plan["boss_node_id"])
+		or not bool(boss_node["cleared"])
+	):
+		return _run_error("completed_floor_ids", "current_floor_not_complete")
+	return {}
+
+
+static func _floor_plan_error(plan: Dictionary, run_seed: int) -> Dictionary:
+	if not _has_exact_fields(plan, FloorPlanScript.ROOT_FIELDS):
+		return _run_error("floor_plan", "fields")
+	if typeof(plan["schema_version"]) != TYPE_INT or int(plan["schema_version"]) != FloorPlanScript.SCHEMA_VERSION:
+		return _run_error("floor_plan.schema_version", "value")
+	if typeof(plan["generator_version"]) != TYPE_STRING or str(plan["generator_version"]) != FloorPlanScript.GENERATOR_VERSION:
+		return _run_error("floor_plan.generator_version", "value")
+	for field: String in ["run_seed", "floor_index", "revision"]:
+		if typeof(plan[field]) != TYPE_INT:
+			return _run_error("floor_plan.%s" % field, "type")
+	if int(plan["run_seed"]) != run_seed:
+		return _run_error("floor_plan.run_seed", "run_mismatch")
+	if int(plan["floor_index"]) < 0 or int(plan["floor_index"]) >= FLOOR_IDS.size():
+		return _run_error("floor_plan.floor_index", "range")
+	if int(plan["revision"]) < 0:
+		return _run_error("floor_plan.revision", "range")
+	for field: String in ["floor_id", "entry_node_id", "boss_node_id", "current_node_id"]:
+		if typeof(plan[field]) != TYPE_STRING or not _route_identifier_is_valid(str(plan[field])):
+			return _run_error("floor_plan.%s" % field, "value")
+	if str(plan["entry_node_id"]) != "entry" or str(plan["boss_node_id"]) != "boss":
+		return _run_error("floor_plan.entry_node_id", "canonical_ids")
+	for field: String in ["nodes", "edges", "selected_edge_ids", "visited_node_ids", "abandoned_node_ids"]:
+		if not plan[field] is Array:
+			return _run_error("floor_plan.%s" % field, "type")
+
+	var nodes_by_id: Dictionary = {}
+	for index: int in range((plan["nodes"] as Array).size()):
+		var node_value: Variant = (plan["nodes"] as Array)[index]
+		if not node_value is Dictionary:
+			return _run_error("floor_plan.nodes[%d]" % index, "type")
+		var node := node_value as Dictionary
+		if not _has_exact_fields(node, FloorPlanScript.NODE_FIELDS):
+			return _run_error("floor_plan.nodes[%d]" % index, "fields")
+		for field: String in ["id", "room_type", "template_id", "encounter_id", "event_id", "merchant_id", "reward_policy_id", "seed_channel_suffix"]:
+			if typeof(node[field]) != TYPE_STRING:
+				return _run_error("floor_plan.nodes[%d].%s" % [index, field], "type")
+		if not _route_identifier_is_valid(str(node["id"])) or nodes_by_id.has(str(node["id"])):
+			return _run_error("floor_plan.nodes[%d].id" % index, "invalid_or_duplicate")
+		if typeof(node["layer"]) != TYPE_INT or int(node["layer"]) < 0:
+			return _run_error("floor_plan.nodes[%d].layer" % index, "type_or_range")
+		for field: String in ["revealed", "visited", "cleared"]:
+			if typeof(node[field]) != TYPE_BOOL:
+				return _run_error("floor_plan.nodes[%d].%s" % [index, field], "type")
+		nodes_by_id[str(node["id"])] = node
+	if not nodes_by_id.has("entry") or not nodes_by_id.has("boss") or not nodes_by_id.has(str(plan["current_node_id"])):
+		return _run_error("floor_plan.nodes", "required_node_missing")
+	var entry_node := nodes_by_id["entry"] as Dictionary
+	var boss_node := nodes_by_id["boss"] as Dictionary
+	if int(entry_node["layer"]) != 0 or str(entry_node["room_type"]) != "entry":
+		return _run_error("floor_plan.nodes", "entry_identity")
+	if int(boss_node["layer"]) < 1 or str(boss_node["room_type"]) != "boss":
+		return _run_error("floor_plan.nodes", "boss_identity")
+	for node_id_value: Variant in nodes_by_id.keys():
+		var node := nodes_by_id[node_id_value] as Dictionary
+		if str(node_id_value) != "boss" and str(node["room_type"]) == "boss":
+			return _run_error("floor_plan.nodes", "boss_identity")
+		if int(node["layer"]) > int(boss_node["layer"]):
+			return _run_error("floor_plan.nodes", "layer_range")
+
+	var edges_by_id: Dictionary = {}
+	var outgoing: Dictionary = {}
+	var incoming: Dictionary = {}
+	for node_id_value: Variant in nodes_by_id.keys():
+		outgoing[str(node_id_value)] = []
+		incoming[str(node_id_value)] = []
+	for index: int in range((plan["edges"] as Array).size()):
+		var edge_value: Variant = (plan["edges"] as Array)[index]
+		if not edge_value is Dictionary:
+			return _run_error("floor_plan.edges[%d]" % index, "type")
+		var edge := edge_value as Dictionary
+		if not _has_exact_fields(edge, FloorPlanScript.EDGE_FIELDS):
+			return _run_error("floor_plan.edges[%d]" % index, "fields")
+		for field: String in ["id", "source_node_id", "destination_node_id"]:
+			if typeof(edge[field]) != TYPE_STRING or not _route_identifier_is_valid(str(edge[field])):
+				return _run_error("floor_plan.edges[%d].%s" % [index, field], "value")
+		var edge_id := str(edge["id"])
+		var source_id := str(edge["source_node_id"])
+		var destination_id := str(edge["destination_node_id"])
+		if edges_by_id.has(edge_id):
+			return _run_error("floor_plan.edges[%d].id" % index, "duplicate")
+		if not nodes_by_id.has(source_id) or not nodes_by_id.has(destination_id):
+			return _run_error("floor_plan.edges[%d]" % index, "unknown_node")
+		if int((nodes_by_id[destination_id] as Dictionary)["layer"]) != int((nodes_by_id[source_id] as Dictionary)["layer"]) + 1:
+			return _run_error("floor_plan.edges[%d]" % index, "layer_mismatch")
+		if typeof(edge["choice_order"]) != TYPE_INT or int(edge["choice_order"]) < 0:
+			return _run_error("floor_plan.edges[%d].choice_order" % index, "type_or_range")
+		if typeof(edge["locked"]) != TYPE_BOOL:
+			return _run_error("floor_plan.edges[%d].locked" % index, "type")
+		if not edge["route_summary_facts"] is Dictionary:
+			return _run_error("floor_plan.edges[%d].route_summary_facts" % index, "type")
+		var facts := edge["route_summary_facts"] as Dictionary
+		if not _has_exact_fields(facts, FloorPlanScript.ROUTE_SUMMARY_FIELDS):
+			return _run_error("floor_plan.edges[%d].route_summary_facts" % index, "fields")
+		var destination := nodes_by_id[destination_id] as Dictionary
+		if str(facts.get("room_type", "")) != str(destination["room_type"]) or str(facts.get("template_id", "")) != str(destination["template_id"]):
+			return _run_error("floor_plan.edges[%d].route_summary_facts" % index, "destination_mismatch")
+		edges_by_id[edge_id] = edge
+		(outgoing[source_id] as Array).append(edge)
+		(incoming[destination_id] as Array).append(edge)
+	if not (incoming["entry"] as Array).is_empty() or not (outgoing["boss"] as Array).is_empty():
+		return _run_error("floor_plan.edges", "terminal_direction")
+	for node_id_value: Variant in nodes_by_id.keys():
+		var node_id := str(node_id_value)
+		if node_id != "entry" and (incoming[node_id] as Array).is_empty():
+			return _run_error("floor_plan.edges", "orphan_node")
+		if node_id != "boss" and (outgoing[node_id] as Array).is_empty():
+			return _run_error("floor_plan.edges", "dead_end_node")
+		if (outgoing[node_id] as Array).size() > 3:
+			return _run_error("floor_plan.edges", "too_many_choices")
+		var choice_orders: Array[int] = []
+		for edge_value: Variant in outgoing[node_id]:
+			choice_orders.append(int((edge_value as Dictionary)["choice_order"]))
+		choice_orders.sort()
+		for order_index: int in range(choice_orders.size()):
+			if choice_orders[order_index] != order_index:
+				return _run_error("floor_plan.edges", "choice_order")
+	if _reachable_ids("entry", outgoing, false).size() != nodes_by_id.size():
+		return _run_error("floor_plan.edges", "unreachable_node")
+	if _reachable_ids("boss", incoming, true).size() != nodes_by_id.size():
+		return _run_error("floor_plan.edges", "boss_unreachable")
+
+	for field: String in ["selected_edge_ids", "visited_node_ids", "abandoned_node_ids"]:
+		var known := edges_by_id if field == "selected_edge_ids" else nodes_by_id
+		var array_error := _known_unique_route_array_error(plan[field], known, "floor_plan.%s" % field)
+		if not array_error.is_empty():
+			return array_error
+	var cursor := str(plan["entry_node_id"])
+	var expected_visited: Array[String] = [cursor]
+	for selected_id_value: Variant in plan["selected_edge_ids"]:
+		var selected := edges_by_id[str(selected_id_value)] as Dictionary
+		if bool(selected["locked"]) or str(selected["source_node_id"]) != cursor:
+			return _run_error("floor_plan.selected_edge_ids", "route_prefix")
+		cursor = str(selected["destination_node_id"])
+		expected_visited.append(cursor)
+	if cursor != str(plan["current_node_id"]) or (plan["visited_node_ids"] as Array) != expected_visited:
+		return _run_error("floor_plan.visited_node_ids", "route_prefix")
+	if int(plan["revision"]) != (plan["selected_edge_ids"] as Array).size():
+		return _run_error("floor_plan.revision", "route_prefix")
+	for node_id_value: Variant in nodes_by_id.keys():
+		var node := nodes_by_id[node_id_value] as Dictionary
+		var expected_visit := expected_visited.has(str(node_id_value))
+		if bool(node["visited"]) != expected_visit or (expected_visit and not bool(node["revealed"])):
+			return _run_error("floor_plan.nodes", "visit_flags")
+	var reachable_from_current := _reachable_ids(str(plan["current_node_id"]), outgoing, false)
+	var expected_abandoned: Array[String] = []
+	for node_value: Variant in plan["nodes"]:
+		var node_id := str((node_value as Dictionary)["id"])
+		if not reachable_from_current.has(node_id) and not expected_visited.has(node_id):
+			expected_abandoned.append(node_id)
+	if (plan["abandoned_node_ids"] as Array) != expected_abandoned:
+		return _run_error("floor_plan.abandoned_node_ids", "route_prefix")
+	if typeof(plan["generation_digest"]) != TYPE_STRING or not _is_sha256_hex(str(plan["generation_digest"])):
+		return _run_error("floor_plan.generation_digest", "format")
+	if str(plan["generation_digest"]) != FloorPlanScript.compute_generation_digest(plan):
+		return _run_error("floor_plan.generation_digest", "mismatch")
+	return {}
+
+
+static func _reachable_ids(start_id: String, adjacency: Dictionary, reverse: bool) -> Dictionary:
+	var reached: Dictionary = {}
+	var pending: Array[String] = [start_id]
+	while not pending.is_empty():
+		var node_id: String = pending.pop_front()
+		if reached.has(node_id):
+			continue
+		reached[node_id] = true
+		for edge_value: Variant in adjacency.get(node_id, []):
+			var edge := edge_value as Dictionary
+			var next_id := str(edge["source_node_id"] if reverse else edge["destination_node_id"])
+			if not reached.has(next_id):
+				pending.append(next_id)
+	return reached
+
+
+static func _plan_node(plan: Dictionary, node_id: String) -> Dictionary:
+	for node_value: Variant in plan.get("nodes", []):
+		if node_value is Dictionary and str((node_value as Dictionary).get("id", "")) == node_id:
+			return (node_value as Dictionary).duplicate(true)
+	return {}
+
+
+static func _stable_unique_string_array_error(value: Variant, field: String) -> Dictionary:
+	if not value is Array:
+		return _run_error(field, "type")
+	var seen: Dictionary = {}
+	for index: int in range((value as Array).size()):
+		var item: Variant = (value as Array)[index]
+		if typeof(item) != TYPE_STRING or not _stable_identifier_is_valid(str(item), 96):
+			return _run_error("%s[%d]" % [field, index], "value")
+		if seen.has(str(item)):
+			return _run_error(field, "duplicate")
+		seen[str(item)] = true
+	return {}
+
+
+static func _offer_unique_string_array_error(value: Variant, field: String) -> Dictionary:
+	if not value is Array:
+		return _run_error(field, "type")
+	var seen: Dictionary = {}
+	for index: int in range((value as Array).size()):
+		var item: Variant = (value as Array)[index]
+		if typeof(item) != TYPE_STRING or not _offer_identifier_is_valid(str(item)):
+			return _run_error("%s[%d]" % [field, index], "value")
+		if seen.has(str(item)):
+			return _run_error(field, "duplicate")
+		seen[str(item)] = true
+	return {}
+
+
+static func _known_unique_route_array_error(
+	value: Variant,
+	known: Dictionary,
+	field: String
+) -> Dictionary:
+	if not value is Array:
+		return _run_error(field, "type")
+	var seen: Dictionary = {}
+	for index: int in range((value as Array).size()):
+		var item: Variant = (value as Array)[index]
+		if typeof(item) != TYPE_STRING or not _route_identifier_is_valid(str(item)):
+			return _run_error("%s[%d]" % [field, index], "value")
+		if seen.has(str(item)):
+			return _run_error(field, "duplicate")
+		if not known.has(str(item)):
+			return _run_error("%s[%d]" % [field, index], "unknown")
+		seen[str(item)] = true
+	return {}
+
+
+static func _run_error(field: String, reason: String) -> Dictionary:
+	var suffix := "" if field.is_empty() else ".%s" % field
+	return {"field": "payload.active_run_state%s" % suffix, "reason": reason}
 
 
 static func empty_active_item_state() -> Dictionary:
@@ -615,6 +995,49 @@ static func _identifier_is_valid(value: Variant, max_length: int) -> bool:
 	for index: int in range(1, identifier.length()):
 		var codepoint := identifier.unicode_at(index)
 		if not _is_lower_ascii_alphanumeric(codepoint) and codepoint not in [45, 95]:
+			return false
+	return true
+
+
+static func _stable_identifier_is_valid(value: Variant, max_length: int) -> bool:
+	if typeof(value) != TYPE_STRING:
+		return false
+	var identifier := str(value)
+	if identifier.is_empty() or identifier.length() > max_length:
+		return false
+	if not _is_lower_ascii_alphanumeric(identifier.unicode_at(0)):
+		return false
+	for index: int in range(1, identifier.length()):
+		var codepoint := identifier.unicode_at(index)
+		if not _is_lower_ascii_alphanumeric(codepoint) and codepoint not in [45, 46, 95]:
+			return false
+	return true
+
+
+static func _route_identifier_is_valid(value: Variant) -> bool:
+	if typeof(value) != TYPE_STRING:
+		return false
+	var identifier := str(value)
+	if identifier.is_empty() or identifier.length() > 96:
+		return false
+	for index: int in range(identifier.length()):
+		var codepoint := identifier.unicode_at(index)
+		if not _is_lower_ascii_alphanumeric(codepoint) and codepoint not in [45, 46, 95]:
+			return false
+	return true
+
+
+static func _offer_identifier_is_valid(value: Variant) -> bool:
+	if typeof(value) != TYPE_STRING:
+		return false
+	var identifier := str(value)
+	if identifier.is_empty() or identifier.length() > 192:
+		return false
+	if not _is_lower_ascii_alphanumeric(identifier.unicode_at(0)):
+		return false
+	for index: int in range(1, identifier.length()):
+		var codepoint := identifier.unicode_at(index)
+		if not _is_lower_ascii_alphanumeric(codepoint) and codepoint not in [45, 46, 58, 95]:
 			return false
 	return true
 

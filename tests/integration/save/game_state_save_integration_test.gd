@@ -25,8 +25,10 @@ func _run() -> void:
 	_remove_tree(_test_root)
 
 	_test_legacy_import_is_one_time_and_preserves_source()
+	_test_defaults_and_active_run_round_trip()
 	_test_settings_and_profile_statistics_round_trip()
 	_test_v1_profile_loads_through_production_migration()
+	_test_v2_profile_loads_through_production_migration()
 	_test_failed_load_preserves_authoritative_memory()
 	_test_profile_and_domain_isolation()
 	_test_old_callers_and_failed_setting_signal_behavior()
@@ -62,6 +64,17 @@ func _test_legacy_import_is_one_time_and_preserves_source() -> void:
 	_suite.assert_true(GameState.load_persistent(), "versioned profile reload succeeds after legacy import")
 	_suite.assert_equal(GameState.persistent.get("runs_completed"), 5.0, "valid profile prevents repeated legacy import")
 	_suite.assert_equal(GameState.get_setting("locale"), "en", "valid global settings prevent legacy overwrite")
+
+
+func _test_defaults_and_active_run_round_trip() -> void:
+	_begin_case("active_run_round_trip")
+	_suite.assert_equal(GameState.persistent.get("active_run_state"), {}, "GameState defaults expose the no-active-run sentinel")
+	var active_run := _m1_active_run()
+	GameState.persistent["active_run_state"] = active_run
+	_suite.assert_true(GameState.save_persistent(), "GameState persists a complete active RunState snapshot")
+	GameState.persistent = {"sentinel": "before-active-run-load"}
+	_suite.assert_true(GameState.load_persistent(), "GameState reloads the active RunState snapshot")
+	_suite.assert_equal(GameState.persistent.get("active_run_state"), active_run, "GameState active run round trips losslessly")
 
 
 func _test_settings_and_profile_statistics_round_trip() -> void:
@@ -131,6 +144,25 @@ func _test_v1_profile_loads_through_production_migration() -> void:
 		{},
 		"GameState receives explicit reward-effect migration state"
 	)
+	_suite.assert_equal(GameState.persistent.get("active_run_state"), {}, "v1 migration reaches the v3 active-run default")
+	_suite.assert_equal(_read_json(profile_path).get("schema_version"), 3.0, "v1 profile rewrites as schema v3")
+
+
+func _test_v2_profile_loads_through_production_migration() -> void:
+	var legacy_path := _begin_case("v2_production_migration")
+	GameState.persistent["runs_completed"] = 8
+	_suite.assert_true(GameState.save_persistent(), "GameState writes the v3 migration fixture")
+	var profile_path := _profile_primary_path(legacy_path)
+	var legacy_profile := _read_json(profile_path)
+	legacy_profile["schema_version"] = 2
+	(legacy_profile.get("payload", {}) as Dictionary).erase("active_run_state")
+	_resign(legacy_profile)
+	_write_text(profile_path, JSON.stringify(legacy_profile, "", true, true))
+	GameState.persistent = {"sentinel": "before-v2-load"}
+	_suite.assert_true(GameState.load_persistent(), "GameState production load migrates schema v2")
+	_suite.assert_equal(GameState.persistent.get("runs_completed"), 8.0, "v2 progress survives GameState load")
+	_suite.assert_equal(GameState.persistent.get("active_run_state"), {}, "v2 migration installs the no-active-run sentinel")
+	_suite.assert_equal(_read_json(profile_path).get("schema_version"), 3.0, "v2 profile rewrites as schema v3")
 
 
 func _test_profile_and_domain_isolation() -> void:
@@ -255,6 +287,36 @@ func _empty_active_item_state() -> Dictionary:
 		"cooldown_end_frame": -1,
 		"handler_state": {},
 		"committed_receipts": {},
+	}
+
+
+func _m1_active_run() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"run_id": "run-game-state-v3",
+		"revision": 0,
+		"phase": 1,
+		"suspended": false,
+		"run_seed": 20261001,
+		"current_floor": 1,
+		"current_room": 0,
+		"room_total": 5,
+		"run_time_ms": 0,
+		"resources": {},
+		"stats": {"kills": 0},
+		"events": [],
+		"build": {},
+		"open_offer": {},
+		"consumed_offer_ids": [],
+		"result": {},
+		"config": {"milestone": "M1"},
+		"current_floor_index": -1,
+		"floor_plan": {},
+		"completed_floor_ids": [],
+		"run_economy": {},
+		"seen_event_ids": [],
+		"merchant_state": {},
+		"floor_rule_state": {},
 	}
 
 

@@ -3,9 +3,9 @@ extends Node
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 
-const CONTRACT_PATH := "res://docs/contracts/save-service-v2.md"
-const PROFILE_SCHEMA_PATH := "res://data/schemas/save_profile_v2.schema.json"
-const SETTINGS_SCHEMA_PATH := "res://data/schemas/save_settings_v2.schema.json"
+const CONTRACT_PATH := "res://docs/contracts/save-service-v3.md"
+const PROFILE_SCHEMA_PATH := "res://data/schemas/save_profile_v3.schema.json"
+const SETTINGS_SCHEMA_PATH := "res://data/schemas/save_settings_v3.schema.json"
 const FIXTURE_ROOT := "res://tests/fixtures/save"
 
 
@@ -39,6 +39,10 @@ func _test_contract_document(suite) -> void:
 		"deterministic fixtures",
 		"normative for the envelope",
 		"opaque-but-runtime-validated",
+		"active_run_state",
+		"migration_unsafe_active_run",
+		"generation_digest",
+		"composite offer id",
 	]:
 		suite.assert_true(
 			text.to_lower().contains(required_term),
@@ -50,11 +54,11 @@ func _test_profile_schema(suite) -> void:
 	var schema := _read_json(PROFILE_SCHEMA_PATH, suite)
 	if schema.is_empty():
 		return
-	suite.assert_equal(schema.get("$id"), "planewalker://schemas/save-profile/2.0.0", "profile schema id is stable")
+	suite.assert_equal(schema.get("$id"), "planewalker://schemas/save-profile/3.0.0", "profile schema id is stable")
 	suite.assert_equal(schema.get("additionalProperties"), false, "profile envelope rejects unknown top-level fields")
 	var properties: Dictionary = schema.get("properties", {})
 	suite.assert_equal(properties.get("magic", {}).get("const"), "PWSAVE", "profile magic is fixed")
-	suite.assert_equal(properties.get("schema_version", {}).get("const"), 2, "profile schema version is explicit")
+	suite.assert_equal(properties.get("schema_version", {}).get("const"), 3, "profile schema version is explicit")
 	suite.assert_equal(properties.get("document_kind", {}).get("const"), "profile", "profile kind is fixed")
 	suite.assert_equal(properties.get("profile_id", {}).get("pattern"), "^[a-z0-9][a-z0-9_-]{0,31}$", "profile id blocks path traversal")
 	suite.assert_equal(properties.get("save_domain", {}).get("pattern"), "^[a-z0-9][a-z0-9_-]{0,31}$", "save domain blocks path traversal")
@@ -71,6 +75,21 @@ func _test_profile_schema(suite) -> void:
 		"profile schema"
 	)
 	var definitions: Dictionary = schema.get("$defs", {})
+	suite.assert_equal(
+		definitions.get("stable_id", {}).get("pattern"),
+		"^[a-z0-9][a-z0-9_.-]{0,95}$",
+		"content stable IDs use the runtime-compatible alphabet"
+	)
+	suite.assert_equal(
+		definitions.get("route_id", {}).get("pattern"),
+		"^[a-z0-9_.-]{1,96}$",
+		"route IDs match FloorPlan's non-path identifier alphabet"
+	)
+	suite.assert_equal(
+		definitions.get("offer_id", {}).get("pattern"),
+		"^[a-z0-9][a-z0-9_.:-]{0,191}$",
+		"composite offer IDs preserve DraftService colon separators"
+	)
 	var payload: Dictionary = properties.get("payload", {})
 	suite.assert_true(
 		(payload.get("required", []) as Array).has("active_item_state"),
@@ -78,7 +97,11 @@ func _test_profile_schema(suite) -> void:
 	)
 	suite.assert_true(
 		(payload.get("required", []) as Array).has("reward_effect_state"),
-		"profile v2 requires reward-effect runtime state"
+		"profile v3 requires reward-effect runtime state"
+	)
+	suite.assert_true(
+		(payload.get("required", []) as Array).has("active_run_state"),
+		"profile v3 requires active RunState"
 	)
 	var integrity: Dictionary = definitions.get("integrity", {})
 	suite.assert_equal(integrity.get("additionalProperties"), false, "integrity object is closed")
@@ -102,7 +125,38 @@ func _test_profile_schema(suite) -> void:
 			"profile JSON Schema intentionally treats nested %s runtime state as opaque"
 			% runtime_domain
 		)
-	var runtime_mutation := _read_json(FIXTURE_ROOT.path_join("profile_v2.json"), suite)
+	var active_run: Dictionary = definitions.get("active_run_state", {})
+	_assert_required_fields(
+		suite,
+		active_run,
+		[
+			"schema_version", "run_id", "revision", "phase", "suspended", "run_seed",
+			"current_floor", "current_room", "room_total", "run_time_ms", "resources",
+			"stats", "events", "build", "open_offer", "consumed_offer_ids", "result",
+			"config", "current_floor_index", "floor_plan", "completed_floor_ids",
+			"run_economy", "seen_event_ids", "merchant_state", "floor_rule_state",
+		],
+		"active RunState schema"
+	)
+	suite.assert_equal(active_run.get("additionalProperties"), false, "active RunState root is closed")
+	suite.assert_equal(
+		active_run.get("properties", {}).get("consumed_offer_ids", {}).get("items", {}).get("$ref"),
+		"#/$defs/offer_id",
+		"consumed offers use the composite offer ID domain"
+	)
+	var floor_plan: Dictionary = definitions.get("floor_plan", {})
+	suite.assert_equal(floor_plan.get("additionalProperties"), false, "FloorPlan root is closed")
+	suite.assert_equal(
+		floor_plan.get("properties", {}).get("current_node_id", {}).get("$ref"),
+		"#/$defs/route_id",
+		"FloorPlan state uses the route ID domain"
+	)
+	suite.assert_equal(
+		floor_plan.get("properties", {}).get("generation_digest", {}).get("$ref"),
+		"#/$defs/sha256",
+		"FloorPlan seals a SHA-256 generation digest"
+	)
+	var runtime_mutation := _read_json(FIXTURE_ROOT.path_join("profile_v3.json"), suite)
 	var reward_state := _closed_reward_effect_fixture()
 	(runtime_mutation.get("payload", {}) as Dictionary)["reward_effect_state"] = reward_state
 	(reward_state.get("stats", {}) as Dictionary)["unknown_runtime_field"] = 1.0
@@ -123,11 +177,11 @@ func _test_settings_schema(suite) -> void:
 	var schema := _read_json(SETTINGS_SCHEMA_PATH, suite)
 	if schema.is_empty():
 		return
-	suite.assert_equal(schema.get("$id"), "planewalker://schemas/save-settings/2.0.0", "settings schema id is stable")
+	suite.assert_equal(schema.get("$id"), "planewalker://schemas/save-settings/3.0.0", "settings schema id is stable")
 	suite.assert_equal(schema.get("additionalProperties"), false, "settings envelope rejects unknown top-level fields")
 	var properties: Dictionary = schema.get("properties", {})
 	suite.assert_equal(properties.get("magic", {}).get("const"), "PWSAVE", "settings magic is fixed")
-	suite.assert_equal(properties.get("schema_version", {}).get("const"), 2, "settings schema version is explicit")
+	suite.assert_equal(properties.get("schema_version", {}).get("const"), 3, "settings schema version is explicit")
 	suite.assert_equal(properties.get("document_kind", {}).get("const"), "settings", "settings kind is fixed")
 	suite.assert_true(not properties.has("profile_id"), "global settings are not tied to a profile")
 	suite.assert_true(not properties.has("content_snapshot"), "global settings do not depend on gameplay content packs")
@@ -171,21 +225,36 @@ func _test_profile_fixtures(suite) -> void:
 	_assert_valid_fixture_integrity(suite, legacy_v1, "legacy v1 profile fixture")
 	suite.assert_equal(legacy_v1.get("schema_version"), 1, "legacy profile fixture remains schema v1")
 
-	var current := _read_json(FIXTURE_ROOT.path_join("profile_v2.json"), suite)
+	var historical_v2 := _read_json(FIXTURE_ROOT.path_join("profile_v2.json"), suite)
+	_assert_valid_fixture_integrity(suite, historical_v2, "historical v2 profile fixture")
+	suite.assert_equal(historical_v2.get("schema_version"), 2, "historical v2 fixture remains migration input")
+	suite.assert_true(not historical_v2.get("payload", {}).has("active_run_state"), "historical v2 fixture predates active RunState")
+
+	var current := _read_json(FIXTURE_ROOT.path_join("profile_v3.json"), suite)
 	_assert_valid_fixture_integrity(suite, current, "current profile fixture")
-	suite.assert_equal(current.get("schema_version"), 2, "current fixture uses schema v2")
+	suite.assert_equal(current.get("schema_version"), 3, "current fixture uses schema v3")
 	suite.assert_equal(current.get("profile_id"), "slot_1", "current fixture targets slot one")
 	suite.assert_true(current.get("payload", {}).has("active_item_state"), "current fixture seals active-item state")
 	suite.assert_true(current.get("payload", {}).has("reward_effect_state"), "current fixture seals reward-effect state")
+	suite.assert_equal(current.get("payload", {}).get("active_run_state"), {}, "current fixture seals no-active-run state")
+	suite.assert_true(
+		SaveEnvelopeScript.validate(current, &"profile", "slot_1", "base").ok,
+		"current v3 fixture passes runtime validation"
+	)
+	var current_settings := _read_json(FIXTURE_ROOT.path_join("settings_v3.json"), suite)
+	_assert_valid_fixture_integrity(suite, current_settings, "current settings fixture")
+	suite.assert_equal(current_settings.get("schema_version"), 3.0, "current settings fixture uses schema v3")
+	suite.assert_true(SaveEnvelopeScript.validate(current_settings, &"settings").ok, "current settings fixture passes runtime validation")
 
 	var migrated := _read_json(FIXTURE_ROOT.path_join("migration_expected_v1.json"), suite)
 	_assert_valid_fixture_integrity(suite, migrated, "migration expected fixture")
 	suite.assert_equal(migrated.get("payload", {}).get("chronos_shards"), 17, "migration fixture preserves currency")
 	suite.assert_true(not migrated.get("payload", {}).has("settings"), "profile migration separates global settings")
 
-	var forward := _read_json(FIXTURE_ROOT.path_join("forward_v3.json"), suite)
+	var forward := _read_json(FIXTURE_ROOT.path_join("forward_v4.json"), suite)
 	suite.assert_equal(forward.get("magic"), "PWSAVE", "forward fixture remains structurally recognizable")
-	suite.assert_equal(forward.get("schema_version"), 3, "forward fixture requires refusal")
+	suite.assert_equal(forward.get("schema_version"), 4, "forward fixture requires refusal")
+	suite.assert_equal(SaveEnvelopeScript.validate(forward).code, &"FORWARD_VERSION", "schema v4 fixture refuses downgrade")
 
 	var tampered := _read_json(FIXTURE_ROOT.path_join("corrupt_integrity.json"), suite)
 	suite.assert_true(not tampered.is_empty(), "integrity-corrupt fixture remains valid JSON")

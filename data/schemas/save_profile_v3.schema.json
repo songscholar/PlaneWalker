@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/save-profile/3.0.0",
+  "title": "Plane Walker Profile Save Envelope v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["magic", "schema_version", "document_kind", "profile_id", "save_domain", "sequence", "game_version", "created_at_utc", "saved_at_utc", "content_snapshot", "payload", "integrity"],
+  "properties": {
+    "magic": { "const": "PWSAVE" },
+    "schema_version": { "const": 3 },
+    "document_kind": { "const": "profile" },
+    "profile_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" },
+    "save_domain": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "game_version": { "type": "string", "minLength": 1 },
+    "created_at_utc": { "type": "string", "format": "date-time" },
+    "saved_at_utc": { "type": "string", "format": "date-time" },
+    "content_snapshot": { "$ref": "#/$defs/content_snapshot" },
+    "payload": {
+      "type": "object",
+      "required": ["active_item_state", "reward_effect_state", "active_run_state"],
+      "properties": {
+        "active_item_state": { "$ref": "#/$defs/active_item_state" },
+        "reward_effect_state": {
+          "oneOf": [
+            { "type": "object", "maxProperties": 0 },
+            { "$ref": "#/$defs/reward_effect_state" }
+          ]
+        },
+        "active_run_state": {
+          "oneOf": [
+            { "type": "object", "maxProperties": 0 },
+            { "$ref": "#/$defs/active_run_state" }
+          ]
+        }
+      }
+    },
+    "integrity": { "$ref": "#/$defs/integrity" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "stable_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,95}$" },
+    "route_id": { "type": "string", "pattern": "^[a-z0-9_.-]{1,96}$" },
+    "offer_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{0,191}$" },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "content_pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack_id", "pack_version", "schema_version", "fingerprint_sha256"],
+      "properties": {
+        "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$" },
+        "pack_version": { "type": "string", "minLength": 1 },
+        "schema_version": { "type": "integer", "minimum": 1 },
+        "fingerprint_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "content_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aggregate_sha256", "packs"],
+      "properties": {
+        "aggregate_sha256": { "$ref": "#/$defs/sha256" },
+        "packs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/content_pack" } }
+      }
+    },
+    "active_item_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "configured", "definition", "generation", "next_token", "current_frame", "cooldown_end_frame", "handler_state", "committed_receipts"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "configured": { "type": "boolean" },
+        "definition": { "type": "object" },
+        "generation": { "type": "integer", "minimum": 0 },
+        "next_token": { "type": "integer", "minimum": 1 },
+        "current_frame": { "type": "integer", "minimum": -1 },
+        "cooldown_end_frame": { "type": "integer", "minimum": -1 },
+        "handler_state": { "type": "object" },
+        "committed_receipts": { "type": "object" }
+      }
+    },
+    "reward_effect_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "stats", "health", "time", "weapon", "character"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "stats": { "type": "object" },
+        "health": { "type": "object" },
+        "time": { "type": "object" },
+        "weapon": { "type": "object" },
+        "character": { "type": "object" }
+      }
+    },
+    "active_run_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "run_id", "revision", "phase", "suspended", "run_seed", "current_floor", "current_room", "room_total", "run_time_ms", "resources", "stats", "events", "build", "open_offer", "consumed_offer_ids", "result", "config", "current_floor_index", "floor_plan", "completed_floor_ids", "run_economy", "seen_event_ids", "merchant_state", "floor_rule_state"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "run_id": { "$ref": "#/$defs/stable_id" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "phase": { "type": "integer", "minimum": 0, "maximum": 11 },
+        "suspended": { "type": "boolean" },
+        "run_seed": { "type": "integer" },
+        "current_floor": { "type": "integer", "minimum": 1 },
+        "current_room": { "type": "integer", "minimum": 0 },
+        "room_total": { "type": "integer", "minimum": 1 },
+        "run_time_ms": { "type": "integer", "minimum": 0 },
+        "resources": { "type": "object" },
+        "stats": { "type": "object" },
+        "events": { "type": "array" },
+        "build": { "type": "object" },
+        "open_offer": { "type": "object" },
+        "consumed_offer_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/offer_id" } },
+        "result": { "type": "object" },
+        "config": {
+          "type": "object",
+          "required": ["milestone"],
+          "properties": {
+            "milestone": { "type": "string", "enum": ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"] }
+          }
+        },
+        "current_floor_index": { "type": "integer", "minimum": -1, "maximum": 4 },
+        "floor_plan": {
+          "oneOf": [
+            { "type": "object", "maxProperties": 0 },
+            { "$ref": "#/$defs/floor_plan" }
+          ]
+        },
+        "completed_floor_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["floor_ruins_of_remnant", "floor_void_forest", "floor_time_rift", "floor_plane_forge", "floor_throne_of_void"] }
+        },
+        "run_economy": { "type": "object" },
+        "seen_event_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stable_id" } },
+        "merchant_state": { "type": "object" },
+        "floor_rule_state": { "type": "object" }
+      }
+    },
+    "floor_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "generator_version", "run_seed", "floor_id", "floor_index", "entry_node_id", "boss_node_id", "current_node_id", "nodes", "edges", "selected_edge_ids", "visited_node_ids", "abandoned_node_ids", "generation_digest", "revision"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "generator_version": { "const": "floor_plan_v1" },
+        "run_seed": { "type": "integer" },
+        "floor_id": { "type": "string", "enum": ["floor_ruins_of_remnant", "floor_void_forest", "floor_time_rift", "floor_plane_forge", "floor_throne_of_void"] },
+        "floor_index": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "entry_node_id": { "const": "entry" },
+        "boss_node_id": { "const": "boss" },
+        "current_node_id": { "$ref": "#/$defs/route_id" },
+        "nodes": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/floor_plan_node" } },
+        "edges": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/floor_plan_edge" } },
+        "selected_edge_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/route_id" } },
+        "visited_node_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/route_id" } },
+        "abandoned_node_ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/route_id" } },
+        "generation_digest": { "$ref": "#/$defs/sha256" },
+        "revision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "floor_plan_node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layer", "room_type", "template_id", "encounter_id", "event_id", "merchant_id", "reward_policy_id", "seed_channel_suffix", "revealed", "visited", "cleared"],
+      "properties": {
+        "id": { "$ref": "#/$defs/route_id" },
+        "layer": { "type": "integer", "minimum": 0 },
+        "room_type": { "type": "string" },
+        "template_id": { "type": "string" },
+        "encounter_id": { "type": "string" },
+        "event_id": { "type": "string" },
+        "merchant_id": { "type": "string" },
+        "reward_policy_id": { "type": "string" },
+        "seed_channel_suffix": { "type": "string" },
+        "revealed": { "type": "boolean" },
+        "visited": { "type": "boolean" },
+        "cleared": { "type": "boolean" }
+      }
+    },
+    "floor_plan_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source_node_id", "destination_node_id", "choice_order", "locked", "route_summary_facts"],
+      "properties": {
+        "id": { "$ref": "#/$defs/route_id" },
+        "source_node_id": { "$ref": "#/$defs/route_id" },
+        "destination_node_id": { "$ref": "#/$defs/route_id" },
+        "choice_order": { "type": "integer", "minimum": 0 },
+        "locked": { "type": "boolean" },
+        "route_summary_facts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["room_type", "template_id"],
+          "properties": {
+            "room_type": { "type": "string" },
+            "template_id": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

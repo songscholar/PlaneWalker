@@ -4,6 +4,7 @@ extends RefCounted
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SaveMigrationV0ToV1Script := preload("res://scripts/save/migrations/save_migration_v0_to_v1.gd")
 const SaveMigrationV1ToV2Script := preload("res://scripts/save/migrations/save_migration_v1_to_v2.gd")
+const SaveMigrationV2ToV3Script := preload("res://scripts/save/migrations/save_migration_v2_to_v3.gd")
 
 var _migrations: Dictionary = {}
 var _default_migrators: Array[RefCounted] = []
@@ -13,9 +14,11 @@ func _init(register_defaults: bool = true) -> void:
 	if register_defaults:
 		var v0_to_v1: RefCounted = SaveMigrationV0ToV1Script.new()
 		var v1_to_v2: RefCounted = SaveMigrationV1ToV2Script.new()
-		_default_migrators.assign([v0_to_v1, v1_to_v2])
+		var v2_to_v3: RefCounted = SaveMigrationV2ToV3Script.new()
+		_default_migrators.assign([v0_to_v1, v1_to_v2, v2_to_v3])
 		register_migration(0, 1, Callable(v0_to_v1, "migrate"))
 		register_migration(1, 2, Callable(v1_to_v2, "migrate"))
+		register_migration(2, 3, Callable(v2_to_v3, "migrate"))
 
 
 func register_migration(from_version: int, to_version: int, migration: Callable):
@@ -95,7 +98,7 @@ func migrate(document: Dictionary, target_version: int, context: Dictionary = {}
 		if not validation.ok:
 			var failed_metadata: Dictionary = validation.metadata.duplicate(true)
 			return _migration_failure(
-				&"MIGRATION_FAILED",
+				validation.code,
 				source_kind,
 				source_version,
 				current_version,
@@ -129,6 +132,16 @@ func _validate_step_results(first: Variant, second: Variant, from_version: int, 
 	var first_result: Variant = first
 	var second_result: Variant = second
 	if not first_result.ok or not second_result.ok:
+		if (
+			first_result.to_dictionary() == second_result.to_dictionary()
+			and first_result.code == &"MIGRATION_UNSAFE_ACTIVE_RUN"
+		):
+			step_metadata.merge(first_result.metadata, true)
+			return SaveResultScript.failure(
+				&"MIGRATION_UNSAFE_ACTIVE_RUN",
+				step_metadata,
+				first_result.diagnostics
+			)
 		step_metadata["reason"] = "migration_step_rejected_input"
 		step_metadata["first_code"] = str(first_result.code)
 		step_metadata["second_code"] = str(second_result.code)
@@ -217,7 +230,10 @@ func _migration_failure(
 	metadata["migrated_to"] = from_version
 	metadata["from_version"] = from_version
 	metadata["to_version"] = to_version
-	metadata["player_notice_required"] = false
+	metadata["player_notice_required"] = (
+		code == &"MIGRATION_UNSAFE_ACTIVE_RUN"
+		or bool(metadata.get("player_notice_required", false))
+	)
 	return SaveResultScript.failure(code, metadata, diagnostics)
 
 

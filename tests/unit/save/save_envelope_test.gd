@@ -5,8 +5,13 @@ const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
-const PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v2.json"
+const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
+const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
+const PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v3.json"
+const HISTORICAL_PROFILE_FIXTURE_PATH := "res://tests/fixtures/save/profile_v2.json"
 const SNAPSHOT_FIXTURE_PATH := "res://tests/fixtures/save/pack_snapshots/base_a.json"
+const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
+const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
 
 
 func _ready() -> void:
@@ -21,8 +26,12 @@ func _run() -> void:
 	_test_relative_path_policy(suite)
 	_test_canonical_json_and_digest(suite)
 	_test_profile_envelope_round_trip(suite)
+	_test_v1_and_v2_profiles_remain_readable(suite)
 	_test_native_v2_profile_runtime_fields_are_strict(suite)
 	_test_native_v2_runtime_state_survives_json_round_trip(suite)
+	_test_native_v3_active_run_round_trip(suite)
+	_test_completed_floor_active_run_round_trip(suite)
+	_test_native_v3_active_run_validation_fails_closed(suite)
 	_test_settings_envelope_round_trip(suite)
 	_test_settings_v1_backward_compatibility(suite)
 	_test_accessibility_settings_validation(suite)
@@ -138,7 +147,7 @@ func _test_profile_envelope_round_trip(suite) -> void:
 	var envelope: Dictionary = created.payload
 	suite.assert_equal(envelope, expected, "profile creation reproduces the frozen deterministic fixture")
 	suite.assert_equal(envelope.get("magic"), "PWSAVE", "envelope uses the frozen magic value")
-	suite.assert_equal(envelope.get("schema_version"), 2, "envelope uses schema version two")
+	suite.assert_equal(envelope.get("schema_version"), 3, "envelope uses schema version three")
 	suite.assert_equal(
 		(SaveEnvelopeScript.validate(
 			envelope,
@@ -147,12 +156,17 @@ func _test_profile_envelope_round_trip(suite) -> void:
 			"base"
 		).payload.get("payload", {}) as Dictionary).get("active_item_state"),
 		SaveEnvelopeScript.empty_active_item_state(),
-		"native v2 profile includes explicit empty active-item state"
+		"native v3 profile includes explicit empty active-item state"
 	)
 	suite.assert_equal(
 		envelope.get("payload", {}).get("reward_effect_state"),
 		{},
-		"native v2 profile includes explicit empty reward-effect state"
+		"native v3 profile includes explicit empty reward-effect state"
+	)
+	suite.assert_equal(
+		envelope.get("payload", {}).get("active_run_state"),
+		{},
+		"native v3 profile includes the explicit no-active-run sentinel"
 	)
 	suite.assert_equal(envelope.get("document_kind"), "profile", "envelope records its document kind")
 	suite.assert_equal(envelope.get("profile_id"), "slot_1", "profile envelope records its profile id")
@@ -185,8 +199,20 @@ func _test_profile_envelope_round_trip(suite) -> void:
 	suite.assert_true(SaveEnvelopeScript.validate(reordered_copy, &"profile", "slot_1", "base").ok, "envelope validation is independent of dictionary insertion order")
 
 
+func _test_v1_and_v2_profiles_remain_readable(suite) -> void:
+	for fixture_path: String in [
+		"res://tests/fixtures/save/profile_v1.json",
+		HISTORICAL_PROFILE_FIXTURE_PATH,
+	]:
+		var historical := _read_json(fixture_path, suite)
+		if historical.is_empty():
+			continue
+		var result = SaveEnvelopeScript.validate(historical, &"profile", "slot_1", "base")
+		suite.assert_true(result.ok, "%s remains readable for ordered migration" % fixture_path)
+
+
 func _test_native_v2_profile_runtime_fields_are_strict(suite) -> void:
-	var valid := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var valid := _read_json(HISTORICAL_PROFILE_FIXTURE_PATH, suite)
 	for malformed: Dictionary in [
 		{"field": "active_item_state", "value": null},
 		{"field": "active_item_state", "value": {}},
@@ -212,7 +238,7 @@ func _test_native_v2_profile_runtime_fields_are_strict(suite) -> void:
 
 
 func _test_native_v2_runtime_state_survives_json_round_trip(suite) -> void:
-	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var fixture := _read_json(HISTORICAL_PROFILE_FIXTURE_PATH, suite)
 	var runtime = ActiveItemRuntimeScript.new()
 	suite.assert_true(runtime.configure(_configured_active_definition()), "configured active fixture is valid")
 	var active_state: Dictionary = runtime.snapshot()
@@ -228,16 +254,248 @@ func _test_native_v2_runtime_state_survives_json_round_trip(suite) -> void:
 	)
 	suite.assert_true(
 		created.ok,
-		"configured runtime v2 envelope creates: %s" % str(created.to_dictionary())
+		"configured runtime v3 envelope creates: %s" % str(created.to_dictionary())
 	)
 	if not created.ok:
 		return
 	var parsed: Variant = JSON.parse_string(JSON.stringify(created.payload, "", true, true))
 	var validated = SaveEnvelopeScript.validate(parsed, &"profile", "slot_1", "base")
-	suite.assert_true(validated.ok, "configured runtime v2 validates after actual JSON round trip")
+	suite.assert_true(validated.ok, "configured runtime v3 validates after actual JSON round trip")
 	if validated.ok:
 		suite.assert_equal(validated.payload["payload"]["active_item_state"], active_state, "configured active integers normalize losslessly")
 		suite.assert_equal(validated.payload["payload"]["reward_effect_state"], reward_state, "non-empty reward integers normalize losslessly")
+
+
+func _test_native_v3_active_run_round_trip(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	if fixture.is_empty():
+		return
+	var active_run := _active_run_fixture("LAUNCH", _generated_floor_plan())
+	active_run["consumed_offer_ids"] = ["run-save-v3:room-01:item:7"]
+	active_run["seen_event_ids"] = ["event.echo"]
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 14, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:10:00Z",
+		fixture.get("content_snapshot", {}),
+		{"active_run_state": active_run}
+	)
+	suite.assert_true(created.ok, "native v3 profile seals a generated FloorPlan: %s" % str(created.to_dictionary()))
+	if not created.ok:
+		return
+	var parsed: Variant = JSON.parse_string(JSON.stringify(created.payload, "", true, true))
+	var validated = SaveEnvelopeScript.validate(parsed, &"profile", "slot_1", "base")
+	suite.assert_true(validated.ok, "active-run profile validates after a physical JSON round trip")
+	if not validated.ok:
+		return
+	var restored := validated.payload.get("payload", {}).get("active_run_state", {}) as Dictionary
+	suite.assert_equal(restored, active_run, "active RunState snapshot round trips losslessly")
+	for integer_field: String in [
+		"schema_version", "revision", "phase", "run_seed", "current_floor",
+		"current_room", "room_total", "run_time_ms", "current_floor_index",
+	]:
+		suite.assert_equal(typeof(restored[integer_field]), TYPE_INT, "%s normalizes to TYPE_INT" % integer_field)
+	suite.assert_equal(typeof(restored["floor_plan"]["floor_index"]), TYPE_INT, "FloorPlan integers normalize to TYPE_INT")
+
+
+func _test_completed_floor_active_run_round_trip(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var plan := _completed_floor_plan()
+	suite.assert_true(not plan.is_empty(), "completed-floor Save fixture reaches its Boss")
+	if fixture.is_empty() or plan.is_empty():
+		return
+	var active_run := _active_run_fixture("LAUNCH", plan)
+	active_run["phase"] = 2
+	active_run["completed_floor_ids"] = [str(plan["floor_id"])]
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 17, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:25:00Z",
+		fixture.get("content_snapshot", {}),
+		{"active_run_state": active_run}
+	)
+	suite.assert_true(created.ok, "completed current floor remains a legal active-run snapshot: %s" % str(created.to_dictionary()))
+
+
+func _test_native_v3_active_run_validation_fails_closed(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	if fixture.is_empty():
+		return
+	var plan := _generated_floor_plan()
+	var active_run := _active_run_fixture("LAUNCH", plan)
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 15, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:15:00Z",
+		fixture.get("content_snapshot", {}),
+		{"active_run_state": active_run}
+	)
+	suite.assert_true(created.ok, "strict active-run mutation fixture creates")
+	if not created.ok:
+		return
+	var base: Dictionary = created.payload
+	var mutations: Array[Dictionary] = [
+		{"label": "missing RunState field", "field": "payload.active_run_state", "mutate": func(run: Dictionary): run.erase("events")},
+		{"label": "room total drift", "field": "payload.active_run_state.room_total", "mutate": func(run: Dictionary): run["room_total"] = 99},
+		{"label": "floor index drift", "field": "payload.active_run_state.current_floor_index", "mutate": func(run: Dictionary): run["current_floor_index"] = 1},
+		{"label": "completed floor prefix drift", "field": "payload.active_run_state.completed_floor_ids", "mutate": func(run: Dictionary): run["completed_floor_ids"] = ["floor_void_forest"]},
+		{"label": "economy container corruption", "field": "payload.active_run_state.run_economy", "mutate": func(run: Dictionary): run["run_economy"] = []},
+		{"label": "event id duplication", "field": "payload.active_run_state.seen_event_ids", "mutate": func(run: Dictionary): run["seen_event_ids"] = ["event_echo", "event_echo"]},
+		{"label": "merchant container corruption", "field": "payload.active_run_state.merchant_state", "mutate": func(run: Dictionary): run["merchant_state"] = []},
+		{"label": "floor-rule container corruption", "field": "payload.active_run_state.floor_rule_state", "mutate": func(run: Dictionary): run["floor_rule_state"] = []},
+		{"label": "plan digest drift", "field": "payload.active_run_state.floor_plan.generation_digest", "mutate": func(run: Dictionary): run["floor_plan"]["generation_digest"] = "0".repeat(64)},
+		{"label": "plan abandoned-route drift", "field": "payload.active_run_state.floor_plan.abandoned_node_ids", "mutate": func(run: Dictionary): run["floor_plan"]["abandoned_node_ids"] = ["boss"]},
+		{"label": "plan unknown field", "field": "payload.active_run_state.floor_plan", "mutate": func(run: Dictionary): run["floor_plan"]["unknown"] = true},
+	]
+	for mutation: Dictionary in mutations:
+		var candidate := base.duplicate(true)
+		var run := candidate["payload"]["active_run_state"] as Dictionary
+		(mutation["mutate"] as Callable).call(run)
+		_resign(candidate)
+		var result = SaveEnvelopeScript.validate(candidate, &"profile", "slot_1", "base")
+		suite.assert_equal(result.code, &"CORRUPT", "%s fails closed" % mutation["label"])
+		suite.assert_equal(result.metadata.get("field"), mutation["field"], "%s identifies its boundary field" % mutation["label"])
+
+	var m1_with_plan := base.duplicate(true)
+	m1_with_plan["payload"]["active_run_state"]["config"]["milestone"] = "M1"
+	_resign(m1_with_plan)
+	suite.assert_equal(
+		SaveEnvelopeScript.validate(m1_with_plan, &"profile", "slot_1", "base").code,
+		&"CORRUPT",
+		"non-Launch active runs cannot smuggle a FloorPlan"
+	)
+
+	var launch_before_floor := _active_run_fixture("LAUNCH", {})
+	launch_before_floor["current_floor_index"] = -1
+	var before_floor = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 16, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-09-28T09:20:00Z",
+		fixture.get("content_snapshot", {}),
+		{"active_run_state": launch_before_floor}
+	)
+	suite.assert_true(before_floor.ok, "Launch run may persist before start_floor without a plan")
+	for field: String in ["run_economy", "merchant_state", "floor_rule_state"]:
+		var dirty_before_floor := launch_before_floor.duplicate(true)
+		dirty_before_floor[field] = {"unexpected": true}
+		suite.assert_true(
+			not SaveEnvelopeScript.create_profile(
+				"slot_1", "base", 16, "0.4.0-dev",
+				"2026-09-28T08:00:00Z", "2026-09-28T09:20:00Z",
+				fixture.get("content_snapshot", {}),
+				{"active_run_state": dirty_before_floor}
+			).ok,
+			"Launch before start_floor requires empty %s" % field
+		)
+	var dirty_events := launch_before_floor.duplicate(true)
+	dirty_events["seen_event_ids"] = ["event_early"]
+	suite.assert_true(
+		not SaveEnvelopeScript.create_profile(
+			"slot_1", "base", 16, "0.4.0-dev",
+			"2026-09-28T08:00:00Z", "2026-09-28T09:20:00Z",
+			fixture.get("content_snapshot", {}),
+			{"active_run_state": dirty_events}
+		).ok,
+		"Launch before start_floor requires an empty seen-event prefix"
+	)
+
+
+func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionary:
+	var floor_index := int(floor_plan.get("floor_index", -1))
+	var selected_count := (floor_plan.get("selected_edge_ids", []) as Array).size()
+	return {
+		"schema_version": 1,
+		"run_id": "run-save-v3",
+		"revision": 0,
+		"phase": 1,
+		"suspended": false,
+		"run_seed": 20261001,
+		"current_floor": floor_index + 1 if floor_index >= 0 else 1,
+		"current_room": selected_count,
+		"room_total": _plan_room_total(floor_plan),
+		"run_time_ms": 0,
+		"resources": {},
+		"stats": {"kills": 0},
+		"events": [],
+		"build": {},
+		"open_offer": {},
+		"consumed_offer_ids": [],
+		"result": {},
+		"config": {"milestone": milestone},
+		"current_floor_index": floor_index,
+		"floor_plan": floor_plan.duplicate(true),
+		"completed_floor_ids": [],
+		"run_economy": {},
+		"seen_event_ids": [],
+		"merchant_state": {},
+		"floor_rule_state": {},
+	}
+
+
+func _generated_floor_plan() -> Dictionary:
+	var floors := _read_json_array(FLOOR_PATH)
+	var templates := _read_json_array(TEMPLATE_PATH)
+	if floors.is_empty() or templates.is_empty():
+		return {}
+	var generated: Dictionary = FloorPlanGeneratorScript.new().generate(20261001, floors[0], templates)
+	return (generated.get("plan", {}) as Dictionary).duplicate(true)
+
+
+func _completed_floor_plan() -> Dictionary:
+	var floors := _read_json_array(FLOOR_PATH)
+	var templates := _read_json_array(TEMPLATE_PATH)
+	var generated := _generated_floor_plan()
+	if floors.is_empty() or templates.is_empty() or generated.is_empty():
+		return {}
+	var model = FloorPlanScript.new()
+	if not bool(model.configure(generated, floors[0], templates).get("ok", false)):
+		return {}
+	while str(model.snapshot().get("current_node_id", "")) != "boss":
+		var snapshot: Dictionary = model.snapshot()
+		var current_node_id := str(snapshot["current_node_id"])
+		if current_node_id != "entry":
+			for node_value: Variant in snapshot["nodes"]:
+				var node := node_value as Dictionary
+				if str(node["id"]) == current_node_id:
+					node["cleared"] = true
+					break
+			if not bool(model.configure(snapshot, floors[0], templates).get("ok", false)):
+				return {}
+			snapshot = model.snapshot()
+		var selected_edge: Dictionary = {}
+		for edge_value: Variant in snapshot.get("edges", []):
+			var edge := edge_value as Dictionary
+			if (
+				str(edge["source_node_id"]) == str(snapshot["current_node_id"])
+				and not bool(edge["locked"])
+				and not (snapshot["abandoned_node_ids"] as Array).has(str(edge["destination_node_id"]))
+			):
+				selected_edge = edge
+				break
+		if selected_edge.is_empty():
+			return {}
+		if not bool(model.select_edge(StringName(str(selected_edge["id"])), model.revision()).get("ok", false)):
+			return {}
+	var completed: Dictionary = model.snapshot()
+	for node_value: Variant in completed["nodes"]:
+		var node := node_value as Dictionary
+		if str(node["id"]) == "boss":
+			node["cleared"] = true
+	return completed if bool(model.configure(completed, floors[0], templates).get("ok", false)) else {}
+
+
+func _plan_room_total(plan: Dictionary) -> int:
+	if plan.is_empty():
+		return 5
+	for node_value: Variant in plan.get("nodes", []):
+		var node := node_value as Dictionary
+		if str(node.get("id", "")) == str(plan.get("boss_node_id", "boss")):
+			return int(node.get("layer", 0))
+	return 0
+
+
+func _read_json_array(path: String) -> Array:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return []
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	return parsed if parsed is Array else []
 
 
 func _configured_active_definition() -> Dictionary:
@@ -466,10 +724,10 @@ func _test_envelope_rejects_tampering(suite) -> void:
 
 
 func _test_envelope_rejects_invalid_documents(suite) -> void:
-	var profile := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var profile := _read_json(HISTORICAL_PROFILE_FIXTURE_PATH, suite)
 
 	var forward := profile.duplicate(true)
-	forward["schema_version"] = 3
+	forward["schema_version"] = 4
 	suite.assert_equal(SaveEnvelopeScript.validate(forward).code, &"FORWARD_VERSION", "forward save schema is refused explicitly")
 
 	var wrong_kind: RefCounted = SaveEnvelopeScript.validate(profile, &"settings")

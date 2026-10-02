@@ -281,6 +281,7 @@ func _default_persistent_data() -> Dictionary:
 		"last_run_summary": {},
 		"active_item_state": SaveEnvelopeScript.empty_active_item_state(),
 		"reward_effect_state": {},
+		"active_run_state": {},
 	}
 
 

@@ -1,0 +1,31 @@
+{
+  "created_at_utc": "2026-09-28T08:00:00Z",
+  "document_kind": "settings",
+  "game_version": "0.4.0-dev",
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "c539eb7ed6bc0c6b6d5b406db1ea7c41758c3c60676fe960082f2349167c8f94"
+  },
+  "magic": "PWSAVE",
+  "payload": {
+    "camera_shake_enabled": true,
+    "damage_received_multiplier": 1.0,
+    "dialogue_volume": 0.9,
+    "enemy_telegraph_scale": 1.0,
+    "high_contrast_danger": false,
+    "hit_flash_enabled": true,
+    "locale": "zh_CN",
+    "master_muted": false,
+    "master_volume": 0.85,
+    "music_volume": 0.8,
+    "ranged_charge_mode": "hold",
+    "reduced_motion": false,
+    "sfx_volume": 0.9,
+    "subtitle_scale": 1.0,
+    "subtitles_enabled": true,
+    "text_scale": 1.0
+  },
+  "saved_at_utc": "2026-09-28T09:30:00Z",
+  "schema_version": 3.0,
+  "sequence": 7.0
+}
