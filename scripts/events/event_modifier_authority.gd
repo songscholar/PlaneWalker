@@ -291,7 +291,8 @@ func _normalize_supported_ids(value: Array, supported: Array[String]) -> Array[S
 	var result := _normalize_ids(value)
 	for entry: String in result:
 		if not supported.has(entry):
-			return []
+			result.clear()
+			return result
 	return result
 
 
@@ -299,11 +300,14 @@ func _normalize_ids(value: Array) -> Array[String]:
 	var result: Array[String] = []
 	for entry: Variant in value:
 		if typeof(entry) != TYPE_STRING or not _valid_id(str(entry)) or result.has(str(entry)):
-			return []
+			result.clear()
+			return result
 		result.append(str(entry))
 	var sorted := result.duplicate()
 	sorted.sort()
-	return result if result == sorted else []
+	if result != sorted:
+		result.clear()
+	return result
 
 
 func _sort_modifiers(value: Array) -> void:

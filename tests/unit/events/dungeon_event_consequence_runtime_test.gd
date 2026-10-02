@@ -264,6 +264,18 @@ func _test_health_authority(suite) -> void:
 
 
 func _test_modifier_authority(suite) -> void:
+	var unsorted = EventModifierAuthorityScript.new()
+	suite.assert_true(
+		not unsorted.configure(
+			["curse_stasis_fracture", "curse_fickle_time"], {}, []
+		),
+		"modifier authority rejects unsorted curse identifiers without a type error"
+	)
+	var malformed = EventModifierAuthorityScript.new()
+	suite.assert_true(
+		not malformed.configure(["curse_fickle_time", 7], {}, []),
+		"modifier authority rejects non-string curse identifiers without a type error"
+	)
 	var authority = EventModifierAuthorityScript.new()
 	suite.assert_true(authority.configure(["curse_fickle_time"], {}, []), "modifier authority configures")
 	var before: Dictionary = authority.snapshot()
