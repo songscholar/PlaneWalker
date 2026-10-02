@@ -104,6 +104,31 @@ class FactRecorder:
 		})
 
 
+class AckFailingFacade:
+	extends RunRuntimeFacadeScript
+
+	var fail_event_fact_ack_count := 0
+
+	func fail_next_event_fact_ack() -> void:
+		fail_event_fact_ack_count = 1
+
+	func _commit_event_runtime_state(
+		command: Dictionary, expected_revision: int
+	) -> Dictionary:
+		if (
+			fail_event_fact_ack_count > 0
+			and str(command.get("operation", "")) == "ack_event_fact"
+		):
+			fail_event_fact_ack_count -= 1
+			return {
+				"ok": false,
+				"code": &"INTEGRITY_FAILURE",
+				"new_revision": expected_revision,
+				"context": {"stage": "injected_event_fact_ack"},
+			}
+		return super._commit_event_runtime_state(command, expected_revision)
+
+
 class RunnerFixture:
 	extends Node
 
@@ -190,6 +215,7 @@ func _ready() -> void:
 func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_real_facade_event_flow_and_restore(suite)
+	_test_event_fact_ack_retry_is_idempotent(suite)
 	_test_launch_host_creates_connected_room_runtime(suite)
 	suite.finish(get_tree())
 
@@ -318,6 +344,66 @@ func _test_real_facade_event_flow_and_restore(suite) -> void:
 	for fact: Dictionary in recorder.facts:
 		for forbidden: String in FORBIDDEN_FACT_FIELDS:
 			suite.assert_true(not fact.has(forbidden), "EventBus fact omits %s" % forbidden)
+	_disconnect_event_facts(recorder)
+
+
+func _test_event_fact_ack_retry_is_idempotent(suite) -> void:
+	var facade := AckFailingFacade.new()
+	var booted = facade.boot()
+	suite.assert_true(booted.ok, "ack retry Facade boots the real Base Pack")
+	if not booted.ok:
+		return
+	var started = facade.start_run(_launch_config(SEED + 2), "event-fact-ack-retry")
+	suite.assert_true(started.ok, "ack retry Facade starts a generated Launch floor")
+	if not started.ok:
+		return
+	var event_node_id := _first_reachable_event_node(
+		facade.snapshot().get("floor_plan", {}) as Dictionary
+	)
+	suite.assert_true(not event_node_id.is_empty(), "ack retry floor has a reachable event node")
+	if event_node_id.is_empty() or not _drive_to_node(facade, event_node_id):
+		suite.assert_true(false, "ack retry fixture reaches the event room")
+		return
+	var recorder := FactRecorder.new()
+	if not _connect_event_facts(recorder):
+		suite.assert_true(false, "ack retry fixture connects EventBus facts")
+		return
+
+	facade.fail_next_event_fact_ack()
+	var failed = facade.call("open_current_event", {})
+	suite.assert_true(not failed.ok, "injected fact ack failure is surfaced")
+	suite.assert_equal(
+		failed.code,
+		&"INTEGRITY_FAILURE",
+		"ack failure preserves the state-sink error code"
+	)
+	suite.assert_equal(
+		recorder.facts.size(),
+		1,
+		"event fact reaches EventBus before durable ack fails"
+	)
+	suite.assert_equal(
+		(facade.snapshot().get("dungeon_event_runtime", {}) as Dictionary)
+			.get("pending_facts", [])
+			.size(),
+		1,
+		"failed ack keeps the event fact in the durable outbox"
+	)
+
+	var retried = facade.call("open_current_event", {})
+	suite.assert_true(retried.ok, "event open retries and acknowledges the pending fact")
+	suite.assert_equal(
+		recorder.facts.size(),
+		1,
+		"retrying the same fact ID does not emit a duplicate EventBus fact"
+	)
+	suite.assert_equal(
+		(facade.snapshot().get("dungeon_event_runtime", {}) as Dictionary)
+			.get("pending_facts", [])
+			.size(),
+		0,
+		"successful retry drains the durable outbox"
+	)
 	_disconnect_event_facts(recorder)
 
 

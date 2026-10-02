@@ -56,6 +56,8 @@ const FLOOR_TRANSACTION_FIELDS: Array[String] = [
 	"revision",
 	"phase",
 	"suspended",
+	"open_offer",
+	"result",
 	"run_seed",
 	"current_floor",
 	"current_room",
@@ -224,7 +226,13 @@ func can_restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 	if not can_restore_selection_transaction_snapshot(value):
 		return false
+	var before_build: Dictionary = build_state.transaction_snapshot()
+	var before_event_runtime := dungeon_event_runtime.duplicate(true)
 	if not build_state.restore_transaction_snapshot(value["build"] as Dictionary):
+		return false
+	if not _sync_event_runtime_external_domains():
+		build_state.restore_transaction_snapshot(before_build)
+		dungeon_event_runtime = before_event_runtime
 		return false
 	revision = int(value["revision"])
 	phase = int(value["phase"])
@@ -233,6 +241,20 @@ func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 	open_offer = (value["open_offer"] as Dictionary).duplicate(true)
 	consumed_offer_ids = (value["consumed_offer_ids"] as Dictionary).duplicate(true)
 	return selection_transaction_snapshot() == value
+
+
+func apply_reward_definition(definition: Dictionary) -> Dictionary:
+	var before_build: Dictionary = build_state.transaction_snapshot()
+	var before_event_runtime := dungeon_event_runtime.duplicate(true)
+	var applied: Dictionary = build_state.apply_definition(definition)
+	if not bool(applied.get("ok", false)):
+		return applied
+	if _sync_event_runtime_external_domains():
+		return applied
+	if not build_state.restore_transaction_snapshot(before_build):
+		push_error("RunState failed to roll back BuildState after event modifier sync rejection")
+	dungeon_event_runtime = before_event_runtime
+	return {"ok": false, "field": "dungeon_event_runtime"}
 
 
 func has_active_floor_plan() -> bool:
@@ -571,6 +593,8 @@ func floor_transaction_snapshot() -> Dictionary:
 		"revision": revision,
 		"phase": phase,
 		"suspended": suspended,
+		"open_offer": open_offer.duplicate(true),
+		"result": result.duplicate(true),
 		"run_seed": run_seed,
 		"current_floor": current_floor,
 		"current_room": current_room,
@@ -603,6 +627,8 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 		or int(value["revision"]) < 0
 		or typeof(value["phase"]) != TYPE_INT
 		or typeof(value["suspended"]) != TYPE_BOOL
+		or not value["open_offer"] is Dictionary
+		or not value["result"] is Dictionary
 		or typeof(value["run_seed"]) != TYPE_INT
 		or typeof(value["current_floor"]) != TYPE_INT
 		or int(value["current_floor"]) < 0
@@ -768,6 +794,8 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	revision = int(value["revision"])
 	phase = int(value["phase"])
 	suspended = bool(value["suspended"])
+	open_offer = (value["open_offer"] as Dictionary).duplicate(true)
+	result = (value["result"] as Dictionary).duplicate(true)
 	run_seed = int(value["run_seed"])
 	current_floor = int(value["current_floor"])
 	current_room = int(value["current_room"])
@@ -833,6 +861,8 @@ func restore_launch_run_snapshot(
 		"revision": int(value.get("revision", -1)),
 		"phase": int(value.get("phase", -1)),
 		"suspended": bool(value.get("suspended", false)),
+		"open_offer": (value.get("open_offer", {}) as Dictionary).duplicate(true),
+		"result": (value.get("result", {}) as Dictionary).duplicate(true),
 		"run_seed": int(value.get("run_seed", 0)),
 		"current_floor": int(value.get("current_floor", 0)),
 		"current_room": int(value.get("current_room", 0)),
@@ -896,13 +926,16 @@ func restore_reward_replay_build_snapshot(value: Dictionary) -> bool:
 	if not can_restore_reward_replay_build_snapshot(value):
 		return false
 	var before: Dictionary = build_state.transaction_snapshot()
+	var before_event_runtime := dungeon_event_runtime.duplicate(true)
 	if (
 		build_state.restore_transaction_snapshot(value)
+		and _sync_event_runtime_external_domains()
 		and build_state.transaction_snapshot() == value
 	):
 		return true
 	if not build_state.restore_transaction_snapshot(before):
 		push_error("RunState failed to roll back a rejected reward Replay checkpoint")
+	dungeon_event_runtime = before_event_runtime
 	return false
 
 

@@ -1,5 +1,6 @@
 extends Node
 
+const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
 const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
@@ -7,6 +8,9 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_facade.gd")
 const RunRuntimeHostScript := preload("res://scripts/application/run_runtime_host.gd")
 const RoomSceneHostScript := preload("res://scripts/dungeon/room_scene_host.gd")
+const PlayerRewardEffectRuntimeScript := preload(
+	"res://scripts/items/player_reward_effect_runtime.gd"
+)
 
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
@@ -15,12 +19,14 @@ const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.jso
 class RouteLifecycleRecorder:
 	extends RefCounted
 
+	var publication_order: Array[String] = []
 	var run_started_events: Array[Dictionary] = []
 	var route_events: Array[Dictionary] = []
 	var room_started_events: Array[Dictionary] = []
 	var room_cleared_events: Array[Dictionary] = []
 	var floor_started_events: Array[Dictionary] = []
 	var floor_completed_events: Array[Dictionary] = []
+	var event_opened_events: Array[Dictionary] = []
 
 	func record_run_started(run_id: String, snapshot: Dictionary) -> void:
 		run_started_events.append({"run_id": run_id, "snapshot": snapshot.duplicate(true)})
@@ -32,6 +38,7 @@ class RouteLifecycleRecorder:
 		node_id: StringName,
 		revision: int
 	) -> void:
+		publication_order.append("route_selected")
 		route_events.append({
 			"run_id": run_id,
 			"floor_id": str(floor_id),
@@ -41,9 +48,24 @@ class RouteLifecycleRecorder:
 		})
 
 	func record_room_started(run_id: String, room_id: StringName, revision: int) -> void:
+		publication_order.append("room_started")
 		room_started_events.append({
 			"run_id": run_id,
 			"room_id": str(room_id),
+			"revision": revision,
+		})
+
+	func record_event_opened(
+		run_id: String,
+		event_id: StringName,
+		node_key: String,
+		revision: int
+	) -> void:
+		publication_order.append("event_opened")
+		event_opened_events.append({
+			"run_id": run_id,
+			"event_id": str(event_id),
+			"node_key": node_key,
 			"revision": revision,
 		})
 
@@ -120,6 +142,121 @@ class AtomicRouteSceneAdapter:
 		return {"ok": true}
 
 
+class TransactionalRoomRuntime:
+	extends Node
+
+	signal room_started(room_id: StringName, revision: int)
+	signal room_cleared(room_id: StringName, revision: int)
+	signal terminal_committed(context: Dictionary, revision: int)
+	signal runtime_failed(context: Dictionary)
+
+	var facade: RefCounted
+	var fail_entry: bool = false
+
+	func begin_current_room() -> Variant:
+		var paused: Variant = facade.call("pause_run")
+		if paused == null or not bool(paused.get("ok")):
+			return paused
+		room_started.emit(&"transactional_room", int(paused.new_revision))
+		if fail_entry:
+			return CommandResultScript.failure(
+				&"CONTENT_NOT_AVAILABLE",
+				int(paused.new_revision),
+				{"operation": "begin_current_room"}
+			)
+		return facade.call("resume_run")
+
+
+
+class RouteEntryRunner:
+	extends Node
+
+	signal spawn_warning_requested(spawn_definition: Dictionary, duration: float)
+	signal spawn_requested(spawn_definition: Dictionary)
+	signal encounter_completed(encounter_id: StringName)
+	signal encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary)
+
+	var active: bool = false
+
+	func start_encounter(_definition: Dictionary, _run_seed: int, _room_number: int) -> void:
+		active = true
+
+	func is_active() -> bool:
+		return active
+
+	func cancel() -> void:
+		active = false
+
+	func snapshot() -> Dictionary:
+		return {"active": active}
+
+	func register_spawned(_entity: Node, _definition: Dictionary = {}) -> bool:
+		return active
+
+	func reject_spawn(_definition: Dictionary, _reason: StringName) -> bool:
+		return active
+
+
+class RouteEntryRoomController:
+	extends Node
+
+	var runner := RouteEntryRunner.new()
+
+	func _init() -> void:
+		add_child(runner)
+
+	func encounter_runner() -> Node:
+		return runner
+
+	func configure_authored_runtime(_runtime: Node, _catalog: RefCounted) -> bool:
+		return true
+
+
+class MerchantRuntimePlayer:
+	extends RefCounted
+
+	var state := {
+		"generation": 1,
+		"health": {"current_hp": 40.0, "max_hp": 100.0},
+		"operations": [],
+	}
+	var publication_active := false
+
+	func reward_effect_snapshot() -> Dictionary:
+		return state.duplicate(true)
+
+	func restore_reward_effect_snapshot(value: Dictionary) -> bool:
+		if value.is_empty() or not value.get("health") is Dictionary:
+			return false
+		state = value.duplicate(true)
+		return true
+
+	func reward_effect_apply_operation(operation: Dictionary) -> Dictionary:
+		(state["operations"] as Array).append(operation.duplicate(true))
+		return {"ok": true, "code": &"OK"}
+
+	func reward_effect_begin_publication() -> bool:
+		if publication_active:
+			return false
+		publication_active = true
+		return true
+
+	func reward_effect_publication_can_commit() -> bool:
+		return publication_active
+
+	func reward_effect_commit_publication() -> bool:
+		if not publication_active:
+			return false
+		publication_active = false
+		return true
+
+	func reward_effect_rollback_publication() -> bool:
+		if not publication_active:
+			return false
+		publication_active = false
+		return true
+
+
 class RecordingFloorRuleEffectAuthority:
 	extends RefCounted
 
@@ -178,6 +315,11 @@ func _run() -> void:
 	_test_event_bus_floor_signal_contract(suite)
 	_test_runtime_host_launch_start_failure_is_atomic(suite)
 	_test_runtime_host_route_transaction_and_publication(suite)
+	_test_runtime_host_room_entry_failure_is_atomic_and_recoverable(suite)
+	_test_runtime_host_route_returns_final_room_entry_revision(suite)
+	_test_runtime_host_real_room_entry_rejection_restores_terminal_fields(suite)
+	_test_runtime_host_real_room_entry_rollback_is_atomic(suite, "event")
+	_test_runtime_host_real_room_entry_rollback_is_atomic(suite, "shop")
 	_test_facade_finalized_route_compensation_and_confirmation(suite)
 	_test_floor_rule_state_runtime_round_trip(suite)
 	_test_launch_restore_rebuilds_active_floor_rule_runtime(suite)
@@ -447,6 +589,413 @@ func _test_facade_finalized_route_compensation_and_confirmation(suite) -> void:
 	suite.assert_true(not late_rollback.ok, "confirmed route cannot be rolled back")
 
 
+func _test_runtime_host_room_entry_failure_is_atomic_and_recoverable(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "room-entry transaction facade boots")
+	suite.assert_true(
+		facade.start_run(_launch_config(), "run-route-room-entry-transaction").ok,
+		"room-entry transaction run starts"
+	)
+	var host := RunRuntimeHostScript.new()
+	add_child(host)
+	host.set("_facade", facade)
+	host.set("_active_run_id", "run-route-room-entry-transaction")
+	host.set("_published_run_id", "run-route-room-entry-transaction")
+	var controller := RouteEntryRoomController.new()
+	host.add_child(controller)
+	host.set("_room_controller", controller)
+	var runtime := TransactionalRoomRuntime.new()
+	runtime.facade = facade
+	host.add_child(runtime)
+	host.set("_room_runtime", runtime)
+	host.call("_connect_room_runtime")
+	var scene_adapter := AtomicRouteSceneAdapter.new()
+	suite.assert_true(
+		host.call("configure_route_scene_adapter", scene_adapter),
+		"room-entry transaction configures its scene adapter"
+	)
+	var recorder := RouteLifecycleRecorder.new()
+	_connect_route_recorder(recorder)
+
+	var choices: Array[Dictionary] = host.call("route_choices")
+	suite.assert_true(not choices.is_empty(), "room-entry transaction exposes a route")
+	if choices.is_empty():
+		_disconnect_route_recorder(recorder)
+		host.free()
+		return
+	var edge_id := StringName(str(choices[0].get("edge_id", "")))
+	var before: Dictionary = facade.snapshot()
+	runtime.fail_entry = true
+	var failed: Variant = host.call("select_route", edge_id)
+	suite.assert_true(not bool(failed.get("ok")), "room-entry rejection fails the route command")
+	suite.assert_equal(
+		str(failed.get("code")),
+		"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+		"room-entry rejection returns the stable host failure code"
+	)
+	suite.assert_equal(
+		facade.snapshot(),
+		before,
+		"room-entry rejection restores the exact pre-route authoritative snapshot"
+	)
+	suite.assert_equal(recorder.route_events.size(), 0, "room-entry rejection publishes no route fact")
+	suite.assert_equal(recorder.room_started_events.size(), 0, "room-entry rejection publishes no room fact")
+	suite.assert_true(
+		host.get("_room_runtime") != runtime,
+		"room-entry rejection replaces the failed runtime with a clean production runtime"
+	)
+
+	host.call("_dispose_room_runtime")
+	var retry_runtime := TransactionalRoomRuntime.new()
+	retry_runtime.facade = facade
+	host.add_child(retry_runtime)
+	host.set("_room_runtime", retry_runtime)
+	host.call("_connect_room_runtime")
+	var selected: Variant = host.call("select_route", edge_id)
+	suite.assert_true(bool(selected.get("ok")), "compensated room-entry route can retry immediately")
+	suite.assert_equal(recorder.route_events.size(), 1, "successful retry publishes one route fact")
+	suite.assert_equal(recorder.room_started_events.size(), 1, "successful retry publishes one room fact")
+	suite.assert_equal(
+		recorder.publication_order,
+		["route_selected", "room_started"],
+		"successful route publication remains ordered before room-start publication"
+	)
+
+	_disconnect_route_recorder(recorder)
+	host.free()
+
+
+func _test_runtime_host_route_returns_final_room_entry_revision(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "final route revision facade boots")
+	suite.assert_true(
+		facade.start_run(_launch_config(), "run-route-final-entry-revision").ok,
+		"final route revision run starts"
+	)
+	var host := RunRuntimeHostScript.new()
+	add_child(host)
+	host.set("_facade", facade)
+	host.set("_active_run_id", "run-route-final-entry-revision")
+	host.set("_published_run_id", "run-route-final-entry-revision")
+	var runtime := TransactionalRoomRuntime.new()
+	runtime.facade = facade
+	host.add_child(runtime)
+	host.set("_room_runtime", runtime)
+	host.call("_connect_room_runtime")
+	suite.assert_true(
+		host.call("configure_route_scene_adapter", AtomicRouteSceneAdapter.new()),
+		"final route revision configures its scene adapter"
+	)
+	var recorder := RouteLifecycleRecorder.new()
+	_connect_route_recorder(recorder)
+	var before: Dictionary = facade.snapshot()
+	var choices: Array[Dictionary] = host.call("route_choices")
+	suite.assert_true(not choices.is_empty(), "final route revision exposes a route")
+	if choices.is_empty():
+		_disconnect_route_recorder(recorder)
+		host.free()
+		return
+	var selected: Variant = host.call(
+		"select_route", StringName(str(choices[0].get("edge_id", "")))
+	)
+	suite.assert_true(bool(selected.get("ok")), "revision-advancing room entry commits")
+	var final_snapshot: Dictionary = facade.snapshot()
+	suite.assert_equal(
+		int(selected.get("new_revision")),
+		int(final_snapshot.get("revision", -1)),
+		"successful route returns the final post-entry authoritative revision"
+	)
+	suite.assert_true(
+		int(selected.get("new_revision")) > int(before.get("revision", -1)) + 2,
+		"returned revision includes the room runtime's pause/resume mutations"
+	)
+	suite.assert_equal(
+		recorder.publication_order,
+		["route_selected", "room_started"],
+		"route fact remains ordered before buffered room-start publication"
+	)
+	_disconnect_route_recorder(recorder)
+	host.free()
+
+
+func _test_runtime_host_real_room_entry_rejection_restores_terminal_fields(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "real entry rejection Facade boots")
+	var run_id := "run-real-shop-entry-rejection"
+	var started = facade.start_run(_launch_config(), run_id)
+	suite.assert_true(started.ok, "real entry rejection run starts")
+	if not started.ok:
+		return
+	var target_node_id := _first_reachable_node_type(
+		facade.snapshot().get("floor_plan", {}) as Dictionary,
+		"shop"
+	)
+	var path := _edge_path_to_node(
+		facade.snapshot().get("floor_plan", {}) as Dictionary,
+		target_node_id
+	)
+	suite.assert_true(
+		not target_node_id.is_empty() and not path.is_empty(),
+		"real entry rejection fixture has a reachable shop"
+	)
+	if target_node_id.is_empty() or path.is_empty():
+		return
+	for index: int in range(path.size() - 1):
+		var begun = facade.begin_route_transition(
+			StringName(path[index]), int(facade.snapshot().get("revision", -1))
+		)
+		if not begun.ok:
+			suite.assert_true(false, "real entry rejection begins predecessor route")
+			return
+		var transition_id := str(begun.context.get("transition_id", ""))
+		var finalized = facade.finalize_route_transition(
+			transition_id, int(begun.new_revision)
+		)
+		if not finalized.ok:
+			suite.assert_true(false, "real entry rejection enters predecessor")
+			return
+		var confirmed = facade.confirm_route_transition(
+			transition_id, int(finalized.new_revision)
+		)
+		if not confirmed.ok:
+			suite.assert_true(false, "real entry rejection confirms predecessor")
+			return
+		var completed = facade.complete_current_room()
+		if not completed.ok:
+			suite.assert_true(false, "real entry rejection clears predecessor")
+			return
+
+	var controller := RouteEntryRoomController.new()
+	add_child(controller)
+	var host := RunRuntimeHostScript.new()
+	add_child(host)
+	host.set("_facade", facade)
+	host.set("_active_run_id", run_id)
+	host.set("_published_run_id", run_id)
+	host.set("_room_controller", controller)
+	var runtime: Variant = facade.create_room_runtime(controller.runner)
+	suite.assert_true(runtime is Node, "real entry rejection creates RoomRuntime")
+	if not runtime is Node:
+		host.free()
+		controller.free()
+		return
+	(runtime as Node).name = "RoomRuntime"
+	host.add_child(runtime as Node)
+	host.set("_room_runtime", runtime)
+	host.call("_connect_room_runtime")
+	host.call(
+		"configure_floor_rule_effect_authority",
+		RecordingFloorRuleEffectAuthority.new()
+	)
+	host.call("configure_route_scene_adapter", AtomicRouteSceneAdapter.new())
+	var before := facade.snapshot().duplicate(true)
+	var failed = host.select_route(StringName(path[-1]))
+	suite.assert_true(not failed.ok, "missing merchant authority rejects real room entry")
+	suite.assert_equal(
+		str(failed.code),
+		"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+		"real room entry rejection returns the stable configuration code"
+	)
+	suite.assert_equal(
+		facade.snapshot(),
+		before,
+		"real room entry rejection restores every authoritative field"
+	)
+	suite.assert_true(
+		(facade.snapshot().get("result", {}) as Dictionary).is_empty(),
+		"real room entry rejection leaves no terminal result"
+	)
+
+	var merchant_player := MerchantRuntimePlayer.new()
+	var merchant_reward_runtime = PlayerRewardEffectRuntimeScript.new()
+	suite.assert_true(
+		facade.configure_merchant_effect_authority(
+			merchant_reward_runtime, merchant_player
+		),
+		"real entry rejection retry configures merchant authority"
+	)
+	var retried = host.select_route(StringName(path[-1]))
+	suite.assert_true(retried.ok, "real room entry retries after complete rollback")
+	host.free()
+	controller.free()
+
+
+func _test_runtime_host_real_room_entry_rollback_is_atomic(
+	suite,
+	room_type: String
+) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "%s rollback Facade boots" % room_type)
+	var merchant_player: MerchantRuntimePlayer = null
+	var merchant_reward_runtime: RefCounted = null
+	if room_type == "shop":
+		merchant_player = MerchantRuntimePlayer.new()
+		merchant_reward_runtime = PlayerRewardEffectRuntimeScript.new()
+		suite.assert_true(
+			facade.configure_merchant_effect_authority(
+				merchant_reward_runtime, merchant_player
+			),
+			"shop rollback configures merchant effect authority"
+		)
+	var run_id := "run-real-%s-route-rollback" % room_type
+	var started = facade.start_run(_launch_config(), run_id)
+	suite.assert_true(started.ok, "%s rollback run starts" % room_type)
+	if not started.ok:
+		return
+	var target_node_id := _first_reachable_node_type(
+		facade.snapshot().get("floor_plan", {}) as Dictionary,
+		room_type
+	)
+	var path := _edge_path_to_node(
+		facade.snapshot().get("floor_plan", {}) as Dictionary,
+		target_node_id
+	)
+	suite.assert_true(
+		not target_node_id.is_empty() and not path.is_empty(),
+		"%s rollback fixture has a reachable target" % room_type
+	)
+	if target_node_id.is_empty() or path.is_empty():
+		return
+	for index: int in range(path.size() - 1):
+		var begun = facade.begin_route_transition(
+			StringName(path[index]), int(facade.snapshot().get("revision", -1))
+		)
+		if not begun.ok:
+			suite.assert_true(false, "%s rollback fixture begins predecessor route" % room_type)
+			return
+		var transition_id := str(begun.context.get("transition_id", ""))
+		var finalized = facade.finalize_route_transition(
+			transition_id, int(begun.new_revision)
+		)
+		if not finalized.ok:
+			suite.assert_true(false, "%s rollback fixture enters predecessor" % room_type)
+			return
+		var confirmed = facade.confirm_route_transition(
+			transition_id, int(finalized.new_revision)
+		)
+		if not confirmed.ok:
+			suite.assert_true(false, "%s rollback fixture confirms predecessor" % room_type)
+			return
+		var completed = facade.complete_current_room()
+		if not completed.ok:
+			suite.assert_true(false, "%s rollback fixture clears predecessor" % room_type)
+			return
+
+	var controller := RouteEntryRoomController.new()
+	add_child(controller)
+	var host := RunRuntimeHostScript.new()
+	add_child(host)
+	host.set("_facade", facade)
+	host.set("_active_run_id", run_id)
+	host.set("_published_run_id", run_id)
+	host.set("_room_controller", controller)
+	var runtime: Variant = facade.create_room_runtime(controller.runner)
+	suite.assert_true(runtime is Node, "%s rollback creates a real RoomRuntime" % room_type)
+	if not runtime is Node:
+		host.free()
+		controller.free()
+		return
+	(runtime as Node).name = "RoomRuntime"
+	host.add_child(runtime as Node)
+	host.set("_room_runtime", runtime)
+	host.call("_connect_room_runtime")
+	host.call(
+		"configure_floor_rule_effect_authority",
+		RecordingFloorRuleEffectAuthority.new()
+	)
+	var adapter := AtomicRouteSceneAdapter.new()
+	adapter.fail_confirm = true
+	host.call("configure_route_scene_adapter", adapter)
+	var recorder := RouteLifecycleRecorder.new()
+	_connect_route_recorder(recorder)
+	var before := facade.snapshot().duplicate(true)
+	var event_runtime_before := (
+		before.get("dungeon_event_runtime", {}) as Dictionary
+	).duplicate(true)
+	var merchant_before := (
+		before.get("merchant_state", {}) as Dictionary
+	).duplicate(true)
+
+	var failed = host.select_route(StringName(path[-1]))
+	suite.assert_true(not failed.ok, "%s scene confirm failure is surfaced" % room_type)
+	suite.assert_equal(
+		str(failed.code),
+		"COMMIT_FAILED",
+		"%s failure keeps the stable code" % room_type
+	)
+	suite.assert_equal(
+		facade.snapshot(), before,
+		"%s failure restores authoritative RunState" % room_type
+	)
+	suite.assert_equal(
+		(facade.get("_event_runtime") as RefCounted).call("snapshot"),
+		event_runtime_before,
+		"%s failure restores the live event runtime" % room_type
+	)
+	suite.assert_equal(
+		(facade.get("_merchant_run_state") as RefCounted).call("snapshot"),
+		merchant_before,
+		"%s failure restores the live merchant state" % room_type
+	)
+	suite.assert_true(
+		(facade.get("_merchant_sessions") as Dictionary).is_empty(),
+		"%s failure removes tentative merchant sessions" % room_type
+	)
+	suite.assert_equal(
+		recorder.route_events.size(), 0,
+		"%s failure publishes no route fact" % room_type
+	)
+	suite.assert_equal(
+		recorder.room_started_events.size(), 0,
+		"%s failure publishes no room fact" % room_type
+	)
+	suite.assert_equal(
+		recorder.event_opened_events.size(), 0,
+		"%s failure publishes no event fact" % room_type
+	)
+
+	adapter.fail_confirm = false
+	var retried = host.select_route(StringName(path[-1]))
+	suite.assert_true(retried.ok, "%s route retries after complete rollback" % room_type)
+	if retried.ok:
+		suite.assert_equal(
+			recorder.route_events.size(), 1,
+			"%s retry publishes one route fact" % room_type
+		)
+		suite.assert_equal(
+			recorder.room_started_events.size(), 1,
+			"%s retry publishes one room fact" % room_type
+		)
+		if room_type == "event":
+			suite.assert_equal(
+				recorder.event_opened_events.size(), 1,
+				"event retry publishes one opened fact"
+			)
+			suite.assert_equal(
+				recorder.publication_order,
+				["route_selected", "event_opened", "room_started"],
+				"event facts publish after route confirmation and before room started"
+			)
+			suite.assert_equal(
+				(facade.get("_event_runtime") as RefCounted).call("snapshot"),
+				facade.snapshot().get("dungeon_event_runtime", {}),
+				"event retry keeps live and authoritative runtime identical"
+			)
+		else:
+			suite.assert_true(
+				not (facade.get("_merchant_sessions") as Dictionary).is_empty(),
+				"shop retry creates one authoritative merchant session"
+			)
+			suite.assert_equal(
+				(facade.get("_merchant_run_state") as RefCounted).call("snapshot"),
+				facade.snapshot().get("merchant_state", {}),
+				"shop retry keeps live and authoritative merchant state identical"
+			)
+	_disconnect_route_recorder(recorder)
+	host.free()
+	controller.free()
+
+
 func _test_floor_rule_state_runtime_round_trip(suite) -> void:
 	var facade = RunRuntimeFacadeScript.new()
 	suite.assert_true(facade.boot().ok, "floor-rule facade boots")
@@ -714,6 +1263,7 @@ func _connect_route_recorder(recorder: RouteLifecycleRecorder) -> void:
 	EventBus.room_cleared.connect(recorder.record_room_cleared)
 	EventBus.floor_started.connect(recorder.record_floor_started)
 	EventBus.floor_completed.connect(recorder.record_floor_completed)
+	EventBus.event_opened.connect(recorder.record_event_opened)
 
 
 func _disconnect_route_recorder(recorder: RouteLifecycleRecorder) -> void:
@@ -729,6 +1279,8 @@ func _disconnect_route_recorder(recorder: RouteLifecycleRecorder) -> void:
 		EventBus.floor_started.disconnect(recorder.record_floor_started)
 	if EventBus.floor_completed.is_connected(recorder.record_floor_completed):
 		EventBus.floor_completed.disconnect(recorder.record_floor_completed)
+	if EventBus.event_opened.is_connected(recorder.record_event_opened):
+		EventBus.event_opened.disconnect(recorder.record_event_opened)
 
 
 func _first_outgoing_edge(plan: Dictionary) -> Dictionary:
@@ -738,6 +1290,68 @@ func _first_outgoing_edge(plan: Dictionary) -> Dictionary:
 		if str(edge.get("source_node_id", "")) == source_id and not bool(edge.get("locked", false)):
 			return edge.duplicate(true)
 	return {}
+
+
+func _first_reachable_node_type(plan: Dictionary, room_type: String) -> String:
+	var queue: Array[String] = [str(plan.get("entry_node_id", "entry"))]
+	var visited: Dictionary = {}
+	while not queue.is_empty():
+		var node_id: String = queue.pop_front()
+		if visited.has(node_id):
+			continue
+		visited[node_id] = true
+		for node_value: Variant in plan.get("nodes", []):
+			if (
+				node_value is Dictionary
+				and str((node_value as Dictionary).get("id", "")) == node_id
+				and str((node_value as Dictionary).get("room_type", "")) == room_type
+			):
+				return node_id
+		for edge_value: Variant in plan.get("edges", []):
+			if (
+				edge_value is Dictionary
+				and str((edge_value as Dictionary).get("source_node_id", "")) == node_id
+				and not bool((edge_value as Dictionary).get("locked", false))
+			):
+				queue.append(str((edge_value as Dictionary).get("destination_node_id", "")))
+	return ""
+
+
+func _edge_path_to_node(plan: Dictionary, target_node_id: String) -> Array[String]:
+	var entry_id := str(plan.get("entry_node_id", "entry"))
+	var queue: Array[String] = [entry_id]
+	var prior: Dictionary = {entry_id: {}}
+	while not queue.is_empty():
+		var source_id: String = queue.pop_front()
+		if source_id == target_node_id:
+			break
+		for edge_value: Variant in plan.get("edges", []):
+			if not edge_value is Dictionary:
+				continue
+			var edge := edge_value as Dictionary
+			if (
+				str(edge.get("source_node_id", "")) != source_id
+				or bool(edge.get("locked", false))
+			):
+				continue
+			var destination_id := str(edge.get("destination_node_id", ""))
+			if prior.has(destination_id):
+				continue
+			prior[destination_id] = {
+				"source": source_id,
+				"edge_id": str(edge.get("id", "")),
+			}
+			queue.append(destination_id)
+	if not prior.has(target_node_id):
+		return []
+	var reversed: Array[String] = []
+	var cursor := target_node_id
+	while cursor != entry_id:
+		var step := prior[cursor] as Dictionary
+		reversed.append(str(step.get("edge_id", "")))
+		cursor = str(step.get("source", ""))
+	reversed.reverse()
+	return reversed
 
 
 func _load_json_array(path: String) -> Array:

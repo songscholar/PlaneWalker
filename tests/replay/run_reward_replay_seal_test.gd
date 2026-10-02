@@ -2,6 +2,9 @@ extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_facade.gd")
+const EventRequirementServiceScript := preload(
+	"res://scripts/events/event_requirement_service.gd"
+)
 
 const SEAL_PATH := "res://scripts/application/run_reward_replay_seal.gd"
 const EFFECT_CATALOG_PATH := "res://data/content/effect_catalog.json"
@@ -146,7 +149,184 @@ func _run() -> void:
 	)
 	suite.assert_equal(m1.snapshot(), m1_before, "Launch seal rejection preserves M1 state")
 
+	_test_reward_curse_syncs_event_requirements_and_restore(suite)
+
 	suite.finish(get_tree())
+
+
+func _test_reward_curse_syncs_event_requirements_and_restore(suite) -> void:
+	var facade = RunRuntimeFacadeScript.new()
+	suite.assert_true(facade.boot().ok, "curse sync fixture boots")
+	var started = facade.start_run(
+		_config("LAUNCH", 20261002), "run-reward-curse-sync"
+	)
+	suite.assert_true(started.ok, "curse sync fixture starts")
+	if not started.ok:
+		return
+	var no_curse_checkpoint: Dictionary = facade.call("reward_replay_snapshot")
+	var curse_id := _complete_route_and_select_contract_curse(suite, facade)
+	suite.assert_true(not curse_id.is_empty(), "contract selection acquires a concrete curse")
+	if curse_id.is_empty():
+		return
+	var selected_snapshot: Dictionary = facade.snapshot()
+	suite.assert_true(
+		(selected_snapshot.get("build", {}).get("curses", []) as Array).has(curse_id),
+		"contract reward writes the authoritative BuildState curse"
+	)
+	_assert_lacks_curse_requirement(
+		suite,
+		facade,
+		curse_id,
+		false,
+		"reward selection refreshes the next event requirement context"
+	)
+
+	var restored = RunRuntimeFacadeScript.new()
+	suite.assert_true(restored.boot().ok, "curse sync restore facade boots")
+	var restored_result = restored.restore_launch_run(selected_snapshot)
+	suite.assert_true(restored_result.ok, "full Run restore accepts synchronized Build and event curse state")
+	if restored_result.ok:
+		_assert_lacks_curse_requirement(
+			suite,
+			restored,
+			curse_id,
+			false,
+			"full Run restore preserves the latest curse requirement context"
+		)
+
+	suite.assert_true(
+		bool(facade.call("restore_reward_replay_snapshot", no_curse_checkpoint)),
+		"reward Replay restores the earlier curse-free BuildState"
+	)
+	suite.assert_true(
+		not (facade.snapshot().get("build", {}).get("curses", []) as Array).has(curse_id),
+		"reward Replay removes the later curse from BuildState"
+	)
+	_assert_lacks_curse_requirement(
+		suite,
+		facade,
+		curse_id,
+		true,
+		"reward Replay refreshes the next event requirement context"
+	)
+
+
+func _complete_route_and_select_contract_curse(suite, facade: RefCounted) -> String:
+	var choices: Array = facade.call("route_choices")
+	suite.assert_true(not choices.is_empty(), "curse sync route exposes a legal choice")
+	if choices.is_empty():
+		return ""
+	var choice := choices[0] as Dictionary
+	var before_route: Dictionary = facade.call("snapshot")
+	var begun = facade.call(
+		"begin_route_transition",
+		StringName(str(choice.get("edge_id", ""))),
+		int(before_route.get("revision", -1))
+	)
+	suite.assert_true(begun.ok, "curse sync route transition begins")
+	if not begun.ok:
+		return ""
+	var finalized = facade.call(
+		"finalize_route_transition",
+		str(begun.context.get("transition_id", "")),
+		int(begun.new_revision)
+	)
+	suite.assert_true(finalized.ok, "curse sync route enters the selected room")
+	if not finalized.ok:
+		return ""
+	var confirmed = facade.call(
+		"confirm_route_transition",
+		str(begun.context.get("transition_id", "")),
+		int(finalized.new_revision)
+	)
+	suite.assert_true(confirmed.ok, "curse sync route confirms")
+	if not confirmed.ok:
+		return ""
+	var completion = facade.call("complete_current_room")
+	suite.assert_true(completion.ok, "curse sync room completes")
+	if not completion.ok:
+		return ""
+	var orchestrator: RefCounted = facade.get("_orchestrator")
+	var draft: RefCounted = facade.get("_draft")
+	var floor_checkpoint: Dictionary = orchestrator.call("floor_transaction_snapshot")
+	var state: Dictionary = facade.call("snapshot")
+	var created = draft.call(
+		"create_offer",
+		facade.call("content_registry"),
+		state,
+		{
+			"reward_kind": "contract",
+			"room_number": int(state.get("current_room", 0)),
+		}
+	)
+	suite.assert_true(created.ok, "curse sync creates an authoritative contract offer")
+	if not created.ok:
+		return ""
+	var offer := created.context.get("offer", {}) as Dictionary
+	var opened = orchestrator.call("open_selection", offer)
+	suite.assert_true(opened.ok, "curse sync contract offer opens")
+	if not opened.ok:
+		return ""
+	var option_id := ""
+	var curse_id := ""
+	for option_value: Variant in offer.get("options", []):
+		if not option_value is Dictionary:
+			continue
+		var option := option_value as Dictionary
+		var content_id := str(option.get("content_id", ""))
+		if content_id == "decline_contract":
+			continue
+		option_id = str(option.get("option_id", ""))
+		curse_id = content_id
+		break
+	suite.assert_true(not option_id.is_empty(), "contract offer contains an acquirable curse")
+	if option_id.is_empty():
+		return ""
+	var selected = facade.call(
+		"submit_selection",
+		str(offer.get("offer_id", "")),
+		option_id,
+		int(offer.get("revision", -1))
+	)
+	suite.assert_true(selected.ok, "contract curse commits through reward selection authority")
+	if selected.ok:
+		floor_checkpoint["dungeon_event_runtime"] = (
+			facade.call("snapshot").get("dungeon_event_runtime", {}) as Dictionary
+		).duplicate(true)
+		suite.assert_true(
+			bool(orchestrator.call("restore_floor_transaction_snapshot", floor_checkpoint)),
+			"curse sync fixture restores a valid completed-room FloorPlan checkpoint"
+		)
+	return curse_id if selected.ok else ""
+
+
+func _assert_lacks_curse_requirement(
+	suite,
+	facade: RefCounted,
+	curse_id: String,
+	expected_eligible: bool,
+	label: String
+) -> void:
+	var provider: Dictionary = facade.call("_event_runtime_context")
+	var requirements := provider.get("requirements", {}) as Dictionary
+	suite.assert_equal(
+		(requirements.get("curse_ids", []) as Array).has(curse_id),
+		not expected_eligible,
+		"%s projects the authoritative curse ids" % label
+	)
+	var evaluated: Dictionary = EventRequirementServiceScript.new().evaluate(
+		[{
+			"operation": "lacks_curse",
+			"arguments": {"curse_id": curse_id},
+		}],
+		requirements
+	)
+	suite.assert_true(bool(evaluated.get("ok", false)), "%s evaluates successfully" % label)
+	suite.assert_equal(
+		bool(evaluated.get("eligible", false)),
+		expected_eligible,
+		label
+	)
 
 
 func _complete_and_select_effectful_reward(

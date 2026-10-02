@@ -113,6 +113,7 @@ var _merchant_run_start_player_baseline: Dictionary = {}
 var _event_definitions: Array[Dictionary] = []
 var _event_content_fingerprint: String = ""
 var _event_runtime: RefCounted
+var _published_event_fact_ids: Dictionary = {}
 
 
 func _notification(what: int) -> void:
@@ -160,6 +161,7 @@ func boot(
 	_event_definitions.clear()
 	_event_content_fingerprint = ""
 	_event_runtime = null
+	_published_event_fact_ids.clear()
 
 	var report
 	if content_path.to_lower().ends_with("pack.json"):
@@ -325,6 +327,7 @@ func start_run(config: Dictionary, run_id: String):
 	_economy_state = candidate_economy
 	_merchant_run_state = candidate_merchant_state
 	_event_runtime = candidate_event_runtime
+	_published_event_fact_ids.clear()
 	_merchant_sessions.clear()
 	return accepted_result
 
@@ -411,6 +414,7 @@ func begin_route_transition(edge_id: StringName, expected_revision: int):
 		"edge_id": str(edge_id),
 		"node_id": str(begun.context.get("node_id", "")),
 		"stage": "begun",
+		"event_facts": [],
 		"floor_rule_runtime": _floor_rule_runtime,
 		"floor_rule_effect_authority": _floor_rule_effect_authority,
 	}
@@ -498,6 +502,12 @@ func rollback_route_transition(transition_id: String, expected_revision: int):
 			_revision(), {"transition_id": transition_id, "rolled_back": true}
 		)
 	if rolled_back.ok:
+		if not _restore_route_runtime_adapters_after_rollback():
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_runtime_adapter_rollback", "transition_id": transition_id}
+			)
 		_floor_rule_runtime = reservation.get("floor_rule_runtime") as RefCounted
 		_floor_rule_effect_authority = reservation.get("floor_rule_effect_authority")
 		_route_transactions.erase(transition_id)
@@ -511,13 +521,40 @@ func confirm_route_transition(transition_id: String, expected_revision: int):
 	var preflight = can_confirm_route_transition(transition_id, expected_revision)
 	if not preflight.ok:
 		return preflight
+	var reservation := (_route_transactions[transition_id] as Dictionary).duplicate(true)
 	_route_transactions.erase(transition_id)
 	if _orchestrator.snapshot().get("floor_rule_state", {}).is_empty():
 		_floor_rule_runtime = null
 		_floor_rule_effect_authority = null
 	return CommandResultScript.success(
-		_revision(), {"transition_id": transition_id, "confirmed": true}
+		_revision(), {
+			"transition_id": transition_id,
+			"confirmed": true,
+			"event_facts": (reservation.get("event_facts", []) as Array).duplicate(true),
+		}
 	)
+
+
+func publish_confirmed_route_event_facts(facts: Array) -> bool:
+	if not _route_transactions.is_empty():
+		return false
+	for value: Variant in facts:
+		if not value is Dictionary:
+			return false
+		var fact := value as Dictionary
+		if (
+			fact.size() != 2
+			or not fact.has("fact_id")
+			or not fact.has("payload")
+			or typeof(fact["fact_id"]) != TYPE_STRING
+			or not fact["payload"] is Dictionary
+			or not _publish_event_fact_immediate(
+				str(fact["fact_id"]),
+				(fact["payload"] as Dictionary).duplicate(true)
+			)
+		):
+			return false
+	return true
 
 
 func can_confirm_route_transition(transition_id: String, expected_revision: int):
@@ -934,8 +971,27 @@ func commit_reserved_selection(reservation_id: String):
 	if not committed.ok:
 		return committed
 	var offer_id := str(reservation.get("offer_id", ""))
+	if not _refresh_event_runtime_from_state():
+		if (
+			not _orchestrator.restore_selection_transaction_snapshot(before)
+			or not _refresh_event_runtime_from_state()
+		):
+			push_error("Selection authority rollback failed after event runtime refresh rejection")
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"reservation_id": reservation_id, "offer_id": offer_id}
+			)
+		return CommandResultScript.failure(
+			&"COMMIT_FAILED",
+			_revision(),
+			{"reservation_id": reservation_id, "offer_id": offer_id}
+		)
 	if not _draft.close_offer(offer_id):
-		if not _orchestrator.restore_selection_transaction_snapshot(before):
+		if (
+			not _orchestrator.restore_selection_transaction_snapshot(before)
+			or not _refresh_event_runtime_from_state()
+		):
 			push_error("Selection authority rollback failed after DraftService close rejection")
 			return CommandResultScript.failure(
 				&"INTEGRITY_FAILURE",
@@ -1076,9 +1132,12 @@ func restore_reward_replay_snapshot(value: Dictionary) -> bool:
 	var target_build := (value.get("build_state", {}) as Dictionary).duplicate(true)
 	if not _orchestrator.restore_reward_replay_build_snapshot(target_build):
 		return false
-	if reward_replay_snapshot() == value:
+	if _refresh_event_runtime_from_state() and reward_replay_snapshot() == value:
 		return true
-	if not _orchestrator.restore_reward_replay_build_snapshot(before):
+	if (
+		not _orchestrator.restore_reward_replay_build_snapshot(before)
+		or not _refresh_event_runtime_from_state()
+	):
 		push_error("RunRuntimeFacade failed to roll back a rejected reward Replay restore")
 	return false
 
@@ -1125,7 +1184,8 @@ func current_encounter_definition() -> Dictionary:
 		return _encounter_catalog.encounter_definition(
 			encounter_id,
 			int(_orchestrator.snapshot().get("run_seed", 0)),
-			int(room.get("room_number", 0))
+			int(room.get("room_number", 0)),
+			str(room.get("type", "combat"))
 		)
 	return _encounter_catalog.encounter_definition(
 		str(room.get("encounter_id", "")),
@@ -1294,6 +1354,68 @@ func _sync_event_runtime_floor_plan() -> bool:
 	if not bool(candidate.get("ok", false)):
 		return false
 	_event_runtime = candidate["runtime"] as RefCounted
+	return true
+
+
+func _refresh_event_runtime_from_state() -> bool:
+	if _orchestrator == null:
+		return false
+	var runtime_snapshot := (
+		_orchestrator.snapshot().get("dungeon_event_runtime", {}) as Dictionary
+	).duplicate(true)
+	if runtime_snapshot.is_empty():
+		return _event_runtime == null
+	if _event_runtime == null or _economy_state == null:
+		return false
+	var candidate := _event_runtime_candidate(
+		_orchestrator, _director, _economy_state, runtime_snapshot
+	)
+	if not bool(candidate.get("ok", false)):
+		return false
+	_event_runtime = candidate["runtime"] as RefCounted
+	return true
+
+
+func _restore_route_runtime_adapters_after_rollback() -> bool:
+	if _orchestrator == null or _director == null or _economy_state == null:
+		return false
+	var state: Dictionary = _orchestrator.snapshot()
+	var plan := (state.get("floor_plan", {}) as Dictionary).duplicate(true)
+	var candidate_director = RunDirectorScript.new()
+	if not candidate_director.configure_launch_plan(plan, _registry):
+		candidate_director.free()
+		return false
+	var event_value := (
+		state.get("dungeon_event_runtime", {}) as Dictionary
+	).duplicate(true)
+	var event_candidate := _event_runtime_candidate(
+		_orchestrator,
+		candidate_director,
+		_economy_state,
+		event_value
+	)
+	if not bool(event_candidate.get("ok", false)):
+		candidate_director.free()
+		return false
+	var merchant_value := (
+		state.get("merchant_state", {}) as Dictionary
+	).duplicate(true)
+	if (
+		_merchant_run_state == null
+		or not bool(_merchant_run_state.call("restore_snapshot", merchant_value))
+	):
+		candidate_director.free()
+		return false
+	var previous_director = _director
+	_director = candidate_director
+	_event_runtime = event_candidate["runtime"] as RefCounted
+	_merchant_sessions.clear()
+	if not _restore_current_merchant_session_from_snapshot():
+		_director = previous_director
+		candidate_director.free()
+		return false
+	if previous_director != null and is_instance_valid(previous_director):
+		previous_director.free()
 	return true
 
 
@@ -1620,6 +1742,7 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 			_revision(),
 			{"stage": "merchant_session_restore"}
 		)
+	_published_event_fact_ids.clear()
 	if previous_director != null and is_instance_valid(previous_director):
 		previous_director.free()
 	return CommandResultScript.success(
@@ -2647,15 +2770,43 @@ func _overlay_event_assignments(director: Node, runtime_snapshot: Dictionary) ->
 	return true
 
 
-func _publish_event_fact(_fact_id: String, payload: Dictionary) -> bool:
+func _publish_event_fact(fact_id: String, payload: Dictionary) -> bool:
+	var transition_id := _finalized_route_transition_id()
+	if not transition_id.is_empty():
+		if not _event_fact_is_valid(fact_id, payload):
+			return false
+		var reservation := _route_transactions[transition_id] as Dictionary
+		var facts := reservation.get("event_facts", []) as Array
+		for value: Variant in facts:
+			if (
+				value is Dictionary
+				and str((value as Dictionary).get("fact_id", "")) == fact_id
+			):
+				return (value as Dictionary).get("payload", {}) == payload
+		facts.append({
+			"fact_id": fact_id,
+			"payload": payload.duplicate(true),
+		})
+		reservation["event_facts"] = facts
+		_route_transactions[transition_id] = reservation
+		return true
+	return _publish_event_fact_immediate(fact_id, payload)
+
+
+func _publish_event_fact_immediate(fact_id: String, payload: Dictionary) -> bool:
 	if _orchestrator == null:
 		return false
 	var run_id := str(_orchestrator.snapshot().get("run_id", ""))
+	if run_id.is_empty() or not _event_fact_is_valid(fact_id, payload):
+		return false
 	var event_id := StringName(str(payload.get("event_id", "")))
 	var node_key := str(payload.get("node_key", ""))
-	if run_id.is_empty() or str(event_id).is_empty() or node_key.is_empty():
-		return false
-	match str(payload.get("kind", "")):
+	var kind := str(payload.get("kind", ""))
+	var publication_id := "%s:%s" % [run_id, fact_id]
+	if _published_event_fact_ids.has(publication_id):
+		return true
+	_published_event_fact_ids[publication_id] = true
+	match kind:
 		"event_opened":
 			EventBus.event_opened.emit(run_id, event_id, node_key, _revision())
 		"event_committed":
@@ -2682,9 +2833,31 @@ func _publish_event_fact(_fact_id: String, payload: Dictionary) -> bool:
 				run_id, event_id, node_key,
 				StringName(str(payload.get("result_key", ""))), _revision()
 			)
-		_:
-			return false
 	return true
+
+
+func _event_fact_is_valid(fact_id: String, payload: Dictionary) -> bool:
+	return (
+		not fact_id.is_empty()
+		and not str(payload.get("event_id", "")).is_empty()
+		and not str(payload.get("node_key", "")).is_empty()
+		and str(payload.get("kind", "")) in [
+			"event_opened",
+			"event_committed",
+			"event_reward_completed",
+			"event_encounter_completed",
+			"event_dismissed",
+		]
+	)
+
+
+func _finalized_route_transition_id() -> String:
+	for transition_id_value: Variant in _route_transactions.keys():
+		var transition_id := str(transition_id_value)
+		var reservation := _route_transactions[transition_id] as Dictionary
+		if str(reservation.get("stage", "")) == "finalized":
+			return transition_id
+	return ""
 
 
 func _require_booted(operation: String):

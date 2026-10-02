@@ -856,7 +856,7 @@ func _validate_selected_definition(definition: Dictionary):
 func _record_selected_definition(definition: Dictionary) -> Dictionary:
 	if definition.is_empty():
 		return {"ok": true, "changed": false}
-	return _state.build_state.apply_definition(definition)
+	return _state.apply_reward_definition(definition)
 
 
 func _reject_phase():

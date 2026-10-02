@@ -40,6 +40,8 @@ var _initializing_run_id: String = ""
 var _pending_initial_room_started: Dictionary = {}
 var _pending_initial_room_cleared: Dictionary = {}
 var _pending_initial_runtime_failure: Dictionary = {}
+var _route_entry_publication_active: bool = false
+var _pending_route_runtime_failure: Dictionary = {}
 var _ended_run_id: String = ""
 var _run_serial: int = 0
 var _hud_render_accumulator: float = 0.0
@@ -114,6 +116,7 @@ func start_run(config: Dictionary) -> Variant:
 	_pending_initial_room_started.clear()
 	_pending_initial_room_cleared.clear()
 	_pending_initial_runtime_failure.clear()
+	_discard_route_entry_publications()
 	_published_route_transition_ids.clear()
 	_published_floor_start_ids.clear()
 	_published_floor_completion_ids.clear()
@@ -515,35 +518,86 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 				{"stage": "route_confirm_preflight_authority_rollback", "transition_id": transition_id}
 			)
 		return confirmable
+	_begin_route_entry_publication_buffer()
+	if _room_runtime != null and is_instance_valid(_room_runtime):
+		var entered: Variant = _room_runtime.call("begin_current_room")
+		if (
+			entered == null
+			or not bool(entered.get("ok"))
+			or not _pending_route_runtime_failure.is_empty()
+		):
+			var entry_code := (
+				str(entered.get("code"))
+				if entered != null
+				else "INVALID_RESULT"
+			)
+			if not _compensate_route_after_room_entry(
+				prepared_scene, adapter_context, transition_id
+			):
+				return CommandResultScript.failure(
+					&"INTEGRITY_FAILURE",
+					_revision(),
+					{"stage": "route_room_runtime_entry_rollback", "transition_id": transition_id}
+				)
+			return CommandResultScript.failure(
+				&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
+				_revision(),
+				{
+					"stage": "route_room_runtime_entry",
+					"transition_id": transition_id,
+					"code": entry_code,
+				}
+			)
+	var final_revision := _revision()
+	adapter_context["revision"] = final_revision
+	var post_entry_confirmable: Variant = _facade.call(
+		"can_confirm_route_transition", transition_id, final_revision
+	)
+	if post_entry_confirmable == null or not bool(post_entry_confirmable.get("ok")):
+		if not _compensate_route_after_room_entry(
+			prepared_scene, adapter_context, transition_id
+		):
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_room_runtime_preflight_rollback", "transition_id": transition_id}
+			)
+		if post_entry_confirmable == null:
+			return CommandResultScript.failure(
+				&"INTEGRITY_FAILURE",
+				_revision(),
+				{"stage": "route_room_runtime_preflight", "transition_id": transition_id}
+			)
+		return CommandResultScript.failure(
+			post_entry_confirmable.code,
+			_revision(),
+			(post_entry_confirmable.context as Dictionary).duplicate(true),
+			post_entry_confirmable.message_key
+		)
 	var scene_confirmed := _confirm_route_scene(prepared_scene, adapter_context)
 	if not bool(scene_confirmed.get("ok", false)):
-		var confirm_scene_rollback := _rollback_route_scene(prepared_scene, adapter_context)
-		if not bool(confirm_scene_rollback.get("ok", false)):
+		if not _compensate_route_after_room_entry(
+			prepared_scene, adapter_context, transition_id
+		):
 			return CommandResultScript.failure(
 				&"INTEGRITY_FAILURE", _revision(),
 				{"stage": "route_scene_confirm_rollback", "transition_id": transition_id}
-			)
-		var confirm_authority_rollback: Variant = _facade.call(
-			"rollback_route_transition", transition_id, _revision()
-		)
-		if confirm_authority_rollback == null or not bool(confirm_authority_rollback.get("ok")):
-			return CommandResultScript.failure(
-				&"INTEGRITY_FAILURE", _revision(),
-				{"stage": "route_scene_confirm_authority_rollback", "transition_id": transition_id}
 			)
 		return CommandResultScript.failure(
 			&"COMMIT_FAILED", _revision(),
 			{"stage": "route_scene_confirm", "transition_id": transition_id}
 		)
 	var confirmed: Variant = _facade.call(
-		"confirm_route_transition", transition_id, route_revision
+		"confirm_route_transition", transition_id, final_revision
 	)
 	if confirmed == null or not bool(confirmed.get("ok")):
+		_discard_route_entry_publications()
 		return CommandResultScript.failure(
 			&"INTEGRITY_FAILURE", _revision(),
 			{"stage": "route_authority_confirm_after_preflight", "transition_id": transition_id}
 		)
 	if _published_route_transition_ids.has(transition_id):
+		_discard_route_entry_publications()
 		return CommandResultScript.failure(
 			&"ALREADY_CONSUMED",
 			_revision(),
@@ -553,28 +607,38 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 	var context: Dictionary = (finalized.context as Dictionary).duplicate(true)
 	var floor_id := StringName(str(context.get("floor_id", "")))
 	var node_id := StringName(str(context.get("node_id", "")))
-	var revision := route_revision
+	var revision := final_revision
 	EventBus.route_selected.emit(
 		_active_run_id, floor_id, StringName(str(edge_id)), node_id, revision
 	)
+	var confirmed_event_facts := (
+		(confirmed.context as Dictionary).get("event_facts", []) as Array
+	).duplicate(true)
+	if (
+		not confirmed_event_facts.is_empty()
+		and (
+			not _facade.has_method("publish_confirmed_route_event_facts")
+			or not bool(_facade.call(
+				"publish_confirmed_route_event_facts", confirmed_event_facts
+			))
+		)
+	):
+		_discard_route_entry_publications()
+		return CommandResultScript.failure(
+			&"INTEGRITY_FAILURE",
+			_revision(),
+			{"stage": "route_event_fact_publication", "transition_id": transition_id}
+		)
 	if _room_runtime != null and is_instance_valid(_room_runtime):
-		var entered: Variant = _room_runtime.call("begin_current_room")
-		if entered == null or not bool(entered.get("ok")):
-			return CommandResultScript.failure(
-				&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
-				_revision(),
-				{
-					"stage": "route_room_runtime_entry",
-					"transition_id": transition_id,
-					"code": str(entered.get("code")) if entered != null else "INVALID_RESULT",
-				}
-			)
+		_discard_route_entry_publications()
+		EventBus.room_started.emit(_active_run_id, node_id, final_revision)
 	else:
+		_discard_route_entry_publications()
 		# Headless transaction harnesses may exercise route publication without
 		# constructing the production RoomRuntime. Production start_run always
 		# owns a runtime and publishes room_started through its signal callback.
 		EventBus.room_started.emit(_active_run_id, node_id, revision)
-	return CommandResultScript.success(route_revision, context)
+	return CommandResultScript.success(final_revision, context)
 
 
 func start_next_floor() -> Variant:
@@ -739,6 +803,8 @@ func _on_room_started(active_room_id: StringName, revision: int) -> void:
 	var run_id := str(state.get("run_id", ""))
 	if run_id.is_empty() or run_id != _active_run_id:
 		return
+	if _route_entry_publication_active:
+		return
 	if run_id == _initializing_run_id:
 		if _pending_initial_room_started.is_empty():
 			_pending_initial_room_started = {
@@ -757,6 +823,8 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 	var run_id := str(state.get("run_id", ""))
 	if run_id.is_empty() or run_id != _active_run_id:
 		return
+	if _route_entry_publication_active:
+		return
 	if run_id == _initializing_run_id:
 		if _pending_initial_room_cleared.is_empty():
 			_pending_initial_room_cleared = {
@@ -772,12 +840,18 @@ func _on_room_cleared(active_room_id: StringName, revision: int) -> void:
 
 
 func _on_terminal_committed(context: Dictionary, _revision: int) -> void:
+	if _route_entry_publication_active:
+		return
 	_retire_hostile_threats()
 	_cancel_player_time_effects(&"run_terminal")
 	_publish_terminal_result(context)
 
 
 func _on_runtime_failed(context: Dictionary) -> void:
+	if _route_entry_publication_active:
+		if _pending_route_runtime_failure.is_empty():
+			_pending_route_runtime_failure = context.duplicate(true)
+		return
 	var state := runtime_snapshot()
 	var run_id := str(state.get("run_id", ""))
 	if not run_id.is_empty() and run_id == _active_run_id and run_id == _initializing_run_id:
@@ -790,6 +864,16 @@ func _on_runtime_failed(context: Dictionary) -> void:
 	_retire_hostile_threats()
 	_cancel_player_time_effects(&"runtime_failed")
 	_publish_terminal_result(context)
+
+
+func _begin_route_entry_publication_buffer() -> void:
+	_discard_route_entry_publications()
+	_route_entry_publication_active = true
+
+
+func _discard_route_entry_publications() -> void:
+	_route_entry_publication_active = false
+	_pending_route_runtime_failure.clear()
 
 
 func _open_offer(offer_value: Variant) -> void:
@@ -1345,6 +1429,64 @@ func _rollback_route_scene(prepared: Dictionary, context: Dictionary) -> Diction
 	elif kind == "room_scene_host" and (_route_scene_adapter as Object).has_method("rollback_transition"):
 		result = (_route_scene_adapter as Object).call("rollback_transition", ticket)
 	return _adapter_result_dictionary(result)
+
+
+func _compensate_route_after_room_entry(
+	prepared_scene: Dictionary,
+	adapter_context: Dictionary,
+	transition_id: String
+) -> bool:
+	var scene_rollback := _rollback_route_scene(prepared_scene, adapter_context)
+	var scene_rollback_ok := bool(scene_rollback.get("ok", false))
+	var authority_rollback: Variant = _facade.call(
+		"rollback_route_transition", transition_id, _revision()
+	)
+	var authority_rollback_ok := (
+		authority_rollback != null and bool(authority_rollback.get("ok"))
+	)
+	var runtime_rollback_ok := false
+	if authority_rollback_ok:
+		runtime_rollback_ok = _rollback_room_runtime_entry()
+	_discard_route_entry_publications()
+	_floor_rule_frame_origin = -1
+	return scene_rollback_ok and authority_rollback_ok and runtime_rollback_ok
+
+
+func _rollback_room_runtime_entry() -> bool:
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		return true
+	if _room_runtime.has_method("rollback_route_entry"):
+		return bool(_room_runtime.call("rollback_route_entry"))
+	if (
+		_facade == null
+		or not _facade.has_method("create_room_runtime")
+		or _room_controller == null
+		or not is_instance_valid(_room_controller)
+		or not _room_controller.has_method("encounter_runner")
+		or not _room_controller.has_method("configure_authored_runtime")
+	):
+		return false
+	var runner_value: Variant = _room_controller.call("encounter_runner")
+	if not runner_value is Node:
+		return false
+	if (runner_value as Node).has_method("cancel"):
+		(runner_value as Node).call("cancel")
+	_dispose_room_runtime()
+	var runtime_value: Variant = _facade.call("create_room_runtime", runner_value)
+	if not runtime_value is Node:
+		return false
+	_room_runtime = runtime_value as Node
+	_room_runtime.name = "RoomRuntime"
+	add_child(_room_runtime)
+	if not bool(_room_controller.call(
+		"configure_authored_runtime",
+		_room_runtime,
+		_facade.call("encounter_catalog")
+	)):
+		_dispose_room_runtime()
+		return false
+	_connect_room_runtime()
+	return true
 
 
 func _floor_rule_configuration_for_scene(prepared: Dictionary) -> Dictionary:
