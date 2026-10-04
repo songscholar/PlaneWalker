@@ -1,0 +1,14 @@
+Plane Walker Original Actor Atlas Artwork
+
+These ten actor animation atlases, their generated contact sheet and the
+original raster source were created locally for the Plane Walker project.
+No downloaded artwork, copyrighted character references, external stock assets
+or remote image services are used.
+
+The original raster artwork in this directory is dedicated to the public domain
+under CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
+This dedication applies to the artwork only; it does not relicense game code,
+project names, third-party dependencies or other assets.
+
+Source: tools/production_art/generate_actor_atlases.py
+Reproduction: python3 tools/production_art/generate_actor_atlases.py

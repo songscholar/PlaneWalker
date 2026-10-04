@@ -1,0 +1,261 @@
+{
+  "assets": [
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 80,
+      "frame_width": 80,
+      "frames_per_state": 4,
+      "height": 480,
+      "id": "forest_heart",
+      "kind": "boss",
+      "path": "forest_heart.png",
+      "rows": 6,
+      "sha256": "5e70d14ca14b24c54aea7a805756a996c9647fce7c889301be2f99a77224a1c3",
+      "width": 320
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 80,
+      "frame_width": 80,
+      "frames_per_state": 4,
+      "height": 480,
+      "id": "forge_colossus",
+      "kind": "boss",
+      "path": "forge_colossus.png",
+      "rows": 6,
+      "sha256": "c7f11f4e1ce43dfe493a9faac2dbb024f1f862436451693bda34fe275459f1c7",
+      "width": 320
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 48,
+      "frame_width": 48,
+      "frames_per_state": 4,
+      "height": 288,
+      "id": "primordial_knight",
+      "kind": "character",
+      "path": "primordial_knight.png",
+      "rows": 6,
+      "sha256": "d69576ed520532aa0f1ec52a21b85b9caacc1441215daf73080cb29b905a2753",
+      "width": 192
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 80,
+      "frame_width": 80,
+      "frames_per_state": 4,
+      "height": 480,
+      "id": "ruin_king",
+      "kind": "boss",
+      "path": "ruin_king.png",
+      "rows": 6,
+      "sha256": "4dfd8ab1555643b570ec31ecffdcd285b65092899567af9a080b294df3c149f2",
+      "width": 320
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 48,
+      "frame_width": 48,
+      "frames_per_state": 4,
+      "height": 288,
+      "id": "time_guardian",
+      "kind": "character",
+      "path": "time_guardian.png",
+      "rows": 6,
+      "sha256": "1f25e130570325e0eac6f065e4161c40764dec4a997916d801981be53a878d58",
+      "width": 192
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 48,
+      "frame_width": 48,
+      "frames_per_state": 4,
+      "height": 288,
+      "id": "time_lord",
+      "kind": "character",
+      "path": "time_lord.png",
+      "rows": 6,
+      "sha256": "a175fb71656402ffe723a82dd552b1bd6fda93d4dbc53f7a002ae4855ee9946c",
+      "width": 192
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 80,
+      "frame_width": 80,
+      "frames_per_state": 4,
+      "height": 480,
+      "id": "time_sovereign",
+      "kind": "boss",
+      "path": "time_sovereign.png",
+      "rows": 6,
+      "sha256": "d01641bfd1c5c0dbd403c5f66ace3b3248d89513477d02af9020655526503afc",
+      "width": 320
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 80,
+      "frame_width": 80,
+      "frames_per_state": 4,
+      "height": 480,
+      "id": "void_throne",
+      "kind": "boss",
+      "path": "void_throne.png",
+      "rows": 6,
+      "sha256": "0d5675aa74c4b21fdfc72a46d6b12dd9ee61c6f22c8d2e95c7b44acf952ef289",
+      "width": 320
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 48,
+      "frame_width": 48,
+      "frames_per_state": 4,
+      "height": 288,
+      "id": "void_walker",
+      "kind": "character",
+      "path": "void_walker.png",
+      "rows": 6,
+      "sha256": "f27fdcff75162d93a8fcbb0cc89cf0533d1bbbb0bd868079346a7c1ecede753a",
+      "width": 192
+    },
+    {
+      "columns": 4,
+      "facing": "right",
+      "filter": "nearest",
+      "fps": {
+        "attack": 12,
+        "cast": 10,
+        "death": 8,
+        "hurt": 12,
+        "idle": 5,
+        "move": 8
+      },
+      "frame_height": 48,
+      "frame_width": 48,
+      "frames_per_state": 4,
+      "height": 288,
+      "id": "wanderer",
+      "kind": "character",
+      "path": "wanderer.png",
+      "rows": 6,
+      "sha256": "4d7d0c81429d16b192262069e36229bbb0225cfc2fb7a25e9ba95ffe96f62041",
+      "width": 192
+    }
+  ],
+  "auxiliary_files": [
+    {
+      "path": "LICENSE.txt",
+      "sha256": "784123c9afbdd9dd0521e6a5377127d235c000ebd865e4540cb97990ce9b9547"
+    },
+    {
+      "path": "contact_sheet.png",
+      "sha256": "3dcf6660a105091c39779617c33925516e8efb61bbfeae31b23d80614b4f6a76"
+    }
+  ],
+  "provenance": {
+    "generator": "tools/production_art/generate_actor_atlases.py",
+    "kind": "original_project_art",
+    "license": "CC0-1.0",
+    "license_path": "LICENSE.txt",
+    "third_party_art": false
+  },
+  "schema_id": "plane_walker_actor_atlas_v1",
+  "schema_version": 1,
+  "states": [
+    "idle",
+    "move",
+    "attack",
+    "cast",
+    "hurt",
+    "death"
+  ]
+}
