@@ -196,10 +196,6 @@ printf '\n== Launch pool simulation contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.simulation.test_launch_pool_report
 
-printf '\n== Five-floor dungeon simulation contracts ==\n'
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
-	tests.contract.simulation.test_dungeon_simulation_report
-
 printf '\n== M1 release gate contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.m1.test_m1_gate
 
@@ -223,6 +219,10 @@ printf 'PASS: bootstrap import completed with only approved generated-resource/e
 printf '\n== Godot clean second import ==\n'
 run_import_phase clean
 printf 'PASS: clean second import completed without project errors\n'
+
+printf '\n== Five-floor dungeon simulation contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 GODOT_BIN="${godot_bin}" python3 -m unittest \
+	tests.contract.simulation.test_dungeon_simulation_report
 
 printf '\n== Godot scene tests ==\n'
 TEST_LOG_DIR="${TEST_LOG_DIR:-${validation_log_dir}/scene-tests}" \

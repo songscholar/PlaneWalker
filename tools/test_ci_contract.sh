@@ -94,12 +94,38 @@ make_fake_import_godot() {
 	chmod +x "${target}"
 }
 
+make_fake_native_probe_python() {
+	local target="$1"
+	local real_python="$2"
+	local quoted_python=""
+	printf -v quoted_python '%q' "${real_python}"
+	# This fixture checks orchestration; the real gate still runs the native module.
+	printf '%s\n' \
+		'#!/usr/bin/env bash' \
+		'set -eu' \
+		'if [[ $# == 3 && "${1:-}" == -m && "${2:-}" == unittest && "${3:-}" == tests.contract.simulation.test_dungeon_simulation_report ]]; then' \
+		'  import_count=0' \
+		'  if [[ -f "${GODOT_BIN}.state" ]]; then import_count="$(cat "${GODOT_BIN}.state")"; fi' \
+		'  [[ "${import_count}" == 2 ]] || { printf "FAIL: native dungeon probe must run after bootstrap and clean imports\\n" >&2; exit 92; }' \
+		'  printf "%s\\n" "$*" >>"${PLANEWALKER_CI_PROBE_TRACE:?}"' \
+		'  printf "CI FIXTURE: native dungeon probe dependency mocked after clean import\\n"' \
+		'  exit 0' \
+		'fi' \
+		'exec '"${quoted_python}"' "$@"' >"${target}"
+	chmod +x "${target}"
+}
+
 run_fake_validation() {
 	local mode="$1"
 	local output_path="$2"
 	local fake_godot="${TEMP_DIR}/godot-import-${mode}"
 	make_fake_import_godot "${fake_godot}" "${mode}"
+	local fake_python_dir="${TEMP_DIR}/python-${mode}"
+	mkdir -p "${fake_python_dir}"
+	make_fake_native_probe_python "${fake_python_dir}/python3" "$(command -v python3)"
 	SKIP_CI_CONTRACT=true \
+		PATH="${fake_python_dir}:${PATH}" \
+		PLANEWALKER_CI_PROBE_TRACE="${TEMP_DIR}/native-probe-${mode}.trace" \
 		GODOT_BIN="${fake_godot}" \
 		VALIDATION_LOG_DIR="${TEMP_DIR}/validation-${mode}" \
 		TEST_LOG_DIR="${TEMP_DIR}/validation-${mode}/scene-tests" \
@@ -255,6 +281,8 @@ assert_file_contains tools/validate_project.sh 'tools/document_governance_baseli
 assert_file_contains tools/validate_project.sh 'tests\.contract\.content_schema\.test_active_item_entry_schema' "active-item schema contract entrypoint"
 assert_file_contains tools/validate_project.sh 'tests\.contract\.content_schema\.test_p14_dungeon_schemas' "P14 dungeon schema contract entrypoint"
 assert_file_contains tools/validate_project.sh 'tests\.contract\.simulation\.test_launch_pool_report' "Launch-pool simulation contract entrypoint"
+assert_file_contains tools/validate_project.sh 'tests\.contract\.simulation\.test_dungeon_simulation_report' "real native dungeon simulation contract entrypoint"
+assert_file_contains tools/validate_project.sh 'tests\.contract\.export\.test_portable_runtime' "portable-runtime contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.playtest\.test_playtest_data' "playtest data contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.m1\.test_m1_gate' "M1 release gate contract entrypoint"
 assert_file_contains tools/validate_project.sh 'python3 -m unittest tests\.contract\.coverage\.test_gdscript_coverage' "GDScript coverage contract entrypoint"
@@ -273,6 +301,10 @@ assert_contains "$(cat "${bootstrap_output}")" "generated translation resources 
 assert_contains "$(cat "${bootstrap_output}")" "cannot persist global Godot editor settings" "editor settings environment warning"
 assert_contains "$(cat "${bootstrap_output}")" "Discovered scene tests: ${scene_count}" "validation executes every discovered scene"
 assert_contains "$(cat "${bootstrap_output}")" "Scene tests: ${scene_count} passed, 0 failed" "validation reports the complete discovered scene count"
+assert_file_contains "${TEMP_DIR}/native-probe-bootstrap_expected.trace" '^-m unittest tests\.contract\.simulation\.test_dungeon_simulation_report$' "validation still calls the real native module after both imports"
+[[ "$(wc -l <"${TEMP_DIR}/native-probe-bootstrap_expected.trace" | tr -d ' ')" == 1 ]] \
+	|| fail "the native dungeon contract module must be invoked exactly once"
+assert_contains "$(cat "${bootstrap_output}")" "native dungeon probe dependency mocked after clean import" "native probe fixture boundary is explicit"
 
 set +e
 run_fake_validation bootstrap_partial "${TEMP_DIR}/bootstrap-partial.out"
@@ -288,10 +320,18 @@ set -e
 [[ ${bootstrap_unexpected_status} -ne 0 ]] || fail "an unrelated bootstrap resource error must fail"
 [[ ${clean_resource_error_status} -ne 0 ]] || fail "the clean second import must reject every resource error"
 [[ ${unrelated_error_status} -ne 0 ]] || fail "an unclassified ERROR line must fail"
+for rejected_mode in bootstrap_partial bootstrap_unexpected_resource clean_resource_error unrelated_error; do
+	[[ ! -f "${TEMP_DIR}/native-probe-${rejected_mode}.trace" ]] \
+		|| fail "native simulation must not run after a failed import: ${rejected_mode}"
+done
 
 editor_warning_output="${TEMP_DIR}/editor-warning.out"
 run_fake_validation editor_warning_only "${editor_warning_output}" \
 	|| fail "editor settings write failures must remain an environment warning"
 assert_contains "$(cat "${editor_warning_output}")" "cannot persist global Godot editor settings" "editor settings warning classification"
+assert_contains "$(cat "${editor_warning_output}")" "native dungeon probe dependency mocked after clean import" "editor warning fixture reaches the native probe after imports"
+assert_file_contains "${TEMP_DIR}/native-probe-editor_warning_only.trace" '^-m unittest tests\.contract\.simulation\.test_dungeon_simulation_report$' "editor warning fixture invokes the real native module command"
+[[ "$(wc -l <"${TEMP_DIR}/native-probe-editor_warning_only.trace" | tr -d ' ')" == 1 ]] \
+	|| fail "the editor warning fixture must invoke the native module exactly once"
 
 printf 'PASS: test and CI contract is satisfied (%d discovered scenes)\n' "${scene_count}"
