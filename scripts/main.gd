@@ -8,6 +8,7 @@ const FloorRuleEffectAuthorityScript := preload(
 const SettlementScript := preload("res://scripts/progression/run_settlement_authority.gd")
 const HubFlowScript := preload("res://scripts/hub/hub_flow_coordinator.gd")
 const TutorialFlowScript := preload("res://scripts/onboarding/tutorial_flow_coordinator.gd")
+const TrainingFlowScript := preload("res://scripts/training/training_flow_coordinator.gd")
 const NarrativeFlowScript := preload("res://scripts/narrative/narrative_flow_coordinator.gd")
 const NativeRoomPresentationScript := preload("res://scripts/dungeon/native_room_presentation.gd")
 
@@ -37,11 +38,14 @@ var _profile_error := ""
 var _terminal_pending := false
 var _hub_flow: Node
 var _tutorial_flow: Node
+var _training_flow: Node2D
 var _narrative_flow: Node
 var _selected_ending_id := ""
 var _credits_pending := false
 var _terminal_notice_run_id := ""
 var _room_presentation: Node
+var _checkpoint_stamp := ""
+var _checkpoint_retry_at := 0
 
 
 func _ready() -> void:
@@ -67,6 +71,7 @@ func _ready() -> void:
 	_apply_localization()
 	_setup_hub()
 	_setup_tutorial()
+	_setup_training()
 	_setup_narrative()
 	if _hub_flow == null:
 		_show_start_menu()
@@ -91,6 +96,7 @@ func _setup_hub() -> void:
 		return
 	_hub_flow = hub
 	hub.launch_requested.connect(_start_hub_run)
+	hub.resume_requested.connect(_start_hub_run)
 	hub.tutorial_requested.connect(_open_hub_tutorial)
 	hub.settings_requested.connect(_open_hub_setting)
 	start_menu.visible = false
@@ -111,6 +117,42 @@ func _setup_tutorial() -> void:
 		return
 	_tutorial_flow = flow
 	flow.review_panel().closed.connect(_refresh_hub_after_review)
+	flow.training_requested.connect(_start_hub_training)
+
+
+func _setup_training() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var flow := TrainingFlowScript.new()
+	flow.name = "TrainingFlow"
+	add_child(flow)
+	var configured: Dictionary = flow.configure(runtime_host.content_registry(), _profile_service)
+	if not configured.ok:
+		_profile_error = str(configured.code)
+		flow.queue_free()
+		return
+	_training_flow = flow
+	flow.closed.connect(_on_training_closed)
+
+
+func _start_hub_training(task_id: StringName, expected_revision: int) -> bool:
+	if _training_flow == null or _hub_flow == null or not _hub_flow.is_hub_visible() or _credits_pending or not _profile_error.is_empty():
+		return false
+	var profile: Dictionary = _profile_service.snapshot()
+	if int(profile.revision) != expected_revision or not profile.active_launch_receipt.is_empty():
+		return false
+	var opened: Dictionary = _training_flow.open(str(task_id))
+	if not opened.ok:
+		return false
+	_tutorial_flow.close()
+	_hub_flow.hide_hub()
+	return true
+
+
+func _on_training_closed() -> void:
+	GameState.refresh_profile_state()
+	if _hub_flow != null:
+		_hub_flow.show_hub()
 
 
 func _setup_narrative() -> void:
@@ -243,6 +285,8 @@ func _apply_localization() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _training_flow != null and _training_flow.is_training_active():
+		return
 	if (
 		input_remap_panel.visible
 		or accessibility_settings_panel.visible
@@ -315,22 +359,35 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	get_tree().paused = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_PAUSABLE
+	var pending_config: Dictionary = _profile_service.pending_launch_config() if not from_candidate else {}
+	var effective_config := pending_config if not pending_config.is_empty() else config
+	_room_presentation.set_launch_mode(str(effective_config.get("milestone", "")) in ["LAUNCH", "EXPANSION"])
+	var was_in_hub: bool = _hub_flow != null and _hub_flow.is_hub_visible()
+	if was_in_hub:
+		_hub_flow.hide_hub()
 	var started: Variant
 	if from_candidate:
 		started = runtime_host.start_run(config)
 	elif not _profile_service.snapshot().active_launch_receipt.is_empty():
-		started = runtime_host.retry_profile_startup(_profile_service, int(_profile_service.snapshot().revision))
+		if not _profile_service.payload().get("native_run_checkpoint", {}).is_empty():
+			started = runtime_host.restore_profile_checkpoint(_profile_service, int(_profile_service.snapshot().revision))
+		else:
+			started = runtime_host.retry_profile_startup(_profile_service, int(_profile_service.snapshot().revision))
 	else:
 		started = runtime_host.start_profile_run(config, _profile_service, int(_profile_service.snapshot().revision))
 	if not started.ok:
 		combat_room.visible = false
 		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+		_room_presentation.set_launch_mode(false)
+		if was_in_hub:
+			_hub_flow.show_hub()
 		if from_candidate:
 			candidate_loadout_panel.call("show_start_rejected")
 		elif from_launch:
 			launch_loadout_panel.call("show_start_rejected")
 		return false
 	_room_presentation.set_launch_mode(str(runtime_host.runtime_snapshot().config.get("milestone", "")) in ["LAUNCH", "EXPANSION"])
+	_room_presentation.synchronize_active_room(bool(started.context.get("restored", false)))
 	if not from_candidate:
 		var bound: Dictionary = _narrative_flow.bind_active_run() if _narrative_flow != null else {"ok": false, "code": &"NARRATIVE_NOT_CONFIGURED"}
 		if not bound.ok:
@@ -348,9 +405,6 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	_selected_ending_id = ""
 	_terminal_notice_run_id = ""
 	runtime_host.set_process(true)
-	if _hub_flow != null:
-		_hub_flow.close_panel()
-		_hub_flow.hide_hub()
 	runtime_host.set_run_presentation_visible(true)
 	if candidate_loadout_panel.visible:
 		candidate_loadout_panel.call("close_panel")
@@ -360,8 +414,53 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	start_menu.visible = false
 	_on_run_started(runtime_host.runtime_snapshot().config)
 	status_label.visible = from_candidate
-	dungeon_flow.call("refresh", true)
+	if bool(started.context.get("restored", false)):
+		var presented: Variant = runtime_host.present_restored_checkpoint(func(): dungeon_flow.refresh(true))
+		if not presented.ok:
+			_profile_error = str(presented.code)
+			combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+			return false
+	else:
+		dungeon_flow.refresh(true)
+	_checkpoint_stamp = ""
+	if not from_candidate:
+		if bool(started.context.get("restored", false)):
+			_checkpoint_stamp = _native_checkpoint_stamp()
+		else:
+			checkpoint_current_run()
+	var snapshot: Dictionary = runtime_host.runtime_snapshot()
+	if RunPhaseScript.is_terminal(int(snapshot.phase)):
+		_on_run_ended(str(snapshot.run_id), snapshot.result, int(snapshot.revision))
 	return true
+
+
+func checkpoint_current_run() -> Dictionary:
+	if _profile_service == null or _profile_service.snapshot().active_launch_receipt.is_empty() or runtime_host.runtime_snapshot().get("run_id") != _profile_service.snapshot().active_launch_receipt.get("run_id"):
+		return {"ok": false, "code": &"INVALID_PHASE", "context": {}}
+	var result: Variant = runtime_host.checkpoint_profile_run(int(_profile_service.snapshot().revision))
+	if result.ok:
+		_checkpoint_stamp = _native_checkpoint_stamp()
+		_checkpoint_retry_at = 0
+		GameState.refresh_profile_state()
+	elif result.code not in [&"CHECKPOINT_UNSAFE", &"NATIVE_CHECKPOINT_UNSAFE", &"INVALID_PHASE"]:
+		_checkpoint_retry_at = Time.get_ticks_msec() + 2000
+	return {"ok": result.ok, "code": result.code, "context": result.context.duplicate(true)}
+
+
+func _native_checkpoint_stamp() -> String:
+	var state: Dictionary = runtime_host.runtime_snapshot()
+	return "%s:%s:%s:%s:%s:%s" % [state.get("run_id", ""), state.get("revision", -1), state.get("phase", -1), state.get("floor_plan", {}).get("floor_id", ""), state.get("floor_plan", {}).get("current_node_id", ""), state.get("events", []).size()]
+
+
+func _process(_delta: float) -> void:
+	if _profile_service == null or _credits_pending or _hub_flow == null or _hub_flow.is_hub_visible() or _profile_service.snapshot().active_launch_receipt.is_empty():
+		return
+	var stamp := _native_checkpoint_stamp()
+	if stamp == _checkpoint_stamp or _checkpoint_retry_at > Time.get_ticks_msec():
+		return
+	var result := checkpoint_current_run()
+	if result.code in [&"CHECKPOINT_UNSAFE", &"NATIVE_CHECKPOINT_UNSAFE", &"INVALID_PHASE"]:
+		_checkpoint_stamp = stamp
 
 
 func _build_run_config() -> Dictionary:
@@ -598,6 +697,7 @@ func _pause_run() -> void:
 	var phase := int(snapshot.get("phase", RunPhaseScript.Value.HUB))
 	if phase == RunPhaseScript.Value.HUB or RunPhaseScript.is_terminal(phase):
 		return
+	checkpoint_current_run()
 	var paused = runtime_host.call("pause_run")
 	if not paused.ok:
 		return

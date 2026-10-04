@@ -69,12 +69,18 @@ func set_launch_mode(value: bool) -> void:
 
 
 func _on_room_transitioned(_receipt: Dictionary) -> void:
+	synchronize_active_room(_host.has_method("native_checkpoint_restore_active") and _host.native_checkpoint_restore_active())
+
+
+func synchronize_active_room(preserve_position: bool = false) -> void:
 	if not _launch_mode or not is_instance_valid(_player):
 		return
 	var room: Node2D = _room_host.active_room()
-	if not is_instance_valid(room):
-		return
 	var state: Dictionary = _host.runtime_snapshot()
+	if not is_instance_valid(room):
+		if not preserve_position and state.get("floor_plan", {}).get("current_node_id") == "entry":
+			_player.global_position = DESIGN_SIZE * 0.5
+		return
 	var binding: Dictionary = room.binding_snapshot()
 	if not binding.get("active", false) or binding.get("binding", {}).get("node_id") != state.get("floor_plan", {}).get("current_node_id"):
 		return
@@ -84,6 +90,6 @@ func _on_room_transitioned(_receipt: Dictionary) -> void:
 		return
 	_camera.global_position = camera_bounds.global_position
 	_camera.force_update_scroll()
-	if _host.has_method("native_checkpoint_restore_active") and _host.native_checkpoint_restore_active():
+	if preserve_position:
 		return
 	_player.global_position = entry.global_position

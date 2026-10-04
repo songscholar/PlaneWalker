@@ -84,7 +84,10 @@ func project(service: RefCounted, selection: Dictionary, district_id: String, fu
 		forge_rows.append(_weapon(profile, weapon))
 	var dialogue := _dialogue(service, npc)
 	var launch_available: bool = profile.active_launch_receipt.is_empty() and profile.unlocked_characters.has(selection.character_id) and profile.unlocked_weapons.has(selection.weapon_id)
+	var resume_available: bool = not profile.active_launch_receipt.is_empty() and service.authenticated_native_checkpoint(int(profile.revision)).ok
 	var value := {"schema_version": 1, "revision": int(profile.revision), "epoch": epoch, "run_id": str(profile.active_launch_receipt.get("run_id", "")), "district_id": district_id, "panel_id": panel, "function_id": function_id, "currencies": {"chronos_shards": int(profile.chronos_shards), "existential_imprints": int(profile.existential_imprints)}, "repair_stage": int(profile.repair_stage), "districts": districts, "functions": functions, "nodes": nodes, "forge": {"weapons": forge_rows}, "builds": builds, "loadout": {"selected": selection.duplicate(true), "characters": characters, "weapons": weapons, "time_pairs": pairs, "build_save": build_save}, "dialogue": dialogue, "collections": _collections(profile), "providers": providers.duplicate(true), "launch_available": launch_available, "launch_reason_key": "" if launch_available else "HUB_LAUNCH_ACTIVE"}
+	value["resume_available"] = resume_available
+	value["resume_reason_key"] = "" if resume_available else "HUB_LAUNCH_ACTIVE"
 	return value.duplicate(true) if Contract.validate(value).ok else {}
 
 

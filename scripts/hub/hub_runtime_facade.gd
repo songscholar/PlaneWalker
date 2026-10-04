@@ -106,6 +106,14 @@ func command(value: Dictionary, expected_revision: int) -> Dictionary:
 		_function_id = ""
 		_epoch += 1
 		return _success()
+	if operation == "resume":
+		if _function_id != "gateway" or not payload.is_empty() or _service.snapshot().active_launch_receipt.is_empty():
+			return _failure(&"INVALID_PHASE")
+		var authenticated: Dictionary = _service.authenticated_native_checkpoint(expected_revision)
+		if not authenticated.ok:
+			return authenticated
+		_epoch += 1
+		return {"ok": true, "code": &"OK", "context": {"run_config": authenticated.context.run.config.duplicate(true), "epoch": _epoch}}
 	if operation != "narrative_dialogue" and (not OPERATIONS.has(operation) or not OPERATIONS[operation].has(_function_id)):
 		return _failure(&"HUB_OPERATION_UNAVAILABLE")
 	var result: Dictionary

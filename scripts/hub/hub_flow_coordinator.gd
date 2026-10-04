@@ -2,6 +2,7 @@ class_name HubFlowCoordinator
 extends Node
 
 signal launch_requested(config: Dictionary)
+signal resume_requested(config: Dictionary)
 signal tutorial_requested
 signal settings_requested(kind: String, restore_focus: Control)
 
@@ -171,6 +172,8 @@ func submit_command(command: Dictionary, revision: int) -> Dictionary:
 	refresh()
 	if command.operation == "launch":
 		launch_requested.emit(result.context.run_config.duplicate(true))
+	elif command.operation == "resume":
+		resume_requested.emit(result.context.run_config.duplicate(true))
 	return result
 
 

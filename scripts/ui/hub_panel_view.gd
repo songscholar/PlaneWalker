@@ -80,6 +80,20 @@ func _render_loadout() -> void:
 	footer.add_child(launch)
 	footer.move_child(launch, 0)
 	_actions.append(launch)
+	if not str(_state.run_id).is_empty():
+		var resume := Button.new()
+		resume.name = "ResumeButton"
+		resume.text = tr("UI_RESUME")
+		resume.custom_minimum_size = Vector2(64, 25)
+		resume.add_theme_font_size_override("font_size", 12)
+		resume.disabled = not bool(_state.resume_available)
+		resume.tooltip_text = tr(str(_state.resume_reason_key)) if resume.disabled else ""
+		resume.set_meta("action_id", "resume")
+		resume.set_meta("available", _state.resume_available)
+		resume.pressed.connect(_activate_action.bind(resume, _emit_operation.bind("resume", {}), _epoch))
+		footer.add_child(resume)
+		footer.move_child(resume, 1)
+		_actions.append(resume)
 
 
 func _add_selector(field: String, label: String, rows: Array, selected_id: String) -> void:

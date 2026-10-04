@@ -3,7 +3,7 @@ extends RefCounted
 
 const Rules := preload("res://scripts/ui/contracts/dungeon_view_state_rules.gd")
 const Config := preload("res://scripts/application/run_config.gd")
-const FIELDS := ["schema_version", "revision", "epoch", "run_id", "district_id", "panel_id", "function_id", "currencies", "repair_stage", "districts", "functions", "nodes", "forge", "builds", "loadout", "dialogue", "collections", "providers", "launch_available", "launch_reason_key"]
+const FIELDS := ["schema_version", "revision", "epoch", "run_id", "district_id", "panel_id", "function_id", "currencies", "repair_stage", "districts", "functions", "nodes", "forge", "builds", "loadout", "dialogue", "collections", "providers", "launch_available", "launch_reason_key", "resume_available", "resume_reason_key"]
 
 
 static func validate(value: Variant):
@@ -20,6 +20,8 @@ static func validate(value: Variant):
 			return Rules.reject(value, "collections")
 	if not _rows(value.providers, ["id", "status", "entries", "available", "reason_key", "cost"], "provider") or value.providers.size() != 3 or not _availability({"available": value.launch_available, "reason_key": value.launch_reason_key, "cost": {"chronos_shards": 0, "existential_imprints": 0}}):
 		return Rules.reject(value, "providers")
+	if not _availability({"available": value.resume_available, "reason_key": value.resume_reason_key, "cost": {"chronos_shards": 0, "existential_imprints": 0}}) or value.resume_available and (value.run_id.is_empty() or value.launch_available):
+		return Rules.reject(value, "continuation")
 	return Rules.accept(value)
 
 

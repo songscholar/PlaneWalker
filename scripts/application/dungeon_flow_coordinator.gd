@@ -179,16 +179,17 @@ func _show(key: String, result: Variant) -> void:
 		return
 	var panel := _panels[key] as Control
 	if _active_panel != panel:
-		_close_panels()
+		_close_panels(false)
 	var rendered: Variant = panel.call("render", result.context["view_state"])
 	if rendered == null or not bool(rendered.get("ok")):
+		_close_panels()
 		return
 	_active_panel = panel
 	_map_button.visible = false
 	_host.call("set_dungeon_selection_safety", true)
 
 
-func _close_panels() -> void:
+func _close_panels(release_safety: bool = true) -> void:
 	for panel: Control in _panels.values():
 		panel.call("close_panel")
 	_active_panel = null
@@ -197,7 +198,8 @@ func _close_panels() -> void:
 		var context: Dictionary = _host.call("dungeon_ui_context")
 		var phase := int(context.get("state", {}).get("phase", -1))
 		_map_button.visible = not context.is_empty() and not Phase.is_terminal(phase) and phase != Phase.Value.SELECTION_ACTIVE
-		_host.call("set_dungeon_selection_safety", false)
+		if release_safety:
+			_host.call("set_dungeon_selection_safety", false)
 
 
 func _on_panel_close(_revision: int, key: String) -> void:

@@ -1,6 +1,7 @@
 extends "res://tests/integration/save/narrative_profile_service_test.gd"
 
 const MainScene := preload("res://scenes/main.tscn")
+const NativeRoute := preload("res://tests/support/native_launch_route_fixture.gd")
 var _main: Node
 var _flow: Node
 var _host: Node
@@ -25,24 +26,13 @@ func _run() -> void:
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 73}
 	suite.assert_true(_main._launch_run(config, false, true), "Main starts one durable actual Launch")
 	_run_state = _host.native_run_state()
-	_host.set_process(false)
-	_player.set_physics_process(false)
-	_main.get_node("CombatRoom01").process_mode = Node.PROCESS_MODE_DISABLED
-	_flow.set_physics_process(false)
-	_main.get_node("TutorialFlow").set_process(false)
-	var templates := _content("room_templates.json")
-	var floors := _content("floors.json")
-	var launch: Dictionary = _service.snapshot().active_launch_receipt
-	# Domain fixture isolates Main's native terminal handoffs from encounter production QA.
-	for index: int in range(5):
-		if index > 0:
-			_enter_floor(floors[index], templates)
-		_complete_floor(launch)
-		_install_actual_room(templates)
-	_run_state.phase = Phase.Value.VICTORY
-	_run_state.result = {"result": "victory"}
+	NativeRoute.freeze(_main)
 	_run_state.run_time_ms = 1000
-	EventBus.run_ended.emit(str(_run_state.run_id), _run_state.result.duplicate(true), int(_run_state.revision))
+	var reached: bool = await NativeRoute.reach(_main, suite, true)
+	suite.assert_true(reached, "terminal fixture uses canonical native room, reward and floor handoffs")
+	if not reached:
+		await _finish()
+		return
 	await get_tree().process_frame
 	suite.assert_true(not _main.get_node("RunEndOverlay").visible, "victory preserves final room interaction instead of obscuring it with the summary overlay")
 	suite.assert_true(not _main.return_to_hub(), "Main refuses Hub return before explicit saved ending and credits")
