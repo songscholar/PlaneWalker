@@ -180,7 +180,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.content_schema.test_active_item_entry_schema \
 	tests.contract.content_schema.test_character_runtime_profile_schema \
 	tests.contract.content_schema.test_archetype_profile_schema \
-	tests.contract.content_schema.test_p14_dungeon_schemas
+	tests.contract.content_schema.test_p14_dungeon_schemas \
+	tests.contract.content_schema.test_p15_hostile_schemas \
+	tests.contract.content_schema.test_p16_hub_schemas \
+	tests.contract.content_schema.test_p16_profile_schemas \
+	tests.contract.content_schema.test_p16_material_policy \
+	tests.contract.content_schema.test_p16_narrative_sources
 
 printf '\n== Localization contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
