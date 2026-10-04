@@ -1,0 +1,9 @@
+Plane Walker original music
+SPDX-License-Identifier: CC0-1.0
+
+All compositions, synthesis instruments and audio samples in this directory
+are original project material rendered by tools/production_audio/generate_music.py.
+No third-party recordings or samples are used. The project authors dedicate
+these audio assets to the public domain under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+The renderer source remains under the repository's source-code license.

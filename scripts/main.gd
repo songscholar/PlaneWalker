@@ -11,6 +11,7 @@ const TutorialFlowScript := preload("res://scripts/onboarding/tutorial_flow_coor
 const TrainingFlowScript := preload("res://scripts/training/training_flow_coordinator.gd")
 const NarrativeFlowScript := preload("res://scripts/narrative/narrative_flow_coordinator.gd")
 const NativeRoomPresentationScript := preload("res://scripts/dungeon/native_room_presentation.gd")
+const MusicDirectorScript := preload("res://scripts/audio/music_director.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -73,6 +74,7 @@ func _ready() -> void:
 	_setup_tutorial()
 	_setup_training()
 	_setup_narrative()
+	_setup_music()
 	if _hub_flow == null:
 		_show_start_menu()
 	call_deferred("_apply_accessibility_to_runtime")
@@ -81,6 +83,33 @@ func _ready() -> void:
 	if not _profile_error.is_empty():
 		status_label.visible = true
 		status_label.text = tr("UI_PROFILE_UNAVAILABLE")
+
+
+func _setup_music() -> void:
+	var director := MusicDirectorScript.new()
+	director.name = "MusicDirector"
+	add_child(director)
+	if not director.configure(_music_context):
+		director.queue_free()
+		push_error("Original music configuration failed")
+
+
+func _music_context() -> Dictionary:
+	var cue_id := "music_hub"
+	if _credits_pending:
+		cue_id = "music_credits"
+	elif _training_flow != null and _training_flow.is_training_active():
+		cue_id = "music_training"
+	elif (_hub_flow == null or not _hub_flow.is_hub_visible()) and combat_room.visible:
+		var state: Dictionary = runtime_host.runtime_snapshot()
+		var phase := int(state.get("phase", -1))
+		if RunPhaseScript.is_terminal(phase):
+			cue_id = "music_victory" if phase == RunPhaseScript.Value.VICTORY else "music_defeat"
+		else:
+			var index := clampi(int(state.get("current_floor_index", 0)), 0, 4)
+			var node: Dictionary = runtime_host.native_run_state().current_floor_node() if runtime_host.native_run_state() != null else {}
+			cue_id = MusicDirectorScript.BOSS_CUES[index] if node.get("room_type") == "boss" and not node.get("cleared", false) else MusicDirectorScript.FLOOR_CUES[index]
+	return {"cue_id": cue_id, "paused": get_tree().paused}
 
 
 func _setup_hub() -> void:

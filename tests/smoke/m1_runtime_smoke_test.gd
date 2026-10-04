@@ -54,7 +54,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var quick_start_config: Dictionary = main.call("_build_run_config")
-	suite.assert_equal(quick_start_config.get("milestone"), "M1", "Quick Start remains milestone M1")
+	suite.assert_equal(quick_start_config.get("milestone"), "LAUNCH", "production Quick Start selects the complete Launch run")
 	suite.assert_equal(quick_start_config.get("character_id"), "wanderer", "Quick Start remains Wanderer")
 	suite.assert_equal(quick_start_config.get("weapon_id"), "sword", "Quick Start remains Sword")
 	suite.assert_equal(quick_start_config.get("enabled_time_skills"), ["stop", "rewind"], "Quick Start remains Stop plus Rewind")
@@ -91,6 +91,8 @@ func _run() -> void:
 
 	var reward_counter := RewardSignalCounter.new()
 	var result_counter := RunResultSignalCounter.new()
+	var profile_before: Dictionary = GameState.profile_runtime_service().snapshot()
+	var persistent_before: Dictionary = GameState.persistent.duplicate(true)
 	EventBus.reward_selected.connect(reward_counter.record)
 	EventBus.run_ended.connect(result_counter.record)
 	room.set("spawn_warning_duration", 0.0)
@@ -181,9 +183,8 @@ func _run() -> void:
 		suite.assert_equal(emitted_result.get("result", ""), "floor_cleared", "victory event exposes the persisted result vocabulary")
 		suite.assert_equal(emitted_result.get("current_room", 0), 5, "victory event records the final room")
 		suite.assert_equal(_summary_selected_count(emitted_result), _selected_count(build), "victory event build agrees with the authoritative snapshot")
-	var persistent_summary: Dictionary = GameState.persistent.get("last_run_summary", {})
-	suite.assert_equal(persistent_summary.get("result", ""), "floor_cleared", "victory persists the terminal summary")
-	suite.assert_equal(persistent_summary.get("current_room", 0), 5, "persistent summary records the final room")
+	suite.assert_equal(GameState.profile_runtime_service().snapshot(), profile_before, "explicit M1 laboratory combat cannot settle an unissued production launch")
+	suite.assert_equal(GameState.persistent, persistent_before, "M1 terminal facts preserve the canonical production Profile mirror")
 
 	await _cleanup(main, reward_counter, result_counter)
 	suite.finish(get_tree())
@@ -295,6 +296,7 @@ func _cleanup(
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
+	await get_tree().create_timer(0.1).timeout
 	GameState.reset_persistent_data(true)
 	GameState.save_path = _original_save_path
 	GameState.persistent = _original_persistent.duplicate(true)

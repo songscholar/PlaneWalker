@@ -22,11 +22,16 @@ func assert_close(actual: float, expected: float, label: String, tolerance: floa
 func finish(tree: SceneTree) -> void:
 	if failures.is_empty():
 		print("PASS: all assertions succeeded")
-		tree.quit(0)
+		_quit_after_audio_drain(tree, 0)
 		return
 	for failure: String in failures:
 		push_error(failure)
-	tree.quit(1)
+	_quit_after_audio_drain(tree, 1)
+
+
+func _quit_after_audio_drain(tree: SceneTree, code: int) -> void:
+	# Playback retirement is queued to Godot's mixer thread after node disposal.
+	tree.create_timer(0.1, true, false, true).timeout.connect(tree.quit.bind(code), CONNECT_ONE_SHOT)
 
 
 func _fail(label: String, detail: String) -> void:
