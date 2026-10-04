@@ -1,0 +1,192 @@
+{
+  "content_snapshot": {
+    "aggregate_sha256": "3ea513ffe38dacd241522b087c5c39b28aa67e2d691bd8de68298661fe39c8d4",
+    "packs": [
+      {
+        "fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "pack_id": "base",
+        "pack_version": "0.4.0-dev",
+        "schema_version": 1
+      },
+      {
+        "fingerprint_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "pack_id": "m1_bonus",
+        "pack_version": "1.0.0",
+        "schema_version": 1
+      }
+    ]
+  },
+  "created_at_utc": "2026-09-28T08:00:00Z",
+  "document_kind": "profile",
+  "game_version": "0.4.0-dev",
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "2da7549adce845b88bc7dd2bb1de438028e3f8498ef5dcdfd01f6b99e6ccc4df"
+  },
+  "magic": "PWSAVE",
+  "payload": {
+    "active_item_state": {
+      "committed_receipts": {},
+      "configured": false,
+      "cooldown_end_frame": -1,
+      "current_frame": -1,
+      "definition": {},
+      "generation": 0,
+      "handler_state": {},
+      "next_token": 1,
+      "schema_version": 1
+    },
+    "active_run_state": {},
+    "best_rooms_cleared": 5,
+    "chronos_shards": 21,
+    "cosmetics": [],
+    "discovered_items": [],
+    "existential_imprints": 5,
+    "last_run_summary": {
+      "result": "floor_cleared",
+      "rooms_cleared": 5
+    },
+    "meta_profile_state": {
+      "active_launch_receipt": {},
+      "build_library": [],
+      "catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
+      "chronos_shards": 21,
+      "completed_boss_ids": [],
+      "completed_command_ids": [],
+      "cosmetics": [],
+      "discovered_items": [],
+      "existential_imprints": 5,
+      "faction_standing": {
+        "council": 0,
+        "merchants": 0,
+        "shardborn": 0,
+        "void_cult": 0
+      },
+      "forge_state": {
+        "bow": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "gauntlets": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "gun": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "staff": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "sword": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        }
+      },
+      "last_settlement_receipt": {},
+      "launch_sequence": 0,
+      "narrative_state": {
+        "artifacts": [],
+        "balance_choice_sources": [],
+        "consumed_sources": [],
+        "credits_completed": [],
+        "endings": [],
+        "environment_records": [],
+        "flags": [],
+        "heart_fragments": [],
+        "hidden_steps": {
+          "primordial_whispers": 0,
+          "voice_of_void": 0,
+          "walkers_song": 0
+        },
+        "nemesis_choices": [],
+        "vera_conversations": 0,
+        "void_exposure_frames": 0
+      },
+      "npc_affinity": {
+        "elara": 0,
+        "hermes": 0,
+        "morpheus": 0,
+        "nemesis": 0,
+        "odysseus": 0,
+        "phia": 0,
+        "sibyl": 0,
+        "vera": 0
+      },
+      "repair_stage": 0,
+      "revision": 0,
+      "schema_id": "planewalker.meta_profile_state",
+      "schema_version": 1,
+      "soul_reserve": 0,
+      "statistics": {
+        "abandons": 0,
+        "deaths": 0,
+        "finished_runs": 6,
+        "victories": 2
+      },
+      "tutorial_state": {
+        "completed_lessons": [],
+        "guided_runs_completed": 0,
+        "seen_hints": [],
+        "skipped_lessons": [],
+        "suppressed": false
+      },
+      "unlocked_achievements": [],
+      "unlocked_characters": [
+        "wanderer"
+      ],
+      "unlocked_nodes": [],
+      "unlocked_weapons": [
+        "bow",
+        "sword"
+      ],
+      "weapon_proficiency": {
+        "bow": 0,
+        "gauntlets": 0,
+        "gun": 0,
+        "staff": 0,
+        "sword": 0
+      }
+    },
+    "npc_affinity": {
+      "elara": 0,
+      "hermes": 0,
+      "morpheus": 0,
+      "nemesis": 0,
+      "odysseus": 0,
+      "phia": 0,
+      "sibyl": 0,
+      "vera": 0
+    },
+    "reward_effect_state": {},
+    "runs_completed": 6,
+    "unlocked_achievements": [],
+    "unlocked_characters": [
+      "wanderer"
+    ],
+    "unlocked_nodes": [],
+    "unlocked_weapons": [
+      "bow",
+      "sword"
+    ],
+    "victories": 2,
+    "weapon_proficiency": {
+      "bow": 0,
+      "gauntlets": 0,
+      "gun": 0,
+      "staff": 0,
+      "sword": 0
+    }
+  },
+  "profile_id": "slot_1",
+  "save_domain": "base",
+  "saved_at_utc": "2026-09-28T09:00:00Z",
+  "schema_version": 4,
+  "sequence": 12
+}

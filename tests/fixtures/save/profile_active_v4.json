@@ -1,0 +1,278 @@
+{
+  "content_snapshot": {
+    "aggregate_sha256": "3ea513ffe38dacd241522b087c5c39b28aa67e2d691bd8de68298661fe39c8d4",
+    "packs": [
+      {
+        "fingerprint_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "pack_id": "base",
+        "pack_version": "0.4.0-dev",
+        "schema_version": 1
+      },
+      {
+        "fingerprint_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "pack_id": "m1_bonus",
+        "pack_version": "1.0.0",
+        "schema_version": 1
+      }
+    ]
+  },
+  "created_at_utc": "2026-09-28T08:00:00Z",
+  "document_kind": "profile",
+  "game_version": "0.4.0-dev",
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "1ce0ef3bf52e301f9d403f8fc030a248c0b30c9f17774fcb0f17c797c5290a8e"
+  },
+  "magic": "PWSAVE",
+  "payload": {
+    "active_item_state": {
+      "committed_receipts": {},
+      "configured": false,
+      "cooldown_end_frame": -1,
+      "current_frame": -1,
+      "definition": {},
+      "generation": 0,
+      "handler_state": {},
+      "next_token": 1,
+      "schema_version": 1
+    },
+    "active_run_state": {
+      "build": {
+        "archetypes": {
+          "accelerated_combo": 0,
+          "freeze_burst": 0,
+          "rewind_echo": 0
+        },
+        "blessings": [],
+        "curses": [],
+        "dominant_archetype": "",
+        "items": [],
+        "reward_history": [],
+        "talents": []
+      },
+      "completed_floor_ids": [],
+      "config": {
+        "accessibility_assists": {
+          "damage_received_multiplier": 1,
+          "enemy_telegraph_scale": 1
+        },
+        "character_id": "wanderer",
+        "character_talents": [],
+        "difficulty": "normal",
+        "enabled_time_skills": [
+          "stop",
+          "rewind"
+        ],
+        "milestone": "M1",
+        "schema_version": 1,
+        "seed": 4,
+        "weapon_id": "sword"
+      },
+      "consumed_offer_ids": [],
+      "current_floor": 1,
+      "current_floor_index": -1,
+      "current_room": 0,
+      "dungeon_event_runtime": {},
+      "events": [],
+      "floor_plan": {},
+      "floor_rule_state": {},
+      "merchant_state": {},
+      "open_offer": {},
+      "phase": 0,
+      "resources": {
+        "meta_run_projection": {
+          "catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
+          "direct_combat_budget": 0,
+          "forge_attack_bonuses": {
+            "bow": 0,
+            "gauntlets": 0,
+            "gun": 0,
+            "staff": 0,
+            "sword": 0
+          },
+          "hub_discount": 0,
+          "options": [],
+          "profile_revision": 0,
+          "projection_digest": "745ed7dc33df8e04baf8ee18b34a735eac818defe67aca04c06b8d3203116352",
+          "schema_id": "planewalker.meta_run_projection",
+          "schema_version": 1,
+          "soul_retention": 0.3,
+          "stat_bonuses": {
+            "attack": 0,
+            "attack_speed": 0,
+            "defense": 0,
+            "entrance_healing": 0,
+            "max_hp": 0,
+            "speed": 0,
+            "void_reduction": 0
+          },
+          "unlocked_nodes": []
+        }
+      },
+      "result": {},
+      "revision": 0,
+      "room_total": 5,
+      "run_economy": {},
+      "run_id": "legacy-active-run",
+      "run_seed": 4,
+      "run_time_ms": 0,
+      "schema_version": 1,
+      "seen_event_ids": [],
+      "stats": {
+        "kills": 0
+      },
+      "suspended": false
+    },
+    "best_rooms_cleared": 5,
+    "chronos_shards": 21,
+    "cosmetics": [],
+    "discovered_items": [],
+    "existential_imprints": 5,
+    "last_run_summary": {
+      "result": "floor_cleared",
+      "rooms_cleared": 5
+    },
+    "meta_profile_state": {
+      "active_launch_receipt": {},
+      "build_library": [],
+      "catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
+      "chronos_shards": 21,
+      "completed_boss_ids": [],
+      "completed_command_ids": [],
+      "cosmetics": [],
+      "discovered_items": [],
+      "existential_imprints": 5,
+      "faction_standing": {
+        "council": 0,
+        "merchants": 0,
+        "shardborn": 0,
+        "void_cult": 0
+      },
+      "forge_state": {
+        "bow": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "gauntlets": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "gun": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "staff": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        },
+        "sword": {
+          "enchant_preferences": [],
+          "level": 0,
+          "void_tempered": false
+        }
+      },
+      "last_settlement_receipt": {},
+      "launch_sequence": 0,
+      "narrative_state": {
+        "artifacts": [],
+        "balance_choice_sources": [],
+        "consumed_sources": [],
+        "credits_completed": [],
+        "endings": [],
+        "environment_records": [],
+        "flags": [],
+        "heart_fragments": [],
+        "hidden_steps": {
+          "primordial_whispers": 0,
+          "voice_of_void": 0,
+          "walkers_song": 0
+        },
+        "nemesis_choices": [],
+        "vera_conversations": 0,
+        "void_exposure_frames": 0
+      },
+      "npc_affinity": {
+        "elara": 0,
+        "hermes": 0,
+        "morpheus": 0,
+        "nemesis": 0,
+        "odysseus": 0,
+        "phia": 0,
+        "sibyl": 0,
+        "vera": 0
+      },
+      "repair_stage": 0,
+      "revision": 0,
+      "schema_id": "planewalker.meta_profile_state",
+      "schema_version": 1,
+      "soul_reserve": 0,
+      "statistics": {
+        "abandons": 0,
+        "deaths": 0,
+        "finished_runs": 6,
+        "victories": 2
+      },
+      "tutorial_state": {
+        "completed_lessons": [],
+        "guided_runs_completed": 0,
+        "seen_hints": [],
+        "skipped_lessons": [],
+        "suppressed": false
+      },
+      "unlocked_achievements": [],
+      "unlocked_characters": [
+        "wanderer"
+      ],
+      "unlocked_nodes": [],
+      "unlocked_weapons": [
+        "bow",
+        "sword"
+      ],
+      "weapon_proficiency": {
+        "bow": 0,
+        "gauntlets": 0,
+        "gun": 0,
+        "staff": 0,
+        "sword": 0
+      }
+    },
+    "npc_affinity": {
+      "elara": 0,
+      "hermes": 0,
+      "morpheus": 0,
+      "nemesis": 0,
+      "odysseus": 0,
+      "phia": 0,
+      "sibyl": 0,
+      "vera": 0
+    },
+    "reward_effect_state": {},
+    "runs_completed": 6,
+    "unlocked_achievements": [],
+    "unlocked_characters": [
+      "wanderer"
+    ],
+    "unlocked_nodes": [],
+    "unlocked_weapons": [
+      "bow",
+      "sword"
+    ],
+    "victories": 2,
+    "weapon_proficiency": {
+      "bow": 0,
+      "gauntlets": 0,
+      "gun": 0,
+      "staff": 0,
+      "sword": 0
+    }
+  },
+  "profile_id": "slot_1",
+  "save_domain": "base",
+  "saved_at_utc": "2026-09-28T09:00:00Z",
+  "schema_version": 4,
+  "sequence": 12
+}

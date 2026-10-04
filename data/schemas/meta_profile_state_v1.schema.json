@@ -1,0 +1,694 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/meta-profile-state/1.0.0",
+  "title": "Plane Walker Meta Profile State v1",
+  "$comment": "Canonical references match the authored Base Pack and explicit legacy references. Runtime MetaProfileState also authenticates the configured catalog fingerprint, strictly sorted ID arrays, source subsets, build ID uniqueness, receipt/profile sequence relations, unlocked launch selections, and the statistics sum. Mod catalogs require their corresponding schema reference set.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "catalog_fingerprint",
+    "revision",
+    "chronos_shards",
+    "existential_imprints",
+    "unlocked_nodes",
+    "discovered_items",
+    "unlocked_characters",
+    "unlocked_weapons",
+    "weapon_proficiency",
+    "forge_state",
+    "npc_affinity",
+    "faction_standing",
+    "narrative_state",
+    "tutorial_state",
+    "build_library",
+    "repair_stage",
+    "launch_sequence",
+    "active_launch_receipt",
+    "last_settlement_receipt",
+    "completed_command_ids",
+    "completed_boss_ids",
+    "unlocked_achievements",
+    "cosmetics",
+    "soul_reserve",
+    "statistics"
+  ],
+  "properties": {
+    "schema_id": {"const":"planewalker.meta_profile_state"},
+    "schema_version": {"const":1},
+    "catalog_fingerprint": {"$ref":"#/$defs/sha256"},
+    "revision": {"$ref":"#/$defs/bounded_integer"},
+    "chronos_shards": {"$ref":"#/$defs/bounded_integer"},
+    "existential_imprints": {"$ref":"#/$defs/bounded_integer"},
+    "unlocked_nodes": {"$ref":"#/$defs/unlocked_nodes"},
+    "discovered_items": {"$ref":"#/$defs/discovered_items"},
+    "unlocked_characters": {"$ref":"#/$defs/unlocked_characters"},
+    "unlocked_weapons": {"$ref":"#/$defs/unlocked_weapons"},
+    "weapon_proficiency": {"$ref":"#/$defs/weapon_proficiency"},
+    "forge_state": {"$ref":"#/$defs/forge_state"},
+    "npc_affinity": {"$ref":"#/$defs/npc_affinity"},
+    "faction_standing": {"$ref":"#/$defs/faction_standing"},
+    "narrative_state": {"$ref":"#/$defs/narrative_state"},
+    "tutorial_state": {"$ref":"#/$defs/tutorial_state"},
+    "build_library": {"$ref":"#/$defs/build_library"},
+    "repair_stage": {"type":"integer","minimum":0,"maximum":3},
+    "launch_sequence": {"$ref":"#/$defs/bounded_integer"},
+    "active_launch_receipt": {"$ref":"#/$defs/launch_receipt"},
+    "last_settlement_receipt": {"$ref":"#/$defs/settlement_receipt"},
+    "completed_command_ids": {"$ref":"#/$defs/source_ids"},
+    "completed_boss_ids": {"type":"array","maxItems":5,"uniqueItems":true,"items":{"$ref":"#/$defs/boss_id"}},
+    "unlocked_achievements": {"$ref":"#/$defs/unlocked_achievements"},
+    "cosmetics": {"$ref":"#/$defs/cosmetics"},
+    "soul_reserve": {"$ref":"#/$defs/bounded_integer"},
+    "statistics": {"$ref":"#/$defs/statistics"}
+  },
+  "$defs": {
+    "bounded_integer": {"type":"integer","minimum":0,"maximum":2147483647},
+    "sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "stable_id": {"type":"string","maxLength":96,"pattern":"^[A-Za-z0-9][A-Za-z0-9_.:-]*$"},
+    "character_id": {"type":"string","enum":["primordial_knight","time_guardian","time_lord","void_walker","wanderer"]},
+    "weapon_id": {"type":"string","enum":["bow","gauntlets","gun","staff","sword"]},
+    "time_id": {"type":"string","enum":["accelerate","rewind","rift","stop"]},
+    "floor_id": {
+      "type": "string",
+      "enum": ["floor_plane_forge","floor_ruins_of_remnant","floor_throne_of_void","floor_time_rift","floor_void_forest"]
+    },
+    "boss_id": {"type":"string","enum":["forest_heart","forge_colossus","ruin_king","time_sovereign","void_throne"]},
+    "item_id": {
+      "type": "string",
+      "enum": [
+        "absolute_zero_device",
+        "abyssal_siphon",
+        "accelerant_window",
+        "accelerated_combo",
+        "aegis_reversal",
+        "anchor_thread",
+        "army_of_yesterday",
+        "blood_price_relic",
+        "brittle_clock",
+        "cadence_core",
+        "chronal_battery",
+        "cleaving_moment",
+        "counter_battery",
+        "decoy_crown",
+        "echo_reservoir",
+        "efficient_overdrive",
+        "evasive_guard_route",
+        "focused_draw",
+        "folded_corridor",
+        "frozen_afterimage",
+        "frozen_burst",
+        "gravity_snare_device",
+        "history_blade",
+        "hunger_edge",
+        "legion_core",
+        "mirror_seed",
+        "overdrive_heart",
+        "paradox_beacon",
+        "pathbreaker_lens",
+        "phantom_lens",
+        "piercing_draw",
+        "quickened_blade",
+        "railshot_module",
+        "redline_injector",
+        "rewind_echo",
+        "rewind_salve",
+        "ricochet_matrix",
+        "rift_anchor",
+        "rift_conductor",
+        "rift_current",
+        "rift_engine",
+        "rift_snare",
+        "stasis_lens",
+        "sword_edge",
+        "tempered_guard",
+        "tempo_barrage",
+        "void_brink",
+        "void_contract",
+        "warded_edge",
+        "weakpoint_prism"
+      ]
+    },
+    "meta_node_id": {
+      "type": "string",
+      "enum": [
+        "C-01",
+        "C-02",
+        "C-03",
+        "C-04",
+        "C-05",
+        "C-06",
+        "C-07",
+        "C-08",
+        "F-01",
+        "F-02",
+        "F-03",
+        "F-04",
+        "F-05",
+        "F-06",
+        "F-07",
+        "F-08",
+        "L-01",
+        "L-02",
+        "L-03",
+        "L-04",
+        "L-05",
+        "L-06",
+        "L-07",
+        "L-08",
+        "L-09",
+        "L-10",
+        "P-01",
+        "P-02",
+        "P-03",
+        "P-04",
+        "P-05",
+        "P-06",
+        "W-01",
+        "W-02",
+        "W-03",
+        "W-04",
+        "W-05",
+        "W-06",
+        "W-07",
+        "W-08",
+        "W-09",
+        "W-10"
+      ]
+    },
+    "enchantment_id": {
+      "type": "string",
+      "enum": [
+        "EN-01",
+        "EN-02",
+        "EN-03",
+        "EN-04",
+        "EN-05",
+        "EN-06",
+        "EN-07",
+        "EN-08",
+        "EN-09",
+        "EN-10",
+        "EN-11",
+        "EN-12",
+        "EN-13",
+        "EN-14",
+        "EN-15"
+      ]
+    },
+    "narrative_flag_id": {
+      "type": "string",
+      "enum": [
+        "balance_choice_elara_forest",
+        "balance_choice_nemesis_forge",
+        "balance_choice_sibyl_rift",
+        "elara_resolution",
+        "hermes_resolution",
+        "morpheus_resolution",
+        "nemesis_attack_1",
+        "nemesis_attack_2",
+        "nemesis_attack_3",
+        "nemesis_attack_4",
+        "nemesis_attack_5",
+        "nemesis_encounter_1_resolved",
+        "nemesis_encounter_2_resolved",
+        "nemesis_encounter_3_resolved",
+        "nemesis_encounter_4_resolved",
+        "nemesis_encounter_5_resolved",
+        "nemesis_resolution",
+        "nemesis_spare_1",
+        "nemesis_spare_2",
+        "nemesis_spare_3",
+        "nemesis_spare_4",
+        "nemesis_spare_5",
+        "odysseus_resolution",
+        "phia_resolution",
+        "primordial_whispers_complete",
+        "sibyl_resolution",
+        "vera_memory_1",
+        "vera_memory_2",
+        "vera_memory_3",
+        "vera_memory_4",
+        "vera_memory_5",
+        "vera_resolution",
+        "voice_of_void_complete",
+        "void_understood",
+        "walkers_song_complete"
+      ]
+    },
+    "artifact_id": {
+      "type": "string",
+      "enum": [
+        "amplification_core_shard",
+        "forgekeeper_mask",
+        "loom_thread",
+        "primordial_child_drawing",
+        "stonekeeper_memory",
+        "unfinished_weaving",
+        "void_baptism_flask",
+        "void_eroded_saber",
+        "walker_demise_letter",
+        "wardens_badge"
+      ]
+    },
+    "environment_record_id": {
+      "type": "string",
+      "enum": [
+        "E1-1",
+        "E1-2",
+        "E1-3",
+        "E1-4",
+        "E1-5",
+        "E2-1",
+        "E2-2",
+        "E2-3",
+        "E2-4",
+        "E3-1",
+        "E3-2",
+        "E3-3",
+        "E3-4",
+        "E4-1",
+        "E4-2",
+        "E4-3",
+        "E4-4",
+        "E5-1",
+        "E5-2",
+        "E5-3",
+        "E5-4"
+      ]
+    },
+    "ending_id": {
+      "type": "string",
+      "enum": ["balance_of_ashes","echo_of_primordial","embrace_of_void","return_of_order","shattered_freedom"]
+    },
+    "tutorial_lesson_id": {
+      "type": "string",
+      "enum": [
+        "alternative_loadouts",
+        "blessing_curse",
+        "boss_warnings",
+        "build_inspection",
+        "hub_forge",
+        "merchant",
+        "movement_dodge",
+        "time_use",
+        "treasure_reward",
+        "weapon_basics"
+      ]
+    },
+    "tutorial_hint_id": {
+      "type": "string",
+      "enum": [
+        "TIP-001",
+        "TIP-002",
+        "TIP-003",
+        "TIP-004",
+        "TIP-005",
+        "TIP-006",
+        "TIP-007",
+        "TIP-008",
+        "TIP-009",
+        "TIP-010",
+        "TIP-011",
+        "TIP-012",
+        "TIP-013",
+        "TIP-014",
+        "TIP-015"
+      ]
+    },
+    "achievement_id": {"type":"string","enum":["first_return"]},
+    "cosmetic_id": {
+      "type": "string",
+      "enum": [
+        "primordial_knight.default",
+        "time_guardian.default",
+        "time_lord.default",
+        "void_walker.default",
+        "wanderer.default"
+      ]
+    },
+    "source_ids": {"type":"array","maxItems":4096,"uniqueItems":true,"items":{"$ref":"#/$defs/stable_id"}},
+    "unlocked_nodes": {
+      "type": "array",
+      "maxItems": 42,
+      "uniqueItems": true,
+      "items": {"$ref":"#/$defs/meta_node_id"},
+      "allOf": [
+        {"if":{"contains":{"const":"W-02"}},"then":{"allOf":[{"contains":{"const":"W-01"}}]}},
+        {"if":{"contains":{"const":"W-03"}},"then":{"allOf":[{"contains":{"const":"W-02"}}]}},
+        {"if":{"contains":{"const":"W-04"}},"then":{"allOf":[{"contains":{"const":"W-01"}}]}},
+        {"if":{"contains":{"const":"W-05"}},"then":{"allOf":[{"contains":{"const":"W-04"}}]}},
+        {"if":{"contains":{"const":"W-06"}},"then":{"allOf":[{"contains":{"const":"W-03"}}]}},
+        {"if":{"contains":{"const":"W-08"}},"then":{"allOf":[{"contains":{"const":"W-07"}}]}},
+        {"if":{"contains":{"const":"W-09"}},"then":{"allOf":[{"contains":{"const":"W-05"}}]}},
+        {"if":{"contains":{"const":"W-10"}},"then":{"allOf":[{"contains":{"const":"W-06"}}]}},
+        {"if":{"contains":{"const":"C-02"}},"then":{"allOf":[{"contains":{"const":"C-01"}}]}},
+        {"if":{"contains":{"const":"C-03"}},"then":{"allOf":[{"contains":{"const":"C-02"}}]}},
+        {"if":{"contains":{"const":"C-05"}},"then":{"allOf":[{"contains":{"const":"C-04"}}]}},
+        {"if":{"contains":{"const":"C-06"}},"then":{"allOf":[{"contains":{"const":"C-04"}}]}},
+        {"if":{"contains":{"const":"C-07"}},"then":{"allOf":[{"contains":{"const":"C-05"}}]}},
+        {
+          "if": {"contains":{"const":"C-08"}},
+          "then": {"allOf":[{"contains":{"const":"C-03"}},{"contains":{"const":"C-06"}}]}
+        },
+        {"if":{"contains":{"const":"L-02"}},"then":{"allOf":[{"contains":{"const":"L-01"}}]}},
+        {"if":{"contains":{"const":"L-03"}},"then":{"allOf":[{"contains":{"const":"L-02"}}]}},
+        {"if":{"contains":{"const":"L-04"}},"then":{"allOf":[{"contains":{"const":"L-01"}}]}},
+        {"if":{"contains":{"const":"L-05"}},"then":{"allOf":[{"contains":{"const":"L-02"}}]}},
+        {"if":{"contains":{"const":"L-06"}},"then":{"allOf":[{"contains":{"const":"L-03"}}]}},
+        {"if":{"contains":{"const":"L-08"}},"then":{"allOf":[{"contains":{"const":"L-07"}}]}},
+        {"if":{"contains":{"const":"L-09"}},"then":{"allOf":[{"contains":{"const":"L-08"}}]}},
+        {
+          "if": {"contains":{"const":"L-10"}},
+          "then": {"allOf":[{"contains":{"const":"L-06"}},{"contains":{"const":"L-09"}}]}
+        },
+        {"if":{"contains":{"const":"F-02"}},"then":{"allOf":[{"contains":{"const":"F-01"}}]}},
+        {"if":{"contains":{"const":"F-03"}},"then":{"allOf":[{"contains":{"const":"F-02"}}]}},
+        {"if":{"contains":{"const":"F-04"}},"then":{"allOf":[{"contains":{"const":"F-02"}}]}},
+        {"if":{"contains":{"const":"F-05"}},"then":{"allOf":[{"contains":{"const":"F-01"}}]}},
+        {
+          "if": {"contains":{"const":"F-06"}},
+          "then": {"allOf":[{"contains":{"const":"F-03"}},{"contains":{"const":"F-05"}}]}
+        },
+        {"if":{"contains":{"const":"F-08"}},"then":{"allOf":[{"contains":{"const":"F-07"}}]}},
+        {
+          "if": {"contains":{"const":"P-02"}},
+          "then": {"allOf":[{"contains":{"const":"P-01"}},{"contains":{"const":"L-01"}}]}
+        },
+        {"if":{"contains":{"const":"P-03"}},"then":{"allOf":[{"contains":{"const":"P-01"}}]}},
+        {
+          "if": {"contains":{"const":"P-04"}},
+          "then": {"allOf":[{"contains":{"const":"P-01"}},{"contains":{"const":"L-09"}}]}
+        },
+        {"if":{"contains":{"const":"P-05"}},"then":{"allOf":[{"contains":{"const":"P-03"}}]}},
+        {"if":{"contains":{"const":"P-06"}},"then":{"allOf":[{"contains":{"const":"P-05"}}]}}
+      ]
+    },
+    "discovered_items": {"type":"array","maxItems":50,"uniqueItems":true,"items":{"$ref":"#/$defs/item_id"}},
+    "unlocked_characters": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"$ref":"#/$defs/character_id"},
+      "contains": {"const":"wanderer"}
+    },
+    "unlocked_weapons": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"$ref":"#/$defs/weapon_id"},
+      "allOf": [{"contains":{"const":"bow"}},{"contains":{"const":"sword"}}]
+    },
+    "weapon_proficiency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bow","gauntlets","gun","staff","sword"],
+      "properties": {
+        "bow": {"$ref":"#/$defs/bounded_integer"},
+        "gauntlets": {"$ref":"#/$defs/bounded_integer"},
+        "gun": {"$ref":"#/$defs/bounded_integer"},
+        "staff": {"$ref":"#/$defs/bounded_integer"},
+        "sword": {"$ref":"#/$defs/bounded_integer"}
+      }
+    },
+    "npc_affinity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elara","hermes","morpheus","nemesis","odysseus","phia","sibyl","vera"],
+      "properties": {
+        "elara": {"type":"integer","minimum":0,"maximum":100},
+        "hermes": {"type":"integer","minimum":0,"maximum":100},
+        "morpheus": {"type":"integer","minimum":0,"maximum":100},
+        "nemesis": {"type":"integer","minimum":0,"maximum":100},
+        "odysseus": {"type":"integer","minimum":0,"maximum":100},
+        "phia": {"type":"integer","minimum":0,"maximum":100},
+        "sibyl": {"type":"integer","minimum":0,"maximum":100},
+        "vera": {"type":"integer","minimum":0,"maximum":100}
+      }
+    },
+    "faction_standing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["council","merchants","shardborn","void_cult"],
+      "properties": {
+        "council": {"type":"integer","minimum":-100,"maximum":100},
+        "merchants": {"type":"integer","minimum":-100,"maximum":100},
+        "shardborn": {"type":"integer","minimum":-100,"maximum":100},
+        "void_cult": {"type":"integer","minimum":-100,"maximum":100}
+      }
+    },
+    "unlocked_achievements": {"type":"array","maxItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/achievement_id"}},
+    "cosmetics": {"type":"array","maxItems":5,"uniqueItems":true,"items":{"$ref":"#/$defs/cosmetic_id"}},
+    "forge_weapon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level","enchant_preferences","void_tempered"],
+      "properties": {
+        "level": {"type":"integer","minimum":0,"maximum":5},
+        "enchant_preferences": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref":"#/$defs/enchantment_id"},
+          "allOf": [
+            {"not":{"allOf":[{"contains":{"const":"EN-01"}},{"contains":{"const":"EN-02"}}]}},
+            {"not":{"allOf":[{"contains":{"const":"EN-01"}},{"contains":{"const":"EN-03"}}]}},
+            {"not":{"allOf":[{"contains":{"const":"EN-02"}},{"contains":{"const":"EN-03"}}]}},
+            {"not":{"allOf":[{"contains":{"const":"EN-04"}},{"contains":{"const":"EN-05"}}]}}
+          ]
+        },
+        "void_tempered": {"type":"boolean"}
+      }
+    },
+    "forge_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bow","gauntlets","gun","staff","sword"],
+      "properties": {
+        "bow": {"$ref":"#/$defs/forge_weapon"},
+        "gauntlets": {"$ref":"#/$defs/forge_weapon"},
+        "gun": {"$ref":"#/$defs/forge_weapon"},
+        "staff": {"$ref":"#/$defs/forge_weapon"},
+        "sword": {"$ref":"#/$defs/forge_weapon"}
+      }
+    },
+    "time_pair": {"type":"array","minItems":2,"maxItems":2,"uniqueItems":true,"items":{"$ref":"#/$defs/time_id"}},
+    "narrative_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flags",
+        "artifacts",
+        "environment_records",
+        "hidden_steps",
+        "nemesis_choices",
+        "vera_conversations",
+        "heart_fragments",
+        "endings",
+        "credits_completed",
+        "void_exposure_frames",
+        "consumed_sources",
+        "balance_choice_sources"
+      ],
+      "properties": {
+        "flags": {"type":"array","maxItems":35,"uniqueItems":true,"items":{"$ref":"#/$defs/narrative_flag_id"}},
+        "artifacts": {"type":"array","maxItems":10,"uniqueItems":true,"items":{"$ref":"#/$defs/artifact_id"}},
+        "environment_records": {"type":"array","maxItems":21,"uniqueItems":true,"items":{"$ref":"#/$defs/environment_record_id"}},
+        "hidden_steps": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primordial_whispers","voice_of_void","walkers_song"],
+          "properties": {
+            "primordial_whispers": {"type":"integer","minimum":0,"maximum":5},
+            "voice_of_void": {"type":"integer","minimum":0,"maximum":5},
+            "walkers_song": {"type":"integer","minimum":0,"maximum":5}
+          }
+        },
+        "nemesis_choices": {"type":"array","maxItems":5,"items":{"type":"string","enum":["spare","attack"]}},
+        "vera_conversations": {"type":"integer","minimum":0,"maximum":5},
+        "heart_fragments": {"type":"array","maxItems":5,"uniqueItems":true,"items":{"$ref":"#/$defs/floor_id"}},
+        "endings": {"type":"array","maxItems":5,"uniqueItems":true,"items":{"$ref":"#/$defs/ending_id"}},
+        "credits_completed": {"type":"array","maxItems":5,"uniqueItems":true,"items":{"$ref":"#/$defs/ending_id"}},
+        "void_exposure_frames": {"$ref":"#/$defs/bounded_integer"},
+        "consumed_sources": {"$ref":"#/$defs/source_ids"},
+        "balance_choice_sources": {"$ref":"#/$defs/source_ids"}
+      },
+      "allOf": [
+        {
+          "if": {"properties":{"credits_completed":{"contains":{"const":"balance_of_ashes"}}}},
+          "then": {"properties":{"endings":{"contains":{"const":"balance_of_ashes"}}}}
+        },
+        {
+          "if": {"properties":{"credits_completed":{"contains":{"const":"echo_of_primordial"}}}},
+          "then": {"properties":{"endings":{"contains":{"const":"echo_of_primordial"}}}}
+        },
+        {
+          "if": {"properties":{"credits_completed":{"contains":{"const":"embrace_of_void"}}}},
+          "then": {"properties":{"endings":{"contains":{"const":"embrace_of_void"}}}}
+        },
+        {
+          "if": {"properties":{"credits_completed":{"contains":{"const":"return_of_order"}}}},
+          "then": {"properties":{"endings":{"contains":{"const":"return_of_order"}}}}
+        },
+        {
+          "if": {"properties":{"credits_completed":{"contains":{"const":"shattered_freedom"}}}},
+          "then": {"properties":{"endings":{"contains":{"const":"shattered_freedom"}}}}
+        }
+      ]
+    },
+    "tutorial_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completed_lessons","skipped_lessons","seen_hints","suppressed","guided_runs_completed"],
+      "properties": {
+        "completed_lessons": {"type":"array","maxItems":10,"uniqueItems":true,"items":{"$ref":"#/$defs/tutorial_lesson_id"}},
+        "skipped_lessons": {"type":"array","maxItems":10,"uniqueItems":true,"items":{"$ref":"#/$defs/tutorial_lesson_id"}},
+        "seen_hints": {"type":"array","maxItems":15,"uniqueItems":true,"items":{"$ref":"#/$defs/tutorial_hint_id"}},
+        "suppressed": {"type":"boolean"},
+        "guided_runs_completed": {"type":"integer","minimum":0,"maximum":3}
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","name","character_id","weapon_id","time_abilities"],
+      "properties": {
+        "id": {"$ref":"#/$defs/stable_id"},
+        "name": {"type":"string","minLength":1,"maxLength":64,"pattern":"^[^\\u0000]*$"},
+        "character_id": {"$ref":"#/$defs/character_id"},
+        "weapon_id": {"$ref":"#/$defs/weapon_id"},
+        "time_abilities": {"$ref":"#/$defs/time_pair"}
+      }
+    },
+    "build_library": {"type":"array","maxItems":32,"uniqueItems":true,"items":{"$ref":"#/$defs/build"}},
+    "launch_receipt": {
+      "oneOf": [
+        {"type":"object","maxProperties":0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_id",
+            "sequence",
+            "run_id",
+            "difficulty",
+            "seed",
+            "character_id",
+            "weapon_id",
+            "time_abilities",
+            "projection_digest"
+          ],
+          "properties": {
+            "schema_id": {"const":"meta_launch_receipt_v1"},
+            "sequence": {"type":"integer","minimum":1,"maximum":2147483647},
+            "run_id": {"$ref":"#/$defs/stable_id"},
+            "difficulty": {"type":"string","enum":["normal","hard","nightmare"]},
+            "seed": {"$ref":"#/$defs/bounded_integer"},
+            "character_id": {"$ref":"#/$defs/character_id"},
+            "weapon_id": {"$ref":"#/$defs/weapon_id"},
+            "time_abilities": {"$ref":"#/$defs/time_pair"},
+            "projection_digest": {"$ref":"#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "settlement_receipt": {
+      "oneOf": [
+        {"type":"object","maxProperties":0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_id","sequence","run_id","terminal_reason","shards","imprints","soul_reserve","digest"],
+          "properties": {
+            "schema_id": {"const":"meta_settlement_receipt_v1"},
+            "sequence": {"type":"integer","minimum":1,"maximum":2147483647},
+            "run_id": {"$ref":"#/$defs/stable_id"},
+            "terminal_reason": {"type":"string","enum":["death","victory","abandon"]},
+            "shards": {"$ref":"#/$defs/bounded_integer"},
+            "imprints": {"$ref":"#/$defs/bounded_integer"},
+            "soul_reserve": {"$ref":"#/$defs/bounded_integer"},
+            "digest": {"$ref":"#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finished_runs","victories","deaths","abandons"],
+      "properties": {
+        "finished_runs": {"$ref":"#/$defs/bounded_integer"},
+        "victories": {"$ref":"#/$defs/bounded_integer"},
+        "deaths": {"$ref":"#/$defs/bounded_integer"},
+        "abandons": {"$ref":"#/$defs/bounded_integer"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "forge_state": {
+            "anyOf": [
+              {"properties":{"bow":{"properties":{"level":{"minimum":1}}}}},
+              {"properties":{"gauntlets":{"properties":{"level":{"minimum":1}}}}},
+              {"properties":{"gun":{"properties":{"level":{"minimum":1}}}}},
+              {"properties":{"staff":{"properties":{"level":{"minimum":1}}}}},
+              {"properties":{"sword":{"properties":{"level":{"minimum":1}}}}}
+            ]
+          }
+        }
+      },
+      "then": {"properties":{"unlocked_nodes":{"contains":{"const":"F-01"}}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "forge_state": {
+            "anyOf": [
+              {"properties":{"bow":{"properties":{"enchant_preferences":{"minItems":1}}}}},
+              {"properties":{"gauntlets":{"properties":{"enchant_preferences":{"minItems":1}}}}},
+              {"properties":{"gun":{"properties":{"enchant_preferences":{"minItems":1}}}}},
+              {"properties":{"staff":{"properties":{"enchant_preferences":{"minItems":1}}}}},
+              {"properties":{"sword":{"properties":{"enchant_preferences":{"minItems":1}}}}}
+            ]
+          }
+        }
+      },
+      "then": {"properties":{"unlocked_nodes":{"contains":{"const":"F-02"}}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "forge_state": {
+            "anyOf": [
+              {"properties":{"bow":{"properties":{"enchant_preferences":{"minItems":2}}}}},
+              {"properties":{"gauntlets":{"properties":{"enchant_preferences":{"minItems":2}}}}},
+              {"properties":{"gun":{"properties":{"enchant_preferences":{"minItems":2}}}}},
+              {"properties":{"staff":{"properties":{"enchant_preferences":{"minItems":2}}}}},
+              {"properties":{"sword":{"properties":{"enchant_preferences":{"minItems":2}}}}}
+            ]
+          }
+        }
+      },
+      "then": {"properties":{"unlocked_nodes":{"contains":{"const":"F-03"}}}}
+    },
+    {
+      "if": {
+        "properties": {
+          "forge_state": {
+            "anyOf": [
+              {"properties":{"bow":{"properties":{"void_tempered":{"const":true}}}}},
+              {"properties":{"gauntlets":{"properties":{"void_tempered":{"const":true}}}}},
+              {"properties":{"gun":{"properties":{"void_tempered":{"const":true}}}}},
+              {"properties":{"staff":{"properties":{"void_tempered":{"const":true}}}}},
+              {"properties":{"sword":{"properties":{"void_tempered":{"const":true}}}}}
+            ]
+          }
+        }
+      },
+      "then": {"properties":{"unlocked_nodes":{"contains":{"const":"F-04"}}}}
+    }
+  ]
+}

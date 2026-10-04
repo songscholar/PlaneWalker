@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/save-profile/4.0.0",
+  "title": "Plane Walker Profile Save Envelope v4",
+  "$comment": "Opt-in MetaProfile Save v4; legacy Main and settings remain v3. Payload extensions are retained for migration. Runtime authenticates integrity, catalog fingerprint, compatibility mirror equality, and active-run semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "magic",
+    "schema_version",
+    "document_kind",
+    "profile_id",
+    "save_domain",
+    "sequence",
+    "game_version",
+    "created_at_utc",
+    "saved_at_utc",
+    "content_snapshot",
+    "payload",
+    "integrity"
+  ],
+  "properties": {
+    "magic": {"const":"PWSAVE"},
+    "schema_version": {"const":4},
+    "document_kind": {"const":"profile"},
+    "profile_id": {"$ref":"planewalker://schemas/save-profile/3.0.0#/properties/profile_id"},
+    "save_domain": {"$ref":"planewalker://schemas/save-profile/3.0.0#/properties/save_domain"},
+    "sequence": {"$ref":"planewalker://schemas/save-profile/3.0.0#/properties/sequence"},
+    "game_version": {"$ref":"planewalker://schemas/save-profile/3.0.0#/properties/game_version"},
+    "created_at_utc": {"$ref":"planewalker://schemas/save-profile/3.0.0#/properties/created_at_utc"},
+    "saved_at_utc": {"$ref":"planewalker://schemas/save-profile/3.0.0#/properties/saved_at_utc"},
+    "content_snapshot": {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/content_snapshot"},
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["active_item_state","reward_effect_state","active_run_state","meta_profile_state"],
+      "properties": {
+        "active_item_state": {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/active_item_state"},
+        "reward_effect_state": {
+          "oneOf": [
+            {"type":"object","maxProperties":0},
+            {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/reward_effect_state"}
+          ]
+        },
+        "active_run_state": {"oneOf":[{"type":"object","maxProperties":0},{"$ref":"#/$defs/active_run_state"}]},
+        "meta_profile_state": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0"},
+        "chronos_shards": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/bounded_integer"},
+        "existential_imprints": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/bounded_integer"},
+        "unlocked_nodes": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/unlocked_nodes"},
+        "discovered_items": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/discovered_items"},
+        "unlocked_characters": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/unlocked_characters"},
+        "unlocked_weapons": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/unlocked_weapons"},
+        "weapon_proficiency": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/weapon_proficiency"},
+        "npc_affinity": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/npc_affinity"},
+        "unlocked_achievements": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/unlocked_achievements"},
+        "cosmetics": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/cosmetics"}
+      }
+    },
+    "integrity": {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/integrity"}
+  },
+  "$defs": {
+    "active_run_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "run_id",
+        "revision",
+        "phase",
+        "suspended",
+        "run_seed",
+        "current_floor",
+        "current_room",
+        "room_total",
+        "run_time_ms",
+        "resources",
+        "stats",
+        "events",
+        "build",
+        "open_offer",
+        "consumed_offer_ids",
+        "result",
+        "config",
+        "current_floor_index",
+        "floor_plan",
+        "completed_floor_ids",
+        "run_economy",
+        "seen_event_ids",
+        "merchant_state",
+        "floor_rule_state"
+      ],
+      "properties": {
+        "schema_version": {"const":1},
+        "run_id": {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/stable_id"},
+        "revision": {"type":"integer","minimum":0},
+        "phase": {"type":"integer","minimum":0,"maximum":11},
+        "suspended": {"type":"boolean"},
+        "run_seed": {"type":"integer"},
+        "current_floor": {"type":"integer","minimum":1},
+        "current_room": {"type":"integer","minimum":0},
+        "room_total": {"type":"integer","minimum":1},
+        "run_time_ms": {"type":"integer","minimum":0},
+        "resources": {"type":"object"},
+        "stats": {"type":"object"},
+        "events": {"type":"array"},
+        "build": {"type":"object"},
+        "open_offer": {"type":"object"},
+        "consumed_offer_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/offer_id"}
+        },
+        "result": {"type":"object"},
+        "config": {
+          "type": "object",
+          "required": ["milestone"],
+          "properties": {"milestone":{"type":"string","enum":["M1","CURRENT","NEXT","LAUNCH","EXPANSION"]}}
+        },
+        "current_floor_index": {"type":"integer","minimum":-1,"maximum":4},
+        "floor_plan": {
+          "oneOf": [{"type":"object","maxProperties":0},{"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/floor_plan"}]
+        },
+        "completed_floor_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["floor_ruins_of_remnant","floor_void_forest","floor_time_rift","floor_plane_forge","floor_throne_of_void"]
+          }
+        },
+        "run_economy": {"type":"object"},
+        "seen_event_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref":"planewalker://schemas/save-profile/3.0.0#/$defs/stable_id"}
+        },
+        "merchant_state": {"type":"object"},
+        "floor_rule_state": {"type":"object"},
+        "dungeon_event_runtime": {
+          "type": "object",
+          "$comment": "Optional for legacy runs. SaveEnvelope authenticates and validates the complete event domain and participant snapshots, as it does the other opaque active-run dictionaries inherited from v3."
+        }
+      }
+    }
+  }
+}

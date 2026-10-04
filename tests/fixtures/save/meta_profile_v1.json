@@ -1,0 +1,108 @@
+{
+  "active_launch_receipt": {},
+  "build_library": [],
+  "catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
+  "chronos_shards": 0,
+  "completed_boss_ids": [],
+  "completed_command_ids": [],
+  "cosmetics": [],
+  "discovered_items": [],
+  "existential_imprints": 0,
+  "faction_standing": {
+    "council": 0,
+    "merchants": 0,
+    "shardborn": 0,
+    "void_cult": 0
+  },
+  "forge_state": {
+    "bow": {
+      "enchant_preferences": [],
+      "level": 0,
+      "void_tempered": false
+    },
+    "gauntlets": {
+      "enchant_preferences": [],
+      "level": 0,
+      "void_tempered": false
+    },
+    "gun": {
+      "enchant_preferences": [],
+      "level": 0,
+      "void_tempered": false
+    },
+    "staff": {
+      "enchant_preferences": [],
+      "level": 0,
+      "void_tempered": false
+    },
+    "sword": {
+      "enchant_preferences": [],
+      "level": 0,
+      "void_tempered": false
+    }
+  },
+  "last_settlement_receipt": {},
+  "launch_sequence": 0,
+  "narrative_state": {
+    "artifacts": [],
+    "balance_choice_sources": [],
+    "consumed_sources": [],
+    "credits_completed": [],
+    "endings": [],
+    "environment_records": [],
+    "flags": [],
+    "heart_fragments": [],
+    "hidden_steps": {
+      "primordial_whispers": 0,
+      "voice_of_void": 0,
+      "walkers_song": 0
+    },
+    "nemesis_choices": [],
+    "vera_conversations": 0,
+    "void_exposure_frames": 0
+  },
+  "npc_affinity": {
+    "elara": 0,
+    "hermes": 0,
+    "morpheus": 0,
+    "nemesis": 0,
+    "odysseus": 0,
+    "phia": 0,
+    "sibyl": 0,
+    "vera": 0
+  },
+  "repair_stage": 0,
+  "revision": 0,
+  "schema_id": "planewalker.meta_profile_state",
+  "schema_version": 1,
+  "soul_reserve": 0,
+  "statistics": {
+    "abandons": 0,
+    "deaths": 0,
+    "finished_runs": 0,
+    "victories": 0
+  },
+  "tutorial_state": {
+    "completed_lessons": [],
+    "guided_runs_completed": 0,
+    "seen_hints": [],
+    "skipped_lessons": [],
+    "suppressed": false
+  },
+  "unlocked_achievements": [],
+  "unlocked_characters": [
+    "wanderer"
+  ],
+  "unlocked_nodes": [],
+  "unlocked_weapons": [
+    "bow",
+    "sword"
+  ],
+  "weapon_proficiency": {
+    "bow": 0,
+    "gauntlets": 0,
+    "gun": 0,
+    "staff": 0,
+    "sword": 0
+  }
+}
