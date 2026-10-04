@@ -99,7 +99,7 @@ static func _derive(profile: Dictionary, catalog: RefCounted) -> Dictionary:
 	for weapon: String in Catalog.WEAPON_IDS:
 		value.forge_attack_bonuses[weapon] = int(profile.forge_state[weapon].level) * 0.01
 	value.options.sort()
-	value.projection_digest = digest(value)
+	value["projection_digest"] = digest(value)
 	return value
 
 

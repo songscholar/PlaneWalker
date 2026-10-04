@@ -31,4 +31,11 @@ func _ready() -> void:
 	var wrong := profile.snapshot()
 	wrong.narrative_state.artifacts = ["invented-artifact"]
 	suite.assert_true(not profile.restore_snapshot(wrong), "invented progression reference refuses")
+	var forged := profile.snapshot()
+	forged.unlocked_nodes = ["F-01", "F-02", "F-03"]
+	forged.forge_state.sword.enchant_preferences = ["EN-01", "EN-04"]
+	suite.assert_true(profile.can_restore_snapshot(forged), "positive control: independent element/time enchants fit two unlocked slots")
+	for pair: Array in [["EN-01", "EN-02"], ["EN-01", "EN-03"], ["EN-02", "EN-03"], ["EN-04", "EN-05"]]:
+		forged.forge_state.sword.enchant_preferences = pair
+		suite.assert_true(not profile.can_restore_snapshot(forged), "mutually exclusive %s preferences cannot enter a saved profile" % str(pair))
 	suite.finish(get_tree())

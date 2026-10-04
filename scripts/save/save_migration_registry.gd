@@ -2,9 +2,11 @@ class_name SaveMigrationRegistry
 extends RefCounted
 
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
+const EnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const SaveMigrationV0ToV1Script := preload("res://scripts/save/migrations/save_migration_v0_to_v1.gd")
 const SaveMigrationV1ToV2Script := preload("res://scripts/save/migrations/save_migration_v1_to_v2.gd")
 const SaveMigrationV2ToV3Script := preload("res://scripts/save/migrations/save_migration_v2_to_v3.gd")
+const SaveMigrationV3ToV4Script := preload("res://scripts/save/migrations/save_migration_v3_to_v4.gd")
 
 var _migrations: Dictionary = {}
 var _default_migrators: Array[RefCounted] = []
@@ -15,10 +17,12 @@ func _init(register_defaults: bool = true) -> void:
 		var v0_to_v1: RefCounted = SaveMigrationV0ToV1Script.new()
 		var v1_to_v2: RefCounted = SaveMigrationV1ToV2Script.new()
 		var v2_to_v3: RefCounted = SaveMigrationV2ToV3Script.new()
-		_default_migrators.assign([v0_to_v1, v1_to_v2, v2_to_v3])
+		var v3_to_v4: RefCounted = SaveMigrationV3ToV4Script.new()
+		_default_migrators.assign([v0_to_v1, v1_to_v2, v2_to_v3, v3_to_v4])
 		register_migration(0, 1, Callable(v0_to_v1, "migrate"))
 		register_migration(1, 2, Callable(v1_to_v2, "migrate"))
 		register_migration(2, 3, Callable(v2_to_v3, "migrate"))
+		register_migration(3, 4, Callable(v3_to_v4, "migrate"))
 
 
 func register_migration(from_version: int, to_version: int, migration: Callable):
@@ -63,10 +67,21 @@ func migrate(document: Dictionary, target_version: int, context: Dictionary = {}
 		})
 
 	var current := document.duplicate(true)
+	if target_version >= 4 and source_version > 0:
+		var authenticated = EnvelopeScript.validate(document, &"profile", "", "", context.get("meta_catalog"))
+		if not authenticated.ok:
+			return SaveResultScript.failure(&"MIGRATION_FAILED", {"reason": "source_authentication_failed"})
+		current = authenticated.payload
 	var current_version := source_version
 	var merged_metadata: Dictionary = {}
 	var merged_diagnostics: Array[Dictionary] = []
 	while current_version < target_version:
+		if current_version == 3 and target_version >= 4:
+			# The original envelope was authenticated before any normalization or migration.
+			var normalized = EnvelopeScript.reseal_current(current)
+			if not normalized.ok:
+				return SaveResultScript.failure(&"MIGRATION_FAILED", {"reason": "normalized_source_invalid"})
+			current = normalized.payload
 		if not _migrations.has(current_version):
 			return _migration_failure(
 				&"MIGRATION_UNAVAILABLE",

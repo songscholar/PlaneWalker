@@ -48,9 +48,12 @@ const ForgeVentsRuleScript := preload(
 const CollapsingPlaneRuleScript := preload(
 	"res://scripts/dungeon/floor_rules/collapsing_plane_rule.gd"
 )
+const MetaProfileScript := preload("res://scripts/progression/meta_profile_state.gd")
+const MetaCompatibilityScript := preload("res://scripts/progression/meta_profile_compatibility.gd")
 
 const MAGIC := "PWSAVE"
 const SCHEMA_VERSION := 3
+const META_PROFILE_SCHEMA_VERSION := 4
 const INTEGRITY_ALGORITHM := "sha256"
 const VALID_DOCUMENT_KINDS: Array[String] = ["profile", "settings"]
 const PROFILE_FIELDS: Array[String] = [
@@ -173,7 +176,8 @@ static func create_profile(
 	created_at_utc: String,
 	saved_at_utc: String,
 	content_snapshot: Dictionary,
-	payload: Dictionary
+	payload: Dictionary,
+	meta_catalog: RefCounted = null
 ):
 	var profile_validation = SavePathPolicyScript.validate_id(profile_id, &"profile_id")
 	if not profile_validation.ok:
@@ -182,13 +186,20 @@ static func create_profile(
 	if not domain_validation.ok:
 		return domain_validation
 	var normalized_payload := payload.duplicate(true)
+	var profile_schema := SCHEMA_VERSION
+	if meta_catalog != null:
+		var imported: Dictionary = MetaCompatibilityScript.from_legacy(normalized_payload, meta_catalog)
+		if not imported.ok:
+			return _invalid_create("payload.meta_profile_state", str(imported.code), null)
+		normalized_payload = imported.context.payload
+		profile_schema = META_PROFILE_SCHEMA_VERSION
 	if not normalized_payload.has("active_item_state"):
 		normalized_payload["active_item_state"] = empty_active_item_state()
 	if not normalized_payload.has("reward_effect_state"):
 		normalized_payload["reward_effect_state"] = {}
 	if not normalized_payload.has("active_run_state"):
 		normalized_payload["active_run_state"] = {}
-	normalized_payload = _normalize_profile_payload(normalized_payload, SCHEMA_VERSION)
+	normalized_payload = _normalize_profile_payload(normalized_payload, profile_schema)
 	var common_error := _common_create_error(
 		sequence,
 		game_version,
@@ -202,7 +213,7 @@ static func create_profile(
 	if not snapshot_error.is_empty():
 		return _invalid_create(str(snapshot_error["field"]), str(snapshot_error["reason"]), snapshot_error.get("value"))
 
-	var payload_error := _profile_payload_error(normalized_payload, SCHEMA_VERSION, false)
+	var payload_error := _profile_payload_error(normalized_payload, profile_schema, false, meta_catalog)
 	if not payload_error.is_empty():
 		return _invalid_create(
 			str(payload_error["field"]),
@@ -211,7 +222,7 @@ static func create_profile(
 		)
 	var document := {
 		"magic": MAGIC,
-		"schema_version": SCHEMA_VERSION,
+		"schema_version": profile_schema,
 		"document_kind": "profile",
 		"profile_id": profile_id,
 		"save_domain": save_domain,
@@ -256,10 +267,12 @@ static func validate(
 	value: Variant,
 	expected_document_kind: StringName = &"",
 	expected_profile_id: String = "",
-	expected_save_domain: String = ""
+	expected_save_domain: String = "",
+	meta_catalog: RefCounted = null
 ):
 	var boundary = validate_document_boundary(
-		value, expected_document_kind, expected_profile_id, expected_save_domain
+		value, expected_document_kind, expected_profile_id, expected_save_domain,
+		META_PROFILE_SCHEMA_VERSION if meta_catalog != null else SCHEMA_VERSION
 	)
 	if not boundary.ok:
 		return boundary
@@ -267,7 +280,7 @@ static func validate(
 	if str(document["document_kind"]) == "profile":
 		var schema_version := int(document["schema_version"])
 		var normalized_payload := _normalize_profile_payload(document["payload"], schema_version)
-		var payload_error := _profile_payload_error(normalized_payload, schema_version)
+		var payload_error := _profile_payload_error(normalized_payload, schema_version, true, meta_catalog)
 		if not payload_error.is_empty():
 			return _corrupt(
 				str(payload_error["field"]),
@@ -283,7 +296,8 @@ static func validate_document_boundary(
 	value: Variant,
 	expected_document_kind: StringName = &"",
 	expected_profile_id: String = "",
-	expected_save_domain: String = ""
+	expected_save_domain: String = "",
+	max_profile_version: int = SCHEMA_VERSION
 ):
 	if typeof(value) != TYPE_DICTIONARY:
 		return _corrupt("document", "type")
@@ -293,10 +307,11 @@ static func validate_document_boundary(
 	if not _is_integer_number(document.get("schema_version")):
 		return _corrupt("schema_version", "type")
 	var schema_version := int(document["schema_version"])
-	if schema_version > SCHEMA_VERSION:
+	var supported_version := max_profile_version if document.get("document_kind") == "profile" else SCHEMA_VERSION
+	if schema_version > supported_version:
 		return SaveResultScript.failure(
 			&"FORWARD_VERSION",
-			{"schema_version": schema_version, "supported_version": SCHEMA_VERSION}
+			{"schema_version": schema_version, "supported_version": supported_version}
 		)
 	if schema_version < 1:
 		return _corrupt("schema_version", "value")
@@ -342,15 +357,22 @@ static func validate_document_boundary(
 	return SaveResultScript.success(document)
 
 
-static func reseal_current(document: Dictionary):
-	if int(document.get("schema_version", -1)) != SCHEMA_VERSION:
+static func reseal_current(document: Dictionary, meta_catalog: RefCounted = null):
+	var expected_version := META_PROFILE_SCHEMA_VERSION if meta_catalog != null and document.get("document_kind") == "profile" else SCHEMA_VERSION
+	if int(document.get("schema_version", -1)) != expected_version:
 		return SaveResultScript.failure(&"INVALID_ARGUMENT", {
 			"field": "schema_version",
-			"expected": SCHEMA_VERSION,
+			"expected": expected_version,
 			"actual": document.get("schema_version"),
 		})
 	var unsigned := document.duplicate(true)
 	unsigned.erase("integrity")
+	if expected_version == META_PROFILE_SCHEMA_VERSION:
+		if not unsigned.get("payload") is Dictionary:
+			return _invalid_create("payload", "type", null)
+		var error := _profile_payload_error(unsigned.payload, expected_version, true, meta_catalog)
+		if not error.is_empty():
+			return _invalid_create(str(error.field), str(error.reason), null)
 	return _finish_create(unsigned)
 
 
@@ -453,7 +475,8 @@ static func _profile_document_error(
 static func _profile_payload_error(
 	payload: Dictionary,
 	schema_version: int,
-	allow_legacy_event_runtime: bool = true
+	allow_legacy_event_runtime: bool = true,
+	meta_catalog: RefCounted = null
 ) -> Dictionary:
 	if schema_version < 2:
 		return {}
@@ -485,6 +508,12 @@ static func _profile_payload_error(
 	)
 	if not active_run_error.is_empty():
 		return active_run_error
+	if schema_version >= META_PROFILE_SCHEMA_VERSION:
+		var profile = MetaProfileScript.new()
+		if meta_catalog == null or not payload.get("meta_profile_state") is Dictionary or not profile.configure(meta_catalog, payload.meta_profile_state) or not MetaCompatibilityScript.mirrors_match(payload, profile.snapshot()):
+			return {"field": "payload.meta_profile_state", "reason": "invalid_or_contradictory"}
+		if not MetaCompatibilityScript.run_matches_profile(payload.active_run_state, profile.snapshot(), meta_catalog):
+			return {"field": "payload.active_run_state.resources.meta_run_projection", "reason": "profile_run_mismatch"}
 	return {}
 
 

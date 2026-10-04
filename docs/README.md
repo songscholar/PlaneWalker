@@ -13,7 +13,7 @@
 
 ## 当前执行结论
 
-P16 的阶段证据已包含严格 Profile/Meta 投影领域、156 条主城/成长/剧情/教学目录，以及[结算与真实 JSON Profile 服务](current/2026-10-04-p16c-settlement-service-evidence.md)。该服务仍未激活到 Main，schema-4 迁移、原生主城与剧情交互继续实施。当前局部完成证据不能代替全产品认证。
+P16 的阶段证据已包含严格 Profile/Meta 投影领域、156 条主城/成长/剧情/教学目录、[结算与真实 JSON Profile 服务](current/2026-10-04-p16c-settlement-service-evidence.md)，以及[存档 v4 迁移和锻造、配装库持久化](current/2026-10-05-p16e-save-v4-workshop-service-evidence.md)。这些服务仍未激活到 Main，原生主城与剧情交互继续实施。当前局部完成证据不能代替全产品认证。
 
 Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Current、Next、Launch 和 Expansion 作为可被删减的产品选项。范围通过实施顺序和质量 Gate 控制，不通过删除角色、武器、楼层、Boss、Hub、剧情、回放、排行、Mod 或 DLC 能力来降低范围。
 
@@ -136,6 +136,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16A Profile Domain Evidence](current/2026-10-04-p16a-profile-domain-evidence.md) | 成长树、严格局外档案、不可变局内投影与 JSON 兼容 | Verified Locally / Current |
 | [P16B Content Evidence](current/2026-10-04-p16b-authoritative-content-evidence.md) | 156 条主城、成长、剧情和教学目录与双语内容 | Verified Locally / Current |
 | [P16C Settlement Evidence](current/2026-10-04-p16c-settlement-service-evidence.md) | 一次结算、开局收据、真实 JSON 写入与失败恢复 | Verified Locally / Current |
+| [P16D Workshop Domain Evidence](current/2026-10-04-p16d-forge-build-proficiency-evidence.md) | 锻造、配装库候选和固定容量武器熟练度领域 | Verified Locally / Current |
+| [P16E Save and Workshop Evidence](current/2026-10-05-p16e-save-v4-workshop-service-evidence.md) | 旧存档 v4 迁移、旧局冻结效果、锻造与配装库原子持久化 | Verified Locally / Current |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |

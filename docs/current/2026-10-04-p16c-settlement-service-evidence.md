@@ -8,7 +8,7 @@
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md`, `docs/current/2026-10-04-p16a-profile-domain-evidence.md`, `docs/current/2026-10-04-p16b-authoritative-content-evidence.md`
 - Last Verified: 2026-10-04
 - Evidence Status: Verified Locally
-- Certification Status: Focused domain and physical JSON service only; schema-4 migration, native defeat grant producer, Player and Main activation pending
+- Certification Status: Focused domain and physical JSON service; opt-in schema-4 migration and workshop persistence added by P16E; native defeat grant producer, Player and Main activation pending
 
 ## Implemented Boundary
 
@@ -32,4 +32,10 @@ Final settlement GREEN: `planewalker-tests.uRQeDM`; physical service GREEN: `pla
 
 The clean detached `cf03870` snapshot completed 243 scenes: 241 passed and two failed (the overly generic native observation method name and an incomplete talent loadout fixture). The precise fixes are local commits `2fb623c` and `7ab956d`. Its formal certification remains failed, with coverage, exports and packaged startup uncollected; later fixes require a new reviewed snapshot.
 
-The service is inactive and temporarily uses the extensible schema-3 payload for focused persistence tests. Schema-4 validation/migration, Registry-authoritative reference loading, native profile commands, real hostile material facts, Player projection installation, crash-to-ending resume, and Hub integration remain required before production activation. No remote publication or real-player certification is claimed.
+The service remains inactive in Main. Its initial schema-3 persistence boundary
+is superseded by the opt-in schema-4 migration and durable workshop contracts in
+`docs/current/2026-10-05-p16e-save-v4-workshop-service-evidence.md`. Real hostile
+material facts, Registry-authoritative activation, proficiency receipt production,
+Player projection installation, crash-to-ending resume, and Hub integration
+remain required before production activation. No remote publication or
+real-player certification is claimed.

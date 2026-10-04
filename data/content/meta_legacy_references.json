@@ -1,0 +1,12 @@
+{
+  "schema_id": "planewalker.meta_legacy_references",
+  "schema_version": 1,
+  "achievement": ["first_return"],
+  "cosmetic": [
+    "primordial_knight.default",
+    "time_guardian.default",
+    "time_lord.default",
+    "void_walker.default",
+    "wanderer.default"
+  ]
+}

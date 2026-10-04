@@ -186,6 +186,13 @@ func _valid_forge(value: Variant, unlocked: Array) -> bool:
 			return false
 		if state.level > 0 and not unlocked.has("F-01") or state.void_tempered and not unlocked.has("F-04") or state.enchant_preferences.size() >= 1 and not unlocked.has("F-02") or state.enchant_preferences.size() == 2 and not unlocked.has("F-03"):
 			return false
+		for group: Array in [["EN-01", "EN-02", "EN-03"], ["EN-04", "EN-05"]]:
+			var equipped := 0
+			for enchantment: String in state.enchant_preferences:
+				if group.has(enchantment):
+					equipped += 1
+			if equipped > 1:
+				return false
 	return true
 
 

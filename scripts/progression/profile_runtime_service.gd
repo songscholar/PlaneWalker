@@ -7,6 +7,8 @@ const MetaProjection := preload("res://scripts/progression/meta_run_projection.g
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 const Envelope := preload("res://scripts/save/save_envelope.gd")
 const Paths := preload("res://scripts/save/save_path_policy.gd")
+const Forge := preload("res://scripts/progression/forge_runtime.gd")
+const Builds := preload("res://scripts/progression/build_library.gd")
 const MIRROR_FIELDS := ["chronos_shards", "existential_imprints", "unlocked_nodes", "discovered_items", "unlocked_characters", "unlocked_weapons", "weapon_proficiency", "npc_affinity", "unlocked_achievements", "cosmetics"]
 const BOSS_ORDER := ["ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne"]
 
@@ -18,10 +20,14 @@ var _profile_id := ""
 var _save_domain := ""
 var _payload: Dictionary = {}
 var _busy := false
+var _forge: RefCounted
+var _builds: RefCounted
 
 
 func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String, save_domain: String, initial_payload: Dictionary = {}) -> Dictionary:
 	if _busy or save_service == null or not save_service.has_method("save_profile") or not save_service.has_method("load_profile") or not save_service.has_method("inspect_profile") or not Paths.validate_id(profile_id).ok or not Paths.validate_id(save_domain).ok:
+		return _failure(&"CONFIGURATION_INVALID")
+	if not save_service.has_method("enable_meta_profile") or not save_service.call("enable_meta_profile", catalog).ok:
 		return _failure(&"CONFIGURATION_INVALID")
 	var loaded = save_service.call("load_profile", profile_id, save_domain)
 	if not loaded.ok and loaded.code != &"NOT_FOUND":
@@ -46,6 +52,8 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 	_profile_id = profile_id
 	_save_domain = save_domain
 	_payload = payload_value.duplicate(true)
+	_forge = null
+	_builds = null
 	return _success({"snapshot": snapshot()})
 
 
@@ -57,14 +65,58 @@ func payload() -> Dictionary:
 	return _payload.duplicate(true)
 
 
+func enable_workshop(entries: Array) -> Dictionary:
+	if _profile == null or _busy:
+		return _failure(&"NOT_CONFIGURED")
+	var forge = Forge.new()
+	var configured: Dictionary = forge.configure(entries, _catalog)
+	var builds = Builds.new()
+	if not configured.ok or not builds.configure(_catalog):
+		return _failure(&"WORKSHOP_CONTENT_INVALID")
+	_forge = forge
+	_builds = builds
+	return _success({})
+
+
+func forge_projection(weapon_id: String) -> Dictionary:
+	return _forge.call("weapon_projection", snapshot(), weapon_id) if _forge != null else {}
+
+
+func resolve_build(build_id: String) -> Dictionary:
+	return _builds.call("resolve", snapshot(), build_id) if _builds != null else _failure(&"WORKSHOP_NOT_CONFIGURED")
+
+
 func execute(command: Dictionary, expected_revision: int) -> Dictionary:
 	var ready := _readiness(expected_revision)
 	if not ready.ok:
 		return ready
-	var prepared: Dictionary = _profile.call("prepare_command", command, expected_revision)
+	var kind: Variant = command.get("kind")
+	var producer: RefCounted
+	if kind in ["forge_upgrade", "enchant_preference", "void_temper"]:
+		producer = _forge
+	elif kind in ["build_save", "build_remove"]:
+		producer = _builds
+	elif kind != "meta_unlock":
+		return _failure(&"COMMAND_INVALID")
+	var prepared: Dictionary
+	var receipt: Dictionary = {}
+	if kind == "meta_unlock":
+		prepared = _profile.call("prepare_command", command, expected_revision)
+	else:
+		if producer == null:
+			return _failure(&"WORKSHOP_NOT_CONFIGURED")
+		var produced: Dictionary = producer.call("prepare_command", snapshot(), command, expected_revision)
+		if not produced.ok:
+			return produced
+		prepared = _profile.call("prepare_candidate", produced.context.candidate)
+		receipt = produced.context.duplicate(true)
+		receipt.erase("candidate")
 	if not prepared.ok:
 		return prepared
-	return _persist_ticket(prepared.context.ticket)
+	var persisted := _persist_ticket(prepared.context.ticket)
+	if persisted.ok:
+		persisted.context.merge(receipt, false)
+	return persisted
 
 
 func prepare_launch(request: Dictionary, expected_revision: int) -> Dictionary:

@@ -3,6 +3,7 @@ extends RefCounted
 
 const Catalog := preload("res://scripts/progression/meta_progression_catalog.gd")
 const CONTENT_ROOT := "res://data/content_packs/base/content/"
+const LEGACY_REFERENCES := "res://data/content/meta_legacy_references.json"
 const META_FIELDS := ["category", "id", "schema_version", "name_key", "description_key", "availability", "tags", "compatibility", "effects", "node_id", "branch", "cost", "prerequisites", "meta_effects"]
 
 
@@ -27,6 +28,15 @@ static func from_catalogs(catalogs: Dictionary) -> Dictionary:
 	var references: Dictionary = {}
 	for category: String in Catalog.REFERENCE_CATEGORIES:
 		references[category] = []
+	var legacy: Variant = JSON.parse_string(FileAccess.get_file_as_string(LEGACY_REFERENCES))
+	if not Catalog.exact_fields(legacy, ["schema_id", "schema_version", "achievement", "cosmetic"]) or legacy.schema_id != "planewalker.meta_legacy_references" or not Catalog.bounded_int(legacy.schema_version, 1, 1):
+		return _failure(&"LEGACY_REFERENCES_INVALID")
+	for category: String in ["achievement", "cosmetic"]:
+		if not legacy[category] is Array:
+			return _failure(&"LEGACY_REFERENCES_INVALID")
+		for id: Variant in legacy[category]:
+			if not _add_reference(references, category, id):
+				return _failure(&"LEGACY_REFERENCES_INVALID")
 	for row: Variant in catalogs.items:
 		if not row is Dictionary or row.get("category") != "item" or not _add_reference(references, "item", row.get("id")):
 			return _failure(&"CONTENT_REFERENCE_INVALID")

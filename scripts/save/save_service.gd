@@ -6,6 +6,7 @@ const SaveFileOpsScript := preload("res://scripts/save/save_file_ops.gd")
 const SaveMigrationRegistryScript := preload("res://scripts/save/save_migration_registry.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
+const MetaProfileScript := preload("res://scripts/progression/meta_profile_state.gd")
 
 const PRIMARY_FILE := "primary.json"
 const PENDING_FILE := "pending.tmp"
@@ -30,6 +31,7 @@ var _clock: Callable
 var _fault_injector: Callable
 var _write_active: bool = false
 var _file_ops = SaveFileOpsScript.new()
+var _meta_catalog: RefCounted
 
 
 func configure(
@@ -61,6 +63,7 @@ func configure(
 	_content_snapshot = (snapshot_validation.payload.get("content_snapshot", {}) as Dictionary).duplicate(true)
 	_clock = clock if clock.is_valid() else Callable(self, "_system_utc_now")
 	_fault_injector = fault_injector
+	_meta_catalog = null
 	_configured = true
 	return SaveResultScript.success({}, {
 		"root_path": _root_path,
@@ -70,6 +73,14 @@ func configure(
 
 func set_fault_injector(fault_injector: Callable) -> void:
 	_fault_injector = fault_injector
+
+
+func enable_meta_profile(catalog: RefCounted):
+	var validator = MetaProfileScript.new()
+	if not _configured or _write_active or not validator.configure(catalog):
+		return SaveResultScript.failure(&"INVALID_ARGUMENT", {"field": "meta_catalog"})
+	_meta_catalog = catalog
+	return SaveResultScript.success()
 
 
 func save_profile(profile_id: String, save_domain: String, payload: Dictionary):
@@ -152,7 +163,8 @@ func _save_profile_internal(profile_id: String, save_domain: String, payload: Di
 		created_at,
 		saved_at,
 		_content_snapshot,
-		payload
+		payload,
+		_meta_catalog
 	)
 	if not created.ok:
 		return created
@@ -404,7 +416,7 @@ func _load_scope(directory_path: String, document_kind: StringName, profile_id: 
 				document_kind,
 				profile_id,
 				save_domain,
-				false
+				migrated_to == SaveEnvelopeScript.META_PROFILE_SCHEMA_VERSION
 			)
 			_write_active = false
 			if not rewrite.ok:
@@ -517,7 +529,7 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 		})
 	var document: Dictionary = parser.data
 	var boundary = SaveEnvelopeScript.validate_document_boundary(
-		document, document_kind, profile_id, save_domain
+		document, document_kind, profile_id, save_domain, _target_version(document_kind)
 	)
 	if not boundary.ok:
 		boundary.metadata["path"] = path
@@ -529,21 +541,21 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 			"expected_aggregate": _content_snapshot.get("aggregate_sha256", ""),
 			"actual_aggregate": actual_snapshot.get("aggregate_sha256", ""),
 		})
-	var validation = SaveEnvelopeScript.validate(document, document_kind, profile_id, save_domain)
+	var validation = SaveEnvelopeScript.validate(document, document_kind, profile_id, save_domain, _meta_catalog)
 	if not validation.ok:
 		validation.metadata["path"] = path
 		return validation
 	var migrated_from := int(document.get("schema_version", SaveEnvelopeScript.SCHEMA_VERSION))
-	if migrated_from < SaveEnvelopeScript.SCHEMA_VERSION:
+	if migrated_from < _target_version(document_kind):
 		var migration = SaveMigrationRegistryScript.new().migrate(
-			validation.payload,
-			SaveEnvelopeScript.SCHEMA_VERSION,
-			{"profile_id": profile_id, "save_domain": save_domain}
+			document if _target_version(document_kind) >= 4 else validation.payload,
+			_target_version(document_kind),
+			{"profile_id": profile_id, "save_domain": save_domain, "meta_catalog": _meta_catalog}
 		)
 		if not migration.ok:
 			migration.metadata["path"] = path
 			return migration
-		var resealed = SaveEnvelopeScript.reseal_current(migration.payload)
+		var resealed = SaveEnvelopeScript.reseal_current(migration.payload, _meta_catalog)
 		if not resealed.ok:
 			resealed.metadata["path"] = path
 			return resealed
@@ -551,7 +563,8 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 			resealed.payload,
 			document_kind,
 			profile_id,
-			save_domain
+			save_domain,
+			_meta_catalog
 		)
 		if not validation.ok:
 			validation.metadata["path"] = path
@@ -563,6 +576,10 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 		"migrated_from": migrated_from,
 		"migrated_to": int(validation.payload.get("schema_version", migrated_from)),
 	})
+
+
+func _target_version(document_kind: StringName) -> int:
+	return SaveEnvelopeScript.META_PROFILE_SCHEMA_VERSION if document_kind == &"profile" and _meta_catalog != null else SaveEnvelopeScript.SCHEMA_VERSION
 
 
 func _quarantine_candidate(
