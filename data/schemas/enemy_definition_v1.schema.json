@@ -1,0 +1,3292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/enemy-definition/1.0.0",
+  "title": "Plane Walker Enemy Definition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "id",
+    "schema_version",
+    "name_key",
+    "description_key",
+    "availability",
+    "tags",
+    "compatibility",
+    "references",
+    "floor_id",
+    "runtime_kind",
+    "max_hp",
+    "defense",
+    "move_speed",
+    "threat_cost",
+    "collision_radius_px",
+    "mechanisms",
+    "actions",
+    "elite_actions"
+  ],
+  "properties": {
+    "category": {
+      "const": "enemy_definition"
+    },
+    "id": {
+      "enum": [
+        "shattered_sentinel",
+        "corrosive_moth",
+        "stone_shell_strider",
+        "ruins_wraith",
+        "rift_watcher",
+        "void_hunter",
+        "void_archer",
+        "bramble_mage",
+        "void_spore",
+        "forest_caller",
+        "shadow_lurker",
+        "chrono_guard",
+        "rift_weaver",
+        "blink_striker",
+        "rewind_priest",
+        "chrono_storm_elemental",
+        "eternal_hound",
+        "forge_titan",
+        "void_web_weaver",
+        "phase_ranger",
+        "chaos_amalgam",
+        "plane_ripper"
+      ]
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "name_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "description_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "availability": {
+      "const": [
+        "LAUNCH",
+        "EXPANSION"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "floor_ids",
+        "actor_kinds"
+      ],
+      "properties": {
+        "floor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "floor_ruins_of_remnant",
+              "floor_void_forest",
+              "floor_time_rift",
+              "floor_plane_forge",
+              "floor_throne_of_void"
+            ]
+          }
+        },
+        "actor_kinds": {
+          "const": [
+            "enemy",
+            "elite"
+          ]
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "floor_id": {
+      "enum": [
+        "floor_ruins_of_remnant",
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ]
+    },
+    "runtime_kind": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]{1,96}$"
+    },
+    "max_hp": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "defense": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "move_speed": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 240
+    },
+    "threat_cost": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "collision_radius_px": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 32
+    },
+    "mechanisms": {
+      "type": "object"
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "planewalker://schemas/hostile-action/1.0.0"
+      }
+    },
+    "elite_actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "planewalker://schemas/hostile-action/1.0.0"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "shattered_sentinel"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "runtime_kind": {
+            "const": "shattered_sentinel"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_ruins_of_remnant"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "retreat_distance_px",
+              "retreat_frames",
+              "first_attack_stagger_frames"
+            ],
+            "properties": {
+              "retreat_distance_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 32
+              },
+              "retreat_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 60
+              },
+              "first_attack_stagger_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 120
+              }
+            }
+          },
+          "actions": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "shattered_sentinel.shield_sweep"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "shattered_sentinel.boulder_slam"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "corrosive_moth"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "runtime_kind": {
+            "const": "corrosive_moth"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_ruins_of_remnant"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kite_min_px",
+              "kite_max_px",
+              "impact_pool_radius_px",
+              "impact_pool_lifetime_frames",
+              "impact_pool_damage",
+              "impact_pool_tick_frames",
+              "death_pool_warning_frames",
+              "death_pool_damage",
+              "death_pool_radius_px"
+            ],
+            "properties": {
+              "kite_min_px": {
+                "type": "number",
+                "minimum": 32,
+                "maximum": 128
+              },
+              "kite_max_px": {
+                "type": "number",
+                "minimum": 32,
+                "maximum": 128
+              },
+              "impact_pool_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 24
+              },
+              "impact_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              },
+              "impact_pool_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "impact_pool_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 120
+              },
+              "death_pool_warning_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 120
+              },
+              "death_pool_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "death_pool_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 24
+              }
+            }
+          },
+          "actions": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "corrosive_moth.corrosive_spit"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "corrosive_moth.corrosive_barrage"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "stone_shell_strider"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "runtime_kind": {
+            "const": "stone_shell_strider"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_ruins_of_remnant"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "shell_frames",
+              "shell_damage_multiplier",
+              "open_frames",
+              "open_damage_multiplier",
+              "elite_shock_once_per_cycle"
+            ],
+            "properties": {
+              "shell_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 120
+              },
+              "shell_damage_multiplier": {
+                "type": "number",
+                "minimum": 0.3,
+                "maximum": 1
+              },
+              "open_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "open_damage_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.3
+              },
+              "elite_shock_once_per_cycle": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "stone_shell_strider.shell_charge"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "stone_shell_strider.bite"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "stone_shell_strider.shell_shock"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "ruins_wraith"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "runtime_kind": {
+            "const": "ruins_wraith"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_ruins_of_remnant",
+              "mini_wraith"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "internal_obstacle_passthrough",
+              "windup_interrupt_damage",
+              "stagger_frames",
+              "consume_after_active",
+              "elite_split_on_final_death"
+            ],
+            "properties": {
+              "internal_obstacle_passthrough": {
+                "type": "boolean",
+                "const": true
+              },
+              "windup_interrupt_damage": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 15
+              },
+              "stagger_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 60
+              },
+              "consume_after_active": {
+                "type": "boolean",
+                "const": true
+              },
+              "elite_split_on_final_death": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "ruins_wraith.spirit_detonation"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "ruins_wraith.spirit_split"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "rift_watcher"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "runtime_kind": {
+            "const": "rift_watcher"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_ruins_of_remnant"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "support_only",
+              "recipient_heal_fraction_cap",
+              "all_sources_recipient_heal_fraction_cap",
+              "death_attack_multiplier",
+              "death_debuff_frames"
+            ],
+            "properties": {
+              "support_only": {
+                "type": "boolean",
+                "const": true
+              },
+              "recipient_heal_fraction_cap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.4
+              },
+              "all_sources_recipient_heal_fraction_cap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.8
+              },
+              "death_attack_multiplier": {
+                "type": "number",
+                "minimum": 0.8,
+                "maximum": 1
+              },
+              "death_debuff_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rift_watcher.nourish"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rift_watcher.rift_pulse"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rift_watcher.rift_bind"
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_hunter"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "void_hunter"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest",
+              "hunter_echo"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "flank_speed_multiplier",
+              "retreat_distance_px",
+              "silhouette_always_visible"
+            ],
+            "properties": {
+              "flank_speed_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.2
+              },
+              "retreat_distance_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 32
+              },
+              "silhouette_always_visible": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_hunter.claw_pair"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_hunter.backstab_dash"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_hunter.hunter_echo"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_archer"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "void_archer"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kite_min_px",
+              "kite_max_px",
+              "obstacle_aware_retreat"
+            ],
+            "properties": {
+              "kite_min_px": {
+                "type": "number",
+                "minimum": 32,
+                "maximum": 160
+              },
+              "kite_max_px": {
+                "type": "number",
+                "minimum": 32,
+                "maximum": 160
+              },
+              "obstacle_aware_retreat": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_archer.void_arrow"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_archer.arrow_fan"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_archer.piercing_arrow"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "bramble_mage"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "bramble_mage"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "own_pool_immunity",
+              "ally_pool_immunity",
+              "pool_count_cap",
+              "whip_slow_multiplier",
+              "whip_slow_frames"
+            ],
+            "properties": {
+              "own_pool_immunity": {
+                "type": "boolean",
+                "const": true
+              },
+              "ally_pool_immunity": {
+                "type": "boolean",
+                "const": false
+              },
+              "pool_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3
+              },
+              "whip_slow_multiplier": {
+                "type": "number",
+                "minimum": 0.4,
+                "maximum": 1
+              },
+              "whip_slow_frames": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 48
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "bramble_mage.bramble_growth"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "bramble_mage.entangling_whip"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "bramble_mage.bramble_cage"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_spore"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "void_spore"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest",
+              "small_void_spore"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "chain_depth_cap",
+              "chain_warning_frames",
+              "residual_radius_px",
+              "residual_lifetime_frames",
+              "residual_tick_damage",
+              "residual_tick_frames",
+              "residual_slow_multiplier",
+              "elite_split_count"
+            ],
+            "properties": {
+              "chain_depth_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "chain_warning_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 120
+              },
+              "residual_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 24
+              },
+              "residual_lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              },
+              "residual_tick_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "residual_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 120
+              },
+              "residual_slow_multiplier": {
+                "type": "number",
+                "minimum": 0.8,
+                "maximum": 1
+              },
+              "elite_split_count": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 2
+              }
+            }
+          },
+          "actions": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_spore.spore_burst"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_spore.spore_split"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "forest_caller"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "forest_caller"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest",
+              "void_beetle",
+              "void_firefly"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "summon_warning_interruptible",
+              "retire_summons_on_owner_death",
+              "retreat_route_validated"
+            ],
+            "properties": {
+              "summon_warning_interruptible": {
+                "type": "boolean",
+                "const": true
+              },
+              "retire_summons_on_owner_death": {
+                "type": "boolean",
+                "const": true
+              },
+              "retreat_route_validated": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forest_caller.void_call"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forest_caller.energy_bolt"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forest_caller.great_call"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "shadow_lurker"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "shadow_lurker"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "burrow_cap_frames",
+              "ground_damage_multiplier",
+              "landing_all_weapons_hittable",
+              "visible_burrow_trail"
+            ],
+            "properties": {
+              "burrow_cap_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              },
+              "ground_damage_multiplier": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 1
+              },
+              "landing_all_weapons_hittable": {
+                "type": "boolean",
+                "const": true
+              },
+              "visible_burrow_trail": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "shadow_lurker.shadow_ambush"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "shadow_lurker.surface_claw"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "shadow_lurker.shadow_trap"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "chrono_guard"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "chrono_guard"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revival_count_cap",
+              "revival_recovery_frames",
+              "revival_hp",
+              "revival_flag_before_publication",
+              "slash_corridor_lifetime_frames"
+            ],
+            "properties": {
+              "revival_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1
+              },
+              "revival_recovery_frames": {
+                "type": "integer",
+                "minimum": 90,
+                "maximum": 180
+              },
+              "revival_hp": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 54
+              },
+              "revival_flag_before_publication": {
+                "type": "boolean",
+                "const": true
+              },
+              "slash_corridor_lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 360
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chrono_guard.chronal_slam"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chrono_guard.rift_slash"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chrono_guard.time_lock"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "rift_weaver"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "rift_weaver"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "prediction_cap_frames",
+              "zone_count_cap",
+              "zone_shift_warning_frames",
+              "shift_portal_opt_in",
+              "elite_fusion_consumes_owned_zones"
+            ],
+            "properties": {
+              "prediction_cap_frames": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "zone_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3
+              },
+              "zone_shift_warning_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 120
+              },
+              "shift_portal_opt_in": {
+                "type": "boolean",
+                "const": true
+              },
+              "elite_fusion_consumes_owned_zones": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rift_weaver.rift_make"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rift_weaver.distortion_bolt"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rift_weaver.rift_fusion"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "blink_striker"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "blink_striker"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transit_frames",
+              "followup_warning_frames",
+              "rift_transit_distance_multiplier",
+              "stop_postpones_landing"
+            ],
+            "properties": {
+              "transit_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "followup_warning_frames": {
+                "type": "integer",
+                "minimum": 25,
+                "maximum": 120
+              },
+              "rift_transit_distance_multiplier": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 1
+              },
+              "stop_postpones_landing": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "blink_striker.blink_cut"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "blink_striker.rift_cross"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "blink_striker.triple_blink"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "rewind_priest"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "rewind_priest"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "history_frames",
+              "base_heal_recipient_fraction",
+              "recipient_heal_fraction_cap",
+              "all_sources_recipient_heal_fraction_cap",
+              "elite_attack_multiplier",
+              "elite_attack_buff_frames",
+              "no_resurrection"
+            ],
+            "properties": {
+              "history_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              },
+              "base_heal_recipient_fraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.3
+              },
+              "recipient_heal_fraction_cap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.4
+              },
+              "all_sources_recipient_heal_fraction_cap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.8
+              },
+              "elite_attack_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.25
+              },
+              "elite_attack_buff_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "no_resurrection": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rewind_priest.rewind_heal"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rewind_priest.slow_bolt"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "rewind_priest.time_reverse"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "chrono_storm_elemental"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "chrono_storm_elemental"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "zone_count_cap",
+              "pattern_radius_px",
+              "fast_multiplier",
+              "slow_multiplier",
+              "swap_warning_frames",
+              "swap_interval_frames",
+              "death_warning_frames",
+              "death_slow_multiplier",
+              "death_slow_frames",
+              "elite_enemy_only_action_freeze"
+            ],
+            "properties": {
+              "zone_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              },
+              "pattern_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "fast_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.25
+              },
+              "slow_multiplier": {
+                "type": "number",
+                "minimum": 0.6,
+                "maximum": 1
+              },
+              "swap_warning_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 120
+              },
+              "swap_interval_frames": {
+                "type": "integer",
+                "minimum": 90,
+                "maximum": 180
+              },
+              "death_warning_frames": {
+                "type": "integer",
+                "minimum": 35,
+                "maximum": 120
+              },
+              "death_slow_multiplier": {
+                "type": "number",
+                "minimum": 0.7,
+                "maximum": 1
+              },
+              "death_slow_frames": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 180
+              },
+              "elite_enemy_only_action_freeze": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chrono_storm_elemental.time_storm"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chrono_storm_elemental.timeflow_push"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chrono_storm_elemental.time_stasis"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "eternal_hound"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "eternal_hound"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dormancy_count_cap",
+              "dormancy_frames",
+              "dormancy_sigil_hp",
+              "revival_hp",
+              "elite_hit_heal_cap",
+              "no_reward_until_final"
+            ],
+            "properties": {
+              "dormancy_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1
+              },
+              "dormancy_frames": {
+                "type": "integer",
+                "minimum": 300,
+                "maximum": 300
+              },
+              "dormancy_sigil_hp": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 12
+              },
+              "revival_hp": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 35
+              },
+              "elite_hit_heal_cap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 20
+              },
+              "no_reward_until_final": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "eternal_hound.temporal_bite"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "eternal_hound.time_hunt"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "forge_titan"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "runtime_kind": {
+            "const": "forge_titan"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_plane_forge"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_plane_forge"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "breath_hp_threshold",
+              "overheat_hp_threshold",
+              "overheat_frames",
+              "overheat_attack_multiplier",
+              "overheat_speed_multiplier",
+              "explosion_warning_frames",
+              "explosion_damage",
+              "explosion_radius_px",
+              "corpse_explosion_warning_frames",
+              "pool_lifetime_frames"
+            ],
+            "properties": {
+              "breath_hp_threshold": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 0.5
+              },
+              "overheat_hp_threshold": {
+                "type": "number",
+                "minimum": 0.3,
+                "maximum": 0.3
+              },
+              "overheat_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "overheat_attack_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.25
+              },
+              "overheat_speed_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.15
+              },
+              "explosion_warning_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 120
+              },
+              "explosion_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 40
+              },
+              "explosion_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 48
+              },
+              "corpse_explosion_warning_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 120
+              },
+              "pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              }
+            }
+          },
+          "actions": {
+            "minItems": 3,
+            "maxItems": 3,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_titan.forge_fist"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_titan.ground_fissure"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_titan.flame_breath"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_titan.plane_collapse"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_web_weaver"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "runtime_kind": {
+            "const": "void_web_weaver"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_plane_forge"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_plane_forge"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "link_count_cap",
+              "link_attack_multiplier",
+              "link_speed_multiplier",
+              "link_strongest_only",
+              "link_collision_warning_frames",
+              "elevation_grants_immunity"
+            ],
+            "properties": {
+              "link_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3
+              },
+              "link_attack_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.15
+              },
+              "link_speed_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.1
+              },
+              "link_strongest_only": {
+                "type": "boolean",
+                "const": true
+              },
+              "link_collision_warning_frames": {
+                "type": "integer",
+                "minimum": 35,
+                "maximum": 120
+              },
+              "elevation_grants_immunity": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          },
+          "actions": {
+            "minItems": 3,
+            "maxItems": 3,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_web_weaver.void_web"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_web_weaver.thread_fan"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_web_weaver.binding_thread"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "void_web_weaver.web_cage"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "phase_ranger"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "runtime_kind": {
+            "const": "phase_ranger"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_plane_forge"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_plane_forge",
+              "ranger_echo"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "projectiles_always_visible",
+              "shift_distance_cap_px",
+              "shift_cooldown_frames",
+              "shift_recovery_frames"
+            ],
+            "properties": {
+              "projectiles_always_visible": {
+                "type": "boolean",
+                "const": true
+              },
+              "shift_distance_cap_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 80
+              },
+              "shift_cooldown_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 360
+              },
+              "shift_recovery_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 60
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "phase_ranger.phase_arrow"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "phase_ranger.void_arrow_rain"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "phase_ranger.phase_split"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "chaos_amalgam"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "runtime_kind": {
+            "const": "chaos_amalgam"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_plane_forge"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_plane_forge"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "form_ids",
+              "form_cycle_frames",
+              "low_hp_form_cycle_frames",
+              "low_hp_threshold",
+              "switch_recovery_frames",
+              "never_switch_committed_action",
+              "elite_burn_damage",
+              "elite_burn_tick_frames",
+              "elite_burn_frames"
+            ],
+            "properties": {
+              "form_ids": {
+                "type": "array",
+                "const": [
+                  "red",
+                  "blue",
+                  "void"
+                ]
+              },
+              "form_cycle_frames": {
+                "type": "integer",
+                "minimum": 240,
+                "maximum": 240
+              },
+              "low_hp_form_cycle_frames": {
+                "type": "integer",
+                "minimum": 150,
+                "maximum": 150
+              },
+              "low_hp_threshold": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 0.5
+              },
+              "switch_recovery_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 60
+              },
+              "never_switch_committed_action": {
+                "type": "boolean",
+                "const": true
+              },
+              "elite_burn_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "elite_burn_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 120
+              },
+              "elite_burn_frames": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 180
+              }
+            }
+          },
+          "actions": {
+            "minItems": 6,
+            "maxItems": 6,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.rage_combo"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.flame_charge"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.frost_wave"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.ice_spikes"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.void_pull"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.void_pulse"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "chaos_amalgam.chaos_outburst"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "plane_ripper"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "runtime_kind": {
+            "const": "plane_ripper"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_plane_forge"
+              ],
+              "actor_kinds": [
+                "enemy",
+                "elite"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_plane_forge"
+            ]
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "portal_pair_cap",
+              "portal_transit_cooldown_frames",
+              "portal_arrival_clearance_px",
+              "death_collapse_warning_frames",
+              "death_collapse_damage",
+              "death_collapse_radius_px"
+            ],
+            "properties": {
+              "portal_pair_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1
+              },
+              "portal_transit_cooldown_frames": {
+                "type": "integer",
+                "minimum": 12,
+                "maximum": 60
+              },
+              "portal_arrival_clearance_px": {
+                "type": "number",
+                "minimum": 48,
+                "maximum": 128
+              },
+              "death_collapse_warning_frames": {
+                "type": "integer",
+                "minimum": 45,
+                "maximum": 120
+              },
+              "death_collapse_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 20
+              },
+              "death_collapse_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 32
+              }
+            }
+          },
+          "actions": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "plane_ripper.plane_rip"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "plane_ripper.rift_strike"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "elite_actions": {
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "plane_ripper.one_way_plane"
+                      },
+                      "warning_frames": {
+                        "minimum": 23
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

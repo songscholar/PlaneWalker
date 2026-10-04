@@ -1,0 +1,924 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/hostile-action/1.0.0",
+  "title": "Plane Walker Hostile Action v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "handler_id",
+    "warning_frames",
+    "active_frames",
+    "recovery_frames",
+    "idle_frames",
+    "cooldown_frames",
+    "weight",
+    "max_consecutive",
+    "distance_min_px",
+    "distance_max_px",
+    "geometry",
+    "hit_schedule",
+    "parameters",
+    "cue_id"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]{1,96}$"
+    },
+    "handler_id": {
+      "enum": [
+        "melee",
+        "charge",
+        "projectile_volley",
+        "zone",
+        "heal",
+        "shield",
+        "summon",
+        "blink",
+        "wall",
+        "link",
+        "portal",
+        "self_rewind",
+        "phase_transition",
+        "pull_zone",
+        "arena_core"
+      ]
+    },
+    "warning_frames": {
+      "type": "integer",
+      "minimum": 23,
+      "maximum": 36000
+    },
+    "active_frames": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36000
+    },
+    "recovery_frames": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 36000
+    },
+    "idle_frames": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 36000
+    },
+    "cooldown_frames": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 36000
+    },
+    "weight": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "max_consecutive": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "distance_min_px": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 640
+    },
+    "distance_max_px": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 640
+    },
+    "geometry": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "shape",
+          "origin_offset",
+          "aim_offset_degrees",
+          "radius",
+          "length"
+        ],
+        "properties": {
+          "shape": {
+            "enum": [
+              "circle",
+              "cone",
+              "line",
+              "rift",
+              "ring",
+              "summon_slots",
+              "target_circle"
+            ]
+          },
+          "origin_offset": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": -640,
+                "maximum": 640
+              },
+              "y": {
+                "type": "number",
+                "minimum": -640,
+                "maximum": 640
+              }
+            }
+          },
+          "aim_offset_degrees": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 320
+          },
+          "length": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 640
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "shape": {
+                  "enum": [
+                    "cone",
+                    "line",
+                    "rift"
+                  ]
+                }
+              },
+              "required": [
+                "shape"
+              ]
+            },
+            "then": {
+              "properties": {
+                "radius": {
+                  "exclusiveMinimum": 0
+                },
+                "length": {
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "shape": {
+                  "enum": [
+                    "circle",
+                    "ring",
+                    "target_circle"
+                  ]
+                }
+              },
+              "required": [
+                "shape"
+              ]
+            },
+            "then": {
+              "properties": {
+                "radius": {
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "hit_schedule": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "offset_frame",
+          "hit_index",
+          "damage",
+          "damage_type"
+        ],
+        "properties": {
+          "offset_frame": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35999
+          },
+          "hit_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "damage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "damage_type": {
+            "enum": [
+              "physical",
+              "time",
+              "void",
+              "fire",
+              "ice",
+              "lightning"
+            ]
+          }
+        }
+      }
+    },
+    "parameters": {
+      "type": "object"
+    },
+    "cue_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]{1,96}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "melee"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "knockback_px"
+            ],
+            "properties": {
+              "knockback_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 64
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "charge"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "travel_px",
+              "speed_px_per_second",
+              "knockback_px"
+            ],
+            "properties": {
+              "travel_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 640
+              },
+              "speed_px_per_second": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 480
+              },
+              "knockback_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 64
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "projectile_volley"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "speed_px_per_second",
+              "lifetime_frames",
+              "pierce_count"
+            ],
+            "properties": {
+              "speed_px_per_second": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 480
+              },
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "pierce_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 8
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "zone"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lifetime_frames",
+              "tick_interval_frames",
+              "slow_multiplier",
+              "slow_duration_frames"
+            ],
+            "properties": {
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1200
+              },
+              "tick_interval_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "slow_multiplier": {
+                "type": "number",
+                "minimum": 0.4,
+                "maximum": 1
+              },
+              "slow_duration_frames": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 600
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "heal"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "heal_amount",
+              "recipient_radius_px"
+            ],
+            "properties": {
+              "heal_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 300
+              },
+              "recipient_radius_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 320
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "shield"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "shield_fraction",
+              "lifetime_frames"
+            ],
+            "properties": {
+              "shield_fraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.3
+              },
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "summon"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "definition_id",
+              "count",
+              "lifetime_frames"
+            ],
+            "properties": {
+              "definition_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_.]{1,96}$"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1200
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "blink"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "travel_px",
+              "transit_frames",
+              "landing_warning_frames"
+            ],
+            "properties": {
+              "travel_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 160
+              },
+              "transit_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              },
+              "landing_warning_frames": {
+                "type": "integer",
+                "minimum": 23,
+                "maximum": 120
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "wall"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hit_points",
+              "lifetime_frames",
+              "gap_px"
+            ],
+            "properties": {
+              "hit_points": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 150
+              },
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1200
+              },
+              "gap_px": {
+                "type": "number",
+                "minimum": 32,
+                "maximum": 320
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "link"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hit_points",
+              "lifetime_frames",
+              "attack_multiplier",
+              "speed_multiplier"
+            ],
+            "properties": {
+              "hit_points": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1200
+              },
+              "attack_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.25
+              },
+              "speed_multiplier": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1.25
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "portal"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lifetime_frames",
+              "min_distance_px",
+              "arrival_clearance_px",
+              "transit_cooldown_frames",
+              "team_rule"
+            ],
+            "properties": {
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1200
+              },
+              "min_distance_px": {
+                "type": "number",
+                "minimum": 96,
+                "maximum": 640
+              },
+              "arrival_clearance_px": {
+                "type": "number",
+                "minimum": 48,
+                "maximum": 320
+              },
+              "transit_cooldown_frames": {
+                "type": "integer",
+                "minimum": 12,
+                "maximum": 600
+              },
+              "team_rule": {
+                "enum": [
+                  "both",
+                  "enemy_only"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "self_rewind"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "max_cast_heal",
+              "max_total_heal",
+              "history_frames"
+            ],
+            "properties": {
+              "max_cast_heal": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 150
+              },
+              "max_total_heal": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 300
+              },
+              "history_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 180
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "phase_transition"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phase_id",
+              "cue_frames"
+            ],
+            "properties": {
+              "phase_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_.]{1,96}$"
+              },
+              "cue_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 180
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "pull_zone"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lifetime_frames",
+              "tick_interval_frames",
+              "pull_px_per_second",
+              "slow_multiplier"
+            ],
+            "properties": {
+              "lifetime_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1200
+              },
+              "tick_interval_frames": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "pull_px_per_second": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 32
+              },
+              "slow_multiplier": {
+                "type": "number",
+                "minimum": 0.4,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "handler_id": {
+            "const": "arena_core"
+          }
+        },
+        "required": [
+          "handler_id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hit_points",
+              "body_damage",
+              "exposure_frames",
+              "max_rounds"
+            ],
+            "properties": {
+              "hit_points": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "body_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "exposure_frames": {
+                "type": "integer",
+                "minimum": 20,
+                "maximum": 60
+              },
+              "max_rounds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "hit_schedule": {
+            "contains": {
+              "properties": {
+                "damage": {
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "damage"
+              ]
+            }
+          }
+        },
+        "required": [
+          "hit_schedule"
+        ]
+      },
+      "then": {
+        "properties": {
+          "geometry": {
+            "minItems": 1
+          },
+          "recovery_frames": {
+            "minimum": 15
+          }
+        }
+      }
+    }
+  ]
+}

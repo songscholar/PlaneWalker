@@ -1,0 +1,441 @@
+[
+  {
+    "category": "elite_affix_definition",
+    "id": "frenzy",
+    "schema_version": 1,
+    "name_key": "AFFIX_FRENZY_NAME",
+    "description_key": "AFFIX_FRENZY_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "frenzy"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant",
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "frenzy",
+    "minimum_floor": 1,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "fortified"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "damage_multiplier": 1.25,
+      "speed_multiplier": 1.15,
+      "damage_taken_multiplier": 1.2
+    },
+    "cue_id": "affix_frenzy"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "fortified",
+    "schema_version": 1,
+    "name_key": "AFFIX_FORTIFIED_NAME",
+    "description_key": "AFFIX_FORTIFIED_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "fortified"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant",
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "fortified",
+    "minimum_floor": 1,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "frenzy"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "hp_multiplier": 1.5,
+      "knockback_resistance_bonus": 0.2,
+      "knockback_resistance_cap": 0.9,
+      "speed_multiplier": 0.8
+    },
+    "cue_id": "affix_fortified"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "regenerating",
+    "schema_version": 1,
+    "name_key": "AFFIX_REGENERATING_NAME",
+    "description_key": "AFFIX_REGENERATING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "regenerating"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant",
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "regenerating",
+    "minimum_floor": 1,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "nullified",
+      "shielded"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "interval_frames": 120,
+      "heal_fraction": 0.03,
+      "total_heal_fraction_cap": 0.3,
+      "heavy_interrupt_frames": 120
+    },
+    "cue_id": "affix_regenerating"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "teleporting",
+    "schema_version": 1,
+    "name_key": "AFFIX_TELEPORTING_NAME",
+    "description_key": "AFFIX_TELEPORTING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "teleporting"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "teleporting",
+    "minimum_floor": 2,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "anchored"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "interval_frames": 480,
+      "distance_min_px": 48,
+      "distance_max_px": 80,
+      "departure_warning_frames": 30,
+      "arrival_recovery_frames": 30
+    },
+    "cue_id": "affix_teleporting"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "splitting",
+    "schema_version": 1,
+    "name_key": "AFFIX_SPLITTING_NAME",
+    "description_key": "AFFIX_SPLITTING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "splitting"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "splitting",
+    "minimum_floor": 2,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "mirroring",
+      "nullified"
+    ],
+    "excluded_enemy_ids": [
+      "chrono_guard",
+      "eternal_hound",
+      "forest_caller",
+      "phase_ranger",
+      "plane_ripper",
+      "ruins_wraith",
+      "void_hunter",
+      "void_spore"
+    ],
+    "parameters": {
+      "child_count": 2,
+      "child_hp_fraction": 0.33,
+      "lifetime_frames": 480,
+      "spawn_warning_frames": 30,
+      "once_only": true,
+      "reward_eligible": false
+    },
+    "cue_id": "affix_splitting"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "shielded",
+    "schema_version": 1,
+    "name_key": "AFFIX_SHIELDED_NAME",
+    "description_key": "AFFIX_SHIELDED_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "shielded"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "shielded",
+    "minimum_floor": 2,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "chaining",
+      "regenerating"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "shield_fraction": 0.3,
+      "regeneration_delay_frames": 1200,
+      "regeneration_count_cap": 1,
+      "break_exposure_frames": 45
+    },
+    "cue_id": "affix_shielded"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "nullified",
+    "schema_version": 1,
+    "name_key": "AFFIX_NULLIFIED_NAME",
+    "description_key": "AFFIX_NULLIFIED_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "nullified"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "nullified",
+    "minimum_floor": 3,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "regenerating",
+      "splitting"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "stop_delay_frames": 30,
+      "stop_vulnerability_frames": 30,
+      "rift_movement_floor": 0.7,
+      "time_damage_retained": true,
+      "echo_interactions_retained": true
+    },
+    "cue_id": "affix_nullified"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "anchored",
+    "schema_version": 1,
+    "name_key": "AFFIX_ANCHORED_NAME",
+    "description_key": "AFFIX_ANCHORED_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "anchored"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "anchored",
+    "minimum_floor": 3,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "teleporting"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "displacement_multiplier": 0,
+      "control_poise": 20,
+      "poise_threshold": 100,
+      "recovery_extension_frames": 20,
+      "stop_rift_retained": true
+    },
+    "cue_id": "affix_anchored"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "chaining",
+    "schema_version": 1,
+    "name_key": "AFFIX_CHAINING_NAME",
+    "description_key": "AFFIX_CHAINING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "chaining"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [],
+    "runtime_kind": "chaining",
+    "minimum_floor": 3,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "shielded"
+    ],
+    "excluded_enemy_ids": [],
+    "parameters": {
+      "recipient_count_cap": 2,
+      "recipient_radius_px": 96,
+      "attack_multiplier": 1.15,
+      "buff_frames": 90,
+      "cooldown_frames": 120,
+      "strongest_only": true
+    },
+    "cue_id": "affix_chaining"
+  },
+  {
+    "category": "elite_affix_definition",
+    "id": "mirroring",
+    "schema_version": 1,
+    "name_key": "AFFIX_MIRRORING_NAME",
+    "description_key": "AFFIX_MIRRORING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "elite",
+      "mirroring"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "elite"
+      ]
+    },
+    "references": [
+      "elite_mirror"
+    ],
+    "runtime_kind": "mirroring",
+    "minimum_floor": 4,
+    "maximum_floor": 5,
+    "excluded_affix_ids": [
+      "splitting"
+    ],
+    "excluded_enemy_ids": [
+      "chrono_guard",
+      "eternal_hound",
+      "forest_caller",
+      "phase_ranger",
+      "plane_ripper",
+      "ruins_wraith",
+      "void_hunter",
+      "void_spore"
+    ],
+    "parameters": {
+      "interval_frames": 900,
+      "spawn_warning_frames": 40,
+      "definition_id": "elite_mirror",
+      "lifetime_frames": 480,
+      "alive_count_cap": 1
+    },
+    "cue_id": "affix_mirroring"
+  }
+]

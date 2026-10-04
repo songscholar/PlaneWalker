@@ -1,0 +1,3211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/boss-definition/1.0.0",
+  "title": "Plane Walker Boss Definition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "id",
+    "schema_version",
+    "name_key",
+    "description_key",
+    "availability",
+    "tags",
+    "compatibility",
+    "references",
+    "floor_id",
+    "runtime_kind",
+    "max_hp",
+    "defense",
+    "move_speed",
+    "collision_radius_px",
+    "actions",
+    "phases",
+    "enrage",
+    "arena",
+    "mechanisms",
+    "time_responses"
+  ],
+  "properties": {
+    "category": {
+      "const": "boss_definition"
+    },
+    "id": {
+      "enum": [
+        "ruin_king",
+        "forest_heart",
+        "time_sovereign",
+        "forge_colossus",
+        "void_throne"
+      ]
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "name_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "description_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "availability": {
+      "const": [
+        "LAUNCH",
+        "EXPANSION"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "floor_ids",
+        "actor_kinds"
+      ],
+      "properties": {
+        "floor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "floor_ruins_of_remnant",
+              "floor_void_forest",
+              "floor_time_rift",
+              "floor_plane_forge",
+              "floor_throne_of_void"
+            ]
+          }
+        },
+        "actor_kinds": {
+          "const": [
+            "boss"
+          ]
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "floor_id": {
+      "enum": [
+        "floor_ruins_of_remnant",
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ]
+    },
+    "runtime_kind": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]{1,96}$"
+    },
+    "max_hp": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 3000
+    },
+    "defense": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "move_speed": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 240
+    },
+    "collision_radius_px": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 48
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "allOf": [
+          {
+            "$ref": "planewalker://schemas/hostile-action/1.0.0"
+          },
+          {
+            "properties": {
+              "warning_frames": {
+                "minimum": 25
+              }
+            },
+            "if": {
+              "properties": {
+                "hit_schedule": {
+                  "contains": {
+                    "properties": {
+                      "damage": {
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": [
+                      "damage"
+                    ]
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "recovery_frames": {
+                  "minimum": 20
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "hp_threshold",
+          "move_speed",
+          "poise_threshold",
+          "action_ids"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "p1",
+              "p2",
+              "p3"
+            ]
+          },
+          "hp_threshold": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 1
+          },
+          "move_speed": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 240
+          },
+          "poise_threshold": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 300
+          },
+          "action_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 13,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9_.]{1,96}$"
+            }
+          }
+        }
+      }
+    },
+    "enrage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "threshold_frames",
+        "damage_multiplier",
+        "cooldown_multiplier",
+        "action_id"
+      ],
+      "properties": {
+        "threshold_frames": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 36000
+        },
+        "damage_multiplier": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1.2
+        },
+        "cooldown_multiplier": {
+          "type": "number",
+          "minimum": 0.85,
+          "maximum": 1
+        },
+        "action_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.]{1,96}$"
+        }
+      }
+    },
+    "arena": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bounds",
+        "safe_corridor_width_px",
+        "constructs",
+        "edge_erosion_step_px",
+        "edge_erosion_max_steps"
+      ],
+      "properties": {
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": -10000,
+              "maximum": 10000
+            },
+            "y": {
+              "type": "number",
+              "minimum": -10000,
+              "maximum": 10000
+            },
+            "width": {
+              "type": "number",
+              "minimum": 320,
+              "maximum": 1280
+            },
+            "height": {
+              "type": "number",
+              "minimum": 180,
+              "maximum": 720
+            }
+          }
+        },
+        "safe_corridor_width_px": {
+          "type": "number",
+          "minimum": 48,
+          "maximum": 128
+        },
+        "constructs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "count",
+              "max_hp",
+              "radius_px"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_.]{1,96}$"
+              },
+              "kind": {
+                "enum": [
+                  "cover",
+                  "root",
+                  "spore_sac",
+                  "healing_flower",
+                  "weakpoint_proxy",
+                  "vent",
+                  "cooling_pool",
+                  "arena_core"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "max_hp": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 150
+              },
+              "radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 32
+              }
+            }
+          }
+        },
+        "edge_erosion_step_px": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "edge_erosion_max_steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
+    },
+    "mechanisms": {
+      "type": "object"
+    },
+    "time_responses": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4,
+      "items": {
+        "allOf": [
+          {
+            "$ref": "planewalker://schemas/hostile-action/1.0.0"
+          },
+          {
+            "properties": {
+              "warning_frames": {
+                "minimum": 25
+              }
+            },
+            "if": {
+              "properties": {
+                "hit_schedule": {
+                  "contains": {
+                    "properties": {
+                      "damage": {
+                        "exclusiveMinimum": 0
+                      }
+                    },
+                    "required": [
+                      "damage"
+                    ]
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "recovery_frames": {
+                  "minimum": 20
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "ruin_king"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "runtime_kind": {
+            "const": "ruin_king"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant"
+              ],
+              "actor_kinds": [
+                "boss"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_ruins_of_remnant"
+            ]
+          },
+          "max_hp": {
+            "const": 800
+          },
+          "phases": {
+            "const": [
+              {
+                "id": "p1",
+                "hp_threshold": 1,
+                "move_speed": 70,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "guardian_shield_sweep",
+                  "guardian_fist_slam",
+                  "guardian_rift_beam",
+                  "guardian_charge"
+                ]
+              },
+              {
+                "id": "p2",
+                "hp_threshold": 0.6,
+                "move_speed": 84,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "guardian_shield_sweep",
+                  "guardian_fist_slam",
+                  "guardian_rift_beam",
+                  "guardian_charge",
+                  "guardian_rift_pulse",
+                  "guardian_debris_barrage",
+                  "guardian_wall"
+                ]
+              }
+            ]
+          },
+          "enrage": {
+            "const": {
+              "threshold_frames": 18000,
+              "damage_multiplier": 1.2,
+              "cooldown_multiplier": 0.85,
+              "action_id": "guardian_enrage_collapse"
+            }
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phase_damage_overrides",
+              "poise_recovery_extension_frames",
+              "charge_collision_exposure_frames",
+              "aftershock_delay_frames",
+              "aftershock_warning_frames",
+              "aftershock_damage",
+              "aftershock_radius_px",
+              "debris_count_cap",
+              "debris_hp",
+              "debris_lifetime_frames",
+              "wall_collapse_warning_frames",
+              "wall_collapse_damage",
+              "wall_collapse_radius_px",
+              "cover_breaks_only_declared_constructs",
+              "core_always_reachable"
+            ],
+            "properties": {
+              "phase_damage_overrides": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "p2"
+                ],
+                "properties": {
+                  "p2": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "guardian_shield_sweep"
+                    ],
+                    "properties": {
+                      "guardian_shield_sweep": {
+                        "type": "integer",
+                        "minimum": 22,
+                        "maximum": 22,
+                        "const": 22
+                      }
+                    }
+                  }
+                }
+              },
+              "poise_recovery_extension_frames": {
+                "type": "integer",
+                "minimum": 45,
+                "maximum": 45,
+                "const": 45
+              },
+              "charge_collision_exposure_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "aftershock_delay_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "aftershock_warning_frames": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "aftershock_damage": {
+                "type": "integer",
+                "minimum": 12,
+                "maximum": 12,
+                "const": 12
+              },
+              "aftershock_radius_px": {
+                "type": "integer",
+                "minimum": 32,
+                "maximum": 32,
+                "const": 32
+              },
+              "debris_count_cap": {
+                "type": "integer",
+                "minimum": 4,
+                "maximum": 4,
+                "const": 4
+              },
+              "debris_hp": {
+                "type": "integer",
+                "minimum": 20,
+                "maximum": 20,
+                "const": 20
+              },
+              "debris_lifetime_frames": {
+                "type": "integer",
+                "minimum": 480,
+                "maximum": 480,
+                "const": 480
+              },
+              "wall_collapse_warning_frames": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "wall_collapse_damage": {
+                "type": "integer",
+                "minimum": 8,
+                "maximum": 8,
+                "const": 8
+              },
+              "wall_collapse_radius_px": {
+                "type": "integer",
+                "minimum": 24,
+                "maximum": 24,
+                "const": 24
+              },
+              "cover_breaks_only_declared_constructs": {
+                "type": "boolean",
+                "const": true
+              },
+              "core_always_reachable": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 8,
+            "maxItems": 8,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_shield_sweep"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_fist_slam"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_rift_beam"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_charge"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_rift_pulse"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_debris_barrage"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 8
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_wall"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "guardian_enrage_collapse"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 2
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 40
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "time_responses": {
+            "const": []
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "forest_heart"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "runtime_kind": {
+            "const": "forest_heart"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_void_forest"
+              ],
+              "actor_kinds": [
+                "boss"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_void_forest",
+              "void_sapling"
+            ]
+          },
+          "max_hp": {
+            "const": 1400
+          },
+          "phases": {
+            "const": [
+              {
+                "id": "p1",
+                "hp_threshold": 1,
+                "move_speed": 0,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "matriarch_root_sweep",
+                  "matriarch_spore_release",
+                  "matriarch_root_pierce",
+                  "matriarch_void_seed"
+                ]
+              },
+              {
+                "id": "p2",
+                "hp_threshold": 0.6,
+                "move_speed": 0,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "matriarch_root_sweep",
+                  "matriarch_spore_release",
+                  "matriarch_root_pierce",
+                  "matriarch_void_seed",
+                  "matriarch_void_cage",
+                  "matriarch_call",
+                  "matriarch_drain_roots"
+                ]
+              }
+            ]
+          },
+          "enrage": {
+            "const": {
+              "threshold_frames": 16200,
+              "damage_multiplier": 1.2,
+              "cooldown_multiplier": 0.85,
+              "action_id": "matriarch_enrage_dissolution"
+            }
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phase_damage_overrides",
+              "root_break_exposure_frames",
+              "p2_root_retirement_count",
+              "roots_never_resurrect",
+              "flower_heal",
+              "flowers_once_only",
+              "trunk_always_hittable",
+              "root_burn_damage",
+              "root_burn_tick_frames",
+              "root_burn_frames",
+              "pierce_slow_multiplier",
+              "pierce_slow_frames",
+              "seed_pool_radius_px",
+              "seed_pool_lifetime_frames",
+              "seed_pool_tick_damage",
+              "seed_pool_tick_frames",
+              "cage_pulse_warning_frames",
+              "cage_pulse_damage",
+              "cage_collapse_warning_frames",
+              "cage_collapse_damage",
+              "drain_heal_per_cast_cap",
+              "drain_heal_encounter_cap",
+              "drain_heal_actual_loss_only",
+              "retire_summons_on_owner_death",
+              "core_always_reachable"
+            ],
+            "properties": {
+              "phase_damage_overrides": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "p2"
+                ],
+                "properties": {
+                  "p2": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "matriarch_root_sweep"
+                    ],
+                    "properties": {
+                      "matriarch_root_sweep": {
+                        "type": "integer",
+                        "minimum": 26,
+                        "maximum": 26,
+                        "const": 26
+                      }
+                    }
+                  }
+                }
+              },
+              "root_break_exposure_frames": {
+                "type": "integer",
+                "minimum": 45,
+                "maximum": 45,
+                "const": 45
+              },
+              "p2_root_retirement_count": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 3,
+                "const": 3
+              },
+              "roots_never_resurrect": {
+                "type": "boolean",
+                "const": true
+              },
+              "flower_heal": {
+                "type": "integer",
+                "minimum": 20,
+                "maximum": 20,
+                "const": 20
+              },
+              "flowers_once_only": {
+                "type": "boolean",
+                "const": true
+              },
+              "trunk_always_hittable": {
+                "type": "boolean",
+                "const": true
+              },
+              "root_burn_damage": {
+                "type": "integer",
+                "minimum": 6,
+                "maximum": 6,
+                "const": 6
+              },
+              "root_burn_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "root_burn_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "pierce_slow_multiplier": {
+                "type": "number",
+                "minimum": 0.4,
+                "maximum": 0.4,
+                "const": 0.4
+              },
+              "pierce_slow_frames": {
+                "type": "integer",
+                "minimum": 90,
+                "maximum": 90,
+                "const": 90
+              },
+              "seed_pool_radius_px": {
+                "type": "integer",
+                "minimum": 29,
+                "maximum": 29,
+                "const": 29
+              },
+              "seed_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 480,
+                "maximum": 480,
+                "const": 480
+              },
+              "seed_pool_tick_damage": {
+                "type": "integer",
+                "minimum": 12,
+                "maximum": 12,
+                "const": 12
+              },
+              "seed_pool_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "cage_pulse_warning_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 30,
+                "const": 30
+              },
+              "cage_pulse_damage": {
+                "type": "integer",
+                "minimum": 8,
+                "maximum": 8,
+                "const": 8
+              },
+              "cage_collapse_warning_frames": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "cage_collapse_damage": {
+                "type": "integer",
+                "minimum": 15,
+                "maximum": 15,
+                "const": 15
+              },
+              "drain_heal_per_cast_cap": {
+                "type": "integer",
+                "minimum": 80,
+                "maximum": 80,
+                "const": 80
+              },
+              "drain_heal_encounter_cap": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 200,
+                "const": 200
+              },
+              "drain_heal_actual_loss_only": {
+                "type": "boolean",
+                "const": true
+              },
+              "retire_summons_on_owner_death": {
+                "type": "boolean",
+                "const": true
+              },
+              "core_always_reachable": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 8,
+            "maxItems": 8,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_root_sweep"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_spore_release"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 6
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_root_pierce"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_void_seed"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_void_cage"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_call"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_drain_roots"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "matriarch_enrage_dissolution"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 2
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "time_responses": {
+            "const": []
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "time_sovereign"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "runtime_kind": {
+            "const": "time_sovereign"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_time_rift"
+              ],
+              "actor_kinds": [
+                "boss"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_time_rift",
+              "timeline_echo"
+            ]
+          },
+          "max_hp": {
+            "const": 2000
+          },
+          "phases": {
+            "const": [
+              {
+                "id": "p1",
+                "hp_threshold": 1,
+                "move_speed": 112,
+                "poise_threshold": 150,
+                "action_ids": [
+                  "traitor_temporal_slash",
+                  "traitor_chrono_bolt",
+                  "traitor_blink",
+                  "traitor_self_rewind"
+                ]
+              },
+              {
+                "id": "p2",
+                "hp_threshold": 0.6,
+                "move_speed": 126,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "traitor_temporal_slash",
+                  "traitor_chrono_bolt",
+                  "traitor_blink",
+                  "traitor_self_rewind",
+                  "traitor_time_freeze",
+                  "traitor_rift_slash",
+                  "traitor_timeline_split"
+                ]
+              }
+            ]
+          },
+          "enrage": {
+            "const": {
+              "threshold_frames": 14400,
+              "damage_multiplier": 1.2,
+              "cooldown_multiplier": 0.85,
+              "action_id": "traitor_enrage_collapse"
+            }
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phase_damage_overrides",
+              "history_frames",
+              "rewind_heal_per_cast_cap",
+              "rewind_heal_encounter_cap",
+              "rewind_interrupt_damage",
+              "rewind_never_restores_claims",
+              "temporal_mark_multiplier",
+              "temporal_mark_frames",
+              "temporal_mark_count_cap",
+              "bolt_pool_radius_px",
+              "bolt_pool_lifetime_frames",
+              "freeze_time_regen_floor",
+              "response_shared_cooldown_p1_frames",
+              "response_shared_cooldown_p2_frames",
+              "response_once_per_ability_generation",
+              "response_defers_until_recovery",
+              "counter_stop_delay_frames",
+              "counter_stop_cancel_damage",
+              "counter_stop_exposure_frames",
+              "counter_rewind_echo_exposure_frames",
+              "counter_accelerate_shatter_hits",
+              "counter_accelerate_exposure_frames",
+              "counter_rift_delay_frames",
+              "counter_rift_recovery_extension_frames",
+              "echo_final_warning_frames",
+              "echo_final_damage",
+              "echo_final_radius_px",
+              "enrage_energy_cost_cap",
+              "player_time_inputs_retained",
+              "core_always_reachable"
+            ],
+            "properties": {
+              "phase_damage_overrides": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "p2"
+                ],
+                "properties": {
+                  "p2": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "traitor_temporal_slash"
+                    ],
+                    "properties": {
+                      "traitor_temporal_slash": {
+                        "type": "integer",
+                        "minimum": 30,
+                        "maximum": 30,
+                        "const": 30
+                      }
+                    }
+                  }
+                }
+              },
+              "history_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "rewind_heal_per_cast_cap": {
+                "type": "integer",
+                "minimum": 150,
+                "maximum": 150,
+                "const": 150
+              },
+              "rewind_heal_encounter_cap": {
+                "type": "integer",
+                "minimum": 300,
+                "maximum": 300,
+                "const": 300
+              },
+              "rewind_interrupt_damage": {
+                "type": "integer",
+                "minimum": 80,
+                "maximum": 80,
+                "const": 80
+              },
+              "rewind_never_restores_claims": {
+                "type": "boolean",
+                "const": true
+              },
+              "temporal_mark_multiplier": {
+                "type": "number",
+                "minimum": 1.15,
+                "maximum": 1.15,
+                "const": 1.15
+              },
+              "temporal_mark_frames": {
+                "type": "integer",
+                "minimum": 240,
+                "maximum": 240,
+                "const": 240
+              },
+              "temporal_mark_count_cap": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1,
+                "const": 1
+              },
+              "bolt_pool_radius_px": {
+                "type": "integer",
+                "minimum": 16,
+                "maximum": 16,
+                "const": 16
+              },
+              "bolt_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "freeze_time_regen_floor": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 0.5,
+                "const": 0.5
+              },
+              "response_shared_cooldown_p1_frames": {
+                "type": "integer",
+                "minimum": 900,
+                "maximum": 900,
+                "const": 900
+              },
+              "response_shared_cooldown_p2_frames": {
+                "type": "integer",
+                "minimum": 600,
+                "maximum": 600,
+                "const": 600
+              },
+              "response_once_per_ability_generation": {
+                "type": "boolean",
+                "const": true
+              },
+              "response_defers_until_recovery": {
+                "type": "boolean",
+                "const": true
+              },
+              "counter_stop_delay_frames": {
+                "type": "integer",
+                "minimum": 72,
+                "maximum": 72,
+                "const": 72
+              },
+              "counter_stop_cancel_damage": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "counter_stop_exposure_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "counter_rewind_echo_exposure_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 30,
+                "const": 30
+              },
+              "counter_accelerate_shatter_hits": {
+                "type": "integer",
+                "minimum": 6,
+                "maximum": 6,
+                "const": 6
+              },
+              "counter_accelerate_exposure_frames": {
+                "type": "integer",
+                "minimum": 90,
+                "maximum": 90,
+                "const": 90
+              },
+              "counter_rift_delay_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 30,
+                "const": 30
+              },
+              "counter_rift_recovery_extension_frames": {
+                "type": "integer",
+                "minimum": 45,
+                "maximum": 45,
+                "const": 45
+              },
+              "echo_final_warning_frames": {
+                "type": "integer",
+                "minimum": 35,
+                "maximum": 35,
+                "const": 35
+              },
+              "echo_final_damage": {
+                "type": "integer",
+                "minimum": 20,
+                "maximum": 20,
+                "const": 20
+              },
+              "echo_final_radius_px": {
+                "type": "integer",
+                "minimum": 32,
+                "maximum": 32,
+                "const": 32
+              },
+              "enrage_energy_cost_cap": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 10,
+                "const": 10
+              },
+              "player_time_inputs_retained": {
+                "type": "boolean",
+                "const": true
+              },
+              "core_always_reachable": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 8,
+            "maxItems": 8,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_temporal_slash"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_chrono_bolt"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 8
+                      },
+                      "max_consecutive": {
+                        "const": 2
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_blink"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_self_rewind"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_time_freeze"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 6
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_rift_slash"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_timeline_split"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor_enrage_collapse"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 2
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "time_responses": {
+            "minItems": 4,
+            "maxItems": 4,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor.counter_stop"
+                      },
+                      "warning_frames": {
+                        "minimum": 45
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor.counter_rewind"
+                      },
+                      "warning_frames": {
+                        "minimum": 45
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor.counter_accelerate"
+                      },
+                      "warning_frames": {
+                        "minimum": 45
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "traitor.counter_rift"
+                      },
+                      "warning_frames": {
+                        "minimum": 45
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "forge_colossus"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "runtime_kind": {
+            "const": "forge_colossus"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_plane_forge"
+              ],
+              "actor_kinds": [
+                "boss"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_plane_forge"
+            ]
+          },
+          "max_hp": {
+            "const": 2800
+          },
+          "phases": {
+            "const": [
+              {
+                "id": "p1",
+                "hp_threshold": 1,
+                "move_speed": 84,
+                "poise_threshold": 250,
+                "action_ids": [
+                  "forge_hammer_slam",
+                  "forge_furnace_spray",
+                  "forge_lava_toss",
+                  "forge_combo"
+                ]
+              },
+              {
+                "id": "p2",
+                "hp_threshold": 0.6,
+                "move_speed": 0,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "forge_furnace_devour",
+                  "forge_anvil_sweep",
+                  "forge_eruption"
+                ]
+              },
+              {
+                "id": "p3",
+                "hp_threshold": 0.25,
+                "move_speed": 140,
+                "poise_threshold": 180,
+                "action_ids": [
+                  "forge_forged_thrust",
+                  "forge_sword_wave",
+                  "forge_forged_cyclone"
+                ]
+              }
+            ]
+          },
+          "enrage": {
+            "const": {
+              "threshold_frames": 12600,
+              "damage_multiplier": 1.2,
+              "cooldown_multiplier": 0.85,
+              "action_id": "forge_enrage_ultimate"
+            }
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phase_damage_overrides",
+              "transformation_heal",
+              "phase_retires_owned_hazards",
+              "concurrent_arm_cap",
+              "eruption_min_spacing_px",
+              "cooling_removes_owned_burn",
+              "cooling_entry_cooldown_frames",
+              "cooling_survives_enrage",
+              "vents_coordinate_floor_rule",
+              "slam_pool_radius_px",
+              "slam_pool_lifetime_frames",
+              "slam_pool_tick_damage",
+              "slam_pool_tick_frames",
+              "slam_burn_damage",
+              "slam_burn_tick_frames",
+              "slam_burn_frames",
+              "spray_pool_lifetime_frames",
+              "lava_pool_radius_px",
+              "lava_pool_lifetime_frames",
+              "lava_pool_tick_damage",
+              "lava_pool_tick_frames",
+              "devour_inner_radius_px",
+              "devour_inner_damage",
+              "devour_inner_once",
+              "eruption_pool_lifetime_frames",
+              "cyclone_move_speed",
+              "cyclone_route_frozen",
+              "enrage_pool_lifetime_frames",
+              "ground_immunity",
+              "core_always_reachable"
+            ],
+            "properties": {
+              "phase_damage_overrides": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {}
+              },
+              "transformation_heal": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 0,
+                "const": 0
+              },
+              "phase_retires_owned_hazards": {
+                "type": "boolean",
+                "const": true
+              },
+              "concurrent_arm_cap": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 2,
+                "const": 2
+              },
+              "eruption_min_spacing_px": {
+                "type": "integer",
+                "minimum": 32,
+                "maximum": 32,
+                "const": 32
+              },
+              "cooling_removes_owned_burn": {
+                "type": "boolean",
+                "const": true
+              },
+              "cooling_entry_cooldown_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 30,
+                "const": 30
+              },
+              "cooling_survives_enrage": {
+                "type": "boolean",
+                "const": true
+              },
+              "vents_coordinate_floor_rule": {
+                "type": "boolean",
+                "const": true
+              },
+              "slam_pool_radius_px": {
+                "type": "integer",
+                "minimum": 32,
+                "maximum": 32,
+                "const": 32
+              },
+              "slam_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "slam_pool_tick_damage": {
+                "type": "integer",
+                "minimum": 8,
+                "maximum": 8,
+                "const": 8
+              },
+              "slam_pool_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "slam_burn_damage": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 10,
+                "const": 10
+              },
+              "slam_burn_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "slam_burn_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "spray_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 120,
+                "maximum": 120,
+                "const": 120
+              },
+              "lava_pool_radius_px": {
+                "type": "integer",
+                "minimum": 32,
+                "maximum": 32,
+                "const": 32
+              },
+              "lava_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 300,
+                "maximum": 300,
+                "const": 300
+              },
+              "lava_pool_tick_damage": {
+                "type": "integer",
+                "minimum": 8,
+                "maximum": 8,
+                "const": 8
+              },
+              "lava_pool_tick_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "devour_inner_radius_px": {
+                "type": "integer",
+                "minimum": 16,
+                "maximum": 16,
+                "const": 16
+              },
+              "devour_inner_damage": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "devour_inner_once": {
+                "type": "boolean",
+                "const": true
+              },
+              "eruption_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 120,
+                "maximum": 120,
+                "const": 120
+              },
+              "cyclone_move_speed": {
+                "type": "integer",
+                "minimum": 48,
+                "maximum": 48,
+                "const": 48
+              },
+              "cyclone_route_frozen": {
+                "type": "boolean",
+                "const": true
+              },
+              "enrage_pool_lifetime_frames": {
+                "type": "integer",
+                "minimum": 300,
+                "maximum": 300,
+                "const": 300
+              },
+              "ground_immunity": {
+                "type": "boolean",
+                "const": false
+              },
+              "core_always_reachable": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 11,
+            "maxItems": 11,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_hammer_slam"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_furnace_spray"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_lava_toss"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 8
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_combo"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_furnace_devour"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 6
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_anvil_sweep"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_eruption"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_forged_thrust"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_sword_wave"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 8
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_forged_cyclone"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "forge_enrage_ultimate"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 2
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 30
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "time_responses": {
+            "const": []
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_throne"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_throne_of_void"
+          },
+          "runtime_kind": {
+            "const": "void_throne"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "boss"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "floor_throne_of_void"
+            ]
+          },
+          "max_hp": {
+            "const": 3000
+          },
+          "phases": {
+            "const": [
+              {
+                "id": "p1",
+                "hp_threshold": 1,
+                "move_speed": 126,
+                "poise_threshold": 180,
+                "action_ids": [
+                  "voidking_scepter_strike",
+                  "voidking_void_bolt",
+                  "voidking_plane_tear",
+                  "voidking_void_step",
+                  "voidking_void_grasp"
+                ]
+              },
+              {
+                "id": "p2",
+                "hp_threshold": 0.6,
+                "move_speed": 0,
+                "poise_threshold": 220,
+                "action_ids": [
+                  "voidking_tentacle_lash",
+                  "voidking_vortex",
+                  "voidking_devour",
+                  "voidking_shard_projection"
+                ]
+              },
+              {
+                "id": "p3",
+                "hp_threshold": 0.2,
+                "move_speed": 154,
+                "poise_threshold": 200,
+                "action_ids": [
+                  "voidking_scepter_strike",
+                  "voidking_void_bolt",
+                  "voidking_plane_tear",
+                  "voidking_void_step",
+                  "voidking_void_grasp",
+                  "voidking_dual_strike",
+                  "voidking_void_end",
+                  "voidking_existence_denial"
+                ]
+              }
+            ]
+          },
+          "enrage": {
+            "const": {
+              "threshold_frames": 10800,
+              "damage_multiplier": 1.2,
+              "cooldown_multiplier": 0.85,
+              "action_id": "voidking_enrage_zero"
+            }
+          },
+          "mechanisms": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phase_damage_overrides",
+              "outer_body_damage_multiplier",
+              "core_exposure_damage_multiplier",
+              "core_always_reachable",
+              "p2_cover_becomes_nondamaging_debris",
+              "core_break_body_damage",
+              "core_break_exposure_frames",
+              "core_round_exposure_frames",
+              "core_regeneration_frames",
+              "core_round_cap",
+              "p3_player_heal_fraction",
+              "p3_heal_once",
+              "p3_heal_never_revives",
+              "scepter_burn_damage",
+              "scepter_burn_tick_frames",
+              "scepter_burn_frames",
+              "bolt_slow_multiplier",
+              "bolt_slow_frames",
+              "tear_final_warning_frames",
+              "tear_final_damage",
+              "tear_final_radius_px",
+              "step_followup_warning_frames",
+              "grasp_slow_multiplier",
+              "grasp_slow_frames",
+              "tentacle_exposure_frames",
+              "vortex_inner_radius_px",
+              "vortex_inner_damage",
+              "vortex_inner_once",
+              "devour_damage_output_multiplier",
+              "devour_debuff_frames",
+              "devour_preserves_item_ownership",
+              "shard_pickup_count_cap",
+              "shard_pickup_lifetime_frames",
+              "shard_pickup_energy",
+              "shard_pickups_once_only",
+              "void_end_zone_lifetime_frames",
+              "core_break_interrupts_denial",
+              "core_break_interrupts_enrage",
+              "player_time_inputs_retained"
+            ],
+            "properties": {
+              "phase_damage_overrides": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {}
+              },
+              "outer_body_damage_multiplier": {
+                "type": "number",
+                "minimum": 0.6,
+                "maximum": 0.6,
+                "const": 0.6
+              },
+              "core_exposure_damage_multiplier": {
+                "type": "number",
+                "minimum": 1.5,
+                "maximum": 1.5,
+                "const": 1.5
+              },
+              "core_always_reachable": {
+                "type": "boolean",
+                "const": true
+              },
+              "p2_cover_becomes_nondamaging_debris": {
+                "type": "boolean",
+                "const": true
+              },
+              "core_break_body_damage": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 100,
+                "const": 100
+              },
+              "core_break_exposure_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 60,
+                "const": 60
+              },
+              "core_round_exposure_frames": {
+                "type": "integer",
+                "minimum": 120,
+                "maximum": 120,
+                "const": 120
+              },
+              "core_regeneration_frames": {
+                "type": "integer",
+                "minimum": 600,
+                "maximum": 600,
+                "const": 600
+              },
+              "core_round_cap": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 2,
+                "const": 2
+              },
+              "p3_player_heal_fraction": {
+                "type": "number",
+                "minimum": 0.3,
+                "maximum": 0.3,
+                "const": 0.3
+              },
+              "p3_heal_once": {
+                "type": "boolean",
+                "const": true
+              },
+              "p3_heal_never_revives": {
+                "type": "boolean",
+                "const": true
+              },
+              "scepter_burn_damage": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 2,
+                "const": 2
+              },
+              "scepter_burn_tick_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 30,
+                "const": 30
+              },
+              "scepter_burn_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "bolt_slow_multiplier": {
+                "type": "number",
+                "minimum": 0.65,
+                "maximum": 0.65,
+                "const": 0.65
+              },
+              "bolt_slow_frames": {
+                "type": "integer",
+                "minimum": 120,
+                "maximum": 120,
+                "const": 120
+              },
+              "tear_final_warning_frames": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "tear_final_damage": {
+                "type": "integer",
+                "minimum": 25,
+                "maximum": 25,
+                "const": 25
+              },
+              "tear_final_radius_px": {
+                "type": "integer",
+                "minimum": 32,
+                "maximum": 32,
+                "const": 32
+              },
+              "step_followup_warning_frames": {
+                "type": "integer",
+                "minimum": 28,
+                "maximum": 28,
+                "const": 28
+              },
+              "grasp_slow_multiplier": {
+                "type": "number",
+                "minimum": 0.4,
+                "maximum": 0.4,
+                "const": 0.4
+              },
+              "grasp_slow_frames": {
+                "type": "integer",
+                "minimum": 90,
+                "maximum": 90,
+                "const": 90
+              },
+              "tentacle_exposure_frames": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 30,
+                "const": 30
+              },
+              "vortex_inner_radius_px": {
+                "type": "integer",
+                "minimum": 24,
+                "maximum": 24,
+                "const": 24
+              },
+              "vortex_inner_damage": {
+                "type": "integer",
+                "minimum": 40,
+                "maximum": 40,
+                "const": 40
+              },
+              "vortex_inner_once": {
+                "type": "boolean",
+                "const": true
+              },
+              "devour_damage_output_multiplier": {
+                "type": "number",
+                "minimum": 0.85,
+                "maximum": 0.85,
+                "const": 0.85
+              },
+              "devour_debuff_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "devour_preserves_item_ownership": {
+                "type": "boolean",
+                "const": true
+              },
+              "shard_pickup_count_cap": {
+                "type": "integer",
+                "minimum": 4,
+                "maximum": 4,
+                "const": 4
+              },
+              "shard_pickup_lifetime_frames": {
+                "type": "integer",
+                "minimum": 180,
+                "maximum": 180,
+                "const": 180
+              },
+              "shard_pickup_energy": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 5,
+                "const": 5
+              },
+              "shard_pickups_once_only": {
+                "type": "boolean",
+                "const": true
+              },
+              "void_end_zone_lifetime_frames": {
+                "type": "integer",
+                "minimum": 300,
+                "maximum": 300,
+                "const": 300
+              },
+              "core_break_interrupts_denial": {
+                "type": "boolean",
+                "const": true
+              },
+              "core_break_interrupts_enrage": {
+                "type": "boolean",
+                "const": true
+              },
+              "player_time_inputs_retained": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          },
+          "actions": {
+            "minItems": 13,
+            "maxItems": 13,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_scepter_strike"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_void_bolt"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 8
+                      },
+                      "max_consecutive": {
+                        "const": 2
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_plane_tear"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 6
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_void_step"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 4
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_void_grasp"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_tentacle_lash"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_vortex"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 6
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_devour"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_shard_projection"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 8
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_dual_strike"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_void_end"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 6
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_existence_denial"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 10
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "planewalker://schemas/hostile-action/1.0.0"
+                  },
+                  {
+                    "properties": {
+                      "id": {
+                        "const": "voidking_enrage_zero"
+                      },
+                      "idle_frames": {
+                        "const": 20
+                      },
+                      "weight": {
+                        "const": 2
+                      },
+                      "max_consecutive": {
+                        "const": 1
+                      },
+                      "warning_frames": {
+                        "minimum": 25
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "time_responses": {
+            "const": []
+          }
+        }
+      }
+    }
+  ]
+}

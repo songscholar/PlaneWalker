@@ -1,0 +1,3924 @@
+[
+  {
+    "category": "enemy_definition",
+    "id": "shattered_sentinel",
+    "schema_version": 1,
+    "name_key": "ENEMY_SHATTERED_SENTINEL_NAME",
+    "description_key": "ENEMY_SHATTERED_SENTINEL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "pursuit",
+      "stone"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "shattered_sentinel",
+    "max_hp": 80,
+    "defense": 0,
+    "move_speed": 64,
+    "threat_cost": 1,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "retreat_distance_px": 19,
+      "retreat_frames": 48,
+      "first_attack_stagger_frames": 60
+    },
+    "actions": [
+      {
+        "id": "shattered_sentinel.shield_sweep",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 150,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 29,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -45,
+            "radius": 29,
+            "length": 29
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 45,
+            "radius": 29,
+            "length": 29
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 19
+        },
+        "cue_id": "hostile_shattered_sentinel_shield_sweep"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "shattered_sentinel.boulder_slam",
+        "handler_id": "melee",
+        "warning_frames": 45,
+        "active_frames": 12,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 40,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 40,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 24,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 24
+        },
+        "cue_id": "hostile_shattered_sentinel_boulder_slam"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "corrosive_moth",
+    "schema_version": 1,
+    "name_key": "ENEMY_CORROSIVE_MOTH_NAME",
+    "description_key": "ENEMY_CORROSIVE_MOTH_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "kite",
+      "acid"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "corrosive_moth",
+    "max_hp": 35,
+    "defense": 0,
+    "move_speed": 96,
+    "threat_cost": 1,
+    "collision_radius_px": 7,
+    "mechanisms": {
+      "kite_min_px": 56,
+      "kite_max_px": 80,
+      "impact_pool_radius_px": 13,
+      "impact_pool_lifetime_frames": 120,
+      "impact_pool_damage": 3,
+      "impact_pool_tick_frames": 60,
+      "death_pool_warning_frames": 30,
+      "death_pool_damage": 5,
+      "death_pool_radius_px": 16
+    },
+    "actions": [
+      {
+        "id": "corrosive_moth.corrosive_spit",
+        "handler_id": "projectile_volley",
+        "warning_frames": 30,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 120,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 192,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_corrosive_moth_corrosive_spit"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "corrosive_moth.corrosive_barrage",
+        "handler_id": "projectile_volley",
+        "warning_frames": 35,
+        "active_frames": 18,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 360,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -15,
+            "radius": 5,
+            "length": 80
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 80
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 15,
+            "radius": 5,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 6,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 6,
+            "hit_index": 1,
+            "damage": 6,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 12,
+            "hit_index": 2,
+            "damage": 6,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 192,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_corrosive_moth_corrosive_barrage"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "stone_shell_strider",
+    "schema_version": 1,
+    "name_key": "ENEMY_STONE_SHELL_STRIDER_NAME",
+    "description_key": "ENEMY_STONE_SHELL_STRIDER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "shell",
+      "charge"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "stone_shell_strider",
+    "max_hp": 120,
+    "defense": 0,
+    "move_speed": 72,
+    "threat_cost": 2,
+    "collision_radius_px": 11,
+    "mechanisms": {
+      "shell_frames": 120,
+      "shell_damage_multiplier": 0.3,
+      "open_frames": 30,
+      "open_damage_multiplier": 1.3,
+      "elite_shock_once_per_cycle": true
+    },
+    "actions": [
+      {
+        "id": "stone_shell_strider.shell_charge",
+        "handler_id": "charge",
+        "warning_frames": 30,
+        "active_frames": 12,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 48,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "travel_px": 48,
+          "speed_px_per_second": 240,
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_stone_shell_strider_shell_charge"
+      },
+      {
+        "id": "stone_shell_strider.bite",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 5,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 120,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 24,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 24
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_stone_shell_strider_bite"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "stone_shell_strider.shell_shock",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 10,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 40,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 40,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_stone_shell_strider_shell_shock"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "ruins_wraith",
+    "schema_version": 1,
+    "name_key": "ENEMY_RUINS_WRAITH_NAME",
+    "description_key": "ENEMY_RUINS_WRAITH_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "detonation",
+      "spectral"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant",
+      "mini_wraith"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "ruins_wraith",
+    "max_hp": 50,
+    "defense": 0,
+    "move_speed": 80,
+    "threat_cost": 2,
+    "collision_radius_px": 8,
+    "mechanisms": {
+      "internal_obstacle_passthrough": true,
+      "windup_interrupt_damage": 15,
+      "stagger_frames": 30,
+      "consume_after_active": true,
+      "elite_split_on_final_death": true
+    },
+    "actions": [
+      {
+        "id": "ruins_wraith.spirit_detonation",
+        "handler_id": "melee",
+        "warning_frames": 60,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 0,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 32,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_ruins_wraith_spirit_detonation"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "ruins_wraith.spirit_split",
+        "handler_id": "summon",
+        "warning_frames": 45,
+        "active_frames": 1,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 0,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": -24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          },
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "mini_wraith",
+          "count": 2,
+          "lifetime_frames": 480
+        },
+        "cue_id": "hostile_ruins_wraith_spirit_split"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "rift_watcher",
+    "schema_version": 1,
+    "name_key": "ENEMY_RIFT_WATCHER_NAME",
+    "description_key": "ENEMY_RIFT_WATCHER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "support",
+      "rift"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "rift_watcher",
+    "max_hp": 100,
+    "defense": 0,
+    "move_speed": 0,
+    "threat_cost": 2,
+    "collision_radius_px": 10,
+    "mechanisms": {
+      "support_only": true,
+      "recipient_heal_fraction_cap": 0.4,
+      "all_sources_recipient_heal_fraction_cap": 0.8,
+      "death_attack_multiplier": 0.8,
+      "death_debuff_frames": 180
+    },
+    "actions": [
+      {
+        "id": "rift_watcher.nourish",
+        "handler_id": "heal",
+        "warning_frames": 30,
+        "active_frames": 1,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 60,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 96,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "heal_amount": 5,
+          "recipient_radius_px": 96
+        },
+        "cue_id": "hostile_rift_watcher_nourish"
+      },
+      {
+        "id": "rift_watcher.rift_pulse",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 4,
+        "recovery_frames": 60,
+        "idle_frames": 15,
+        "cooldown_frames": 240,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 48,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.7,
+          "slow_duration_frames": 120
+        },
+        "cue_id": "hostile_rift_watcher_rift_pulse"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "rift_watcher.rift_bind",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 10,
+        "recovery_frames": 40,
+        "idle_frames": 15,
+        "cooldown_frames": 360,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 64,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 64
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 90,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_rift_watcher_rift_bind"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "void_hunter",
+    "schema_version": 1,
+    "name_key": "ENEMY_VOID_HUNTER_NAME",
+    "description_key": "ENEMY_VOID_HUNTER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "flank",
+      "void"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_void_forest",
+      "hunter_echo"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "void_hunter",
+    "max_hp": 90,
+    "defense": 0,
+    "move_speed": 126,
+    "threat_cost": 2,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "flank_speed_multiplier": 1.2,
+      "retreat_distance_px": 32,
+      "silhouette_always_visible": true
+    },
+    "actions": [
+      {
+        "id": "void_hunter.claw_pair",
+        "handler_id": "melee",
+        "warning_frames": 23,
+        "active_frames": 16,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 72,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 24,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 24
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 12,
+            "hit_index": 1,
+            "damage": 8,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_void_hunter_claw_pair"
+      },
+      {
+        "id": "void_hunter.backstab_dash",
+        "handler_id": "charge",
+        "warning_frames": 28,
+        "active_frames": 6,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 240,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 56,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 6,
+            "length": 56
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "travel_px": 56,
+          "speed_px_per_second": 336,
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_void_hunter_backstab_dash"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "void_hunter.hunter_echo",
+        "handler_id": "summon",
+        "warning_frames": 35,
+        "active_frames": 1,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 600,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "hunter_echo",
+          "count": 1,
+          "lifetime_frames": 480
+        },
+        "cue_id": "hostile_void_hunter_hunter_echo"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "void_archer",
+    "schema_version": 1,
+    "name_key": "ENEMY_VOID_ARCHER_NAME",
+    "description_key": "ENEMY_VOID_ARCHER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "kite",
+      "ranged"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_void_forest"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "void_archer",
+    "max_hp": 55,
+    "defense": 0,
+    "move_speed": 78,
+    "threat_cost": 2,
+    "collision_radius_px": 8,
+    "mechanisms": {
+      "kite_min_px": 80,
+      "kite_max_px": 128,
+      "obstacle_aware_retreat": true
+    },
+    "actions": [
+      {
+        "id": "void_archer.void_arrow",
+        "handler_id": "projectile_volley",
+        "warning_frames": 25,
+        "active_frames": 4,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 150,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 128,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 128
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 16,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 192,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_void_archer_void_arrow"
+      },
+      {
+        "id": "void_archer.arrow_fan",
+        "handler_id": "projectile_volley",
+        "warning_frames": 40,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 360,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 128,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -15,
+            "radius": 3,
+            "length": 128
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 128
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 15,
+            "radius": 3,
+            "length": 128
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 8,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 192,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_void_archer_arrow_fan"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "void_archer.piercing_arrow",
+        "handler_id": "projectile_volley",
+        "warning_frames": 35,
+        "active_frames": 6,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 4,
+            "length": 160
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 240,
+          "lifetime_frames": 120,
+          "pierce_count": 1
+        },
+        "cue_id": "hostile_void_archer_piercing_arrow"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "bramble_mage",
+    "schema_version": 1,
+    "name_key": "ENEMY_BRAMBLE_MAGE_NAME",
+    "description_key": "ENEMY_BRAMBLE_MAGE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "zone",
+      "bramble"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_void_forest"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "bramble_mage",
+    "max_hp": 70,
+    "defense": 0,
+    "move_speed": 58,
+    "threat_cost": 3,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "own_pool_immunity": true,
+      "ally_pool_immunity": false,
+      "pool_count_cap": 3,
+      "whip_slow_multiplier": 0.4,
+      "whip_slow_frames": 48
+    },
+    "actions": [
+      {
+        "id": "bramble_mage.bramble_growth",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -32,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 32,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 8,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 300,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.6,
+          "slow_duration_frames": 60
+        },
+        "cue_id": "hostile_bramble_mage_bramble_growth"
+      },
+      {
+        "id": "bramble_mage.entangling_whip",
+        "handler_id": "zone",
+        "warning_frames": 28,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 240,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 64,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 4,
+            "length": 64
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 48,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 48
+        },
+        "cue_id": "hostile_bramble_mage_entangling_whip"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "bramble_mage.bramble_cage",
+        "handler_id": "wall",
+        "warning_frames": 50,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -90,
+            "radius": 3,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 90,
+            "radius": 3,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "hit_points": 30,
+          "lifetime_frames": 240,
+          "gap_px": 32
+        },
+        "cue_id": "hostile_bramble_mage_bramble_cage"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "void_spore",
+    "schema_version": 1,
+    "name_key": "ENEMY_VOID_SPORE_NAME",
+    "description_key": "ENEMY_VOID_SPORE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "chain",
+      "spore"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_void_forest",
+      "small_void_spore"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "void_spore",
+    "max_hp": 25,
+    "defense": 0,
+    "move_speed": 42,
+    "threat_cost": 1,
+    "collision_radius_px": 7,
+    "mechanisms": {
+      "chain_depth_cap": 5,
+      "chain_warning_frames": 30,
+      "residual_radius_px": 24,
+      "residual_lifetime_frames": 180,
+      "residual_tick_damage": 5,
+      "residual_tick_frames": 60,
+      "residual_slow_multiplier": 0.8,
+      "elite_split_count": 2
+    },
+    "actions": [
+      {
+        "id": "void_spore.spore_burst",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 0,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 40,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 40,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_void_spore_spore_burst"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "void_spore.spore_split",
+        "handler_id": "summon",
+        "warning_frames": 30,
+        "active_frames": 1,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 0,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": -16,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          },
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 16,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "small_void_spore",
+          "count": 2,
+          "lifetime_frames": 480
+        },
+        "cue_id": "hostile_void_spore_spore_split"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "forest_caller",
+    "schema_version": 1,
+    "name_key": "ENEMY_FOREST_CALLER_NAME",
+    "description_key": "ENEMY_FOREST_CALLER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "summoner",
+      "forest"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_void_forest",
+      "void_beetle",
+      "void_firefly"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "forest_caller",
+    "max_hp": 130,
+    "defense": 0,
+    "move_speed": 58,
+    "threat_cost": 4,
+    "collision_radius_px": 11,
+    "mechanisms": {
+      "summon_warning_interruptible": true,
+      "retire_summons_on_owner_death": true,
+      "retreat_route_validated": true
+    },
+    "actions": [
+      {
+        "id": "forest_caller.void_call",
+        "handler_id": "summon",
+        "warning_frames": 45,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": -24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          },
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "void_firefly",
+          "count": 2,
+          "lifetime_frames": 900
+        },
+        "cue_id": "hostile_forest_caller_void_call"
+      },
+      {
+        "id": "forest_caller.energy_bolt",
+        "handler_id": "projectile_volley",
+        "warning_frames": 25,
+        "active_frames": 4,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 128,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_forest_caller_energy_bolt"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "forest_caller.great_call",
+        "handler_id": "summon",
+        "warning_frames": 60,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 720,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "void_beetle",
+          "count": 1,
+          "lifetime_frames": 1200
+        },
+        "cue_id": "hostile_forest_caller_great_call"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "shadow_lurker",
+    "schema_version": 1,
+    "name_key": "ENEMY_SHADOW_LURKER_NAME",
+    "description_key": "ENEMY_SHADOW_LURKER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "burrow",
+      "shadow"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_void_forest"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "shadow_lurker",
+    "max_hp": 75,
+    "defense": 0,
+    "move_speed": 98,
+    "threat_cost": 3,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "burrow_cap_frames": 180,
+      "ground_damage_multiplier": 0.5,
+      "landing_all_weapons_hittable": true,
+      "visible_burrow_trail": true
+    },
+    "actions": [
+      {
+        "id": "shadow_lurker.shadow_ambush",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 210,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 32,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_shadow_lurker_shadow_ambush"
+      },
+      {
+        "id": "shadow_lurker.surface_claw",
+        "handler_id": "melee",
+        "warning_frames": 23,
+        "active_frames": 5,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 120,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 24,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 14,
+            "length": 24
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_shadow_lurker_surface_claw"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "shadow_lurker.shadow_trap",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 360,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_shadow_lurker_shadow_trap"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "chrono_guard",
+    "schema_version": 1,
+    "name_key": "ENEMY_CHRONO_GUARD_NAME",
+    "description_key": "ENEMY_CHRONO_GUARD_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "revival",
+      "time"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "chrono_guard",
+    "max_hp": 180,
+    "defense": 0,
+    "move_speed": 70,
+    "threat_cost": 3,
+    "collision_radius_px": 11,
+    "mechanisms": {
+      "revival_count_cap": 1,
+      "revival_recovery_frames": 90,
+      "revival_hp": 54,
+      "revival_flag_before_publication": true,
+      "slash_corridor_lifetime_frames": 360
+    },
+    "actions": [
+      {
+        "id": "chrono_guard.chronal_slam",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 150,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 32,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 32
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_chrono_guard_chronal_slam"
+      },
+      {
+        "id": "chrono_guard.rift_slash",
+        "handler_id": "zone",
+        "warning_frames": 35,
+        "active_frames": 10,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 48,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 10,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 28,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 360,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.7,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_chrono_guard_rift_slash"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "chrono_guard.time_lock",
+        "handler_id": "zone",
+        "warning_frames": 45,
+        "active_frames": 10,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 56,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 56,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 90,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_chrono_guard_time_lock"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "rift_weaver",
+    "schema_version": 1,
+    "name_key": "ENEMY_RIFT_WEAVER_NAME",
+    "description_key": "ENEMY_RIFT_WEAVER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "zone",
+      "rift"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "rift_weaver",
+    "max_hp": 100,
+    "defense": 0,
+    "move_speed": 64,
+    "threat_cost": 4,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "prediction_cap_frames": 30,
+      "zone_count_cap": 3,
+      "zone_shift_warning_frames": 30,
+      "shift_portal_opt_in": true,
+      "elite_fusion_consumes_owned_zones": true
+    },
+    "actions": [
+      {
+        "id": "rift_weaver.rift_make",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 240,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 600,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.6,
+          "slow_duration_frames": 60
+        },
+        "cue_id": "hostile_rift_weaver_rift_make"
+      },
+      {
+        "id": "rift_weaver.distortion_bolt",
+        "handler_id": "projectile_volley",
+        "warning_frames": 25,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 112,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 112
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 160,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_rift_weaver_distortion_bolt"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "rift_weaver.rift_fusion",
+        "handler_id": "zone",
+        "warning_frames": 50,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 720,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 64,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 5,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 480,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_rift_weaver_rift_fusion"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "blink_striker",
+    "schema_version": 1,
+    "name_key": "ENEMY_BLINK_STRIKER_NAME",
+    "description_key": "ENEMY_BLINK_STRIKER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "blink",
+      "time"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "blink_striker",
+    "max_hp": 95,
+    "defense": 0,
+    "move_speed": 106,
+    "threat_cost": 3,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "transit_frames": 8,
+      "followup_warning_frames": 25,
+      "rift_transit_distance_multiplier": 0.5,
+      "stop_postpones_landing": true
+    },
+    "actions": [
+      {
+        "id": "blink_striker.blink_cut",
+        "handler_id": "blink",
+        "warning_frames": 35,
+        "active_frames": 6,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 120,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 14,
+            "length": 29
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "travel_px": 48,
+          "transit_frames": 8,
+          "landing_warning_frames": 25
+        },
+        "cue_id": "hostile_blink_striker_blink_cut"
+      },
+      {
+        "id": "blink_striker.rift_cross",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 4,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 270,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 120,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 28,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_blink_striker_rift_cross"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "blink_striker.triple_blink",
+        "handler_id": "blink",
+        "warning_frames": 50,
+        "active_frames": 58,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -30,
+            "radius": 14,
+            "length": 29
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 14,
+            "length": 29
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 30,
+            "radius": 14,
+            "length": 29
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 27,
+            "hit_index": 1,
+            "damage": 15,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 54,
+            "hit_index": 2,
+            "damage": 15,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "travel_px": 48,
+          "transit_frames": 8,
+          "landing_warning_frames": 25
+        },
+        "cue_id": "hostile_blink_striker_triple_blink"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "rewind_priest",
+    "schema_version": 1,
+    "name_key": "ENEMY_REWIND_PRIEST_NAME",
+    "description_key": "ENEMY_REWIND_PRIEST_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "support",
+      "rewind"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "rewind_priest",
+    "max_hp": 110,
+    "defense": 0,
+    "move_speed": 58,
+    "threat_cost": 4,
+    "collision_radius_px": 9,
+    "mechanisms": {
+      "history_frames": 180,
+      "base_heal_recipient_fraction": 0.3,
+      "recipient_heal_fraction_cap": 0.4,
+      "all_sources_recipient_heal_fraction_cap": 0.8,
+      "elite_attack_multiplier": 1.25,
+      "elite_attack_buff_frames": 300,
+      "no_resurrection": true
+    },
+    "actions": [
+      {
+        "id": "rewind_priest.rewind_heal",
+        "handler_id": "heal",
+        "warning_frames": 45,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 80,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "heal_amount": 30,
+          "recipient_radius_px": 80
+        },
+        "cue_id": "hostile_rewind_priest_rewind_heal"
+      },
+      {
+        "id": "rewind_priest.slow_bolt",
+        "handler_id": "projectile_volley",
+        "warning_frames": 30,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 210,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 128,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_rewind_priest_slow_bolt"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "rewind_priest.time_reverse",
+        "handler_id": "heal",
+        "warning_frames": 60,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 900,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 80,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "heal_amount": 44,
+          "recipient_radius_px": 80
+        },
+        "cue_id": "hostile_rewind_priest_time_reverse"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "chrono_storm_elemental",
+    "schema_version": 1,
+    "name_key": "ENEMY_CHRONO_STORM_ELEMENTAL_NAME",
+    "description_key": "ENEMY_CHRONO_STORM_ELEMENTAL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "storm",
+      "time"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "chrono_storm_elemental",
+    "max_hp": 150,
+    "defense": 0,
+    "move_speed": 78,
+    "threat_cost": 4,
+    "collision_radius_px": 10,
+    "mechanisms": {
+      "zone_count_cap": 2,
+      "pattern_radius_px": 64,
+      "fast_multiplier": 1.25,
+      "slow_multiplier": 0.6,
+      "swap_warning_frames": 30,
+      "swap_interval_frames": 90,
+      "death_warning_frames": 35,
+      "death_slow_multiplier": 0.7,
+      "death_slow_frames": 180,
+      "elite_enemy_only_action_freeze": true
+    },
+    "actions": [
+      {
+        "id": "chrono_storm_elemental.time_storm",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -32,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 32,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 10,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 180,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.6,
+          "slow_duration_frames": 60
+        },
+        "cue_id": "hostile_chrono_storm_elemental_time_storm"
+      },
+      {
+        "id": "chrono_storm_elemental.timeflow_push",
+        "handler_id": "zone",
+        "warning_frames": 25,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 48,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.6,
+          "slow_duration_frames": 120
+        },
+        "cue_id": "hostile_chrono_storm_elemental_timeflow_push"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "chrono_storm_elemental.time_stasis",
+        "handler_id": "zone",
+        "warning_frames": 55,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 600,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 56,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 120
+        },
+        "cue_id": "hostile_chrono_storm_elemental_time_stasis"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "eternal_hound",
+    "schema_version": 1,
+    "name_key": "ENEMY_ETERNAL_HOUND_NAME",
+    "description_key": "ENEMY_ETERNAL_HOUND_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "dormancy",
+      "hound"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "eternal_hound",
+    "max_hp": 70,
+    "defense": 0,
+    "move_speed": 140,
+    "threat_cost": 3,
+    "collision_radius_px": 8,
+    "mechanisms": {
+      "dormancy_count_cap": 1,
+      "dormancy_frames": 300,
+      "dormancy_sigil_hp": 12,
+      "revival_hp": 35,
+      "elite_hit_heal_cap": 20,
+      "no_reward_until_final": true
+    },
+    "actions": [
+      {
+        "id": "eternal_hound.temporal_bite",
+        "handler_id": "melee",
+        "warning_frames": 23,
+        "active_frames": 5,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 90,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 19,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 10,
+            "length": 19
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 16,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_eternal_hound_temporal_bite"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "eternal_hound.time_hunt",
+        "handler_id": "charge",
+        "warning_frames": 30,
+        "active_frames": 6,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 40,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 40
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 30,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "travel_px": 40,
+          "speed_px_per_second": 240,
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_eternal_hound_time_hunt"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "forge_titan",
+    "schema_version": 1,
+    "name_key": "ENEMY_FORGE_TITAN_NAME",
+    "description_key": "ENEMY_FORGE_TITAN_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "overheat",
+      "forge"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_plane_forge"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "forge_titan",
+    "max_hp": 350,
+    "defense": 0,
+    "move_speed": 56,
+    "threat_cost": 4,
+    "collision_radius_px": 15,
+    "mechanisms": {
+      "breath_hp_threshold": 0.5,
+      "overheat_hp_threshold": 0.3,
+      "overheat_frames": 600,
+      "overheat_attack_multiplier": 1.25,
+      "overheat_speed_multiplier": 1.15,
+      "explosion_warning_frames": 60,
+      "explosion_damage": 40,
+      "explosion_radius_px": 48,
+      "corpse_explosion_warning_frames": 60,
+      "pool_lifetime_frames": 180
+    },
+    "actions": [
+      {
+        "id": "forge_titan.forge_fist",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 10,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 210,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 40,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 20,
+            "length": 40
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 25,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_titan_forge_fist"
+      },
+      {
+        "id": "forge_titan.ground_fissure",
+        "handler_id": "zone",
+        "warning_frames": 40,
+        "active_frames": 12,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 360,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 64,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 64
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 30,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 180,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 1,
+          "slow_duration_frames": 0
+        },
+        "cue_id": "hostile_forge_titan_ground_fissure"
+      },
+      {
+        "id": "forge_titan.flame_breath",
+        "handler_id": "zone",
+        "warning_frames": 50,
+        "active_frames": 30,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 1,
+          "slow_duration_frames": 0
+        },
+        "cue_id": "hostile_forge_titan_flame_breath"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "forge_titan.plane_collapse",
+        "handler_id": "melee",
+        "warning_frames": 60,
+        "active_frames": 20,
+        "recovery_frames": 40,
+        "idle_frames": 15,
+        "cooldown_frames": 720,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 96,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 40,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_titan_plane_collapse"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "void_web_weaver",
+    "schema_version": 1,
+    "name_key": "ENEMY_VOID_WEB_WEAVER_NAME",
+    "description_key": "ENEMY_VOID_WEB_WEAVER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "link",
+      "web"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_plane_forge"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "void_web_weaver",
+    "max_hp": 120,
+    "defense": 0,
+    "move_speed": 70,
+    "threat_cost": 5,
+    "collision_radius_px": 10,
+    "mechanisms": {
+      "link_count_cap": 3,
+      "link_attack_multiplier": 1.15,
+      "link_speed_multiplier": 1.1,
+      "link_strongest_only": true,
+      "link_collision_warning_frames": 35,
+      "elevation_grants_immunity": false
+    },
+    "actions": [
+      {
+        "id": "void_web_weaver.void_web",
+        "handler_id": "link",
+        "warning_frames": 35,
+        "active_frames": 1,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "hit_points": 15,
+          "lifetime_frames": 480,
+          "attack_multiplier": 1.15,
+          "speed_multiplier": 1.1
+        },
+        "cue_id": "hostile_void_web_weaver_void_web"
+      },
+      {
+        "id": "void_web_weaver.thread_fan",
+        "handler_id": "projectile_volley",
+        "warning_frames": 30,
+        "active_frames": 15,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 210,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -30,
+            "radius": 3,
+            "length": 96
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -15,
+            "radius": 3,
+            "length": 96
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 96
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 15,
+            "radius": 3,
+            "length": 96
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 30,
+            "radius": 3,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 3,
+            "damage": 8,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 4,
+            "damage": 8,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 160,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_void_web_weaver_thread_fan"
+      },
+      {
+        "id": "void_web_weaver.binding_thread",
+        "handler_id": "zone",
+        "warning_frames": 35,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 14,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 90,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_void_web_weaver_binding_thread"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "void_web_weaver.web_cage",
+        "handler_id": "wall",
+        "warning_frames": 55,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 600,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -90,
+            "radius": 3,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 3,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 90,
+            "radius": 3,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "hit_points": 25,
+          "lifetime_frames": 360,
+          "gap_px": 32
+        },
+        "cue_id": "hostile_void_web_weaver_web_cage"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "phase_ranger",
+    "schema_version": 1,
+    "name_key": "ENEMY_PHASE_RANGER_NAME",
+    "description_key": "ENEMY_PHASE_RANGER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "ranged",
+      "phase"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_plane_forge",
+      "ranger_echo"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "phase_ranger",
+    "max_hp": 85,
+    "defense": 0,
+    "move_speed": 84,
+    "threat_cost": 3,
+    "collision_radius_px": 8,
+    "mechanisms": {
+      "projectiles_always_visible": true,
+      "shift_distance_cap_px": 80,
+      "shift_cooldown_frames": 180,
+      "shift_recovery_frames": 30
+    },
+    "actions": [
+      {
+        "id": "phase_ranger.phase_arrow",
+        "handler_id": "projectile_volley",
+        "warning_frames": 25,
+        "active_frames": 4,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 120,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 144,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 4,
+            "length": 144
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 240,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_phase_ranger_phase_arrow"
+      },
+      {
+        "id": "phase_ranger.void_arrow_rain",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 30,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 360,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -40,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -8,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 8,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 40,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 5,
+            "hit_index": 1,
+            "damage": 10,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 10,
+            "hit_index": 2,
+            "damage": 10,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 15,
+            "hit_index": 3,
+            "damage": 10,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 20,
+            "hit_index": 4,
+            "damage": 10,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 25,
+            "hit_index": 5,
+            "damage": 10,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_phase_ranger_void_arrow_rain"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "phase_ranger.phase_split",
+        "handler_id": "summon",
+        "warning_frames": 35,
+        "active_frames": 1,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 600,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": -24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          },
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 24,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "ranger_echo",
+          "count": 2,
+          "lifetime_frames": 600
+        },
+        "cue_id": "hostile_phase_ranger_phase_split"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "chaos_amalgam",
+    "schema_version": 1,
+    "name_key": "ENEMY_CHAOS_AMALGAM_NAME",
+    "description_key": "ENEMY_CHAOS_AMALGAM_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "forms",
+      "chaos"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_plane_forge"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "chaos_amalgam",
+    "max_hp": 200,
+    "defense": 0,
+    "move_speed": 98,
+    "threat_cost": 5,
+    "collision_radius_px": 12,
+    "mechanisms": {
+      "form_ids": [
+        "red",
+        "blue",
+        "void"
+      ],
+      "form_cycle_frames": 240,
+      "low_hp_form_cycle_frames": 150,
+      "low_hp_threshold": 0.5,
+      "switch_recovery_frames": 30,
+      "never_switch_committed_action": true,
+      "elite_burn_damage": 5,
+      "elite_burn_tick_frames": 60,
+      "elite_burn_frames": 180
+    },
+    "actions": [
+      {
+        "id": "chaos_amalgam.rage_combo",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 36,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 120,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 32,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 32
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 12,
+            "hit_index": 1,
+            "damage": 12,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 24,
+            "hit_index": 2,
+            "damage": 12,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_chaos_amalgam_rage_combo"
+      },
+      {
+        "id": "chaos_amalgam.flame_charge",
+        "handler_id": "charge",
+        "warning_frames": 30,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 64,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 64
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 25,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "travel_px": 64,
+          "speed_px_per_second": 480,
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_chaos_amalgam_flame_charge"
+      },
+      {
+        "id": "chaos_amalgam.frost_wave",
+        "handler_id": "zone",
+        "warning_frames": 30,
+        "active_frames": 10,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 56,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 56,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "ice"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.6,
+          "slow_duration_frames": 120
+        },
+        "cue_id": "hostile_chaos_amalgam_frost_wave"
+      },
+      {
+        "id": "chaos_amalgam.ice_spikes",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 8,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -20,
+            "radius": 5,
+            "length": 80
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 80
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 20,
+            "radius": 5,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "ice"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 20,
+            "damage_type": "ice"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 20,
+            "damage_type": "ice"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_chaos_amalgam_ice_spikes"
+      },
+      {
+        "id": "chaos_amalgam.void_pull",
+        "handler_id": "melee",
+        "warning_frames": 25,
+        "active_frames": 8,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 150,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 40,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 20,
+            "length": 40
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_chaos_amalgam_void_pull"
+      },
+      {
+        "id": "chaos_amalgam.void_pulse",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 10,
+        "recovery_frames": 25,
+        "idle_frames": 15,
+        "cooldown_frames": 300,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 64,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 64,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_chaos_amalgam_void_pulse"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "chaos_amalgam.chaos_outburst",
+        "handler_id": "zone",
+        "warning_frames": 55,
+        "active_frames": 15,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 600,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 80,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 80,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 35,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 180,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.7,
+          "slow_duration_frames": 180
+        },
+        "cue_id": "hostile_chaos_amalgam_chaos_outburst"
+      }
+    ]
+  },
+  {
+    "category": "enemy_definition",
+    "id": "plane_ripper",
+    "schema_version": 1,
+    "name_key": "ENEMY_PLANE_RIPPER_NAME",
+    "description_key": "ENEMY_PLANE_RIPPER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "portal",
+      "plane"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "enemy",
+        "elite"
+      ]
+    },
+    "references": [
+      "floor_plane_forge"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "plane_ripper",
+    "max_hp": 140,
+    "defense": 0,
+    "move_speed": 84,
+    "threat_cost": 5,
+    "collision_radius_px": 10,
+    "mechanisms": {
+      "portal_pair_cap": 1,
+      "portal_transit_cooldown_frames": 12,
+      "portal_arrival_clearance_px": 48,
+      "death_collapse_warning_frames": 45,
+      "death_collapse_damage": 20,
+      "death_collapse_radius_px": 32
+    },
+    "actions": [
+      {
+        "id": "plane_ripper.plane_rip",
+        "handler_id": "portal",
+        "warning_frames": 50,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 15,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": -48,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          },
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 48,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 720,
+          "min_distance_px": 96,
+          "arrival_clearance_px": 48,
+          "transit_cooldown_frames": 12,
+          "team_rule": "both"
+        },
+        "cue_id": "hostile_plane_ripper_plane_rip"
+      },
+      {
+        "id": "plane_ripper.rift_strike",
+        "handler_id": "melee",
+        "warning_frames": 25,
+        "active_frames": 6,
+        "recovery_frames": 20,
+        "idle_frames": 15,
+        "cooldown_frames": 180,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 48,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 16,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_plane_ripper_rift_strike"
+      }
+    ],
+    "elite_actions": [
+      {
+        "id": "plane_ripper.one_way_plane",
+        "handler_id": "portal",
+        "warning_frames": 50,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 15,
+        "cooldown_frames": 720,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": -48,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          },
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 48,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "lifetime_frames": 720,
+          "min_distance_px": 96,
+          "arrival_clearance_px": 48,
+          "transit_cooldown_frames": 12,
+          "team_rule": "enemy_only"
+        },
+        "cue_id": "hostile_plane_ripper_one_way_plane"
+      }
+    ]
+  }
+]

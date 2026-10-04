@@ -1,0 +1,3217 @@
+[
+  {
+    "category": "boss_definition",
+    "id": "ruin_king",
+    "schema_version": 1,
+    "name_key": "BOSS_RUIN_KING_NAME",
+    "description_key": "BOSS_RUIN_KING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "boss",
+      "floor_1"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "boss"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "ruin_king",
+    "max_hp": 800,
+    "defense": 0,
+    "move_speed": 70,
+    "collision_radius_px": 24,
+    "actions": [
+      {
+        "id": "guardian_shield_sweep",
+        "handler_id": "melee",
+        "warning_frames": 48,
+        "active_frames": 10,
+        "recovery_frames": 40,
+        "idle_frames": 20,
+        "cooldown_frames": 240,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -45,
+            "radius": 56,
+            "length": 56
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 45,
+            "radius": 56,
+            "length": 56
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 40
+        },
+        "cue_id": "hostile_guardian_shield_sweep"
+      },
+      {
+        "id": "guardian_fist_slam",
+        "handler_id": "melee",
+        "warning_frames": 55,
+        "active_frames": 8,
+        "recovery_frames": 60,
+        "idle_frames": 20,
+        "cooldown_frames": 360,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 25,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_guardian_fist_slam"
+      },
+      {
+        "id": "guardian_rift_beam",
+        "handler_id": "melee",
+        "warning_frames": 55,
+        "active_frames": 30,
+        "recovery_frames": 50,
+        "idle_frames": 20,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 192,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 192
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 10,
+            "hit_index": 1,
+            "damage": 15,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 20,
+            "hit_index": 2,
+            "damage": 15,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_guardian_rift_beam"
+      },
+      {
+        "id": "guardian_charge",
+        "handler_id": "charge",
+        "warning_frames": 45,
+        "active_frames": 60,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 600,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 128,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 128
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "travel_px": 128,
+          "speed_px_per_second": 112,
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_guardian_charge"
+      },
+      {
+        "id": "guardian_rift_pulse",
+        "handler_id": "melee",
+        "warning_frames": 60,
+        "active_frames": 6,
+        "recovery_frames": 55,
+        "idle_frames": 20,
+        "cooldown_frames": 720,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 96,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 28,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_guardian_rift_pulse"
+      },
+      {
+        "id": "guardian_debris_barrage",
+        "handler_id": "projectile_volley",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 40,
+        "idle_frames": 20,
+        "cooldown_frames": 480,
+        "weight": 8,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 192,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -60,
+            "radius": 5,
+            "length": 192
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -36,
+            "radius": 5,
+            "length": 192
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -12,
+            "radius": 5,
+            "length": 192
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 12,
+            "radius": 5,
+            "length": 192
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 36,
+            "radius": 5,
+            "length": 192
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 60,
+            "radius": 5,
+            "length": 192
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 10,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 10,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 3,
+            "damage": 10,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 4,
+            "damage": 10,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 5,
+            "damage": 10,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 128,
+          "lifetime_frames": 90,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_guardian_debris_barrage"
+      },
+      {
+        "id": "guardian_wall",
+        "handler_id": "wall",
+        "warning_frames": 55,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -48
+            },
+            "aim_offset_degrees": 90,
+            "radius": 6,
+            "length": 64
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 48
+            },
+            "aim_offset_degrees": 90,
+            "radius": 6,
+            "length": 64
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "hit_points": 150,
+          "lifetime_frames": 600,
+          "gap_px": 32
+        },
+        "cue_id": "hostile_guardian_wall"
+      },
+      {
+        "id": "guardian_enrage_collapse",
+        "handler_id": "melee",
+        "warning_frames": 75,
+        "active_frames": 15,
+        "recovery_frames": 60,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 2,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 256,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -96
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 96
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 40,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_guardian_enrage_collapse"
+      }
+    ],
+    "phases": [
+      {
+        "id": "p1",
+        "hp_threshold": 1,
+        "move_speed": 70,
+        "poise_threshold": 200,
+        "action_ids": [
+          "guardian_shield_sweep",
+          "guardian_fist_slam",
+          "guardian_rift_beam",
+          "guardian_charge"
+        ]
+      },
+      {
+        "id": "p2",
+        "hp_threshold": 0.6,
+        "move_speed": 84,
+        "poise_threshold": 200,
+        "action_ids": [
+          "guardian_shield_sweep",
+          "guardian_fist_slam",
+          "guardian_rift_beam",
+          "guardian_charge",
+          "guardian_rift_pulse",
+          "guardian_debris_barrage",
+          "guardian_wall"
+        ]
+      }
+    ],
+    "enrage": {
+      "threshold_frames": 18000,
+      "damage_multiplier": 1.2,
+      "cooldown_multiplier": 0.85,
+      "action_id": "guardian_enrage_collapse"
+    },
+    "arena": {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 360
+      },
+      "safe_corridor_width_px": 48,
+      "constructs": [
+        {
+          "id": "ruins_cover_pillar",
+          "kind": "cover",
+          "count": 4,
+          "max_hp": 80,
+          "radius_px": 14
+        }
+      ],
+      "edge_erosion_step_px": 0,
+      "edge_erosion_max_steps": 0
+    },
+    "mechanisms": {
+      "phase_damage_overrides": {
+        "p2": {
+          "guardian_shield_sweep": 22
+        }
+      },
+      "poise_recovery_extension_frames": 45,
+      "charge_collision_exposure_frames": 60,
+      "aftershock_delay_frames": 60,
+      "aftershock_warning_frames": 40,
+      "aftershock_damage": 12,
+      "aftershock_radius_px": 32,
+      "debris_count_cap": 4,
+      "debris_hp": 20,
+      "debris_lifetime_frames": 480,
+      "wall_collapse_warning_frames": 40,
+      "wall_collapse_damage": 8,
+      "wall_collapse_radius_px": 24,
+      "cover_breaks_only_declared_constructs": true,
+      "core_always_reachable": true
+    },
+    "time_responses": []
+  },
+  {
+    "category": "boss_definition",
+    "id": "forest_heart",
+    "schema_version": 1,
+    "name_key": "BOSS_FOREST_HEART_NAME",
+    "description_key": "BOSS_FOREST_HEART_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "boss",
+      "floor_2"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "boss"
+      ]
+    },
+    "references": [
+      "floor_void_forest",
+      "void_sapling"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "forest_heart",
+    "max_hp": 1400,
+    "defense": 0,
+    "move_speed": 0,
+    "collision_radius_px": 24,
+    "actions": [
+      {
+        "id": "matriarch_root_sweep",
+        "handler_id": "melee",
+        "warning_frames": 45,
+        "active_frames": 12,
+        "recovery_frames": 40,
+        "idle_frames": 20,
+        "cooldown_frames": 180,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_matriarch_root_sweep"
+      },
+      {
+        "id": "matriarch_spore_release",
+        "handler_id": "zone",
+        "warning_frames": 60,
+        "active_frames": 1,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 600,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -48,
+              "y": -32
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 48,
+              "y": -32
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -48,
+              "y": 32
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 48,
+              "y": 32
+            },
+            "aim_offset_degrees": 0,
+            "radius": 19,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 8,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 360,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.75,
+          "slow_duration_frames": 360
+        },
+        "cue_id": "hostile_matriarch_spore_release"
+      },
+      {
+        "id": "matriarch_root_pierce",
+        "handler_id": "melee",
+        "warning_frames": 47,
+        "active_frames": 8,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 420,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 128,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 128
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 28,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_matriarch_root_pierce"
+      },
+      {
+        "id": "matriarch_void_seed",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 720,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 40,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 35,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_matriarch_void_seed"
+      },
+      {
+        "id": "matriarch_void_cage",
+        "handler_id": "wall",
+        "warning_frames": 70,
+        "active_frames": 1,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 1080,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 24,
+              "y": 0
+            },
+            "aim_offset_degrees": 90,
+            "radius": 5,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": -24,
+              "y": 0
+            },
+            "aim_offset_degrees": 90,
+            "radius": 5,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": -16,
+              "y": 24
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 16
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "hit_points": 50,
+          "lifetime_frames": 300,
+          "gap_px": 32
+        },
+        "cue_id": "hostile_matriarch_void_cage"
+      },
+      {
+        "id": "matriarch_call",
+        "handler_id": "summon",
+        "warning_frames": 70,
+        "active_frames": 1,
+        "recovery_frames": 50,
+        "idle_frames": 20,
+        "cooldown_frames": 1200,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": -64,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 64,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "void_sapling",
+          "count": 2,
+          "lifetime_frames": 900
+        },
+        "cue_id": "hostile_matriarch_call"
+      },
+      {
+        "id": "matriarch_drain_roots",
+        "handler_id": "melee",
+        "warning_frames": 50,
+        "active_frames": 60,
+        "recovery_frames": 40,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 128,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -32
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 128
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 128
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 32
+            },
+            "aim_offset_degrees": 0,
+            "radius": 5,
+            "length": 128
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 5,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 15,
+            "hit_index": 1,
+            "damage": 5,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 30,
+            "hit_index": 2,
+            "damage": 5,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 45,
+            "hit_index": 3,
+            "damage": 5,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_matriarch_drain_roots"
+      },
+      {
+        "id": "matriarch_enrage_dissolution",
+        "handler_id": "zone",
+        "warning_frames": 80,
+        "active_frames": 20,
+        "recovery_frames": 60,
+        "idle_frames": 20,
+        "cooldown_frames": 720,
+        "weight": 2,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -80,
+              "y": -56
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 80,
+              "y": -56
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -80,
+              "y": 56
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 80,
+              "y": 56
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 45,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 300,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 1,
+          "slow_duration_frames": 0
+        },
+        "cue_id": "hostile_matriarch_enrage_dissolution"
+      }
+    ],
+    "phases": [
+      {
+        "id": "p1",
+        "hp_threshold": 1,
+        "move_speed": 0,
+        "poise_threshold": 200,
+        "action_ids": [
+          "matriarch_root_sweep",
+          "matriarch_spore_release",
+          "matriarch_root_pierce",
+          "matriarch_void_seed"
+        ]
+      },
+      {
+        "id": "p2",
+        "hp_threshold": 0.6,
+        "move_speed": 0,
+        "poise_threshold": 200,
+        "action_ids": [
+          "matriarch_root_sweep",
+          "matriarch_spore_release",
+          "matriarch_root_pierce",
+          "matriarch_void_seed",
+          "matriarch_void_cage",
+          "matriarch_call",
+          "matriarch_drain_roots"
+        ]
+      }
+    ],
+    "enrage": {
+      "threshold_frames": 16200,
+      "damage_multiplier": 1.2,
+      "cooldown_multiplier": 0.85,
+      "action_id": "matriarch_enrage_dissolution"
+    },
+    "arena": {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 360
+      },
+      "safe_corridor_width_px": 48,
+      "constructs": [
+        {
+          "id": "forest_root",
+          "kind": "root",
+          "count": 6,
+          "max_hp": 100,
+          "radius_px": 12
+        },
+        {
+          "id": "forest_spore_sac",
+          "kind": "spore_sac",
+          "count": 4,
+          "max_hp": 30,
+          "radius_px": 10
+        },
+        {
+          "id": "forest_healing_flower",
+          "kind": "healing_flower",
+          "count": 3,
+          "max_hp": 1,
+          "radius_px": 8
+        }
+      ],
+      "edge_erosion_step_px": 16,
+      "edge_erosion_max_steps": 2
+    },
+    "mechanisms": {
+      "phase_damage_overrides": {
+        "p2": {
+          "matriarch_root_sweep": 26
+        }
+      },
+      "root_break_exposure_frames": 45,
+      "p2_root_retirement_count": 3,
+      "roots_never_resurrect": true,
+      "flower_heal": 20,
+      "flowers_once_only": true,
+      "trunk_always_hittable": true,
+      "root_burn_damage": 6,
+      "root_burn_tick_frames": 60,
+      "root_burn_frames": 180,
+      "pierce_slow_multiplier": 0.4,
+      "pierce_slow_frames": 90,
+      "seed_pool_radius_px": 29,
+      "seed_pool_lifetime_frames": 480,
+      "seed_pool_tick_damage": 12,
+      "seed_pool_tick_frames": 60,
+      "cage_pulse_warning_frames": 30,
+      "cage_pulse_damage": 8,
+      "cage_collapse_warning_frames": 40,
+      "cage_collapse_damage": 15,
+      "drain_heal_per_cast_cap": 80,
+      "drain_heal_encounter_cap": 200,
+      "drain_heal_actual_loss_only": true,
+      "retire_summons_on_owner_death": true,
+      "core_always_reachable": true
+    },
+    "time_responses": []
+  },
+  {
+    "category": "boss_definition",
+    "id": "time_sovereign",
+    "schema_version": 1,
+    "name_key": "BOSS_TIME_SOVEREIGN_NAME",
+    "description_key": "BOSS_TIME_SOVEREIGN_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "boss",
+      "floor_3"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "boss"
+      ]
+    },
+    "references": [
+      "floor_time_rift",
+      "timeline_echo"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "time_sovereign",
+    "max_hp": 2000,
+    "defense": 0,
+    "move_speed": 112,
+    "collision_radius_px": 24,
+    "actions": [
+      {
+        "id": "traitor_temporal_slash",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 6,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 180,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 24,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_traitor_temporal_slash"
+      },
+      {
+        "id": "traitor_chrono_bolt",
+        "handler_id": "projectile_volley",
+        "warning_frames": 32,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 120,
+        "weight": 8,
+        "max_consecutive": 2,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 240
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 160,
+          "lifetime_frames": 90,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_traitor_chrono_bolt"
+      },
+      {
+        "id": "traitor_blink",
+        "handler_id": "blink",
+        "warning_frames": 35,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 480,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -48,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "travel_px": 48,
+          "transit_frames": 8,
+          "landing_warning_frames": 35
+        },
+        "cue_id": "hostile_traitor_blink"
+      },
+      {
+        "id": "traitor_self_rewind",
+        "handler_id": "self_rewind",
+        "warning_frames": 70,
+        "active_frames": 1,
+        "recovery_frames": 55,
+        "idle_frames": 20,
+        "cooldown_frames": 1500,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [],
+        "hit_schedule": [],
+        "parameters": {
+          "max_cast_heal": 150,
+          "max_total_heal": 300,
+          "history_frames": 180
+        },
+        "cue_id": "hostile_traitor_self_rewind"
+      },
+      {
+        "id": "traitor_time_freeze",
+        "handler_id": "zone",
+        "warning_frames": 60,
+        "active_frames": 120,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 80,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.4,
+          "slow_duration_frames": 120
+        },
+        "cue_id": "hostile_traitor_time_freeze"
+      },
+      {
+        "id": "traitor_rift_slash",
+        "handler_id": "melee",
+        "warning_frames": 45,
+        "active_frames": 39,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 480,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 48
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -30,
+            "radius": 24,
+            "length": 48
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 30,
+            "radius": 24,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 17,
+            "hit_index": 1,
+            "damage": 20,
+            "damage_type": "time"
+          },
+          {
+            "offset_frame": 34,
+            "hit_index": 2,
+            "damage": 20,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_traitor_rift_slash"
+      },
+      {
+        "id": "traitor_timeline_split",
+        "handler_id": "summon",
+        "warning_frames": 75,
+        "active_frames": 1,
+        "recovery_frames": 60,
+        "idle_frames": 20,
+        "cooldown_frames": 1320,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": -64,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          },
+          {
+            "shape": "summon_slots",
+            "origin_offset": {
+              "x": 64,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "definition_id": "timeline_echo",
+          "count": 2,
+          "lifetime_frames": 1200
+        },
+        "cue_id": "hostile_traitor_timeline_split"
+      },
+      {
+        "id": "traitor_enrage_collapse",
+        "handler_id": "melee",
+        "warning_frames": 75,
+        "active_frames": 30,
+        "recovery_frames": 60,
+        "idle_frames": 20,
+        "cooldown_frames": 600,
+        "weight": 2,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -96,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 96,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 50,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_traitor_enrage_collapse"
+      }
+    ],
+    "phases": [
+      {
+        "id": "p1",
+        "hp_threshold": 1,
+        "move_speed": 112,
+        "poise_threshold": 150,
+        "action_ids": [
+          "traitor_temporal_slash",
+          "traitor_chrono_bolt",
+          "traitor_blink",
+          "traitor_self_rewind"
+        ]
+      },
+      {
+        "id": "p2",
+        "hp_threshold": 0.6,
+        "move_speed": 126,
+        "poise_threshold": 200,
+        "action_ids": [
+          "traitor_temporal_slash",
+          "traitor_chrono_bolt",
+          "traitor_blink",
+          "traitor_self_rewind",
+          "traitor_time_freeze",
+          "traitor_rift_slash",
+          "traitor_timeline_split"
+        ]
+      }
+    ],
+    "enrage": {
+      "threshold_frames": 14400,
+      "damage_multiplier": 1.2,
+      "cooldown_multiplier": 0.85,
+      "action_id": "traitor_enrage_collapse"
+    },
+    "arena": {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 360
+      },
+      "safe_corridor_width_px": 48,
+      "constructs": [
+        {
+          "id": "traitor_watch",
+          "kind": "weakpoint_proxy",
+          "count": 1,
+          "max_hp": 80,
+          "radius_px": 12
+        }
+      ],
+      "edge_erosion_step_px": 0,
+      "edge_erosion_max_steps": 0
+    },
+    "mechanisms": {
+      "phase_damage_overrides": {
+        "p2": {
+          "traitor_temporal_slash": 30
+        }
+      },
+      "history_frames": 180,
+      "rewind_heal_per_cast_cap": 150,
+      "rewind_heal_encounter_cap": 300,
+      "rewind_interrupt_damage": 80,
+      "rewind_never_restores_claims": true,
+      "temporal_mark_multiplier": 1.15,
+      "temporal_mark_frames": 240,
+      "temporal_mark_count_cap": 1,
+      "bolt_pool_radius_px": 16,
+      "bolt_pool_lifetime_frames": 180,
+      "freeze_time_regen_floor": 0.5,
+      "response_shared_cooldown_p1_frames": 900,
+      "response_shared_cooldown_p2_frames": 600,
+      "response_once_per_ability_generation": true,
+      "response_defers_until_recovery": true,
+      "counter_stop_delay_frames": 72,
+      "counter_stop_cancel_damage": 40,
+      "counter_stop_exposure_frames": 60,
+      "counter_rewind_echo_exposure_frames": 30,
+      "counter_accelerate_shatter_hits": 6,
+      "counter_accelerate_exposure_frames": 90,
+      "counter_rift_delay_frames": 30,
+      "counter_rift_recovery_extension_frames": 45,
+      "echo_final_warning_frames": 35,
+      "echo_final_damage": 20,
+      "echo_final_radius_px": 32,
+      "enrage_energy_cost_cap": 10,
+      "player_time_inputs_retained": true,
+      "core_always_reachable": true
+    },
+    "time_responses": [
+      {
+        "id": "traitor.counter_stop",
+        "handler_id": "melee",
+        "warning_frames": 45,
+        "active_frames": 6,
+        "recovery_frames": 60,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 64,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_traitor_counter_stop"
+      },
+      {
+        "id": "traitor.counter_rewind",
+        "handler_id": "blink",
+        "warning_frames": 45,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "travel_px": 48,
+          "transit_frames": 8,
+          "landing_warning_frames": 45
+        },
+        "cue_id": "hostile_traitor_counter_rewind"
+      },
+      {
+        "id": "traitor.counter_accelerate",
+        "handler_id": "zone",
+        "warning_frames": 45,
+        "active_frames": 1,
+        "recovery_frames": 90,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 64,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 0,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.7,
+          "slow_duration_frames": 120
+        },
+        "cue_id": "hostile_traitor_counter_accelerate"
+      },
+      {
+        "id": "traitor.counter_rift",
+        "handler_id": "melee",
+        "warning_frames": 45,
+        "active_frames": 31,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 64,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 30,
+            "hit_index": 0,
+            "damage": 0,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_traitor_counter_rift"
+      }
+    ]
+  },
+  {
+    "category": "boss_definition",
+    "id": "forge_colossus",
+    "schema_version": 1,
+    "name_key": "BOSS_FORGE_COLOSSUS_NAME",
+    "description_key": "BOSS_FORGE_COLOSSUS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "boss",
+      "floor_4"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "boss"
+      ]
+    },
+    "references": [
+      "floor_plane_forge"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "forge_colossus",
+    "max_hp": 2800,
+    "defense": 0,
+    "move_speed": 84,
+    "collision_radius_px": 24,
+    "actions": [
+      {
+        "id": "forge_hammer_slam",
+        "handler_id": "melee",
+        "warning_frames": 48,
+        "active_frames": 10,
+        "recovery_frames": 55,
+        "idle_frames": 20,
+        "cooldown_frames": 300,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 56,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 28,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_hammer_slam"
+      },
+      {
+        "id": "forge_furnace_spray",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 45,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 420,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 32,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "fire"
+          },
+          {
+            "offset_frame": 15,
+            "hit_index": 1,
+            "damage": 12,
+            "damage_type": "fire"
+          },
+          {
+            "offset_frame": 30,
+            "hit_index": 2,
+            "damage": 12,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_furnace_spray"
+      },
+      {
+        "id": "forge_lava_toss",
+        "handler_id": "projectile_volley",
+        "warning_frames": 47,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 360,
+        "weight": 8,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 192,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 8,
+            "length": 192
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 112,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_forge_lava_toss"
+      },
+      {
+        "id": "forge_combo",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 44,
+        "recovery_frames": 50,
+        "idle_frames": 20,
+        "cooldown_frames": 600,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 20,
+            "length": 40
+          },
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 48
+          },
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 56,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 16,
+            "hit_index": 1,
+            "damage": 22,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 34,
+            "hit_index": 2,
+            "damage": 32,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_combo"
+      },
+      {
+        "id": "forge_furnace_devour",
+        "handler_id": "pull_zone",
+        "warning_frames": 55,
+        "active_frames": 90,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 720,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 112,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 112,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 10,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 90,
+          "tick_interval_frames": 60,
+          "pull_px_per_second": 32,
+          "slow_multiplier": 1
+        },
+        "cue_id": "hostile_forge_furnace_devour"
+      },
+      {
+        "id": "forge_anvil_sweep",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 12,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 180,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 40,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 32,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_anvil_sweep"
+      },
+      {
+        "id": "forge_eruption",
+        "handler_id": "melee",
+        "warning_frames": 65,
+        "active_frames": 20,
+        "recovery_frames": 55,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -80,
+              "y": -48
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": -48
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 80,
+              "y": -48
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -80,
+              "y": 48
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 48
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 80,
+              "y": 48
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 35,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_eruption"
+      },
+      {
+        "id": "forge_forged_thrust",
+        "handler_id": "melee",
+        "warning_frames": 30,
+        "active_frames": 6,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 150,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 10,
+            "length": 80
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 36,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 32
+        },
+        "cue_id": "hostile_forge_forged_thrust"
+      },
+      {
+        "id": "forge_sword_wave",
+        "handler_id": "projectile_volley",
+        "warning_frames": 32,
+        "active_frames": 1,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 240,
+        "weight": 8,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 192,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 192
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 30,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 144,
+          "lifetime_frames": 80,
+          "pierce_count": 1
+        },
+        "cue_id": "hostile_forge_sword_wave"
+      },
+      {
+        "id": "forge_forged_cyclone",
+        "handler_id": "melee",
+        "warning_frames": 42,
+        "active_frames": 60,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 720,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 10,
+            "hit_index": 1,
+            "damage": 15,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 20,
+            "hit_index": 2,
+            "damage": 15,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 30,
+            "hit_index": 3,
+            "damage": 15,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 40,
+            "hit_index": 4,
+            "damage": 15,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 50,
+            "hit_index": 5,
+            "damage": 15,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_forged_cyclone"
+      },
+      {
+        "id": "forge_enrage_ultimate",
+        "handler_id": "melee",
+        "warning_frames": 80,
+        "active_frames": 10,
+        "recovery_frames": 80,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 2,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 256,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -96
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 96
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 60,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_forge_enrage_ultimate"
+      }
+    ],
+    "phases": [
+      {
+        "id": "p1",
+        "hp_threshold": 1,
+        "move_speed": 84,
+        "poise_threshold": 250,
+        "action_ids": [
+          "forge_hammer_slam",
+          "forge_furnace_spray",
+          "forge_lava_toss",
+          "forge_combo"
+        ]
+      },
+      {
+        "id": "p2",
+        "hp_threshold": 0.6,
+        "move_speed": 0,
+        "poise_threshold": 200,
+        "action_ids": [
+          "forge_furnace_devour",
+          "forge_anvil_sweep",
+          "forge_eruption"
+        ]
+      },
+      {
+        "id": "p3",
+        "hp_threshold": 0.25,
+        "move_speed": 140,
+        "poise_threshold": 180,
+        "action_ids": [
+          "forge_forged_thrust",
+          "forge_sword_wave",
+          "forge_forged_cyclone"
+        ]
+      }
+    ],
+    "enrage": {
+      "threshold_frames": 12600,
+      "damage_multiplier": 1.2,
+      "cooldown_multiplier": 0.85,
+      "action_id": "forge_enrage_ultimate"
+    },
+    "arena": {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 360
+      },
+      "safe_corridor_width_px": 48,
+      "constructs": [
+        {
+          "id": "forge_anvil",
+          "kind": "cover",
+          "count": 4,
+          "max_hp": 120,
+          "radius_px": 14
+        },
+        {
+          "id": "forge_vent",
+          "kind": "vent",
+          "count": 4,
+          "max_hp": 1,
+          "radius_px": 16
+        },
+        {
+          "id": "forge_cooling_pool",
+          "kind": "cooling_pool",
+          "count": 4,
+          "max_hp": 1,
+          "radius_px": 24
+        }
+      ],
+      "edge_erosion_step_px": 0,
+      "edge_erosion_max_steps": 0
+    },
+    "mechanisms": {
+      "phase_damage_overrides": {},
+      "transformation_heal": 0,
+      "phase_retires_owned_hazards": true,
+      "concurrent_arm_cap": 2,
+      "eruption_min_spacing_px": 32,
+      "cooling_removes_owned_burn": true,
+      "cooling_entry_cooldown_frames": 30,
+      "cooling_survives_enrage": true,
+      "vents_coordinate_floor_rule": true,
+      "slam_pool_radius_px": 32,
+      "slam_pool_lifetime_frames": 180,
+      "slam_pool_tick_damage": 8,
+      "slam_pool_tick_frames": 60,
+      "slam_burn_damage": 10,
+      "slam_burn_tick_frames": 60,
+      "slam_burn_frames": 180,
+      "spray_pool_lifetime_frames": 120,
+      "lava_pool_radius_px": 32,
+      "lava_pool_lifetime_frames": 300,
+      "lava_pool_tick_damage": 8,
+      "lava_pool_tick_frames": 60,
+      "devour_inner_radius_px": 16,
+      "devour_inner_damage": 40,
+      "devour_inner_once": true,
+      "eruption_pool_lifetime_frames": 120,
+      "cyclone_move_speed": 48,
+      "cyclone_route_frozen": true,
+      "enrage_pool_lifetime_frames": 300,
+      "ground_immunity": false,
+      "core_always_reachable": true
+    },
+    "time_responses": []
+  },
+  {
+    "category": "boss_definition",
+    "id": "void_throne",
+    "schema_version": 1,
+    "name_key": "BOSS_VOID_THRONE_NAME",
+    "description_key": "BOSS_VOID_THRONE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "boss",
+      "floor_5"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "boss"
+      ]
+    },
+    "references": [
+      "floor_throne_of_void"
+    ],
+    "floor_id": "floor_throne_of_void",
+    "runtime_kind": "void_throne",
+    "max_hp": 3000,
+    "defense": 0,
+    "move_speed": 126,
+    "collision_radius_px": 24,
+    "actions": [
+      {
+        "id": "voidking_scepter_strike",
+        "handler_id": "melee",
+        "warning_frames": 28,
+        "active_frames": 5,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 150,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 48
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 30,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_scepter_strike"
+      },
+      {
+        "id": "voidking_void_bolt",
+        "handler_id": "projectile_volley",
+        "warning_frames": 28,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 90,
+        "weight": 8,
+        "max_consecutive": 2,
+        "distance_min_px": 0,
+        "distance_max_px": 240,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 10,
+            "length": 240
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 22,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 176,
+          "lifetime_frames": 90,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_voidking_void_bolt"
+      },
+      {
+        "id": "voidking_plane_tear",
+        "handler_id": "zone",
+        "warning_frames": 47,
+        "active_frames": 90,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 480,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 160,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 160
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 15,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 90,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.5,
+          "slow_duration_frames": 90
+        },
+        "cue_id": "hostile_voidking_plane_tear"
+      },
+      {
+        "id": "voidking_void_step",
+        "handler_id": "blink",
+        "warning_frames": 30,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 360,
+        "weight": 4,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -40,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [],
+        "parameters": {
+          "travel_px": 40,
+          "transit_frames": 8,
+          "landing_warning_frames": 28
+        },
+        "cue_id": "hostile_voidking_void_step"
+      },
+      {
+        "id": "voidking_void_grasp",
+        "handler_id": "melee",
+        "warning_frames": 55,
+        "active_frames": 6,
+        "recovery_frames": 40,
+        "idle_frames": 20,
+        "cooldown_frames": 720,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 48,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_void_grasp"
+      },
+      {
+        "id": "voidking_tentacle_lash",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 8,
+        "recovery_frames": 35,
+        "idle_frames": 20,
+        "cooldown_frames": 120,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 35,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_tentacle_lash"
+      },
+      {
+        "id": "voidking_vortex",
+        "handler_id": "pull_zone",
+        "warning_frames": 60,
+        "active_frames": 120,
+        "recovery_frames": 45,
+        "idle_frames": 20,
+        "cooldown_frames": 900,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 128,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 128,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 120,
+          "tick_interval_frames": 60,
+          "pull_px_per_second": 32,
+          "slow_multiplier": 1
+        },
+        "cue_id": "hostile_voidking_vortex"
+      },
+      {
+        "id": "voidking_devour",
+        "handler_id": "melee",
+        "warning_frames": 75,
+        "active_frames": 10,
+        "recovery_frames": 65,
+        "idle_frames": 20,
+        "cooldown_frames": 1200,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 64,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 50,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_devour"
+      },
+      {
+        "id": "voidking_shard_projection",
+        "handler_id": "projectile_volley",
+        "warning_frames": 28,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 20,
+        "cooldown_frames": 300,
+        "weight": 8,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 256,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -180,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -135,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -90,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -45,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 45,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 90,
+            "radius": 6,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 135,
+            "radius": 6,
+            "length": 256
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 3,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 4,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 5,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 6,
+            "damage": 18,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 7,
+            "damage": 18,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 128,
+          "lifetime_frames": 120,
+          "pierce_count": 0
+        },
+        "cue_id": "hostile_voidking_shard_projection"
+      },
+      {
+        "id": "voidking_dual_strike",
+        "handler_id": "melee",
+        "warning_frames": 35,
+        "active_frames": 22,
+        "recovery_frames": 40,
+        "idle_frames": 20,
+        "cooldown_frames": 180,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 96,
+        "geometry": [
+          {
+            "shape": "cone",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 48
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 90,
+            "radius": 10,
+            "length": 64
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 28,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 17,
+            "hit_index": 1,
+            "damage": 28,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_dual_strike"
+      },
+      {
+        "id": "voidking_void_end",
+        "handler_id": "zone",
+        "warning_frames": 80,
+        "active_frames": 15,
+        "recovery_frames": 80,
+        "idle_frames": 20,
+        "cooldown_frames": 1080,
+        "weight": 6,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 320,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -104
+            },
+            "aim_offset_degrees": 0,
+            "radius": 72,
+            "length": 256
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": -64,
+              "y": -104
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          },
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 64,
+              "y": -104
+            },
+            "aim_offset_degrees": 0,
+            "radius": 24,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 55,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 300,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 1,
+          "slow_duration_frames": 0
+        },
+        "cue_id": "hostile_voidking_void_end"
+      },
+      {
+        "id": "voidking_existence_denial",
+        "handler_id": "melee",
+        "warning_frames": 110,
+        "active_frames": 20,
+        "recovery_frames": 100,
+        "idle_frames": 20,
+        "cooldown_frames": 1800,
+        "weight": 10,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 256,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -96
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 96
+            },
+            "aim_offset_degrees": 0,
+            "radius": 16,
+            "length": 256
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 65,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_existence_denial"
+      },
+      {
+        "id": "voidking_enrage_zero",
+        "handler_id": "melee",
+        "warning_frames": 90,
+        "active_frames": 10,
+        "recovery_frames": 90,
+        "idle_frames": 20,
+        "cooldown_frames": 1200,
+        "weight": 2,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 256,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": -104
+            },
+            "aim_offset_degrees": 0,
+            "radius": 72,
+            "length": 256
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 70,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 0
+        },
+        "cue_id": "hostile_voidking_enrage_zero"
+      }
+    ],
+    "phases": [
+      {
+        "id": "p1",
+        "hp_threshold": 1,
+        "move_speed": 126,
+        "poise_threshold": 180,
+        "action_ids": [
+          "voidking_scepter_strike",
+          "voidking_void_bolt",
+          "voidking_plane_tear",
+          "voidking_void_step",
+          "voidking_void_grasp"
+        ]
+      },
+      {
+        "id": "p2",
+        "hp_threshold": 0.6,
+        "move_speed": 0,
+        "poise_threshold": 220,
+        "action_ids": [
+          "voidking_tentacle_lash",
+          "voidking_vortex",
+          "voidking_devour",
+          "voidking_shard_projection"
+        ]
+      },
+      {
+        "id": "p3",
+        "hp_threshold": 0.2,
+        "move_speed": 154,
+        "poise_threshold": 200,
+        "action_ids": [
+          "voidking_scepter_strike",
+          "voidking_void_bolt",
+          "voidking_plane_tear",
+          "voidking_void_step",
+          "voidking_void_grasp",
+          "voidking_dual_strike",
+          "voidking_void_end",
+          "voidking_existence_denial"
+        ]
+      }
+    ],
+    "enrage": {
+      "threshold_frames": 10800,
+      "damage_multiplier": 1.2,
+      "cooldown_multiplier": 0.85,
+      "action_id": "voidking_enrage_zero"
+    },
+    "arena": {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 640,
+        "height": 360
+      },
+      "safe_corridor_width_px": 48,
+      "constructs": [
+        {
+          "id": "void_cover_pillar",
+          "kind": "cover",
+          "count": 4,
+          "max_hp": 120,
+          "radius_px": 14
+        },
+        {
+          "id": "void_plane_core",
+          "kind": "arena_core",
+          "count": 4,
+          "max_hp": 100,
+          "radius_px": 12
+        }
+      ],
+      "edge_erosion_step_px": 0,
+      "edge_erosion_max_steps": 0
+    },
+    "mechanisms": {
+      "phase_damage_overrides": {},
+      "outer_body_damage_multiplier": 0.6,
+      "core_exposure_damage_multiplier": 1.5,
+      "core_always_reachable": true,
+      "p2_cover_becomes_nondamaging_debris": true,
+      "core_break_body_damage": 100,
+      "core_break_exposure_frames": 60,
+      "core_round_exposure_frames": 120,
+      "core_regeneration_frames": 600,
+      "core_round_cap": 2,
+      "p3_player_heal_fraction": 0.3,
+      "p3_heal_once": true,
+      "p3_heal_never_revives": true,
+      "scepter_burn_damage": 2,
+      "scepter_burn_tick_frames": 30,
+      "scepter_burn_frames": 180,
+      "bolt_slow_multiplier": 0.65,
+      "bolt_slow_frames": 120,
+      "tear_final_warning_frames": 40,
+      "tear_final_damage": 25,
+      "tear_final_radius_px": 32,
+      "step_followup_warning_frames": 28,
+      "grasp_slow_multiplier": 0.4,
+      "grasp_slow_frames": 90,
+      "tentacle_exposure_frames": 30,
+      "vortex_inner_radius_px": 24,
+      "vortex_inner_damage": 40,
+      "vortex_inner_once": true,
+      "devour_damage_output_multiplier": 0.85,
+      "devour_debuff_frames": 180,
+      "devour_preserves_item_ownership": true,
+      "shard_pickup_count_cap": 4,
+      "shard_pickup_lifetime_frames": 180,
+      "shard_pickup_energy": 5,
+      "shard_pickups_once_only": true,
+      "void_end_zone_lifetime_frames": 300,
+      "core_break_interrupts_denial": true,
+      "core_break_interrupts_enrage": true,
+      "player_time_inputs_retained": true
+    },
+    "time_responses": []
+  }
+]

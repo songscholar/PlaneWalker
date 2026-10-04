@@ -1,0 +1,865 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/summon-definition/1.0.0",
+  "title": "Plane Walker Summon Definition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "id",
+    "schema_version",
+    "name_key",
+    "description_key",
+    "availability",
+    "tags",
+    "compatibility",
+    "references",
+    "runtime_kind",
+    "parent_definition_id",
+    "max_hp",
+    "hp_fraction",
+    "damage",
+    "damage_multiplier",
+    "move_speed",
+    "collision_radius_px",
+    "lifetime_frames",
+    "spawn_warning_frames",
+    "attack_warning_frames",
+    "final_explosion_warning_frames",
+    "reward_eligible",
+    "capabilities",
+    "attack"
+  ],
+  "properties": {
+    "category": {
+      "const": "summon_definition"
+    },
+    "id": {
+      "enum": [
+        "mini_wraith",
+        "small_void_spore",
+        "void_firefly",
+        "void_beetle",
+        "hunter_echo",
+        "ranger_echo",
+        "timeline_echo",
+        "void_sapling",
+        "elite_mirror"
+      ]
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "name_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "description_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "availability": {
+      "const": [
+        "LAUNCH",
+        "EXPANSION"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "floor_ids",
+        "actor_kinds"
+      ],
+      "properties": {
+        "floor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "floor_ruins_of_remnant",
+              "floor_void_forest",
+              "floor_time_rift",
+              "floor_plane_forge",
+              "floor_throne_of_void"
+            ]
+          }
+        },
+        "actor_kinds": {
+          "const": [
+            "summon"
+          ]
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "runtime_kind": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]{1,96}$"
+    },
+    "parent_definition_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]{1,96}$"
+    },
+    "max_hp": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "hp_fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.2
+    },
+    "damage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 18
+    },
+    "damage_multiplier": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 1
+    },
+    "move_speed": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 240
+    },
+    "collision_radius_px": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 32
+    },
+    "lifetime_frames": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1200
+    },
+    "spawn_warning_frames": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 120
+    },
+    "attack_warning_frames": {
+      "type": "integer",
+      "minimum": 23,
+      "maximum": 120
+    },
+    "final_explosion_warning_frames": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 120
+    },
+    "reward_eligible": {
+      "type": "boolean",
+      "const": false
+    },
+    "capabilities": {
+      "type": "array",
+      "const": []
+    },
+    "attack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "range_px",
+        "active_frames",
+        "recovery_frames",
+        "cooldown_frames"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "melee",
+            "charge",
+            "projectile_volley",
+            "parent_first_damaging"
+          ]
+        },
+        "range_px": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 240
+        },
+        "active_frames": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "recovery_frames": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 60
+        },
+        "cooldown_frames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1200
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "mini_wraith"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "mini_wraith"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "ruins_wraith"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "ruins_wraith"
+          },
+          "max_hp": {
+            "const": 25
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 10
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 80
+          },
+          "collision_radius_px": {
+            "const": 7
+          },
+          "lifetime_frames": {
+            "const": 480
+          },
+          "attack": {
+            "const": {
+              "kind": "melee",
+              "range_px": 32,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "small_void_spore"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "small_void_spore"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "void_spore"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "void_spore"
+          },
+          "max_hp": {
+            "const": 12
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 6
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 42
+          },
+          "collision_radius_px": {
+            "const": 6
+          },
+          "lifetime_frames": {
+            "const": 480
+          },
+          "attack": {
+            "const": {
+              "kind": "melee",
+              "range_px": 40,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_firefly"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "void_firefly"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "forest_caller"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "forest_caller"
+          },
+          "max_hp": {
+            "const": 20
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 6
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 96
+          },
+          "collision_radius_px": {
+            "const": 6
+          },
+          "lifetime_frames": {
+            "const": 900
+          },
+          "attack": {
+            "const": {
+              "kind": "projectile_volley",
+              "range_px": 96,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_beetle"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "void_beetle"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "stone_shell_strider"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "stone_shell_strider"
+          },
+          "max_hp": {
+            "const": 80
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 18
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 72
+          },
+          "collision_radius_px": {
+            "const": 10
+          },
+          "lifetime_frames": {
+            "const": 1200
+          },
+          "attack": {
+            "const": {
+              "kind": "charge",
+              "range_px": 48,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "hunter_echo"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "hunter_echo"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "void_hunter"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "void_hunter"
+          },
+          "max_hp": {
+            "const": 45
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 7
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 126
+          },
+          "collision_radius_px": {
+            "const": 8
+          },
+          "lifetime_frames": {
+            "const": 480
+          },
+          "attack": {
+            "const": {
+              "kind": "melee",
+              "range_px": 24,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "ranger_echo"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "ranger_echo"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "phase_ranger"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "phase_ranger"
+          },
+          "max_hp": {
+            "const": 42
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 11
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 84
+          },
+          "collision_radius_px": {
+            "const": 8
+          },
+          "lifetime_frames": {
+            "const": 600
+          },
+          "attack": {
+            "const": {
+              "kind": "projectile_volley",
+              "range_px": 144,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "timeline_echo"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "timeline_echo"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "time_sovereign"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "time_sovereign"
+          },
+          "max_hp": {
+            "const": 200
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 15
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 112
+          },
+          "collision_radius_px": {
+            "const": 12
+          },
+          "lifetime_frames": {
+            "const": 1200
+          },
+          "attack": {
+            "const": {
+              "kind": "melee",
+              "range_px": 48,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "void_sapling"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "void_sapling"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": [
+              "forest_caller"
+            ]
+          },
+          "parent_definition_id": {
+            "const": "forest_caller"
+          },
+          "max_hp": {
+            "const": 60
+          },
+          "hp_fraction": {
+            "const": 0
+          },
+          "damage": {
+            "const": 15
+          },
+          "damage_multiplier": {
+            "const": 1
+          },
+          "move_speed": {
+            "const": 58
+          },
+          "collision_radius_px": {
+            "const": 9
+          },
+          "lifetime_frames": {
+            "const": 900
+          },
+          "attack": {
+            "const": {
+              "kind": "melee",
+              "range_px": 32,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "elite_mirror"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime_kind": {
+            "const": "elite_mirror"
+          },
+          "compatibility": {
+            "const": {
+              "floor_ids": [
+                "floor_ruins_of_remnant",
+                "floor_void_forest",
+                "floor_time_rift",
+                "floor_plane_forge",
+                "floor_throne_of_void"
+              ],
+              "actor_kinds": [
+                "summon"
+              ]
+            }
+          },
+          "references": {
+            "const": []
+          },
+          "parent_definition_id": {
+            "const": "bound_ordinary"
+          },
+          "max_hp": {
+            "const": 1
+          },
+          "hp_fraction": {
+            "const": 0.2
+          },
+          "damage": {
+            "const": 0
+          },
+          "damage_multiplier": {
+            "const": 0.5
+          },
+          "move_speed": {
+            "const": 64
+          },
+          "collision_radius_px": {
+            "const": 8
+          },
+          "lifetime_frames": {
+            "const": 480
+          },
+          "attack": {
+            "const": {
+              "kind": "parent_first_damaging",
+              "range_px": 0,
+              "active_frames": 6,
+              "recovery_frames": 20,
+              "cooldown_frames": 120
+            }
+          }
+        }
+      }
+    }
+  ]
+}
