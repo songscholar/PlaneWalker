@@ -153,7 +153,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Durable Host Startup Evidence](current/2026-10-05-p16-durable-host-startup-evidence.md) | 保存后开局发布、冷启动重试、回调身份复检与下一层恢复等待 | Verified Locally / Main integration pending |
 | [P16 Native Hub Scene Evidence](current/2026-10-05-p16-native-hub-shell-evidence.md) | 三个像素场景、原生移动与九目的地、48 张渲染截图 | Verified Locally / Business panels pending |
 | [P16 Hub Business Evidence](current/2026-10-05-p16-hub-business-evidence.md) | 权威档案业务入口、闭合可用性与成本投影、配装和离线出发 | Verified Locally / Native panel certification separate |
-| [P16 Production Profile Boot Evidence](current/2026-10-05-p16-production-profile-boot-evidence.md) | 真实内容指纹、旧指纹迁移、权威进度镜像与未知内容拒绝 | Verified Locally / Main entry pending |
+| [P16 Production Profile Boot Evidence](current/2026-10-05-p16-production-profile-boot-evidence.md) | 真实内容指纹、已核验历史迁移、权威进度镜像与未知内容拒绝 | Verified Locally / Full resume pending |
+| [P16 Actual Content Compatibility Evidence](current/2026-10-05-p16-actual-content-compatibility-evidence.md) | 两个精确历史内容版本、Git 来源审计与全部物理保存故障补偿 | Verified Locally / Pinned localization-only upgrades |
 | [P16 Encounter Timer Evidence](current/2026-10-05-p16-encounter-timer-evidence.md) | 原生计时器、暂停继承、退出取消与零泄漏房间退役 | Verified Locally / Current |
 | [P16 Main Profile Flow Evidence](current/2026-10-05-p16-main-profile-flow-evidence.md) | 正式耐久开局、真实死亡结算、保存重试和下一局身份 | Verified Locally / Victory and full resume pending |
 | [P16 Native Hub Flow Evidence](current/2026-10-05-p16-native-hub-flow-evidence.md) | Main 首屏、九面板、真实购买和锻造、手柄入口与原生画面 | Verified Locally / Training and optional providers pending |

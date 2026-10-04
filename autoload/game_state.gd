@@ -9,6 +9,7 @@ const ContentRegistryScript := preload("res://scripts/content/content_registry.g
 const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const MetaFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
 const ProfileServiceScript := preload("res://scripts/progression/profile_runtime_service.gd")
+const ActualCompatibilityScript := preload("res://scripts/save/actual_content_compatibility_ledger.gd")
 
 const SAVE_GAME_VERSION := "0.4.0-dev"
 const DEFAULT_PROFILE_ID := "slot_1"
@@ -89,17 +90,24 @@ func activate_profile_content(registry: RefCounted) -> Dictionary:
 		return {"ok": false, "code": &"CONFIGURATION_INVALID", "context": {}}
 	var inspected = service.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
 	if inspected.code == &"CONTENT_MISMATCH":
-		var source := SaveServiceScript.new()
-		var prior := _legacy_content_snapshot()
-		source.configure(_save_service_root_path(), SAVE_GAME_VERSION, prior)
-		source.enable_meta_profile(catalog)
-		var legacy = source.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
-		if not legacy.ok:
+		var sources := ActualCompatibilityScript.trusted_sources(binding, catalog.fingerprint())
+		sources.append(_legacy_content_snapshot())
+		var matched := false
+		for prior: Dictionary in sources:
+			var source := SaveServiceScript.new()
+			if not source.configure(_save_service_root_path(), SAVE_GAME_VERSION, prior).ok or not source.enable_meta_profile(catalog).ok:
+				continue
+			var legacy = source.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
+			if not legacy.ok:
+				continue
+			var rebound = source.rebind_profile_content(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN, prior, binding, legacy.payload)
+			if not rebound.ok:
+				return {"ok": false, "code": rebound.code, "context": rebound.metadata.duplicate(true)}
+			service = source
+			matched = true
+			break
+		if not matched:
 			return {"ok": false, "code": inspected.code, "context": inspected.metadata.duplicate(true)}
-		var rebound = source.rebind_profile_content(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN, prior, binding, legacy.payload)
-		if not rebound.ok:
-			return {"ok": false, "code": rebound.code, "context": rebound.metadata.duplicate(true)}
-		service = source
 	var old_save := _save_service
 	var old_path := _save_service_path
 	var old_catalog := _profile_catalog

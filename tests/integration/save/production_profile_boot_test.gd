@@ -9,6 +9,7 @@ const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Profile := preload("res://scripts/progression/meta_profile_state.gd")
 const Envelope := preload("res://scripts/save/save_envelope.gd")
 const Paths := preload("res://scripts/save/runtime_user_data_path.gd")
+const Ledger := preload("res://scripts/save/actual_content_compatibility_ledger.gd")
 
 
 func _ready() -> void:
@@ -30,11 +31,21 @@ func _run() -> void:
 		return
 	var packs := [{"pack_id": "base", "pack_version": "0.4.0-dev", "schema_version": 1, "fingerprint_sha256": "1".repeat(64)}]
 	var known_legacy := {"packs": packs, "aggregate_sha256": Envelope.content_snapshot_digest(packs)}
-	for case_id: String in ["fresh", "actual_v4", "known_legacy", "unknown_content"]:
+	var known_actual: Dictionary = {}
+	var cases: Array = ["fresh", "actual_v4", "known_legacy", "unknown_content"]
+	var sources := Ledger.trusted_sources(target, catalog.fingerprint())
+	suite.assert_equal(sources.size(), 2, "reviewed compatibility ledger supplies only the two known actual sources")
+	for index: int in range(sources.size()):
+		var id := "known_actual_%d" % index
+		cases.append(id)
+		known_actual[id] = sources[index]
+	for case_id: String in cases:
 		var path := Paths.resolve_default("user://p16-profile-boot/" + case_id + "/legacy.json", "p16-profile-boot/" + case_id + "/legacy.json")
 		var root := path.get_base_dir().path_join("plane_walker/save")
 		var save := Save.new()
 		var source := known_legacy if case_id == "known_legacy" else target
+		if known_actual.has(case_id):
+			source = known_actual[case_id].duplicate(true)
 		if case_id == "unknown_content":
 			source = target.duplicate(true)
 			source.packs[0].fingerprint_sha256 = "2".repeat(64)
