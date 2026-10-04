@@ -9,6 +9,8 @@ var _authority: WeakRef
 var _definition: Dictionary = {}
 var _sprite: Sprite2D
 var _shape: CollisionShape2D
+var _hit_target_ids: Array = []
+var _ignored_bodies: Array[WeakRef] = []
 
 
 func configure_payload(authority: RefCounted, id: String, definition: Dictionary) -> bool:
@@ -69,6 +71,36 @@ func project_record(record: Dictionary, frame: int) -> bool:
 		add_to_group("launch_hostile_payloads")
 	else:
 		deactivate()
+	return true
+
+
+func project_hit_targets(ids: Array, bodies: Dictionary) -> bool:
+	for body: PhysicsBody2D in get_collision_exceptions():
+		remove_collision_exception_with(body)
+	_hit_target_ids = ids.duplicate()
+	_ignored_bodies.clear()
+	for id: String in ids:
+		var body: Variant = bodies.get(id)
+		if body is PhysicsBody2D and is_instance_valid(body) and body.is_inside_tree() and not body.is_queued_for_deletion():
+			add_collision_exception_with(body)
+			_ignored_bodies.append(weakref(body))
+	return true
+
+
+func native_hit_targets_match(ids: Array) -> bool:
+	if ids != _hit_target_ids:
+		return false
+	var expected: Array[PhysicsBody2D] = []
+	for reference: WeakRef in _ignored_bodies:
+		var body: Variant = reference.get_ref()
+		if is_instance_valid(body):
+			expected.append(body)
+	var actual := get_collision_exceptions()
+	if actual.size() != expected.size():
+		return false
+	for body: PhysicsBody2D in expected:
+		if not actual.has(body):
+			return false
 	return true
 
 

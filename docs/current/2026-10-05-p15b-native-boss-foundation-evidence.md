@@ -67,3 +67,25 @@ strict production Boss HUD ViewState, all phase-specific art tracks and all
 accessibility/ultrawide captures remain active gates. The shared effects router
 still refuses an unsupported handler; no inert-success fallback is added. Human
 playtests remain 0/20. No remote publication occurred.
+
+## Authored Projectile Gate
+
+Foundation retained in `5e05ad2`. The next focused gate preserves Boss-authored
+finite warning ranges: Forge lava toss stays 192px and Void shard projection
+stays 256px. Existing enemy finite envelopes remain unchanged. Payloads retain
+up to the authored eight penetrations, distinct target claims and complete native
+collision exceptions through rejected-frame compensation. All projectiles still
+retire at a finite range, lifetime, wall contact or exhausted penetration budget.
+
+- Authored range/penetration RED: `planewalker-tests.GZpa7N`.
+- Payload domain GREEN: `planewalker-tests.1s80xH`, 1/1 passed.
+- Actual Forge P3 sword-wave scene, real room and two real Player bodies: `planewalker-tests.5AGxH5`, 1/1 passed. Each body receives one 30-damage hit; first penetration rejection restores Health, payload claims and physical collision exceptions, and retry publishes once.
+- Combined Boss foundation/payload GREEN: `planewalker-tests.gb8POQ`, 3/3 passed.
+- Existing Moth actual native flight/death/Rift/wall regression: `planewalker-tests.ynqPer`, 1/1 passed.
+- Effect and bridge regressions: `planewalker-tests.YSYCoS` and `planewalker-tests.4qWfmZ`, each 1/1 passed.
+- Coordinator regression: `planewalker-tests.rtLCLU`, 1/1 passed. Coordinated blink landing envelope RED `planewalker-tests.tZb0St` and full enemy-domain GREEN `planewalker-tests.Q0O1iU` verify locked normal/Rift landings.
+
+All final listed gates have clean engine logs. No new dependency was introduced.
+The production projectile raster still uses the previously certified acid atlas;
+distinct Boss/element raster projections remain active visual work. Persistent
+zones, healing, summons and arena mechanisms are not certified by this gate.

@@ -12,6 +12,7 @@ var _nodes: Dictionary = {}
 var _pending: Dictionary = {}
 var _committed := false
 var _next_ticket := 1
+var _known_targets: Dictionary = {}
 
 
 func configure(run_id: String, frame: int) -> bool:
@@ -112,7 +113,7 @@ func prepare_payloads(batches: Array, context: Dictionary) -> Dictionary:
 			if _root == null or room.is_empty() or not actor.has_method("prepared_launch_payload_parameters"):
 				return _failure("missing_payload_room_authority")
 			var mechanisms: Dictionary = actor.prepared_launch_payload_parameters()
-			if mechanisms.is_empty() or not preview.reserve_projectile(hit, room.bounds, mechanisms).ok:
+			if not preview.reserve_projectile(hit, room.bounds, mechanisms).ok:
 				return _failure("projectile_reservation")
 		for mechanism: Dictionary in wrapper.batch.get("mechanism_requests", []):
 			if mechanism.get("kind", "") != "death_pool":
@@ -152,7 +153,11 @@ func can_commit(ticket: Dictionary) -> bool:
 
 
 func commit(ticket: Dictionary) -> bool:
-	if not can_commit(ticket) or not _runtime.restore_snapshot(ticket.after) or not _sync_native(ticket.after):
+	if not can_commit(ticket) or not _runtime.restore_snapshot(ticket.after):
+		return false
+	for id: String in ticket.targets:
+		_known_targets[id] = weakref(ticket.targets[id])
+	if not _sync_native(ticket.after):
 		return false
 	_committed = true
 	return true
@@ -195,6 +200,13 @@ func _sync_native(value: Dictionary, prune: bool = false) -> bool:
 			_nodes[row.id] = node
 		if not is_instance_valid(_nodes[row.id]) or not _nodes[row.id].project_record(row, int(value.runtime_frame)):
 			return false
+		if row.definition.kind == "projectile":
+			var bodies: Dictionary = {}
+			for id: String in row.hit_targets:
+				if _known_targets.has(id):
+					bodies[id] = _known_targets[id].get_ref()
+			if not _nodes[row.id].project_hit_targets(row.hit_targets, bodies):
+				return false
 		live[row.id] = true
 	for id: String in _nodes:
 		if not live.has(id):
@@ -233,7 +245,7 @@ func _native_matches(value: Dictionary) -> bool:
 			return false
 		var node: Node2D = _nodes[row.id]
 		var position: Dictionary = row.position if row.definition.kind == "projectile" else row.definition.position
-		if not node.is_inside_tree() or node.get_parent() != _root or not node.visible or node.global_position != Vector2(position.x, position.y) or not node.native_definition_matches(row.definition):
+		if not node.is_inside_tree() or node.get_parent() != _root or not node.visible or node.global_position != Vector2(position.x, position.y) or not node.native_definition_matches(row.definition) or row.definition.kind == "projectile" and not node.native_hit_targets_match(row.hit_targets):
 			return false
 	return true
 

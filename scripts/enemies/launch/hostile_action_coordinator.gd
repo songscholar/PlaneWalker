@@ -105,7 +105,7 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 	next.paused_frames = 0
 	next.cooldowns[action_id] = int(next.commit_frame) + int(action.cooldown_frames)
 	next.idle_through_frame = int(next.commit_frame) + int(action.warning_frames) + int(action.active_frames) + int(action.recovery_frames) + int(action.idle_frames) - 1
-	next.committed_geometry = _committed_geometry(action, next)
+	next.committed_geometry = _committed_geometry(action, next, _definition.actor_kind)
 	_state = next
 	return {
 		"ok": true, "phase": "WARNING", "action_id": action_id, "handler_id": action.handler_id,
@@ -231,7 +231,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			return false
 		if index > 0 and generation != value.geometry_generations[index - 1] + 1:
 			return false
-	if value.next_generation_floor != value.geometry_generations.back() + 1 or value.committed_geometry != _committed_geometry(action, value):
+	if value.next_generation_floor != value.geometry_generations.back() + 1 or value.committed_geometry != _committed_geometry(action, value, _definition.actor_kind):
 		return false
 	var expected_claims: Array = []
 	for hit: Dictionary in action.hit_schedule:
@@ -283,7 +283,7 @@ static func action_phase(elapsed: int, action: Dictionary) -> String:
 	return "IDLE"
 
 
-static func _committed_geometry(action: Dictionary, state: Dictionary) -> Array[Dictionary]:
+static func _committed_geometry(action: Dictionary, state: Dictionary, actor_kind: String = "enemy") -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var source := _vector(state.committed_origin)
 	var target := _vector(state.committed_target)
@@ -292,16 +292,17 @@ static func _committed_geometry(action: Dictionary, state: Dictionary) -> Array[
 	for index: int in range(action.geometry.size()):
 		var primitive: Dictionary = action.geometry[index]
 		var length: float = float(primitive.length)
-		if action.handler_id == "projectile_volley":
+		if action.handler_id == "projectile_volley" and actor_kind != "boss":
 			length = minf(240.0, float(action.parameters.speed_px_per_second) * float(action.parameters.lifetime_frames) / 60.0)
 		var offset := _vector(primitive.origin_offset).rotated(aim.angle())
-		var origin := target + offset if primitive.shape == "target_circle" else source + offset
+		var landing_origin: bool = primitive.shape == "target_circle" or action.handler_id == "blink"
+		var origin := target + offset if landing_origin else source + offset
 		var slots: Array = [_point(origin)] if primitive.shape == "summon_slots" else []
 		result.append({
 			"hostile_source_id": state.identity.hostile_source_id, "attack_generation": state.geometry_generations[index],
 			"shape": primitive.shape, "origin": _point(origin),
 			"aim_direction": _point(aim.rotated(deg_to_rad(primitive.aim_offset_degrees))),
-			"target_point": _point(origin) if primitive.shape == "target_circle" else state.committed_target.duplicate(true), "summon_slots": slots,
+			"target_point": _point(origin) if landing_origin else state.committed_target.duplicate(true), "summon_slots": slots,
 			"radius": primitive.radius, "length": length,
 			"active_from_frame": state.commit_frame, "active_through_frame": through,
 		})

@@ -13,9 +13,9 @@ const MAX_CLAIMS := 4096
 const MAX_FRAME := 2147483647 - Contract.MAX_FRAME
 const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "projectiles", "zones"]
 const HIT_FIELDS := ["run_id", "hostile_source_id", "attack_generation", "hit_index", "runtime_frame", "target_id", "action_id", "damage", "damage_type", "handler_id", "geometry", "parameters"]
-const PROJECTILE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "travel", "position", "control"]
+const PROJECTILE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "travel", "position", "control", "hit_targets"]
 const ZONE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "control"]
-const PROJECTILE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "origin", "direction", "radius", "speed", "lifetime_frames", "range_px", "damage", "damage_type", "target_id", "bounds", "impact_pool"]
+const PROJECTILE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "origin", "direction", "radius", "speed", "lifetime_frames", "range_px", "damage", "damage_type", "target_id", "bounds", "impact_pool", "pierce_count"]
 const ZONE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "position", "radius", "damage", "damage_type", "warning_frames", "lifetime_frames", "tick_frames", "bounds"]
 
 var _state: Dictionary = {}
@@ -38,7 +38,7 @@ func reserve_projectile(hit: Dictionary, bounds: Dictionary, mechanisms: Diction
 	if _has_claim(_state, definition):
 		return _failure("duplicate_reservation")
 	var phase := "ACTIVE" if _active_count(_state.projectiles) < MAX_PROJECTILES else "PENDING"
-	var record := {"id": id, "definition": definition, "phase": phase, "activated_frame": _state.runtime_frame if phase == "ACTIVE" else -1, "age": 0, "travel": 0.0, "position": definition.origin.duplicate(), "control": _new_control(id, int(_state.runtime_frame))}
+	var record := {"id": id, "definition": definition, "phase": phase, "activated_frame": _state.runtime_frame if phase == "ACTIVE" else -1, "age": 0, "travel": 0.0, "position": definition.origin.duplicate(), "control": _new_control(id, int(_state.runtime_frame)), "hit_targets": []}
 	_state.claims.append({"id": id, "key": _reservation_key(definition)})
 	_state.projectiles.append(record)
 	return {"ok": true, "id": id, "phase": phase}
@@ -81,6 +81,9 @@ func advance_frame(frame: int, observations: Dictionary) -> Dictionary:
 	for id: Variant in observations.projectile_contacts:
 		if not motion.has(id) or not _valid_contact(observations.projectile_contacts[id], motion[id], observations.targets):
 			return _failure("contact")
+		for row: Dictionary in _state.projectiles:
+			if row.id == id and observations.projectile_contacts[id].kind == "target" and row.hit_targets.has(observations.projectile_contacts[id].target_id):
+				return _failure("duplicate_pierced_target")
 	var next := snapshot()
 	next.runtime_frame = frame
 	var damages: Array[Dictionary] = []
@@ -99,10 +102,12 @@ func advance_frame(frame: int, observations: Dictionary) -> Dictionary:
 			var contact: Dictionary = observations.projectile_contacts[row.id]
 			if contact.kind == "target":
 				damages.append(_damage(row.id, row.definition, contact.target_id, frame))
-			if not row.definition.impact_pool.is_empty():
-				impacts.append(_impact_definition(row.definition, contact.position, frame))
-			retired.append(row.id)
-			continue
+				row.hit_targets.append(contact.target_id)
+			if contact.kind == "world" or row.hit_targets.size() > int(row.definition.pierce_count):
+				if not row.definition.impact_pool.is_empty():
+					impacts.append(_impact_definition(row.definition, contact.position, frame))
+				retired.append(row.id)
+				continue
 		var step: Dictionary = motion[row.id]
 		if not step.action_paused:
 			row.age = int(row.age) + 1
@@ -205,6 +210,13 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			return false
 		if row.phase == "PENDING" and (row.age != 0 or float(row.travel) != 0.0):
 			return false
+		if not row.hit_targets is Array or row.hit_targets.size() > int(row.definition.pierce_count) or row.hit_targets.size() > int(row.age) or row.phase == "PENDING" and not row.hit_targets.is_empty():
+			return false
+		var seen_targets: Dictionary = {}
+		for target: Variant in row.hit_targets:
+			if not _stable_id(target) or seen_targets.has(target):
+				return false
+			seen_targets[target] = true
 		if float(row.travel) > float(row.definition.speed) * float(row.age) / 60.0 + 0.00001:
 			return false
 	for row: Variant in value.zones:
@@ -231,7 +243,7 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 		return {}
 	if not Contract.integer_in_range(hit.attack_generation, 1, MAX_FRAME) or not Contract.integer_in_range(hit.hit_index, 0, 63) or not Contract.number_in_range(hit.damage, 0, 600) or hit.damage_type not in Contract.DAMAGE_TYPES or not _valid_bounds(bounds):
 		return {}
-	if not hit.parameters is Dictionary or not Contract._parameters("projectile_volley", hit.parameters).ok or hit.parameters.pierce_count != 0 or not hit.geometry is Array or hit.geometry.is_empty() or hit.geometry.size() > 16:
+	if not hit.parameters is Dictionary or not Contract._parameters("projectile_volley", hit.parameters).ok or not hit.geometry is Array or hit.geometry.is_empty() or hit.geometry.size() > 16:
 		return {}
 	var index := int(hit.hit_index) if hit.geometry.size() > 1 else 0
 	if index >= hit.geometry.size():
@@ -241,8 +253,8 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 		if not fact is Dictionary or Actions.native_threat_fact(fact).is_empty() or fact.hostile_source_id != hit.hostile_source_id or fact.attack_generation != int(hit.attack_generation) + lane_index or fact.shape != "line":
 			return {}
 	var lane: Dictionary = hit.geometry[index]
-	var range_px := minf(240.0, float(hit.parameters.speed_px_per_second) * float(hit.parameters.lifetime_frames) / 60.0)
-	if float(lane.length) != range_px or not _inside(lane.origin, bounds):
+	var range_px := float(lane.length)
+	if not Contract.number_in_range(range_px, 1.0, float(hit.parameters.speed_px_per_second) * float(hit.parameters.lifetime_frames) / 60.0) or not _inside(lane.origin, bounds):
 		return {}
 	var pool: Dictionary = {}
 	if not mechanisms.is_empty():
@@ -250,7 +262,7 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 		if not parsed.ok:
 			return {}
 		pool = {"radius": float(mechanisms.impact_pool_radius_px), "lifetime_frames": int(mechanisms.impact_pool_lifetime_frames), "damage": float(mechanisms.impact_pool_damage), "tick_frames": int(mechanisms.impact_pool_tick_frames)}
-	return {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool}
+	return {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool, "pierce_count": int(hit.parameters.pierce_count)}
 
 
 func _reserve_zone(state: Dictionary, definition: Dictionary) -> Dictionary:
@@ -285,7 +297,7 @@ func _valid_live_record(row: Dictionary, state: Dictionary, claims: Dictionary, 
 func _valid_projectile_definition(row: Dictionary) -> bool:
 	if not Contract.exact_fields(row, PROJECTILE_DEFINITION_FIELDS) or row.kind != "projectile" or not _valid_definition_identity(row) or not Contract.valid_point(row.origin) or not Contract.valid_point(row.direction, 1) or not is_equal_approx(_vector(row.direction).length(), 1.0) or not _inside(row.origin, row.bounds) or not _stable_id(row.target_id):
 		return false
-	if not Contract.number_in_range(row.radius, 1, 320) or not Contract.number_in_range(row.speed, 1, 480) or not Contract.integer_in_range(row.lifetime_frames, 1, 600) or row.range_px != minf(240.0, float(row.speed) * float(row.lifetime_frames) / 60.0) or not row.impact_pool is Dictionary:
+	if not Contract.number_in_range(row.radius, 1, 320) or not Contract.number_in_range(row.speed, 1, 480) or not Contract.integer_in_range(row.lifetime_frames, 1, 600) or not Contract.number_in_range(row.range_px, 1.0, float(row.speed) * float(row.lifetime_frames) / 60.0) or not Contract.integer_in_range(row.pierce_count, 0, 8) or not row.impact_pool is Dictionary:
 		return false
 	return row.impact_pool.is_empty() or (Contract.exact_fields(row.impact_pool, ["radius", "lifetime_frames", "damage", "tick_frames"]) and Contract.number_in_range(row.impact_pool.radius, 1, 320) and Contract.number_in_range(row.impact_pool.damage, 0, 600) and Contract.integer_in_range(row.impact_pool.lifetime_frames, 1, 1200) and Contract.integer_in_range(row.impact_pool.tick_frames, 1, 600))
 

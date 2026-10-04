@@ -3,6 +3,7 @@ extends Node
 const Suite := preload("res://tests/support/test_suite.gd")
 const Content := preload("res://tests/support/p15_hostile_fixtures.gd")
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const Boss := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Coordinator := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const Actions := preload("res://tests/support/p15_action_fixtures.gd")
 const BOUNDS := {"x": 0.0, "y": 0.0, "width": 640.0, "height": 360.0}
@@ -23,6 +24,7 @@ func _run() -> void:
 		_test_impact_and_death_zones(implementation)
 		_test_capacity_and_restore(implementation)
 		_test_adversarial_contracts(implementation)
+		_test_authored_boss_ranges_and_piercing(implementation)
 	suite.finish(get_tree())
 
 
@@ -42,6 +44,56 @@ func _hit(source: String = "hostile-moth-one") -> Dictionary:
 
 func _mechanisms() -> Dictionary:
 	return Content.enemy("corrosive_moth").mechanisms.duplicate(true)
+
+
+func _boss_hit(boss_id: String, action_id: String, index: int = 0) -> Dictionary:
+	var parser := Boss.new()
+	parser.configure(Content.boss(boss_id))
+	var projection := parser.runtime_projection()
+	var coordinator := Coordinator.new()
+	coordinator.configure({"id": projection.id, "actor_kind": projection.actor_kind, "actions": projection.actions}, {"run_id": "run-p15", "hostile_source_id": "hostile-boss-range", "next_generation_floor": 7, "runtime_frame": 0})
+	coordinator.request_action(action_id, Actions.context())
+	for frame: int in range(1, 601):
+		var result := coordinator.advance_frame(frame, Actions.context(frame))
+		if not result.hit_facts.is_empty():
+			return result.hit_facts[index]
+	return {}
+
+
+func _test_authored_boss_ranges_and_piercing(implementation: Script) -> void:
+	for row: Array in [["forge_colossus", "forge_lava_toss", 192.0], ["void_throne", "voidking_shard_projection", 256.0]]:
+		var hit := _boss_hit(row[0], row[1])
+		var runtime: RefCounted = implementation.new()
+		runtime.configure("run-p15", hit.runtime_frame)
+		var reserved: Dictionary = runtime.reserve_projectile(hit, BOUNDS, {})
+		suite.assert_true(reserved.ok, "native payload preserves authored %s finite range" % row[1])
+		if reserved.ok:
+			suite.assert_equal(runtime.snapshot().projectiles[0].definition.range_px, row[2], "payload range equals the sealed authored warning envelope")
+			suite.assert_true(runtime.can_restore_snapshot(runtime.snapshot()), "authored Boss projectile round-trips its exact trajectory")
+	var hit := _boss_hit("forge_colossus", "forge_sword_wave")
+	var runtime: RefCounted = implementation.new()
+	runtime.configure("run-p15", hit.runtime_frame)
+	var reserved: Dictionary = runtime.reserve_projectile(hit, BOUNDS, {})
+	suite.assert_true(reserved.ok, "authored sword wave reserves one bounded penetration")
+	if not reserved.ok:
+		return
+	var frame := int(hit.runtime_frame) + 1
+	var first := {reserved.id: {"kind": "target", "target_id": "first", "position": {"x": 101.0, "y": 100.0}}}
+	var first_result: Dictionary = runtime.advance_frame(frame, _observations(first, {"first": {"x": 101.0, "y": 100.0}}))
+	suite.assert_true(first_result.ok and first_result.damage_requests.size() == 1, "piercing projectile damages its first sealed body exactly once")
+	suite.assert_equal(runtime.snapshot().projectiles.size(), 1, "one-pierce wave remains live after the first body")
+	var checkpoint: Dictionary = runtime.snapshot()
+	suite.assert_true(runtime.can_restore_snapshot(checkpoint), "pierced target claims are strict deterministic state")
+	var duplicate := {reserved.id: {"kind": "target", "target_id": "first", "position": {"x": 103.0, "y": 100.0}}}
+	suite.assert_true(not runtime.advance_frame(frame + 1, _observations(duplicate, {"first": {"x": 103.0, "y": 100.0}})).ok, "native observation cannot damage the same pierced target again")
+	suite.assert_equal(runtime.snapshot(), checkpoint, "rejected repeat contact consumes no age, travel or pierce budget")
+	var second := {reserved.id: {"kind": "target", "target_id": "second", "position": {"x": 103.0, "y": 100.0}}}
+	var second_result: Dictionary = runtime.advance_frame(frame + 1, _observations(second, {"second": {"x": 103.0, "y": 100.0}}))
+	suite.assert_true(second_result.ok and second_result.damage_requests.size() == 1, "one-pierce wave settles its second distinct body")
+	suite.assert_true(runtime.snapshot().projectiles.is_empty(), "finite pierce budget retires after two target contacts")
+	var forged := checkpoint.duplicate(true)
+	forged.projectiles[0].hit_targets.append("second")
+	suite.assert_true(not runtime.restore_snapshot(forged), "live projectile cannot restore already-exhausted pierce budget")
 
 
 func _observations(contacts: Dictionary = {}, targets: Dictionary = {}) -> Dictionary:
