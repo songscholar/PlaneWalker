@@ -1,7 +1,7 @@
 extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
-const Fixtures := preload("res://tests/support/p16_profile_fixtures.gd")
+const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Catalog := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Profile := preload("res://scripts/progression/meta_profile_state.gd")
 const MetaProjection := preload("res://scripts/progression/meta_run_projection.gd")
@@ -16,8 +16,12 @@ const BOSS_ORDER := ["ruin_king", "forest_heart", "time_sovereign", "forge_colos
 
 func _ready() -> void:
 	var suite = Suite.new()
-	var catalog = Catalog.new()
-	suite.assert_true(catalog.configure(Fixtures.meta_entries()).ok, "Meta content configures")
+	var loaded: Dictionary = Factory.load_base()
+	suite.assert_true(loaded.ok, "settlement uses the actual Base content catalog")
+	if not loaded.ok:
+		suite.finish(get_tree())
+		return
+	var catalog: RefCounted = loaded.context.catalog
 	var authority = Settlement.new()
 	var boss_map: Dictionary = {}
 	for index: int in range(5):
@@ -29,6 +33,8 @@ func _ready() -> void:
 	suite.assert_true(not Settlement.new().configure(catalog, swapped), "swapped canonical Boss associations refuse configuration")
 	for row: Array in [[0, false, "normal", 3, 0], [2, false, "normal", 63, 4], [5, true, "normal", 235, 10], [5, true, "hard", 352, 10], [5, true, "nightmare", 587, 10]]:
 		var fixture := _fixture(catalog, row[0], row[1], row[2])
+		var validated = Envelope.validate_active_run_snapshot(fixture.run)
+		suite.assert_true(validated.ok, "historical terminal remains readable with the authenticated Base projection: %s" % str(validated.metadata))
 		var before: Dictionary = fixture.profile.duplicate(true)
 		var result: Dictionary = authority.prepare(fixture.profile, fixture.launch, fixture.run, fixture.receipts)
 		suite.assert_true(result.ok, "authentic terminal %s prepares: %s" % [str(row), str(result)])

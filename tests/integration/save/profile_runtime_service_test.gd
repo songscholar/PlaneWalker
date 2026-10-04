@@ -1,8 +1,7 @@
 extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
-const Fixtures := preload("res://tests/support/p16_profile_fixtures.gd")
-const Catalog := preload("res://scripts/progression/meta_progression_catalog.gd")
+const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Profile := preload("res://scripts/progression/meta_profile_state.gd")
 const Service := preload("res://scripts/progression/profile_runtime_service.gd")
 const Save := preload("res://scripts/save/save_service.gd")
@@ -19,8 +18,12 @@ var _observed_profile: Dictionary = {}
 
 func _ready() -> void:
 	var suite = Suite.new()
-	var catalog = Catalog.new()
-	catalog.configure(Fixtures.meta_entries())
+	var loaded: Dictionary = Factory.load_base()
+	suite.assert_true(loaded.ok, "profile persistence uses the actual Base content catalog")
+	if not loaded.ok:
+		suite.finish(get_tree())
+		return
+	var catalog: RefCounted = loaded.context.catalog
 	var state = Profile.new()
 	state.configure(catalog)
 	var seed_profile: Dictionary = state.snapshot()
@@ -65,6 +68,8 @@ func _ready() -> void:
 	suite.assert_true(not restored.execute({"command_id": "old-purchase", "kind": "meta_unlock", "node_id": "C-01"}, restored.snapshot().revision).ok, "another old service cannot overwrite a newer durable profile")
 	suite.assert_true(not service.prepare_launch(request, service.snapshot().revision).ok, "active receipt prevents a second launch")
 	var terminal := _terminal(launched.context.launch, launched.context.projection)
+	var valid_terminal = Envelope.validate_active_run_snapshot(terminal)
+	suite.assert_true(valid_terminal.ok, "authentic terminal satisfies the native Save contract: %s" % str(valid_terminal.metadata))
 	before = service.snapshot()
 	_fault = &"before_primary_promote"
 	suite.assert_true(not service.settle_terminal(terminal, [], before.revision).ok, "failed terminal write cannot publish payout")

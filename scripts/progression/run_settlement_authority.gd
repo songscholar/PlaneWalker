@@ -11,6 +11,7 @@ const Resources := preload("res://scripts/events/event_resource_authority.gd")
 const SOURCE_FIELDS := ["schema_id", "source_id", "run_id", "launch_sequence", "floor_id", "node_id", "kind", "payload"]
 const SOURCE_TYPE := "meta_settlement_source_v1"
 const BOSS_ORDER := ["ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne"]
+const LAUNCH_FIELDS := ["schema_id", "sequence", "run_id", "difficulty", "seed", "character_id", "weapon_id", "time_abilities", "projection_digest"]
 
 var _catalog: RefCounted
 var _boss_by_floor: Dictionary = {}
@@ -28,6 +29,39 @@ func configure(catalog: RefCounted, boss_by_floor: Dictionary) -> bool:
 	_catalog = catalog
 	_boss_by_floor = boss_by_floor.duplicate(true)
 	return true
+
+
+func verified_run_sources(launch: Dictionary, run_snapshot: Dictionary) -> Dictionary:
+	if _catalog == null or not Catalog.exact_fields(launch, LAUNCH_FIELDS) or launch.schema_id != "meta_launch_receipt_v1" or not Catalog.stable_id(launch.run_id) or not Catalog.bounded_int(launch.sequence, 1, Catalog.MAX_VALUE) or not Catalog.bounded_int(launch.seed, 0, Catalog.MAX_VALUE) or launch.difficulty not in ["normal", "hard", "nightmare"] or launch.character_id not in Catalog.CHARACTER_IDS or launch.weapon_id not in Catalog.WEAPON_IDS or not launch.time_abilities is Array or launch.time_abilities.size() != 2 or launch.time_abilities[0] not in Catalog.TIME_IDS or launch.time_abilities[1] not in Catalog.TIME_IDS or launch.time_abilities[0] == launch.time_abilities[1] or not Catalog.fingerprint_valid(launch.projection_digest):
+		return _failure(&"LAUNCH_MISMATCH")
+	var validated = Envelope.validate_active_run_snapshot(run_snapshot)
+	if not validated.ok or validated.payload.is_empty() or not _run_matches_launch(validated.payload, launch):
+		return _failure(&"RUN_INVALID")
+	var run: Dictionary = validated.payload
+	var projection: Variant = run.resources.get("meta_run_projection")
+	if not projection is Dictionary or not MetaProjection.validate(projection, _catalog) or projection.projection_digest != launch.projection_digest or _remaining_soul(run.resources) < 0:
+		return _failure(&"PROJECTION_INVALID")
+	var receipts: Array = []
+	for event: Variant in run.events:
+		if event is Dictionary and event.get("type") == SOURCE_TYPE:
+			receipts.append(event.get("receipt"))
+	return _validate_sources(run, launch, receipts)
+
+
+func verified_terminal_facts(launch: Dictionary, terminal: Dictionary) -> Dictionary:
+	var verified := verified_run_sources(launch, terminal)
+	if not verified.ok:
+		return verified
+	var normalized: Dictionary = Envelope.validate_active_run_snapshot(terminal).payload
+	var reason := str(normalized.result.get("result", ""))
+	if not _terminal_matches_launch(normalized, launch, reason):
+		return _failure(&"TERMINAL_INVALID")
+	var boss_ids: Array = []
+	for source: Dictionary in verified.context.sources:
+		if source.kind == "boss":
+			boss_ids.append(source.payload.boss_id)
+	boss_ids.sort()
+	return _success({"run_id": launch.run_id, "launch_sequence": int(launch.sequence), "terminal_reason": reason, "boss_ids": boss_ids})
 
 
 func prepare(profile: Dictionary, launch: Dictionary, terminal: Dictionary, source_receipts: Array) -> Dictionary:
