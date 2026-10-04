@@ -42,7 +42,7 @@
     },
     {
       "id": "p16_narrative",
-      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "descriptor_path": "res://data/save/compatibility/base_p16_narrative_before_training.json",
       "source_commits": ["b6e6a2cf7e776e390ebbca99e8c4afed6bc13fc6"],
       "snapshot": {
         "aggregate_sha256": "897d72f310a123362093fcd27d31eac692689ab0a1583177d3d807abf6407a49",
@@ -55,20 +55,42 @@
           }
         ]
       }
+    },
+    {
+      "id": "p16_training",
+      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "source_commits": ["14a1d3b0b0d39ce885f6366ddd9ff2894bc07d88"],
+      "snapshot": {
+        "aggregate_sha256": "d484655161da5bbfddd7fd3fc82afd54b363fc0609020c2070eac7a885fde074",
+        "packs": [
+          {
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2,
+            "fingerprint_sha256": "5410744506218905c156ee9a1ca868a1baa6bf16130602875e8d29aa3d3bbe0a"
+          }
+        ]
+      }
     }
   ],
   "transitions": [
     {
       "source_id": "p16_actual",
-      "target_id": "p16_narrative",
+      "target_id": "p16_training",
       "allowed_changed_files": ["localization/translations.csv"],
-      "reason": "Hub and Narrative UI translations changed. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
+      "reason": "Hub, Narrative and Training UI translations changed. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
     },
     {
       "source_id": "p16_hub",
-      "target_id": "p16_narrative",
+      "target_id": "p16_training",
       "allowed_changed_files": ["localization/translations.csv"],
-      "reason": "Eight Narrative UI translation keys changed. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
+      "reason": "Narrative and Training UI translation keys changed. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
+    },
+    {
+      "source_id": "p16_narrative",
+      "target_id": "p16_training",
+      "allowed_changed_files": ["localization/translations.csv"],
+      "reason": "Four Training UI translation keys were added. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
     }
   ]
 }

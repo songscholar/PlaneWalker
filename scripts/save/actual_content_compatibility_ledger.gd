@@ -6,9 +6,9 @@ const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Descriptor := preload("res://scripts/content/content_pack_descriptor.gd")
 const Envelope := preload("res://scripts/save/save_envelope.gd")
 const LEDGER_PATH := "res://data/save/compatibility/actual_content_ledger.json"
-const LEDGER_SHA256 := "3dae91591e08377f1292c8915a526f2929aac22e61b60e0eaa52043d203750f9"
+const LEDGER_SHA256 := "8c4cf7e701a0b1e67931d9900bbfd43b1e8b5fd63abe95fa4b9cc51b0853f187"
 const LEGACY_REFERENCES_SHA256 := "0a82bbe5a66702aca98cdaffedf3c8673d752f685de9a134e0283efd6b60c71a"
-const DESCRIPTOR_PATHS := ["res://data/save/compatibility/base_p16_actual_pre_hub.json", "res://data/save/compatibility/base_p16_hub_before_narrative.json", "res://data/content_packs/base/pack.json"]
+const DESCRIPTOR_PATHS := ["res://data/save/compatibility/base_p16_actual_pre_hub.json", "res://data/save/compatibility/base_p16_hub_before_narrative.json", "res://data/save/compatibility/base_p16_narrative_before_training.json", "res://data/content_packs/base/pack.json"]
 const LOCALIZATION_PATH := "localization/translations.csv"
 
 
@@ -35,7 +35,7 @@ static func _verified_ledger() -> Dictionary:
 	if not FileAccess.file_exists(LEDGER_PATH) or FileAccess.get_sha256(LEDGER_PATH) != LEDGER_SHA256 or FileAccess.get_sha256(Factory.LEGACY_REFERENCES) != LEGACY_REFERENCES_SHA256:
 		return {}
 	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(LEDGER_PATH))
-	if not Catalog.exact_fields(value, ["schema_id", "schema_version", "save_schema_version", "meta_catalog_fingerprint", "bindings", "transitions"]) or value.schema_id != "planewalker.actual_content_compatibility" or not Catalog.bounded_int(value.schema_version, 1, 1) or not Catalog.bounded_int(value.save_schema_version, Envelope.META_PROFILE_SCHEMA_VERSION, Envelope.META_PROFILE_SCHEMA_VERSION) or not Catalog.fingerprint_valid(value.meta_catalog_fingerprint) or not value.bindings is Array or value.bindings.size() != 3 or not value.transitions is Array or value.transitions.size() != 2:
+	if not Catalog.exact_fields(value, ["schema_id", "schema_version", "save_schema_version", "meta_catalog_fingerprint", "bindings", "transitions"]) or value.schema_id != "planewalker.actual_content_compatibility" or not Catalog.bounded_int(value.schema_version, 1, 1) or not Catalog.bounded_int(value.save_schema_version, Envelope.META_PROFILE_SCHEMA_VERSION, Envelope.META_PROFILE_SCHEMA_VERSION) or not Catalog.fingerprint_valid(value.meta_catalog_fingerprint) or not value.bindings is Array or value.bindings.size() != 4 or not value.transitions is Array or value.transitions.size() != 3:
 		return {}
 	var current := Factory.load_base()
 	if not current.ok or current.context.catalog.fingerprint() != value.meta_catalog_fingerprint:
