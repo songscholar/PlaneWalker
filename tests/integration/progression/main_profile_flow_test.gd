@@ -49,6 +49,7 @@ func _run() -> void:
 	for _frame: int in range(4):
 		await get_tree().physics_frame
 	suite.assert_true(host.runtime_snapshot().run_time_ms > 0, "actual gameplay advances outside the route selection")
+	before = service.snapshot()
 	host.set_process(false)
 	player.set_physics_process(false)
 	var save: RefCounted = GameState.get("_save_service")

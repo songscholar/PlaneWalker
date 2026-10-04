@@ -6,6 +6,8 @@ const FloorRuleEffectAuthorityScript := preload(
 	"res://scripts/dungeon/floor_rule_effect_authority.gd"
 )
 const SettlementScript := preload("res://scripts/progression/run_settlement_authority.gd")
+const HubFlowScript := preload("res://scripts/hub/hub_flow_coordinator.gd")
+const TutorialFlowScript := preload("res://scripts/onboarding/tutorial_flow_coordinator.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -31,6 +33,8 @@ var _floor_rule_effect_authority: RefCounted
 var _profile_service: RefCounted
 var _profile_error := ""
 var _terminal_pending := false
+var _hub_flow: Node
+var _tutorial_flow: Node
 
 
 func _ready() -> void:
@@ -54,13 +58,79 @@ func _ready() -> void:
 	status_label.visible = false
 	_setup_language_button()
 	_apply_localization()
-	_show_start_menu()
+	_setup_hub()
+	_setup_tutorial()
+	if _hub_flow == null:
+		_show_start_menu()
 	call_deferred("_apply_accessibility_to_runtime")
 	_print_input_map()
 	runtime_host.set_run_presentation_visible(false)
 	if not _profile_error.is_empty():
 		status_label.visible = true
 		status_label.text = tr("UI_PROFILE_UNAVAILABLE")
+
+
+func _setup_hub() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var hub := HubFlowScript.new()
+	hub.name = "HubFlowCoordinator"
+	add_child(hub)
+	var configured: Dictionary = hub.configure(runtime_host.content_registry(), _profile_service)
+	if not configured.ok:
+		_profile_error = str(configured.code)
+		hub.queue_free()
+		return
+	_hub_flow = hub
+	hub.launch_requested.connect(_start_hub_run)
+	hub.tutorial_requested.connect(_open_hub_tutorial)
+	hub.settings_requested.connect(_open_hub_setting)
+	start_menu.visible = false
+	FocusCoordinator.close_scope(start_menu)
+	hub.show_hub()
+
+
+func _setup_tutorial() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var flow := TutorialFlowScript.new()
+	flow.name = "TutorialFlow"
+	add_child(flow)
+	var configured: Dictionary = flow.configure(runtime_host.content_registry(), _profile_service, runtime_host, combat_room.get_node("Player"), input_remap_panel.get("_service"))
+	if not configured.ok:
+		_profile_error = str(configured.code)
+		flow.queue_free()
+		return
+	_tutorial_flow = flow
+	flow.review_panel().closed.connect(_refresh_hub_after_review)
+
+
+func _refresh_hub_after_review() -> void:
+	if _hub_flow != null and _hub_flow.is_hub_visible():
+		_hub_flow.refresh()
+
+
+func _open_hub_tutorial() -> void:
+	if _tutorial_flow != null and _hub_flow != null and _hub_flow.is_hub_visible():
+		_hub_flow.close_panel()
+		_tutorial_flow.open_review()
+
+
+func _start_hub_run(config: Dictionary) -> void:
+	if _hub_flow == null or not _hub_flow.is_hub_visible():
+		return
+	if not _launch_run(config, false, true):
+		_hub_flow.show_launch_rejection()
+
+
+func _open_hub_setting(kind: String, restore_focus: Control) -> void:
+	match kind:
+		"accessibility":
+			accessibility_settings_panel.open_panel(restore_focus)
+		"input":
+			input_remap_panel.open_panel(restore_focus)
+		"language":
+			_toggle_language()
 
 
 func _configure_production_profile() -> void:
@@ -117,7 +187,8 @@ func _toggle_language() -> void:
 	GameState.set_setting("locale", next_locale)
 	TranslationServer.set_locale(next_locale)
 	_apply_localization()
-	_show_start_menu()
+	if start_menu.visible:
+		_show_start_menu()
 
 
 func _apply_localization() -> void:
@@ -139,6 +210,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		or candidate_loadout_panel.visible
 		or launch_loadout_panel.visible
 	):
+		return
+	if _tutorial_flow != null and _tutorial_flow.handle_input(event):
+		get_viewport().set_input_as_handled()
+		return
+	if _hub_flow != null and _hub_flow.is_hub_visible():
 		return
 	if not start_menu.visible and bool(dungeon_flow.call("handle_input", event)):
 		get_viewport().set_input_as_handled()
@@ -218,7 +294,16 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 			combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 			return false
 		GameState.refresh_profile_state()
+		if _tutorial_flow != null:
+			var tutorial_bound: Dictionary = _tutorial_flow.bind_active_run()
+			if not tutorial_bound.ok:
+				_profile_error = str(tutorial_bound.code)
+				combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+				return false
 	_terminal_pending = false
+	if _hub_flow != null:
+		_hub_flow.close_panel()
+		_hub_flow.hide_hub()
 	runtime_host.set_run_presentation_visible(true)
 	if candidate_loadout_panel.visible:
 		candidate_loadout_panel.call("close_panel")
@@ -302,6 +387,9 @@ func _on_run_ended(run_id: String, result: Dictionary, _revision: int) -> void:
 	var native: Dictionary = runtime_host.runtime_snapshot()
 	if native.get("run_id") != run_id or not RunPhaseScript.is_terminal(int(native.get("phase", -1))):
 		return
+	if _tutorial_flow != null:
+		_tutorial_flow.close()
+		_tutorial_flow.retire_active_run()
 	if _profile_service != null and _profile_service.snapshot().active_launch_receipt.get("run_id") == run_id:
 		_terminal_pending = true
 		if int(native.phase) == RunPhaseScript.Value.DEFEAT:
@@ -333,7 +421,7 @@ func retry_terminal_settlement() -> Dictionary:
 		var prefix := "ending-choice:%d:" % int(profile.launch_sequence)
 		for marker: String in profile.narrative_state.consumed_sources:
 			chosen = chosen or marker.begins_with(prefix)
-		if not chosen or not profile.narrative_state.heart_fragments.has("heart_fragment_5"):
+		if not chosen or not profile.narrative_state.heart_fragments.has("floor_throne_of_void") or not profile.narrative_state.consumed_sources.has("source:heart_fragment_5"):
 			return {"ok": false, "code": &"FINAL_CHOICE_PENDING", "context": {}}
 	var receipts: Array = []
 	for event: Dictionary in terminal.events:
@@ -364,7 +452,10 @@ func return_to_hub() -> bool:
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	status_label.visible = false
 	runtime_host.set_run_presentation_visible(false)
-	_show_start_menu()
+	if _hub_flow != null:
+		_hub_flow.show_hub()
+	else:
+		_show_start_menu()
 	return true
 
 

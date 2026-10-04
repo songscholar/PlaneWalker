@@ -4,16 +4,16 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P11 five weapons, P12 five characters, and P13 complete Launch pools are certified locally; P14 event effects, six native dungeon panels, physical Save continuation, and full Player Replay schema 7 are implemented with focused verification; final combined P14 repository certification is pending. P15 hostile foundations and the native Sentinel are implemented but inactive. P7/P9 retains coverage and formal export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P11 five weapons, P12 five characters, and P13 complete Launch pools are certified locally. P14 native dungeon panels, Save continuation, and Player Replay are implemented with focused verification. P15 native Sentinel and Moth/payload boundaries are verified; complete encounter and boss production integration remains pending. P16 actual-content Profile, Main durable launch/death settlement, native Hub business panels, and native tutorial flow are implemented with focused verification. Combined product certification, full resume, final narrative flow, and Expansion remain active. P7/P9 retains coverage and formal export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
-- Last Verified: 2026-10-02
+- Last Verified: 2026-10-05
 - Contract References: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
 
 ## 当前执行结论
 
-P16 的阶段证据已包含严格 Profile/Meta 投影领域、156 条主城/成长/剧情/教学目录、[结算与真实 JSON Profile 服务](current/2026-10-04-p16c-settlement-service-evidence.md)，以及[存档 v4 迁移和锻造、配装库持久化](current/2026-10-05-p16e-save-v4-workshop-service-evidence.md)。这些服务仍未激活到 Main，原生主城与剧情交互继续实施。当前局部完成证据不能代替全产品认证。
+P16 的档案服务现已激活到 Main：正式开局使用耐久收据，真实死亡结算可在保存失败后重试，返回据点后可用下一身份重新开局。三个原生据点区域接入成长、锻造、配装、档案与 NPC 对话面板，教学提示使用真实玩家成功帧。最终心脏、结局和字幕流程、完整局内恢复、训练与引导局、离线扩展模式及全产品构建认证继续实施。当前局部完成证据不能代替全产品认证。
 
 Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Current、Next、Launch 和 Expansion 作为可被删减的产品选项。范围通过实施顺序和质量 Gate 控制，不通过删除角色、武器、楼层、Boss、Hub、剧情、回放、排行、Mod 或 DLC 能力来降低范围。
 
@@ -154,6 +154,14 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Native Hub Scene Evidence](current/2026-10-05-p16-native-hub-shell-evidence.md) | 三个像素场景、原生移动与九目的地、48 张渲染截图 | Verified Locally / Business panels pending |
 | [P16 Hub Business Evidence](current/2026-10-05-p16-hub-business-evidence.md) | 权威档案业务入口、闭合可用性与成本投影、配装和离线出发 | Verified Locally / Native panel certification separate |
 | [P16 Production Profile Boot Evidence](current/2026-10-05-p16-production-profile-boot-evidence.md) | 真实内容指纹、旧指纹迁移、权威进度镜像与未知内容拒绝 | Verified Locally / Main entry pending |
+| [P16 Encounter Timer Evidence](current/2026-10-05-p16-encounter-timer-evidence.md) | 原生计时器、暂停继承、退出取消与零泄漏房间退役 | Verified Locally / Current |
+| [P16 Main Profile Flow Evidence](current/2026-10-05-p16-main-profile-flow-evidence.md) | 正式耐久开局、真实死亡结算、保存重试和下一局身份 | Verified Locally / Victory and full resume pending |
+| [P16 Native Hub Flow Evidence](current/2026-10-05-p16-native-hub-flow-evidence.md) | Main 首屏、九面板、真实购买和锻造、手柄入口与原生画面 | Verified Locally / Training and optional providers pending |
+| [P16 Tutorial Flow Design](superpowers/specs/2026-10-05-plane-walker-p16n-tutorial-flow-design.md) | 真实观察器、课程回顾、原生提示与暂停身份设计 | Approved / Current |
+| [P16 Tutorial Flow Plan](superpowers/plans/2026-10-05-plane-walker-p16n-tutorial-flow.md) | 原生教学协调器与保存失败验证实施计划 | Implemented / Current |
+| [P16 Tutorial Flow Evidence](current/2026-10-05-p16n-tutorial-flow-evidence.md) | 真实成功帧、物理保存、课程回顾与原生提示生命周期 | Verified Locally / Training and guided runs pending |
+| [P16 Native Narrative Flow Design](superpowers/specs/2026-10-05-plane-walker-p16o-native-narrative-flow-design.md) | 真实原生来源接触、胜利通行、结局保存和字幕身份 | Approved / Current |
+| [P16 Native Narrative Flow Plan](superpowers/plans/2026-10-05-plane-walker-p16o-native-narrative-flow.md) | 原生剧情协调器、失败重试和终局流程实施 | Active / Current |
 | [P16G Native Material Evidence](current/2026-10-05-p16g-native-material-evidence.md) | 原生敌人死亡认证、材料保留重试与真实结算金额 | Verified Locally / Main integration pending |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |

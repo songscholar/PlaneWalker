@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/ui/main_hub_visual_test.gd" id="1"]
+
+[node name="MainHubVisualTest" type="Node"]
+script = ExtResource("1")
