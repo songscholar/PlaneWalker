@@ -241,7 +241,7 @@ func accept_weakpoint_damage_fact(value: Dictionary) -> Dictionary:
 		return {"ok": true, "cancelled": false, "retired_generations": []}
 	_cancel_pending_rewind()
 	var result: Dictionary = _action.cancel(&"watch_rewind_interrupt")
-	mechanism.phase_transition_until_frame = int(_state.runtime_frame) + 54
+	mechanism.phase_transition_until_frame = int(value.runtime_frame) + 54
 	mechanism.delay_remaining_frames = 0
 	_conversion.synchronize_tail(_character_tail_must_wait())
 	return {"ok": true, "cancelled": true, "retired_generations": result.retired_generations}

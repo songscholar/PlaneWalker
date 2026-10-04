@@ -1,0 +1,11 @@
+Plane Walker Original Boss Construct Artwork
+
+This raster atlas was authored locally from original pixel geometry for Plane Walker.
+No downloaded imagery or third-party artwork is used.
+
+The artwork is dedicated to the public domain under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+The dedication applies to the artwork, not game code or project identity.
+
+Source: tools/production_art/generate_boss_construct_atlases.py
+Reproduction: python3 tools/production_art/generate_boss_construct_atlases.py

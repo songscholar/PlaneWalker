@@ -17,10 +17,40 @@ func _create_launch_status_runtime() -> RefCounted:
 func _ready() -> void:
 	super._ready()
 	add_to_group("bosses")
+	var watch_shape := get_node_or_null("WatchHurtbox/CollisionShape2D") as CollisionShape2D
+	if watch_shape != null and watch_shape.shape != null:
+		watch_shape.shape = watch_shape.shape.duplicate()
+
+
+func _native_geometry_matches_definition() -> bool:
+	if not super._native_geometry_matches_definition():
+		return false
+	if _launch_definition.get("id", "") != "time_sovereign":
+		return true
+	var watch := get_node_or_null("WatchHurtbox") as Area2D
+	var shape := get_node_or_null("WatchHurtbox/CollisionShape2D") as CollisionShape2D
+	var primary := get_node("Hurtbox") as Area2D
+	return watch != null and shape != null and shape.shape is CircleShape2D and not shape.disabled and watch.transform == Transform2D.IDENTITY and shape.transform == Transform2D.IDENTITY and shape.shape.radius == float(_launch_definition.collision_radius_px) and watch.collision_layer == (0 if _launch_runtime.snapshot().terminal else 4) and watch.collision_mask == 0 and primary.collision_layer == 0
+
+
+func _restore_actor_state(value: Dictionary) -> bool:
+	if not super._restore_actor_state(value):
+		return false
+	_refresh_control_visual()
+	return true
+
+
+func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
+	if _launch_definition.get("id", "") == "time_sovereign" and not _native_geometry_matches_definition():
+		return _launch_failure("watch_native_geometry")
+	return super.prepare_launch_frame(frame, observations)
 
 
 func _refresh_control_visual() -> void:
 	var state: Dictionary = _launch_runtime.snapshot()
+	var watch := get_node_or_null("WatchHurtbox") as Area2D
+	if watch != null and not state.is_empty():
+		watch.present(native_watch_snapshot())
 	var sprite := get_node_or_null("Sprite2D") as Sprite2D
 	if state.is_empty() or sprite == null or not sprite.has_method("configure"):
 		return
@@ -36,6 +66,55 @@ func _refresh_control_visual() -> void:
 	var facing := Vector2.RIGHT if state.action.committed_aim.is_empty() else _vector(state.action.committed_aim)
 	sprite.present(pose, facing, float(state.runtime_frame) / 60.0, false, false)
 	sprite.modulate = Color(0.55, 0.95, 1.0) if _launch_runtime.is_exposed() else Color.WHITE
+
+
+func native_watch_snapshot() -> Dictionary:
+	var state: Dictionary = _launch_runtime.snapshot()
+	if state.is_empty() or _launch_definition.get("id", "") != "time_sovereign":
+		return {}
+	var rewind: Dictionary = state.mechanism_state.rewind
+	var active: bool = state.action.phase == "WARNING" and state.action.action_id == "traitor_self_rewind" and not rewind.is_empty() and not rewind.consumed
+	var broken: bool = not rewind.is_empty() and rewind.cancelled and float(rewind.weakpoint_damage) >= float(_launch_definition.mechanisms.rewind_interrupt_damage)
+	return {"owner_source_id": str(hostile_source_id), "runtime_frame": int(state.runtime_frame), "hittable": not state.terminal and health != null and not health.dead, "cast_generation": int(rewind.attack_generation) if active else 0, "maximum_hp": float(_launch_definition.mechanisms.rewind_interrupt_damage), "current_hp": 0.0 if broken else float(_launch_definition.mechanisms.rewind_interrupt_damage) - (float(rewind.weakpoint_damage) if active else 0.0)}
+
+
+func receive_native_watch_hit(damage_info: RefCounted) -> float:
+	if damage_info == null or _launch_definition.get("id", "") != "time_sovereign" or not native_watch_snapshot().hittable:
+		return 0.0
+	var run := StringName(str(_launch_identity.run_id))
+	if damage_info.run_id != run:
+		var attacker: Node = damage_info.attacker
+		if damage_info.run_id != &"runtime" or not is_instance_valid(attacker) or not attacker is PlayerController or attacker.current_run_id() != run:
+			return 0.0
+	var state: Dictionary = _launch_runtime.snapshot()
+	var id := _damage_identity(damage_info)
+	if state.mechanism_state.damage_claims.has(id):
+		return 0.0
+	return health.take_damage(damage_info)
+
+
+func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
+	var before: Dictionary = _launch_runtime.snapshot()
+	var accepted := super.apply_weapon_hit_control(damage_info, final_amount)
+	if damage_info == null or before.is_empty() or _launch_definition.get("id", "") != "time_sovereign":
+		return accepted
+	var after: Dictionary = _launch_runtime.snapshot()
+	var id := _damage_identity(damage_info)
+	var rewind: Dictionary = before.mechanism_state.rewind
+	# Group-targeted spells and physical watch collisions settle one body identity.
+	if not before.mechanism_state.damage_claims.has(id) and after.mechanism_state.damage_claims.has(id) and before.action.phase == "WARNING" and before.action.action_id == "traitor_self_rewind" and not rewind.is_empty() and not rewind.consumed:
+		var frame: int = health.frame_signal_transaction_runtime_frame()
+		var result: Dictionary = _launch_runtime.accept_weakpoint_damage_fact({"fact_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "attack_generation": int(rewind.attack_generation), "amount": final_amount})
+		if result.ok and _hostile_threat_registry != null:
+			for generation: int in result.retired_generations:
+				_hostile_threat_registry.retire(hostile_source_id, generation)
+	_refresh_control_visual()
+	return accepted
+
+
+static func _damage_identity(damage_info: RefCounted) -> String:
+	var info: Dictionary = damage_info.snapshot()
+	return JSON.stringify([info.run_id, info.target_id, info.hostile_source_id, info.attack_generation, info.hit_index]).sha256_text()
 
 
 func _on_died(killer: Variant) -> void:

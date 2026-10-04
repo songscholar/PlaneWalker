@@ -1,14 +1,19 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/launch/launch_boss_actor.gd" id="1_actor"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
 [ext_resource type="Script" path="res://scripts/presentation/actor_atlas_projection.gd" id="4_atlas"]
+[ext_resource type="Script" path="res://scripts/enemies/launch/launch_boss_watch_hurtbox.gd" id="5_watch"]
+[ext_resource type="Texture2D" path="res://assets/production/constructs/time_watch.png" id="6_watch_texture"]
 
 [sub_resource type="CircleShape2D" id="BodyShape"]
 radius = 24.0
 
 [sub_resource type="CircleShape2D" id="HurtShape"]
+radius = 24.0
+
+[sub_resource type="CircleShape2D" id="WatchShape"]
 radius = 24.0
 
 [node name="TimeSovereign" type="CharacterBody2D"]
@@ -33,7 +38,7 @@ script = ExtResource("2_health")
 max_hp = 2000.0
 
 [node name="Hurtbox" type="Area2D" parent="."]
-collision_layer = 4
+collision_layer = 0
 collision_mask = 0
 script = ExtResource("3_hurtbox")
 health_component_path = NodePath("../HealthComponent")
@@ -41,3 +46,16 @@ health_component_path = NodePath("../HealthComponent")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
 shape = SubResource("HurtShape")
 
+[node name="WatchHurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("5_watch")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="WatchHurtbox"]
+shape = SubResource("WatchShape")
+
+[node name="Sprite2D" type="Sprite2D" parent="WatchHurtbox"]
+texture_filter = 1
+z_index = 1
+texture = ExtResource("6_watch_texture")
+hframes = 4

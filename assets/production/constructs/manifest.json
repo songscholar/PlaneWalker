@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_boss_construct_atlases.py",
+  "atlases": [
+    {
+      "id": "time_watch",
+      "path": "time_watch.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning_a",
+        "warning_b",
+        "broken"
+      ],
+      "sha256": "f8173737bbc3e2bfbd1c3daa8392ed5d6da0b43f086fca0d0e604e2a2bf2c520"
+    }
+  ]
+}
