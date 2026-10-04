@@ -6,6 +6,7 @@ const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinato
 const Geometry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const ActorScript := preload("res://scripts/enemies/launch/launch_hostile_actor.gd")
 const ZoneProjection := preload("res://scripts/enemies/launch/launch_semantic_zone_projection.gd")
+const StormPattern := preload("res://scripts/enemies/launch/launch_storm_pattern.gd")
 const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "heal_sources", "heal_recipients", "histories", "zones", "statuses"]
 const ZONE_FIELDS := ["id", "source_id", "action_id", "generation", "hit_index", "reserved_frame", "active_frame", "expires_frame", "geometry", "initial_damage", "damage", "damage_type", "tick_damage_type", "tick_frames", "warning_frames", "lifetime_frames", "slow_multiplier", "slow_frames", "enemy_only_freeze", "owner_immunity", "ally_damage", "owner_zone_cap", "phase"]
 const STATUS_FIELDS := ["id", "target_id", "expires_frame", "slow_multiplier", "speed_multiplier", "attack_multiplier", "freeze_actions"]
@@ -171,7 +172,7 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 					if not healing.request.is_empty():
 						health_requests.append(healing.request)
 				"zone":
-					if not _reserve_zones(next, request, definition, action, zone_capacity, _zone_attack_multiplier(wrapper.batch, action)):
+					if not _reserve_zones(next, request, definition, action, zone_capacity, _zone_attack_multiplier(wrapper.batch, action), int(actor.get("_launch_identity").seed)):
 						return _failure("zone_reservation")
 				_: return _failure("unimplemented_semantic_handler")
 		for hit: Dictionary in wrapper.batch.hit_facts:
@@ -326,7 +327,7 @@ func _prepare_heal(next: Dictionary, request: Dictionary, definition: Dictionary
 	return {"ok": true, "request": {}}
 
 
-func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionary, action: Dictionary, capacity: int, attack_multiplier: float) -> bool:
+func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionary, action: Dictionary, capacity: int, attack_multiplier: float, seed: int = 0) -> bool:
 	if next.zones.size() + request.geometry.size() > MAX_RESERVATIONS:
 		return false
 	if definition.runtime_kind == "rift_weaver" and request.action_id.ends_with(".rift_fusion"):
@@ -355,6 +356,8 @@ func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionar
 		row.owner_immunity = definition.runtime_kind == "bramble_mage"
 		row.ally_damage = definition.runtime_kind == "bramble_mage"
 		row.enemy_only_freeze = request.action_id.ends_with(".time_stasis")
+		if request.action_id == "chrono_storm_elemental.time_storm":
+			row["storm_pattern"] = StormPattern.create(seed, str(request.hostile_source_id), int(request.attack_generation), index, definition.mechanisms)
 		if _active_zone_count(next) >= capacity or owned >= cap:
 			row.warning_frames = int(action.warning_frames)
 			_make_pending(row)
@@ -458,19 +461,22 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 			row.phase = "WARNING" if next.runtime_frame < row.active_frame else "ACTIVE"
 			if row.phase == "ACTIVE":
 				var tick: bool = (int(next.runtime_frame) - int(row.active_frame)) % int(row.tick_frames) == 0
+				var movement: Dictionary = StormPattern.project(row.storm_pattern, int(row.active_frame), int(next.runtime_frame)) if row.has("storm_pattern") else {"slow_multiplier": float(row.slow_multiplier), "speed_multiplier": 1.0}
 				var ids: Array = targets.keys()
 				ids.sort()
 				for id: String in ids:
 					var target: Node2D = targets[id]
 					var health: Node = target.get_node("HealthComponent")
-					if health.dead or (id == row.source_id and row.owner_immunity) or (actors.has(id) and not row.ally_damage and not row.enemy_only_freeze) or not _contains(row.geometry, _predicted_position(target, next.runtime_frame)):
+					var actor_target: bool = actors.has(id)
+					var ally_control: bool = row.enemy_only_freeze or row.action_id in ["chrono_storm_elemental.time_storm", "chrono_storm_elemental.death_pulse"]
+					if health.dead or (id == row.source_id and row.owner_immunity) or (actor_target and not row.ally_damage and not ally_control) or not _contains(row.geometry, _predicted_position(target, next.runtime_frame)):
 						continue
 					var initial: bool = int(next.runtime_frame) == int(row.active_frame)
 					var damage: float = float(row.initial_damage) if initial else float(row.damage)
-					if tick and damage > 0.0 and (not row.enemy_only_freeze or not actors.has(id)):
+					if tick and damage > 0.0 and (not actor_target or row.ally_damage) and (not row.enemy_only_freeze or not actor_target):
 						damages.append({"payload_id": row.id, "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": (int(next.runtime_frame) - int(row.active_frame)) / int(row.tick_frames), "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": damage, "damage_type": row.damage_type if initial else row.tick_damage_type})
-					if row.slow_multiplier < 1.0 or row.enemy_only_freeze:
-						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + maxi(0, int(row.slow_frames)), "slow_multiplier": float(row.slow_multiplier), "speed_multiplier": 1.0, "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
+					if movement.slow_multiplier < 1.0 or movement.speed_multiplier > 1.0 or row.enemy_only_freeze:
+						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + (0 if row.has("storm_pattern") else maxi(0, int(row.slow_frames))), "slow_multiplier": float(movement.slow_multiplier), "speed_multiplier": float(movement.speed_multiplier), "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
 	next.zones = retained
 
 
@@ -642,7 +648,8 @@ static func _upsert_status(next: Dictionary, value: Dictionary) -> void:
 
 
 static func _valid_zone(row: Dictionary, frame: int) -> bool:
-	if not Contract.exact_fields(row, ZONE_FIELDS) or not _stable(row.id) or not _stable(row.source_id) or not Contract.valid_id(row.action_id) or not Contract.integer_in_range(row.generation, 1, MAX_FRAME) or not Contract.integer_in_range(row.hit_index, 0, 63) or not _frame(row.reserved_frame) or row.reserved_frame > frame or row.phase not in ["PENDING", "WARNING", "ACTIVE"] or not row.geometry is Dictionary or Actions.native_threat_fact(row.geometry).is_empty():
+	var fields: Array = ZONE_FIELDS + ["storm_pattern"] if row.has("storm_pattern") else ZONE_FIELDS
+	if not Contract.exact_fields(row, fields) or row.has("storm_pattern") and (row.action_id != "chrono_storm_elemental.time_storm" or not StormPattern.valid(row.storm_pattern)) or not _stable(row.id) or not _stable(row.source_id) or not Contract.valid_id(row.action_id) or not Contract.integer_in_range(row.generation, 1, MAX_FRAME) or not Contract.integer_in_range(row.hit_index, 0, 63) or not _frame(row.reserved_frame) or row.reserved_frame > frame or row.phase not in ["PENDING", "WARNING", "ACTIVE"] or not row.geometry is Dictionary or Actions.native_threat_fact(row.geometry).is_empty():
 		return false
 	if not Contract.number_in_range(row.initial_damage, 0.0, 600.0) or not Contract.number_in_range(row.damage, 0.0, 600.0) or row.damage_type not in Contract.DAMAGE_TYPES or row.tick_damage_type not in Contract.DAMAGE_TYPES or not Contract.integer_in_range(row.tick_frames, 1, 600) or not Contract.integer_in_range(row.warning_frames, 0, 600) or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.number_in_range(row.slow_multiplier, 0.4, 1.0) or not Contract.integer_in_range(row.slow_frames, 0, 600) or not Contract.integer_in_range(row.owner_zone_cap, 1, MAX_ZONES) or typeof(row.owner_immunity) != TYPE_BOOL or typeof(row.enemy_only_freeze) != TYPE_BOOL or typeof(row.ally_damage) != TYPE_BOOL:
 		return false

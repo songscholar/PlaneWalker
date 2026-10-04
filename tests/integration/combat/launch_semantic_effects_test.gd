@@ -377,6 +377,8 @@ func _semantic_player() -> Node2D:
 
 func _test_native_storm_death() -> void:
 	var storm := _actor("chrono_storm_elemental", "hostile:storm")
+	var friend := _actor("rift_watcher", "hostile:friend")
+	friend.apply_time_stop_source(&"storm-friend-fixture-stop", 20.0)
 	var player := _semantic_player()
 	var root := Node2D.new()
 	add_child(root)
@@ -388,7 +390,7 @@ func _test_native_storm_death() -> void:
 	storm.hostile_final_death.connect(func(source: StringName, receipt: String): receipts.append([source, receipt]))
 	_injure(storm, 1000.0, 1)
 	for frame: int in range(1, 218):
-		suite.assert_true(_native_step(effects, {"hostile:storm": storm}, frame, registry, {"player:1": player}), "native Storm death pulse accepts finite frame")
+		suite.assert_true(_native_step(effects, {"hostile:friend": friend, "hostile:storm": storm}, frame, registry, {"player:1": player}), "native Storm death pulse accepts finite frame")
 		if frame == 1:
 			suite.assert_equal(effects.native_semantic_nodes().size(), 1, "real final Storm death projects one independent warned pulse")
 			suite.assert_equal(registry.snapshot().size(), 1, "Storm death pulse owns an actual warning registry fact")
@@ -396,6 +398,7 @@ func _test_native_storm_death() -> void:
 			suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "Storm death pulse preserves all thirty-five warning frames")
 		if frame == 36:
 			suite.assert_close(player.call("_floor_rule_movement_multiplier"), 0.7, "Storm death pulse applies authored slow through native Player modifier")
+			suite.assert_close(friend.get("_launch_runtime").control_modifiers().movement_multiplier, 0.7, "Storm death pulse also slows actual native allies")
 		if frame == 37:
 			suite.assert_equal(effects.native_semantic_nodes(), [], "single death pulse retires its projection after activation")
 			suite.assert_equal(registry.snapshot(), [], "single death pulse retires its native warning fact")
@@ -405,6 +408,7 @@ func _test_native_storm_death() -> void:
 	suite.assert_equal(player.get_node("HealthComponent").current_hp, 1000.0, "Storm death pulse never fabricates a damaging hit")
 	suite.assert_equal(receipts.size(), 1, "Storm death effect cannot duplicate counted final death")
 	storm.queue_free()
+	friend.queue_free()
 	player.queue_free()
 	root.queue_free()
 	await get_tree().process_frame

@@ -1,8 +1,12 @@
 class_name LaunchSemanticZoneProjection
 extends Node2D
 
+const StormPattern := preload("res://scripts/enemies/launch/launch_storm_pattern.gd")
+
 var _record: Dictionary = {}
 var _sprite: Sprite2D
+var _presentation: Dictionary = {}
+var _frame := 0
 
 
 func project_record(record: Dictionary, frame: int) -> bool:
@@ -14,10 +18,13 @@ func project_record(record: Dictionary, frame: int) -> bool:
 		_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_sprite.hframes = 4
 		add_child(_sprite)
-	var texture := load("res://assets/production/hostile_effects/%s_pool.png" % record.damage_type) as Texture2D
+	_presentation = StormPattern.project(record.storm_pattern, int(record.active_frame), frame) if record.has("storm_pattern") else {}
+	var texture_type: String = "physical" if bool(_presentation.get("fast", false)) else str(record.damage_type)
+	var texture := load("res://assets/production/hostile_effects/%s_pool.png" % texture_type) as Texture2D
 	if texture == null:
 		return false
 	_record = record.duplicate(true)
+	_frame = frame
 	name = record.id
 	global_position = Vector2(float(record.geometry.origin.x), float(record.geometry.origin.y))
 	_sprite.texture = texture
@@ -31,10 +38,21 @@ func project_record(record: Dictionary, frame: int) -> bool:
 		_sprite.position = Vector2.ZERO
 		_sprite.scale = Vector2.ONE * radius / 13.0
 		rotation = 0.0
-	_sprite.modulate = Color(1.0, 0.95, 0.45, 0.65 if frame % 12 < 6 else 1.0) if record.phase == "WARNING" else Color.WHITE
+	_sprite.modulate = Color(1.0, 0.95, 0.45, 0.65 if frame % 12 < 6 else 1.0) if record.phase == "WARNING" or bool(_presentation.get("swap_warning", false)) else Color.WHITE
 	visible = record.phase != "PENDING"
 	return true
 
 
 func matches_record(record: Dictionary) -> bool:
-	return is_inside_tree() and not is_queued_for_deletion() and record == _record and visible and global_position == Vector2(float(record.geometry.origin.x), float(record.geometry.origin.y)) and is_instance_valid(_sprite) and _sprite.get_parent() == self and _sprite.texture != null and _sprite.visible and _sprite.hframes == 4
+	if not (is_inside_tree() and not is_queued_for_deletion() and record == _record and visible and global_position == Vector2(float(record.geometry.origin.x), float(record.geometry.origin.y)) and is_instance_valid(_sprite) and _sprite.get_parent() == self and _sprite.texture != null and _sprite.visible and _sprite.hframes == 4):
+		return false
+	if not record.has("storm_pattern"):
+		return true
+	var expected := StormPattern.project(record.storm_pattern, int(record.active_frame), _frame)
+	var texture_type: String = "physical" if bool(expected.fast) else str(record.damage_type)
+	var color := Color(1.0, 0.95, 0.45, 0.65 if _frame % 12 < 6 else 1.0) if record.phase == "WARNING" or bool(expected.swap_warning) else Color.WHITE
+	return _presentation == expected and _sprite.texture.resource_path == "res://assets/production/hostile_effects/%s_pool.png" % texture_type and _sprite.frame == (_frame / 6) % 4 and _sprite.modulate == color
+
+
+func presentation_snapshot() -> Dictionary:
+	return _presentation.duplicate(true)

@@ -24,12 +24,13 @@
 - [x] Separate initial zone damage from declared recurring DOT and verify a real Guard corridor does not repeat its initial hit.
 - [x] Retain full Guard/Hound recovery intervals after buffered native lethal frames, including Stop independence, rollback and once-only Health publication.
 - [x] Certify native Storm warned nondamaging death slow and actual Spore burst consumption, warned residual ticks, area-bound slow and finite teardown.
+- [x] Execute seeded Storm fast/slow fields with ninety-frame swaps, thirty-frame native raster warnings, Player/ally area controls, typed cold restoration, rollback/retry and closed legacy V1 compatibility; inspect actual rendered phases at both supported viewport sizes.
 
 ## Remaining Production Mechanics
 
 - [ ] Verify all native zone damage, strongest-only slowdown, safe owner immunity and finite TTL under the integrated Router.
 - [ ] Verify Priest long-history expiry, regeneration affix caps and irreversible health replay together.
-- [ ] Execute remaining final-death effects, Spore warned bounded chains, elemental pattern swaps and declared elite affixes.
+- [ ] Execute remaining final-death effects, Spore warned bounded chains, elite Storm stasis/owner immunity and declared elite affixes.
 - [ ] Provide actual destructible sigils, walls, links, safe portals and nonreward summons through tested authorities.
 - [ ] Verify full twenty-two native enemy kits and five Boss arenas, checkpoint recovery, replay and whole-room completion.
 
