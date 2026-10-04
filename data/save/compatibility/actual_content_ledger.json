@@ -74,8 +74,8 @@
     },
     {
       "id": "p17_native_ambush",
-      "descriptor_path": "res://data/content_packs/base/pack.json",
-      "source_commits": ["5e05ad22493fc9a01566a53510d5ce0ab94cac85"],
+      "descriptor_path": "res://data/save/compatibility/base_p19_before_corpse_tuning.json",
+      "source_commits": ["2b25db38f330c51769f879562e6f492b2c08d2bb"],
       "snapshot": {
         "aggregate_sha256": "e6575e275c0ba84658488bebf2681660d1e20b8c0b397d575e24a6969a9b8cda",
         "packs": [
@@ -87,32 +87,54 @@
           }
         ]
       }
+    },
+    {
+      "id": "p19_corpse_tuning",
+      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "source_commits": ["2b25db38f330c51769f879562e6f492b2c08d2bb"],
+      "snapshot": {
+        "aggregate_sha256": "751f794bfbbb3e562c0862b314654d20efa82970ad29dff4537689c0eded1371",
+        "packs": [
+          {
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2,
+            "fingerprint_sha256": "b758d96e29137ee904948483a186ef0df50b8348f8138217ed1b70d83f9b284f"
+          }
+        ]
+      }
     }
   ],
   "transitions": [
     {
       "source_id": "p16_actual",
-      "target_id": "p17_native_ambush",
+      "target_id": "p19_corpse_tuning",
       "allowed_changed_files": ["assets/rooms/launch/room_event_crossroads.tscn", "assets/rooms/launch/room_event_mirror_hall.tscn", "assets/rooms/launch/room_event_shrine.tscn", "content/enemies.json", "content/room_templates.json", "localization/translations.csv"],
       "reason": "Reviewed UI localization, three event enemy anchors and independently tested elite TripleBlink timing and landing correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate."
     },
     {
       "source_id": "p16_hub",
-      "target_id": "p17_native_ambush",
+      "target_id": "p19_corpse_tuning",
       "allowed_changed_files": ["assets/rooms/launch/room_event_crossroads.tscn", "assets/rooms/launch/room_event_mirror_hall.tscn", "assets/rooms/launch/room_event_shrine.tscn", "content/enemies.json", "content/room_templates.json", "localization/translations.csv"],
       "reason": "Reviewed Narrative and Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate."
     },
     {
       "source_id": "p16_narrative",
-      "target_id": "p17_native_ambush",
+      "target_id": "p19_corpse_tuning",
       "allowed_changed_files": ["assets/rooms/launch/room_event_crossroads.tscn", "assets/rooms/launch/room_event_mirror_hall.tscn", "assets/rooms/launch/room_event_shrine.tscn", "content/enemies.json", "content/room_templates.json", "localization/translations.csv"],
       "reason": "Reviewed Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate."
     },
     {
       "source_id": "p16_training",
-      "target_id": "p17_native_ambush",
+      "target_id": "p19_corpse_tuning",
       "allowed_changed_files": ["assets/rooms/launch/room_event_crossroads.tscn", "assets/rooms/launch/room_event_mirror_hall.tscn", "assets/rooms/launch/room_event_shrine.tscn", "content/enemies.json", "content/room_templates.json"],
       "reason": "Reviewed enemy_wave_primary anchors in three event rooms and templates, and independently tested elite TripleBlink timing and landing correction. All other descriptor fields, localization, Meta progression and Profile v4 are unchanged. Native active runs require their own content migration gate."
+    },
+    {
+      "source_id": "p17_native_ambush",
+      "target_id": "p19_corpse_tuning",
+      "allowed_changed_files": ["content/enemies.json"],
+      "reason": "Reviewed Titan corpse pool damage, tick interval and radius are now canonical data instead of runtime tuning constants. Meta definitions and Profile v4 are unchanged. Active native checkpoints require explicit reconstruction validation before content rebinding."
     }
   ]
 }

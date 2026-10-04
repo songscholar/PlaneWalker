@@ -63,7 +63,7 @@ func configure(registry: RefCounted, service: RefCounted, host: Node, player: No
 		return Candidate.success() if _service == service and _host == host and _player == player and _input == remap else Candidate.failure(&"ALREADY_CONFIGURED")
 	if not is_node_ready() or not registry is Registry or not service is Service or not host is Host or not player is Player or not remap is Remap or not is_instance_valid(host) or not is_instance_valid(player) or host.get("_player") != player or host.content_registry() != registry:
 		return Candidate.failure(&"TUTORIAL_FLOW_CONFIGURATION_INVALID")
-	var catalog := Factory.from_registry(registry)
+	var catalog := Factory.from_profile_registry(registry, service.snapshot())
 	if not catalog.ok or service.snapshot().get("catalog_fingerprint") != catalog.context.catalog.fingerprint():
 		return Candidate.failure(&"TUTORIAL_FLOW_CONFIGURATION_INVALID")
 	var entries: Array = registry.get_catalog_entries(&"tutorial_definition", &"LAUNCH")

@@ -36,7 +36,7 @@ func _run() -> void:
 	var known_actual: Dictionary = {}
 	var cases: Array = ["fresh", "actual_v4", "known_legacy", "unknown_content"]
 	var sources := Ledger.trusted_sources(target, catalog.fingerprint())
-	suite.assert_equal(sources.size(), 4, "reviewed compatibility ledger supplies only the four known actual sources")
+	suite.assert_equal(sources.size(), 5, "reviewed compatibility ledger supplies only the five known actual sources")
 	for index: int in range(sources.size()):
 		var id := "known_actual_%d" % index
 		cases.append(id)

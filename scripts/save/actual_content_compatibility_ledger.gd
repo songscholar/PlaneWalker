@@ -6,11 +6,12 @@ const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Descriptor := preload("res://scripts/content/content_pack_descriptor.gd")
 const Envelope := preload("res://scripts/save/save_envelope.gd")
 const LEDGER_PATH := "res://data/save/compatibility/actual_content_ledger.json"
-const LEDGER_SHA256 := "89349817ce7acdf296128abcda64821b9627780d7db52e3f54dfe8a0434e9a07"
+const LEDGER_SHA256 := "aa2cd3d231b76222ba3c275abb681d295a7b70d888b5a6df4393149efa82c473"
 const LEGACY_REFERENCES_SHA256 := "0a82bbe5a66702aca98cdaffedf3c8673d752f685de9a134e0283efd6b60c71a"
-const DESCRIPTOR_PATHS := ["res://data/save/compatibility/base_p16_actual_pre_hub.json", "res://data/save/compatibility/base_p16_hub_before_narrative.json", "res://data/save/compatibility/base_p16_narrative_before_training.json", "res://data/save/compatibility/base_p17_before_native_ambush.json", "res://data/content_packs/base/pack.json"]
+const DESCRIPTOR_PATHS := ["res://data/save/compatibility/base_p16_actual_pre_hub.json", "res://data/save/compatibility/base_p16_hub_before_narrative.json", "res://data/save/compatibility/base_p16_narrative_before_training.json", "res://data/save/compatibility/base_p17_before_native_ambush.json", "res://data/save/compatibility/base_p19_before_corpse_tuning.json", "res://data/content_packs/base/pack.json"]
 const LOCALIZATION_PATH := "localization/translations.csv"
 const AMBUSH_FILES := ["assets/rooms/launch/room_event_crossroads.tscn", "assets/rooms/launch/room_event_mirror_hall.tscn", "assets/rooms/launch/room_event_shrine.tscn", "content/enemies.json", "content/room_templates.json"]
+const ENEMY_MECHANISM_FILES := ["content/enemies.json"]
 
 
 static func trusted_sources(target_binding: Dictionary, catalog_fingerprint: String) -> Array[Dictionary]:
@@ -36,7 +37,7 @@ static func _verified_ledger() -> Dictionary:
 	if not FileAccess.file_exists(LEDGER_PATH) or FileAccess.get_sha256(LEDGER_PATH) != LEDGER_SHA256 or FileAccess.get_sha256(Factory.LEGACY_REFERENCES) != LEGACY_REFERENCES_SHA256:
 		return {}
 	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(LEDGER_PATH))
-	if not Catalog.exact_fields(value, ["schema_id", "schema_version", "save_schema_version", "meta_catalog_fingerprint", "bindings", "transitions"]) or value.schema_id != "planewalker.actual_content_compatibility" or not Catalog.bounded_int(value.schema_version, 1, 1) or not Catalog.bounded_int(value.save_schema_version, Envelope.META_PROFILE_SCHEMA_VERSION, Envelope.META_PROFILE_SCHEMA_VERSION) or not Catalog.fingerprint_valid(value.meta_catalog_fingerprint) or not value.bindings is Array or value.bindings.size() != 5 or not value.transitions is Array or value.transitions.size() != 4:
+	if not Catalog.exact_fields(value, ["schema_id", "schema_version", "save_schema_version", "meta_catalog_fingerprint", "bindings", "transitions"]) or value.schema_id != "planewalker.actual_content_compatibility" or not Catalog.bounded_int(value.schema_version, 1, 1) or not Catalog.bounded_int(value.save_schema_version, Envelope.META_PROFILE_SCHEMA_VERSION, Envelope.META_PROFILE_SCHEMA_VERSION) or not Catalog.fingerprint_valid(value.meta_catalog_fingerprint) or not value.bindings is Array or value.bindings.size() != 6 or not value.transitions is Array or value.transitions.size() != 5:
 		return {}
 	var current := Factory.load_base()
 	if not current.ok or current.context.catalog.fingerprint() != value.meta_catalog_fingerprint:
@@ -61,7 +62,7 @@ static func _verified_ledger() -> Dictionary:
 		aggregates.append(binding.aggregate_sha256)
 	var edges: Array = []
 	for edge: Variant in value.transitions:
-		if not Catalog.exact_fields(edge, ["source_id", "target_id", "allowed_changed_files", "reason"]) or not bindings.has(edge.source_id) or not bindings.has(edge.target_id) or edge.source_id == edge.target_id or edge.allowed_changed_files not in [AMBUSH_FILES, AMBUSH_FILES + [LOCALIZATION_PATH]] or not edge.reason is String or edge.reason.is_empty():
+		if not Catalog.exact_fields(edge, ["source_id", "target_id", "allowed_changed_files", "reason"]) or not bindings.has(edge.source_id) or not bindings.has(edge.target_id) or edge.source_id == edge.target_id or edge.allowed_changed_files not in [ENEMY_MECHANISM_FILES, AMBUSH_FILES, AMBUSH_FILES + [LOCALIZATION_PATH]] or not edge.reason is String or edge.reason.is_empty():
 			return {}
 		var id := str(edge.source_id) + ":" + str(edge.target_id)
 		if edges.has(id) or bindings[edge.target_id].descriptor_path != "res://data/content_packs/base/pack.json" or not _reviewed_changes_only(descriptors[edge.source_id], descriptors[edge.target_id], edge.allowed_changed_files):

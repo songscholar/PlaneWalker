@@ -32,4 +32,4 @@
 - [x] Export all three real targets using the official project-local templates.
 - [x] Implement release-compatible Main diagnostic and verifier refusal tests.
 - [x] Run the actual packaged executable and retain its startup evidence.
-- [ ] Commit the focused build changes and continue combined certification.
+- [x] Commit focused build changes as `4fe9f02`; combined certification continues.
