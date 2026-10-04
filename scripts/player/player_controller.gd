@@ -2,6 +2,9 @@ class_name PlayerController
 extends CharacterBody2D
 
 const StatsResource := preload("res://scripts/core/stats.gd")
+const MetaStatsScript := preload("res://scripts/progression/meta_stats_applicator.gd")
+const MetaCatalogFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
+const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const EventTemporaryModifierLayerScript := preload("res://scripts/events/event_temporary_modifier_layer.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
@@ -1023,6 +1026,22 @@ func get_damage_taken_multiplier() -> float:
 	return _event_temporary_modifier_layer.call("damage_taken_multiplier")
 
 
+func get_damage_taken_multiplier_for(damage_info: RefCounted) -> float:
+	var multiplier := get_damage_taken_multiplier()
+	if damage_info != null and damage_info.damage_type == DamageInfoScript.DamageType.VOID:
+		var projection := meta_run_projection_snapshot()
+		if not projection.is_empty():
+			multiplier *= 1.0 - float(projection.stat_bonuses.void_reduction)
+	return multiplier
+
+
+func meta_run_projection_snapshot() -> Dictionary:
+	if loadout_runtime == null:
+		return {}
+	var value: Variant = loadout_runtime.snapshot().get("meta_run_projection", {})
+	return value.duplicate(true) if value is Dictionary else {}
+
+
 func _sync_weapon_adapter_stats() -> void:
 	var effective_attack := get_effective_attack()
 	var character_attack_scale := effective_attack / 30.0
@@ -2018,7 +2037,18 @@ func configure_loadout(config: Dictionary) -> bool:
 		return false
 	var character_profile := next_config.get("character_profile", {}) as Dictionary
 	var next_stats = StatsResource.new()
-	if not bool(next_stats.call("apply_profile", character_profile.get("base_stats", {}))):
+	var permanent_stats: Dictionary = character_profile.get("base_stats", {})
+	if next_config.has("meta_run_projection"):
+		if str(next_config.get("milestone", "")) not in ["LAUNCH", "EXPANSION"] or not next_config.meta_run_projection is Dictionary:
+			return false
+		var loaded_catalog: Dictionary = MetaCatalogFactoryScript.load_base()
+		if not loaded_catalog.ok:
+			return false
+		var prepared_stats: Dictionary = MetaStatsScript.prepare(character_profile, {}, str(next_config.get("weapon_id", "")), next_config.meta_run_projection, loaded_catalog.context.catalog)
+		if not prepared_stats.ok:
+			return false
+		permanent_stats = prepared_stats.context.stats
+	if not bool(next_stats.call("apply_profile", permanent_stats)):
 		return false
 	var next_mobility := _normalized_mobility_profile(
 		character_profile.get("mobility", {}) as Dictionary
@@ -3942,7 +3972,7 @@ func _current_full_player_replay_identity(require_exact_initial_talents: bool = 
 	var time_abilities: Array[String] = []
 	for ability_value: Variant in loadout_runtime.call("time_ability_ids"):
 		time_abilities.append(str(ability_value))
-	return {
+	var identity := {
 		"run_id": str(_run_id),
 		"owner_character_generation": _owner_character_generation,
 		"character_id": character_id,
@@ -3955,6 +3985,10 @@ func _current_full_player_replay_identity(require_exact_initial_talents: bool = 
 		"stats": stats_state,
 		"mobility": mobility_state,
 	}
+	var projection := meta_run_projection_snapshot()
+	if not projection.is_empty():
+		identity["meta_projection_digest"] = projection.projection_digest
+	return identity
 
 
 func _capture_launch_replay_identity_baseline() -> bool:
@@ -4004,7 +4038,7 @@ func full_player_replay_snapshot() -> Dictionary:
 		"character_input_owner": character_input_owner_snapshot(),
 		"priority_arbitration": priority_arbitration_snapshot(),
 	}
-	if snapshot_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+	if ReplayRecorderScript.is_current_launch_snapshot_schema(snapshot_schema_version):
 		if (
 			not health.has_method("invulnerability_replay_snapshot")
 			or not health.has_method("can_restore_invulnerability_replay_snapshot")
@@ -4046,10 +4080,7 @@ func full_player_replay_snapshot() -> Dictionary:
 		"weapon_replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
 		"weapon_replay_restore_invalid_reason": _weapon_replay_restore_invalid_reason,
 	}
-	if (
-		int(snapshot["schema_version"])
-		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-	):
+	if ReplayRecorderScript.is_current_launch_snapshot_schema(int(snapshot["schema_version"])):
 		var active_item_state := active_item_snapshot()
 		var reward_effect_state := reward_effect_snapshot()
 		var live_talent_state := _full_player_live_talent_state()
@@ -4250,8 +4281,7 @@ func _install_full_player_replay_snapshot(value: Dictionary, for_rollback: bool)
 		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	if (
-		int(value.get("schema_version", 0))
-		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		ReplayRecorderScript.is_current_launch_snapshot_schema(int(value.get("schema_version", 0)))
 		and not bool(health.call(
 			"restore_invulnerability_replay_snapshot",
 			(player_state.get("invulnerability_state", {}) as Dictionary).duplicate(true)
@@ -4321,10 +4351,7 @@ func _can_install_full_player_replay_snapshot(value: Dictionary) -> bool:
 		value.get("player_weapon_state", {}) as Dictionary
 	).duplicate(true)
 	var player_state := value.get("player_state", {}) as Dictionary
-	var is_launch_snapshot := (
-		int(value.get("schema_version", 0))
-		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-	)
+	var is_launch_snapshot := ReplayRecorderScript.is_current_launch_snapshot_schema(int(value.get("schema_version", 0)))
 	if is_launch_snapshot and (
 		health == null
 		or not health.has_method("can_restore_invulnerability_replay_snapshot")
@@ -4403,7 +4430,7 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		"weapon_replay_capture_sequence", "weapon_replay_fact_baseline",
 		"weapon_replay_capture_invalid_reason", "weapon_replay_restore_invalid_reason",
 	]
-	if expected_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+	if ReplayRecorderScript.is_current_launch_snapshot_schema(expected_schema_version):
 		fields.append("active_item_state")
 		fields.append("reward_effect_state")
 		fields.append("live_talent_state")
@@ -4436,8 +4463,7 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		or typeof(value.get("weapon_replay_capture_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
 		or typeof(value.get("weapon_replay_restore_invalid_reason")) not in [TYPE_STRING, TYPE_STRING_NAME]
 		or (
-			expected_schema_version
-				== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+			ReplayRecorderScript.is_current_launch_snapshot_schema(expected_schema_version)
 			and (
 				not value.get("active_item_state") is Dictionary
 				or not value.get("reward_effect_state") is Dictionary
@@ -4450,7 +4476,7 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		int(value["schema_version"]) != expected_schema_version
 	):
 		return {}
-	if expected_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+	if ReplayRecorderScript.is_current_launch_snapshot_schema(expected_schema_version):
 		if not ReplayRecorderScript.validate_full_player_event_modifiers(value.get("event_temporary_modifiers")):
 			return {}
 		var active_item_state := value.get("active_item_state", {}) as Dictionary
@@ -4502,10 +4528,7 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		"next_time_action_token", "time_action_generation",
 		"character_input_owner", "priority_arbitration",
 	]
-	var is_launch_snapshot := (
-		expected_schema_version
-		== ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-	)
+	var is_launch_snapshot := ReplayRecorderScript.is_current_launch_snapshot_schema(expected_schema_version)
 	if is_launch_snapshot:
 		player_state_fields.append("invulnerability_state")
 	if player_state.size() != player_state_fields.size():

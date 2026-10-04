@@ -18,6 +18,7 @@ const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 2
 const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 7
 const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 7
 const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 7
+const FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION := 8
 const FULL_PLAYER_LEGACY_REWARD_LAUNCH_SCHEMA_VERSION := 6
 const FULL_PLAYER_LEGACY_REWARD_LAUNCH_FRAME_SCHEMA_VERSION := 6
 const FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 6
@@ -853,8 +854,13 @@ static func profile_digest(profile: Dictionary) -> String:
 
 
 static func validate_full_player_identity(value: Dictionary) -> Dictionary:
+	var expected_fields := FULL_PLAYER_IDENTITY_FIELDS.duplicate()
+	if value.has("meta_projection_digest"):
+		if not _is_sha256(value.meta_projection_digest) or value.get("character_profile_id") == "wanderer_m1_v1":
+			return {}
+		expected_fields.append("meta_projection_digest")
 	if (
-		not _has_exact_fields_static(value, FULL_PLAYER_IDENTITY_FIELDS)
+		not _has_exact_fields_static(value, expected_fields)
 		or not replay_value_is_safe(value)
 		or not _is_non_empty_string(value.get("run_id"))
 		or str(value["run_id"]).length() > 256
@@ -894,7 +900,7 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 			return {}
 		seen[str(ability_value)] = true
 		time_ability_ids.append(str(ability_value))
-	return {
+	var normalized := {
 		"run_id": str(value["run_id"]),
 		"owner_character_generation": int(value["owner_character_generation"]),
 		"character_id": str(value["character_id"]),
@@ -907,9 +913,14 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 		"stats": stats,
 		"mobility": mobility,
 	}
+	if value.has("meta_projection_digest"):
+		normalized["meta_projection_digest"] = value.meta_projection_digest
+	return normalized
 
 
 static func full_player_schema_version_for_identity(identity: Dictionary) -> int:
+	if identity.has("meta_projection_digest"):
+		return FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION
 	return (
 		FULL_PLAYER_SCHEMA_VERSION
 		if str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
@@ -918,6 +929,8 @@ static func full_player_schema_version_for_identity(identity: Dictionary) -> int
 
 
 static func full_player_frame_schema_version_for_identity(identity: Dictionary) -> int:
+	if identity.has("meta_projection_digest"):
+		return FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION
 	return (
 		FULL_PLAYER_FRAME_SCHEMA_VERSION
 		if str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
@@ -926,11 +939,17 @@ static func full_player_frame_schema_version_for_identity(identity: Dictionary) 
 
 
 static func full_player_snapshot_schema_version_for_identity(identity: Dictionary) -> int:
+	if identity.has("meta_projection_digest"):
+		return FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION
 	return (
 		FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION
 		if str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
 		else FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
 	)
+
+
+static func is_current_launch_snapshot_schema(version: int) -> bool:
+	return version in [FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION, FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION]
 
 
 static func _validated_full_player_stats(value: Dictionary) -> Dictionary:
@@ -1034,6 +1053,7 @@ static func validate_full_player_snapshot(
 	var has_launch_reward_state := snapshot_schema_version in [
 		FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION,
 		FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION,
+		FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION,
 	]
 	var expected_player_fields := (
 		FULL_PLAYER_LAUNCH_STATE_FIELDS
@@ -1071,7 +1091,7 @@ static func validate_full_player_snapshot(
 		)
 	):
 		return _failure(&"FULL_PLAYER_ACTIVE_ITEM_STATE_INVALID")
-	if snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION and not validate_full_player_event_modifiers(snapshot.get("event_temporary_modifiers")):
+	if is_current_launch_snapshot_schema(snapshot_schema_version) and not validate_full_player_event_modifiers(snapshot.get("event_temporary_modifiers")):
 		return _failure(&"FULL_PLAYER_EVENT_MODIFIER_STATE_INVALID")
 	if has_launch_reward_state:
 		var reward_effect_value: Variant = snapshot.get("reward_effect_state")
@@ -1431,6 +1451,8 @@ static func _full_player_snapshot_fields_for_schema(
 	schema_version: int
 ) -> Array[String]:
 	var is_m1 := str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
+	if identity.has("meta_projection_digest") != (schema_version == FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION):
+		return []
 	if is_m1 and schema_version == FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION:
 		return FULL_PLAYER_SNAPSHOT_FIELDS
 	if (
@@ -1443,7 +1465,7 @@ static func _full_player_snapshot_fields_for_schema(
 		and schema_version == FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_SCHEMA_VERSION
 	):
 		return FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_FIELDS
-	if not is_m1 and schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+	if not is_m1 and is_current_launch_snapshot_schema(schema_version):
 		return FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS
 	if not is_m1 and schema_version == FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
 		var legacy_fields := FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS.duplicate()
