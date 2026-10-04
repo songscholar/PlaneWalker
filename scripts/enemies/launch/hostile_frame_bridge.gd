@@ -8,6 +8,7 @@ var _player: Node2D
 var _registry: RefCounted
 var _actors: Dictionary = {}
 var _effects: RefCounted
+var _encounter_authority: RefCounted
 var _last_runtime_frame := -1
 var _next_ticket_id := 1
 var _active: Dictionary = {}
@@ -17,6 +18,8 @@ var _publishing := false
 
 func configure(player: Node2D, registry: RefCounted, actors: Array, effects: RefCounted) -> bool:
 	if not _active.is_empty() or not _detached.is_empty() or _publishing or not is_instance_valid(player) or registry == null or effects == null:
+		return false
+	if _encounter_authority != null and (player != _player or registry != _registry or effects != _effects):
 		return false
 	if not player.has_method("current_run_id") or str(player.call("current_run_id")).is_empty():
 		return false
@@ -68,6 +71,18 @@ func register_actor(actor: Node2D) -> bool:
 	return configure(_player, _registry, next_actors, _effects)
 
 
+func configure_encounter_authority(authority: RefCounted) -> bool:
+	if frame_transaction_is_active() or _encounter_authority != null or authority == null or not is_instance_valid(_player):
+		return false
+	for method: StringName in [&"owns_effects", &"is_ready_for_frame", &"launch_transaction_snapshot", &"restore_launch_transaction_snapshot", &"prepare_frame", &"can_commit", &"commit", &"rollback", &"can_publish", &"seal_frame_publication", &"publish_frame_observations"]:
+		if not authority.has_method(method):
+			return false
+	if not authority.owns_effects(_effects, str(_player.call("current_run_id"))) or not authority.is_ready_for_frame(_last_runtime_frame + 1):
+		return false
+	_encounter_authority = authority
+	return true
+
+
 func retire_actor(source_id: String) -> bool:
 	if frame_transaction_is_active() or not _actors.has(source_id):
 		return false
@@ -80,6 +95,8 @@ func retire_actor(source_id: String) -> bool:
 
 func is_ready_for_frame(runtime_frame: int) -> bool:
 	if not is_instance_valid(_player) or _registry == null or _effects == null or not _active.is_empty() or not _detached.is_empty() or _publishing or runtime_frame != _last_runtime_frame + 1:
+		return false
+	if _encounter_authority != null and not _encounter_authority.is_ready_for_frame(runtime_frame):
 		return false
 	for source_id: String in _sorted_sources():
 		var actor: Node2D = _actors[source_id]
@@ -102,8 +119,13 @@ func begin_frame(runtime_frame: int) -> Dictionary:
 		return {}
 	var ticket := {"owner_instance_id": get_instance_id(), "ticket_id": _next_ticket_id, "runtime_frame": runtime_frame}
 	_next_ticket_id += 1
-	_active = {"ticket": ticket.duplicate(true), "registry_before": _registry.call("snapshot"), "effects_checkpoint": {}, "records": [], "effect_ticket": {}, "prepared": false, "publication": {}, "finalized": false}
+	_active = {"ticket": ticket.duplicate(true), "registry_before": _registry.call("snapshot"), "effects_checkpoint": {}, "encounter_checkpoint": {}, "encounter_ticket": {}, "records": [], "effect_ticket": {}, "prepared": false, "publication": {}, "finalized": false}
 	# These checkpoints precede weapon/world hits, not merely hostile movement.
+	if _encounter_authority != null:
+		_active.encounter_checkpoint = _encounter_authority.launch_transaction_snapshot()
+		if _active.encounter_checkpoint.is_empty():
+			rollback_frame(ticket)
+			return {}
 	if _effects.has_method("launch_transaction_snapshot") and _effects.has_method("restore_launch_transaction_snapshot"):
 		_active.effects_checkpoint = _effects.call("launch_transaction_snapshot")
 		if _active.effects_checkpoint.is_empty():
@@ -157,6 +179,13 @@ func prepare_frame(ticket: Dictionary) -> bool:
 	_active.effect_ticket = prepared.ticket.duplicate(true)
 	if not bool(_effects.call("can_commit", _active.effect_ticket)):
 		return false
+	if _encounter_authority != null:
+		var encounter_prepared: Dictionary = _encounter_authority.prepare_frame(_active.effect_ticket)
+		if not encounter_prepared.ok:
+			return false
+		_active.encounter_ticket = encounter_prepared.ticket.duplicate(true)
+		if not _encounter_authority.can_commit(_active.encounter_ticket):
+			return false
 	for record: Dictionary in _active.records:
 		if not bool(record.actor.call("can_commit_launch_frame", record.actor_ticket)):
 			return false
@@ -164,11 +193,13 @@ func prepare_frame(ticket: Dictionary) -> bool:
 		if not bool(record.actor.call("commit_launch_frame", record.actor_ticket)):
 			return false
 	var committed: Dictionary = _effects.call("commit", _active.effect_ticket)
-	return bool(committed.get("ok", false))
+	return bool(committed.get("ok", false)) and (_encounter_authority == null or _encounter_authority.commit(_active.encounter_ticket))
 
 
 func prepare_frame_publication(ticket: Dictionary) -> Dictionary:
 	if not _matches(ticket) or not bool(_active.prepared) or _active.effect_ticket.is_empty() or not bool(_effects.call("can_publish", _active.effect_ticket)):
+		return {}
+	if _encounter_authority != null and not _encounter_authority.can_publish(_active.encounter_ticket):
 		return {}
 	if not _active.publication.is_empty():
 		return _active.publication.duplicate(true)
@@ -200,6 +231,8 @@ func finalize_frame_publication(publication: Dictionary) -> bool:
 func seal_frame_publication(publication: Dictionary) -> bool:
 	if not _publication_matches(publication) or not bool(_active.finalized):
 		return false
+	if _encounter_authority != null and not _encounter_authority.can_publish(_active.encounter_ticket):
+		return false
 	for record: Dictionary in _active.records:
 		if not bool(record.actor.call("can_restore_launch_transaction_snapshot", record.checkpoint)):
 			return false
@@ -208,8 +241,10 @@ func seal_frame_publication(publication: Dictionary) -> bool:
 			return false
 		if bool((record.actor.call("launch_runtime_snapshot") as Dictionary).runtime.terminal):
 			_actors.erase(record.source_id)
+	if _encounter_authority != null and not _encounter_authority.seal_frame_publication(_active.encounter_ticket):
+		return false
 	_last_runtime_frame = int(_active.ticket.runtime_frame)
-	_detached = {"records": _active.records.duplicate(), "effect_ticket": _active.effect_ticket.duplicate(true)}
+	_detached = {"records": _active.records.duplicate(), "effect_ticket": _active.effect_ticket.duplicate(true), "encounter_ticket": _active.encounter_ticket.duplicate(true)}
 	_active.clear()
 	return true
 
@@ -225,6 +260,8 @@ func publish_prepared_frame() -> void:
 	for record: Dictionary in publication.records:
 		if is_instance_valid(record.health):
 			record.health.call("publish_prepared_frame_signals")
+	if _encounter_authority != null and not _encounter_authority.publish_frame_observations(publication.encounter_ticket):
+		push_error("Sealed hostile encounter publication failed closed")
 	_publishing = false
 
 
@@ -232,6 +269,11 @@ func rollback_frame(ticket: Dictionary) -> bool:
 	if not _matches(ticket):
 		return false
 	var restored := true
+	if _encounter_authority != null:
+		if not _active.encounter_ticket.is_empty():
+			restored = _encounter_authority.rollback(_active.encounter_ticket) and restored
+		if not _active.encounter_checkpoint.is_empty():
+			restored = _encounter_authority.restore_launch_transaction_snapshot(_active.encounter_checkpoint) and restored
 	if not _active.effect_ticket.is_empty():
 		restored = bool(_effects.call("rollback", _active.effect_ticket)) and restored
 	if not _active.effects_checkpoint.is_empty():

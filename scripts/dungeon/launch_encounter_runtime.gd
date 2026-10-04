@@ -14,6 +14,7 @@ const SNAPSHOT_FIELDS: Array[String] = [
 	"defeat_ledger", "pending_work", "completion_published", "failure",
 ]
 const WORK_BUDGETS := {"projectile": 32, "zone": 12, "construct": 8, "link": 3, "portal_pair": 1, "summon": 8}
+const MAX_WORK_RESERVATIONS := 256
 const LIFE_STATES: Array[String] = ["ALIVE", "RECOVERING", "DORMANT", "FINAL"]
 const LIVE_STATUSES: Array[String] = ["READY", "DELAY", "WARNING", "SPAWNING", "FIGHTING"]
 const MAX_FRAME := 2147400000
@@ -32,7 +33,7 @@ func configure(encounter: Dictionary, identity: Dictionary) -> Dictionary:
 		return _failure("identity", "invalid")
 	_encounter = normalized.definition
 	_state = {
-		"schema_version": 1, "encounter_digest": JSON.stringify(_encounter).sha256_text(),
+		"schema_version": 2, "encounter_digest": JSON.stringify(_encounter).sha256_text(),
 		"identity": {"run_id": identity.run_id, "room_id": identity.room_id, "runtime_frame": int(identity.runtime_frame), "encounter_generation": int(identity.encounter_generation)},
 		"last_runtime_frame": int(identity.runtime_frame), "status": "READY", "wave_index": -1,
 		"wave_started_frame": -1, "warning_frame": -1, "spawn_frame": -1,
@@ -115,18 +116,32 @@ func notify_entity_defeated(source_id: String, receipt_id: String) -> bool:
 	return true
 
 
-func reserve_pending_work(work_id: String, kind: String, owner_source_id: String) -> bool:
-	if _state.is_empty() or _state.status not in LIVE_STATUSES or not _stable_id(work_id) or not WORK_BUDGETS.has(kind) or _state.pending_work.has(work_id):
+func reserve_pending_work(work_id: String, kind: String, owner_source_id: String, phase: String = "ACTIVE") -> bool:
+	if _state.is_empty() or _state.status not in LIVE_STATUSES or not _stable_id(work_id) or not WORK_BUDGETS.has(kind) or phase not in ["ACTIVE", "PENDING"] or _state.pending_work.has(work_id) or _state.pending_work.size() >= MAX_WORK_RESERVATIONS:
 		return false
 	if not _state.roster.has(owner_source_id) and not _state.defeat_ledger.has(owner_source_id):
 		return false
 	var count := 0
 	for work: Dictionary in _state.pending_work.values():
-		if work.kind == kind:
+		if work.kind == kind and work.phase == "ACTIVE":
+			count += 1
+	if phase == "ACTIVE" and count >= int(WORK_BUDGETS[kind]):
+		return false
+	_state.pending_work[work_id] = {"kind": kind, "owner_source_id": owner_source_id, "phase": phase}
+	return true
+
+
+func activate_pending_work(work_id: String) -> bool:
+	if _state.is_empty() or _state.status not in LIVE_STATUSES or not _state.pending_work.has(work_id) or _state.pending_work[work_id].phase != "PENDING":
+		return false
+	var kind: String = _state.pending_work[work_id].kind
+	var count := 0
+	for row: Dictionary in _state.pending_work.values():
+		if row.kind == kind and row.phase == "ACTIVE":
 			count += 1
 	if count >= int(WORK_BUDGETS[kind]):
 		return false
-	_state.pending_work[work_id] = {"kind": kind, "owner_source_id": owner_source_id}
+	_state.pending_work[work_id].phase = "ACTIVE"
 	return true
 
 
@@ -178,7 +193,8 @@ func configured_encounter() -> Dictionary:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, SNAPSHOT_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.encounter_digest != _state.encounter_digest or value.identity != _state.identity:
+	value = _normalize_work_snapshot(value)
+	if _state.is_empty() or not Contract.exact_fields(value, SNAPSHOT_FIELDS) or value.schema_version != 2 or value.encounter_digest != _state.encounter_digest or value.identity != _state.identity:
 		return false
 	for field: String in ["last_runtime_frame", "wave_index", "wave_started_frame", "warning_frame", "spawn_frame"]:
 		if typeof(value[field]) != TYPE_INT:
@@ -190,6 +206,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	for field: String in ["pending_spawns", "roster", "defeat_ledger", "pending_work", "failure"]:
 		if not value[field] is Dictionary:
 			return false
+	if value.pending_work.size() > MAX_WORK_RESERVATIONS:
+		return false
 	if value.completion_published != (value.status == "COMPLETE") or (value.status == "FAILED") != not value.failure.is_empty():
 		return false
 	if value.status == "FAILED" and (not Contract.exact_fields(value.failure, ["code", "spawn_id", "reason"]) or value.failure.code != "SPAWN_REJECTED" or not _stable_id(value.failure.reason) or not value.pending_spawns.has(value.failure.spawn_id)):
@@ -221,8 +239,21 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 func restore_snapshot(value: Dictionary) -> bool:
 	if not can_restore_snapshot(value):
 		return false
-	_state = value.duplicate(true)
+	_state = _normalize_work_snapshot(value)
 	return true
+
+
+static func _normalize_work_snapshot(value: Dictionary) -> Dictionary:
+	if not Contract.exact_fields(value, SNAPSHOT_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version not in [1, 2] or not value.pending_work is Dictionary:
+		return {}
+	var normalized := value.duplicate(true)
+	if value.schema_version == 1:
+		for row: Variant in normalized.pending_work.values():
+			if not row is Dictionary or not Contract.exact_fields(row, ["kind", "owner_source_id"]):
+				return {}
+			row.phase = "ACTIVE"
+		normalized.schema_version = 2
+	return normalized
 
 
 func _validate_rosters(value: Dictionary) -> bool:
@@ -274,11 +305,11 @@ func _validate_rosters(value: Dictionary) -> bool:
 	var budget_counts: Dictionary = {}
 	for work_id: Variant in value.pending_work:
 		var work: Variant = value.pending_work[work_id]
-		if not _stable_id(work_id) or not work is Dictionary or not Contract.exact_fields(work, ["kind", "owner_source_id"]) or typeof(work.kind) != TYPE_STRING or not WORK_BUDGETS.has(work.kind) or not _stable_id(work.owner_source_id):
+		if not _stable_id(work_id) or not work is Dictionary or not Contract.exact_fields(work, ["kind", "owner_source_id", "phase"]) or typeof(work.kind) != TYPE_STRING or not WORK_BUDGETS.has(work.kind) or not _stable_id(work.owner_source_id) or typeof(work.phase) != TYPE_STRING or work.phase not in ["ACTIVE", "PENDING"]:
 			return false
 		if not value.roster.has(work.owner_source_id) and not value.defeat_ledger.has(work.owner_source_id):
 			return false
-		budget_counts[work.kind] = int(budget_counts.get(work.kind, 0)) + 1
+		budget_counts[work.kind] = int(budget_counts.get(work.kind, 0)) + (1 if work.phase == "ACTIVE" else 0)
 		if budget_counts[work.kind] > int(WORK_BUDGETS[work.kind]):
 			return false
 	return true

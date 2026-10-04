@@ -18,6 +18,7 @@ func _run() -> void:
 	_test_waves_and_pending_work(suite, implementation)
 	_test_corruption_and_replay(suite, implementation)
 	_test_failed_spawns_and_cancellation(suite, implementation)
+	_test_pending_queue_contract(suite, implementation)
 	suite.finish(get_tree())
 
 
@@ -133,6 +134,53 @@ func _test_failed_spawns_and_cancellation(suite: RefCounted, implementation: Scr
 	suite.assert_equal(cancelled.retired_sources.size(), 2, "cancellation retires every live source")
 	suite.assert_equal(cancelled.retired_work_ids.size(), 12, "cancellation retires every reserved payload")
 	suite.assert_true(not runtime.advance_frame(32, {}).ok, "cancelled encounter cannot advance")
+
+
+func _test_pending_queue_contract(suite: RefCounted, implementation: Script) -> void:
+	var runtime := _configured(suite, implementation)
+	_spawn_first_wave(suite, runtime)
+	suite.assert_true(runtime.has_method("activate_pending_work"), "room ledger distinguishes queued work from active budget reservations")
+	if not runtime.has_method("activate_pending_work"):
+		return
+	for index: int in range(32):
+		suite.assert_true(runtime.reserve_pending_work("projectile-%d" % index, "projectile", "hostile:sentinel-1"), "room ledger reserves each active projectile slot")
+	suite.assert_true(runtime.call("reserve_pending_work", "projectile-queued", "projectile", "hostile:sentinel-1", "PENDING"), "full projectile budget retains queued authoritative work")
+	var full: Dictionary = runtime.snapshot()
+	var overfull_legacy := full.duplicate(true)
+	overfull_legacy.schema_version = 1
+	for row: Dictionary in overfull_legacy.pending_work.values():
+		row.erase("phase")
+	suite.assert_true(not runtime.can_restore_snapshot(overfull_legacy), "legacy migration cannot disguise queued overflow as an active budget")
+	suite.assert_equal(full.schema_version, 2, "queued-work checkpoint has an explicit new schema version")
+	suite.assert_true(not runtime.activate_pending_work("projectile-queued"), "queued projectile cannot bypass the full active budget")
+	suite.assert_equal(runtime.snapshot(), full, "failed promotion leaves queued identity and budget unchanged")
+	suite.assert_true(runtime.retire_pending_work("projectile-0") and runtime.activate_pending_work("projectile-queued"), "one retired active slot admits the existing queued identity")
+	suite.assert_equal(runtime.snapshot().pending_work["projectile-queued"].phase, "ACTIVE", "promotion keeps the same room-work lineage")
+	var malformed: Dictionary = runtime.snapshot()
+	malformed.pending_work["projectile-queued"].phase = "WARNING"
+	suite.assert_true(not runtime.can_restore_snapshot(malformed), "room ledger rejects unknown reservation phases")
+	var legacy: Dictionary = runtime.snapshot()
+	legacy.schema_version = 1
+	for row: Dictionary in legacy.pending_work.values():
+		row.erase("phase")
+	suite.assert_true(runtime.restore_snapshot(legacy), "legacy active-only native checkpoints migrate without losing budgets")
+	suite.assert_equal(runtime.snapshot().schema_version, 2, "legacy checkpoint normalizes to the new work schema")
+	for row: Dictionary in runtime.snapshot().pending_work.values():
+		suite.assert_equal(row.phase, "ACTIVE", "legacy work remains active after migration")
+	for id: String in runtime.snapshot().pending_work.keys():
+		runtime.retire_pending_work(id)
+	runtime.notify_entity_defeated("hostile:sentinel-1", "queue-death-1")
+	runtime.notify_entity_defeated("hostile:sentinel-2", "queue-death-2")
+	suite.assert_true(runtime.call("reserve_pending_work", "queued-after-death", "zone", "hostile:sentinel-1", "PENDING"), "dead parent retains its queued payload lineage")
+	suite.assert_equal(runtime.advance_frame(32).wave_started, {}, "queued payload forbids next wave even with no active body or zone")
+	var queued: Dictionary = runtime.snapshot()
+	for index: int in range(255):
+		suite.assert_true(runtime.call("reserve_pending_work", "queued-%d" % index, "zone", "hostile:sentinel-1", "PENDING"), "queued room work obeys a finite retained reservation cap")
+	var capacity: Dictionary = runtime.snapshot()
+	suite.assert_true(not runtime.call("reserve_pending_work", "queued-overflow", "zone", "hostile:sentinel-1", "PENDING"), "full retained room queue rejects further work")
+	suite.assert_equal(runtime.snapshot(), capacity, "queue capacity rejection retains all existing identities")
+	suite.assert_true(runtime.restore_snapshot(queued) and runtime.retire_pending_work("queued-after-death"), "queued final retirement restores and settles its exact identity")
+	suite.assert_equal(runtime.advance_frame(33).wave_started.wave_index, 1, "next wave begins only after queued work also retires")
 	runtime = _configured(suite, implementation)
 	for frame: int in range(1, 32):
 		runtime.advance_frame(frame, {})

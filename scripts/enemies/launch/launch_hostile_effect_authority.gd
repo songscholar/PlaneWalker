@@ -45,6 +45,12 @@ func native_payload_nodes() -> Array[Node2D]:
 	return _payloads.native_nodes()
 
 
+func prepared_payload_transition(ticket: Dictionary) -> Dictionary:
+	if not _ticket_matches(ticket) or _publishing:
+		return {}
+	return {"before": ticket.payload_ticket.before.duplicate(true), "after": ticket.payload_ticket.after.duplicate(true)}
+
+
 func launch_transaction_snapshot() -> Dictionary:
 	return snapshot() if _pending.is_empty() and not _publishing else {}
 
