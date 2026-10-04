@@ -1,0 +1,549 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/weapon-proficiency/1.0.0",
+  "title": "Plane Walker weapon proficiency state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "revision",
+    "experience",
+    "high_water"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "planewalker.weapon_proficiency"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "experience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bow",
+        "gauntlets",
+        "gun",
+        "staff",
+        "sword"
+      ],
+      "properties": {
+        "bow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "gauntlets": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "gun": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "staff": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "sword": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "high_water": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bow",
+        "gauntlets",
+        "gun",
+        "staff",
+        "sword"
+      ],
+      "properties": {
+        "bow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normal_run",
+            "training_drill"
+          ],
+          "properties": {
+            "normal_run": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            },
+            "training_drill": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "gauntlets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normal_run",
+            "training_drill"
+          ],
+          "properties": {
+            "normal_run": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            },
+            "training_drill": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "gun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normal_run",
+            "training_drill"
+          ],
+          "properties": {
+            "normal_run": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            },
+            "training_drill": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "staff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normal_run",
+            "training_drill"
+          ],
+          "properties": {
+            "normal_run": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            },
+            "training_drill": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "sword": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normal_run",
+            "training_drill"
+          ],
+          "properties": {
+            "normal_run": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            },
+            "training_drill": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    },
+                    "action_sequence": {
+                      "const": 0,
+                      "type": "integer"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "session_sequence",
+                    "action_sequence"
+                  ],
+                  "properties": {
+                    "session_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    },
+                    "action_sequence": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
