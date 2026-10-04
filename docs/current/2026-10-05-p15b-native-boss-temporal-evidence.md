@@ -1,6 +1,12 @@
 # P15B Native Boss Temporal And Shared Semantic Router
 
 - Status: retained implementation; broader Boss production scope remains active
+- Document Role: Current implementation and verification evidence
+- Authority Level: retained milestone evidence
+- Applies To: P15B native Boss temporal runtime and shared semantic effects
+- Owner: Plane Walker implementation team
+- Depends On: P15D semantic authority foundation `09b74bd`
+- Last Verified: 2026-10-05
 - Date: 2026-10-05
 - Dependency: P15D semantic authority foundation `09b74bd`
 - Scope: authenticated native healing, Time Sovereign historical self rewind, and shared semantic effect transactions

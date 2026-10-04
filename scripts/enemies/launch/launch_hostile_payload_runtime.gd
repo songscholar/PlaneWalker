@@ -44,8 +44,8 @@ func reserve_projectile(hit: Dictionary, bounds: Dictionary, mechanisms: Diction
 	return {"ok": true, "id": id, "phase": phase}
 
 
-func reserve_death_pool(request: Dictionary) -> Dictionary:
-	if _state.is_empty() or not Contract.exact_fields(request, ["kind", "run_id", "hostile_source_id", "runtime_frame", "attack_generation", "position", "bounds", "parameters"]):
+func reserve_death_pool(request: Dictionary, zone_capacity: int = MAX_ZONES) -> Dictionary:
+	if _state.is_empty() or zone_capacity < 0 or zone_capacity > MAX_ZONES or not Contract.exact_fields(request, ["kind", "run_id", "hostile_source_id", "runtime_frame", "attack_generation", "position", "bounds", "parameters"]):
 		return _failure("death_request")
 	if request.kind != "death_pool" or request.run_id != _state.run_id or request.runtime_frame != _state.runtime_frame or not _stable_id(request.hostile_source_id) or not Contract.integer_in_range(request.attack_generation, 1, MAX_FRAME):
 		return _failure("death_identity")
@@ -54,7 +54,7 @@ func reserve_death_pool(request: Dictionary) -> Dictionary:
 	if not Contract.integer_in_range(request.parameters.warning_frames, 23, 600) or not Contract.number_in_range(request.parameters.radius, 1, 320) or not Contract.number_in_range(request.parameters.damage, 0, 600):
 		return _failure("death_values")
 	var definition := {"kind": "death_pool", "run_id": request.run_id, "source_id": request.hostile_source_id, "generation": int(request.attack_generation), "hit_index": 63, "reserved_frame": int(request.runtime_frame), "position": Contract.point(request.position), "radius": float(request.parameters.radius), "damage": float(request.parameters.damage), "damage_type": "void", "warning_frames": int(request.parameters.warning_frames), "lifetime_frames": 1, "tick_frames": 1, "bounds": request.bounds.duplicate(true), "visual_kind": "acid"}
-	return _reserve_zone(_state, definition)
+	return _reserve_zone(_state, definition, zone_capacity)
 
 
 func motion_for_frame(frame: int) -> Dictionary:
@@ -74,8 +74,8 @@ func motion_for_frame(frame: int) -> Dictionary:
 	return result
 
 
-func advance_frame(frame: int, observations: Dictionary) -> Dictionary:
-	if _state.is_empty() or frame != int(_state.runtime_frame) + 1 or not _frame(frame) or not _valid_observations(observations):
+func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MAX_ZONES) -> Dictionary:
+	if _state.is_empty() or zone_capacity < 0 or zone_capacity > MAX_ZONES or frame != int(_state.runtime_frame) + 1 or not _frame(frame) or not _valid_observations(observations):
 		return _failure("frame_or_observations")
 	var motion := motion_for_frame(frame)
 	for id: Variant in observations.projectile_contacts:
@@ -146,11 +146,11 @@ func advance_frame(frame: int, observations: Dictionary) -> Dictionary:
 			retained_zones.append(row)
 	next.zones = retained_zones
 	for definition: Dictionary in impacts:
-		var reserved := _reserve_zone(next, definition)
+		var reserved := _reserve_zone(next, definition, zone_capacity)
 		if not reserved.ok:
 			return reserved
 	_activate_pending(next.projectiles, MAX_PROJECTILES, frame)
-	_activate_pending(next.zones, MAX_ZONES, frame)
+	_activate_pending(next.zones, zone_capacity, frame)
 	_state = next
 	return {"ok": true, "runtime_frame": frame, "damage_requests": damages, "retired_payload_ids": retired, "pending_work": pending_work()}
 
@@ -265,11 +265,11 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 	return {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool, "pierce_count": int(hit.parameters.pierce_count), "visual_kind": "acid" if hit.action_id.begins_with("corrosive_moth.") else str(hit.damage_type)}
 
 
-func _reserve_zone(state: Dictionary, definition: Dictionary) -> Dictionary:
+func _reserve_zone(state: Dictionary, definition: Dictionary, zone_capacity: int = MAX_ZONES) -> Dictionary:
 	var id := _id(definition)
 	if _has_claim(state, definition) or state.projectiles.size() + state.zones.size() >= MAX_RESERVATIONS or state.claims.size() >= MAX_CLAIMS or not _valid_zone_definition(definition):
 		return _failure("zone_reservation")
-	var phase := ("WARNING" if definition.warning_frames > 0 else "ACTIVE") if _active_count(state.zones) < MAX_ZONES else "PENDING"
+	var phase := ("WARNING" if definition.warning_frames > 0 else "ACTIVE") if _active_count(state.zones) < zone_capacity else "PENDING"
 	state.claims.append({"id": id, "key": _reservation_key(definition)})
 	state.zones.append({"id": id, "definition": definition, "phase": phase, "activated_frame": state.runtime_frame if phase != "PENDING" else -1, "age": 0, "control": _new_control(id, int(state.runtime_frame))})
 	return {"ok": true, "id": id, "phase": phase}

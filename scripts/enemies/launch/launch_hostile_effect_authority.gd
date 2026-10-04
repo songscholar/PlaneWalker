@@ -56,6 +56,22 @@ func native_semantic_nodes() -> Array[Node2D]:
 	return _semantics.native_nodes()
 
 
+func bind_native_targets(actors: Dictionary, targets: Dictionary) -> bool:
+	return not _state.is_empty() and _pending.is_empty() and not _publishing and _semantics.bind_native_targets(actors, targets)
+
+
+func dispose_native_effects() -> bool:
+	return not _state.is_empty() and _pending.is_empty() and not _publishing and _semantics.dispose_native_effects()
+
+
+func work_snapshot() -> Dictionary:
+	return _work_snapshot(snapshot()) if not _state.is_empty() else {}
+
+
+func prepared_work_transition(ticket: Dictionary) -> Dictionary:
+	return {"before": _work_snapshot(ticket.before), "after": _work_snapshot(ticket.after)} if _ticket_matches(ticket) and not _publishing else {}
+
+
 func prepared_payload_transition(ticket: Dictionary) -> Dictionary:
 	if not _ticket_matches(ticket) or _publishing:
 		return {}
@@ -74,7 +90,7 @@ func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
 		if typeof(claim) != TYPE_STRING or claim.length() != 64 or not claim.is_valid_hex_number(false) or seen.has(claim):
 			return false
 		seen[claim] = true
-	return value.runtime_frame == value.payloads.runtime_frame and value.runtime_frame == value.semantics.runtime_frame
+	return value.runtime_frame == value.payloads.runtime_frame and value.runtime_frame == value.semantics.runtime_frame and _payload_active_zone_count(value.payloads) + _semantics.active_zone_count_for_snapshot(value.semantics, int(value.runtime_frame)) <= 12
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
@@ -118,6 +134,9 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	var registry: Variant = context.threat_registry
 	if not registry is RefCounted or not registry.has_method("snapshot") or not registry.has_method("extend_fact_through") or not context.actors is Dictionary or not context.targets is Dictionary or batches.size() > 32:
 		return _failure("native_authorities")
+	for source: Variant in context.actors:
+		if context.targets.has(source) and context.targets[source] != context.actors[source]:
+			return _failure("native_target_identity")
 	var registry_before: Array = registry.snapshot()
 	var projected: RefCounted = Registry.new()
 	if not _install_registry(projected, registry_before):
@@ -166,14 +185,16 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 		if not batch.get("mechanism_requests", []) is Array or batch.get("mechanism_requests", []).size() > 128:
 			return _failure("mechanism_requests")
 		for mechanism: Variant in batch.get("mechanism_requests", []):
-			if mechanism is Dictionary and mechanism.get("kind", "") in ["death_pool", "restore_hp", "boss_self_rewind", "warned_explosion"]:
+			if not mechanism is Dictionary:
+				return _failure("mechanism_request")
+			if mechanism.get("kind", "") != "consume_actor":
 				continue
 			var prepared := _prepare_consumption(mechanism, source, actor, context, next)
 			if not prepared.ok:
 				return prepared
 			damages.append(prepared.record)
 		for hit: Variant in batch.hit_facts:
-			if hit is Dictionary and hit.get("handler_id", "") in ["projectile_volley", "blink", "zone"]:
+			if hit is Dictionary and hit.get("handler_id", "") not in ["melee", "charge"]:
 				continue
 			var prepared := _prepare_hit(hit, source, actor, context, next)
 			if not prepared.ok:
@@ -184,7 +205,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 			if not prepared.ok:
 				return prepared
 			damages.append(prepared.record)
-	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context)
+	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context, _semantics.active_zone_count_for_snapshot(next.semantics, int(context.runtime_frame)))
 	if not payload_prepared.ok:
 		return payload_prepared
 	for request: Dictionary in payload_prepared.damage_requests:
@@ -197,7 +218,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	if not _prepare_payload_registry(payload_prepared.ticket.before, payload_prepared.ticket.after, projected, operations):
 		_payloads.rollback(payload_prepared.ticket)
 		return _failure("payload_threat_registry")
-	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context)
+	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after))
 	if not semantic_prepared.ok:
 		_payloads.rollback(payload_prepared.ticket)
 		return semantic_prepared
@@ -435,6 +456,20 @@ static func _payload_threat_fact(row: Dictionary, frame: int) -> Dictionary:
 	var projectile: bool = definition.kind == "projectile"
 	var origin: Dictionary = definition.origin if projectile else definition.position
 	return {"hostile_source_id": StringName(row.id), "attack_generation": 1, "shape": &"line" if projectile else &"circle", "origin": _vector(origin), "aim_direction": _vector(definition.direction) if projectile else Vector2.RIGHT, "target_point": _vector(origin), "summon_slots": [], "radius": definition.radius, "length": definition.range_px if projectile else 0.0, "active_from_frame": definition.reserved_frame, "active_through_frame": frame + int(definition.lifetime_frames) + int(definition.get("warning_frames", 0)) - int(row.age)}
+
+
+func _work_snapshot(value: Dictionary) -> Dictionary:
+	var records: Dictionary = _semantics.work_records_for_snapshot(value.semantics)
+	for row: Dictionary in value.payloads.projectiles + value.payloads.zones:
+		records[row.id] = {"kind": "projectile" if row.definition.kind == "projectile" else "zone", "owner_source_id": row.definition.source_id, "phase": "PENDING" if row.phase == "PENDING" else "ACTIVE"}
+	return {"run_id": value.run_id, "runtime_frame": value.runtime_frame, "records": records}
+
+
+static func _payload_active_zone_count(value: Dictionary) -> int:
+	var count := 0
+	for row: Dictionary in value.zones:
+		count += int(row.phase != "PENDING")
+	return count
 
 
 func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictionary, next: Dictionary) -> Dictionary:

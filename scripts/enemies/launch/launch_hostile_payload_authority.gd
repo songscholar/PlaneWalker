@@ -67,8 +67,8 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	return _sync_native(value, true)
 
 
-func prepare_payloads(batches: Array, context: Dictionary) -> Dictionary:
-	if not _pending.is_empty() or context.runtime_frame != int(snapshot().runtime_frame) + 1 or context.run_id != snapshot().run_id or not _native_matches(snapshot()):
+func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones: int = 0) -> Dictionary:
+	if foreign_active_zones < 0 or foreign_active_zones > Runtime.MAX_ZONES or not _pending.is_empty() or context.runtime_frame != int(snapshot().runtime_frame) + 1 or context.run_id != snapshot().run_id or not _native_matches(snapshot()):
 		return _failure("unavailable_or_native_projection")
 	var before := snapshot()
 	var has_live_payloads: bool = not before.projectiles.is_empty() or not before.zones.is_empty()
@@ -101,7 +101,8 @@ func prepare_payloads(batches: Array, context: Dictionary) -> Dictionary:
 	preview.configure(before.run_id, before.initial_frame)
 	if not preview.restore_snapshot(before):
 		return _failure("checkpoint")
-	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors})
+	var zone_capacity := Runtime.MAX_ZONES - foreign_active_zones
+	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity)
 	if not advanced.ok:
 		return advanced
 	for wrapper: Dictionary in batches:
@@ -119,7 +120,7 @@ func prepare_payloads(batches: Array, context: Dictionary) -> Dictionary:
 			if mechanism.get("kind", "") != "death_pool":
 				continue
 			var room: Dictionary = actor.launch_room_motion_snapshot()
-			if _root == null or room.is_empty() or not actor.has_method("prepared_launch_frame_reserves_death_pool") or not actor.prepared_launch_frame_reserves_death_pool() or not actor.get_node("HealthComponent").dead or mechanism.bounds != room.bounds or not preview.reserve_death_pool(mechanism).ok:
+			if _root == null or room.is_empty() or not actor.has_method("prepared_launch_frame_reserves_death_pool") or not actor.prepared_launch_frame_reserves_death_pool() or not actor.get_node("HealthComponent").dead or mechanism.bounds != room.bounds or not preview.reserve_death_pool(mechanism, zone_capacity).ok:
 				return _failure("unsealed_death_pool")
 	var ticket := {"ticket_id": _next_ticket, "runtime_frame": context.runtime_frame, "before": before, "after": preview.snapshot(), "damage_requests": advanced.damage_requests, "native_contacts": native_contacts, "target_positions": target_descriptors, "targets": context.targets.duplicate() if has_live_payloads else {}}
 	_next_ticket += 1

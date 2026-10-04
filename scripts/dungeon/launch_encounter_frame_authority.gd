@@ -25,8 +25,8 @@ func configure(encounter: RefCounted, effects: RefCounted) -> bool:
 	if _encounter != null or not encounter is Encounter or not effects is Effects:
 		return false
 	var state: Dictionary = encounter.snapshot()
-	var payload: Dictionary = effects.payload_snapshot()
-	if state.is_empty() or payload.is_empty() or not encounter.is_active() or state.identity.run_id != payload.run_id or state.last_runtime_frame != payload.runtime_frame or not _ledger_contains_payloads(state, payload):
+	var payload: Dictionary = effects.work_snapshot()
+	if state.is_empty() or payload.is_empty() or not encounter.is_active() or state.identity.run_id != payload.run_id or state.last_runtime_frame != payload.runtime_frame or not _ledger_contains_work(state, payload):
 		return false
 	_encounter = encounter
 	_effects = effects
@@ -48,7 +48,7 @@ func is_ready_for_frame(frame: int) -> bool:
 	if _encounter == null or not _pending.is_empty() or not _detached.is_empty() or _publishing or frame != _last_frame + 1:
 		return false
 	var state: Dictionary = _encounter.snapshot()
-	var payload: Dictionary = _effects.payload_snapshot()
+	var payload: Dictionary = _effects.work_snapshot()
 	if state.is_empty() or payload.is_empty():
 		return false
 	return state.identity == _identity and state.encounter_digest == _digest and state.status in Encounter.LIVE_STATUSES + ["COMPLETE"] and (state.last_runtime_frame == _last_frame or (state.status == "COMPLETE" and state.last_runtime_frame <= _last_frame)) and payload.run_id == _identity.run_id and payload.runtime_frame == _last_frame
@@ -70,13 +70,13 @@ func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
 
 
 func prepare_frame(effect_ticket: Dictionary) -> Dictionary:
-	var transition: Dictionary = _effects.prepared_payload_transition(effect_ticket) if _effects != null else {}
-	if transition.is_empty() or not is_ready_for_frame(int(transition.after.runtime_frame)) or transition.before != _effects.payload_snapshot():
+	var transition: Dictionary = _effects.prepared_work_transition(effect_ticket) if _effects != null else {}
+	if transition.is_empty() or not is_ready_for_frame(int(transition.after.runtime_frame)) or transition.before != _effects.work_snapshot():
 		return _failure("unsealed_effect_transition")
 	var before := snapshot()
-	var previous := _payload_work(transition.before)
-	var current := _payload_work(transition.after)
-	if not _ledger_contains_payloads(before.encounter, transition.before):
+	var previous: Dictionary = transition.before.records
+	var current: Dictionary = transition.after.records
+	if not _ledger_contains_work(before.encounter, transition.before):
 		return _failure("stale_payload_ledger")
 	var preview := Encounter.new()
 	if not preview.configure(_encounter.configured_encounter(), _identity).ok or not preview.restore_snapshot(before.encounter):
@@ -111,11 +111,11 @@ func prepare_frame(effect_ticket: Dictionary) -> Dictionary:
 
 
 func can_commit(ticket: Dictionary) -> bool:
-	return _matches(ticket) and not _committed and snapshot() == ticket.before and _effects.prepared_payload_transition(ticket.effect_ticket) == ticket.transition and _effects.payload_snapshot() in [ticket.transition.before, ticket.transition.after]
+	return _matches(ticket) and not _committed and snapshot() == ticket.before and _effects.prepared_work_transition(ticket.effect_ticket) == ticket.transition and _effects.work_snapshot() in [ticket.transition.before, ticket.transition.after]
 
 
 func commit(ticket: Dictionary) -> bool:
-	if not can_commit(ticket) or _effects.payload_snapshot() != ticket.transition.after or not _encounter.restore_snapshot(ticket.after.encounter):
+	if not can_commit(ticket) or _effects.work_snapshot() != ticket.transition.after or not _encounter.restore_snapshot(ticket.after.encounter):
 		return false
 	_last_frame = ticket.runtime_frame
 	_committed = true
@@ -132,7 +132,7 @@ func rollback(ticket: Dictionary) -> bool:
 
 
 func can_publish(ticket: Dictionary) -> bool:
-	return _matches(ticket) and _committed and snapshot() == ticket.after and _effects.payload_snapshot() == ticket.transition.after
+	return _matches(ticket) and _committed and snapshot() == ticket.after and _effects.work_snapshot() == ticket.transition.after
 
 
 func publish_frame_observations(ticket: Dictionary) -> bool:
@@ -160,17 +160,10 @@ func _matches(ticket: Dictionary) -> bool:
 	return not _publishing and Contract.exact_fields(ticket, TICKET_FIELDS) and not _pending.is_empty() and ticket == _pending
 
 
-static func _payload_work(value: Dictionary) -> Dictionary:
-	var result: Dictionary = {}
-	for row: Dictionary in value.projectiles + value.zones:
-		result[row.id] = {"kind": "projectile" if row.definition.kind == "projectile" else "zone", "owner_source_id": row.definition.source_id, "phase": "PENDING" if row.phase == "PENDING" else "ACTIVE"}
-	return result
-
-
-static func _ledger_contains_payloads(state: Dictionary, payload: Dictionary) -> bool:
-	var expected := _payload_work(payload)
+static func _ledger_contains_work(state: Dictionary, payload: Dictionary) -> bool:
+	var expected: Dictionary = payload.records
 	for id: String in state.pending_work:
-		if id.begins_with("payload-") and not expected.has(id):
+		if (id.begins_with("payload-") or id.begins_with("semantic_")) and not expected.has(id):
 			return false
 	for id: String in expected:
 		if state.pending_work.get(id, {}) != expected[id]:

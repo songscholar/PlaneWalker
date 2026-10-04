@@ -71,6 +71,10 @@ func _test_actual_player_damage(implementation: Script) -> void:
 			break
 		var batches := [{"hostile_source_id": "hostile:test-a", "batch": prepared.batch}]
 		var context := {"run_id": "run-p15", "runtime_frame": frame, "threat_registry": registry, "actors": {"hostile:test-a": actor}, "targets": {"player:1": player, "hostile:test-a": actor}}
+		if frame == 1:
+			var ambiguous := context.duplicate(true)
+			ambiguous.targets["hostile:test-a"] = player
+			suite.assert_true(not authority.prepare_effects(batches, ambiguous).ok, "one hostile source identity cannot target a different native body")
 		if not prepared.batch.hit_facts.is_empty():
 			var before_hp: float = health.current_hp
 			var forged := batches.duplicate(true)
