@@ -1,7 +1,13 @@
 # P16N Native Tutorial Flow
 
-- Status: Approved under standing project authorization
-- Scope: Native tutorial presentation and durable Profile wiring
+- Status: Approved / Current
+- Document Role: Current focused tutorial flow specification under standing project authorization
+- Authority Level: Native tutorial presentation and physical Profile integration below P16
+- Applies To: TutorialFlowCoordinator, actual Host/Player bindings, review pause ownership and saved hints
+- Owner: Project onboarding implementation lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md`, `docs/current/2026-10-05-p16l-tutorial-ui-evidence.md`
+- Last Verified: 2026-10-05
+- Implementation Status: Coordinator implemented and verified; production Main routing follows in its owning milestone
 
 `TutorialFlowCoordinator` owns the review panel and saved-hint presenter in a
 CanvasLayer. It configures from the active Registry, physical

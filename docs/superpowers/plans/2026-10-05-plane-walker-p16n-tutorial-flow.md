@@ -1,5 +1,15 @@
 # Native Tutorial Flow Implementation Plan
 
+- Status: Implemented / Current
+- Document Role: Current focused native tutorial implementation plan
+- Authority Level: Task execution below the approved P16N tutorial flow specification
+- Applies To: Native coordinator, view policy capability, real Profile/Host tests and evidence
+- Owner: Project onboarding implementation lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-05-plane-walker-p16n-tutorial-flow-design.md`
+- Last Verified: 2026-10-05
+- Implementation Status: Focused coordinator completion criteria verified locally
+- Exit Gate: Actual Main/Host/Profile/Player integration, retry/recovery, stale binding, controller review and scanned native logs pass
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Connect the actual tutorial UI to native gameplay and the physical Profile service without publishing unsaved or stale hints.

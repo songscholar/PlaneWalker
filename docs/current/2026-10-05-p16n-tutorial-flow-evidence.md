@@ -1,7 +1,14 @@
 # P16N Native Tutorial Flow Evidence
 
-- Status: Verified native coordinator; Main wiring owned by the production flow milestone
-- Date: 2026-10-05
+- Status: Implemented / Current
+- Document Role: Current focused native tutorial integration evidence
+- Authority Level: Tutorial coordinator and physical Profile presentation boundary
+- Applies To: TutorialFlowCoordinator, real Registry/Host/Player/Profile/remap integration
+- Owner: Project onboarding implementation lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-05-plane-walker-p16n-tutorial-flow-design.md`, `docs/superpowers/plans/2026-10-05-plane-walker-p16n-tutorial-flow.md`
+- Last Verified: 2026-10-05
+- Evidence Status: Verified Locally
+- Certification Status: Native coordinator verified; production Main routing owned by its milestone
 - Engine: Godot 4.6.1
 
 ## Implemented
