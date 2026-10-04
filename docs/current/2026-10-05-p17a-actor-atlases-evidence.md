@@ -53,8 +53,10 @@ It does not claim all Launch enemies, room bitmap environments, soundtracks or
 five-boss native gameplay presentation are finished. The first complete packed
 Player fixture exposed a pre-existing export blocker: imported Base pack PNG
 source bytes are omitted, so ContentPackDescriptor correctly rejects integrity
-activation. This is tracked as a separate export repair; atlas-only packed loading
-is verified, and a complete distributable is not certified by this evidence.
+activation. The separate export repair now verifies all five actual Player
+profiles in the PCK, recorded in
+`docs/current/2026-10-05-content-pack-export-evidence.md`. A complete distributable
+is not certified by this evidence.
 Base pack manifest,
 compatibility ledger, Meta state, typed Player Visual and combat domain data are
 untouched. Root owns consolidated documentation indexing and retention review.

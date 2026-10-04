@@ -7,6 +7,14 @@ template directory is also the directory Godot reads. It never installs template
 in a personal Godot directory. macOS editor copies retain the complete upstream
 application bundle; moving only its executable can fail macOS signature checks.
 
+The enabled `addons/content_pack_source_export` plugin preserves each content
+pack's original declared bytes beside Godot's imported textures, compiled scenes
+and translations. This lets exported runtime content keep the same SHA-256
+descriptor authentication as source checkouts. Malformed descriptors or changed
+sources produce export error logs; Godot may still exit zero, so build acceptance
+must include the tools' log scan. Real fixture PCK and actual Main/Profile gates
+are recorded in `docs/current/2026-10-05-content-pack-export-evidence.md`.
+
 `python3 tools/export/fetch_templates.py` downloads the official Godot 4.6.1
 archive using resumable HTTP ranges. Its release size and SHA-256 are pinned
 from the upstream release metadata. Completed ranges remain in the project

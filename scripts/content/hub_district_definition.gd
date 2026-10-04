@@ -13,7 +13,7 @@ func configure(source: Dictionary) -> Dictionary:
 		return _failure("root")
 	if source.availability != ["LAUNCH", "EXPANSION"] or source.tags != ["launch", "hub"] or not source.compatibility is Dictionary or not source.compatibility.is_empty() or not source.effects is Dictionary or not source.effects.is_empty():
 		return _failure("metadata")
-	if source.scene_path != "res://scenes/hub/%s.tscn" % source.id or not FileAccess.file_exists(source.scene_path) or not _position(source.arrival):
+	if source.scene_path != "res://scenes/hub/%s.tscn" % source.id or not ResourceLoader.exists(source.scene_path, "PackedScene") or not _position(source.arrival):
 		return _failure("scene_path")
 	if not source.functions is Array or source.functions.size() != 3:
 		return _failure("functions")
