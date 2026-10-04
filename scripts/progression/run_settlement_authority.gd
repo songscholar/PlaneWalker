@@ -169,10 +169,14 @@ func _validate_sources(run: Dictionary, launch: Dictionary, receipts: Array) -> 
 	var room_keys: Dictionary = {}
 	for fact: Dictionary in facts_result.context.room_facts:
 		room_keys["%s:%s" % [fact.floor_id, fact.node_id]] = true
+	var material_room_keys := room_keys.duplicate()
+	for node: Dictionary in run.floor_plan.nodes:
+		if node.id == run.floor_plan.current_node_id and node.visited and node.room_type in ["combat", "elite", "boss"]:
+			material_room_keys["%s:%s" % [run.floor_plan.floor_id, node.id]] = true
 	var retained: Dictionary = {}
 	for event: Variant in run.events:
 		if event is Dictionary and event.get("type") == SOURCE_TYPE:
-			if not Catalog.exact_fields(event, ["type", "receipt"]) or not _valid_source(event.receipt, launch, room_keys) or retained.has(event.receipt.source_id):
+			if not Catalog.exact_fields(event, ["type", "receipt"]) or not _valid_source(event.receipt, launch, room_keys, material_room_keys) or retained.has(event.receipt.source_id):
 				return _failure(&"SOURCE_INVALID")
 			retained[event.receipt.source_id] = _normalize_source(event.receipt)
 	if retained.size() != receipts.size():
@@ -181,7 +185,7 @@ func _validate_sources(run: Dictionary, launch: Dictionary, receipts: Array) -> 
 	var boss_floors: Array = []
 	var material_defeats: Array = []
 	for value: Variant in receipts:
-		if not _valid_source(value, launch, room_keys) or sources.has(value.source_id) or not retained.has(value.source_id):
+		if not _valid_source(value, launch, room_keys, material_room_keys) or sources.has(value.source_id) or not retained.has(value.source_id):
 			return _failure(&"SOURCE_INVALID")
 		var source := _normalize_source(value)
 		if source != retained[value.source_id]:
@@ -208,16 +212,16 @@ func _validate_sources(run: Dictionary, launch: Dictionary, receipts: Array) -> 
 	return _success({"sources": ordered})
 
 
-func _valid_source(value: Variant, launch: Dictionary, room_keys: Dictionary) -> bool:
-	if not Catalog.exact_fields(value, SOURCE_FIELDS) or value.schema_id != SOURCE_TYPE or not Catalog.stable_id(value.source_id) or value.run_id != launch.run_id or not Catalog.bounded_int(value.launch_sequence, 1, Catalog.MAX_VALUE) or value.launch_sequence != launch.sequence or value.floor_id not in Envelope.FLOOR_IDS or not value.node_id is String or not room_keys.has("%s:%s" % [value.floor_id, value.node_id]):
+func _valid_source(value: Variant, launch: Dictionary, room_keys: Dictionary, material_room_keys: Dictionary) -> bool:
+	if not Catalog.exact_fields(value, SOURCE_FIELDS) or value.schema_id != SOURCE_TYPE or not Catalog.stable_id(value.source_id) or value.run_id != launch.run_id or not Catalog.bounded_int(value.launch_sequence, 1, Catalog.MAX_VALUE) or value.launch_sequence != launch.sequence or value.floor_id not in Envelope.FLOOR_IDS or not value.node_id is String:
 		return false
 	if value.kind == "boss":
-		return value.node_id == "boss" and Catalog.exact_fields(value.payload, ["actor_role", "boss_id"]) and value.payload.actor_role == "principal" and value.payload.boss_id == _boss_by_floor[value.floor_id] and value.source_id == source_id(value, value.payload.boss_id)
+		return room_keys.has("%s:%s" % [value.floor_id, value.node_id]) and value.node_id == "boss" and Catalog.exact_fields(value.payload, ["actor_role", "boss_id"]) and value.payload.actor_role == "principal" and value.payload.boss_id == _boss_by_floor[value.floor_id] and value.source_id == source_id(value, value.payload.boss_id)
 	if value.kind == "material":
-		if not Catalog.exact_fields(value.payload, ["actor_role", "principal_source_id", "defeat_receipt", "chronos_shards", "existential_imprints"]) or value.payload.actor_role != "principal" or not Catalog.stable_id(value.payload.principal_source_id):
+		if not material_room_keys.has("%s:%s" % [value.floor_id, value.node_id]) or not Catalog.exact_fields(value.payload, ["actor_role", "principal_source_id", "defeat_receipt", "chronos_shards", "existential_imprints"]) or value.payload.actor_role != "principal" or not Catalog.stable_id(value.payload.principal_source_id):
 			return false
 		var defeat := "hostile_defeat:%s" % ("%s|%s" % [launch.run_id, value.payload.principal_source_id]).sha256_text().substr(0, 40)
-		return value.payload.defeat_receipt == defeat and value.source_id == source_id(value, defeat) and Catalog.bounded_int(value.payload.chronos_shards, 0, Catalog.MAX_VALUE) and Catalog.bounded_int(value.payload.existential_imprints, 0, Catalog.MAX_VALUE) and (value.payload.chronos_shards > 0 or value.payload.existential_imprints > 0)
+		return value.payload.defeat_receipt == defeat and value.source_id == source_id(value, defeat) and Catalog.bounded_int(value.payload.chronos_shards, 0, 5) and Catalog.bounded_int(value.payload.existential_imprints, 0, 1) and (value.payload.chronos_shards > 0 or value.payload.existential_imprints > 0)
 	return false
 
 

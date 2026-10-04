@@ -1,0 +1,8 @@
+{
+  "schema_id": "planewalker.meta_material_policy",
+  "schema_version": 1,
+  "ordinary": {"chronos_shards": 0, "existential_imprints": 0},
+  "elite": {"chronos_shards": 1, "existential_imprints": 0},
+  "boss": {"chronos_shards": 0, "existential_imprints": 0},
+  "support": {"chronos_shards": 0, "existential_imprints": 0}
+}

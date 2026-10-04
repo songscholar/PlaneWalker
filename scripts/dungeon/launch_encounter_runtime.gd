@@ -173,6 +173,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func configured_encounter() -> Dictionary:
+	return _encounter.duplicate(true)
+
+
 func can_restore_snapshot(value: Dictionary) -> bool:
 	if _state.is_empty() or not Contract.exact_fields(value, SNAPSHOT_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.encounter_digest != _state.encounter_digest or value.identity != _state.identity:
 		return false

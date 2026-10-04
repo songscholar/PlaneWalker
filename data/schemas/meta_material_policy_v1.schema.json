@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker.meta_material_policy_v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_id", "schema_version", "ordinary", "elite", "boss", "support"],
+  "properties": {
+    "schema_id": {"const": "planewalker.meta_material_policy"},
+    "schema_version": {"const": 1},
+    "ordinary": {"$ref": "#/$defs/material"},
+    "elite": {"$ref": "#/$defs/material"},
+    "boss": {"$ref": "#/$defs/noMaterial"},
+    "support": {"$ref": "#/$defs/noMaterial"}
+  },
+  "$defs": {
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chronos_shards", "existential_imprints"],
+      "properties": {
+        "chronos_shards": {"type": "integer", "minimum": 0, "maximum": 5},
+        "existential_imprints": {"type": "integer", "minimum": 0, "maximum": 1}
+      }
+    },
+    "noMaterial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chronos_shards", "existential_imprints"],
+      "properties": {
+        "chronos_shards": {"const": 0, "type": "integer"},
+        "existential_imprints": {"const": 0, "type": "integer"}
+      }
+    }
+  }
+}

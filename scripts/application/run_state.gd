@@ -12,6 +12,7 @@ const DungeonEventRunStateScript := preload("res://scripts/events/dungeon_event_
 const EventModifierLifetimeScript := preload("res://scripts/events/event_modifier_lifetime.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const PLAYER_REWARD_BASELINE := "player_reward_run_start_baseline"
+const MetaCatalog := preload("res://scripts/progression/meta_progression_catalog.gd")
 
 const REWARD_REPLAY_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -168,6 +169,34 @@ func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
 func advance_revision() -> int:
 	revision += 1
 	return revision
+
+
+func can_append_meta_material_source(source: Dictionary) -> bool:
+	var node := current_floor_node()
+	if is_terminal() or suspended or node.is_empty() or not node.visited or node.cleared or node.room_type not in ["combat", "elite"] or events.size() >= 4096 or revision >= MetaCatalog.MAX_VALUE:
+		return false
+	if not MetaCatalog.exact_fields(source, ["schema_id", "source_id", "run_id", "launch_sequence", "floor_id", "node_id", "kind", "payload"]) or source.schema_id != "meta_settlement_source_v1" or source.kind != "material" or source.run_id != run_id or source.floor_id != floor_plan.floor_id or source.node_id != node.id or not MetaCatalog.bounded_int(source.launch_sequence, 1, MetaCatalog.MAX_VALUE):
+		return false
+	var payload: Variant = source.payload
+	if not MetaCatalog.exact_fields(payload, ["actor_role", "principal_source_id", "defeat_receipt", "chronos_shards", "existential_imprints"]) or payload.actor_role != "principal" or not MetaCatalog.stable_id(payload.principal_source_id) or not MetaCatalog.bounded_int(payload.chronos_shards, 0, 5) or not MetaCatalog.bounded_int(payload.existential_imprints, 0, 1) or payload.chronos_shards + payload.existential_imprints <= 0:
+		return false
+	var defeat := "hostile_defeat:%s" % (run_id + "|" + payload.principal_source_id).sha256_text().substr(0, 40)
+	var identity := "meta_material:%s" % ("%s|%d|%s|%s|%s" % [run_id, int(source.launch_sequence), source.floor_id, source.node_id, defeat]).sha256_text().substr(0, 40)
+	if payload.defeat_receipt != defeat or source.source_id != identity:
+		return false
+	for event: Variant in events:
+		if event is Dictionary and event.get("type") == "meta_settlement_source_v1" and event.get("receipt") is Dictionary:
+			if event.receipt.get("source_id") == identity or event.receipt.get("payload", {}).get("defeat_receipt") == defeat:
+				return false
+	return true
+
+
+func append_meta_material_source(source: Dictionary) -> bool:
+	if not can_append_meta_material_source(source):
+		return false
+	events.append({"type": "meta_settlement_source_v1", "receipt": source.duplicate(true)})
+	advance_revision()
+	return true
 
 
 func advance_time(delta_seconds: float) -> int:
