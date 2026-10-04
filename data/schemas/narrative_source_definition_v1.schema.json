@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/narrative-source-definition/1.0.0",
+  "title": "Plane Walker narrative source definition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "id", "schema_version", "name_key", "description_key", "availability", "tags", "compatibility", "effects", "source_kind", "sequence", "source_receipt_id", "floor_id", "location_id", "requirements", "text_key", "consumption_scope"],
+  "properties": {
+    "category": {"const": "narrative_source_definition"},
+    "id": {"$ref": "#/$defs/id"},
+    "schema_version": {"type": "integer", "const": 1},
+    "name_key": {"$ref": "#/$defs/key"},
+    "description_key": {"$ref": "#/$defs/key"},
+    "availability": {"const": ["LAUNCH", "EXPANSION"]},
+    "tags": {"const": ["launch", "narrative"]},
+    "compatibility": {"type": "object", "const": {}},
+    "effects": {"type": "object", "const": {}},
+    "source_kind": {"enum": ["phia_marker", "walker_letter", "heart_fragment"]},
+    "sequence": {"type": "integer", "minimum": 1, "maximum": 5},
+    "source_receipt_id": {"$ref": "#/$defs/id"},
+    "floor_id": {"enum": ["floor_ruins_of_remnant", "floor_void_forest", "floor_time_rift", "floor_plane_forge", "floor_throne_of_void"]},
+    "location_id": {"$ref": "#/$defs/id"},
+    "requirements": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/requirement"}},
+    "text_key": {"$ref": "#/$defs/key"},
+    "consumption_scope": {"const": "profile"}
+  },
+  "allOf": [
+    {"if": {"properties": {"source_kind": {"const": "phia_marker"}}}, "then": {"properties": {"floor_id": {"const": "floor_ruins_of_remnant"}, "requirements": {"maxItems": 0}}}},
+    {"if": {"properties": {"source_kind": {"const": "walker_letter"}}}, "then": {"properties": {"sequence": {"maximum": 3}, "requirements": {"maxItems": 0}}}},
+    {"if": {"properties": {"source_kind": {"const": "heart_fragment"}}}, "then": {"properties": {"requirements": {"minItems": 1}}}}
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"},
+    "key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$"},
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "value"],
+      "properties": {
+        "kind": {"const": "boss_defeated"},
+        "id": {"enum": ["ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne"]},
+        "value": {"type": "integer", "const": 1}
+      }
+    }
+  }
+}
