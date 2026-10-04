@@ -222,6 +222,17 @@ func configure_authored_runtime(
 	return true
 
 
+func configure_checkpoint_runtime(room_runtime: Node, encounter_catalog: RefCounted) -> bool:
+	if not configure_authored_runtime(room_runtime, encounter_catalog):
+		return false
+	var retained: Dictionary = room_runtime.snapshot()
+	_current_room_definition = retained.room_definition.duplicate(true)
+	_cleared = bool(retained.room_terminal) and retained.failure.is_empty()
+	if reward_marker != null:
+		reward_marker.visible = _cleared
+	return true
+
+
 func begin_run() -> Variant:
 	return begin_current_room()
 

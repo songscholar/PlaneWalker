@@ -1368,6 +1368,16 @@ func current_room_definition() -> Dictionary:
 	return _room_definitions[room_number - 1].duplicate(true)
 
 
+func current_room_restore_target() -> Dictionary:
+	var room := current_room_definition()
+	if not _is_floor_plan_run() or room.is_empty() or not room.get("template") is Dictionary:
+		return {}
+	var target := room.duplicate(true)
+	target["node_id"] = str(snapshot().floor_plan.current_node_id)
+	target["scene_context"] = _scene_context_for_target(target)
+	return target
+
+
 func current_encounter_definition() -> Dictionary:
 	if not _booted or _encounter_catalog == null or _orchestrator == null:
 		return {}

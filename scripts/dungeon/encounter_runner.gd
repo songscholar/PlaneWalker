@@ -123,6 +123,22 @@ func snapshot() -> Dictionary:
 	}
 
 
+func restore_inactive_checkpoint(value: Dictionary) -> bool:
+	var fields := ["encounter_id", "wave_index", "alive_count", "pending_spawn_count", "active", "failure"]
+	if value.size() != fields.size() or _active or not _alive_instance_ids.is_empty() or not _pending_spawn_ids.is_empty():
+		return false
+	for field: String in fields:
+		if not value.has(field):
+			return false
+	if not value.encounter_id is String or not value.failure is Dictionary or value.active != false or value.alive_count != 0 or value.pending_spawn_count != 0 or typeof(value.wave_index) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value.wave_index)) or float(value.wave_index) != floor(float(value.wave_index)) or int(value.wave_index) < -1:
+		return false
+	cancel()
+	_encounter = {} if value.encounter_id.is_empty() else {"id": value.encounter_id}
+	_wave_index = int(value.wave_index)
+	_last_failure = value.failure.duplicate(true)
+	return JSON.parse_string(JSON.stringify(snapshot(), "", true, true)) == JSON.parse_string(JSON.stringify(value, "", true, true))
+
+
 func _schedule_advance(token: int) -> void:
 	if not _active or _advance_scheduled:
 		return

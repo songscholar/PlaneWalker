@@ -920,6 +920,14 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 			and SelectionOfferScript.validate(offer).ok
 			and int(offer.get("revision", -1)) <= int(value["revision"])
 		)
+	if int(value["phase"]) == RunPhaseScript.Value.DEFEAT:
+		var terminal := value["result"] as Dictionary
+		return (
+			terminal.get("result") in ["death", "abandon"]
+			and terminal.get("room_id") == current_node.get("id")
+			and int(terminal.get("current_room", -1)) == int(value["current_room"])
+			and (value["open_offer"] as Dictionary).is_empty()
+		)
 	return _active_floor_phase_is_valid(int(value["phase"]), plan, current_node)
 
 
@@ -1587,6 +1595,8 @@ func _floor_rule_state_matches_context(
 		or candidate_phase not in [
 			_active_phase_for_room_type(str(current_node.get("room_type", ""))),
 			RunPhaseScript.Value.ROOM_RESOLVING,
+			RunPhaseScript.Value.SELECTION_ACTIVE,
+			RunPhaseScript.Value.DEFEAT,
 		]
 	):
 		return false

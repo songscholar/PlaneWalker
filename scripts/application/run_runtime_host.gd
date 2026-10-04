@@ -12,6 +12,10 @@ const HostileThreatRegistryScript := preload("res://scripts/combat/hostile_threa
 const PlayerRewardEffectRuntimeScript := preload("res://scripts/items/player_reward_effect_runtime.gd")
 const ProfileServiceScript := preload("res://scripts/progression/profile_runtime_service.gd")
 const RunLoadoutPolicyScript := preload("res://scripts/application/run_loadout_policy.gd")
+const NativeCheckpointScript := preload("res://scripts/save/native_run_checkpoint_authority.gd")
+const CheckpointPlayerTransactionScript := preload("res://scripts/save/native_checkpoint_player_transaction.gd")
+
+signal profile_run_restored(run_id: String, state: Dictionary)
 
 const HUD_RENDER_INTERVAL := 0.1
 const BOSS_EXPOSURE_REPLAY_CHECKPOINT_SCHEMA_VERSION := 1
@@ -64,6 +68,7 @@ var _profile_start_pending := false
 var _profile_publication_pending := false
 var _floor_entry_recovery_pending := false
 var _presentation_enabled := true
+var _checkpoint_restore_active := false
 
 
 func _ready() -> void:
@@ -178,6 +183,179 @@ func retain_profile_run(expected_revision: int) -> Variant:
 
 func native_run_state() -> RefCounted:
 	return _facade.native_run_state() if _facade != null else null
+
+
+func native_checkpoint_restore_active() -> bool:
+	return _checkpoint_restore_active
+
+
+func native_checkpoint_participants() -> Dictionary:
+	return {
+		"facade": _facade, "runtime": _room_runtime, "controller": _room_controller,
+		"player": _player, "scene_host": _route_scene_adapter, "profile": _profile_service,
+		"busy": _checkpoint_restore_active or _profile_start_pending or _profile_publication_pending or _floor_entry_recovery_pending or _route_entry_publication_active,
+		"publication": {
+			"route_ids": _published_route_transition_ids.duplicate(true),
+			"floor_start_ids": _published_floor_start_ids.duplicate(true),
+			"floor_completion_ids": _published_floor_completion_ids.duplicate(true),
+			"floor_rule_frame_origin": _floor_rule_frame_origin,
+			"player_process_mode": _player_process_mode if _selection_safety_active else _player.process_mode,
+			"controller_process_mode": _room_controller_process_mode if _selection_safety_active else _room_controller.process_mode,
+			"selection_safety": _selection_safety_active,
+			"dungeon_selection": _dungeon_selection_active,
+		},
+	}
+
+
+func checkpoint_profile_run(expected_revision: int) -> Variant:
+	if _profile_service == null or not _profile_service.has_method("retain_native_checkpoint"):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "checkpoint_profile_run"})
+	var retained: Dictionary = _profile_service.call("retain_native_checkpoint", self, expected_revision)
+	if not retained.ok and retained.code == &"NATIVE_PUBLICATION_PENDING":
+		_profile_publication_pending = true
+		if _player != null and is_instance_valid(_player):
+			_player.process_mode = Node.PROCESS_MODE_DISABLED
+		if _room_controller != null and is_instance_valid(_room_controller):
+			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED
+	return CommandResultScript.success(_revision(), retained.context) if retained.ok else CommandResultScript.failure(retained.code, _revision(), retained.context)
+
+
+func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> Variant:
+	if not _active or not _active_run_id.is_empty() or _checkpoint_restore_active or not service is ProfileServiceScript or not service.has_method("authenticated_native_checkpoint"):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "restore_profile_checkpoint"})
+	var authenticated: Dictionary = service.call("authenticated_native_checkpoint", expected_revision)
+	if not authenticated.ok:
+		return CommandResultScript.failure(authenticated.code, _revision(), authenticated.context)
+	var saved: Dictionary = authenticated.context.run
+	var checkpoint: Dictionary = authenticated.context.checkpoint
+	var replay: Dictionary = authenticated.context.replay
+	var candidate := _boot_facade()
+	if candidate == null:
+		return CommandResultScript.failure(&"CONTENT_NOT_AVAILABLE", _revision())
+	var domain = candidate.restore_launch_run(saved, _floor_rule_effect_authority)
+	if not domain.ok:
+		return domain
+	var target: Dictionary = candidate.current_room_restore_target()
+	if not NativeCheckpointScript.scene_binding_matches(checkpoint.scene_binding, target):
+		return CommandResultScript.failure(&"NATIVE_CHECKPOINT_INVALID", _revision(), {"stage": "scene_binding"})
+	var prepared: Dictionary = {}
+	if not target.is_empty():
+		if not _route_scene_adapter is Object or not _route_scene_adapter.has_method("prepare_transition"):
+			return CommandResultScript.failure(&"ROOM_SCENE_ADAPTER_INVALID", _revision())
+		var scene_preimage: Dictionary = _route_scene_adapter.active_snapshot()
+		var scene_context: Dictionary = target.scene_context.duplicate(true)
+		scene_context["reduced_motion"] = checkpoint.scene_binding.binding.reduced_motion
+		scene_context["hit_flash_enabled"] = checkpoint.scene_binding.binding.hit_flash_enabled
+		prepared = _prepare_route_scene(target, {"scene_context": scene_context})
+		if not prepared.get("ok", false):
+			return CommandResultScript.failure(&"ROOM_SCENE_BIND_FAILED", _revision(), prepared)
+		prepared["checkpoint_scene_preimage"] = scene_preimage
+	_checkpoint_restore_active = true
+	var player_transaction := CheckpointPlayerTransactionScript.new()
+	if not player_transaction.begin(_player):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_PLAYER_INVALID")
+	var config: Dictionary = saved.config.duplicate(true)
+	var loadout: Dictionary = candidate.active_loadout()
+	config["character_profile"] = loadout.character_profile.duplicate(true)
+	config["weapon_profile"] = loadout.weapon_profile.duplicate(true)
+	config["character_talent_definitions"] = loadout.character_talents.duplicate(true)
+	config["character_talents"] = []
+	for talent: Dictionary in loadout.character_talents:
+		config.character_talents.append(str(talent.id))
+	config["meta_run_projection"] = saved.resources.meta_run_projection.duplicate(true)
+	if not _player.configure_run(StringName(saved.run_id)):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_RUN_ID_INVALID")
+	if not _player.configure_loadout(config):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_LOADOUT_INVALID")
+	if not _player.restore_full_player_replay_snapshot(replay):
+		var diagnostics := {"identity": _player.full_player_replay_identity() == replay.identity, "health": _player.health.can_restore_replay_snapshot(replay.health_state), "world": _player.world_payload_authority.can_restore_replay_snapshot(replay.world_payload_state), "normalized": not (_player.call("_validated_full_player_replay_snapshot", replay) as Dictionary).is_empty(), "installable": _player.call("_can_install_full_player_replay_snapshot", replay)}
+		var failed = _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_PLAYER_INVALID")
+		failed.context["participants"] = diagnostics
+		return failed
+	var floor_effects: Dictionary = checkpoint.floor_effect_state.duplicate(true)
+	floor_effects["schema_version"] = int(floor_effects.schema_version)
+	if not _player.restore_floor_rule_effect_snapshot(floor_effects):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_FLOOR_EFFECT_INVALID")
+	if not candidate.configure_merchant_effect_authority(_reward_effect_runtime, _player):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"AUTHORED_RUNTIME_CONFIGURATION_FAILED")
+	var runner: Node = _room_controller.encounter_runner()
+	var runner_before: Dictionary = runner.snapshot()
+	var runtime: Node = candidate.create_room_runtime(runner)
+	if runtime == null or not runtime.restore_safe_checkpoint(checkpoint.room_state):
+		if runtime != null:
+			runtime.free()
+		runner.restore_inactive_checkpoint(runner_before)
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_ROOM_INVALID")
+	if not prepared.is_empty() and not _commit_route_scene(prepared, {}, {}).get("ok", false):
+		runtime.free()
+		runner.restore_inactive_checkpoint(runner_before)
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"ROOM_SCENE_ACTIVATION_FAILED")
+	var actual_binding: Dictionary = {} if prepared.is_empty() else _route_scene_adapter.active_room().binding_snapshot()
+	if not NativeCheckpointScript.json_equal(candidate.snapshot(), saved) or _player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.equivalent_scene_binding(checkpoint.scene_binding, actual_binding):
+		runtime.free()
+		runner.restore_inactive_checkpoint(runner_before)
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_DRIFT")
+	if not prepared.is_empty() and not _confirm_route_scene(prepared, {}).get("ok", false):
+		runtime.free()
+		runner.restore_inactive_checkpoint(runner_before)
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"ROOM_SCENE_CONFIRM_FAILED")
+	_facade = candidate
+	_room_runtime = runtime
+	_room_runtime.name = "RoomRuntime"
+	add_child(_room_runtime)
+	_profile_service = service
+	_active_run_id = str(saved.run_id)
+	_published_run_id = _active_run_id
+	_initializing_run_id = ""
+	_ended_run_id = _active_run_id if RunPhaseScript.is_terminal(int(saved.phase)) else ""
+	_profile_start_pending = false
+	_profile_publication_pending = false
+	_floor_entry_recovery_pending = false
+	var publication: Dictionary = checkpoint.publication_state
+	_published_route_transition_ids = publication.route_ids.duplicate(true)
+	_published_floor_start_ids = publication.floor_start_ids.duplicate(true)
+	_published_floor_completion_ids = publication.floor_completion_ids.duplicate(true)
+	_floor_rule_frame_origin = int(publication.floor_rule_frame_origin)
+	_player_process_mode = int(publication.player_process_mode) as ProcessMode
+	_room_controller_process_mode = int(publication.controller_process_mode) as ProcessMode
+	_selection_safety_active = bool(publication.selection_safety)
+	_dungeon_selection_active = bool(publication.dungeon_selection)
+	_player.process_mode = Node.PROCESS_MODE_DISABLED if _selection_safety_active or RunPhaseScript.is_terminal(int(saved.phase)) else _player_process_mode
+	_room_controller.process_mode = Node.PROCESS_MODE_DISABLED if _selection_safety_active or RunPhaseScript.is_terminal(int(saved.phase)) else _room_controller_process_mode
+	_room_controller.configure_hostile_threat_authority(hostile_identity_scope(StringName(saved.run_id)), _hostile_threat_registry)
+	if not _room_controller.configure_checkpoint_runtime(runtime, candidate.encounter_catalog()):
+		_profile_publication_pending = true
+	_connect_room_runtime()
+	if not player_transaction.commit():
+		_profile_publication_pending = true
+	if int(saved.phase) == RunPhaseScript.Value.SELECTION_ACTIVE and _choice_panel != null:
+		_choice_panel.render(_choice_offer_for_player(saved.open_offer))
+	var native_player := _player
+	profile_run_restored.emit(_active_run_id, saved.duplicate(true))
+	_checkpoint_restore_active = false
+	if not is_inside_tree() or not is_instance_valid(native_player) or _player != native_player or native_player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), saved) or service.snapshot().revision != expected_revision:
+		_profile_publication_pending = true
+	if _profile_publication_pending:
+		if is_instance_valid(native_player):
+			native_player.process_mode = Node.PROCESS_MODE_DISABLED
+		if is_instance_valid(_room_controller):
+			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED
+		return CommandResultScript.failure(&"NATIVE_PUBLICATION_PENDING", _revision(), {"restored": true})
+	_render_live_hud()
+	return CommandResultScript.success(_revision(), {"restored": true, "run_id": _active_run_id, "terminal": RunPhaseScript.is_terminal(int(saved.phase)), "profile_revision": expected_revision})
+
+
+func _rollback_checkpoint_restore(transaction: RefCounted, prepared: Dictionary, code: StringName) -> Variant:
+	var scene_rolled_back: bool = prepared.is_empty() or _rollback_route_scene(prepared, {}).get("ok", false)
+	if not scene_rolled_back and _route_scene_adapter is Object and _route_scene_adapter.has_method("pending_transition_ticket") and _route_scene_adapter.pending_transition_ticket().is_empty():
+		scene_rolled_back = _route_scene_adapter.active_snapshot() == prepared.get("checkpoint_scene_preimage")
+	var player_rolled_back: bool = not transaction.get("_active") or transaction.rollback()
+	_checkpoint_restore_active = false
+	if not scene_rolled_back or not player_rolled_back:
+		_profile_publication_pending = true
+		_player.process_mode = Node.PROCESS_MODE_DISABLED
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "checkpoint_restore_rollback", "cause": str(code), "scene": scene_rolled_back, "player": player_rolled_back})
+	return CommandResultScript.failure(code, _revision(), {"stage": "checkpoint_restore"})
 
 
 func content_registry() -> RefCounted:

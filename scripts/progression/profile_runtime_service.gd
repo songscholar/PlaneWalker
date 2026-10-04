@@ -13,6 +13,7 @@ const Narrative := preload("res://scripts/narrative/narrative_runtime.gd")
 const NarrativeContent := preload("res://scripts/narrative/narrative_catalog.gd")
 const Tutorial := preload("res://scripts/onboarding/tutorial_runtime.gd")
 const TutorialAdapter := preload("res://scripts/onboarding/tutorial_native_adapter.gd")
+const TrainingAdapter := preload("res://scripts/training/training_runtime.gd")
 const Run := preload("res://scripts/application/run_state.gd")
 const RunConfig := preload("res://scripts/application/run_config.gd")
 const Player := preload("res://scripts/player/player_controller.gd")
@@ -20,6 +21,7 @@ const Room := preload("res://scripts/dungeon/launch_room_scene.gd")
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
+const NativeCheckpoint := preload("res://scripts/save/native_run_checkpoint_authority.gd")
 const OCCURRENCE_RADIUS := 48.0
 const MAX_OCCURRENCES := 64
 const MIRROR_FIELDS := ["chronos_shards", "existential_imprints", "unlocked_nodes", "discovered_items", "unlocked_characters", "unlocked_weapons", "weapon_proficiency", "npc_affinity", "unlocked_achievements", "cosmetics"]
@@ -49,10 +51,13 @@ var _tutorial_run: RefCounted
 var _tutorial_player: WeakRef
 var _tutorial_publication := false
 var _tutorial_recovery_pending := false
+var _training_adapter: RefCounted
+var _training_publication := false
+var _training_recovery_pending := false
 
 
 func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String, save_domain: String, initial_payload: Dictionary = {}) -> Dictionary:
-	if _busy or _narrative_publication or _tutorial_publication or save_service == null or not save_service.has_method("save_profile") or not save_service.has_method("load_profile") or not save_service.has_method("inspect_profile") or not Paths.validate_id(profile_id).ok or not Paths.validate_id(save_domain).ok:
+	if _busy or _narrative_publication or _tutorial_publication or _training_publication or save_service == null or not save_service.has_method("save_profile") or not save_service.has_method("load_profile") or not save_service.has_method("inspect_profile") or not Paths.validate_id(profile_id).ok or not Paths.validate_id(save_domain).ok:
 		return _failure(&"CONFIGURATION_INVALID")
 	if not save_service.has_method("enable_meta_profile") or not save_service.call("enable_meta_profile", catalog).ok:
 		return _failure(&"CONFIGURATION_INVALID")
@@ -91,6 +96,7 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 	_tutorial_recovery_pending = false
 	retire_tutorial_run()
 	_tutorial = null
+	retire_training()
 	return _success({"snapshot": snapshot()})
 
 
@@ -147,8 +153,67 @@ func retain_active_run(run: RefCounted, player: Node, expected_revision: int) ->
 	return persisted
 
 
+func retain_native_checkpoint(host: Node, expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	var captured := NativeCheckpoint.capture(host)
+	if not captured.ok:
+		return captured
+	var participants: Dictionary = host.native_checkpoint_participants()
+	var run: RefCounted = host.native_run_state()
+	var player: Node = participants.player
+	var before := snapshot()
+	var launch := _launch_for_run(captured.context.run)
+	if participants.profile != self or launch.is_empty():
+		return {"ok": false, "code": &"NATIVE_CHECKPOINT_INVALID", "context": {"stage": "profile_binding"}}
+	if not _player_matches_launch(player, launch, captured.context.run):
+		return {"ok": false, "code": &"NATIVE_CHECKPOINT_INVALID", "context": {"stage": "player_launch"}}
+	var sources: Dictionary = _settlement.verified_run_sources(launch, captured.context.run)
+	if not sources.ok or _clone_native_run(run, captured.context.run) == null:
+		return {"ok": false, "code": &"NATIVE_CHECKPOINT_INVALID", "context": {"stage": "run_validation", "sources": sources}}
+	if before.revision == Catalog.MAX_VALUE:
+		return _failure(&"TRANSACTION_LIMIT")
+	var candidate := before.duplicate(true)
+	candidate.revision += 1
+	var prepared: Dictionary = _profile.prepare_candidate(candidate)
+	if not prepared.ok:
+		return prepared
+	var persisted := _persist_ticket(prepared.context.ticket, {"active_run_state": captured.context.run, "reward_effect_state": captured.context.reward, "native_run_checkpoint": captured.context.checkpoint})
+	if persisted.ok:
+		var after := NativeCheckpoint.capture(host)
+		if not after.ok or after.context != captured.context:
+			_narrative_recovery_pending = true
+			return _failure(&"NATIVE_PUBLICATION_PENDING")
+		persisted.context["checkpoint_digest"] = captured.context.checkpoint.digest
+	return persisted
+
+
+func authenticated_native_checkpoint(expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	var primary = _save.inspect_profile(_profile_id, _save_domain)
+	if not primary.ok or not _json_equal(primary.payload.payload, _with_runtime_defaults(_payload)):
+		return _failure(&"STALE_DURABLE_PROFILE")
+	var checkpoint: Variant = _payload.get("native_run_checkpoint", {})
+	var run_value: Variant = _payload.get("active_run_state", {})
+	var reward_value: Variant = _payload.get("reward_effect_state", {})
+	if not checkpoint is Dictionary or checkpoint.is_empty():
+		return _failure(&"NATIVE_CHECKPOINT_NOT_AVAILABLE")
+	if not run_value is Dictionary or not reward_value is Dictionary:
+		return _failure(&"NATIVE_CHECKPOINT_INVALID")
+	var valid := NativeCheckpoint.validate(checkpoint, run_value, reward_value)
+	if not valid.ok:
+		return valid
+	var launch := _launch_for_run(run_value)
+	if launch.is_empty() or not _json_equal(launch, checkpoint.launch_receipt) or not _settlement.verified_run_sources(launch, run_value).ok:
+		return _failure(&"NATIVE_CHECKPOINT_INVALID")
+	return _success({"checkpoint": checkpoint.duplicate(true), "run": run_value.duplicate(true), "replay": valid.context.replay.duplicate(true)})
+
+
 func enable_workshop(entries: Array) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication or _tutorial_publication:
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _training_publication:
 		return _failure(&"NOT_CONFIGURED")
 	var forge = Forge.new()
 	var configured: Dictionary = forge.configure(entries, _catalog)
@@ -169,7 +234,7 @@ func resolve_build(build_id: String) -> Dictionary:
 
 
 func enable_tutorial(entries: Array) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _tutorial_recovery_pending:
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _training_publication or _tutorial_recovery_pending:
 		return _failure(&"NOT_CONFIGURED")
 	var runtime := Tutorial.new()
 	var configured := runtime.configure(entries, _catalog)
@@ -184,8 +249,72 @@ func tutorial_progress_view() -> Dictionary:
 	return _tutorial.progress_view(snapshot()) if _tutorial != null else _failure(&"TUTORIAL_NOT_CONFIGURED")
 
 
+func bind_training(player: Node, task_id: String, seed: int) -> Dictionary:
+	if _tutorial == null or _busy or _training_publication or _narrative_publication or _tutorial_publication or _narrative_recovery_pending or _tutorial_recovery_pending or not snapshot().active_launch_receipt.is_empty():
+		return _failure(&"TRAINING_BINDING_INVALID")
+	var drill: Dictionary = _tutorial.training_definition(task_id)
+	if drill.is_empty():
+		return _failure(&"TRAINING_TASK_INVALID")
+	if task_id == "T-05":
+		return _failure(&"TRAINING_BOSS_UNAVAILABLE")
+	var decoded: Dictionary = _tutorial.progress_view(snapshot())
+	if not decoded.ok:
+		return decoded
+	var sequence := int(decoded.context.watermarks.get("training_drill", {}).get("session_sequence", 0)) + 1
+	var adapter := TrainingAdapter.new()
+	if not adapter.configure(player, {"session_sequence": sequence, "seed": seed}, drill):
+		return _failure(&"TRAINING_BINDING_INVALID")
+	retire_training()
+	_training_adapter = adapter
+	return _success({"adapter": adapter})
+
+
+func observe_training(adapter: RefCounted, expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	if adapter == null or adapter != _training_adapter or _tutorial == null or not snapshot().active_launch_receipt.is_empty():
+		return _failure(&"TRAINING_BINDING_INVALID")
+	var observation: Dictionary = adapter.prepared_observation(snapshot())
+	var checkpoint: Dictionary = adapter.native_checkpoint()
+	if not observation.ok or checkpoint.is_empty():
+		return _failure(&"TRAINING_OBSERVATION_UNAVAILABLE")
+	var produced: Dictionary = _tutorial.prepare_observation(snapshot(), observation.context.receipt, expected_revision, adapter.task_id())
+	if not produced.ok:
+		return produced
+	var prepared: Dictionary = _profile.prepare_candidate(produced.context.candidate)
+	if not prepared.ok:
+		return prepared
+	_training_publication = true
+	var persisted := _persist_ticket(prepared.context.ticket)
+	if persisted.ok:
+		if adapter.native_checkpoint() != checkpoint or not adapter.can_confirm_saved(observation.context.receipt, observation.context.seal):
+			_training_recovery_pending = true
+			_training_publication = false
+			return _failure(&"NATIVE_PUBLICATION_PENDING")
+		var confirmed: Dictionary = adapter.confirm_saved(observation.context.receipt, observation.context.seal)
+		if not confirmed.ok or adapter.native_checkpoint() != checkpoint:
+			_training_recovery_pending = true
+			_training_publication = false
+			return _failure(&"NATIVE_PUBLICATION_PENDING")
+		persisted.context.completed_tasks = produced.context.completed_tasks.duplicate()
+		persisted.context.receipt = observation.context.receipt.duplicate(true)
+		persisted.context.consumed = true
+	_training_publication = false
+	return persisted
+
+
+func retire_training() -> void:
+	if _busy or _training_publication:
+		return
+	if _training_adapter != null:
+		_training_adapter.detach()
+	_training_adapter = null
+	_training_recovery_pending = false
+
+
 func bind_tutorial_run(run: RefCounted, player: Node) -> Dictionary:
-	if _tutorial == null or _busy or _narrative_publication or _tutorial_publication or _tutorial_recovery_pending or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
+	if _tutorial == null or _busy or _narrative_publication or _tutorial_publication or _training_publication or _tutorial_recovery_pending or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
 		return _failure(&"TUTORIAL_BINDING_INVALID")
 	var launch: Dictionary = snapshot().active_launch_receipt
 	var state: Dictionary = run.snapshot()
@@ -237,7 +366,7 @@ func observe_tutorial(adapter: RefCounted, expected_revision: int) -> Dictionary
 
 
 func restore_tutorial_run() -> Dictionary:
-	if _tutorial == null or _tutorial_run == null or _tutorial_player == null or _busy or _narrative_publication or _tutorial_publication:
+	if _tutorial == null or _tutorial_run == null or _tutorial_player == null or _busy or _narrative_publication or _tutorial_publication or _training_publication:
 		return _failure(&"TUTORIAL_BINDING_INVALID")
 	var run: RefCounted = _tutorial_run
 	var player: Node = _tutorial_player.get_ref()
@@ -249,7 +378,7 @@ func restore_tutorial_run() -> Dictionary:
 
 
 func retire_tutorial_run() -> void:
-	if _busy or _narrative_publication or _tutorial_publication or _tutorial_recovery_pending:
+	if _busy or _narrative_publication or _tutorial_publication or _training_publication or _tutorial_recovery_pending:
 		return
 	if _tutorial_adapter != null:
 		_tutorial_adapter.detach()
@@ -304,7 +433,7 @@ func _persist_tutorial(produced: Dictionary, checkpoint: Dictionary, observation
 
 
 func enable_narrative(entries: Array, sources: Array) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication or _tutorial_publication:
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _training_publication:
 		return _failure(&"NOT_CONFIGURED")
 	var runtime := Narrative.new()
 	var content := NarrativeContent.new()
@@ -318,7 +447,7 @@ func enable_narrative(entries: Array, sources: Array) -> Dictionary:
 
 
 func bind_narrative_run(run: RefCounted, player: Node) -> Dictionary:
-	if _narrative == null or _busy or _narrative_publication or _tutorial_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
+	if _narrative == null or _busy or _narrative_publication or _tutorial_publication or _training_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
 		return _failure(&"NARRATIVE_BINDING_INVALID")
 	var launch := _launch_for_run(run.snapshot())
 	if launch.is_empty() or not _player_matches_launch(player, launch, run.snapshot()) or not _settlement.verified_run_sources(launch, run.snapshot()).ok or not Replay.validate_full_player_reward_effect_state(player.reward_effect_snapshot()):
@@ -332,7 +461,7 @@ func bind_narrative_run(run: RefCounted, player: Node) -> Dictionary:
 
 
 func install_narrative_occurrence(kind: String, id: String, room: Node2D, template: Dictionary, anchor_id: String, runtime_parent: Node2D) -> Dictionary:
-	if _narrative == null or _busy or _narrative_publication or _tutorial_publication or _occurrences.size() >= MAX_OCCURRENCES or not _native_narrative_active(kind == "collect") or not room is Room or not is_instance_valid(runtime_parent) or not runtime_parent.is_inside_tree() or runtime_parent == room or room.is_ancestor_of(runtime_parent):
+	if _narrative == null or _busy or _narrative_publication or _tutorial_publication or _training_publication or _occurrences.size() >= MAX_OCCURRENCES or not _native_narrative_active(kind == "collect") or not room is Room or not is_instance_valid(runtime_parent) or not runtime_parent.is_inside_tree() or runtime_parent == room or room.is_ancestor_of(runtime_parent):
 		return _failure(&"OCCURRENCE_INVALID")
 	var definition := _occurrence_definition(kind, id)
 	var node: Dictionary = _narrative_run.current_floor_node()
@@ -471,13 +600,13 @@ func execute_narrative(command: Dictionary, expected_revision: int, occurrence: 
 
 
 func restore_narrative_run() -> Dictionary:
-	if _narrative_run == null or _narrative_player == null or _busy or _narrative_publication or _tutorial_publication:
+	if _narrative_run == null or _narrative_player == null or _busy or _narrative_publication or _tutorial_publication or _training_publication:
 		return _failure(&"NARRATIVE_BINDING_INVALID")
 	return restore_active_run(_narrative_run, _narrative_player.get_ref())
 
 
 func restore_active_run(run: RefCounted, player: Node) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication or _tutorial_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _training_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
 		return _failure(&"NATIVE_BINDING_INVALID")
 	var inspected = _save.inspect_profile(_profile_id, _save_domain)
 	if not inspected.ok or not _json_equal(inspected.payload.payload, _with_runtime_defaults(_payload)):
@@ -565,7 +694,7 @@ func prepare_launch(request: Dictionary, expected_revision: int, run_config: Dic
 	var prepared: Dictionary = _profile.call("prepare_candidate", candidate)
 	if not prepared.ok:
 		return _failure(&"LOADOUT_INVALID")
-	var persisted := _persist_ticket(prepared.context.ticket, {"active_run_state": {}, "reward_effect_state": {}, "pending_meta_run_projection": projected.context.projection, "pending_run_config": frozen_config})
+	var persisted := _persist_ticket(prepared.context.ticket, {"active_run_state": {}, "reward_effect_state": {}, "native_run_checkpoint": {}, "pending_meta_run_projection": projected.context.projection, "pending_run_config": frozen_config})
 	if persisted.ok:
 		persisted.context["launch"] = launch.duplicate(true)
 		persisted.context["projection"] = projected.context.projection.duplicate(true)
@@ -661,11 +790,11 @@ func _discard_failure(ticket: Dictionary, code: StringName) -> Dictionary:
 
 
 func _readiness(expected_revision: int) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication or _tutorial_publication:
-		return _failure(&"BUSY" if _busy or _narrative_publication or _tutorial_publication else &"NOT_CONFIGURED")
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _training_publication:
+		return _failure(&"BUSY" if _busy or _narrative_publication or _tutorial_publication or _training_publication else &"NOT_CONFIGURED")
 	if expected_revision != snapshot().revision:
 		return _failure(&"STALE_REVISION")
-	if _narrative_recovery_pending or _tutorial_recovery_pending:
+	if _narrative_recovery_pending or _tutorial_recovery_pending or _training_recovery_pending:
 		return _failure(&"NATIVE_PUBLICATION_PENDING")
 	return _success({})
 

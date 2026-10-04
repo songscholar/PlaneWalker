@@ -340,6 +340,44 @@ func snapshot() -> Dictionary:
 	}
 
 
+func restore_safe_checkpoint(value: Dictionary) -> bool:
+	if _facade == null or _runner == null or not _runner.has_method("restore_inactive_checkpoint") or value.size() != snapshot().size():
+		return false
+	for field: String in snapshot():
+		if not value.has(field):
+			return false
+	if value.configured != true or not value.room_active is bool or not value.room_terminal is bool or not value.room_id is String or not value.room_definition is Dictionary or not value.event_continuation is Dictionary or not value.failure is Dictionary or int(value.run_seed) != _run_seed:
+		return false
+	var expected: Dictionary = _facade.call("current_room_definition")
+	if JSON.parse_string(JSON.stringify(value.room_definition, "", true, true)) != JSON.parse_string(JSON.stringify(expected, "", true, true)) or (not expected.is_empty() and value.room_id != str(_room_id(expected))) or expected.is_empty() and value.room_id != "":
+		return false
+	var run: Dictionary = _facade.snapshot()
+	var phase := int(run.phase)
+	if bool(value.room_active) and bool(value.room_terminal) or not value.failure.is_empty():
+		return false
+	if expected.is_empty():
+		if value.room_active or value.room_terminal or not value.event_continuation.is_empty():
+			return false
+	elif phase == RunPhaseScript.Value.ROOM_ACTIVE:
+		if not value.room_active or value.room_terminal:
+			return false
+	elif phase in [RunPhaseScript.Value.ROOM_RESOLVING, RunPhaseScript.Value.SELECTION_ACTIVE, RunPhaseScript.Value.DEFEAT, RunPhaseScript.Value.VICTORY]:
+		if value.room_active or not value.room_terminal:
+			return false
+	var continuation: Dictionary = _facade.call("_current_event_continuation")
+	if JSON.parse_string(JSON.stringify(value.event_continuation, "", true, true)) != JSON.parse_string(JSON.stringify(continuation, "", true, true)):
+		return false
+	if not _runner.call("restore_inactive_checkpoint", value.runner):
+		return false
+	_room_active = value.room_active
+	_room_terminal = value.room_terminal
+	_current_room = expected.duplicate(true)
+	_current_room_id = StringName(value.room_id)
+	_event_continuation = value.event_continuation.duplicate(true)
+	_failure = value.failure.duplicate(true)
+	return JSON.parse_string(JSON.stringify(snapshot(), "", true, true)) == JSON.parse_string(JSON.stringify(value, "", true, true))
+
+
 func _connect_runner() -> void:
 	if _runner == null:
 		return

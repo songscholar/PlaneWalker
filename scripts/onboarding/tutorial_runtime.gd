@@ -26,12 +26,18 @@ func progress_view(profile: Dictionary) -> Dictionary:
 	return Progress.decode(profile, _content)
 
 
-func prepare_observation(profile: Dictionary, receipt: Dictionary, expected_revision: int) -> Dictionary:
+func training_definition(task_id: String) -> Dictionary:
+	return _content.call("definition", "training_task", task_id) if _content != null else {}
+
+
+func prepare_observation(profile: Dictionary, receipt: Dictionary, expected_revision: int, training_task_id: String = "") -> Dictionary:
 	var decoded := _ready_profile(profile, expected_revision)
 	if not decoded.ok:
 		return decoded
 	if not _receipt_valid(profile, receipt, decoded.context.watermarks):
 		return Candidate.failure(&"TUTORIAL_RECEIPT_INVALID")
+	if not training_task_id.is_empty() and (receipt.context_id != "training_drill" or _content.call("definition", "training_task", training_task_id).is_empty()):
+		return Candidate.failure(&"TRAINING_TASK_INVALID")
 	var candidate := profile.duplicate(true)
 	var counters: Dictionary = decoded.context.counters.duplicate(true)
 	var completed_lessons: Array = []
@@ -44,6 +50,8 @@ func prepare_observation(profile: Dictionary, receipt: Dictionary, expected_revi
 			candidate.tutorial_state.completed_lessons.sort()
 			completed_lessons.append(lesson.lesson_id)
 	for task: Dictionary in _content.call("definitions", "training_task"):
+		if not training_task_id.is_empty() and task.task_id != training_task_id:
+			continue
 		if decoded.context.training_claims.has(task.task_id):
 			continue
 		if _advance(candidate, counters, task, "task", task.task_id, receipt):
