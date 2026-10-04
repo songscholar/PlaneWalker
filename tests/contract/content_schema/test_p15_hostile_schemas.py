@@ -88,8 +88,29 @@ class P15HostileSchemaTest(unittest.TestCase):
                     for hit in action["hit_schedule"]:
                         self.assertLess(hit["offset_frame"], action["active_frames"], action["id"])
         blink = next(row for row in self.catalog("enemy_definition") if row["id"] == "blink_striker")
-        self.assertEqual(blink["elite_actions"][0]["active_frames"], 58)
-        self.assertEqual([hit["offset_frame"] for hit in blink["elite_actions"][0]["hit_schedule"]], [0, 27, 54])
+        triple = blink["elite_actions"][0]
+        # Each landing retains its transit and telegraph before the next cut.
+        interval = triple["parameters"]["transit_frames"] + triple["parameters"]["landing_warning_frames"]
+        self.assertEqual(triple["active_frames"], 70)
+        self.assertEqual([hit["offset_frame"] for hit in triple["hit_schedule"]], [0, interval, interval * 2])
+
+    def test_titan_corpse_pool_has_closed_bounded_authored_parameters(self):
+        row = next(row for row in self.catalog("enemy_definition") if row["id"] == "forge_titan")
+        validator = self.validator("enemy_definition")
+        self.assertEqual(list(validator.iter_errors(row)), [])
+        for field, invalid in {
+            "corpse_pool_radius_px": [0, 33, True],
+            "corpse_pool_damage": [-1, 9, True],
+            "corpse_pool_tick_frames": [59, 121, 60.5, True],
+        }.items():
+            missing = copy.deepcopy(row)
+            del missing["mechanisms"][field]
+            self.assertTrue(list(validator.iter_errors(missing)), field)
+            for value in invalid:
+                with self.subTest(field=field, value=value):
+                    bad = copy.deepcopy(row)
+                    bad["mechanisms"][field] = value
+                    self.assertTrue(list(validator.iter_errors(bad)))
 
     def test_root_and_nested_unknown_fields_fail_closed(self):
         for category in FILES:

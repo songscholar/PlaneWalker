@@ -2489,6 +2489,9 @@
               "explosion_damage",
               "explosion_radius_px",
               "corpse_explosion_warning_frames",
+              "corpse_pool_radius_px",
+              "corpse_pool_damage",
+              "corpse_pool_tick_frames",
               "pool_lifetime_frames"
             ],
             "properties": {
@@ -2533,6 +2536,21 @@
                 "maximum": 48
               },
               "corpse_explosion_warning_frames": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 120
+              },
+              "corpse_pool_radius_px": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 32
+              },
+              "corpse_pool_damage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 8
+              },
+              "corpse_pool_tick_frames": {
                 "type": "integer",
                 "minimum": 60,
                 "maximum": 120
