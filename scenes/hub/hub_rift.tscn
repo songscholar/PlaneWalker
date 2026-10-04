@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/hub/hub_district_scene.gd" id="1"]
+[ext_resource type="Texture2D" path="res://data/content_packs/base/assets/hub/hub_rift.png" id="2"]
+
+[node name="HubRift" type="Node2D"]
+script = ExtResource("1")
+district_id = "hub_rift"
+texture_filter = 1
+
+[node name="Background" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+centered = false

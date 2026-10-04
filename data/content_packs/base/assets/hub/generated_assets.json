@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "status": "native_hub_work",
+  "generator": "tools/generate_hub_assets.py",
+  "provenance": "Original project-authored procedural pixel artwork; no third-party sources.",
+  "license": "CC0-1.0",
+  "npc_frame_order": [
+    "odysseus",
+    "elara",
+    "sibyl",
+    "hermes",
+    "phia",
+    "morpheus",
+    "nemesis",
+    "vera",
+    "walker"
+  ],
+  "assets": [
+    {
+      "path": "hub_council.png",
+      "sha256": "e096a38fc75c623a0b4bceb8874faa3ccbda54da57997626cb51591dd59a0d4d",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "path": "hub_craft.png",
+      "sha256": "d29a776e4d1a2512b965c707716dec43d5a5236b4836dcbdb69f3adcd6e59508",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "path": "hub_rift.png",
+      "sha256": "8935edd1ca9101added78c19ad3a6ec9581a5a1a9f989f0ca908f7df9e459d04",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "path": "hub_portraits.png",
+      "sha256": "e1273fdd4411dabd2d0e622daf560f73736e0770836e2e83dbc5f71fa71e9196",
+      "width": 288,
+      "height": 32
+    }
+  ]
+}
