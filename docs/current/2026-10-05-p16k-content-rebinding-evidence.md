@@ -6,6 +6,7 @@
 - Applies To: SaveService content rebinding API
 - Owner: Runtime integration agent
 - Last Verified: 2026-10-05
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md`, `docs/current/2026-10-04-p16b-authoritative-content-evidence.md`
 - Evidence Status: Verified Locally
 - Certification Status: Focused storage boundary verified; GameState activation pending
 

@@ -6,6 +6,7 @@
 - Applies To: ProfileRuntimeService tutorial integration
 - Owner: Runtime integration agent
 - Last Verified: 2026-10-05
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md`, `docs/current/2026-10-05-p16i-native-tutorial-evidence.md`
 - Evidence Status: Verified Locally
 - Certification Status: Physical service verified; Main routing and guided policy remain separate
 

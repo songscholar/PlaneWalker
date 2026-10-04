@@ -145,10 +145,15 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Onboarding Domain Evidence](current/2026-10-05-p16f-onboarding-domain-evidence.md) | 教学动作计数、提示投影、跳过重放与指导局策略领域 | Verified Locally / Native integration pending |
 | [P16 Native Tutorial Observation Evidence](current/2026-10-05-p16i-native-tutorial-evidence.md) | 真实动作与成功帧认证、击退排除、保存后发布和失败帧补偿 | Verified Locally / Profile service and UI integration pending |
 | [P16 Native Tutorial UI Evidence](current/2026-10-05-p16l-tutorial-ui-evidence.md) | 真实 InputMap、课程和训练投影、原生焦点、双语及 17 张渲染证据 | Verified Locally / Main and training integration pending |
+| [P16 Physical Tutorial Service Evidence](current/2026-10-05-p16l-physical-tutorial-service-evidence.md) | 真实动作进度、完整局与奖励状态原子保存、回调漂移拒绝和恢复 | Verified Locally / Main routing and guided policy separate |
+| [P16 Compatible Content Rebinding Evidence](current/2026-10-05-p16k-content-rebinding-evidence.md) | 已认证旧内容指纹迁移、整档案保留、物理保存故障与并发回调拒绝 | Verified Locally / Current |
 | [P16 Registry Activation Evidence](current/2026-10-05-p16m-registry-activation-evidence.md) | 正式激活 431 条目录、40 遭遇配方、领域整组校验与 76 个完整性摘要 | Verified Locally / Complete native certification pending |
 | [P16 Player Frame Observer Evidence](current/2026-10-05-p16-player-frame-observer-evidence.md) | Player 成功帧通知、冻结输入读取、Replay 恢复失效与 11 场景回归 | Verified Locally / Tutorial UI integration pending |
 | [P16 Native Narrative Retention Evidence](current/2026-10-05-p16j-native-narrative-retention-evidence.md) | 原生叙事来源、HP 支付、完整局/奖励参与者保存、冻结开局和终局恢复 | Verified Locally / Main integration pending |
 | [P16 Durable Host Startup Evidence](current/2026-10-05-p16-durable-host-startup-evidence.md) | 保存后开局发布、冷启动重试、回调身份复检与下一层恢复等待 | Verified Locally / Main integration pending |
+| [P16 Native Hub Scene Evidence](current/2026-10-05-p16-native-hub-shell-evidence.md) | 三个像素场景、原生移动与九目的地、48 张渲染截图 | Verified Locally / Business panels pending |
+| [P16 Hub Business Evidence](current/2026-10-05-p16-hub-business-evidence.md) | 权威档案业务入口、闭合可用性与成本投影、配装和离线出发 | Verified Locally / Native panel certification separate |
+| [P16 Production Profile Boot Evidence](current/2026-10-05-p16-production-profile-boot-evidence.md) | 真实内容指纹、旧指纹迁移、权威进度镜像与未知内容拒绝 | Verified Locally / Main entry pending |
 | [P16G Native Material Evidence](current/2026-10-05-p16g-native-material-evidence.md) | 原生敌人死亡认证、材料保留重试与真实结算金额 | Verified Locally / Main integration pending |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
