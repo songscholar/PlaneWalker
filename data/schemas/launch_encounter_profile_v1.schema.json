@@ -1,0 +1,1860 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/launch-encounter-profile/1.0.0",
+  "title": "Plane Walker Launch Encounter Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "id",
+    "schema_version",
+    "name_key",
+    "description_key",
+    "availability",
+    "tags",
+    "compatibility",
+    "references",
+    "floor_id",
+    "boss_id",
+    "boss_encounter_id",
+    "recipes"
+  ],
+  "properties": {
+    "category": {
+      "const": "launch_encounter_profile"
+    },
+    "id": {
+      "enum": [
+        "encounter_profile_ruins_adapter_v1",
+        "encounter_profile_forest_adapter_v1",
+        "encounter_profile_rift_adapter_v1",
+        "encounter_profile_forge_adapter_v1",
+        "encounter_profile_throne_adapter_v1"
+      ]
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "name_key": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_]{1,96}$"
+    },
+    "description_key": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_]{1,96}$"
+    },
+    "availability": {
+      "const": [
+        "LAUNCH",
+        "EXPANSION"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_.]{1,96}$"
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 28,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "shattered_sentinel",
+          "corrosive_moth",
+          "stone_shell_strider",
+          "ruins_wraith",
+          "rift_watcher",
+          "void_hunter",
+          "void_archer",
+          "bramble_mage",
+          "void_spore",
+          "forest_caller",
+          "shadow_lurker",
+          "chrono_guard",
+          "rift_weaver",
+          "blink_striker",
+          "rewind_priest",
+          "chrono_storm_elemental",
+          "eternal_hound",
+          "forge_titan",
+          "void_web_weaver",
+          "phase_ranger",
+          "chaos_amalgam",
+          "plane_ripper",
+          "ruin_king",
+          "forest_heart",
+          "time_sovereign",
+          "forge_colossus",
+          "void_throne"
+        ]
+      }
+    },
+    "floor_id": {
+      "enum": [
+        "floor_ruins_of_remnant",
+        "floor_void_forest",
+        "floor_time_rift",
+        "floor_plane_forge",
+        "floor_throne_of_void"
+      ]
+    },
+    "boss_id": {
+      "enum": [
+        "ruin_king",
+        "forest_heart",
+        "time_sovereign",
+        "forge_colossus",
+        "void_throne"
+      ]
+    },
+    "boss_encounter_id": {
+      "enum": [
+        "boss_encounter_ruin_king_adapter_v1",
+        "boss_encounter_forest_heart_adapter_v1",
+        "boss_encounter_time_sovereign_adapter_v1",
+        "boss_encounter_forge_colossus_adapter_v1",
+        "boss_encounter_void_throne_adapter_v1"
+      ]
+    },
+    "recipes": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/recipe"
+      }
+    }
+  },
+  "$defs": {
+    "spawn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "enemy_id",
+        "spawn_slot_id",
+        "spawn_offset",
+        "elite",
+        "affix_ids",
+        "mechanism_ids"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.]{1,96}$"
+        },
+        "enemy_id": {
+          "enum": [
+            "shattered_sentinel",
+            "corrosive_moth",
+            "stone_shell_strider",
+            "ruins_wraith",
+            "rift_watcher",
+            "void_hunter",
+            "void_archer",
+            "bramble_mage",
+            "void_spore",
+            "forest_caller",
+            "shadow_lurker",
+            "chrono_guard",
+            "rift_weaver",
+            "blink_striker",
+            "rewind_priest",
+            "chrono_storm_elemental",
+            "eternal_hound",
+            "forge_titan",
+            "void_web_weaver",
+            "phase_ranger",
+            "chaos_amalgam",
+            "plane_ripper"
+          ]
+        },
+        "spawn_slot_id": {
+          "enum": [
+            "enemy_wave_primary",
+            "elite_primary"
+          ]
+        },
+        "spawn_offset": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": -320,
+              "maximum": 320,
+              "multipleOf": 16
+            },
+            "y": {
+              "type": "integer",
+              "minimum": -320,
+              "maximum": 320,
+              "multipleOf": 16
+            }
+          }
+        },
+        "elite": {
+          "type": "boolean"
+        },
+        "affix_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "frenzy",
+              "fortified",
+              "regenerating",
+              "teleporting",
+              "splitting",
+              "shielded",
+              "nullified",
+              "anchored",
+              "chaining",
+              "mirroring"
+            ]
+          }
+        },
+        "mechanism_ids": {
+          "const": []
+        }
+      }
+    },
+    "wave": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "delay_frames",
+        "warning_frames",
+        "spawns"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.]{1,96}$"
+        },
+        "delay_frames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "warning_frames": {
+          "type": "integer",
+          "minimum": 23,
+          "maximum": 600
+        },
+        "spawns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/spawn"
+          }
+        }
+      }
+    },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "room_type",
+        "template_ids",
+        "threat_budget",
+        "waves"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.]{1,96}$"
+        },
+        "room_type": {
+          "enum": [
+            "combat",
+            "elite"
+          ]
+        },
+        "template_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.]{1,96}$"
+          }
+        },
+        "threat_budget": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 14
+        },
+        "waves": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/wave"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "encounter_profile_ruins_adapter_v1"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_ruins_of_remnant"
+          },
+          "boss_id": {
+            "const": "ruin_king"
+          },
+          "boss_encounter_id": {
+            "const": "boss_encounter_ruin_king_adapter_v1"
+          },
+          "recipes": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "sentinel_line"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "watcher_guard"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "moth_crossfire"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "wraith_shell"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "ruin_full"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "sentinel_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "shell_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "watcher_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ],
+            "items": {
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "sentinel_line",
+                      "watcher_guard",
+                      "moth_crossfire",
+                      "wraith_shell",
+                      "ruin_full"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "room_type": {
+                    "const": "combat"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 4,
+                    "maximum": 6
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_combat_pillared_hall",
+                        "room_combat_high_ground",
+                        "room_combat_split_chambers",
+                        "room_combat_ring",
+                        "room_combat_open_field",
+                        "room_combat_bridge",
+                        "room_combat_l_corner",
+                        "room_combat_crossroads"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 30,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "enemy_wave_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 1,
+                                      "maxItems": 1
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "room_type": {
+                    "const": "elite"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 4,
+                    "maximum": 9
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_elite_arena",
+                        "room_elite_trap_arena",
+                        "room_elite_guard_corridor",
+                        "room_elite_twin_hall",
+                        "room_elite_altar_defense"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 30,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "elite_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 1,
+                                      "maxItems": 1
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "encounter_profile_forest_adapter_v1"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_void_forest"
+          },
+          "boss_id": {
+            "const": "forest_heart"
+          },
+          "boss_encounter_id": {
+            "const": "boss_encounter_forest_heart_adapter_v1"
+          },
+          "recipes": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "hunter_archer"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "bramble_spores"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "caller_archer"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "lurker_hunter"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "forest_full"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "hunter_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "bramble_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "caller_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ],
+            "items": {
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "hunter_archer",
+                      "bramble_spores",
+                      "caller_archer",
+                      "lurker_hunter",
+                      "forest_full"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "room_type": {
+                    "const": "combat"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 8
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_combat_pillared_hall",
+                        "room_combat_high_ground",
+                        "room_combat_split_chambers",
+                        "room_combat_void_grove",
+                        "room_combat_open_field",
+                        "room_combat_ring",
+                        "room_combat_l_corner",
+                        "room_combat_crossroads"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "enemy_wave_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 1,
+                                      "maxItems": 1
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "room_type": {
+                    "const": "elite"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 11
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_elite_arena",
+                        "room_elite_trap_arena",
+                        "room_elite_guard_corridor",
+                        "room_elite_twin_hall",
+                        "room_elite_altar_defense"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "elite_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 1,
+                                      "maxItems": 1
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "encounter_profile_rift_adapter_v1"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_time_rift"
+          },
+          "boss_id": {
+            "const": "time_sovereign"
+          },
+          "boss_encounter_id": {
+            "const": "boss_encounter_time_sovereign_adapter_v1"
+          },
+          "recipes": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "guard_priest"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "weaver_blink"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "hound_pack"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "storm_archer"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "rift_full"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "guard_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "blink_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "storm_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ],
+            "items": {
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "guard_priest",
+                      "weaver_blink",
+                      "hound_pack",
+                      "storm_archer",
+                      "rift_full"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "room_type": {
+                    "const": "combat"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 6,
+                    "maximum": 9
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_combat_pillared_hall",
+                        "room_combat_high_ground",
+                        "room_combat_split_chambers",
+                        "room_combat_void_grove",
+                        "room_combat_open_field",
+                        "room_combat_ring",
+                        "room_combat_l_corner",
+                        "room_combat_bridge",
+                        "room_combat_crossroads",
+                        "room_combat_clockwork"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "enemy_wave_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "room_type": {
+                    "const": "elite"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 6,
+                    "maximum": 12
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_elite_arena",
+                        "room_elite_trap_arena",
+                        "room_elite_guard_corridor",
+                        "room_elite_twin_hall",
+                        "room_elite_altar_defense"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "elite_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "encounter_profile_forge_adapter_v1"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_plane_forge"
+          },
+          "boss_id": {
+            "const": "forge_colossus"
+          },
+          "boss_encounter_id": {
+            "const": "boss_encounter_forge_colossus_adapter_v1"
+          },
+          "recipes": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "titan_ranger"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "web_titan"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "chaos_crossfire"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "ripper_pack"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "forge_full"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "titan_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "chaos_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "ripper_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ],
+            "items": {
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "titan_ranger",
+                      "web_titan",
+                      "chaos_crossfire",
+                      "ripper_pack",
+                      "forge_full"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "room_type": {
+                    "const": "combat"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 10
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_combat_pillared_hall",
+                        "room_combat_high_ground",
+                        "room_combat_split_chambers",
+                        "room_combat_void_grove",
+                        "room_combat_open_field",
+                        "room_combat_ring",
+                        "room_combat_l_corner",
+                        "room_combat_clockwork",
+                        "room_combat_crossroads"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "enemy_wave_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "room_type": {
+                    "const": "elite"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 13
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_elite_arena",
+                        "room_elite_trap_arena",
+                        "room_elite_guard_corridor",
+                        "room_elite_twin_hall",
+                        "room_elite_altar_defense"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "elite_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "id": {
+            "const": "encounter_profile_throne_adapter_v1"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "then": {
+        "properties": {
+          "floor_id": {
+            "const": "floor_throne_of_void"
+          },
+          "boss_id": {
+            "const": "void_throne"
+          },
+          "boss_encounter_id": {
+            "const": "boss_encounter_void_throne_adapter_v1"
+          },
+          "recipes": {
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_front"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_lanes"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_mirror"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_space"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_guard"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_titan_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_chaos_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "id": {
+                      "const": "throne_blink_trial"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ],
+            "items": {
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "throne_front",
+                      "throne_lanes",
+                      "throne_mirror",
+                      "throne_space",
+                      "throne_guard"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "room_type": {
+                    "const": "combat"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 11
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_combat_pillared_hall",
+                        "room_combat_high_ground",
+                        "room_combat_split_chambers",
+                        "room_combat_void_grove",
+                        "room_combat_open_field",
+                        "room_combat_ring",
+                        "room_combat_l_corner",
+                        "room_combat_bridge",
+                        "room_combat_crossroads",
+                        "room_combat_clockwork"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "enemy_wave_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "room_type": {
+                    "const": "elite"
+                  },
+                  "threat_budget": {
+                    "type": "integer",
+                    "minimum": 7,
+                    "maximum": 14
+                  },
+                  "template_ids": {
+                    "items": {
+                      "enum": [
+                        "room_elite_arena",
+                        "room_elite_trap_arena",
+                        "room_elite_guard_corridor",
+                        "room_elite_twin_hall",
+                        "room_elite_altar_defense"
+                      ]
+                    }
+                  },
+                  "waves": {
+                    "items": {
+                      "properties": {
+                        "warning_frames": {
+                          "type": "integer",
+                          "minimum": 23,
+                          "maximum": 600
+                        },
+                        "spawns": {
+                          "items": {
+                            "properties": {
+                              "spawn_slot_id": {
+                                "const": "elite_primary"
+                              }
+                            },
+                            "allOf": [
+                              {
+                                "if": {
+                                  "properties": {
+                                    "elite": {
+                                      "const": true
+                                    }
+                                  },
+                                  "required": [
+                                    "elite"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "minItems": 2,
+                                      "maxItems": 2
+                                    }
+                                  }
+                                },
+                                "else": {
+                                  "properties": {
+                                    "affix_ids": {
+                                      "const": []
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

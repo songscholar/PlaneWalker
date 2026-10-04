@@ -674,7 +674,8 @@ Evidence records exact implementation commits, counts, digests, focused/full tes
 - [x] Fixed-frame Stop/Rift/weakpoint/vulnerability source maps and strict control checkpoints reached focused RED-to-GREEN.
 - [x] First inactive native Sentinel scene, nineteen-pixel/forty-eight-frame retreat domain, original raster generator, real Health/Hurtbox damage, and native status/frame compensation reached focused RED-to-GREEN. This is a partial actor slice, not completed authoritative Launch content or global frame atomicity.
 - [x] Partial evidence recorded in `docs/current/2026-10-04-p15-hostile-foundation-evidence.md` with tested APIs and explicit production limits.
-- [ ] Complete Task 1 authoritative JSON, runtime parsers, schemas, and localization; pack activation remains staged.
+- [x] Authoritative Enemy/Boss/Affix/Summon data and closed parsers/schemas are present; five real profiles and forty recipes, bilingual profile keys, inactive source and actual template/actor-reference validation reached focused RED-to-GREEN on 2026-10-05.
+- [ ] Complete Task 1 specialized ContentRegistry ingestion; pack activation remains staged behind native runtime/asset/production gates.
 - [ ] Complete Task 2 live effect/bridge atomicity, time sources, and nonterminal HealthComponent integration.
 - [ ] Complete Tasks 3-12 native species, Bosses, assets, routing, Save/Replay, and certification.
 

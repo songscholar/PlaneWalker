@@ -12,6 +12,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = Suite.new()
+	suite.assert_true(FileAccess.file_exists("res://data/content_packs/base/content/launch_encounters.json"), "forty Launch recipes must exist in the authoritative authored catalog")
 	var implementation = load("res://scripts/dungeon/launch_encounter_catalog.gd")
 	suite.assert_true(implementation != null, "real Launch catalog implementation exists")
 	if implementation == null:
@@ -19,6 +20,7 @@ func _run() -> void:
 		return
 	var catalog: RefCounted = implementation.new()
 	var registry := Fixtures.registry()
+	suite.assert_true(catalog.configure_authored().ok, "inactive catalog reads authoritative hostile content without activating Base Pack")
 	suite.assert_true(catalog.configure(registry).ok, "five profiles with closed references configure")
 	suite.assert_equal(catalog.snapshot().enemy_count, 22, "catalog requires twenty-two ordinary identities")
 	suite.assert_equal(catalog.snapshot().recipe_count, 40, "catalog requires forty concrete recipe records")
@@ -37,11 +39,15 @@ func _run() -> void:
 		for recipe: Dictionary in registry.rows.launch_encounter_profile[floor_index].recipes:
 			var direct: Dictionary = catalog.encounter_definition(profile_id + "." + recipe.id, 0, 0, recipe.room_type)
 			suite.assert_true(Runtime.normalize_encounter(direct).ok, "every authored recipe resolves directly")
+			for template_id: String in recipe.template_ids:
+				var compatible: Dictionary = catalog.resolve_for_node(profile_id, 1729, "node:template", recipe.room_type, template_id)
+				suite.assert_equal(compatible.get("recipe_id"), recipe.id, "each actual compatible template resolves its authored recipe")
 	suite.assert_equal(catalog.encounter_definition("unknown_launch", 1, 1, "combat"), {}, "unknown Launch reference rejects")
 	suite.assert_equal(catalog.encounter_definition(Ids.PROFILE_IDS[0], 1, 1, "shop"), {}, "unsupported room type rejects")
 	suite.assert_equal(catalog.resolve_for_node(Ids.PROFILE_IDS[0], 1, "node:1", "combat", "missing_template"), {}, "no compatible template rejects")
 	suite.assert_equal(catalog.enemy_definition("chrono_warden"), {}, "Launch cannot resolve M1 compatibility Boss")
 	suite.assert_equal(catalog.spawn_slot("enemy_wave_primary").node_path, "EncounterAnchors/enemy_wave_primary", "Launch uses real streamed anchors")
+	suite.assert_equal(catalog.spawn_slot("elite_primary").node_path, "EncounterAnchors/elite_primary", "elite waves bind actual authored elite anchor")
 	var isolated: Dictionary = catalog.enemy_definition("shattered_sentinel")
 	isolated.scene = "res://arbitrary.tscn"
 	suite.assert_true(catalog.enemy_definition("shattered_sentinel").scene.ends_with("enemy_shattered_sentinel.tscn"), "actor lookups are deeply isolated")
@@ -65,6 +71,21 @@ func _run() -> void:
 	var invalid_pair := Fixtures.registry()
 	invalid_pair.rows.launch_encounter_profile[2].recipes[5].waves[0].spawns[0].affix_ids = ["frenzy", "fortified"]
 	suite.assert_true(not catalog.configure(invalid_pair).ok, "symmetric excluded elite pair rejects")
+	var wrong_floor := Fixtures.registry()
+	wrong_floor.rows.launch_encounter_profile[0].recipes[0].template_ids = ["room_combat_void_grove"]
+	suite.assert_true(not catalog.configure(wrong_floor).ok, "template outside authored floor compatibility rejects")
+	var bad_anchor := Fixtures.registry()
+	bad_anchor.rows.room_template[10].spawn_anchors[1].id = "missing_elite_anchor"
+	suite.assert_true(not catalog.configure(bad_anchor).ok, "missing physical elite anchor rejects")
+	var outside := Fixtures.registry()
+	outside.rows.launch_encounter_profile[0].recipes[0].waves[0].spawns[0].spawn_offset.x = -320
+	suite.assert_true(not catalog.configure(outside).ok, "offset outside sixteen-pixel room margin rejects")
+	var overlap := Fixtures.registry()
+	overlap.rows.launch_encounter_profile[0].recipes[0].waves[0].spawns[1].spawn_offset = overlap.rows.launch_encounter_profile[0].recipes[0].waves[0].spawns[0].spawn_offset.duplicate()
+	suite.assert_true(not catalog.configure(overlap).ok, "actors less than thirty-two pixels apart reject")
+	var malformed_affix := Fixtures.registry()
+	malformed_affix.rows.elite_affix_definition[0].parameters.damage_multiplier = true
+	suite.assert_true(not catalog.configure(malformed_affix).ok, "actual closed elite affix definition is parsed")
 	var profile_script = load("res://scripts/dungeon/launch_encounter_profile.gd")
 	var parser: RefCounted = profile_script.new()
 	for field: String in Fixtures.profile(0):

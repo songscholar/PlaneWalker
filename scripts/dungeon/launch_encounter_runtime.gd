@@ -314,7 +314,8 @@ static func normalize_encounter(source: Dictionary) -> Dictionary:
 					return _failure("spawns.enemy_id", "boss_identity_mismatch")
 			elif not Ids.ENEMY_FLOORS.has(spawn.enemy_id) or int(Ids.ENEMY_FLOORS[spawn.enemy_id]) > floor_index + 1:
 				return _failure("spawns.enemy_id", "unsupported")
-			if typeof(spawn.spawn_slot_id) != TYPE_STRING or spawn.spawn_slot_id not in ["enemy_wave_primary", "boss_primary"] or spawn.spawn_slot_id != ("boss_primary" if source.room_type == "boss" else "enemy_wave_primary") or not Contract.valid_point(spawn.spawn_offset, 320) or typeof(spawn.elite) != TYPE_BOOL:
+			var expected_slot := "boss_primary" if source.room_type == "boss" else ("elite_primary" if source.room_type == "elite" else "enemy_wave_primary")
+			if typeof(spawn.spawn_slot_id) != TYPE_STRING or spawn.spawn_slot_id != expected_slot or not Contract.valid_point(spawn.spawn_offset, 320) or typeof(spawn.elite) != TYPE_BOOL:
 				return _failure("spawns", "invalid_slot_or_elite")
 			if not spawn.affix_ids is Array or not spawn.mechanism_ids is Array or not spawn.mechanism_ids.is_empty():
 				return _failure("spawns", "unsupported_mechanism")

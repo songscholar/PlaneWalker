@@ -2,10 +2,14 @@ class_name LaunchEncounterCatalog
 extends RefCounted
 
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
-const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Profile := preload("res://scripts/dungeon/launch_encounter_profile.gd")
 const Runtime := preload("res://scripts/dungeon/launch_encounter_runtime.gd")
 const Seed := preload("res://scripts/core/seed_service.gd")
+const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const Boss := preload("res://scripts/enemies/launch/boss_definition.gd")
+const Affix := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
+const Room := preload("res://scripts/dungeon/room_template_definition.gd")
+const AuthoredSource := preload("res://scripts/dungeon/launch_hostile_content_source.gd")
 const BASE_RESOURCE_ROOT := "res://data/content_packs/base/"
 
 var _actors: Dictionary = {}
@@ -13,6 +17,14 @@ var _profiles: Dictionary = {}
 var _recipes: Dictionary = {}
 var _boss_encounters: Dictionary = {}
 var _snapshot: Dictionary = {}
+
+
+func configure_authored() -> Dictionary:
+	var source := AuthoredSource.new()
+	var loaded := source.load_authored()
+	if not loaded.ok:
+		return _failure("source", "invalid_authored_collection", loaded)
+	return configure(source)
 
 
 func configure(registry: RefCounted) -> Dictionary:
@@ -42,12 +54,21 @@ func configure(registry: RefCounted) -> Dictionary:
 				if not profile_result.ok:
 					return _failure("profile", "invalid_definition", profile_result)
 				_profiles[candidate.id] = profile_result.definition
+			else:
+				var affix_result := Affix.new().configure(candidate)
+				if not affix_result.ok:
+					return _failure("affix", "invalid_definition", affix_result)
 	for profile: Dictionary in _profiles.values():
 		for recipe: Dictionary in profile.recipes:
 			for template_id: String in recipe.template_ids:
 				var template: Variant = registry.get_content(StringName(template_id))
-				if not template is Dictionary or template.get("category") != "room_template" or template.get("room_type") != recipe.room_type:
+				if not template is Dictionary:
 					return _failure("template_id", "dangling_or_wrong_type")
+				var room_result := Room.new().configure(template)
+				if not room_result.ok or template.room_type != recipe.room_type or not template.floor_ids.has(profile.floor_id):
+					return _failure("template_id", "incompatible_definition")
+				if not _valid_spawn_positions(recipe, room_result.definition):
+					return _failure("spawn_offset", "invalid_room_geometry")
 			for wave: Dictionary in recipe.waves:
 				var threat := 0
 				for spawn: Dictionary in wave.spawns:
@@ -107,7 +128,7 @@ func enemy_definition(enemy_id: String) -> Dictionary:
 
 
 func spawn_slot(slot_id: String) -> Dictionary:
-	if _snapshot.is_empty() or slot_id not in ["enemy_wave_primary", "boss_primary"]:
+	if _snapshot.is_empty() or slot_id not in ["enemy_wave_primary", "elite_primary", "boss_primary"]:
 		return {}
 	return {"id": slot_id, "anchor_id": slot_id, "node_path": "EncounterAnchors/" + slot_id}
 
@@ -119,16 +140,43 @@ func snapshot() -> Dictionary:
 func _normalize_actor(source: Dictionary, category: String) -> Dictionary:
 	var expected_scene: String = "assets/enemies/launch/enemy_%s.tscn" % source.id if category == "enemy_definition" else "assets/bosses/launch/boss_%s.tscn" % source.id
 	var floor_index: int = int(Ids.ENEMY_FLOORS[source.id]) if category == "enemy_definition" else Ids.BOSS_IDS.find(source.id) + 1
-	if source.get("scene") != expected_scene or not Contract.integer_in_range(source.get("floor_index"), floor_index, floor_index):
-		return _failure("scene", "actor_identity_mismatch")
-	if category == "enemy_definition" and not Contract.integer_in_range(source.get("threat_cost"), 1, 5):
-		return _failure("threat_cost", "invalid")
-	var result := source.duplicate(true)
+	var parser: RefCounted = Enemy.new() if category == "enemy_definition" else Boss.new()
+	var parsed: Dictionary = parser.configure(source)
+	if not parsed.ok:
+		return _failure("actor", "invalid_definition", parsed)
+	var result: Dictionary = parsed.definition
 	result.scene = BASE_RESOURCE_ROOT + expected_scene
 	result.floor_index = floor_index
 	if category == "enemy_definition":
 		result.threat_cost = int(source.threat_cost)
 	return {"ok": true, "definition": result}
+
+
+func _valid_spawn_positions(recipe: Dictionary, template: Dictionary) -> bool:
+	var entry := Vector2.ZERO
+	var anchors: Dictionary = {}
+	for anchor: Dictionary in template.spawn_anchors:
+		anchors[anchor.id] = Vector2(float(anchor.position.x), float(anchor.position.y))
+		if anchor.kind == "player":
+			entry = anchors[anchor.id]
+	var bounds: Dictionary = template.camera_bounds
+	var safe := Rect2(float(bounds.x) + 16.0, float(bounds.y) + 16.0, float(bounds.width) - 32.0, float(bounds.height) - 32.0)
+	for wave: Dictionary in recipe.waves:
+		var positions: Array[Vector2] = []
+		for spawn: Dictionary in wave.spawns:
+			if not anchors.has(spawn.spawn_slot_id):
+				return false
+			var offset := Vector2(float(spawn.spawn_offset.x), float(spawn.spawn_offset.y))
+			if not is_zero_approx(fposmod(offset.x, 16.0)) or not is_zero_approx(fposmod(offset.y, 16.0)):
+				return false
+			var point: Vector2 = anchors[spawn.spawn_slot_id] + offset
+			if point.x < safe.position.x or point.y < safe.position.y or point.x > safe.end.x or point.y > safe.end.y or point.distance_to(entry) < 64.0:
+				return false
+			for previous: Vector2 in positions:
+				if point.distance_to(previous) < 32.0:
+					return false
+			positions.append(point)
+	return true
 
 
 func _failure(field: String, reason: String, detail: Dictionary = {}) -> Dictionary:

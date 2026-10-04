@@ -1,0 +1,2404 @@
+[
+  {
+    "category": "launch_encounter_profile",
+    "id": "encounter_profile_ruins_adapter_v1",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_0_NAME",
+    "description_key": "P15_PROFILE_0_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch_hostile"
+    ],
+    "compatibility": {},
+    "references": [
+      "corrosive_moth",
+      "rift_watcher",
+      "ruin_king",
+      "ruins_wraith",
+      "shattered_sentinel",
+      "stone_shell_strider"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "boss_id": "ruin_king",
+    "boss_encounter_id": "boss_encounter_ruin_king_adapter_v1",
+    "recipes": [
+      {
+        "id": "sentinel_line",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_pillared_hall",
+          "room_combat_high_ground"
+        ],
+        "threat_budget": 6,
+        "waves": [
+          {
+            "id": "sentinel_line_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "sentinel_line_spawn_1",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "sentinel_line_spawn_2",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "sentinel_line_spawn_3",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "watcher_guard",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_split_chambers",
+          "room_combat_ring"
+        ],
+        "threat_budget": 6,
+        "waves": [
+          {
+            "id": "watcher_guard_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "watcher_guard_spawn_1",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "watcher_guard_spawn_2",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "watcher_guard_spawn_3",
+                "enemy_id": "rift_watcher",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "moth_crossfire",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field",
+          "room_combat_bridge"
+        ],
+        "threat_budget": 6,
+        "waves": [
+          {
+            "id": "moth_crossfire_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "moth_crossfire_spawn_1",
+                "enemy_id": "corrosive_moth",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "moth_crossfire_spawn_2",
+                "enemy_id": "corrosive_moth",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "moth_crossfire_spawn_3",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "wraith_shell",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_l_corner"
+        ],
+        "threat_budget": 6,
+        "waves": [
+          {
+            "id": "wraith_shell_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "wraith_shell_spawn_1",
+                "enemy_id": "ruins_wraith",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "wraith_shell_spawn_2",
+                "enemy_id": "stone_shell_strider",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ruin_full",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_crossroads"
+        ],
+        "threat_budget": 6,
+        "waves": [
+          {
+            "id": "ruin_full_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "ruin_full_spawn_1",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ruin_full_spawn_2",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ruin_full_spawn_3",
+                "enemy_id": "corrosive_moth",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ruin_full_spawn_4",
+                "enemy_id": "rift_watcher",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sentinel_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_arena",
+          "room_elite_trap_arena"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "sentinel_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "sentinel_trial_spawn_1",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "sentinel_trial_spawn_2",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "sentinel_trial_spawn_3",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "sentinel_trial_spawn_4",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shell_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_guard_corridor",
+          "room_elite_twin_hall"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "shell_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "shell_trial_spawn_1",
+                "enemy_id": "ruins_wraith",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "shell_trial_spawn_2",
+                "enemy_id": "stone_shell_strider",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "shell_trial_spawn_3",
+                "enemy_id": "ruins_wraith",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "watcher_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_altar_defense"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "watcher_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {
+                "id": "watcher_trial_spawn_1",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "watcher_trial_spawn_2",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "watcher_trial_spawn_3",
+                "enemy_id": "rift_watcher",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "watcher_trial_spawn_4",
+                "enemy_id": "shattered_sentinel",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "launch_encounter_profile",
+    "id": "encounter_profile_forest_adapter_v1",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_1_NAME",
+    "description_key": "P15_PROFILE_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch_hostile"
+    ],
+    "compatibility": {},
+    "references": [
+      "bramble_mage",
+      "forest_caller",
+      "forest_heart",
+      "shadow_lurker",
+      "void_archer",
+      "void_hunter",
+      "void_spore"
+    ],
+    "floor_id": "floor_void_forest",
+    "boss_id": "forest_heart",
+    "boss_encounter_id": "boss_encounter_forest_heart_adapter_v1",
+    "recipes": [
+      {
+        "id": "hunter_archer",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_pillared_hall",
+          "room_combat_high_ground"
+        ],
+        "threat_budget": 8,
+        "waves": [
+          {
+            "id": "hunter_archer_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "hunter_archer_spawn_1",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hunter_archer_spawn_2",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hunter_archer_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bramble_spores",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_split_chambers",
+          "room_combat_void_grove"
+        ],
+        "threat_budget": 8,
+        "waves": [
+          {
+            "id": "bramble_spores_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "bramble_spores_spawn_1",
+                "enemy_id": "bramble_mage",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_spores_spawn_2",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_spores_spawn_3",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_spores_spawn_4",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "caller_archer",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field",
+          "room_combat_ring"
+        ],
+        "threat_budget": 8,
+        "waves": [
+          {
+            "id": "caller_archer_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "caller_archer_spawn_1",
+                "enemy_id": "forest_caller",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "caller_archer_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "lurker_hunter",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_l_corner"
+        ],
+        "threat_budget": 8,
+        "waves": [
+          {
+            "id": "lurker_hunter_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "lurker_hunter_spawn_1",
+                "enemy_id": "shadow_lurker",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "lurker_hunter_spawn_2",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "forest_full",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_crossroads"
+        ],
+        "threat_budget": 8,
+        "waves": [
+          {
+            "id": "forest_full_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "forest_full_spawn_1",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "forest_full_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "forest_full_spawn_3",
+                "enemy_id": "bramble_mage",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "forest_full_spawn_4",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "forest_full_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "forest_full_spawn_5",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "hunter_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_arena",
+          "room_elite_trap_arena"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "hunter_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "hunter_trial_spawn_1",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hunter_trial_spawn_2",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hunter_trial_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hunter_trial_spawn_4",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "bramble_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_guard_corridor",
+          "room_elite_twin_hall"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "bramble_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "bramble_trial_spawn_1",
+                "enemy_id": "bramble_mage",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_trial_spawn_2",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_trial_spawn_3",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_trial_spawn_4",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "bramble_trial_spawn_5",
+                "enemy_id": "void_spore",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 64
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "caller_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_altar_defense"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "caller_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "caller_trial_spawn_1",
+                "enemy_id": "forest_caller",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "caller_trial_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "caller_trial_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "launch_encounter_profile",
+    "id": "encounter_profile_rift_adapter_v1",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_2_NAME",
+    "description_key": "P15_PROFILE_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch_hostile"
+    ],
+    "compatibility": {},
+    "references": [
+      "blink_striker",
+      "chrono_guard",
+      "chrono_storm_elemental",
+      "eternal_hound",
+      "rewind_priest",
+      "rift_weaver",
+      "time_sovereign",
+      "void_archer"
+    ],
+    "floor_id": "floor_time_rift",
+    "boss_id": "time_sovereign",
+    "boss_encounter_id": "boss_encounter_time_sovereign_adapter_v1",
+    "recipes": [
+      {
+        "id": "guard_priest",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_pillared_hall",
+          "room_combat_high_ground"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "guard_priest_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "guard_priest_spawn_1",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "guard_priest_spawn_2",
+                "enemy_id": "rewind_priest",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "weaver_blink",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_split_chambers",
+          "room_combat_void_grove"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "weaver_blink_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "weaver_blink_spawn_1",
+                "enemy_id": "rift_weaver",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "weaver_blink_spawn_2",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "hound_pack",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field",
+          "room_combat_ring"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "hound_pack_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "hound_pack_spawn_1",
+                "enemy_id": "eternal_hound",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hound_pack_spawn_2",
+                "enemy_id": "eternal_hound",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "hound_pack_spawn_3",
+                "enemy_id": "eternal_hound",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "storm_archer",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_l_corner",
+          "room_combat_bridge"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "storm_archer_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "storm_archer_spawn_1",
+                "enemy_id": "chrono_storm_elemental",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "storm_archer_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "storm_archer_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "rift_full",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_crossroads",
+          "room_combat_clockwork"
+        ],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "rift_full_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "rift_full_spawn_1",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "rift_full_spawn_2",
+                "enemy_id": "rift_weaver",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "rift_full_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "rift_full_spawn_3",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "guard_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_arena",
+          "room_elite_trap_arena"
+        ],
+        "threat_budget": 12,
+        "waves": [
+          {
+            "id": "guard_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "guard_trial_spawn_1",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "guard_trial_spawn_2",
+                "enemy_id": "rewind_priest",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "guard_trial_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "guard_trial_spawn_3",
+                "enemy_id": "rewind_priest",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "blink_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_guard_corridor",
+          "room_elite_twin_hall"
+        ],
+        "threat_budget": 12,
+        "waves": [
+          {
+            "id": "blink_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "blink_trial_spawn_1",
+                "enemy_id": "rift_weaver",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "blink_trial_spawn_2",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "blink_trial_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "blink_trial_spawn_3",
+                "enemy_id": "rift_weaver",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "storm_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_altar_defense"
+        ],
+        "threat_budget": 12,
+        "waves": [
+          {
+            "id": "storm_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "storm_trial_spawn_1",
+                "enemy_id": "chrono_storm_elemental",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "storm_trial_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "storm_trial_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "storm_trial_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "storm_trial_spawn_4",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "launch_encounter_profile",
+    "id": "encounter_profile_forge_adapter_v1",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_3_NAME",
+    "description_key": "P15_PROFILE_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch_hostile"
+    ],
+    "compatibility": {},
+    "references": [
+      "chaos_amalgam",
+      "forge_colossus",
+      "forge_titan",
+      "phase_ranger",
+      "plane_ripper",
+      "void_archer",
+      "void_hunter",
+      "void_web_weaver"
+    ],
+    "floor_id": "floor_plane_forge",
+    "boss_id": "forge_colossus",
+    "boss_encounter_id": "boss_encounter_forge_colossus_adapter_v1",
+    "recipes": [
+      {
+        "id": "titan_ranger",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_pillared_hall",
+          "room_combat_high_ground"
+        ],
+        "threat_budget": 10,
+        "waves": [
+          {
+            "id": "titan_ranger_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "titan_ranger_spawn_1",
+                "enemy_id": "forge_titan",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "titan_ranger_spawn_2",
+                "enemy_id": "phase_ranger",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "web_titan",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_split_chambers",
+          "room_combat_void_grove"
+        ],
+        "threat_budget": 10,
+        "waves": [
+          {
+            "id": "web_titan_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "web_titan_spawn_1",
+                "enemy_id": "void_web_weaver",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "web_titan_spawn_2",
+                "enemy_id": "forge_titan",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "chaos_crossfire",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field",
+          "room_combat_ring"
+        ],
+        "threat_budget": 10,
+        "waves": [
+          {
+            "id": "chaos_crossfire_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "chaos_crossfire_spawn_1",
+                "enemy_id": "chaos_amalgam",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "chaos_crossfire_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ripper_pack",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_l_corner",
+          "room_combat_clockwork"
+        ],
+        "threat_budget": 10,
+        "waves": [
+          {
+            "id": "ripper_pack_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "ripper_pack_spawn_1",
+                "enemy_id": "plane_ripper",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ripper_pack_spawn_2",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ripper_pack_spawn_3",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "forge_full",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_crossroads"
+        ],
+        "threat_budget": 10,
+        "waves": [
+          {
+            "id": "forge_full_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "forge_full_spawn_1",
+                "enemy_id": "forge_titan",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "forge_full_spawn_2",
+                "enemy_id": "phase_ranger",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "forge_full_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "forge_full_spawn_3",
+                "enemy_id": "void_web_weaver",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "titan_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_arena",
+          "room_elite_trap_arena"
+        ],
+        "threat_budget": 13,
+        "waves": [
+          {
+            "id": "titan_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "titan_trial_spawn_1",
+                "enemy_id": "forge_titan",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "titan_trial_spawn_2",
+                "enemy_id": "phase_ranger",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "titan_trial_spawn_3",
+                "enemy_id": "phase_ranger",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "chaos_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_guard_corridor",
+          "room_elite_twin_hall"
+        ],
+        "threat_budget": 13,
+        "waves": [
+          {
+            "id": "chaos_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "chaos_trial_spawn_1",
+                "enemy_id": "chaos_amalgam",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "chaos_trial_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "chaos_trial_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ripper_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_altar_defense"
+        ],
+        "threat_budget": 13,
+        "waves": [
+          {
+            "id": "ripper_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "ripper_trial_spawn_1",
+                "enemy_id": "plane_ripper",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ripper_trial_spawn_2",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "ripper_trial_spawn_3",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "ripper_trial_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "ripper_trial_spawn_4",
+                "enemy_id": "void_hunter",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "launch_encounter_profile",
+    "id": "encounter_profile_throne_adapter_v1",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_4_NAME",
+    "description_key": "P15_PROFILE_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch_hostile"
+    ],
+    "compatibility": {},
+    "references": [
+      "blink_striker",
+      "chaos_amalgam",
+      "chrono_guard",
+      "forge_titan",
+      "phase_ranger",
+      "plane_ripper",
+      "rewind_priest",
+      "rift_weaver",
+      "void_archer",
+      "void_throne",
+      "void_web_weaver"
+    ],
+    "floor_id": "floor_throne_of_void",
+    "boss_id": "void_throne",
+    "boss_encounter_id": "boss_encounter_void_throne_adapter_v1",
+    "recipes": [
+      {
+        "id": "throne_front",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_pillared_hall",
+          "room_combat_high_ground"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "throne_front_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_front_spawn_1",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_front_spawn_2",
+                "enemy_id": "forge_titan",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_lanes",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_split_chambers",
+          "room_combat_void_grove"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "throne_lanes_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_lanes_spawn_1",
+                "enemy_id": "phase_ranger",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_lanes_spawn_2",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_lanes_spawn_3",
+                "enemy_id": "void_archer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_mirror",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field",
+          "room_combat_ring"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "throne_mirror_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_mirror_spawn_1",
+                "enemy_id": "chaos_amalgam",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_mirror_spawn_2",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_space",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_l_corner",
+          "room_combat_bridge"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "throne_space_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_space_spawn_1",
+                "enemy_id": "plane_ripper",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_space_spawn_2",
+                "enemy_id": "rift_weaver",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_guard",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_crossroads",
+          "room_combat_clockwork"
+        ],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "throne_guard_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_guard_spawn_1",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_guard_spawn_2",
+                "enemy_id": "void_web_weaver",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "throne_guard_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_guard_spawn_3",
+                "enemy_id": "rewind_priest",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_titan_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_arena",
+          "room_elite_trap_arena"
+        ],
+        "threat_budget": 14,
+        "waves": [
+          {
+            "id": "throne_titan_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_titan_trial_spawn_1",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_titan_trial_spawn_2",
+                "enemy_id": "forge_titan",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_titan_trial_spawn_3",
+                "enemy_id": "chrono_guard",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_chaos_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_guard_corridor",
+          "room_elite_twin_hall"
+        ],
+        "threat_budget": 14,
+        "waves": [
+          {
+            "id": "throne_chaos_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_chaos_trial_spawn_1",
+                "enemy_id": "chaos_amalgam",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_chaos_trial_spawn_2",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_chaos_trial_spawn_3",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "throne_blink_trial",
+        "room_type": "elite",
+        "template_ids": [
+          "room_elite_altar_defense"
+        ],
+        "threat_budget": 14,
+        "waves": [
+          {
+            "id": "throne_blink_trial_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_blink_trial_spawn_1",
+                "enemy_id": "chaos_amalgam",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              },
+              {
+                "id": "throne_blink_trial_spawn_2",
+                "enemy_id": "blink_striker",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": true,
+                "affix_ids": [
+                  "frenzy",
+                  "chaining"
+                ],
+                "mechanism_ids": []
+              }
+            ]
+          },
+          {
+            "id": "throne_blink_trial_wave_2",
+            "delay_frames": 15,
+            "warning_frames": 23,
+            "spawns": [
+              {
+                "id": "throne_blink_trial_spawn_3",
+                "enemy_id": "chaos_amalgam",
+                "spawn_slot_id": "elite_primary",
+                "spawn_offset": {
+                  "x": -64,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
