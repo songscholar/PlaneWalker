@@ -13,7 +13,7 @@ const ACTION_IDS := {
 const STATE_FIELDS := {
 	"shattered_sentinel": ["first_attack_ready_frame", "damage_claims", "retreat_remaining_frames", "retreat_direction"],
 	"corrosive_moth": ["first_attack_ready_frame", "damage_claims", "death_pool_reserved"],
-	"stone_shell_strider": ["first_attack_ready_frame", "damage_claims", "shell_remaining_frames", "open_remaining_frames", "shell_cycle", "shell_shock_used"],
+	"stone_shell_strider": ["first_attack_ready_frame", "damage_claims", "shell_remaining_frames", "open_remaining_frames", "shell_cycle", "shell_shock_used", "shell_shock_cycle"],
 	"ruins_wraith": ["first_attack_ready_frame", "damage_claims", "windup_damage", "stagger_remaining_frames", "detonation_consumed"],
 	"rift_watcher": ["first_attack_ready_frame", "damage_claims", "healing_expenditure", "death_debuff_reserved"],
 }
@@ -34,7 +34,7 @@ static func make_state(kind: String, first_attack_ready_frame: int) -> Dictionar
 	match kind:
 		"shattered_sentinel": state.merge({"retreat_remaining_frames": 0, "retreat_direction": {"x": 0.0, "y": 0.0}})
 		"corrosive_moth": state.merge({"death_pool_reserved": false})
-		"stone_shell_strider": state.merge({"shell_remaining_frames": 0, "open_remaining_frames": 0, "shell_cycle": 0, "shell_shock_used": false})
+		"stone_shell_strider": state.merge({"shell_remaining_frames": 0, "open_remaining_frames": 0, "shell_cycle": 0, "shell_shock_used": false, "shell_shock_cycle": 0})
 		"ruins_wraith": state.merge({"windup_damage": 0.0, "stagger_remaining_frames": 0, "detonation_consumed": false})
 		"rift_watcher": state.merge({"healing_expenditure": {}, "death_debuff_reserved": false})
 		_: return {}
@@ -56,7 +56,11 @@ static func valid_state(kind: String, authored: Dictionary, state: Dictionary, i
 			return state.retreat_remaining_frames == 0 or is_equal_approx(_vector(state.retreat_direction).length(), 1.0)
 		"corrosive_moth": return typeof(state.death_pool_reserved) == TYPE_BOOL
 		"stone_shell_strider":
-			return _integer(state.shell_remaining_frames, 0, authored.shell_frames) and _integer(state.open_remaining_frames, 0, authored.open_frames) and _integer(state.shell_cycle, 0, 2147483646) and typeof(state.shell_shock_used) == TYPE_BOOL and (state.shell_remaining_frames == 0 or state.open_remaining_frames == 0)
+			if not _integer(state.shell_remaining_frames, 0, authored.shell_frames) or not _integer(state.open_remaining_frames, 0, authored.open_frames) or not _integer(state.shell_cycle, 0, 2147483646) or not _integer(state.shell_shock_cycle, 0, state.shell_cycle) or typeof(state.shell_shock_used) != TYPE_BOOL or (state.shell_remaining_frames > 0 and state.open_remaining_frames > 0):
+				return false
+			if state.shell_shock_used:
+				return state.shell_cycle > 0 and state.shell_shock_cycle == state.shell_cycle
+			return state.shell_shock_cycle < state.shell_cycle or state.shell_cycle == 0
 		"ruins_wraith":
 			return Contract.number_in_range(state.windup_damage, 0.0, authored.windup_interrupt_damage) and state.windup_damage < authored.windup_interrupt_damage and _integer(state.stagger_remaining_frames, 0, authored.stagger_frames) and typeof(state.detonation_consumed) == TYPE_BOOL
 		"rift_watcher":
@@ -132,6 +136,7 @@ static func action_started(kind: String, state: Dictionary, action_id: String) -
 	var next := state.duplicate(true)
 	if kind == "stone_shell_strider" and action_id.ends_with(".shell_shock"):
 		next.shell_shock_used = true
+		next.shell_shock_cycle = next.shell_cycle
 	if kind == "ruins_wraith" and action_id.ends_with(".spirit_detonation"):
 		next.windup_damage = 0.0
 	return next

@@ -212,6 +212,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if value.action.last_runtime_frame != value.runtime_frame or value.control.runtime_frame != value.runtime_frame or value.control.terminal != value.terminal:
 		return false
+	if _definition.runtime_kind == "stone_shell_strider" and value.action.action_id == "stone_shell_strider.shell_shock" and int(mechanism.shell_shock_cycle) == 0:
+		return false
 	return not value.terminal or (value.action.phase == "IDLE" and int(mechanism.get("retreat_remaining_frames", 0)) == 0)
 
 
@@ -249,7 +251,12 @@ func _select_action(frame: int, observations: Dictionary) -> String:
 	var current: Dictionary = _action.snapshot()
 	if frame <= int(current.idle_through_frame):
 		return ""
-	for candidate: Dictionary in _definition.actions:
+	var candidates: Array = _definition.actions.duplicate()
+	if _definition.runtime_kind == "stone_shell_strider" and _definition.actor_kind == "elite":
+		var shock := _action_definition("stone_shell_strider.shell_shock")
+		candidates.erase(shock)
+		candidates.push_front(shock)
+	for candidate: Dictionary in candidates:
 		var distance := _vector(observations.source_position).distance_to(_vector(observations.target_position))
 		if int(current.cooldowns.get(candidate.id, 0)) <= frame and distance >= float(candidate.distance_min_px) and distance <= float(candidate.distance_max_px) and Mechanisms.action_available(_definition.runtime_kind, _state.mechanism_state, candidate.id):
 			return candidate.id
