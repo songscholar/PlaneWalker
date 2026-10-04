@@ -3122,13 +3122,11 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 		for curse: Dictionary in curse_definitions:
 			var transaction = PlayerRewardTransactionScript.new()
 			transaction.configure(_merchant_player, _merchant_reward_runtime)
+			physical_transactions.append(transaction)
 			if not transaction.apply(curse):
-				var rolled_back: bool = transaction.rollback()
-				for previous: Variant in physical_transactions:
-					rolled_back = previous.rollback() and rolled_back
+				var rolled_back := _compensate_event_physical_state(physical_transactions)
 				candidate_director.free()
 				return {"ok": false, "code": &"COMMIT_FAILED" if rolled_back else &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_curse_effect"}}
-			physical_transactions.append(transaction)
 	var physical_before: Dictionary = {}
 	if _merchant_player != null and str(command.get("operation", "")) == "choose_option":
 		physical_before = _merchant_player.call("reward_effect_snapshot")
@@ -3139,23 +3137,25 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 		physical_after["health"]["current_hp"] = clampf(float(physical_after["health"]["current_hp"]) + delta, 0.0, float(physical_after["health"]["max_hp"]))
 		if physical_after["health"].has("dead"):
 			physical_after["health"]["dead"] = float(physical_after["health"]["current_hp"]) <= 0.0
-		if not bool(_merchant_player.call("restore_reward_effect_snapshot", physical_after)):
-			for transaction: Variant in physical_transactions:
-				transaction.rollback()
+		var health_applied := bool(_merchant_player.call("restore_reward_effect_snapshot", physical_after))
+		health_applied = _merchant_player.call("reward_effect_snapshot") == physical_after and health_applied
+		if not health_applied:
+			var rolled_back := _compensate_event_physical_state(physical_transactions, physical_before)
 			candidate_director.free()
-			return {"ok": false, "code": &"COMMIT_FAILED", "new_revision": _revision(), "context": {"stage": "event_physical_health"}}
+			return {"ok": false, "code": &"COMMIT_FAILED" if rolled_back else &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_physical_health"}}
 	var committed = _orchestrator.commit_event_transaction(candidate, expected_revision)
 	if not committed.ok:
-		if not physical_before.is_empty():
-			_merchant_player.call("restore_reward_effect_snapshot", physical_before)
-		for transaction: Variant in physical_transactions:
-			transaction.rollback()
+		var rolled_back := _compensate_event_physical_state(physical_transactions, physical_before)
+		var failure_context: Dictionary = committed.context.duplicate(true)
+		if not rolled_back:
+			failure_context["compensation_failed"] = true
+			failure_context["cause_code"] = str(committed.code)
 		candidate_director.free()
 		return {
 			"ok": false,
-			"code": committed.code,
+			"code": committed.code if rolled_back else &"INTEGRITY_FAILURE",
 			"new_revision": committed.new_revision,
-			"context": committed.context.duplicate(true),
+			"context": failure_context,
 		}
 	if not _sync_player_event_modifiers():
 		candidate_director.free()
@@ -3174,6 +3174,25 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 		"new_revision": committed.new_revision,
 		"context": committed.context.duplicate(true),
 	}
+
+
+func _compensate_event_physical_state(
+	transactions: Array,
+	health_preimage: Dictionary = {}
+) -> bool:
+	var restored := true
+	if not health_preimage.is_empty():
+		if _merchant_player == null or not is_instance_valid(_merchant_player):
+			restored = false
+		else:
+			restored = bool(_merchant_player.call(
+				"restore_reward_effect_snapshot", health_preimage.duplicate(true)
+			))
+			restored = _merchant_player.call("reward_effect_snapshot") == health_preimage and restored
+	# Every compensation is attempted, even after an earlier participant refuses.
+	for index: int in range(transactions.size() - 1, -1, -1):
+		restored = bool(transactions[index].rollback()) and restored
+	return restored
 
 
 func _overlay_event_assignments(director: Node, runtime_snapshot: Dictionary) -> bool:
