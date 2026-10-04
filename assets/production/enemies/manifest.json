@@ -1,0 +1,213 @@
+{
+  "schema_id": "plane_walker_launch_enemy_art_v1",
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "generator": "tools/production_art/generate_enemy_atlases.py",
+  "source": "data/content_packs/base/content/enemies.json",
+  "phases": [
+    "idle",
+    "warning",
+    "active",
+    "recovery"
+  ],
+  "assets": [
+    {
+      "id": "shattered_sentinel",
+      "path": "shattered_sentinel.png",
+      "floor_id": "floor_ruins_of_remnant",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "0e2d760291d64afbb82f6fd4e25a031e83d6e6729f5c61f309ff8a5adc385953"
+    },
+    {
+      "id": "corrosive_moth",
+      "path": "corrosive_moth.png",
+      "floor_id": "floor_ruins_of_remnant",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "d2d9a7dddb41f332790b6b1bee823ff139021f40507198bb7070a00c598220f2"
+    },
+    {
+      "id": "stone_shell_strider",
+      "path": "stone_shell_strider.png",
+      "floor_id": "floor_ruins_of_remnant",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "9f55259d261ce1bb718e446f8331b017faab0c7520ddfa63322f5cefc65e44e3"
+    },
+    {
+      "id": "ruins_wraith",
+      "path": "ruins_wraith.png",
+      "floor_id": "floor_ruins_of_remnant",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "0cd756af234c41a7e0edb1965c541c886f40158a4ffb421577414f8a8bbe8b25"
+    },
+    {
+      "id": "rift_watcher",
+      "path": "rift_watcher.png",
+      "floor_id": "floor_ruins_of_remnant",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "2b8d017faf87b223618bad9095bc968ae1d05c461e016a5bc07605c39ee42c75"
+    },
+    {
+      "id": "void_hunter",
+      "path": "void_hunter.png",
+      "floor_id": "floor_void_forest",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "93523df6d8c6f4807d7ea2d51889a118a16f5a362699038f61238a613d72141b"
+    },
+    {
+      "id": "void_archer",
+      "path": "void_archer.png",
+      "floor_id": "floor_void_forest",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "4b9bb9f377542cb5ccee803dc3eb6e9d01554c56c00961d8041c529a2ccc9b99"
+    },
+    {
+      "id": "bramble_mage",
+      "path": "bramble_mage.png",
+      "floor_id": "floor_void_forest",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "14a8f21afad55857b1f171db057b6d93f730619f359567f486f241c443c04ed5"
+    },
+    {
+      "id": "void_spore",
+      "path": "void_spore.png",
+      "floor_id": "floor_void_forest",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "1a5abd97142648dd4b87f2572eef42a0d257f5828c636e41dbef2b73a2fa6797"
+    },
+    {
+      "id": "forest_caller",
+      "path": "forest_caller.png",
+      "floor_id": "floor_void_forest",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "19ba7c37e7c4f2ec10ffd448796fa076bc7d8c37f587dc3599edc4f1cf16ff25"
+    },
+    {
+      "id": "shadow_lurker",
+      "path": "shadow_lurker.png",
+      "floor_id": "floor_void_forest",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "9bdc9357eee1018aa01768a5f9eb8de0a873996a622f60aed6b6c0d87875fd8b"
+    },
+    {
+      "id": "chrono_guard",
+      "path": "chrono_guard.png",
+      "floor_id": "floor_time_rift",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "3fa9baf3eef6f9b453ac188cec706bb2493f5480008bce91b6321a698d9176b7"
+    },
+    {
+      "id": "rift_weaver",
+      "path": "rift_weaver.png",
+      "floor_id": "floor_time_rift",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "e9222ac84e2be2042bced9b51eff246ee236af66af9cb382139010bc3bc32abd"
+    },
+    {
+      "id": "blink_striker",
+      "path": "blink_striker.png",
+      "floor_id": "floor_time_rift",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "ecbfb9f5c57f54f12214a644a3c92a9a90154908a1742c5fb3bc7fe5e812e584"
+    },
+    {
+      "id": "rewind_priest",
+      "path": "rewind_priest.png",
+      "floor_id": "floor_time_rift",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "11e34c9696dab25d70eb550fee7e82f22cfcaa051d3397a40c050d76680dac33"
+    },
+    {
+      "id": "chrono_storm_elemental",
+      "path": "chrono_storm_elemental.png",
+      "floor_id": "floor_time_rift",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "abf7cecbbbc091588c736b56c0274205d39f229bc5be985c52fd0994df24f4ff"
+    },
+    {
+      "id": "eternal_hound",
+      "path": "eternal_hound.png",
+      "floor_id": "floor_time_rift",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "dbadf2406b4122a731448ebb93ea3d4fa0cc920b037622bdaeebe8e38fb66f6a"
+    },
+    {
+      "id": "forge_titan",
+      "path": "forge_titan.png",
+      "floor_id": "floor_plane_forge",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "86409d4917963fdb943eaa85799a06e3ebe196f95784cb0a0176e160b88dae50"
+    },
+    {
+      "id": "void_web_weaver",
+      "path": "void_web_weaver.png",
+      "floor_id": "floor_plane_forge",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "b9f27350949bfd4ca1b939dc54aa9dc7be1bc520b34a0cc57f486e5022fd04af"
+    },
+    {
+      "id": "phase_ranger",
+      "path": "phase_ranger.png",
+      "floor_id": "floor_plane_forge",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "e7930c7c29c7aecb559ea43960f98e2739af0386cf39a33e9ce76b791d0f9e15"
+    },
+    {
+      "id": "chaos_amalgam",
+      "path": "chaos_amalgam.png",
+      "floor_id": "floor_plane_forge",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "394e90ea91352445b0b6d330f0c93dc7c72d9b84ada56fd196960fa32bb4428e"
+    },
+    {
+      "id": "plane_ripper",
+      "path": "plane_ripper.png",
+      "floor_id": "floor_plane_forge",
+      "width": 192,
+      "height": 48,
+      "frame_width": 48,
+      "sha256": "c7577174f8318b6a6a282c6076eb998b4e06efbaf4b94441fd8ddf76f3498e1e"
+    }
+  ]
+}
