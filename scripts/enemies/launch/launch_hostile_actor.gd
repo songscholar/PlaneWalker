@@ -368,6 +368,42 @@ func get_damage_taken_multiplier() -> float:
 	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus()) * _launch_runtime.species_damage_taken_multiplier())
 
 
+func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: float) -> Dictionary:
+	if _launch_definition.get("runtime_kind", "") not in ["chrono_guard", "eternal_hound"]:
+		return {}
+	if not is_instance_valid(health) or health.dead or damage_info == null or not is_finite(final_amount) or final_amount < health.current_hp or not _launch_runtime.has_method("prepare_lethal_transition"):
+		return {"ok": false}
+	var decision: Dictionary = _launch_runtime.prepare_lethal_transition()
+	if not decision.ok:
+		return decision
+	decision["owner_instance_id"] = get_instance_id()
+	decision["health_instance_id"] = health.get_instance_id()
+	decision["health_before"] = health.runtime_state_snapshot()
+	decision["damage_digest"] = var_to_bytes(damage_info.snapshot()).hex_encode().sha256_text()
+	return decision
+
+
+func blocks_hostile_body_damage() -> bool:
+	return _launch_definition.get("runtime_kind", "") == "eternal_hound" and int(_launch_runtime.snapshot().get("mechanism_state", {}).get("dormancy_remaining_frames", 0)) > 0
+
+
+func accept_launch_health_fact(fact: Dictionary) -> bool:
+	return is_instance_valid(health) and not health.dead and _launch_runtime.has_method("accept_health_fact") and fact.get("hp_after", -1.0) == health.current_hp and _launch_runtime.accept_health_fact(fact).ok
+
+
+func commit_hostile_lethal_transition(damage_info: RefCounted, final_amount: float, decision: Dictionary) -> bool:
+	if not is_instance_valid(health) or not health.owns_hostile_lethal_commit(damage_info, final_amount, decision) or decision != prepare_hostile_lethal_transition(damage_info, final_amount):
+		return false
+	var domain := decision.duplicate(true)
+	for field: String in ["owner_instance_id", "health_instance_id", "health_before", "damage_digest"]:
+		domain.erase(field)
+	if not _launch_runtime.commit_lethal_transition(domain):
+		return false
+	if not decision.final_death and _hostile_threat_registry != null:
+		_hostile_threat_registry.retire_source(hostile_source_id)
+	return true
+
+
 func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
 	var staged := false
 	if not _launch_definition.is_empty() and damage_info != null and is_finite(final_amount) and final_amount > 0.0:

@@ -60,6 +60,8 @@ var _frame_signal_publication_in_progress: bool = false
 var _post_publication_frame_signal_events: Array[Dictionary] = []
 var _published_damage_info: RefCounted
 var _published_damage_context: Dictionary = {}
+var _hostile_lethal_commit_context: Dictionary = {}
+var _hostile_lethal_application_in_progress := false
 
 
 func _ready() -> void:
@@ -632,8 +634,13 @@ func _resolve_damage(
 	var original_amount := planned_amount
 	if dead:
 		return _prevented_resolution(damage_info, &"target_dead")
+	if _hostile_lethal_application_in_progress:
+		return _prevented_resolution(damage_info, &"hostile_lethal_reentrant")
 	if invulnerable:
 		return _prevented_resolution(damage_info, &"target_invulnerable")
+	var hostile_owner := get_parent()
+	if hostile_owner != null and hostile_owner.has_method("blocks_hostile_body_damage") and hostile_owner.call("blocks_hostile_body_damage"):
+		return _prevented_resolution(damage_info, &"hostile_dormant_body")
 
 	var parsed_weapon := _parse_defense_decision(weapon_decision)
 	var parsed_character := _parse_defense_decision(character_decision)
@@ -724,6 +731,7 @@ func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -
 			&"target_invulnerable",
 			&"invalid_decision",
 			&"defense_commit_failed",
+			&"hostile_lethal_reentrant",
 		]:
 			_emit_damage_observation(damage_info)
 		return resolution
@@ -731,6 +739,15 @@ func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -
 	var final_amount := float(resolution.finalized_damage())
 	if not is_finite(final_amount) or final_amount <= 0.0:
 		return _prevented_resolution(damage_info, &"invalid_resolution")
+	var lethal_owner := get_parent()
+	var lethal_decision: Dictionary = {}
+	if final_amount >= current_hp and lethal_owner != null and lethal_owner.has_method("prepare_hostile_lethal_transition"):
+		var prepared: Variant = lethal_owner.call("prepare_hostile_lethal_transition", damage_info, final_amount)
+		if not prepared is Dictionary:
+			return _prevented_resolution(damage_info, &"hostile_lethal_invalid")
+		lethal_decision = prepared
+		if not lethal_decision.is_empty() and (lethal_decision.get("ok") != true or typeof(lethal_decision.get("hp_after")) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(lethal_decision.hp_after)) or float(lethal_decision.hp_after) < 0.0 or float(lethal_decision.hp_after) > max_hp or not lethal_owner.has_method("commit_hostile_lethal_transition")):
+			return _prevented_resolution(damage_info, &"hostile_lethal_invalid")
 	if bool(snapshot.get("irreversible", false)):
 		var actual_loss := minf(current_hp, final_amount)
 		var claim_result := _record_irreversible_loss(
@@ -748,15 +765,30 @@ func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -
 				damage_info,
 				StringName(str(claim_result.get("code", "irreversible_claim_rejected")).to_lower())
 			)
-	_emit_damage_observation(damage_info)
 	var hp_before := current_hp
-	current_hp = maxf(0.0, current_hp - final_amount)
+	if not lethal_decision.is_empty():
+		_hostile_lethal_commit_context = {"damage_info": damage_info, "amount": final_amount, "decision": lethal_decision.duplicate(true)}
+		var committed: bool = lethal_owner.call("commit_hostile_lethal_transition", damage_info, final_amount, lethal_decision)
+		_hostile_lethal_commit_context.clear()
+		if not committed:
+			return _prevented_resolution(damage_info, &"hostile_lethal_commit_failed")
+		current_hp = float(lethal_decision.hp_after)
+		_hostile_lethal_application_in_progress = true
+		_emit_damage_observation(damage_info)
+	else:
+		_emit_damage_observation(damage_info)
+		current_hp = maxf(0.0, current_hp - final_amount)
 	_queue_or_flush_frame_signal_event(&"damaged", [final_amount, current_hp])
 	_apply_hit_reaction(damage_info, final_amount, hp_before)
 	_queue_or_flush_frame_signal_event(&"damage_applied", [damage_info, get_parent(), final_amount])
 	if current_hp <= 0.0:
 		_die(damage_info.attacker)
+	_hostile_lethal_application_in_progress = false
 	return resolution
+
+
+func owns_hostile_lethal_commit(damage_info: RefCounted, amount: float, decision: Dictionary) -> bool:
+	return not _hostile_lethal_commit_context.is_empty() and _hostile_lethal_commit_context.damage_info == damage_info and _hostile_lethal_commit_context.amount == amount and _hostile_lethal_commit_context.decision == decision
 
 
 func _apply_hit_reaction(damage_info: RefCounted, final_amount: float, hp_before: float) -> void:

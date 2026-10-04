@@ -2147,7 +2147,7 @@
         "id": "blink_striker.triple_blink",
         "handler_id": "blink",
         "warning_frames": 50,
-        "active_frames": 58,
+        "active_frames": 70,
         "recovery_frames": 35,
         "idle_frames": 15,
         "cooldown_frames": 480,
@@ -2170,7 +2170,7 @@
             "shape": "cone",
             "origin_offset": {
               "x": 0,
-              "y": 0
+              "y": 32
             },
             "aim_offset_degrees": 0,
             "radius": 14,
@@ -2180,7 +2180,7 @@
             "shape": "cone",
             "origin_offset": {
               "x": 0,
-              "y": 0
+              "y": -32
             },
             "aim_offset_degrees": 30,
             "radius": 14,
@@ -2195,13 +2195,13 @@
             "damage_type": "time"
           },
           {
-            "offset_frame": 27,
+            "offset_frame": 33,
             "hit_index": 1,
             "damage": 15,
             "damage_type": "time"
           },
           {
-            "offset_frame": 54,
+            "offset_frame": 66,
             "hit_index": 2,
             "damage": 15,
             "damage_type": "time"
