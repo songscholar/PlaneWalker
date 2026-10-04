@@ -144,6 +144,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Native Floor Entry Evidence](current/2026-10-05-p16-native-floor-entry-evidence.md) | 冻结永久成长、楼层回血、失败补偿、严格原生恢复和 JSON 存档 | Verified Locally / Main integration pending |
 | [P16 Onboarding Domain Evidence](current/2026-10-05-p16f-onboarding-domain-evidence.md) | 教学动作计数、提示投影、跳过重放与指导局策略领域 | Verified Locally / Native integration pending |
 | [P16 Native Tutorial Observation Evidence](current/2026-10-05-p16i-native-tutorial-evidence.md) | 真实动作与成功帧认证、击退排除、保存后发布和失败帧补偿 | Verified Locally / Profile service and UI integration pending |
+| [P16 Native Tutorial UI Evidence](current/2026-10-05-p16l-tutorial-ui-evidence.md) | 真实 InputMap、课程和训练投影、原生焦点、双语及 17 张渲染证据 | Verified Locally / Main and training integration pending |
 | [P16 Player Frame Observer Evidence](current/2026-10-05-p16-player-frame-observer-evidence.md) | Player 成功帧通知、冻结输入读取、Replay 恢复失效与 11 场景回归 | Verified Locally / Tutorial UI integration pending |
 | [P16 Native Narrative Retention Evidence](current/2026-10-05-p16j-native-narrative-retention-evidence.md) | 原生叙事来源、HP 支付、完整局/奖励参与者保存、冻结开局和终局恢复 | Verified Locally / Main integration pending |
 | [P16 Durable Host Startup Evidence](current/2026-10-05-p16-durable-host-startup-evidence.md) | 保存后开局发布、冷启动重试、回调身份复检与下一层恢复等待 | Verified Locally / Main integration pending |
