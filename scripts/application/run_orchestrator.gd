@@ -94,14 +94,16 @@ func native_run_state() -> RefCounted:
 func restore_launch_run_snapshot(
 	value: Dictionary,
 	floor_definition: Dictionary,
-	room_templates: Array
+	room_templates: Array,
+	meta_catalog: RefCounted = null
 ) -> bool:
 	if not _pending_route_transition.is_empty():
 		return false
 	return _state.restore_launch_run_snapshot(
 		value.duplicate(true),
 		floor_definition.duplicate(true),
-		room_templates.duplicate(true)
+		room_templates.duplicate(true),
+		meta_catalog
 	)
 
 

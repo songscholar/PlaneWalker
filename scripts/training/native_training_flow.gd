@@ -26,7 +26,7 @@ var _boss: Node2D
 func configure(registry: RefCounted, service: RefCounted, boss_provider: Callable = Callable()) -> Dictionary:
 	if _registry != null or not is_inside_tree() or not registry is Registry or not service is Service or service.snapshot().is_empty():
 		return Candidate.failure(&"TRAINING_CONFIGURATION_INVALID")
-	var catalog := Factory.from_registry(registry)
+	var catalog := Factory.from_profile_registry(registry, service.snapshot())
 	if not catalog.ok or service.snapshot().catalog_fingerprint != catalog.context.catalog.fingerprint():
 		return Candidate.failure(&"TRAINING_CONFIGURATION_INVALID")
 	var enabled: Dictionary = service.enable_tutorial(registry.get_catalog_entries(&"tutorial_definition", &"LAUNCH"))

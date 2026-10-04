@@ -32,15 +32,19 @@ var _publishing := false
 var _callback: Callable
 
 
-func bind_normal_run(profile: Dictionary, run: RefCounted, player: Node) -> Dictionary:
+func bind_normal_run(profile: Dictionary, run: RefCounted, player: Node, tutorial_content: RefCounted = null) -> Dictionary:
 	if _retired or _publishing or _run != null or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree() or not player.has_signal("authoritative_frame_committed") or not player.has_method("authoritative_frame_intents"):
 		return Candidate.failure(&"TUTORIAL_BINDING_INVALID")
-	var loaded := Factory.load_base()
-	if not loaded.ok:
-		return loaded
-	var content := Content.new()
-	var entries: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/tutorial_definitions.json"))
-	if not entries is Array or not content.configure(entries, loaded.context.catalog).ok:
+	var content := tutorial_content
+	if content == null:
+		var loaded := Factory.load_base()
+		if not loaded.ok:
+			return loaded
+		content = Content.new()
+		var entries: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/tutorial_definitions.json"))
+		if not entries is Array or not content.configure(entries, loaded.context.catalog).ok:
+			return Candidate.failure(&"TUTORIAL_CONTENT_INVALID")
+	if not content is Content or content.meta_catalog() == null:
 		return Candidate.failure(&"TUTORIAL_CONTENT_INVALID")
 	var decoded := Progress.decode(profile, content)
 	if not decoded.ok or profile.active_launch_receipt.is_empty():
@@ -51,7 +55,7 @@ func bind_normal_run(profile: Dictionary, run: RefCounted, player: Node) -> Dict
 	if not projection_value is Dictionary:
 		return Candidate.failure(&"TUTORIAL_BINDING_INVALID")
 	var projection: Dictionary = projection_value
-	if not MetaProjection.validate(projection, loaded.context.catalog):
+	if not MetaProjection.validate(projection, content.meta_catalog()):
 		return Candidate.failure(&"TUTORIAL_BINDING_INVALID")
 	var config: Dictionary = player.loadout_runtime.snapshot()
 	if identity.is_empty() or run.run_id != launch.run_id or run.run_seed != launch.seed or projection.is_empty() or projection.get("projection_digest") != launch.projection_digest or identity.run_id != launch.run_id or identity.get("meta_projection_digest") != launch.projection_digest or identity.character_id != launch.character_id or identity.weapon_id != launch.weapon_id or identity.time_ability_ids != launch.time_abilities or config.get("milestone") not in ["LAUNCH", "EXPANSION"]:

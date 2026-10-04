@@ -506,7 +506,7 @@ static func _profile_payload_error(
 	if not payload.has("active_run_state"):
 		return {"field": "payload.active_run_state", "reason": "missing"}
 	var active_run_error := _active_run_state_error(
-		payload["active_run_state"], allow_legacy_event_runtime
+		payload["active_run_state"], allow_legacy_event_runtime, meta_catalog
 	)
 	if not active_run_error.is_empty():
 		return active_run_error
@@ -519,9 +519,9 @@ static func _profile_payload_error(
 	return {}
 
 
-static func validate_active_run_snapshot(value: Dictionary):
+static func validate_active_run_snapshot(value: Dictionary, meta_catalog: RefCounted = null):
 	var normalized: Dictionary = _normalize_profile_payload({"active_run_state": value}, 3)["active_run_state"]
-	var error := _active_run_state_error(normalized)
+	var error := _active_run_state_error(normalized, true, meta_catalog)
 	if not error.is_empty():
 		return _invalid_create(str(error["field"]), str(error["reason"]), error.get("value"))
 	return SaveResultScript.success(normalized)
@@ -640,7 +640,8 @@ static func _normalize_persisted_integer_fields(
 
 static func _active_run_state_error(
 	value: Variant,
-	allow_legacy_event_runtime: bool = true
+	allow_legacy_event_runtime: bool = true,
+	meta_catalog: RefCounted = null
 ) -> Dictionary:
 	if not value is Dictionary:
 		return _run_error("", "type")
@@ -694,8 +695,13 @@ static func _active_run_state_error(
 	if typeof(run["current_floor_index"]) != TYPE_INT:
 		return _run_error("current_floor_index", "type")
 	if run.resources.has("meta_run_projection") or run.resources.has("meta_floor_entrances"):
-		var loaded: Dictionary = MetaFactoryScript.load_base()
-		if not loaded.ok or not MetaProjectionScript.validate_run_resources(run.resources, int(run.current_floor_index), loaded.context.catalog):
+		var selected_catalog := meta_catalog
+		if selected_catalog == null:
+			var loaded: Dictionary = MetaFactoryScript.load_base()
+			if not loaded.ok:
+				return _run_error("resources.meta_run_projection", "invalid")
+			selected_catalog = loaded.context.catalog
+		if not MetaProjectionScript.validate_run_resources(run.resources, int(run.current_floor_index), selected_catalog):
 			return _run_error("resources.meta_run_projection", "invalid")
 	var completed_error := _stable_unique_string_array_error(
 		run["completed_floor_ids"], "completed_floor_ids"

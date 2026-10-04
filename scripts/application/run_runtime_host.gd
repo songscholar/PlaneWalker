@@ -28,6 +28,7 @@ const BOSS_EXPOSURE_REPLAY_CHECKPOINT_FIELDS := [
 
 @export var room_controller_path: NodePath
 @export_file("*.json") var manifest_path: String = "res://data/content_packs/base/pack.json"
+var content_pack_specs: Array = []
 
 var _active: bool = false
 var _facade: RefCounted
@@ -291,7 +292,7 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	config["meta_run_projection"] = saved.resources.meta_run_projection.duplicate(true)
 	if not _player.configure_run(StringName(saved.run_id)):
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_RUN_ID_INVALID")
-	if not _player.configure_loadout(config):
+	if not _player.configure_loadout(config, candidate.active_meta_catalog()):
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_LOADOUT_INVALID")
 	if not _player.restore_reward_effect_snapshot(replay.reward_effect_state, false):
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_REWARD_INVALID")
@@ -511,7 +512,12 @@ func start_run(config: Dictionary, profile_launch: Dictionary = {}) -> Variant:
 	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
 	if not projection.is_empty():
 		accepted_config["meta_run_projection"] = projection.duplicate(true)
-	if not bool(_player.call("configure_loadout", accepted_config)):
+	var loadout_applied: bool = (
+		bool(_player.call("configure_loadout", accepted_config))
+		if projection.is_empty()
+		else bool(_player.call("configure_loadout", accepted_config, _facade.active_meta_catalog()))
+	)
+	if not loadout_applied:
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
 	if (
 		_is_floor_plan_snapshot(accepted_snapshot)
@@ -1237,7 +1243,7 @@ func choice_panel() -> Control:
 
 func _boot_facade() -> RefCounted:
 	var facade := RunRuntimeFacadeScript.new()
-	var booted = facade.boot(manifest_path)
+	var booted = facade.boot(manifest_path, RunRuntimeFacadeScript.DEFAULT_ENCOUNTER_PATH, content_pack_specs)
 	return facade if booted.ok else null
 
 

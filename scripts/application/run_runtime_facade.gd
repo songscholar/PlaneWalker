@@ -137,7 +137,8 @@ func _notification(what: int) -> void:
 
 func boot(
 	content_path: String = DEFAULT_CONTENT_PATH,
-	encounter_path: String = DEFAULT_ENCOUNTER_PATH
+	encounter_path: String = DEFAULT_ENCOUNTER_PATH,
+	pack_specs: Array = []
 ):
 	_booted = false
 	_registry = ContentRegistryScript.new()
@@ -176,7 +177,9 @@ func boot(
 	_published_event_fact_ids.clear()
 
 	var report
-	if content_path.to_lower().ends_with("pack.json"):
+	if not pack_specs.is_empty():
+		report = _registry.load_packs(pack_specs, GAME_VERSION, &"EXPANSION")
+	elif content_path.to_lower().ends_with("pack.json"):
 		report = _registry.load_packs(
 			[{"path": content_path, "required": true}],
 			GAME_VERSION,
@@ -226,7 +229,7 @@ func start_run(config: Dictionary, run_id: String, meta_projection: Dictionary =
 		)
 	var meta_catalog: RefCounted = null
 	if not meta_projection.is_empty():
-		var loaded: Dictionary = MetaCatalogFactory.load_base()
+		var loaded: Dictionary = MetaCatalogFactory.from_profile_registry(_registry, meta_projection)
 		if not _is_floor_plan_milestone(str(normalized.milestone)) or not loaded.ok or not MetaRunProjectionScript.validate(meta_projection, loaded.context.catalog):
 			return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "meta_run_projection"})
 		meta_catalog = loaded.context.catalog
@@ -1762,6 +1765,14 @@ func content_registry() -> RefCounted:
 	return _registry
 
 
+func active_meta_catalog() -> RefCounted:
+	var projection: Dictionary = snapshot().get("resources", {}).get("meta_run_projection", {})
+	if projection.is_empty():
+		return null
+	var loaded := MetaCatalogFactory.from_profile_registry(_registry, projection)
+	return loaded.context.catalog if loaded.ok else null
+
+
 func create_room_runtime(encounter_runner: Node) -> Node:
 	if not _booted or _orchestrator == null or _encounter_catalog == null or encounter_runner == null:
 		return null
@@ -2024,6 +2035,15 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT", _revision(), {"field": "current_floor_index"}
 		)
+	var meta_catalog: RefCounted
+	var projection: Variant = value.get("resources", {}).get("meta_run_projection", {})
+	if not projection is Dictionary:
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "meta_run_projection"})
+	if not projection.is_empty():
+		var loaded := MetaCatalogFactory.from_profile_registry(_registry, projection)
+		if not loaded.ok or not MetaRunProjectionScript.validate(projection, loaded.context.catalog):
+			return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "meta_run_projection"})
+		meta_catalog = loaded.context.catalog
 	var candidate_orchestrator = RunOrchestratorScript.new()
 	var candidate_director = RunDirectorScript.new()
 	if not candidate_orchestrator.enter_hub().ok:
@@ -2041,7 +2061,8 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 	if not candidate_orchestrator.restore_launch_run_snapshot(
 		value.duplicate(true),
 		_floor_definitions[floor_index].duplicate(true),
-		_room_templates.duplicate(true)
+		_room_templates.duplicate(true),
+		meta_catalog
 	):
 		candidate_director.free()
 		return CommandResultScript.failure(

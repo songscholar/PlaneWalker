@@ -333,7 +333,7 @@ func bind_tutorial_run(run: RefCounted, player: Node) -> Dictionary:
 	if launch.is_empty() or not _player_matches_launch(player, launch, state) or player.full_player_replay_snapshot().is_empty() or not _settlement.verified_run_sources(launch, state).ok or not Replay.validate_full_player_reward_effect_state(player.reward_effect_snapshot()) or _clone_native_run(run, state) == null:
 		return _failure(&"TUTORIAL_BINDING_INVALID")
 	var adapter := TutorialAdapter.new()
-	var bound := adapter.bind_normal_run(snapshot(), run, player)
+	var bound := adapter.bind_normal_run(snapshot(), run, player, _tutorial.content_catalog())
 	if not bound.ok:
 		return bound
 	retire_tutorial_run()
@@ -588,7 +588,7 @@ func execute_narrative(command: Dictionary, expected_revision: int, occurrence: 
 			return _failure(&"NATIVE_HEALTH_SYNC_INVALID")
 		clone.advance_revision()
 		run_after = clone.snapshot()
-		if not Envelope.validate_active_run_snapshot(run_after).ok:
+		if not Envelope.validate_active_run_snapshot(run_after, _catalog).ok:
 			_profile.discard_candidate(prepared.context.ticket)
 			return _failure(&"NATIVE_RUN_ENVELOPE_INVALID")
 		payload_changes.active_run_state = run_after
@@ -658,7 +658,7 @@ func restore_active_run(run: RefCounted, player: Node) -> Dictionary:
 	var before: Dictionary = player.reward_effect_snapshot()
 	var floor: Dictionary = run.floor_transaction_snapshot()
 	_narrative_publication = true
-	var restored: bool = player.restore_reward_effect_snapshot(player_value, false) and run.restore_launch_run_snapshot(run_value, floor.floor_definition, floor.room_templates)
+	var restored: bool = player.restore_reward_effect_snapshot(player_value, false) and run.restore_launch_run_snapshot(run_value, floor.floor_definition, floor.room_templates, _catalog)
 	if not restored:
 		player.restore_reward_effect_snapshot(before, false)
 	_narrative_publication = false
@@ -982,12 +982,12 @@ func _clone_native_run(run: RefCounted, value: Dictionary) -> RefCounted:
 	var floor: Dictionary = run.floor_transaction_snapshot()
 	var clone := Run.new()
 	clone.reset_domain(value.config, value.run_id)
-	return clone if clone.restore_launch_run_snapshot(value, floor.floor_definition, floor.room_templates) else null
+	return clone if clone.restore_launch_run_snapshot(value, floor.floor_definition, floor.room_templates, _catalog) else null
 
 
 func _restore_bound_run(value: Dictionary) -> bool:
 	var floor: Dictionary = _narrative_run.floor_transaction_snapshot()
-	return _narrative_run.restore_launch_run_snapshot(value, floor.floor_definition, floor.room_templates)
+	return _narrative_run.restore_launch_run_snapshot(value, floor.floor_definition, floor.room_templates, _catalog)
 
 
 func _mirrors_match(value: Dictionary, profile: Dictionary) -> bool:

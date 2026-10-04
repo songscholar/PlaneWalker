@@ -10,6 +10,8 @@ const Profile := preload("res://scripts/progression/meta_profile_state.gd")
 const Envelope := preload("res://scripts/save/save_envelope.gd")
 const Paths := preload("res://scripts/save/runtime_user_data_path.gd")
 const Ledger := preload("res://scripts/save/actual_content_compatibility_ledger.gd")
+const Service := preload("res://scripts/progression/profile_runtime_service.gd")
+const Facade := preload("res://scripts/application/run_runtime_facade.gd")
 
 
 func _ready() -> void:
@@ -34,11 +36,14 @@ func _run() -> void:
 	var known_actual: Dictionary = {}
 	var cases: Array = ["fresh", "actual_v4", "known_legacy", "unknown_content"]
 	var sources := Ledger.trusted_sources(target, catalog.fingerprint())
-	suite.assert_equal(sources.size(), 3, "reviewed compatibility ledger supplies only the three known actual sources")
+	suite.assert_equal(sources.size(), 4, "reviewed compatibility ledger supplies only the four known actual sources")
 	for index: int in range(sources.size()):
 		var id := "known_actual_%d" % index
 		cases.append(id)
 		known_actual[id] = sources[index]
+		var active_id := "active_actual_%d" % index
+		cases.append(active_id)
+		known_actual[active_id] = sources[index]
 	for case_id: String in cases:
 		var path := Paths.resolve_default("user://p16-profile-boot/" + case_id + "/legacy.json", "p16-profile-boot/" + case_id + "/legacy.json")
 		var root := path.get_base_dir().path_join("plane_walker/save")
@@ -61,6 +66,16 @@ func _run() -> void:
 				payload.meta_profile_state.chronos_shards = 37
 			var seeded = save.save_profile("slot_1", "base", payload)
 			suite.assert_true(seeded.ok, "fixture primary saves: " + case_id + " " + str(seeded.to_dictionary()))
+			if case_id.begins_with("active_actual_"):
+				var service := Service.new()
+				suite.assert_true(service.configure(catalog, save, "slot_1", "base").ok, "reviewed historical live fixture configures actual Profile")
+				var prepared: Dictionary = service.prepare_launch({"seed": 71, "difficulty": "normal", "character_id": "wanderer", "weapon_id": "sword", "time_abilities": ["stop", "rewind"]}, int(service.snapshot().revision))
+				suite.assert_true(prepared.ok, "reviewed historical live fixture prepares an authentic launch")
+				var facade := Facade.new()
+				suite.assert_true(facade.boot().ok and facade.start_run(prepared.context.run_config, prepared.context.launch.run_id, prepared.context.projection).ok, "historical live fixture contains a canonical authored native Run")
+				var retained: Dictionary = service.payload()
+				retained.active_run_state = facade.snapshot()
+				suite.assert_true(save.save_profile("slot_1", "base", retained).ok, "reviewed source physically validates and retains its live Run")
 		var primary_path := root.path_join("profiles/slot_1/base/primary.json")
 		var before := FileAccess.get_file_as_string(primary_path) if case_id != "fresh" else ""
 		state.save_path = path
@@ -68,8 +83,9 @@ func _run() -> void:
 		suite.assert_equal(FileAccess.get_file_as_string(primary_path) if case_id != "fresh" else "", before, "autoload settings boot never mutates a Profile before actual-content activation")
 		var prior := state.persistent.duplicate(true)
 		var result: Dictionary = state.activate_profile_content(registry)
-		if case_id == "unknown_content":
-			suite.assert_true(not result.ok and result.code == &"CONTENT_MISMATCH", "unknown content cannot self-authorize a new binding")
+		if case_id == "unknown_content" or case_id.begins_with("active_actual_"):
+			var rejection: StringName = &"NATIVE_CONTENT_MIGRATION_REQUIRED" if case_id.begins_with("active_actual_") else &"CONTENT_MISMATCH"
+			suite.assert_true(not result.ok and result.code == rejection, "unknown or live historical content cannot silently self-authorize: " + case_id + " " + str(result))
 			suite.assert_equal(state.persistent, prior, "refused production boot preserves authoritative memory")
 			suite.assert_equal(FileAccess.get_file_as_string(primary_path), before, "refused production boot preserves actual bytes")
 			suite.assert_true(state.profile_runtime_service() == null, "refused content cannot expose a launch-capable Profile")

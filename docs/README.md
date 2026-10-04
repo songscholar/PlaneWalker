@@ -154,7 +154,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Native Hub Scene Evidence](current/2026-10-05-p16-native-hub-shell-evidence.md) | 三个像素场景、原生移动与九目的地、48 张渲染截图 | Verified Locally / Business panels pending |
 | [P16 Hub Business Evidence](current/2026-10-05-p16-hub-business-evidence.md) | 权威档案业务入口、闭合可用性与成本投影、配装和离线出发 | Verified Locally / Native panel certification separate |
 | [P16 Production Profile Boot Evidence](current/2026-10-05-p16-production-profile-boot-evidence.md) | 真实内容指纹、已核验历史迁移、权威进度镜像与未知内容拒绝 | Verified Locally / Full resume pending |
-| [P16 Actual Content Compatibility Evidence](current/2026-10-05-p16-actual-content-compatibility-evidence.md) | 两个精确历史内容版本、Git 来源审计与全部物理保存故障补偿 | Verified Locally / Pinned localization-only upgrades |
+| [P16 Actual Content Compatibility Evidence](current/2026-10-05-p16-actual-content-compatibility-evidence.md) | 原始与 Hub 历史内容版本、Git 来源审计与全部物理保存故障补偿 | Verified Locally / Pinned localization-only upgrades |
+| [P16 Training Content Compatibility Evidence](current/2026-10-05-p16-training-content-compatibility-evidence.md) | 四训练翻译键、三个真实历史档案升级与完整指纹认证 | Verified Locally / Exact localization-only upgrades |
 | [P16 Encounter Timer Evidence](current/2026-10-05-p16-encounter-timer-evidence.md) | 原生计时器、暂停继承、退出取消与零泄漏房间退役 | Verified Locally / Current |
 | [P16 Main Profile Flow Evidence](current/2026-10-05-p16-main-profile-flow-evidence.md) | 正式耐久开局、真实死亡结算、保存重试和下一局身份 | Verified Locally / Victory and full resume pending |
 | [P16 Native Hub Flow Evidence](current/2026-10-05-p16-native-hub-flow-evidence.md) | Main 首屏、九面板、真实购买和锻造、手柄入口与原生画面 | Verified Locally / Training and optional providers pending |
@@ -166,6 +167,35 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Native Narrative Evidence](current/2026-10-05-p16o-native-narrative-evidence.md) | 真实接触、保存故障、过期回调、恢复与中英文原生渲染 | Verified Locally / Main handoff separate |
 | [P16 Main Narrative Flow Evidence](current/2026-10-05-p16-main-narrative-flow-evidence.md) | 正式最终碎片、结局、物理结算重试、片尾重启恢复与房间正确呈现 | Verified Locally / Five-boss combat separate |
 | [P16P Native Training Evidence](current/2026-10-05-p16p-native-training-evidence.md) | 150 个实际练习配置、五武器成功帧、一次性训练奖励与保存补偿 | Verified Locally / Arena and T05 separate |
+| [P16Q Native Checkpoint Evidence](current/2026-10-05-p16q-native-checkpoint-evidence.md) | 原生入口、奖励待选、死亡、World payload 的物理冷恢复与失败补偿 | Verified Locally / Live combat separate |
+| [P16 Main Native Resume Evidence](current/2026-10-05-p16-main-native-resume-evidence.md) | 据点实际继续按钮、同局物理恢复、安全点保存和完整玩家状态保持 | Verified Locally / Live combat separate |
+| [P16R Training Arena Design](superpowers/specs/2026-10-05-plane-walker-p16r-training-arena-design.md) | 原生演练场、Boss 转化目标、配置与手柄流程设计 | Approved / Current authority |
+| [P16R Training Arena Plan](superpowers/plans/2026-10-05-plane-walker-p16r-training-arena.md) | 可玩训练场及真实目标验证记录 | Completed / Historical |
+| [P16R Training Arena Evidence](current/2026-10-05-p16r-training-arena-evidence.md) | 真实训练目标、Boss 前摇转化、一次性奖励和八种原生画面合同 | Verified Locally / Production Boss integration separate |
+| [Content Pack Export Evidence](current/2026-10-05-content-pack-export-evidence.md) | 导出原始认证字节、PCK 实际大厅开局和角色原生导入资源 | Verified Locally / Formal template builds separate |
+| [P15N Production Launch Encounters Design](superpowers/specs/2026-10-05-plane-walker-p15n-production-launch-encounters-design.md) | 正式遭遇生成、统一动作帧与原生敌人桥接合同 | Approved / Current authority |
+| [P15N Production Launch Encounters Plan](superpowers/plans/2026-10-05-plane-walker-p15n-production-launch-encounters.md) | 正式战斗生成与角色生命周期接线计划 | Active / Current |
+| [P15N Production Launch Encounters Evidence](current/2026-10-05-p15n-production-launch-encounter-evidence.md) | 真实 Main 生成、统一动作帧、最终死亡和奖励生命周期验证 | Verified Locally / Remaining combat gates active |
+| [P15E Native Event Ambush Design](superpowers/specs/2026-10-05-plane-walker-p15e-native-event-ambush-design.md) | 事件伏击原生生成和精确完成身份约束 | Approved / Current authority |
+| [P15E Native Event Ambush Plan](superpowers/plans/2026-10-05-plane-walker-p15e-native-event-ambush.md) | 事件选择、提交、敌人生成及回滚接线 | Active / Current |
+| [P15E Native Event Ambush Evidence](current/2026-10-05-p15e-native-event-ambush-evidence.md) | 真实 Main 事件战斗和续行身份验证 | Verified Locally / Combined certification separate |
+| [P15C Complete Enemy Domain Plan](superpowers/plans/2026-10-05-plane-walker-p15c-complete-enemy-domain.md) | 二十二敌人机制、动作时间轴和最终死亡实施 | Active / Current |
+| [P15C Complete Enemy Domain Evidence](current/2026-10-05-p15c-complete-enemy-domain-evidence.md) | 二十二敌人领域时间轴、Guard/Hound 首次致死与原生事务验证 | Verified Locally / Complete native mechanisms separate |
+| [P15B Native Boss Runtime Plan](superpowers/plans/2026-10-05-plane-walker-p15b-native-boss-runtime.md) | 五首领固定帧、原生演员及完整动作效果实施 | Active / Current |
+| [P15B Native Boss Foundation Evidence](current/2026-10-05-p15b-native-boss-foundation-evidence.md) | 五首领动作、实际玩家帧桥接、资源显示和回滚验证 | Verified Locally / Full effects pending |
+| [P17A Actor Atlases Design](superpowers/specs/2026-10-05-plane-walker-p17a-actor-atlases-design.md) | 五角色与五首领原始像素动画资源合同 | Approved / Current authority |
+| [P17A Actor Atlases Plan](superpowers/plans/2026-10-05-plane-walker-p17a-actor-atlases.md) | 确定性图集生产、许可、逐帧和原生加载验证 | Active / Current |
+| [P17A Actor Atlases Evidence](current/2026-10-05-p17a-actor-atlases-evidence.md) | 十套动画、240 帧、来源、哈希与真实 Godot 图集验证 | Verified Locally / Gameplay integration separate |
+| [P17B Original Music Design](superpowers/specs/2026-10-05-plane-walker-p17b-original-music-design.md) | 十五首原创循环与游戏状态只读投影 | Approved / Current authority |
+| [P17B Original Music Plan](superpowers/plans/2026-10-05-plane-walker-p17b-original-music.md) | 音频生成、双轨切换、暂停与真实 Main 验证 | Active / Current |
+| [P17B Original Music Evidence](current/2026-10-05-p17b-original-music-evidence.md) | 十五首循环、字节复现、真实 Main 与 PCK 播放和暂停验证 | Verified Locally / Combined certification separate |
+| [P17C Launch Enemy Presentation Plan](superpowers/plans/2026-10-05-plane-walker-p17c-launch-enemy-presentation.md) | 二十二敌人原创像素资源、缺失原生场景与实际渲染验证 | Active / Current |
+| [P17C Launch Enemy Presentation Evidence](current/2026-10-05-p17c-launch-enemy-presentation-evidence.md) | 二十二敌人造型、十八场景、真实窗口和 PCK 资源验证 | Verified Locally / Combat certification separate |
+| [P18A Local Content Management Design](superpowers/specs/2026-10-05-plane-walker-p18a-local-content-management-design.md) | 离线 Mod 和 DLC 发现、启停、权利接口与存档隔离 | Approved / Current authority |
+| [P18A Local Content Management Plan](superpowers/plans/2026-10-05-plane-walker-p18a-local-content-management.md) | 安全内容安装、实际 Registry 激活与独立存档域实施 | Active / Current |
+| [P18A Local Content Management Evidence](current/2026-10-05-p18a-local-content-management-evidence.md) | 离线安装、原子启停、权利边界和独立存档域验证 | Verified Locally / Main integration pending |
+| [P18B Native Content Management Plan](superpowers/plans/2026-10-05-plane-walker-p18b-native-content-management.md) | Hub 内容包控制、真实启动程序集与独立冒险存档接线 | Active / Current |
+| [P18B Native Content Management Evidence](current/2026-10-05-p18b-native-content-management-evidence.md) | 实际内容启停、冷恢复、独立结算、本体字节保护及原生界面与 PCK 验证 | Verified Locally / Combined certification active |
 | [P16 Native Training Design](superpowers/specs/2026-10-05-plane-walker-p16p-native-training-design.md) | 隔离练习、真实动作认证与一次性档案奖励 | Approved / Current |
 | [P16 Native Training Plan](superpowers/plans/2026-10-05-plane-walker-p16p-native-training.md) | 实体训练、保存失败恢复与原生教学入口实施 | Active / Current |
 | [P16 Native Checkpoint Design](superpowers/specs/2026-10-05-plane-walker-p16q-native-checkpoint-design.md) | 真实安全快照、关闭重建与严格冷恢复 | Approved / Current |

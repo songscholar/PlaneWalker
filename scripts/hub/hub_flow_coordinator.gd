@@ -271,6 +271,7 @@ func _refresh_toolbar() -> void:
 	popup.add_item(tr("UI_ACCESSIBILITY_SETTINGS"), 0)
 	popup.add_item(tr("UI_INPUT_REMAP"), 1)
 	popup.add_item(tr("UI_LANG_EN") if str(TranslationServer.get_locale()) == "zh_CN" else tr("UI_LANG_ZH"), 2)
+	popup.add_item(tr("UI_CONTENT_TITLE"), 3)
 	FocusCoordinator.link_ring(_toolbar_controls(), false)
 	var runtimes := get_tree().get_nodes_in_group("accessibility_runtime")
 	if not runtimes.is_empty():
@@ -300,7 +301,8 @@ func _toolbar_function(id: String, epoch: int) -> void:
 
 func _settings_selected(id: int) -> void:
 	if _active:
-		settings_requested.emit(["accessibility", "input", "language"][id], _settings)
+		if id >= 0 and id < 4:
+			settings_requested.emit(["accessibility", "input", "language", "content"][id], _settings)
 
 
 func _fit_scene() -> void:

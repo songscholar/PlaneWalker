@@ -12,6 +12,8 @@ const TrainingFlowScript := preload("res://scripts/training/training_flow_coordi
 const NarrativeFlowScript := preload("res://scripts/narrative/narrative_flow_coordinator.gd")
 const NativeRoomPresentationScript := preload("res://scripts/dungeon/native_room_presentation.gd")
 const MusicDirectorScript := preload("res://scripts/audio/music_director.gd")
+const ContentManagerScript := preload("res://scripts/expansion/expansion_content_manager.gd")
+const ContentManagementPanelScript := preload("res://scripts/ui/content_management_panel.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -47,6 +49,21 @@ var _terminal_notice_run_id := ""
 var _room_presentation: Node
 var _checkpoint_stamp := ""
 var _checkpoint_retry_at := 0
+var _content_manager: RefCounted
+var _content_activation: Dictionary = {}
+var _content_panel: Control
+var _content_revision := 0
+var _content_reload_pending := false
+var _last_launch_rejection: Dictionary = {}
+
+
+func _enter_tree() -> void:
+	var manager := ContentManagerScript.new()
+	var configured: Dictionary = manager.configure(GameState.save_path.get_base_dir().path_join("plane_walker/content"), [{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"EXPANSION", Callable(), _content_mutation_locked)
+	if configured.ok:
+		_content_manager = manager
+		_content_activation = manager.activation_context()
+		get_node("RunRuntimeHost").content_pack_specs = _content_activation.pack_specs.duplicate(true)
 
 
 func _ready() -> void:
@@ -75,6 +92,7 @@ func _ready() -> void:
 	_setup_training()
 	_setup_narrative()
 	_setup_music()
+	_setup_content_management()
 	if _hub_flow == null:
 		_show_start_menu()
 	call_deferred("_apply_accessibility_to_runtime")
@@ -110,6 +128,95 @@ func _music_context() -> Dictionary:
 			var node: Dictionary = runtime_host.native_run_state().current_floor_node() if runtime_host.native_run_state() != null else {}
 			cue_id = MusicDirectorScript.BOSS_CUES[index] if node.get("room_type") == "boss" and not node.get("cleared", false) else MusicDirectorScript.FLOOR_CUES[index]
 	return {"cue_id": cue_id, "paused": get_tree().paused}
+
+
+func _setup_content_management() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "ContentManagementLayer"
+	layer.layer = 61
+	add_child(layer)
+	_content_panel = ContentManagementPanelScript.new()
+	_content_panel.name = "ContentManagementPanel"
+	layer.add_child(_content_panel)
+	_content_panel.command_requested.connect(submit_content_command)
+	_content_panel.closed.connect(_content_management_closed)
+
+
+func content_manager() -> RefCounted:
+	return _content_manager
+
+
+func _content_mutation_locked() -> bool:
+	if _content_reload_pending or _credits_pending or _training_flow != null and _training_flow.is_training_active():
+		return true
+	var service: RefCounted = _profile_service if _profile_service != null else GameState.profile_runtime_service()
+	if service != null and not service.snapshot().active_launch_receipt.is_empty():
+		return true
+	var host := get_node_or_null("RunRuntimeHost")
+	if host != null and host.is_node_ready():
+		var state: Dictionary = host.runtime_snapshot()
+		return not str(state.get("run_id", "")).is_empty() and not RunPhaseScript.is_terminal(int(state.get("phase", -1)))
+	return false
+
+
+func open_content_management() -> Dictionary:
+	if _content_manager == null or _content_panel == null or _hub_flow == null or not _hub_flow.is_hub_visible() or _credits_pending or _content_reload_pending:
+		return {"ok": false, "code": &"INVALID_PHASE", "context": {}}
+	_hub_flow.close_panel()
+	_hub_flow.scene_host().set_interaction_enabled(false)
+	return _refresh_content_panel()
+
+
+func _refresh_content_panel() -> Dictionary:
+	_content_revision += 1
+	var discovery: Dictionary = _content_manager.discovery()
+	var state := {"run_id": "content-manager", "revision": _content_revision, "epoch": _content_revision, "installed": discovery.installed, "activation": discovery.activation, "locked": _content_mutation_locked(), "diagnostics": discovery.diagnostics, "entitlements": discovery.entitlements}
+	var rendered: Variant = _content_panel.render(state)
+	return {"ok": rendered.ok, "code": rendered.code, "context": rendered.context.duplicate(true)}
+
+
+func submit_content_command(operation: String, payload: Dictionary, revision: int) -> Dictionary:
+	if _content_manager == null or _content_panel == null or not _content_panel.visible or _hub_flow == null or not _hub_flow.is_hub_visible() or revision != _content_revision or _content_reload_pending:
+		return {"ok": false, "code": &"STALE_REVISION", "context": {}}
+	if operation == "set_enabled" and get_tree().current_scene != self:
+		return {"ok": false, "code": &"NATIVE_SCENE_REQUIRED", "context": {}}
+	var before: Dictionary = _content_manager.activation_context()
+	var result: Dictionary
+	match operation:
+		"install":
+			result = _content_manager.install(str(payload.get("path", "")))
+		"set_enabled":
+			result = _content_manager.set_enabled(payload.get("ids", []) if payload.get("ids") is Array else [null])
+		"uninstall":
+			result = _content_manager.uninstall(str(payload.get("id", "")))
+		"refresh":
+			result = _content_manager.refresh()
+		"cancel":
+			result = {"ok": true, "code": &"OK", "context": {}}
+		_:
+			result = {"ok": false, "code": &"INVALID_ARGUMENT", "context": {}}
+	if result.ok and _content_manager.activation_context() != before:
+		_content_reload_pending = true
+		_content_panel.close_panel()
+		call_deferred("_reload_content_scene")
+	else:
+		_refresh_content_panel()
+		if not result.ok:
+			_content_panel.show_rejection("UI_CONTENT_REJECTED")
+	return result.duplicate(true)
+
+
+func _reload_content_scene() -> void:
+	if not _content_reload_pending or get_tree().current_scene != self:
+		return
+	var error := get_tree().reload_current_scene()
+	if error != OK:
+		push_error("Content selection retained, native scene reload failed: %s" % error_string(error))
+
+
+func _content_management_closed() -> void:
+	if _hub_flow != null and _hub_flow.is_hub_visible() and not _content_reload_pending:
+		_hub_flow.refresh()
 
 
 func _setup_hub() -> void:
@@ -236,10 +343,12 @@ func _open_hub_setting(kind: String, restore_focus: Control) -> void:
 			input_remap_panel.open_panel(restore_focus)
 		"language":
 			_toggle_language()
+		"content":
+			open_content_management()
 
 
 func _configure_production_profile() -> void:
-	var activated: Dictionary = GameState.activate_profile_content(runtime_host.content_registry())
+	var activated: Dictionary = GameState.activate_profile_content(runtime_host.content_registry(), str(_content_activation.get("save_domain", "base")))
 	if not activated.ok:
 		_profile_error = str(activated.code)
 		return
@@ -381,10 +490,13 @@ func _start_launch_run(launch_config: Dictionary) -> void:
 
 
 func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = false) -> bool:
-	if _credits_pending:
+	if _credits_pending or _content_reload_pending or _content_panel != null and _content_panel.visible:
 		return false
 	if not from_candidate and (_profile_service == null or not _profile_error.is_empty()):
 		return false
+	config = config.duplicate(true)
+	if not from_candidate and str(_content_activation.get("save_domain", "base")) != "base":
+		config.milestone = "EXPANSION"
 	get_tree().paused = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -405,6 +517,7 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	else:
 		started = runtime_host.start_profile_run(config, _profile_service, int(_profile_service.snapshot().revision))
 	if not started.ok:
+		_last_launch_rejection = {"code": started.code, "context": started.context.duplicate(true)}
 		combat_room.visible = false
 		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 		_room_presentation.set_launch_mode(false)
@@ -415,6 +528,7 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 		elif from_launch:
 			launch_loadout_panel.call("show_start_rejected")
 		return false
+	_last_launch_rejection.clear()
 	_room_presentation.set_launch_mode(str(runtime_host.runtime_snapshot().config.get("milestone", "")) in ["LAUNCH", "EXPANSION"])
 	_room_presentation.synchronize_active_room(bool(started.context.get("restored", false)))
 	if not from_candidate:

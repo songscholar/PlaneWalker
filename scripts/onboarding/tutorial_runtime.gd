@@ -26,6 +26,10 @@ func progress_view(profile: Dictionary) -> Dictionary:
 	return Progress.decode(profile, _content)
 
 
+func content_catalog() -> RefCounted:
+	return _content
+
+
 func training_definition(task_id: String) -> Dictionary:
 	return _content.call("definition", "training_task", task_id) if _content != null else {}
 

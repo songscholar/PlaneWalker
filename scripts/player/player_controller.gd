@@ -2007,7 +2007,7 @@ func try_action(action_id: StringName) -> bool:
 			return false
 
 
-func configure_loadout(config: Dictionary) -> bool:
+func configure_loadout(config: Dictionary, meta_catalog: RefCounted = null) -> bool:
 	if loadout_runtime == null or not _runtime_reset_preflight():
 		return false
 	var next_config := config.duplicate(true)
@@ -2047,10 +2047,13 @@ func configure_loadout(config: Dictionary) -> bool:
 	if next_config.has("meta_run_projection"):
 		if str(next_config.get("milestone", "")) not in ["LAUNCH", "EXPANSION"] or not next_config.meta_run_projection is Dictionary:
 			return false
-		var loaded_catalog: Dictionary = MetaCatalogFactoryScript.load_base()
-		if not loaded_catalog.ok:
-			return false
-		var prepared_stats: Dictionary = MetaStatsScript.prepare(character_profile, {}, str(next_config.get("weapon_id", "")), next_config.meta_run_projection, loaded_catalog.context.catalog)
+		var selected_catalog := meta_catalog
+		if selected_catalog == null:
+			var loaded_catalog: Dictionary = MetaCatalogFactoryScript.load_base()
+			if not loaded_catalog.ok:
+				return false
+			selected_catalog = loaded_catalog.context.catalog
+		var prepared_stats: Dictionary = MetaStatsScript.prepare(character_profile, {}, str(next_config.get("weapon_id", "")), next_config.meta_run_projection, selected_catalog)
 		if not prepared_stats.ok:
 			return false
 		permanent_stats = prepared_stats.context.stats

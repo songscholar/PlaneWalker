@@ -52,6 +52,7 @@ var floor_rule_state: Dictionary = {}
 
 var _floor_definition: Dictionary = {}
 var _room_templates: Array = []
+var _meta_catalog: RefCounted
 
 const SELECTION_TRANSACTION_FIELDS: Array[String] = [
 	"schema_version",
@@ -143,6 +144,7 @@ func _init() -> void:
 
 
 func reset_domain(p_config: Dictionary, p_run_id: String) -> void:
+	_meta_catalog = null
 	config = RunConfigScript.normalized(p_config)
 	run_id = p_run_id
 	suspended = false
@@ -315,7 +317,11 @@ func bind_meta_run_projection(value: Dictionary, catalog: RefCounted) -> bool:
 	if not is_launch_floor_mode() or phase != RunPhaseScript.Value.RUN_PREPARING or not MetaProjectionScript.validate(value, catalog):
 		return false
 	if resources.has("meta_run_projection"):
-		return resources.meta_run_projection == value
+		if resources.meta_run_projection != value:
+			return false
+		_meta_catalog = catalog
+		return true
+	_meta_catalog = catalog
 	resources["meta_run_projection"] = value.duplicate(true)
 	resources["meta_floor_entrances"] = []
 	return true
@@ -342,6 +348,8 @@ func commit_meta_floor_entrance(before_current: float, maximum: float, after_cur
 func _meta_resources_valid(bundle: Dictionary, floor_index: int) -> bool:
 	if not bundle.has("meta_run_projection"):
 		return not bundle.has("meta_floor_entrances")
+	if _meta_catalog != null:
+		return MetaProjectionScript.validate_run_resources(bundle, floor_index, _meta_catalog)
 	var loaded: Dictionary = MetaFactoryScript.load_base()
 	return loaded.ok and MetaProjectionScript.validate_run_resources(bundle, floor_index, loaded.context.catalog)
 
@@ -958,6 +966,21 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 
 
 func restore_launch_run_snapshot(
+	value: Dictionary,
+	floor_definition: Dictionary,
+	room_templates: Array,
+	meta_catalog: RefCounted = null
+) -> bool:
+	var before_catalog := _meta_catalog
+	if meta_catalog != null:
+		_meta_catalog = meta_catalog
+	var restored := _restore_launch_run_snapshot(value, floor_definition, room_templates)
+	if not restored:
+		_meta_catalog = before_catalog
+	return restored
+
+
+func _restore_launch_run_snapshot(
 	value: Dictionary,
 	floor_definition: Dictionary,
 	room_templates: Array

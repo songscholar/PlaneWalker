@@ -34,7 +34,7 @@ func configure(catalog: RefCounted, boss_by_floor: Dictionary) -> bool:
 func verified_run_sources(launch: Dictionary, run_snapshot: Dictionary) -> Dictionary:
 	if _catalog == null or not Catalog.exact_fields(launch, LAUNCH_FIELDS) or launch.schema_id != "meta_launch_receipt_v1" or not Catalog.stable_id(launch.run_id) or not Catalog.bounded_int(launch.sequence, 1, Catalog.MAX_VALUE) or not Catalog.bounded_int(launch.seed, 0, Catalog.MAX_VALUE) or launch.difficulty not in ["normal", "hard", "nightmare"] or launch.character_id not in Catalog.CHARACTER_IDS or launch.weapon_id not in Catalog.WEAPON_IDS or not launch.time_abilities is Array or launch.time_abilities.size() != 2 or launch.time_abilities[0] not in Catalog.TIME_IDS or launch.time_abilities[1] not in Catalog.TIME_IDS or launch.time_abilities[0] == launch.time_abilities[1] or not Catalog.fingerprint_valid(launch.projection_digest):
 		return _failure(&"LAUNCH_MISMATCH")
-	var validated = Envelope.validate_active_run_snapshot(run_snapshot)
+	var validated = Envelope.validate_active_run_snapshot(run_snapshot, _catalog)
 	if not validated.ok or validated.payload.is_empty() or not _run_matches_launch(validated.payload, launch):
 		return _failure(&"RUN_INVALID")
 	var run: Dictionary = validated.payload
@@ -52,7 +52,7 @@ func verified_terminal_facts(launch: Dictionary, terminal: Dictionary) -> Dictio
 	var verified := verified_run_sources(launch, terminal)
 	if not verified.ok:
 		return verified
-	var normalized: Dictionary = Envelope.validate_active_run_snapshot(terminal).payload
+	var normalized: Dictionary = Envelope.validate_active_run_snapshot(terminal, _catalog).payload
 	var reason := str(normalized.result.get("result", ""))
 	if not _terminal_matches_launch(normalized, launch, reason):
 		return _failure(&"TERMINAL_INVALID")
@@ -71,7 +71,7 @@ func prepare(profile: Dictionary, launch: Dictionary, terminal: Dictionary, sour
 	var before: Dictionary = state.snapshot()
 	if launch.is_empty() or before.active_launch_receipt != launch:
 		return _failure(&"LAUNCH_MISMATCH")
-	var validated = Envelope.validate_active_run_snapshot(terminal)
+	var validated = Envelope.validate_active_run_snapshot(terminal, _catalog)
 	if not validated.ok or validated.payload.is_empty():
 		return _failure(&"TERMINAL_INVALID")
 	var run: Dictionary = validated.payload
@@ -133,7 +133,7 @@ func import_legacy_statistics(profile: Dictionary, terminal: Dictionary, source_
 	var command_id := "legacy-stat:%s" % str(terminal.get("run_id", "")).sha256_text().substr(0, 40)
 	if not Catalog.stable_id(command_id) or not candidate.active_launch_receipt.is_empty() or candidate.completed_command_ids.has(command_id):
 		return _failure(&"SOURCE_INVALID")
-	var validated = Envelope.validate_active_run_snapshot(terminal)
+	var validated = Envelope.validate_active_run_snapshot(terminal, _catalog)
 	if not validated.ok or validated.payload.is_empty():
 		return _failure(&"TERMINAL_INVALID")
 	var run: Dictionary = validated.payload
@@ -156,7 +156,7 @@ func prepare_abandon(profile: Dictionary, launch: Dictionary, active_run: Dictio
 	if _catalog == null or not state.configure(_catalog, profile):
 		return _failure(&"PROFILE_INVALID")
 	var before: Dictionary = state.snapshot()
-	var validated = Envelope.validate_active_run_snapshot(active_run)
+	var validated = Envelope.validate_active_run_snapshot(active_run, _catalog)
 	if launch.is_empty() or before.active_launch_receipt != launch or not validated.ok or validated.payload.is_empty():
 		return _failure(&"LAUNCH_MISMATCH")
 	var run: Dictionary = validated.payload

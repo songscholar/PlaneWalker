@@ -30,6 +30,14 @@ static func from_registry(registry: RefCounted, availability: StringName = &"LAU
 	return from_catalogs(catalogs)
 
 
+static func from_profile_registry(registry: RefCounted, profile: Dictionary) -> Dictionary:
+	for availability: StringName in [&"LAUNCH", &"EXPANSION"]:
+		var built := from_registry(registry, availability)
+		if built.ok and profile.get("catalog_fingerprint") == built.context.catalog.fingerprint():
+			return built
+	return _failure(&"PROFILE_CONTENT_MISMATCH")
+
+
 static func from_catalogs(catalogs: Dictionary) -> Dictionary:
 	if not Catalog.exact_fields(catalogs, ["meta_nodes", "items", "forge_definitions", "narrative_definitions", "tutorial_definitions", "archetype_profiles"]):
 		return _failure(&"CATALOG_SHAPE_INVALID")

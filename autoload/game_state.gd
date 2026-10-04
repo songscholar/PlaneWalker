@@ -10,6 +10,7 @@ const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_p
 const MetaFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
 const ProfileServiceScript := preload("res://scripts/progression/profile_runtime_service.gd")
 const ActualCompatibilityScript := preload("res://scripts/save/actual_content_compatibility_ledger.gd")
+const SavePathsScript := preload("res://scripts/save/save_path_policy.gd")
 
 const SAVE_GAME_VERSION := "0.4.0-dev"
 const DEFAULT_PROFILE_ID := "slot_1"
@@ -60,6 +61,7 @@ var _save_service_path: String = ""
 var _profile_runtime: RefCounted
 var _profile_catalog: RefCounted
 var _content_binding: Dictionary = {}
+var _profile_save_domain := DEFAULT_SAVE_DOMAIN
 
 
 func _ready() -> void:
@@ -72,15 +74,15 @@ func _ready() -> void:
 			persistent.settings = _settings_payload(loaded.payload)
 
 
-func activate_profile_content(registry: RefCounted) -> Dictionary:
-	if save_path.is_empty() or not registry is ContentRegistryScript:
+func activate_profile_content(registry: RefCounted, save_domain: String = DEFAULT_SAVE_DOMAIN) -> Dictionary:
+	if save_path.is_empty() or not registry is ContentRegistryScript or not SavePathsScript.validate_id(save_domain).ok:
 		return {"ok": false, "code": &"INVALID_ARGUMENT", "context": {}}
 	var binding := ContentSnapshotScript.snapshot(registry)
 	if binding.is_empty():
 		return {"ok": false, "code": &"CONTENT_UNAVAILABLE", "context": {}}
-	if _profile_runtime != null and _save_service_path == save_path and binding == _content_binding:
+	if _profile_runtime != null and _save_service_path == save_path and binding == _content_binding and save_domain == _profile_save_domain:
 		return {"ok": true, "code": &"OK", "context": {}}
-	var factory := MetaFactoryScript.from_registry(registry)
+	var factory := MetaFactoryScript.from_registry(registry, &"LAUNCH" if save_domain == DEFAULT_SAVE_DOMAIN else &"EXPANSION")
 	if not factory.ok:
 		return factory
 	var catalog: RefCounted = factory.context.catalog
@@ -88,8 +90,8 @@ func activate_profile_content(registry: RefCounted) -> Dictionary:
 	var configured = service.configure(_save_service_root_path(), SAVE_GAME_VERSION, binding)
 	if not configured.ok or not service.enable_meta_profile(catalog).ok:
 		return {"ok": false, "code": &"CONFIGURATION_INVALID", "context": {}}
-	var inspected = service.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
-	if inspected.code == &"CONTENT_MISMATCH":
+	var inspected = service.inspect_profile(DEFAULT_PROFILE_ID, save_domain)
+	if inspected.code == &"CONTENT_MISMATCH" and save_domain == DEFAULT_SAVE_DOMAIN:
 		var sources := ActualCompatibilityScript.trusted_sources(binding, catalog.fingerprint())
 		sources.append(_legacy_content_snapshot())
 		var matched := false
@@ -100,6 +102,8 @@ func activate_profile_content(registry: RefCounted) -> Dictionary:
 			var legacy = source.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
 			if not legacy.ok:
 				continue
+			if not legacy.payload.payload.get("active_run_state", {}).is_empty() or not legacy.payload.payload.get("native_run_checkpoint", {}).is_empty():
+				return {"ok": false, "code": &"NATIVE_CONTENT_MIGRATION_REQUIRED", "context": {"source_snapshot": prior.duplicate(true)}}
 			var rebound = source.rebind_profile_content(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN, prior, binding, legacy.payload)
 			if not rebound.ok:
 				return {"ok": false, "code": rebound.code, "context": rebound.metadata.duplicate(true)}
@@ -112,25 +116,29 @@ func activate_profile_content(registry: RefCounted) -> Dictionary:
 	var old_path := _save_service_path
 	var old_catalog := _profile_catalog
 	var old_binding := _content_binding.duplicate(true)
+	var old_domain := _profile_save_domain
 	var old_persistent := persistent.duplicate(true)
 	_save_service = service
 	_save_service_path = save_path
 	_profile_catalog = catalog
 	_content_binding = binding.duplicate(true)
-	if inspected.code == &"NOT_FOUND" and FileAccess.file_exists(save_path) and not _import_legacy_persistent():
+	_profile_save_domain = save_domain
+	if save_domain == DEFAULT_SAVE_DOMAIN and inspected.code == &"NOT_FOUND" and FileAccess.file_exists(save_path) and not _import_legacy_persistent():
 		_save_service = old_save
 		_save_service_path = old_path
 		_profile_catalog = old_catalog
 		_content_binding = old_binding
+		_profile_save_domain = old_domain
 		persistent = old_persistent
 		return {"ok": false, "code": &"LEGACY_IMPORT_FAILED", "context": {}}
 	var runtime := ProfileServiceScript.new()
-	var activated := runtime.configure(catalog, service, DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
+	var activated := runtime.configure(catalog, service, DEFAULT_PROFILE_ID, save_domain)
 	if not activated.ok:
 		_save_service = old_save
 		_save_service_path = old_path
 		_profile_catalog = old_catalog
 		_content_binding = old_binding
+		_profile_save_domain = old_domain
 		persistent = old_persistent
 		return activated
 	_profile_runtime = runtime
@@ -140,6 +148,10 @@ func activate_profile_content(registry: RefCounted) -> Dictionary:
 
 func profile_runtime_service() -> RefCounted:
 	return _profile_runtime if _save_service_path == save_path else null
+
+
+func active_profile_domain() -> String:
+	return _profile_save_domain if profile_runtime_service() != null else ""
 
 
 func refresh_profile_state() -> bool:

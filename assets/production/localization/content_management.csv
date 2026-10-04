@@ -1,0 +1,12 @@
+keys,en,zh_CN
+UI_CONTENT_TITLE,Content Packs,内容包
+UI_CONTENT_BASE,Base game,游戏本体
+UI_CONTENT_LOCAL,Local content,本地内容
+UI_CONTENT_INSTALL,Install Folder,安装文件夹
+UI_CONTENT_REFRESH,Refresh,刷新
+UI_CONTENT_REMOVE,Uninstall,卸载
+UI_CONTENT_EMPTY,No installed packs,尚未安装内容包
+UI_CONTENT_RUN_LOCK,Adventure in progress,冒险进行中
+UI_CONTENT_ENTITLEMENT_REQUIRED,Ownership unavailable,所有权不可用
+UI_CONTENT_ISOLATED_FMT,Unavailable package: %s,不可用的内容包：%s
+UI_CONTENT_REJECTED,Unable to apply this change,无法应用此更改

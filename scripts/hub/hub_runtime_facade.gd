@@ -32,7 +32,7 @@ func configure(registry: RefCounted, profile_service: RefCounted, providers: Dic
 	for id: Variant in providers:
 		if id not in ["daily", "leaderboard", "social"] or not providers[id] is Callable or not providers[id].is_valid():
 			return _failure(&"CONFIGURATION_INVALID")
-	var built := Factory.from_registry(registry)
+	var built := Factory.from_profile_registry(registry, profile_service.snapshot())
 	var snapshot: Dictionary = profile_service.snapshot()
 	if not built.ok or snapshot.is_empty() or snapshot.catalog_fingerprint != built.context.catalog.fingerprint():
 		return _failure(&"PROFILE_CONTENT_MISMATCH")
