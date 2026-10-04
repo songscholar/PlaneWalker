@@ -1,15 +1,15 @@
 # P17A Actor Atlases Implementation Plan
 
-> For agentic workers: execute each focused task with an independent validation gate and precise local commit.
-
 - Status: Approved
-- Document Role: Focused production raster implementation plan
+- Document Role: Current focused production raster implementation plan
 - Authority Level: Execution plan below P17A design
 - Applies To: Original actor atlas production and verification
 - Owner: Project pixel presentation lane
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-05-plane-walker-p17a-actor-atlases-design.md`
 - Last Verified: 2026-10-05
 - Exit Gate: RED then GREEN asset contracts, actual PNG inspection and native Godot rendering
+
+> For agentic workers: execute each focused task with an independent validation gate and precise local commit.
 
 **Goal:** Produce ten original pixel animation atlases that can be consumed independently of gameplay.
 
@@ -35,7 +35,11 @@
 
 ## Task 2: Native Presentation
 
-- [ ] Read existing PixelProxy and actual actor boundaries and define a failing native rendering test.
-- [ ] Attach atlas projection without changing gameplay state or typed Visual.
-- [ ] Preserve original weapon feedback, afterimages and accessibility flags.
-- [ ] Verify actual OpenGL frames and gameplay snapshot neutrality, then create a separate commit.
+- [x] Read existing PixelProxy and actual actor boundaries and define a failing native rendering test.
+- [x] Attach atlas projection without changing gameplay state or typed Visual.
+- [x] Preserve original weapon feedback, afterimages and accessibility flags.
+- [x] Verify actual OpenGL frames, gameplay snapshot neutrality and isolated packed atlas loading, then create a separate commit.
+
+The full packed Player fixture also exposed missing imported Base pack source
+bytes during ContentPackDescriptor integrity activation. That export repair has
+its own gate; this completed projection task does not certify the distributable.

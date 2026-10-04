@@ -1,14 +1,14 @@
 # P17A Actor Atlas Evidence
 
 - Status: Approved / Current
-- Document Role: Focused original raster library evidence
+- Document Role: Current focused original raster library evidence
 - Authority Level: Verification evidence below P17A
-- Applies To: Ten actor animation atlases, provenance and deterministic native loading
+- Applies To: Ten actor animation atlases, provenance, deterministic native loading and five actual Player projections
 - Owner: Project pixel presentation lane
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-05-plane-walker-p17a-actor-atlases-design.md`, `docs/superpowers/plans/2026-10-05-plane-walker-p17a-actor-atlases.md`
 - Last Verified: 2026-10-05
-- Implementation Status: Asset library and native gallery verified; gameplay projection remains the next focused task
-- Exit Gate: Ten original nonblank atlases reproduce exactly and render all 240 cells in actual Godot
+- Implementation Status: Asset library, native gallery and actual five-character Player projection verified; five-boss gameplay binding remains separate
+- Exit Gate: Ten original nonblank atlases reproduce exactly, render all 240 cells and preserve native Player gameplay snapshots
 
 ## Delivered
 
@@ -24,6 +24,14 @@ including the contact sheet and manifest, with pinned Pillow 12.3.0. The library
 uses original project raster source and CC0 artwork provenance in LICENSE.txt.
 There are no downloaded media, private credentials or external asset purchases.
 
+`ActorAtlasProjection` validates the checked-in JSON manifest and loads actual
+imported Texture2D resources. PixelProxyActor consumes this projection for the
+five authored character profiles, including the Wanderer fallback used by M1.
+The existing presentation clock selects action rows; native aim, gameplay clocks,
+typed Player Visual, equipped weapon cues, shadows, afterimages and accessibility
+remain authoritative. Invalid identities retain the original polygon fallback.
+Death clamps to its final frame and reduced motion freezes animation.
+
 ## Verification
 
 - Missing generator RED: focused Python suite failed with ModuleNotFoundError before implementation.
@@ -33,12 +41,21 @@ There are no downloaded media, private credentials or external asset purchases.
 - Actual OpenGL 640x360 gallery: `/private/tmp/plane-walker-p17a-native-gallery.log`, clean PASS. Import `/private/tmp/plane-walker-p17a-import.log` is also clean.
 - Inspected `assets/production/actors/contact_sheet.png` and `build/visual-evidence/p17a-actor-atlases/attack.png`. All ten silhouettes are nonblank, fit their cells and have visible costume or structural differences.
 - `python3 -m pip_audit --disable-pip --no-deps -r requirements-production-art.txt`: no known vulnerabilities; public advisory lookup used narrow network access after sandbox DNS refusal. Optional tooling only; checked-in runtime PNGs do not require Pillow.
+- Missing runtime projection RED: `planewalker-tests.ZunejA` refused bitmap projection for all five actual Player profiles.
+- Presentation regression: `planewalker-tests.K6noXW`, 4/4 GREEN, no script errors or leaks. The five-Player fixture verifies idle/attack/death frames, preserved sword feedback, reduced motion, left mirroring, invalid identity recovery, nonfinite clock refusal and unchanged full replay snapshots.
+- Actual OpenGL five-Player 640x360 window: `/private/tmp/plane-walker-p17a-native-players-final.log`, clean PASS. Inspected `build/visual-evidence/p17a-actor-atlases/actual-players.png`.
+- macOS Debug PCK export: `/private/tmp/plane-walker-p17a-export-pack.log`, no script errors or leaks. All ten atlases and manifest are included. An isolated packed probe loads all ten Texture2D resources at their expected sizes through ActorAtlasProjection (`/private/tmp/plane-walker-p17a-packed-probe.log`).
 
 ## Limits And Rollback
 
-This commit adds an independently usable resource library and test gallery.
+The two focused commits add the resource library, gallery and actual Player binding.
 It does not claim all Launch enemies, room bitmap environments, soundtracks or
-five-boss native gameplay presentation are finished. Base pack manifest,
+five-boss native gameplay presentation are finished. The first complete packed
+Player fixture exposed a pre-existing export blocker: imported Base pack PNG
+source bytes are omitted, so ContentPackDescriptor correctly rejects integrity
+activation. This is tracked as a separate export repair; atlas-only packed loading
+is verified, and a complete distributable is not certified by this evidence.
+Base pack manifest,
 compatibility ledger, Meta state, typed Player Visual and combat domain data are
 untouched. Root owns consolidated documentation indexing and retention review.
 Each asset can be replaced without changing gameplay state; no push or public

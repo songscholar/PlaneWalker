@@ -1,7 +1,7 @@
 # P17A Actor Atlases Design
 
 - Status: Approved
-- Document Role: Focused production raster design
+- Document Role: Current focused production raster design
 - Authority Level: Project implementation design below AGENTS.md
 - Applies To: Five character and five boss animation atlases and deterministic asset validation
 - Owner: Project pixel presentation lane

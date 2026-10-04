@@ -4,6 +4,7 @@ extends Node2D
 signal cue_requested(cue_id: StringName, world_position: Vector2, intensity: float)
 
 const AfterimageScript := preload("res://scripts/presentation/pixel_proxy_afterimage.gd")
+const ActorAtlasScript := preload("res://scripts/presentation/actor_atlas_projection.gd")
 const PIXEL_UNIT := 2
 const SCREEN_PIXEL_UNIT := 2.0
 const FLASH_BUDGET_WINDOW_SECONDS := 1.0
@@ -200,6 +201,7 @@ var _high_contrast_character_feedback: bool = false
 var _active_item_cue_id: String = ""
 var _active_item_cue_kind: String = ""
 var _active_item_cue_remaining: float = 0.0
+var _actor_atlas: Sprite2D
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -239,6 +241,7 @@ func bind_actor(actor: Node2D) -> bool:
 	_update_presentation_facing()
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
+	_sync_actor_atlas()
 	queue_redraw()
 	return true
 
@@ -421,6 +424,7 @@ func get_snapshot_for_test() -> Dictionary:
 		"boss_texture_pattern": _boss_texture_pattern,
 		"boss_luminance": _boss_luminance,
 		"afterimage_count": _afterimage_count,
+		"actor_atlas": _actor_atlas.snapshot() if _actor_atlas != null else {},
 	}
 
 
@@ -456,7 +460,22 @@ func _advance_animation(delta: float) -> void:
 	_update_presentation_facing()
 	_update_boss_presentation_state()
 	_apply_pixel_transform()
+	_sync_actor_atlas()
 	queue_redraw()
+
+
+func _sync_actor_atlas() -> void:
+	if _role != "player":
+		return
+	if _actor_atlas == null:
+		_actor_atlas = ActorAtlasScript.new()
+		_actor_atlas.name = "ProductionActorAtlas"
+		_actor_atlas.z_index = -1
+		add_child(_actor_atlas)
+	var actor_id := _character_profile_id if not _character_profile_id.is_empty() else "wanderer"
+	if not _actor_atlas.configure(actor_id):
+		return
+	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
 
 
 func _derive_state_from_actor() -> void:
@@ -960,11 +979,12 @@ func _draw_shadow() -> void:
 
 
 func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
-	draw_rect(Rect2(-10, -10, 20, 24), secondary, true)
-	draw_rect(Rect2(-8, -14, 16, 12), primary, true)
-	draw_rect(Rect2(-4, -12, 8, 6), accent, true)
-	draw_rect(Rect2(-12, 0, 4, 12), primary.darkened(0.2), true)
-	draw_rect(Rect2(8, 0, 4, 12), primary.darkened(0.2), true)
+	if _actor_atlas == null or not _actor_atlas.visible:
+		draw_rect(Rect2(-10, -10, 20, 24), secondary, true)
+		draw_rect(Rect2(-8, -14, 16, 12), primary, true)
+		draw_rect(Rect2(-4, -12, 8, 6), accent, true)
+		draw_rect(Rect2(-12, 0, 4, 12), primary.darkened(0.2), true)
+		draw_rect(Rect2(8, 0, 4, 12), primary.darkened(0.2), true)
 	draw_set_transform(Vector2.ZERO, _facing.angle(), Vector2.ONE)
 	if _weapon_visual_kind() == "bow":
 		_draw_player_bow(accent)
