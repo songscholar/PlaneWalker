@@ -69,6 +69,9 @@ var _profile_publication_pending := false
 var _floor_entry_recovery_pending := false
 var _presentation_enabled := true
 var _checkpoint_restore_active := false
+var _checkpoint_presentation_active := false
+var _restored_checkpoint_digest := ""
+var _restored_checkpoint_profile_revision := -1
 
 
 func _ready() -> void:
@@ -189,6 +192,29 @@ func native_checkpoint_restore_active() -> bool:
 	return _checkpoint_restore_active
 
 
+func present_restored_checkpoint(presentation: Callable) -> Variant:
+	if not _active or not is_inside_tree() or is_queued_for_deletion() or _active_run_id.is_empty() or _checkpoint_presentation_active or _checkpoint_restore_active or _restored_checkpoint_digest.is_empty() or not is_instance_valid(_profile_service) or not is_instance_valid(_player) or not _player.is_inside_tree() or _player.is_queued_for_deletion() or not presentation.is_valid():
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "present_restored_checkpoint"})
+	var authenticated: Dictionary = _profile_service.authenticated_native_checkpoint(_restored_checkpoint_profile_revision)
+	if not authenticated.ok or authenticated.context.checkpoint.digest != _restored_checkpoint_digest or not NativeCheckpointScript.json_equal(runtime_snapshot(), authenticated.context.run) or _player.full_player_replay_snapshot() != authenticated.context.replay:
+		_restored_checkpoint_digest = ""
+		return CommandResultScript.failure(&"NATIVE_CHECKPOINT_INVALID", _revision(), {"stage": "restored_presentation"})
+	_restored_checkpoint_digest = ""
+	var native_player: Node = _player
+	var native_profile: RefCounted = _profile_service
+	_checkpoint_presentation_active = true
+	presentation.call()
+	_checkpoint_presentation_active = false
+	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(native_player) or _player != native_player or not native_player.is_inside_tree() or native_player.is_queued_for_deletion() or _profile_service != native_profile or native_player.full_player_replay_snapshot() != authenticated.context.replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), authenticated.context.run) or native_profile.snapshot().revision != _restored_checkpoint_profile_revision:
+		_profile_publication_pending = true
+		if is_instance_valid(_player):
+			_player.process_mode = Node.PROCESS_MODE_DISABLED
+		if is_instance_valid(_room_controller):
+			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED
+		return CommandResultScript.failure(&"NATIVE_PUBLICATION_PENDING", _revision(), {"stage": "restored_presentation"})
+	return CommandResultScript.success(_revision(), {"presented": true})
+
+
 func native_checkpoint_participants() -> Dictionary:
 	return {
 		"facade": _facade, "runtime": _room_runtime, "controller": _room_controller,
@@ -267,6 +293,8 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_RUN_ID_INVALID")
 	if not _player.configure_loadout(config):
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_LOADOUT_INVALID")
+	if not _player.restore_reward_effect_snapshot(replay.reward_effect_state, false):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_REWARD_INVALID")
 	if not _player.restore_full_player_replay_snapshot(replay):
 		var diagnostics := {"identity": _player.full_player_replay_identity() == replay.identity, "health": _player.health.can_restore_replay_snapshot(replay.health_state), "world": _player.world_payload_authority.can_restore_replay_snapshot(replay.world_payload_state), "normalized": not (_player.call("_validated_full_player_replay_snapshot", replay) as Dictionary).is_empty(), "installable": _player.call("_can_install_full_player_replay_snapshot", replay)}
 		var failed = _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_PLAYER_INVALID")
@@ -331,6 +359,7 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	if int(saved.phase) == RunPhaseScript.Value.SELECTION_ACTIVE and _choice_panel != null:
 		_choice_panel.render(_choice_offer_for_player(saved.open_offer))
 	var native_player := _player
+	service.bind_native_checkpoint_host(self)
 	profile_run_restored.emit(_active_run_id, saved.duplicate(true))
 	_checkpoint_restore_active = false
 	if not is_inside_tree() or not is_instance_valid(native_player) or _player != native_player or native_player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), saved) or service.snapshot().revision != expected_revision:
@@ -342,6 +371,8 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED
 		return CommandResultScript.failure(&"NATIVE_PUBLICATION_PENDING", _revision(), {"restored": true})
 	_render_live_hud()
+	_restored_checkpoint_digest = str(checkpoint.digest)
+	_restored_checkpoint_profile_revision = expected_revision
 	return CommandResultScript.success(_revision(), {"restored": true, "run_id": _active_run_id, "terminal": RunPhaseScript.is_terminal(int(saved.phase)), "profile_revision": expected_revision})
 
 
@@ -2155,13 +2186,14 @@ func _set_selection_safety(active_selection: bool) -> void:
 			return
 		_selection_safety_active = true
 		if _player != null and is_instance_valid(_player):
-			if _player.has_method("cancel_transient_actions"):
+			if not _checkpoint_presentation_active and _player.has_method("cancel_transient_actions"):
 				_player.call("cancel_transient_actions")
-			if _player.has_method("cancel_active_time_effects"):
+			if not _checkpoint_presentation_active and _player.has_method("cancel_active_time_effects"):
 				_player.call("cancel_active_time_effects", &"selection_opened")
 			_player_process_mode = _player.process_mode
 			_player.process_mode = Node.PROCESS_MODE_DISABLED
-		_clear_hostile_transients()
+		if not _checkpoint_presentation_active:
+			_clear_hostile_transients()
 		if _room_controller != null and is_instance_valid(_room_controller):
 			_room_controller_process_mode = _room_controller.process_mode
 			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED

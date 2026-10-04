@@ -11,7 +11,7 @@
 
 ## Verified Native Cases
 
-`tests/integration/save/native_run_checkpoint_test.tscn` runs five isolated
+`tests/integration/save/native_run_checkpoint_test.tscn` runs six isolated
 physical Profiles against production Main, Host and Player scenes:
 
 - Launch entry retains and restores the same Run, frozen projection and full Replay.
@@ -22,6 +22,8 @@ physical Profiles against production Main, Host and Player scenes:
   World frame clock and expires through the normal payload lifecycle.
 - Post-restoration callback drift reports publication pending and freezes both
   Player and RoomController without changing the durable checkpoint.
+- A checkpointed launch can be explicitly abandoned, physically reopened and
+  proved unavailable for resumption or duplicate settlement.
 
 The same suite rejects unsupported live encounters, invalid inner digests,
 re-signed mismatched scene seeds and stale in-memory Profiles whose physical
@@ -53,6 +55,45 @@ The persisted primary proves actual Base provenance:
 - Aggregate: `897d72f310a123362093fcd27d31eac692689ab0a1583177d3d807abf6407a49`.
 - Source: final test user-data `p16q-checkpoint/profiles/checkpoint_entrance/base/primary.json`,
   captured by ContentSnapshotProvider from the actual Host registry.
+
+## Atomic Profile Synchronization
+
+Ordinary native Run retention now refreshes the complete checkpoint in the same
+physical write as its canonical Run and reward state. Tutorial and narrative
+Profile writes use the bound actual Host. A narrative health effect captures
+its validated native target silently, proves exact Player Replay and Run
+preimage restoration before saving, then publishes and verifies the complete
+checkpoint. Callback drift reports publication pending and blocks further
+Profile commands. Unsupported live combat still refuses a checkpoint update.
+
+An explicit abandonment atomically clears the resumable checkpoint while
+retaining its terminal Run and settlement receipt. A physical reopened Profile
+cannot resume or settle that launch twice. The native suite now has six cases,
+including abandonment, Player movement synchronization, and a failed ordinary
+retention before primary promotion preserving the complete native preimage.
+
+Meaningful synchronization RED: `build/test-logs/p16q-checkpoint/synchronization-red`.
+Meaningful abandonment RED: `build/test-logs/p16q-checkpoint/abandon-red`.
+Six-case GREEN: `build/test-logs/p16q-checkpoint/sync-final-guarded`.
+Profile, native narrative, tutorial and actual Main tutorial cold resumption
+also passed in `sync-profile`, `sync-narrative`, `sync-tutorial` and
+`sync-main-resume` under the same checkpoint log root. Every scene passed with
+zero known leak warnings and scans found no script errors or leak diagnostics.
+
+The same suite verifies a single-use authenticated first-presentation callback.
+It pauses the native participants without cancelling saved weapon/time actions
+or the actual restored rift; a second call is refused. A fifth-floor cold
+restoration also installs authenticated reward state before full Replay
+preflight so earned resource maxima are available to all native participants.
+
+The six-case GREEN physical primary proves the newer reviewed Base binding:
+
+- Pack: `5410744506218905c156ee9a1ca868a1baa6bf16130602875e8d29aa3d3bbe0a`.
+- Aggregate: `d484655161da5bbfddd7fd3fc82afd54b363fc0609020c2070eac7a885fde074`.
+- Source: `abandon-green-stable/user-data/tests__integration__save__native_run_checkpoint_test/files/p16q-checkpoint/profiles/checkpoint_entrance/base/primary.json`.
+
+The fingerprints above supplement the original safe milestone evidence; they
+were captured from actual activated content rather than supplied fixture pins.
 
 ## Current Limits
 

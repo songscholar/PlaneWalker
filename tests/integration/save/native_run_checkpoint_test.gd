@@ -18,7 +18,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = Suite.new()
-	for case_name: String in ["entrance", "reward", "defeat", "payload", "drift"]:
+	for case_name: String in ["entrance", "reward", "defeat", "payload", "drift", "abandon"]:
 		await _exercise(suite, case_name)
 	suite.finish(get_tree())
 
@@ -67,6 +67,9 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		else:
 			suite.assert_true(room.report_player_died("checkpoint_fixture").ok and int(host.runtime_snapshot().phase) == Phase.Value.DEFEAT, "native room runtime produces terminal defeat")
 	player.position = Vector2(153, 123)
+	if case_name in ["entrance", "payload"]:
+		main.get_node("DungeonFlow").set_process(false)
+		host.set_dungeon_selection_safety(false)
 	if case_name == "payload":
 		suite.assert_true(player.time_manager.try_time_rift(Vector2(280, 160)), "physical checkpoint includes a real native persistent rift")
 	var captured := Checkpoint.capture(host)
@@ -94,6 +97,32 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		return
+	if case_name == "abandon":
+		var abandoned: Dictionary = service.abandon_run(host.runtime_snapshot(), int(service.snapshot().revision))
+		suite.assert_true(abandoned.ok and service.payload().native_run_checkpoint.is_empty(), "abandoning a checkpointed actual launch atomically retires its resumable native checkpoint")
+		var reopened_abandon := Service.new()
+		suite.assert_true(reopened_abandon.configure(catalog, save, slot, "base").ok and reopened_abandon.snapshot().active_launch_receipt.is_empty(), "physical abandon reopens a settled Profile without an active launch")
+		var retired: Dictionary = reopened_abandon.authenticated_native_checkpoint(int(reopened_abandon.snapshot().revision))
+		suite.assert_true(not retired.ok and retired.code == &"NATIVE_CHECKPOINT_NOT_AVAILABLE" and reopened_abandon.payload().active_run_state.result.result == "abandon", "abandoned physical Run retains its terminal receipt without offering cold resumption")
+		var abandon_before: Dictionary = reopened_abandon.snapshot()
+		var repeated: Dictionary = reopened_abandon.abandon_run(host.runtime_snapshot(), int(abandon_before.revision))
+		suite.assert_true(not repeated.ok and reopened_abandon.snapshot() == abandon_before, "repeated abandon cannot publish another settlement")
+		main.queue_free()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		return
+	if case_name == "entrance":
+		player.position += Vector2.ONE
+		var synchronized_before: Dictionary = service.payload()
+		var full_before: Dictionary = player.full_player_replay_snapshot()
+		save.set_fault_injector(func(point: StringName) -> bool: return point == &"before_primary_promote")
+		var failed_refresh = host.retain_profile_run(int(service.snapshot().revision))
+		suite.assert_true(not failed_refresh.ok and service.payload() == synchronized_before and player.full_player_replay_snapshot() == full_before, "failed atomic native retention preserves the physical checkpoint and complete Player preimage")
+		save.set_fault_injector(Callable())
+		var refreshed = host.retain_profile_run(int(service.snapshot().revision))
+		suite.assert_true(refreshed.ok, "safe native Profile retention succeeds after Player motion")
+		var refreshed_checkpoint: Dictionary = service.authenticated_native_checkpoint(int(service.snapshot().revision))
+		suite.assert_true(refreshed_checkpoint.ok and refreshed_checkpoint.context.replay == player.full_player_replay_snapshot(), "ordinary Profile retention atomically refreshes the complete native checkpoint")
 	var run_before: Dictionary = host.runtime_snapshot()
 	var replay_before: Dictionary = player.full_player_replay_snapshot()
 	var payload_id := ""
@@ -162,6 +191,11 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	suite.assert_true(_json_equal(host.runtime_snapshot(), run_before), "cold restore preserves canonical Run, floor entrances and frozen projection")
 	suite.assert_true(player.full_player_replay_snapshot() == replay_before, "cold restore preserves full native Player Replay including Vector2")
 	suite.assert_equal(reopened.snapshot(), profile_before, "restore cannot mint a launch, revise the Profile or settle twice")
+	if restored.ok and case_name in ["entrance", "payload"]:
+		var presented = host.present_restored_checkpoint(Callable(host, "set_dungeon_selection_safety").bind(true))
+		suite.assert_true(presented.ok and player.full_player_replay_snapshot() == replay_before, "authenticated first presentation pauses actual native participants without changing saved actions or World payloads")
+		var repeated_presentation = host.present_restored_checkpoint(Callable(host, "set_dungeon_selection_safety").bind(true))
+		suite.assert_true(not repeated_presentation.ok and repeated_presentation.code == &"INVALID_PHASE", "authenticated native presentation capability can be consumed only once")
 	if restored.ok and case_name == "payload":
 		var world: Node = player.world_payload_authority
 		var rebuilt: Node = world.payload_node(StringName(payload_id))

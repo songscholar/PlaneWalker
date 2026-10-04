@@ -26,6 +26,15 @@ The checkpoint binds the exact launch receipt, frozen projection, Run identity
 and revision, room snapshot and scene binding. Extension checksums are
 integrity checks, never authority to mint a receipt or change a loadout.
 
+Once a native checkpoint exists, Profile writes that change Run or reward
+participants atomically refresh the complete checkpoint from the bound Host.
+Tutorial and narrative updates cannot retain an older Player or Run digest.
+Projected narrative health effects prove exact native preimage compensation
+before the physical write and verify their published target afterward.
+Explicit abandonment retires the resumable checkpoint in the same terminal
+settlement write. Unsupported combat updates preserve the previous primary
+and return an actionable refusal instead of creating an inconsistent save.
+
 Cold restore authenticates the current physical primary against the loaded
 Profile before creating a candidate facade. It installs the accepted original
 loadout, restores exact Player Replay, stages the authored room scene and

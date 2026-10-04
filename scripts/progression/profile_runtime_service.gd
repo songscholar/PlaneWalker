@@ -54,6 +54,8 @@ var _tutorial_recovery_pending := false
 var _training_adapter: RefCounted
 var _training_publication := false
 var _training_recovery_pending := false
+var _native_checkpoint_host: WeakRef
+var _checkpoint_recovery_pending := false
 
 
 func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String, save_domain: String, initial_payload: Dictionary = {}) -> Dictionary:
@@ -97,6 +99,8 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 	retire_tutorial_run()
 	_tutorial = null
 	retire_training()
+	_native_checkpoint_host = null
+	_checkpoint_recovery_pending = false
 	return _success({"snapshot": snapshot()})
 
 
@@ -186,7 +190,15 @@ func retain_native_checkpoint(host: Node, expected_revision: int) -> Dictionary:
 			_narrative_recovery_pending = true
 			return _failure(&"NATIVE_PUBLICATION_PENDING")
 		persisted.context["checkpoint_digest"] = captured.context.checkpoint.digest
+		bind_native_checkpoint_host(host)
 	return persisted
+
+
+func bind_native_checkpoint_host(host: Node) -> bool:
+	if not NativeCheckpoint._native_host(host) or not host.is_inside_tree() or host.native_checkpoint_participants().profile != self or host.native_run_state() == null:
+		return false
+	_native_checkpoint_host = weakref(host)
+	return true
 
 
 func authenticated_native_checkpoint(expected_revision: int) -> Dictionary:
@@ -249,20 +261,20 @@ func tutorial_progress_view() -> Dictionary:
 	return _tutorial.progress_view(snapshot()) if _tutorial != null else _failure(&"TUTORIAL_NOT_CONFIGURED")
 
 
-func bind_training(player: Node, task_id: String, seed: int) -> Dictionary:
+func bind_training(player: Node, task_id: String, seed: int, boss: Node = null) -> Dictionary:
 	if _tutorial == null or _busy or _training_publication or _narrative_publication or _tutorial_publication or _narrative_recovery_pending or _tutorial_recovery_pending or not snapshot().active_launch_receipt.is_empty():
 		return _failure(&"TRAINING_BINDING_INVALID")
 	var drill: Dictionary = _tutorial.training_definition(task_id)
 	if drill.is_empty():
 		return _failure(&"TRAINING_TASK_INVALID")
-	if task_id == "T-05":
+	if task_id == "T-05" and boss == null:
 		return _failure(&"TRAINING_BOSS_UNAVAILABLE")
 	var decoded: Dictionary = _tutorial.progress_view(snapshot())
 	if not decoded.ok:
 		return decoded
 	var sequence := int(decoded.context.watermarks.get("training_drill", {}).get("session_sequence", 0)) + 1
 	var adapter := TrainingAdapter.new()
-	if not adapter.configure(player, {"session_sequence": sequence, "seed": seed}, drill):
+	if not adapter.configure(player, {"session_sequence": sequence, "seed": seed}, drill, boss):
 		return _failure(&"TRAINING_BINDING_INVALID")
 	retire_training()
 	_training_adapter = adapter
@@ -582,6 +594,20 @@ func execute_narrative(command: Dictionary, expected_revision: int, occurrence: 
 		payload_changes.active_run_state = run_after
 		payload_changes.reward_effect_state = player_after
 	_narrative_publication = true
+	if not player_after.is_empty() and not _payload.get("native_run_checkpoint", {}).is_empty():
+		# Capture the validated effect from native participants, then restore before the physical write.
+		var native_player: Node = _narrative_player.get_ref()
+		var full_before: Dictionary = native_player.full_player_replay_snapshot()
+		var staged: bool = native_player.restore_reward_effect_snapshot(player_after, false) and _restore_bound_run(run_after)
+		var synchronized := _checkpoint_changes(payload_changes) if staged else _failure(&"NATIVE_EFFECT_INVALID")
+		var compensated: bool = native_player.restore_reward_effect_snapshot(player_before, false) and _restore_bound_run(run_before) and native_player.full_player_replay_snapshot() == full_before and _narrative_run.snapshot() == run_before
+		if not synchronized.ok or not compensated:
+			_profile.discard_candidate(prepared.context.ticket)
+			_narrative_publication = false
+			if not compensated:
+				_narrative_recovery_pending = true
+			return synchronized if compensated else _failure(&"NATIVE_PUBLICATION_PENDING")
+		payload_changes = synchronized.context.changes
 	var persisted := _persist_ticket(prepared.context.ticket, payload_changes)
 	if persisted.ok and not run_before.is_empty():
 		var player: Node = _narrative_player.get_ref() if _narrative_player != null else null
@@ -593,6 +619,13 @@ func execute_narrative(command: Dictionary, expected_revision: int, occurrence: 
 			_narrative_publication = false
 			_narrative_recovery_pending = true
 			return _failure(&"NATIVE_PUBLICATION_PENDING")
+		if payload_changes.has("native_run_checkpoint"):
+			var host: Node = _native_checkpoint_host.get_ref() if _native_checkpoint_host != null else null
+			var current := NativeCheckpoint.capture(host)
+			if not current.ok or current.context.checkpoint != payload_changes.native_run_checkpoint:
+				_narrative_publication = false
+				_narrative_recovery_pending = true
+				return _failure(&"NATIVE_PUBLICATION_PENDING")
 	_narrative_publication = false
 	if persisted.ok:
 		persisted.context.merge(receipt, false)
@@ -734,7 +767,7 @@ func abandon_run(active_run: Dictionary, expected_revision: int) -> Dictionary:
 	var prepared: Dictionary = _profile.call("prepare_candidate", settlement.context.candidate)
 	if not prepared.ok:
 		return prepared
-	return _persist_ticket(prepared.context.ticket, {"active_run_state": settlement.context.terminal, "pending_meta_run_projection": {}, "pending_run_config": {}})
+	return _persist_ticket(prepared.context.ticket, {"active_run_state": settlement.context.terminal, "native_run_checkpoint": {}, "pending_meta_run_projection": {}, "pending_run_config": {}})
 
 
 func _persist_ticket(ticket: Dictionary, payload_changes: Dictionary = {}) -> Dictionary:
@@ -752,6 +785,12 @@ func _persist_ticket(ticket: Dictionary, payload_changes: Dictionary = {}) -> Di
 		next_payload = durable.duplicate(true)
 	elif primary.code != &"NOT_FOUND":
 		return _discard_failure(ticket, primary.code)
+	var synchronize: bool = not next_payload.get("native_run_checkpoint", {}).is_empty() and not payload_changes.has("native_run_checkpoint") and (payload_changes.has("active_run_state") or payload_changes.has("reward_effect_state"))
+	if synchronize:
+		var synchronized := _checkpoint_changes(payload_changes)
+		if not synchronized.ok:
+			return _discard_failure(ticket, synchronized.code)
+		payload_changes = synchronized.context.changes
 	for key: String in payload_changes:
 		next_payload[key] = payload_changes[key].duplicate(true)
 	next_payload["meta_profile_state"] = candidate.duplicate(true)
@@ -770,7 +809,27 @@ func _persist_ticket(ticket: Dictionary, payload_changes: Dictionary = {}) -> Di
 	if not committed.ok:
 		return _failure(&"INTEGRITY_FAILURE")
 	_payload = _with_runtime_defaults(next_payload)
+	if synchronize:
+		var host: Node = _native_checkpoint_host.get_ref() if _native_checkpoint_host != null else null
+		var after := NativeCheckpoint.capture(host)
+		if not after.ok or after.context.checkpoint != payload_changes.native_run_checkpoint:
+			_checkpoint_recovery_pending = true
+			return _failure(&"NATIVE_PUBLICATION_PENDING")
 	return _success({"snapshot": snapshot(), "reconciled_committed_write": reconciled})
+
+
+func _checkpoint_changes(changes: Dictionary) -> Dictionary:
+	var host: Node = _native_checkpoint_host.get_ref() if _native_checkpoint_host != null else null
+	var captured := NativeCheckpoint.capture(host)
+	if not captured.ok:
+		return captured
+	if changes.has("active_run_state") and not _json_equal(changes.active_run_state, captured.context.run) or changes.has("reward_effect_state") and not _json_equal(changes.reward_effect_state, captured.context.reward):
+		return _failure(&"NATIVE_CHECKPOINT_INVALID")
+	var synchronized := changes.duplicate(true)
+	synchronized["active_run_state"] = captured.context.run.duplicate(true)
+	synchronized["reward_effect_state"] = captured.context.reward.duplicate(true)
+	synchronized["native_run_checkpoint"] = captured.context.checkpoint.duplicate(true)
+	return _success({"changes": synchronized})
 
 
 func _with_runtime_defaults(value: Dictionary) -> Dictionary:
@@ -794,7 +853,7 @@ func _readiness(expected_revision: int) -> Dictionary:
 		return _failure(&"BUSY" if _busy or _narrative_publication or _tutorial_publication or _training_publication else &"NOT_CONFIGURED")
 	if expected_revision != snapshot().revision:
 		return _failure(&"STALE_REVISION")
-	if _narrative_recovery_pending or _tutorial_recovery_pending or _training_recovery_pending:
+	if _narrative_recovery_pending or _tutorial_recovery_pending or _training_recovery_pending or _checkpoint_recovery_pending:
 		return _failure(&"NATIVE_PUBLICATION_PENDING")
 	return _success({})
 
