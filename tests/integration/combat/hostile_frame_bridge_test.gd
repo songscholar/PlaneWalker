@@ -95,6 +95,7 @@ func _run() -> void:
 
 func _actors() -> Array:
 	var player := PlayerScene.instantiate()
+	player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 	player.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(player)
 	player.configure_run(&"run-p15")
@@ -400,6 +401,7 @@ func _test_real_hostile_effect_frame(implementation: Script) -> void:
 	var player: Node = nodes[0]
 	var actor: Node = nodes[1]
 	var health := player.get_node("HealthComponent")
+	suite.assert_true(PhysicsServer2D.body_get_space(player.get_rid()) == player.get_world_2d().space, "manual native Player frames retain a registered collision body")
 	health.current_hp = 100.0
 	health.defense = 0.0
 	var effects: RefCounted = effect_script.new()
@@ -436,7 +438,9 @@ func _test_real_hostile_effect_frame(implementation: Script) -> void:
 	suite.assert_true(player.advance_action_frame(), "real hostile action retries the exact scheduled frame")
 	suite.assert_equal(health.current_hp, 88.0, "paired native sweep applies twelve damage once to actual Player")
 	suite.assert_equal(hits, [12.0], "accepted native effect publishes one logical hit")
+	var hit_position: Vector2 = player.global_position
 	suite.assert_true(player.advance_action_frame(), "Player continues after native hit publication")
+	suite.assert_true(player.global_position.distance_to(hit_position) > 0.0, "accepted hostile knockback moves the actual registered Player body")
 	suite.assert_equal(health.current_hp, 88.0, "next active frame cannot duplicate scheduled hit")
 	EventBus.hit_confirmed.disconnect(observer)
 	player.configure_hostile_frame_participant(null)

@@ -33,7 +33,17 @@ Terminal actors leave the active bridge roster at seal. Their detached Health ba
 - The production Sentinel/effect authority applies one twelve-damage logical sweep to the actual Player, with exact registry/Health compensation and same-frame retry.
 - Altered frame tickets cannot consume compensation, and injected irreversible seal failure never calls ordinary rollback.
 
-Latest focused bridge GREEN logs: `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.PGN0y8`.
+Latest focused bridge GREEN logs: `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.T1KgQi`.
+
+The manual-frame Player fixture now sets `DISABLE_MODE_KEEP_ACTIVE` before
+disabling automatic processing. Godot otherwise removes the collision body
+from its physics space, which made the first accepted hostile knockback emit
+`body->get_space() is null` and skip physical movement. New assertions first
+failed in `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.T9YKfN`,
+then passed with both registered PhysicsServer2D body space and actual Player
+displacement after the accepted hit. The latest engine log has only three
+injected World refusals and the injected irreversible seal diagnostic; no
+unexpected physical-space error, script failure, or leak remains in that gate.
 
 Regression GREEN logs:
 
