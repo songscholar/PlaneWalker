@@ -6,7 +6,7 @@
 - Applies To: Closed actions, fixed-frame scheduling, strict snapshots, Launch profile selection, pending encounter work, Sentinel domain behavior, native actor compensation, and buffered combat observations
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`, `docs/superpowers/plans/2026-10-04-plane-walker-p15-enemies-bosses.md`
-- Last Verified: 2026-10-04
+- Last Verified: 2026-10-05
 - Evidence Status: Verified Locally
 - Certification Status: Partial P15 foundation; production actors, content activation, and whole-repository certification pending
 
@@ -74,6 +74,8 @@ Each new test first failed with a named missing-implementation assertion. Implem
 | `./tools/run_tests.sh --filter hostile_frame_bridge --timeout 90` (consumption regression and registered physics body) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.uJJLPF` |
 | `./tools/run_tests.sh --filter launch_actor_transaction --timeout 60` (consumption regression) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.mARzI3` |
 | `./tools/run_tests.sh --filter event_bus_source_contract --timeout 60` (consumption regression) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.N4Da3Q` |
+| `./tools/run_tests.sh --filter ruins_wraith_consumption --timeout 60` (terminal/live Health checkpoint splice rejection) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.Xaj5p8` |
+| `./tools/run_tests.sh --filter launch_actor_transaction --timeout 60` (legal lethal-pending checkpoint regression) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.2oAuxW` |
 
 The focused GREEN logs contain zero assertion failures and zero known/unknown leak warnings. Manual log scans also check generic engine errors. The explicit effect API contract and effect logs contain no engine errors. The earlier `Ea4m10` bridge log had an unexpected `body->get_space()` null diagnostic; QA fixed disabled native fixtures to retain registered bodies in `5561e24`. The newer `uJJLPF` bridge log contains only the three deliberately injected World rejection diagnostics and one deliberately injected irreversible-seal diagnostic. The `zPehNa` consumption log contains only its deliberately injected World rejection at frame `121`; it has no script error or leak. These negative tests are not zero-diagnostic logs. GDScript line coverage is unavailable in this installed engine; no coverage percentage is claimed.
 
@@ -82,6 +84,8 @@ Whole-repository certification caught the native effect's generic `publish` alia
 Actual content projection tests first failed with the named eight-field configuration assertion. The GREEN gates replace the previous synthetic Sentinel/Strider/Wraith definitions with real catalog parser projections. Alternate valid authored values prove twelve-pixel/twenty-four-frame retreat, sixty-frame shell at `0.5` damage, fifteen-frame exposure at `1.1` damage, and ten-damage interruption with forty-five-frame stationary stagger. Missing/extra/Boolean/fractional mechanisms reject; physical JSON content projections preserve the sealed definition identity. The three content projection logs above contain no engine/script errors or leak warnings.
 
 Wraith consumption first failed with the named missing sealed-terminal boundary assertion. A further RED proved that a consumed mechanism checkpoint could restore as a live actor; that inconsistent state now rejects. Native GREEN cases verify changed consumption lineage rejection, effect compensation, exact-frame retry, one canonical native death receipt, no fabricated attack observation, all threat retirement, no repeated publication, production Player late-World rejection, immediate terminal roster removal, and the following accepted Player frame.
+
+Independent review found a second checkpoint inconsistency: a real consumed terminal actor snapshot could be combined with an earlier valid live Health snapshot. A named RED reproduced it; the external native transaction restore boundary now requires dead Health for a consumed actor. Internal preparation may still stage terminal domain before its Health effect commits, and the legal pre-publication lethal Health/active domain compensation path remains verified. `Xaj5p8` contains its one intentional late World rejection; `2oAuxW` has no engine/script errors, and both have zero leak warnings.
 
 Tests cover missing/extra fields, Boolean-as-number, fractional frame rejection, JSON integral-number normalization, nonfinite values, handler parameter closure, warning/active/recovery boundaries, frozen aim, paired geometry generations, repeated overlap, multi-hit replay, cancellation, deep snapshot isolation, corrupted generation/phase/hit claims, quantized geometry reconstruction, five-floor/Boss routing, every authored recipe ID, missing collections/references, illegal affix pairs, wave delay, spawn/death deduplication, dormant roster retention, pending death-zone work, room budgets, and failed spawn handling.
 

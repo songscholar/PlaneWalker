@@ -195,7 +195,9 @@ func launch_transaction_snapshot() -> Dictionary:
 
 
 func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
-	return Contract.exact_fields(value, ["schema_version", "hostile_source_id", "actor", "health"]) and typeof(value.schema_version) == TYPE_INT and value.schema_version == 1 and value.hostile_source_id == str(hostile_source_id) and value.actor is Dictionary and _can_restore_actor_state(value.actor) and value.health is Dictionary and bool(health.call("_valid_health_transaction_snapshot", value.health))
+	if not Contract.exact_fields(value, ["schema_version", "hostile_source_id", "actor", "health"]) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.hostile_source_id != str(hostile_source_id) or not value.actor is Dictionary or not _can_restore_actor_state(value.actor) or not value.health is Dictionary or not bool(health.call("_valid_health_transaction_snapshot", value.health)):
+		return false
+	return not bool(value.actor.runtime.mechanism_state.get("detonation_consumed", false)) or bool(value.health.dead)
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
