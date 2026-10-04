@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "inactive_p15_work",
+  "generator": "tools/generate_launch_enemy_assets.py",
+  "provenance": "Original project-authored procedural pixel artwork; no third-party source assets.",
+  "license": "CC0-1.0",
+  "assets": [
+    {
+      "path": "shattered_sentinel.png",
+      "sha256": "8967da46de46dd6dbf6730792b197f1b481547a5ae454b86e1ab9f57d5fa33b0",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
+    }
+  ]
+}

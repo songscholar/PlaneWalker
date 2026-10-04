@@ -25,6 +25,27 @@ func retire(hostile_source_id: StringName, attack_generation: int) -> bool:
 	return true
 
 
+func extend_fact_through(
+	hostile_source_id: StringName,
+	attack_generation: int,
+	expected_through_frame: int,
+	new_through_frame: int
+) -> bool:
+	var key := _identity_key(hostile_source_id, attack_generation)
+	if key.is_empty() or not _facts_by_key.has(key) or new_through_frame <= expected_through_frame:
+		return false
+	var fact: Dictionary = _facts_by_key[key]
+	if int(fact["active_through_frame"]) != expected_through_frame:
+		return false
+	var extended := fact.duplicate(true)
+	extended["active_through_frame"] = new_through_frame
+	var validated: Dictionary = HostileTelegraphFactScript.create(extended)
+	if validated.is_empty():
+		return false
+	_facts_by_key[key] = validated
+	return true
+
+
 func retire_source(hostile_source_id: StringName) -> int:
 	if hostile_source_id == &"":
 		return 0

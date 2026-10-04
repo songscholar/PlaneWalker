@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_fact_is_strict_and_deep_isolated()
 	_test_circle_uses_unscaled_geometry_and_inclusive_frames()
 	_test_duplicate_identity_rejects_until_retired()
+	_test_expiry_extension_preserves_geometry_and_checks_expected_value()
 	_test_line_cone_and_rift_geometry()
 	_test_summon_slots_and_nearest_distance_are_stable()
 	_test_accessibility_scale_changes_only_projection()
@@ -78,6 +79,30 @@ func _test_duplicate_identity_rejects_until_retired() -> void:
 	_suite.assert_true(registry.call("retire", &"warden-a", 4), "matching fact retires")
 	_suite.assert_true(not registry.call("retire", &"warden-a", 4), "retiring missing fact rejects")
 	_suite.assert_true(registry.call("register_fact", fact), "retired identity can be reconstructed")
+
+
+func _test_expiry_extension_preserves_geometry_and_checks_expected_value() -> void:
+	var registry: RefCounted = HostileThreatRegistryScript.new()
+	_suite.assert_true(registry.has_method("extend_fact_through"), "registry provides narrow expiry extension")
+	if not registry.has_method("extend_fact_through"):
+		return
+	var fact := _circle_fact(&"launch-sentinel", 7, Vector2(12, 34), 18, 10, 40)
+	registry.call("register_fact", fact)
+	_suite.assert_true(registry.call("extend_fact_through", &"launch-sentinel", 7, 40, 70), "matching expiry extends")
+	var extended: Dictionary = registry.call("fact_snapshot", &"launch-sentinel", 7)
+	var expected := fact.duplicate(true)
+	expected.active_through_frame = 70
+	_suite.assert_equal(extended, expected, "extension changes only expiry")
+	var before: Array = registry.call("snapshot")
+	for request: Array in [[40, 80], [70, 70], [70, 69], [70, -1]]:
+		_suite.assert_true(not registry.call("extend_fact_through", &"launch-sentinel", 7, request[0], request[1]), "stale or shortening expiry rejects")
+		_suite.assert_equal(registry.call("snapshot"), before, "rejected extension is pure")
+	_suite.assert_true(not registry.call("extend_fact_through", &"foreign", 7, 70, 80), "foreign source cannot extend")
+	_suite.assert_true(not registry.call("extend_fact_through", &"launch-sentinel", 8, 70, 80), "foreign generation cannot extend")
+	_suite.assert_true(registry.call("contains_point", Vector2(12, 34), 70), "extended expiry remains inclusive")
+	_suite.assert_true(not registry.call("contains_point", Vector2(12, 34), 71), "extension retains exact final edge")
+	registry.call("retire", &"launch-sentinel", 7)
+	_suite.assert_true(not registry.call("extend_fact_through", &"launch-sentinel", 7, 70, 80), "retired fact cannot revive by extension")
 
 
 func _test_line_cone_and_rift_geometry() -> void:
