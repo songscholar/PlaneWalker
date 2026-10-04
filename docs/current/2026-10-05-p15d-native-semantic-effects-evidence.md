@@ -27,6 +27,8 @@ Zone records now distinguish `initial_damage` from recurring `damage`, with inde
 
 Guard and Hound native lethal preparation now authenticates the active Health transaction frame. A bounded lifecycle claim in the existing mechanism claim ledger prevents counting that same lethal frame as elapsed recovery time. Guard retains all ninety subsequent frames, and Hound all three hundred; actual Router healing restores fifty-four and thirty-five HP respectively. Direct domain damage keeps its existing frame-zero behavior. This change adds no checkpoint fields or canonical content changes.
 
+Native Storm final death retains all thirty-five warning frames before a nondamaging pulse applies the authored 0.70 Player slow. Its warning fact and raster projection retire after activation; its finite status expires independently. Actual Spore burst resolves twelve damage after thirty warning frames, consumes its real Health once after the active window, and retains a separately warned residual pool. The pool ticks five damage exactly three times over its 180-frame life. Residual slowdown follows area membership rather than borrowing the sixty-frame damage interval as an unauthored linger. Leaving and reentering the pool does not reset its tick phase, and expiry removes zone work, registry facts, native nodes and slowdown.
+
 ## Verification
 
 All logs are under the platform temporary test root. Godot line coverage is unsupported.
@@ -41,9 +43,10 @@ All logs are under the platform temporary test root. Godot line coverage is unsu
 - Initial-versus-periodic correction: coordinated actual Guard corridor RED `NRSHko` (frame 126 repeated another 28 damage), then Router GREEN `WkmAen`; full owned semantic/history/death/disposal rerun `nXHLTT`, 1/1 GREEN, clean logs.
 - Buffered native recovery RED `pfFV40` reproduced both timers ending one frame early. GREEN `vQZTAn` certifies complete recovery intervals, independent Stop, exact actor/Health rollback, stable retry, one healing publication, retained counted parent and one final-death receipt after the next lethal. Existing direct-domain recovery and all twenty-two species regression GREEN `kE2m53`, both 1/1 with clean logs.
 - Final typed-frame gate rejects malformed decision Variants without coercion; refreshed native recovery GREEN `ZO2qYn` and twenty-two species/domain GREEN `oKpqpd`, both 1/1 with clean logs.
+- Native Storm pulse and Spore burst/residual RED `f7XhS7` caught the unauthored residual slowdown after expiry. GREEN `dxFX3e`, 1/1, clean engine logs, also verifies membership exit/reentry, original tick phase, exactly three residual damage ticks, one counted consumption receipt and complete finite teardown.
 
 The initial module parse run `8w2Bfb` and incorrectly named native configuration test run `HrFBw3` are not counted as GREEN. Both issues were fixed before the final native sink run.
 
 ## Remaining Work
 
-The paired shared Router, Boss and mixed room-budget tests land in coordinated milestones. Wall, summon, link and portal handlers currently reject explicitly. Storm death pulse and Spore residual reservation paths exist but are not yet certified by focused native assertions. This foundation does not certify whole enemy kits, actual sigils, split/chain hazards, elemental swaps, elite affixes, full replay or whole-room completion. Boss zone timing and values remain per-mechanism native gates rather than inferred from generic zone coverage.
+The paired shared Router, Boss and mixed room-budget tests land in coordinated milestones. Wall, summon, link and portal handlers currently reject explicitly. This foundation does not certify whole enemy kits, actual sigils, Spore chain depth or elite splits, Storm fast/slow pattern swaps, elite affixes, full replay or whole-room completion. Boss zone timing and values remain per-mechanism native gates rather than inferred from generic zone coverage.

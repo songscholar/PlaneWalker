@@ -420,7 +420,7 @@ func _prepare_terminal_effects(next: Dictionary, actor: Node2D, definition: Dict
 				return false
 			return _reserve_terminal_zone(next, source, definition.id, "corpse_pool", position, float(mechanisms.corpse_pool_radius_px), int(mechanisms.corpse_explosion_warning_frames) + 1, int(mechanisms.pool_lifetime_frames), float(mechanisms.corpse_pool_damage), "fire", 1.0, 0, capacity, int(mechanisms.corpse_pool_tick_frames))
 		"void_spore":
-			return _reserve_terminal_zone(next, source, definition.id, "residual", position, float(mechanisms.residual_radius_px), int(mechanisms.chain_warning_frames), int(mechanisms.residual_lifetime_frames), float(mechanisms.residual_tick_damage), "void", float(mechanisms.residual_slow_multiplier), int(mechanisms.residual_tick_frames), capacity, int(mechanisms.residual_tick_frames))
+			return _reserve_terminal_zone(next, source, definition.id, "residual", position, float(mechanisms.residual_radius_px), int(mechanisms.chain_warning_frames), int(mechanisms.residual_lifetime_frames), float(mechanisms.residual_tick_damage), "void", float(mechanisms.residual_slow_multiplier), 0, capacity, int(mechanisms.residual_tick_frames))
 	return true
 
 
@@ -470,7 +470,7 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 					if tick and damage > 0.0 and (not row.enemy_only_freeze or not actors.has(id)):
 						damages.append({"payload_id": row.id, "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": (int(next.runtime_frame) - int(row.active_frame)) / int(row.tick_frames), "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": damage, "damage_type": row.damage_type if initial else row.tick_damage_type})
 					if row.slow_multiplier < 1.0 or row.enemy_only_freeze:
-						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + maxi(1, int(row.slow_frames)), "slow_multiplier": float(row.slow_multiplier), "speed_multiplier": 1.0, "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
+						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + maxi(0, int(row.slow_frames)), "slow_multiplier": float(row.slow_multiplier), "speed_multiplier": 1.0, "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
 	next.zones = retained
 
 

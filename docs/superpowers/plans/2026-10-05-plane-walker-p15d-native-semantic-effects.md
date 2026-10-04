@@ -23,12 +23,13 @@
 - [x] Provide shared-zone capacity admission and semantic work records for the coordinated Router/Encounter authority.
 - [x] Separate initial zone damage from declared recurring DOT and verify a real Guard corridor does not repeat its initial hit.
 - [x] Retain full Guard/Hound recovery intervals after buffered native lethal frames, including Stop independence, rollback and once-only Health publication.
+- [x] Certify native Storm warned nondamaging death slow and actual Spore burst consumption, warned residual ticks, area-bound slow and finite teardown.
 
 ## Remaining Production Mechanics
 
 - [ ] Verify all native zone damage, strongest-only slowdown, safe owner immunity and finite TTL under the integrated Router.
 - [ ] Verify Priest long-history expiry, regeneration affix caps and irreversible health replay together.
-- [ ] Execute final-death effects, residual pools, elemental pattern swaps and declared elite affixes.
+- [ ] Execute remaining final-death effects, Spore warned bounded chains, elemental pattern swaps and declared elite affixes.
 - [ ] Provide actual destructible sigils, walls, links, safe portals and nonreward summons through tested authorities.
 - [ ] Verify full twenty-two native enemy kits and five Boss arenas, checkpoint recovery, replay and whole-room completion.
 

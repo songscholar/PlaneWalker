@@ -26,6 +26,8 @@ func _run() -> void:
 		await _test_simultaneous_native_heal()
 		await _test_native_priest_history()
 		await _test_native_terminal_hazards()
+		await _test_native_storm_death()
+		await _test_native_spore_residual()
 		await _test_native_status_disposal(implementation)
 	suite.finish(get_tree())
 
@@ -357,4 +359,102 @@ func _test_native_status_disposal(implementation: Script) -> void:
 	suite.assert_equal(authority.snapshot().statuses, [], "room disposal clears authoritative finite statuses")
 	actor.queue_free()
 	player.queue_free()
+	await get_tree().process_frame
+
+
+func _semantic_player() -> Node2D:
+	var player: Node2D = PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	player.get_node("TimeManager").set_process(false)
+	player.get_node("RewindRecorder").set_process(false)
+	player.configure_run(&"run-p15")
+	player.global_position = Vector2(120, 100)
+	player.get_node("HealthComponent").max_hp = 1000.0
+	player.get_node("HealthComponent").current_hp = 1000.0
+	return player
+
+
+func _test_native_storm_death() -> void:
+	var storm := _actor("chrono_storm_elemental", "hostile:storm")
+	var player := _semantic_player()
+	var root := Node2D.new()
+	add_child(root)
+	var effects := Effects.new()
+	effects.configure("run-p15")
+	effects.configure_native_payloads(root)
+	var registry := Registry.new()
+	var receipts: Array = []
+	storm.hostile_final_death.connect(func(source: StringName, receipt: String): receipts.append([source, receipt]))
+	_injure(storm, 1000.0, 1)
+	for frame: int in range(1, 218):
+		suite.assert_true(_native_step(effects, {"hostile:storm": storm}, frame, registry, {"player:1": player}), "native Storm death pulse accepts finite frame")
+		if frame == 1:
+			suite.assert_equal(effects.native_semantic_nodes().size(), 1, "real final Storm death projects one independent warned pulse")
+			suite.assert_equal(registry.snapshot().size(), 1, "Storm death pulse owns an actual warning registry fact")
+		if frame == 35:
+			suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "Storm death pulse preserves all thirty-five warning frames")
+		if frame == 36:
+			suite.assert_close(player.call("_floor_rule_movement_multiplier"), 0.7, "Storm death pulse applies authored slow through native Player modifier")
+		if frame == 37:
+			suite.assert_equal(effects.native_semantic_nodes(), [], "single death pulse retires its projection after activation")
+			suite.assert_equal(registry.snapshot(), [], "single death pulse retires its native warning fact")
+		if frame == 216:
+			suite.assert_close(player.call("_floor_rule_movement_multiplier"), 0.7, "Storm slow persists independently after pulse projection ends")
+	suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "finite Storm death slow cannot remain after expiry")
+	suite.assert_equal(player.get_node("HealthComponent").current_hp, 1000.0, "Storm death pulse never fabricates a damaging hit")
+	suite.assert_equal(receipts.size(), 1, "Storm death effect cannot duplicate counted final death")
+	storm.queue_free()
+	player.queue_free()
+	root.queue_free()
+	await get_tree().process_frame
+
+
+func _test_native_spore_residual() -> void:
+	var spore := _actor("void_spore", "hostile:spore")
+	var player := _semantic_player()
+	var root := Node2D.new()
+	add_child(root)
+	var effects := Effects.new()
+	effects.configure("run-p15")
+	effects.configure_native_payloads(root)
+	var registry := Registry.new()
+	var started: Dictionary = spore.get("_launch_runtime").request_action("void_spore.spore_burst", Fixtures.context())
+	for fact: Dictionary in started.threat_facts:
+		registry.register_fact(preload("res://scripts/enemies/launch/hostile_action_coordinator.gd").native_threat_fact(fact))
+	var receipts: Array = []
+	spore.hostile_final_death.connect(func(source: StringName, receipt: String): receipts.append([source, receipt]))
+	for frame: int in range(1, 247):
+		if frame == 67:
+			player.global_position = Vector2(500, 100)
+		if frame == 96:
+			player.global_position = Vector2(120, 100)
+		suite.assert_true(_native_step(effects, {"hostile:spore": spore}, frame, registry, {"player:1": player}), "native Spore burst and residual accept finite frame")
+		var hp: float = player.get_node("HealthComponent").current_hp
+		if frame == 29:
+			suite.assert_equal(hp, 1000.0, "Spore burst cannot hit before full thirty-frame warning")
+		if frame == 30:
+			suite.assert_equal(hp, 988.0, "actual Spore burst resolves one twelve-damage native hit")
+		if frame == 36:
+			suite.assert_true(spore.get_node("HealthComponent").dead and spore.launch_runtime_snapshot().runtime.terminal, "accepted burst consumes actual counted Spore Health exactly once")
+			suite.assert_equal(effects.native_semantic_nodes().size(), 1, "consumed Spore retains independent warned residual native pool")
+		if frame == 65:
+			suite.assert_equal(hp, 988.0, "Spore residual receives its independent thirty-frame warning")
+		if frame == 66:
+			suite.assert_equal(hp, 983.0, "residual starts with actual five-point native damage")
+			suite.assert_close(player.call("_floor_rule_movement_multiplier"), 0.8, "residual projects authored native slowdown")
+		if frame == 67:
+			suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "leaving Spore residual removes its area-bound slowdown")
+		if frame == 96:
+			suite.assert_close(player.call("_floor_rule_movement_multiplier"), 0.8, "reentering residual reapplies slowdown without an extra damage tick")
+			suite.assert_equal(hp, 983.0, "reentering residual preserves original tick phase")
+	suite.assert_equal(player.get_node("HealthComponent").current_hp, 973.0, "Spore residual applies exactly three five-point ticks over its finite lifetime")
+	suite.assert_equal(receipts.size(), 1, "Spore burst consumption publishes one counted death receipt")
+	suite.assert_equal(effects.semantic_snapshot().zones, [], "Spore residual finite TTL releases room work")
+	suite.assert_equal(effects.native_semantic_nodes(), [], "Spore residual finite TTL releases actual native projections")
+	suite.assert_equal(registry.snapshot(), [], "Spore residual finite TTL retires actual registry facts")
+	suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "expired Spore residual cannot leave an unauthored sixty-frame slow")
+	spore.queue_free()
+	player.queue_free()
+	root.queue_free()
 	await get_tree().process_frame
