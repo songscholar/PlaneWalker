@@ -9,8 +9,10 @@ const Definition := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Seeds := preload("res://scripts/core/seed_service.gd")
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control", "conversion"]
-const MECHANISM_FIELDS: Array[String] = ["phase_index", "hp_current", "phase_transition_until_frame", "enraged", "action_phase_index", "action_enraged", "delay_remaining_frames", "exposure_through_frame", "last_action_id", "consecutive_actions", "damage_claims", "stop_claims"]
+const MECHANISM_FIELDS: Array[String] = ["phase_index", "hp_current", "minimum_hp", "phase_transition_until_frame", "enraged", "action_phase_index", "action_enraged", "delay_remaining_frames", "exposure_through_frame", "last_action_id", "consecutive_actions", "damage_claims", "health_claims", "stop_claims", "history", "rewind", "rewind_healing_spent", "weakpoint_claims"]
 const DAMAGE_FACT_FIELDS: Array[String] = ["fact_id", "runtime_frame", "target_source_id", "amount", "hp_after"]
+const HISTORY_FIELDS: Array[String] = ["runtime_frame", "position", "hp"]
+const REWIND_FIELDS: Array[String] = ["attack_generation", "commit_frame", "history_reference", "landing", "hp_at_commit", "heal_amount", "healing_spent_before", "weakpoint_damage", "consumed", "cancelled"]
 const MAX_CLAIMS := 512
 
 var _definition: Dictionary = {}
@@ -44,7 +46,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	if not _conversion.configure({"run_id": identity.run_id, "hostile_source_id": identity.hostile_source_id, "runtime_frame": identity.runtime_frame}):
 		_definition.clear()
 		return _failure("conversion_identity")
-	_state = {"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false, "mechanism_state": {"phase_index": 0, "hp_current": float(_definition.max_hp), "phase_transition_until_frame": int(identity.runtime_frame) - 1, "enraged": false, "action_phase_index": 0, "action_enraged": false, "delay_remaining_frames": 0, "exposure_through_frame": int(identity.runtime_frame) - 1, "last_action_id": "", "consecutive_actions": 0, "damage_claims": [], "stop_claims": []}}
+	_state = {"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false, "mechanism_state": {"phase_index": 0, "hp_current": float(_definition.max_hp), "minimum_hp": float(_definition.max_hp), "phase_transition_until_frame": int(identity.runtime_frame) - 1, "enraged": false, "action_phase_index": 0, "action_enraged": false, "delay_remaining_frames": 0, "exposure_through_frame": int(identity.runtime_frame) - 1, "last_action_id": "", "consecutive_actions": 0, "damage_claims": [], "health_claims": [], "stop_claims": [], "history": [], "rewind": {}, "rewind_healing_spent": 0.0, "weakpoint_claims": []}}
 	_action = initial_action
 	return {"ok": true, "snapshot": snapshot()}
 
@@ -59,6 +61,12 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 		var mechanism: Dictionary = _state.mechanism_state
 		mechanism.consecutive_actions = int(mechanism.consecutive_actions) + 1 if mechanism.last_action_id == action_id else 1
 		mechanism.last_action_id = action_id
+		if action_id == "traitor_self_rewind":
+			var reference: Dictionary = mechanism.history[0].duplicate(true) if not mechanism.history.is_empty() else {"runtime_frame": int(_state.runtime_frame), "position": context.source_position.duplicate(true), "hp": float(mechanism.hp_current)}
+			var healing := minf(maxf(0.0, float(reference.hp) - float(mechanism.hp_current)), minf(float(_definition.mechanisms.rewind_heal_per_cast_cap), float(_definition.mechanisms.rewind_heal_encounter_cap) - float(mechanism.rewind_healing_spent)))
+			var action: Dictionary = _action.snapshot()
+			mechanism.rewind = {"attack_generation": int(action.geometry_generations[0]), "commit_frame": int(_state.runtime_frame), "history_reference": reference, "landing": reference.position.duplicate(true), "hp_at_commit": float(mechanism.hp_current), "heal_amount": healing, "healing_spent_before": float(mechanism.rewind_healing_spent), "weakpoint_damage": 0.0, "consumed": false, "cancelled": false}
+			result.threat_facts = [{"hostile_source_id": _state.identity.hostile_source_id, "attack_generation": int(action.geometry_generations[0]), "shape": "circle", "origin": reference.position.duplicate(true), "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": reference.position.duplicate(true), "summon_slots": [], "radius": 16.0, "length": 0.0, "active_from_frame": int(_state.runtime_frame), "active_through_frame": int(action.idle_through_frame) - int(_action_definition(action_id).idle_frames)}]
 	return result
 
 
@@ -70,10 +78,14 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 		return _failure("control")
 	var paused := _delays_action(frame)
 	var displacement := Vector2.ZERO
+	var relocation := false
 	var action: Dictionary = _action.snapshot()
 	var definition := _action_definition(str(action.action_id))
 	if not paused:
-		if not definition.is_empty() and definition.handler_id == "charge" and Action.action_phase(frame - int(action.commit_frame) - int(action.paused_frames), definition) == "ACTIVE":
+		if not definition.is_empty() and definition.handler_id == "self_rewind" and Action.action_phase(frame - int(action.commit_frame) - int(action.paused_frames), definition) == "ACTIVE" and not _state.mechanism_state.rewind.is_empty() and not _state.mechanism_state.rewind.consumed:
+			displacement = _vector(_state.mechanism_state.rewind.landing) - _vector(observations.source_position)
+			relocation = true
+		elif not definition.is_empty() and definition.handler_id == "charge" and Action.action_phase(frame - int(action.commit_frame) - int(action.paused_frames), definition) == "ACTIVE":
 			var direction := _vector(action.committed_aim)
 			var travelled := (_vector(observations.source_position) - _vector(action.committed_origin)).dot(direction)
 			displacement = direction * minf(maxf(0.0, float(definition.parameters.travel_px) - travelled), float(definition.parameters.speed_px_per_second) * float(control.movement_multiplier) / 60.0)
@@ -82,7 +94,7 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 			var target := _vector(observations.target_position)
 			var speed := float(_definition.phases[int(_state.mechanism_state.phase_index)].move_speed) * float(control.movement_multiplier) / 60.0
 			displacement = source.direction_to(target) * minf(maxf(0.0, source.distance_to(target) - 40.0), speed)
-	return {"ok": true, "displacement": _point(displacement), "action_paused": paused}
+	return {"ok": true, "displacement": _point(displacement), "action_paused": paused, "relocation": relocation}
 
 
 func advance_frame(frame: int, observations: Dictionary, select_action: bool = true, external_action_paused: bool = false) -> Dictionary:
@@ -106,6 +118,17 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		return _failure("conversion_frame")
 	result["mechanism_requests"] = []
 	result["threat_facts"] = []
+	for hit: Dictionary in result.hit_facts:
+		hit.damage = float(hit.damage) * float(controls.get("attack_multiplier", 1.0))
+	if _definition.id == "time_sovereign":
+		var mechanism: Dictionary = _state.mechanism_state
+		mechanism.history.append({"runtime_frame": frame, "position": observations.source_position.duplicate(true), "hp": float(mechanism.hp_current)})
+		while mechanism.history.size() > int(_definition.mechanisms.history_frames):
+			mechanism.history.pop_front()
+		if result.phase == "ACTIVE" and _action.snapshot().action_id == "traitor_self_rewind" and not mechanism.rewind.is_empty() and not mechanism.rewind.consumed:
+			mechanism.rewind.consumed = true
+			mechanism.rewind_healing_spent += float(mechanism.rewind.heal_amount)
+			result.mechanism_requests.append({"kind": "boss_self_rewind", "run_id": _state.identity.run_id, "hostile_source_id": _state.identity.hostile_source_id, "runtime_frame": frame, "attack_generation": int(mechanism.rewind.attack_generation), "hit_index": 62, "position": observations.source_position.duplicate(true), "amount": float(mechanism.rewind.heal_amount)})
 	if result.phase == "IDLE" and not _sync_action_regime():
 		restore_snapshot(before)
 		return _failure("action_regime")
@@ -171,9 +194,12 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 		mechanism.damage_claims.pop_front()
 	mechanism.damage_claims.append(value.fact_id)
 	mechanism.hp_current = float(value.hp_after)
-	var phase := _phase_for_hp(float(value.hp_after))
+	_update_history_hp(int(value.runtime_frame), float(value.hp_after))
+	mechanism.minimum_hp = minf(float(mechanism.minimum_hp), float(value.hp_after))
+	var phase := _phase_for_hp(float(mechanism.minimum_hp))
 	var retired: Array = []
 	if phase > int(mechanism.phase_index):
+		_cancel_pending_rewind()
 		retired = _action.cancel(&"phase_transition").retired_generations
 		mechanism.phase_index = phase
 		mechanism.phase_transition_until_frame = int(value.runtime_frame) + 59
@@ -183,6 +209,55 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 			return _failure("action_regime")
 	_conversion.synchronize_tail(_character_tail_must_wait())
 	return {"ok": true, "retired_generations": retired}
+
+
+func accept_health_fact(value: Dictionary) -> Dictionary:
+	if _state.is_empty() or _state.terminal or not Contract.exact_fields(value, DAMAGE_FACT_FIELDS):
+		return _failure("health_fact")
+	if typeof(value.fact_id) != TYPE_STRING or value.fact_id.is_empty() or value.fact_id.length() > 128 or value.target_source_id != _state.identity.hostile_source_id or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or not Contract.number_in_range(value.amount, 0.000001, _definition.max_hp) or not Contract.number_in_range(value.hp_after, 0.000001, _definition.max_hp):
+		return _failure("health_identity_or_value")
+	var mechanism: Dictionary = _state.mechanism_state
+	if float(mechanism.hp_current) <= 0.0 or mechanism.health_claims.has(value.fact_id) or not is_equal_approx(float(mechanism.hp_current) + float(value.amount), float(value.hp_after)):
+		return _failure("duplicate_or_inconsistent_health")
+	if mechanism.health_claims.size() >= MAX_CLAIMS:
+		mechanism.health_claims.pop_front()
+	mechanism.health_claims.append(value.fact_id)
+	mechanism.hp_current = float(value.hp_after)
+	_update_history_hp(int(value.runtime_frame), float(value.hp_after))
+	return {"ok": true}
+
+
+func accept_weakpoint_damage_fact(value: Dictionary) -> Dictionary:
+	if _state.is_empty() or _state.terminal or _definition.id != "time_sovereign" or not Contract.exact_fields(value, ["fact_id", "runtime_frame", "attack_generation", "amount"]):
+		return _failure("weakpoint_fact")
+	var mechanism: Dictionary = _state.mechanism_state
+	if typeof(value.fact_id) != TYPE_STRING or value.fact_id.is_empty() or value.fact_id.length() > 128 or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or not Contract.integer_in_range(value.attack_generation, 1, Controls.MAX_COUNTER) or not Contract.number_in_range(value.amount, 0.000001, 1000000.0) or mechanism.weakpoint_claims.has(value.fact_id) or mechanism.rewind.is_empty() or mechanism.rewind.consumed or value.attack_generation != mechanism.rewind.attack_generation or _action.snapshot().phase != "WARNING" or _action.snapshot().action_id != "traitor_self_rewind":
+		return _failure("weakpoint_identity_or_cast")
+	if mechanism.weakpoint_claims.size() >= MAX_CLAIMS:
+		mechanism.weakpoint_claims.pop_front()
+	mechanism.weakpoint_claims.append(value.fact_id)
+	mechanism.rewind.weakpoint_damage = minf(float(_definition.mechanisms.rewind_interrupt_damage), float(mechanism.rewind.weakpoint_damage) + float(value.amount))
+	if float(mechanism.rewind.weakpoint_damage) < float(_definition.mechanisms.rewind_interrupt_damage):
+		return {"ok": true, "cancelled": false, "retired_generations": []}
+	_cancel_pending_rewind()
+	var result: Dictionary = _action.cancel(&"watch_rewind_interrupt")
+	mechanism.phase_transition_until_frame = int(_state.runtime_frame) + 54
+	mechanism.delay_remaining_frames = 0
+	_conversion.synchronize_tail(_character_tail_must_wait())
+	return {"ok": true, "cancelled": true, "retired_generations": result.retired_generations}
+
+
+func _update_history_hp(frame: int, hp: float) -> void:
+	var history: Array = _state.mechanism_state.history
+	if not history.is_empty() and int(history.back().runtime_frame) == frame:
+		history.back().hp = hp
+
+
+func _cancel_pending_rewind() -> void:
+	var rewind: Dictionary = _state.mechanism_state.rewind
+	if not rewind.is_empty() and not rewind.consumed:
+		rewind.cancelled = true
+		rewind.consumed = true
 
 
 func species_damage_taken_multiplier() -> float:
@@ -243,7 +318,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if not value.mechanism_state is Dictionary or not Contract.exact_fields(value.mechanism_state, MECHANISM_FIELDS) or not value.action is Dictionary or not value.control is Dictionary or not value.conversion is Dictionary or not _conversion.can_restore_snapshot(value.conversion):
 		return false
 	var mechanism: Dictionary = value.mechanism_state
-	if not Contract.integer_in_range(mechanism.phase_index, 0, _definition.phases.size() - 1) or not Contract.integer_in_range(mechanism.action_phase_index, 0, int(mechanism.phase_index)) or not Contract.number_in_range(mechanism.hp_current, 0.0, _definition.max_hp) or int(mechanism.phase_index) != _phase_for_hp(float(mechanism.hp_current)):
+	if not Contract.integer_in_range(mechanism.phase_index, 0, _definition.phases.size() - 1) or not Contract.integer_in_range(mechanism.action_phase_index, 0, int(mechanism.phase_index)) or not Contract.number_in_range(mechanism.hp_current, 0.0, _definition.max_hp) or not Contract.number_in_range(mechanism.minimum_hp, 0.0, float(mechanism.hp_current)) or int(mechanism.phase_index) != _phase_for_hp(float(mechanism.minimum_hp)):
 		return false
 	if typeof(mechanism.enraged) != TYPE_BOOL or mechanism.enraged != (int(value.runtime_frame) - int(value.identity.runtime_frame) >= int(_definition.enrage.threshold_frames)) or typeof(mechanism.action_enraged) != TYPE_BOOL or mechanism.action_enraged and not mechanism.enraged:
 		return false
@@ -253,16 +328,18 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if not mechanism.last_action_id.is_empty() and int(mechanism.consecutive_actions) > int(_action_definition(mechanism.last_action_id).max_consecutive):
 		return false
-	for field: String in ["damage_claims", "stop_claims"]:
+	for field: String in ["damage_claims", "health_claims", "stop_claims"]:
 		if not mechanism[field] is Array or mechanism[field].size() > MAX_CLAIMS:
 			return false
 		var seen: Dictionary = {}
 		for id: Variant in mechanism[field]:
-			if typeof(id) != TYPE_STRING or id.is_empty() or id.length() > (128 if field == "damage_claims" else 64) or seen.has(id):
+			if typeof(id) != TYPE_STRING or id.is_empty() or id.length() > (64 if field == "stop_claims" else 128) or seen.has(id):
 				return false
 			seen[id] = true
 	var action := _make_action(int(mechanism.action_phase_index), mechanism.action_enraged)
 	if action == null or not action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
+		return false
+	if not _valid_temporal_state(mechanism, value):
 		return false
 	for source: Dictionary in value.control.sources:
 		if source.kind == "stop" or source.kind == "rift" and float(source.magnitude) < 0.70:
@@ -298,6 +375,7 @@ func cancel(reason: StringName = &"cancelled") -> Dictionary:
 	if _state.is_empty() or _state.terminal or reason == &"":
 		return _failure("terminal")
 	var result: Dictionary = _action.cancel(reason)
+	_cancel_pending_rewind()
 	_control.cancel(reason)
 	_conversion.cancel()
 	_state.terminal = true
@@ -309,9 +387,49 @@ func cancel_action(reason: StringName = &"interrupted") -> Dictionary:
 	if _state.is_empty() or _state.terminal or reason == &"":
 		return _failure("action_unavailable")
 	_state.mechanism_state.delay_remaining_frames = 0
+	_cancel_pending_rewind()
 	var result: Dictionary = _action.cancel(reason)
 	_conversion.synchronize_tail(_character_tail_must_wait())
 	return result
+
+
+func _valid_temporal_state(mechanism: Dictionary, value: Dictionary) -> bool:
+	if not mechanism.history is Array or not mechanism.rewind is Dictionary or not mechanism.weakpoint_claims is Array or mechanism.weakpoint_claims.size() > MAX_CLAIMS or not Contract.number_in_range(mechanism.rewind_healing_spent, 0.0, 300.0):
+		return false
+	if _definition.id != "time_sovereign":
+		return mechanism.history.is_empty() and mechanism.rewind.is_empty() and mechanism.weakpoint_claims.is_empty() and float(mechanism.rewind_healing_spent) == 0.0
+	var history_size := mini(int(_definition.mechanisms.history_frames), int(value.runtime_frame) - int(value.identity.runtime_frame))
+	if mechanism.history.size() != history_size:
+		return false
+	for index: int in range(mechanism.history.size()):
+		var row: Variant = mechanism.history[index]
+		if not _valid_history_row(row) or int(row.runtime_frame) != int(value.runtime_frame) - history_size + 1 + index:
+			return false
+	var seen: Dictionary = {}
+	for claim: Variant in mechanism.weakpoint_claims:
+		if typeof(claim) != TYPE_STRING or claim.is_empty() or claim.length() > 128 or seen.has(claim):
+			return false
+		seen[claim] = true
+	var rewind: Dictionary = mechanism.rewind
+	if rewind.is_empty():
+		return mechanism.rewind_healing_spent == 0.0 and mechanism.weakpoint_claims.is_empty()
+	if not Contract.exact_fields(rewind, REWIND_FIELDS) or not _valid_history_row(rewind.history_reference) or rewind.landing != rewind.history_reference.position or not Contract.integer_in_range(rewind.attack_generation, int(value.identity.next_generation_floor), int(value.action.next_generation_floor) - 1) or not Contract.integer_in_range(rewind.commit_frame, int(value.identity.runtime_frame), int(value.runtime_frame)):
+		return false
+	if not Contract.integer_in_range(rewind.history_reference.runtime_frame, maxi(int(value.identity.runtime_frame), int(rewind.commit_frame) - int(_definition.mechanisms.history_frames) + 1), int(rewind.commit_frame)) or not Contract.number_in_range(rewind.hp_at_commit, 0.000001, _definition.max_hp) or not Contract.number_in_range(rewind.healing_spent_before, 0.0, _definition.mechanisms.rewind_heal_encounter_cap) or not Contract.number_in_range(rewind.heal_amount, 0.0, _definition.mechanisms.rewind_heal_per_cast_cap) or not Contract.number_in_range(rewind.weakpoint_damage, 0.0, _definition.mechanisms.rewind_interrupt_damage) or typeof(rewind.consumed) != TYPE_BOOL or typeof(rewind.cancelled) != TYPE_BOOL or rewind.cancelled and not rewind.consumed:
+		return false
+	var expected_heal := minf(maxf(0.0, float(rewind.history_reference.hp) - float(rewind.hp_at_commit)), minf(float(_definition.mechanisms.rewind_heal_per_cast_cap), float(_definition.mechanisms.rewind_heal_encounter_cap) - float(rewind.healing_spent_before)))
+	if not is_equal_approx(float(rewind.heal_amount), expected_heal) or not is_equal_approx(float(mechanism.rewind_healing_spent), float(rewind.healing_spent_before) + (float(rewind.heal_amount) if rewind.consumed and not rewind.cancelled else 0.0)):
+		return false
+	if not rewind.consumed:
+		return value.action.action_id == "traitor_self_rewind" and value.action.phase == "WARNING" and value.action.geometry_generations == [rewind.attack_generation] and int(value.action.commit_frame) == int(rewind.commit_frame)
+	return true
+
+
+func _valid_history_row(value: Variant) -> bool:
+	if not value is Dictionary or not Contract.exact_fields(value, HISTORY_FIELDS) or typeof(value.runtime_frame) != TYPE_INT or not Contract.valid_point(value.position) or not Contract.number_in_range(value.hp, 0.0, _definition.max_hp):
+		return false
+	var bounds: Dictionary = _definition.arena.bounds
+	return float(value.position.x) >= float(bounds.x) and float(value.position.x) <= float(bounds.x) + float(bounds.width) and float(value.position.y) >= float(bounds.y) and float(value.position.y) <= float(bounds.y) + float(bounds.height)
 
 
 func _sync_action_regime() -> bool:

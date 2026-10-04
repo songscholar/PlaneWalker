@@ -47,7 +47,32 @@ func _run() -> void:
 		_test_character_tail(suite, implementation, projection, identity)
 		_test_long_damage_history(suite, implementation, projection, identity)
 		_test_weapon_source_lifetime(suite, implementation, projection, identity)
+		_test_health_settlement(suite, implementation, projection, identity)
 	suite.finish(get_tree())
+
+
+func _test_health_settlement(suite: RefCounted, implementation: Script, definition: Dictionary, identity: Dictionary) -> void:
+	var runtime: RefCounted = implementation.new()
+	runtime.configure(definition, identity)
+	suite.assert_true(runtime.has_method("accept_health_fact"), "native Boss healing requires an authenticated domain settlement")
+	if not runtime.has_method("accept_health_fact"):
+		return
+	var threshold := float(definition.max_hp) * float(definition.phases[1].hp_threshold)
+	runtime.accept_damage_fact({"fact_id": "heal-phase-damage", "runtime_frame": 0, "target_source_id": identity.hostile_source_id, "amount": float(definition.max_hp) - threshold, "hp_after": threshold})
+	var fact := {"fact_id": "heal-phase-receipt", "runtime_frame": 0, "target_source_id": identity.hostile_source_id, "amount": 100.0, "hp_after": threshold + 100.0}
+	suite.assert_true(runtime.accept_health_fact(fact).ok, "sealed actual healing updates Boss HP")
+	var checkpoint: Dictionary = runtime.snapshot()
+	suite.assert_equal(checkpoint.mechanism_state.phase_index, 1, "healing above a threshold never decrements the accepted Boss phase")
+	suite.assert_true(runtime.can_restore_snapshot(checkpoint), "monotonic healed Boss phase has executable checkpoint provenance")
+	suite.assert_true(not runtime.accept_health_fact(fact).ok and runtime.snapshot() == checkpoint, "duplicate heal receipt cannot restore HP twice")
+	var forged := fact.duplicate(true)
+	forged.fact_id = "forged-heal"
+	forged.hp_after += 1.0
+	suite.assert_true(not runtime.accept_health_fact(forged).ok and runtime.snapshot() == checkpoint, "heal amount and settled HP must agree exactly")
+	forged = checkpoint.duplicate(true)
+	forged.mechanism_state.phase_index = 0
+	forged.mechanism_state.action_phase_index = 0
+	suite.assert_true(not runtime.restore_snapshot(forged) and runtime.snapshot() == checkpoint, "restored phase cannot erase a previously crossed damage threshold")
 
 
 func _test_controls(suite: RefCounted, implementation: Script, definition: Dictionary, identity: Dictionary) -> void:

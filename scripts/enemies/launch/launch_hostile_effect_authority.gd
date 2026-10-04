@@ -6,8 +6,9 @@ const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinato
 const Registry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Damage := preload("res://scripts/combat/damage_info.gd")
 const Payloads := preload("res://scripts/enemies/launch/launch_hostile_payload_authority.gd")
+const Semantics := preload("res://scripts/enemies/launch/launch_semantic_effect_authority.gd")
 const CONTEXT_FIELDS: Array[String] = ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]
-const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "source_batches", "actors", "targets", "threat_registry", "payload_ticket"]
+const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "health_records", "source_batches", "actors", "targets", "threat_registry", "payload_ticket", "semantic_ticket"]
 const MAX_CLAIMS := 4096
 
 var _state: Dictionary = {}
@@ -17,10 +18,11 @@ var _committed := false
 var _publishing := false
 var _owned_signals: Array[Dictionary] = []
 var _payloads: RefCounted = Payloads.new()
+var _semantics: RefCounted = Semantics.new()
 
 
 func configure(run_id: String, runtime_frame: int = 0) -> bool:
-	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame):
+	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame) or not _semantics.configure(run_id, runtime_frame):
 		return false
 	_state = {"schema_version": 1, "run_id": run_id, "runtime_frame": runtime_frame, "claims": []}
 	return true
@@ -30,11 +32,12 @@ func snapshot() -> Dictionary:
 	var result := _state.duplicate(true)
 	if not result.is_empty():
 		result["payloads"] = _payloads.snapshot()
+		result["semantics"] = _semantics.snapshot()
 	return result
 
 
 func configure_native_payloads(root: Node2D) -> bool:
-	return not _state.is_empty() and _pending.is_empty() and _payloads.configure_native_root(root)
+	return not _state.is_empty() and _pending.is_empty() and _payloads.configure_native_root(root) and _semantics.configure_native_root(root)
 
 
 func payload_snapshot() -> Dictionary:
@@ -43,6 +46,14 @@ func payload_snapshot() -> Dictionary:
 
 func native_payload_nodes() -> Array[Node2D]:
 	return _payloads.native_nodes()
+
+
+func semantic_snapshot() -> Dictionary:
+	return _semantics.snapshot()
+
+
+func native_semantic_nodes() -> Array[Node2D]:
+	return _semantics.native_nodes()
 
 
 func prepared_payload_transition(ticket: Dictionary) -> Dictionary:
@@ -56,18 +67,24 @@ func launch_transaction_snapshot() -> Dictionary:
 
 
 func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads"]) or value.schema_version != 1 or value.run_id != _state.run_id or typeof(value.runtime_frame) != TYPE_INT or not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.payloads is Dictionary or not _payloads.can_restore_transaction_snapshot(value.payloads):
+	if not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads", "semantics"]) or value.schema_version != 1 or value.run_id != _state.run_id or typeof(value.runtime_frame) != TYPE_INT or not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.payloads is Dictionary or not _payloads.can_restore_transaction_snapshot(value.payloads) or not value.semantics is Dictionary or not _semantics.can_restore_transaction_snapshot(value.semantics):
 		return false
 	var seen: Dictionary = {}
 	for claim: Variant in value.claims:
 		if typeof(claim) != TYPE_STRING or claim.length() != 64 or not claim.is_valid_hex_number(false) or seen.has(claim):
 			return false
 		seen[claim] = true
-	return value.runtime_frame == value.payloads.runtime_frame
+	return value.runtime_frame == value.payloads.runtime_frame and value.runtime_frame == value.semantics.runtime_frame
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
-	if not _pending.is_empty() or _publishing or not can_restore_launch_transaction_snapshot(value) or not _payloads.restore_transaction_snapshot(value.payloads):
+	if not _pending.is_empty() or _publishing or not can_restore_launch_transaction_snapshot(value):
+		return false
+	var before := snapshot()
+	if not _payloads.restore_transaction_snapshot(value.payloads):
+		return false
+	if not _semantics.restore_transaction_snapshot(value.semantics):
+		_payloads.restore_transaction_snapshot(before.payloads)
 		return false
 	_state = value.duplicate(true)
 	return true
@@ -144,19 +161,19 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 				return _failure("threat_retirement")
 			operations.append({"kind": "retire", "source": source, "generation": generation})
 		for request: Variant in batch.effect_requests:
-			if not request is Dictionary or request.get("handler_id", "") not in ["melee", "charge", "projectile_volley"] or str(request.get("hostile_source_id", "")) != source:
+			if not request is Dictionary or request.get("handler_id", "") not in Contract.handler_ids() or str(request.get("hostile_source_id", "")) != source:
 				return _failure("unimplemented_effect_handler")
 		if not batch.get("mechanism_requests", []) is Array or batch.get("mechanism_requests", []).size() > 128:
 			return _failure("mechanism_requests")
 		for mechanism: Variant in batch.get("mechanism_requests", []):
-			if mechanism is Dictionary and mechanism.get("kind", "") == "death_pool":
+			if mechanism is Dictionary and mechanism.get("kind", "") in ["death_pool", "restore_hp", "boss_self_rewind", "warned_explosion"]:
 				continue
 			var prepared := _prepare_consumption(mechanism, source, actor, context, next)
 			if not prepared.ok:
 				return prepared
 			damages.append(prepared.record)
 		for hit: Variant in batch.hit_facts:
-			if hit is Dictionary and hit.get("handler_id", "") == "projectile_volley":
+			if hit is Dictionary and hit.get("handler_id", "") in ["projectile_volley", "blink", "zone"]:
 				continue
 			var prepared := _prepare_hit(hit, source, actor, context, next)
 			if not prepared.ok:
@@ -180,9 +197,33 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	if not _prepare_payload_registry(payload_prepared.ticket.before, payload_prepared.ticket.after, projected, operations):
 		_payloads.rollback(payload_prepared.ticket)
 		return _failure("payload_threat_registry")
+	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context)
+	if not semantic_prepared.ok:
+		_payloads.rollback(payload_prepared.ticket)
+		return semantic_prepared
+	for request: Dictionary in semantic_prepared.damage_requests:
+		var prepared := _prepare_payload_damage(request, context, next)
+		if not prepared.ok:
+			_semantics.rollback(semantic_prepared.ticket)
+			_payloads.rollback(payload_prepared.ticket)
+			return prepared
+		damages.append(prepared.record)
+	var health_records: Array[Dictionary] = []
+	for request: Dictionary in semantic_prepared.health_requests:
+		var prepared := _prepare_health_gain(request, context, next)
+		if not prepared.ok:
+			_semantics.rollback(semantic_prepared.ticket)
+			_payloads.rollback(payload_prepared.ticket)
+			return prepared
+		health_records.append(prepared.record)
+	next.semantics = semantic_prepared.ticket.after.duplicate(true)
+	if not _prepare_semantic_registry(semantic_prepared.ticket.before, semantic_prepared.ticket.after, projected, operations):
+		_semantics.rollback(semantic_prepared.ticket)
+		_payloads.rollback(payload_prepared.ticket)
+		return _failure("semantic_threat_registry")
 	while next.claims.size() > MAX_CLAIMS:
 		next.claims.pop_front()
-	var ticket := {"ticket_id": _next_ticket_id, "run_id": context.run_id, "runtime_frame": context.runtime_frame, "before": snapshot(), "after": next, "registry_before": registry_before, "registry_after": projected.snapshot(), "registry_operations": operations, "damage_records": damages, "source_batches": batches.duplicate(true), "actors": context.actors.duplicate(), "targets": context.targets.duplicate(), "threat_registry": registry, "payload_ticket": payload_prepared.ticket}
+	var ticket := {"ticket_id": _next_ticket_id, "run_id": context.run_id, "runtime_frame": context.runtime_frame, "before": snapshot(), "after": next, "registry_before": registry_before, "registry_after": projected.snapshot(), "registry_operations": operations, "damage_records": damages, "health_records": health_records, "source_batches": batches.duplicate(true), "actors": context.actors.duplicate(), "targets": context.targets.duplicate(), "threat_registry": registry, "payload_ticket": payload_prepared.ticket, "semantic_ticket": semantic_prepared.ticket}
 	_next_ticket_id += 1
 	_pending = ticket.duplicate(true)
 	_committed = false
@@ -191,13 +232,13 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 
 
 func can_commit_effects(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or _committed or _publishing or snapshot() != ticket.before or ticket.threat_registry.snapshot() != ticket.registry_before or not _payloads.can_commit(ticket.payload_ticket):
+	if not _ticket_matches(ticket) or _committed or _publishing or snapshot() != ticket.before or ticket.threat_registry.snapshot() != ticket.registry_before or not _payloads.can_commit(ticket.payload_ticket) or not _semantics.can_commit(ticket.semantic_ticket):
 		return false
 	for wrapper: Dictionary in ticket.source_batches:
 		var actor: Node = ticket.actors[wrapper.hostile_source_id]
 		if not is_instance_valid(actor) or actor.prepared_launch_frame_batch() != wrapper.batch:
 			return false
-	for record: Dictionary in ticket.damage_records:
+	for record: Dictionary in ticket.damage_records + ticket.health_records:
 		if not is_instance_valid(record.target) or not is_instance_valid(record.health) or not _target_position_matches(record, ticket.runtime_frame) or _health_observation(record.health) != record.health_before:
 			return false
 	return true
@@ -207,9 +248,9 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 	if not can_commit_effects(ticket):
 		return _failure("stale_commit")
 	var seen_health: Dictionary = {}
-	for record: Dictionary in ticket.damage_records:
+	for record: Dictionary in ticket.damage_records + ticket.health_records:
 		var health: Node = record.health
-		if (record.info == null and not record.has("consumption_amount")) or seen_health.has(health):
+		if (record.get("info") == null and not record.has("consumption_amount") and not record.has("health_amount")) or seen_health.has(health):
 			continue
 		seen_health[health] = true
 		if not health.frame_signal_transaction_is_active():
@@ -222,6 +263,8 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 			return _failure("registry_commit")
 	if not _payloads.commit(ticket.payload_ticket):
 		return _failure("native_payload_commit")
+	if not _semantics.commit(ticket.semantic_ticket):
+		return _failure("native_semantic_commit")
 	var resolutions: Array = []
 	for record: Dictionary in ticket.damage_records:
 		if record.has("consumption_amount"):
@@ -235,6 +278,16 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 		if resolution == null:
 			return _failure("health_resolution")
 		resolutions.append(resolution.snapshot())
+	for record: Dictionary in ticket.health_records:
+		var amount: float = minf(record.health_amount, maxf(0.0, float(record.health.max_hp) - float(record.health.current_hp)))
+		if amount <= 0.0 or record.health.dead:
+			continue
+		var healed: float = record.health.heal(amount / float(record.health.healing_multiplier))
+		if not is_equal_approx(healed, amount):
+			return _failure("health_gain")
+		var fact := {"fact_id": record.health_fact_id, "runtime_frame": int(ticket.runtime_frame), "target_source_id": record.target_id, "amount": healed, "hp_after": float(record.health.current_hp)}
+		if not bool(record.target.accept_launch_health_fact(fact)):
+			return _failure("health_gain_receipt")
 	for owned: Dictionary in _owned_signals:
 		var publication: Dictionary = owned.health.prepare_frame_signal_publication(owned.ticket)
 		if publication.is_empty() or not owned.health.finalize_frame_signal_publication(publication):
@@ -257,6 +310,7 @@ func rollback_effects(ticket: Dictionary) -> bool:
 	if not _install_registry(ticket.threat_registry, ticket.registry_before):
 		ok = false
 	ok = _payloads.rollback(ticket.payload_ticket) and ok
+	ok = _semantics.rollback(ticket.semantic_ticket) and ok
 	_state = ticket.before.duplicate(true)
 	_pending.clear()
 	_owned_signals.clear()
@@ -265,7 +319,7 @@ func rollback_effects(ticket: Dictionary) -> bool:
 
 
 func can_publish_effects(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or not _committed or _publishing or not _payloads.can_publish(ticket.payload_ticket):
+	if not _ticket_matches(ticket) or not _committed or _publishing or not _payloads.can_publish(ticket.payload_ticket) or not _semantics.can_publish(ticket.semantic_ticket):
 		return false
 	for owned: Dictionary in _owned_signals:
 		if not is_instance_valid(owned.health) or not bool(owned.health.call("_finalized_frame_signal_publication_matches", owned.publication)):
@@ -277,7 +331,7 @@ func publish_effects(ticket: Dictionary) -> bool:
 	if not can_publish_effects(ticket):
 		return false
 	var publications := _owned_signals.duplicate(true)
-	if not _payloads.publish(ticket.payload_ticket):
+	if not _payloads.publish(ticket.payload_ticket) or not _semantics.publish(ticket.semantic_ticket):
 		return false
 	_publishing = true
 	_pending.clear()
@@ -290,11 +344,14 @@ func publish_effects(ticket: Dictionary) -> bool:
 
 
 func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
-	if not context.targets.has(request.target_id):
+	if not context.targets.has(request.target_id) and not context.actors.has(request.target_id):
 		return _failure("payload_damage_target")
-	var record := _target_record(context.targets[request.target_id])
+	var target: Node2D = context.targets.get(request.target_id, context.actors.get(request.target_id))
+	var record := _target_record(target)
 	if record.is_empty():
 		return _failure("payload_health")
+	if context.actors.has(request.target_id):
+		record["target_position_after"] = target.prepared_launch_frame_position()
 	var claim := _claim(context.run_id, request.target_id, request.payload_id, request.attack_generation, request.hit_index)
 	if next.claims.has(claim):
 		return _failure("duplicate_payload_damage")
@@ -304,6 +361,44 @@ func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dic
 		return _failure("payload_damage_plan")
 	record["info"] = info
 	return {"ok": true, "record": record}
+
+
+func _prepare_health_gain(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
+	if not Contract.exact_fields(request, ["kind", "hostile_source_id", "attack_generation", "hit_index", "target_id", "runtime_frame", "amount"]) or request.kind not in ["heal", "restore_hp"] or not context.actors.has(request.hostile_source_id) or not context.actors.has(request.target_id) or request.runtime_frame != context.runtime_frame or not Contract.integer_in_range(request.attack_generation, 1, 2147483646) or not Contract.integer_in_range(request.hit_index, 0, 63) or not Contract.number_in_range(request.amount, 0.000001, 1000000.0):
+		return _failure("health_gain_request")
+	var target: Node2D = context.actors[request.target_id]
+	var record := _target_record(target)
+	if record.is_empty() or not target.has_method("accept_launch_health_fact") or record.health_before.runtime.dead or not Contract.number_in_range(record.health.healing_multiplier, 0.000001, 1000000.0):
+		return _failure("health_gain_target")
+	var claim := _claim(context.run_id, request.target_id, "health:%s:%s" % [request.hostile_source_id, request.kind], request.attack_generation, request.hit_index)
+	if next.claims.has(claim):
+		return _failure("duplicate_health_gain")
+	next.claims.append(claim)
+	record["target_position_after"] = target.prepared_launch_frame_position()
+	record["target_id"] = request.target_id
+	record["health_amount"] = float(request.amount)
+	record["health_fact_id"] = "hostile-health:%s" % claim.substr(0, 40)
+	return {"ok": true, "record": record}
+
+
+func _prepare_semantic_registry(before: Dictionary, after: Dictionary, registry: RefCounted, operations: Array[Dictionary]) -> bool:
+	var before_rows: Dictionary = {}
+	var after_rows: Dictionary = {}
+	for fact: Dictionary in _semantics.threat_facts_for_snapshot(before):
+		before_rows[str(fact.hostile_source_id)] = fact
+	for fact: Dictionary in _semantics.threat_facts_for_snapshot(after):
+		after_rows[str(fact.hostile_source_id)] = fact
+	for id: String in before_rows:
+		if not after_rows.has(id) or before_rows[id] != after_rows[id]:
+			if not registry.retire(StringName(id), 1):
+				return false
+			operations.append({"kind": "retire", "source": id, "generation": 1})
+	for id: String in after_rows:
+		if not before_rows.has(id) or before_rows[id] != after_rows[id]:
+			if not registry.register_fact(after_rows[id]):
+				return false
+			operations.append({"kind": "register", "fact": after_rows[id]})
+	return true
 
 
 static func _prepare_payload_registry(before: Dictionary, after: Dictionary, registry: RefCounted, operations: Array[Dictionary]) -> bool:
@@ -409,7 +504,7 @@ func _prepare_status_tick(value: Variant, target_id: String, actor: Node2D, cont
 func _prepare_consumption(value: Variant, source: String, actor: Node2D, context: Dictionary, next: Dictionary) -> Dictionary:
 	if not value is Dictionary or not Contract.exact_fields(value, ["kind", "run_id", "hostile_source_id", "runtime_frame", "action_id", "attack_generation", "hit_index"]):
 		return _failure("unimplemented_mechanism_handler")
-	if value.kind != "consume_actor" or value.run_id != context.run_id or value.hostile_source_id != source or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame != context.runtime_frame or value.action_id != "ruins_wraith.spirit_detonation" or typeof(value.attack_generation) != TYPE_INT or not Contract.integer_in_range(value.attack_generation, 1, 2147483646) or typeof(value.hit_index) != TYPE_INT or value.hit_index != 63 or not actor.has_method("prepared_launch_frame_consumes_actor") or not bool(actor.prepared_launch_frame_consumes_actor()):
+	if value.kind != "consume_actor" or value.run_id != context.run_id or value.hostile_source_id != source or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame != context.runtime_frame or not Contract.valid_id(value.action_id) or typeof(value.attack_generation) != TYPE_INT or not Contract.integer_in_range(value.attack_generation, 1, 2147483646) or typeof(value.hit_index) != TYPE_INT or value.hit_index != 63 or not actor.has_method("prepared_launch_frame_consumes_actor") or not bool(actor.prepared_launch_frame_consumes_actor()):
 		return _failure("unsealed_consumption")
 	var record := _target_record(actor)
 	if record.is_empty() or record.health_before.runtime.dead or not Contract.number_in_range(record.health_before.runtime.current_hp, 0.000001, 1000000.0):
@@ -434,7 +529,7 @@ func _target_record(target: Variant) -> Dictionary:
 
 
 static func _health_observation(health: Node) -> Dictionary:
-	return {"runtime": health.runtime_state_snapshot(), "defense": health.defense, "invulnerable": health.invulnerable, "accessibility_multiplier": health.damage_received_multiplier}
+	return {"runtime": health.runtime_state_snapshot(), "defense": health.defense, "invulnerable": health.invulnerable, "accessibility_multiplier": health.damage_received_multiplier, "healing_multiplier": health.healing_multiplier, "max_hp": health.max_hp}
 
 
 static func _target_position_matches(record: Dictionary, runtime_frame: int) -> bool:
