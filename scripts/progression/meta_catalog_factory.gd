@@ -17,6 +17,19 @@ static func load_base() -> Dictionary:
 	return from_catalogs(catalogs)
 
 
+static func from_registry(registry: RefCounted, availability: StringName = &"LAUNCH") -> Dictionary:
+	if registry == null or not registry.has_method("get_catalog_entries") or availability not in [&"LAUNCH", &"EXPANSION"]:
+		return _failure(&"REGISTRY_UNAVAILABLE")
+	var catalogs: Dictionary = {}
+	for file: String in ["meta_nodes", "items", "forge_definitions", "narrative_definitions", "tutorial_definitions", "archetype_profiles"]:
+		var category: String = {"meta_nodes": "meta_node", "items": "item", "forge_definitions": "forge_definition", "narrative_definitions": "narrative_definition", "tutorial_definitions": "tutorial_definition", "archetype_profiles": "archetype_profile"}[file]
+		var entries: Variant = registry.call("get_catalog_entries", StringName(category), availability)
+		if not entries is Array or entries.is_empty():
+			return _failure(&"CONTENT_UNAVAILABLE", {"catalog": file})
+		catalogs[file] = entries
+	return from_catalogs(catalogs)
+
+
 static func from_catalogs(catalogs: Dictionary) -> Dictionary:
 	if not Catalog.exact_fields(catalogs, ["meta_nodes", "items", "forge_definitions", "narrative_definitions", "tutorial_definitions", "archetype_profiles"]):
 		return _failure(&"CATALOG_SHAPE_INVALID")

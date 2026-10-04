@@ -1,5 +1,6 @@
 import copy
 import csv
+import hashlib
 import json
 import math
 import unittest
@@ -146,7 +147,7 @@ class LaunchEncounterContentTest(unittest.TestCase):
                 compatible = {row["id"] for row in templates.values() if row["room_type"] == room_type and profile["floor_id"] in row["floor_ids"]}
                 self.assertEqual(actual, compatible, "every floor-compatible authored template has a recipe")
 
-    def test_bilingual_profile_keys_and_inactive_pack(self):
+    def test_bilingual_profile_keys_and_integrity_bound_activation(self):
         for path in [ROOT / "data/localization/translations.csv", ROOT / "data/content_packs/base/localization/translations.csv"]:
             with path.open(encoding="utf-8", newline="") as handle:
                 rows = {row["keys"]: row for row in csv.DictReader(handle)}
@@ -155,7 +156,11 @@ class LaunchEncounterContentTest(unittest.TestCase):
                     self.assertTrue(rows[profile[field]]["en"].strip())
                     self.assertTrue(rows[profile[field]]["zh_CN"].strip())
         pack = json.loads((ROOT / "data/content_packs/base/pack.json").read_text(encoding="utf-8"))
-        self.assertNotIn("content/launch_encounters.json", pack["content_manifest"])
+        self.assertIn("content/launch_encounters.json", pack["content_manifest"])
+        self.assertEqual(
+            pack["integrity_hashes"]["content/launch_encounters.json"],
+            hashlib.sha256((CONTENT / "launch_encounters.json").read_bytes()).hexdigest(),
+        )
 
 
 if __name__ == "__main__":

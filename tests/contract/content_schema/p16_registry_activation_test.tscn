@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/contract/content_schema/p16_registry_activation_test.gd" id="1"]
+
+[node name="P16RegistryActivationTest" type="Node"]
+script = ExtResource("1")

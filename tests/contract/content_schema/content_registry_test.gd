@@ -23,6 +23,17 @@ const EXPECTED_BASE_CATEGORY_COUNTS := {
 	"dungeon_event": 18,
 	"merchant_definition": 5,
 	"economy_profile": 1,
+	"enemy_definition": 22,
+	"boss_definition": 5,
+	"summon_definition": 9,
+	"elite_affix_definition": 10,
+	"launch_encounter_profile": 5,
+	"meta_node": 42,
+	"hub_district": 3,
+	"forge_definition": 20,
+	"narrative_definition": 57,
+	"narrative_source_definition": 13,
+	"tutorial_definition": 34,
 }
 const EXPECTED_FLOOR_IDS: Array[String] = [
 	"floor_ruins_of_remnant",

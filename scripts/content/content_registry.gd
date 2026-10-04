@@ -15,6 +15,12 @@ const RoomTemplateDefinitionScript := preload("res://scripts/dungeon/room_templa
 const DungeonEventDefinitionScript := preload("res://scripts/dungeon/dungeon_event_definition.gd")
 const MerchantDefinitionScript := preload("res://scripts/dungeon/merchant_definition.gd")
 const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
+const P16ContentCatalogScript := preload("res://scripts/content/p16_content_catalog.gd")
+const EnemyDefinitionScript := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const BossDefinitionScript := preload("res://scripts/enemies/launch/boss_definition.gd")
+const SummonDefinitionScript := preload("res://scripts/enemies/launch/summon_definition.gd")
+const EliteAffixDefinitionScript := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
+const LaunchEncounterProfileScript := preload("res://scripts/dungeon/launch_encounter_profile.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -202,6 +208,17 @@ const SPECIALIZED_CATEGORIES: Array[String] = [
 	"dungeon_event",
 	"merchant_definition",
 	"economy_profile",
+	"enemy_definition",
+	"boss_definition",
+	"summon_definition",
+	"elite_affix_definition",
+	"launch_encounter_profile",
+	"meta_node",
+	"hub_district",
+	"forge_definition",
+	"narrative_definition",
+	"narrative_source_definition",
+	"tutorial_definition",
 ]
 const P14_ENVIRONMENT_RULE_IDS: Array[String] = [
 	"rule_crumbling_ground",
@@ -224,6 +241,7 @@ const P14_BOSS_ENCOUNTER_IDS: Array[String] = [
 	"boss_encounter_forge_colossus_adapter_v1",
 	"boss_encounter_void_throne_adapter_v1",
 ]
+const P15_CATEGORY_COUNTS := {"enemy_definition": 22, "boss_definition": 5, "summon_definition": 9, "elite_affix_definition": 10, "launch_encounter_profile": 5}
 
 var _definitions: Dictionary = {}
 var _active_packs: Array[Dictionary] = []
@@ -533,6 +551,14 @@ func load_entries(
 func get_content(content_id: StringName) -> Dictionary:
 	var definition: Dictionary = _definitions.get(str(content_id), {})
 	return definition.duplicate(true)
+
+
+func get_catalog_entries(category: StringName, availability: StringName = &"") -> Array[Dictionary]:
+	var entries := get_by_category(category, availability)
+	for entry: Dictionary in entries:
+		entry.erase("pack_id")
+		entry.erase("pack_version")
+	return entries
 
 
 func get_weapon_runtime_profile(profile_id: StringName) -> Dictionary:
@@ -1050,6 +1076,17 @@ func _load_pack_definitions(
 			definitions.append(normalized)
 	if not errors.is_empty():
 		return {"ok": false, "definitions": [], "errors": errors}
+	var closure := P16ContentCatalogScript.validate_complete(definitions)
+	if not closure.ok:
+		return {"ok": false, "definitions": [], "errors": [{"message": "P16 catalog closure failed validation", "context": {"pack_id": pack_id, "code": str(closure.code), "detail": closure.context.duplicate(true)}}]}
+	var hostile_counts: Dictionary = {}
+	for definition: Dictionary in definitions:
+		if P15_CATEGORY_COUNTS.has(definition.category):
+			hostile_counts[definition.category] = int(hostile_counts.get(definition.category, 0)) + 1
+	if not hostile_counts.is_empty():
+		for category: String in P15_CATEGORY_COUNTS:
+			if hostile_counts.get(category, 0) != P15_CATEGORY_COUNTS[category]:
+				return {"ok": false, "definitions": [], "errors": [{"message": "Launch hostile catalog count is incomplete", "context": {"pack_id": pack_id, "category": category}}]}
 	definitions.sort_custom(
 		func(left: Dictionary, right: Dictionary) -> bool:
 			return str(left["id"]) < str(right["id"])
@@ -1068,6 +1105,16 @@ func _specialized_definition_parse_result(
 	if not SPECIALIZED_CATEGORIES.has(category):
 		return {"handled": false, "ok": false, "definition": {}, "context": {}}
 	var definition_parser: RefCounted
+	if P16ContentCatalogScript.COUNTS.has(category):
+		if not _matches(CONTENT_ID_PATTERN, entry.get("id")):
+			return {"handled": true, "ok": false, "code": &"P16_CONTENT_ID_INVALID", "definition": {}, "context": {"field": "id"}}
+		var p16_result := P16ContentCatalogScript.parse_entry(entry)
+		p16_result["handled"] = true
+		if p16_result.ok:
+			var localization_error := _nested_localization_error(p16_result.definition, localization_keys)
+			if not localization_error.is_empty():
+				return {"handled": true, "ok": false, "code": &"SPECIALIZED_LOCALIZATION_INVALID", "definition": {}, "context": localization_error}
+		return p16_result
 	match category:
 		"floor_definition":
 			definition_parser = FloorDefinitionScript.new()
@@ -1079,6 +1126,16 @@ func _specialized_definition_parse_result(
 			definition_parser = MerchantDefinitionScript.new()
 		"economy_profile":
 			definition_parser = EconomyProfileScript.new()
+		"enemy_definition":
+			definition_parser = EnemyDefinitionScript.new()
+		"boss_definition":
+			definition_parser = BossDefinitionScript.new()
+		"summon_definition":
+			definition_parser = SummonDefinitionScript.new()
+		"elite_affix_definition":
+			definition_parser = EliteAffixDefinitionScript.new()
+		"launch_encounter_profile":
+			definition_parser = LaunchEncounterProfileScript.new()
 		_:
 			return {
 				"handled": true,
@@ -1580,6 +1637,14 @@ func _first_specialized_reference_error(
 			continue
 		var reference_error: Dictionary = {}
 		match category:
+			"enemy_definition", "boss_definition", "summon_definition", "launch_encounter_profile":
+				reference_error = _specialized_reference_field_error(definition, "floor_id", "floor_definition", definitions_by_id)
+				if reference_error.is_empty() and category == "launch_encounter_profile":
+					reference_error = _specialized_reference_field_error(definition, "boss_id", "boss_definition", definitions_by_id)
+					for recipe: Dictionary in definition.recipes:
+						if not reference_error.is_empty():
+							break
+						reference_error = _specialized_reference_field_error({"id": definition.id, "availability": definition.availability, "template_ids": recipe.template_ids}, "template_ids", "room_template", definitions_by_id)
 			"floor_definition":
 				reference_error = _specialized_reference_field_error(
 					definition,

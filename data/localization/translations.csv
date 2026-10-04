@@ -1717,3 +1717,8 @@ keys,en,zh_CN
 "UI_TUTORIAL_ACTION_FORGE_UPGRADE","Forge upgrade","熔炉强化"
 "UI_TUTORIAL_ACTION_LAUNCH_LOADOUT_CHANGE","Change loadout","更换配装"
 "UI_TUTORIAL_ACTION_INTERACT","Interact","互动"
+"UI_RETURN_HUB","Return to Hub","返回枢纽"
+"UI_PROFILE_UNAVAILABLE","Progress could not be loaded.","进度暂时无法读取。"
+"UI_SETTLEMENT_RETRY","Save pending. Retry to continue.","结算尚未保存，请重试。"
+"UI_RETRY","Retry","重试"
+"UI_ENDING_PENDING","The final choice awaits.","最后的抉择仍在等待。"
