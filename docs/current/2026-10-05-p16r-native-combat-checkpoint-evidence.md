@@ -1,10 +1,11 @@
 # P16R Native Combat Cold Checkpoint Evidence
 
 - Status: Verified Locally / Current
-- Document Role: Native active-combat cold restoration and compensation evidence
+- Document Role: Current native active-combat cold restoration and compensation evidence
 - Authority Level: Executable evidence below the P16R specification
 - Applies To: Actor, encounter, effect, Player, Host and physical Profile restoration
 - Owner: Project runtime implementation lead
+- Depends On: `docs/superpowers/specs/2026-10-05-plane-walker-p16r-native-combat-checkpoint-design.md`
 - Last Verified: 2026-10-05
 - Exit Gate: Actual cold continuation and focused regressions pass
 

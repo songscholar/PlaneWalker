@@ -310,6 +310,7 @@ var _weapon_action_token_order: Array[int] = []
 var _weapon_hit_fact_claims: Dictionary = {}
 var _weapon_mastery_target_ids_by_token: Dictionary = {}
 var _weapon_resource_fact_state: Dictionary = {}
+var _weapon_resource_publication_enabled := true
 var _next_weapon_action_token_floor: int = 1
 var _weapon_replay_events: Array[Dictionary] = []
 var _weapon_replay_capture_sequence: int = 0
@@ -9498,13 +9499,14 @@ func _on_gun_resource_reward_requested(
 	var current := float(time_manager.energy)
 	if current <= before:
 		return
-	EventBus.weapon_resource_changed.emit(
-		&"gun",
-		reward_id,
-		current,
-		float(time_manager.max_energy),
-		&"projectile_reward"
-	)
+	if _weapon_resource_publication_enabled:
+		EventBus.weapon_resource_changed.emit(
+			&"gun",
+			reward_id,
+			current,
+			float(time_manager.max_energy),
+			&"projectile_reward"
+		)
 	if not _applying_weapon_replay_event and not before_snapshot.is_empty():
 		var before_energy_state := _weapon_replay_time_energy_state(before_snapshot)
 		_record_weapon_replay_external_fact(
@@ -9567,13 +9569,14 @@ func _on_staff_resource_reward_requested(
 	var current := float(time_manager.energy)
 	if current <= before:
 		return
-	EventBus.weapon_resource_changed.emit(
-		&"staff",
-		reward_id,
-		current,
-		float(time_manager.max_energy),
-		&"ultimate_tick"
-	)
+	if _weapon_resource_publication_enabled:
+		EventBus.weapon_resource_changed.emit(
+			&"staff",
+			reward_id,
+			current,
+			float(time_manager.max_energy),
+			&"ultimate_tick"
+		)
 	if not _applying_weapon_replay_event and not before_snapshot.is_empty():
 		var before_energy_state := _weapon_replay_time_energy_state(before_snapshot)
 		_record_weapon_replay_external_fact(
@@ -9674,6 +9677,10 @@ func _live_staff_reward_source_generation(
 	return source_generation if matched == 1 else 0
 
 
+func set_weapon_resource_publication_enabled(enabled: bool) -> void:
+	_weapon_resource_publication_enabled = enabled
+
+
 func _sync_weapon_resource_facts(reason: StringName) -> void:
 	if (
 		weapon_runtime == null
@@ -9727,7 +9734,8 @@ func _sync_weapon_resource_facts(reason: StringName) -> void:
 		):
 			return
 	_weapon_resource_fact_state[resource_key] = {"current": current, "maximum": maximum}
-	EventBus.weapon_resource_changed.emit(weapon_id, resource_id, current, maximum, reason)
+	if _weapon_resource_publication_enabled:
+		EventBus.weapon_resource_changed.emit(weapon_id, resource_id, current, maximum, reason)
 
 
 func _on_staff_payload_result_reported(

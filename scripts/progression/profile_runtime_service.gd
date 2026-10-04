@@ -224,6 +224,22 @@ func authenticated_native_checkpoint(expected_revision: int) -> Dictionary:
 	return _success({"checkpoint": checkpoint.duplicate(true), "run": run_value.duplicate(true), "replay": valid.context.replay.duplicate(true), "native": valid.context.native.duplicate(true)})
 
 
+func authenticated_active_run(expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	var primary = _save.inspect_profile(_profile_id, _save_domain)
+	if not primary.ok or not _json_equal(primary.payload.payload, _with_runtime_defaults(_payload)):
+		return _failure(&"STALE_DURABLE_PROFILE")
+	var run_value: Variant = _payload.get("active_run_state", {})
+	if not run_value is Dictionary or run_value.is_empty():
+		return _failure(&"ACTIVE_RUN_INVALID")
+	var launch := _launch_for_run(run_value)
+	if launch.is_empty() or not _settlement.verified_run_sources(launch, run_value).ok:
+		return _failure(&"ACTIVE_RUN_INVALID")
+	return _success({"run": run_value.duplicate(true), "launch": launch})
+
+
 func enable_workshop(entries: Array) -> Dictionary:
 	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _training_publication:
 		return _failure(&"NOT_CONFIGURED")

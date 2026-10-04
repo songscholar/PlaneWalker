@@ -10,6 +10,7 @@ const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_p
 const MetaFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
 const ProfileServiceScript := preload("res://scripts/progression/profile_runtime_service.gd")
 const ActualCompatibilityScript := preload("res://scripts/save/actual_content_compatibility_ledger.gd")
+const ActiveContentMigrationScript := preload("res://scripts/save/active_content_migration_authority.gd")
 const SavePathsScript := preload("res://scripts/save/save_path_policy.gd")
 
 const SAVE_GAME_VERSION := "0.4.0-dev"
@@ -93,6 +94,7 @@ func activate_profile_content(registry: RefCounted, save_domain: String = DEFAUL
 	var inspected = service.inspect_profile(DEFAULT_PROFILE_ID, save_domain)
 	if inspected.code == &"CONTENT_MISMATCH" and save_domain == DEFAULT_SAVE_DOMAIN:
 		var sources := ActualCompatibilityScript.trusted_sources(binding, catalog.fingerprint())
+		var trusted := sources.duplicate(true)
 		sources.append(_legacy_content_snapshot())
 		var matched := false
 		for prior: Dictionary in sources:
@@ -103,7 +105,12 @@ func activate_profile_content(registry: RefCounted, save_domain: String = DEFAUL
 			if not legacy.ok:
 				continue
 			if not legacy.payload.payload.get("active_run_state", {}).is_empty() or not legacy.payload.payload.get("native_run_checkpoint", {}).is_empty():
-				return {"ok": false, "code": &"NATIVE_CONTENT_MIGRATION_REQUIRED", "context": {"source_snapshot": prior.duplicate(true)}}
+				if prior not in trusted:
+					return {"ok": false, "code": &"NATIVE_CONTENT_MIGRATION_REQUIRED", "context": {"stage": "untrusted_active_source", "source_snapshot": prior.duplicate(true)}}
+				var compatible := ActiveContentMigrationScript.verify(source, catalog, DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN, binding, self)
+				if not compatible.ok:
+					compatible.context["source_snapshot"] = prior.duplicate(true)
+					return compatible
 			var rebound = source.rebind_profile_content(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN, prior, binding, legacy.payload)
 			if not rebound.ok:
 				return {"ok": false, "code": rebound.code, "context": rebound.metadata.duplicate(true)}

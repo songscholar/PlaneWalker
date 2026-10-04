@@ -34,9 +34,9 @@ func _run() -> void:
 	var packs := [{"pack_id": "base", "pack_version": "0.4.0-dev", "schema_version": 1, "fingerprint_sha256": "1".repeat(64)}]
 	var known_legacy := {"packs": packs, "aggregate_sha256": Envelope.content_snapshot_digest(packs)}
 	var known_actual: Dictionary = {}
-	var cases: Array = ["fresh", "actual_v4", "known_legacy", "unknown_content"]
+	var cases: Array = ["fresh", "actual_v4", "known_legacy", "active_legacy", "unknown_content"]
 	var sources := Ledger.trusted_sources(target, catalog.fingerprint())
-	suite.assert_equal(sources.size(), 5, "reviewed compatibility ledger supplies only the five known actual sources")
+	suite.assert_true(not sources.is_empty() and sources.size() == Ledger.audit_view().transitions.size(), "reviewed compatibility ledger supplies only its authenticated actual sources")
 	for index: int in range(sources.size()):
 		var id := "known_actual_%d" % index
 		cases.append(id)
@@ -48,7 +48,7 @@ func _run() -> void:
 		var path := Paths.resolve_default("user://p16-profile-boot/" + case_id + "/legacy.json", "p16-profile-boot/" + case_id + "/legacy.json")
 		var root := path.get_base_dir().path_join("plane_walker/save")
 		var save := Save.new()
-		var source := known_legacy if case_id == "known_legacy" else target
+		var source := known_legacy if case_id in ["known_legacy", "active_legacy"] else target
 		if known_actual.has(case_id):
 			source = known_actual[case_id].duplicate(true)
 		if case_id == "unknown_content":
@@ -66,7 +66,7 @@ func _run() -> void:
 				payload.meta_profile_state.chronos_shards = 37
 			var seeded = save.save_profile("slot_1", "base", payload)
 			suite.assert_true(seeded.ok, "fixture primary saves: " + case_id + " " + str(seeded.to_dictionary()))
-			if case_id.begins_with("active_actual_"):
+			if case_id.begins_with("active_"):
 				var service := Service.new()
 				suite.assert_true(service.configure(catalog, save, "slot_1", "base").ok, "reviewed historical live fixture configures actual Profile")
 				var prepared: Dictionary = service.prepare_launch({"seed": 71, "difficulty": "normal", "character_id": "wanderer", "weapon_id": "sword", "time_abilities": ["stop", "rewind"]}, int(service.snapshot().revision))
@@ -83,8 +83,8 @@ func _run() -> void:
 		suite.assert_equal(FileAccess.get_file_as_string(primary_path) if case_id != "fresh" else "", before, "autoload settings boot never mutates a Profile before actual-content activation")
 		var prior := state.persistent.duplicate(true)
 		var result: Dictionary = state.activate_profile_content(registry)
-		if case_id == "unknown_content" or case_id.begins_with("active_actual_"):
-			var rejection: StringName = &"NATIVE_CONTENT_MIGRATION_REQUIRED" if case_id.begins_with("active_actual_") else &"CONTENT_MISMATCH"
+		if case_id in ["unknown_content", "active_legacy"]:
+			var rejection: StringName = &"NATIVE_CONTENT_MIGRATION_REQUIRED" if case_id == "active_legacy" else &"CONTENT_MISMATCH"
 			suite.assert_true(not result.ok and result.code == rejection, "unknown or live historical content cannot silently self-authorize: " + case_id + " " + str(result))
 			suite.assert_equal(state.persistent, prior, "refused production boot preserves authoritative memory")
 			suite.assert_equal(FileAccess.get_file_as_string(primary_path), before, "refused production boot preserves actual bytes")
@@ -98,7 +98,7 @@ func _run() -> void:
 				suite.assert_equal(profile.chronos_shards, 0 if case_id == "fresh" else 37, "production boot never mints currency")
 				suite.assert_equal(profile.unlocked_characters, ["wanderer"], "fresh and migrated Profile own the real starter character")
 				suite.assert_equal(profile.unlocked_weapons, ["bow", "sword"], "canonical starter weapons survive compatibility composition")
-				suite.assert_equal(profile.launch_sequence, 0, "content activation cannot begin or settle a run")
+				suite.assert_equal(profile.launch_sequence, 1 if case_id.begins_with("active_actual_") else 0, "content activation cannot begin or settle a run")
 				suite.assert_equal(state.persistent.meta_profile_state, profile, "GameState mirror comes from the authoritative Profile snapshot")
 				var owned := state.persistent.duplicate(true)
 				var owned_bytes := FileAccess.get_file_as_string(primary_path) if FileAccess.file_exists(primary_path) else ""
