@@ -2,8 +2,8 @@
 
 - Status: Implemented / Current
 - Document Role: Current partial-milestone evidence
-- Authority Level: Evidence for isolated P15 action, encounter, control, and first native actor foundations
-- Applies To: Closed actions, fixed-frame scheduling, strict snapshots, Launch profile selection, pending encounter work, Sentinel domain behavior, and native actor compensation
+- Authority Level: Evidence for isolated P15 action, encounter, control, native actor, and real Health effect foundations
+- Applies To: Closed actions, fixed-frame scheduling, strict snapshots, Launch profile selection, pending encounter work, Sentinel domain behavior, native actor compensation, and buffered combat observations
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`, `docs/superpowers/plans/2026-10-04-plane-walker-p15-enemies-bosses.md`
 - Last Verified: 2026-10-04
@@ -28,7 +28,13 @@
 
 `LaunchHostileActor` is an inactive native Sentinel adapter. It reuses EnemyBase's damage and weapon/status helpers, replaces physics and timer gameplay with accepted-frame preparation/commit/compensation, predicts movement through native collision in test-only mode, and projects the authoritative action into a four-frame raster. Its real HealthComponent resolves weakpoint and vulnerability damage. Final Health death clears control/status state and emits one stable encounter receipt; room economy remains an external authority.
 
+Native preparation also accepts Health damage already staged by the Player in the same frame. A staged lethal result prepares terminal cancellation and suppresses attacks and burn ticks without publishing a defeat receipt; compensation restores life, group membership, controls, status clocks, and the Health ledger. Only published final Health death starts the bounded `0.2` second presentation retirement and releases the native body. Weapon interruption cancels the current action without terminally cancelling the actor.
+
 `LaunchElementalStatusRuntime` adds complete native compensation snapshots to the existing status implementation. These retain deterministic seed, both slow floors, elapsed tick clocks, ownership, and live burn source/attacker references. They are native transaction records, not persisted Save/Replay seals. Health compensation uses the existing once-only frozen ledger contract; restoring or discarding a checkpoint consumes it.
+
+Health frame transactions now buffer the three typed combat observations alongside native Health signals. Each queued `hit_confirmed` retains its own settled HP, death, weakpoint, and frame context. An optional internal attacker staging callback preserves same-frame Player facts before public publication; the context records whether that observation was staged so the public callback can avoid recording it again. Direct Health calls retain synchronous observation behavior. Rejected finalized publications also discard late queued observations.
+
+`LaunchHostileEffectAuthority` verifies source-sorted native batches against each actor's sealed preparation, validates threat registration/retirement/expiry extensions on an isolated registry, creates immutable DamageInfo plans, and applies real Health damage through geometry unions. The initial implemented handler is melee; every other semantic handler rejects. Native burn ticks retain stable identities and tolerate a released source handle. Burn target validation recognizes the actor's sealed committed displacement. Compensation restores claims, registry, and effect-owned signal buffers; outer actor/Player owners restore Health checkpoints. Publication detaches its batch before callbacks and rejects reentry.
 
 `tools/generate_launch_enemy_assets.py` produces an original `128 x 32` four-frame Sentinel bitmap and a provenance/hash manifest. The scene has real body and hurtbox collision, HealthComponent, and Sprite2D; its compatibility Polygon2D is hidden. This asset and scene are not in the active content pack.
 
@@ -43,12 +49,18 @@ Each new test first failed with a named missing-implementation assertion. Implem
 | `./tools/run_tests.sh --filter launch_encounter --timeout 15` | 2 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.HO3TMt` |
 | `./tools/run_tests.sh --filter hostile_control_runtime --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.aleU8Y` |
 | `./tools/run_tests.sh --filter launch_enemy --timeout 15` | 2 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.IQA7nG` |
+| `./tools/run_tests.sh --filter health_frame_observations --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.jweNXO` |
+| `./tools/run_tests.sh --filter launch_actor_transaction --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.T1qOSt` |
+| `./tools/run_tests.sh --filter launch_enemy_actor --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.3h7rmn` |
+| `./tools/run_tests.sh --filter launch_hostile_effect_authority --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.Jgy3d5` |
 
 The focused logs contain zero failures and zero known/unknown leak warnings. Manual log scans also check generic engine errors. GDScript line coverage is unavailable in this installed engine; no coverage percentage is claimed.
 
 Tests cover missing/extra fields, Boolean-as-number, fractional frame rejection, JSON integral-number normalization, nonfinite values, handler parameter closure, warning/active/recovery boundaries, frozen aim, paired geometry generations, repeated overlap, multi-hit replay, cancellation, deep snapshot isolation, corrupted generation/phase/hit claims, quantized geometry reconstruction, five-floor/Boss routing, every authored recipe ID, missing collections/references, illegal affix pairs, wave delay, spawn/death deduplication, dormant roster retention, pending death-zone work, room budgets, and failed spawn handling.
 
 Additional RED cases reproduced a central gap in the sentinel's paired sweep and an offset target-circle disagreement with the real threat registry. The corrected sweep covers the intended front half-plane and preserves the rear safe side; target circles commit their rotated authored offset into the registry's `target_point`. Stop tests verify sequential runtime frames, frozen action phase/hit claims, one semantic effect per active edge, and strict expiry extension.
+
+Real native effect tests cover sealed-batch forgery, Player damage, unpublished damage compensation, exact-frame retry, single public hit observation with settled HP, callback reentry, stale registry preflight, Stop expiry extension and compensation, and a displaced Player missing frozen geometry. Further RED cases reproduced moving burn targets being rejected after actor commit, released burn source handles causing a script error, and terminal bodies never retiring. The focused gates verify their fixes using real scene actors and HealthComponent rather than effect fixtures.
 
 ## Production Integration Contract
 
@@ -59,6 +71,7 @@ Additional RED cases reproduced a central gap in the sentinel's paired sweep and
 - Bind actual actors through `register_spawned(spawn_id, source_id)`. Domain life transitions call `set_life_state`. Final authenticated HealthComponent death receipts call `notify_entity_defeated`; dormant/recovering actors cannot submit a normal death receipt. An authenticated sigil finalization first installs the `FINAL` life state.
 - Payload creation/retirement reserves/releases `pending_work`. The bridge owns atomic frame preparation, live effect commit, compensation, and publication; these pure objects do not independently run physics or publish EventBus facts.
 - Native actor frame APIs are `prepare_launch_frame(frame, observations) -> {ok, ticket, batch}`, `can_commit_launch_frame(ticket) -> bool`, `commit_launch_frame(ticket) -> bool`, `rollback_launch_frame(ticket) -> bool`, and `publish_launch_frame(ticket) -> bool`. Preparation predicts an isolated domain/status/transform candidate. Commit installs that candidate. It does not apply registered geometry or target damage; the shared effect authority owns those effects.
+- Effect APIs are `configure(run_id, runtime_frame) -> bool`, `prepare_effects(batches, context) -> {ok, ticket}`, `can_commit_effects`, `commit_effects -> {ok, resolutions}`, `rollback_effects`, `can_publish_effects`, and `publish_effects`. Bridge protocol aliases are `can_commit`, `commit`, `rollback`, `can_publish`, and `publish`. Context has exactly `run_id`, `runtime_frame`, `threat_registry`, `actors`, and `targets`; batches are source-sorted `{hostile_source_id, batch}` wrappers. `prepared_launch_frame_position` exposes the sealed native prediction without advancing the actor.
 - `launch_transaction_snapshot`, `can_restore_launch_transaction_snapshot`, `restore_launch_transaction_snapshot`, and `discard_launch_transaction_snapshot` own native frame-start actor/Health compensation. They are distinct from the prepared actor frame ticket, which only restores domain/status/transform. The bridge must not duplicate the same Health frozen-ledger ownership in another participant.
 
 ## Remaining Scope
@@ -67,6 +80,6 @@ This evidence does not certify twenty-two implemented species, complete native a
 
 No new hostile content has entered the active Base Pack. Existing Main, RunRuntimeHost, RunRuntimeFacade, ContentRegistry, EncounterCatalog, and EncounterRunner are unchanged by this foundation. SaveEnvelope and Replay versions remain unchanged. Schema files, authoritative hostile JSON, full native effects/actors, complete time-source integration, Save/Replay seals, visual QA, and the production/synthetic hostile matrices remain required by the P15 plan.
 
-Before the shared frame bridge can certify atomicity, Health's three typed combat EventBus observations need a validated publication adapter. Its existing frame transaction buffers `damaged`, `healed`, and `died`, but currently emits `damage_about_to_apply`, `hit_confirmed`, and `damage_applied` synchronously. Player's `hit_confirmed` observer also records mastery and Replay facts from live settlement state. Deferring that observer without preserving per-hit settlement semantics would change same-frame multi-hit facts. This integration gap remains explicitly open in the partial milestone.
+The Health publication adapter and per-hit internal staging context are verified at their own boundary. Complete Player/HostileFrameBridge integration, terminal roster removal after body retirement, native multi-hit mastery/Replay facts, late whole-frame rejection, and all species/handler production gates must still pass before atomicity or Launch routing is certified.
 
 The full P15 milestone remains active. Authentic external playtests remain `0 / 20`, and formal M1 status remains `M1 Candidate - External Validation Pending`.

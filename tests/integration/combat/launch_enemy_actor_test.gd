@@ -60,11 +60,13 @@ func _test_actor(scene: PackedScene) -> void:
 	suite.assert_true(actor.discard_launch_transaction_snapshot(discard_checkpoint), "unused native compensation checkpoint releases ledger ticket")
 	var signals: Array = []
 	actor.hostile_final_death.connect(func(source_id: StringName, receipt_id: String): signals.append([source_id, receipt_id]))
-	health.take_damage(Damage.new(1000.0))
+	health.take_damage(Damage.from_plan({"run_id": "run-p15", "target_id": "hostile:test-a", "hostile_source_id": "player:1", "attack_generation": 4, "action_token": 4, "amount": 1000.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["attack:heavy"], "can_crit": false}))
 	suite.assert_equal(signals.size(), 1, "HealthComponent final death emits one stable encounter receipt")
 	suite.assert_true(actor.launch_runtime_snapshot().runtime.terminal, "native death cancels authoritative domain")
 	suite.assert_true(not actor.is_time_stopped(), "native final death clears control sources")
 	suite.assert_equal(actor.elemental_status_snapshot().source_count, 0, "native final death clears elemental sources")
-	actor.queue_free()
-	await get_tree().process_frame
+	await get_tree().create_timer(0.3).timeout
+	suite.assert_true(not is_instance_valid(actor), "published final death retires native body after bounded presentation feedback")
+	if is_instance_valid(actor):
+		actor.queue_free()
 	await get_tree().process_frame

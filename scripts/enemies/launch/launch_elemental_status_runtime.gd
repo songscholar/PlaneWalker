@@ -7,7 +7,12 @@ const ENTRY_FIELDS: Array[String] = ["key", "effect_id", "source_id", "generatio
 
 
 func transaction_snapshot() -> Dictionary:
-	return {"schema_version": 1, "seed": _deterministic_seed, "slow_floor": _slow_floor_multiplier, "attack_slow_floor": _attack_slow_floor_multiplier, "entries": _entries.duplicate(true)}
+	var entries := _entries.duplicate(true)
+	for row: Dictionary in entries.values():
+		for field: String in ["damage_source", "damage_attacker"]:
+			if not is_instance_valid(row[field]):
+				row[field] = null
+	return {"schema_version": 1, "seed": _deterministic_seed, "slow_floor": _slow_floor_multiplier, "attack_slow_floor": _attack_slow_floor_multiplier, "entries": entries}
 
 
 func can_restore_transaction_snapshot(value: Dictionary) -> bool:
@@ -25,6 +30,8 @@ func can_restore_transaction_snapshot(value: Dictionary) -> bool:
 		for field: String in ["generation", "remaining_frames", "elapsed_frames", "tick_interval_frames"]:
 			if typeof(row[field]) != TYPE_INT:
 				return false
+		if not Contract.number_in_range(row.magnitude, 0.0, 1000000.0) or not Contract.number_in_range(row.attack_speed_multiplier, -1.0, 1000000.0):
+			return false
 		if row.elapsed_frames < 0 or not _is_valid_application(StringName(row.effect_id), StringName(row.source_id), row.generation, row.remaining_frames, row.magnitude, maxi(1, int(row.tick_interval_frames)), row.attack_speed_multiplier):
 			return false
 		if row.key != key or key != _status_key(StringName(row.effect_id), StringName(row.source_id), row.generation):
@@ -48,4 +55,4 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 
 
 static func _valid_node(value: Variant) -> bool:
-	return value == null or (value is Node and is_instance_valid(value))
+	return typeof(value) == TYPE_NIL or (is_instance_valid(value) and value is Node)

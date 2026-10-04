@@ -364,7 +364,7 @@ func prepare_weapon_mastery(fact: Variant) -> Dictionary:
 	)
 
 
-func settle_prepared_weapon_mastery(ticket: Variant) -> Dictionary:
+func settle_prepared_weapon_mastery(ticket: Variant, observation_sink: Callable = Callable()) -> Dictionary:
 	if not _mastery_ticket_matches(ticket):
 		return CharacterActionContractScript.failure(
 			CharacterActionContractScript.CODE_INVALID_CONTEXT,
@@ -395,7 +395,10 @@ func settle_prepared_weapon_mastery(ticket: Variant) -> Dictionary:
 	_mastery_claims[claim_key] = normalized.duplicate(true)
 	_action_revision += 1
 	_clear_prepared_mastery()
-	_publish_weapon_mastery(normalized)
+	if observation_sink.is_valid():
+		observation_sink.call(normalized.duplicate(true))
+	else:
+		_publish_weapon_mastery(normalized)
 	return CharacterActionContractScript.success(
 		CharacterActionContractScript.CODE_OK,
 		[],

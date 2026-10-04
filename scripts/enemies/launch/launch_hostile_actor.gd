@@ -4,8 +4,9 @@ extends "res://scripts/enemies/enemy_base.gd"
 const LaunchRuntime := preload("res://scripts/enemies/launch/launch_enemy_runtime.gd")
 const LaunchStatus := preload("res://scripts/enemies/launch/launch_elemental_status_runtime.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
-const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch"]
-const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt"]
+const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before"]
+const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata"]
+const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
 
 signal hostile_final_death(source_id: StringName, receipt_id: String)
 
@@ -72,7 +73,7 @@ func project_runtime_snapshot(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
-	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or not health.is_alive():
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _launch_runtime.snapshot().terminal:
 		return _launch_failure("unavailable")
 	if not Contract.exact_fields(observations, HostileActionCoordinator.CONTEXT_FIELDS) or not Contract.valid_point(observations.source_position) or not _vector(observations.source_position).is_equal_approx(global_position):
 		return _launch_failure("source_position")
@@ -91,11 +92,12 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		externally_paused = next_credit < 1.0
 		if not externally_paused:
 			next_credit -= 1.0
+	var lethal_pending: bool = health.dead
 	var motion: Dictionary = preview.motion_for_frame(frame, observations)
 	if not motion.ok:
 		return motion
 	var displacement := _vector(motion.displacement) * float(status_preview.slow_multiplier())
-	if externally_paused or motion.action_paused:
+	if lethal_pending or externally_paused or motion.action_paused:
 		displacement = Vector2.ZERO
 	else:
 		displacement += _knockback_velocity / 60.0
@@ -105,10 +107,22 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		predicted += collision.get_travel() if collision != null else displacement
 	var committed_observations := observations.duplicate(true)
 	committed_observations.source_position = _point(predicted)
-	var batch: Dictionary = preview.advance_frame(frame, committed_observations, true, externally_paused)
+	var batch: Dictionary = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
 	if not batch.ok:
 		return batch
-	var status_events: Dictionary = status_preview.advance_frame()
+	var status_events: Dictionary = {"burn_ticks": []}
+	if lethal_pending:
+		var cancelled: Dictionary = preview.cancel(&"death")
+		batch.retired_generations = cancelled.retired_generations
+		batch.threat_extensions = []
+		batch.threat_facts = []
+		batch.hit_facts = []
+		batch.effect_requests = []
+		batch.phase = "IDLE"
+		status_preview.reset_runtime_state()
+		next_credit = 0.0
+	else:
+		status_events = status_preview.advance_frame()
 	batch["status_tick_requests"] = status_events.burn_ticks.duplicate(true)
 	var after := before.duplicate(true)
 	after.runtime = preview.snapshot()
@@ -116,7 +130,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	after.position = _point(predicted)
 	after.knockback = _point(_knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() / 60.0))
 	after.action_credit = next_credit
-	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch}
+	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch, "health_before": health.runtime_state_snapshot()}
 	_next_launch_ticket_id += 1
 	_prepared_launch_frame = ticket.duplicate(true)
 	_prepared_frame_committed = false
@@ -124,7 +138,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 
 
 func can_commit_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.is_alive() and _can_restore_actor_state(ticket.after)
+	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after)
 
 
 func commit_launch_frame(ticket: Dictionary) -> bool:
@@ -145,13 +159,25 @@ func rollback_launch_frame(ticket: Dictionary) -> bool:
 	return true
 
 
+func can_publish_launch_frame(ticket: Dictionary) -> bool:
+	return _ticket_matches(ticket) and _prepared_frame_committed
+
+
 func publish_launch_frame(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or not _prepared_frame_committed:
+	if not can_publish_launch_frame(ticket):
 		return false
 	_prepared_launch_frame.clear()
 	_prepared_frame_committed = false
 	_refresh_control_visual()
 	return true
+
+
+func prepared_launch_frame_batch() -> Dictionary:
+	return (_prepared_launch_frame.get("batch", {}) as Dictionary).duplicate(true)
+
+
+func prepared_launch_frame_position() -> Vector2:
+	return _vector(_prepared_launch_frame.after.position) if not _prepared_launch_frame.is_empty() else global_position
 
 
 func launch_transaction_snapshot() -> Dictionary:
@@ -171,6 +197,13 @@ func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
 		return false
 	_prepared_launch_frame.clear()
 	_prepared_frame_committed = false
+	_hostile_identity_active = not bool(value.actor.runtime.terminal)
+	if health.is_alive() and _hostile_identity_active:
+		add_to_group("enemies")
+		add_to_group("time_stoppable")
+	else:
+		remove_from_group("enemies")
+		remove_from_group("time_stoppable")
 	_refresh_control_visual()
 	return true
 
@@ -265,6 +298,9 @@ func _on_died(_killer: Variant) -> void:
 	remove_from_group("time_stoppable")
 	_death_receipt = "hostile_defeat:%s" % (str(_launch_identity.get("run_id", "")) + "|" + str(hostile_source_id)).sha256_text().substr(0, 40)
 	_refresh_control_visual()
+	var retirement := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	retirement.tween_interval(0.2)
+	retirement.tween_callback(queue_free)
 	hostile_final_death.emit(hostile_source_id, _death_receipt)
 
 
@@ -286,7 +322,12 @@ func _refresh_control_visual() -> void:
 
 
 func _actor_state() -> Dictionary:
-	return {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt}
+	var metadata: Dictionary = {}
+	for field: String in WEAPON_METADATA_FIELDS:
+		if has_meta(field):
+			var value: Variant = get_meta(field)
+			metadata[field] = value.duplicate(true) if value is Dictionary or value is Array else value
+	return {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata}
 
 
 func _can_restore_actor_state(value: Dictionary) -> bool:
@@ -294,6 +335,18 @@ func _can_restore_actor_state(value: Dictionary) -> bool:
 		return false
 	if not Contract.valid_point(value.position) or not Contract.valid_point(value.knockback) or not Contract.number_in_range(value.action_credit, 0.0, 1.0) or typeof(value.death_receipt) != TYPE_STRING:
 		return false
+	if not value.weapon_metadata is Dictionary:
+		return false
+	for field: Variant in value.weapon_metadata:
+		if typeof(field) != TYPE_STRING or field not in WEAPON_METADATA_FIELDS:
+			return false
+		var metadata_value: Variant = value.weapon_metadata[field]
+		if field == "elemental_status_seed_initialized" and typeof(metadata_value) != TYPE_INT:
+			return false
+		if field == "elemental_status_seed_material" and typeof(metadata_value) != TYPE_STRING:
+			return false
+		if field in ["bow_time_erosion_sources", "planewalker_replay_external_fact_claims"] and not metadata_value is Dictionary:
+			return false
 	for field: String in ["weakpoint_sequence", "stop_sequence", "blind_sequence"]:
 		if typeof(value[field]) != TYPE_INT or int(value[field]) < 0:
 			return false
@@ -321,6 +374,12 @@ func _restore_actor_state(value: Dictionary) -> bool:
 	_elemental_blind_action_sequence = value.blind_sequence
 	_action_credit = float(value.action_credit)
 	_death_receipt = value.death_receipt
+	for field: String in WEAPON_METADATA_FIELDS:
+		if value.weapon_metadata.has(field):
+			var metadata_value: Variant = value.weapon_metadata[field]
+			set_meta(field, metadata_value.duplicate(true) if metadata_value is Dictionary else metadata_value)
+		elif has_meta(field):
+			remove_meta(field)
 	return true
 
 

@@ -263,6 +263,10 @@ var _last_move_direction: Vector2 = Vector2.RIGHT
 var _last_weapon_aim_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
 var _runtime_frame: int = 0
+var _hostile_frame_participant: RefCounted
+var _active_hostile_frame_ticket: Dictionary = {}
+var _fixed_frame_weapon_observations: Array[Dictionary] = []
+var _fixed_frame_commit_irreversible := false
 var _reward_effect_publication_active: bool = false
 var _reward_effect_publication_in_progress: bool = false
 var _reward_effect_pending_health_signal: Dictionary = {}
@@ -2487,7 +2491,13 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 	if frame_before.is_empty():
 		return false
 	var next_runtime_frame := _runtime_frame + 1
+	if _hostile_frame_participant != null:
+		var hostile_ticket: Variant = _hostile_frame_participant.call("begin_frame", next_runtime_frame)
+		if not hostile_ticket is Dictionary or hostile_ticket.is_empty():
+			return false
+		_active_hostile_frame_ticket = hostile_ticket.duplicate(true)
 	if not _begin_fixed_frame_event_buffers(next_runtime_frame):
+		_rollback_fixed_frame_hostile_transaction()
 		return false
 
 	_runtime_frame = next_runtime_frame
@@ -2629,7 +2639,11 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 	):
 		_sync_weapon_action_projection()
 	_apply_frame_movement(normalized_frame_intents.get("movement", Vector2.ZERO) as Vector2)
+	if _hostile_frame_participant != null and not bool(_hostile_frame_participant.call("prepare_frame", _active_hostile_frame_ticket)):
+		return _reject_fixed_frame(frame_before, "Hostile frame preparation rejected runtime frame %d" % _runtime_frame)
 	if not _commit_fixed_frame_event_buffers():
+		if _fixed_frame_commit_irreversible:
+			return false
 		return _reject_fixed_frame(
 			frame_before,
 			"Fixed-frame event buffer settlement rejected runtime frame %d" % _runtime_frame
@@ -2640,6 +2654,8 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 
 
 func _fixed_frame_preflight() -> bool:
+	if _hostile_frame_participant != null and (not _active_hostile_frame_ticket.is_empty() or not bool(_hostile_frame_participant.call("is_ready_for_frame", _runtime_frame + 1))):
+		return false
 	if (
 		_runtime_frame < 0
 		or time_manager == null
@@ -2976,9 +2992,10 @@ func _restore_fixed_frame_transaction(value: Dictionary) -> bool:
 
 func _reject_fixed_frame(value: Dictionary, reason: String) -> bool:
 	var world_rollback_ok := _rollback_fixed_frame_world_transaction()
+	var hostile_rollback_ok := _rollback_fixed_frame_hostile_transaction()
 	var state_rollback_ok := _restore_fixed_frame_transaction(value)
 	var event_rollback_ok := _rollback_fixed_frame_event_buffers()
-	if not world_rollback_ok or not state_rollback_ok or not event_rollback_ok:
+	if not world_rollback_ok or not hostile_rollback_ok or not state_rollback_ok or not event_rollback_ok:
 		set_physics_process(false)
 		push_error("Fixed-frame rollback failed closed after: %s" % reason)
 	else:
@@ -2987,6 +3004,8 @@ func _reject_fixed_frame(value: Dictionary, reason: String) -> bool:
 
 
 func _begin_fixed_frame_event_buffers(runtime_frame: int) -> bool:
+	_fixed_frame_commit_irreversible = false
+	_fixed_frame_weapon_observations.clear()
 	if not bool(weapon_action_coordinator.call("begin_frame_event_buffer")):
 		return false
 	var time_ticket_value: Variant = time_manager.call(
@@ -3053,6 +3072,12 @@ func _commit_fixed_frame_event_buffers() -> bool:
 	var time_ticket := _active_time_frame_signal_ticket.duplicate(true)
 	var health_ticket := _active_health_frame_signal_ticket.duplicate(true)
 	var world_ticket := _active_world_frame_ticket.duplicate(true)
+	var hostile_publication: Dictionary = {}
+	if _hostile_frame_participant != null:
+		var hostile_value: Variant = _hostile_frame_participant.call("prepare_frame_publication", _active_hostile_frame_ticket)
+		if not hostile_value is Dictionary or hostile_value.is_empty():
+			return false
+		hostile_publication = hostile_value.duplicate(true)
 	var time_publication_value: Variant = time_manager.call(
 		"prepare_frame_signal_publication",
 		time_ticket
@@ -3111,6 +3136,16 @@ func _commit_fixed_frame_event_buffers() -> bool:
 			set_physics_process(false)
 			push_error("Finalized frame publication discard failed after Health rejection")
 		return false
+	if _hostile_frame_participant != null and not bool(_hostile_frame_participant.call("finalize_frame_publication", hostile_publication)):
+		var time_discard_ok := bool(time_manager.call("discard_finalized_frame_signal_publication", time_publication))
+		var weapon_discard_ok := bool(weapon_action_coordinator.call("discard_finalized_frame_event_publication", weapon_publication))
+		var health_discard_ok := bool(health.call("discard_finalized_frame_signal_publication", health_publication))
+		_active_time_frame_signal_ticket.clear()
+		_active_health_frame_signal_ticket.clear()
+		if not time_discard_ok or not weapon_discard_ok or not health_discard_ok:
+			set_physics_process(false)
+			push_error("Finalized Player publication discard failed after hostile rejection")
+		return false
 	if not bool(world_payload_authority.call(
 		"commit_frame_transaction",
 		world_ticket
@@ -3134,13 +3169,25 @@ func _commit_fixed_frame_event_buffers() -> bool:
 			push_error("Finalized frame publication discard failed closed")
 		return false
 	_active_world_frame_ticket.clear()
+	_fixed_frame_commit_irreversible = true
+	if _hostile_frame_participant != null and not bool(_hostile_frame_participant.call("seal_frame_publication", hostile_publication)):
+		set_physics_process(false)
+		push_error("Hostile compensation retirement failed after irreversible World commit")
+		return false
+	_active_hostile_frame_ticket.clear()
 	_active_time_frame_signal_ticket.clear()
 	_active_health_frame_signal_ticket.clear()
+	var weapon_observations := _fixed_frame_weapon_observations.duplicate(true)
+	_fixed_frame_weapon_observations.clear()
 	# All complete batches are now irreversible and detached from their live
 	# transactions; observers cannot invalidate sibling publication.
 	time_manager.call("publish_prepared_frame_signals")
 	weapon_action_coordinator.call("publish_prepared_frame_events")
 	health.call("publish_prepared_frame_signals")
+	if _hostile_frame_participant != null:
+		_hostile_frame_participant.call("publish_prepared_frame")
+	for observation: Dictionary in weapon_observations:
+		_flush_weapon_observation(observation)
 	return true
 
 
@@ -3164,6 +3211,7 @@ func _fixed_frame_event_buffers_can_commit() -> bool:
 
 
 func _rollback_fixed_frame_event_buffers() -> bool:
+	_fixed_frame_weapon_observations.clear()
 	var time_ok := true
 	if not _active_time_frame_signal_ticket.is_empty():
 		time_ok = bool(time_manager.call(
@@ -3196,6 +3244,29 @@ func _rollback_fixed_frame_world_transaction() -> bool:
 	))
 	_active_world_frame_ticket.clear()
 	return rolled_back
+
+
+func configure_hostile_frame_participant(participant: RefCounted) -> bool:
+	if not _active_hostile_frame_ticket.is_empty() or not _active_world_frame_ticket.is_empty() or not _active_time_frame_signal_ticket.is_empty() or not _active_health_frame_signal_ticket.is_empty():
+		return false
+	if _hostile_frame_participant != null and bool(_hostile_frame_participant.call("frame_transaction_is_active")):
+		return false
+	if participant != null:
+		for method: StringName in [&"is_ready_for_frame", &"frame_transaction_is_active", &"begin_frame", &"prepare_frame", &"prepare_frame_publication", &"finalize_frame_publication", &"seal_frame_publication", &"publish_prepared_frame", &"rollback_frame"]:
+			if not participant.has_method(method):
+				return false
+		if not bool(participant.call("is_ready_for_frame", _runtime_frame + 1)):
+			return false
+	_hostile_frame_participant = participant
+	return true
+
+
+func _rollback_fixed_frame_hostile_transaction() -> bool:
+	if _active_hostile_frame_ticket.is_empty():
+		return true
+	var ticket := _active_hostile_frame_ticket.duplicate(true)
+	_active_hostile_frame_ticket.clear()
+	return _hostile_frame_participant != null and bool(_hostile_frame_participant.call("rollback_frame", ticket))
 
 
 func _rewind_frame_transaction_snapshot() -> Dictionary:
@@ -9288,13 +9359,7 @@ func _on_gun_action_hit_confirmed(action_token: int, target: Node) -> void:
 	)
 	var before := weapon_replay_snapshot()
 	_weapon_hit_fact_claims[action_token] = true
-	EventBus.weapon_hit_confirmed.emit(
-		&"gun",
-		action_id,
-		action_token,
-		target.get_instance_id(),
-		{"source": "gun_projectile", "scope": "action"}
-	)
+	_queue_weapon_observation(&"hit", [&"gun", action_id, action_token, target.get_instance_id(), {"source": "gun_projectile", "scope": "action"}])
 	if not _applying_weapon_replay_event and not before.is_empty() and target.is_inside_tree():
 		_record_weapon_replay_external_fact(
 			"weapon_hit_claim",
@@ -9950,7 +10015,8 @@ func _settle_weapon_mastery_fact(fact: Dictionary) -> bool:
 		return false
 	var settled: Dictionary = character_action_coordinator.call(
 		"settle_prepared_weapon_mastery",
-		ticket
+		ticket,
+		Callable(self, "_observe_weapon_mastery")
 	)
 	if bool(settled.get("ok", false)):
 		return _discard_weapon_mastery_external_snapshot(external_before)
@@ -10115,6 +10181,9 @@ func _stable_weapon_mastery_target_id(target: Node) -> int:
 
 
 func _target_has_active_weakpoint(target: Node, damage_info: RefCounted) -> bool:
+	var observation := _published_damage_observation_context(damage_info, target)
+	if observation.has("weakpoint_active"):
+		return bool(observation["weakpoint_active"])
 	if target.has_meta("weakpoint_active") and bool(target.get_meta("weakpoint_active")):
 		return true
 	if target.has_method("get_weakpoint_damage_bonus"):
@@ -10156,6 +10225,29 @@ func _record_weapon_replay_payload_result(
 	)
 
 
+func stage_frame_damage_observation(damage_info: RefCounted, target: Node, final_amount: float) -> bool:
+	if _active_time_frame_signal_ticket.is_empty() or _active_world_frame_ticket.is_empty() or damage_info == null or target == null or not is_instance_valid(target) or damage_info.get("attacker") != self:
+		return false
+	var observation := _published_damage_observation_context(damage_info, target)
+	if observation.is_empty() or bool(observation.get("internal_observation_recorded", false)):
+		return false
+	_refresh_weapon_replay_fact_baseline()
+	_on_weapon_replay_hit_confirmed(damage_info, target, final_amount)
+	return true
+
+
+func _published_damage_observation_context(damage_info: RefCounted, target: Node) -> Dictionary:
+	if target == null or not is_instance_valid(target):
+		return {}
+	var target_health := target.get_node_or_null("HealthComponent")
+	if target_health == null and target.has_method("published_damage_observation_context"):
+		target_health = target
+	if target_health == null or not target_health.has_method("published_damage_observation_context"):
+		return {}
+	var value: Variant = target_health.call("published_damage_observation_context", damage_info)
+	return value.duplicate(true) if value is Dictionary else {}
+
+
 func _on_weapon_replay_hit_confirmed(
 	damage_info: Variant,
 	target: Node,
@@ -10170,6 +10262,9 @@ func _on_weapon_replay_hit_confirmed(
 		or final_amount <= 0.0
 		or (damage_info as RefCounted).get("attacker") != self
 	):
+		return
+	var observation := _published_damage_observation_context(damage_info as RefCounted, target)
+	if bool(observation.get("internal_observation_recorded", false)):
 		return
 	var damage_tags_value: Variant = (damage_info as RefCounted).get("tags")
 	if damage_tags_value is Array:
@@ -10206,8 +10301,8 @@ func _on_weapon_replay_hit_confirmed(
 		or not target.is_inside_tree()
 	):
 		return
-	var hp_after := float(health.get("current_hp"))
-	var hp_before := hp_after + final_amount
+	var hp_after := float(observation.get("hp_after", health.get("current_hp")))
+	var hp_before := float(observation.get("hp_before", hp_after + final_amount))
 	_record_weapon_replay_external_fact(
 		"combat_damage",
 		action_token,
@@ -10218,7 +10313,7 @@ func _on_weapon_replay_hit_confirmed(
 			"hp_before": hp_before,
 			"hp_after": hp_after,
 			"resolved_damage": final_amount,
-			"target_dead_after": bool(health.get("dead")),
+			"target_dead_after": bool(observation.get("target_dead_after", health.get("dead"))),
 			"state_after": weapon_replay_snapshot(),
 		}
 	)
@@ -10275,13 +10370,32 @@ func _on_gauntlets_impact_feedback_requested(
 	var context := fact.duplicate(true)
 	context["source"] = "gauntlets_payload"
 	context["generation"] = generation
-	EventBus.weapon_hit_confirmed.emit(
-		&"gauntlets",
-		action_id,
-		action_token,
-		target_id,
-		context
-	)
+	_queue_weapon_observation(&"hit", [&"gauntlets", action_id, action_token, target_id, context])
+
+
+func _observe_weapon_mastery(fact: Dictionary) -> void:
+	_queue_weapon_observation(&"mastery", [
+		StringName(fact.weapon_id), StringName(fact.mastery_family),
+		StringName(fact.mastery_id), StringName(fact.action_id),
+		int(fact.action_token), int(fact.generation), int(fact.target_id),
+		(fact.context as Dictionary).duplicate(true),
+	])
+
+
+func _queue_weapon_observation(kind: StringName, arguments: Array) -> void:
+	var observation := {"kind": kind, "arguments": arguments.duplicate(true)}
+	if not _active_world_frame_ticket.is_empty():
+		_fixed_frame_weapon_observations.append(observation)
+	else:
+		_flush_weapon_observation(observation)
+
+
+func _flush_weapon_observation(observation: Dictionary) -> void:
+	var arguments := observation.arguments as Array
+	if observation.kind == &"mastery":
+		EventBus.weapon_mastery_confirmed.emit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
+	elif observation.kind == &"hit":
+		EventBus.weapon_hit_confirmed.emit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4])
 
 
 func _on_weapon_runtime_event(event: Dictionary) -> void:

@@ -127,6 +127,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P15 Enemies and Bosses Design](superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md) | 22 敌人、五 Boss、攻击契约、遭遇与原生演员集成 | Approved / Current authority |
 | [P15 Enemies and Bosses Plan](superpowers/plans/2026-10-04-plane-walker-p15-enemies-bosses.md) | 固定帧敌方行为、内容目录与真实场景实现计划 | Active / Current |
 | [P15 Hostile Foundation Evidence](current/2026-10-04-p15-hostile-foundation-evidence.md) | 已验证的攻击状态、遭遇状态与目录基础 | Verified Locally / Current |
+| [P15 Hostile Frame Bridge Evidence](current/2026-10-04-p15-hostile-frame-bridge-evidence.md) | 原生敌人伤害、精通观察、完整帧回滚及死亡/波次生命周期 | Verified Locally / Current |
 | [P16 Hub, Meta and Narrative Design](superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md) | 三个 Hub 区域、成长预算、剧情与五结局权威 | Approved / Current authority |
 | [P16 Hub, Meta and Narrative Plan](superpowers/plans/2026-10-04-plane-walker-p16-hub-meta-narrative.md) | 档案、结算、锻造、剧情、教学与原生场景执行计划 | Active / Current |
 | [P16A Profile Domain Evidence](current/2026-10-04-p16a-profile-domain-evidence.md) | 成长树、严格局外档案、不可变局内投影与 JSON 兼容 | Verified Locally / Current |

@@ -58,6 +58,8 @@ var _prepared_frame_signal_publication: Dictionary = {}
 var _finalized_frame_signal_publication: Dictionary = {}
 var _frame_signal_publication_in_progress: bool = false
 var _post_publication_frame_signal_events: Array[Dictionary] = []
+var _published_damage_info: RefCounted
+var _published_damage_context: Dictionary = {}
 
 
 func _ready() -> void:
@@ -211,6 +213,7 @@ func discard_finalized_frame_signal_publication(publication: Dictionary) -> bool
 	):
 		return false
 	_finalized_frame_signal_publication.clear()
+	_post_publication_frame_signal_events.clear()
 	return true
 
 
@@ -370,6 +373,18 @@ func _flush_frame_signal_event(event: Dictionary) -> void:
 	var kind := StringName(str(event.get("kind", "")))
 	var arguments := event.get("arguments", []) as Array
 	match kind:
+		&"damage_about_to_apply":
+			EventBus.damage_about_to_apply.emit(arguments[0], arguments[1])
+		&"hit_confirmed":
+			var previous_info := _published_damage_info
+			var previous_context := _published_damage_context
+			_published_damage_info = arguments[0]
+			_published_damage_context = (arguments[3] as Dictionary).duplicate(true)
+			EventBus.hit_confirmed.emit(arguments[0], arguments[1], float(arguments[2]))
+			_published_damage_info = previous_info
+			_published_damage_context = previous_context
+		&"damage_applied":
+			EventBus.damage_applied.emit(arguments[0], arguments[1], float(arguments[2]))
 		&"damaged":
 			damaged.emit(float(arguments[0]), float(arguments[1]))
 		&"healed":
@@ -379,6 +394,10 @@ func _flush_frame_signal_event(event: Dictionary) -> void:
 			clear_invulnerability_sources()
 			EventBus.entity_died.emit(get_parent(), killer)
 			died.emit(killer)
+
+
+func published_damage_observation_context(damage_info: RefCounted) -> Dictionary:
+	return _published_damage_context.duplicate(true) if damage_info != null and damage_info == _published_damage_info else {}
 
 
 func can_restore_replay_snapshot(value: Dictionary) -> bool:
@@ -726,18 +745,36 @@ func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -
 				StringName(str(claim_result.get("code", "irreversible_claim_rejected")).to_lower())
 			)
 	_emit_damage_observation(damage_info)
+	var hp_before := current_hp
 	current_hp = maxf(0.0, current_hp - final_amount)
 	_queue_or_flush_frame_signal_event(&"damaged", [final_amount, current_hp])
-	_apply_hit_reaction(damage_info, final_amount)
-	EventBus.damage_applied.emit(damage_info, get_parent(), final_amount)
+	_apply_hit_reaction(damage_info, final_amount, hp_before)
+	_queue_or_flush_frame_signal_event(&"damage_applied", [damage_info, get_parent(), final_amount])
 	if current_hp <= 0.0:
 		_die(damage_info.attacker)
 	return resolution
 
 
-func _apply_hit_reaction(damage_info: RefCounted, final_amount: float) -> void:
+func _apply_hit_reaction(damage_info: RefCounted, final_amount: float, hp_before: float) -> void:
 	var owner_entity := get_parent()
-	EventBus.hit_confirmed.emit(damage_info, owner_entity, final_amount)
+	var context: Dictionary = {}
+	if not _active_frame_signal_transaction.is_empty() or not _finalized_frame_signal_publication.is_empty() or _frame_signal_publication_in_progress:
+		var weakpoint_active := bool(owner_entity.get_meta("weakpoint_active", false))
+		if owner_entity.has_method("get_weakpoint_damage_bonus"):
+			weakpoint_active = weakpoint_active or float(owner_entity.get_weakpoint_damage_bonus(damage_info)) > 0.0
+		context = {"runtime_frame": int((_active_frame_signal_transaction.get("ticket", {}) as Dictionary).get("runtime_frame", 0)), "hp_before": hp_before, "hp_after": current_hp, "target_dead_after": current_hp <= 0.0, "weakpoint_active": weakpoint_active, "internal_observation_recorded": false}
+		var attacker: Node = damage_info.attacker
+		if not _active_frame_signal_transaction.is_empty() and attacker != null and is_instance_valid(attacker) and attacker.has_method("stage_frame_damage_observation"):
+			# Internal Player facts retain their original settlement state while the
+			# public observation waits for the entire frame to become irreversible.
+			var previous_info := _published_damage_info
+			var previous_context := _published_damage_context
+			_published_damage_info = damage_info
+			_published_damage_context = context.duplicate(true)
+			context.internal_observation_recorded = bool(attacker.call("stage_frame_damage_observation", damage_info, owner_entity, final_amount))
+			_published_damage_info = previous_info
+			_published_damage_context = previous_context
+	_queue_or_flush_frame_signal_event(&"hit_confirmed", [damage_info, owner_entity, final_amount, context])
 	if damage_info.knockback.length_squared() > 0.0 and owner_entity.has_method("apply_knockback"):
 		owner_entity.apply_knockback(damage_info.knockback)
 	if owner_entity.has_method("apply_weapon_hit_control"):
@@ -942,7 +979,7 @@ func _tag_semantic(tag_value: Variant) -> String:
 
 
 func _emit_damage_observation(damage_info: RefCounted) -> void:
-	EventBus.damage_about_to_apply.emit(damage_info, get_parent())
+	_queue_or_flush_frame_signal_event(&"damage_about_to_apply", [damage_info, get_parent()])
 
 
 func _resolution_finalized_damage(resolution: RefCounted) -> float:
