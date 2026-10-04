@@ -5,6 +5,7 @@ const LaunchRuntime := preload("res://scripts/enemies/launch/launch_enemy_runtim
 const LaunchStatus := preload("res://scripts/enemies/launch/launch_elemental_status_runtime.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
+const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -601,3 +602,88 @@ static func _vector(value: Dictionary) -> Vector2:
 
 static func _launch_failure(field: String) -> Dictionary:
 	return {"ok": false, "code": &"LAUNCH_ACTOR_INVALID", "context": {"field": field}}
+
+
+func native_cold_snapshot(source_binding: Callable) -> Dictionary:
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _prepared_frame_committed or health == null or not source_binding.is_valid():
+		return {}
+	var state := _actor_state()
+	for row: Dictionary in state.status.entries.values():
+		for field: String in ["damage_source", "damage_attacker"]:
+			if row[field] == null:
+				continue
+			var binding: Variant = source_binding.call(row[field])
+			if not binding is Dictionary or binding.is_empty():
+				return {}
+			row[field] = binding.duplicate(true)
+	return {"schema_version": 1, "definition_id": str(_launch_definition.id), "identity": _launch_identity.duplicate(true), "actor": state, "health": health.runtime_state_snapshot()}
+
+
+func can_restore_native_cold_snapshot(value: Dictionary, source_resolver: Callable) -> bool:
+	if not Contract.exact_fields(value, ["schema_version", "definition_id", "identity", "actor", "health"]) or value.schema_version != 1 or value.definition_id != _launch_definition.get("id") or value.identity != _launch_identity or not value.actor is Dictionary or not value.health is Dictionary or not _prepared_launch_frame.is_empty() or not source_resolver.is_valid():
+		return false
+	var state := _cold_actor_state(value.actor, source_resolver)
+	if state.is_empty() or not _can_restore_actor_state(state) or not health.can_restore_replay_snapshot(value.health):
+		return false
+	if value.health.dead != state.runtime.terminal:
+		return false
+	for field: String in ["hp_after", "hp_current"]:
+		if state.runtime.mechanism_state.has(field) and not is_equal_approx(float(state.runtime.mechanism_state[field]), float(value.health.current_hp)):
+			return false
+	return true
+
+
+func native_cold_threat_facts() -> Array:
+	var state: Dictionary = _launch_runtime.snapshot()
+	var facts: Array = state.action.committed_geometry.duplicate(true)
+	if state.action.action_id == "traitor_self_rewind" and not state.mechanism_state.rewind.is_empty():
+		var action := {}
+		for candidate: Dictionary in _launch_definition.actions + _launch_definition.get("time_responses", []):
+			if candidate.id == state.action.action_id:
+				action = candidate
+		if action.is_empty():
+			return []
+		var landing: Dictionary = state.mechanism_state.rewind.landing
+		facts = [{"hostile_source_id": state.identity.hostile_source_id, "attack_generation": state.action.geometry_generations[0], "shape": "circle", "origin": landing, "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": landing, "summon_slots": [], "radius": 16.0, "length": 0.0, "active_from_frame": state.action.commit_frame, "active_through_frame": int(state.action.idle_through_frame) - int(action.idle_frames)}]
+	var result: Array = []
+	for fact: Dictionary in facts:
+		result.append(Actions.native_threat_fact(fact))
+	return result
+
+
+func restore_native_cold_snapshot(value: Dictionary, source_resolver: Callable) -> bool:
+	if not can_restore_native_cold_snapshot(value, source_resolver):
+		return false
+	var state := _cold_actor_state(value.actor, source_resolver)
+	if not health.restore_irreversible_replay_snapshot(value.health.ledger) or not health.restore_replay_snapshot(value.health) or not _restore_actor_state(state):
+		return false
+	_hostile_identity_active = not bool(state.runtime.terminal)
+	if health.is_alive() and _hostile_identity_active:
+		add_to_group("enemies")
+		add_to_group("time_stoppable")
+	else:
+		remove_from_group("enemies")
+		remove_from_group("time_stoppable")
+	_refresh_control_visual()
+	return true
+
+
+func _cold_actor_state(value: Dictionary, source_resolver: Callable) -> Dictionary:
+	if not value.get("status") is Dictionary or not value.status.get("entries") is Dictionary:
+		return {}
+	var state := value.duplicate(true)
+	for candidate: Variant in state.status.entries.values():
+		if not candidate is Dictionary:
+			return {}
+		for field: String in ["damage_source", "damage_attacker"]:
+			if not candidate.has(field):
+				return {}
+			if candidate[field] == null:
+				continue
+			if not candidate[field] is Dictionary:
+				return {}
+			var source: Variant = source_resolver.call(candidate[field])
+			if not source is Node or not is_instance_valid(source):
+				return {}
+			candidate[field] = source
+	return state

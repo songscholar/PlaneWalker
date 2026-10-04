@@ -197,7 +197,7 @@ func present_restored_checkpoint(presentation: Callable) -> Variant:
 	if not _active or not is_inside_tree() or is_queued_for_deletion() or _active_run_id.is_empty() or _checkpoint_presentation_active or _checkpoint_restore_active or _restored_checkpoint_digest.is_empty() or not is_instance_valid(_profile_service) or not is_instance_valid(_player) or not _player.is_inside_tree() or _player.is_queued_for_deletion() or not presentation.is_valid():
 		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "present_restored_checkpoint"})
 	var authenticated: Dictionary = _profile_service.authenticated_native_checkpoint(_restored_checkpoint_profile_revision)
-	if not authenticated.ok or authenticated.context.checkpoint.digest != _restored_checkpoint_digest or not NativeCheckpointScript.json_equal(runtime_snapshot(), authenticated.context.run) or _player.full_player_replay_snapshot() != authenticated.context.replay:
+	if not authenticated.ok or authenticated.context.checkpoint.digest != _restored_checkpoint_digest or not NativeCheckpointScript.json_equal(runtime_snapshot(), authenticated.context.run) or _player.full_player_replay_snapshot() != authenticated.context.replay or not _native_checkpoint_encounter_matches(authenticated.context.native):
 		_restored_checkpoint_digest = ""
 		return CommandResultScript.failure(&"NATIVE_CHECKPOINT_INVALID", _revision(), {"stage": "restored_presentation"})
 	_restored_checkpoint_digest = ""
@@ -206,7 +206,7 @@ func present_restored_checkpoint(presentation: Callable) -> Variant:
 	_checkpoint_presentation_active = true
 	presentation.call()
 	_checkpoint_presentation_active = false
-	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(native_player) or _player != native_player or not native_player.is_inside_tree() or native_player.is_queued_for_deletion() or _profile_service != native_profile or native_player.full_player_replay_snapshot() != authenticated.context.replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), authenticated.context.run) or native_profile.snapshot().revision != _restored_checkpoint_profile_revision:
+	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(native_player) or _player != native_player or not native_player.is_inside_tree() or native_player.is_queued_for_deletion() or _profile_service != native_profile or native_player.full_player_replay_snapshot() != authenticated.context.replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), authenticated.context.run) or native_profile.snapshot().revision != _restored_checkpoint_profile_revision or not _native_checkpoint_encounter_matches(authenticated.context.native):
 		_profile_publication_pending = true
 		if is_instance_valid(_player):
 			_player.process_mode = Node.PROCESS_MODE_DISABLED
@@ -214,6 +214,13 @@ func present_restored_checkpoint(presentation: Callable) -> Variant:
 			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED
 		return CommandResultScript.failure(&"NATIVE_PUBLICATION_PENDING", _revision(), {"stage": "restored_presentation"})
 	return CommandResultScript.success(_revision(), {"presented": true})
+
+
+func _native_checkpoint_encounter_matches(expected: Dictionary) -> bool:
+	if not is_instance_valid(_room_controller):
+		return false
+	var runner: Node = _room_controller.encounter_runner()
+	return not runner.is_active() if expected.is_empty() else runner.native_cold_snapshot() == expected
 
 
 func native_checkpoint_participants() -> Dictionary:
@@ -256,6 +263,7 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	var saved: Dictionary = authenticated.context.run
 	var checkpoint: Dictionary = authenticated.context.checkpoint
 	var replay: Dictionary = authenticated.context.replay
+	var native: Dictionary = authenticated.context.native
 	var candidate := _boot_facade()
 	if candidate == null:
 		return CommandResultScript.failure(&"CONTENT_NOT_AVAILABLE", _revision())
@@ -308,26 +316,24 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	if not candidate.configure_merchant_effect_authority(_reward_effect_runtime, _player):
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"AUTHORED_RUNTIME_CONFIGURATION_FAILED")
 	var runner: Node = _room_controller.encounter_runner()
-	var runner_before: Dictionary = runner.snapshot()
-	var runtime: Node = candidate.create_room_runtime(runner)
-	if runtime == null or not runtime.restore_safe_checkpoint(checkpoint.room_state):
-		if runtime != null:
-			runtime.free()
-		runner.restore_inactive_checkpoint(runner_before)
+	var runner_before: Dictionary = runner.checkpoint_restore_preimage()
+	if runner_before.is_empty():
 		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_ROOM_INVALID")
+	var hostile_before: Dictionary = _room_controller.checkpoint_hostile_binding()
+	var runtime: Node = candidate.create_room_runtime(runner)
+	var native_rollback := {"runner": runner, "preimage": runner_before, "hostile": hostile_before, "runtime": runtime}
+	if runtime == null or native.is_empty() and not runtime.restore_safe_checkpoint(checkpoint.room_state):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_ROOM_INVALID", native_rollback)
 	if not prepared.is_empty() and not _commit_route_scene(prepared, {}, {}).get("ok", false):
-		runtime.free()
-		runner.restore_inactive_checkpoint(runner_before)
-		return _rollback_checkpoint_restore(player_transaction, prepared, &"ROOM_SCENE_ACTIVATION_FAILED")
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"ROOM_SCENE_ACTIVATION_FAILED", native_rollback)
+	if not native.is_empty():
+		if not _room_controller.configure_hostile_threat_authority(hostile_identity_scope(StringName(saved.run_id)), _hostile_threat_registry) or not _configure_native_encounter_runner(runner, candidate) or not runtime.restore_safe_checkpoint(checkpoint.room_state, native):
+			return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_ROOM_INVALID", native_rollback)
 	var actual_binding: Dictionary = {} if prepared.is_empty() else _route_scene_adapter.active_room().binding_snapshot()
-	if not NativeCheckpointScript.json_equal(candidate.snapshot(), saved) or _player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.equivalent_scene_binding(checkpoint.scene_binding, actual_binding):
-		runtime.free()
-		runner.restore_inactive_checkpoint(runner_before)
-		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_DRIFT")
+	if not NativeCheckpointScript.json_equal(candidate.snapshot(), saved) or _player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.equivalent_scene_binding(checkpoint.scene_binding, actual_binding) or not _native_checkpoint_encounter_matches(native):
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"NATIVE_RESTORE_DRIFT", native_rollback)
 	if not prepared.is_empty() and not _confirm_route_scene(prepared, {}).get("ok", false):
-		runtime.free()
-		runner.restore_inactive_checkpoint(runner_before)
-		return _rollback_checkpoint_restore(player_transaction, prepared, &"ROOM_SCENE_CONFIRM_FAILED")
+		return _rollback_checkpoint_restore(player_transaction, prepared, &"ROOM_SCENE_CONFIRM_FAILED", native_rollback)
 	_facade = candidate
 	_room_runtime = runtime
 	_room_runtime.name = "RoomRuntime"
@@ -351,9 +357,10 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	_dungeon_selection_active = bool(publication.dungeon_selection)
 	_player.process_mode = Node.PROCESS_MODE_DISABLED if _selection_safety_active or RunPhaseScript.is_terminal(int(saved.phase)) else _player_process_mode
 	_room_controller.process_mode = Node.PROCESS_MODE_DISABLED if _selection_safety_active or RunPhaseScript.is_terminal(int(saved.phase)) else _room_controller_process_mode
-	_room_controller.configure_hostile_threat_authority(hostile_identity_scope(StringName(saved.run_id)), _hostile_threat_registry)
-	if not _configure_native_encounter_runner(runner, candidate):
-		_profile_publication_pending = true
+	if native.is_empty():
+		_room_controller.configure_hostile_threat_authority(hostile_identity_scope(StringName(saved.run_id)), _hostile_threat_registry)
+		if not _configure_native_encounter_runner(runner, candidate):
+			_profile_publication_pending = true
 	if not _room_controller.configure_checkpoint_runtime(runtime, candidate.encounter_catalog()):
 		_profile_publication_pending = true
 	_connect_room_runtime()
@@ -365,7 +372,7 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	service.bind_native_checkpoint_host(self)
 	profile_run_restored.emit(_active_run_id, saved.duplicate(true))
 	_checkpoint_restore_active = false
-	if not is_inside_tree() or not is_instance_valid(native_player) or _player != native_player or native_player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), saved) or service.snapshot().revision != expected_revision:
+	if not is_inside_tree() or not is_instance_valid(native_player) or _player != native_player or native_player.full_player_replay_snapshot() != replay or not NativeCheckpointScript.json_equal(runtime_snapshot(), saved) or service.snapshot().revision != expected_revision or not _native_checkpoint_encounter_matches(native):
 		_profile_publication_pending = true
 	if _profile_publication_pending:
 		if is_instance_valid(native_player):
@@ -379,16 +386,21 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	return CommandResultScript.success(_revision(), {"restored": true, "run_id": _active_run_id, "terminal": RunPhaseScript.is_terminal(int(saved.phase)), "profile_revision": expected_revision})
 
 
-func _rollback_checkpoint_restore(transaction: RefCounted, prepared: Dictionary, code: StringName) -> Variant:
+func _rollback_checkpoint_restore(transaction: RefCounted, prepared: Dictionary, code: StringName, native: Dictionary = {}) -> Variant:
+	var native_rolled_back := true
+	if not native.is_empty():
+		if is_instance_valid(native.runtime):
+			native.runtime.free()
+		native_rolled_back = native.runner.discard_checkpoint_restore(native.preimage) and _room_controller.restore_checkpoint_hostile_binding(native.hostile)
 	var scene_rolled_back: bool = prepared.is_empty() or _rollback_route_scene(prepared, {}).get("ok", false)
 	if not scene_rolled_back and _route_scene_adapter is Object and _route_scene_adapter.has_method("pending_transition_ticket") and _route_scene_adapter.pending_transition_ticket().is_empty():
 		scene_rolled_back = _route_scene_adapter.active_snapshot() == prepared.get("checkpoint_scene_preimage")
 	var player_rolled_back: bool = not transaction.get("_active") or transaction.rollback()
 	_checkpoint_restore_active = false
-	if not scene_rolled_back or not player_rolled_back:
+	if not scene_rolled_back or not player_rolled_back or not native_rolled_back:
 		_profile_publication_pending = true
 		_player.process_mode = Node.PROCESS_MODE_DISABLED
-		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "checkpoint_restore_rollback", "cause": str(code), "scene": scene_rolled_back, "player": player_rolled_back})
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "checkpoint_restore_rollback", "cause": str(code), "scene": scene_rolled_back, "player": player_rolled_back, "native": native_rolled_back})
 	return CommandResultScript.failure(code, _revision(), {"stage": "checkpoint_restore"})
 
 

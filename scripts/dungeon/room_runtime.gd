@@ -98,6 +98,11 @@ func begin_current_room() -> Variant:
 				"code": str(opened.get("code")) if opened != null else "INVALID_RESULT",
 			})
 			return opened
+		var assigned_room: Dictionary = _facade.call("current_room_definition")
+		if _room_id(assigned_room) != _current_room_id:
+			_fail_runtime(&"EVENT_RUNTIME_CONFIGURATION_FAILED", {"room_id": str(_current_room_id)})
+			return _failure_result(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED")
+		_current_room = assigned_room.duplicate(true)
 		if not sync_event_result(opened):
 			_fail_runtime(&"EVENT_RUNTIME_CONFIGURATION_FAILED", {
 				"room_id": str(_current_room_id),
@@ -350,7 +355,7 @@ func snapshot() -> Dictionary:
 	}
 
 
-func restore_safe_checkpoint(value: Dictionary) -> bool:
+func restore_safe_checkpoint(value: Dictionary, native: Dictionary = {}) -> bool:
 	if _facade == null or _runner == null or not _runner.has_method("restore_inactive_checkpoint") or value.size() != snapshot().size():
 		return false
 	for field: String in snapshot():
@@ -368,7 +373,7 @@ func restore_safe_checkpoint(value: Dictionary) -> bool:
 	if expected.is_empty():
 		if value.room_active or value.room_terminal or not value.event_continuation.is_empty():
 			return false
-	elif phase == RunPhaseScript.Value.ROOM_ACTIVE:
+	elif phase in [RunPhaseScript.Value.ROOM_ACTIVE, RunPhaseScript.Value.COMBAT_ACTIVE, RunPhaseScript.Value.BOSS_ACTIVE]:
 		if not value.room_active or value.room_terminal:
 			return false
 	elif phase in [RunPhaseScript.Value.ROOM_RESOLVING, RunPhaseScript.Value.SELECTION_ACTIVE, RunPhaseScript.Value.DEFEAT, RunPhaseScript.Value.VICTORY]:
@@ -377,7 +382,10 @@ func restore_safe_checkpoint(value: Dictionary) -> bool:
 	var continuation: Dictionary = _facade.call("_current_event_continuation")
 	if JSON.parse_string(JSON.stringify(value.event_continuation, "", true, true)) != JSON.parse_string(JSON.stringify(continuation, "", true, true)):
 		return false
-	if not _runner.call("restore_inactive_checkpoint", value.runner):
+	if not native.is_empty() and (phase not in [RunPhaseScript.Value.ROOM_ACTIVE, RunPhaseScript.Value.COMBAT_ACTIVE, RunPhaseScript.Value.BOSS_ACTIVE] or not value.room_active or value.room_terminal or not _runner.has_method("restore_native_cold_snapshot")):
+		return false
+	var restored: bool = _runner.call("restore_inactive_checkpoint", value.runner) if native.is_empty() else _runner.call("restore_native_cold_snapshot", native)
+	if not restored or not JSON.parse_string(JSON.stringify(_runner.snapshot(), "", true, true)) == JSON.parse_string(JSON.stringify(value.runner, "", true, true)):
 		return false
 	_room_active = value.room_active
 	_room_terminal = value.room_terminal

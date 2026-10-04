@@ -44,6 +44,34 @@ func native_launch_scene() -> Node2D:
 	return _native_launch_driver.native_scene() if _native_launch_driver != null else null
 
 
+func native_cold_snapshot() -> Dictionary:
+	return _native_launch_driver.cold_snapshot() if _native_launch_driver != null else {}
+
+
+func restore_native_cold_snapshot(value: Dictionary) -> bool:
+	if _native_launch_driver == null or is_active() or not _encounter.is_empty() or not _native_launch_driver.restore_cold_snapshot(value):
+		return false
+	_generation = int(value.encounter.identity.encounter_generation)
+	_encounter = value.definition.duplicate(true)
+	return true
+
+
+func checkpoint_restore_preimage() -> Dictionary:
+	return {"runner": snapshot(), "generation": _generation} if not is_active() else {}
+
+
+func discard_checkpoint_restore(value: Dictionary) -> bool:
+	if value.size() != 2 or not value.get("runner") is Dictionary or not value.get("generation") is int or value.generation < 0:
+		return false
+	if _native_launch_driver != null and not _native_launch_driver.discard_cold_restore():
+		return false
+	cancel()
+	if not restore_inactive_checkpoint(value.runner):
+		return false
+	_generation = value.generation
+	return snapshot() == value.runner
+
+
 func spawn_native_actor(spawn: Dictionary) -> bool:
 	return _native_launch_driver != null and _native_launch_driver.spawn_actor(spawn)
 

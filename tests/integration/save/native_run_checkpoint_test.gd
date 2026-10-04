@@ -58,9 +58,8 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 				edge = str(route.edge_id)
 				break
 		suite.assert_true(not edge.is_empty() and host.select_route(StringName(edge), int(host.runtime_snapshot().revision)).ok, "native scene route enters a combat encounter")
-		var unsafe_before: Dictionary = service.payload()
-		var refused = host.checkpoint_profile_run(int(service.snapshot().revision))
-		suite.assert_true(not refused.ok and refused.code == &"CHECKPOINT_UNSAFE" and service.payload() == unsafe_before, "unsupported live encounter checkpoint preserves physical Profile")
+		var live = host.checkpoint_profile_run(int(service.snapshot().revision))
+		suite.assert_true(live.ok, "sealed native live encounter checkpoints persist through version two")
 		var room: Node = host.native_checkpoint_participants().runtime
 		if case_name == "reward":
 			suite.assert_true(room.complete_current_room().ok and int(host.runtime_snapshot().phase) == Phase.Value.SELECTION_ACTIVE, "real room completion retains a native pending reward")
@@ -123,6 +122,13 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		suite.assert_true(refreshed.ok, "safe native Profile retention succeeds after Player motion")
 		var refreshed_checkpoint: Dictionary = service.authenticated_native_checkpoint(int(service.snapshot().revision))
 		suite.assert_true(refreshed_checkpoint.ok and refreshed_checkpoint.context.replay == player.full_player_replay_snapshot(), "ordinary Profile retention atomically refreshes the complete native checkpoint")
+		var legacy: Dictionary = service.payload()
+		legacy.native_run_checkpoint.schema_version = 1
+		legacy.native_run_checkpoint.erase("encounter_codec")
+		legacy.native_run_checkpoint.erase("digest")
+		legacy.native_run_checkpoint.digest = Checkpoint.canonical(legacy.native_run_checkpoint).sha256_text()
+		var written: Variant = save.save_profile(slot, "base", JSON.parse_string(JSON.stringify(legacy, "", true, true)))
+		suite.assert_true(written.ok, "fixture retains a genuine version-one safe checkpoint for actual cold restoration: " + str(written.code) + " " + str(written.diagnostics))
 	var run_before: Dictionary = host.runtime_snapshot()
 	var replay_before: Dictionary = player.full_player_replay_snapshot()
 	var payload_id := ""

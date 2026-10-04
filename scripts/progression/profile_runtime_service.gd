@@ -221,7 +221,7 @@ func authenticated_native_checkpoint(expected_revision: int) -> Dictionary:
 	var launch := _launch_for_run(run_value)
 	if launch.is_empty() or not _json_equal(launch, checkpoint.launch_receipt) or not _settlement.verified_run_sources(launch, run_value).ok:
 		return _failure(&"NATIVE_CHECKPOINT_INVALID")
-	return _success({"checkpoint": checkpoint.duplicate(true), "run": run_value.duplicate(true), "replay": valid.context.replay.duplicate(true)})
+	return _success({"checkpoint": checkpoint.duplicate(true), "run": run_value.duplicate(true), "replay": valid.context.replay.duplicate(true), "native": valid.context.native.duplicate(true)})
 
 
 func enable_workshop(entries: Array) -> Dictionary:
@@ -404,7 +404,8 @@ func _tutorial_native_checkpoint() -> Dictionary:
 	var launch: Dictionary = snapshot().active_launch_receipt
 	if _tutorial_run == null or launch.is_empty() or not is_instance_valid(player) or not player.is_inside_tree():
 		return {}
-	var state: Dictionary = _tutorial_run.snapshot()
+	var host: Node = _native_checkpoint_host.get_ref() if _native_checkpoint_host != null else null
+	var state: Dictionary = host.runtime_snapshot() if is_instance_valid(host) and host.native_run_state() == _tutorial_run else _tutorial_run.snapshot()
 	var reward: Dictionary = player.reward_effect_snapshot()
 	var native_frame: Dictionary = player.full_player_replay_snapshot()
 	if not _player_matches_launch(player, launch, state) or native_frame.is_empty() or not _settlement.verified_run_sources(launch, state).ok or not Replay.validate_full_player_reward_effect_state(reward) or _clone_native_run(_tutorial_run, state) == null:
@@ -663,8 +664,15 @@ func restore_active_run(run: RefCounted, player: Node) -> Dictionary:
 		player.restore_reward_effect_snapshot(before, false)
 	_narrative_publication = false
 	if restored:
+		if not _payload.get("native_run_checkpoint", {}).is_empty():
+			var host: Node = _native_checkpoint_host.get_ref() if _native_checkpoint_host != null else null
+			var captured := NativeCheckpoint.capture(host)
+			if not captured.ok or captured.context.checkpoint != _payload.native_run_checkpoint:
+				_checkpoint_recovery_pending = true
+				return _failure(&"NATIVE_PUBLICATION_PENDING")
 		_narrative_recovery_pending = false
 		_tutorial_recovery_pending = false
+		_checkpoint_recovery_pending = false
 	return _success({}) if restored else _failure(&"NATIVE_RESTORE_INVALID")
 
 

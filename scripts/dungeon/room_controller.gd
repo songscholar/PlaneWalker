@@ -86,6 +86,24 @@ func hostile_threat_registry() -> RefCounted:
 	return _hostile_threat_registry
 
 
+func checkpoint_hostile_binding() -> Dictionary:
+	return {"scope": _hostile_identity_scope.duplicate(true), "registry": _hostile_threat_registry, "facts": _hostile_threat_registry.snapshot() if _hostile_threat_registry != null else []}
+
+
+func restore_checkpoint_hostile_binding(value: Dictionary) -> bool:
+	if value.size() != 3 or not value.get("scope") is Dictionary or not value.get("facts") is Array or value.get("registry") != null and not value.registry is RefCounted:
+		return false
+	_hostile_identity_scope = value.scope.duplicate(true)
+	_hostile_threat_registry = value.registry
+	if _hostile_threat_registry == null:
+		return value.facts.is_empty()
+	_hostile_threat_registry.clear()
+	for fact: Dictionary in value.facts:
+		if not _hostile_threat_registry.register_fact(fact):
+			return false
+	return _hostile_threat_registry.snapshot() == value.facts
+
+
 func configure_character_boss_exposure_replay_authority(authority: RefCounted) -> bool:
 	if authority == null:
 		return false

@@ -10,10 +10,13 @@ const SceneHost := preload("res://scripts/dungeon/room_scene_host.gd")
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const Seed := preload("res://scripts/core/seed_service.gd")
 const Scene := preload("res://scripts/dungeon/launch_room_scene.gd")
+const NativeDriver := preload("res://scripts/dungeon/native_launch_encounter_driver.gd")
 const SCENE_BINDING_FIELDS := ["node_id", "content_id", "room_type", "floor_id", "palette_id", "environment_rule_id", "room_seed", "binding_generation", "reduced_motion", "hit_flash_enabled"]
 const FIELDS := ["schema_version", "run_id", "run_revision", "run_digest", "launch_receipt", "player_codec", "floor_effect_state", "room_state", "scene_binding", "publication_state", "digest"]
+const V2_FIELDS := ["schema_version", "run_id", "run_revision", "run_digest", "launch_receipt", "player_codec", "encounter_codec", "floor_effect_state", "room_state", "scene_binding", "publication_state", "digest"]
 const PUBLICATION_FIELDS := ["route_ids", "floor_start_ids", "floor_completion_ids", "floor_rule_frame_origin", "player_process_mode", "controller_process_mode", "selection_safety", "dungeon_selection"]
-const SAFE_PHASES := [Phase.Value.RUN_PREPARING, Phase.Value.ROOM_ENTERING, Phase.Value.ROOM_ACTIVE, Phase.Value.ROOM_RESOLVING, Phase.Value.SELECTION_ACTIVE, Phase.Value.ROOM_TRANSITION, Phase.Value.VICTORY, Phase.Value.DEFEAT]
+const LIVE_PHASES := [Phase.Value.ROOM_ACTIVE, Phase.Value.COMBAT_ACTIVE, Phase.Value.BOSS_ACTIVE]
+const SAFE_PHASES := [Phase.Value.RUN_PREPARING, Phase.Value.ROOM_ENTERING, Phase.Value.ROOM_ACTIVE, Phase.Value.COMBAT_ACTIVE, Phase.Value.BOSS_ACTIVE, Phase.Value.ROOM_RESOLVING, Phase.Value.SELECTION_ACTIVE, Phase.Value.ROOM_TRANSITION, Phase.Value.VICTORY, Phase.Value.DEFEAT]
 
 
 static func capture(host: Node) -> Dictionary:
@@ -29,12 +32,19 @@ static func capture(host: Node) -> Dictionary:
 		return failure(&"NATIVE_BINDING_INVALID")
 	var run: Dictionary = host.runtime_snapshot()
 	var room: Dictionary = runtime.snapshot()
-	if not safe_run(run):
+	var runner: Node = controller.encounter_runner()
+	var native: Dictionary = runner.native_cold_snapshot() if runner.is_active() else {}
+	if not safe_run(run, not native.is_empty()):
 		return failure(&"CHECKPOINT_UNSAFE", "phase_%d" % int(run.get("phase", -1)))
-	if not inactive_room(room):
+	if not inactive_room(room) and not live_room(room, native):
 		return {"ok": false, "code": &"CHECKPOINT_UNSAFE", "context": {"stage": "room", "room": room}}
 	var enemies: Node = controller.get_node_or_null("Enemies")
-	if enemies == null or enemies.get_child_count() != 0:
+	var native_count := 0
+	if enemies != null:
+		for enemy: Node in enemies.get_children():
+			if not enemy.is_queued_for_deletion():
+				native_count += 1
+	if enemies == null or native_count != native.get("actors", {}).size():
 		return failure(&"CHECKPOINT_UNSAFE", "live_hostiles")
 	var replay: Dictionary = player.full_player_replay_snapshot()
 	if replay.is_empty() or not Replay.validate_full_player_snapshot(replay, replay.get("identity", {})).ok or str(replay.identity.run_id) != str(run.run_id):
@@ -42,6 +52,12 @@ static func capture(host: Node) -> Dictionary:
 	var encoded := Replay.encode_replay_json(replay)
 	if not encoded.ok:
 		return encoded
+	var encounter_codec := ""
+	if not native.is_empty():
+		var encoded_encounter := Replay.encode_replay_json(native)
+		if not encoded_encounter.ok:
+			return failure(&"CHECKPOINT_UNSAFE", "native_codec")
+		encounter_codec = encoded_encounter.json
 	var launch: Dictionary = service.call("_launch_for_run", run)
 	if launch.is_empty():
 		return failure(&"NATIVE_CHECKPOINT_INVALID", "launch")
@@ -58,12 +74,13 @@ static func capture(host: Node) -> Dictionary:
 	elif scene_host is SceneHost and scene_host.active_room() != null:
 		return failure(&"NATIVE_CHECKPOINT_INVALID", "unexpected_scene")
 	var checkpoint := {
-		"schema_version": 1,
+		"schema_version": 2,
 		"run_id": run.run_id,
 		"run_revision": int(run.revision),
 		"run_digest": canonical(run).sha256_text(),
 		"launch_receipt": launch.duplicate(true),
 		"player_codec": encoded.json,
+		"encounter_codec": encounter_codec,
 		"floor_effect_state": player.floor_rule_effect_snapshot(),
 		"room_state": room.duplicate(true),
 		"scene_binding": binding,
@@ -77,11 +94,23 @@ static func capture(host: Node) -> Dictionary:
 
 
 static func validate(checkpoint: Dictionary, run: Dictionary, reward: Dictionary) -> Dictionary:
-	if not exact_fields(checkpoint, FIELDS) or not integral(checkpoint.schema_version) or int(checkpoint.schema_version) != 1 or not safe_run(run) or checkpoint.run_id != run.get("run_id") or not integral(checkpoint.run_revision) or int(checkpoint.run_revision) != int(run.get("revision", -1)) or checkpoint.run_digest != canonical(run).sha256_text():
+	var version: Variant = checkpoint.get("schema_version")
+	if not integral(version) or int(version) not in [1, 2] or not exact_fields(checkpoint, FIELDS if int(version) == 1 else V2_FIELDS):
+		return failure(&"NATIVE_CHECKPOINT_INVALID", "fields")
+	var native: Dictionary = {}
+	if int(version) == 2:
+		if not checkpoint.encounter_codec is String:
+			return failure(&"NATIVE_CHECKPOINT_INVALID", "encounter_codec")
+		if not checkpoint.encounter_codec.is_empty():
+			var decoded_native := Replay.decode_replay_json(checkpoint.encounter_codec)
+			if not decoded_native.ok:
+				return failure(&"NATIVE_CHECKPOINT_INVALID", "encounter_codec")
+			native = decoded_native.replay
+	if not safe_run(run, not native.is_empty()) or checkpoint.run_id != run.get("run_id") or not integral(checkpoint.run_revision) or int(checkpoint.run_revision) != int(run.get("revision", -1)) or checkpoint.run_digest != canonical(run).sha256_text():
 		return failure(&"NATIVE_CHECKPOINT_INVALID", "run")
 	var unsigned := checkpoint.duplicate(true)
 	unsigned.erase("digest")
-	if checkpoint.digest != canonical(unsigned).sha256_text() or not checkpoint.launch_receipt is Dictionary or checkpoint.launch_receipt.get("run_id") != run.run_id or checkpoint.launch_receipt.get("projection_digest") != run.get("resources", {}).get("meta_run_projection", {}).get("projection_digest") or not checkpoint.room_state is Dictionary or not inactive_room(checkpoint.room_state) or not checkpoint.scene_binding is Dictionary or not valid_scene_binding(checkpoint.scene_binding) or not checkpoint.publication_state is Dictionary:
+	if checkpoint.digest != canonical(unsigned).sha256_text() or not checkpoint.launch_receipt is Dictionary or checkpoint.launch_receipt.get("run_id") != run.run_id or checkpoint.launch_receipt.get("projection_digest") != run.get("resources", {}).get("meta_run_projection", {}).get("projection_digest") or not checkpoint.room_state is Dictionary or (not inactive_room(checkpoint.room_state) if native.is_empty() else not live_room(checkpoint.room_state, native)) or not checkpoint.scene_binding is Dictionary or not valid_scene_binding(checkpoint.scene_binding) or not checkpoint.publication_state is Dictionary:
 		return failure(&"NATIVE_CHECKPOINT_INVALID", "binding")
 	if not scene_binding_matches_run(checkpoint.scene_binding, run, checkpoint.room_state):
 		return failure(&"NATIVE_CHECKPOINT_INVALID", "scene_identity")
@@ -107,7 +136,9 @@ static func validate(checkpoint: Dictionary, run: Dictionary, reward: Dictionary
 	var replay: Dictionary = decoded.replay
 	if not Replay.validate_full_player_snapshot(replay, replay.get("identity", {})).ok or replay.get("identity", {}).get("run_id") != run.run_id or not json_equal(replay.get("reward_effect_state"), reward):
 		return failure(&"NATIVE_CHECKPOINT_INVALID", "replay")
-	return {"ok": true, "code": &"OK", "context": {"replay": replay.duplicate(true)}}
+	if not native.is_empty() and (int(run.phase) not in LIVE_PHASES or native.get("run_seed") != run.run_seed or not NativeDriver.validate_cold_snapshot(native, str(run.run_id), str(checkpoint.room_state.room_id), int(replay.frame))):
+		return failure(&"NATIVE_CHECKPOINT_INVALID", "native_encounter")
+	return {"ok": true, "code": &"OK", "context": {"replay": replay.duplicate(true), "native": native.duplicate(true)}}
 
 
 static func valid_scene_binding(binding: Dictionary) -> bool:
@@ -153,25 +184,39 @@ static func equivalent_scene_binding(left: Dictionary, right: Dictionary) -> boo
 	return json_equal(expected, actual)
 
 
-static func safe_run(run: Dictionary) -> bool:
+static func safe_run(run: Dictionary, live_encounter: bool = false) -> bool:
 	if run.is_empty() or run.get("config", {}).get("milestone") not in ["LAUNCH", "EXPANSION"] or int(run.get("phase", -1)) not in SAFE_PHASES or not run.get("floor_plan") is Dictionary or run.floor_plan.is_empty():
 		return false
-	if int(run.phase) != Phase.Value.ROOM_ACTIVE:
+	if int(run.phase) not in LIVE_PHASES:
 		return true
 	var plan: Dictionary = run.floor_plan
 	if plan.get("current_node_id") == plan.get("entry_node_id"):
 		return true
 	for node: Dictionary in plan.get("nodes", []):
 		if node.get("id") == plan.get("current_node_id"):
-			return node.get("room_type") in ["event", "shop", "treasure", "rest"]
+			return (int(run.phase) == Phase.Value.ROOM_ACTIVE and node.get("room_type") in ["event", "shop", "treasure", "rest"]) or live_encounter and node.get("room_type") in ["combat", "elite", "boss"]
 	return false
 
 
 static func inactive_room(room: Dictionary) -> bool:
+	if not valid_room(room):
+		return false
+	var runner: Dictionary = room.runner
+	return runner.active == false and runner.alive_count == 0 and runner.pending_spawn_count == 0
+
+
+static func live_room(room: Dictionary, native: Dictionary) -> bool:
+	if native.is_empty() or not valid_room(room) or not room.room_active or room.room_terminal or not room.failure.is_empty():
+		return false
+	var runner: Dictionary = room.runner
+	return runner.active == true and runner.failure.is_empty() and runner.encounter_id == native.get("definition", {}).get("id") and runner.alive_count == native.get("actors", {}).size() and runner.pending_spawn_count == 0 and runner.wave_index == native.get("encounter", {}).get("wave_index")
+
+
+static func valid_room(room: Dictionary) -> bool:
 	if not exact_fields(room, ["configured", "room_active", "room_terminal", "room_id", "room_definition", "run_seed", "event_continuation", "failure", "runner"]) or room.configured != true or not room.room_active is bool or not room.room_terminal is bool or not room.room_id is String or not room.room_definition is Dictionary or not room.event_continuation is Dictionary or not room.failure is Dictionary or not integral(room.run_seed) or not room.runner is Dictionary:
 		return false
 	var runner: Dictionary = room.runner
-	return exact_fields(runner, ["encounter_id", "wave_index", "alive_count", "pending_spawn_count", "active", "failure"]) and runner.active == false and runner.alive_count == 0 and runner.pending_spawn_count == 0 and integral(runner.wave_index) and int(runner.wave_index) >= -1 and runner.encounter_id is String and runner.failure is Dictionary
+	return exact_fields(runner, ["encounter_id", "wave_index", "alive_count", "pending_spawn_count", "active", "failure"]) and runner.active is bool and integral(runner.alive_count) and runner.alive_count >= 0 and runner.alive_count <= 8 and integral(runner.pending_spawn_count) and runner.pending_spawn_count >= 0 and runner.pending_spawn_count <= 8 and integral(runner.wave_index) and int(runner.wave_index) >= -1 and runner.encounter_id is String and runner.failure is Dictionary
 
 
 static func canonical(value: Variant) -> String:

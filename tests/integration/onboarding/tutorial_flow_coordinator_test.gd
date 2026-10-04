@@ -61,6 +61,9 @@ func _run() -> void:
 	suite.assert_true(remap.reset_action(&"dash").ok, "actual dash binding restores after remap verification")
 	_action(panel, "training:T-01").pressed.emit()
 	suite.assert_equal(_training, [[&"T-01", int(before.revision)]], "native training request forwards exact task and Profile revision")
+	suite.assert_true(_main.get_node("TrainingFlow").is_training_active(), "tutorial request opens actual Main training flow")
+	_main.get_node("TrainingFlow").close()
+	suite.assert_true(_flow.open_review("keyboard_mouse").ok, "actual training return reopens current tutorial commands")
 	panel.show_rejection("UI_TUTORIAL_RETRY")
 	_save.set_fault_injector(_inject_fault)
 	_fault = true

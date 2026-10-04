@@ -136,7 +136,7 @@ func close() -> void:
 	if is_instance_valid(_player):
 		_player.set_physics_process(false)
 		# Weapon adapters also own native payloads outside the Player subtree.
-		if not _player.reset_runtime_state():
+		if _player.is_inside_tree() and not _player.reset_runtime_state():
 			push_error("Native training Player retirement failed to clear owned payloads")
 		_player.queue_free()
 	if is_instance_valid(_boss):
