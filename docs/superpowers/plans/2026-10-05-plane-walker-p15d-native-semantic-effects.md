@@ -17,11 +17,16 @@
 - [x] Verify native competing healers charge only actual missing HP and publish one buffered Health observation.
 - [x] Preserve pending zone decisions when global or owner budgets are full; admit only after accounting for all surviving hazards.
 - [x] Extend fixed-frame controls with strongest attack/speed buffs and strongest attack debuff while preserving the default modifier contract.
+- [x] Bind actual targets before cold restoration and dispose only owned status/modifier sources on room teardown.
+- [x] Record only observed accepted-frame HP history; verify Priest native healing and source/shared caps.
+- [x] Verify Watcher death recipient penalty and independently warned finite Titan corpse explosion/pool through actual Health and threat registry.
+- [x] Provide shared-zone capacity admission and semantic work records for the coordinated Router/Encounter authority.
+- [x] Separate initial zone damage from declared recurring DOT and verify a real Guard corridor does not repeat its initial hit.
 
 ## Remaining Production Mechanics
 
 - [ ] Verify all native zone damage, strongest-only slowdown, safe owner immunity and finite TTL under the integrated Router.
-- [ ] Record only observed accepted-frame HP history and verify Priest native healing and cap expiry.
+- [ ] Verify Priest long-history expiry, regeneration affix caps and irreversible health replay together.
 - [ ] Execute final-death effects, residual pools, elemental pattern swaps and declared elite affixes.
 - [ ] Provide actual destructible sigils, walls, links, safe portals and nonreward summons through tested authorities.
 - [ ] Verify full twenty-two native enemy kits and five Boss arenas, checkpoint recovery, replay and whole-room completion.

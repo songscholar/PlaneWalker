@@ -7,7 +7,7 @@ const Geometry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const ActorScript := preload("res://scripts/enemies/launch/launch_hostile_actor.gd")
 const ZoneProjection := preload("res://scripts/enemies/launch/launch_semantic_zone_projection.gd")
 const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "heal_sources", "heal_recipients", "histories", "zones", "statuses"]
-const ZONE_FIELDS := ["id", "source_id", "action_id", "generation", "hit_index", "reserved_frame", "active_frame", "expires_frame", "geometry", "damage", "damage_type", "tick_frames", "warning_frames", "lifetime_frames", "slow_multiplier", "slow_frames", "enemy_only_freeze", "owner_immunity", "ally_damage", "owner_zone_cap", "phase"]
+const ZONE_FIELDS := ["id", "source_id", "action_id", "generation", "hit_index", "reserved_frame", "active_frame", "expires_frame", "geometry", "initial_damage", "damage", "damage_type", "tick_damage_type", "tick_frames", "warning_frames", "lifetime_frames", "slow_multiplier", "slow_frames", "enemy_only_freeze", "owner_immunity", "ally_damage", "owner_zone_cap", "phase"]
 const STATUS_FIELDS := ["id", "target_id", "expires_frame", "slow_multiplier", "speed_multiplier", "attack_multiplier", "freeze_actions"]
 const MAX_CLAIMS := 4096
 const MAX_ZONES := 12
@@ -35,6 +35,35 @@ func configure_native_root(root: Node2D) -> bool:
 	if _root != null or not _pending.is_empty() or not is_instance_valid(root) or not root.is_inside_tree() or not root.global_transform.is_equal_approx(Transform2D.IDENTITY):
 		return false
 	_root = root
+	return true
+
+
+func bind_native_targets(actors: Dictionary, targets: Dictionary) -> bool:
+	if _state.is_empty() or not _pending.is_empty() or actors.size() > 32 or targets.size() > 8:
+		return false
+	var combined := targets.duplicate()
+	for id: String in actors:
+		if combined.has(id) or not _native_actor(actors[id]) or str(actors[id].hostile_source_id) != id:
+			return false
+		combined[id] = actors[id]
+	if _observations(combined).size() != combined.size():
+		return false
+	_targets = combined
+	return true
+
+
+func dispose_native_effects() -> bool:
+	if not _pending.is_empty() or _state.is_empty():
+		return false
+	var checkpoints := _status_checkpoints(_targets)
+	if not _apply_statuses({"statuses": []}, _targets):
+		_restore_status_checkpoints(checkpoints)
+		return false
+	_state.zones = []
+	_state.statuses = []
+	_prune_native(_state)
+	_targets.clear()
+	_root = null
 	return true
 
 
@@ -89,12 +118,16 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	return false
 
 
-func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
-	if _state.is_empty() or not _pending.is_empty() or not Contract.exact_fields(context, ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]) or context.run_id != _state.run_id or not _frame(context.runtime_frame) or context.runtime_frame != int(_state.runtime_frame) + 1 or not context.actors is Dictionary or not context.targets is Dictionary or batches.size() > 32 or not _native_matches(snapshot()):
+func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: int = 0) -> Dictionary:
+	if _state.is_empty() or not _pending.is_empty() or foreign_active_zones < 0 or foreign_active_zones > MAX_ZONES or not Contract.exact_fields(context, ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]) or context.run_id != _state.run_id or not _frame(context.runtime_frame) or context.runtime_frame != int(_state.runtime_frame) + 1 or not context.actors is Dictionary or not context.targets is Dictionary or batches.size() > 32 or not _native_matches(snapshot()):
 		return _failure("context_or_projection")
 	var before := snapshot()
 	var next := snapshot()
 	next.runtime_frame = context.runtime_frame
+	next.zones = next.zones.filter(func(row: Dictionary): return row.phase == "PENDING" or row.expires_frame >= next.runtime_frame)
+	var zone_capacity := MAX_ZONES - foreign_active_zones
+	if _active_zone_count(next) > zone_capacity:
+		return _failure("shared_zone_budget")
 	var targets: Dictionary = context.targets.duplicate()
 	for id: String in context.actors:
 		if not _native_actor(context.actors[id]) or str(context.actors[id].hostile_source_id) != id:
@@ -138,7 +171,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 					if not healing.request.is_empty():
 						health_requests.append(healing.request)
 				"zone":
-					if not _reserve_zones(next, request, definition, action):
+					if not _reserve_zones(next, request, definition, action, zone_capacity, _zone_attack_multiplier(wrapper.batch, action)):
 						return _failure("zone_reservation")
 				_: return _failure("unimplemented_semantic_handler")
 		for hit: Dictionary in wrapper.batch.hit_facts:
@@ -159,10 +192,18 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 					if amount > 0.0 and not health.dead:
 						health_requests.append(_health_request(request, wrapper.hostile_source_id, amount, "restore_hp" if request.kind == "restore_hp" else "heal"))
 				"warned_explosion":
-					if not _reserve_explosion(next, request):
+					if not _reserve_explosion(next, request, zone_capacity):
 						return _failure("warned_explosion")
 				_: return _failure("unimplemented_semantic_mechanism")
-	_advance_zones(next, targets, context.actors, damages)
+		if not _prepare_terminal_effects(next, actor, definition, context.actors, zone_capacity):
+			return _failure("terminal_semantics")
+	var terminal_ids: Array = context.actors.keys()
+	terminal_ids.sort()
+	for id: String in terminal_ids:
+		var actor: Node2D = context.actors[id]
+		if bool(actor.launch_runtime_snapshot().runtime.terminal) and not _prepare_terminal_effects(next, actor, actor.get("_launch_definition"), context.actors, zone_capacity):
+			return _failure("finalized_terminal_semantics")
+	_advance_zones(next, targets, context.actors, damages, zone_capacity)
 	if not can_restore_transaction_snapshot(next) or (not next.zones.is_empty() and not _root_ready()):
 		return _failure("candidate_state_or_root")
 	var ticket := {"ticket_id": _next_ticket, "before": before, "after": next, "targets": targets, "observations": observations, "status_before": _status_checkpoints(targets)}
@@ -228,6 +269,17 @@ func threat_facts_for_snapshot(value: Dictionary) -> Array[Dictionary]:
 	return result
 
 
+func work_records_for_snapshot(value: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for row: Dictionary in value.get("zones", []):
+		result[row.id] = {"kind": "zone", "owner_source_id": row.source_id, "phase": "PENDING" if row.phase == "PENDING" else "ACTIVE"}
+	return result
+
+
+static func active_zone_count_for_snapshot(value: Dictionary, frame: int) -> int:
+	return value.get("zones", []).filter(func(row: Dictionary): return row.phase != "PENDING" and int(row.expires_frame) >= frame).size()
+
+
 func _prepare_heal(next: Dictionary, request: Dictionary, definition: Dictionary, actors: Dictionary, pending_heals: Dictionary) -> Dictionary:
 	var source: Node2D = actors[request.hostile_source_id]
 	var source_health: Node = source.get_node("HealthComponent")
@@ -274,7 +326,7 @@ func _prepare_heal(next: Dictionary, request: Dictionary, definition: Dictionary
 	return {"ok": true, "request": {}}
 
 
-func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionary, action: Dictionary) -> bool:
+func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionary, action: Dictionary, capacity: int, attack_multiplier: float) -> bool:
 	if next.zones.size() + request.geometry.size() > MAX_RESERVATIONS:
 		return false
 	if definition.runtime_kind == "rift_weaver" and request.action_id.ends_with(".rift_fusion"):
@@ -288,11 +340,22 @@ func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionar
 		var fact: Dictionary = request.geometry[index]
 		var damaging: Dictionary = action.hit_schedule[mini(index, action.hit_schedule.size() - 1)] if not action.hit_schedule.is_empty() else {"damage": 0.0, "damage_type": "time"}
 		var row := _zone(request, fact, index, float(damaging.damage), str(damaging.damage_type), 0, int(request.parameters.lifetime_frames), int(request.parameters.tick_interval_frames), float(request.parameters.slow_multiplier), int(request.parameters.slow_duration_frames))
+		row.initial_damage *= attack_multiplier
+		if definition.actor_kind != "boss":
+			row.damage = 0.0
+			if request.action_id in ["bramble_mage.bramble_growth", "rift_weaver.rift_fusion", "chrono_storm_elemental.time_storm", "forge_titan.flame_breath"]:
+				row.damage = float(damaging.damage)
+			elif request.action_id == "forge_titan.ground_fissure":
+				row.damage = float(definition.mechanisms.corpse_pool_damage) * (1.25 if definition.actor_kind == "elite" else 1.0)
+			elif request.action_id == "chaos_amalgam.chaos_outburst":
+				row.damage = float(definition.mechanisms.elite_burn_damage) * 1.25
+				row.tick_damage_type = "fire"
+		row.damage *= attack_multiplier
 		row.owner_zone_cap = cap
 		row.owner_immunity = definition.runtime_kind == "bramble_mage"
 		row.ally_damage = definition.runtime_kind == "bramble_mage"
 		row.enemy_only_freeze = request.action_id.ends_with(".time_stasis")
-		if _active_zone_count(next) >= MAX_ZONES or owned >= cap:
+		if _active_zone_count(next) >= capacity or owned >= cap:
 			row.warning_frames = int(action.warning_frames)
 			_make_pending(row)
 		else:
@@ -301,20 +364,80 @@ func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionar
 	return true
 
 
-func _reserve_explosion(next: Dictionary, request: Dictionary) -> bool:
+func _reserve_explosion(next: Dictionary, request: Dictionary, capacity: int) -> bool:
 	if next.zones.size() >= MAX_RESERVATIONS or not Contract.valid_point(request.get("position")) or not request.get("parameters") is Dictionary or not Contract.exact_fields(request.parameters, ["warning_frames", "damage", "radius"]) or not Contract.integer_in_range(request.parameters.warning_frames, 23, 600) or not Contract.number_in_range(request.parameters.damage, 0.0, 600.0) or not Contract.number_in_range(request.parameters.radius, 1.0, 320.0):
 		return false
 	var fact := {"hostile_source_id": request.hostile_source_id, "attack_generation": request.attack_generation, "shape": "circle", "origin": request.position.duplicate(true), "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": request.position.duplicate(true), "summon_slots": [], "radius": float(request.parameters.radius), "length": 0.0, "active_from_frame": next.runtime_frame, "active_through_frame": int(next.runtime_frame) + int(request.parameters.warning_frames)}
 	var source := request.duplicate(true)
 	source["action_id"] = "forge_titan.overheat_explosion"
 	var row := _zone(source, fact, 0, float(request.parameters.damage), "fire", int(request.parameters.warning_frames), 1, 1, 1.0, 0)
-	if _active_zone_count(next) >= MAX_ZONES:
+	if _active_zone_count(next) >= capacity:
 		_make_pending(row)
 	next.zones.append(row)
 	return true
 
 
-func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, damages: Array[Dictionary]) -> void:
+func _prepare_terminal_effects(next: Dictionary, actor: Node2D, definition: Dictionary, actors: Dictionary, capacity: int) -> bool:
+	var prepared: Dictionary = actor.get("_prepared_launch_frame")
+	var source: String = str(actor.hostile_source_id)
+	if prepared.is_empty():
+		var current: Dictionary = actor.launch_runtime_snapshot()
+		var receipt := "hostile_defeat:%s" % (str(next.run_id) + "|" + source).sha256_text().substr(0, 40)
+		if not bool(current.runtime.terminal) or not bool(current.health.dead) or current.death_receipt != receipt:
+			return true
+	elif not bool(prepared.after.runtime.terminal):
+		return true
+	var claim := JSON.stringify([source, "terminal"]).sha256_text()
+	if next.claims.has(claim):
+		return true
+	if next.claims.size() >= MAX_CLAIMS:
+		return false
+	next.claims.append(claim)
+	if definition.actor_kind == "boss":
+		var owned: Array = next.zones.filter(func(row: Dictionary): return row.source_id == source)
+		var ids: Dictionary = {}
+		for row: Dictionary in owned:
+			for target_id: String in actors:
+				ids[_id([row.id, target_id, "status"])] = true
+			ids[_id([row.id, "player:1", "status"])] = true
+		next.zones = next.zones.filter(func(row: Dictionary): return row.source_id != source)
+		next.statuses = next.statuses.filter(func(row: Dictionary): return not ids.has(row.id))
+		return true
+	var mechanisms: Dictionary = definition.mechanisms
+	if definition.runtime_kind == "rift_watcher":
+		var recipients: Array = next.heal_sources.get(source, {}).keys()
+		recipients.sort()
+		for id: String in recipients:
+			if actors.has(id) and not actors[id].get_node("HealthComponent").dead:
+				_upsert_status(next, {"id": _id([source, id, "watcher_death"]), "target_id": id, "expires_frame": int(next.runtime_frame) + int(mechanisms.death_debuff_frames), "slow_multiplier": 1.0, "speed_multiplier": 1.0, "attack_multiplier": float(mechanisms.death_attack_multiplier), "freeze_actions": false})
+		return true
+	var position := _predicted_position(actor, int(next.runtime_frame))
+	match definition.runtime_kind:
+		"chrono_storm_elemental":
+			return _reserve_terminal_zone(next, source, definition.id, "death_pulse", position, float(mechanisms.pattern_radius_px), int(mechanisms.death_warning_frames), 1, 0.0, "time", float(mechanisms.death_slow_multiplier), int(mechanisms.death_slow_frames), capacity)
+		"forge_titan":
+			if not _reserve_terminal_zone(next, source, definition.id, "corpse_explosion", position, float(mechanisms.explosion_radius_px), int(mechanisms.corpse_explosion_warning_frames), 1, float(mechanisms.explosion_damage), "fire", 1.0, 0, capacity):
+				return false
+			return _reserve_terminal_zone(next, source, definition.id, "corpse_pool", position, float(mechanisms.corpse_pool_radius_px), int(mechanisms.corpse_explosion_warning_frames) + 1, int(mechanisms.pool_lifetime_frames), float(mechanisms.corpse_pool_damage), "fire", 1.0, 0, capacity, int(mechanisms.corpse_pool_tick_frames))
+		"void_spore":
+			return _reserve_terminal_zone(next, source, definition.id, "residual", position, float(mechanisms.residual_radius_px), int(mechanisms.chain_warning_frames), int(mechanisms.residual_lifetime_frames), float(mechanisms.residual_tick_damage), "void", float(mechanisms.residual_slow_multiplier), int(mechanisms.residual_tick_frames), capacity, int(mechanisms.residual_tick_frames))
+	return true
+
+
+func _reserve_terminal_zone(next: Dictionary, source: String, species: String, suffix: String, position: Vector2, radius: float, warning: int, lifetime: int, damage: float, damage_type: String, slow: float, slow_frames: int, capacity: int, tick_frames: int = 60) -> bool:
+	if next.zones.size() >= MAX_RESERVATIONS:
+		return false
+	var point := {"x": position.x, "y": position.y}
+	var request := {"hostile_source_id": source, "attack_generation": 1, "action_id": "%s.%s" % [species, suffix], "runtime_frame": int(next.runtime_frame)}
+	var geometry := {"hostile_source_id": source, "attack_generation": 1, "shape": "circle", "origin": point, "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": point, "summon_slots": [], "radius": radius, "length": 0.0, "active_from_frame": int(next.runtime_frame), "active_through_frame": int(next.runtime_frame) + warning + lifetime - 1}
+	var row := _zone(request, geometry, 0, damage, damage_type, warning, lifetime, tick_frames, slow, slow_frames)
+	if _active_zone_count(next) >= capacity:
+		_make_pending(row)
+	next.zones.append(row)
+	return true
+
+
+func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, damages: Array[Dictionary], capacity: int) -> void:
 	next.statuses = next.statuses.filter(func(row: Dictionary): return row.expires_frame >= next.runtime_frame)
 	var retained: Array = next.zones.filter(func(row: Dictionary): return row.phase == "PENDING" or int(next.runtime_frame) <= int(row.expires_frame))
 	var active := 0
@@ -325,7 +448,7 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 			owners[row.source_id] = int(owners.get(row.source_id, 0)) + 1
 	# Existing visible hazards reserve capacity before any delayed decision is admitted.
 	for row: Dictionary in retained:
-		if row.phase == "PENDING" and active < MAX_ZONES and int(owners.get(row.source_id, 0)) < int(row.owner_zone_cap):
+		if row.phase == "PENDING" and active < capacity and int(owners.get(row.source_id, 0)) < int(row.owner_zone_cap):
 			row.active_frame = int(next.runtime_frame) + int(row.warning_frames)
 			row.expires_frame = int(row.active_frame) + int(row.lifetime_frames) - 1
 			row.phase = "WARNING" if row.warning_frames > 0 else "ACTIVE"
@@ -342,15 +465,17 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 					var health: Node = target.get_node("HealthComponent")
 					if health.dead or (id == row.source_id and row.owner_immunity) or (actors.has(id) and not row.ally_damage and not row.enemy_only_freeze) or not _contains(row.geometry, _predicted_position(target, next.runtime_frame)):
 						continue
-					if tick and row.damage > 0.0 and (not row.enemy_only_freeze or not actors.has(id)):
-						damages.append({"payload_id": row.id, "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": (int(next.runtime_frame) - int(row.active_frame)) / int(row.tick_frames), "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": float(row.damage), "damage_type": row.damage_type})
+					var initial: bool = int(next.runtime_frame) == int(row.active_frame)
+					var damage: float = float(row.initial_damage) if initial else float(row.damage)
+					if tick and damage > 0.0 and (not row.enemy_only_freeze or not actors.has(id)):
+						damages.append({"payload_id": row.id, "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": (int(next.runtime_frame) - int(row.active_frame)) / int(row.tick_frames), "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": damage, "damage_type": row.damage_type if initial else row.tick_damage_type})
 					if row.slow_multiplier < 1.0 or row.enemy_only_freeze:
 						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + maxi(1, int(row.slow_frames)), "slow_multiplier": float(row.slow_multiplier), "speed_multiplier": 1.0, "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
 	next.zones = retained
 
 
 func _zone(request: Dictionary, geometry: Dictionary, index: int, damage: float, damage_type: String, warning: int, lifetime: int, tick: int, slow: float, slow_frames: int) -> Dictionary:
-	return {"id": _id([request.hostile_source_id, request.attack_generation, request.action_id, index]), "source_id": request.hostile_source_id, "action_id": request.action_id, "generation": int(request.attack_generation), "hit_index": index, "reserved_frame": int(request.runtime_frame), "active_frame": int(request.runtime_frame) + warning, "expires_frame": int(request.runtime_frame) + warning + lifetime - 1, "geometry": geometry.duplicate(true), "damage": damage, "damage_type": damage_type, "tick_frames": tick, "warning_frames": warning, "lifetime_frames": lifetime, "slow_multiplier": slow, "slow_frames": slow_frames, "enemy_only_freeze": false, "owner_immunity": false, "ally_damage": false, "owner_zone_cap": MAX_ZONES, "phase": "WARNING" if warning > 0 else "ACTIVE"}
+	return {"id": _id([request.hostile_source_id, request.attack_generation, request.action_id, index]), "source_id": request.hostile_source_id, "action_id": request.action_id, "generation": int(request.attack_generation), "hit_index": index, "reserved_frame": int(request.runtime_frame), "active_frame": int(request.runtime_frame) + warning, "expires_frame": int(request.runtime_frame) + warning + lifetime - 1, "geometry": geometry.duplicate(true), "initial_damage": damage, "damage": damage, "damage_type": damage_type, "tick_damage_type": damage_type, "tick_frames": tick, "warning_frames": warning, "lifetime_frames": lifetime, "slow_multiplier": slow, "slow_frames": slow_frames, "enemy_only_freeze": false, "owner_immunity": false, "ally_damage": false, "owner_zone_cap": MAX_ZONES, "phase": "WARNING" if warning > 0 else "ACTIVE"}
 
 
 func _apply_statuses(value: Dictionary, targets: Dictionary) -> bool:
@@ -483,15 +608,13 @@ func _observations_match(records: Dictionary, frame: int) -> bool:
 
 
 func _record_histories(next: Dictionary, actors: Dictionary) -> void:
+	for history: Dictionary in next.histories.values():
+		history.frames = history.frames.filter(func(row: Dictionary): return row.frame > int(next.runtime_frame) - 180)
 	for id: String in actors:
 		var health: Node = actors[id].get_node("HealthComponent")
 		if health.dead:
 			continue
 		var history: Dictionary = next.histories.get(id, {"max_hp": float(health.max_hp), "frames": []})
-		if history.frames.is_empty():
-			var initial: int = int(actors[id].launch_runtime_snapshot().runtime.identity.runtime_frame)
-			if initial >= int(next.runtime_frame) - 180:
-				history.frames.append({"frame": initial, "hp": float(health.max_hp)})
 		history.frames.append({"frame": int(next.runtime_frame), "hp": float(health.current_hp)})
 		history.frames = history.frames.filter(func(row: Dictionary): return row.frame > int(next.runtime_frame) - 180)
 		next.histories[id] = history
@@ -521,7 +644,7 @@ static func _upsert_status(next: Dictionary, value: Dictionary) -> void:
 static func _valid_zone(row: Dictionary, frame: int) -> bool:
 	if not Contract.exact_fields(row, ZONE_FIELDS) or not _stable(row.id) or not _stable(row.source_id) or not Contract.valid_id(row.action_id) or not Contract.integer_in_range(row.generation, 1, MAX_FRAME) or not Contract.integer_in_range(row.hit_index, 0, 63) or not _frame(row.reserved_frame) or row.reserved_frame > frame or row.phase not in ["PENDING", "WARNING", "ACTIVE"] or not row.geometry is Dictionary or Actions.native_threat_fact(row.geometry).is_empty():
 		return false
-	if not Contract.number_in_range(row.damage, 0.0, 600.0) or row.damage_type not in Contract.DAMAGE_TYPES or not Contract.integer_in_range(row.tick_frames, 1, 600) or not Contract.integer_in_range(row.warning_frames, 0, 600) or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.number_in_range(row.slow_multiplier, 0.4, 1.0) or not Contract.integer_in_range(row.slow_frames, 0, 600) or not Contract.integer_in_range(row.owner_zone_cap, 1, MAX_ZONES) or typeof(row.owner_immunity) != TYPE_BOOL or typeof(row.enemy_only_freeze) != TYPE_BOOL or typeof(row.ally_damage) != TYPE_BOOL:
+	if not Contract.number_in_range(row.initial_damage, 0.0, 600.0) or not Contract.number_in_range(row.damage, 0.0, 600.0) or row.damage_type not in Contract.DAMAGE_TYPES or row.tick_damage_type not in Contract.DAMAGE_TYPES or not Contract.integer_in_range(row.tick_frames, 1, 600) or not Contract.integer_in_range(row.warning_frames, 0, 600) or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.number_in_range(row.slow_multiplier, 0.4, 1.0) or not Contract.integer_in_range(row.slow_frames, 0, 600) or not Contract.integer_in_range(row.owner_zone_cap, 1, MAX_ZONES) or typeof(row.owner_immunity) != TYPE_BOOL or typeof(row.enemy_only_freeze) != TYPE_BOOL or typeof(row.ally_damage) != TYPE_BOOL:
 		return false
 	if row.phase == "PENDING":
 		return row.active_frame == -1 and row.expires_frame == -1
@@ -552,7 +675,7 @@ static func _valid_histories(histories: Variant, frame: int) -> bool:
 			return false
 		var previous := -1
 		for row: Variant in history.frames:
-			if not row is Dictionary or not Contract.exact_fields(row, ["frame", "hp"]) or not _frame(row.frame) or row.frame <= previous or row.frame > frame or not Contract.number_in_range(row.hp, 0.0, history.max_hp):
+			if not row is Dictionary or not Contract.exact_fields(row, ["frame", "hp"]) or not _frame(row.frame) or row.frame <= previous or row.frame <= frame - 180 or row.frame > frame or not Contract.number_in_range(row.hp, 0.0, history.max_hp):
 				return false
 			previous = row.frame
 	return true
@@ -574,6 +697,15 @@ static func _action(definition: Dictionary, action_id: String) -> Dictionary:
 		if action.id == action_id:
 			return action
 	return {}
+
+
+static func _zone_attack_multiplier(batch: Dictionary, action: Dictionary) -> float:
+	for fact: Dictionary in batch.hit_facts:
+		if fact.handler_id == "zone" and fact.action_id == action.id:
+			for hit: Dictionary in action.hit_schedule:
+				if hit.hit_index == fact.hit_index and float(hit.damage) > 0.0:
+					return float(fact.damage) / float(hit.damage)
+	return 1.0
 
 
 static func _active_zone_count(value: Dictionary) -> int:

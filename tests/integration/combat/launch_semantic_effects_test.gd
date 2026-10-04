@@ -24,6 +24,9 @@ func _run() -> void:
 		await _test_native_heal(implementation)
 		await _test_zone_budget(implementation)
 		await _test_simultaneous_native_heal()
+		await _test_native_priest_history()
+		await _test_native_terminal_hazards()
+		await _test_native_status_disposal(implementation)
 	suite.finish(get_tree())
 
 
@@ -158,7 +161,7 @@ func _test_zone_budget(implementation: Script) -> void:
 
 
 func _zone_record(id: String, source: String, pending: bool, lifetime: int, cap: int) -> Dictionary:
-	return {"id": id, "source_id": source, "action_id": "rift_weaver.rift_make", "generation": 1, "hit_index": 0, "reserved_frame": 0, "active_frame": -1 if pending else 0, "expires_frame": -1 if pending else lifetime, "geometry": {"hostile_source_id": source, "attack_generation": 1, "shape": "circle", "origin": {"x": 120.0, "y": 100.0}, "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": {"x": 120.0, "y": 100.0}, "summon_slots": [], "radius": 19.0, "length": 0.0, "active_from_frame": 0, "active_through_frame": 100}, "damage": 8.0, "damage_type": "void", "tick_frames": 60, "warning_frames": 0, "lifetime_frames": lifetime if pending else lifetime + 1, "slow_multiplier": 0.6, "slow_frames": 60, "enemy_only_freeze": false, "owner_immunity": false, "ally_damage": false, "owner_zone_cap": cap, "phase": "PENDING" if pending else "ACTIVE"}
+	return {"id": id, "source_id": source, "action_id": "rift_weaver.rift_make", "generation": 1, "hit_index": 0, "reserved_frame": 0, "active_frame": -1 if pending else 0, "expires_frame": -1 if pending else lifetime, "geometry": {"hostile_source_id": source, "attack_generation": 1, "shape": "circle", "origin": {"x": 120.0, "y": 100.0}, "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": {"x": 120.0, "y": 100.0}, "summon_slots": [], "radius": 19.0, "length": 0.0, "active_from_frame": 0, "active_through_frame": 100}, "initial_damage": 8.0, "damage": 8.0, "damage_type": "void", "tick_damage_type": "void", "tick_frames": 60, "warning_frames": 0, "lifetime_frames": lifetime if pending else lifetime + 1, "slow_multiplier": 0.6, "slow_frames": 60, "enemy_only_freeze": false, "owner_immunity": false, "ally_damage": false, "owner_zone_cap": cap, "phase": "PENDING" if pending else "ACTIVE"}
 
 
 func _test_simultaneous_native_heal() -> void:
@@ -212,7 +215,146 @@ func _test_simultaneous_native_heal() -> void:
 	var semantic: Dictionary = effects.semantic_snapshot()
 	suite.assert_equal(semantic.heal_recipients.get("hostile:healed", 0.0), 3.0, "shared healing budget charges actual same-frame gain")
 	suite.assert_equal(semantic.heal_sources.get("hostile:healer-b", {}), {}, "later healer retains unused encounter budget")
+	_injure(first, 1000.0, 2)
+	suite.assert_true(_native_step(effects, actors, 31, registry), "support final death commits actual native lifecycle")
+	suite.assert_equal(recipient.get("_launch_runtime").control_modifiers().get("attack_multiplier", 1.0), 0.8, "Watcher final death debuffs its actual healed recipient")
+	suite.assert_equal(second.get("_launch_runtime").control_modifiers().get("attack_multiplier", 1.0), 1.0, "Watcher death does not debuff an unrelated support")
 	for actor: Node2D in actors.values():
 		actor.queue_free()
 	root.queue_free()
+	await get_tree().process_frame
+
+
+func _test_native_priest_history() -> void:
+	for observed_full_hp: bool in [false, true]:
+		var priest := _actor("rewind_priest", "hostile:priest")
+		var recipient := _actor("shattered_sentinel", "hostile:history")
+		recipient.apply_time_stop_source(&"history-fixture-stop", 20.0)
+		priest.get("_launch_runtime").request_action("rewind_priest.rewind_heal", Fixtures.context())
+		var root := Node2D.new()
+		add_child(root)
+		var effects := Effects.new()
+		effects.configure("run-p15", 0)
+		effects.configure_native_payloads(root)
+		var registry := Registry.new()
+		var actors := {"hostile:history": recipient, "hostile:priest": priest}
+		if not observed_full_hp:
+			_injure(recipient, 50.0, 1)
+		for frame: int in range(1, 46):
+			suite.assert_true(_native_step(effects, actors, frame, registry), "Priest native history accepts sequential observed frames")
+			if observed_full_hp and frame == 1:
+				_injure(recipient, 50.0, 1)
+		var health: Node = recipient.get_node("HealthComponent")
+		suite.assert_equal(health.current_hp, 54.0 if observed_full_hp else 30.0, "Priest healing uses observed historical HP and thirty percent recipient bound")
+		var semantic: Dictionary = effects.semantic_snapshot()
+		suite.assert_equal(semantic.heal_recipients.get("hostile:history", 0.0), 24.0 if observed_full_hp else 0.0, "Priest never fabricates a pre-observation maximum HP history")
+		for actor: Node2D in actors.values():
+			actor.queue_free()
+		root.queue_free()
+		await get_tree().process_frame
+
+
+func _injure(actor: Node2D, amount: float, generation: int) -> void:
+	actor.get_node("HealthComponent").take_damage(Damage.from_plan({"run_id": "run-p15", "target_id": str(actor.hostile_source_id), "hostile_source_id": "player:1", "attack_generation": generation, "action_token": generation, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:bow"], "can_crit": false}))
+
+
+func _native_step(effects: RefCounted, actors: Dictionary, frame: int, registry: RefCounted, targets: Dictionary = {}) -> bool:
+	var pairs: Array[Dictionary] = []
+	var batches: Array[Dictionary] = []
+	for id: String in actors:
+		var actor: Node2D = actors[id]
+		if actor.launch_runtime_snapshot().runtime.terminal:
+			continue
+		var observation := Fixtures.context(frame)
+		observation.source_position = {"x": actor.global_position.x, "y": actor.global_position.y}
+		var prepared: Dictionary = actor.prepare_launch_frame(frame, observation)
+		if not prepared.ok:
+			return false
+		pairs.append({"actor": actor, "ticket": prepared.ticket})
+		batches.append({"hostile_source_id": id, "batch": prepared.batch})
+	var prepared: Dictionary = effects.prepare_effects(batches, {"run_id": "run-p15", "runtime_frame": frame, "threat_registry": registry, "actors": actors, "targets": targets})
+	if not prepared.ok:
+		for pair: Dictionary in pairs:
+			pair.actor.rollback_launch_frame(pair.ticket)
+		return false
+	for pair: Dictionary in pairs:
+		if not pair.actor.commit_launch_frame(pair.ticket):
+			return false
+	if not effects.commit_effects(prepared.ticket).ok:
+		return false
+	for pair: Dictionary in pairs:
+		if not pair.actor.publish_launch_frame(pair.ticket):
+			return false
+	return effects.publish_effects(prepared.ticket)
+
+
+func _test_native_terminal_hazards() -> void:
+	var titan := _actor("forge_titan", "hostile:titan")
+	var player: Node2D = PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	player.get_node("TimeManager").set_process(false)
+	player.get_node("RewindRecorder").set_process(false)
+	player.configure_run(&"run-p15")
+	player.global_position = Vector2(120, 100)
+	var health: Node = player.get_node("HealthComponent")
+	health.max_hp = 1000.0
+	health.current_hp = 1000.0
+	var root := Node2D.new()
+	add_child(root)
+	var effects := Effects.new()
+	effects.configure("run-p15", 0)
+	effects.configure_native_payloads(root)
+	var registry := Registry.new()
+	var actors := {"hostile:titan": titan}
+	_injure(titan, 1000.0, 1)
+	suite.assert_true(titan.get_node("HealthComponent").dead, "corpse fixture is a real final native death")
+	for frame: int in range(1, 243):
+		if not _native_step(effects, actors, frame, registry, {"player:1": player}):
+			suite.assert_true(false, "corpse hazard accepts every finite native frame %d" % frame)
+			break
+		if frame == 1:
+			suite.assert_equal(effects.native_semantic_nodes().size(), 2, "final Titan death retains warned explosion and finite native pool")
+			suite.assert_equal(registry.snapshot().size(), 2, "death hazard warning uses independent native source generations")
+		if frame == 60:
+			suite.assert_equal(health.current_hp, 1000.0, "corpse explosion completes sixty continuous warning frames")
+		if frame == 61:
+			suite.assert_equal(health.current_hp, 960.0, "native corpse explosion applies forty damage once")
+		if frame == 62:
+			suite.assert_equal(health.current_hp, 952.0, "native corpse pool starts after explosion with separate warning")
+	suite.assert_equal(health.current_hp, 936.0, "finite corpse pool applies exactly three authored sixty-frame ticks")
+	suite.assert_equal(effects.semantic_snapshot().zones, [], "terminal work expires instead of holding the room indefinitely")
+	suite.assert_equal(effects.native_semantic_nodes(), [], "expired corpse effects release native projections")
+	suite.assert_equal(registry.snapshot(), [], "expired terminal effects retire native threat facts")
+	titan.queue_free()
+	player.queue_free()
+	root.queue_free()
+	await get_tree().process_frame
+
+
+func _test_native_status_disposal(implementation: Script) -> void:
+	var actor := _actor("shattered_sentinel", "hostile:status")
+	actor.get("_launch_runtime").add_control_source("outside_buff", "attack_buff", 60, 1.15)
+	var player: Node2D = PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	player.get_node("TimeManager").set_process(false)
+	player.get_node("RewindRecorder").set_process(false)
+	player.configure_run(&"run-p15")
+	player.apply_floor_rule_modifier(&"outside_rule", &"movement", &"apply", {"movement_multiplier": 0.8})
+	var authority: RefCounted = implementation.new()
+	authority.configure("run-p15")
+	suite.assert_true(authority.bind_native_targets({"hostile:status": actor}, {"player:1": player}), "cold semantic projection binds actual actor and Player before restore")
+	var state: Dictionary = authority.snapshot()
+	state.statuses = [{"id": "player_status", "target_id": "player:1", "expires_frame": 60, "slow_multiplier": 0.6, "speed_multiplier": 1.0, "attack_multiplier": 1.0, "freeze_actions": false}, {"id": "actor_status", "target_id": "hostile:status", "expires_frame": 60, "slow_multiplier": 1.0, "speed_multiplier": 1.0, "attack_multiplier": 0.8, "freeze_actions": false}]
+	suite.assert_true(authority.restore_transaction_snapshot(state), "cold semantic checkpoint projects actual status modifiers")
+	suite.assert_close(actor.get("_launch_runtime").control_modifiers().get("attack_multiplier", 1.0), 0.92, "native restored penalty combines once with unrelated strongest buff")
+	suite.assert_true(player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "native restored slow owns its exact Player modifier source")
+	suite.assert_true(authority.dispose_native_effects(), "room teardown disposes native semantic effect ownership")
+	suite.assert_equal(actor.get("_launch_runtime").control_modifiers().get("attack_multiplier", 1.0), 1.15, "room disposal preserves unrelated native attack buff")
+	suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "room disposal cannot leave persistent Player slowdown")
+	suite.assert_true(player.floor_rule_effect_snapshot().modifiers.has("outside_rule|movement"), "room disposal preserves unrelated floor-rule modifier")
+	suite.assert_equal(authority.snapshot().statuses, [], "room disposal clears authoritative finite statuses")
+	actor.queue_free()
+	player.queue_free()
 	await get_tree().process_frame
