@@ -42,6 +42,6 @@
 
 ## Task 3: Native Semantic Assembly
 
-- [ ] Create a separate semantic authority using existing sealed Actor batches, bounded payload budgets and prepare/commit/rollback/publish API.
-- [ ] Coordinate shared router changes with its owner, including typed heal/restore requests and authenticated lethal Health hooks.
+- [x] Create a separate semantic authority using existing sealed Actor batches, bounded payload budgets and prepare/commit/rollback/publish API; see the P15D plan.
+- [x] Coordinate shared router changes with its owner, including typed heal/restore requests and authenticated lethal Health hooks.
 - [ ] Verify actual native Health, collision, summons, zones, constructs, links and portals before counting these as production completion.

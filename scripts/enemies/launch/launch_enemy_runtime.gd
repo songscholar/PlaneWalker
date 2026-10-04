@@ -201,7 +201,7 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 				result.phase = requested.phase
 	result["action_paused"] = controls.action_paused
 	result["movement_multiplier"] = controls.movement_multiplier
-	var attack_multiplier := species_attack_multiplier()
+	var attack_multiplier := species_attack_multiplier() * float(controls.get("attack_multiplier", 1.0))
 	if attack_multiplier != 1.0:
 		for hit: Dictionary in result.hit_facts:
 			hit.damage *= attack_multiplier

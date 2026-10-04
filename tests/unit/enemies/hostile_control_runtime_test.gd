@@ -15,6 +15,7 @@ func _run() -> void:
 	if implementation != null:
 		_test_source_lifetimes(implementation)
 		_test_strict_restore_and_terminal_frames(implementation)
+		_test_support_modifiers(implementation)
 	suite.finish(get_tree())
 
 
@@ -79,3 +80,29 @@ func _test_strict_restore_and_terminal_frames(implementation: Script) -> void:
 	suite.assert_true(not runtime.advance_frame(3).ok, "terminal frame rejects")
 	suite.assert_true(not runtime.add_source("late", "stop", 1, 1.0), "terminal source insertion rejects")
 	suite.assert_equal(runtime.snapshot(), terminal, "terminal rejection preserves state")
+
+
+func _test_support_modifiers(implementation: Script) -> void:
+	var runtime := _configured(implementation)
+	suite.assert_true(runtime.add_source("link:a", "attack_buff", 3, 1.15), "link attack buff installs")
+	suite.assert_true(runtime.add_source("link:b", "attack_buff", 3, 1.15), "second link attack buff installs")
+	suite.assert_true(runtime.add_source("priest", "attack_buff", 2, 1.25), "priest strongest buff installs")
+	suite.assert_true(runtime.add_source("watcher", "attack_debuff", 1, 0.80), "Watcher death attack debuff installs")
+	suite.assert_true(runtime.add_source("fast:a", "speed_buff", 3, 1.10), "link speed buff installs")
+	suite.assert_true(runtime.add_source("fast:b", "speed_buff", 2, 1.25), "storm strongest speed installs")
+	runtime.add_source("slow", "rift", 1, 0.60)
+	for kind: String in ["attack_buff", "speed_buff"]:
+		suite.assert_true(not runtime.add_source("invalid:" + kind, kind, 3, 1.26), "support buff upper bound rejects")
+	suite.assert_true(not runtime.add_source("invalid:debuff", "attack_debuff", 3, 0.79), "death debuff lower bound rejects")
+	var frame: Dictionary = runtime.advance_frame(1)
+	suite.assert_equal(frame.attack_multiplier, 1.0, "strongest buff and strongest debuff multiply once")
+	suite.assert_equal(frame.movement_multiplier, 0.75, "strongest speed and strongest slow multiply once")
+	var restored := _configured(implementation)
+	suite.assert_true(restored.restore_snapshot(runtime.snapshot()), "support controls restore strict bounded state")
+	suite.assert_equal(restored.advance_frame(2), runtime.advance_frame(2), "restored support expiry matches")
+	suite.assert_equal(runtime.modifiers().attack_multiplier, 1.25, "expired Watcher penalty leaves strongest priest buff")
+	runtime.advance_frame(3)
+	suite.assert_equal(runtime.modifiers().attack_multiplier, 1.15, "overlapping equal links do not compound")
+	suite.assert_equal(runtime.modifiers().movement_multiplier, 1.10, "overlapping speed uses strongest remaining link")
+	runtime.advance_frame(4)
+	suite.assert_equal(runtime.modifiers(), {"action_paused": false, "movement_multiplier": 1.0, "weakpoint_bonus": 0.0, "damage_taken_multiplier": 1.0}, "support expiry preserves original default modifier contract")

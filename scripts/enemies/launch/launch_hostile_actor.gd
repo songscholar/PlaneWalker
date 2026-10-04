@@ -147,7 +147,8 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var motion: Dictionary = preview.motion_for_frame(frame, observations)
 	if not motion.ok:
 		return motion
-	var displacement := _vector(motion.displacement) * float(status_preview.slow_multiplier())
+	var relocation: bool = bool(motion.get("relocation", false))
+	var displacement := _vector(motion.displacement) * (1.0 if relocation else float(status_preview.slow_multiplier()))
 	if lethal_pending or externally_paused or motion.action_paused:
 		displacement = Vector2.ZERO
 	else:
@@ -157,7 +158,13 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var predicted := global_position
 	var collision_target: Node2D
 	if not displacement.is_zero_approx():
-		if not _room_motion.is_empty() and bool(_launch_definition.mechanisms.get("internal_obstacle_passthrough", false)):
+		if relocation:
+			var destination := global_position + displacement
+			var arrival_transform := global_transform
+			arrival_transform.origin = destination
+			if not test_move(arrival_transform, Vector2.ZERO, null, 0.08, true):
+				predicted = destination
+		elif not _room_motion.is_empty() and bool(_launch_definition.mechanisms.get("internal_obstacle_passthrough", false)):
 			predicted += displacement
 		else:
 			var collision := move_and_collide(displacement, true)
@@ -260,7 +267,10 @@ func prepared_launch_frame_position() -> Vector2:
 
 
 func prepared_launch_frame_consumes_actor() -> bool:
-	return not _prepared_launch_frame.is_empty() and _launch_definition.runtime_kind == "ruins_wraith" and bool(_prepared_launch_frame.after.runtime.terminal) and bool(_prepared_launch_frame.after.runtime.mechanism_state.detonation_consumed) and _prepared_launch_frame.batch.mechanism_requests.size() == 1
+	if _prepared_launch_frame.is_empty() or _launch_definition.runtime_kind not in ["ruins_wraith", "void_spore"] or not bool(_prepared_launch_frame.after.runtime.terminal):
+		return false
+	var mechanism: Dictionary = _prepared_launch_frame.after.runtime.mechanism_state
+	return bool(mechanism.get("detonation_consumed", mechanism.get("burst_consumed", false))) and _prepared_launch_frame.batch.mechanism_requests.size() == 1
 
 
 func prepared_launch_frame_contacts_target(target: Node2D) -> bool:
