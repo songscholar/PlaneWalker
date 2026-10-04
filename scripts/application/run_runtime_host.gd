@@ -63,6 +63,7 @@ var _profile_bootstrap_service: RefCounted
 var _profile_start_pending := false
 var _profile_publication_pending := false
 var _floor_entry_recovery_pending := false
+var _presentation_enabled := true
 
 
 func _ready() -> void:
@@ -177,6 +178,19 @@ func retain_profile_run(expected_revision: int) -> Variant:
 
 func native_run_state() -> RefCounted:
 	return _facade.native_run_state() if _facade != null else null
+
+
+func content_registry() -> RefCounted:
+	return _facade.content_registry() if _facade != null else null
+
+
+func set_run_presentation_visible(value: bool) -> bool:
+	if not value and not _active_run_id.is_empty() and not RunPhaseScript.is_terminal(int(runtime_snapshot().get("phase", -1))):
+		return false
+	_presentation_enabled = value
+	if _hud_layer != null:
+		_hud_layer.visible = value
+	return true
 
 
 func start_run(config: Dictionary, profile_launch: Dictionary = {}) -> Variant:
@@ -2000,7 +2014,7 @@ func _clear_hostile_transients() -> void:
 
 
 func _render_live_hud() -> void:
-	if _hud_layer == null or _projector == null or _facade == null:
+	if not _presentation_enabled or _hud_layer == null or _projector == null or _facade == null:
 		return
 	var authoritative := runtime_snapshot()
 	if str(authoritative.get("run_id", "")) != _active_run_id:

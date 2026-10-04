@@ -1,12 +1,18 @@
 class_name RunEndOverlay
 extends CanvasLayer
 
+signal hub_return_requested
+const Phase := preload("res://scripts/application/run_phase.gd")
+
 @onready var panel: PanelContainer = $Panel
 @onready var result_label: Label = $Panel/Margin/VBox/ResultLabel
 @onready var restart_button: Button = $Panel/Margin/VBox/RestartButton
+var _profile_return := false
+var _host: Node
 
 
 func _ready() -> void:
+	_host = get_parent().get_node_or_null("RunRuntimeHost")
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	restart_button.text = tr("UI_RESTART_RUN")
@@ -14,9 +20,13 @@ func _ready() -> void:
 	restart_button.pressed.connect(_restart_run)
 
 
-func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
+func _on_run_ended(run_id: String, result: Dictionary, _revision: int) -> void:
+	if _host != null:
+		var native: Dictionary = _host.runtime_snapshot()
+		if native.get("run_id") != run_id or not Phase.is_terminal(int(native.get("phase", -1))):
+			return
 	var outcome := str(result.get("result", ""))
-	var title := tr("UI_RUN_COMPLETE") if outcome == "floor_cleared" else tr("UI_RUN_FAILED")
+	var title := tr("UI_RUN_COMPLETE") if outcome in ["floor_cleared", "victory"] else tr("UI_RUN_FAILED")
 	result_label.text = "%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s" % [
 		title,
 		tr("UI_ROOM_REACHED"), result.get("current_room", result.get("rooms_cleared", 0)),
@@ -33,8 +43,28 @@ func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
 
 
 func _restart_run() -> void:
+	if _profile_return:
+		hub_return_requested.emit()
+		return
 	FocusCoordinator.close_scope(self)
 	get_tree().reload_current_scene()
+
+
+func configure_profile_return(value: bool) -> void:
+	_profile_return = value
+	restart_button.text = tr("UI_RETURN_HUB") if value else tr("UI_RESTART_RUN")
+
+
+func show_save_pending() -> void:
+	restart_button.text = tr("UI_RETRY")
+	restart_button.tooltip_text = tr("UI_SETTLEMENT_RETRY")
+
+
+func hide_overlay() -> void:
+	FocusCoordinator.close_scope(self)
+	visible = false
+	restart_button.tooltip_text = ""
+	configure_profile_return(_profile_return)
 
 
 func _format_time(seconds: float) -> String:

@@ -5,6 +5,7 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const FloorRuleEffectAuthorityScript := preload(
 	"res://scripts/dungeon/floor_rule_effect_authority.gd"
 )
+const SettlementScript := preload("res://scripts/progression/run_settlement_authority.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -27,11 +28,15 @@ const FloorRuleEffectAuthorityScript := preload(
 
 var _lang_button: Button
 var _floor_rule_effect_authority: RefCounted
+var _profile_service: RefCounted
+var _profile_error := ""
+var _terminal_pending := false
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_configure_launch_dungeon_runtime()
+	_configure_production_profile()
 	_apply_locale()
 	EventBus.run_ended.connect(_on_run_ended)
 	start_button.pressed.connect(_start_new_run)
@@ -42,6 +47,8 @@ func _ready() -> void:
 	pause_menu.resume_requested.connect(_resume_run)
 	pause_menu.remap_requested.connect(_open_input_remap)
 	pause_menu.accessibility_requested.connect(_open_accessibility_settings)
+	$RunEndOverlay.hub_return_requested.connect(return_to_hub)
+	$RunEndOverlay.configure_profile_return(true)
 	combat_room.visible = false
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	status_label.visible = false
@@ -50,6 +57,24 @@ func _ready() -> void:
 	_show_start_menu()
 	call_deferred("_apply_accessibility_to_runtime")
 	_print_input_map()
+	runtime_host.set_run_presentation_visible(false)
+	if not _profile_error.is_empty():
+		status_label.visible = true
+		status_label.text = tr("UI_PROFILE_UNAVAILABLE")
+
+
+func _configure_production_profile() -> void:
+	var activated: Dictionary = GameState.activate_profile_content(runtime_host.content_registry())
+	if not activated.ok:
+		_profile_error = str(activated.code)
+		return
+	_profile_service = GameState.profile_runtime_service()
+	var registry: RefCounted = runtime_host.content_registry()
+	var workshop: Array = registry.get_catalog_entries(&"forge_definition", &"LAUNCH")
+	var narrative: Array = registry.get_catalog_entries(&"narrative_definition", &"LAUNCH")
+	var sources: Array = registry.get_catalog_entries(&"narrative_source_definition", &"LAUNCH")
+	if not _profile_service.enable_workshop(workshop).ok or not _profile_service.enable_narrative(narrative, sources).ok:
+		_profile_error = "CONTENT_UNAVAILABLE"
 
 
 func _configure_launch_dungeon_runtime() -> void:
@@ -126,8 +151,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var phase := int(runtime_host.call("runtime_snapshot").get("phase", RunPhaseScript.Value.HUB))
 	if event.is_action_pressed("interact") and RunPhaseScript.is_terminal(phase):
-		get_tree().paused = false
-		get_tree().reload_current_scene()
+		return_to_hub()
 
 
 func _start_new_run() -> void:
@@ -167,10 +191,18 @@ func _start_launch_run(launch_config: Dictionary) -> void:
 
 
 func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = false) -> bool:
+	if not from_candidate and (_profile_service == null or not _profile_error.is_empty()):
+		return false
 	get_tree().paused = false
 	combat_room.visible = true
 	combat_room.process_mode = Node.PROCESS_MODE_PAUSABLE
-	var started = runtime_host.call("start_run", config)
+	var started: Variant
+	if from_candidate:
+		started = runtime_host.start_run(config)
+	elif not _profile_service.snapshot().active_launch_receipt.is_empty():
+		started = runtime_host.retry_profile_startup(_profile_service, int(_profile_service.snapshot().revision))
+	else:
+		started = runtime_host.start_profile_run(config, _profile_service, int(_profile_service.snapshot().revision))
 	if not started.ok:
 		combat_room.visible = false
 		combat_room.process_mode = Node.PROCESS_MODE_DISABLED
@@ -179,13 +211,22 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 		elif from_launch:
 			launch_loadout_panel.call("show_start_rejected")
 		return false
+	if not from_candidate:
+		var bound: Dictionary = _profile_service.bind_narrative_run(runtime_host.native_run_state(), combat_room.get_node("Player"))
+		if not bound.ok:
+			_profile_error = str(bound.code)
+			combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+			return false
+		GameState.refresh_profile_state()
+	_terminal_pending = false
+	runtime_host.set_run_presentation_visible(true)
 	if candidate_loadout_panel.visible:
 		candidate_loadout_panel.call("close_panel")
 	if launch_loadout_panel.visible:
 		launch_loadout_panel.call("close_panel")
 	FocusCoordinator.close_scope(start_menu)
 	start_menu.visible = false
-	_on_run_started(config)
+	_on_run_started(runtime_host.runtime_snapshot().config)
 	dungeon_flow.call("refresh", true)
 	return true
 
@@ -193,7 +234,7 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 func _build_run_config() -> Dictionary:
 	return {
 		"schema_version": 1,
-		"milestone": "M1",
+		"milestone": "LAUNCH",
 		"character_id": "wanderer",
 		"weapon_id": "sword",
 		"enabled_time_skills": ["stop", "rewind"],
@@ -257,8 +298,14 @@ func _apply_run_accessibility_assists(run_data: Dictionary) -> void:
 	player_health.call("configure_accessibility_assists", assists)
 
 
-func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
-	GameState.record_run_summary(result)
+func _on_run_ended(run_id: String, result: Dictionary, _revision: int) -> void:
+	var native: Dictionary = runtime_host.runtime_snapshot()
+	if native.get("run_id") != run_id or not RunPhaseScript.is_terminal(int(native.get("phase", -1))):
+		return
+	if _profile_service != null and _profile_service.snapshot().active_launch_receipt.get("run_id") == run_id:
+		_terminal_pending = true
+		if int(native.phase) == RunPhaseScript.Value.DEFEAT:
+			retry_terminal_settlement()
 	get_tree().paused = false
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 	pause_menu.hide_pause()
@@ -271,6 +318,54 @@ func _on_run_ended(_run_id: String, result: Dictionary, _revision: int) -> void:
 		tr("UI_REWARDS"), str((snapshot.get("build", {}) as Dictionary).get("items", [])),
 	]
 	print("Run ended: ", result)
+
+
+func retry_terminal_settlement() -> Dictionary:
+	var terminal: Dictionary = runtime_host.runtime_snapshot()
+	if _profile_service == null or not RunPhaseScript.is_terminal(int(terminal.get("phase", -1))):
+		return {"ok": false, "code": &"INVALID_PHASE", "context": {}}
+	var profile: Dictionary = _profile_service.snapshot()
+	if profile.active_launch_receipt.is_empty():
+		var same: bool = profile.last_settlement_receipt.get("run_id") == terminal.get("run_id")
+		return {"ok": same, "code": &"OK" if same else &"INVALID_PHASE", "context": {}}
+	if int(terminal.phase) == RunPhaseScript.Value.VICTORY:
+		var chosen := false
+		var prefix := "ending-choice:%d:" % int(profile.launch_sequence)
+		for marker: String in profile.narrative_state.consumed_sources:
+			chosen = chosen or marker.begins_with(prefix)
+		if not chosen or not profile.narrative_state.heart_fragments.has("heart_fragment_5"):
+			return {"ok": false, "code": &"FINAL_CHOICE_PENDING", "context": {}}
+	var receipts: Array = []
+	for event: Dictionary in terminal.events:
+		if event.get("type") == SettlementScript.SOURCE_TYPE:
+			receipts.append(event.receipt.duplicate(true))
+	var settled: Dictionary = _profile_service.settle_terminal(terminal, receipts, int(profile.revision))
+	if settled.ok:
+		_terminal_pending = false
+		GameState.refresh_profile_state()
+	else:
+		$RunEndOverlay.show_save_pending()
+	return settled
+
+
+func return_to_hub() -> bool:
+	var terminal: Dictionary = runtime_host.runtime_snapshot()
+	if not RunPhaseScript.is_terminal(int(terminal.get("phase", -1))):
+		return false
+	if _terminal_pending:
+		if int(terminal.phase) == RunPhaseScript.Value.VICTORY:
+			status_label.text = tr("UI_ENDING_PENDING")
+			return false
+		if not retry_terminal_settlement().ok:
+			return false
+	get_tree().paused = false
+	$RunEndOverlay.hide_overlay()
+	combat_room.visible = false
+	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+	status_label.visible = false
+	runtime_host.set_run_presentation_visible(false)
+	_show_start_menu()
+	return true
 
 
 func _toggle_pause() -> void:
