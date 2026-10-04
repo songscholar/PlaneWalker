@@ -7,6 +7,14 @@ template directory is also the directory Godot reads. It never installs template
 in a personal Godot directory. macOS editor copies retain the complete upstream
 application bundle; moving only its executable can fail macOS signature checks.
 
+`python3 tools/export/fetch_templates.py` downloads the official Godot 4.6.1
+archive using resumable HTTP ranges. Its release size and SHA-256 are pinned
+from the upstream release metadata. Completed ranges remain in the project
+cache; only a full digest match promotes the archive. Installation validates
+ZIP paths, version and the complete selected macOS/Linux/Windows release set
+before replacing the project template directory. No personal installation is
+modified. Use `--workers` to control concurrent transfers.
+
 ## Offline macOS Fallback
 
 When release templates are unavailable, build a local package from an installed
