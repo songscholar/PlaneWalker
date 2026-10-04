@@ -49,6 +49,8 @@ Player processing remains disabled; retirement restores its original mode.
 - Inspected nonblank screenshots: `build/visual-evidence/p16o-native-narrative/dialogue-saved.png`, `dialogue-saved-en.png`, `actual-heart-marker.png`, `ending-choices.png`, `ending-choices-en.png`, `credits-pending.png`, `credits-pending-en.png`. Native panel text fits its safe area and scrolls; authored pixel marker renders.
 - Existing pinned Python development dependencies audited with `python3 -m pip_audit --disable-pip --no-deps -r requirements-dev.txt`: no known vulnerabilities. The required public advisory query used narrow network access after the sandbox DNS refusal.
 - `git diff --check` passed. Documentation metadata is complete; parent owns index entries and consolidated governance run.
+- Parent independent review found and fixed the terminal story Back escape and stale-story revision trap. Terminal story now requires Continue; both ordinary and terminal stories reproject their already-saved subject/text after stale refusal. Expanded regression `planewalker-tests.zs7puD` passed without script errors/leaks. `python3 tools/document_governance.py` passed with zero violations after shared index integration.
+- Follow-up actual OpenGL 640x360 run passed cleanly: `/private/tmp/plane-walker-p16o-render-review-final.log`, with no script errors, warnings, or leaked resources. Inspected `build/visual-evidence/p16o-native-narrative/terminal-story.png` and `terminal-story-en.png`; saved terminal text wraps correctly and exposes Continue with no Back escape.
 
 The deterministic five-floor integration fixture follows the existing physical
 service test's authored route and canonical boss source setup. Completed floors

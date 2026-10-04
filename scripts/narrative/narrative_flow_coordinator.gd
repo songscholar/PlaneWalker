@@ -353,7 +353,7 @@ func _execute(fields: Dictionary, revision: int, token: Area2D = null) -> Dictio
 		"narrative_dialogue": open_dialogue(str(command.npc_id))
 		"narrative_collect", "narrative_choice":
 			_retire_occurrences()
-			_render(_model.story(_service.snapshot(), _view_run_id(), str(result.context.source_id), str(result.context.get("text_key", _active_occurrence.get("definition", {}).get("description_key", "UI_NARRATIVE_COLLECTED")))))
+			_render(_model.story(_service.snapshot(), _view_run_id(), str(result.context.source_id), str(result.context.get("text_key", _active_occurrence.get("definition", {}).get("description_key", "UI_NARRATIVE_COLLECTED"))), _terminal))
 		"narrative_ending":
 			close()
 			_retire_occurrences()
@@ -388,6 +388,7 @@ func _reject(result: Dictionary) -> Dictionary:
 			var state: Dictionary = _panel.view_state()
 			match state.mode:
 				"dialogue": open_dialogue(str(state.subject_id))
+				"story": _render(_model.story(_service.snapshot(), _view_run_id(), str(state.subject_id), str(state.text_key), _terminal))
 				"ending": _show_endings()
 				"credits": show_selected_credits(str(state.subject_id))
 				"choice":

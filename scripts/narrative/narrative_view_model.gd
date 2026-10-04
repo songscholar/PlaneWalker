@@ -34,9 +34,10 @@ func endings(profile: Dictionary, run_id: String, context: Dictionary) -> Dictio
 	return _finish(state)
 
 
-func story(profile: Dictionary, run_id: String, subject_id: String, text_key: String) -> Dictionary:
+func story(profile: Dictionary, run_id: String, subject_id: String, text_key: String, terminal: bool = false) -> Dictionary:
 	var state := _base(profile, run_id, "story", subject_id, "UI_NARRATIVE_COLLECTED")
 	state.text_key = text_key
+	state.close_available = not terminal
 	state.rows.append(_row("continue", "", "", "UI_NARRATIVE_CONTINUE", "", true, false, 0))
 	return _finish(state)
 
