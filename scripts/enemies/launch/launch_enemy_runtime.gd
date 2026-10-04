@@ -46,6 +46,8 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		var action: Dictionary = Contract.create(candidate, definition.actor_kind).definition
 		if int(action.warning_frames) < 30 or action.handler_id not in ["melee", "charge", "projectile_volley", "zone", "heal", "summon"]:
 			return _failure("unimplemented_handler_or_warning")
+		if action.handler_id == "charge" and (action.hit_schedule.size() != 1 or action.geometry.size() != 1):
+			return _failure("unimplemented_charge_schedule")
 		ids.append(action.id)
 		normalized_actions.append(action)
 	var expected := Mechanisms.action_ids(definition.runtime_kind, definition.actor_kind == "elite")
@@ -85,11 +87,18 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if controls.is_empty():
 		return _failure("control")
 	var displacement := Vector2.ZERO
+	var action_state: Dictionary = _action.snapshot()
+	var active_action := _action_definition(action_state.action_id)
 	var staggered: bool = _definition.runtime_kind == "ruins_wraith" and int(_state.mechanism_state.stagger_remaining_frames) > 0
 	if not controls.action_paused and not staggered:
 		if _definition.runtime_kind == "shattered_sentinel" and int(_state.mechanism_state.retreat_remaining_frames) > 0:
 			displacement = _vector(_state.mechanism_state.retreat_direction) * (float(_definition.mechanisms.retreat_distance_px) / float(_definition.mechanisms.retreat_frames)) * float(controls.movement_multiplier)
-		elif _action.snapshot().phase == "IDLE":
+		elif not active_action.is_empty() and active_action.handler_id == "charge" and Action.action_phase(frame - int(action_state.commit_frame) - int(action_state.paused_frames), active_action) == "ACTIVE":
+			var direction := _vector(action_state.committed_aim)
+			var travelled := (_vector(observations.source_position) - _vector(action_state.committed_origin)).dot(direction)
+			var remaining := maxf(0.0, float(active_action.parameters.travel_px) - travelled)
+			displacement = direction * minf(remaining, float(active_action.parameters.speed_px_per_second) * float(controls.movement_multiplier) / 60.0)
+		elif action_state.phase == "IDLE":
 			var source := _vector(observations.source_position)
 			var target := _vector(observations.target_position)
 			var distance := source.distance_to(target)
@@ -135,6 +144,16 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	result["action_paused"] = controls.action_paused
 	result["movement_multiplier"] = controls.movement_multiplier
 	return result
+
+
+func charge_contact_fact(frame: int, target_id: String) -> Dictionary:
+	if _state.is_empty() or _state.terminal or frame != int(_state.runtime_frame):
+		return {}
+	var action_state: Dictionary = _action.snapshot()
+	var active_action := _action_definition(action_state.action_id)
+	if action_state.phase != "ACTIVE" or active_action.is_empty() or active_action.handler_id != "charge" or target_id != action_state.target_id:
+		return {}
+	return Action._hit_fact(active_action.hit_schedule[0], active_action, action_state)
 
 
 func add_control_source(source_id: String, kind: String, duration_frames: int, magnitude: float) -> bool:
@@ -235,6 +254,13 @@ func _select_action(frame: int, observations: Dictionary) -> String:
 		if int(current.cooldowns.get(candidate.id, 0)) <= frame and distance >= float(candidate.distance_min_px) and distance <= float(candidate.distance_max_px) and Mechanisms.action_available(_definition.runtime_kind, _state.mechanism_state, candidate.id):
 			return candidate.id
 	return ""
+
+
+func _action_definition(action_id: String) -> Dictionary:
+	for candidate: Dictionary in _definition.actions:
+		if candidate.id == action_id:
+			return candidate
+	return {}
 
 
 func _controls_for_frame(frame: int) -> Dictionary:

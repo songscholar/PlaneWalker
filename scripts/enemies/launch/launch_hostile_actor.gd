@@ -4,7 +4,7 @@ extends "res://scripts/enemies/enemy_base.gd"
 const LaunchRuntime := preload("res://scripts/enemies/launch/launch_enemy_runtime.gd")
 const LaunchStatus := preload("res://scripts/enemies/launch/launch_elemental_status_runtime.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
-const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before"]
+const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
 
@@ -102,14 +102,21 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	else:
 		displacement += _knockback_velocity / 60.0
 	var predicted := global_position
+	var collision_target: Node2D
 	if not displacement.is_zero_approx():
 		var collision := move_and_collide(displacement, true)
 		predicted += collision.get_travel() if collision != null else displacement
+		if collision != null and collision.get_collider() is Node2D:
+			collision_target = collision.get_collider() as Node2D
 	var committed_observations := observations.duplicate(true)
 	committed_observations.source_position = _point(predicted)
 	var batch: Dictionary = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
 	if not batch.ok:
 		return batch
+	# A charge's frozen corridor warns its route; damage requires real body contact.
+	var contact_fact: Dictionary = preview.charge_contact_fact(frame, str(observations.target_id))
+	if not contact_fact.is_empty():
+		batch.hit_facts = [contact_fact] if collision_target != null else []
 	var status_events: Dictionary = {"burn_ticks": []}
 	if lethal_pending:
 		var cancelled: Dictionary = preview.cancel(&"death")
@@ -134,7 +141,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	after.position = _point(predicted)
 	after.knockback = _point(_knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() / 60.0))
 	after.action_credit = next_credit
-	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch, "health_before": health.runtime_state_snapshot()}
+	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch, "health_before": health.runtime_state_snapshot(), "collision_target": collision_target}
 	_next_launch_ticket_id += 1
 	_prepared_launch_frame = ticket.duplicate(true)
 	_prepared_frame_committed = false
@@ -186,6 +193,10 @@ func prepared_launch_frame_position() -> Vector2:
 
 func prepared_launch_frame_consumes_actor() -> bool:
 	return not _prepared_launch_frame.is_empty() and _launch_definition.runtime_kind == "ruins_wraith" and bool(_prepared_launch_frame.after.runtime.terminal) and bool(_prepared_launch_frame.after.runtime.mechanism_state.detonation_consumed) and _prepared_launch_frame.batch.mechanism_requests.size() == 1
+
+
+func prepared_launch_frame_contacts_target(target: Node2D) -> bool:
+	return not _prepared_launch_frame.is_empty() and is_instance_valid(target) and _prepared_launch_frame.collision_target == target
 
 
 func launch_transaction_snapshot() -> Dictionary:

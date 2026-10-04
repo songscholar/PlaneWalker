@@ -99,7 +99,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 				return _failure("threat_retirement")
 			operations.append({"kind": "retire", "source": source, "generation": generation})
 		for request: Variant in batch.effect_requests:
-			if not request is Dictionary or request.get("handler_id", "") != "melee" or str(request.get("hostile_source_id", "")) != source:
+			if not request is Dictionary or request.get("handler_id", "") not in ["melee", "charge"] or str(request.get("hostile_source_id", "")) != source:
 				return _failure("unimplemented_effect_handler")
 		if not batch.get("mechanism_requests", []) is Array or batch.get("mechanism_requests", []).size() > 128:
 			return _failure("mechanism_requests")
@@ -226,7 +226,7 @@ func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictio
 	if not value is Dictionary or not Contract.exact_fields(value, ["run_id", "hostile_source_id", "attack_generation", "hit_index", "runtime_frame", "target_id", "action_id", "damage", "damage_type", "handler_id", "geometry", "parameters"]):
 		return _failure("hit_fields")
 	var hit := value as Dictionary
-	if hit.run_id != context.run_id or str(hit.hostile_source_id) != source or hit.runtime_frame != context.runtime_frame or hit.handler_id != "melee" or hit.damage_type not in Contract.DAMAGE_TYPES or not context.targets.has(hit.target_id) or not hit.geometry is Array or hit.geometry.is_empty():
+	if hit.run_id != context.run_id or str(hit.hostile_source_id) != source or hit.runtime_frame != context.runtime_frame or hit.handler_id not in ["melee", "charge"] or hit.damage_type not in Contract.DAMAGE_TYPES or not context.targets.has(hit.target_id) or not hit.geometry is Array or hit.geometry.is_empty():
 		return _failure("hit_identity_or_handler")
 	var target: Variant = context.targets[hit.target_id]
 	var record := _target_record(target)
@@ -239,8 +239,17 @@ func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictio
 		var fact := Actions.native_threat_fact(primitive)
 		if fact.is_empty() or str(fact.hostile_source_id) != source or not envelope.register_fact(fact):
 			return _failure("hit_geometry")
+	if hit.handler_id == "charge":
+		if not actor.has_method("prepared_launch_frame_contacts_target"):
+			return _failure("unsealed_charge_contact")
+		if not bool(actor.prepared_launch_frame_contacts_target(target)) or not envelope.contains_point(target.global_position, context.runtime_frame):
+			record["info"] = null
+			return {"ok": true, "record": record}
 	var claim := _claim(context.run_id, str(hit.target_id), source, int(hit.attack_generation), int(hit.hit_index))
 	if next.claims.has(claim):
+		if hit.handler_id == "charge":
+			record["info"] = null
+			return {"ok": true, "record": record}
 		return _failure("duplicate_hit")
 	next.claims.append(claim)
 	var info: RefCounted
@@ -249,7 +258,7 @@ func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictio
 		var direction := _vector(primitive.origin).direction_to(_vector(primitive.target_point))
 		if direction.is_zero_approx():
 			direction = _vector(primitive.aim_direction)
-		info = Damage.from_plan({"run_id": context.run_id, "target_id": hit.target_id, "hostile_source_id": source, "attack_generation": hit.attack_generation, "hit_index": hit.hit_index, "action_token": hit.attack_generation, "amount": hit.damage, "damage_type": Contract.DAMAGE_TYPES.find(hit.damage_type), "source": actor, "attacker": actor, "can_crit": false, "knockback": direction * float(hit.parameters.knockback_px), "tags": ["enemy:launch", "enemy:melee"], "source_generation": hit.attack_generation})
+		info = Damage.from_plan({"run_id": context.run_id, "target_id": hit.target_id, "hostile_source_id": source, "attack_generation": hit.attack_generation, "hit_index": hit.hit_index, "action_token": hit.attack_generation, "amount": hit.damage, "damage_type": Contract.DAMAGE_TYPES.find(hit.damage_type), "source": actor, "attacker": actor, "can_crit": false, "knockback": direction * float(hit.parameters.knockback_px), "tags": ["enemy:launch", "enemy:%s" % hit.handler_id], "source_generation": hit.attack_generation})
 		if info == null:
 			return _failure("damage_plan")
 	record["info"] = info
