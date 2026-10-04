@@ -151,7 +151,10 @@ func _test_launch_talent_offer_character_scope(suite, room: Dictionary) -> void:
 		"wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord",
 	]:
 		var state := _state(900 + character_id.length(), 3)
-		state["config"] = {"milestone": "LAUNCH", "character_id": character_id}
+		state["config"] = {
+			"milestone": "LAUNCH", "character_id": character_id, "weapon_id": "sword",
+			"enabled_time_skills": ["stop", "rewind"], "mode": "normal",
+		}
 		var service = DraftServiceScript.new()
 		var result = service.create_offer(registry, state, room)
 		suite.assert_true(result.ok, "%s receives a Launch talent offer" % character_id)
@@ -165,6 +168,17 @@ func _test_launch_talent_offer_character_scope(suite, room: Dictionary) -> void:
 				[character_id],
 				"%s offer excludes cross-character talents" % character_id
 			)
+	var bow_state := _state(919, 3)
+	bow_state["config"] = {
+		"milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "bow",
+		"enabled_time_skills": ["stop", "rewind"], "mode": "normal",
+	}
+	var bow_service = DraftServiceScript.new()
+	var bow_result = bow_service.create_offer(registry, bow_state, room)
+	suite.assert_true(bow_result.ok, "Bow receives remaining compatible Wanderer talents")
+	if bow_result.ok:
+		suite.assert_equal(_definitions(bow_service, bow_result.context["offer"]).size(), 2, "Bow excludes Sword-only execution talent")
+		suite.assert_true(not _option_ids(bow_result.context["offer"]).has("tal_ruin_execute"), "unsupported execution effect stays filtered")
 
 
 func _test_real_m1_pool_build_compatibility(suite, rooms: Array[Dictionary]) -> void:
