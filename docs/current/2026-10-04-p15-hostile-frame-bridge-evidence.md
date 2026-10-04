@@ -1,10 +1,11 @@
 # P15 Hostile Frame Bridge Evidence
 
 - Status: Current / Focused GREEN
-- Document Role: Native Player/hostile fixed-frame integration evidence
+- Document Role: Current native Player/hostile fixed-frame integration evidence
 - Authority Level: Evidence below the approved P15 execution design
 - Applies To: Player fixed-frame transactions, native Sentinel, Health observations, hostile effect authority, actor retirement
 - Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`, `docs/current/2026-10-04-p15-hostile-foundation-evidence.md`
 - Last Verified: 2026-10-04
 - Implementation Status: Focused integration and regression gates pass; complete P15 actor/handler/content certification remains pending
 - Exit Gate: Reproducible full P15 native content, lifecycle, replay, Save, interaction, and export certification
