@@ -1,6 +1,8 @@
 class_name PlayerController
 extends CharacterBody2D
 
+signal authoritative_frame_committed(frame: int)
+
 const StatsResource := preload("res://scripts/core/stats.gd")
 const MetaStatsScript := preload("res://scripts/progression/meta_stats_applicator.gd")
 const MetaCatalogFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
@@ -266,6 +268,10 @@ var _last_move_direction: Vector2 = Vector2.RIGHT
 var _last_weapon_aim_direction: Vector2 = Vector2.RIGHT
 var _dash_invulnerable_bonus: float = 0.0
 var _runtime_frame: int = 0
+var _last_authoritative_frame_intents: Dictionary = {}
+var _last_authoritative_intents_frame: int = -1
+var _last_authoritative_intents_run: StringName = &""
+var _last_authoritative_intents_generation: int = -1
 var _hostile_frame_participant: RefCounted
 var _active_hostile_frame_ticket: Dictionary = {}
 var _fixed_frame_weapon_observations: Array[Dictionary] = []
@@ -2680,7 +2686,18 @@ func advance_action_frame(frame_intents: Dictionary = {}) -> bool:
 		)
 
 	_refresh_weapon_replay_fact_baseline()
+	_last_authoritative_frame_intents = normalized_frame_intents.duplicate(true)
+	_last_authoritative_intents_frame = _runtime_frame
+	_last_authoritative_intents_run = _run_id
+	_last_authoritative_intents_generation = _owner_character_generation
+	authoritative_frame_committed.emit(_runtime_frame)
 	return true
+
+
+func authoritative_frame_intents(frame: int) -> Dictionary:
+	if frame != _runtime_frame or frame != _last_authoritative_intents_frame or _run_id != _last_authoritative_intents_run or _owner_character_generation != _last_authoritative_intents_generation:
+		return {}
+	return _last_authoritative_frame_intents.duplicate(true)
 
 
 func _fixed_frame_preflight() -> bool:
@@ -4130,8 +4147,10 @@ func restore_full_player_replay_snapshot(snapshot: Dictionary) -> bool:
 	if before.is_empty():
 		return false
 	if before == normalized:
+		_last_authoritative_intents_frame = -1
 		return true
 	if _install_full_player_replay_snapshot(normalized, false):
+		_last_authoritative_intents_frame = -1
 		return true
 	if not _install_full_player_replay_snapshot(before, true):
 		set_physics_process(false)
