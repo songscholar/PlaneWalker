@@ -2,6 +2,8 @@ extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
 const Actions := preload("res://tests/support/p15_action_fixtures.gd")
+const Content := preload("res://tests/support/p15_hostile_fixtures.gd")
+const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
 var suite
 
 
@@ -17,44 +19,18 @@ func _run() -> void:
 	if runtime.has_method("accept_damage_fact"):
 		_test_shell_cycle(implementation)
 		_test_wraith_interrupt(implementation)
+		_test_authored_shell_and_interrupt(implementation)
 	suite.finish(get_tree())
 
 
 static func strider_definition() -> Dictionary:
-	var charge := Actions.action()
-	charge.id = "stone_shell_strider.shell_charge"
-	charge.handler_id = "charge"
-	charge.active_frames = 12
-	charge.cooldown_frames = 180
-	charge.distance_max_px = 48.0
-	charge.geometry = [{"shape": "line", "origin_offset": {"x": 0.0, "y": 0.0}, "aim_offset_degrees": 0.0, "radius": 8.0, "length": 48.0}]
-	charge.hit_schedule[0].damage = 15.0
-	charge.parameters = {"travel_px": 48.0, "speed_px_per_second": 240.0, "knockback_px": 0.0}
-	var bite := Actions.action()
-	bite.id = "stone_shell_strider.bite"
-	bite.active_frames = 5
-	bite.recovery_frames = 20
-	bite.cooldown_frames = 120
-	bite.weight = 6
-	bite.distance_max_px = 24.0
-	bite.geometry = [{"shape": "cone", "origin_offset": {"x": 0.0, "y": 0.0}, "aim_offset_degrees": 0.0, "radius": 12.0, "length": 24.0}]
-	bite.hit_schedule[0].damage = 10.0
-	bite.parameters.knockback_px = 0.0
-	return {"id": "stone_shell_strider", "actor_kind": "enemy", "runtime_kind": "stone_shell_strider", "max_hp": 120.0, "defense": 0.0, "move_speed": 72.0, "actions": [charge, bite]}
+	var parser := Enemy.new()
+	return parser.runtime_projection() if parser.configure(Content.enemy("stone_shell_strider")).ok else {}
 
 
 static func wraith_definition() -> Dictionary:
-	var detonation := Actions.action()
-	detonation.id = "ruins_wraith.spirit_detonation"
-	detonation.warning_frames = 60
-	detonation.active_frames = 6
-	detonation.recovery_frames = 20
-	detonation.cooldown_frames = 0
-	detonation.distance_max_px = 32.0
-	detonation.geometry = [{"shape": "circle", "origin_offset": {"x": 0.0, "y": 0.0}, "aim_offset_degrees": 0.0, "radius": 32.0, "length": 0.0}]
-	detonation.hit_schedule[0].damage = 20.0
-	detonation.parameters.knockback_px = 0.0
-	return {"id": "ruins_wraith", "actor_kind": "enemy", "runtime_kind": "ruins_wraith", "max_hp": 50.0, "defense": 0.0, "move_speed": 80.0, "actions": [detonation]}
+	var parser := Enemy.new()
+	return parser.runtime_projection() if parser.configure(Content.enemy("ruins_wraith")).ok else {}
 
 
 func _runtime(implementation: Script, definition: Dictionary) -> RefCounted:
@@ -119,3 +95,33 @@ func _test_wraith_interrupt(implementation: Script) -> void:
 	runtime.accept_damage_fact(_fact("wraith-lethal", 40, 50.0, 0.0))
 	var after_kill: Dictionary = runtime.advance_frame(41, Actions.context(41), false)
 	suite.assert_true(after_kill.hit_facts.is_empty(), "pre-active final Health kill cancels all explosion hits")
+
+
+func _test_authored_shell_and_interrupt(implementation: Script) -> void:
+	var shell := strider_definition()
+	shell.mechanisms.shell_frames = 60
+	shell.mechanisms.shell_damage_multiplier = 0.5
+	shell.mechanisms.open_frames = 15
+	shell.mechanisms.open_damage_multiplier = 1.1
+	var runtime := _runtime(implementation, shell)
+	if runtime.snapshot().is_empty():
+		return
+	runtime.accept_damage_fact(_fact("authored-shell", 0, 10.0, 110.0))
+	suite.assert_equal(runtime.snapshot().mechanism_state.shell_remaining_frames, 60, "shell uses authored lifetime")
+	suite.assert_equal(runtime.species_damage_taken_multiplier(), 0.5, "shell uses authored damage multiplier")
+	for frame: int in range(1, 61):
+		runtime.advance_frame(frame, Actions.context(frame), false)
+	suite.assert_equal(runtime.snapshot().mechanism_state.open_remaining_frames, 15, "exposure uses authored lifetime")
+	suite.assert_equal(runtime.species_damage_taken_multiplier(), 1.1, "exposure uses authored damage multiplier")
+	var bad: Dictionary = runtime.snapshot()
+	bad.mechanism_state.open_remaining_frames = 16
+	suite.assert_true(not runtime.can_restore_snapshot(bad), "exposure cannot restore beyond the authored bound")
+	var wraith := wraith_definition()
+	wraith.mechanisms.windup_interrupt_damage = 10.0
+	wraith.mechanisms.stagger_frames = 45
+	var interrupted := _runtime(implementation, wraith)
+	interrupted.request_action("ruins_wraith.spirit_detonation", Actions.context())
+	suite.assert_true(interrupted.accept_damage_fact(_fact("authored-interrupt", 0, 10.0, 40.0)).ok, "authored interrupt threshold accepts authenticated damage")
+	suite.assert_equal(interrupted.snapshot().mechanism_state.stagger_remaining_frames, 45, "authored interrupt threshold creates authored stagger")
+	var motion: Dictionary = interrupted.motion_for_frame(1, Actions.context(1))
+	suite.assert_equal(motion.displacement, {"x": 0.0, "y": 0.0}, "stagger prevents actual pursuit movement")

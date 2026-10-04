@@ -6,7 +6,9 @@ const Controls := preload("res://scripts/enemies/launch/hostile_control_runtime.
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Seeds := preload("res://scripts/core/seed_service.gd")
 const Mechanisms := preload("res://scripts/enemies/launch/enemy_mechanism_handlers.gd")
-const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "actions"]
+const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const DefinitionContract := preload("res://scripts/enemies/launch/hostile_definition_contract.gd")
+const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "actions", "mechanisms"]
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control"]
 const DAMAGE_FACT_FIELDS: Array[String] = ["fact_id", "runtime_frame", "target_source_id", "amount", "hp_after"]
@@ -28,6 +30,11 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		return _failure("stats")
 	if not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("seed")
+	var authored_mechanisms := DefinitionContract.mechanisms(definition.mechanisms, Enemy.MECHANISM_RULES[definition.id])
+	if not authored_mechanisms.ok:
+		return authored_mechanisms
+	if authored_mechanisms.value.has("kite_min_px") and authored_mechanisms.value.kite_min_px > authored_mechanisms.value.kite_max_px:
+		return _failure("kite_bounds")
 	var action_identity := identity.duplicate(true)
 	action_identity.erase("seed")
 	var result: Dictionary = _action.configure({"id": definition.id, "actor_kind": definition.actor_kind, "actions": definition.actions}, action_identity)
@@ -49,11 +56,15 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		return controls
 	_definition = definition.duplicate(true)
 	_definition.actions = normalized_actions
+	_definition.mechanisms = authored_mechanisms.value
+	for stat: String in ["max_hp", "defense", "move_speed"]:
+		_definition[stat] = float(_definition[stat])
+	var stagger_bound := int(_definition.mechanisms.get("first_attack_stagger_frames", 60))
 	var rng := Seeds.make_rng(int(identity.seed), StringName("hostile_first_attack_v1:%s" % identity.hostile_source_id))
 	_state = {
-		"schema_version": 1, "definition_digest": JSON.stringify(_definition).sha256_text(),
+		"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(),
 		"identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false,
-		"mechanism_state": Mechanisms.make_state(definition.runtime_kind, int(identity.runtime_frame) + rng.randi_range(0, 60)),
+		"mechanism_state": Mechanisms.make_state(definition.runtime_kind, int(identity.runtime_frame) + rng.randi_range(0, stagger_bound)),
 	}
 	return {"ok": true, "snapshot": snapshot()}
 
@@ -74,9 +85,10 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if controls.is_empty():
 		return _failure("control")
 	var displacement := Vector2.ZERO
-	if not controls.action_paused:
+	var staggered: bool = _definition.runtime_kind == "ruins_wraith" and int(_state.mechanism_state.stagger_remaining_frames) > 0
+	if not controls.action_paused and not staggered:
 		if _definition.runtime_kind == "shattered_sentinel" and int(_state.mechanism_state.retreat_remaining_frames) > 0:
-			displacement = _vector(_state.mechanism_state.retreat_direction) * (19.0 / 48.0) * float(controls.movement_multiplier)
+			displacement = _vector(_state.mechanism_state.retreat_direction) * (float(_definition.mechanisms.retreat_distance_px) / float(_definition.mechanisms.retreat_frames)) * float(controls.movement_multiplier)
 		elif _action.snapshot().phase == "IDLE":
 			var source := _vector(observations.source_position)
 			var target := _vector(observations.target_position)
@@ -100,7 +112,7 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		_control.restore_snapshot(before.control)
 		return result
 	_state.runtime_frame = frame
-	var mechanism: Dictionary = Mechanisms.advance(_definition.runtime_kind, _state.mechanism_state, previous_action, _action.snapshot())
+	var mechanism: Dictionary = Mechanisms.advance(_definition.runtime_kind, _definition.mechanisms, _state.mechanism_state, previous_action, _action.snapshot())
 	if controls.action_paused and _definition.runtime_kind == "shattered_sentinel":
 		mechanism.state = _state.mechanism_state.duplicate(true)
 	_state.mechanism_state = mechanism.state
@@ -136,7 +148,7 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 		return _failure("damage_fact")
 	if typeof(value.fact_id) != TYPE_STRING or value.fact_id.is_empty() or value.fact_id.length() > 128 or value.target_source_id != _state.identity.hostile_source_id or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or not Contract.number_in_range(value.amount, 0.000001, 1000000.0) or not Contract.number_in_range(value.hp_after, 0.0, _definition.max_hp):
 		return _failure("damage_fact_identity_or_value")
-	var prepared: Dictionary = Mechanisms.accept_damage(_definition.runtime_kind, _state.mechanism_state, _action.snapshot(), value)
+	var prepared: Dictionary = Mechanisms.accept_damage(_definition.runtime_kind, _definition.mechanisms, _state.mechanism_state, _action.snapshot(), value)
 	if not prepared.ok:
 		return _failure("duplicate_damage_fact")
 	_state.mechanism_state = prepared.state
@@ -147,7 +159,7 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 
 
 func species_damage_taken_multiplier() -> float:
-	return Mechanisms.damage_taken_multiplier(_definition.runtime_kind, _state.mechanism_state) if not _state.is_empty() else 1.0
+	return Mechanisms.damage_taken_multiplier(_definition.runtime_kind, _definition.mechanisms, _state.mechanism_state) if not _state.is_empty() else 1.0
 
 
 func snapshot() -> Dictionary:
@@ -167,7 +179,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if not value.mechanism_state is Dictionary:
 		return false
 	var mechanism: Dictionary = value.mechanism_state
-	if not Mechanisms.valid_state(_definition.runtime_kind, mechanism, _state.mechanism_state.first_attack_ready_frame):
+	if not Mechanisms.valid_state(_definition.runtime_kind, _definition.mechanisms, mechanism, _state.mechanism_state.first_attack_ready_frame):
 		return false
 	if not value.action is Dictionary or not value.control is Dictionary or not _action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false

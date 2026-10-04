@@ -41,7 +41,7 @@ static func make_state(kind: String, first_attack_ready_frame: int) -> Dictionar
 	return state
 
 
-static func valid_state(kind: String, state: Dictionary, initial_ready_frame: int) -> bool:
+static func valid_state(kind: String, authored: Dictionary, state: Dictionary, initial_ready_frame: int) -> bool:
 	if not STATE_FIELDS.has(kind) or not Contract.exact_fields(state, STATE_FIELDS[kind]) or state.first_attack_ready_frame != initial_ready_frame or not state.damage_claims is Array or state.damage_claims.size() > MAX_DAMAGE_CLAIMS:
 		return false
 	var seen: Dictionary = {}
@@ -51,14 +51,14 @@ static func valid_state(kind: String, state: Dictionary, initial_ready_frame: in
 		seen[claim] = true
 	match kind:
 		"shattered_sentinel":
-			if not _integer(state.retreat_remaining_frames, 0, 48) or not Contract.valid_point(state.retreat_direction, 1.0):
+			if not _integer(state.retreat_remaining_frames, 0, authored.retreat_frames) or not Contract.valid_point(state.retreat_direction, 1.0):
 				return false
 			return state.retreat_remaining_frames == 0 or is_equal_approx(_vector(state.retreat_direction).length(), 1.0)
 		"corrosive_moth": return typeof(state.death_pool_reserved) == TYPE_BOOL
 		"stone_shell_strider":
-			return _integer(state.shell_remaining_frames, 0, 120) and _integer(state.open_remaining_frames, 0, 30) and _integer(state.shell_cycle, 0, 2147483646) and typeof(state.shell_shock_used) == TYPE_BOOL and (state.shell_remaining_frames == 0 or state.open_remaining_frames == 0)
+			return _integer(state.shell_remaining_frames, 0, authored.shell_frames) and _integer(state.open_remaining_frames, 0, authored.open_frames) and _integer(state.shell_cycle, 0, 2147483646) and typeof(state.shell_shock_used) == TYPE_BOOL and (state.shell_remaining_frames == 0 or state.open_remaining_frames == 0)
 		"ruins_wraith":
-			return Contract.number_in_range(state.windup_damage, 0.0, 14.999999) and _integer(state.stagger_remaining_frames, 0, 30) and typeof(state.detonation_consumed) == TYPE_BOOL
+			return Contract.number_in_range(state.windup_damage, 0.0, authored.windup_interrupt_damage) and state.windup_damage < authored.windup_interrupt_damage and _integer(state.stagger_remaining_frames, 0, authored.stagger_frames) and typeof(state.detonation_consumed) == TYPE_BOOL
 		"rift_watcher":
 			if typeof(state.death_debuff_reserved) != TYPE_BOOL or not state.healing_expenditure is Dictionary or state.healing_expenditure.size() > 8:
 				return false
@@ -69,7 +69,7 @@ static func valid_state(kind: String, state: Dictionary, initial_ready_frame: in
 	return false
 
 
-static func accept_damage(kind: String, state: Dictionary, action: Dictionary, fact: Dictionary) -> Dictionary:
+static func accept_damage(kind: String, authored: Dictionary, state: Dictionary, action: Dictionary, fact: Dictionary) -> Dictionary:
 	var claim := str(fact.fact_id).sha256_text()
 	if state.damage_claims.has(claim) or state.damage_claims.size() >= MAX_DAMAGE_CLAIMS:
 		return {"ok": false}
@@ -77,19 +77,19 @@ static func accept_damage(kind: String, state: Dictionary, action: Dictionary, f
 	next.damage_claims.append(claim)
 	var cancel_action: bool = fact.hp_after <= 0.0
 	if kind == "stone_shell_strider" and not cancel_action and next.shell_remaining_frames == 0 and next.open_remaining_frames == 0:
-		next.shell_remaining_frames = 120
+		next.shell_remaining_frames = authored.shell_frames
 		next.shell_cycle += 1
 		next.shell_shock_used = false
 	if kind == "ruins_wraith" and action.phase == "WARNING" and action.action_id == "ruins_wraith.spirit_detonation":
 		next.windup_damage += float(fact.amount)
-		if next.windup_damage >= 15.0 or cancel_action:
+		if next.windup_damage >= authored.windup_interrupt_damage or cancel_action:
 			cancel_action = true
 			next.windup_damage = 0.0
-			next.stagger_remaining_frames = 30 if fact.hp_after > 0.0 else 0
+			next.stagger_remaining_frames = authored.stagger_frames if fact.hp_after > 0.0 else 0
 	return {"ok": true, "state": next, "cancel_action": cancel_action}
 
 
-static func advance(kind: String, state: Dictionary, before_action: Dictionary, after_action: Dictionary) -> Dictionary:
+static func advance(kind: String, authored: Dictionary, state: Dictionary, before_action: Dictionary, after_action: Dictionary) -> Dictionary:
 	var next := state.duplicate(true)
 	var requests: Array[Dictionary] = []
 	match kind:
@@ -97,14 +97,14 @@ static func advance(kind: String, state: Dictionary, before_action: Dictionary, 
 			if next.retreat_remaining_frames > 0:
 				next.retreat_remaining_frames -= 1
 			if before_action.phase == "ACTIVE" and after_action.phase == "RECOVERY" and before_action.action_id == "shattered_sentinel.shield_sweep":
-				next.retreat_remaining_frames = 48
+				next.retreat_remaining_frames = authored.retreat_frames
 				var direction := -_vector(before_action.committed_aim)
 				next.retreat_direction = {"x": direction.x, "y": direction.y}
 		"stone_shell_strider":
 			if next.shell_remaining_frames > 0:
 				next.shell_remaining_frames -= 1
 				if next.shell_remaining_frames == 0:
-					next.open_remaining_frames = 30
+					next.open_remaining_frames = authored.open_frames
 			elif next.open_remaining_frames > 0:
 				next.open_remaining_frames -= 1
 		"ruins_wraith":
@@ -137,12 +137,12 @@ static func action_started(kind: String, state: Dictionary, action_id: String) -
 	return next
 
 
-static func damage_taken_multiplier(kind: String, state: Dictionary) -> float:
+static func damage_taken_multiplier(kind: String, authored: Dictionary, state: Dictionary) -> float:
 	if kind == "stone_shell_strider":
 		if state.shell_remaining_frames > 0:
-			return 0.30
+			return float(authored.shell_damage_multiplier)
 		if state.open_remaining_frames > 0:
-			return 1.30
+			return float(authored.open_damage_multiplier)
 	return 1.0
 
 
