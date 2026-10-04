@@ -1788,3 +1788,7 @@ keys,en,zh_CN
 "UI_NARRATIVE_SAVE_RETRY","The change was not saved. Try again.","未能保存更改，请重试。"
 "UI_NARRATIVE_NEEDS","Requirements","所需条件"
 "UI_NARRATIVE_COLLECTED","Collected","已收集。"
+"UI_TRAINING_PLAY","Practice","开始练习"
+"UI_TRAINING_PAUSE","Configure","调整配装"
+"UI_TRAINING_COMPLETE","Completed","已完成"
+"UI_TRAINING_SAVE_RETRY","Save failed. Retry.","保存失败，请重试。"
