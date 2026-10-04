@@ -219,16 +219,7 @@ func _on_setting_changed(_setting_id: StringName, _value: Variant) -> void:
 
 
 func _base_content_snapshot() -> Dictionary:
-	var packs: Array = [{
-		"pack_id": "base",
-		"pack_version": GAME_VERSION,
-		"schema_version": 1,
-		"fingerprint_sha256": "1".repeat(64),
-	}]
-	return {
-		"aggregate_sha256": SaveEnvelopeScript.content_snapshot_digest(packs),
-		"packs": packs,
-	}
+	return GameState._base_content_snapshot()
 
 
 func _service_root(legacy_path: String) -> String:

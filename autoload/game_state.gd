@@ -5,6 +5,10 @@ const SaveMigrationRegistryScript := preload("res://scripts/save/save_migration_
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SaveServiceScript := preload("res://scripts/save/save_service.gd")
 const RuntimeUserDataPathScript := preload("res://scripts/save/runtime_user_data_path.gd")
+const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
+const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
+const MetaFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
+const ProfileServiceScript := preload("res://scripts/progression/profile_runtime_service.gd")
 
 const SAVE_GAME_VERSION := "0.4.0-dev"
 const DEFAULT_PROFILE_ID := "slot_1"
@@ -52,12 +56,97 @@ var save_path: String = "user://plane_walker_save.json"
 var persistent: Dictionary = {}
 var _save_service: RefCounted
 var _save_service_path: String = ""
+var _profile_runtime: RefCounted
+var _profile_catalog: RefCounted
+var _content_binding: Dictionary = {}
 
 
 func _ready() -> void:
 	if save_path == "user://plane_walker_save.json":
 		save_path = RuntimeUserDataPathScript.resolve_default(save_path, "plane_walker_save.json")
-	load_persistent()
+	persistent = _default_persistent_data()
+	if _ensure_save_service().ok:
+		var loaded = _save_service.load_settings()
+		if loaded.ok:
+			persistent.settings = _settings_payload(loaded.payload)
+
+
+func activate_profile_content(registry: RefCounted) -> Dictionary:
+	if save_path.is_empty() or not registry is ContentRegistryScript:
+		return {"ok": false, "code": &"INVALID_ARGUMENT", "context": {}}
+	var binding := ContentSnapshotScript.snapshot(registry)
+	if binding.is_empty():
+		return {"ok": false, "code": &"CONTENT_UNAVAILABLE", "context": {}}
+	if _profile_runtime != null and _save_service_path == save_path and binding == _content_binding:
+		return {"ok": true, "code": &"OK", "context": {}}
+	var factory := MetaFactoryScript.from_registry(registry)
+	if not factory.ok:
+		return factory
+	var catalog: RefCounted = factory.context.catalog
+	var service := SaveServiceScript.new()
+	var configured = service.configure(_save_service_root_path(), SAVE_GAME_VERSION, binding)
+	if not configured.ok or not service.enable_meta_profile(catalog).ok:
+		return {"ok": false, "code": &"CONFIGURATION_INVALID", "context": {}}
+	var inspected = service.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
+	if inspected.code == &"CONTENT_MISMATCH":
+		var source := SaveServiceScript.new()
+		var prior := _legacy_content_snapshot()
+		source.configure(_save_service_root_path(), SAVE_GAME_VERSION, prior)
+		source.enable_meta_profile(catalog)
+		var legacy = source.inspect_profile(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
+		if not legacy.ok:
+			return {"ok": false, "code": inspected.code, "context": inspected.metadata.duplicate(true)}
+		var rebound = source.rebind_profile_content(DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN, prior, binding, legacy.payload)
+		if not rebound.ok:
+			return {"ok": false, "code": rebound.code, "context": rebound.metadata.duplicate(true)}
+		service = source
+	var old_save := _save_service
+	var old_path := _save_service_path
+	var old_catalog := _profile_catalog
+	var old_binding := _content_binding.duplicate(true)
+	var old_persistent := persistent.duplicate(true)
+	_save_service = service
+	_save_service_path = save_path
+	_profile_catalog = catalog
+	_content_binding = binding.duplicate(true)
+	if inspected.code == &"NOT_FOUND" and FileAccess.file_exists(save_path) and not _import_legacy_persistent():
+		_save_service = old_save
+		_save_service_path = old_path
+		_profile_catalog = old_catalog
+		_content_binding = old_binding
+		persistent = old_persistent
+		return {"ok": false, "code": &"LEGACY_IMPORT_FAILED", "context": {}}
+	var runtime := ProfileServiceScript.new()
+	var activated := runtime.configure(catalog, service, DEFAULT_PROFILE_ID, DEFAULT_SAVE_DOMAIN)
+	if not activated.ok:
+		_save_service = old_save
+		_save_service_path = old_path
+		_profile_catalog = old_catalog
+		_content_binding = old_binding
+		persistent = old_persistent
+		return activated
+	_profile_runtime = runtime
+	refresh_profile_state()
+	return activated
+
+
+func profile_runtime_service() -> RefCounted:
+	return _profile_runtime if _save_service_path == save_path else null
+
+
+func refresh_profile_state() -> bool:
+	var service := profile_runtime_service()
+	if service == null:
+		return false
+	var profile: Dictionary = service.snapshot()
+	var payload: Dictionary = service.payload()
+	payload["meta_profile_state"] = profile.duplicate(true)
+	for field: String in ProfileServiceScript.MIRROR_FIELDS:
+		payload[field] = profile[field].duplicate(true) if profile[field] is Array or profile[field] is Dictionary else profile[field]
+	payload["runs_completed"] = int(profile.statistics.finished_runs)
+	payload["victories"] = int(profile.statistics.victories)
+	persistent = _compose_persistent_values(payload, normalized_settings())
+	return true
 
 
 func set_setting(setting_id: String, value: Variant) -> bool:
@@ -87,6 +176,8 @@ func normalized_settings() -> Dictionary:
 
 
 func load_persistent() -> bool:
+	if profile_runtime_service() != null:
+		return refresh_profile_state()
 	var service_result = _ensure_save_service()
 	if not service_result.ok:
 		return false
@@ -112,6 +203,8 @@ func load_persistent() -> bool:
 
 
 func save_persistent() -> bool:
+	if profile_runtime_service() != null:
+		return false
 	var service_result = _ensure_save_service()
 	if not service_result.ok:
 		return false
@@ -131,6 +224,8 @@ func save_persistent() -> bool:
 
 
 func reset_persistent_data(delete_file: bool = false) -> void:
+	if profile_runtime_service() != null:
+		return
 	persistent = _default_persistent_data()
 	if not delete_file:
 		return
@@ -159,6 +254,9 @@ func _ensure_save_service():
 		return configured
 	_save_service = service
 	_save_service_path = save_path
+	_profile_runtime = null
+	_profile_catalog = null
+	_content_binding.clear()
 	return configured
 
 
@@ -176,9 +274,10 @@ func _import_legacy_persistent() -> bool:
 		return false
 
 	var registry = SaveMigrationRegistryScript.new()
-	var migration = registry.migrate(parsed, SaveEnvelopeScript.SCHEMA_VERSION, {
+	var migration = registry.migrate(parsed, SaveEnvelopeScript.META_PROFILE_SCHEMA_VERSION if _profile_catalog != null else SaveEnvelopeScript.SCHEMA_VERSION, {
 		"profile_id": DEFAULT_PROFILE_ID,
 		"save_domain": DEFAULT_SAVE_DOMAIN,
+		"meta_catalog": _profile_catalog,
 	})
 	if not migration.ok:
 		return false
@@ -230,6 +329,12 @@ func _default_settings_payload() -> Dictionary:
 
 
 func _base_content_snapshot() -> Dictionary:
+	var registry := ContentRegistryScript.new()
+	var report = registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], SAVE_GAME_VERSION, &"M1")
+	return {} if report.has_blocking_errors() else ContentSnapshotScript.snapshot(registry)
+
+
+func _legacy_content_snapshot() -> Dictionary:
 	var packs: Array = [{
 		"pack_id": "base",
 		"pack_version": SAVE_GAME_VERSION,
@@ -247,6 +352,8 @@ func _save_service_root_path() -> String:
 
 
 func record_run_summary(result: Dictionary) -> bool:
+	if profile_runtime_service() != null:
+		return false
 	var rooms_cleared := int(result.get("rooms_cleared", 0))
 	persistent["runs_completed"] = int(persistent.get("runs_completed", 0)) + 1
 	persistent["best_rooms_cleared"] = maxi(int(persistent.get("best_rooms_cleared", 0)), rooms_cleared)
