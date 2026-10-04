@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 import zipfile
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,6 +57,16 @@ def fixture_server(payload: bytes, wrong_range: bool = False):
 
 
 class FetchTemplatesTest(unittest.TestCase):
+    def test_release_redirect_is_limited_to_official_https_asset_host(self):
+        from subprocess import CompletedProcess
+        with patch.object(fetch_templates.subprocess, "run", return_value=CompletedProcess([], 0, '{"url_effective":"https://release-assets.githubusercontent.com/official"}', "")):
+            self.assertEqual(fetch_templates.resolve_release_url(), "https://release-assets.githubusercontent.com/official")
+        for destination in ("http://release-assets.githubusercontent.com/official", "https://example.org/untrusted"):
+            import json
+            with patch.object(fetch_templates.subprocess, "run", return_value=CompletedProcess([], 0, json.dumps({"url_effective": destination}), "")):
+                with self.assertRaisesRegex(ValueError, "host"):
+                    fetch_templates.resolve_release_url()
+
     @unittest.skipUnless(shutil.which("curl"), "curl is optional")
     def test_curl_backend_enforces_the_same_range_and_archive_contract(self):
         payload = fixture_archive()

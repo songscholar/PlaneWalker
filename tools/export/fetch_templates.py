@@ -13,6 +13,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -177,6 +178,22 @@ def install_templates(archive: Path, output: Path) -> None:
                 shutil.rmtree(temporary)
 
 
+def resolve_release_url() -> str:
+    result = subprocess.run([
+        "curl", "-4", "--silent", "--show-error", "--location", "--head", "--fail",
+        "--connect-timeout", "10", "--max-time", "40", "--retry", "2",
+        "--output", os.devnull, "--write-out", "%{json}", URL,
+    ], capture_output=True, text=True, timeout=130, check=False)
+    if result.returncode:
+        raise OSError(f"official release redirect failed ({result.returncode})")
+    metadata = json.loads(result.stdout)
+    resolved = metadata.get("url_effective", "")
+    parsed = urlsplit(resolved)
+    if parsed.scheme != "https" or parsed.hostname != "release-assets.githubusercontent.com":
+        raise ValueError("official release redirected to an unexpected host")
+    return resolved
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -186,7 +203,8 @@ def main() -> None:
     parser.add_argument("--transport", choices=("urllib", "curl"), default="curl" if shutil.which("curl") else "urllib")
     args = parser.parse_args()
     print(f"Fetching official Godot {VERSION}: {SIZE} bytes, SHA-256 {SHA256}", flush=True)
-    archive = download_archive(URL, SIZE, SHA256, args.cache, workers=args.workers, transport=args.transport)
+    url = resolve_release_url() if args.transport == "curl" else URL
+    archive = download_archive(url, SIZE, SHA256, args.cache, workers=args.workers, transport=args.transport)
     install_templates(archive, args.output)
     print(f"Verified export templates installed: {args.output}", flush=True)
 
