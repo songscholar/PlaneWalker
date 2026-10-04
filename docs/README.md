@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P11 five weapons, P12 five characters, and P13 complete Launch pools are certified locally. P14 native dungeon panels, Save continuation, and Player Replay are implemented with focused verification. P15 native Sentinel and Moth/payload boundaries are verified; complete encounter and boss production integration remains pending. P16 actual-content Profile, Main durable launch/death settlement, native Hub business panels, and native tutorial flow are implemented with focused verification. Combined product certification, full resume, final narrative flow, and Expansion remain active. P7/P9 retains coverage and formal export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P11 five weapons, P12 five characters, and P13 complete Launch pools are certified locally. P14 native dungeon panels, Save continuation, and Player Replay are implemented with focused verification. P15 native Sentinel and Moth/payload boundaries are verified; complete encounter and boss production integration remains pending. P16 actual-content Profile, reviewed history upgrades, Main durable launch/death settlement, native Hub/tutorial, and final fragment/ending/credits handoffs are verified separately. Combined product certification, full native resume, training, and Expansion remain active. P7/P9 retains coverage and formal export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -163,6 +163,13 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Tutorial Flow Evidence](current/2026-10-05-p16n-tutorial-flow-evidence.md) | 真实成功帧、物理保存、课程回顾与原生提示生命周期 | Verified Locally / Training and guided runs pending |
 | [P16 Native Narrative Flow Design](superpowers/specs/2026-10-05-plane-walker-p16o-native-narrative-flow-design.md) | 真实原生来源接触、胜利通行、结局保存和字幕身份 | Approved / Current |
 | [P16 Native Narrative Flow Plan](superpowers/plans/2026-10-05-plane-walker-p16o-native-narrative-flow.md) | 原生剧情协调器、失败重试和终局流程实施 | Active / Current |
+| [P16 Native Narrative Evidence](current/2026-10-05-p16o-native-narrative-evidence.md) | 真实接触、保存故障、过期回调、恢复与中英文原生渲染 | Verified Locally / Main handoff separate |
+| [P16 Main Narrative Flow Evidence](current/2026-10-05-p16-main-narrative-flow-evidence.md) | 正式最终碎片、结局、物理结算重试、片尾重启恢复与房间正确呈现 | Verified Locally / Five-boss combat separate |
+| [P16P Native Training Evidence](current/2026-10-05-p16p-native-training-evidence.md) | 150 个实际练习配置、五武器成功帧、一次性训练奖励与保存补偿 | Verified Locally / Arena and T05 separate |
+| [P16 Native Training Design](superpowers/specs/2026-10-05-plane-walker-p16p-native-training-design.md) | 隔离练习、真实动作认证与一次性档案奖励 | Approved / Current |
+| [P16 Native Training Plan](superpowers/plans/2026-10-05-plane-walker-p16p-native-training.md) | 实体训练、保存失败恢复与原生教学入口实施 | Active / Current |
+| [P16 Native Checkpoint Design](superpowers/specs/2026-10-05-plane-walker-p16q-native-checkpoint-design.md) | 真实安全快照、关闭重建与严格冷恢复 | Approved / Current |
+| [P16 Native Checkpoint Plan](superpowers/plans/2026-10-05-plane-walker-p16q-native-checkpoint.md) | 原生房间、玩家、档案与领域事务恢复 | Active / Current |
 | [P16G Native Material Evidence](current/2026-10-05-p16g-native-material-evidence.md) | 原生敌人死亡认证、材料保留重试与真实结算金额 | Verified Locally / Main integration pending |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |

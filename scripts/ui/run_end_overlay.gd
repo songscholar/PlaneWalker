@@ -9,6 +9,7 @@ const Phase := preload("res://scripts/application/run_phase.gd")
 @onready var restart_button: Button = $Panel/Margin/VBox/RestartButton
 var _profile_return := false
 var _host: Node
+var _presented_run_id := ""
 
 
 func _ready() -> void:
@@ -25,6 +26,9 @@ func _on_run_ended(run_id: String, result: Dictionary, _revision: int) -> void:
 		var native: Dictionary = _host.runtime_snapshot()
 		if native.get("run_id") != run_id or not Phase.is_terminal(int(native.get("phase", -1))):
 			return
+	if _presented_run_id == run_id:
+		return
+	_presented_run_id = run_id
 	var outcome := str(result.get("result", ""))
 	var title := tr("UI_RUN_COMPLETE") if outcome in ["floor_cleared", "victory"] else tr("UI_RUN_FAILED")
 	result_label.text = "%s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s" % [
@@ -58,6 +62,13 @@ func configure_profile_return(value: bool) -> void:
 func show_save_pending() -> void:
 	restart_button.text = tr("UI_RETRY")
 	restart_button.tooltip_text = tr("UI_SETTLEMENT_RETRY")
+
+
+func show_victory_save_retry() -> void:
+	show_save_pending()
+	result_label.text = tr("UI_SETTLEMENT_RETRY")
+	visible = true
+	FocusCoordinator.open_scope(self, restart_button)
 
 
 func hide_overlay() -> void:

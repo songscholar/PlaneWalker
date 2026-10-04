@@ -8,6 +8,8 @@ const FloorRuleEffectAuthorityScript := preload(
 const SettlementScript := preload("res://scripts/progression/run_settlement_authority.gd")
 const HubFlowScript := preload("res://scripts/hub/hub_flow_coordinator.gd")
 const TutorialFlowScript := preload("res://scripts/onboarding/tutorial_flow_coordinator.gd")
+const NarrativeFlowScript := preload("res://scripts/narrative/narrative_flow_coordinator.gd")
+const NativeRoomPresentationScript := preload("res://scripts/dungeon/native_room_presentation.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -35,6 +37,11 @@ var _profile_error := ""
 var _terminal_pending := false
 var _hub_flow: Node
 var _tutorial_flow: Node
+var _narrative_flow: Node
+var _selected_ending_id := ""
+var _credits_pending := false
+var _terminal_notice_run_id := ""
+var _room_presentation: Node
 
 
 func _ready() -> void:
@@ -60,6 +67,7 @@ func _ready() -> void:
 	_apply_localization()
 	_setup_hub()
 	_setup_tutorial()
+	_setup_narrative()
 	if _hub_flow == null:
 		_show_start_menu()
 	call_deferred("_apply_accessibility_to_runtime")
@@ -105,6 +113,32 @@ func _setup_tutorial() -> void:
 	flow.review_panel().closed.connect(_refresh_hub_after_review)
 
 
+func _setup_narrative() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var occurrences := Node2D.new()
+	occurrences.name = "NarrativeOccurrences"
+	add_child(occurrences)
+	var flow := NarrativeFlowScript.new()
+	flow.name = "NarrativeFlow"
+	add_child(flow)
+	var configured: Dictionary = flow.configure(runtime_host.content_registry(), _profile_service, runtime_host, launch_room_scene_host, combat_room.get_node("Player"), occurrences)
+	if not configured.ok:
+		_profile_error = str(configured.code)
+		flow.queue_free()
+		occurrences.queue_free()
+		return
+	_narrative_flow = flow
+	flow.ending_selected.connect(_on_ending_selected)
+	flow.credits_completed.connect(_on_credits_completed)
+	var resumed: Dictionary = flow.resume_selected_credits()
+	if resumed.ok and resumed.context.get("resumed", false):
+		_selected_ending_id = str(flow.panel().view_state().subject_id)
+		_credits_pending = true
+		if _hub_flow != null:
+			_hub_flow.hide_hub()
+
+
 func _refresh_hub_after_review() -> void:
 	if _hub_flow != null and _hub_flow.is_hub_visible():
 		_hub_flow.refresh()
@@ -148,6 +182,11 @@ func _configure_production_profile() -> void:
 
 
 func _configure_launch_dungeon_runtime() -> void:
+	_room_presentation = NativeRoomPresentationScript.new()
+	_room_presentation.name = "NativeRoomPresentation"
+	add_child(_room_presentation)
+	if not _room_presentation.configure(runtime_host, launch_room_scene_host, combat_room):
+		push_error("Native room presentation configuration failed")
 	_floor_rule_effect_authority = FloorRuleEffectAuthorityScript.new()
 	var player := combat_room.get_node_or_null("Player")
 	var authority_configured := bool(_floor_rule_effect_authority.call(
@@ -214,6 +253,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _tutorial_flow != null and _tutorial_flow.handle_input(event):
 		get_viewport().set_input_as_handled()
 		return
+	if _narrative_flow != null and _narrative_flow.panel().visible:
+		return
 	if _hub_flow != null and _hub_flow.is_hub_visible():
 		return
 	if not start_menu.visible and bool(dungeon_flow.call("handle_input", event)):
@@ -267,6 +308,8 @@ func _start_launch_run(launch_config: Dictionary) -> void:
 
 
 func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = false) -> bool:
+	if _credits_pending:
+		return false
 	if not from_candidate and (_profile_service == null or not _profile_error.is_empty()):
 		return false
 	get_tree().paused = false
@@ -287,8 +330,9 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 		elif from_launch:
 			launch_loadout_panel.call("show_start_rejected")
 		return false
+	_room_presentation.set_launch_mode(str(runtime_host.runtime_snapshot().config.get("milestone", "")) in ["LAUNCH", "EXPANSION"])
 	if not from_candidate:
-		var bound: Dictionary = _profile_service.bind_narrative_run(runtime_host.native_run_state(), combat_room.get_node("Player"))
+		var bound: Dictionary = _narrative_flow.bind_active_run() if _narrative_flow != null else {"ok": false, "code": &"NARRATIVE_NOT_CONFIGURED"}
 		if not bound.ok:
 			_profile_error = str(bound.code)
 			combat_room.process_mode = Node.PROCESS_MODE_DISABLED
@@ -301,6 +345,9 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 				combat_room.process_mode = Node.PROCESS_MODE_DISABLED
 				return false
 	_terminal_pending = false
+	_selected_ending_id = ""
+	_terminal_notice_run_id = ""
+	runtime_host.set_process(true)
 	if _hub_flow != null:
 		_hub_flow.close_panel()
 		_hub_flow.hide_hub()
@@ -312,6 +359,7 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	FocusCoordinator.close_scope(start_menu)
 	start_menu.visible = false
 	_on_run_started(runtime_host.runtime_snapshot().config)
+	status_label.visible = from_candidate
 	dungeon_flow.call("refresh", true)
 	return true
 
@@ -387,16 +435,31 @@ func _on_run_ended(run_id: String, result: Dictionary, _revision: int) -> void:
 	var native: Dictionary = runtime_host.runtime_snapshot()
 	if native.get("run_id") != run_id or not RunPhaseScript.is_terminal(int(native.get("phase", -1))):
 		return
+	if _terminal_notice_run_id == run_id:
+		return
+	_terminal_notice_run_id = run_id
 	if _tutorial_flow != null:
 		_tutorial_flow.close()
 		_tutorial_flow.retire_active_run()
-	if _profile_service != null and _profile_service.snapshot().active_launch_receipt.get("run_id") == run_id:
+	var profile_run: bool = _profile_service != null and _profile_service.snapshot().active_launch_receipt.get("run_id") == run_id
+	if profile_run:
 		_terminal_pending = true
 		if int(native.phase) == RunPhaseScript.Value.DEFEAT:
 			retry_terminal_settlement()
 	get_tree().paused = false
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
+	runtime_host.set_process(false)
 	pause_menu.hide_pause()
+	dungeon_flow.refresh(true)
+	if profile_run and int(native.phase) == RunPhaseScript.Value.VICTORY and _narrative_flow != null:
+		$RunEndOverlay.hide_overlay()
+		runtime_host.set_run_presentation_visible(false)
+		status_label.visible = false
+		var narrative: Dictionary = _narrative_flow.terminal_victory()
+		if not narrative.ok:
+			status_label.visible = true
+			status_label.text = tr("UI_NARRATIVE_SAVE_RETRY")
+		return
 	status_label.visible = true
 	var snapshot: Dictionary = runtime_host.call("runtime_snapshot")
 	status_label.text = "%s\n%s: %s\n%s: %s\n%s: %s" % [
@@ -406,6 +469,58 @@ func _on_run_ended(run_id: String, result: Dictionary, _revision: int) -> void:
 		tr("UI_REWARDS"), str((snapshot.get("build", {}) as Dictionary).get("items", [])),
 	]
 	print("Run ended: ", result)
+
+
+func _on_ending_selected(ending_id: String, _receipt: Dictionary) -> void:
+	if _profile_service == null or _saved_ending_id() != ending_id or int(runtime_host.runtime_snapshot().get("phase", -1)) != RunPhaseScript.Value.VICTORY:
+		return
+	_selected_ending_id = ending_id
+	GameState.refresh_profile_state()
+	_continue_victory()
+
+
+func _saved_ending_id() -> String:
+	if _profile_service == null:
+		return ""
+	var profile: Dictionary = _profile_service.snapshot()
+	var receipt: Dictionary = profile.active_launch_receipt if not profile.active_launch_receipt.is_empty() else profile.last_settlement_receipt
+	if receipt.is_empty():
+		return ""
+	var prefix := "ending-choice:%d:" % int(receipt.sequence)
+	for marker: String in profile.narrative_state.consumed_sources:
+		if marker.begins_with(prefix):
+			return marker.substr(prefix.length())
+	return ""
+
+
+func _continue_victory() -> bool:
+	var ending_id := _saved_ending_id()
+	if ending_id.is_empty() or _narrative_flow == null:
+		return false
+	_selected_ending_id = ending_id
+	var settled := retry_terminal_settlement()
+	if not settled.ok:
+		$RunEndOverlay.show_victory_save_retry()
+		return false
+	var credits: Dictionary = _narrative_flow.show_selected_credits(ending_id)
+	if not credits.ok:
+		$RunEndOverlay.show_victory_save_retry()
+		return false
+	_credits_pending = true
+	$RunEndOverlay.hide_overlay()
+	status_label.visible = false
+	return true
+
+
+func _on_credits_completed(ending_id: String, _receipt: Dictionary) -> void:
+	if _profile_service == null or not _credits_pending or ending_id != _selected_ending_id or _saved_ending_id() != ending_id:
+		return
+	if not _profile_service.snapshot().narrative_state.credits_completed.has(ending_id):
+		return
+	_credits_pending = false
+	_narrative_flow.retire_active_run()
+	GameState.refresh_profile_state()
+	_show_hub_after_run()
 
 
 func retry_terminal_settlement() -> Dictionary:
@@ -437,16 +552,29 @@ func retry_terminal_settlement() -> Dictionary:
 
 
 func return_to_hub() -> bool:
+	if _credits_pending:
+		return false
 	var terminal: Dictionary = runtime_host.runtime_snapshot()
 	if not RunPhaseScript.is_terminal(int(terminal.get("phase", -1))):
 		return false
 	if _terminal_pending:
 		if int(terminal.phase) == RunPhaseScript.Value.VICTORY:
-			status_label.text = tr("UI_ENDING_PENDING")
+			_continue_victory()
 			return false
 		if not retry_terminal_settlement().ok:
 			return false
+	if int(terminal.phase) == RunPhaseScript.Value.VICTORY and not _saved_ending_id().is_empty() and not _profile_service.snapshot().narrative_state.credits_completed.has(_saved_ending_id()):
+		_continue_victory()
+		return false
+	if _narrative_flow != null:
+		_narrative_flow.retire_active_run()
+	_show_hub_after_run()
+	return true
+
+
+func _show_hub_after_run() -> void:
 	get_tree().paused = false
+	_room_presentation.set_launch_mode(false)
 	$RunEndOverlay.hide_overlay()
 	combat_room.visible = false
 	combat_room.process_mode = Node.PROCESS_MODE_DISABLED
@@ -456,7 +584,6 @@ func return_to_hub() -> bool:
 		_hub_flow.show_hub()
 	else:
 		_show_start_menu()
-	return true
 
 
 func _toggle_pause() -> void:
