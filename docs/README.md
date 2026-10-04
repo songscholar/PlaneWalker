@@ -127,6 +127,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P15 Enemies and Bosses Design](superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md) | 22 敌人、五 Boss、攻击契约、遭遇与原生演员集成 | Approved / Current authority |
 | [P15 Enemies and Bosses Plan](superpowers/plans/2026-10-04-plane-walker-p15-enemies-bosses.md) | 固定帧敌方行为、内容目录与真实场景实现计划 | Active / Current |
 | [P15 Hostile Foundation Evidence](current/2026-10-04-p15-hostile-foundation-evidence.md) | 已验证的攻击状态、遭遇状态与目录基础 | Verified Locally / Current |
+| [P16 Hub, Meta and Narrative Design](superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md) | 三个 Hub 区域、成长预算、剧情与五结局权威 | Approved / Current authority |
+| [P16 Hub, Meta and Narrative Plan](superpowers/plans/2026-10-04-plane-walker-p16-hub-meta-narrative.md) | 档案、结算、锻造、剧情、教学与原生场景执行计划 | Active / Current |
+| [P16A Profile Domain Evidence](current/2026-10-04-p16a-profile-domain-evidence.md) | 成长树、严格局外档案、不可变局内投影与 JSON 兼容 | Verified Locally / Current |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |
