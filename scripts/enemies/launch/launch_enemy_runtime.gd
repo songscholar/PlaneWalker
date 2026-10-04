@@ -282,25 +282,33 @@ func species_speed_multiplier() -> float:
 	return float(_definition.mechanisms.overheat_speed_multiplier) if not _state.is_empty() and _definition.runtime_kind == "forge_titan" and _state.mechanism_state.overheat_remaining_frames > 0 else 1.0
 
 
-func prepare_lethal_transition() -> Dictionary:
+func prepare_lethal_transition(lethal_frame: int = -1) -> Dictionary:
 	if _state.is_empty() or _state.terminal:
 		return _failure("lethal_unavailable")
+	if lethal_frame == -1:
+		lethal_frame = int(_state.runtime_frame)
+	if lethal_frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1]:
+		return _failure("lethal_frame")
 	var final_death := true
 	var kind: String = _definition.runtime_kind
 	if kind == "chrono_guard" and not _state.mechanism_state.revival_used:
 		final_death = false
 	if kind == "eternal_hound" and not _state.mechanism_state.dormancy_used:
 		final_death = false
-	return {"ok": true, "final_death": final_death, "hp_after": 0.0 if final_death else 1.0, "hostile_source_id": _state.identity.hostile_source_id, "runtime_frame": _state.runtime_frame, "before_digest": JSON.stringify(snapshot(), "", true, true).sha256_text()}
+	if not final_death and lethal_frame > int(_state.runtime_frame) and _state.mechanism_state.damage_claims.size() >= Mechanisms.MAX_DAMAGE_CLAIMS:
+		return _failure("lethal_claim_capacity")
+	return {"ok": true, "final_death": final_death, "hp_after": 0.0 if final_death else 1.0, "hostile_source_id": _state.identity.hostile_source_id, "runtime_frame": _state.runtime_frame, "lethal_frame": lethal_frame, "before_digest": JSON.stringify(snapshot(), "", true, true).sha256_text()}
 
 
 func commit_lethal_transition(decision: Dictionary) -> bool:
-	if decision != prepare_lethal_transition():
+	if decision.get("ok") != true or typeof(decision.get("lethal_frame")) != TYPE_INT or decision != prepare_lethal_transition(decision.lethal_frame):
 		return false
 	if decision.final_death:
 		return true
 	_action.cancel(&"nonterminal_lethal")
 	_state.mechanism_state.hp_after = 1.0
+	if int(decision.lethal_frame) > int(_state.runtime_frame):
+		_state.mechanism_state.damage_claims.append(Mechanisms.recovery_frame_claim(_definition.runtime_kind, int(decision.lethal_frame)))
 	if _definition.runtime_kind == "chrono_guard":
 		_state.mechanism_state.revival_used = true
 		_state.mechanism_state.recovery_remaining_frames = int(_definition.mechanisms.revival_recovery_frames)

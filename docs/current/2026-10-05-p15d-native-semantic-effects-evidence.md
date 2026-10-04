@@ -25,6 +25,8 @@ The authority supplies `work_records_for_snapshot` and a foreign active-zone cap
 
 Zone records now distinguish `initial_damage` from recurring `damage`, with independent `tick_damage_type`. Ordinary corridors/pulses apply their authored initial hit once and preserve only their slow afterward. The canonical Bramble growth, Rift fusion, time storm and flame breath retain their declared DOT damage from the actual action hit schedule. Fissure pool damage uses the canonical Forge lava-pool baseline; Chaos outburst periodic burn uses its existing authored burn damage and Fire damage type. The multiplier comes from the sealed current hit fact, retaining accepted-frame control and species scaling. Boss periodic zones still require their separate per-mechanism verification.
 
+Guard and Hound native lethal preparation now authenticates the active Health transaction frame. A bounded lifecycle claim in the existing mechanism claim ledger prevents counting that same lethal frame as elapsed recovery time. Guard retains all ninety subsequent frames, and Hound all three hundred; actual Router healing restores fifty-four and thirty-five HP respectively. Direct domain damage keeps its existing frame-zero behavior. This change adds no checkpoint fields or canonical content changes.
+
 ## Verification
 
 All logs are under the platform temporary test root. Godot line coverage is unsupported.
@@ -37,6 +39,8 @@ All logs are under the platform temporary test root. Godot line coverage is unsu
 - Actual finite Titan terminal hazards: `Hn9OAk` and canonical-data rerun `pEcPuc`, 1/1 GREEN, clean logs; refreshed enemy definition/domain contract `qBBY7w`, 1/1 GREEN.
 - Cold status binding and precise room disposal: `gdB553`, 1/1 GREEN, clean logs. An intermediate `nXPwB7` used exact float equality for 1.15 times 0.80; corrected to the existing tolerance-aware assertion and reran.
 - Initial-versus-periodic correction: coordinated actual Guard corridor RED `NRSHko` (frame 126 repeated another 28 damage), then Router GREEN `WkmAen`; full owned semantic/history/death/disposal rerun `nXHLTT`, 1/1 GREEN, clean logs.
+- Buffered native recovery RED `pfFV40` reproduced both timers ending one frame early. GREEN `vQZTAn` certifies complete recovery intervals, independent Stop, exact actor/Health rollback, stable retry, one healing publication, retained counted parent and one final-death receipt after the next lethal. Existing direct-domain recovery and all twenty-two species regression GREEN `kE2m53`, both 1/1 with clean logs.
+- Final typed-frame gate rejects malformed decision Variants without coercion; refreshed native recovery GREEN `ZO2qYn` and twenty-two species/domain GREEN `oKpqpd`, both 1/1 with clean logs.
 
 The initial module parse run `8w2Bfb` and incorrectly named native configuration test run `HrFBw3` are not counted as GREEN. Both issues were fixed before the final native sink run.
 

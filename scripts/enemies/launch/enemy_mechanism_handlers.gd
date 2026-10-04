@@ -129,6 +129,10 @@ static func accept_damage(kind: String, authored: Dictionary, state: Dictionary,
 	return {"ok": true, "state": next, "cancel_action": cancel_action}
 
 
+static func recovery_frame_claim(kind: String, frame: int) -> String:
+	return ("enemy_lethal_recovery:%s:%d" % [kind, frame]).sha256_text()
+
+
 static func advance(kind: String, authored: Dictionary, state: Dictionary, before_action: Dictionary, after_action: Dictionary, max_hp: float, action_paused: bool, move_speed: float) -> Dictionary:
 	var next := state.duplicate(true)
 	var requests: Array[Dictionary] = []
@@ -170,13 +174,13 @@ static func advance(kind: String, authored: Dictionary, state: Dictionary, befor
 			if not action_paused and next.burrow_remaining_frames > 0:
 				next.burrow_remaining_frames -= 1
 		"chrono_guard":
-			if next.recovery_remaining_frames > 0:
+			if next.recovery_remaining_frames > 0 and not next.damage_claims.has(recovery_frame_claim(kind, int(after_action.last_runtime_frame))):
 				next.recovery_remaining_frames -= 1
 				if next.recovery_remaining_frames == 0:
 					next.hp_after = minf(max_hp, float(authored.revival_hp))
 					requests.append({"kind": "restore_hp", "amount": next.hp_after})
 		"eternal_hound":
-			if next.dormancy_remaining_frames > 0:
+			if next.dormancy_remaining_frames > 0 and not next.damage_claims.has(recovery_frame_claim(kind, int(after_action.last_runtime_frame))):
 				next.dormancy_remaining_frames -= 1
 				if next.dormancy_remaining_frames == 0:
 					next.sigil_hp = 0.0

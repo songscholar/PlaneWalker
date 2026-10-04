@@ -22,6 +22,7 @@
 - [x] Verify Watcher death recipient penalty and independently warned finite Titan corpse explosion/pool through actual Health and threat registry.
 - [x] Provide shared-zone capacity admission and semantic work records for the coordinated Router/Encounter authority.
 - [x] Separate initial zone damage from declared recurring DOT and verify a real Guard corridor does not repeat its initial hit.
+- [x] Retain full Guard/Hound recovery intervals after buffered native lethal frames, including Stop independence, rollback and once-only Health publication.
 
 ## Remaining Production Mechanics
 

@@ -72,11 +72,15 @@ func _test_revival(implementation: Script) -> void:
 		var runtime := _runtime(implementation, pair[0])
 		var before: Dictionary = runtime.snapshot()
 		var decision: Dictionary = runtime.prepare_lethal_transition()
+		suite.assert_true(not runtime.prepare_lethal_transition(2).ok and not runtime.prepare_lethal_transition(-2).ok, "lethal frame accepts only current or buffered next frame")
 		suite.assert_true(decision.ok and not decision.final_death, "first lethal is nonterminal: " + pair[0])
 		suite.assert_equal(runtime.snapshot(), before, "lethal preparation never mutates domain")
 		var forged := decision.duplicate(true)
 		forged.hp_after = 20.0
 		suite.assert_true(not runtime.commit_lethal_transition(forged), "forged lifecycle decision rejects")
+		forged = decision.duplicate(true)
+		forged.lethal_frame = {}
+		suite.assert_true(not runtime.commit_lethal_transition(forged), "malformed lethal-frame Variant rejects without coercion")
 		suite.assert_true(runtime.commit_lethal_transition(decision), "authored nonterminal lifecycle commits")
 		suite.assert_true(not runtime.commit_lethal_transition(decision), "once-only lifecycle ticket cannot repeat")
 		suite.assert_true(runtime.add_control_source("stop-revival", "stop", 30, 1.0), "recovery accepts independent Stop source")

@@ -384,7 +384,10 @@ func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: fl
 		return {}
 	if not is_instance_valid(health) or health.dead or damage_info == null or not is_finite(final_amount) or final_amount < health.current_hp or not _launch_runtime.has_method("prepare_lethal_transition"):
 		return {"ok": false}
-	var decision: Dictionary = _launch_runtime.prepare_lethal_transition()
+	var lethal_frame: int = health.frame_signal_transaction_runtime_frame()
+	if lethal_frame < 0:
+		lethal_frame = int(_launch_runtime.snapshot().runtime_frame)
+	var decision: Dictionary = _launch_runtime.prepare_lethal_transition(lethal_frame)
 	if not decision.ok:
 		return decision
 	decision["owner_instance_id"] = get_instance_id()
