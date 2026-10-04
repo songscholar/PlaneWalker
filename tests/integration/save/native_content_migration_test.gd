@@ -13,6 +13,8 @@ const Ledger := preload("res://scripts/save/actual_content_compatibility_ledger.
 const Checkpoint := preload("res://scripts/save/native_run_checkpoint_authority.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Route := preload("res://tests/support/native_launch_route_fixture.gd")
+const Phase := preload("res://scripts/application/run_phase.gd")
+const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 
 
 func _ready() -> void:
@@ -25,7 +27,8 @@ func _run() -> void:
 	var gun := await _fixture(suite, false, "gun")
 	var staff := await _fixture(suite, false, "staff")
 	var terminal := await _fixture(suite, true)
-	if native.is_empty() or gun.is_empty() or staff.is_empty() or terminal.is_empty():
+	var time_boss := await _fixture(suite, false, "sword", true)
+	if native.is_empty() or gun.is_empty() or staff.is_empty() or terminal.is_empty() or time_boss.is_empty():
 		suite.finish(get_tree())
 		return
 	var catalog: RefCounted = Factory.load_base().context.catalog
@@ -39,6 +42,7 @@ func _run() -> void:
 		await _migrate(suite, gun, sources[index], catalog, "gun_%d" % index)
 		await _migrate(suite, staff, sources[index], catalog, "staff_%d" % index)
 		await _migrate(suite, terminal, sources[index], catalog, "terminal_%d" % index)
+		await _migrate(suite, time_boss, sources[index], catalog, "time_boss_%d" % index)
 	for kind: String in ["actor", "authored"]:
 		var changed := native.duplicate(true)
 		var aggregate: Dictionary = Replay.decode_replay_json(changed.payload.native_run_checkpoint.encounter_codec).replay
@@ -57,7 +61,7 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
-func _fixture(suite: RefCounted, terminal: bool, weapon: String = "sword") -> Dictionary:
+func _fixture(suite: RefCounted, terminal: bool, weapon: String = "sword", time_boss: bool = false) -> Dictionary:
 	var main := Main.instantiate()
 	add_child(main)
 	await get_tree().process_frame
@@ -71,29 +75,54 @@ func _fixture(suite: RefCounted, terminal: bool, weapon: String = "sword") -> Di
 	var save := Save.new()
 	var service := Service.new()
 	var slot := "terminal_fixture" if terminal else "native_fixture_" + weapon
+	if time_boss:
+		slot = "native_fixture_time_boss"
 	suite.assert_true(save.configure(Paths.resolve_default("user://p16s-fixture", "p16s-fixture"), "0.4.0-dev", binding).ok and service.configure(catalog, save, slot, "base", {"meta_profile_state": Fixtures.profile(catalog)}).ok, "migration fixture owns an actual physical Profile")
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": weapon, "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 4}
 	suite.assert_true(host.start_profile_run(config, service, int(service.snapshot().revision)).ok, "migration fixture launches through actual Host")
 	var selected := false
-	for choice: Dictionary in host.route_choices():
-		if choice.node_id == "layer_01_a":
-			selected = host.select_route(StringName(choice.edge_id), int(host.runtime_snapshot().revision)).ok
-			break
+	if time_boss:
+		selected = await _route_to_time_boss(suite, host)
+	else:
+		for choice: Dictionary in host.route_choices():
+			if choice.node_id == "layer_01_a":
+				selected = host.select_route(StringName(choice.edge_id), int(host.runtime_snapshot().revision)).ok
+				break
 	suite.assert_true(selected, "migration fixture binds an actual authored room")
+	if not selected:
+		await _dispose(main)
+		return {}
 	var controller: Node = main.get_node("CombatRoom01")
 	var player: Node = controller.get_node("Player")
 	var runner: Node = controller.encounter_runner()
 	host.set_dungeon_selection_safety(false)
 	player.health.acquire_invulnerability_source(&"migration_fixture")
 	var ready := false
-	for _frame: int in range(80):
+	var watch: Dictionary = {}
+	for _frame: int in range(1500 if time_boss else 80):
+		if time_boss:
+			for actor: Node2D in controller.get_node("Enemies").get_children():
+				player.global_position = actor.global_position + Vector2(32.0, 0.0)
 		if not player.advance_action_frame():
 			break
 		ready = runner.native_launch_snapshot().get("actors", {}).size() > 0
+		if time_boss:
+			ready = false
+			for actor: Node in controller.get_node("Enemies").get_children():
+				var state: Dictionary = actor.launch_runtime_snapshot().runtime
+				if state.action.phase == "WARNING" and state.action.action_id == "traitor_self_rewind":
+					watch = actor.native_watch_snapshot()
+					ready = watch.hittable and watch.cast_generation > 0
 		if ready:
 			break
 		await get_tree().physics_frame
 	suite.assert_true(ready, "migration fixture retains real native actors at an accepted frame")
+	if not ready:
+		await _dispose(main)
+		return {}
+	if time_boss:
+		suite.assert_true(int(host.runtime_snapshot().current_floor_index) == 2 and controller.get_node("Enemies").get_child_count() == 1 and controller.get_node("Enemies").get_child(0).get("_launch_definition").id == "time_sovereign", "historical fixture reaches the actual third-floor Time Sovereign without injecting its saved cast")
+	var native_before: Dictionary = runner.native_launch_snapshot()
 	if terminal:
 		host.native_checkpoint_participants().facade.advance_time(1.0)
 		suite.assert_true(host.native_checkpoint_participants().runtime.report_player_died("migration_fixture").ok, "migration fixture uses actual terminal settlement")
@@ -116,7 +145,50 @@ func _fixture(suite: RefCounted, terminal: bool, weapon: String = "sword") -> Di
 	else:
 		suite.assert_true(service.snapshot().active_launch_receipt.is_empty() and not service.snapshot().last_settlement_receipt.is_empty(), "terminal migration starts from actual settled lineage")
 	await _dispose(main)
-	return {"payload": payload, "binding": binding, "registry": registry, "next_native": next_native, "next_player": next_player, "terminal": terminal}
+	return {"payload": payload, "binding": binding, "registry": registry, "native_before": native_before, "watch": watch, "next_native": next_native, "next_player": next_player, "terminal": terminal}
+
+
+func _route_to_time_boss(suite: RefCounted, host: Node) -> bool:
+	# Earlier combat receipts are fixtures; the saved Time Boss and cast are native.
+	for _step: int in range(140):
+		var state: Dictionary = host.runtime_snapshot()
+		var node: Dictionary = host.native_run_state().current_floor_node()
+		if int(state.current_floor_index) == 2 and node.room_type == "boss":
+			return true
+		var result: Variant
+		if not state.open_offer.is_empty():
+			var offer: Dictionary = state.open_offer
+			host._on_option_chosen(str(offer.offer_id), str(offer.options[0].option_id), int(offer.revision))
+			result = {"ok": int(host.runtime_snapshot().revision) > int(state.revision), "code": "reward"}
+		elif int(state.phase) == Phase.Value.RUN_PREPARING:
+			result = host.start_next_floor(int(state.revision))
+		elif node.id == state.floor_plan.entry_node_id or node.cleared:
+			var choices: Array = host.route_choices()
+			if choices.is_empty():
+				return false
+			var selected: Dictionary = choices[0]
+			for choice: Dictionary in choices:
+				if choice.room_type in ["combat", "elite", "boss"]:
+					selected = choice
+					break
+			result = host.select_route(StringName(selected.edge_id), int(state.revision))
+		else:
+			match node.room_type:
+				"shop": result = host.leave_merchant(int(state.revision))
+				"event": result = host.choose_event_option(&"decline", int(state.revision)) if host.dungeon_ui_context().event.phase == "open" else host.dismiss_event(int(state.revision))
+				"treasure", "rest": result = host.resolve_room_interaction(&"leave", int(state.revision))
+				_:
+					if node.room_type == "boss":
+						var launch: Dictionary = host.native_checkpoint_participants().profile.snapshot().active_launch_receipt
+						var source := {"schema_id": Settlement.SOURCE_TYPE, "run_id": launch.run_id, "launch_sequence": int(launch.sequence), "floor_id": state.floor_plan.floor_id, "node_id": node.id, "kind": "boss", "payload": {"actor_role": "principal", "boss_id": Settlement.BOSS_ORDER[int(state.current_floor_index)]}}
+						source["source_id"] = Settlement.source_id(source, source.payload.boss_id)
+						host.native_run_state().events.append({"type": Settlement.SOURCE_TYPE, "receipt": source})
+					result = host.native_checkpoint_participants().runtime.complete_current_room()
+		if not result.ok:
+			suite.assert_true(false, "historical Time Boss route progresses at %s: %s" % [node.id, result.code])
+			return false
+		await get_tree().process_frame
+	return false
 
 
 func _migrate(suite: RefCounted, fixture: Dictionary, source: Dictionary, catalog: RefCounted, id: String, refuse: bool = false) -> void:
@@ -176,6 +248,15 @@ func _migrate(suite: RefCounted, fixture: Dictionary, source: Dictionary, catalo
 		var restored: Variant = main.get_node("RunRuntimeHost").restore_profile_checkpoint(state.profile_runtime_service(), int(state.profile_runtime_service().snapshot().revision))
 		suite.assert_true(restored.ok, "migrated physical checkpoint cold-restores through another actual Main: " + id + " " + str(restored.code))
 		if restored.ok and not fixture.terminal:
+			if not fixture.watch.is_empty():
+				var actors := main.get_node("CombatRoom01/Enemies")
+				suite.assert_equal(actors.get_child_count(), 1, "historical Time Boss reconstructs one counted body")
+				if actors.get_child_count() == 1:
+					var boss := actors.get_child(0)
+					var watch := boss.get_node_or_null("WatchHurtbox") as Area2D
+					suite.assert_true(watch != null and watch.collision_layer == 4 and watch.get_node_or_null("HealthComponent") == null and boss.get_node("Hurtbox").collision_layer == 0, "historical Time Boss uses the current real Watch scene without a second Health or reward owner")
+					suite.assert_equal(boss.native_watch_snapshot(), fixture.watch, "authenticated historical migration preserves the pending Watch cast and threshold")
+				suite.assert_equal(main.get_node("CombatRoom01").encounter_runner().native_launch_snapshot(), fixture.native_before, "historical Time Boss preserves its whole native checkpoint before the next accepted frame")
 			await get_tree().physics_frame
 			var player: Node = main.get_node("CombatRoom01/Player")
 			suite.assert_true(player.advance_action_frame(), "migrated active checkpoint accepts original next frame")
