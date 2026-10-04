@@ -46,15 +46,17 @@ func _ready() -> void:
 
 func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 	var sources: Array = ledger.trusted_sources(_target, _catalog.fingerprint())
-	_suite.assert_equal(sources.size(), 3, "ledger contains only three audited actual-content sources")
+	_suite.assert_equal(sources.size(), 4, "ledger contains only four audited actual-content sources")
 	_suite.assert_true(not ledger.audit_view().is_empty(), "ledger authenticates pinned metadata and full descriptor proof")
-	if sources.size() != 3:
+	if sources.size() != 4:
 		return
 	_suite.assert_equal(sources[0], original, "5bee/54bee shared source derives from the complete historical descriptor")
 	var middle: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p16_hub_before_narrative.json"))
 	_suite.assert_equal(sources[1].packs[0].fingerprint_sha256, Descriptor.canonical_digest(middle), "100d754 source derives from complete intermediate Hub descriptor")
 	var narrative: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p16_narrative_before_training.json"))
 	_suite.assert_equal(sources[2].packs[0].fingerprint_sha256, Descriptor.canonical_digest(narrative), "b6e6a2c Narrative source derives from its complete committed descriptor")
+	var before_ambush: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p17_before_native_ambush.json"))
+	_suite.assert_equal(sources[3].packs[0].fingerprint_sha256, Descriptor.canonical_digest(before_ambush), "native ambush source derives from the complete retained pre-anchor descriptor")
 	_suite.assert_true(ledger.trusted_sources(_target, "0".repeat(64)).is_empty(), "different Meta semantics cannot authorize rebinding")
 	_suite.assert_true(ledger.trusted_sources(sources[0], _catalog.fingerprint()).is_empty(), "unknown or reverse target has no implicit compatibility")
 	for mutation: String in ["pack", "version", "schema", "aggregate", "extra", "mod"]:
