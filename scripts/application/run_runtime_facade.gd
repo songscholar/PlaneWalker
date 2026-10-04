@@ -1415,6 +1415,23 @@ func current_encounter_definition() -> Dictionary:
 	)
 
 
+func event_encounter_definition(profile_id: String) -> Dictionary:
+	if not _booted or not _is_floor_plan_run() or _launch_encounter_catalog == null:
+		return {}
+	var room := current_room_definition()
+	if room.get("type") != "event" or not room.get("template") is Dictionary:
+		return {}
+	var continuation := _current_event_continuation()
+	if continuation.get("kind") != "encounter" or continuation.get("encounter_id") != profile_id:
+		return {}
+	return _launch_encounter_catalog.resolve_for_event(
+		profile_id,
+		int(_orchestrator.snapshot().get("run_seed", 0)),
+		str(room.get("node_id", "")),
+		room.template
+	)
+
+
 func open_current_event(runtime_context: Dictionary = {}):
 	var readiness = _require_event_room("open_current_event")
 	if not readiness.ok:

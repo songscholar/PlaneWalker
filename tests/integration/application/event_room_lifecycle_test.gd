@@ -45,6 +45,9 @@ class EventFacadeSpy:
 	func event_view_state() -> Dictionary:
 		return view.duplicate(true)
 
+	func _current_event_continuation() -> Dictionary:
+		return continuation.duplicate(true)
+
 	func choose_current_event_option(_option_id: StringName, expected_revision: int):
 		if expected_revision != int(state["revision"]):
 			return CommandResultScript.failure(&"STALE_REVISION", int(state["revision"]))
@@ -140,6 +143,7 @@ class EventRunnerSpy:
 	var cancel_calls := 0
 	var active := false
 	var encounter_id := ""
+	var failure: Dictionary = {}
 
 	func start_encounter(encounter: Dictionary, _run_seed: int, _room_number: int) -> void:
 		start_calls += 1
@@ -154,7 +158,7 @@ class EventRunnerSpy:
 		return active
 
 	func snapshot() -> Dictionary:
-		return {"active": active, "encounter_id": encounter_id}
+		return {"active": active, "encounter_id": encounter_id, "alive_count": 1 if active else 0, "pending_spawn_count": 0, "failure": failure.duplicate(true)}
 
 
 func _ready() -> void:
@@ -305,6 +309,7 @@ func _test_pending_encounter_uses_authenticated_completion(suite) -> void:
 	suite.assert_equal(facade.complete_room_calls, 0, "wrong encounter ID cannot clear room")
 	suite.assert_true(bool(runtime.snapshot()["room_active"]), "wrong encounter ID keeps event active")
 
+	runner.active = false
 	runner.encounter_completed.emit(&"encounter_profile_forest_adapter_v1")
 	suite.assert_equal(facade.encounter_calls, 1, "matching encounter completes through Facade")
 	suite.assert_equal(
@@ -331,6 +336,8 @@ func _test_pending_encounter_failure_uses_authenticated_completion(suite) -> voi
 	var runtime: Node = fixture["runtime"]
 	var runner: EventRunnerSpy = fixture["runner"]
 	suite.assert_true(runtime.begin_current_room().ok, "failed encounter fixture opens")
+	runner.active = false
+	runner.failure = {"code": "PLAYER_DEFEATED"}
 	runner.encounter_failed.emit(
 		&"encounter_profile_forest_adapter_v1",
 		&"PLAYER_DEFEATED",

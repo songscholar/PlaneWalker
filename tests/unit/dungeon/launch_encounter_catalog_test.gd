@@ -48,6 +48,24 @@ func _run() -> void:
 	suite.assert_equal(catalog.enemy_definition("chrono_warden"), {}, "Launch cannot resolve M1 compatibility Boss")
 	suite.assert_equal(catalog.spawn_slot("enemy_wave_primary").node_path, "EncounterAnchors/enemy_wave_primary", "Launch uses real streamed anchors")
 	suite.assert_equal(catalog.spawn_slot("elite_primary").node_path, "EncounterAnchors/elite_primary", "elite waves bind actual authored elite anchor")
+	suite.assert_true(catalog.has_method("resolve_for_event"), "Launch event ambush resolves against actual event geometry")
+	if catalog.has_method("resolve_for_event"):
+		for template_id: String in ["room_event_shrine", "room_event_crossroads", "room_event_mirror_hall"]:
+			var event_template: Dictionary = registry.get_content(StringName(template_id))
+			var event_encounter: Dictionary = catalog.resolve_for_event(Ids.PROFILE_IDS[0], 6, "layer_03_c", event_template)
+			suite.assert_true(not event_encounter.is_empty() and event_encounter.get("room_type") == "combat", "event geometry accepts an authored ordinary combat recipe")
+			suite.assert_equal(catalog.resolve_for_event(Ids.PROFILE_IDS[0], 6, "layer_03_c", event_template), event_encounter, "event recipe and offsets are deterministic")
+			suite.assert_equal(catalog.encounter_definition(event_encounter.get("id", "")), event_encounter, "event resolution preserves the concrete authored recipe")
+			suite.assert_equal(catalog.resolve_for_node(Ids.PROFILE_IDS[0], 6, "layer_03_c", "combat", template_id), {}, "event resolution cannot weaken ordinary template compatibility")
+		var missing_event_anchor: Dictionary = registry.get_content(&"room_event_crossroads")
+		missing_event_anchor.spawn_anchors = [missing_event_anchor.spawn_anchors[0]]
+		suite.assert_equal(catalog.resolve_for_event(Ids.PROFILE_IDS[0], 6, "layer_03_c", missing_event_anchor), {}, "event recipes require their actual declared enemy anchor")
+		var entry_overlap: Dictionary = registry.get_content(&"room_event_crossroads")
+		entry_overlap.spawn_anchors[1].position = entry_overlap.spawn_anchors[0].position.duplicate()
+		suite.assert_equal(catalog.resolve_for_event(Ids.PROFILE_IDS[0], 6, "layer_03_c", entry_overlap), {}, "event geometry refuses overlap with Player entry")
+		suite.assert_equal(catalog.resolve_for_event(Ids.PROFILE_IDS[0], 6, "", registry.get_content(&"room_event_crossroads")), {}, "event resolution requires actual node identity")
+		suite.assert_equal(catalog.resolve_for_event(Ids.PROFILE_IDS[0], 6, "layer_03_c", registry.get_content(&"room_combat_open_field")), {}, "event resolution rejects ordinary rooms")
+		suite.assert_equal(catalog.resolve_for_event("unknown_launch", 6, "layer_03_c", registry.get_content(&"room_event_crossroads")), {}, "event resolution rejects unknown profiles")
 	var isolated: Dictionary = catalog.enemy_definition("shattered_sentinel")
 	isolated.scene = "res://arbitrary.tscn"
 	suite.assert_true(catalog.enemy_definition("shattered_sentinel").scene.ends_with("enemy_shattered_sentinel.tscn"), "actor lookups are deeply isolated")

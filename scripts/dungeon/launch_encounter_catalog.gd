@@ -130,6 +130,26 @@ func enemy_definition(enemy_id: String) -> Dictionary:
 	return _actors.get(enemy_id, {}).duplicate(true) if not _snapshot.is_empty() else {}
 
 
+func resolve_for_event(profile_id: String, run_seed: int, node_id: String, template: Dictionary) -> Dictionary:
+	if _snapshot.is_empty() or not _profiles.has(profile_id) or node_id.is_empty() or node_id.length() > 64:
+		return {}
+	var parsed := Room.new().configure(template)
+	if not parsed.ok or parsed.definition.room_type != "event":
+		return {}
+	var profile: Dictionary = _profiles[profile_id]
+	if not parsed.definition.floor_ids.has(profile.floor_id):
+		return {}
+	var candidates: Array[String] = []
+	for recipe: Dictionary in profile.recipes:
+		if recipe.room_type == "combat" and _valid_spawn_positions(recipe, parsed.definition):
+			candidates.append(recipe.id)
+	candidates.sort()
+	if candidates.is_empty():
+		return {}
+	var rng := Seed.make_rng(run_seed, StringName("launch_event_encounter_v1:%s:%s" % [profile.floor_id, node_id]))
+	return _recipes[profile_id + "." + candidates[rng.randi_range(0, candidates.size() - 1)]].duplicate(true)
+
+
 func spawn_slot(slot_id: String) -> Dictionary:
 	if _snapshot.is_empty() or slot_id not in ["enemy_wave_primary", "elite_primary", "boss_primary"]:
 		return {}

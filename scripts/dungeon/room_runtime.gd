@@ -240,9 +240,13 @@ func sync_event_result(result: Variant) -> bool:
 	if not view_value is Dictionary or (view_value as Dictionary).is_empty():
 		return false
 	var view := view_value as Dictionary
+	if _result_revision(result) != _current_revision() or view != event_view_state():
+		return false
 	var phase := str(view.get("phase", ""))
 	var pending_kind := str(view.get("pending_kind", ""))
 	var continuation_value: Variant = context.get("continuation", {})
+	if not _facade.has_method("_current_event_continuation") or not continuation_value is Dictionary or continuation_value != _facade.call("_current_event_continuation"):
+		return false
 	if phase in ["pending_reward", "pending_encounter"]:
 		if not continuation_value is Dictionary:
 			return false
@@ -264,8 +268,14 @@ func sync_event_result(result: Variant) -> bool:
 			var encounter_id := str(continuation.get("encounter_id", ""))
 			if encounter_id.is_empty():
 				return false
-			if not _start_event_encounter(encounter_id, continuation_id):
+			if _runner == null or bool(_runner.call("is_active")) and _event_continuation != continuation:
 				return false
+			var previous_continuation := _event_continuation.duplicate(true)
+			_event_continuation = continuation.duplicate(true)
+			if not _start_event_encounter(encounter_id, continuation_id):
+				_event_continuation = previous_continuation
+				return false
+			return true
 		_event_continuation = continuation.duplicate(true)
 		return true
 	if not pending_kind.is_empty() or (continuation_value is Dictionary and not (continuation_value as Dictionary).is_empty()):
@@ -418,13 +428,10 @@ func _on_encounter_completed(encounter_id: StringName) -> void:
 	if not _room_active or _room_terminal:
 		return
 	if _is_active_launch_event():
-		if (
-			str(_event_continuation.get("kind", "")) != "encounter"
-			or str(encounter_id) != str(_event_continuation.get("encounter_id", ""))
-		):
+		if not _matches_event_encounter(encounter_id, false):
 			return
 		_complete_event_encounter(true, {
-			"encounter_id": str(encounter_id),
+			"encounter_id": str(_event_continuation.encounter_id),
 			"result": "victory",
 		})
 		return
@@ -440,13 +447,10 @@ func _on_encounter_failed(encounter_id: StringName, reason: StringName, context:
 	if not _room_active or _room_terminal:
 		return
 	if _is_active_launch_event():
-		if (
-			str(_event_continuation.get("kind", "")) != "encounter"
-			or str(encounter_id) != str(_event_continuation.get("encounter_id", ""))
-		):
+		if not _matches_event_encounter(encounter_id, true):
 			return
 		var completion_context := context.duplicate(true)
-		completion_context["encounter_id"] = str(encounter_id)
+		completion_context["encounter_id"] = str(_event_continuation.encounter_id)
 		completion_context["reason"] = str(reason)
 		_complete_event_encounter(false, completion_context)
 		return
@@ -532,6 +536,18 @@ func _complete_event_encounter(success: bool, context: Dictionary) -> void:
 		})
 
 
+func _matches_event_encounter(encounter_id: StringName, failed: bool) -> bool:
+	if _event_continuation.get("kind") != "encounter" or _runner == null:
+		return false
+	var state: Dictionary = _runner.call("snapshot") if _runner.has_method("snapshot") else {}
+	if not state.has("encounter_id"):
+		return str(encounter_id) == str(_event_continuation.get("encounter_id", ""))
+	if str(encounter_id).is_empty() or str(encounter_id) != str(state.encounter_id) or bool(state.get("active", true)):
+		return false
+	var failure: Dictionary = state.get("failure", {})
+	return not failure.is_empty() if failed else failure.is_empty() and int(state.get("alive_count", -1)) == 0 and int(state.get("pending_spawn_count", -1)) == 0
+
+
 func _fail_runtime(reason: StringName, context: Dictionary) -> void:
 	if _room_terminal or not _failure.is_empty():
 		return
@@ -574,11 +590,15 @@ func _start_event_encounter(encounter_id: String, continuation_id: String) -> bo
 			and str(_event_continuation.get("continuation_id", "")) == continuation_id
 			and str(_event_continuation.get("encounter_id", "")) == encounter_id
 		)
-	var encounter_value: Variant = _catalog.call(
-		"encounter_definition",
-		encounter_id,
-		_run_seed,
-		int(_current_room.get("room_number", 0))
+	var encounter_value: Variant = (
+		_facade.call("event_encounter_definition", encounter_id)
+		if _facade.has_method("event_encounter_definition")
+		else _catalog.call(
+			"encounter_definition",
+			encounter_id,
+			_run_seed,
+			int(_current_room.get("room_number", 0))
+		)
 	)
 	if not encounter_value is Dictionary or (encounter_value as Dictionary).is_empty():
 		return false
@@ -588,7 +608,8 @@ func _start_event_encounter(encounter_id: String, continuation_id: String) -> bo
 		_run_seed,
 		int(_current_room.get("room_number", 0))
 	)
-	return true
+	var state: Dictionary = _runner.call("snapshot") if _runner.has_method("snapshot") else {}
+	return _room_active and not _room_terminal and _failure.is_empty() and (not state.has("active") or bool(state.active))
 
 
 func _is_active_launch_event() -> bool:

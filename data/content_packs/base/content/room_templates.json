@@ -1872,6 +1872,14 @@
           "x": 160,
           "y": 280
         }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 416,
+          "y": 176
+        }
       }
     ],
     "interaction_anchors": [
@@ -1964,6 +1972,14 @@
           "x": 160,
           "y": 280
         }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 416,
+          "y": 176
+        }
       }
     ],
     "interaction_anchors": [
@@ -2055,6 +2071,14 @@
         "position": {
           "x": 160,
           "y": 280
+        }
+      },
+      {
+        "id": "enemy_wave_primary",
+        "kind": "enemy",
+        "position": {
+          "x": 416,
+          "y": 176
         }
       }
     ],

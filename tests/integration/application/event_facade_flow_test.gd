@@ -131,6 +131,7 @@ class AckFailingFacade:
 
 class RunnerFixture:
 	extends Node
+	var native_binding: Dictionary = {}
 
 	signal spawn_warning_requested(spawn_definition: Dictionary, duration: float)
 	signal spawn_requested(spawn_definition: Dictionary)
@@ -138,6 +139,10 @@ class RunnerFixture:
 	signal encounter_failed(
 		encounter_id: StringName, reason: StringName, context: Dictionary
 	)
+
+	func configure_native_launch(controller: Node, facade: RefCounted, player: Node, scene_resolver: Callable) -> bool:
+		native_binding = {"controller": controller, "facade": facade, "player": player, "scene_resolver": scene_resolver}
+		return controller != null and facade != null and player != null and scene_resolver.is_valid()
 
 	func start_encounter(_definition: Dictionary, _seed: int, _room: int) -> void:
 		pass
@@ -425,6 +430,12 @@ func _test_launch_host_creates_connected_room_runtime(suite) -> void:
 	var started = host.start_run(_launch_config(SEED + 1))
 	suite.assert_true(started.ok, "Launch Host starts through the real Base Pack Facade")
 	if started.ok:
+		suite.assert_true(
+			controller.runner.native_binding.get("controller") == controller
+			and controller.runner.native_binding.get("player") == player
+			and controller.runner.native_binding.get("facade") == facade,
+			"Launch Host configures its same native encounter participants"
+		)
 		var runtime_value: Variant = host.get("_room_runtime")
 		suite.assert_true(runtime_value is Node, "Launch Host creates and owns a RoomRuntime")
 		suite.assert_equal(
