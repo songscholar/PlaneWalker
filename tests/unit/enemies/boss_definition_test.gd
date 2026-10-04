@@ -27,7 +27,7 @@ func _run() -> void:
 			total_actions += parser.snapshot().actions.size()
 			total_responses += parser.snapshot().time_responses.size()
 			var projection: Dictionary = parser.runtime_projection()
-			suite.assert_equal(projection.keys().size(), 12, "Boss runtime projection has twelve closed fields")
+			suite.assert_equal(projection.keys().size(), 13, "Boss runtime projection has thirteen closed fields including physical collision")
 			suite.assert_equal(projection.actor_kind, "boss", "Boss kind retained")
 			projection.phases.clear()
 			suite.assert_true(not parser.snapshot().phases.is_empty(), "projection isolates phase authority")

@@ -8,6 +8,7 @@ const FIELDS: Array[String] = [
 	"category", "id", "schema_version", "name_key", "description_key", "availability", "tags", "compatibility", "references",
 	"floor_id", "runtime_kind", "max_hp", "defense", "move_speed", "collision_radius_px", "actions", "phases", "enrage", "arena", "mechanisms", "time_responses",
 ]
+const RUNTIME_FIELDS: Array[String] = ["actor_kind", "id", "runtime_kind", "max_hp", "defense", "move_speed", "collision_radius_px", "actions", "phases", "enrage", "arena", "mechanisms", "time_responses"]
 const PREFIXES: Array[String] = ["guardian_", "matriarch_", "traitor_", "forge_", "voidking_"]
 const HP: Array[int] = [800, 1400, 2000, 2800, 3000]
 const ENRAGE_FRAMES: Array[int] = [18000, 16200, 14400, 12600, 10800]
@@ -993,10 +994,30 @@ func runtime_projection() -> Dictionary:
 	if _snapshot.is_empty():
 		return {}
 	var result := {"actor_kind": "boss"}
-	for field: String in ["id", "runtime_kind", "max_hp", "defense", "move_speed", "actions", "phases", "enrage", "arena", "mechanisms", "time_responses"]:
+	for field: String in RUNTIME_FIELDS.slice(1):
 		var value: Variant = _snapshot[field]
 		result[field] = value.duplicate(true) if value is Array or value is Dictionary else value
 	return result
+
+
+func configure_runtime_projection(source: Dictionary) -> Dictionary:
+	_snapshot.clear()
+	if not Action.exact_fields(source, RUNTIME_FIELDS) or source.actor_kind != "boss" or not Ids.BOSS_IDS.has(source.id) or not source.actions is Array:
+		return Contract.failure("runtime_projection", "exact_boss_fields_required")
+	var floor_id: String = Ids.FLOOR_IDS[Ids.BOSS_IDS.find(source.id)]
+	var references: Array[String] = [floor_id]
+	for row: Variant in source.actions:
+		if not row is Dictionary or not row.get("parameters") is Dictionary:
+			return Contract.failure("actions", "expected_dictionary")
+		if row.get("handler_id") == "summon" and row.parameters.get("definition_id") is String and not references.has(row.parameters.definition_id):
+			references.append(row.parameters.definition_id)
+	references.sort()
+	# Rebuild only the structural envelope to reuse all authored gameplay checks.
+	var envelope := source.duplicate(true)
+	envelope.erase("actor_kind")
+	envelope.merge({"category": "boss_definition", "schema_version": 1, "name_key": "BOSS_RUNTIME_NAME", "description_key": "BOSS_RUNTIME_DESC", "availability": ["LAUNCH", "EXPANSION"], "tags": ["boss"], "compatibility": {"floor_ids": [floor_id], "actor_kinds": ["boss"]}, "references": references, "floor_id": floor_id})
+	var result := configure(envelope)
+	return {"ok": true, "definition": runtime_projection(), "context": {}} if result.ok else result
 
 
 func _phases(value: Variant, id: String) -> Dictionary:
