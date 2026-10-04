@@ -62,7 +62,7 @@ class EffectDouble extends RefCounted:
 	func can_publish(_ticket: Dictionary) -> bool:
 		return _committed and not rejected_publication
 
-	func publish(_ticket: Dictionary) -> bool:
+	func publish_effect_observations(_ticket: Dictionary) -> bool:
 		if not _committed:
 			return false
 		publications += 1

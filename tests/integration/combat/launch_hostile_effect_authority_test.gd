@@ -18,6 +18,10 @@ func _run() -> void:
 	var implementation := load("res://scripts/enemies/launch/launch_hostile_effect_authority.gd")
 	suite.assert_true(implementation != null, "P15 native hostile effect authority exists")
 	if implementation != null:
+		var boundary: RefCounted = implementation.new()
+		suite.assert_true(boundary.has_method("publish_effect_observations"), "native effect boundary exposes explicit observation publication")
+		suite.assert_true(not boundary.has_method("publish"), "native effect boundary does not expose generic event publication")
+		suite.assert_true(not boundary.publish_effect_observations({}), "observation publication requires a sealed transaction ticket")
 		await _test_actual_player_damage(implementation)
 		await _test_moving_actor_burn(implementation)
 		await _test_registry_cas_and_missed_geometry(implementation)
@@ -179,7 +183,7 @@ func _test_registry_cas_and_missed_geometry(implementation: Script) -> void:
 			prepared = actor.prepare_launch_frame(frame, Actions.context(frame))
 			effect = authority.prepare_effects([{"hostile_source_id": "hostile:test-a", "batch": prepared.batch}], context)
 		suite.assert_true(actor.commit_launch_frame(prepared.ticket) and authority.commit(effect.ticket).ok, "native miss and pause frames commit")
-		suite.assert_true(authority.can_publish(effect.ticket) and actor.publish_launch_frame(prepared.ticket) and authority.publish(effect.ticket), "native miss and pause publications seal")
+		suite.assert_true(authority.can_publish(effect.ticket) and actor.publish_launch_frame(prepared.ticket) and authority.publish_effect_observations(effect.ticket), "native miss and pause publications seal")
 		actor.discard_launch_transaction_snapshot(checkpoint)
 		if not prepared.batch.threat_facts.is_empty():
 			actor.apply_time_stop_source(&"stop:authority", 2.0 / 60.0)

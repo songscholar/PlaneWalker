@@ -44,7 +44,7 @@ func can_publish(ticket: Dictionary) -> bool:
 	return can_publish_effects(ticket)
 
 
-func publish(ticket: Dictionary) -> bool:
+func publish_effect_observations(ticket: Dictionary) -> bool:
 	return publish_effects(ticket)
 
 

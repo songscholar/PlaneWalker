@@ -23,7 +23,7 @@ func configure(player: Node2D, registry: RefCounted, actors: Array, effects: Ref
 	for method: StringName in [&"snapshot", &"clear", &"register_fact"]:
 		if not registry.has_method(method):
 			return false
-	for method: StringName in [&"prepare_effects", &"can_commit", &"commit", &"rollback", &"can_publish", &"publish"]:
+	for method: StringName in [&"prepare_effects", &"can_commit", &"commit", &"rollback", &"can_publish", &"publish_effect_observations"]:
 		if not effects.has_method(method):
 			return false
 	var candidate: Dictionary = {}
@@ -215,7 +215,7 @@ func publish_prepared_frame() -> void:
 	var publication := _detached.duplicate()
 	_detached.clear()
 	_publishing = true
-	if not bool(_effects.call("publish", publication.effect_ticket)):
+	if not bool(_effects.call("publish_effect_observations", publication.effect_ticket)):
 		push_error("Sealed hostile effect publication failed closed")
 	for record: Dictionary in publication.records:
 		if is_instance_valid(record.health):
