@@ -39,6 +39,10 @@ func _physics_process(_delta: float) -> void:
 	_refresh_control_visual()
 
 
+func owns_actor_presentation() -> bool:
+	return true
+
+
 func configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary:
 	if not _prepared_launch_frame.is_empty() or health == null or not _room_motion.is_empty():
 		return _launch_failure("not_ready_or_busy")
@@ -165,8 +169,18 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		batch.hit_facts = [contact_fact] if collision_target != null else []
 	var status_events: Dictionary = {"burn_ticks": []}
 	if lethal_pending:
+		if _launch_definition.runtime_kind == "corrosive_moth":
+			if _room_motion.is_empty():
+				return _launch_failure("death_payload_room")
+			var death_pool: Dictionary = preview.reserve_terminal_death_pool(_point(predicted), _room_motion.bounds)
+			if death_pool.is_empty():
+				return _launch_failure("death_payload_generation")
+			batch.mechanism_requests = [death_pool]
 		var cancelled: Dictionary = preview.cancel(&"death")
-		batch.retired_generations = cancelled.retired_generations
+		if cancelled.ok:
+			batch.retired_generations = cancelled.retired_generations
+		else:
+			batch.retired_generations = before.runtime.action.geometry_generations.duplicate()
 		batch.threat_extensions = []
 		batch.threat_facts = []
 		batch.hit_facts = []
@@ -245,6 +259,14 @@ func prepared_launch_frame_contacts_target(target: Node2D) -> bool:
 	return not _prepared_launch_frame.is_empty() and is_instance_valid(target) and _prepared_launch_frame.collision_target == target
 
 
+func prepared_launch_payload_parameters() -> Dictionary:
+	return _launch_definition.mechanisms.duplicate(true) if not _prepared_launch_frame.is_empty() and _launch_definition.runtime_kind == "corrosive_moth" else {}
+
+
+func prepared_launch_frame_reserves_death_pool() -> bool:
+	return not _prepared_launch_frame.is_empty() and _launch_definition.runtime_kind == "corrosive_moth" and health.dead and bool(_prepared_launch_frame.after.runtime.terminal) and bool(_prepared_launch_frame.after.runtime.mechanism_state.death_pool_reserved) and _prepared_launch_frame.batch.mechanism_requests.size() == 1 and _prepared_launch_frame.batch.mechanism_requests[0].kind == "death_pool"
+
+
 func launch_transaction_snapshot() -> Dictionary:
 	if _launch_definition.is_empty():
 		return {}
@@ -254,7 +276,7 @@ func launch_transaction_snapshot() -> Dictionary:
 func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
 	if not Contract.exact_fields(value, ["schema_version", "hostile_source_id", "actor", "health"]) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.hostile_source_id != str(hostile_source_id) or not value.actor is Dictionary or not _can_restore_actor_state(value.actor) or not value.health is Dictionary or not bool(health.call("_valid_health_transaction_snapshot", value.health)):
 		return false
-	return not bool(value.actor.runtime.mechanism_state.get("detonation_consumed", false)) or bool(value.health.dead)
+	return not (bool(value.actor.runtime.mechanism_state.get("detonation_consumed", false)) or bool(value.actor.runtime.mechanism_state.get("death_pool_reserved", false))) or bool(value.health.dead)
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:

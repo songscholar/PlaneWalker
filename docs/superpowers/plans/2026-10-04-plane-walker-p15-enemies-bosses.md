@@ -676,7 +676,8 @@ Evidence records exact implementation commits, counts, digests, focused/full tes
 - [x] Partial evidence recorded in `docs/current/2026-10-04-p15-hostile-foundation-evidence.md` with tested APIs and explicit production limits.
 - [x] Authoritative Enemy/Boss/Affix/Summon data and closed parsers/schemas are present; five real profiles and forty recipes, bilingual profile keys, inactive source and actual template/actor-reference validation reached focused RED-to-GREEN on 2026-10-05.
 - [x] Native Strider charge/contact and elite once-cycle shell shock execute real Health effects; shell-shock selection, cycle lineage, Stop, native reservation compensation and actual Launch Guardian damage passed isolated gates. Complete Ruins kits and affix/production routing gates remain open.
-- [ ] Complete Task 1 specialized ContentRegistry ingestion; pack activation remains staged behind native runtime/asset/production gates.
+- [x] Native Moth kiting, finite frozen single/three-lane projectiles, real swept collisions, independent impact/death acid pools and Stop/Rift sources execute actual Launch Character damage with whole-frame compensation. Owned raster presentation rejects the legacy proxy; corrected OpenGL screenshots were inspected at 640x360. Queued payload room-ledger settlement, complete visual/audio kits and production routing remain open.
+- [x] Specialized ContentRegistry ingestion and Base Pack data activation verified separately at `5bee8ef` for 431 records/40 recipes; this is data-boundary activation and does not certify unimplemented native kits.
 - [ ] Complete Task 2 live effect/bridge atomicity, time sources, and nonterminal HealthComponent integration.
 - [ ] Complete Tasks 3-12 native species, Bosses, assets, routing, Save/Replay, and certification.
 

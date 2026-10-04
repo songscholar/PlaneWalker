@@ -504,6 +504,8 @@ func _scan_for_actors() -> void:
 func _ensure_actor_proxy(actor: Node2D) -> Node:
 	if actor == null or not is_instance_valid(actor):
 		return null
+	if actor.has_method("owns_actor_presentation") and actor.owns_actor_presentation():
+		return null
 	if actor.is_in_group("player"):
 		_cache_player(actor)
 	var existing := actor.get_node_or_null("PixelProxyActor")

@@ -37,6 +37,24 @@ def raster(species: str = "shattered_sentinel") -> bytes:
 
     for frame in range(4):
         shift = -1 if frame == 2 else 1 if frame == 3 else 0
+        if species == "acid_projectile":
+            rect(frame, 9, 12, 14, 8, "outline")
+            rect(frame, 12, 10, 8, 12, "outline")
+            rect(frame, 11, 13, 10, 6, "acid")
+            rect(frame, 14, 12, 6, 8, "acid")
+            rect(frame, 17, 13, 3, 3, "spirit")
+            rect(frame, 3 + frame, 15, 6, 2, "gold")
+            continue
+        if species == "acid_pool":
+            rect(frame, 4, 9, 24, 14, "outline")
+            rect(frame, 8, 4, 16, 24, "outline")
+            rect(frame, 5, 10, 22, 12, "shadow")
+            rect(frame, 9, 5, 14, 22, "acid")
+            rect(frame, 6, 11, 20, 10, "acid")
+            rect(frame, 10, 9, 3, 3, "spirit")
+            rect(frame, 19, 19 - frame, 4, 3, "gold")
+            rect(frame, 13, 18, 4, 4, "shadow")
+            continue
         if species == "stone_shell_strider":
             for leg in (5, 12, 21):
                 rect(frame, leg + shift, 21, 5, 6, "outline")
@@ -138,7 +156,7 @@ def raster(species: str = "shattered_sentinel") -> bytes:
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     assets = []
-    for species in ("shattered_sentinel", "corrosive_moth", "stone_shell_strider", "ruins_wraith", "rift_watcher"):
+    for species in ("shattered_sentinel", "corrosive_moth", "stone_shell_strider", "ruins_wraith", "rift_watcher", "acid_projectile", "acid_pool"):
         data = raster(species)
         filename = f"{species}.png"
         (OUTPUT / filename).write_bytes(data)

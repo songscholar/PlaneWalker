@@ -19,6 +19,7 @@ func _run() -> void:
 		_test_sentinel_action_and_retreat(implementation)
 		_test_stop_and_strict_checkpoint(implementation)
 		_test_authored_retreat_and_projection(implementation)
+		_test_moth_kiting(implementation)
 	suite.finish(get_tree())
 
 
@@ -137,3 +138,29 @@ func _test_authored_retreat_and_projection(implementation: Script) -> void:
 		var reference: RefCounted = implementation.new()
 		reference.configure(projection, identity)
 		suite.assert_equal(restored.snapshot(), reference.snapshot(), "JSON projection produces identical sealed definition identity")
+
+
+func _test_moth_kiting(implementation: Script) -> void:
+	var parser := Enemy.new()
+	parser.configure(Content.enemy("corrosive_moth"))
+	var runtime: RefCounted = implementation.new()
+	var identity := Fixtures.identity()
+	identity.seed = 42
+	suite.assert_true(runtime.configure(parser.runtime_projection(), identity).ok, "Moth uses the actual authored projection")
+	var unsealed_death: Dictionary = runtime.snapshot()
+	unsealed_death.mechanism_state.death_pool_reserved = true
+	suite.assert_true(not runtime.can_restore_snapshot(unsealed_death), "live Moth checkpoint cannot fabricate a spent final-death payload generation")
+	for pair: Array in [[0.0, -1.6], [40.0, -1.6], [56.0, 0.0], [70.0, 0.0], [80.0, 0.0], [100.0, 1.6]]:
+		var context := Fixtures.context(1)
+		context.target_position = {"x": 100.0 + pair[0], "y": 100.0}
+		var motion: Dictionary = runtime.motion_for_frame(1, context)
+		suite.assert_true(is_equal_approx(float(motion.displacement.x), pair[1]), "Moth keeps authored 56-80px kite band at distance %.1f" % pair[0])
+	suite.assert_true(runtime.add_control_source("stop-moth", "stop", 1, 1.0), "Moth accepts fixed-frame Stop")
+	suite.assert_equal(runtime.motion_for_frame(1, Fixtures.context(1)).displacement, {"x": 0.0, "y": 0.0}, "Stop cancels native kite motion")
+	runtime.advance_frame(1, Fixtures.context(1), false)
+	runtime.advance_frame(2, Fixtures.context(2), false)
+	var commitment := Fixtures.context(2)
+	suite.assert_true(runtime.request_action("corrosive_moth.corrosive_spit", commitment).ok, "Moth commits actual spit after Stop expires")
+	var target_moved := Fixtures.context(3)
+	target_moved.target_position = {"x": 300.0, "y": 100.0}
+	suite.assert_equal(runtime.motion_for_frame(3, target_moved).displacement, {"x": 0.0, "y": 0.0}, "Moth warning preserves frozen origin and aim")

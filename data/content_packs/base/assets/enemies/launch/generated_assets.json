@@ -69,6 +69,32 @@
         "active",
         "recovery"
       ]
+    },
+    {
+      "path": "acid_projectile.png",
+      "sha256": "ce09cb8b34583fdd4d5ec3ae213445ea0e871d5d75a31d6fde5c6ada42f11c17",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
+    },
+    {
+      "path": "acid_pool.png",
+      "sha256": "ae7117f33633cb2ac7d1e767657f94026e22590a050af5ae7e598b18a919ea1e",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
     }
   ]
 }

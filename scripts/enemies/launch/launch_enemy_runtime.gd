@@ -102,8 +102,15 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 			var source := _vector(observations.source_position)
 			var target := _vector(observations.target_position)
 			var distance := source.distance_to(target)
-			var step := minf(maxf(0.0, distance - 24.0), float(_definition.move_speed) * float(controls.movement_multiplier) / 60.0)
-			displacement = source.direction_to(target) * step
+			var speed := float(_definition.move_speed) * float(controls.movement_multiplier) / 60.0
+			if _definition.runtime_kind == "corrosive_moth":
+				if distance < float(_definition.mechanisms.kite_min_px):
+					var direction := source.direction_to(target) if not is_zero_approx(distance) else _vector(observations.facing_direction).normalized()
+					displacement = -direction * minf(float(_definition.mechanisms.kite_min_px) - distance, speed)
+				elif distance > float(_definition.mechanisms.kite_max_px):
+					displacement = source.direction_to(target) * minf(distance - float(_definition.mechanisms.kite_max_px), speed)
+			else:
+				displacement = source.direction_to(target) * minf(maxf(0.0, distance - 24.0), speed)
 	return {"ok": true, "displacement": {"x": displacement.x, "y": displacement.y}, "action_paused": controls.action_paused}
 
 
@@ -154,6 +161,18 @@ func charge_contact_fact(frame: int, target_id: String) -> Dictionary:
 	if action_state.phase != "ACTIVE" or active_action.is_empty() or active_action.handler_id != "charge" or target_id != action_state.target_id:
 		return {}
 	return Action._hit_fact(active_action.hit_schedule[0], active_action, action_state)
+
+
+func reserve_terminal_death_pool(position: Dictionary, bounds: Dictionary) -> Dictionary:
+	if _state.is_empty() or _state.terminal or _definition.runtime_kind != "corrosive_moth" or _state.mechanism_state.death_pool_reserved or not Contract.valid_point(position):
+		return {}
+	var generation: int = _action.reserve_terminal_generation()
+	if generation < 1:
+		return {}
+	_state.mechanism_state.death_pool_reserved = true
+	var request := {"kind": "death_pool", "run_id": _state.identity.run_id, "hostile_source_id": _state.identity.hostile_source_id, "runtime_frame": _state.runtime_frame, "attack_generation": generation, "position": position.duplicate(true), "bounds": bounds.duplicate(true), "parameters": {"warning_frames": int(_definition.mechanisms.death_pool_warning_frames), "radius": float(_definition.mechanisms.death_pool_radius_px), "damage": float(_definition.mechanisms.death_pool_damage)}}
+	cancel(&"death")
+	return request
 
 
 func add_control_source(source_id: String, kind: String, duration_frames: int, magnitude: float) -> bool:
@@ -207,6 +226,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if not Mechanisms.valid_state(_definition.runtime_kind, _definition.mechanisms, mechanism, _state.mechanism_state.first_attack_ready_frame):
 		return false
 	if _definition.runtime_kind == "ruins_wraith" and mechanism.detonation_consumed and not value.terminal:
+		return false
+	if _definition.runtime_kind == "corrosive_moth" and mechanism.death_pool_reserved and not value.terminal:
 		return false
 	if not value.action is Dictionary or not value.control is Dictionary or not _action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false

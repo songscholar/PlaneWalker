@@ -5,8 +5,9 @@ const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const Registry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Damage := preload("res://scripts/combat/damage_info.gd")
+const Payloads := preload("res://scripts/enemies/launch/launch_hostile_payload_authority.gd")
 const CONTEXT_FIELDS: Array[String] = ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]
-const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "source_batches", "actors", "targets", "threat_registry"]
+const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "source_batches", "actors", "targets", "threat_registry", "payload_ticket"]
 const MAX_CLAIMS := 4096
 
 var _state: Dictionary = {}
@@ -15,17 +16,55 @@ var _next_ticket_id := 1
 var _committed := false
 var _publishing := false
 var _owned_signals: Array[Dictionary] = []
+var _payloads: RefCounted = Payloads.new()
 
 
 func configure(run_id: String, runtime_frame: int = 0) -> bool:
-	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0:
+	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame):
 		return false
 	_state = {"schema_version": 1, "run_id": run_id, "runtime_frame": runtime_frame, "claims": []}
 	return true
 
 
 func snapshot() -> Dictionary:
-	return _state.duplicate(true)
+	var result := _state.duplicate(true)
+	if not result.is_empty():
+		result["payloads"] = _payloads.snapshot()
+	return result
+
+
+func configure_native_payloads(root: Node2D) -> bool:
+	return not _state.is_empty() and _pending.is_empty() and _payloads.configure_native_root(root)
+
+
+func payload_snapshot() -> Dictionary:
+	return _payloads.snapshot()
+
+
+func native_payload_nodes() -> Array[Node2D]:
+	return _payloads.native_nodes()
+
+
+func launch_transaction_snapshot() -> Dictionary:
+	return snapshot() if _pending.is_empty() and not _publishing else {}
+
+
+func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
+	if not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads"]) or value.schema_version != 1 or value.run_id != _state.run_id or typeof(value.runtime_frame) != TYPE_INT or not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.payloads is Dictionary or not _payloads.can_restore_transaction_snapshot(value.payloads):
+		return false
+	var seen: Dictionary = {}
+	for claim: Variant in value.claims:
+		if typeof(claim) != TYPE_STRING or claim.length() != 64 or not claim.is_valid_hex_number(false) or seen.has(claim):
+			return false
+		seen[claim] = true
+	return value.runtime_frame == value.payloads.runtime_frame
+
+
+func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
+	if not _pending.is_empty() or _publishing or not can_restore_launch_transaction_snapshot(value) or not _payloads.restore_transaction_snapshot(value.payloads):
+		return false
+	_state = value.duplicate(true)
+	return true
 
 
 func can_commit(ticket: Dictionary) -> bool:
@@ -99,16 +138,20 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 				return _failure("threat_retirement")
 			operations.append({"kind": "retire", "source": source, "generation": generation})
 		for request: Variant in batch.effect_requests:
-			if not request is Dictionary or request.get("handler_id", "") not in ["melee", "charge"] or str(request.get("hostile_source_id", "")) != source:
+			if not request is Dictionary or request.get("handler_id", "") not in ["melee", "charge", "projectile_volley"] or str(request.get("hostile_source_id", "")) != source:
 				return _failure("unimplemented_effect_handler")
 		if not batch.get("mechanism_requests", []) is Array or batch.get("mechanism_requests", []).size() > 128:
 			return _failure("mechanism_requests")
 		for mechanism: Variant in batch.get("mechanism_requests", []):
+			if mechanism is Dictionary and mechanism.get("kind", "") == "death_pool":
+				continue
 			var prepared := _prepare_consumption(mechanism, source, actor, context, next)
 			if not prepared.ok:
 				return prepared
 			damages.append(prepared.record)
 		for hit: Variant in batch.hit_facts:
+			if hit is Dictionary and hit.get("handler_id", "") == "projectile_volley":
+				continue
 			var prepared := _prepare_hit(hit, source, actor, context, next)
 			if not prepared.ok:
 				return prepared
@@ -118,9 +161,22 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 			if not prepared.ok:
 				return prepared
 			damages.append(prepared.record)
+	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context)
+	if not payload_prepared.ok:
+		return payload_prepared
+	for request: Dictionary in payload_prepared.damage_requests:
+		var prepared := _prepare_payload_damage(request, context, next)
+		if not prepared.ok:
+			_payloads.rollback(payload_prepared.ticket)
+			return prepared
+		damages.append(prepared.record)
+	next.payloads = payload_prepared.ticket.after.duplicate(true)
+	if not _prepare_payload_registry(payload_prepared.ticket.before, payload_prepared.ticket.after, projected, operations):
+		_payloads.rollback(payload_prepared.ticket)
+		return _failure("payload_threat_registry")
 	while next.claims.size() > MAX_CLAIMS:
 		next.claims.pop_front()
-	var ticket := {"ticket_id": _next_ticket_id, "run_id": context.run_id, "runtime_frame": context.runtime_frame, "before": snapshot(), "after": next, "registry_before": registry_before, "registry_after": projected.snapshot(), "registry_operations": operations, "damage_records": damages, "source_batches": batches.duplicate(true), "actors": context.actors.duplicate(), "targets": context.targets.duplicate(), "threat_registry": registry}
+	var ticket := {"ticket_id": _next_ticket_id, "run_id": context.run_id, "runtime_frame": context.runtime_frame, "before": snapshot(), "after": next, "registry_before": registry_before, "registry_after": projected.snapshot(), "registry_operations": operations, "damage_records": damages, "source_batches": batches.duplicate(true), "actors": context.actors.duplicate(), "targets": context.targets.duplicate(), "threat_registry": registry, "payload_ticket": payload_prepared.ticket}
 	_next_ticket_id += 1
 	_pending = ticket.duplicate(true)
 	_committed = false
@@ -129,7 +185,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 
 
 func can_commit_effects(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or _committed or _publishing or snapshot() != ticket.before or ticket.threat_registry.snapshot() != ticket.registry_before:
+	if not _ticket_matches(ticket) or _committed or _publishing or snapshot() != ticket.before or ticket.threat_registry.snapshot() != ticket.registry_before or not _payloads.can_commit(ticket.payload_ticket):
 		return false
 	for wrapper: Dictionary in ticket.source_batches:
 		var actor: Node = ticket.actors[wrapper.hostile_source_id]
@@ -158,6 +214,8 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 	for operation: Dictionary in ticket.registry_operations:
 		if not _apply_registry_operation(ticket.threat_registry, operation):
 			return _failure("registry_commit")
+	if not _payloads.commit(ticket.payload_ticket):
+		return _failure("native_payload_commit")
 	var resolutions: Array = []
 	for record: Dictionary in ticket.damage_records:
 		if record.has("consumption_amount"):
@@ -192,6 +250,7 @@ func rollback_effects(ticket: Dictionary) -> bool:
 			ok = bool(owned.health.discard_finalized_frame_signal_publication(owned.publication)) and ok
 	if not _install_registry(ticket.threat_registry, ticket.registry_before):
 		ok = false
+	ok = _payloads.rollback(ticket.payload_ticket) and ok
 	_state = ticket.before.duplicate(true)
 	_pending.clear()
 	_owned_signals.clear()
@@ -200,7 +259,7 @@ func rollback_effects(ticket: Dictionary) -> bool:
 
 
 func can_publish_effects(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or not _committed or _publishing:
+	if not _ticket_matches(ticket) or not _committed or _publishing or not _payloads.can_publish(ticket.payload_ticket):
 		return false
 	for owned: Dictionary in _owned_signals:
 		if not is_instance_valid(owned.health) or not bool(owned.health.call("_finalized_frame_signal_publication_matches", owned.publication)):
@@ -212,6 +271,8 @@ func publish_effects(ticket: Dictionary) -> bool:
 	if not can_publish_effects(ticket):
 		return false
 	var publications := _owned_signals.duplicate(true)
+	if not _payloads.publish(ticket.payload_ticket):
+		return false
 	_publishing = true
 	_pending.clear()
 	_owned_signals.clear()
@@ -220,6 +281,59 @@ func publish_effects(ticket: Dictionary) -> bool:
 		owned.health.publish_prepared_frame_signals()
 	_publishing = false
 	return true
+
+
+func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
+	if not context.targets.has(request.target_id):
+		return _failure("payload_damage_target")
+	var record := _target_record(context.targets[request.target_id])
+	if record.is_empty():
+		return _failure("payload_health")
+	var claim := _claim(context.run_id, request.target_id, request.payload_id, request.attack_generation, request.hit_index)
+	if next.claims.has(claim):
+		return _failure("duplicate_payload_damage")
+	next.claims.append(claim)
+	var info := Damage.from_plan({"run_id": context.run_id, "target_id": request.target_id, "hostile_source_id": request.payload_id, "attack_generation": request.attack_generation, "hit_index": request.hit_index, "action_token": request.attack_generation, "amount": request.damage, "damage_type": Contract.DAMAGE_TYPES.find(request.damage_type), "source": null, "attacker": null, "can_crit": false, "knockback": Vector2.ZERO, "tags": ["enemy:launch", "enemy:payload"], "source_generation": request.attack_generation})
+	if info == null:
+		return _failure("payload_damage_plan")
+	record["info"] = info
+	return {"ok": true, "record": record}
+
+
+static func _prepare_payload_registry(before: Dictionary, after: Dictionary, registry: RefCounted, operations: Array[Dictionary]) -> bool:
+	var before_rows: Dictionary = {}
+	var after_rows: Dictionary = {}
+	for row: Dictionary in before.projectiles + before.zones:
+		if row.phase != "PENDING":
+			before_rows[row.id] = row
+	for row: Dictionary in after.projectiles + after.zones:
+		if row.phase != "PENDING":
+			after_rows[row.id] = row
+	for id: String in before_rows:
+		if not after_rows.has(id):
+			if not registry.retire(StringName(id), 1):
+				return false
+			operations.append({"kind": "retire", "source": id, "generation": 1})
+	for id: String in after_rows:
+		var next := _payload_threat_fact(after_rows[id], int(after.runtime_frame))
+		if not before_rows.has(id):
+			if not registry.register_fact(next):
+				return false
+			operations.append({"kind": "register", "fact": next})
+		else:
+			var previous := _payload_threat_fact(before_rows[id], int(before.runtime_frame))
+			if next.active_through_frame != previous.active_through_frame:
+				if not registry.extend_fact_through(StringName(id), 1, previous.active_through_frame, next.active_through_frame):
+					return false
+				operations.append({"kind": "extend", "extension": {"hostile_source_id": id, "attack_generation": 1, "expected_through_frame": previous.active_through_frame, "new_through_frame": next.active_through_frame}})
+	return true
+
+
+static func _payload_threat_fact(row: Dictionary, frame: int) -> Dictionary:
+	var definition: Dictionary = row.definition
+	var projectile: bool = definition.kind == "projectile"
+	var origin: Dictionary = definition.origin if projectile else definition.position
+	return {"hostile_source_id": StringName(row.id), "attack_generation": 1, "shape": &"line" if projectile else &"circle", "origin": _vector(origin), "aim_direction": _vector(definition.direction) if projectile else Vector2.RIGHT, "target_point": _vector(origin), "summon_slots": [], "radius": definition.radius, "length": definition.range_px if projectile else 0.0, "active_from_frame": definition.reserved_frame, "active_through_frame": frame + int(definition.lifetime_frames) + int(definition.get("warning_frames", 0)) - int(row.age)}
 
 
 func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictionary, next: Dictionary) -> Dictionary:

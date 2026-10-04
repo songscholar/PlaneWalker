@@ -102,8 +102,13 @@ func begin_frame(runtime_frame: int) -> Dictionary:
 		return {}
 	var ticket := {"owner_instance_id": get_instance_id(), "ticket_id": _next_ticket_id, "runtime_frame": runtime_frame}
 	_next_ticket_id += 1
-	_active = {"ticket": ticket.duplicate(true), "registry_before": _registry.call("snapshot"), "records": [], "effect_ticket": {}, "prepared": false, "publication": {}, "finalized": false}
+	_active = {"ticket": ticket.duplicate(true), "registry_before": _registry.call("snapshot"), "effects_checkpoint": {}, "records": [], "effect_ticket": {}, "prepared": false, "publication": {}, "finalized": false}
 	# These checkpoints precede weapon/world hits, not merely hostile movement.
+	if _effects.has_method("launch_transaction_snapshot") and _effects.has_method("restore_launch_transaction_snapshot"):
+		_active.effects_checkpoint = _effects.call("launch_transaction_snapshot")
+		if _active.effects_checkpoint.is_empty():
+			rollback_frame(ticket)
+			return {}
 	for source_id: String in _sorted_sources():
 		var actor: Node2D = _actors[source_id]
 		var state: Dictionary = actor.call("launch_runtime_snapshot")
@@ -229,6 +234,8 @@ func rollback_frame(ticket: Dictionary) -> bool:
 	var restored := true
 	if not _active.effect_ticket.is_empty():
 		restored = bool(_effects.call("rollback", _active.effect_ticket)) and restored
+	if not _active.effects_checkpoint.is_empty():
+		restored = bool(_effects.call("restore_launch_transaction_snapshot", _active.effects_checkpoint)) and restored
 	for record: Dictionary in _active.records:
 		if not is_instance_valid(record.actor) or not is_instance_valid(record.health):
 			restored = false

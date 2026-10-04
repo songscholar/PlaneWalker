@@ -167,6 +167,14 @@ func cancel(reason: StringName) -> Dictionary:
 	return {"ok": true, "reason": reason, "retired_generations": retired, "hit_facts": []}
 
 
+func reserve_terminal_generation() -> int:
+	if _state.is_empty() or int(_state.next_generation_floor) >= MAX_COUNTER:
+		return -1
+	var generation: int = int(_state.next_generation_floor)
+	_state.next_generation_floor = generation + 1
+	return generation
+
+
 func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
@@ -283,6 +291,9 @@ static func _committed_geometry(action: Dictionary, state: Dictionary) -> Array[
 	var through: int = int(state.commit_frame) + int(action.warning_frames) + int(action.active_frames) + int(action.recovery_frames) + int(state.paused_frames) - 1
 	for index: int in range(action.geometry.size()):
 		var primitive: Dictionary = action.geometry[index]
+		var length: float = float(primitive.length)
+		if action.handler_id == "projectile_volley":
+			length = minf(240.0, float(action.parameters.speed_px_per_second) * float(action.parameters.lifetime_frames) / 60.0)
 		var offset := _vector(primitive.origin_offset).rotated(aim.angle())
 		var origin := target + offset if primitive.shape == "target_circle" else source + offset
 		var slots: Array = [_point(origin)] if primitive.shape == "summon_slots" else []
@@ -291,7 +302,7 @@ static func _committed_geometry(action: Dictionary, state: Dictionary) -> Array[
 			"shape": primitive.shape, "origin": _point(origin),
 			"aim_direction": _point(aim.rotated(deg_to_rad(primitive.aim_offset_degrees))),
 			"target_point": _point(origin) if primitive.shape == "target_circle" else state.committed_target.duplicate(true), "summon_slots": slots,
-			"radius": primitive.radius, "length": primitive.length,
+			"radius": primitive.radius, "length": length,
 			"active_from_frame": state.commit_frame, "active_through_frame": through,
 		})
 	return result
