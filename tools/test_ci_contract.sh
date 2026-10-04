@@ -254,8 +254,11 @@ leak_failure_status=$?
 set -e
 [[ ${leak_failure_status} -ne 0 ]] || fail "an unexpected ObjectDB leak must fail the suite"
 
-known_leak_output="$(GODOT_BIN="${TEMP_DIR}/godot-leak-failure" TEST_LOG_DIR="${TEMP_DIR}/known-leak-logs" tools/run_tests.sh --filter reward_system_smoke)"
-assert_contains "${known_leak_output}" "Known leak warnings: 1" "explicit known-leak summary"
+set +e
+GODOT_BIN="${TEMP_DIR}/godot-leak-failure" TEST_LOG_DIR="${TEMP_DIR}/reward-leak-logs" tools/run_tests.sh --filter reward_system_smoke >/dev/null 2>&1
+reward_leak_status=$?
+set -e
+[[ ${reward_leak_status} -ne 0 ]] || fail "the reward smoke scene must reject ObjectDB leaks without a waiver"
 
 make_fake_godot "${TEMP_DIR}/godot-hang" hang
 set +e

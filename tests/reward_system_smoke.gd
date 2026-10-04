@@ -464,6 +464,7 @@ func _run_death_check() -> void:
 	var fixture := await _create_host_fixture(321)
 	var room: Node = fixture["room"]
 	var host: Node = fixture["host"]
+	var persistent_before: Dictionary = GameState.persistent.duplicate(true)
 	var result_counter := RunResultSignalCounter.new()
 	EventBus.run_ended.connect(result_counter.record)
 
@@ -491,8 +492,7 @@ func _run_death_check() -> void:
 		_assert_true(int(emitted_result.get("rooms_cleared", -1)) == 0, "death event records cleared rooms")
 		_assert_true(int(emitted_result.get("current_room", -1)) == 1, "death event records current room")
 		_assert_true(int(emitted_result.get("kills", -1)) == 0, "death event records kill count")
-	var persistent_summary: Dictionary = GameState.persistent.get("last_run_summary", {})
-	_assert_true(str(persistent_summary.get("result", "")) == "death", "death persists the terminal summary")
+	_assert_true(GameState.persistent == persistent_before, "nonprofile M1 death cannot mutate the activated Profile")
 	_assert_true(room.get_node("RewardMarker").visible == false, "death hides reward marker")
 
 	if EventBus.run_ended.is_connected(result_counter.record):
@@ -506,8 +506,8 @@ func _run_death_overlay_check() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	_assert_true(main.get_node("StartMenu").visible, "main scene opens on start menu")
-	main._start_new_run()
+	_assert_true(main.get_node("HubFlowCoordinator").is_hub_visible(), "main scene opens on the production Hub")
+	_assert_true(main._launch_run(_m1_smoke_config(7891), true), "M1 compatibility entry starts death-overlay fixture")
 	await get_tree().process_frame
 	await get_tree().process_frame
 
@@ -550,7 +550,7 @@ func _run_pause_menu_check() -> void:
 	var restart_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/RestartButton")
 	var quit_button: Button = main.get_node("PauseMenu/Panel/Margin/VBox/QuitButton")
 	var host: Node = main.get_node("RunRuntimeHost")
-	_assert_true(start_menu.visible, "pause check starts on start menu")
+	_assert_true(main.get_node("HubFlowCoordinator").is_hub_visible(), "pause check starts on the production Hub")
 	_assert_true(int((host.call("runtime_snapshot") as Dictionary).get("phase", -1)) == RunPhaseScript.Value.HUB, "main scene starts in authoritative hub phase")
 	_assert_true(restart_button.text == "重新开始", "pause menu exposes restart")
 	_assert_true(quit_button.text == "退出", "pause menu exposes quit")
@@ -562,7 +562,7 @@ func _run_pause_menu_check() -> void:
 	main._pause_run()
 	_assert_true(not get_tree().paused, "hub phase cannot open pause")
 	main.get_node("CombatRoom01").set("spawn_warning_duration", 0.0)
-	main._start_new_run()
+	_assert_true(main._launch_run(_m1_smoke_config(7892), true), "M1 compatibility entry starts pause fixture")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_assert_true(not start_menu.visible, "quick start hides start menu")
@@ -631,6 +631,8 @@ func _run_pause_menu_check() -> void:
 
 
 func _run_persistence_check() -> void:
+	var profile_path := GameState.save_path
+	GameState.save_path = _test_storage_root.path_join("legacy_persistence/legacy.json")
 	GameState.reset_persistent_data(true)
 	GameState.persistent = {"settings": {"master_volume": 0.3}}
 	_assert_true(GameState.save_persistent(), "legacy settings fixture can be saved")
@@ -683,6 +685,8 @@ func _run_persistence_check() -> void:
 	_assert_true(GameState.persistent.get("last_run_summary", {}).get("result", "") == "floor_cleared", "persistent save restores last run result")
 	_assert_true(GameState.persistent.get("last_run_summary", {}).get("blessings", []).size() == 1, "persistent save stores blessings")
 	_assert_true(GameState.persistent.get("last_run_summary", {}).get("talent_choices", []).size() == 1, "persistent save stores talents")
+	GameState.save_path = profile_path
+	GameState.load_persistent()
 
 
 func _run_room_progression_check() -> void:
@@ -764,6 +768,10 @@ func _run_reward_ui_build_check() -> void:
 	snapshot = host.call("runtime_snapshot")
 	_assert_true((snapshot.get("build", {}) as Dictionary).get("items", []).size() == 1, "V2 reward selection updates the authoritative build")
 	await _destroy_host_fixture(fixture)
+
+
+func _m1_smoke_config(seed: int) -> Dictionary:
+	return {"schema_version": 1, "milestone": "M1", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": seed}
 
 
 func _create_host_fixture(seed: int) -> Dictionary:

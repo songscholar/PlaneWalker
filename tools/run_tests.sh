@@ -164,7 +164,6 @@ printf 'Logs: %s\n' "${log_dir}"
 
 passed=0
 failed=0
-known_leak_warnings=0
 for scene in "${test_scenes[@]}"; do
 	safe_name="${scene//\//__}"
 	safe_name="${safe_name%.tscn}"
@@ -184,13 +183,8 @@ for scene in "${test_scenes[@]}"; do
 		runtime_failure=true
 	fi
 	if log_has_leak "${stdout_log}" "${engine_log}"; then
-		if [[ "${scene}" == "tests/reward_system_smoke.tscn" ]]; then
-			((known_leak_warnings += 1))
-			printf '[  WARNING ] %s (known ObjectDB leak)\n' "${scene}" >&2
-		else
-			runtime_failure=true
-			printf '[  WARNING ] %s (unexpected engine object leak)\n' "${scene}" >&2
-		fi
+		runtime_failure=true
+		printf '[  WARNING ] %s (engine object leak)\n' "${scene}" >&2
 	fi
 
 	if (( status == 0 )) && [[ "${runtime_failure}" == false ]]; then
@@ -214,7 +208,6 @@ for scene in "${test_scenes[@]}"; do
 done
 
 printf '\nScene tests: %d passed, %d failed, %d total\n' "${passed}" "${failed}" "${#test_scenes[@]}"
-printf 'Known leak warnings: %d\n' "${known_leak_warnings}"
 
 coverage_report="${log_dir}/gdscript-coverage.json"
 coverage_command=(

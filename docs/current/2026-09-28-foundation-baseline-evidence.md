@@ -8,7 +8,7 @@
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, full-product completion spec
 - Verified Commits: `9faa1e2`, `bac5e74`, `d92b1ed`
-- Last Verified: 2026-09-28
+- Last Verified: 2026-10-05
 - Rollback Points: each verified commit is independently reversible
 
 ## Outcome
@@ -97,9 +97,17 @@ Evidence log directory:
 /var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-validation.d3i2QU
 ```
 
-## Known limitation
+## Historical limitation
 
-The legacy reward smoke scene still leaks ObjectDB instances at process exit. It is explicitly counted and limited to that scene by the test runner; every new or unexpected ObjectDB/RID leak fails validation. This warning remains a tracked cleanup item and is not treated as general permission to ignore leaks.
+The September baseline retained a reward-smoke ObjectDB warning with an explicit runner exemption. This describes the captured historical runs above. The current runner has no scene exemption: every ObjectDB or RID leak fails validation.
+
+## Current Reward Regression Gate
+
+On 2026-10-05 the actual reward-smoke investigation `planewalker-tests.3MsrvA` reproduced obsolete fixture assertions after production Hub/Profile activation, but no ObjectDB or RID leak. A runtime leak correction is therefore not claimed. The focused fixture update uses the existing explicit M1 compatibility launch path for pause/death UI, verifies a nonprofile death cannot mutate the activated Profile, and places legacy save/reset checks in a separate test directory. Production Profile protection remains unchanged.
+
+The meaningful CI-contract RED requires an injected exit-zero ObjectDB warning in `reward_system_smoke` to fail and reproduced the exemption exactly: `FAIL: the reward smoke scene must reject ObjectDB leaks without a waiver`. The runner now treats that scene identically to all other scenes and removes the obsolete known-warning counter. Actual reward smoke GREEN `planewalker-tests.Q7UeOg`, 1/1, retains reward, curse, weapon, time, feedback, death, pause, settings, progression, choice UI and legacy persistence assertions. Both stdout and engine logs were scanned and contain no errors, warnings or leaks. Godot line coverage remains unsupported.
+
+The stable `bash tools/test_ci_contract.sh` rerun passed against 332 discovered scenes. Its fake-engine contract verifies exit-zero runtime and leak refusal, timeout, bootstrap/clean import ordering and the native dependency invocation boundary; it is not a claim that all 332 native scenes were executed by that contract fixture.
 
 ## Gate decision
 
