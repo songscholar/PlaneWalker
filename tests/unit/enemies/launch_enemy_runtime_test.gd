@@ -101,7 +101,7 @@ func _test_authored_retreat_and_projection(implementation: Script) -> void:
 	var identity := Fixtures.identity()
 	identity["seed"] = 42
 	var runtime: RefCounted = implementation.new()
-	suite.assert_true(runtime.configure(projection, identity).ok, "native runtime consumes the authoritative eight-field content projection")
+	suite.assert_true(runtime.configure(projection, identity).ok, "native runtime consumes the authoritative nine-field content projection")
 	if runtime.snapshot().is_empty():
 		return
 	suite.assert_true(runtime.snapshot().mechanism_state.first_attack_ready_frame <= 1, "first attack stagger uses the authored frame bound")
@@ -126,6 +126,10 @@ func _test_authored_retreat_and_projection(implementation: Script) -> void:
 			"boolean": bad.mechanisms.retreat_distance_px = true
 			"fractional": bad.mechanisms.retreat_frames = 1.5
 		suite.assert_true(not implementation.new().configure(bad, identity).ok, "native projection rejects %s mechanisms" % mutation)
+	for radius: Variant in [true, 0.0, 33.0, INF, NAN]:
+		var bad := projection.duplicate(true)
+		bad.collision_radius_px = radius
+		suite.assert_true(not implementation.new().configure(bad, identity).ok, "native projection rejects invalid collision radius")
 	var decoded: Dictionary = JSON.parse_string(JSON.stringify(projection))
 	var restored: RefCounted = implementation.new()
 	suite.assert_true(restored.configure(decoded, identity).ok, "physical JSON content projection configures the native runtime")

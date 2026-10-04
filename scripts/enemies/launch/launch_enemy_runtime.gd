@@ -8,7 +8,7 @@ const Seeds := preload("res://scripts/core/seed_service.gd")
 const Mechanisms := preload("res://scripts/enemies/launch/enemy_mechanism_handlers.gd")
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
 const DefinitionContract := preload("res://scripts/enemies/launch/hostile_definition_contract.gd")
-const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "actions", "mechanisms"]
+const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "collision_radius_px", "actions", "mechanisms"]
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control"]
 const DAMAGE_FACT_FIELDS: Array[String] = ["fact_id", "runtime_frame", "target_source_id", "amount", "hp_after"]
@@ -26,7 +26,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		return _failure("fields")
 	if not Mechanisms.ACTION_IDS.has(definition.id) or definition.runtime_kind != definition.id or definition.actor_kind not in ["enemy", "elite"]:
 		return _failure("runtime_kind")
-	if not Contract.number_in_range(definition.max_hp, 1.0, 1000000.0) or not Contract.number_in_range(definition.defense, 0.0, 10000.0) or not Contract.number_in_range(definition.move_speed, 0.0, 1000.0):
+	if not Contract.number_in_range(definition.max_hp, 1.0, 1000000.0) or not Contract.number_in_range(definition.defense, 0.0, 10000.0) or not Contract.number_in_range(definition.move_speed, 0.0, 1000.0) or not Contract.number_in_range(definition.collision_radius_px, 1.0, 32.0):
 		return _failure("stats")
 	if not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("seed")
@@ -59,7 +59,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_definition = definition.duplicate(true)
 	_definition.actions = normalized_actions
 	_definition.mechanisms = authored_mechanisms.value
-	for stat: String in ["max_hp", "defense", "move_speed"]:
+	for stat: String in ["max_hp", "defense", "move_speed", "collision_radius_px"]:
 		_definition[stat] = float(_definition[stat])
 	var stagger_bound := int(_definition.mechanisms.get("first_attack_stagger_frames", 60))
 	var rng := Seeds.make_rng(int(identity.seed), StringName("hostile_first_attack_v1:%s" % identity.hostile_source_id))

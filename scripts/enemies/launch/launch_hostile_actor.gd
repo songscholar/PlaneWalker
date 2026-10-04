@@ -4,8 +4,9 @@ extends "res://scripts/enemies/enemy_base.gd"
 const LaunchRuntime := preload("res://scripts/enemies/launch/launch_enemy_runtime.gd")
 const LaunchStatus := preload("res://scripts/enemies/launch/launch_elemental_status_runtime.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
+const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
-const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata"]
+const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
 
 signal hostile_final_death(source_id: StringName, receipt_id: String)
@@ -18,6 +19,10 @@ var _prepared_frame_committed := false
 var _next_launch_ticket_id := 1
 var _action_credit := 0.0
 var _death_receipt := ""
+var _room_motion: Dictionary = {}
+var _motion_room: Node2D
+var _motion_room_transform := Transform2D.IDENTITY
+var _motion_room_local_bounds := Rect2()
 
 
 func _init() -> void:
@@ -35,12 +40,16 @@ func _physics_process(_delta: float) -> void:
 
 
 func configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary:
-	if not _prepared_launch_frame.is_empty() or health == null:
+	if not _prepared_launch_frame.is_empty() or health == null or not _room_motion.is_empty():
 		return _launch_failure("not_ready_or_busy")
 	var candidate: RefCounted = LaunchRuntime.new()
 	var configured: Dictionary = candidate.configure(definition, context)
 	if not configured.ok:
 		return configured
+	var body := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	var hurt := get_node_or_null("Hurtbox/CollisionShape2D") as CollisionShape2D
+	if body == null or hurt == null or not body.shape is CircleShape2D or not hurt.shape is CircleShape2D:
+		return _launch_failure("body_shapes")
 	if not health.configure_run(StringName(context.run_id)):
 		return _launch_failure("health_run")
 	_launch_runtime = candidate
@@ -54,11 +63,39 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	health.defense = defense
 	health.current_hp = max_hp
 	health.dead = false
+	body.shape = body.shape.duplicate()
+	hurt.shape = hurt.shape.duplicate()
+	(body.shape as CircleShape2D).radius = float(definition.collision_radius_px)
+	(hurt.shape as CircleShape2D).radius = float(definition.collision_radius_px)
 	configure_elemental_status_seed(int(context.seed), 0.40, 0.40)
 	_action_credit = 0.0
 	_death_receipt = ""
 	_refresh_control_visual()
 	return {"ok": true, "snapshot": launch_runtime_snapshot()}
+
+
+func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary:
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or not _room_motion.is_empty() or int(_launch_runtime.snapshot().runtime_frame) != int(_launch_identity.runtime_frame):
+		return _launch_failure("room_motion_busy")
+	var verified: Dictionary = RoomContract.validate(room, template)
+	if not verified.ok or not room.is_inside_tree() or not _translation_only(room.global_transform) or not _native_geometry_matches_definition() or collision_layer != 4 or not get_collision_mask_value(1):
+		return _launch_failure("room_motion_contract")
+	var local_bounds: Rect2 = verified.context.camera_bounds
+	if _physical_camera_bounds(room) != local_bounds:
+		return _launch_failure("room_motion_camera")
+	var bounds := Rect2(local_bounds.position + room.global_position, local_bounds.size)
+	var radius := float(_launch_definition.collision_radius_px)
+	if bounds.size.x <= radius * 2.0 or bounds.size.y <= radius * 2.0 or not _within_bounds(global_position, bounds, radius):
+		return _launch_failure("room_motion_position")
+	_room_motion = {"room_id": str(verified.context.content_id), "bounds": {"x": bounds.position.x, "y": bounds.position.y, "width": bounds.size.x, "height": bounds.size.y}, "collision_radius_px": radius, "collision_layer": collision_layer, "collision_mask": collision_mask}
+	_motion_room = room
+	_motion_room_transform = room.global_transform
+	_motion_room_local_bounds = local_bounds
+	return {"ok": true, "room_motion": launch_room_motion_snapshot()}
+
+
+func launch_room_motion_snapshot() -> Dictionary:
+	return _room_motion.duplicate(true)
 
 
 func launch_runtime_snapshot() -> Dictionary:
@@ -75,6 +112,8 @@ func project_runtime_snapshot(value: Dictionary) -> bool:
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _launch_runtime.snapshot().terminal:
 		return _launch_failure("unavailable")
+	if not _room_motion.is_empty() and (not _room_motion_is_valid() or not _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px))):
+		return _launch_failure("room_motion")
 	if not Contract.exact_fields(observations, HostileActionCoordinator.CONTEXT_FIELDS) or not Contract.valid_point(observations.source_position) or not _vector(observations.source_position).is_equal_approx(global_position):
 		return _launch_failure("source_position")
 	var before := _actor_state()
@@ -101,13 +140,20 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		displacement = Vector2.ZERO
 	else:
 		displacement += _knockback_velocity / 60.0
+	if not _room_motion.is_empty():
+		displacement = _constrain_to_room(global_position + displacement) - global_position
 	var predicted := global_position
 	var collision_target: Node2D
 	if not displacement.is_zero_approx():
-		var collision := move_and_collide(displacement, true)
-		predicted += collision.get_travel() if collision != null else displacement
-		if collision != null and collision.get_collider() is Node2D:
-			collision_target = collision.get_collider() as Node2D
+		if not _room_motion.is_empty() and bool(_launch_definition.mechanisms.get("internal_obstacle_passthrough", false)):
+			predicted += displacement
+		else:
+			var collision := move_and_collide(displacement, true)
+			predicted += collision.get_travel() if collision != null else displacement
+			if collision != null and collision.get_collider() is Node2D:
+				collision_target = collision.get_collider() as Node2D
+	if not _room_motion.is_empty():
+		predicted = _constrain_to_room(predicted)
 	var committed_observations := observations.duplicate(true)
 	committed_observations.source_position = _point(predicted)
 	var batch: Dictionary = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
@@ -171,7 +217,7 @@ func rollback_launch_frame(ticket: Dictionary) -> bool:
 
 
 func can_publish_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and _prepared_frame_committed
+	return _ticket_matches(ticket) and _prepared_frame_committed and (_room_motion.is_empty() or (_room_motion_is_valid() and _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px))))
 
 
 func publish_launch_frame(ticket: Dictionary) -> bool:
@@ -364,13 +410,15 @@ func _actor_state() -> Dictionary:
 		if has_meta(field):
 			var value: Variant = get_meta(field)
 			metadata[field] = value.duplicate(true) if value is Dictionary or value is Array else value
-	return {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata}
+	return {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata, "room_motion": launch_room_motion_snapshot()}
 
 
 func _can_restore_actor_state(value: Dictionary) -> bool:
 	if not Contract.exact_fields(value, ACTOR_STATE_FIELDS) or not value.runtime is Dictionary or not _launch_runtime.can_restore_snapshot(value.runtime) or not value.status is Dictionary or not elemental_status_runtime.can_restore_transaction_snapshot(value.status):
 		return false
 	if not Contract.valid_point(value.position) or not Contract.valid_point(value.knockback) or not Contract.number_in_range(value.action_credit, 0.0, 1.0) or typeof(value.death_receipt) != TYPE_STRING:
+		return false
+	if value.room_motion != _room_motion or (not _room_motion.is_empty() and (not _room_motion_is_valid() or not _within_bounds(_vector(value.position), _motion_bounds(), float(_launch_definition.collision_radius_px)))):
 		return false
 	if not value.weapon_metadata is Dictionary:
 		return false
@@ -422,6 +470,45 @@ func _restore_actor_state(value: Dictionary) -> bool:
 
 func _ticket_matches(ticket: Dictionary) -> bool:
 	return Contract.exact_fields(ticket, FRAME_TICKET_FIELDS) and not _prepared_launch_frame.is_empty() and ticket == _prepared_launch_frame
+
+
+func _native_geometry_matches_definition() -> bool:
+	var body := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	var hurt := get_node_or_null("Hurtbox/CollisionShape2D") as CollisionShape2D
+	var hurtbox := get_node_or_null("Hurtbox") as Area2D
+	return _translation_only(global_transform) and body != null and hurt != null and hurtbox != null and body.shape is CircleShape2D and hurt.shape is CircleShape2D and not body.disabled and not hurt.disabled and body.transform == Transform2D.IDENTITY and hurt.transform == Transform2D.IDENTITY and hurtbox.transform == Transform2D.IDENTITY and body.shape.radius == float(_launch_definition.collision_radius_px) and hurt.shape.radius == float(_launch_definition.collision_radius_px)
+
+
+func _room_motion_is_valid() -> bool:
+	return is_instance_valid(_motion_room) and _motion_room.is_inside_tree() and _motion_room.global_transform == _motion_room_transform and _physical_camera_bounds(_motion_room) == _motion_room_local_bounds and collision_layer == _room_motion.collision_layer and collision_mask == _room_motion.collision_mask and _native_geometry_matches_definition()
+
+
+static func _physical_camera_bounds(room: Node2D) -> Rect2:
+	var anchor := room.get_node_or_null("CameraBounds") as Area2D
+	var collision := room.get_node_or_null("CameraBounds/CollisionShape2D") as CollisionShape2D
+	if anchor == null or collision == null or not collision.shape is RectangleShape2D or not _translation_only(anchor.transform) or not _translation_only(collision.transform):
+		return Rect2()
+	var size: Vector2 = collision.shape.size
+	return Rect2(anchor.position + collision.position - size * 0.5, size)
+
+
+func _motion_bounds() -> Rect2:
+	var bounds: Dictionary = _room_motion.bounds
+	return Rect2(float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
+
+
+func _constrain_to_room(position: Vector2) -> Vector2:
+	var limits := _motion_bounds().grow(-float(_launch_definition.collision_radius_px))
+	return Vector2(clampf(position.x, limits.position.x, limits.end.x), clampf(position.y, limits.position.y, limits.end.y))
+
+
+static func _within_bounds(position: Vector2, bounds: Rect2, radius: float) -> bool:
+	var limits := bounds.grow(-radius)
+	return position.is_finite() and position.x >= limits.position.x and position.y >= limits.position.y and position.x <= limits.end.x and position.y <= limits.end.y
+
+
+static func _translation_only(transform: Transform2D) -> bool:
+	return transform.origin.is_finite() and transform.x == Vector2.RIGHT and transform.y == Vector2.DOWN
 
 
 static func _seconds_to_frames(value: float) -> int:

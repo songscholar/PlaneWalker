@@ -226,6 +226,7 @@ Coordinator snapshot includes frame, action phase/elapsed, action ID/digest, com
 
 **Interfaces:**
 - Actor: `configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary`, `launch_runtime_snapshot() -> Dictionary`, `project_runtime_snapshot(value: Dictionary) -> bool`; existing hostile/time/weapon endpoint signatures are preserved.
+- Room motion: `configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary`, `launch_room_motion_snapshot() -> Dictionary`. Validate the actual room through `RoomSceneContract`; accept translation-only transforms and freeze global CameraBounds. Consume `EnemyDefinition.runtime_projection.collision_radius_px` for independent body/hurt shapes and inset centre limits. Before each prepared frame, reject moved/freed rooms, changed bounds, scaled actors, and changed native body geometry. The Wraith may bypass internal collisions only after this boundary is configured; clip all resulting movement to the frozen inset bounds. Native actor checkpoints carry the same immutable room-motion descriptor and cannot restore a foreign descriptor or an out-of-bounds position.
 - Mechanism handlers: `prepare_mechanism(runtime_kind: String, state: Dictionary, observations: Dictionary) -> Dictionary` returns isolated next state and effects; unknown runtime kind rejects.
 - Payload: `configure_payload(descriptor: Dictionary, authority: Object) -> bool`, `payload_snapshot() -> Dictionary`, `retire(reason: StringName) -> void`.
 
@@ -241,6 +242,8 @@ suite.assert_equal(shell_before.definition_id, "stone_shell_strider", "real spec
 ```
 
 Define `LaunchEnemyRuntime.accept_damage_fact(value: Dictionary) -> Dictionary` in this task; facts require unique fact ID, positive finite amount, accepted frame, target source, and resulting HP from HealthComponent. Cover sentinel retreat, moth pool and warned death burst, shell/open boundaries, wraith interrupt/cancel, watcher target/cap/death debuff, each elite move, and actor `_physics_process` gameplay purity. Real integration compares Player HP, damage generation/hit index, registry geometry, and runtime state through HealthComponent.
+
+The room-motion RED test is `tests/integration/combat/ruins_wraith_room_motion_test.gd`/scene. Instantiate `room_combat_open_field.tscn` with its actual JSON template, offset the room, and place a native internal wall. Verify configured Wraith crossing, unconfigured Wraith and configured Strider collision, each outer corner's authored-radius margin, unchanged collision masks, preparation purity, rollback and exact-frame retry, malformed room rejection, and immutable checkpoint/transform/shape guards. Run `./tools/run_tests.sh --filter ruins_wraith_room_motion --timeout 60` before implementation, then the Ruins, native actor, effect and Player bridge regressions.
 
 - [ ] **Step 2: Run RED: `./tools/run_tests.sh --filter ruins_enemy_mechanisms` and `--filter launch_enemy_actor`.**
 - [ ] **Step 3: Implement the species state table and production adapters.**
