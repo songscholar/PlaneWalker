@@ -1,0 +1,1146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/narrative-definition/1.0.0",
+  "title": "Plane Walker narrative_definition v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "npc_id",
+        "district_id",
+        "faction_id",
+        "depth_thresholds",
+        "dialogue_nodes",
+        "resolution_flag"
+      ],
+      "properties": {
+        "category": {
+          "const": "narrative_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "npc"
+        },
+        "npc_id": {
+          "type": "string",
+          "enum": [
+            "odysseus",
+            "elara",
+            "sibyl",
+            "hermes",
+            "phia",
+            "morpheus",
+            "nemesis",
+            "vera"
+          ]
+        },
+        "district_id": {
+          "type": "string",
+          "enum": [
+            "hub_council",
+            "hub_craft",
+            "hub_rift"
+          ]
+        },
+        "faction_id": {
+          "type": "string",
+          "enum": [
+            "council",
+            "void_cult",
+            "merchants",
+            "shardborn"
+          ]
+        },
+        "depth_thresholds": {
+          "const": [
+            20,
+            40,
+            60,
+            80,
+            100
+          ]
+        },
+        "dialogue_nodes": {
+          "type": "array",
+          "minItems": 13,
+          "maxItems": 13,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "text_key",
+              "trigger",
+              "requirements",
+              "choices"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              },
+              "text_key": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+              },
+              "trigger": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id",
+                  "value"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "npc_intro",
+                      "first_death",
+                      "floor_completed",
+                      "boss_defeated",
+                      "affinity_min",
+                      "npc_depth_read",
+                      "record_collected",
+                      "artifact_collected",
+                      "flag_set",
+                      "hidden_step_complete",
+                      "phia_markers_min",
+                      "related_letter_count_min",
+                      "void_exposure_frames_min",
+                      "nemesis_spared_min",
+                      "vera_conversation_count_min",
+                      "heart_fragment_count_min",
+                      "npc_depth_incomplete",
+                      "balance_choice_count_min",
+                      "all_hidden_lines_complete",
+                      "all_npc_affinity_min",
+                      "artifact_count_min",
+                      "record_count_min"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  }
+                }
+              },
+              "requirements": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "id",
+                    "value"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "npc_intro",
+                        "first_death",
+                        "floor_completed",
+                        "boss_defeated",
+                        "affinity_min",
+                        "npc_depth_read",
+                        "record_collected",
+                        "artifact_collected",
+                        "flag_set",
+                        "hidden_step_complete",
+                        "phia_markers_min",
+                        "related_letter_count_min",
+                        "void_exposure_frames_min",
+                        "nemesis_spared_min",
+                        "vera_conversation_count_min",
+                        "heart_fragment_count_min",
+                        "npc_depth_incomplete",
+                        "balance_choice_count_min",
+                        "all_hidden_lines_complete",
+                        "all_npc_affinity_min",
+                        "artifact_count_min",
+                        "record_count_min"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"
+                    },
+                    "value": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              },
+              "choices": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "text_key",
+                    "affinity_delta",
+                    "faction_delta",
+                    "flags",
+                    "once"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+                    },
+                    "text_key": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+                    },
+                    "affinity_delta": {
+                      "type": "integer",
+                      "minimum": -10,
+                      "maximum": 10
+                    },
+                    "faction_delta": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "faction_id",
+                        "value"
+                      ],
+                      "properties": {
+                        "faction_id": {
+                          "type": "string",
+                          "enum": [
+                            "council",
+                            "void_cult",
+                            "merchants",
+                            "shardborn",
+                            "none"
+                          ]
+                        },
+                        "value": {
+                          "type": "integer",
+                          "minimum": -100,
+                          "maximum": 100
+                        }
+                      }
+                    },
+                    "flags": {
+                      "type": "array",
+                      "minItems": 0,
+                      "maxItems": 8,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+                      }
+                    },
+                    "once": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "resolution_flag": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "artifact_id",
+        "floor_id",
+        "source_receipt_id",
+        "text_key",
+        "record_tags"
+      ],
+      "properties": {
+        "category": {
+          "const": "narrative_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "artifact"
+        },
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "floor_id": {
+          "type": "string",
+          "enum": [
+            "floor_ruins_of_remnant",
+            "floor_void_forest",
+            "floor_time_rift",
+            "floor_plane_forge",
+            "floor_throne_of_void"
+          ]
+        },
+        "source_receipt_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "record_tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "record_id",
+        "floor_id",
+        "location_id",
+        "source_receipt_id",
+        "text_key",
+        "record_tags"
+      ],
+      "properties": {
+        "category": {
+          "const": "narrative_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "environment_record"
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^E[1-5]-[1-5]$"
+        },
+        "floor_id": {
+          "type": "string",
+          "enum": [
+            "floor_ruins_of_remnant",
+            "floor_void_forest",
+            "floor_time_rift",
+            "floor_plane_forge",
+            "floor_throne_of_void"
+          ]
+        },
+        "location_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "source_receipt_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "record_tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "storyline_id",
+        "requirements",
+        "steps",
+        "completion_flag"
+      ],
+      "properties": {
+        "category": {
+          "const": "narrative_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "hidden_line"
+        },
+        "storyline_id": {
+          "type": "string",
+          "enum": [
+            "primordial_whispers",
+            "walkers_song",
+            "voice_of_void"
+          ]
+        },
+        "requirements": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "npc_intro",
+                  "first_death",
+                  "floor_completed",
+                  "boss_defeated",
+                  "affinity_min",
+                  "npc_depth_read",
+                  "record_collected",
+                  "artifact_collected",
+                  "flag_set",
+                  "hidden_step_complete",
+                  "phia_markers_min",
+                  "related_letter_count_min",
+                  "void_exposure_frames_min",
+                  "nemesis_spared_min",
+                  "vera_conversation_count_min",
+                  "heart_fragment_count_min",
+                  "npc_depth_incomplete",
+                  "balance_choice_count_min",
+                  "all_hidden_lines_complete",
+                  "all_npc_affinity_min",
+                  "artifact_count_min",
+                  "record_count_min"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "index",
+              "source_receipt_id",
+              "floor_id",
+              "requirements",
+              "text_key"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "source_receipt_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              },
+              "floor_id": {
+                "type": "string",
+                "enum": [
+                  "floor_ruins_of_remnant",
+                  "floor_void_forest",
+                  "floor_time_rift",
+                  "floor_plane_forge",
+                  "floor_throne_of_void"
+                ]
+              },
+              "requirements": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "id",
+                    "value"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "npc_intro",
+                        "first_death",
+                        "floor_completed",
+                        "boss_defeated",
+                        "affinity_min",
+                        "npc_depth_read",
+                        "record_collected",
+                        "artifact_collected",
+                        "flag_set",
+                        "hidden_step_complete",
+                        "phia_markers_min",
+                        "related_letter_count_min",
+                        "void_exposure_frames_min",
+                        "nemesis_spared_min",
+                        "vera_conversation_count_min",
+                        "heart_fragment_count_min",
+                        "npc_depth_incomplete",
+                        "balance_choice_count_min",
+                        "all_hidden_lines_complete",
+                        "all_npc_affinity_min",
+                        "artifact_count_min",
+                        "record_count_min"
+                      ]
+                    },
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"
+                    },
+                    "value": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2147483647
+                    }
+                  }
+                }
+              },
+              "text_key": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+              }
+            }
+          }
+        },
+        "completion_flag": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "ending_id",
+        "final_choice",
+        "resolved_boss_id",
+        "requirements",
+        "text_key",
+        "credits_key",
+        "gallery_replayable"
+      ],
+      "properties": {
+        "category": {
+          "const": "narrative_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "ending"
+        },
+        "ending_id": {
+          "type": "string",
+          "enum": [
+            "return_of_order",
+            "embrace_of_void",
+            "balance_of_ashes",
+            "shattered_freedom",
+            "echo_of_primordial"
+          ]
+        },
+        "final_choice": {
+          "type": "string",
+          "enum": [
+            "reassemble",
+            "accept",
+            "coexist",
+            "release",
+            "ask"
+          ]
+        },
+        "resolved_boss_id": {
+          "const": "void_throne"
+        },
+        "requirements": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "npc_intro",
+                  "first_death",
+                  "floor_completed",
+                  "boss_defeated",
+                  "affinity_min",
+                  "npc_depth_read",
+                  "record_collected",
+                  "artifact_collected",
+                  "flag_set",
+                  "hidden_step_complete",
+                  "phia_markers_min",
+                  "related_letter_count_min",
+                  "void_exposure_frames_min",
+                  "nemesis_spared_min",
+                  "vera_conversation_count_min",
+                  "heart_fragment_count_min",
+                  "npc_depth_incomplete",
+                  "balance_choice_count_min",
+                  "all_hidden_lines_complete",
+                  "all_npc_affinity_min",
+                  "artifact_count_min",
+                  "record_count_min"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "credits_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "gallery_replayable": {
+          "const": true
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "choice_family",
+        "sequence",
+        "floor_id",
+        "source_receipt_id",
+        "requirements",
+        "temporary_max_hp_cost",
+        "consumption_scope",
+        "options"
+      ],
+      "properties": {
+        "category": {
+          "const": "narrative_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "choice"
+        },
+        "choice_family": {
+          "type": "string",
+          "enum": [
+            "nemesis",
+            "vera"
+          ]
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "floor_id": {
+          "type": "string",
+          "enum": [
+            "floor_ruins_of_remnant",
+            "floor_void_forest",
+            "floor_time_rift",
+            "floor_plane_forge",
+            "floor_throne_of_void"
+          ]
+        },
+        "source_receipt_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "requirements": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "npc_intro",
+                  "first_death",
+                  "floor_completed",
+                  "boss_defeated",
+                  "affinity_min",
+                  "npc_depth_read",
+                  "record_collected",
+                  "artifact_collected",
+                  "flag_set",
+                  "hidden_step_complete",
+                  "phia_markers_min",
+                  "related_letter_count_min",
+                  "void_exposure_frames_min",
+                  "nemesis_spared_min",
+                  "vera_conversation_count_min",
+                  "heart_fragment_count_min",
+                  "npc_depth_incomplete",
+                  "balance_choice_count_min",
+                  "all_hidden_lines_complete",
+                  "all_npc_affinity_min",
+                  "artifact_count_min",
+                  "record_count_min"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "temporary_max_hp_cost": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "consumption_scope": {
+          "const": "profile"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "text_key",
+              "affinity_delta",
+              "faction_delta",
+              "flags",
+              "spared",
+              "consumes_source"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              },
+              "text_key": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+              },
+              "affinity_delta": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20
+              },
+              "faction_delta": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "faction_id",
+                  "value"
+                ],
+                "properties": {
+                  "faction_id": {
+                    "type": "string",
+                    "enum": [
+                      "council",
+                      "void_cult",
+                      "merchants",
+                      "shardborn",
+                      "none"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": -100,
+                    "maximum": 100
+                  }
+                }
+              },
+              "flags": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 8,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+                }
+              },
+              "spared": {
+                "type": "boolean"
+              },
+              "consumes_source": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

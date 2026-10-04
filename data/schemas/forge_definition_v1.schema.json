@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/forge-definition/1.0.0",
+  "title": "Plane Walker forge_definition v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "weapon_id",
+        "levels",
+        "proficiency_thresholds",
+        "enchantment_ids",
+        "void_temper_costs",
+        "maximum_enchantments",
+        "required_node_id"
+      ],
+      "properties": {
+        "category": {
+          "const": "forge_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "weapon"
+        },
+        "weapon_id": {
+          "type": "string",
+          "enum": [
+            "sword",
+            "bow",
+            "gun",
+            "staff",
+            "gauntlets"
+          ]
+        },
+        "levels": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "level",
+              "cost",
+              "attack_bonus"
+            ],
+            "properties": {
+              "level": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "cost": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "chronos_shards",
+                  "existential_imprints"
+                ],
+                "properties": {
+                  "chronos_shards": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  },
+                  "existential_imprints": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  }
+                }
+              },
+              "attack_bonus": {
+                "const": 0.01,
+                "type": "number"
+              }
+            }
+          }
+        },
+        "proficiency_thresholds": {
+          "const": [
+            0,
+            100,
+            300,
+            700,
+            1500
+          ]
+        },
+        "enchantment_ids": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 15,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^EN-[0-9]{2}$"
+          }
+        },
+        "void_temper_costs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "chronos_shards",
+              "existential_imprints"
+            ],
+            "properties": {
+              "chronos_shards": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              "existential_imprints": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "maximum_enchantments": {
+          "const": 2
+        },
+        "required_node_id": {
+          "const": "F-01"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "enchantment_id",
+        "preference_tags",
+        "exclusive_group",
+        "unlock_cost",
+        "required_node_id",
+        "training_action_id",
+        "effect_policy"
+      ],
+      "properties": {
+        "category": {
+          "const": "forge_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "enchantment"
+        },
+        "enchantment_id": {
+          "type": "string",
+          "pattern": "^EN-[0-9]{2}$"
+        },
+        "preference_tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "exclusive_group": {
+          "type": "string",
+          "enum": [
+            "element",
+            "time_void",
+            "none"
+          ]
+        },
+        "unlock_cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chronos_shards",
+            "existential_imprints"
+          ],
+          "properties": {
+            "chronos_shards": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "existential_imprints": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            }
+          }
+        },
+        "required_node_id": {
+          "type": "string",
+          "enum": [
+            "F-02",
+            "F-03"
+          ]
+        },
+        "training_action_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "effect_policy": {
+          "const": "reward_preference_and_training"
+        }
+      }
+    }
+  ]
+}

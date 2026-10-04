@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/hub-district/1.0.0",
+  "title": "Plane Walker hub_district v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "id",
+    "schema_version",
+    "name_key",
+    "description_key",
+    "availability",
+    "tags",
+    "compatibility",
+    "effects",
+    "district_id",
+    "scene_path",
+    "arrival",
+    "functions",
+    "repair_stage_milestones"
+  ],
+  "properties": {
+    "category": {
+      "const": "hub_district"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "name_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "description_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "availability": {
+      "const": [
+        "LAUNCH",
+        "EXPANSION"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+      }
+    },
+    "compatibility": {
+      "const": {},
+      "type": "object"
+    },
+    "effects": {
+      "const": {},
+      "type": "object"
+    },
+    "district_id": {
+      "type": "string",
+      "enum": [
+        "hub_council",
+        "hub_craft",
+        "hub_rift"
+      ]
+    },
+    "scene_path": {
+      "type": "string",
+      "pattern": "^res://scenes/hub/hub_[a-z]+\\.tscn$"
+    },
+    "arrival": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1280
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 720
+        }
+      }
+    },
+    "functions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "npc_id",
+          "position",
+          "panel_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "council",
+              "archive",
+              "gateway",
+              "training",
+              "forge",
+              "meditation",
+              "merchant",
+              "gallery",
+              "mirror"
+            ]
+          },
+          "npc_id": {
+            "type": "string",
+            "enum": [
+              "odysseus",
+              "elara",
+              "sibyl",
+              "hermes",
+              "phia",
+              "morpheus",
+              "nemesis",
+              "vera"
+            ]
+          },
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1280
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 720
+              }
+            }
+          },
+          "panel_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        }
+      }
+    },
+    "repair_stage_milestones": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "stage",
+          "completed_floor_count"
+        ],
+        "properties": {
+          "stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "completed_floor_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          }
+        }
+      }
+    }
+  }
+}

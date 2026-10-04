@@ -1,0 +1,1094 @@
+[
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_movement_dodge",
+    "schema_version": 1,
+    "name_key": "LESSON_MOVEMENT_DODGE_NAME",
+    "description_key": "LESSON_MOVEMENT_DODGE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "movement_dodge",
+    "sequence": 1,
+    "trigger_id": "first_dungeon_entry",
+    "prerequisite_lesson_ids": [],
+    "receipt_requirements": [
+      {
+        "action_id": "move",
+        "count": 3,
+        "context_id": "normal_run"
+      },
+      {
+        "action_id": "dash",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_MOVEMENT_DODGE_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_weapon_basics",
+    "schema_version": 1,
+    "name_key": "LESSON_WEAPON_BASICS_NAME",
+    "description_key": "LESSON_WEAPON_BASICS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "weapon_basics",
+    "sequence": 2,
+    "trigger_id": "first_hostile",
+    "prerequisite_lesson_ids": [
+      "movement_dodge"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "weapon_primary",
+        "count": 3,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_WEAPON_BASICS_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_time_use",
+    "schema_version": 1,
+    "name_key": "LESSON_TIME_USE_NAME",
+    "description_key": "LESSON_TIME_USE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "time_use",
+    "sequence": 3,
+    "trigger_id": "first_time_opportunity",
+    "prerequisite_lesson_ids": [
+      "weapon_basics"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "time_slot_1",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_TIME_USE_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_treasure_reward",
+    "schema_version": 1,
+    "name_key": "LESSON_TREASURE_REWARD_NAME",
+    "description_key": "LESSON_TREASURE_REWARD_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "treasure_reward",
+    "sequence": 4,
+    "trigger_id": "first_reward",
+    "prerequisite_lesson_ids": [
+      "time_use"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "reward_select",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_TREASURE_REWARD_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_merchant",
+    "schema_version": 1,
+    "name_key": "LESSON_MERCHANT_NAME",
+    "description_key": "LESSON_MERCHANT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "merchant",
+    "sequence": 5,
+    "trigger_id": "first_shop",
+    "prerequisite_lesson_ids": [
+      "treasure_reward"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "merchant_purchase",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_MERCHANT_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_boss_warnings",
+    "schema_version": 1,
+    "name_key": "LESSON_BOSS_WARNINGS_NAME",
+    "description_key": "LESSON_BOSS_WARNINGS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "boss_warnings",
+    "sequence": 6,
+    "trigger_id": "first_boss",
+    "prerequisite_lesson_ids": [
+      "merchant"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "hostile_warning_observed",
+        "count": 1,
+        "context_id": "normal_run"
+      },
+      {
+        "action_id": "boss_conversion",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_BOSS_WARNINGS_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_build_inspection",
+    "schema_version": 1,
+    "name_key": "LESSON_BUILD_INSPECTION_NAME",
+    "description_key": "LESSON_BUILD_INSPECTION_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "build_inspection",
+    "sequence": 7,
+    "trigger_id": "first_build_threshold",
+    "prerequisite_lesson_ids": [
+      "boss_warnings"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "build_open",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_BUILD_INSPECTION_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_blessing_curse",
+    "schema_version": 1,
+    "name_key": "LESSON_BLESSING_CURSE_NAME",
+    "description_key": "LESSON_BLESSING_CURSE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "blessing_curse",
+    "sequence": 8,
+    "trigger_id": "first_event",
+    "prerequisite_lesson_ids": [
+      "build_inspection"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "event_choice",
+        "count": 1,
+        "context_id": "normal_run"
+      }
+    ],
+    "text_key": "TUTORIAL_BLESSING_CURSE_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_hub_forge",
+    "schema_version": 1,
+    "name_key": "LESSON_HUB_FORGE_NAME",
+    "description_key": "LESSON_HUB_FORGE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "hub_forge",
+    "sequence": 9,
+    "trigger_id": "first_hub_return",
+    "prerequisite_lesson_ids": [
+      "blessing_curse"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "forge_upgrade",
+        "count": 1,
+        "context_id": "hub"
+      }
+    ],
+    "text_key": "TUTORIAL_HUB_FORGE_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "lesson_alternative_loadouts",
+    "schema_version": 1,
+    "name_key": "LESSON_ALTERNATIVE_LOADOUTS_NAME",
+    "description_key": "LESSON_ALTERNATIVE_LOADOUTS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "lesson",
+    "lesson_id": "alternative_loadouts",
+    "sequence": 10,
+    "trigger_id": "first_new_loadout",
+    "prerequisite_lesson_ids": [
+      "hub_forge"
+    ],
+    "receipt_requirements": [
+      {
+        "action_id": "launch_loadout_change",
+        "count": 1,
+        "context_id": "hub"
+      }
+    ],
+    "text_key": "TUTORIAL_ALTERNATIVE_LOADOUTS_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 0,
+      "existential_imprints": 0
+    }
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_001",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_001_NAME",
+    "description_key": "HINT_TIP_001_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-001",
+    "trigger_id": "first_dungeon_entry",
+    "style": "instant",
+    "maximum_displays": 1,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "move",
+      "dash"
+    ],
+    "text_key": "TIP_001_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_002",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_002_NAME",
+    "description_key": "HINT_TIP_002_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-002",
+    "trigger_id": "first_hostile",
+    "style": "instant",
+    "maximum_displays": 1,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "weapon_primary"
+    ],
+    "text_key": "TIP_002_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_003",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_003_NAME",
+    "description_key": "HINT_TIP_003_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-003",
+    "trigger_id": "health_below_half",
+    "style": "status",
+    "maximum_displays": 3,
+    "display_frames": 0,
+    "semantic_action_ids": [],
+    "text_key": "TIP_003_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_004",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_004_NAME",
+    "description_key": "HINT_TIP_004_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-004",
+    "trigger_id": "time_energy_empty",
+    "style": "status",
+    "maximum_displays": 3,
+    "display_frames": 0,
+    "semantic_action_ids": [
+      "time_slot_1"
+    ],
+    "text_key": "TIP_004_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_005",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_005_NAME",
+    "description_key": "HINT_TIP_005_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-005",
+    "trigger_id": "first_elite",
+    "style": "instant",
+    "maximum_displays": 3,
+    "display_frames": 180,
+    "semantic_action_ids": [],
+    "text_key": "TIP_005_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_006",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_006_NAME",
+    "description_key": "HINT_TIP_006_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-006",
+    "trigger_id": "first_route_discovery",
+    "style": "context",
+    "maximum_displays": 5,
+    "display_frames": 0,
+    "semantic_action_ids": [
+      "interact"
+    ],
+    "text_key": "TIP_006_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_007",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_007_NAME",
+    "description_key": "HINT_TIP_007_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-007",
+    "trigger_id": "first_rare_reward",
+    "style": "instant",
+    "maximum_displays": 5,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "build_open"
+    ],
+    "text_key": "TIP_007_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_008",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_008_NAME",
+    "description_key": "HINT_TIP_008_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-008",
+    "trigger_id": "first_legendary_reward",
+    "style": "instant",
+    "maximum_displays": 5,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "build_open"
+    ],
+    "text_key": "TIP_008_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_009",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_009_NAME",
+    "description_key": "HINT_TIP_009_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-009",
+    "trigger_id": "first_void_damage",
+    "style": "instant",
+    "maximum_displays": 3,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "dash"
+    ],
+    "text_key": "TIP_009_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_010",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_010_NAME",
+    "description_key": "HINT_TIP_010_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-010",
+    "trigger_id": "first_forge_preview",
+    "style": "instant",
+    "maximum_displays": 2,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "interact"
+    ],
+    "text_key": "TIP_010_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_011",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_011_NAME",
+    "description_key": "HINT_TIP_011_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-011",
+    "trigger_id": "first_existential_imprint",
+    "style": "instant",
+    "maximum_displays": 3,
+    "display_frames": 180,
+    "semantic_action_ids": [],
+    "text_key": "TIP_011_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_012",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_012_NAME",
+    "description_key": "HINT_TIP_012_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-012",
+    "trigger_id": "first_character_unlock",
+    "style": "hub",
+    "maximum_displays": 1,
+    "display_frames": 0,
+    "semantic_action_ids": [
+      "interact"
+    ],
+    "text_key": "TIP_012_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_013",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_013_NAME",
+    "description_key": "HINT_TIP_013_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-013",
+    "trigger_id": "first_training_entry",
+    "style": "hub",
+    "maximum_displays": 1,
+    "display_frames": 0,
+    "semantic_action_ids": [
+      "interact"
+    ],
+    "text_key": "TIP_013_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_014",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_014_NAME",
+    "description_key": "HINT_TIP_014_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-014",
+    "trigger_id": "second_same_boss_failure",
+    "style": "death",
+    "maximum_displays": 1,
+    "display_frames": 0,
+    "semantic_action_ids": [],
+    "text_key": "TIP_014_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "hint_tip_015",
+    "schema_version": 1,
+    "name_key": "HINT_TIP_015_NAME",
+    "description_key": "HINT_TIP_015_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hint",
+    "hint_id": "TIP-015",
+    "trigger_id": "first_curse_choice",
+    "style": "instant",
+    "maximum_displays": 2,
+    "display_frames": 180,
+    "semantic_action_ids": [
+      "interact"
+    ],
+    "text_key": "TIP_015_TEXT",
+    "suppressible": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "training_t_01",
+    "schema_version": 1,
+    "name_key": "TRAINING_T_01_NAME",
+    "description_key": "TRAINING_T_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "training_task",
+    "task_id": "T-01",
+    "receipt_requirements": [
+      {
+        "action_id": "move",
+        "count": 1,
+        "context_id": "training_drill"
+      },
+      {
+        "action_id": "dash",
+        "count": 1,
+        "context_id": "training_drill"
+      }
+    ],
+    "text_key": "TRAINING_T_01_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 3,
+      "existential_imprints": 0
+    },
+    "reward_once": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "training_t_02",
+    "schema_version": 1,
+    "name_key": "TRAINING_T_02_NAME",
+    "description_key": "TRAINING_T_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "training_task",
+    "task_id": "T-02",
+    "receipt_requirements": [
+      {
+        "action_id": "weapon_primary",
+        "count": 1,
+        "context_id": "training_drill"
+      }
+    ],
+    "text_key": "TRAINING_T_02_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "reward_once": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "training_t_03",
+    "schema_version": 1,
+    "name_key": "TRAINING_T_03_NAME",
+    "description_key": "TRAINING_T_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "training_task",
+    "task_id": "T-03",
+    "receipt_requirements": [
+      {
+        "action_id": "time_slot_1",
+        "count": 1,
+        "context_id": "training_drill"
+      }
+    ],
+    "text_key": "TRAINING_T_03_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "reward_once": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "training_t_04",
+    "schema_version": 1,
+    "name_key": "TRAINING_T_04_NAME",
+    "description_key": "TRAINING_T_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "training_task",
+    "task_id": "T-04",
+    "receipt_requirements": [
+      {
+        "action_id": "weapon_primary",
+        "count": 1,
+        "context_id": "training_drill"
+      },
+      {
+        "action_id": "dash",
+        "count": 1,
+        "context_id": "training_drill"
+      }
+    ],
+    "text_key": "TRAINING_T_04_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 8,
+      "existential_imprints": 0
+    },
+    "reward_once": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "training_t_05",
+    "schema_version": 1,
+    "name_key": "TRAINING_T_05_NAME",
+    "description_key": "TRAINING_T_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "training_task",
+    "task_id": "T-05",
+    "receipt_requirements": [
+      {
+        "action_id": "boss_conversion",
+        "count": 1,
+        "context_id": "training_drill"
+      }
+    ],
+    "text_key": "TRAINING_T_05_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 15,
+      "existential_imprints": 0
+    },
+    "reward_once": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "training_t_06",
+    "schema_version": 1,
+    "name_key": "TRAINING_T_06_NAME",
+    "description_key": "TRAINING_T_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "training_task",
+    "task_id": "T-06",
+    "receipt_requirements": [
+      {
+        "action_id": "weapon_skill",
+        "count": 1,
+        "context_id": "training_drill"
+      },
+      {
+        "action_id": "time_slot_1",
+        "count": 1,
+        "context_id": "training_drill"
+      }
+    ],
+    "text_key": "TRAINING_T_06_TEXT",
+    "repeatable": true,
+    "skippable": true,
+    "reward": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "reward_once": true
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "assisted_run_1",
+    "schema_version": 1,
+    "name_key": "ASSISTED_RUN_1_NAME",
+    "description_key": "ASSISTED_RUN_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "assisted_run",
+    "sequence": 1,
+    "incoming_damage_multiplier": 0.8,
+    "warning_scale": 1.25,
+    "ranked_eligible": false,
+    "default_enabled": false,
+    "text_key": "ASSISTED_RUN_1_TEXT"
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "assisted_run_2",
+    "schema_version": 1,
+    "name_key": "ASSISTED_RUN_2_NAME",
+    "description_key": "ASSISTED_RUN_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "assisted_run",
+    "sequence": 2,
+    "incoming_damage_multiplier": 0.9,
+    "warning_scale": 1.1,
+    "ranked_eligible": false,
+    "default_enabled": false,
+    "text_key": "ASSISTED_RUN_2_TEXT"
+  },
+  {
+    "category": "tutorial_definition",
+    "id": "assisted_run_3",
+    "schema_version": 1,
+    "name_key": "ASSISTED_RUN_3_NAME",
+    "description_key": "ASSISTED_RUN_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "assisted_run",
+    "sequence": 3,
+    "incoming_damage_multiplier": 1,
+    "warning_scale": 1,
+    "ranked_eligible": false,
+    "default_enabled": false,
+    "text_key": "ASSISTED_RUN_3_TEXT"
+  }
+]

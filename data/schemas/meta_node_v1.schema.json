@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/meta-node/1.0.0",
+  "title": "Plane Walker meta_node v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "id",
+    "schema_version",
+    "name_key",
+    "description_key",
+    "availability",
+    "tags",
+    "compatibility",
+    "effects",
+    "node_id",
+    "branch",
+    "cost",
+    "prerequisites",
+    "meta_effects"
+  ],
+  "properties": {
+    "category": {
+      "const": "meta_node"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "name_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "description_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+    },
+    "availability": {
+      "const": [
+        "LAUNCH",
+        "EXPANSION"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+      }
+    },
+    "compatibility": {
+      "const": {},
+      "type": "object"
+    },
+    "effects": {
+      "const": {},
+      "type": "object"
+    },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[WCLFP]-[0-9]{2}$"
+    },
+    "branch": {
+      "type": "string",
+      "enum": [
+        "W",
+        "C",
+        "L",
+        "F",
+        "P"
+      ]
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chronos_shards",
+        "existential_imprints"
+      ],
+      "properties": {
+        "chronos_shards": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "existential_imprints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "prerequisites": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[WCLFP]-[0-9]{2}$"
+      }
+    },
+    "meta_effects": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "stat",
+              "magnitude"
+            ],
+            "properties": {
+              "kind": {
+                "const": "stat_bonus"
+              },
+              "stat": {
+                "type": "string",
+                "enum": [
+                  "max_hp",
+                  "attack",
+                  "defense",
+                  "speed",
+                  "attack_speed",
+                  "entrance_healing",
+                  "void_reduction"
+                ]
+              },
+              "magnitude": {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 0.05
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "option_id"
+            ],
+            "properties": {
+              "kind": {
+                "const": "option"
+              },
+              "option_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "const": "soul_retention"
+              },
+              "value": {
+                "enum": [
+                  0.5,
+                  0.7
+                ],
+                "type": "number"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "const": "hub_discount"
+              },
+              "value": {
+                "const": 0.1,
+                "type": "number"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

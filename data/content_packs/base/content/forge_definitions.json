@@ -1,0 +1,942 @@
+[
+  {
+    "category": "forge_definition",
+    "id": "forge_sword",
+    "schema_version": 1,
+    "name_key": "FORGE_SWORD_NAME",
+    "description_key": "FORGE_SWORD_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "weapon",
+    "weapon_id": "sword",
+    "levels": [
+      {
+        "level": 1,
+        "cost": {
+          "chronos_shards": 5,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 2,
+        "cost": {
+          "chronos_shards": 10,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 3,
+        "cost": {
+          "chronos_shards": 20,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 4,
+        "cost": {
+          "chronos_shards": 35,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 5,
+        "cost": {
+          "chronos_shards": 50,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      }
+    ],
+    "proficiency_thresholds": [
+      0,
+      100,
+      300,
+      700,
+      1500
+    ],
+    "enchantment_ids": [
+      "EN-01",
+      "EN-02",
+      "EN-03",
+      "EN-04",
+      "EN-05",
+      "EN-06",
+      "EN-07",
+      "EN-08",
+      "EN-09",
+      "EN-10",
+      "EN-11",
+      "EN-12",
+      "EN-13",
+      "EN-14",
+      "EN-15"
+    ],
+    "void_temper_costs": [
+      {
+        "chronos_shards": 30,
+        "existential_imprints": 0
+      },
+      {
+        "chronos_shards": 0,
+        "existential_imprints": 3
+      }
+    ],
+    "maximum_enchantments": 2,
+    "required_node_id": "F-01"
+  },
+  {
+    "category": "forge_definition",
+    "id": "forge_bow",
+    "schema_version": 1,
+    "name_key": "FORGE_BOW_NAME",
+    "description_key": "FORGE_BOW_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "weapon",
+    "weapon_id": "bow",
+    "levels": [
+      {
+        "level": 1,
+        "cost": {
+          "chronos_shards": 5,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 2,
+        "cost": {
+          "chronos_shards": 10,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 3,
+        "cost": {
+          "chronos_shards": 20,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 4,
+        "cost": {
+          "chronos_shards": 35,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 5,
+        "cost": {
+          "chronos_shards": 50,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      }
+    ],
+    "proficiency_thresholds": [
+      0,
+      100,
+      300,
+      700,
+      1500
+    ],
+    "enchantment_ids": [
+      "EN-01",
+      "EN-02",
+      "EN-03",
+      "EN-04",
+      "EN-05",
+      "EN-06",
+      "EN-07",
+      "EN-08",
+      "EN-09",
+      "EN-10",
+      "EN-11",
+      "EN-12",
+      "EN-13",
+      "EN-14",
+      "EN-15"
+    ],
+    "void_temper_costs": [
+      {
+        "chronos_shards": 30,
+        "existential_imprints": 0
+      },
+      {
+        "chronos_shards": 0,
+        "existential_imprints": 3
+      }
+    ],
+    "maximum_enchantments": 2,
+    "required_node_id": "F-01"
+  },
+  {
+    "category": "forge_definition",
+    "id": "forge_gun",
+    "schema_version": 1,
+    "name_key": "FORGE_GUN_NAME",
+    "description_key": "FORGE_GUN_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "weapon",
+    "weapon_id": "gun",
+    "levels": [
+      {
+        "level": 1,
+        "cost": {
+          "chronos_shards": 5,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 2,
+        "cost": {
+          "chronos_shards": 10,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 3,
+        "cost": {
+          "chronos_shards": 20,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 4,
+        "cost": {
+          "chronos_shards": 35,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 5,
+        "cost": {
+          "chronos_shards": 50,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      }
+    ],
+    "proficiency_thresholds": [
+      0,
+      100,
+      300,
+      700,
+      1500
+    ],
+    "enchantment_ids": [
+      "EN-01",
+      "EN-02",
+      "EN-03",
+      "EN-04",
+      "EN-05",
+      "EN-06",
+      "EN-07",
+      "EN-08",
+      "EN-09",
+      "EN-10",
+      "EN-11",
+      "EN-12",
+      "EN-13",
+      "EN-14",
+      "EN-15"
+    ],
+    "void_temper_costs": [
+      {
+        "chronos_shards": 30,
+        "existential_imprints": 0
+      },
+      {
+        "chronos_shards": 0,
+        "existential_imprints": 3
+      }
+    ],
+    "maximum_enchantments": 2,
+    "required_node_id": "F-01"
+  },
+  {
+    "category": "forge_definition",
+    "id": "forge_staff",
+    "schema_version": 1,
+    "name_key": "FORGE_STAFF_NAME",
+    "description_key": "FORGE_STAFF_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "weapon",
+    "weapon_id": "staff",
+    "levels": [
+      {
+        "level": 1,
+        "cost": {
+          "chronos_shards": 5,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 2,
+        "cost": {
+          "chronos_shards": 10,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 3,
+        "cost": {
+          "chronos_shards": 20,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 4,
+        "cost": {
+          "chronos_shards": 35,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 5,
+        "cost": {
+          "chronos_shards": 50,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      }
+    ],
+    "proficiency_thresholds": [
+      0,
+      100,
+      300,
+      700,
+      1500
+    ],
+    "enchantment_ids": [
+      "EN-01",
+      "EN-02",
+      "EN-03",
+      "EN-04",
+      "EN-05",
+      "EN-06",
+      "EN-07",
+      "EN-08",
+      "EN-09",
+      "EN-10",
+      "EN-11",
+      "EN-12",
+      "EN-13",
+      "EN-14",
+      "EN-15"
+    ],
+    "void_temper_costs": [
+      {
+        "chronos_shards": 30,
+        "existential_imprints": 0
+      },
+      {
+        "chronos_shards": 0,
+        "existential_imprints": 3
+      }
+    ],
+    "maximum_enchantments": 2,
+    "required_node_id": "F-01"
+  },
+  {
+    "category": "forge_definition",
+    "id": "forge_gauntlets",
+    "schema_version": 1,
+    "name_key": "FORGE_GAUNTLETS_NAME",
+    "description_key": "FORGE_GAUNTLETS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "weapon",
+    "weapon_id": "gauntlets",
+    "levels": [
+      {
+        "level": 1,
+        "cost": {
+          "chronos_shards": 5,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 2,
+        "cost": {
+          "chronos_shards": 10,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 3,
+        "cost": {
+          "chronos_shards": 20,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 4,
+        "cost": {
+          "chronos_shards": 35,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      },
+      {
+        "level": 5,
+        "cost": {
+          "chronos_shards": 50,
+          "existential_imprints": 0
+        },
+        "attack_bonus": 0.01
+      }
+    ],
+    "proficiency_thresholds": [
+      0,
+      100,
+      300,
+      700,
+      1500
+    ],
+    "enchantment_ids": [
+      "EN-01",
+      "EN-02",
+      "EN-03",
+      "EN-04",
+      "EN-05",
+      "EN-06",
+      "EN-07",
+      "EN-08",
+      "EN-09",
+      "EN-10",
+      "EN-11",
+      "EN-12",
+      "EN-13",
+      "EN-14",
+      "EN-15"
+    ],
+    "void_temper_costs": [
+      {
+        "chronos_shards": 30,
+        "existential_imprints": 0
+      },
+      {
+        "chronos_shards": 0,
+        "existential_imprints": 3
+      }
+    ],
+    "maximum_enchantments": 2,
+    "required_node_id": "F-01"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_01",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_01_NAME",
+    "description_key": "ENCHANTMENT_EN_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-01",
+    "preference_tags": [
+      "weapon",
+      "payoff"
+    ],
+    "exclusive_group": "element",
+    "unlock_cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_primary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_02",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_02_NAME",
+    "description_key": "ENCHANTMENT_EN_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-02",
+    "preference_tags": [
+      "freeze_burst"
+    ],
+    "exclusive_group": "element",
+    "unlock_cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_secondary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_03",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_03_NAME",
+    "description_key": "ENCHANTMENT_EN_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-03",
+    "preference_tags": [
+      "accelerated_combo"
+    ],
+    "exclusive_group": "element",
+    "unlock_cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_skill",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_04",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_04_NAME",
+    "description_key": "ENCHANTMENT_EN_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-04",
+    "preference_tags": [
+      "time"
+    ],
+    "exclusive_group": "time_void",
+    "unlock_cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_primary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_05",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_05_NAME",
+    "description_key": "ENCHANTMENT_EN_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-05",
+    "preference_tags": [
+      "low_hp_void"
+    ],
+    "exclusive_group": "time_void",
+    "unlock_cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_secondary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_06",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_06_NAME",
+    "description_key": "ENCHANTMENT_EN_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-06",
+    "preference_tags": [
+      "survival"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 35,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-03",
+    "training_action_id": "weapon_skill",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_07",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_07_NAME",
+    "description_key": "ENCHANTMENT_EN_07_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-07",
+    "preference_tags": [
+      "piercing_barrage"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_primary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_08",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_08_NAME",
+    "description_key": "ENCHANTMENT_EN_08_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-08",
+    "preference_tags": [
+      "weapon"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 25,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_secondary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_09",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_09_NAME",
+    "description_key": "ENCHANTMENT_EN_09_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-09",
+    "preference_tags": [
+      "accelerated_combo"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_skill",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_10",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_10_NAME",
+    "description_key": "ENCHANTMENT_EN_10_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-10",
+    "preference_tags": [
+      "accelerated_combo",
+      "payoff"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 25,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_primary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_11",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_11_NAME",
+    "description_key": "ENCHANTMENT_EN_11_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-11",
+    "preference_tags": [
+      "utility"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 12,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-02",
+    "training_action_id": "weapon_secondary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_12",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_12_NAME",
+    "description_key": "ENCHANTMENT_EN_12_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-12",
+    "preference_tags": [
+      "rift_trap"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 35,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-03",
+    "training_action_id": "weapon_skill",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_13",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_13_NAME",
+    "description_key": "ENCHANTMENT_EN_13_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-13",
+    "preference_tags": [
+      "echo_legion",
+      "rewind_echo"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 35,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-03",
+    "training_action_id": "weapon_primary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_14",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_14_NAME",
+    "description_key": "ENCHANTMENT_EN_14_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-14",
+    "preference_tags": [
+      "survival",
+      "time"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 50,
+      "existential_imprints": 5
+    },
+    "required_node_id": "F-03",
+    "training_action_id": "weapon_secondary",
+    "effect_policy": "reward_preference_and_training"
+  },
+  {
+    "category": "forge_definition",
+    "id": "enchantment_en_15",
+    "schema_version": 1,
+    "name_key": "ENCHANTMENT_EN_15_NAME",
+    "description_key": "ENCHANTMENT_EN_15_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "enchantment",
+    "enchantment_id": "EN-15",
+    "preference_tags": [
+      "generalist",
+      "utility"
+    ],
+    "exclusive_group": "none",
+    "unlock_cost": {
+      "chronos_shards": 50,
+      "existential_imprints": 0
+    },
+    "required_node_id": "F-03",
+    "training_action_id": "weapon_skill",
+    "effect_policy": "reward_preference_and_training"
+  }
+]

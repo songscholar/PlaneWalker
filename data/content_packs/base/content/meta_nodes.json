@@ -1,0 +1,1358 @@
+[
+  {
+    "category": "meta_node",
+    "id": "meta_w_01",
+    "schema_version": 1,
+    "name_key": "META_W_01_NAME",
+    "description_key": "META_W_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-01",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "max_hp",
+        "magnitude": 0.02
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_02",
+    "schema_version": 1,
+    "name_key": "META_W_02_NAME",
+    "description_key": "META_W_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-02",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "max_hp",
+        "magnitude": 0.01
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_03",
+    "schema_version": 1,
+    "name_key": "META_W_03_NAME",
+    "description_key": "META_W_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-03",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-02"
+    ],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "max_hp",
+        "magnitude": 0.02
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_04",
+    "schema_version": 1,
+    "name_key": "META_W_04_NAME",
+    "description_key": "META_W_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-04",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 8,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "entrance_healing",
+        "magnitude": 0.02
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_05",
+    "schema_version": 1,
+    "name_key": "META_W_05_NAME",
+    "description_key": "META_W_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-05",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 15,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-04"
+    ],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "void_reduction",
+        "magnitude": 0.02
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_06",
+    "schema_version": 1,
+    "name_key": "META_W_06_NAME",
+    "description_key": "META_W_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-06",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 30,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-03"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "safe_training_reset"
+      },
+      {
+        "kind": "option",
+        "option_id": "death_analysis"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_07",
+    "schema_version": 1,
+    "name_key": "META_W_07_NAME",
+    "description_key": "META_W_07_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-07",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "soul_retention",
+        "value": 0.5
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_08",
+    "schema_version": 1,
+    "name_key": "META_W_08_NAME",
+    "description_key": "META_W_08_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-08",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-07"
+    ],
+    "meta_effects": [
+      {
+        "kind": "soul_retention",
+        "value": 0.7
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_09",
+    "schema_version": 1,
+    "name_key": "META_W_09_NAME",
+    "description_key": "META_W_09_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-09",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-05"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "free_hub_rest"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_w_10",
+    "schema_version": 1,
+    "name_key": "META_W_10_NAME",
+    "description_key": "META_W_10_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "W-10",
+    "branch": "W",
+    "cost": {
+      "chronos_shards": 25,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "W-06"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "next_room_content_preview"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_01",
+    "schema_version": 1,
+    "name_key": "META_C_01_NAME",
+    "description_key": "META_C_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-01",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "attack",
+        "magnitude": 0.02
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_02",
+    "schema_version": 1,
+    "name_key": "META_C_02_NAME",
+    "description_key": "META_C_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-02",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 12,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "C-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "attack",
+        "magnitude": 0.01
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_03",
+    "schema_version": 1,
+    "name_key": "META_C_03_NAME",
+    "description_key": "META_C_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-03",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 25,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "C-02"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "archetype_shortlists"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_04",
+    "schema_version": 1,
+    "name_key": "META_C_04_NAME",
+    "description_key": "META_C_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-04",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 8,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "attack_speed",
+        "magnitude": 0.01
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_05",
+    "schema_version": 1,
+    "name_key": "META_C_05_NAME",
+    "description_key": "META_C_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-05",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 15,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "C-04"
+    ],
+    "meta_effects": [
+      {
+        "kind": "stat_bonus",
+        "stat": "attack_speed",
+        "magnitude": 0.01
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_06",
+    "schema_version": 1,
+    "name_key": "META_C_06_NAME",
+    "description_key": "META_C_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-06",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "C-04"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "dodge_parry_drill"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_07",
+    "schema_version": 1,
+    "name_key": "META_C_07_NAME",
+    "description_key": "META_C_07_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-07",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 15,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "C-05"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "hostile_timing_comparison"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_c_08",
+    "schema_version": 1,
+    "name_key": "META_C_08_NAME",
+    "description_key": "META_C_08_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "C-08",
+    "branch": "C",
+    "cost": {
+      "chronos_shards": 50,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "C-03",
+      "C-06"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "complete_boss_drills"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_01",
+    "schema_version": 1,
+    "name_key": "META_L_01_NAME",
+    "description_key": "META_L_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-01",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "ruins_runes_basic"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_02",
+    "schema_version": 1,
+    "name_key": "META_L_02_NAME",
+    "description_key": "META_L_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-02",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "ruins_runes_complete"
+      },
+      {
+        "kind": "option",
+        "option_id": "rift_runes_basic"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_03",
+    "schema_version": 1,
+    "name_key": "META_L_03_NAME",
+    "description_key": "META_L_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-03",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-02"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "all_runes_complete"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_04",
+    "schema_version": 1,
+    "name_key": "META_L_04_NAME",
+    "description_key": "META_L_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-04",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 8,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "hostile_role_preview"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_05",
+    "schema_version": 1,
+    "name_key": "META_L_05_NAME",
+    "description_key": "META_L_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-05",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 12,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-02"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "rift_landmark_hints"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_06",
+    "schema_version": 1,
+    "name_key": "META_L_06_NAME",
+    "description_key": "META_L_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-06",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 18,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-03"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "floor_safety_annotations"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_07",
+    "schema_version": 1,
+    "name_key": "META_L_07_NAME",
+    "description_key": "META_L_07_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-07",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 3,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "cross_linked_archive"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_08",
+    "schema_version": 1,
+    "name_key": "META_L_08_NAME",
+    "description_key": "META_L_08_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-08",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-07"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "extra_build_presets"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_09",
+    "schema_version": 1,
+    "name_key": "META_L_09_NAME",
+    "description_key": "META_L_09_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-09",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 12,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "L-08"
+    ],
+    "meta_effects": [
+      {
+        "kind": "hub_discount",
+        "value": 0.1
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_l_10",
+    "schema_version": 1,
+    "name_key": "META_L_10_NAME",
+    "description_key": "META_L_10_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "L-10",
+    "branch": "L",
+    "cost": {
+      "chronos_shards": 40,
+      "existential_imprints": 5
+    },
+    "prerequisites": [
+      "L-06",
+      "L-09"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "floor_content_preview"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_01",
+    "schema_version": 1,
+    "name_key": "META_F_01_NAME",
+    "description_key": "META_F_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-01",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "weapon_forging"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_02",
+    "schema_version": 1,
+    "name_key": "META_F_02_NAME",
+    "description_key": "META_F_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-02",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 10,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "F-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "first_enchantment"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_03",
+    "schema_version": 1,
+    "name_key": "META_F_03_NAME",
+    "description_key": "META_F_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-03",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 20,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "F-02"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "second_enchantment"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_04",
+    "schema_version": 1,
+    "name_key": "META_F_04_NAME",
+    "description_key": "META_F_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-04",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 25,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "F-02"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "void_temper"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_05",
+    "schema_version": 1,
+    "name_key": "META_F_05_NAME",
+    "description_key": "META_F_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-05",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 12,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "F-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "forge_preference_recall"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_06",
+    "schema_version": 1,
+    "name_key": "META_F_06_NAME",
+    "description_key": "META_F_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-06",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 30,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "F-03",
+      "F-05"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "enchantment_comparison"
+      },
+      {
+        "kind": "option",
+        "option_id": "craft_library"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_07",
+    "schema_version": 1,
+    "name_key": "META_F_07_NAME",
+    "description_key": "META_F_07_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-07",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 5,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "basic_recovery_recipes"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_f_08",
+    "schema_version": 1,
+    "name_key": "META_F_08_NAME",
+    "description_key": "META_F_08_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "F-08",
+    "branch": "F",
+    "cost": {
+      "chronos_shards": 15,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "F-07"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "advanced_recovery_recipes"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_p_01",
+    "schema_version": 1,
+    "name_key": "META_P_01_NAME",
+    "description_key": "META_P_01_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "P-01",
+    "branch": "P",
+    "cost": {
+      "chronos_shards": 3,
+      "existential_imprints": 0
+    },
+    "prerequisites": [],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "council_missions"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_p_02",
+    "schema_version": 1,
+    "name_key": "META_P_02_NAME",
+    "description_key": "META_P_02_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "P-02",
+    "branch": "P",
+    "cost": {
+      "chronos_shards": 8,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "P-01",
+      "L-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "phia_guidance"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_p_03",
+    "schema_version": 1,
+    "name_key": "META_P_03_NAME",
+    "description_key": "META_P_03_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "P-03",
+    "branch": "P",
+    "cost": {
+      "chronos_shards": 15,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "P-01"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "character_drills"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_p_04",
+    "schema_version": 1,
+    "name_key": "META_P_04_NAME",
+    "description_key": "META_P_04_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "P-04",
+    "branch": "P",
+    "cost": {
+      "chronos_shards": 12,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "P-01",
+      "L-09"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "extra_merchant_options"
+      },
+      {
+        "kind": "option",
+        "option_id": "five_run_gift"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_p_05",
+    "schema_version": 1,
+    "name_key": "META_P_05_NAME",
+    "description_key": "META_P_05_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "P-05",
+    "branch": "P",
+    "cost": {
+      "chronos_shards": 25,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "P-03"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "first_narrative_companion"
+      }
+    ]
+  },
+  {
+    "category": "meta_node",
+    "id": "meta_p_06",
+    "schema_version": 1,
+    "name_key": "META_P_06_NAME",
+    "description_key": "META_P_06_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "node_id": "P-06",
+    "branch": "P",
+    "cost": {
+      "chronos_shards": 40,
+      "existential_imprints": 0
+    },
+    "prerequisites": [
+      "P-05"
+    ],
+    "meta_effects": [
+      {
+        "kind": "option",
+        "option_id": "second_narrative_companion"
+      }
+    ]
+  }
+]

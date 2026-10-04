@@ -1,0 +1,5229 @@
+[
+  {
+    "category": "narrative_definition",
+    "id": "npc_odysseus",
+    "schema_version": 1,
+    "name_key": "NPC_ODYSSEUS_NAME",
+    "description_key": "NPC_ODYSSEUS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "odysseus",
+    "district_id": "hub_council",
+    "faction_id": "council",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "odysseus_intro",
+        "text_key": "NPC_ODYSSEUS_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "odysseus",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "odysseus_intro_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_first_death",
+        "text_key": "NPC_ODYSSEUS_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_first_death_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_floor_1",
+        "text_key": "NPC_ODYSSEUS_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_floor_1_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_floor_2",
+        "text_key": "NPC_ODYSSEUS_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_floor_2_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_floor_3",
+        "text_key": "NPC_ODYSSEUS_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_floor_3_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_floor_4",
+        "text_key": "NPC_ODYSSEUS_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_floor_4_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_floor_5",
+        "text_key": "NPC_ODYSSEUS_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_floor_5_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_depth_1",
+        "text_key": "NPC_ODYSSEUS_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "odysseus",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_depth_1_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_depth_2",
+        "text_key": "NPC_ODYSSEUS_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "odysseus",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "odysseus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_depth_2_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_depth_3",
+        "text_key": "NPC_ODYSSEUS_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "odysseus",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "odysseus",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_depth_3_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_depth_4",
+        "text_key": "NPC_ODYSSEUS_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "odysseus",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "odysseus",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_depth_4_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_depth_5",
+        "text_key": "NPC_ODYSSEUS_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "odysseus",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "odysseus",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_depth_5_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "odysseus_resolution",
+        "text_key": "NPC_ODYSSEUS_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "odysseus",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "odysseus",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "odysseus_resolution_remember",
+            "text_key": "NPC_ODYSSEUS_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "odysseus_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "odysseus_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_elara",
+    "schema_version": 1,
+    "name_key": "NPC_ELARA_NAME",
+    "description_key": "NPC_ELARA_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "elara",
+    "district_id": "hub_council",
+    "faction_id": "council",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "elara_intro",
+        "text_key": "NPC_ELARA_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "elara",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "elara_intro_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_first_death",
+        "text_key": "NPC_ELARA_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_first_death_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_floor_1",
+        "text_key": "NPC_ELARA_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_floor_1_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_floor_2",
+        "text_key": "NPC_ELARA_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_floor_2_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          },
+          {
+            "id": "elara_floor_2_coexist",
+            "text_key": "NPC_ELARA_FLOOR_2_COEXIST",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "council",
+              "value": 3
+            },
+            "flags": [
+              "balance_choice_elara_forest"
+            ],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_floor_3",
+        "text_key": "NPC_ELARA_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_floor_3_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_floor_4",
+        "text_key": "NPC_ELARA_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_floor_4_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_floor_5",
+        "text_key": "NPC_ELARA_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_floor_5_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_depth_1",
+        "text_key": "NPC_ELARA_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "elara",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_depth_1_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_depth_2",
+        "text_key": "NPC_ELARA_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "elara",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "elara",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_depth_2_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_depth_3",
+        "text_key": "NPC_ELARA_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "elara",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "elara",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_depth_3_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_depth_4",
+        "text_key": "NPC_ELARA_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "elara",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "elara",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_depth_4_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_depth_5",
+        "text_key": "NPC_ELARA_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "elara",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "elara",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_depth_5_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "elara_resolution",
+        "text_key": "NPC_ELARA_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "elara",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "elara",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "elara_resolution_remember",
+            "text_key": "NPC_ELARA_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "elara_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "elara_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_sibyl",
+    "schema_version": 1,
+    "name_key": "NPC_SIBYL_NAME",
+    "description_key": "NPC_SIBYL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "sibyl",
+    "district_id": "hub_rift",
+    "faction_id": "void_cult",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "sibyl_intro",
+        "text_key": "NPC_SIBYL_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "sibyl",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "sibyl_intro_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_first_death",
+        "text_key": "NPC_SIBYL_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_first_death_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_floor_1",
+        "text_key": "NPC_SIBYL_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_floor_1_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_floor_2",
+        "text_key": "NPC_SIBYL_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_floor_2_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_floor_3",
+        "text_key": "NPC_SIBYL_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_floor_3_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          },
+          {
+            "id": "sibyl_floor_3_coexist",
+            "text_key": "NPC_SIBYL_FLOOR_3_COEXIST",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "void_cult",
+              "value": 3
+            },
+            "flags": [
+              "balance_choice_sibyl_rift"
+            ],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_floor_4",
+        "text_key": "NPC_SIBYL_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_floor_4_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_floor_5",
+        "text_key": "NPC_SIBYL_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_floor_5_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_depth_1",
+        "text_key": "NPC_SIBYL_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "sibyl",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_depth_1_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_depth_2",
+        "text_key": "NPC_SIBYL_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "sibyl",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "sibyl",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_depth_2_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_depth_3",
+        "text_key": "NPC_SIBYL_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "sibyl",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "sibyl",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_depth_3_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_depth_4",
+        "text_key": "NPC_SIBYL_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "sibyl",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "sibyl",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_depth_4_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "void_understood"
+            ],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_depth_5",
+        "text_key": "NPC_SIBYL_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "sibyl",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "sibyl",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_depth_5_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "sibyl_resolution",
+        "text_key": "NPC_SIBYL_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "sibyl",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "sibyl",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "sibyl_resolution_remember",
+            "text_key": "NPC_SIBYL_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "sibyl_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "sibyl_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_hermes",
+    "schema_version": 1,
+    "name_key": "NPC_HERMES_NAME",
+    "description_key": "NPC_HERMES_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "hermes",
+    "district_id": "hub_rift",
+    "faction_id": "merchants",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "hermes_intro",
+        "text_key": "NPC_HERMES_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "hermes",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "hermes_intro_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_first_death",
+        "text_key": "NPC_HERMES_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_first_death_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_floor_1",
+        "text_key": "NPC_HERMES_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_floor_1_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_floor_2",
+        "text_key": "NPC_HERMES_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_floor_2_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_floor_3",
+        "text_key": "NPC_HERMES_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_floor_3_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_floor_4",
+        "text_key": "NPC_HERMES_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_floor_4_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_floor_5",
+        "text_key": "NPC_HERMES_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_floor_5_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_depth_1",
+        "text_key": "NPC_HERMES_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "hermes",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_depth_1_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_depth_2",
+        "text_key": "NPC_HERMES_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "hermes",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "hermes",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_depth_2_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_depth_3",
+        "text_key": "NPC_HERMES_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "hermes",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "hermes",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_depth_3_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_depth_4",
+        "text_key": "NPC_HERMES_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "hermes",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "hermes",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_depth_4_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_depth_5",
+        "text_key": "NPC_HERMES_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "hermes",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "hermes",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_depth_5_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "hermes_resolution",
+        "text_key": "NPC_HERMES_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "hermes",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "hermes",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "hermes_resolution_remember",
+            "text_key": "NPC_HERMES_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "hermes_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "hermes_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_phia",
+    "schema_version": 1,
+    "name_key": "NPC_PHIA_NAME",
+    "description_key": "NPC_PHIA_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "phia",
+    "district_id": "hub_council",
+    "faction_id": "shardborn",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "phia_intro",
+        "text_key": "NPC_PHIA_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "phia",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "phia_intro_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_first_death",
+        "text_key": "NPC_PHIA_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_first_death_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_floor_1",
+        "text_key": "NPC_PHIA_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_floor_1_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_floor_2",
+        "text_key": "NPC_PHIA_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_floor_2_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_floor_3",
+        "text_key": "NPC_PHIA_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_floor_3_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_floor_4",
+        "text_key": "NPC_PHIA_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_floor_4_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_floor_5",
+        "text_key": "NPC_PHIA_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_floor_5_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_depth_1",
+        "text_key": "NPC_PHIA_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "phia",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_depth_1_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_depth_2",
+        "text_key": "NPC_PHIA_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "phia",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "phia",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_depth_2_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_depth_3",
+        "text_key": "NPC_PHIA_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "phia",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "phia",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_depth_3_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_depth_4",
+        "text_key": "NPC_PHIA_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "phia",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "phia",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_depth_4_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_depth_5",
+        "text_key": "NPC_PHIA_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "phia",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "phia",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_depth_5_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "phia_resolution",
+        "text_key": "NPC_PHIA_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "phia",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "phia",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "phia_resolution_remember",
+            "text_key": "NPC_PHIA_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "phia_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "phia_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_morpheus",
+    "schema_version": 1,
+    "name_key": "NPC_MORPHEUS_NAME",
+    "description_key": "NPC_MORPHEUS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "morpheus",
+    "district_id": "hub_craft",
+    "faction_id": "council",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "morpheus_intro",
+        "text_key": "NPC_MORPHEUS_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "morpheus",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "morpheus_intro_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_first_death",
+        "text_key": "NPC_MORPHEUS_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_first_death_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_floor_1",
+        "text_key": "NPC_MORPHEUS_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_floor_1_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_floor_2",
+        "text_key": "NPC_MORPHEUS_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_floor_2_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_floor_3",
+        "text_key": "NPC_MORPHEUS_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_floor_3_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_floor_4",
+        "text_key": "NPC_MORPHEUS_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_floor_4_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_floor_5",
+        "text_key": "NPC_MORPHEUS_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_floor_5_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_depth_1",
+        "text_key": "NPC_MORPHEUS_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "morpheus",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_depth_1_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_depth_2",
+        "text_key": "NPC_MORPHEUS_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "morpheus",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "morpheus",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_depth_2_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_depth_3",
+        "text_key": "NPC_MORPHEUS_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "morpheus",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "morpheus",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_depth_3_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_depth_4",
+        "text_key": "NPC_MORPHEUS_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "morpheus",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "morpheus",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_depth_4_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_depth_5",
+        "text_key": "NPC_MORPHEUS_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "morpheus",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "morpheus",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_depth_5_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "morpheus_resolution",
+        "text_key": "NPC_MORPHEUS_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "morpheus",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "morpheus",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "morpheus_resolution_remember",
+            "text_key": "NPC_MORPHEUS_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "morpheus_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "morpheus_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_nemesis",
+    "schema_version": 1,
+    "name_key": "NPC_NEMESIS_NAME",
+    "description_key": "NPC_NEMESIS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "nemesis",
+    "district_id": "hub_craft",
+    "faction_id": "void_cult",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "nemesis_intro",
+        "text_key": "NPC_NEMESIS_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "nemesis",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "nemesis_intro_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_first_death",
+        "text_key": "NPC_NEMESIS_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_first_death_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_floor_1",
+        "text_key": "NPC_NEMESIS_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_floor_1_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_floor_2",
+        "text_key": "NPC_NEMESIS_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_floor_2_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_floor_3",
+        "text_key": "NPC_NEMESIS_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_floor_3_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_floor_4",
+        "text_key": "NPC_NEMESIS_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_floor_4_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          },
+          {
+            "id": "nemesis_floor_4_coexist",
+            "text_key": "NPC_NEMESIS_FLOOR_4_COEXIST",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "void_cult",
+              "value": 3
+            },
+            "flags": [
+              "balance_choice_nemesis_forge"
+            ],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_floor_5",
+        "text_key": "NPC_NEMESIS_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_floor_5_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_depth_1",
+        "text_key": "NPC_NEMESIS_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "nemesis",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_depth_1_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_depth_2",
+        "text_key": "NPC_NEMESIS_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "nemesis",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "nemesis",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_depth_2_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_depth_3",
+        "text_key": "NPC_NEMESIS_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "nemesis",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "nemesis",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_depth_3_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_depth_4",
+        "text_key": "NPC_NEMESIS_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "nemesis",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "nemesis",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_depth_4_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_depth_5",
+        "text_key": "NPC_NEMESIS_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "nemesis",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "nemesis",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_depth_5_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "nemesis_resolution",
+        "text_key": "NPC_NEMESIS_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "nemesis",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "nemesis",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "nemesis_resolution_remember",
+            "text_key": "NPC_NEMESIS_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "nemesis_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "nemesis_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "npc_vera",
+    "schema_version": 1,
+    "name_key": "NPC_VERA_NAME",
+    "description_key": "NPC_VERA_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "npc",
+    "npc_id": "vera",
+    "district_id": "hub_craft",
+    "faction_id": "shardborn",
+    "depth_thresholds": [
+      20,
+      40,
+      60,
+      80,
+      100
+    ],
+    "dialogue_nodes": [
+      {
+        "id": "vera_intro",
+        "text_key": "NPC_VERA_INTRO_TEXT",
+        "trigger": {
+          "kind": "npc_intro",
+          "id": "vera",
+          "value": 1
+        },
+        "requirements": [],
+        "choices": [
+          {
+            "id": "vera_intro_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_first_death",
+        "text_key": "NPC_VERA_FIRST_DEATH_TEXT",
+        "trigger": {
+          "kind": "first_death",
+          "id": "all",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_first_death_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_floor_1",
+        "text_key": "NPC_VERA_FLOOR_1_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_ruins_of_remnant",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_floor_1_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_floor_2",
+        "text_key": "NPC_VERA_FLOOR_2_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_void_forest",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_floor_2_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_floor_3",
+        "text_key": "NPC_VERA_FLOOR_3_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_time_rift",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_floor_3_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_floor_4",
+        "text_key": "NPC_VERA_FLOOR_4_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_plane_forge",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_floor_4_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_floor_5",
+        "text_key": "NPC_VERA_FLOOR_5_TEXT",
+        "trigger": {
+          "kind": "floor_completed",
+          "id": "floor_throne_of_void",
+          "value": 1
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_floor_5_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_depth_1",
+        "text_key": "NPC_VERA_DEPTH_1_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "vera",
+          "value": 20
+        },
+        "requirements": [
+          {
+            "kind": "npc_intro",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_depth_1_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_depth_2",
+        "text_key": "NPC_VERA_DEPTH_2_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "vera",
+          "value": 40
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "vera",
+            "value": 1
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_depth_2_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_depth_3",
+        "text_key": "NPC_VERA_DEPTH_3_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "vera",
+          "value": 60
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "vera",
+            "value": 2
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_depth_3_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_depth_4",
+        "text_key": "NPC_VERA_DEPTH_4_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "vera",
+          "value": 80
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "vera",
+            "value": 3
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_depth_4_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_depth_5",
+        "text_key": "NPC_VERA_DEPTH_5_TEXT",
+        "trigger": {
+          "kind": "affinity_min",
+          "id": "vera",
+          "value": 100
+        },
+        "requirements": [
+          {
+            "kind": "npc_depth_read",
+            "id": "vera",
+            "value": 4
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_depth_5_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 10,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [],
+            "once": true
+          }
+        ]
+      },
+      {
+        "id": "vera_resolution",
+        "text_key": "NPC_VERA_RESOLUTION_TEXT",
+        "trigger": {
+          "kind": "npc_depth_read",
+          "id": "vera",
+          "value": 5
+        },
+        "requirements": [
+          {
+            "kind": "affinity_min",
+            "id": "vera",
+            "value": 100
+          }
+        ],
+        "choices": [
+          {
+            "id": "vera_resolution_remember",
+            "text_key": "NPC_VERA_REPLY_REMEMBER",
+            "affinity_delta": 0,
+            "faction_delta": {
+              "faction_id": "none",
+              "value": 0
+            },
+            "flags": [
+              "vera_resolution"
+            ],
+            "once": true
+          }
+        ]
+      }
+    ],
+    "resolution_flag": "vera_resolution"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_wardens_badge",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_WARDENS_BADGE_NAME",
+    "description_key": "ARTIFACT_WARDENS_BADGE_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "wardens_badge",
+    "floor_id": "floor_ruins_of_remnant",
+    "source_receipt_id": "artifact_pickup_wardens_badge",
+    "text_key": "ARTIFACT_WARDENS_BADGE_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_primordial_child_drawing",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_PRIMORDIAL_CHILD_DRAWING_NAME",
+    "description_key": "ARTIFACT_PRIMORDIAL_CHILD_DRAWING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "primordial_child_drawing",
+    "floor_id": "floor_ruins_of_remnant",
+    "source_receipt_id": "artifact_pickup_primordial_child_drawing",
+    "text_key": "ARTIFACT_PRIMORDIAL_CHILD_DRAWING_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_void_eroded_saber",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_VOID_ERODED_SABER_NAME",
+    "description_key": "ARTIFACT_VOID_ERODED_SABER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "void_eroded_saber",
+    "floor_id": "floor_void_forest",
+    "source_receipt_id": "artifact_pickup_void_eroded_saber",
+    "text_key": "ARTIFACT_VOID_ERODED_SABER_TEXT",
+    "record_tags": [
+      "walkers"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_loom_thread",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_LOOM_THREAD_NAME",
+    "description_key": "ARTIFACT_LOOM_THREAD_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "loom_thread",
+    "floor_id": "floor_time_rift",
+    "source_receipt_id": "artifact_pickup_loom_thread",
+    "text_key": "ARTIFACT_LOOM_THREAD_TEXT",
+    "record_tags": [
+      "causal_truth"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_forgekeeper_mask",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_FORGEKEEPER_MASK_NAME",
+    "description_key": "ARTIFACT_FORGEKEEPER_MASK_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "forgekeeper_mask",
+    "floor_id": "floor_plane_forge",
+    "source_receipt_id": "artifact_pickup_forgekeeper_mask",
+    "text_key": "ARTIFACT_FORGEKEEPER_MASK_TEXT",
+    "record_tags": [
+      "creation"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_stonekeeper_memory",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_STONEKEEPER_MEMORY_NAME",
+    "description_key": "ARTIFACT_STONEKEEPER_MEMORY_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "stonekeeper_memory",
+    "floor_id": "floor_ruins_of_remnant",
+    "source_receipt_id": "artifact_pickup_stonekeeper_memory",
+    "text_key": "ARTIFACT_STONEKEEPER_MEMORY_TEXT",
+    "record_tags": [
+      "coexistence"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_void_baptism_flask",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_VOID_BAPTISM_FLASK_NAME",
+    "description_key": "ARTIFACT_VOID_BAPTISM_FLASK_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "void_baptism_flask",
+    "floor_id": "floor_void_forest",
+    "source_receipt_id": "artifact_pickup_void_baptism_flask",
+    "text_key": "ARTIFACT_VOID_BAPTISM_FLASK_TEXT",
+    "record_tags": [
+      "void"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_amplification_core_shard",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_AMPLIFICATION_CORE_SHARD_NAME",
+    "description_key": "ARTIFACT_AMPLIFICATION_CORE_SHARD_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "amplification_core_shard",
+    "floor_id": "floor_time_rift",
+    "source_receipt_id": "artifact_pickup_amplification_core_shard",
+    "text_key": "ARTIFACT_AMPLIFICATION_CORE_SHARD_TEXT",
+    "record_tags": [
+      "collapse"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_walker_demise_letter",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_WALKER_DEMISE_LETTER_NAME",
+    "description_key": "ARTIFACT_WALKER_DEMISE_LETTER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "walker_demise_letter",
+    "floor_id": "floor_plane_forge",
+    "source_receipt_id": "artifact_pickup_walker_demise_letter",
+    "text_key": "ARTIFACT_WALKER_DEMISE_LETTER_TEXT",
+    "record_tags": [
+      "walkers"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "artifact_unfinished_weaving",
+    "schema_version": 1,
+    "name_key": "ARTIFACT_UNFINISHED_WEAVING_NAME",
+    "description_key": "ARTIFACT_UNFINISHED_WEAVING_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "artifact",
+    "artifact_id": "unfinished_weaving",
+    "floor_id": "floor_time_rift",
+    "source_receipt_id": "artifact_pickup_unfinished_weaving",
+    "text_key": "ARTIFACT_UNFINISHED_WEAVING_TEXT",
+    "record_tags": [
+      "causal_truth"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e1_1",
+    "schema_version": 1,
+    "name_key": "RECORD_E1_1_NAME",
+    "description_key": "RECORD_E1_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E1-1",
+    "floor_id": "floor_ruins_of_remnant",
+    "location_id": "warden_classroom",
+    "source_receipt_id": "observe_warden_classroom",
+    "text_key": "RECORD_E1_1_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e1_2",
+    "schema_version": 1,
+    "name_key": "RECORD_E1_2_NAME",
+    "description_key": "RECORD_E1_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E1-2",
+    "floor_id": "floor_ruins_of_remnant",
+    "location_id": "heart_overlook",
+    "source_receipt_id": "observe_heart_overlook",
+    "text_key": "RECORD_E1_2_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e1_3",
+    "schema_version": 1,
+    "name_key": "RECORD_E1_3_NAME",
+    "description_key": "RECORD_E1_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E1-3",
+    "floor_id": "floor_ruins_of_remnant",
+    "location_id": "amplifier_base",
+    "source_receipt_id": "observe_amplifier_base",
+    "text_key": "RECORD_E1_3_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e1_4",
+    "schema_version": 1,
+    "name_key": "RECORD_E1_4_NAME",
+    "description_key": "RECORD_E1_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E1-4",
+    "floor_id": "floor_ruins_of_remnant",
+    "location_id": "primordial_home",
+    "source_receipt_id": "observe_primordial_home",
+    "text_key": "RECORD_E1_4_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e1_5",
+    "schema_version": 1,
+    "name_key": "RECORD_E1_5_NAME",
+    "description_key": "RECORD_E1_5_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E1-5",
+    "floor_id": "floor_ruins_of_remnant",
+    "location_id": "phia_markers",
+    "source_receipt_id": "observe_phia_markers",
+    "text_key": "RECORD_E1_5_TEXT",
+    "record_tags": [
+      "grief"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e2_1",
+    "schema_version": 1,
+    "name_key": "RECORD_E2_1_NAME",
+    "description_key": "RECORD_E2_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E2-1",
+    "floor_id": "floor_void_forest",
+    "location_id": "twisted_statue",
+    "source_receipt_id": "observe_twisted_statue",
+    "text_key": "RECORD_E2_1_TEXT",
+    "record_tags": [
+      "coexistence"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e2_2",
+    "schema_version": 1,
+    "name_key": "RECORD_E2_2_NAME",
+    "description_key": "RECORD_E2_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E2-2",
+    "floor_id": "floor_void_forest",
+    "location_id": "mycelial_cradle",
+    "source_receipt_id": "observe_mycelial_cradle",
+    "text_key": "RECORD_E2_2_TEXT",
+    "record_tags": [
+      "coexistence"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e2_3",
+    "schema_version": 1,
+    "name_key": "RECORD_E2_3_NAME",
+    "description_key": "RECORD_E2_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E2-3",
+    "floor_id": "floor_void_forest",
+    "location_id": "cult_altar",
+    "source_receipt_id": "observe_cult_altar",
+    "text_key": "RECORD_E2_3_TEXT",
+    "record_tags": [
+      "coexistence"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e2_4",
+    "schema_version": 1,
+    "name_key": "RECORD_E2_4_NAME",
+    "description_key": "RECORD_E2_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E2-4",
+    "floor_id": "floor_void_forest",
+    "location_id": "selene_diary",
+    "source_receipt_id": "observe_selene_diary",
+    "text_key": "RECORD_E2_4_TEXT",
+    "record_tags": [
+      "coexistence"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e3_1",
+    "schema_version": 1,
+    "name_key": "RECORD_E3_1_NAME",
+    "description_key": "RECORD_E3_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E3-1",
+    "floor_id": "floor_time_rift",
+    "location_id": "collapse_day",
+    "source_receipt_id": "observe_collapse_day",
+    "text_key": "RECORD_E3_1_TEXT",
+    "record_tags": [
+      "causal_truth"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e3_2",
+    "schema_version": 1,
+    "name_key": "RECORD_E3_2_NAME",
+    "description_key": "RECORD_E3_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E3-2",
+    "floor_id": "floor_time_rift",
+    "location_id": "void_future",
+    "source_receipt_id": "observe_void_future",
+    "text_key": "RECORD_E3_2_TEXT",
+    "record_tags": [
+      "causal_truth"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e3_3",
+    "schema_version": 1,
+    "name_key": "RECORD_E3_3_NAME",
+    "description_key": "RECORD_E3_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E3-3",
+    "floor_id": "floor_time_rift",
+    "location_id": "timefolk_supper",
+    "source_receipt_id": "observe_timefolk_supper",
+    "text_key": "RECORD_E3_3_TEXT",
+    "record_tags": [
+      "causal_truth"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e3_4",
+    "schema_version": 1,
+    "name_key": "RECORD_E3_4_NAME",
+    "description_key": "RECORD_E3_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E3-4",
+    "floor_id": "floor_time_rift",
+    "location_id": "loom_weaving",
+    "source_receipt_id": "observe_loom_weaving",
+    "text_key": "RECORD_E3_4_TEXT",
+    "record_tags": [
+      "causal_truth"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e4_1",
+    "schema_version": 1,
+    "name_key": "RECORD_E4_1_NAME",
+    "description_key": "RECORD_E4_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E4-1",
+    "floor_id": "floor_plane_forge",
+    "location_id": "rejected_creations",
+    "source_receipt_id": "observe_rejected_creations",
+    "text_key": "RECORD_E4_1_TEXT",
+    "record_tags": [
+      "creation"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e4_2",
+    "schema_version": 1,
+    "name_key": "RECORD_E4_2_NAME",
+    "description_key": "RECORD_E4_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E4-2",
+    "floor_id": "floor_plane_forge",
+    "location_id": "original_furnace",
+    "source_receipt_id": "observe_original_furnace",
+    "text_key": "RECORD_E4_2_TEXT",
+    "record_tags": [
+      "creation"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e4_3",
+    "schema_version": 1,
+    "name_key": "RECORD_E4_3_NAME",
+    "description_key": "RECORD_E4_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E4-3",
+    "floor_id": "floor_plane_forge",
+    "location_id": "artisan_workbench",
+    "source_receipt_id": "observe_artisan_workbench",
+    "text_key": "RECORD_E4_3_TEXT",
+    "record_tags": [
+      "creation"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e4_4",
+    "schema_version": 1,
+    "name_key": "RECORD_E4_4_NAME",
+    "description_key": "RECORD_E4_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E4-4",
+    "floor_id": "floor_plane_forge",
+    "location_id": "ignis_directive",
+    "source_receipt_id": "observe_ignis_directive",
+    "text_key": "RECORD_E4_4_TEXT",
+    "record_tags": [
+      "creation"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e5_1",
+    "schema_version": 1,
+    "name_key": "RECORD_E5_1_NAME",
+    "description_key": "RECORD_E5_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E5-1",
+    "floor_id": "floor_throne_of_void",
+    "location_id": "existence_dissolution",
+    "source_receipt_id": "observe_existence_dissolution",
+    "text_key": "RECORD_E5_1_TEXT",
+    "record_tags": [
+      "final_choice"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e5_2",
+    "schema_version": 1,
+    "name_key": "RECORD_E5_2_NAME",
+    "description_key": "RECORD_E5_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E5-2",
+    "floor_id": "floor_throne_of_void",
+    "location_id": "fading_corridor",
+    "source_receipt_id": "observe_fading_corridor",
+    "text_key": "RECORD_E5_2_TEXT",
+    "record_tags": [
+      "final_choice"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e5_3",
+    "schema_version": 1,
+    "name_key": "RECORD_E5_3_NAME",
+    "description_key": "RECORD_E5_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E5-3",
+    "floor_id": "floor_throne_of_void",
+    "location_id": "last_heart_fragment",
+    "source_receipt_id": "observe_last_heart_fragment",
+    "text_key": "RECORD_E5_3_TEXT",
+    "record_tags": [
+      "final_choice"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "record_e5_4",
+    "schema_version": 1,
+    "name_key": "RECORD_E5_4_NAME",
+    "description_key": "RECORD_E5_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "environment_record",
+    "record_id": "E5-4",
+    "floor_id": "floor_throne_of_void",
+    "location_id": "void_answer",
+    "source_receipt_id": "observe_void_answer",
+    "text_key": "RECORD_E5_4_TEXT",
+    "record_tags": [
+      "final_choice"
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "hidden_primordial_whispers",
+    "schema_version": 1,
+    "name_key": "HIDDEN_PRIMORDIAL_WHISPERS_NAME",
+    "description_key": "HIDDEN_PRIMORDIAL_WHISPERS_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hidden_line",
+    "storyline_id": "primordial_whispers",
+    "requirements": [
+      {
+        "kind": "phia_markers_min",
+        "id": "phia",
+        "value": 5
+      },
+      {
+        "kind": "npc_intro",
+        "id": "phia",
+        "value": 1
+      }
+    ],
+    "steps": [
+      {
+        "id": "primordial_whispers_step_1",
+        "index": 1,
+        "source_receipt_id": "hidden_primordial_whispers_1",
+        "floor_id": "floor_ruins_of_remnant",
+        "requirements": [
+          {
+            "kind": "record_collected",
+            "id": "E1-1",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_PRIMORDIAL_WHISPERS_STEP_1_TEXT"
+      },
+      {
+        "id": "primordial_whispers_step_2",
+        "index": 2,
+        "source_receipt_id": "hidden_primordial_whispers_2",
+        "floor_id": "floor_ruins_of_remnant",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "primordial_whispers",
+            "value": 1
+          },
+          {
+            "kind": "record_collected",
+            "id": "E1-3",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_PRIMORDIAL_WHISPERS_STEP_2_TEXT"
+      },
+      {
+        "id": "primordial_whispers_step_3",
+        "index": 3,
+        "source_receipt_id": "hidden_primordial_whispers_3",
+        "floor_id": "floor_time_rift",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "primordial_whispers",
+            "value": 2
+          }
+        ],
+        "text_key": "HIDDEN_PRIMORDIAL_WHISPERS_STEP_3_TEXT"
+      },
+      {
+        "id": "primordial_whispers_step_4",
+        "index": 4,
+        "source_receipt_id": "hidden_primordial_whispers_4",
+        "floor_id": "floor_time_rift",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "primordial_whispers",
+            "value": 3
+          }
+        ],
+        "text_key": "HIDDEN_PRIMORDIAL_WHISPERS_STEP_4_TEXT"
+      },
+      {
+        "id": "primordial_whispers_step_5",
+        "index": 5,
+        "source_receipt_id": "hidden_primordial_whispers_5",
+        "floor_id": "floor_throne_of_void",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "primordial_whispers",
+            "value": 4
+          },
+          {
+            "kind": "vera_conversation_count_min",
+            "id": "vera",
+            "value": 5
+          }
+        ],
+        "text_key": "HIDDEN_PRIMORDIAL_WHISPERS_STEP_5_TEXT"
+      }
+    ],
+    "completion_flag": "primordial_whispers_complete"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "hidden_walkers_song",
+    "schema_version": 1,
+    "name_key": "HIDDEN_WALKERS_SONG_NAME",
+    "description_key": "HIDDEN_WALKERS_SONG_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hidden_line",
+    "storyline_id": "walkers_song",
+    "requirements": [
+      {
+        "kind": "related_letter_count_min",
+        "id": "walkers",
+        "value": 3
+      },
+      {
+        "kind": "affinity_min",
+        "id": "morpheus",
+        "value": 40
+      }
+    ],
+    "steps": [
+      {
+        "id": "walkers_song_step_1",
+        "index": 1,
+        "source_receipt_id": "hidden_walkers_song_1",
+        "floor_id": "floor_void_forest",
+        "requirements": [],
+        "text_key": "HIDDEN_WALKERS_SONG_STEP_1_TEXT"
+      },
+      {
+        "id": "walkers_song_step_2",
+        "index": 2,
+        "source_receipt_id": "hidden_walkers_song_2",
+        "floor_id": "floor_plane_forge",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "walkers_song",
+            "value": 1
+          },
+          {
+            "kind": "artifact_collected",
+            "id": "walker_demise_letter",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_WALKERS_SONG_STEP_2_TEXT"
+      },
+      {
+        "id": "walkers_song_step_3",
+        "index": 3,
+        "source_receipt_id": "hidden_walkers_song_3",
+        "floor_id": "floor_ruins_of_remnant",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "walkers_song",
+            "value": 2
+          },
+          {
+            "kind": "affinity_min",
+            "id": "morpheus",
+            "value": 60
+          }
+        ],
+        "text_key": "HIDDEN_WALKERS_SONG_STEP_3_TEXT"
+      },
+      {
+        "id": "walkers_song_step_4",
+        "index": 4,
+        "source_receipt_id": "hidden_walkers_song_4",
+        "floor_id": "floor_plane_forge",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "walkers_song",
+            "value": 3
+          },
+          {
+            "kind": "record_collected",
+            "id": "E4-2",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_WALKERS_SONG_STEP_4_TEXT"
+      },
+      {
+        "id": "walkers_song_step_5",
+        "index": 5,
+        "source_receipt_id": "hidden_walkers_song_5",
+        "floor_id": "floor_throne_of_void",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "walkers_song",
+            "value": 4
+          },
+          {
+            "kind": "record_collected",
+            "id": "E5-3",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_WALKERS_SONG_STEP_5_TEXT"
+      }
+    ],
+    "completion_flag": "walkers_song_complete"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "hidden_voice_of_void",
+    "schema_version": 1,
+    "name_key": "HIDDEN_VOICE_OF_VOID_NAME",
+    "description_key": "HIDDEN_VOICE_OF_VOID_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "hidden_line",
+    "storyline_id": "voice_of_void",
+    "requirements": [
+      {
+        "kind": "affinity_min",
+        "id": "sibyl",
+        "value": 40
+      },
+      {
+        "kind": "void_exposure_frames_min",
+        "id": "all",
+        "value": 18000
+      }
+    ],
+    "steps": [
+      {
+        "id": "voice_of_void_step_1",
+        "index": 1,
+        "source_receipt_id": "hidden_voice_of_void_1",
+        "floor_id": "floor_void_forest",
+        "requirements": [
+          {
+            "kind": "record_collected",
+            "id": "E2-3",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_VOICE_OF_VOID_STEP_1_TEXT"
+      },
+      {
+        "id": "voice_of_void_step_2",
+        "index": 2,
+        "source_receipt_id": "hidden_voice_of_void_2",
+        "floor_id": "floor_time_rift",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "voice_of_void",
+            "value": 1
+          },
+          {
+            "kind": "nemesis_spared_min",
+            "id": "nemesis",
+            "value": 3
+          }
+        ],
+        "text_key": "HIDDEN_VOICE_OF_VOID_STEP_2_TEXT"
+      },
+      {
+        "id": "voice_of_void_step_3",
+        "index": 3,
+        "source_receipt_id": "hidden_voice_of_void_3",
+        "floor_id": "floor_throne_of_void",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "voice_of_void",
+            "value": 2
+          },
+          {
+            "kind": "record_collected",
+            "id": "E5-4",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_VOICE_OF_VOID_STEP_3_TEXT"
+      },
+      {
+        "id": "voice_of_void_step_4",
+        "index": 4,
+        "source_receipt_id": "hidden_voice_of_void_4",
+        "floor_id": "floor_ruins_of_remnant",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "voice_of_void",
+            "value": 3
+          },
+          {
+            "kind": "affinity_min",
+            "id": "sibyl",
+            "value": 80
+          }
+        ],
+        "text_key": "HIDDEN_VOICE_OF_VOID_STEP_4_TEXT"
+      },
+      {
+        "id": "voice_of_void_step_5",
+        "index": 5,
+        "source_receipt_id": "hidden_voice_of_void_5",
+        "floor_id": "floor_throne_of_void",
+        "requirements": [
+          {
+            "kind": "hidden_step_complete",
+            "id": "voice_of_void",
+            "value": 4
+          },
+          {
+            "kind": "record_collected",
+            "id": "E5-3",
+            "value": 1
+          }
+        ],
+        "text_key": "HIDDEN_VOICE_OF_VOID_STEP_5_TEXT"
+      }
+    ],
+    "completion_flag": "voice_of_void_complete"
+  },
+  {
+    "category": "narrative_definition",
+    "id": "ending_return_of_order",
+    "schema_version": 1,
+    "name_key": "ENDING_RETURN_OF_ORDER_NAME",
+    "description_key": "ENDING_RETURN_OF_ORDER_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "ending",
+    "ending_id": "return_of_order",
+    "final_choice": "reassemble",
+    "resolved_boss_id": "void_throne",
+    "requirements": [
+      {
+        "kind": "affinity_min",
+        "id": "elara",
+        "value": 80
+      },
+      {
+        "kind": "heart_fragment_count_min",
+        "id": "all",
+        "value": 5
+      },
+      {
+        "kind": "npc_depth_incomplete",
+        "id": "sibyl",
+        "value": 5
+      }
+    ],
+    "text_key": "ENDING_RETURN_OF_ORDER_TEXT",
+    "credits_key": "ENDING_RETURN_OF_ORDER_CREDITS",
+    "gallery_replayable": true
+  },
+  {
+    "category": "narrative_definition",
+    "id": "ending_embrace_of_void",
+    "schema_version": 1,
+    "name_key": "ENDING_EMBRACE_OF_VOID_NAME",
+    "description_key": "ENDING_EMBRACE_OF_VOID_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "ending",
+    "ending_id": "embrace_of_void",
+    "final_choice": "accept",
+    "resolved_boss_id": "void_throne",
+    "requirements": [
+      {
+        "kind": "affinity_min",
+        "id": "sibyl",
+        "value": 80
+      },
+      {
+        "kind": "nemesis_spared_min",
+        "id": "nemesis",
+        "value": 5
+      },
+      {
+        "kind": "flag_set",
+        "id": "void_understood",
+        "value": 1
+      }
+    ],
+    "text_key": "ENDING_EMBRACE_OF_VOID_TEXT",
+    "credits_key": "ENDING_EMBRACE_OF_VOID_CREDITS",
+    "gallery_replayable": true
+  },
+  {
+    "category": "narrative_definition",
+    "id": "ending_balance_of_ashes",
+    "schema_version": 1,
+    "name_key": "ENDING_BALANCE_OF_ASHES_NAME",
+    "description_key": "ENDING_BALANCE_OF_ASHES_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "ending",
+    "ending_id": "balance_of_ashes",
+    "final_choice": "coexist",
+    "resolved_boss_id": "void_throne",
+    "requirements": [
+      {
+        "kind": "affinity_min",
+        "id": "elara",
+        "value": 60
+      },
+      {
+        "kind": "affinity_min",
+        "id": "sibyl",
+        "value": 60
+      },
+      {
+        "kind": "heart_fragment_count_min",
+        "id": "all",
+        "value": 3
+      },
+      {
+        "kind": "balance_choice_count_min",
+        "id": "all",
+        "value": 3
+      }
+    ],
+    "text_key": "ENDING_BALANCE_OF_ASHES_TEXT",
+    "credits_key": "ENDING_BALANCE_OF_ASHES_CREDITS",
+    "gallery_replayable": true
+  },
+  {
+    "category": "narrative_definition",
+    "id": "ending_shattered_freedom",
+    "schema_version": 1,
+    "name_key": "ENDING_SHATTERED_FREEDOM_NAME",
+    "description_key": "ENDING_SHATTERED_FREEDOM_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "ending",
+    "ending_id": "shattered_freedom",
+    "final_choice": "release",
+    "resolved_boss_id": "void_throne",
+    "requirements": [],
+    "text_key": "ENDING_SHATTERED_FREEDOM_TEXT",
+    "credits_key": "ENDING_SHATTERED_FREEDOM_CREDITS",
+    "gallery_replayable": true
+  },
+  {
+    "category": "narrative_definition",
+    "id": "ending_echo_of_primordial",
+    "schema_version": 1,
+    "name_key": "ENDING_ECHO_OF_PRIMORDIAL_NAME",
+    "description_key": "ENDING_ECHO_OF_PRIMORDIAL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "ending",
+    "ending_id": "echo_of_primordial",
+    "final_choice": "ask",
+    "resolved_boss_id": "void_throne",
+    "requirements": [
+      {
+        "kind": "all_hidden_lines_complete",
+        "id": "all",
+        "value": 3
+      },
+      {
+        "kind": "all_npc_affinity_min",
+        "id": "all",
+        "value": 80
+      },
+      {
+        "kind": "artifact_count_min",
+        "id": "all",
+        "value": 10
+      },
+      {
+        "kind": "record_count_min",
+        "id": "all",
+        "value": 21
+      },
+      {
+        "kind": "vera_conversation_count_min",
+        "id": "vera",
+        "value": 5
+      }
+    ],
+    "text_key": "ENDING_ECHO_OF_PRIMORDIAL_TEXT",
+    "credits_key": "ENDING_ECHO_OF_PRIMORDIAL_CREDITS",
+    "gallery_replayable": true
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_nemesis_1",
+    "schema_version": 1,
+    "name_key": "CHOICE_NEMESIS_1_NAME",
+    "description_key": "CHOICE_NEMESIS_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "nemesis",
+    "sequence": 1,
+    "floor_id": "floor_ruins_of_remnant",
+    "source_receipt_id": "nemesis_encounter_1",
+    "requirements": [],
+    "temporary_max_hp_cost": 0,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "spare",
+        "text_key": "CHOICE_NEMESIS_1_SPARE",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": 5
+        },
+        "flags": [
+          "nemesis_spare_1",
+          "nemesis_encounter_1_resolved"
+        ],
+        "spared": true,
+        "consumes_source": true
+      },
+      {
+        "id": "attack",
+        "text_key": "CHOICE_NEMESIS_1_ATTACK",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": -5
+        },
+        "flags": [
+          "nemesis_attack_1",
+          "nemesis_encounter_1_resolved"
+        ],
+        "spared": false,
+        "consumes_source": true
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_vera_1",
+    "schema_version": 1,
+    "name_key": "CHOICE_VERA_1_NAME",
+    "description_key": "CHOICE_VERA_1_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "vera",
+    "sequence": 1,
+    "floor_id": "floor_throne_of_void",
+    "source_receipt_id": "vera_conversation_1",
+    "requirements": [],
+    "temporary_max_hp_cost": 5,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "listen",
+        "text_key": "CHOICE_VERA_1_LISTEN",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "shardborn",
+          "value": 3
+        },
+        "flags": [
+          "vera_memory_1"
+        ],
+        "spared": false,
+        "consumes_source": true
+      },
+      {
+        "id": "defer",
+        "text_key": "CHOICE_VERA_1_DEFER",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "none",
+          "value": 0
+        },
+        "flags": [],
+        "spared": false,
+        "consumes_source": false
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_nemesis_2",
+    "schema_version": 1,
+    "name_key": "CHOICE_NEMESIS_2_NAME",
+    "description_key": "CHOICE_NEMESIS_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "nemesis",
+    "sequence": 2,
+    "floor_id": "floor_void_forest",
+    "source_receipt_id": "nemesis_encounter_2",
+    "requirements": [
+      {
+        "kind": "flag_set",
+        "id": "nemesis_encounter_1_resolved",
+        "value": 1
+      }
+    ],
+    "temporary_max_hp_cost": 0,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "spare",
+        "text_key": "CHOICE_NEMESIS_2_SPARE",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": 5
+        },
+        "flags": [
+          "nemesis_spare_2",
+          "nemesis_encounter_2_resolved"
+        ],
+        "spared": true,
+        "consumes_source": true
+      },
+      {
+        "id": "attack",
+        "text_key": "CHOICE_NEMESIS_2_ATTACK",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": -5
+        },
+        "flags": [
+          "nemesis_attack_2",
+          "nemesis_encounter_2_resolved"
+        ],
+        "spared": false,
+        "consumes_source": true
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_vera_2",
+    "schema_version": 1,
+    "name_key": "CHOICE_VERA_2_NAME",
+    "description_key": "CHOICE_VERA_2_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "vera",
+    "sequence": 2,
+    "floor_id": "floor_throne_of_void",
+    "source_receipt_id": "vera_conversation_2",
+    "requirements": [
+      {
+        "kind": "vera_conversation_count_min",
+        "id": "vera",
+        "value": 1
+      }
+    ],
+    "temporary_max_hp_cost": 5,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "listen",
+        "text_key": "CHOICE_VERA_2_LISTEN",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "shardborn",
+          "value": 3
+        },
+        "flags": [
+          "vera_memory_2"
+        ],
+        "spared": false,
+        "consumes_source": true
+      },
+      {
+        "id": "defer",
+        "text_key": "CHOICE_VERA_2_DEFER",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "none",
+          "value": 0
+        },
+        "flags": [],
+        "spared": false,
+        "consumes_source": false
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_nemesis_3",
+    "schema_version": 1,
+    "name_key": "CHOICE_NEMESIS_3_NAME",
+    "description_key": "CHOICE_NEMESIS_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "nemesis",
+    "sequence": 3,
+    "floor_id": "floor_time_rift",
+    "source_receipt_id": "nemesis_encounter_3",
+    "requirements": [
+      {
+        "kind": "flag_set",
+        "id": "nemesis_encounter_2_resolved",
+        "value": 1
+      }
+    ],
+    "temporary_max_hp_cost": 0,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "spare",
+        "text_key": "CHOICE_NEMESIS_3_SPARE",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": 5
+        },
+        "flags": [
+          "nemesis_spare_3",
+          "nemesis_encounter_3_resolved"
+        ],
+        "spared": true,
+        "consumes_source": true
+      },
+      {
+        "id": "attack",
+        "text_key": "CHOICE_NEMESIS_3_ATTACK",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": -5
+        },
+        "flags": [
+          "nemesis_attack_3",
+          "nemesis_encounter_3_resolved"
+        ],
+        "spared": false,
+        "consumes_source": true
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_vera_3",
+    "schema_version": 1,
+    "name_key": "CHOICE_VERA_3_NAME",
+    "description_key": "CHOICE_VERA_3_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "vera",
+    "sequence": 3,
+    "floor_id": "floor_throne_of_void",
+    "source_receipt_id": "vera_conversation_3",
+    "requirements": [
+      {
+        "kind": "vera_conversation_count_min",
+        "id": "vera",
+        "value": 2
+      }
+    ],
+    "temporary_max_hp_cost": 5,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "listen",
+        "text_key": "CHOICE_VERA_3_LISTEN",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "shardborn",
+          "value": 3
+        },
+        "flags": [
+          "vera_memory_3"
+        ],
+        "spared": false,
+        "consumes_source": true
+      },
+      {
+        "id": "defer",
+        "text_key": "CHOICE_VERA_3_DEFER",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "none",
+          "value": 0
+        },
+        "flags": [],
+        "spared": false,
+        "consumes_source": false
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_nemesis_4",
+    "schema_version": 1,
+    "name_key": "CHOICE_NEMESIS_4_NAME",
+    "description_key": "CHOICE_NEMESIS_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "nemesis",
+    "sequence": 4,
+    "floor_id": "floor_plane_forge",
+    "source_receipt_id": "nemesis_encounter_4",
+    "requirements": [
+      {
+        "kind": "flag_set",
+        "id": "nemesis_encounter_3_resolved",
+        "value": 1
+      }
+    ],
+    "temporary_max_hp_cost": 0,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "spare",
+        "text_key": "CHOICE_NEMESIS_4_SPARE",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": 5
+        },
+        "flags": [
+          "nemesis_spare_4",
+          "nemesis_encounter_4_resolved"
+        ],
+        "spared": true,
+        "consumes_source": true
+      },
+      {
+        "id": "attack",
+        "text_key": "CHOICE_NEMESIS_4_ATTACK",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": -5
+        },
+        "flags": [
+          "nemesis_attack_4",
+          "nemesis_encounter_4_resolved"
+        ],
+        "spared": false,
+        "consumes_source": true
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_vera_4",
+    "schema_version": 1,
+    "name_key": "CHOICE_VERA_4_NAME",
+    "description_key": "CHOICE_VERA_4_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "vera",
+    "sequence": 4,
+    "floor_id": "floor_throne_of_void",
+    "source_receipt_id": "vera_conversation_4",
+    "requirements": [
+      {
+        "kind": "vera_conversation_count_min",
+        "id": "vera",
+        "value": 3
+      }
+    ],
+    "temporary_max_hp_cost": 5,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "listen",
+        "text_key": "CHOICE_VERA_4_LISTEN",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "shardborn",
+          "value": 3
+        },
+        "flags": [
+          "vera_memory_4"
+        ],
+        "spared": false,
+        "consumes_source": true
+      },
+      {
+        "id": "defer",
+        "text_key": "CHOICE_VERA_4_DEFER",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "none",
+          "value": 0
+        },
+        "flags": [],
+        "spared": false,
+        "consumes_source": false
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_nemesis_5",
+    "schema_version": 1,
+    "name_key": "CHOICE_NEMESIS_5_NAME",
+    "description_key": "CHOICE_NEMESIS_5_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "nemesis",
+    "sequence": 5,
+    "floor_id": "floor_throne_of_void",
+    "source_receipt_id": "nemesis_encounter_5",
+    "requirements": [
+      {
+        "kind": "flag_set",
+        "id": "nemesis_encounter_4_resolved",
+        "value": 1
+      }
+    ],
+    "temporary_max_hp_cost": 0,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "spare",
+        "text_key": "CHOICE_NEMESIS_5_SPARE",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": 5
+        },
+        "flags": [
+          "nemesis_spare_5",
+          "nemesis_encounter_5_resolved"
+        ],
+        "spared": true,
+        "consumes_source": true
+      },
+      {
+        "id": "attack",
+        "text_key": "CHOICE_NEMESIS_5_ATTACK",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "void_cult",
+          "value": -5
+        },
+        "flags": [
+          "nemesis_attack_5",
+          "nemesis_encounter_5_resolved"
+        ],
+        "spared": false,
+        "consumes_source": true
+      }
+    ]
+  },
+  {
+    "category": "narrative_definition",
+    "id": "choice_vera_5",
+    "schema_version": 1,
+    "name_key": "CHOICE_VERA_5_NAME",
+    "description_key": "CHOICE_VERA_5_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "definition_kind": "choice",
+    "choice_family": "vera",
+    "sequence": 5,
+    "floor_id": "floor_throne_of_void",
+    "source_receipt_id": "vera_conversation_5",
+    "requirements": [
+      {
+        "kind": "vera_conversation_count_min",
+        "id": "vera",
+        "value": 4
+      }
+    ],
+    "temporary_max_hp_cost": 5,
+    "consumption_scope": "profile",
+    "options": [
+      {
+        "id": "listen",
+        "text_key": "CHOICE_VERA_5_LISTEN",
+        "affinity_delta": 16,
+        "faction_delta": {
+          "faction_id": "shardborn",
+          "value": 3
+        },
+        "flags": [
+          "vera_memory_5"
+        ],
+        "spared": false,
+        "consumes_source": true
+      },
+      {
+        "id": "defer",
+        "text_key": "CHOICE_VERA_5_DEFER",
+        "affinity_delta": 0,
+        "faction_delta": {
+          "faction_id": "none",
+          "value": 0
+        },
+        "flags": [],
+        "spared": false,
+        "consumes_source": false
+      }
+    ]
+  }
+]

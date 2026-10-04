@@ -1,0 +1,212 @@
+[
+  {
+    "category": "hub_district",
+    "id": "hub_council",
+    "schema_version": 1,
+    "name_key": "HUB_COUNCIL_NAME",
+    "description_key": "HUB_COUNCIL_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "district_id": "hub_council",
+    "scene_path": "res://scenes/hub/hub_council.tscn",
+    "arrival": {
+      "x": 320,
+      "y": 288
+    },
+    "functions": [
+      {
+        "id": "council",
+        "npc_id": "odysseus",
+        "position": {
+          "x": 160,
+          "y": 176
+        },
+        "panel_id": "hub_council_panel"
+      },
+      {
+        "id": "archive",
+        "npc_id": "phia",
+        "position": {
+          "x": 320,
+          "y": 176
+        },
+        "panel_id": "hub_archive_panel"
+      },
+      {
+        "id": "gateway",
+        "npc_id": "elara",
+        "position": {
+          "x": 480,
+          "y": 176
+        },
+        "panel_id": "hub_gateway_panel"
+      }
+    ],
+    "repair_stage_milestones": [
+      {
+        "stage": 0,
+        "completed_floor_count": 0
+      },
+      {
+        "stage": 1,
+        "completed_floor_count": 1
+      },
+      {
+        "stage": 2,
+        "completed_floor_count": 3
+      },
+      {
+        "stage": 3,
+        "completed_floor_count": 5
+      }
+    ]
+  },
+  {
+    "category": "hub_district",
+    "id": "hub_craft",
+    "schema_version": 1,
+    "name_key": "HUB_CRAFT_NAME",
+    "description_key": "HUB_CRAFT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "district_id": "hub_craft",
+    "scene_path": "res://scenes/hub/hub_craft.tscn",
+    "arrival": {
+      "x": 320,
+      "y": 288
+    },
+    "functions": [
+      {
+        "id": "training",
+        "npc_id": "nemesis",
+        "position": {
+          "x": 160,
+          "y": 176
+        },
+        "panel_id": "hub_training_panel"
+      },
+      {
+        "id": "forge",
+        "npc_id": "vera",
+        "position": {
+          "x": 320,
+          "y": 176
+        },
+        "panel_id": "hub_forge_panel"
+      },
+      {
+        "id": "meditation",
+        "npc_id": "morpheus",
+        "position": {
+          "x": 480,
+          "y": 176
+        },
+        "panel_id": "hub_meditation_panel"
+      }
+    ],
+    "repair_stage_milestones": [
+      {
+        "stage": 0,
+        "completed_floor_count": 0
+      },
+      {
+        "stage": 1,
+        "completed_floor_count": 1
+      },
+      {
+        "stage": 2,
+        "completed_floor_count": 3
+      },
+      {
+        "stage": 3,
+        "completed_floor_count": 5
+      }
+    ]
+  },
+  {
+    "category": "hub_district",
+    "id": "hub_rift",
+    "schema_version": 1,
+    "name_key": "HUB_RIFT_NAME",
+    "description_key": "HUB_RIFT_DESC",
+    "availability": [
+      "LAUNCH",
+      "EXPANSION"
+    ],
+    "tags": [
+      "launch",
+      "hub"
+    ],
+    "compatibility": {},
+    "effects": {},
+    "district_id": "hub_rift",
+    "scene_path": "res://scenes/hub/hub_rift.tscn",
+    "arrival": {
+      "x": 320,
+      "y": 288
+    },
+    "functions": [
+      {
+        "id": "merchant",
+        "npc_id": "hermes",
+        "position": {
+          "x": 160,
+          "y": 176
+        },
+        "panel_id": "hub_merchant_panel"
+      },
+      {
+        "id": "gallery",
+        "npc_id": "phia",
+        "position": {
+          "x": 320,
+          "y": 176
+        },
+        "panel_id": "hub_gallery_panel"
+      },
+      {
+        "id": "mirror",
+        "npc_id": "sibyl",
+        "position": {
+          "x": 480,
+          "y": 176
+        },
+        "panel_id": "hub_mirror_panel"
+      }
+    ],
+    "repair_stage_milestones": [
+      {
+        "stage": 0,
+        "completed_floor_count": 0
+      },
+      {
+        "stage": 1,
+        "completed_floor_count": 1
+      },
+      {
+        "stage": 2,
+        "completed_floor_count": 3
+      },
+      {
+        "stage": 3,
+        "completed_floor_count": 5
+      }
+    ]
+  }
+]

@@ -1,0 +1,511 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/tutorial-definition/1.0.0",
+  "title": "Plane Walker tutorial_definition v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "lesson_id",
+        "sequence",
+        "trigger_id",
+        "prerequisite_lesson_ids",
+        "receipt_requirements",
+        "text_key",
+        "repeatable",
+        "skippable",
+        "reward"
+      ],
+      "properties": {
+        "category": {
+          "const": "tutorial_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "lesson"
+        },
+        "lesson_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "trigger_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "prerequisite_lesson_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "receipt_requirements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "action_id",
+              "count",
+              "context_id"
+            ],
+            "properties": {
+              "action_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "context_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              }
+            }
+          }
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "repeatable": {
+          "const": true
+        },
+        "skippable": {
+          "const": true
+        },
+        "reward": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chronos_shards",
+            "existential_imprints"
+          ],
+          "properties": {
+            "chronos_shards": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "existential_imprints": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "hint_id",
+        "trigger_id",
+        "style",
+        "maximum_displays",
+        "display_frames",
+        "semantic_action_ids",
+        "text_key",
+        "suppressible"
+      ],
+      "properties": {
+        "category": {
+          "const": "tutorial_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "hint"
+        },
+        "hint_id": {
+          "type": "string",
+          "pattern": "^TIP-[0-9]{3}$"
+        },
+        "trigger_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "style": {
+          "type": "string",
+          "enum": [
+            "instant",
+            "context",
+            "status",
+            "death",
+            "hub"
+          ]
+        },
+        "maximum_displays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "display_frames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "semantic_action_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "suppressible": {
+          "const": true
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "task_id",
+        "receipt_requirements",
+        "text_key",
+        "repeatable",
+        "skippable",
+        "reward",
+        "reward_once"
+      ],
+      "properties": {
+        "category": {
+          "const": "tutorial_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "training_task"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^T-[0-9]{2}$"
+        },
+        "receipt_requirements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "action_id",
+              "count",
+              "context_id"
+            ],
+            "properties": {
+              "action_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "context_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+              }
+            }
+          }
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "repeatable": {
+          "const": true
+        },
+        "skippable": {
+          "const": true
+        },
+        "reward": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chronos_shards",
+            "existential_imprints"
+          ],
+          "properties": {
+            "chronos_shards": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "existential_imprints": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            }
+          }
+        },
+        "reward_once": {
+          "const": true
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "id",
+        "schema_version",
+        "name_key",
+        "description_key",
+        "availability",
+        "tags",
+        "compatibility",
+        "effects",
+        "definition_kind",
+        "sequence",
+        "incoming_damage_multiplier",
+        "warning_scale",
+        "ranked_eligible",
+        "default_enabled",
+        "text_key"
+      ],
+      "properties": {
+        "category": {
+          "const": "tutorial_definition"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "name_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "description_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "availability": {
+          "const": [
+            "LAUNCH",
+            "EXPANSION"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          }
+        },
+        "compatibility": {
+          "const": {},
+          "type": "object"
+        },
+        "effects": {
+          "const": {},
+          "type": "object"
+        },
+        "definition_kind": {
+          "const": "assisted_run"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "incoming_damage_multiplier": {
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 1
+        },
+        "warning_scale": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1.25
+        },
+        "ranked_eligible": {
+          "const": false
+        },
+        "default_enabled": {
+          "const": false
+        },
+        "text_key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        }
+      }
+    }
+  ]
+}
