@@ -11,6 +11,8 @@ const Forge := preload("res://scripts/progression/forge_runtime.gd")
 const Builds := preload("res://scripts/progression/build_library.gd")
 const Narrative := preload("res://scripts/narrative/narrative_runtime.gd")
 const NarrativeContent := preload("res://scripts/narrative/narrative_catalog.gd")
+const Tutorial := preload("res://scripts/onboarding/tutorial_runtime.gd")
+const TutorialAdapter := preload("res://scripts/onboarding/tutorial_native_adapter.gd")
 const Run := preload("res://scripts/application/run_state.gd")
 const RunConfig := preload("res://scripts/application/run_config.gd")
 const Player := preload("res://scripts/player/player_controller.gd")
@@ -41,10 +43,16 @@ var _narrative_launch: Dictionary = {}
 var _occurrences: Dictionary = {}
 var _narrative_publication := false
 var _narrative_recovery_pending := false
+var _tutorial: RefCounted
+var _tutorial_adapter: RefCounted
+var _tutorial_run: RefCounted
+var _tutorial_player: WeakRef
+var _tutorial_publication := false
+var _tutorial_recovery_pending := false
 
 
 func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String, save_domain: String, initial_payload: Dictionary = {}) -> Dictionary:
-	if _busy or _narrative_publication or save_service == null or not save_service.has_method("save_profile") or not save_service.has_method("load_profile") or not save_service.has_method("inspect_profile") or not Paths.validate_id(profile_id).ok or not Paths.validate_id(save_domain).ok:
+	if _busy or _narrative_publication or _tutorial_publication or save_service == null or not save_service.has_method("save_profile") or not save_service.has_method("load_profile") or not save_service.has_method("inspect_profile") or not Paths.validate_id(profile_id).ok or not Paths.validate_id(save_domain).ok:
 		return _failure(&"CONFIGURATION_INVALID")
 	if not save_service.has_method("enable_meta_profile") or not save_service.call("enable_meta_profile", catalog).ok:
 		return _failure(&"CONFIGURATION_INVALID")
@@ -80,6 +88,9 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 	_narrative_player = null
 	_narrative_launch.clear()
 	_narrative_recovery_pending = false
+	_tutorial_recovery_pending = false
+	retire_tutorial_run()
+	_tutorial = null
 	return _success({"snapshot": snapshot()})
 
 
@@ -111,7 +122,7 @@ func retain_active_run(run: RefCounted, player: Node, expected_revision: int) ->
 	var ready := _readiness(expected_revision)
 	if not ready.ok:
 		return ready
-	if _narrative_recovery_pending:
+	if _narrative_recovery_pending or _tutorial_recovery_pending:
 		return _failure(&"NATIVE_PUBLICATION_PENDING")
 	if not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
 		return _failure(&"NATIVE_BINDING_INVALID")
@@ -137,7 +148,7 @@ func retain_active_run(run: RefCounted, player: Node, expected_revision: int) ->
 
 
 func enable_workshop(entries: Array) -> Dictionary:
-	if _profile == null or _busy:
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication:
 		return _failure(&"NOT_CONFIGURED")
 	var forge = Forge.new()
 	var configured: Dictionary = forge.configure(entries, _catalog)
@@ -157,8 +168,143 @@ func resolve_build(build_id: String) -> Dictionary:
 	return _builds.call("resolve", snapshot(), build_id) if _builds != null else _failure(&"WORKSHOP_NOT_CONFIGURED")
 
 
+func enable_tutorial(entries: Array) -> Dictionary:
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or _tutorial_recovery_pending:
+		return _failure(&"NOT_CONFIGURED")
+	var runtime := Tutorial.new()
+	var configured := runtime.configure(entries, _catalog)
+	if not configured.ok:
+		return configured
+	retire_tutorial_run()
+	_tutorial = runtime
+	return _success({})
+
+
+func tutorial_progress_view() -> Dictionary:
+	return _tutorial.progress_view(snapshot()) if _tutorial != null else _failure(&"TUTORIAL_NOT_CONFIGURED")
+
+
+func bind_tutorial_run(run: RefCounted, player: Node) -> Dictionary:
+	if _tutorial == null or _busy or _narrative_publication or _tutorial_publication or _tutorial_recovery_pending or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
+		return _failure(&"TUTORIAL_BINDING_INVALID")
+	var launch: Dictionary = snapshot().active_launch_receipt
+	var state: Dictionary = run.snapshot()
+	if launch.is_empty() or not _player_matches_launch(player, launch, state) or player.full_player_replay_snapshot().is_empty() or not _settlement.verified_run_sources(launch, state).ok or not Replay.validate_full_player_reward_effect_state(player.reward_effect_snapshot()) or _clone_native_run(run, state) == null:
+		return _failure(&"TUTORIAL_BINDING_INVALID")
+	var adapter := TutorialAdapter.new()
+	var bound := adapter.bind_normal_run(snapshot(), run, player)
+	if not bound.ok:
+		return bound
+	retire_tutorial_run()
+	_tutorial_adapter = adapter
+	_tutorial_run = run
+	_tutorial_player = weakref(player)
+	return {"ok": true, "code": &"OK", "context": {"adapter": adapter}}
+
+
+func execute_tutorial(command: Dictionary, expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	if _tutorial == null:
+		return _failure(&"TUTORIAL_NOT_CONFIGURED")
+	if _tutorial_recovery_pending or _narrative_recovery_pending:
+		return _failure(&"NATIVE_PUBLICATION_PENDING")
+	var produced: Dictionary = _tutorial.prepare_command(snapshot(), command, expected_revision)
+	if not produced.ok:
+		return produced
+	return _persist_tutorial(produced, _tutorial_native_checkpoint() if _tutorial_adapter != null else {})
+
+
+func observe_tutorial(adapter: RefCounted, expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	if _tutorial == null or adapter == null or adapter != _tutorial_adapter:
+		return _failure(&"TUTORIAL_BINDING_INVALID")
+	if _tutorial_recovery_pending or _narrative_recovery_pending:
+		return _failure(&"NATIVE_PUBLICATION_PENDING")
+	var observation: Dictionary = adapter.prepared_observation(snapshot())
+	if not observation.ok:
+		return observation
+	var checkpoint := _tutorial_native_checkpoint()
+	if checkpoint.is_empty():
+		return _failure(&"TUTORIAL_BINDING_INVALID")
+	var produced: Dictionary = _tutorial.prepare_observation(snapshot(), observation.context.receipt, expected_revision)
+	if not produced.ok:
+		return produced
+	return _persist_tutorial(produced, checkpoint, observation.context)
+
+
+func restore_tutorial_run() -> Dictionary:
+	if _tutorial == null or _tutorial_run == null or _tutorial_player == null or _busy or _narrative_publication or _tutorial_publication:
+		return _failure(&"TUTORIAL_BINDING_INVALID")
+	var run: RefCounted = _tutorial_run
+	var player: Node = _tutorial_player.get_ref()
+	var restored := restore_active_run(run, player)
+	if not restored.ok:
+		return restored
+	retire_tutorial_run()
+	return bind_tutorial_run(run, player)
+
+
+func retire_tutorial_run() -> void:
+	if _busy or _narrative_publication or _tutorial_publication or _tutorial_recovery_pending:
+		return
+	if _tutorial_adapter != null:
+		_tutorial_adapter.detach()
+	_tutorial_adapter = null
+	_tutorial_run = null
+	_tutorial_player = null
+
+
+func _tutorial_native_checkpoint() -> Dictionary:
+	var player: Node = _tutorial_player.get_ref() if _tutorial_player != null else null
+	var launch: Dictionary = snapshot().active_launch_receipt
+	if _tutorial_run == null or launch.is_empty() or not is_instance_valid(player) or not player.is_inside_tree():
+		return {}
+	var state: Dictionary = _tutorial_run.snapshot()
+	var reward: Dictionary = player.reward_effect_snapshot()
+	var native_frame: Dictionary = player.full_player_replay_snapshot()
+	if not _player_matches_launch(player, launch, state) or native_frame.is_empty() or not _settlement.verified_run_sources(launch, state).ok or not Replay.validate_full_player_reward_effect_state(reward) or _clone_native_run(_tutorial_run, state) == null:
+		return {}
+	return {"active_run_state": state, "reward_effect_state": reward, "native_frame": native_frame, "player_id": player.get_instance_id(), "run_id": _tutorial_run.get_instance_id()}
+
+
+func _persist_tutorial(produced: Dictionary, checkpoint: Dictionary, observation: Dictionary = {}) -> Dictionary:
+	if _tutorial_adapter != null and checkpoint.is_empty():
+		return _failure(&"TUTORIAL_BINDING_INVALID")
+	var prepared: Dictionary = _profile.prepare_candidate(produced.context.candidate)
+	if not prepared.ok:
+		return prepared
+	var changes: Dictionary = {}
+	if not checkpoint.is_empty():
+		changes = {"active_run_state": checkpoint.active_run_state, "reward_effect_state": checkpoint.reward_effect_state}
+	_tutorial_publication = true
+	var persisted := _persist_ticket(prepared.context.ticket, changes)
+	if persisted.ok and not checkpoint.is_empty():
+		if _tutorial_native_checkpoint() != checkpoint or not observation.is_empty() and not _tutorial_adapter.can_confirm_saved(observation.receipt, observation.seal):
+			_tutorial_recovery_pending = true
+			_tutorial_publication = false
+			return _failure(&"NATIVE_PUBLICATION_PENDING")
+		if not observation.is_empty():
+			var confirmed: Dictionary = _tutorial_adapter.confirm_saved(observation.receipt, observation.seal)
+			if not confirmed.ok or _tutorial_native_checkpoint() != checkpoint:
+				_tutorial_recovery_pending = true
+				_tutorial_publication = false
+				return _failure(&"NATIVE_PUBLICATION_PENDING")
+	_tutorial_publication = false
+	if persisted.ok:
+		var receipt: Dictionary = produced.context.duplicate(true)
+		receipt.erase("candidate")
+		persisted.context.merge(receipt, false)
+		if not observation.is_empty():
+			persisted.context.receipt = observation.receipt.duplicate(true)
+	return persisted
+
+
 func enable_narrative(entries: Array, sources: Array) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication:
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication:
 		return _failure(&"NOT_CONFIGURED")
 	var runtime := Narrative.new()
 	var content := NarrativeContent.new()
@@ -172,7 +318,7 @@ func enable_narrative(entries: Array, sources: Array) -> Dictionary:
 
 
 func bind_narrative_run(run: RefCounted, player: Node) -> Dictionary:
-	if _narrative == null or _busy or _narrative_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
+	if _narrative == null or _busy or _narrative_publication or _tutorial_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
 		return _failure(&"NARRATIVE_BINDING_INVALID")
 	var launch := _launch_for_run(run.snapshot())
 	if launch.is_empty() or not _player_matches_launch(player, launch, run.snapshot()) or not _settlement.verified_run_sources(launch, run.snapshot()).ok or not Replay.validate_full_player_reward_effect_state(player.reward_effect_snapshot()):
@@ -186,7 +332,7 @@ func bind_narrative_run(run: RefCounted, player: Node) -> Dictionary:
 
 
 func install_narrative_occurrence(kind: String, id: String, room: Node2D, template: Dictionary, anchor_id: String, runtime_parent: Node2D) -> Dictionary:
-	if _narrative == null or _busy or _narrative_publication or _occurrences.size() >= MAX_OCCURRENCES or not _native_narrative_active(kind == "collect") or not room is Room or not is_instance_valid(runtime_parent) or not runtime_parent.is_inside_tree() or runtime_parent == room or room.is_ancestor_of(runtime_parent):
+	if _narrative == null or _busy or _narrative_publication or _tutorial_publication or _occurrences.size() >= MAX_OCCURRENCES or not _native_narrative_active(kind == "collect") or not room is Room or not is_instance_valid(runtime_parent) or not runtime_parent.is_inside_tree() or runtime_parent == room or room.is_ancestor_of(runtime_parent):
 		return _failure(&"OCCURRENCE_INVALID")
 	var definition := _occurrence_definition(kind, id)
 	var node: Dictionary = _narrative_run.current_floor_node()
@@ -325,13 +471,13 @@ func execute_narrative(command: Dictionary, expected_revision: int, occurrence: 
 
 
 func restore_narrative_run() -> Dictionary:
-	if _narrative_run == null or _narrative_player == null or _busy or _narrative_publication:
+	if _narrative_run == null or _narrative_player == null or _busy or _narrative_publication or _tutorial_publication:
 		return _failure(&"NARRATIVE_BINDING_INVALID")
 	return restore_active_run(_narrative_run, _narrative_player.get_ref())
 
 
 func restore_active_run(run: RefCounted, player: Node) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication or not run is Run or not is_instance_valid(player) or not player is Player or not player.is_inside_tree():
 		return _failure(&"NATIVE_BINDING_INVALID")
 	var inspected = _save.inspect_profile(_profile_id, _save_domain)
 	if not inspected.ok or not _json_equal(inspected.payload.payload, _with_runtime_defaults(_payload)):
@@ -356,6 +502,7 @@ func restore_active_run(run: RefCounted, player: Node) -> Dictionary:
 	_narrative_publication = false
 	if restored:
 		_narrative_recovery_pending = false
+		_tutorial_recovery_pending = false
 	return _success({}) if restored else _failure(&"NATIVE_RESTORE_INVALID")
 
 
@@ -514,10 +661,12 @@ func _discard_failure(ticket: Dictionary, code: StringName) -> Dictionary:
 
 
 func _readiness(expected_revision: int) -> Dictionary:
-	if _profile == null or _busy or _narrative_publication:
-		return _failure(&"BUSY" if _busy or _narrative_publication else &"NOT_CONFIGURED")
+	if _profile == null or _busy or _narrative_publication or _tutorial_publication:
+		return _failure(&"BUSY" if _busy or _narrative_publication or _tutorial_publication else &"NOT_CONFIGURED")
 	if expected_revision != snapshot().revision:
 		return _failure(&"STALE_REVISION")
+	if _narrative_recovery_pending or _tutorial_recovery_pending:
+		return _failure(&"NATIVE_PUBLICATION_PENDING")
 	return _success({})
 
 
@@ -598,10 +747,17 @@ func _occurrence_matches(command: Dictionary, token: Area2D) -> bool:
 
 
 func _player_matches_launch(player: Node, launch: Dictionary, run_value: Dictionary) -> bool:
-	if not is_instance_valid(player) or not player is Player or player.loadout_runtime == null or launch.is_empty():
+	if not is_instance_valid(player) or not player is Player or player.loadout_runtime == null or launch.is_empty() or not run_value.get("config") is Dictionary or not run_value.config.get("character_talents") is Array:
 		return false
 	var loadout: Dictionary = player.loadout_runtime.snapshot()
-	return not player.full_player_replay_identity().is_empty() and _run_config_matches_pending(run_value) and str(player.current_run_id()) == launch.run_id and loadout.get("milestone") == run_value.config.get("milestone") and loadout.get("milestone") in ["LAUNCH", "EXPANSION"] and loadout.get("character_id") == launch.character_id and loadout.get("weapon_id") == launch.weapon_id and loadout.get("enabled_time_skills") == launch.time_abilities and _json_equal(player.meta_run_projection_snapshot(), run_value.resources.get("meta_run_projection"))
+	var identity: Dictionary = player.full_player_replay_identity()
+	if identity.is_empty() or not identity.get("character_talent_ids") is Array:
+		return false
+	var initial_talents: Array = identity.character_talent_ids.duplicate()
+	var selected_talents: Array = run_value.config.character_talents.duplicate()
+	initial_talents.sort()
+	selected_talents.sort()
+	return initial_talents == selected_talents and _run_config_matches_pending(run_value) and str(player.current_run_id()) == launch.run_id and loadout.get("milestone") == run_value.config.get("milestone") and loadout.get("milestone") in ["LAUNCH", "EXPANSION"] and loadout.get("character_id") == launch.character_id and loadout.get("weapon_id") == launch.weapon_id and loadout.get("enabled_time_skills") == launch.time_abilities and _json_equal(player.meta_run_projection_snapshot(), run_value.resources.get("meta_run_projection"))
 
 
 func _native_player_stamp(player: Node) -> Dictionary:
