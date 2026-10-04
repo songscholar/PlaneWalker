@@ -123,6 +123,10 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		next_credit = 0.0
 	else:
 		status_events = status_preview.advance_frame()
+		if preview.snapshot().terminal:
+			status_preview.reset_runtime_state()
+			status_events.burn_ticks = []
+			next_credit = 0.0
 	batch["status_tick_requests"] = status_events.burn_ticks.duplicate(true)
 	var after := before.duplicate(true)
 	after.runtime = preview.snapshot()
@@ -178,6 +182,10 @@ func prepared_launch_frame_batch() -> Dictionary:
 
 func prepared_launch_frame_position() -> Vector2:
 	return _vector(_prepared_launch_frame.after.position) if not _prepared_launch_frame.is_empty() else global_position
+
+
+func prepared_launch_frame_consumes_actor() -> bool:
+	return not _prepared_launch_frame.is_empty() and _launch_definition.runtime_kind == "ruins_wraith" and bool(_prepared_launch_frame.after.runtime.terminal) and bool(_prepared_launch_frame.after.runtime.mechanism_state.detonation_consumed) and _prepared_launch_frame.batch.mechanism_requests.size() == 1
 
 
 func launch_transaction_snapshot() -> Dictionary:

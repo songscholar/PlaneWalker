@@ -101,8 +101,13 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 		for request: Variant in batch.effect_requests:
 			if not request is Dictionary or request.get("handler_id", "") != "melee" or str(request.get("hostile_source_id", "")) != source:
 				return _failure("unimplemented_effect_handler")
-		if not batch.get("mechanism_requests", []) is Array or not (batch.get("mechanism_requests", []) as Array).is_empty():
-			return _failure("unimplemented_mechanism_handler")
+		if not batch.get("mechanism_requests", []) is Array or batch.get("mechanism_requests", []).size() > 128:
+			return _failure("mechanism_requests")
+		for mechanism: Variant in batch.get("mechanism_requests", []):
+			var prepared := _prepare_consumption(mechanism, source, actor, context, next)
+			if not prepared.ok:
+				return prepared
+			damages.append(prepared.record)
 		for hit: Variant in batch.hit_facts:
 			var prepared := _prepare_hit(hit, source, actor, context, next)
 			if not prepared.ok:
@@ -142,7 +147,7 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 	var seen_health: Dictionary = {}
 	for record: Dictionary in ticket.damage_records:
 		var health: Node = record.health
-		if record.info == null or seen_health.has(health):
+		if (record.info == null and not record.has("consumption_amount")) or seen_health.has(health):
 			continue
 		seen_health[health] = true
 		if not health.frame_signal_transaction_is_active():
@@ -155,6 +160,11 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 			return _failure("registry_commit")
 	var resolutions: Array = []
 	for record: Dictionary in ticket.damage_records:
+		if record.has("consumption_amount"):
+			var consumed: float = record.health.lose_health(record.consumption_amount, record.target)
+			if not is_equal_approx(consumed, float(record.consumption_amount)) or not record.health.dead:
+				return _failure("health_consumption")
+			continue
 		if record.info == null:
 			continue
 		var resolution: RefCounted = record.health.resolve_and_apply_damage(record.info)
@@ -264,6 +274,24 @@ func _prepare_status_tick(value: Variant, target_id: String, actor: Node2D, cont
 	if info == null:
 		return _failure("status_damage_plan")
 	record["info"] = info
+	return {"ok": true, "record": record}
+
+
+func _prepare_consumption(value: Variant, source: String, actor: Node2D, context: Dictionary, next: Dictionary) -> Dictionary:
+	if not value is Dictionary or not Contract.exact_fields(value, ["kind", "run_id", "hostile_source_id", "runtime_frame", "action_id", "attack_generation", "hit_index"]):
+		return _failure("unimplemented_mechanism_handler")
+	if value.kind != "consume_actor" or value.run_id != context.run_id or value.hostile_source_id != source or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame != context.runtime_frame or value.action_id != "ruins_wraith.spirit_detonation" or typeof(value.attack_generation) != TYPE_INT or not Contract.integer_in_range(value.attack_generation, 1, 2147483646) or typeof(value.hit_index) != TYPE_INT or value.hit_index != 63 or not actor.has_method("prepared_launch_frame_consumes_actor") or not bool(actor.prepared_launch_frame_consumes_actor()):
+		return _failure("unsealed_consumption")
+	var record := _target_record(actor)
+	if record.is_empty() or record.health_before.runtime.dead or not Contract.number_in_range(record.health_before.runtime.current_hp, 0.000001, 1000000.0):
+		return _failure("consumption_target")
+	var claim := _claim(context.run_id, source, source, value.attack_generation, value.hit_index)
+	if next.claims.has(claim):
+		return _failure("duplicate_consumption")
+	next.claims.append(claim)
+	record["target_position_after"] = actor.prepared_launch_frame_position()
+	record["info"] = null
+	record["consumption_amount"] = float(record.health_before.runtime.current_hp)
 	return {"ok": true, "record": record}
 
 

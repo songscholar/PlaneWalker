@@ -118,7 +118,13 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	_state.mechanism_state = mechanism.state
 	result["mechanism_requests"] = mechanism.requests
 	result["threat_facts"] = []
-	if select_action and not controls.action_paused and frame >= int(_state.mechanism_state.first_attack_ready_frame) and result.phase == "IDLE":
+	if _definition.runtime_kind == "ruins_wraith" and not mechanism.requests.is_empty():
+		var generation: int = previous_action.geometry_generations[0]
+		var cancelled := cancel(&"detonation_consumed")
+		result.retired_generations.append_array(cancelled.retired_generations)
+		result.phase = "IDLE"
+		result.mechanism_requests = [{"kind": "consume_actor", "run_id": _state.identity.run_id, "hostile_source_id": _state.identity.hostile_source_id, "runtime_frame": frame, "action_id": previous_action.action_id, "attack_generation": generation, "hit_index": 63}]
+	if select_action and not _state.terminal and not controls.action_paused and frame >= int(_state.mechanism_state.first_attack_ready_frame) and result.phase == "IDLE":
 		var selected := _select_action(frame, observations)
 		if not selected.is_empty():
 			var requested: Dictionary = _action.request_action(selected, observations)
@@ -180,6 +186,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	var mechanism: Dictionary = value.mechanism_state
 	if not Mechanisms.valid_state(_definition.runtime_kind, _definition.mechanisms, mechanism, _state.mechanism_state.first_attack_ready_frame):
+		return false
+	if _definition.runtime_kind == "ruins_wraith" and mechanism.detonation_consumed and not value.terminal:
 		return false
 	if not value.action is Dictionary or not value.control is Dictionary or not _action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false
