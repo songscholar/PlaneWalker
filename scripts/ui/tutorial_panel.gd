@@ -31,25 +31,27 @@ func _render_state() -> void:
 	_hint_toggle.pressed.connect(_activate_action.bind(_hint_toggle, _request_suppression, _epoch))
 	rows_container.add_child(_hint_toggle)
 	_actions.append(_hint_toggle)
-	_mode_selector = OptionButton.new()
-	_mode_selector.name = "RunMode"
-	_mode_selector.add_item(tr("UI_TUTORIAL_NORMAL"), 0)
-	_mode_selector.add_item(tr("UI_TUTORIAL_GUIDED"), 1)
-	_mode_selector.set_item_disabled(1, not _state.guided_available and not _state.guided_selected)
-	_mode_selector.select(1 if _state.guided_selected else 0)
-	_mode_selector.disabled = not _state.mode_change_available
-	_mode_selector.set_meta("action_id", "tutorial_mode")
-	_mode_selector.set_meta("available", _state.mode_change_available)
-	_mode_selector.add_theme_font_size_override("font_size", 12)
-	_mode_selector.item_selected.connect(_request_mode.bind(_epoch))
-	rows_container.add_child(_mode_selector)
-	_actions.append(_mode_selector)
+	_mode_selector = null
+	if _state.guided_policy_available:
+		_mode_selector = OptionButton.new()
+		_mode_selector.name = "RunMode"
+		_mode_selector.add_item(tr("UI_TUTORIAL_NORMAL"), 0)
+		_mode_selector.add_item(tr("UI_TUTORIAL_GUIDED"), 1)
+		_mode_selector.set_item_disabled(1, not _state.guided_available and not _state.guided_selected)
+		_mode_selector.select(1 if _state.guided_selected else 0)
+		_mode_selector.disabled = not _state.mode_change_available
+		_mode_selector.set_meta("action_id", "tutorial_mode")
+		_mode_selector.set_meta("available", _state.mode_change_available)
+		_mode_selector.add_theme_font_size_override("font_size", 12)
+		_mode_selector.item_selected.connect(_request_mode.bind(_epoch))
+		rows_container.add_child(_mode_selector)
+		_actions.append(_mode_selector)
 	if _state.guided_selected:
 		_add_text(tr("UI_TUTORIAL_POLICY") % [int(roundf(_state.incoming_damage_multiplier * 100.0)), int(roundf(_state.warning_scale * 100.0))], "GuidedPolicy")
 		_add_text(tr("UI_TUTORIAL_UNRANKED"), "RankedStatus")
 	elif _state.guided_sequence == 4:
 		_add_text(tr("UI_TUTORIAL_GUIDED_COMPLETE"), "GuidedStatus")
-	if not _state.mode_change_available:
+	if not _state.training_available:
 		_add_text(tr("UI_TUTORIAL_ACTIVE_RUN"), "RunModeReason")
 	var selected: Dictionary = _state.lessons[0]
 	for lesson: Dictionary in _state.lessons:
@@ -77,7 +79,8 @@ func show_rejection(message_key: String) -> void:
 	super.show_rejection(message_key)
 	if not _state.is_empty():
 		_hint_toggle.button_pressed = not _state.suppressed
-		_mode_selector.select(1 if _state.guided_selected else 0)
+		if _mode_selector != null:
+			_mode_selector.select(1 if _state.guided_selected else 0)
 
 
 func _recall_lesson(id: String) -> void:

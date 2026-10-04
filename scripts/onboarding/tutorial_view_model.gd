@@ -23,7 +23,7 @@ func configure(entries: Array, meta_catalog: RefCounted, input_service: RefCount
 	return Candidate.success()
 
 
-func project(profile: Dictionary, profile_id: String, family: String, first_time_ability: String, guided_selected: bool = false) -> Dictionary:
+func project(profile: Dictionary, profile_id: String, family: String, first_time_ability: String, guided_selected: bool = false, guided_policy_available: bool = true) -> Dictionary:
 	if _content == null:
 		return Candidate.failure(&"NOT_CONFIGURED")
 	var decoded := Progress.decode(profile, _content)
@@ -31,10 +31,13 @@ func project(profile: Dictionary, profile_id: String, family: String, first_time
 		return Candidate.failure(&"TUTORIAL_VIEW_INVALID")
 	var sequence: int = int(profile.tutorial_state.guided_runs_completed) + 1
 	var policy: Dictionary = _content.definition("assisted_run", str(sequence))
+	if guided_selected and not guided_policy_available:
+		return Candidate.failure(&"GUIDED_POLICY_UNAVAILABLE")
 	if guided_selected and policy.is_empty():
 		return Candidate.failure(&"GUIDED_PROGRAM_COMPLETE")
-	var mode_available: bool = profile.active_launch_receipt.is_empty()
-	var state := {"schema_version": 1, "revision": int(profile.revision), "run_id": profile_id, "family": family, "first_time_ability": first_time_ability, "suppressed": profile.tutorial_state.suppressed, "guided_selected": guided_selected, "guided_available": not policy.is_empty() and mode_available, "mode_change_available": mode_available, "training_available": mode_available, "guided_sequence": sequence, "incoming_damage_multiplier": float(policy.incoming_damage_multiplier) if guided_selected else 1.0, "warning_scale": float(policy.warning_scale) if guided_selected else 1.0, "ranked_eligible": not guided_selected, "lessons": [], "training_tasks": []}
+	var training_available: bool = profile.active_launch_receipt.is_empty()
+	var mode_available: bool = training_available and guided_policy_available
+	var state := {"schema_version": 1, "revision": int(profile.revision), "run_id": profile_id, "family": family, "first_time_ability": first_time_ability, "suppressed": profile.tutorial_state.suppressed, "guided_selected": guided_selected, "guided_policy_available": guided_policy_available, "guided_available": not policy.is_empty() and mode_available, "mode_change_available": mode_available, "training_available": training_available, "guided_sequence": sequence, "incoming_damage_multiplier": float(policy.incoming_damage_multiplier) if guided_selected else 1.0, "warning_scale": float(policy.warning_scale) if guided_selected else 1.0, "ranked_eligible": not guided_selected, "lessons": [], "training_tasks": []}
 	var lessons: Array = _content.definitions("lesson")
 	lessons.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.sequence < b.sequence)
 	for lesson: Dictionary in lessons:

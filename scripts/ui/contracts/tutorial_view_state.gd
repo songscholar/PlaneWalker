@@ -5,7 +5,7 @@ const Rules := preload("res://scripts/ui/contracts/dungeon_view_state_rules.gd")
 const Catalog := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Content := preload("res://scripts/onboarding/tutorial_catalog.gd")
 const Projector := preload("res://scripts/onboarding/tutorial_projector.gd")
-const FIELDS := ["schema_version", "revision", "run_id", "family", "first_time_ability", "suppressed", "guided_selected", "guided_available", "mode_change_available", "training_available", "guided_sequence", "incoming_damage_multiplier", "warning_scale", "ranked_eligible", "lessons", "training_tasks"]
+const FIELDS := ["schema_version", "revision", "run_id", "family", "first_time_ability", "suppressed", "guided_selected", "guided_policy_available", "guided_available", "mode_change_available", "training_available", "guided_sequence", "incoming_damage_multiplier", "warning_scale", "ranked_eligible", "lessons", "training_tasks"]
 const LESSON_FIELDS := ["lesson_id", "sequence", "name_key", "text_key", "status_key", "recall_available", "skip_available", "requirements", "actions"]
 const TASK_FIELDS := ["task_id", "name_key", "text_key", "reward_shards", "claimed", "requirements", "actions"]
 const HINT_FIELDS := ["schema_version", "revision", "run_id", "hint_id", "name_key", "text_key", "style", "display_frames", "family", "first_time_ability", "actions"]
@@ -16,16 +16,16 @@ static func validate(value: Variant):
 	if not Rules.header(value, FIELDS) or not _input_header(value):
 		return Rules.reject(value, "root")
 	var state: Dictionary = value
-	for field: String in ["suppressed", "guided_selected", "guided_available", "mode_change_available", "training_available", "ranked_eligible"]:
+	for field: String in ["suppressed", "guided_selected", "guided_policy_available", "guided_available", "mode_change_available", "training_available", "ranked_eligible"]:
 		if not state[field] is bool:
 			return Rules.reject(value, field)
-	if not Catalog.bounded_int(state.guided_sequence, 1, 4) or state.training_available != state.mode_change_available or state.guided_available != (state.guided_sequence <= 3 and state.mode_change_available):
+	if not Catalog.bounded_int(state.guided_sequence, 1, 4) or state.mode_change_available != (state.training_available and state.guided_policy_available) or state.guided_available != (state.guided_sequence <= 3 and state.mode_change_available):
 		return Rules.reject(value, "guided_sequence")
 	var index: int = state.guided_sequence - 1
 	var damage := 1.0
 	var warning := 1.0
 	if state.guided_selected:
-		if index > 2:
+		if index > 2 or not state.guided_policy_available:
 			return Rules.reject(value, "guided_selected")
 		damage = [0.8, 0.9, 1.0][index]
 		warning = [1.25, 1.10, 1.0][index]

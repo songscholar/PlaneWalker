@@ -75,6 +75,10 @@ func bind_normal_run(profile: Dictionary, run: RefCounted, player: Node) -> Dict
 	return Candidate.success()
 
 
+func is_live_binding() -> bool:
+	return _live_identity()
+
+
 func pending_observations() -> Array:
 	var result: Array = []
 	for row: Dictionary in _pending:
