@@ -1,7 +1,7 @@
 # Plane Walker Native Narrative and Retention Evidence
 
 - Status: Implemented / Current
-- Document Role: Focused implementation evidence
+- Document Role: Current focused implementation evidence
 - Authority Level: Native narrative contact, Profile persistence, and retained Run boundary
 - Applies To: ProfileRuntimeService and RunSettlementAuthority
 - Owner: Runtime integration agent

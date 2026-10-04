@@ -10,6 +10,8 @@ const RunRuntimeFacadeScript := preload("res://scripts/application/run_runtime_f
 const RunViewStateProjectorScript := preload("res://scripts/application/run_view_state_projector.gd")
 const HostileThreatRegistryScript := preload("res://scripts/combat/hostile_threat_registry.gd")
 const PlayerRewardEffectRuntimeScript := preload("res://scripts/items/player_reward_effect_runtime.gd")
+const ProfileServiceScript := preload("res://scripts/progression/profile_runtime_service.gd")
+const RunLoadoutPolicyScript := preload("res://scripts/application/run_loadout_policy.gd")
 
 const HUD_RENDER_INTERVAL := 0.1
 const BOSS_EXPOSURE_REPLAY_CHECKPOINT_SCHEMA_VERSION := 1
@@ -56,6 +58,11 @@ var _floor_rule_frame_origin: int = -1
 var _published_route_transition_ids: Dictionary = {}
 var _published_floor_start_ids: Dictionary = {}
 var _published_floor_completion_ids: Dictionary = {}
+var _profile_service: RefCounted
+var _profile_bootstrap_service: RefCounted
+var _profile_start_pending := false
+var _profile_publication_pending := false
+var _floor_entry_recovery_pending := false
 
 
 func _ready() -> void:
@@ -95,24 +102,110 @@ func _process(delta: float) -> void:
 	_render_live_hud()
 
 
-func start_run(config: Dictionary) -> Variant:
+func start_profile_run(config: Dictionary, service: RefCounted, expected_revision: int) -> Variant:
+	if not _active or not service is ProfileServiceScript or not service.has_method("retain_active_run") or str(config.get("milestone", "")) not in ["LAUNCH", "EXPANSION"]:
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"operation": "start_profile_run"})
+	if not _active_run_id.is_empty() and not RunPhaseScript.is_terminal(int(runtime_snapshot().get("phase", -1))):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "start_profile_run"})
+	var normalized := RunConfigScript.normalized(config)
+	var validated = RunConfigScript.validate(normalized)
+	if not validated.ok:
+		return validated
+	var loadout = RunLoadoutPolicyScript.new().validate(normalized, _facade.content_registry())
+	if not loadout.ok:
+		return loadout
+	var prepared: Dictionary = service.call("prepare_launch", {"seed": normalized.seed, "difficulty": normalized.difficulty, "character_id": normalized.character_id, "weapon_id": normalized.weapon_id, "time_abilities": normalized.enabled_time_skills}, expected_revision, normalized)
+	if not prepared.ok:
+		return CommandResultScript.failure(prepared.code, _revision(), prepared.context)
+	_profile_bootstrap_service = service
+	var started = start_run(normalized, {"launch": prepared.context.launch, "projection": prepared.context.projection})
+	_profile_bootstrap_service = null
+	return started
+
+
+func retry_profile_startup(service: RefCounted, expected_revision: int) -> Variant:
+	if not _active or not service is ProfileServiceScript or int(service.snapshot().get("revision", -1)) != expected_revision:
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"operation": "retry_profile_startup"})
+	if _profile_publication_pending:
+		return CommandResultScript.failure(&"NATIVE_PUBLICATION_PENDING", _revision(), {"operation": "retry_profile_startup", "published": true})
+	var receipt: Dictionary = service.snapshot().active_launch_receipt
+	var projection: Dictionary = service.frozen_launch_projection()
+	var config: Dictionary = service.pending_launch_config()
+	if receipt.is_empty() or projection.is_empty() or config.is_empty():
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "retry_profile_startup"})
+	if _profile_start_pending and _profile_service == service and _active_run_id == str(receipt.run_id) and not RunPhaseScript.is_terminal(int(runtime_snapshot().get("phase", -1))):
+		return _finish_profile_startup()
+	if not _active_run_id.is_empty() and not RunPhaseScript.is_terminal(int(runtime_snapshot().get("phase", -1))):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "retry_profile_startup"})
+	if not service.payload().get("active_run_state", {}).is_empty():
+		return CommandResultScript.failure(&"NATIVE_RESTORE_REQUIRED", _revision(), {"operation": "retry_profile_startup"})
+	_profile_bootstrap_service = service
+	var started = start_run(config, {"launch": receipt, "projection": projection})
+	_profile_bootstrap_service = null
+	return started
+
+
+func _finish_profile_startup() -> Variant:
+	_set_selection_safety(true)
+	var retained = retain_profile_run(int(_profile_service.snapshot().revision))
+	if not retained.ok:
+		return CommandResultScript.failure(retained.code, _revision(), {"startup_pending": true, "recovery": "retry_profile_startup", "cause": retained.context})
+	_profile_start_pending = false
+	_set_selection_safety(false)
+	var start_snapshot := runtime_snapshot()
+	var source_service := _profile_service
+	var source_player := _player
+	var generation := int(source_player.owner_character_generation())
+	var physical: Dictionary = source_player.reward_effect_snapshot()
+	_published_run_id = _active_run_id
+	_initializing_run_id = ""
+	EventBus.run_started.emit(_active_run_id, start_snapshot.duplicate(true))
+	if not is_inside_tree() or _profile_service != source_service or _player != source_player or not is_instance_valid(source_player) or not source_player.is_inside_tree() or str(source_player.current_run_id()) != str(start_snapshot.run_id) or int(source_player.owner_character_generation()) != generation or source_player.reward_effect_snapshot() != physical or runtime_snapshot() != start_snapshot or source_service.snapshot().active_launch_receipt.get("run_id") != start_snapshot.run_id:
+		_profile_publication_pending = true
+		_set_selection_safety(true)
+		return CommandResultScript.failure(&"NATIVE_PUBLICATION_PENDING", _revision(), {"published": true, "run_id": start_snapshot.run_id})
+	_publish_floor_started_once(start_snapshot)
+	return CommandResultScript.success(_revision(), {"profile_revision": int(_profile_service.snapshot().revision)})
+
+
+func retain_profile_run(expected_revision: int) -> Variant:
+	if _profile_service == null or _facade == null or _player == null or not _facade.configure_merchant_effect_authority(_reward_effect_runtime, _player):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "retain_profile_run"})
+	var retained: Dictionary = _profile_service.call("retain_active_run", _facade.native_run_state(), _player, expected_revision)
+	return CommandResultScript.success(_revision(), retained.context) if retained.ok else CommandResultScript.failure(retained.code, _revision(), {"runtime_started": true, "cause": retained.context})
+
+
+func native_run_state() -> RefCounted:
+	return _facade.native_run_state() if _facade != null else null
+
+
+func start_run(config: Dictionary, profile_launch: Dictionary = {}) -> Variant:
 	if not _active or _room_controller == null:
 		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "start_run"})
 	var normalized := RunConfigScript.normalized(config)
 	var validation = RunConfigScript.validate(normalized)
 	if not validation.ok:
 		return validation
+	if not profile_launch.is_empty() and not _profile_launch_matches(normalized, profile_launch):
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "profile_launch"})
+	if profile_launch.is_empty() and _profile_service != null and not _profile_service.snapshot().get("active_launch_receipt", {}).is_empty():
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "start_run", "cause": "LAUNCH_ACTIVE"})
 	var next_facade := _facade if _active_run_id.is_empty() else _boot_facade()
 	if next_facade == null:
 		return CommandResultScript.failure(&"CONTENT_NOT_AVAILABLE", _revision())
 	_run_serial += 1
-	var run_id := "run-%d-%d" % [int(normalized.get("seed", 0)), _run_serial]
-	var started = next_facade.start_run(normalized, run_id)
+	var run_id := str(profile_launch.get("launch", {}).get("run_id", "")) if not profile_launch.is_empty() else "run-%d-%d" % [int(normalized.get("seed", 0)), _run_serial]
+	var projection: Dictionary = profile_launch.get("projection", {})
+	var started = next_facade.start_run(normalized, run_id, projection)
 	if not started.ok:
 		return started
 
 	_dispose_room_runtime()
 	_facade = next_facade
+	_profile_service = _profile_bootstrap_service if not profile_launch.is_empty() else null
+	_profile_start_pending = not profile_launch.is_empty()
+	_profile_publication_pending = false
+	_floor_entry_recovery_pending = false
 	_active_run_id = run_id
 	_published_run_id = ""
 	_initializing_run_id = run_id
@@ -191,6 +284,8 @@ func start_run(config: Dictionary) -> Variant:
 	accepted_config["character_talents"] = talent_ids
 	accepted_config["character_talent_definitions"] = talent_definitions
 	accepted_config["weapon_profile"] = (weapon_profile_value as Dictionary).duplicate(true)
+	if not projection.is_empty():
+		accepted_config["meta_run_projection"] = projection.duplicate(true)
 	if not bool(_player.call("configure_loadout", accepted_config)):
 		return _fail_start(&"LOADOUT_APPLY_FAILED", {"configured": false})
 	if (
@@ -232,12 +327,16 @@ func start_run(config: Dictionary) -> Variant:
 		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"configured": false})
 	_connect_room_runtime()
 	if _is_floor_plan_snapshot(accepted_snapshot):
+		if not _settle_floor_entrance():
+			return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"meta_floor_entrance": false})
+		if _profile_start_pending:
+			return _finish_profile_startup()
 		var start_snapshot := runtime_snapshot()
 		_published_run_id = run_id
 		_initializing_run_id = ""
 		EventBus.run_started.emit(run_id, start_snapshot.duplicate(true))
 		_publish_floor_started_once(start_snapshot)
-		return started
+		return CommandResultScript.success(_revision(), started.context)
 	var entered: Variant = _room_runtime.call("begin_current_room")
 	if entered == null or not bool(entered.get("ok")):
 		if entered != null and entered.get("code") is StringName:
@@ -267,6 +366,26 @@ func start_run(config: Dictionary) -> Variant:
 	_publish_pending_initial_room_started(run_id)
 	_publish_pending_initial_room_cleared(run_id)
 	return entered
+
+
+func _profile_launch_matches(config: Dictionary, context: Dictionary) -> bool:
+	if _profile_bootstrap_service == null or context.size() != 2 or not context.get("launch") is Dictionary or not context.get("projection") is Dictionary:
+		return false
+	var launch: Dictionary = context.launch
+	var profile: Dictionary = _profile_bootstrap_service.snapshot()
+	return (
+		str(config.milestone) in ["LAUNCH", "EXPANSION"]
+		and not launch.is_empty()
+		and profile.get("active_launch_receipt") == launch
+		and _profile_bootstrap_service.frozen_launch_projection() == context.projection
+		and _profile_bootstrap_service.pending_launch_config() == config
+		and launch.get("seed") == config.seed
+		and launch.get("difficulty") == config.difficulty
+		and launch.get("character_id") == config.character_id
+		and launch.get("weapon_id") == config.weapon_id
+		and launch.get("time_abilities") == config.enabled_time_skills
+		and launch.get("projection_digest") == context.projection.get("projection_digest")
+	)
 
 
 func pause_run() -> Variant:
@@ -446,6 +565,9 @@ func route_choices() -> Array[Dictionary]:
 func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 	if (
 		_facade == null
+		or _floor_entry_recovery_pending
+		or _profile_start_pending
+		or _profile_publication_pending
 		or _active_run_id.is_empty()
 		or _active_run_id != _published_run_id
 		or not _facade.has_method("begin_route_transition")
@@ -765,10 +887,35 @@ func start_next_floor(expected_revision: int = -1) -> Variant:
 		)
 	if expected_revision >= 0 and expected_revision != _revision():
 		return CommandResultScript.failure(&"STALE_REVISION", _revision())
+	if _floor_entry_recovery_pending or _profile_publication_pending or _profile_start_pending:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "start_next_floor"})
 	var started: Variant = _facade.call("start_next_floor")
 	if started != null and bool(started.get("ok")):
+		if not _settle_floor_entrance():
+			_floor_entry_recovery_pending = true
+			_set_selection_safety(true)
+			return CommandResultScript.failure(&"COMMIT_FAILED", _revision(), {"operation": "meta_floor_entrance", "recovery": "retry_floor_entrance"})
 		_publish_floor_started_once(runtime_snapshot())
+		return CommandResultScript.success(_revision(), started.context)
 	return started
+
+
+func retry_floor_entrance() -> Variant:
+	if _profile_start_pending or _profile_publication_pending:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "retry_floor_entrance"})
+	if not _settle_floor_entrance():
+		return CommandResultScript.failure(&"COMMIT_FAILED", _revision(), {"operation": "meta_floor_entrance"})
+	if _floor_entry_recovery_pending:
+		_floor_entry_recovery_pending = false
+		_set_selection_safety(false)
+	_publish_floor_started_once(runtime_snapshot())
+	return CommandResultScript.success(_revision())
+
+
+func _settle_floor_entrance() -> bool:
+	if _facade == null:
+		return false
+	return bool(_facade.apply_meta_floor_entrance(_player).ok)
 
 
 func room_plan() -> Array[Dictionary]:
@@ -1421,6 +1568,9 @@ func _fail_start(code: StringName, context: Dictionary) -> Variant:
 	if _choice_panel != null:
 		_choice_panel.close_panel()
 	_set_selection_safety(false)
+	if _profile_start_pending:
+		_set_selection_safety(true)
+		return CommandResultScript.failure(code, _revision(), {"startup_pending": true, "recovery": "retry_profile_startup", "cause": context})
 	_publish_terminal_result(failure_context)
 	return CommandResultScript.failure(code, _revision(), context)
 
@@ -1806,6 +1956,8 @@ func _is_floor_plan_snapshot(state: Dictionary) -> bool:
 
 
 func _set_selection_safety(active_selection: bool) -> void:
+	if not active_selection and (_floor_entry_recovery_pending or _profile_publication_pending):
+		return
 	if active_selection:
 		if _selection_safety_active:
 			return
