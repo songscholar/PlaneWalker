@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import shutil
 import sys
 import tempfile
 import threading
@@ -55,6 +56,18 @@ def fixture_server(payload: bytes, wrong_range: bool = False):
 
 
 class FetchTemplatesTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("curl"), "curl is optional")
+    def test_curl_backend_enforces_the_same_range_and_archive_contract(self):
+        payload = fixture_archive()
+        with tempfile.TemporaryDirectory() as directory, fixture_server(payload) as (url, requests):
+            cache = Path(directory) / "cache"
+            result = fetch_templates.download_archive(url, len(payload), hashlib.sha256(payload).hexdigest(), cache, workers=2, chunk_size=4096, transport="curl")
+            self.assertEqual(result.read_bytes(), payload)
+            self.assertGreater(len(requests), 1)
+        with tempfile.TemporaryDirectory() as directory, fixture_server(payload, wrong_range=True) as (url, _requests):
+            with self.assertRaisesRegex(ValueError, "range"):
+                fetch_templates.download_archive(url, len(payload), hashlib.sha256(payload).hexdigest(), Path(directory), workers=2, chunk_size=4096, transport="curl")
+
     def test_range_download_verifies_archive_and_only_extracts_selected_templates(self):
         payload = fixture_archive()
         with tempfile.TemporaryDirectory() as directory, fixture_server(payload) as (url, requests):

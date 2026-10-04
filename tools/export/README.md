@@ -14,6 +14,9 @@ cache; only a full digest match promotes the archive. Installation validates
 ZIP paths, version and the complete selected macOS/Linux/Windows release set
 before replacing the project template directory. No personal installation is
 modified. Use `--workers` to control concurrent transfers.
+The CLI prefers curl's IPv4 transport when available; `--transport urllib`
+selects the standard-library backend. Both enforce the same exact response
+range, length and final archive digest before installation.
 
 ## Offline macOS Fallback
 

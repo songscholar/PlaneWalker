@@ -4,9 +4,11 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import hashlib
+import json
 import os
 import shutil
 import stat
+import subprocess
 import tempfile
 import time
 import urllib.error
@@ -30,9 +32,11 @@ def _digest(path: Path) -> str:
 
 
 def download_archive(url: str, size: int, sha256: str, cache: Path, workers: int = 8,
-                     chunk_size: int = 8 * 1024 * 1024) -> Path:
+                     chunk_size: int = 8 * 1024 * 1024, transport: str = "urllib") -> Path:
     if size <= 0 or workers <= 0 or chunk_size <= 0:
         raise ValueError("download dimensions must be positive")
+    if transport not in ("urllib", "curl"):
+        raise ValueError("unknown download transport")
     cache = Path(cache)
     cache.mkdir(parents=True, exist_ok=True)
     target = cache / "templates.tpz"
@@ -55,6 +59,9 @@ def download_archive(url: str, size: int, sha256: str, cache: Path, workers: int
                 "User-Agent": "PlaneWalker-export-tool/1.0",
             })
             try:
+                if transport == "curl":
+                    _curl_range(url, offset, end, size, part)
+                    return part
                 with urllib.request.urlopen(request, timeout=60) as response:
                     expected = f"bytes {offset}-{end}/{size}"
                     if response.status != 206 or response.headers.get("Content-Range") != expected:
@@ -93,6 +100,40 @@ def download_archive(url: str, size: int, sha256: str, cache: Path, workers: int
         raise ValueError("official template SHA-256 verification failed")
     candidate.replace(target)
     return target
+
+
+def _curl_range(url: str, start: int, end: int, size: int, part: Path) -> None:
+    temporary = part.with_suffix(".receiving")
+    result = subprocess.run([
+        "curl", "-4", "--silent", "--show-error", "--location", "--fail",
+        "--connect-timeout", "10", "--max-time", "90", "--range", f"{start}-{end}",
+        "--header", "Accept-Encoding: identity", "--output", str(temporary),
+        "--write-out", "%{json}\n%{header_json}", url,
+    ], capture_output=True, text=True, timeout=100, check=False)
+    decoder = json.JSONDecoder()
+    try:
+        metadata, consumed = decoder.raw_decode(result.stdout)
+        headers = json.loads(result.stdout[consumed:].strip())
+    except (ValueError, TypeError) as error:
+        raise OSError("curl did not return transfer metadata") from error
+    if metadata.get("response_code") != 206 or headers.get("content-range") != [f"bytes {start}-{end}/{size}"]:
+        if result.returncode:
+            raise OSError(f"curl range transfer failed ({result.returncode})")
+        raise ValueError("invalid HTTP range response from curl")
+    if headers.get("content-length") != [str(end - start + 1)]:
+        raise ValueError("invalid HTTP range content length from curl")
+    received = temporary.stat().st_size if temporary.is_file() else 0
+    if received > end - start + 1:
+        raise ValueError("HTTP range transfer exceeds its expected size")
+    if received:
+        with temporary.open("rb") as source, part.open("ab") as destination:
+            shutil.copyfileobj(source, destination)
+            destination.flush()
+            os.fsync(destination.fileno())
+    if temporary.exists():
+        temporary.unlink()
+    if received != end - start + 1:
+        raise OSError("incomplete HTTP range transfer from curl")
 
 
 def install_templates(archive: Path, output: Path) -> None:
@@ -142,9 +183,10 @@ def main() -> None:
     parser.add_argument("--cache", type=Path, default=root / "build/toolchain/godot-4.6.1/range-cache")
     parser.add_argument("--output", type=Path, default=root / "build/toolchain/godot-4.6.1/templates" / VERSION)
     parser.add_argument("--workers", type=int, default=12)
+    parser.add_argument("--transport", choices=("urllib", "curl"), default="curl" if shutil.which("curl") else "urllib")
     args = parser.parse_args()
     print(f"Fetching official Godot {VERSION}: {SIZE} bytes, SHA-256 {SHA256}", flush=True)
-    archive = download_archive(URL, SIZE, SHA256, args.cache, workers=args.workers)
+    archive = download_archive(URL, SIZE, SHA256, args.cache, workers=args.workers, transport=args.transport)
     install_templates(archive, args.output)
     print(f"Verified export templates installed: {args.output}", flush=True)
 
