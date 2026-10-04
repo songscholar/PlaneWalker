@@ -143,6 +143,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16 Native Permanent Player Evidence](current/2026-10-05-p16h-meta-player-replay-evidence.md) | 原生永久属性、虚空减伤、150 配装与 Replay 8 冻结身份 | Verified Locally / Main integration pending |
 | [P16 Native Floor Entry Evidence](current/2026-10-05-p16-native-floor-entry-evidence.md) | 冻结永久成长、楼层回血、失败补偿、严格原生恢复和 JSON 存档 | Verified Locally / Main integration pending |
 | [P16 Onboarding Domain Evidence](current/2026-10-05-p16f-onboarding-domain-evidence.md) | 教学动作计数、提示投影、跳过重放与指导局策略领域 | Verified Locally / Native integration pending |
+| [P16 Native Tutorial Observation Evidence](current/2026-10-05-p16i-native-tutorial-evidence.md) | 真实动作与成功帧认证、击退排除、保存后发布和失败帧补偿 | Verified Locally / Profile service and UI integration pending |
 | [P16G Native Material Evidence](current/2026-10-05-p16g-native-material-evidence.md) | 原生敌人死亡认证、材料保留重试与真实结算金额 | Verified Locally / Main integration pending |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
