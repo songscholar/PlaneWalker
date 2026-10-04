@@ -138,6 +138,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16C Settlement Evidence](current/2026-10-04-p16c-settlement-service-evidence.md) | 一次结算、开局收据、真实 JSON 写入与失败恢复 | Verified Locally / Current |
 | [P16D Workshop Domain Evidence](current/2026-10-04-p16d-forge-build-proficiency-evidence.md) | 锻造、配装库候选和固定容量武器熟练度领域 | Verified Locally / Current |
 | [P16E Save and Workshop Evidence](current/2026-10-05-p16e-save-v4-workshop-service-evidence.md) | 旧存档 v4 迁移、旧局冻结效果、锻造与配装库原子持久化 | Verified Locally / Current |
+| [P16F Permanent Stats Evidence](current/2026-10-05-p16f-meta-stats-evidence.md) | 真实角色基础属性、永久成长与所选武器锻造的纯投影和 150 配装矩阵 | Verified Locally / Player integration pending |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |
