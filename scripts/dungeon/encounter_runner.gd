@@ -18,6 +18,7 @@ var _active: bool = false
 var _advance_scheduled: bool = false
 var _last_failure: Dictionary = {}
 var _timing_override_seconds: float = -1.0
+var _phase_timer: Timer
 
 
 func configure(enemies_root: Node) -> void:
@@ -41,6 +42,7 @@ func start_encounter(encounter: Dictionary, _run_seed: int, _room_number: int) -
 
 
 func cancel() -> void:
+	_cancel_phase_timer()
 	_generation += 1
 	_active = false
 	_advance_scheduled = false
@@ -49,6 +51,10 @@ func cancel() -> void:
 	_alive_instance_ids.clear()
 	_pending_spawn_ids.clear()
 	_last_failure.clear()
+
+
+func _exit_tree() -> void:
+	_cancel_phase_timer()
 
 
 func register_spawned(entity: Node, spawn_definition: Dictionary = {}) -> bool:
@@ -137,15 +143,22 @@ func _start_next_wave(token: int) -> void:
 		return
 	var wave: Dictionary = waves[_wave_index]
 	wave_started.emit(_wave_index, StringName(str(wave.get("id", ""))))
+	if not _active or token != _generation:
+		return
 	var delay_seconds := (
 		_timing_override_seconds
 		if _timing_override_seconds >= 0.0
 		else float(wave.get("delay_seconds", 0.0))
 	)
 	if delay_seconds > 0.0:
-		await get_tree().create_timer(delay_seconds).timeout
-		if not _active or token != _generation:
-			return
+		_wait_for_phase(delay_seconds, _begin_wave_warning.bind(wave.duplicate(true), token))
+	else:
+		_begin_wave_warning(wave, token)
+
+
+func _begin_wave_warning(wave: Dictionary, token: int) -> void:
+	if not _active or token != _generation:
+		return
 	var telegraph_seconds := (
 		_timing_override_seconds
 		if _timing_override_seconds >= 0.0
@@ -157,10 +170,17 @@ func _start_next_wave(token: int) -> void:
 		var spawn: Dictionary = spawn_value
 		_pending_spawn_ids[str(spawn.get("id", ""))] = true
 		spawn_warning_requested.emit(spawn.duplicate(true), telegraph_seconds)
-	if telegraph_seconds > 0.0:
-		await get_tree().create_timer(telegraph_seconds).timeout
 		if not _active or token != _generation:
 			return
+	if telegraph_seconds > 0.0:
+		_wait_for_phase(telegraph_seconds, _spawn_wave.bind(spawns.duplicate(true), token))
+	else:
+		_spawn_wave(spawns, token)
+
+
+func _spawn_wave(spawns: Array, token: int) -> void:
+	if not _active or token != _generation:
+		return
 	for spawn_value: Variant in spawns:
 		var spawn: Dictionary = spawn_value
 		spawn_requested.emit(spawn.duplicate(true))
@@ -171,6 +191,34 @@ func _start_next_wave(token: int) -> void:
 			reject_spawn(spawn, &"SPAWN_REQUEST_UNACKNOWLEDGED")
 			return
 	_check_wave_completion()
+
+
+func _wait_for_phase(duration: float, continuation: Callable) -> void:
+	_cancel_phase_timer()
+	_phase_timer = Timer.new()
+	_phase_timer.one_shot = true
+	_phase_timer.process_callback = Timer.TIMER_PROCESS_PHYSICS
+	add_child(_phase_timer)
+	_phase_timer.timeout.connect(_finish_phase.bind(_phase_timer, continuation), CONNECT_ONE_SHOT)
+	_phase_timer.start(duration)
+
+
+func _finish_phase(timer: Timer, continuation: Callable) -> void:
+	if timer != _phase_timer:
+		return
+	_cancel_phase_timer()
+	if continuation.is_valid():
+		continuation.call()
+
+
+func _cancel_phase_timer() -> void:
+	if not is_instance_valid(_phase_timer):
+		return
+	_phase_timer.stop()
+	if _phase_timer.get_parent() == self:
+		remove_child(_phase_timer)
+	_phase_timer.queue_free()
+	_phase_timer = null
 
 
 func _check_wave_completion() -> void:
@@ -190,6 +238,7 @@ func _complete_encounter() -> void:
 
 
 func _fail_encounter(reason: StringName, context: Dictionary) -> void:
+	_cancel_phase_timer()
 	var encounter_id := StringName(str(_encounter.get("id", "")))
 	_generation += 1
 	_active = false
