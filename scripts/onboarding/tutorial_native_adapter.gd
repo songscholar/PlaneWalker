@@ -8,6 +8,7 @@ const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Content := preload("res://scripts/onboarding/tutorial_catalog.gd")
 const Progress := preload("res://scripts/onboarding/tutorial_progress.gd")
 const Candidate := preload("res://scripts/progression/profile_command_candidate.gd")
+const MetaProjection := preload("res://scripts/progression/meta_run_projection.gd")
 const Run := preload("res://scripts/application/run_state.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Player := preload("res://scripts/player/player_controller.gd")
@@ -19,6 +20,7 @@ var _run: RefCounted
 var _player: WeakRef
 var _launch: Dictionary = {}
 var _identity: Dictionary = {}
+var _projection: Dictionary = {}
 var _pending: Array = []
 var _last_frame := 0
 var _next_action_sequence := 1
@@ -49,6 +51,8 @@ func bind_normal_run(profile: Dictionary, run: RefCounted, player: Node) -> Dict
 	if not projection_value is Dictionary:
 		return Candidate.failure(&"TUTORIAL_BINDING_INVALID")
 	var projection: Dictionary = projection_value
+	if not MetaProjection.validate(projection, loaded.context.catalog):
+		return Candidate.failure(&"TUTORIAL_BINDING_INVALID")
 	var config: Dictionary = player.loadout_runtime.snapshot()
 	if identity.is_empty() or run.run_id != launch.run_id or run.run_seed != launch.seed or projection.is_empty() or projection.get("projection_digest") != launch.projection_digest or identity.run_id != launch.run_id or identity.get("meta_projection_digest") != launch.projection_digest or identity.character_id != launch.character_id or identity.weapon_id != launch.weapon_id or identity.time_ability_ids != launch.time_abilities or config.get("milestone") not in ["LAUNCH", "EXPANSION"]:
 		return Candidate.failure(&"TUTORIAL_BINDING_INVALID")
@@ -60,6 +64,7 @@ func bind_normal_run(profile: Dictionary, run: RefCounted, player: Node) -> Dict
 	_player = weakref(player)
 	_launch = launch.duplicate(true)
 	_identity = identity
+	_projection = projection.duplicate(true)
 	_last_frame = int(arbitration.frame)
 	_last_position = player.global_position
 	_below_half = player.health.current_hp < player.health.max_hp * 0.5
@@ -109,6 +114,7 @@ func detach() -> void:
 	_player = null
 	_launch.clear()
 	_identity.clear()
+	_projection.clear()
 	_retired = true
 
 
@@ -168,6 +174,6 @@ func _live_identity() -> bool:
 		return false
 	var player: Node = _player.get_ref()
 	var projection: Variant = _run.resources.get("meta_run_projection", {})
-	if not is_instance_valid(player) or not player.is_inside_tree() or _run.run_id != _launch.run_id or _run.run_seed != _launch.seed or not projection is Dictionary or projection.get("projection_digest") != _launch.projection_digest:
+	if not is_instance_valid(player) or not player.is_inside_tree() or _run.run_id != _launch.run_id or _run.run_seed != _launch.seed or projection != _projection:
 		return false
 	return player.full_player_replay_identity() == _identity

@@ -57,7 +57,12 @@ func _run() -> void:
 	var resources_before: Dictionary = state.resources.duplicate(true)
 	state.resources.meta_run_projection = true
 	suite.assert_true(not implementation.new().bind_normal_run(profile, state, player).ok, "malformed native projection refuses without protocol error")
-	state.resources = resources_before
+	state.resources = resources_before.duplicate(true)
+	var contradictory_projection := projection.duplicate(true)
+	contradictory_projection.stat_bonuses.attack += 0.01
+	state.resources.meta_run_projection = contradictory_projection
+	suite.assert_true(not implementation.new().bind_normal_run(profile, state, player).ok, "unchanged digest cannot authenticate contradictory native projection fields")
+	state.resources = resources_before.duplicate(true)
 	suite.assert_true(adapter.bind_normal_run(profile, state, player).ok, "adapter binds actual Run, Player and active profile receipt")
 	adapter.observation_saved.connect(_on_saved)
 	player.authoritative_frame_committed.emit(1)
@@ -76,6 +81,9 @@ func _run() -> void:
 		var altered: Dictionary = ticket.context.receipt.duplicate(true)
 		altered.action_id = "boss_conversion"
 		suite.assert_true(not adapter.can_confirm_saved(altered, ticket.context.seal), "caller cannot change an issued native semantic fact")
+		state.resources.meta_run_projection = contradictory_projection.duplicate(true)
+		suite.assert_true(not adapter.can_confirm_saved(ticket.context.receipt, ticket.context.seal), "live projection fields cannot drift behind an unchanged digest")
+		state.resources = resources_before.duplicate(true)
 		var candidate: Dictionary = runtime.prepare_observation(profile, ticket.context.receipt, profile.revision)
 		suite.assert_true(candidate.ok, "native receipt reaches real pure tutorial runtime")
 		if candidate.ok:

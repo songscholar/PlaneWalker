@@ -15,6 +15,7 @@
 TutorialNativeAdapter 绑定实际 RunState、场景树中的真实 Launch/Expansion PlayerController、
 经过教学领域验证的 Profile 及活动启动收据。启动运行、种子、角色、武器、时间能力对、
 Meta 投影摘要和 Replay owner generation 必须一致。错误来源和损坏投影在访问原生协议前拒绝。
+绑定时验证完整 Meta 投影，绑定后比较冻结的全投影；摘要没有改变也不能掩盖字段漂移。
 
 观察仅来自 Player.authoritative_frame_committed。适配器再次核对当前成功帧的
 authoritative_frame_intents 和真实优先级仲裁；提前伪造通知、旧帧、失败帧、Replay restore
@@ -40,6 +41,8 @@ confirm_saved。确认先消费收据，再发布一次 observation_saved，重�
 - 退休绑定重用和保存回调漂移 RED：planewalker-tests.ynqPvM。
 - 生命周期和四类实际动作 GREEN：planewalker-tests.toUJxH。
 - 最终实际 World commit 故障和恢复专项：planewalker-tests.frUq9p，1/1 GREEN。
+- 复核提出完整投影身份收紧：planewalker-tests.CEXdfc RED；最终
+  planewalker-tests.Uz0uOx 1/1 GREEN，涵盖 bind/确认时未改摘要的字段漂移。
 - git diff --check：PASS。
 
 专项使用实际内容 Registry、生成 FloorPlan 和配置 Meta 的真实 Player 场景。覆盖三个真实
