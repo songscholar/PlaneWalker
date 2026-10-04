@@ -11,6 +11,7 @@ const RoomSceneHostScript := preload("res://scripts/dungeon/room_scene_host.gd")
 const PlayerRewardEffectRuntimeScript := preload(
 	"res://scripts/items/player_reward_effect_runtime.gd"
 )
+const PlayerScene := preload("res://scenes/player/player.tscn")
 
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
@@ -323,7 +324,8 @@ func _run() -> void:
 	_test_facade_finalized_route_compensation_and_confirmation(suite)
 	_test_floor_rule_state_runtime_round_trip(suite)
 	_test_launch_restore_rebuilds_active_floor_rule_runtime(suite)
-	_test_floor_rule_advance_failure_is_terminal_once(suite)
+	_test_floor_rule_advance_failure_is_terminal_once(suite, "combat")
+	_test_floor_rule_advance_failure_is_terminal_once(suite, "boss")
 	suite.finish(get_tree())
 
 
@@ -412,9 +414,21 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 	if not started.ok:
 		return
 
+	var player: Node = PlayerScene.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	var config: Dictionary = facade.snapshot()["config"].duplicate(true)
+	var loadout: Dictionary = facade.active_loadout()
+	config["character_profile"] = loadout["character_profile"]
+	config["weapon_profile"] = loadout["weapon_profile"]
+	suite.assert_true(player.call("configure_run", StringName(run_id)), "lifecycle Player binds the actual run identity")
+	suite.assert_true(player.call("configure_loadout", config), "lifecycle Player configures the production loadout")
+	suite.assert_true(facade.configure_merchant_effect_authority(PlayerRewardEffectRuntimeScript.new(), player), "lifecycle binds real Player and effects for rewards and shops")
+
 	var host := RunRuntimeHostScript.new()
 	add_child(host)
 	host.set("_facade", facade)
+	host.set("_player", player)
 	host.set("_active_run_id", run_id)
 	host.set("_published_run_id", run_id)
 	var recorder := RouteLifecycleRecorder.new()
@@ -503,6 +517,8 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 	host.call("_publish_floor_started_once", facade.snapshot())
 	suite.assert_equal(recorder.floor_started_events.size(), 1, "floor start publishes exactly once")
 
+	var expected_ledger: Array = []
+	var expected_gold := 0
 	while (facade.snapshot().get("completed_floor_ids", []) as Array).is_empty():
 		choices = host.call("route_choices")
 		suite.assert_true(not choices.is_empty(), "active Launch node exposes the next route choice")
@@ -522,6 +538,13 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 		suite.assert_equal(recorder.route_events.size(), route_count_before + 1, "route selection publishes one route fact")
 		suite.assert_equal(recorder.room_started_events.size(), room_start_count_before + 1, "route selection publishes one room-start fact")
 		var room: Dictionary = facade.current_room_definition()
+		var payout := int({"combat": 30, "elite": 50, "boss": 60}.get(str(room["room_type"]), 0))
+		if payout > 0:
+			expected_gold += payout
+			expected_ledger.append({
+				"transaction_id": "room_gold:%s:%s" % [room["floor_id"], room["node_id"]],
+				"operation": "gold_delta", "amount": payout, "revision": expected_ledger.size() + 1,
+			})
 		var completed = facade.complete_current_room()
 		suite.assert_true(completed.ok, "selected Launch room completes through the facade")
 		if not completed.ok:
@@ -531,6 +554,15 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 			StringName(str(room.get("node_id", ""))),
 			int(completed.new_revision)
 		)
+		var room_state: Dictionary = facade.snapshot()
+		if int(room_state["phase"]) == RunPhaseScript.Value.SELECTION_ACTIVE:
+			var offer: Dictionary = room_state["open_offer"]
+			var before_history := (room_state["build"]["reward_history"] as Array).size()
+			var rewarded = facade.commit_current_reward(offer["offer_id"], offer["options"][0]["option_id"], offer["revision"])
+			suite.assert_true(rewarded.ok, "lifecycle resolves the real room reward before the next route")
+			if not rewarded.ok:
+				break
+			suite.assert_equal(facade.snapshot()["build"]["reward_history"].size(), before_history + 1, "lifecycle reward enters the canonical history exactly once")
 
 	var final_snapshot: Dictionary = facade.snapshot()
 	suite.assert_equal((final_snapshot.get("completed_floor_ids", []) as Array).size(), 1, "first Launch floor completes once")
@@ -540,18 +572,12 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 		"first Boss completion settles floor-one economy exactly once"
 	)
 	var economy_ledger: Array = final_snapshot.get("run_economy", {}).get("ledger", [])
-	suite.assert_equal(economy_ledger.size(), 1, "floor settlement appends one economy fact")
-	if economy_ledger.size() == 1:
-		suite.assert_equal(
-			economy_ledger[0],
-			{
-				"transaction_id": "tx_floor_1_settlement",
-				"operation": "gold_decay",
-				"amount": 0,
-				"revision": 1,
-			},
-			"under-cap floor settlement records the canonical zero-decay fact"
-		)
+	expected_ledger.append({
+		"transaction_id": "tx_floor_1_settlement", "operation": "gold_decay",
+		"amount": 0, "revision": expected_ledger.size() + 1,
+	})
+	suite.assert_equal(economy_ledger, expected_ledger, "floor settlement preserves exact authored room income and appends one zero-decay fact")
+	suite.assert_equal(final_snapshot["run_economy"]["balance"], expected_gold, "under-cap settlement preserves all earned room gold")
 	suite.assert_equal(recorder.route_events.size(), recorder.room_started_events.size(), "every committed route publishes one room start")
 	suite.assert_equal(recorder.route_events.size(), recorder.room_cleared_events.size(), "every entered room publishes one room clear")
 	suite.assert_equal(recorder.floor_completed_events.size(), 1, "floor completion publishes exactly once")
@@ -562,6 +588,7 @@ func _test_runtime_host_route_transaction_and_publication(suite) -> void:
 	room_scene_host.reset()
 	room_scene_host.free()
 	host.free()
+	player.free()
 
 
 func _test_facade_finalized_route_compensation_and_confirmation(suite) -> void:
@@ -1102,28 +1129,26 @@ func _test_launch_restore_rebuilds_active_floor_rule_runtime(suite) -> void:
 	)
 
 
-func _test_floor_rule_advance_failure_is_terminal_once(suite) -> void:
+func _test_floor_rule_advance_failure_is_terminal_once(suite, room_type: String) -> void:
 	var facade = RunRuntimeFacadeScript.new()
 	suite.assert_true(facade.boot().ok, "floor-rule failure facade boots")
-	var run_id := "run-floor-rule-runtime-failure"
+	var run_id := "run-floor-rule-runtime-failure-" + room_type
 	suite.assert_true(facade.start_run(_launch_config(), run_id).ok, "floor-rule failure run starts")
-	var choice := (facade.route_choices() as Array)[0] as Dictionary
-	var begun = facade.begin_route_transition(
-		StringName(str(choice["edge_id"])),
-		int(facade.snapshot()["revision"])
-	)
-	var transition_id := str(begun.context.get("transition_id", ""))
-	var finalized = facade.finalize_route_transition(transition_id, int(begun.new_revision))
+	var target := _floor_rule_failure_target(suite, facade, room_type)
+	if target.is_empty():
+		return
+	var transition_id := str(target["transition_id"])
 	var authority := RejectingFloorRuleEffectAuthority.new()
 	var configured = facade.configure_floor_rule(
 		&"rule_crumbling_ground",
-		_floor_rule_configuration(str(choice["node_id"])),
+		_floor_rule_configuration(str(target["node_id"])),
 		authority,
-		int(finalized.new_revision)
+		int(target["revision"])
 	)
 	suite.assert_true(configured.ok, "rejecting floor-rule authority configures before the active frame")
 	var confirmed = facade.confirm_route_transition(transition_id, int(configured.new_revision))
 	suite.assert_true(confirmed.ok, "floor-rule failure route confirms")
+	suite.assert_equal(facade.snapshot()["phase"], RunPhaseScript.Value.BOSS_ACTIVE if room_type == "boss" else RunPhaseScript.Value.COMBAT_ACTIVE, "floor-rule failure reaches the actual active " + room_type + " phase")
 
 	var host := RunRuntimeHostScript.new()
 	var frame_controller := FloorRuleFrameController.new()
@@ -1167,6 +1192,30 @@ func _test_floor_rule_advance_failure_is_terminal_once(suite) -> void:
 		EventBus.run_ended.disconnect(recorder.record_run_ended)
 	host.free()
 	frame_controller.free()
+
+
+func _floor_rule_failure_target(suite, facade: RefCounted, room_type: String) -> Dictionary:
+	for _step: int in range(16):
+		var choices: Array = facade.call("route_choices")
+		if choices.is_empty():
+			break
+		var choice := choices[0] as Dictionary
+		var begun = facade.call("begin_route_transition", StringName(str(choice["edge_id"])), int(facade.call("snapshot")["revision"]))
+		suite.assert_true(begun.ok, "floor-rule failure route begins")
+		if not begun.ok:
+			return {}
+		var transition_id := str(begun.context["transition_id"])
+		var finalized = facade.call("finalize_route_transition", transition_id, int(begun.new_revision))
+		suite.assert_true(finalized.ok, "floor-rule failure route finalizes")
+		if not finalized.ok:
+			return {}
+		var room: Dictionary = facade.call("current_room_definition")
+		if str(room["room_type"]) == room_type or room_type == "combat" and str(room["room_type"]) == "elite":
+			return {"transition_id": transition_id, "node_id": str(room["node_id"]), "revision": finalized.new_revision}
+		suite.assert_true(facade.call("confirm_route_transition", transition_id, int(finalized.new_revision)).ok, "floor-rule failure predecessor route confirms")
+		suite.assert_true(facade.call("complete_current_room").ok, "floor-rule failure predecessor room completes")
+	suite.assert_true(false, "floor-rule failure reaches the requested " + room_type + " room")
+	return {}
 
 
 func _test_runtime_host_launch_start_failure_is_atomic(suite) -> void:

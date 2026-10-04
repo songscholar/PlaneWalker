@@ -23,11 +23,26 @@ class FloorSettlementEconomyFault:
 	func revision() -> int:
 		return int(base.call("revision"))
 
+	func balance() -> int:
+		return int(base.call("balance"))
+
 	func snapshot() -> Dictionary:
 		var value: Dictionary = base.call("snapshot").duplicate(true)
 		if corrupt_commit_snapshot and _settlement_committed:
 			value["profile_id"] = "forged_profile"
 		return value
+
+	func prepare_transaction(transaction_id: String, delta: int, expected_revision: int, context: Dictionary = {}) -> Dictionary:
+		return base.call("prepare_transaction", transaction_id, delta, expected_revision, context.duplicate(true))
+
+	func commit_transaction(ticket: Dictionary) -> Dictionary:
+		return base.call("commit_transaction", ticket.duplicate(true))
+
+	func rollback_transaction(receipt_or_ticket: Dictionary) -> Dictionary:
+		return base.call("rollback_transaction", receipt_or_ticket.duplicate(true))
+
+	func can_restore_snapshot(value: Dictionary) -> bool:
+		return bool(base.call("can_restore_snapshot", value.duplicate(true)))
 
 	func apply_floor_transition(
 		floor_index: int,
@@ -131,16 +146,18 @@ func _test_under_cap_settlement_is_exactly_once(suite) -> void:
 		return
 	var after: Dictionary = facade.snapshot()
 	var ledger: Array = after.get("run_economy", {}).get("ledger", [])
+	var expected := _expected_room_income(1)
+	expected.append({
+		"transaction_id": "tx_floor_1_settlement", "operation": "gold_decay",
+		"amount": 0, "revision": 4,
+	})
+	suite.assert_equal(before["run_economy"]["ledger"], _expected_room_income(1).slice(0, 2), "pre-Boss rooms already committed their exact income")
 	suite.assert_equal(
 		ledger,
-		[{
-			"transaction_id": "tx_floor_1_settlement",
-			"operation": "gold_decay",
-			"amount": 0,
-			"revision": 1,
-		}],
-		"under-cap Boss completion appends one canonical zero-decay fact"
+		expected,
+		"under-cap Boss completion appends exact Boss income and one zero-decay fact"
 	)
+	suite.assert_equal(after["run_economy"]["balance"], 140, "all three authored room incomes survive under-cap settlement")
 	suite.assert_equal(
 		after.get("run_economy", {}).get("settled_floor_indices"),
 		[0],
@@ -148,8 +165,8 @@ func _test_under_cap_settlement_is_exactly_once(suite) -> void:
 	)
 	suite.assert_equal(
 		int(after.get("revision", -1)),
-		int(before.get("revision", -1)) + 3,
-		"Boss completion owns node, economy, and floor revisions"
+		int(before.get("revision", -1)) + 4,
+		"Boss completion owns node, room income, settlement, and floor revisions"
 	)
 	var before_duplicate: Dictionary = after.duplicate(true)
 	var duplicate = facade.complete_current_room()
@@ -171,32 +188,29 @@ func _test_over_cap_settlement_is_deterministic(suite) -> void:
 	if not completed.ok:
 		return
 	var economy: Dictionary = facade.snapshot().get("run_economy", {})
+	suite.assert_equal(before["run_economy"]["balance"], 1080, "seed grant and two authored room incomes precede Boss settlement")
+	var expected: Array = [{
+		"transaction_id": "tx_test_seed_gold_floor-economy-over-cap",
+		"operation": "gold_delta", "amount": 1000, "revision": 1,
+	}]
+	expected.append_array(_expected_room_income(2))
+	expected.append({
+		"transaction_id": "tx_floor_1_settlement", "operation": "gold_decay",
+		"amount": -220, "revision": 5,
+	})
 	suite.assert_equal(
 		economy.get("balance"),
-		850,
+		920,
 		"floor-one overflow retains exactly half of gold above the 700 cap"
 	)
 	suite.assert_equal(
 		economy.get("ledger"),
-		[
-			{
-				"transaction_id": "tx_test_seed_gold_floor-economy-over-cap",
-				"operation": "gold_delta",
-				"amount": 1000,
-				"revision": 1,
-			},
-			{
-				"transaction_id": "tx_floor_1_settlement",
-				"operation": "gold_decay",
-				"amount": -150,
-				"revision": 2,
-			},
-		],
+		expected,
 		"over-cap Boss completion records the deterministic decay fact"
 	)
 	suite.assert_equal(
 		completed.context.get("economy_settlement", {}).get("context", {}).get("decayed_gold"),
-		150,
+		220,
 		"completion context reports the exact decayed amount"
 	)
 	suite.assert_equal(
@@ -368,3 +382,11 @@ func _launch_config() -> Dictionary:
 		"difficulty": "normal",
 		"seed": FIXED_SEED,
 	}
+
+
+func _expected_room_income(first_revision: int) -> Array:
+	return [
+		{"transaction_id": "room_gold:floor_ruins_of_remnant:layer_01_a", "operation": "gold_delta", "amount": 30, "revision": first_revision},
+		{"transaction_id": "room_gold:floor_ruins_of_remnant:layer_02_a", "operation": "gold_delta", "amount": 50, "revision": first_revision + 1},
+		{"transaction_id": "room_gold:floor_ruins_of_remnant:boss", "operation": "gold_delta", "amount": 60, "revision": first_revision + 2},
+	]

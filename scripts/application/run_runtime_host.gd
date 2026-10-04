@@ -1651,7 +1651,11 @@ func _advance_floor_rule_from_host() -> void:
 	):
 		return
 	var state := runtime_snapshot()
-	if int(state.get("phase", -1)) != RunPhaseScript.Value.ROOM_ACTIVE:
+	if int(state.get("phase", -1)) not in [
+		RunPhaseScript.Value.COMBAT_ACTIVE,
+		RunPhaseScript.Value.BOSS_ACTIVE,
+		RunPhaseScript.Value.ROOM_ACTIVE,
+	]:
 		return
 	var floor_rule_state: Dictionary = state.get("floor_rule_state", {})
 	if floor_rule_state.is_empty():
