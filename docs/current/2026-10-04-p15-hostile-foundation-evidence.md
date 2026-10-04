@@ -24,7 +24,9 @@
 
 `HostileControlRuntime` owns bounded fixed-frame source maps for Stop, Rift, weakpoint, and vulnerability. Duplicate sources cannot restart lifetimes. Stop sources expire independently; Rift takes the strongest source with a `0.40` movement floor; weakpoint takes the largest active bonus; independent vulnerability sources combine under a `3.0` damage multiplier cap. JSON numeric normalization and strict identity/frame/expiry checks protect checkpoint restoration. Terminal cleanup removes every control source.
 
-`LaunchEnemyRuntime` currently implements only the Sentinel mechanism. It uses the common coordinator, seeded initial attack staggering, pursuit, the paired sweep, and a nineteen-pixel retreat over forty-eight accepted action frames. Unsupported native mechanisms reject explicitly. Its action/control/mechanism checkpoint validates together, and action interruption is distinct from terminal cancellation.
+`LaunchEnemyRuntime` implements the Sentinel mechanism using the common coordinator, seeded initial attack staggering, pursuit, the paired sweep, and a nineteen-pixel retreat over forty-eight accepted action frames. Its action/control/mechanism checkpoint validates together, and action interruption is distinct from terminal cancellation.
+
+The next inactive Ruins boundary adds unique Health damage facts and two concrete mechanism state machines. Strider shell closes for `120` accepted frames after a hit, retains its original lifetime on further hits, then exposes for `30` frames with damage multipliers `0.30` and `1.30`. Wraith accumulates damage during its committed detonation warning; `15` damage retires the warning and creates a `30` frame nonattacking stagger. A pre-active lethal Health result cancels the warning. These mechanisms use strict native actor/Health compensation, including rejected incoming damage claims. Their charge, terminal consumption, support/death payloads, complete kits, and routing remain open; a nonempty unsupported mechanism request rejects explicitly.
 
 `LaunchHostileActor` is an inactive native Sentinel adapter. It reuses EnemyBase's damage and weapon/status helpers, replaces physics and timer gameplay with accepted-frame preparation/commit/compensation, predicts movement through native collision in test-only mode, and projects the authoritative action into a four-frame raster. Its real HealthComponent resolves weakpoint and vulnerability damage. Final Health death clears control/status state and emits one stable encounter receipt; room economy remains an external authority.
 
@@ -36,7 +38,7 @@ Health frame transactions now buffer the three typed combat observations alongsi
 
 `LaunchHostileEffectAuthority` verifies source-sorted native batches against each actor's sealed preparation, validates threat registration/retirement/expiry extensions on an isolated registry, creates immutable DamageInfo plans, and applies real Health damage through geometry unions. The initial implemented handler is melee; every other semantic handler rejects. Native burn ticks retain stable identities and tolerate a released source handle. Burn target validation recognizes the actor's sealed committed displacement. Compensation restores claims, registry, and effect-owned signal buffers; outer actor/Player owners restore Health checkpoints. Publication detaches its batch before callbacks and rejects reentry.
 
-`tools/generate_launch_enemy_assets.py` produces an original `128 x 32` four-frame Sentinel bitmap and a provenance/hash manifest. The scene has real body and hurtbox collision, HealthComponent, and Sprite2D; its compatibility Polygon2D is hidden. This asset and scene are not in the active content pack.
+`tools/generate_launch_enemy_assets.py` produces original `128 x 32` four-frame rasters for the five Ruins identities and a provenance/hash manifest. Sentinel, Strider, and Wraith scenes currently have real body and hurtbox collision, HealthComponent, and Sprite2D; their compatibility Polygon2D is hidden. These assets and scenes are not in the active content pack and do not certify complete kits.
 
 ## Focused Verification
 
@@ -53,6 +55,11 @@ Each new test first failed with a named missing-implementation assertion. Implem
 | `./tools/run_tests.sh --filter launch_actor_transaction --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.T1qOSt` |
 | `./tools/run_tests.sh --filter launch_enemy_actor --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.3h7rmn` |
 | `./tools/run_tests.sh --filter launch_hostile_effect_authority --timeout 15` | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.Jgy3d5` |
+| `./tools/run_tests.sh --filter hostile_action --timeout 15` (Boss namespace and 150 HP wall) | 2 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.q66xq5` |
+| `./tools/run_tests.sh --filter ruins_enemy --timeout 15` (shell and interrupt boundary) | 2 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.gJjCXN` |
+| `./tools/run_tests.sh --filter launch_enemy --timeout 15` (after synchronous native damage staging) | 2 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.9T0CKl` |
+| `./tools/run_tests.sh --filter hostile_frame_bridge --timeout 15` (after synchronous native damage staging) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.34r5sj` |
+| `./tools/run_tests.sh --filter launch_hostile_effect_authority --timeout 15` (after synchronous native damage staging) | 1 | `/var/folders/2r/hcrdmp2s4r7cxjdcrf76l_5w0000gn/T/planewalker-tests.jHywWv` |
 
 The focused logs contain zero failures and zero known/unknown leak warnings. Manual log scans also check generic engine errors. GDScript line coverage is unavailable in this installed engine; no coverage percentage is claimed.
 

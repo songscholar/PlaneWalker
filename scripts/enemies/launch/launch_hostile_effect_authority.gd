@@ -101,6 +101,8 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 		for request: Variant in batch.effect_requests:
 			if not request is Dictionary or request.get("handler_id", "") != "melee" or str(request.get("hostile_source_id", "")) != source:
 				return _failure("unimplemented_effect_handler")
+		if not batch.get("mechanism_requests", []) is Array or not (batch.get("mechanism_requests", []) as Array).is_empty():
+			return _failure("unimplemented_mechanism_handler")
 		for hit: Variant in batch.hit_facts:
 			var prepared := _prepare_hit(hit, source, actor, context, next)
 			if not prepared.ok:

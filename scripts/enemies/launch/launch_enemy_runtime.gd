@@ -5,10 +5,11 @@ const Action := preload("res://scripts/enemies/launch/hostile_action_coordinator
 const Controls := preload("res://scripts/enemies/launch/hostile_control_runtime.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Seeds := preload("res://scripts/core/seed_service.gd")
+const Mechanisms := preload("res://scripts/enemies/launch/enemy_mechanism_handlers.gd")
 const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "actions"]
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control"]
-const MECHANISM_FIELDS: Array[String] = ["first_attack_ready_frame", "retreat_remaining_frames", "retreat_direction"]
+const DAMAGE_FACT_FIELDS: Array[String] = ["fact_id", "runtime_frame", "target_source_id", "amount", "hp_after"]
 
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
@@ -21,7 +22,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_state.clear()
 	if not Contract.exact_fields(definition, DEFINITION_FIELDS) or not Contract.exact_fields(identity, IDENTITY_FIELDS):
 		return _failure("fields")
-	if definition.id != "shattered_sentinel" or definition.runtime_kind != definition.id or definition.actor_kind not in ["enemy", "elite"]:
+	if not Mechanisms.ACTION_IDS.has(definition.id) or definition.runtime_kind != definition.id or definition.actor_kind not in ["enemy", "elite"]:
 		return _failure("runtime_kind")
 	if not Contract.number_in_range(definition.max_hp, 1.0, 1000000.0) or not Contract.number_in_range(definition.defense, 0.0, 10000.0) or not Contract.number_in_range(definition.move_speed, 0.0, 1000.0):
 		return _failure("stats")
@@ -36,13 +37,11 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	var ids: Array[String] = []
 	for candidate: Dictionary in definition.actions:
 		var action: Dictionary = Contract.create(candidate, definition.actor_kind).definition
-		if int(action.warning_frames) < 30 or action.handler_id != "melee":
+		if int(action.warning_frames) < 30 or action.handler_id not in ["melee", "charge", "projectile_volley", "zone", "heal", "summon"]:
 			return _failure("unimplemented_handler_or_warning")
 		ids.append(action.id)
 		normalized_actions.append(action)
-	var expected := ["shattered_sentinel.shield_sweep"]
-	if definition.actor_kind == "elite":
-		expected.append("shattered_sentinel.boulder_slam")
+	var expected := Mechanisms.action_ids(definition.runtime_kind, definition.actor_kind == "elite")
 	if ids != expected:
 		return _failure("actions")
 	var controls: Dictionary = _control.configure({"run_id": identity.run_id, "hostile_source_id": identity.hostile_source_id, "runtime_frame": identity.runtime_frame})
@@ -54,15 +53,18 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_state = {
 		"schema_version": 1, "definition_digest": JSON.stringify(_definition).sha256_text(),
 		"identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false,
-		"mechanism_state": {"first_attack_ready_frame": int(identity.runtime_frame) + rng.randi_range(0, 60), "retreat_remaining_frames": 0, "retreat_direction": {"x": 0.0, "y": 0.0}},
+		"mechanism_state": Mechanisms.make_state(definition.runtime_kind, int(identity.runtime_frame) + rng.randi_range(0, 60)),
 	}
 	return {"ok": true, "snapshot": snapshot()}
 
 
 func request_action(action_id: String, context: Dictionary) -> Dictionary:
-	if _state.is_empty() or _state.terminal or bool(_control.modifiers().action_paused) or int(_state.mechanism_state.retreat_remaining_frames) > 0:
+	if _state.is_empty() or _state.terminal or bool(_control.modifiers().action_paused) or not Mechanisms.action_available(_definition.runtime_kind, _state.mechanism_state, action_id):
 		return _failure("action_unavailable")
-	return _action.request_action(action_id, context)
+	var result: Dictionary = _action.request_action(action_id, context)
+	if result.ok:
+		_state.mechanism_state = Mechanisms.action_started(_definition.runtime_kind, _state.mechanism_state, action_id)
+	return result
 
 
 func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
@@ -73,7 +75,7 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 		return _failure("control")
 	var displacement := Vector2.ZERO
 	if not controls.action_paused:
-		if int(_state.mechanism_state.retreat_remaining_frames) > 0:
+		if _definition.runtime_kind == "shattered_sentinel" and int(_state.mechanism_state.retreat_remaining_frames) > 0:
 			displacement = _vector(_state.mechanism_state.retreat_direction) * (19.0 / 48.0) * float(controls.movement_multiplier)
 		elif _action.snapshot().phase == "IDLE":
 			var source := _vector(observations.source_position)
@@ -98,20 +100,20 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		_control.restore_snapshot(before.control)
 		return result
 	_state.runtime_frame = frame
-	if not controls.action_paused and int(_state.mechanism_state.retreat_remaining_frames) > 0:
-		_state.mechanism_state.retreat_remaining_frames -= 1
-	if previous_action.phase == "ACTIVE" and result.phase == "RECOVERY" and previous_action.action_id == "shattered_sentinel.shield_sweep":
-		_state.mechanism_state.retreat_remaining_frames = 48
-		var direction := -_vector(previous_action.committed_aim)
-		_state.mechanism_state.retreat_direction = {"x": direction.x, "y": direction.y}
+	var mechanism: Dictionary = Mechanisms.advance(_definition.runtime_kind, _state.mechanism_state, previous_action, _action.snapshot())
+	if controls.action_paused and _definition.runtime_kind == "shattered_sentinel":
+		mechanism.state = _state.mechanism_state.duplicate(true)
+	_state.mechanism_state = mechanism.state
+	result["mechanism_requests"] = mechanism.requests
 	result["threat_facts"] = []
-	if select_action and not controls.action_paused and int(_state.mechanism_state.retreat_remaining_frames) == 0 and frame >= int(_state.mechanism_state.first_attack_ready_frame) and result.phase == "IDLE":
-		var selected := _select_action(frame)
+	if select_action and not controls.action_paused and frame >= int(_state.mechanism_state.first_attack_ready_frame) and result.phase == "IDLE":
+		var selected := _select_action(frame, observations)
 		if not selected.is_empty():
 			var requested: Dictionary = _action.request_action(selected, observations)
 			if requested.ok:
 				result.threat_facts = requested.threat_facts
 				result.phase = requested.phase
+				_state.mechanism_state = Mechanisms.action_started(_definition.runtime_kind, _state.mechanism_state, selected)
 	result["action_paused"] = controls.action_paused
 	result["movement_multiplier"] = controls.movement_multiplier
 	return result
@@ -129,6 +131,25 @@ func control_modifiers() -> Dictionary:
 	return _control.modifiers()
 
 
+func accept_damage_fact(value: Dictionary) -> Dictionary:
+	if _state.is_empty() or _state.terminal or not Contract.exact_fields(value, DAMAGE_FACT_FIELDS):
+		return _failure("damage_fact")
+	if typeof(value.fact_id) != TYPE_STRING or value.fact_id.is_empty() or value.fact_id.length() > 128 or value.target_source_id != _state.identity.hostile_source_id or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or not Contract.number_in_range(value.amount, 0.000001, 1000000.0) or not Contract.number_in_range(value.hp_after, 0.0, _definition.max_hp):
+		return _failure("damage_fact_identity_or_value")
+	var prepared: Dictionary = Mechanisms.accept_damage(_definition.runtime_kind, _state.mechanism_state, _action.snapshot(), value)
+	if not prepared.ok:
+		return _failure("duplicate_damage_fact")
+	_state.mechanism_state = prepared.state
+	var retired: Array = []
+	if prepared.cancel_action:
+		retired = _action.cancel(&"health_damage_interrupt").retired_generations
+	return {"ok": true, "retired_generations": retired}
+
+
+func species_damage_taken_multiplier() -> float:
+	return Mechanisms.damage_taken_multiplier(_definition.runtime_kind, _state.mechanism_state) if not _state.is_empty() else 1.0
+
+
 func snapshot() -> Dictionary:
 	if _state.is_empty():
 		return {}
@@ -143,18 +164,16 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame < int(_state.identity.runtime_frame) or typeof(value.terminal) != TYPE_BOOL:
 		return false
-	if not value.mechanism_state is Dictionary or not Contract.exact_fields(value.mechanism_state, MECHANISM_FIELDS):
+	if not value.mechanism_state is Dictionary:
 		return false
 	var mechanism: Dictionary = value.mechanism_state
-	if mechanism.first_attack_ready_frame != _state.mechanism_state.first_attack_ready_frame or not Contract.integer_in_range(mechanism.retreat_remaining_frames, 0, 48) or typeof(mechanism.retreat_remaining_frames) != TYPE_INT or not Contract.valid_point(mechanism.retreat_direction, 1.0):
-		return false
-	if mechanism.retreat_remaining_frames > 0 and not is_equal_approx(_vector(mechanism.retreat_direction).length(), 1.0):
+	if not Mechanisms.valid_state(_definition.runtime_kind, mechanism, _state.mechanism_state.first_attack_ready_frame):
 		return false
 	if not value.action is Dictionary or not value.control is Dictionary or not _action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false
 	if value.action.last_runtime_frame != value.runtime_frame or value.control.runtime_frame != value.runtime_frame or value.control.terminal != value.terminal:
 		return false
-	return not value.terminal or (value.action.phase == "IDLE" and mechanism.retreat_remaining_frames == 0)
+	return not value.terminal or (value.action.phase == "IDLE" and int(mechanism.get("retreat_remaining_frames", 0)) == 0)
 
 
 func restore_snapshot(value: Dictionary) -> bool:
@@ -174,23 +193,26 @@ func cancel(reason: StringName = &"cancelled") -> Dictionary:
 	var result: Dictionary = _action.cancel(reason)
 	_control.cancel(reason)
 	_state.terminal = true
-	_state.mechanism_state.retreat_remaining_frames = 0
+	if _state.mechanism_state.has("retreat_remaining_frames"):
+		_state.mechanism_state.retreat_remaining_frames = 0
 	return result
 
 
 func cancel_action(reason: StringName = &"interrupted") -> Dictionary:
 	if _state.is_empty() or _state.terminal or reason == &"":
 		return _failure("action_unavailable")
-	_state.mechanism_state.retreat_remaining_frames = 0
+	if _state.mechanism_state.has("retreat_remaining_frames"):
+		_state.mechanism_state.retreat_remaining_frames = 0
 	return _action.cancel(reason)
 
 
-func _select_action(frame: int) -> String:
+func _select_action(frame: int, observations: Dictionary) -> String:
 	var current: Dictionary = _action.snapshot()
 	if frame <= int(current.idle_through_frame):
 		return ""
 	for candidate: Dictionary in _definition.actions:
-		if int(current.cooldowns.get(candidate.id, 0)) <= frame:
+		var distance := _vector(observations.source_position).distance_to(_vector(observations.target_position))
+		if int(current.cooldowns.get(candidate.id, 0)) <= frame and distance >= float(candidate.distance_min_px) and distance <= float(candidate.distance_max_px) and Mechanisms.action_available(_definition.runtime_kind, _state.mechanism_state, candidate.id):
 			return candidate.id
 	return ""
 

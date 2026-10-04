@@ -17,6 +17,58 @@
         "active",
         "recovery"
       ]
+    },
+    {
+      "path": "corrosive_moth.png",
+      "sha256": "0cdf5a565a40b02cbae9ec85734d2d3b219787bdbef4d64d9968c87a0a66d62e",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
+    },
+    {
+      "path": "stone_shell_strider.png",
+      "sha256": "f8f4108cfb35babf7abdb723dc1a84dcdab29b6194261d39e49de668d6c0a804",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
+    },
+    {
+      "path": "ruins_wraith.png",
+      "sha256": "532f7f9d0dff16fb75929dc667a3322d13c3380665a6683d73f3ba20d86eab65",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
+    },
+    {
+      "path": "rift_watcher.png",
+      "sha256": "b5c2bc3e393c7598575030042f67a878daa895a44bf886fc3cadc8f113213098",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ]
     }
   ]
 }

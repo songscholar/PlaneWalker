@@ -18,10 +18,14 @@ COLORS = {
     "light": (173, 194, 192, 255),
     "gold": (218, 174, 67, 255),
     "eye": (84, 233, 220, 255),
+    "acid": (165, 222, 77, 255),
+    "wing": (96, 153, 177, 230),
+    "violet": (163, 133, 215, 255),
+    "spirit": (213, 239, 237, 240),
 }
 
 
-def raster() -> bytes:
+def raster(species: str = "shattered_sentinel") -> bytes:
     pixels = bytearray(128 * 32 * 4)
 
     def rect(frame: int, x: int, y: int, w: int, h: int, color: str) -> None:
@@ -33,6 +37,70 @@ def raster() -> bytes:
 
     for frame in range(4):
         shift = -1 if frame == 2 else 1 if frame == 3 else 0
+        if species == "stone_shell_strider":
+            for leg in (5, 12, 21):
+                rect(frame, leg + shift, 21, 5, 6, "outline")
+                rect(frame, leg + shift, 22, 3, 4, "shadow")
+            rect(frame, 3 + shift, 12, 25, 11, "outline")
+            rect(frame, 6 + shift, 7, 19, 15, "outline")
+            rect(frame, 7 + shift, 8, 17, 13, "stone")
+            rect(frame, 9 + shift, 6, 13, 3, "outline")
+            rect(frame, 10 + shift, 7, 11, 2, "light")
+            for plate in (9, 15, 21):
+                rect(frame, plate + shift, 10, 2, 10, "shadow")
+                rect(frame, plate + shift, 10, 1, 6, "gold")
+            rect(frame, 23 + shift, 15, 6, 7, "outline")
+            rect(frame, 24 + shift, 16, 4, 4, "shadow")
+            rect(frame, 27 + shift, 16, 1, 2, "eye")
+            if frame == 1:
+                rect(frame, 4, 10, 2, 5, "gold")
+            if frame == 3:
+                rect(frame, 11, 17, 9, 4, "eye")
+            continue
+        if species == "ruins_wraith":
+            rect(frame, 10 + shift, 4, 12, 18, "outline")
+            rect(frame, 8 + shift, 9, 16, 12, "outline")
+            rect(frame, 11 + shift, 5, 10, 16, "violet")
+            rect(frame, 12 + shift, 8, 8, 8, "spirit")
+            rect(frame, 13 + shift, 11, 2, 2, "outline")
+            rect(frame, 17 + shift, 11, 2, 2, "outline")
+            for trail in (9, 14, 19):
+                rect(frame, trail + shift, 20, 3, 8 - frame, "violet")
+                rect(frame, trail + shift + 1, 21, 1, 5 - frame, "spirit")
+            if frame in (1, 2):
+                rect(frame, 5, 13, 3, 8, "eye")
+                rect(frame, 24, 13, 3, 8, "eye")
+            continue
+        if species == "corrosive_moth":
+            wing_y = 8 if frame in (0, 2) else 11
+            rect(frame, 3, wing_y, 11, 13, "outline")
+            rect(frame, 18, wing_y, 11, 13, "outline")
+            rect(frame, 4, wing_y + 1, 9, 10, "wing")
+            rect(frame, 19, wing_y + 1, 9, 10, "wing")
+            rect(frame, 7, wing_y + 3, 4, 5, "acid")
+            rect(frame, 21, wing_y + 3, 4, 5, "acid")
+            rect(frame, 13, 8, 6, 18, "outline")
+            rect(frame, 14, 9, 4, 15, "gold")
+            rect(frame, 14, 10, 4, 4, "shadow")
+            rect(frame, 14, 11, 1, 1, "eye")
+            rect(frame, 17, 11, 1, 1, "eye")
+            if frame == 2:
+                rect(frame, 14, 25, 4, 4, "acid")
+            continue
+        if species == "rift_watcher":
+            rect(frame, 9, 3 + shift, 14, 25, "outline")
+            rect(frame, 6, 8 + shift, 20, 17, "outline")
+            rect(frame, 10, 4 + shift, 12, 21, "stone")
+            rect(frame, 7, 10 + shift, 18, 9, "gold")
+            rect(frame, 8, 11 + shift, 16, 7, "outline")
+            rect(frame, 10, 12 + shift, 12, 5, "spirit")
+            rect(frame, 15, 11 + shift, 3, 7, "eye")
+            rect(frame, 16, 12 + shift, 1, 5, "outline")
+            rect(frame, 13, 21 + shift, 6, 3, "violet")
+            if frame in (1, 2):
+                rect(frame, 3, 13, 2, 9, "eye")
+                rect(frame, 27, 13, 2, 9, "eye")
+            continue
         # A fractured stone guardian with a large edged shield and luminous eyes.
         rect(frame, 10 + shift, 6, 13, 19, "outline")
         rect(frame, 11 + shift, 7, 11, 17, "shadow")
@@ -69,16 +137,19 @@ def raster() -> bytes:
 
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    data = raster()
-    filename = "shattered_sentinel.png"
-    (OUTPUT / filename).write_bytes(data)
+    assets = []
+    for species in ("shattered_sentinel", "corrosive_moth", "stone_shell_strider", "ruins_wraith", "rift_watcher"):
+        data = raster(species)
+        filename = f"{species}.png"
+        (OUTPUT / filename).write_bytes(data)
+        assets.append({"path": filename, "sha256": hashlib.sha256(data).hexdigest(), "width": 128, "height": 32, "frame_width": 32, "frames": ["idle", "warning", "active", "recovery"]})
     manifest = {
         "schema_version": 1,
         "status": "inactive_p15_work",
         "generator": "tools/generate_launch_enemy_assets.py",
         "provenance": "Original project-authored procedural pixel artwork; no third-party source assets.",
         "license": "CC0-1.0",
-        "assets": [{"path": filename, "sha256": hashlib.sha256(data).hexdigest(), "width": 128, "height": 32, "frame_width": 32, "frames": ["idle", "warning", "active", "recovery"]}],
+        "assets": assets,
     }
     (OUTPUT / "generated_assets.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 

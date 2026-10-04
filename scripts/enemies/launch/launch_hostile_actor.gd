@@ -268,7 +268,23 @@ func clear_damage_vulnerability_source(source_id: StringName) -> bool:
 
 
 func get_damage_taken_multiplier() -> float:
-	return minf(3.0, float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus())
+	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus()) * _launch_runtime.species_damage_taken_multiplier())
+
+
+func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
+	var staged := false
+	if not _launch_definition.is_empty() and damage_info != null and is_finite(final_amount) and final_amount > 0.0:
+		var info: Dictionary = damage_info.snapshot()
+		var frame: int = health.frame_signal_transaction_runtime_frame()
+		if frame < 0:
+			frame = _hostile_runtime_frame()
+		var identity := JSON.stringify([info.run_id, info.target_id, info.hostile_source_id, info.attack_generation, info.hit_index])
+		var result: Dictionary = _launch_runtime.accept_damage_fact({"fact_id": identity.sha256_text(), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": final_amount, "hp_after": health.current_hp})
+		staged = result.ok
+		if result.ok and _hostile_threat_registry != null:
+			for generation: int in result.retired_generations:
+				_hostile_threat_registry.retire(hostile_source_id, generation)
+	return super.apply_weapon_hit_control(damage_info, final_amount) or staged
 
 
 func cancel_active_attack() -> void:

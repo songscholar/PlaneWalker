@@ -245,6 +245,10 @@ func frame_signal_transaction_is_active() -> bool:
 	return not _active_frame_signal_transaction.is_empty()
 
 
+func frame_signal_transaction_runtime_frame() -> int:
+	return int((_active_frame_signal_transaction.get("ticket", {}) as Dictionary).get("runtime_frame", -1))
+
+
 func _frame_signal_publication_matches(publication: Dictionary) -> bool:
 	if (
 		_prepared_frame_signal_publication.is_empty()
