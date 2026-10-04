@@ -1,9 +1,11 @@
 # P16B Authoritative Hub Content Evidence
 
 - Status: Focused content boundary GREEN; production activation pending
+- Document Role: P16B focused content verification evidence
 - Authority Level: Evidence beneath the approved P16 specification
 - Applies To: Five P16 catalogs, closed JSON schemas, bilingual source catalogs, and Python contracts
 - Owner: Project integration lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p16-hub-meta-narrative-design.md`, `docs/superpowers/plans/2026-10-04-plane-walker-p16-hub-meta-narrative.md`
 - Last Verified: 2026-10-04
 
 ## Authored content
