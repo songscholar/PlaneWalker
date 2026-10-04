@@ -13,6 +13,13 @@ const EventModifierLifetimeScript := preload("res://scripts/events/event_modifie
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const PLAYER_REWARD_BASELINE := "player_reward_run_start_baseline"
 const MetaCatalog := preload("res://scripts/progression/meta_progression_catalog.gd")
+const MetaProjectionScript := preload("res://scripts/progression/meta_run_projection.gd")
+const MetaFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
+const META_RESOURCE_FIELDS := ["meta_run_projection", "meta_floor_entrances"]
+const RUN_BUILD_FIELDS: Array[String] = [
+	"items", "blessings", "curses", "talents", "reward_history",
+	"archetypes", "dominant_archetype",
+]
 
 const REWARD_REPLAY_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -304,6 +311,41 @@ func bind_player_reward_baseline(value: Dictionary) -> bool:
 	return true
 
 
+func bind_meta_run_projection(value: Dictionary, catalog: RefCounted) -> bool:
+	if not is_launch_floor_mode() or phase != RunPhaseScript.Value.RUN_PREPARING or not MetaProjectionScript.validate(value, catalog):
+		return false
+	if resources.has("meta_run_projection"):
+		return resources.meta_run_projection == value
+	resources["meta_run_projection"] = value.duplicate(true)
+	resources["meta_floor_entrances"] = []
+	return true
+
+
+func commit_meta_floor_entrance(before_current: float, maximum: float, after_current: float) -> bool:
+	if not is_launch_floor_mode() or suspended or phase != RunPhaseScript.Value.ROOM_ACTIVE or current_floor_index < 0 or not resources.get("meta_run_projection") is Dictionary:
+		return false
+	if floor_plan.get("current_node_id") != floor_plan.get("entry_node_id"):
+		return false
+	var entries: Array = resources.get("meta_floor_entrances", [])
+	if entries.has(current_floor_index) or not MetaProjectionScript.validate_floor_entries(entries, current_floor_index):
+		return false
+	var health: Dictionary = resources.get("health", {})
+	if not is_finite(before_current) or not is_finite(maximum) or not is_finite(after_current) or before_current <= 0.0 or maximum <= 0.0 or before_current > maximum or float(health.get("current", -1.0)) != before_current or float(health.get("maximum", -1.0)) != maximum:
+		return false
+	var ratio := float(resources.meta_run_projection.stat_bonuses.entrance_healing)
+	if not is_equal_approx(after_current, minf(maximum, before_current + maximum * ratio)) or not observe_player_health(after_current, maximum):
+		return false
+	resources["meta_floor_entrances"] = range(current_floor_index + 1)
+	return true
+
+
+func _meta_resources_valid(bundle: Dictionary, floor_index: int) -> bool:
+	if not bundle.has("meta_run_projection"):
+		return not bundle.has("meta_floor_entrances")
+	var loaded: Dictionary = MetaFactoryScript.load_base()
+	return loaded.ok and MetaProjectionScript.validate_run_resources(bundle, floor_index, loaded.context.catalog)
+
+
 func apply_reward_definition(definition: Dictionary) -> Dictionary:
 	var before_build: Dictionary = build_state.transaction_snapshot()
 	var before_event_runtime := dungeon_event_runtime.duplicate(true)
@@ -484,6 +526,9 @@ func initialize_launch_event_state(runtime_snapshot: Dictionary) -> bool:
 	}
 	if resources.has(PLAYER_REWARD_BASELINE):
 		candidate_resources[PLAYER_REWARD_BASELINE] = resources[PLAYER_REWARD_BASELINE].duplicate(true)
+	for field: String in META_RESOURCE_FIELDS:
+		if resources.has(field):
+			candidate_resources[field] = resources[field].duplicate(true)
 	if not _event_candidate_matches_domains(
 		runtime_snapshot,
 		run_economy,
@@ -537,9 +582,14 @@ func commit_event_transaction_state(candidate: Dictionary) -> bool:
 	run_economy = economy_value.duplicate(true)
 	floor_plan = floor_value.duplicate(true)
 	var baseline: Dictionary = resources.get(PLAYER_REWARD_BASELINE, {}).duplicate(true)
+	var retained_meta := {}
+	for field: String in META_RESOURCE_FIELDS:
+		if resources.has(field):
+			retained_meta[field] = resources[field].duplicate(true)
 	resources = resources_value.duplicate(true)
 	if not baseline.is_empty():
 		resources[PLAYER_REWARD_BASELINE] = baseline
+	resources.merge(retained_meta, true)
 	seen_event_ids = _event_seen_ids(runtime_value)
 	if build_state.transaction_snapshot() != build_value:
 		build_state.restore_transaction_snapshot(before_build)
@@ -924,16 +974,15 @@ func restore_launch_run_snapshot(
 	):
 		return false
 	var consumed_values := value.get("consumed_offer_ids", []) as Array
+	if not _meta_resources_valid(value.resources, int(value.get("current_floor_index", -1))):
+		return false
 	if not _is_unique_string_array(consumed_values):
 		return false
 	var target_build: Dictionary = build_state.transaction_snapshot()
 	var build_value := value.get("build", {}) as Dictionary
-	for field: String in [
-		"items", "blessings", "curses", "talents", "reward_history",
-		"archetypes", "dominant_archetype",
-	]:
-		if not build_value.has(field):
-			return false
+	if not _has_exact_fields(build_value, RUN_BUILD_FIELDS):
+		return false
+	for field: String in RUN_BUILD_FIELDS:
 		var field_value: Variant = build_value[field]
 		target_build[field] = (
 			field_value.duplicate(true)
@@ -941,6 +990,11 @@ func restore_launch_run_snapshot(
 			else field_value
 		)
 	if not build_state.can_restore_transaction_snapshot(target_build):
+		return false
+	if not value.get("dungeon_event_runtime", {}).is_empty() and not _event_candidate_matches_domains(
+		value.dungeon_event_runtime, value.run_economy, value.floor_plan,
+		value.resources, target_build, true, floor_definition, room_templates
+	):
 		return false
 	var floor_value: Dictionary = {
 		"schema_version": 1,
@@ -969,6 +1023,11 @@ func restore_launch_run_snapshot(
 	}
 	var before_floor: Dictionary = floor_transaction_snapshot()
 	var before_build: Dictionary = build_state.transaction_snapshot()
+	var before_time := run_time_ms
+	var before_time_fraction := _run_time_fraction_ms
+	var before_resources := resources.duplicate(true)
+	var before_stats := stats.duplicate(true)
+	var before_consumed := consumed_offer_ids.duplicate(true)
 	if not build_state.restore_transaction_snapshot(target_build):
 		return false
 	if not can_restore_floor_transaction_snapshot(floor_value):
@@ -976,6 +1035,7 @@ func restore_launch_run_snapshot(
 		return false
 	if not restore_floor_transaction_snapshot(floor_value):
 		build_state.restore_transaction_snapshot(before_build)
+		restore_floor_transaction_snapshot(before_floor)
 		return false
 	run_time_ms = int(value["run_time_ms"])
 	_run_time_fraction_ms = 0.0
@@ -991,6 +1051,11 @@ func restore_launch_run_snapshot(
 		return true
 	build_state.restore_transaction_snapshot(before_build)
 	restore_floor_transaction_snapshot(before_floor)
+	run_time_ms = before_time
+	_run_time_fraction_ms = before_time_fraction
+	resources = before_resources
+	stats = before_stats
+	consumed_offer_ids = before_consumed
 	return false
 
 
@@ -1173,6 +1238,15 @@ func _event_candidate_matches_domains(
 ) -> bool:
 	var parts := _event_runtime_parts(runtime_snapshot)
 	var expected_resource_fields := EVENT_RESOURCE_BUNDLE_FIELDS.duplicate()
+	if resource_bundle.has("meta_floor_entrances") and not resource_bundle.has("meta_run_projection"):
+		return false
+	for field: String in META_RESOURCE_FIELDS:
+		if resource_bundle.has(field):
+			expected_resource_fields.append(field)
+			if not allow_uninitialized and resource_bundle[field] != resources.get(field):
+				return false
+	if resource_bundle.has("meta_run_projection") and allow_uninitialized and not _meta_resources_valid(resource_bundle, int(plan_snapshot.get("floor_index", -1))):
+		return false
 	if resource_bundle.has(PLAYER_REWARD_BASELINE):
 		expected_resource_fields.append(PLAYER_REWARD_BASELINE)
 		if not resource_bundle[PLAYER_REWARD_BASELINE] is Dictionary or not ReplayRecorderScript.validate_full_player_reward_effect_state(resource_bundle[PLAYER_REWARD_BASELINE]):

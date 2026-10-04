@@ -6,6 +6,8 @@ const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
 const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunLoadoutPolicyScript := preload("res://scripts/application/run_loadout_policy.gd")
+const MetaCatalogFactory := preload("res://scripts/progression/meta_catalog_factory.gd")
+const MetaRunProjectionScript := preload("res://scripts/progression/meta_run_projection.gd")
 const RunRewardReplaySealScript := preload(
 	"res://scripts/application/run_reward_replay_seal.gd"
 )
@@ -201,7 +203,13 @@ func boot(
 	return hub_result
 
 
-func start_run(config: Dictionary, run_id: String):
+func start_meta_run(config: Dictionary, run_id: String, projection: Dictionary):
+	if projection.is_empty():
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "meta_run_projection"})
+	return start_run(config, run_id, projection)
+
+
+func start_run(config: Dictionary, run_id: String, meta_projection: Dictionary = {}):
 	var readiness = _require_booted("start_run")
 	if not readiness.ok:
 		return readiness
@@ -213,6 +221,12 @@ func start_run(config: Dictionary, run_id: String):
 			_revision(),
 			config_validation.context
 		)
+	var meta_catalog: RefCounted = null
+	if not meta_projection.is_empty():
+		var loaded: Dictionary = MetaCatalogFactory.load_base()
+		if not _is_floor_plan_milestone(str(normalized.milestone)) or not loaded.ok or not MetaRunProjectionScript.validate(meta_projection, loaded.context.catalog):
+			return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "meta_run_projection"})
+		meta_catalog = loaded.context.catalog
 	var loadout_validation = RunLoadoutPolicyScript.new().validate(normalized, _registry)
 	if not loadout_validation.ok:
 		return CommandResultScript.failure(
@@ -251,6 +265,9 @@ func start_run(config: Dictionary, run_id: String):
 	if not started.ok:
 		candidate_director.free()
 		return CommandResultScript.failure(started.code, _revision(), started.context)
+	if meta_catalog != null and not candidate_orchestrator.bind_meta_run_projection(meta_projection, meta_catalog):
+		candidate_director.free()
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "meta_run_projection"})
 
 	var accepted_result = started
 	var candidate_rooms: Array[Dictionary] = []
@@ -1322,6 +1339,10 @@ func active_loadout() -> Dictionary:
 	return _accepted_loadout.duplicate(true)
 
 
+func native_run_state() -> RefCounted:
+	return _orchestrator.native_run_state() if _orchestrator != null else null
+
+
 func current_room_definition() -> Dictionary:
 	if not _booted or _orchestrator == null:
 		return {}
@@ -1761,6 +1782,38 @@ func _physical_health() -> Dictionary:
 	if not value is Dictionary or not value.get("health") is Dictionary:
 		return {}
 	return (value["health"] as Dictionary).duplicate(true)
+
+
+func apply_meta_floor_entrance(player: Node) -> Dictionary:
+	var before: Dictionary = snapshot()
+	var projection: Dictionary = before.get("resources", {}).get("meta_run_projection", {})
+	if projection.is_empty():
+		return {"ok": true, "code": &"OK", "context": {"applied": false}}
+	if player == null or not is_instance_valid(player) or player != _merchant_player or not player.has_method("meta_run_projection_snapshot") or player.call("meta_run_projection_snapshot") != projection or str(player.call("current_run_id")) != str(before.run_id) or not _route_transactions.is_empty():
+		return {"ok": false, "code": &"PLAYER_IDENTITY_INVALID", "context": {}}
+	var floor_index := int(before.current_floor_index)
+	if (before.resources.get("meta_floor_entrances", []) as Array).has(floor_index):
+		return {"ok": true, "code": &"OK", "context": {"applied": false}}
+	if not _sync_player_health_observation():
+		return {"ok": false, "code": &"HEALTH_SYNC_FAILED", "context": {}}
+	before = snapshot()
+	var physical_before: Dictionary = player.call("reward_effect_snapshot")
+	var physical_after := physical_before.duplicate(true)
+	var current := float(physical_before.health.current_hp)
+	var maximum := float(physical_before.health.max_hp)
+	physical_after.health.current_hp = minf(maximum, current + maximum * float(projection.stat_bonuses.entrance_healing))
+	if not bool(player.call("restore_reward_effect_snapshot", physical_after, false)):
+		return {"ok": false, "code": &"COMMIT_FAILED", "context": {}}
+	var committed = _orchestrator.commit_meta_floor_entrance(current, maximum, float(physical_after.health.current_hp), int(before.revision))
+	if not committed.ok or not _refresh_event_runtime_from_state():
+		var domain_restored: bool = _orchestrator.restore_launch_run_snapshot(before, _floor_definitions[floor_index], _room_templates)
+		var physical_restored := bool(player.call("restore_reward_effect_snapshot", physical_before, false))
+		var event_restored := _refresh_event_runtime_from_state()
+		return {"ok": false, "code": &"COMMIT_FAILED" if domain_restored and physical_restored and event_restored else &"INTEGRITY_FAILURE", "context": {}}
+	var healed := float(physical_after.health.current_hp) - current
+	if healed > 0.0:
+		player.get_node("HealthComponent").emit_signal("healed", healed, float(physical_after.health.current_hp))
+	return {"ok": true, "code": &"OK", "context": {"applied": true, "healed": healed, "revision": committed.new_revision}}
 
 
 func _sync_player_event_modifiers() -> bool:

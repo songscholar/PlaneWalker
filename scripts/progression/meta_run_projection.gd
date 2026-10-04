@@ -61,6 +61,21 @@ static func validate_combined(value: Dictionary, character_bonuses: Dictionary, 
 	return true
 
 
+static func validate_floor_entries(value: Variant, floor_index: int) -> bool:
+	if floor_index < -1 or floor_index > 4 or not value is Array or value.size() > floor_index + 1:
+		return false
+	for index: int in range(value.size()):
+		if not Catalog.bounded_int(value[index], index, index):
+			return false
+	return true
+
+
+static func validate_run_resources(bundle: Dictionary, floor_index: int, catalog: RefCounted) -> bool:
+	if not bundle.has("meta_run_projection"):
+		return not bundle.has("meta_floor_entrances")
+	return bundle.meta_run_projection is Dictionary and validate(bundle.meta_run_projection, catalog) and validate_floor_entries(bundle.get("meta_floor_entrances", []), floor_index)
+
+
 static func digest(value: Dictionary) -> String:
 	var unsigned := value.duplicate(true)
 	unsigned.erase("projection_digest")

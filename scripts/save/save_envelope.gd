@@ -2,6 +2,8 @@ class_name SaveEnvelope
 extends RefCounted
 
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
+const MetaProjectionScript := preload("res://scripts/progression/meta_run_projection.gd")
+const MetaFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
 const SavePathPolicyScript := preload("res://scripts/save/save_path_policy.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const EffectHandlerCatalogScript := preload("res://scripts/content/effects/effect_handler_catalog.gd")
@@ -562,7 +564,7 @@ static func _normalize_persisted_integer_fields(
 	value: Variant, parent_field: String, effect_catalog: RefCounted
 ) -> Variant:
 	const INTEGER_FIELDS: Array[String] = [
-		"schema_version", "profile_version", "generation", "next_token",
+		"schema_version", "profile_version", "profile_revision", "generation", "next_token",
 		"current_frame", "cooldown_end_frame", "token", "runtime_frame",
 		"activated_at_frame", "expires_at_frame", "resource_revision",
 		"invulnerability_token",
@@ -587,6 +589,7 @@ static func _normalize_persisted_integer_fields(
 		"after_room_sequence",
 	]
 	const INTEGER_ARRAY_FIELDS: Array[String] = [
+		"meta_floor_entrances",
 		"reward_invulnerability_tokens", "claimed_rewind_generations",
 		"reward_eligible_tokens", "reward_claimed_tokens", "settled_floor_indices",
 	]
@@ -690,6 +693,10 @@ static func _active_run_state_error(
 		return consumed_error
 	if typeof(run["current_floor_index"]) != TYPE_INT:
 		return _run_error("current_floor_index", "type")
+	if run.resources.has("meta_run_projection") or run.resources.has("meta_floor_entrances"):
+		var loaded: Dictionary = MetaFactoryScript.load_base()
+		if not loaded.ok or not MetaProjectionScript.validate_run_resources(run.resources, int(run.current_floor_index), loaded.context.catalog):
+			return _run_error("resources.meta_run_projection", "invalid")
 	var completed_error := _stable_unique_string_array_error(
 		run["completed_floor_ids"], "completed_floor_ids"
 	)
@@ -951,6 +958,8 @@ static func _dungeon_event_runtime_error(run: Dictionary) -> Dictionary:
 	}
 	var event_resources: Dictionary = run["resources"].duplicate(true)
 	event_resources.erase("player_reward_run_start_baseline")
+	event_resources.erase("meta_run_projection")
+	event_resources.erase("meta_floor_entrances")
 	if (
 		run["run_economy"] != economy_snapshot
 		or run["floor_plan"] != route_snapshot["plan"]

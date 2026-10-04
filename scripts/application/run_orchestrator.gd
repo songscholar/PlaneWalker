@@ -70,8 +70,25 @@ func bind_player_reward_baseline(value: Dictionary) -> bool:
 	return _state.bind_player_reward_baseline(value.duplicate(true))
 
 
+func bind_meta_run_projection(value: Dictionary, catalog: RefCounted) -> bool:
+	return _pending_route_transition.is_empty() and _state.bind_meta_run_projection(value, catalog)
+
+
+func commit_meta_floor_entrance(before_current: float, maximum: float, after_current: float, expected_revision: int):
+	var validation = _validate_expected_revision(expected_revision)
+	if not validation.ok:
+		return validation
+	if not _pending_route_transition.is_empty() or not _state.commit_meta_floor_entrance(before_current, maximum, after_current):
+		return CommandResultScript.failure(&"INVALID_PHASE", _state.revision, {"operation": "meta_floor_entrance"})
+	return CommandResultScript.success(_state.advance_revision())
+
+
 func reward_build_participant() -> Object:
 	return _state.build_state
+
+
+func native_run_state() -> RefCounted:
+	return _state
 
 
 func restore_launch_run_snapshot(
