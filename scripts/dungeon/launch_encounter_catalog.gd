@@ -32,7 +32,7 @@ func configure(registry: RefCounted) -> Dictionary:
 	if registry == null or not registry.has_method("get_by_category") or not registry.has_method("get_content"):
 		return _failure("registry", "unsupported")
 	for category: String in ["enemy_definition", "boss_definition", "elite_affix_definition", "launch_encounter_profile"]:
-		var rows: Variant = registry.get_by_category(StringName(category), &"LAUNCH")
+		var rows: Variant = registry.get_catalog_entries(StringName(category), &"LAUNCH") if registry.has_method("get_catalog_entries") else registry.get_by_category(StringName(category), &"LAUNCH")
 		if not rows is Array:
 			return _failure(category, "invalid_collection")
 		var expected: Array = Ids.enemy_ids() if category == "enemy_definition" else (Ids.BOSS_IDS if category == "boss_definition" else (Ids.AFFIX_IDS if category == "elite_affix_definition" else Ids.PROFILE_IDS))
@@ -64,6 +64,9 @@ func configure(registry: RefCounted) -> Dictionary:
 				var template: Variant = registry.get_content(StringName(template_id))
 				if not template is Dictionary:
 					return _failure("template_id", "dangling_or_wrong_type")
+				if registry.has_method("get_catalog_entries"):
+					template.erase("pack_id")
+					template.erase("pack_version")
 				var room_result := Room.new().configure(template)
 				if not room_result.ok or template.room_type != recipe.room_type or not template.floor_ids.has(profile.floor_id):
 					return _failure("template_id", "incompatible_definition")

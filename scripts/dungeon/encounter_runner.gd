@@ -8,6 +8,9 @@ signal spawn_rejected(spawn_definition: Dictionary, reason: StringName)
 signal encounter_completed(encounter_id: StringName)
 signal encounter_failed(encounter_id: StringName, reason: StringName, context: Dictionary)
 
+const NativeLaunchDriver := preload("res://scripts/dungeon/native_launch_encounter_driver.gd")
+
+var _native_launch_driver: Node
 var _enemies_root: Node
 var _encounter: Dictionary = {}
 var _generation: int = 0
@@ -25,6 +28,30 @@ func configure(enemies_root: Node) -> void:
 	_enemies_root = enemies_root
 
 
+func configure_native_launch(controller: Node2D, facade: RefCounted, player: Node2D, scene_resolver: Callable) -> bool:
+	if _native_launch_driver == null:
+		_native_launch_driver = NativeLaunchDriver.new()
+		_native_launch_driver.name = "NativeLaunchEncounterDriver"
+		add_child(_native_launch_driver)
+	return _native_launch_driver.configure(self, controller, facade, player, scene_resolver)
+
+
+func native_launch_snapshot() -> Dictionary:
+	return _native_launch_driver.snapshot() if _native_launch_driver != null else {}
+
+
+func native_launch_scene() -> Node2D:
+	return _native_launch_driver.native_scene() if _native_launch_driver != null else null
+
+
+func spawn_native_actor(spawn: Dictionary) -> bool:
+	return _native_launch_driver != null and _native_launch_driver.spawn_actor(spawn)
+
+
+func _has_native_state() -> bool:
+	return _native_launch_driver != null and _native_launch_driver.has_native_state()
+
+
 func set_timing_override(seconds: float = -1.0) -> void:
 	_timing_override_seconds = seconds if seconds >= 0.0 else -1.0
 
@@ -33,6 +60,11 @@ func start_encounter(encounter: Dictionary, _run_seed: int, _room_number: int) -
 	cancel()
 	_generation += 1
 	_encounter = encounter.duplicate(true)
+	if encounter.has("recipe_id") and encounter.has("floor_id"):
+		if _native_launch_driver == null or not _native_launch_driver.start(encounter, _run_seed, _generation):
+			if _native_launch_driver == null:
+				_fail_encounter(&"NATIVE_LAUNCH_BINDING_INVALID", {})
+		return
 	_wave_index = -1
 	_active = not _encounter.is_empty()
 	if not _active:
@@ -42,6 +74,8 @@ func start_encounter(encounter: Dictionary, _run_seed: int, _room_number: int) -
 
 
 func cancel() -> void:
+	if _native_launch_driver != null:
+		_native_launch_driver.cancel()
 	_cancel_phase_timer()
 	_generation += 1
 	_active = false
@@ -75,6 +109,8 @@ func register_spawned(entity: Node, spawn_definition: Dictionary = {}) -> bool:
 
 
 func reject_spawn(spawn_definition: Dictionary, reason: StringName) -> bool:
+	if _has_native_state():
+		return _native_launch_driver.reject_spawn(spawn_definition, reason)
 	if not _active:
 		return false
 	var spawn_id := str(spawn_definition.get("id", ""))
@@ -101,18 +137,26 @@ func notify_entity_defeated(entity: Node) -> bool:
 
 
 func alive_count() -> int:
+	if _has_native_state():
+		return int(_native_launch_driver.legacy_snapshot().alive_count)
 	return _alive_instance_ids.size()
 
 
 func current_wave_index() -> int:
+	if _has_native_state():
+		return int(_native_launch_driver.legacy_snapshot().wave_index)
 	return _wave_index
 
 
 func is_active() -> bool:
+	if _has_native_state():
+		return _native_launch_driver.is_active()
 	return _active
 
 
 func snapshot() -> Dictionary:
+	if _has_native_state():
+		return _native_launch_driver.legacy_snapshot()
 	return {
 		"encounter_id": str(_encounter.get("id", "")),
 		"wave_index": _wave_index,

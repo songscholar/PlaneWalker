@@ -13,6 +13,7 @@ const RunRewardReplaySealScript := preload(
 )
 const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const EncounterCatalogScript := preload("res://scripts/dungeon/encounter_catalog.gd")
+const LaunchEncounterCatalogScript := preload("res://scripts/dungeon/launch_encounter_catalog.gd")
 const M1RoomPlanScript := preload("res://scripts/dungeon/m1_room_plan.gd")
 const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
@@ -92,6 +93,7 @@ const DEFAULT_ENCOUNTER_PATH := "res://data/encounters/m1_encounters.json"
 
 var _registry: RefCounted
 var _encounter_catalog: RefCounted
+var _launch_encounter_catalog: RefCounted
 var _draft: RefCounted
 var _orchestrator: RefCounted
 var _room_definitions: Array[Dictionary] = []
@@ -140,6 +142,7 @@ func boot(
 	_booted = false
 	_registry = ContentRegistryScript.new()
 	_encounter_catalog = EncounterCatalogScript.new()
+	_launch_encounter_catalog = null
 	_draft = DraftServiceScript.new()
 	_orchestrator = RunOrchestratorScript.new()
 	_room_definitions.clear()
@@ -1388,7 +1391,18 @@ func current_encounter_definition() -> Dictionary:
 		var encounter_id := str(room.get("encounter_id", ""))
 		if encounter_id.is_empty():
 			return {}
-		return _encounter_catalog.encounter_definition(
+		if _launch_encounter_catalog == null:
+			return {}
+		var room_type := str(room.get("type", "combat"))
+		if room_type in ["combat", "elite"]:
+			return _launch_encounter_catalog.resolve_for_node(
+				encounter_id,
+				int(_orchestrator.snapshot().get("run_seed", 0)),
+				str(room.get("node_id", "")),
+				room_type,
+				str(room.get("template", {}).get("id", ""))
+			)
+		return _launch_encounter_catalog.encounter_definition(
 			encounter_id,
 			int(_orchestrator.snapshot().get("run_seed", 0)),
 			int(room.get("room_number", 0)),
@@ -1724,7 +1738,7 @@ func room_plan() -> Array[Dictionary]:
 
 
 func encounter_catalog() -> RefCounted:
-	return _encounter_catalog
+	return _launch_encounter_catalog if _is_floor_plan_run() else _encounter_catalog
 
 
 func content_registry() -> RefCounted:
@@ -1737,7 +1751,7 @@ func create_room_runtime(encounter_runner: Node) -> Node:
 	var runtime := RoomRuntimeScript.new()
 	runtime.configure(
 		self,
-		_encounter_catalog,
+		encounter_catalog(),
 		room_plan(),
 		int(_orchestrator.snapshot().get("run_seed", 0)),
 		encounter_runner
@@ -3387,6 +3401,10 @@ func _revision() -> int:
 
 
 func _configure_launch_content(milestone: StringName):
+	var launch_catalog := LaunchEncounterCatalogScript.new()
+	var encounter_report: Dictionary = launch_catalog.configure(_registry)
+	if not encounter_report.ok:
+		return CommandResultScript.failure(&"CONTENT_NOT_AVAILABLE", _revision(), {"category": "launch_encounter", "detail": encounter_report.context})
 	var canonical_floors: Array[Dictionary] = []
 	var canonical_templates: Array[Dictionary] = []
 	var canonical_merchants: Array[Dictionary] = []
@@ -3504,6 +3522,7 @@ func _configure_launch_content(milestone: StringName):
 			}
 		)
 	_floor_definitions = canonical_floors.duplicate(true)
+	_launch_encounter_catalog = launch_catalog
 	_room_templates = canonical_templates.duplicate(true)
 	_economy_profile = economy_profile.duplicate(true)
 	_merchant_definitions = canonical_merchants.duplicate(true)

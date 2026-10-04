@@ -11,7 +11,7 @@ const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elem
 
 signal hostile_final_death(source_id: StringName, receipt_id: String)
 
-var _launch_runtime: RefCounted = LaunchRuntime.new()
+var _launch_runtime: RefCounted = _create_launch_runtime()
 var _launch_definition: Dictionary = {}
 var _launch_identity: Dictionary = {}
 var _prepared_launch_frame: Dictionary = {}
@@ -26,7 +26,15 @@ var _motion_room_local_bounds := Rect2()
 
 
 func _init() -> void:
-	elemental_status_runtime = LaunchStatus.new()
+	elemental_status_runtime = _create_launch_status_runtime()
+
+
+func _create_launch_runtime() -> RefCounted:
+	return LaunchRuntime.new()
+
+
+func _create_launch_status_runtime() -> RefCounted:
+	return LaunchStatus.new()
 
 
 func _ready() -> void:
@@ -46,7 +54,7 @@ func owns_actor_presentation() -> bool:
 func configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary:
 	if not _prepared_launch_frame.is_empty() or health == null or not _room_motion.is_empty():
 		return _launch_failure("not_ready_or_busy")
-	var candidate: RefCounted = LaunchRuntime.new()
+	var candidate: RefCounted = _create_launch_runtime()
 	var configured: Dictionary = candidate.configure(definition, context)
 	if not configured.ok:
 		return configured
@@ -121,11 +129,11 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if not Contract.exact_fields(observations, HostileActionCoordinator.CONTEXT_FIELDS) or not Contract.valid_point(observations.source_position) or not _vector(observations.source_position).is_equal_approx(global_position):
 		return _launch_failure("source_position")
 	var before := _actor_state()
-	var preview: RefCounted = LaunchRuntime.new()
+	var preview: RefCounted = _create_launch_runtime()
 	preview.configure(_launch_definition, _launch_identity)
 	if not preview.restore_snapshot(before.runtime):
 		return _launch_failure("runtime_checkpoint")
-	var status_preview: RefCounted = LaunchStatus.new()
+	var status_preview: RefCounted = _create_launch_status_runtime()
 	if not status_preview.restore_transaction_snapshot(before.status):
 		return _launch_failure("status_checkpoint")
 	var next_credit := _action_credit
@@ -392,7 +400,7 @@ func _on_damaged(_amount: float, _current_hp: float) -> void:
 
 
 func _on_died(_killer: Variant) -> void:
-	if not _death_receipt.is_empty():
+	if not is_instance_valid(health) or not health.dead or health.current_hp > 0.0 or not _death_receipt.is_empty():
 		return
 	cancel_active_attack()
 	_launch_runtime.cancel(&"death")

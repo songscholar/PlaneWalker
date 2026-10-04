@@ -351,6 +351,8 @@ func restore_profile_checkpoint(service: RefCounted, expected_revision: int) -> 
 	_player.process_mode = Node.PROCESS_MODE_DISABLED if _selection_safety_active or RunPhaseScript.is_terminal(int(saved.phase)) else _player_process_mode
 	_room_controller.process_mode = Node.PROCESS_MODE_DISABLED if _selection_safety_active or RunPhaseScript.is_terminal(int(saved.phase)) else _room_controller_process_mode
 	_room_controller.configure_hostile_threat_authority(hostile_identity_scope(StringName(saved.run_id)), _hostile_threat_registry)
+	if not _configure_native_encounter_runner(runner, candidate):
+		_profile_publication_pending = true
 	if not _room_controller.configure_checkpoint_runtime(runtime, candidate.encounter_catalog()):
 		_profile_publication_pending = true
 	_connect_room_runtime()
@@ -548,6 +550,8 @@ func start_run(config: Dictionary, profile_launch: Dictionary = {}) -> Variant:
 	))
 	if not configured:
 		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"configured": false})
+	if not _configure_native_encounter_runner(runner_value, _facade):
+		return _fail_start(&"AUTHORED_RUNTIME_CONFIGURATION_FAILED", {"native_launch_driver": false})
 	_connect_room_runtime()
 	if _is_floor_plan_snapshot(accepted_snapshot):
 		if not _settle_floor_entrance():
@@ -2002,6 +2006,19 @@ func _rollback_room_runtime_entry() -> bool:
 		return false
 	_connect_room_runtime()
 	return true
+
+
+func _configure_native_encounter_runner(runner: Node, facade: RefCounted) -> bool:
+	if not _is_floor_plan_snapshot(facade.snapshot()):
+		return true
+	return runner.configure_native_launch(_room_controller, facade, _player, Callable(self, "_native_launch_room_scene"))
+
+
+func _native_launch_room_scene() -> Node2D:
+	if not _route_scene_adapter is Object or not _route_scene_adapter.has_method("active_room"):
+		return null
+	var scene: Variant = _route_scene_adapter.active_room()
+	return scene as Node2D
 
 
 func _floor_rule_configuration_for_scene(prepared: Dictionary) -> Dictionary:

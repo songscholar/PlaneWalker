@@ -429,6 +429,8 @@ func _on_encounter_completed(encounter_id: StringName) -> void:
 		})
 		return
 	var expected := str(_current_room.get("encounter_id", ""))
+	if str(_current_room.get("runtime_mode", "")) == "launch" and _facade.has_method("current_encounter_definition"):
+		expected = str(_facade.current_encounter_definition().get("id", ""))
 	if not expected.is_empty() and str(encounter_id) != expected:
 		return
 	_complete_current_room()

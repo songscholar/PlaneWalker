@@ -302,12 +302,17 @@ func _on_authored_spawn_warning(spawn_definition: Dictionary, duration: float) -
 	if marker == null:
 		return
 	var radius := 44.0 if str(spawn_definition.get("enemy_id", "")) == "chrono_warden" else 24.0
-	_show_spawn_warning(marker.global_position, radius, duration)
+	var offset: Dictionary = spawn_definition.get("spawn_offset", {})
+	_show_spawn_warning(marker.global_position + Vector2(float(offset.get("x", 0.0)), float(offset.get("y", 0.0))), radius, duration)
 
 
 func _on_authored_spawn_requested(spawn_definition: Dictionary) -> void:
 	if not _authored_runtime_enabled or _encounter_catalog == null or _room_runtime == null:
 		_reject_authored_spawn(spawn_definition, &"AUTHORED_RUNTIME_UNAVAILABLE")
+		return
+	if not _encounter_runner.native_launch_snapshot().is_empty():
+		if not _encounter_runner.spawn_native_actor(spawn_definition):
+			_reject_authored_spawn(spawn_definition, &"NATIVE_SPAWN_REGISTRATION_REJECTED")
 		return
 	var enemy_id := str(spawn_definition.get("enemy_id", ""))
 	var enemy_definition: Dictionary = _encounter_catalog.call("enemy_definition", enemy_id)
@@ -398,6 +403,9 @@ func _spawn_marker_for(spawn_definition: Dictionary) -> Node2D:
 		str(spawn_definition.get("spawn_slot_id", ""))
 	)
 	var node_path := NodePath(str(slot.get("node_path", "")))
+	var native_scene: Node2D = _encounter_runner.native_launch_scene()
+	if native_scene != null:
+		return native_scene.get_node_or_null(node_path) as Node2D
 	return get_node_or_null(node_path) as Node2D
 
 
