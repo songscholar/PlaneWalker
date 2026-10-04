@@ -488,6 +488,14 @@ static func _profile_payload_error(
 	return {}
 
 
+static func validate_active_run_snapshot(value: Dictionary):
+	var normalized: Dictionary = _normalize_profile_payload({"active_run_state": value}, 3)["active_run_state"]
+	var error := _active_run_state_error(normalized)
+	if not error.is_empty():
+		return _invalid_create(str(error["field"]), str(error["reason"]), error.get("value"))
+	return SaveResultScript.success(normalized)
+
+
 static func _normalize_profile_payload(payload: Dictionary, schema_version: int) -> Dictionary:
 	var normalized := payload.duplicate(true)
 	if schema_version < 2:

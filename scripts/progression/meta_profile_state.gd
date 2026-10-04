@@ -9,6 +9,7 @@ const NARRATIVE_FIELDS := ["flags", "artifacts", "environment_records", "hidden_
 const TUTORIAL_FIELDS := ["completed_lessons", "skipped_lessons", "seen_hints", "suppressed", "guided_runs_completed"]
 const STATISTIC_FIELDS := ["finished_runs", "victories", "deaths", "abandons"]
 const MAX_HISTORY := 4096
+const RESERVED_COMMAND_PREFIXES := ["forge-enchant-unlock:", "legacy-stat:", "training-claim:", "narrative-source:"]
 
 var _catalog: RefCounted
 var _state: Dictionary = {}
@@ -59,6 +60,9 @@ func prepare_command(command: Dictionary, expected_revision: int) -> Dictionary:
 		return _failure(&"STALE_REVISION", {"revision": _state.revision})
 	if not Catalog.exact_fields(command, ["command_id", "kind", "node_id"]) or command.kind != "meta_unlock" or not Catalog.stable_id(command.command_id) or not command.node_id is String:
 		return _failure(&"COMMAND_INVALID")
+	for prefix: String in RESERVED_COMMAND_PREFIXES:
+		if command.command_id.begins_with(prefix):
+			return _failure(&"COMMAND_INVALID")
 	if _state.completed_command_ids.has(command.command_id):
 		return _failure(&"DUPLICATE_COMMAND")
 	if _state.completed_command_ids.size() >= MAX_HISTORY or _state.revision == Catalog.MAX_VALUE or _prepared.size() >= 32:
