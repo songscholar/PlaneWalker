@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "generator": "tools/generate_training_assets.py",
+  "provenance": "Original project-authored deterministic pixel artwork; no third-party sources.",
+  "license": "CC0-1.0",
+  "assets": [
+    {
+      "path": "training_floor.png",
+      "sha256": "2ae137f61008b9aba25df96ccab94a570ca6a5d3704fdb17447ed0732b97a10e",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "path": "training_target.png",
+      "sha256": "1e56accc9753f7389b90dde58af7775a8a37432949e9be4230df504ca4b84b3c",
+      "width": 40,
+      "height": 48
+    },
+    {
+      "path": "training_warden.png",
+      "sha256": "bbc15a077fef71faa82b1baf6863170dee8d64d697cdd67768b63817f3c2b534",
+      "width": 48,
+      "height": 52
+    },
+    {
+      "path": "play.png",
+      "sha256": "c559eff0940b262356dad4e2ca0ff20417b7ae86ec1c00bb30bda721f8696973",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "pause.png",
+      "sha256": "a335dfac96f6beb519476f2cdfc0c25b14d455770857ea09f213f0d39201872a",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "reset.png",
+      "sha256": "6fb72145e6361e598057ca5b8504a69bebd14dc2d00de1dcf29969ef3bd4625a",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "back.png",
+      "sha256": "be2abfa992f7d0fdf23c7d948c08278e553f5f0e6da62be9dcbd861da36600ec",
+      "width": 16,
+      "height": 16
+    }
+  ]
+}

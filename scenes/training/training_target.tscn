@@ -1,0 +1,38 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_base.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3"]
+[ext_resource type="Texture2D" path="res://data/content_packs/base/assets/training/training_target.png" id="4"]
+
+[sub_resource type="CircleShape2D" id="body"]
+radius = 15.0
+
+[node name="TrainingTarget" type="CharacterBody2D"]
+texture_filter = 1
+script = ExtResource("1")
+max_hp = 1000.0
+move_speed = 0.0
+
+[node name="Visual" type="Polygon2D" parent="."]
+visible = false
+
+[node name="Sprite" type="Sprite2D" parent="."]
+position = Vector2(0, -11)
+texture = ExtResource("4")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2")
+max_hp = 1000.0
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("3")
+health_component_path = NodePath("../HealthComponent")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("body")

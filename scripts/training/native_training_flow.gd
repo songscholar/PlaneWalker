@@ -10,6 +10,7 @@ const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 
 signal task_completed(task_id: StringName)
 signal observation_rejected(code: StringName)
+signal observations_saved
 
 var _registry: RefCounted
 var _service: RefCounted
@@ -18,9 +19,11 @@ var _adapter: RefCounted
 var _request: Dictionary = {}
 var _busy := false
 var _last_rejection: StringName = &""
+var _boss_provider: Callable
+var _boss: Node2D
 
 
-func configure(registry: RefCounted, service: RefCounted) -> Dictionary:
+func configure(registry: RefCounted, service: RefCounted, boss_provider: Callable = Callable()) -> Dictionary:
 	if _registry != null or not is_inside_tree() or not registry is Registry or not service is Service or service.snapshot().is_empty():
 		return Candidate.failure(&"TRAINING_CONFIGURATION_INVALID")
 	var catalog := Factory.from_registry(registry)
@@ -31,13 +34,14 @@ func configure(registry: RefCounted, service: RefCounted) -> Dictionary:
 		return enabled
 	_registry = registry
 	_service = service
+	_boss_provider = boss_provider
 	return Candidate.success()
 
 
 func start(request: Dictionary) -> Dictionary:
 	if _registry == null or _busy or not _valid_request(request) or not _service.snapshot().active_launch_receipt.is_empty():
 		return Candidate.failure(&"TRAINING_CONFIGURATION_INVALID")
-	if request.task_id == "T-05":
+	if request.task_id == "T-05" and not _boss_provider.is_valid():
 		return Candidate.failure(&"TRAINING_BOSS_UNAVAILABLE")
 	if _player != null:
 		return Candidate.failure(&"TRAINING_ALREADY_ACTIVE")
@@ -51,13 +55,17 @@ func start(request: Dictionary) -> Dictionary:
 		player.queue_free()
 		_busy = false
 		return Candidate.failure(&"TRAINING_NATIVE_CONFIGURATION_INVALID")
-	var bound: Dictionary = _service.bind_training(player, request.task_id, int(request.seed))
+	var boss: Node2D = _boss_provider.call(player, request) if request.task_id == "T-05" else null
+	var bound: Dictionary = _service.bind_training(player, request.task_id, int(request.seed), boss)
 	if not bound.ok:
+		if is_instance_valid(boss):
+			boss.queue_free()
 		player.queue_free()
 		_busy = false
 		return bound
 	_player = player
 	_adapter = bound.context.adapter
+	_boss = boss
 	_request = request.duplicate(true)
 	_busy = false
 	return Candidate.success({"player": _player, "adapter": _adapter})
@@ -92,13 +100,25 @@ func process_pending_observations() -> Dictionary:
 		result.context.completed_tasks = completed.duplicate()
 		for id: String in completed:
 			task_completed.emit(StringName(id))
+		if result.context.get("consumed", false) and _adapter != null and _adapter.is_live_binding() and _adapter.pending_observations().is_empty() and not _service.get("_training_recovery_pending"):
+			observations_saved.emit()
 	return result
 
 
-func reset_attempt() -> Dictionary:
-	if _busy or _request.is_empty():
+func prepare_retirement() -> Dictionary:
+	if _busy or get_tree().paused or _adapter == null:
 		return Candidate.failure(&"TRAINING_BINDING_INVALID")
-	var drained := process_pending_observations()
+	if _service.get("_training_recovery_pending"):
+		return Candidate.failure(&"NATIVE_PUBLICATION_PENDING")
+	if _adapter.pending_observations().is_empty():
+		return Candidate.success({"consumed": false})
+	return process_pending_observations()
+
+
+func reset_attempt() -> Dictionary:
+	if _busy or _request.is_empty() or get_tree().paused:
+		return Candidate.failure(&"TRAINING_BINDING_INVALID")
+	var drained := prepare_retirement()
 	if not drained.ok:
 		return drained
 	var request := _request.duplicate(true)
@@ -119,7 +139,14 @@ func close() -> void:
 		if not _player.reset_runtime_state():
 			push_error("Native training Player retirement failed to clear owned payloads")
 		_player.queue_free()
+	if is_instance_valid(_boss):
+		_boss.set_physics_process(false)
+		_boss.remove_from_group("enemies")
+		_boss.remove_from_group("bosses")
+		_boss.remove_from_group("time_stoppable")
+		_boss.queue_free()
 	_player = null
+	_boss = null
 	_adapter = null
 	_request.clear()
 	_last_rejection = &""

@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/enemies/boss_chrono_warden.tscn" id="1"]
+[ext_resource type="Script" path="res://scripts/training/training_chrono_warden.gd" id="2"]
+[ext_resource type="Texture2D" path="res://data/content_packs/base/assets/training/training_warden.png" id="3"]
+
+[node name="TrainingWarden" instance=ExtResource("1")]
+texture_filter = 1
+script = ExtResource("2")
+
+[node name="Visual" parent="." index="0"]
+visible = false
+
+[node name="TrainingSprite" type="Sprite2D" parent="."]
+position = Vector2(0, -6)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("3")
