@@ -80,6 +80,7 @@ func _run() -> void:
 		var actor_state: Dictionary = actor.launch_runtime_snapshot()
 		var source_id: String = str(actor.get("hostile_source_id"))
 		sources[source_id] = true
+		suite.assert_true(str(actor.get_meta("run_id", "")) == str(host.runtime_snapshot().run_id) and str(actor.get_meta("room_id", "")) == str(state.encounter.identity.room_id) and str(actor.get_meta("encounter_id", "")) == str(state.definition.id), "native actor exposes the actual accepted Run, room and concrete encounter identity")
 		suite.assert_true(state.encounter.roster.has(source_id) and actor_state.runtime.runtime_frame == state.encounter.last_runtime_frame and actor_state.runtime.identity.run_id == host.runtime_snapshot().run_id, "native roster, actor and Player share authenticated source identity and clock")
 		suite.assert_true(not actor.launch_room_motion_snapshot().is_empty(), "real authored anchors bind actor movement to the native room geometry")
 	suite.assert_equal(sources.size(), runner.alive_count(), "every living production hostile has exactly one native roster entry")

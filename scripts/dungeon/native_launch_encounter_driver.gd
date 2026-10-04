@@ -206,6 +206,8 @@ func spawn_actor(spawn: Dictionary) -> bool:
 	actor.set_meta("encounter_enemy_id", str(spawn.enemy_id))
 	actor.set_meta("encounter_spawn_id", str(spawn.id))
 	actor.set_meta("encounter_affix_ids", spawn.affix_ids.duplicate())
+	_controller._configure_hostile_run_metadata(actor, {"run_id": str(_player.current_run_id())})
+	actor.set_meta("encounter_id", StringName(_definition.id))
 	_controller.get_node("Enemies").add_child(actor)
 	actor.global_position = marker.global_position + Vector2(float(spawn.spawn_offset.x), float(spawn.spawn_offset.y))
 	if not actor.configure_launch_definition(projection, identity).ok or not actor.configure_launch_room_motion(_scene, _template).ok or not _controller._configure_character_boss_exposure_participant(actor) or not _bridge.register_actor(actor) or not _encounter.register_spawned(str(spawn.id), source_id):

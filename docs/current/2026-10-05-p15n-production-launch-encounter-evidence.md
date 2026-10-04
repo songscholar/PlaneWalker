@@ -46,6 +46,9 @@ Meaningful missing-production RED: `build/test-logs/p15n-launch-production/red`.
 Real activated metadata RED: `catalog-diagnostics`.
 Real forged-death and missing-room-completion RED: `room-lifecycle-red`.
 Production lifecycle and cancellation GREEN: `cancellation-complete`.
+Accepted native Run, room and concrete encounter metadata RED: `metadata-red`;
+GREEN: `metadata-green`. The binding uses the existing Controller scope helper
+before actor configuration and retains the resolved concrete encounter identity.
 
 Seven targeted regression scenes passed under the same log root:
 
