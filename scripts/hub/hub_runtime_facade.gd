@@ -11,7 +11,8 @@ const Policy := preload("res://scripts/application/run_loadout_policy.gd")
 const Config := preload("res://scripts/application/run_config.gd")
 const Projector := preload("res://scripts/hub/hub_view_state_projector.gd")
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
-const OPERATIONS := {"meta_unlock": ["council"], "forge_upgrade": ["forge"], "enchant_preference": ["forge"], "void_temper": ["forge"], "build_save": ["meditation"], "build_remove": ["meditation"], "build_select": ["meditation", "gateway"], "select_loadout": ["meditation", "gateway"], "launch": ["gateway"], "provider_refresh": ["gateway", "merchant", "mirror"]}
+const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
+const OPERATIONS := {"meta_unlock": ["council"], "forge_upgrade": ["forge"], "enchant_preference": ["forge"], "void_temper": ["forge"], "build_save": ["meditation"], "build_remove": ["meditation"], "build_export": ["meditation"], "build_import": ["meditation"], "build_select": ["meditation", "gateway"], "select_loadout": ["meditation", "gateway"], "launch": ["gateway"], "provider_refresh": ["gateway", "merchant", "mirror"]}
 
 var _registry: RefCounted
 var _service: RefCounted
@@ -127,6 +128,10 @@ func command(value: Dictionary, expected_revision: int) -> Dictionary:
 			result = _select(payload)
 		"build_select":
 			result = _select_build(payload)
+		"build_export":
+			result = _export_build(payload)
+		"build_import":
+			result = _import_build(payload, expected_revision)
 		"launch":
 			result = _launch(payload)
 		"provider_refresh":
@@ -167,6 +172,22 @@ func _select_build(value: Dictionary) -> Dictionary:
 		if build.time_abilities.has(id):
 			abilities.append(id)
 	return _select({"character_id": build.character_id, "weapon_id": build.weapon_id, "time_abilities": abilities, "difficulty": _selection.difficulty})
+
+
+func _export_build(value: Dictionary) -> Dictionary:
+	if not Catalog.exact_fields(value, ["build_id"]) or not value.build_id is String:
+		return _failure(&"COMMAND_INVALID")
+	var resolved: Dictionary = _service.resolve_build(value.build_id)
+	return ShareCodec.encode(resolved.context.build) if resolved.ok else resolved
+
+
+func _import_build(value: Dictionary, revision: int) -> Dictionary:
+	if not Catalog.exact_fields(value, ["command_id", "share_code"]):
+		return _failure(&"COMMAND_INVALID")
+	var decoded := ShareCodec.decode(value.share_code)
+	if not decoded.ok:
+		return decoded
+	return _service.execute({"command_id": value.command_id, "kind": "build_save", "build": decoded.context.build}, revision)
 
 
 func _launch(value: Dictionary) -> Dictionary:

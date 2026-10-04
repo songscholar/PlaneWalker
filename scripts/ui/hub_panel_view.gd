@@ -5,9 +5,13 @@ signal command_requested(command: Dictionary, revision: int)
 signal tutorial_requested
 
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
+const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
 
 var _selectors: Dictionary = {}
 var _build_name: LineEdit
+var _share_code: LineEdit
+var _share_draft := ""
+var _name_draft := ""
 
 
 func _validate(value: Dictionary):
@@ -28,6 +32,7 @@ func show_rejection(message_key: String) -> void:
 func _render_state() -> void:
 	_selectors.clear()
 	_build_name = null
+	_share_code = null
 	for row: Dictionary in _state.functions:
 		if row.id == _state.function_id:
 			title_label.text = tr(str(row.name_key))
@@ -163,12 +168,76 @@ func _render_builds() -> void:
 	_build_name.name = "BuildName"
 	_build_name.placeholder_text = tr("UI_HUB_BUILD_NAME")
 	_build_name.max_length = 64
+	_build_name.text = _name_draft
 	_build_name.custom_minimum_size = Vector2(0, 29)
 	rows_container.add_child(_build_name)
+	_build_name.text_changed.connect(func(value: String): _name_draft = value)
 	_add_action("build_save", tr("UI_HUB_BUILD_SAVE"), "", bool(_state.loadout.build_save.available), str(_state.loadout.build_save.reason_key), _save_build)
+	_share_code = LineEdit.new()
+	_share_code.name = "ShareCode"
+	_share_code.placeholder_text = tr("UI_SHARE_CODE")
+	_share_code.max_length = ShareCodec.MAX_CODE_LENGTH
+	_share_code.custom_minimum_size = Vector2(0, 29)
+	_share_code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_share_code.text = _share_draft
+	rows_container.add_child(_share_code)
+	_share_code.text_changed.connect(func(value: String): _share_draft = value)
+	_add_action("build_import", tr("UI_SHARE_IMPORT"), "", true, "", _import_share)
+	var clipboard := DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD)
+	var reason := "" if clipboard else "UI_SHARE_CLIPBOARD_UNAVAILABLE"
+	_add_action("share_copy", tr("UI_SHARE_COPY"), "", clipboard, reason, _copy_share)
+	_add_action("share_paste", tr("UI_SHARE_PASTE"), "", clipboard, reason, _paste_share)
 	for row: Dictionary in _state.builds:
 		_add_action("build_select:" + str(row.id), str(row.name), "%s / %s" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper())], bool(row.available), str(row.reason_key), _emit_operation.bind("build_select", {"build_id": row.id}))
+		_add_action("build_export:" + str(row.id), tr("UI_SHARE_EXPORT"), "", bool(row.available), str(row.reason_key), _emit_operation.bind("build_export", {"build_id": row.id}))
 		_add_action("build_remove:" + str(row.id), tr("UI_HUB_BUILD_REMOVE"), "", bool(row.remove.available), str(row.remove.reason_key), _emit_operation.bind("build_remove", {"build_id": row.id}))
+
+
+func show_share_code(code: String) -> void:
+	if _state.get("function_id") != "meditation" or not is_instance_valid(_share_code) or not ShareCodec.decode(code).ok:
+		return
+	_share_draft = code
+	_share_code.text = code
+	_share_code.select_all()
+	call_deferred("_focus_share", _epoch)
+
+
+func _import_share() -> void:
+	_share_draft = _share_code.text
+	_emit_operation("build_import", {"command_id": "hub:%d:%d:build_import" % [int(_state.revision), int(_state.epoch)], "share_code": _share_draft})
+
+
+func _copy_share() -> void:
+	if not ShareCodec.decode(_share_code.text).ok:
+		show_rejection("UI_SHARE_INVALID")
+		return
+	DisplayServer.clipboard_set(_share_code.text)
+	_finish_clipboard_action()
+
+
+func _paste_share() -> void:
+	var pasted := DisplayServer.clipboard_get()
+	if pasted.length() > ShareCodec.MAX_CODE_LENGTH:
+		show_rejection("UI_SHARE_INVALID")
+		return
+	_share_draft = pasted
+	_share_code.text = _share_draft
+	_finish_clipboard_action()
+
+
+func _finish_clipboard_action() -> void:
+	_submitted = false
+	for control: Control in _actions:
+		(control as Button).disabled = not bool(control.get_meta("available", false))
+	FocusCoordinator.link_ring(_focus_controls(), false)
+	_share_code.grab_focus()
+
+
+func _focus_share(source_epoch: int) -> void:
+	await get_tree().process_frame
+	if source_epoch == _epoch and visible and is_instance_valid(_share_code) and FocusCoordinator.active_scope() == self:
+		_share_code.grab_focus()
+		scroll.ensure_control_visible(_share_code)
 
 
 func _add_preference(id: String, text: String, entry: Dictionary, callback: Callable) -> void:
@@ -188,6 +257,7 @@ func _add_preference(id: String, text: String, entry: Dictionary, callback: Call
 
 
 func _save_build() -> void:
+	_name_draft = _build_name.text
 	if _build_name.text.strip_edges().is_empty():
 		show_rejection("UI_HUB_BUILD_NAME")
 		return
@@ -239,12 +309,20 @@ func _cost(value: Dictionary) -> String:
 
 func _focus_controls() -> Array[Control]:
 	var controls: Array[Control] = []
+	var actions := super._focus_controls()
 	for option: OptionButton in _selectors.values():
 		if not option.disabled:
 			controls.append(option)
 	if is_instance_valid(_build_name):
 		controls.append(_build_name)
-	controls.append_array(super._focus_controls())
+		for control: Control in actions:
+			if control.get_meta("action_id", "") == "build_save":
+				controls.append(control)
+				actions.erase(control)
+				break
+	if is_instance_valid(_share_code):
+		controls.append(_share_code)
+	controls.append_array(actions)
 	return controls
 
 

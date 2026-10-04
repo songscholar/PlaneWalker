@@ -164,12 +164,17 @@ func submit_command(command: Dictionary, revision: int) -> Dictionary:
 	if not result.ok:
 		refresh()
 		if _panel.visible:
-			_panel.show_rejection("UI_HUB_SAVE_RETRY")
+			var message := "UI_HUB_SAVE_RETRY"
+			if command.operation in ["build_import", "build_export"]:
+				message = {&"SHARE_CODE_INVALID": "UI_SHARE_INVALID", &"NO_CHANGE": "HUB_NO_CHANGE", &"LOADOUT_INVALID": "HUB_LOADOUT_INVALID", &"BUILD_CAPACITY": "HUB_BUILD_CAPACITY", &"BUILD_NOT_FOUND": "HUB_BUILD_NOT_FOUND"}.get(result.code, message)
+			_panel.show_rejection(message)
 		else:
 			_status.text = tr("UI_HUB_SAVE_RETRY")
 		return result
 	GameState.refresh_profile_state()
 	refresh()
+	if command.operation == "build_export":
+		_panel.show_share_code(result.context.share_code)
 	if command.operation == "launch":
 		launch_requested.emit(result.context.run_config.duplicate(true))
 	elif command.operation == "resume":

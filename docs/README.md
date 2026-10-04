@@ -187,6 +187,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P15B Native Boss Foundation Evidence](current/2026-10-05-p15b-native-boss-foundation-evidence.md) | 五首领动作、实际玩家帧桥接、资源显示和回滚验证 | Verified Locally / Full effects pending |
 | [P15B Native Boss Temporal Evidence](current/2026-10-05-p15b-native-boss-temporal-evidence.md) | 时之首领真实生命恢复、固定落点、阻挡和整帧失败补偿 | Verified Locally / Arena constructs active |
 | [P15E Native Mixed Hazard Work Evidence](current/2026-10-05-p15e-native-mixed-hazard-work-evidence.md) | 语义危险区死亡后所有权、共享区域预算、完整预警与清场补偿 | Verified Locally / Constructs active |
+| [P15B Native Time Watch Evidence](current/2026-10-05-p15b-native-watch-evidence.md) | 真实武器弱点代理、80 伤害打断、55 帧恢复、致死补偿与冷重建 | Verified Locally / Remaining arena mechanics active |
 | [P17A Actor Atlases Design](superpowers/specs/2026-10-05-plane-walker-p17a-actor-atlases-design.md) | 五角色与五首领原始像素动画资源合同 | Approved / Current authority |
 | [P17A Actor Atlases Plan](superpowers/plans/2026-10-05-plane-walker-p17a-actor-atlases.md) | 确定性图集生产、许可、逐帧和原生加载验证 | Active / Current |
 | [P17A Actor Atlases Evidence](current/2026-10-05-p17a-actor-atlases-evidence.md) | 十套动画、240 帧、来源、哈希与真实 Godot 图集验证 | Verified Locally / Gameplay integration separate |
@@ -202,6 +203,10 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P18B Native Content Management Evidence](current/2026-10-05-p18b-native-content-management-evidence.md) | 实际内容启停、冷恢复、独立结算、本体字节保护及原生界面与 PCK 验证 | Verified Locally / Combined certification active |
 | [P19 Packaged Startup Plan](superpowers/plans/2026-10-05-plane-walker-p19-packaged-startup.md) | 实际三平台发行包和独立主场景启动认证 | Active / Current |
 | [P19 Packaged Startup Evidence](current/2026-10-05-p19-packaged-startup-evidence.md) | 三个真实发行包、认证哈希与 macOS 原生十二项启动检查 | Verified Locally / Clean combined certification active |
+| [P19 Corpse Content Compatibility Evidence](current/2026-10-05-p19-corpse-content-compatibility-evidence.md) | 泰坦尸体池数据绑定、保留原始描述及旧档案物理兼容验证 | Verified Locally / Current |
+| [P20A Build Sharing Design](superpowers/specs/2026-10-05-plane-walker-p20a-build-sharing-design.md) | 离线配装码、严格解码、档案解锁和原生冥想室合同 | Approved / Current authority |
+| [P20A Build Sharing Plan](superpowers/plans/2026-10-05-plane-walker-p20a-build-sharing.md) | 150 组合、原子导入导出和实际控制的实施记录 | Implemented / Current |
+| [P20A Native Build Sharing Evidence](current/2026-10-05-p20a-native-build-sharing-evidence.md) | 150 配装往返、实际导入导出、保存补偿、剪贴板和八种原生画面 | Verified Locally / Current |
 | [P16 Native Training Design](superpowers/specs/2026-10-05-plane-walker-p16p-native-training-design.md) | 隔离练习、真实动作认证与一次性档案奖励 | Approved / Current |
 | [P16 Native Training Plan](superpowers/plans/2026-10-05-plane-walker-p16p-native-training.md) | 实体训练、保存失败恢复与原生教学入口实施 | Active / Current |
 | [P16 Native Checkpoint Design](superpowers/specs/2026-10-05-plane-walker-p16q-native-checkpoint-design.md) | 真实安全快照、关闭重建与严格冷恢复 | Approved / Current |
@@ -209,6 +214,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P16R Native Combat Checkpoint Design](superpowers/specs/2026-10-05-plane-walker-p16r-native-combat-checkpoint-design.md) | 活跃战斗的原生演员、效果和威胁冷恢复合同 | Approved / Current authority |
 | [P16R Native Combat Checkpoint Plan](superpowers/plans/2026-10-05-plane-walker-p16r-native-combat-checkpoint.md) | 战斗快照、重建、失败补偿与教学保存回归实施 | Active / Current |
 | [P16R Native Combat Checkpoint Evidence](current/2026-10-05-p16r-native-combat-checkpoint-evidence.md) | 十一种战斗冷续跑、篡改拒绝与旧版安全存档/教学回归 | Verified Locally / Current |
+| [P16S Native Content Migration Design](superpowers/specs/2026-10-05-plane-walker-p16s-native-content-migration-design.md) | 已认证历史内容与活跃原生战斗的重建和原子迁移合同 | Approved / Current authority |
+| [P16S Native Content Migration Plan](superpowers/plans/2026-10-05-plane-walker-p16s-native-content-migration.md) | 全档案迁移、物理保存故障和无发布探测的实施记录 | Active / Current |
+| [P16S Native Content Migration Evidence](current/2026-10-05-p16s-native-content-migration-evidence.md) | 六历史来源、24次实际迁移、重签篡改拒绝及枪杖无发布验证 | Verified Locally / Current |
 | [P16G Native Material Evidence](current/2026-10-05-p16g-native-material-evidence.md) | 原生敌人死亡认证、材料保留重试与真实结算金额 | Verified Locally / Main integration pending |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import csv
 import json
 import re
@@ -62,9 +63,53 @@ def validate_localization(project_root: Path | str) -> list[Violation]:
     catalog_keys = set(catalog)
 
     violations.extend(_validate_required_domain_keys(root, catalog_path, catalog_keys))
+    runtime_sources, config_violations = _configured_runtime_catalogs(root)
+    violations.extend(config_violations)
+    for source in runtime_sources:
+        if source == catalog_path:
+            continue
+        extra, extra_violations = _read_catalog(root, source)
+        violations.extend(extra_violations)
+        for key in sorted(set(extra) & catalog_keys):
+            violations.append(Violation("duplicate-runtime-key", key, _relative_path(root, source), 0, "multiple configured catalogs define the same runtime key"))
+        catalog_keys.update(extra)
     violations.extend(_validate_code_references(root, catalog_keys))
     violations.extend(_validate_content_references(root, catalog_keys))
     return sorted(violations)
+
+
+def _configured_runtime_catalogs(root: Path) -> tuple[list[Path], list[Violation]]:
+    project = root / "project.godot"
+    if not project.is_file():
+        return [], []
+    try:
+        source = project.read_text(encoding="utf-8")
+        section = re.search(r"(?ms)^\[internationalization\]\s*\n(.*?)(?=^\[|\Z)", source)
+        if section is None:
+            return [], []
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read_string("[internationalization]\n" + section.group(1))
+        value = parser.get("internationalization", "locale/translations", fallback="PackedStringArray()")
+        if not value.startswith("PackedStringArray(") or not value.endswith(")"):
+            raise ValueError("locale/translations must be a PackedStringArray")
+        resources = json.loads("[" + value[len("PackedStringArray("):-1] + "]")
+        paths: set[Path] = set()
+        for resource in resources:
+            if not isinstance(resource, str) or not resource.startswith("res://"):
+                raise ValueError("translation source must use a repository resource path")
+            path = root / resource[len("res://"):]
+            for locale in CATALOG_COLUMNS[1:]:
+                ending = f".{locale}.translation"
+                if resource.endswith(ending):
+                    path = root / (resource[len("res://"):-len(ending)] + ".csv")
+                    break
+            if not path.resolve().is_relative_to(root):
+                raise ValueError("translation source escapes the repository")
+            if path.suffix == ".csv":
+                paths.add(path)
+        return sorted(paths), []
+    except (OSError, ValueError, configparser.Error) as error:
+        return [], [Violation("invalid-runtime-catalog-config", "", "project.godot", 0, str(error))]
 
 
 def _validate_required_domain_keys(
@@ -217,7 +262,7 @@ def _validate_code_references(root: Path, catalog_keys: set[str]) -> list[Violat
                     key,
                     _relative_path(root, source_path),
                     source.count("\n", 0, match.start()) + 1,
-                    "literal tr() key is absent from translations.csv",
+                    "literal tr() key is absent from configured runtime catalogs",
                 )
             )
     return violations

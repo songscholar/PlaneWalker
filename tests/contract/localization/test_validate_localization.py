@@ -35,6 +35,40 @@ SEMANTIC_INPUT_TRANSLATIONS = {
 
 
 class LocalizationContractTest(unittest.TestCase):
+    def test_reads_only_configured_supplemental_runtime_catalogs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            self._write(root / "assets/ui.csv", "keys,en,zh_CN\nUI_EXTRA,Extra,Extra\n")
+            self._write(root / "scripts/ui.gd", 'label.text = tr("UI_EXTRA")\n')
+            self.assertContainsCode(validate_localization(root), "missing-code-key")
+            self._write(root / "project.godot", '[internationalization]\nlocale/translations=PackedStringArray("res://assets/ui.en.translation", "res://assets/ui.zh_CN.translation")\n')
+            self.assertEqual(validate_localization(root), [])
+
+    def test_checks_missing_or_invalid_configured_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            self._write(root / "project.godot", '[internationalization]\nlocale/translations=PackedStringArray("res://assets/missing.en.translation")\n')
+            self.assertContainsCode(validate_localization(root), "missing-catalog")
+            self._write(root / "assets/missing.csv", "keys,en,zh_CN\nUI_EXTRA,%d,%s\n")
+            self.assertContainsCode(validate_localization(root), "placeholder-mismatch")
+
+    def test_rejects_ambiguous_runtime_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [["UI_EXTRA", "Main", "Main"]])
+            self._write(root / "assets/ui.csv", "keys,en,zh_CN\nUI_EXTRA,Extra,Extra\n")
+            self._write(root / "project.godot", '[internationalization]\nlocale/translations=PackedStringArray("res://assets/ui.en.translation")\n')
+            self.assertContainsCode(validate_localization(root), "duplicate-runtime-key")
+
+    def test_rejects_configured_catalog_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            self._write(root / "project.godot", '[internationalization]\nlocale/translations=PackedStringArray("res://../outside.en.translation")\n')
+            self.assertContainsCode(validate_localization(root), "invalid-runtime-catalog-config")
+
     def test_semantic_input_rows_match_in_global_and_base_catalogs(self) -> None:
         catalogs = (
             PROJECT_ROOT / "data" / "localization" / "translations.csv",
