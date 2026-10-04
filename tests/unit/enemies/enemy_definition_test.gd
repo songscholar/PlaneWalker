@@ -29,6 +29,9 @@ func _test_real_catalog(implementation: Script) -> void:
 		suite.assert_true(result.ok, "real species parses: " + row.id + " " + str(result.get("context", {})))
 		if result.ok:
 			suite.assert_equal(result.definition.id, row.id, "normalized species retains identity")
+			for actor_kind: String in ["enemy", "elite"]:
+				var projection: Dictionary = parser.runtime_projection(actor_kind)
+				suite.assert_equal(projection.get("collision_radius_px"), row.collision_radius_px, "native %s retains authored body radius: %s" % [actor_kind, row.id])
 			var snapshot: Dictionary = parser.snapshot()
 			snapshot.mechanisms.clear()
 			suite.assert_true(not parser.snapshot().mechanisms.is_empty(), "snapshot isolates authored mechanisms")
@@ -39,19 +42,33 @@ func _test_real_catalog(implementation: Script) -> void:
 func _test_projection(implementation: Script) -> void:
 	var parser: RefCounted = implementation.new()
 	var row := Fixtures.enemy()
+	var authored_radius: float = row.collision_radius_px
 	suite.assert_true(parser.configure(row).ok, "Sentinel configures for native projection")
 	var ordinary: Dictionary = parser.runtime_projection()
-	suite.assert_equal(ordinary.keys().size(), 8, "native enemy projection includes authored mechanisms")
+	var expected_fields: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "collision_radius_px", "actions", "mechanisms"]
+	var actual_fields: Array = ordinary.keys()
+	expected_fields.sort()
+	actual_fields.sort()
+	suite.assert_equal(actual_fields, expected_fields, "native enemy projection has exactly nine authenticated fields")
+	suite.assert_equal(ordinary.get("collision_radius_px"), row.collision_radius_px, "ordinary projection retains authored radius")
 	suite.assert_equal(ordinary.actor_kind, "enemy", "ordinary default kind")
 	suite.assert_equal(ordinary.actions.size(), 1, "ordinary excludes elite action")
 	suite.assert_equal(ordinary.mechanisms, parser.snapshot().mechanisms, "runtime retains one authoritative mechanism definition")
 	var elite: Dictionary = parser.runtime_projection("elite")
+	suite.assert_equal(elite.get("collision_radius_px"), row.collision_radius_px, "elite keeps authored radius while HP and damage scale")
 	suite.assert_equal(elite.max_hp, 160.0, "elite body has twice base HP")
 	suite.assert_equal(elite.actions.size(), 2, "elite retains base action and appends species move")
 	suite.assert_equal(elite.actions[0].hit_schedule[0].damage, 15.0, "elite base damage multiplied exactly once")
 	suite.assert_equal(elite.actions[1].hit_schedule[0].damage, 30.0, "elite species damage multiplied exactly once")
 	elite.actions[0].parameters.knockback_px = 64
+	elite.collision_radius_px = 32.0
+	row.collision_radius_px = 1.0
 	suite.assert_equal(parser.runtime_projection("elite").actions[0].parameters.knockback_px, 19.0, "projection deeply isolated")
+	suite.assert_equal(parser.runtime_projection("elite").get("collision_radius_px"), authored_radius, "neither source nor returned projection can change configured radius")
+	var alternate := Fixtures.enemy()
+	alternate.collision_radius_px = 13.5
+	suite.assert_true(parser.configure(alternate).ok, "alternate valid authored radius configures")
+	suite.assert_equal(parser.runtime_projection().get("collision_radius_px"), 13.5, "radius projection derives from authored values rather than scene defaults")
 	suite.assert_equal(parser.runtime_projection("boss"), {}, "unsupported native kind refuses")
 
 

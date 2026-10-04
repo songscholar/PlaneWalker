@@ -311,5 +311,6 @@ func runtime_projection(actor_kind: String = "enemy") -> Dictionary:
 	return {
 		"id": _snapshot.id, "actor_kind": actor_kind, "runtime_kind": _snapshot.runtime_kind,
 		"max_hp": _snapshot.max_hp * (2.0 if actor_kind == "elite" else 1.0), "defense": _snapshot.defense,
-		"move_speed": _snapshot.move_speed, "actions": actions, "mechanisms": _snapshot.mechanisms.duplicate(true),
+		"move_speed": _snapshot.move_speed, "collision_radius_px": _snapshot.collision_radius_px,
+		"actions": actions, "mechanisms": _snapshot.mechanisms.duplicate(true),
 	}
