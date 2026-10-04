@@ -26,6 +26,9 @@ func _ready() -> void:
 	initial.chronos_shards = 5
 	suite.assert_true(state.restore_snapshot(initial), "fixture earned shards restore")
 	var before: Dictionary = state.snapshot()
+	for prefix: String in ["onboarding-progress:", "onboarding-watermark:"]:
+		suite.assert_equal(state.prepare_command({"command_id": prefix + "forged", "kind": "meta_unlock", "node_id": "W-01"}, before.revision).code, &"COMMAND_INVALID", "public purchases cannot create trusted tutorial markers")
+		suite.assert_equal(state.snapshot(), before, "reserved tutorial marker refusal preserves the full profile")
 	var command := {"command_id": "buy-w01", "kind": "meta_unlock", "node_id": "W-01"}
 	var prepared: Dictionary = state.prepare_command(command, before.revision)
 	suite.assert_true(prepared.ok, "affordable authored unlock prepares")
