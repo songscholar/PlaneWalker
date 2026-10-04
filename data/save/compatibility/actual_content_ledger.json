@@ -1,0 +1,74 @@
+{
+  "schema_id": "planewalker.actual_content_compatibility",
+  "schema_version": 1,
+  "save_schema_version": 4,
+  "meta_catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
+  "bindings": [
+    {
+      "id": "p16_actual",
+      "descriptor_path": "res://data/save/compatibility/base_p16_actual_pre_hub.json",
+      "source_commits": [
+        "5bee8eff0efce6661d670bab19e96469d8da3c53",
+        "54bee98b3b911cd6a3d8166f015eab0fceb177eb",
+        "c48116a29ce8cd6752e49d0029d44b3aa528bc14"
+      ],
+      "snapshot": {
+        "aggregate_sha256": "359f78795637dac50112df36f8be804e28f6700ef2a2d8efe52e174dd0d3a47c",
+        "packs": [
+          {
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2,
+            "fingerprint_sha256": "5f71d5f2974f4b6927594397e593acb75bef7d9806d0fbf0d028f15dc2efc99e"
+          }
+        ]
+      }
+    },
+    {
+      "id": "p16_hub",
+      "descriptor_path": "res://data/save/compatibility/base_p16_hub_before_narrative.json",
+      "source_commits": ["100d754fb3dac6cff9fa1cd0fbd41191daeb8a03"],
+      "snapshot": {
+        "aggregate_sha256": "de23d7d6c778f8f6f26fe4163270bfd840dfc758df8ce9c8f855f3ca2e969b5b",
+        "packs": [
+          {
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2,
+            "fingerprint_sha256": "46e09bb02ab515c6ad2944b4c8d30f561fca7fcfe3e28b56afc38fc1154d2903"
+          }
+        ]
+      }
+    },
+    {
+      "id": "p16_narrative",
+      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "source_commits": ["b6e6a2cf7e776e390ebbca99e8c4afed6bc13fc6"],
+      "snapshot": {
+        "aggregate_sha256": "897d72f310a123362093fcd27d31eac692689ab0a1583177d3d807abf6407a49",
+        "packs": [
+          {
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2,
+            "fingerprint_sha256": "35b38b70f84c80df5433475c385344b5206eb9922164f8a7aa82277baaca18f7"
+          }
+        ]
+      }
+    }
+  ],
+  "transitions": [
+    {
+      "source_id": "p16_actual",
+      "target_id": "p16_narrative",
+      "allowed_changed_files": ["localization/translations.csv"],
+      "reason": "Hub and Narrative UI translations changed. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
+    },
+    {
+      "source_id": "p16_hub",
+      "target_id": "p16_narrative",
+      "allowed_changed_files": ["localization/translations.csv"],
+      "reason": "Eight Narrative UI translation keys changed. All authored gameplay and Meta definitions, pack manifests and strict Profile v4 schema are unchanged."
+    }
+  ]
+}
