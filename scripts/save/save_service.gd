@@ -41,6 +41,8 @@ func configure(
 	clock: Callable = Callable(),
 	fault_injector: Callable = Callable()
 ):
+	if _write_active:
+		return _busy("configure")
 	if root_path.strip_edges().is_empty():
 		return SaveResultScript.failure(&"INVALID_ARGUMENT", {"field": "root_path", "reason": "empty"})
 	if game_version.strip_edges().is_empty():
@@ -107,6 +109,85 @@ func inspect_profile(profile_id: String, save_domain: String = "base"):
 	if not readiness.ok:
 		return readiness
 	return _inspect_primary(_profile_directory(profile_id, save_domain), &"profile", profile_id, save_domain)
+
+
+func rebind_profile_content(
+	profile_id: String,
+	save_domain: String,
+	prior_snapshot: Dictionary,
+	target_snapshot: Dictionary,
+	expected_primary: Dictionary
+):
+	var readiness = _validate_profile_request(profile_id, save_domain)
+	if not readiness.ok:
+		return readiness
+	if _write_active:
+		return _busy("rebind_profile_content")
+	if not _same_json(prior_snapshot, _content_snapshot):
+		return SaveResultScript.failure(&"CONTENT_MISMATCH", {"reason": "configured_prior_snapshot"})
+	var validated = SaveEnvelopeScript.create_profile(
+		profile_id, save_domain, 0, _game_version,
+		"2000-01-01T00:00:00Z", "2000-01-01T00:00:00Z", target_snapshot, {}
+	)
+	if not validated.ok:
+		return validated
+	_write_active = true
+	var result = _rebind_profile_content_internal(
+		profile_id, save_domain, validated.payload.content_snapshot.duplicate(true),
+		expected_primary.duplicate(true)
+	)
+	_write_active = false
+	return result
+
+
+func _rebind_profile_content_internal(
+	profile_id: String, save_domain: String, target_snapshot: Dictionary,
+	expected_primary: Dictionary
+):
+	var directory := _profile_directory(profile_id, save_domain)
+	var actual = _inspect_primary(directory, &"profile", profile_id, save_domain)
+	if not actual.ok:
+		if actual.code != &"NOT_FOUND" or not expected_primary.is_empty():
+			return actual if actual.code != &"NOT_FOUND" else SaveResultScript.failure(
+				&"INVALID_ARGUMENT", {"reason": "expected_primary_missing"}
+			)
+		for filename: String in [PENDING_FILE, BACKUP_ONE_FILE, BACKUP_TWO_FILE]:
+			if FileAccess.file_exists(directory.path_join(filename)):
+				return SaveResultScript.failure(&"INVALID_ARGUMENT", {"reason": "source_recovery_files_present"})
+		_content_snapshot = target_snapshot.duplicate(true)
+		return SaveResultScript.success({}, {"committed": false, "source_kind": "absent", "reconciled_committed_write": false})
+	if expected_primary.is_empty() or not _same_json(actual.payload, expected_primary):
+		return SaveResultScript.failure(&"INVALID_ARGUMENT", {"reason": "expected_primary_stale"})
+	if _content_snapshot_matches(target_snapshot):
+		return SaveResultScript.success(actual.payload.payload, {"committed": false, "source_kind": "primary", "sequence": int(actual.payload.sequence), "reconciled_committed_write": false})
+	var created = SaveEnvelopeScript.create_profile(
+		profile_id, save_domain, int(actual.payload.sequence) + 1, _game_version,
+		str(actual.payload.created_at_utc), _now(), target_snapshot,
+		actual.payload.payload, _meta_catalog
+	)
+	if not created.ok:
+		return created
+	if not _same_json(created.payload.payload, actual.payload.payload):
+		return SaveResultScript.failure(&"INVALID_ARGUMENT", {"reason": "content_rebinding_changes_payload"})
+	var committed = _commit_envelope(
+		directory, created.payload, &"profile", profile_id, save_domain, true,
+		target_snapshot, actual.payload
+	)
+	var reconciled := false
+	if not committed.ok:
+		# A target-compatible pending or backup file cannot prove migration committed.
+		var primary = _read_and_validate(
+			directory.path_join(PRIMARY_FILE), &"profile", profile_id, save_domain,
+			target_snapshot
+		)
+		if not primary.ok or not _same_json(primary.payload, created.payload):
+			return committed
+		reconciled = true
+	_content_snapshot = target_snapshot.duplicate(true)
+	return SaveResultScript.success(created.payload.payload, {
+		"committed": true, "source_kind": "primary", "sequence": int(created.payload.sequence),
+		"digest": _document_digest(created.payload), "reconciled_committed_write": reconciled,
+	})
 
 
 func reset_profile(profile_id: String, save_domain: String = "base"):
@@ -230,7 +311,9 @@ func _commit_envelope(
 	document_kind: StringName,
 	profile_id: String,
 	save_domain: String,
-	rotate_backups: bool
+	rotate_backups: bool,
+	target_content_snapshot: Dictionary = {},
+	expected_primary: Dictionary = {}
 ):
 	var directory_result = _file_ops.ensure_directory(directory_path)
 	if not directory_result.ok:
@@ -248,7 +331,7 @@ func _commit_envelope(
 	if not fault_result.ok:
 		return fault_result
 
-	var pending_validation = _read_and_validate(pending_path, document_kind, profile_id, save_domain)
+	var pending_validation = _read_and_validate(pending_path, document_kind, profile_id, save_domain, target_content_snapshot)
 	if not pending_validation.ok:
 		return pending_validation
 	if _document_digest(pending_validation.payload) != _document_digest(document):
@@ -294,6 +377,10 @@ func _commit_envelope(
 	fault_result = _inject_fault(&"before_primary_promote")
 	if not fault_result.ok:
 		return fault_result
+	if not expected_primary.is_empty():
+		var preimage = _read_and_validate(primary_path, document_kind, profile_id, save_domain)
+		if not preimage.ok or not _same_json(preimage.payload, expected_primary):
+			return SaveResultScript.failure(&"INVALID_ARGUMENT", {"reason": "expected_primary_stale"})
 	var promote = _file_ops.rename_file(pending_path, primary_path)
 	if not promote.ok:
 		return promote
@@ -301,7 +388,7 @@ func _commit_envelope(
 	if not fault_result.ok:
 		return fault_result
 
-	var primary_validation = _read_and_validate(primary_path, document_kind, profile_id, save_domain)
+	var primary_validation = _read_and_validate(primary_path, document_kind, profile_id, save_domain, target_content_snapshot)
 	if not primary_validation.ok:
 		return primary_validation
 	if _document_digest(primary_validation.payload) != _document_digest(document):
@@ -512,7 +599,7 @@ func _inspect_primary(directory_path: String, document_kind: StringName, profile
 	return _read_and_validate(directory_path.path_join(PRIMARY_FILE), document_kind, profile_id, save_domain)
 
 
-func _read_and_validate(path: String, document_kind: StringName, profile_id: String, save_domain: String):
+func _read_and_validate(path: String, document_kind: StringName, profile_id: String, save_domain: String, expected_content_snapshot: Dictionary = {}):
 	var read_result = _file_ops.read_utf8(path)
 	if not read_result.ok:
 		return read_result
@@ -534,11 +621,13 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 	if not boundary.ok:
 		boundary.metadata["path"] = path
 		return boundary
-	if document_kind == &"profile" and not _content_snapshot_matches(boundary.payload.get("content_snapshot", {})):
+	var required_snapshot := _content_snapshot if expected_content_snapshot.is_empty() else expected_content_snapshot
+	var content_matches := _content_snapshot_matches(boundary.payload.get("content_snapshot", {})) if expected_content_snapshot.is_empty() else _same_json(boundary.payload.get("content_snapshot", {}), required_snapshot)
+	if document_kind == &"profile" and not content_matches:
 		var actual_snapshot: Dictionary = boundary.payload.get("content_snapshot", {})
 		return SaveResultScript.failure(&"CONTENT_MISMATCH", {
 			"path": path,
-			"expected_aggregate": _content_snapshot.get("aggregate_sha256", ""),
+			"expected_aggregate": required_snapshot.get("aggregate_sha256", ""),
 			"actual_aggregate": actual_snapshot.get("aggregate_sha256", ""),
 		})
 	var validation = SaveEnvelopeScript.validate(document, document_kind, profile_id, save_domain, _meta_catalog)
@@ -686,6 +775,12 @@ func _content_snapshot_matches(value: Variant) -> bool:
 	if not value is Dictionary:
 		return false
 	return SaveEnvelopeScript.canonical_json(value) == SaveEnvelopeScript.canonical_json(_content_snapshot)
+
+
+func _same_json(left: Variant, right: Variant) -> bool:
+	var left_json := SaveEnvelopeScript.canonical_json(left)
+	var right_json := SaveEnvelopeScript.canonical_json(right)
+	return not left_json.is_empty() and not right_json.is_empty() and JSON.parse_string(left_json) == JSON.parse_string(right_json)
 
 
 func _document_digest(document: Dictionary) -> String:
