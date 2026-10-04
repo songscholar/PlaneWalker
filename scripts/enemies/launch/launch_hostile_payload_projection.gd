@@ -34,14 +34,16 @@ func configure_payload(authority: RefCounted, id: String, definition: Dictionary
 	_sprite = Sprite2D.new()
 	_sprite.name = "Sprite2D"
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_sprite.texture = load("res://data/content_packs/base/assets/enemies/launch/%s.png" % ("acid_projectile" if definition.kind == "projectile" else "acid_pool"))
+	var shape := "projectile" if definition.kind == "projectile" else "pool"
+	var texture_path := "res://data/content_packs/base/assets/enemies/launch/acid_%s.png" % shape if definition.visual_kind == "acid" else "res://assets/production/hostile_effects/%s_%s.png" % [definition.visual_kind, shape]
+	_sprite.texture = load(texture_path)
 	if _sprite.texture == null:
 		return false
 	_sprite.hframes = 4
 	if definition.kind == "projectile":
 		_sprite.rotation = Vector2(definition.direction.x, definition.direction.y).angle()
 	else:
-		_sprite.scale = Vector2.ONE * float(definition.radius) / 13.0
+		_sprite.scale = Vector2.ONE * float(definition.radius) / (13.0 if definition.visual_kind == "acid" else 14.0)
 	add_child(_sprite)
 	var receiver := RiftReceiver.new()
 	receiver.name = "RiftReceiver"

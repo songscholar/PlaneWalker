@@ -112,6 +112,7 @@ func _test_native_piercing() -> void:
 			players[index].get_node("HealthComponent").discard_transaction_snapshot(health_checkpoints[index])
 		if not effects.payload_snapshot().projectiles.is_empty():
 			spawned = true
+			suite.assert_equal(effects.native_payload_nodes()[0].get_node("Sprite2D").texture.resource_path, "res://assets/production/hostile_effects/fire_projectile.png", "actual Forge sword wave uses its original fire raster")
 		if spawned and effects.payload_snapshot().projectiles.is_empty():
 			retired = true
 			break

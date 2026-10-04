@@ -86,6 +86,11 @@ func _run() -> void:
 	var empty_geometry := Fixtures.action()
 	empty_geometry.geometry = []
 	_assert_reject(suite, implementation, empty_geometry, "damaging action requires committed geometry")
+	var blink := Fixtures.action()
+	blink.handler_id = "blink"
+	blink.parameters = {"travel_px": 48, "transit_frames": 8, "landing_warning_frames": 30}
+	blink.hit_schedule[0].hit_index = blink.geometry.size()
+	_assert_reject(suite, implementation, blink, "blink hit index must name its own frozen landing lane")
 	suite.assert_equal(implementation.handler_ids().size(), 15, "closed fifteen handler families")
 	suite.finish(get_tree())
 

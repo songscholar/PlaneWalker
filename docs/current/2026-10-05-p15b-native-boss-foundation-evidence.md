@@ -86,6 +86,23 @@ retire at a finite range, lifetime, wall contact or exhausted penetration budget
 - Coordinator regression: `planewalker-tests.rtLCLU`, 1/1 passed. Coordinated blink landing envelope RED `planewalker-tests.tZb0St` and full enemy-domain GREEN `planewalker-tests.Q0O1iU` verify locked normal/Rift landings.
 
 All final listed gates have clean engine logs. No new dependency was introduced.
-The production projectile raster still uses the previously certified acid atlas;
-distinct Boss/element raster projections remain active visual work. Persistent
-zones, healing, summons and arena mechanisms are not certified by this gate.
+Persistent zones, healing, summons and arena mechanisms are not certified by
+this projectile gate.
+
+## Element Raster Gate
+
+Six damage types now have distinct original four-frame projectile and area PNG
+atlases under `assets/production/hostile_effects`. The reproducible local generator,
+CC0 dedication, SHA-256 manifest and contact sheet are retained together. The
+previously certified Moth acid bytes and acid projection remain preserved.
+
+- Missing raster/generator contract RED was followed by 2/2 Python art contracts GREEN, including byte-for-byte regeneration, all twelve unique atlases and four visible frames per atlas.
+- Actual original element projection GREEN: `planewalker-tests.uym2zj`, 1/1 passed.
+- Native GPU rendering exit 0 and `PASS: all assertions succeeded`; all twelve real payload projection nodes pass per-node color/foreground pixel checks at 640x360 and 1280x720. Both inspected screenshots are retained in `build/visual-evidence/p15b-hostile-element-effects/`; `build/test-logs/p15b-hostile-element-effects/engine.log` has no script errors or leaks.
+- Actual Forge sword wave checks the manifested fire texture, and the combined Boss gate `planewalker-tests.poI1Xw` passes 3/3. Moth regression `planewalker-tests.dRIoKS` and payload domain `planewalker-tests.cMMwMX` each pass 1/1.
+- Independent blink-lane generation RED `planewalker-tests.c2WsOa` and coordinated full enemy-domain GREEN `planewalker-tests.utlj4u` verify each strike uses its own locked landing and generation. Out-of-range blink lane RED `planewalker-tests.yOzDyi` becomes contract GREEN `planewalker-tests.KVYeG7`, 1/1.
+
+The first presentation-test attempt had a reserved builtin type identifier in its
+test script; it is excluded from the final GPU gate. No dependency or remotely
+sourced artwork was added. This gate certifies element art/projection, not all
+specialized Boss gameplay mechanisms.

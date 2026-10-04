@@ -81,6 +81,8 @@ static func create(source: Dictionary, actor_kind: String) -> Dictionary:
 	result.hit_schedule = hit_result.value
 	var damaging := false
 	for hit: Dictionary in result.hit_schedule:
+		if result.handler_id == "blink" and int(hit.hit_index) >= result.geometry.size():
+			return failure("hit_index", "blink_requires_own_landing_lane")
 		damaging = damaging or hit.damage > 0
 	if damaging:
 		if result.geometry.is_empty():

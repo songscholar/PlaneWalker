@@ -310,12 +310,17 @@ static func _committed_geometry(action: Dictionary, state: Dictionary, actor_kin
 
 
 static func _hit_fact(hit: Dictionary, action: Dictionary, state: Dictionary) -> Dictionary:
+	var generation: int = int(state.geometry_generations[0])
+	var geometry: Array = state.committed_geometry.duplicate(true)
+	if action.handler_id == "blink" and int(hit.hit_index) < geometry.size():
+		geometry = [geometry[int(hit.hit_index)]]
+		generation = int(state.geometry_generations[int(hit.hit_index)])
 	return {
 		"run_id": state.identity.run_id, "hostile_source_id": state.identity.hostile_source_id,
-		"attack_generation": state.geometry_generations[0], "hit_index": hit.hit_index,
+		"attack_generation": generation, "hit_index": hit.hit_index,
 		"runtime_frame": state.last_runtime_frame, "target_id": state.target_id, "action_id": state.action_id,
 		"damage": hit.damage, "damage_type": hit.damage_type, "handler_id": action.handler_id,
-		"geometry": state.committed_geometry.duplicate(true), "parameters": action.parameters.duplicate(true),
+		"geometry": geometry, "parameters": action.parameters.duplicate(true),
 	}
 
 

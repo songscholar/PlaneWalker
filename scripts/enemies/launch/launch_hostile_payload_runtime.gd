@@ -15,8 +15,8 @@ const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_fra
 const HIT_FIELDS := ["run_id", "hostile_source_id", "attack_generation", "hit_index", "runtime_frame", "target_id", "action_id", "damage", "damage_type", "handler_id", "geometry", "parameters"]
 const PROJECTILE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "travel", "position", "control", "hit_targets"]
 const ZONE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "control"]
-const PROJECTILE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "origin", "direction", "radius", "speed", "lifetime_frames", "range_px", "damage", "damage_type", "target_id", "bounds", "impact_pool", "pierce_count"]
-const ZONE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "position", "radius", "damage", "damage_type", "warning_frames", "lifetime_frames", "tick_frames", "bounds"]
+const PROJECTILE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "origin", "direction", "radius", "speed", "lifetime_frames", "range_px", "damage", "damage_type", "target_id", "bounds", "impact_pool", "pierce_count", "visual_kind"]
+const ZONE_DEFINITION_FIELDS := ["kind", "run_id", "source_id", "generation", "hit_index", "reserved_frame", "position", "radius", "damage", "damage_type", "warning_frames", "lifetime_frames", "tick_frames", "bounds", "visual_kind"]
 
 var _state: Dictionary = {}
 
@@ -53,7 +53,7 @@ func reserve_death_pool(request: Dictionary) -> Dictionary:
 		return _failure("death_parameters")
 	if not Contract.integer_in_range(request.parameters.warning_frames, 23, 600) or not Contract.number_in_range(request.parameters.radius, 1, 320) or not Contract.number_in_range(request.parameters.damage, 0, 600):
 		return _failure("death_values")
-	var definition := {"kind": "death_pool", "run_id": request.run_id, "source_id": request.hostile_source_id, "generation": int(request.attack_generation), "hit_index": 63, "reserved_frame": int(request.runtime_frame), "position": Contract.point(request.position), "radius": float(request.parameters.radius), "damage": float(request.parameters.damage), "damage_type": "void", "warning_frames": int(request.parameters.warning_frames), "lifetime_frames": 1, "tick_frames": 1, "bounds": request.bounds.duplicate(true)}
+	var definition := {"kind": "death_pool", "run_id": request.run_id, "source_id": request.hostile_source_id, "generation": int(request.attack_generation), "hit_index": 63, "reserved_frame": int(request.runtime_frame), "position": Contract.point(request.position), "radius": float(request.parameters.radius), "damage": float(request.parameters.damage), "damage_type": "void", "warning_frames": int(request.parameters.warning_frames), "lifetime_frames": 1, "tick_frames": 1, "bounds": request.bounds.duplicate(true), "visual_kind": "acid"}
 	return _reserve_zone(_state, definition)
 
 
@@ -262,7 +262,7 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 		if not parsed.ok:
 			return {}
 		pool = {"radius": float(mechanisms.impact_pool_radius_px), "lifetime_frames": int(mechanisms.impact_pool_lifetime_frames), "damage": float(mechanisms.impact_pool_damage), "tick_frames": int(mechanisms.impact_pool_tick_frames)}
-	return {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool, "pierce_count": int(hit.parameters.pierce_count)}
+	return {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool, "pierce_count": int(hit.parameters.pierce_count), "visual_kind": "acid" if hit.action_id.begins_with("corrosive_moth.") else str(hit.damage_type)}
 
 
 func _reserve_zone(state: Dictionary, definition: Dictionary) -> Dictionary:
@@ -277,7 +277,7 @@ func _reserve_zone(state: Dictionary, definition: Dictionary) -> Dictionary:
 
 func _impact_definition(projectile: Dictionary, position: Dictionary, frame: int) -> Dictionary:
 	var pool: Dictionary = projectile.impact_pool
-	return {"kind": "impact_pool", "run_id": projectile.run_id, "source_id": projectile.source_id, "generation": projectile.generation, "hit_index": projectile.hit_index, "reserved_frame": frame, "position": Contract.point(position), "radius": pool.radius, "damage": pool.damage, "damage_type": projectile.damage_type, "warning_frames": 0, "lifetime_frames": pool.lifetime_frames, "tick_frames": pool.tick_frames, "bounds": projectile.bounds.duplicate(true)}
+	return {"kind": "impact_pool", "run_id": projectile.run_id, "source_id": projectile.source_id, "generation": projectile.generation, "hit_index": projectile.hit_index, "reserved_frame": frame, "position": Contract.point(position), "radius": pool.radius, "damage": pool.damage, "damage_type": projectile.damage_type, "warning_frames": 0, "lifetime_frames": pool.lifetime_frames, "tick_frames": pool.tick_frames, "bounds": projectile.bounds.duplicate(true), "visual_kind": projectile.visual_kind}
 
 
 func _valid_live_record(row: Dictionary, state: Dictionary, claims: Dictionary, live: Dictionary, projectile: bool) -> bool:
@@ -307,7 +307,7 @@ func _valid_zone_definition(row: Dictionary) -> bool:
 
 
 func _valid_definition_identity(row: Dictionary) -> bool:
-	return row.run_id == _state.run_id and _stable_id(row.source_id) and Contract.integer_in_range(row.generation, 1, MAX_FRAME) and Contract.integer_in_range(row.hit_index, 0, 63) and _frame(row.reserved_frame) and Contract.number_in_range(row.damage, 0, 600) and row.damage_type in Contract.DAMAGE_TYPES and _valid_bounds(row.bounds)
+	return row.run_id == _state.run_id and _stable_id(row.source_id) and Contract.integer_in_range(row.generation, 1, MAX_FRAME) and Contract.integer_in_range(row.hit_index, 0, 63) and _frame(row.reserved_frame) and Contract.number_in_range(row.damage, 0, 600) and row.damage_type in Contract.DAMAGE_TYPES and row.visual_kind in ["acid", "physical", "time", "void", "fire", "ice", "lightning"] and _valid_bounds(row.bounds)
 
 
 func _valid_observations(value: Dictionary) -> bool:

@@ -1,0 +1,68 @@
+{
+  "schema_id": "plane_walker_hostile_effect_art_v1",
+  "license": "CC0-1.0",
+  "frame_size": 32,
+  "frame_count": 4,
+  "assets": [
+    {
+      "id": "physical_projectile",
+      "path": "physical_projectile.png",
+      "sha256": "8198c6468fe985c3f963c47dd60055d1219d0563296576d00bcec0cd45bbeffd"
+    },
+    {
+      "id": "physical_pool",
+      "path": "physical_pool.png",
+      "sha256": "ee3bda4c47cc9c84c619b1ae4ddad28495fd3feeb674d80dfc7b349b4e457ae1"
+    },
+    {
+      "id": "time_projectile",
+      "path": "time_projectile.png",
+      "sha256": "6e7a3a7025fabcfce87305fd86ffa498b4b7e816c25e36c8b3086f9b6bfea8bb"
+    },
+    {
+      "id": "time_pool",
+      "path": "time_pool.png",
+      "sha256": "79579b943e16e19cae03821c08ffd9fad5f458d6af86f9197381371657a17879"
+    },
+    {
+      "id": "void_projectile",
+      "path": "void_projectile.png",
+      "sha256": "7c6ee6ce1d688cd67fba3bf96396e41c064c862666605337a83d3ebdc5fb3b33"
+    },
+    {
+      "id": "void_pool",
+      "path": "void_pool.png",
+      "sha256": "e858af437e2e9cdd5b6fffec8b72f1187a7d71dad4f5de97460a4472577d4081"
+    },
+    {
+      "id": "fire_projectile",
+      "path": "fire_projectile.png",
+      "sha256": "45a84185f3dee6fcae3ff683a9a631174f950ad20019bd6100e6db7e939a58ed"
+    },
+    {
+      "id": "fire_pool",
+      "path": "fire_pool.png",
+      "sha256": "0689f3a3e79e4a0ab8da930a7307e9328af92d4074b7354d90acf423e1b1f849"
+    },
+    {
+      "id": "ice_projectile",
+      "path": "ice_projectile.png",
+      "sha256": "86a45cfc7ed4d4339bcf834238b6d76d6527ff109afd29ac9827c808030e75ed"
+    },
+    {
+      "id": "ice_pool",
+      "path": "ice_pool.png",
+      "sha256": "bfa6a86568c792525ec795ba5d4b137ca8a5800dbbab8b0fc917d0f77b58b955"
+    },
+    {
+      "id": "lightning_projectile",
+      "path": "lightning_projectile.png",
+      "sha256": "160ab3913f6a2d0807149525697c9243ea0a0b41ac4e50ebeacc39bc80b10732"
+    },
+    {
+      "id": "lightning_pool",
+      "path": "lightning_pool.png",
+      "sha256": "fb48718a2e85e07e1ee7f9ca03afe3ad35598a85394b6d71afb3dde9572e6f4c"
+    }
+  ]
+}
