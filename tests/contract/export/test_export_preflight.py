@@ -77,7 +77,7 @@ class ExportPreflightContractTest(unittest.TestCase):
         with fixture_project() as root:
             presets = root / "export_presets.cfg"
             text = presets.read_text(encoding="utf-8")
-            text = text.replace('platform="Linux/BSD"', 'platform="Windows Desktop"')
+            text = text.replace('platform="Linux/X11"', 'platform="Windows Desktop"')
             text = text.replace(
                 'export_path="build/linux/PlaneWalker.x86_64"',
                 'export_path="build/linux/Wrong.x86_64"',
@@ -106,6 +106,25 @@ class ExportPreflightContractTest(unittest.TestCase):
 
         self.assertEqual(report["status"], "error")
         self.assertIn("preset_embed_pck_required", issue_codes(report))
+
+    def test_consistent_unsupported_platform_is_rejected(self) -> None:
+        with fixture_project() as root:
+            manifest_path = root / "data" / "toolchain" / "export_targets.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["targets"][1]["platform"] = "Linux/BSD"
+            manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+            presets = root / "export_presets.cfg"
+            presets.write_text(
+                presets.read_text(encoding="utf-8").replace(
+                    'platform="Linux/X11"', 'platform="Linux/BSD"'
+                ),
+                encoding="utf-8",
+            )
+
+            report = validate_contract(root)
+
+        self.assertEqual(report["status"], "error")
+        self.assertIn("target_platform_unsupported", issue_codes(report))
 
     def test_local_mode_reports_missing_templates_as_blocked(self) -> None:
         with fixture_project() as root, tempfile.TemporaryDirectory() as temp:

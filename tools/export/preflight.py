@@ -28,6 +28,11 @@ EXPECTED_TARGET_IDS = (
     "linux-x86_64",
     "macos-universal",
 )
+EXPECTED_PLATFORM_NAMES = {
+    "windows-x86_64": "Windows Desktop",
+    "linux-x86_64": "Linux/X11",
+    "macos-universal": "macOS",
+}
 
 
 def parse_godot_config(path: Path) -> dict[str, dict[str, str]]:
@@ -398,6 +403,15 @@ def _validate_target(
     target_id = _target_string(raw_target, "id", index, issues)
     preset_name = _target_string(raw_target, "preset", index, issues)
     platform_name = _target_string(raw_target, "platform", index, issues)
+    if platform_name != EXPECTED_PLATFORM_NAMES.get(target_id):
+        _add_issue(
+            issues,
+            "target_platform_unsupported",
+            "error",
+            f"target {target_id or index} requires Godot 4.6.1 platform "
+            f"{EXPECTED_PLATFORM_NAMES.get(target_id)}, got {platform_name}",
+            target=target_id,
+        )
     artifact = _target_string(raw_target, "artifact", index, issues)
     artifact_kind = _target_string(raw_target, "artifact_kind", index, issues)
     if artifact_kind not in {"file", "directory"}:

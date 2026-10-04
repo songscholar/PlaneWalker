@@ -14,6 +14,7 @@ const NativeRoomPresentationScript := preload("res://scripts/dungeon/native_room
 const MusicDirectorScript := preload("res://scripts/audio/music_director.gd")
 const ContentManagerScript := preload("res://scripts/expansion/expansion_content_manager.gd")
 const ContentManagementPanelScript := preload("res://scripts/ui/content_management_panel.gd")
+const StartupDiagnosticScript := preload("res://scripts/operations/packaged_startup_diagnostic.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -101,6 +102,14 @@ func _ready() -> void:
 	if not _profile_error.is_empty():
 		status_label.visible = true
 		status_label.text = tr("UI_PROFILE_UNAVAILABLE")
+	if "--plane-walker-startup-check" in OS.get_cmdline_user_args():
+		call_deferred("_verify_packaged_startup")
+
+
+func _verify_packaged_startup() -> void:
+	var diagnostic := StartupDiagnosticScript.new()
+	get_tree().root.add_child(diagnostic)
+	diagnostic.verify(self)
 
 
 func _setup_music() -> void:
