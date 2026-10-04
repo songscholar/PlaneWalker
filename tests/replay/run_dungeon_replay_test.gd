@@ -7,6 +7,18 @@ const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_gene
 const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
+const DungeonEventRunStateScript := preload(
+	"res://scripts/events/dungeon_event_run_state.gd"
+)
+const DungeonEventRuntimeScript := preload("res://scripts/events/dungeon_event_runtime.gd")
+const DungeonEventSelectorScript := preload("res://scripts/events/dungeon_event_selector.gd")
+const EventRequirementServiceScript := preload("res://scripts/events/event_requirement_service.gd")
+const ConsequenceRuntimeScript := preload("res://scripts/events/dungeon_event_consequence_runtime.gd")
+const EventResourceAuthorityScript := preload("res://scripts/events/event_resource_authority.gd")
+const EventHealthAuthorityScript := preload("res://scripts/events/event_health_authority.gd")
+const EventModifierAuthorityScript := preload("res://scripts/events/event_modifier_authority.gd")
+const EventRouteAuthorityScript := preload("res://scripts/events/event_route_authority.gd")
+const DungeonEventDefinitionScript := preload("res://scripts/dungeon/dungeon_event_definition.gd")
 const CrumblingGroundRuleScript := preload(
 	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
 )
@@ -14,6 +26,11 @@ const CrumblingGroundRuleScript := preload(
 const SEAL_PATH := "res://scripts/replay/run_dungeon_replay_seal.gd"
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
+const PUBLICATION_SECRET := "task7-replay-publication-secret-0123456789abcdef0123456789abcdef"
+
+var _event_global_revision := 10
+var _event_provider_context: Dictionary = {}
+var _accept_event_facts := true
 
 
 class DriftRegistry:
@@ -148,8 +165,25 @@ func _run() -> void:
 		bool(seal_script.new().call("_merchant_state_is_valid", merchant_state)),
 		"dungeon Replay merchant fixture restores through its authority"
 	)
-	var seal: RefCounted = seal_script.new()
-	var event_resolutions: Array = _event_resolutions_for_plan(seal, registry, plan)
+	var seal: RefCounted = seal_script.new(PUBLICATION_SECRET)
+	var event_resolutions: Dictionary = _dungeon_event_runtime_for_plan(registry, plan)
+	suite.assert_true(
+		not event_resolutions.is_empty(),
+		"dungeon Replay fixture owns a complete event runtime snapshot"
+	)
+	var replay_event_state := _event_state_from_runtime(event_resolutions)
+	var replay_assignments := replay_event_state.get("selected_event_by_node", {}) as Dictionary
+	var replay_assignment := (
+		(replay_assignments.values()[0] as Dictionary)
+		if not replay_assignments.is_empty()
+		else {}
+	)
+	suite.assert_true(
+		not replay_assignment.is_empty()
+		and str(replay_assignment.get("event_id", ""))
+		!= str(_node_by_id(plan, str(replay_assignment.get("node_id", ""))).get("event_id", "")),
+		"Replay fixture proves actual selection may differ from the FloorPlan primary candidate"
+	)
 	var floor_transitions: Array = [
 		{
 			"sequence": 0,
@@ -198,7 +232,12 @@ func _run() -> void:
 		_merchant_transaction_facts_fixture(),
 		"seal owns the globally ordered merchant transaction facts"
 	)
-	suite.assert_equal(str(snapshot.get("event_resolution_digest", "")).length(), 64, "seal owns event digest")
+	suite.assert_equal(str(snapshot.get("event_runtime_digest", "")).length(), 64, "seal owns full event runtime digest")
+	suite.assert_equal((snapshot.get("event_assignment_facts", []) as Array).size(), 1, "seal owns actual selected-event facts")
+	suite.assert_equal((snapshot.get("event_outcome_facts", []) as Array).size(), 1, "seal owns authored outcome facts")
+	suite.assert_equal((snapshot.get("event_transaction_facts", []) as Array).size(), 1, "seal owns completed event transactions")
+	suite.assert_equal((snapshot.get("event_receipt_facts", []) as Array).size(), 1, "seal owns committed consequence receipts")
+	suite.assert_equal((snapshot.get("event_publication_facts", []) as Array).size(), 2, "seal owns complete event publication facts")
 	suite.assert_equal(snapshot.get("floor_transitions"), floor_transitions, "seal owns floor transitions")
 	suite.assert_equal(str(snapshot.get("snapshot_digest", "")).length(), 64, "seal authenticates historical bytes")
 
@@ -208,6 +247,19 @@ func _run() -> void:
 	)
 	suite.assert_true(bool(valid.get("ok", false)), "valid dungeon Replay seal verifies")
 	suite.assert_equal(valid.get("snapshot"), snapshot, "validation returns byte-identical historical snapshot")
+	_test_room_completion_history_binding(suite, seal, registry, plan, route_prefix, room_facts, run_economy, merchant_state, event_resolutions, floor_transitions)
+	_test_resigned_event_fact_drift(
+		suite, seal, snapshot, registry, plan, run_economy,
+		merchant_state, event_resolutions
+	)
+	_test_event_runtime_phases(
+		suite, seal, registry, plan, run_economy, merchant_state, floor_transitions
+	)
+	_test_event_runtime_authority_rejections(
+		suite, seal, snapshot, registry, plan, run_economy,
+		merchant_state, event_resolutions, floor_transitions
+	)
+	_test_event_route_skip_history(suite, seal, registry, floors, templates, run_economy, merchant_state)
 	_test_floor_rule_replay_round_trip(
 		suite, seal, registry, plan, route_prefix, room_facts,
 		run_economy, merchant_state, event_resolutions, floor_transitions
@@ -307,7 +359,7 @@ func _run() -> void:
 	)
 
 	_test_later_floor_transition_authority(
-		suite, seal, registry, floors, templates, run_economy, merchant_state
+		suite, seal, registry, floors, templates, run_economy, merchant_state, event_resolutions
 	)
 
 	var duplicate_economy := run_economy.duplicate(true)
@@ -371,28 +423,22 @@ func _run() -> void:
 		"capture rejects non-contiguous economy revisions"
 	)
 
-	if not event_resolutions.is_empty():
-		var duplicate_events := event_resolutions.duplicate(true)
-		duplicate_events.append(duplicate_events[0].duplicate(true))
-		duplicate_events[1]["sequence"] = 1
-		suite.assert_equal(
-			seal.call(
-				"capture", registry, plan, route_prefix, room_facts,
-				run_economy, merchant_state, duplicate_events, floor_transitions
-			),
-			{},
-			"capture rejects duplicate event resolutions"
-		)
-		var wrong_event_node := event_resolutions.duplicate(true)
-		wrong_event_node[0]["node_id"] = "boss"
-		suite.assert_equal(
-			seal.call(
-				"capture", registry, plan, route_prefix, room_facts,
-				run_economy, merchant_state, wrong_event_node, floor_transitions
-			),
-			{},
-			"capture rejects event resolutions outside the cleared route node"
-		)
+	var wrong_event_node := event_resolutions.duplicate(true)
+	var wrong_event_state := _event_state_from_runtime(wrong_event_node)
+	var wrong_assignments := wrong_event_state["selected_event_by_node"] as Dictionary
+	var wrong_key := str(wrong_assignments.keys()[0])
+	var wrong_assignment := (wrong_assignments[wrong_key] as Dictionary).duplicate(true)
+	wrong_assignment["node_id"] = "boss"
+	wrong_assignments.erase(wrong_key)
+	wrong_assignments["%s:boss" % str(plan.get("floor_id", ""))] = wrong_assignment
+	suite.assert_equal(
+		seal.call(
+			"capture", registry, plan, route_prefix, room_facts,
+			run_economy, merchant_state, wrong_event_node, floor_transitions
+		),
+		{},
+		"capture rejects event assignments outside the selected event route"
+	)
 
 	var unauthenticated := snapshot.duplicate(true)
 	unauthenticated["route_prefix"] = ["forged_edge"]
@@ -493,27 +539,18 @@ func _run() -> void:
 		"re-signed sold-reward payout drift"
 	)
 
-	if not event_resolutions.is_empty():
-		var changed_events := event_resolutions.duplicate(true)
-		changed_events[0]["outcome_id"] = "forged_outcome"
-		_assert_rejected(
-			suite, seal, snapshot, registry, plan, run_economy, merchant_state, changed_events,
-			&"EVENT_RESOLUTION_INVALID", "event outcome authority drift"
-		)
-		var event_definition_drift = DriftRegistry.new(registry)
-		var event_id := str(event_resolutions[0].get("event_id", ""))
-		var changed_event: Dictionary = registry.resolve_dungeon_event(
-			StringName(event_id)
-		)
-		changed_event["options"][0]["consequences"] = [
-			{"operation": "gold_delta", "amount": 999},
-		]
-		event_definition_drift.event_overrides[event_id] = changed_event
-		_assert_rejected(
-			suite, seal, snapshot, event_definition_drift, plan,
-			run_economy, merchant_state, event_resolutions, &"EVENT_RESOLUTION_INVALID",
-			"event consequence definition drift"
-		)
+	var event_definition_drift = DriftRegistry.new(registry)
+	var event_id := str(replay_assignment.get("event_id", ""))
+	var changed_event: Dictionary = registry.resolve_dungeon_event(StringName(event_id))
+	changed_event["options"][0]["outcomes"][0]["consequences"] = [
+		{"operation": "gold_delta", "arguments": {"amount": 999}},
+	]
+	event_definition_drift.event_overrides[event_id] = changed_event
+	_assert_rejected(
+		suite, seal, snapshot, event_definition_drift, plan,
+		run_economy, merchant_state, event_resolutions, &"EVENT_ASSIGNMENT_DRIFT",
+		"event consequence definition drift"
+	)
 
 	var fingerprint_drift = DriftRegistry.new(registry)
 	fingerprint_drift.packs_override = registry.active_packs()
@@ -545,7 +582,7 @@ func _assert_rejected(
 	plan: Dictionary,
 	run_economy: Dictionary,
 	merchant_state: Dictionary,
-	event_resolutions: Array,
+	event_resolutions: Dictionary,
 	expected_code: StringName,
 	label: String,
 	expected_field: String = ""
@@ -564,6 +601,458 @@ func _assert_rejected(
 		)
 
 
+func _test_resigned_event_fact_drift(
+	suite,
+	seal: RefCounted,
+	snapshot: Dictionary,
+	registry: RefCounted,
+	plan: Dictionary,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
+	event_runtime: Dictionary
+) -> void:
+	var cases: Array[Dictionary] = [
+		{
+			"field": "event_assignment_facts",
+			"member": "event_id",
+			"value": "event_forged_selection",
+			"code": &"EVENT_ASSIGNMENT_DRIFT",
+			"label": "re-signed selected-event drift",
+		},
+		{
+			"field": "event_outcome_facts",
+			"member": "outcome_id",
+			"value": "forged_outcome",
+			"code": &"EVENT_OUTCOME_DRIFT",
+			"label": "re-signed authored-outcome drift",
+		},
+		{
+			"field": "event_transaction_facts",
+			"member": "transaction_id",
+			"value": "event_tx_v1:forged:999",
+			"code": &"EVENT_TRANSACTION_DRIFT",
+			"label": "re-signed completed-transaction drift",
+		},
+		{
+			"field": "event_receipt_facts",
+			"member": "transaction_id",
+			"value": "event_tx_v1:forged:999",
+			"code": &"EVENT_RECEIPT_DRIFT",
+			"label": "re-signed event-receipt drift",
+		},
+		{
+			"field": "event_publication_facts",
+			"member": "fact_id",
+			"value": "event_committed:event_tx_v1:forged:999",
+			"code": &"EVENT_PUBLICATION_DRIFT",
+			"label": "re-signed event-publication drift",
+		},
+		{
+			"field": "event_publication_facts",
+			"member": "chain_hash",
+			"value": "0".repeat(64),
+			"code": &"EVENT_PUBLICATION_DRIFT",
+			"label": "re-signed publication authentication drift",
+		},
+	]
+	for drift_case: Dictionary in cases:
+		var forged := snapshot.duplicate(true)
+		var facts := forged[drift_case["field"]] as Array
+		facts[0][drift_case["member"]] = drift_case["value"]
+		forged["snapshot_digest"] = seal.call("snapshot_digest", forged)
+		_assert_rejected(
+			suite, seal, forged, registry, plan, run_economy, merchant_state,
+			event_runtime, drift_case["code"], drift_case["label"]
+		)
+
+
+func _test_event_runtime_phases(
+	suite,
+	seal: RefCounted,
+	registry: RefCounted,
+	plan: Dictionary,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
+	floor_transitions: Array
+) -> void:
+	var active_plan := _with_current_node_cleared(plan, false)
+	var room_facts := _room_fact_inputs_for_plan(active_plan)
+	var snapshots: Dictionary = {}
+	for phase: String in [
+		"open", "reserved", "pending_reward", "pending_encounter",
+		"resolved", "dismissed", "reward_completed", "encounter_completed", "pending_publication",
+	]:
+		var event_runtime := _dungeon_event_runtime_for_plan(registry, active_plan, phase)
+		suite.assert_true(not event_runtime.is_empty(), "%s runtime fixture is authoritative" % phase)
+		if event_runtime.is_empty():
+			continue
+		snapshots[phase] = event_runtime.duplicate(true)
+		var snapshot: Dictionary = seal.call(
+			"capture", registry, active_plan, active_plan["selected_edge_ids"], room_facts,
+			run_economy, merchant_state, event_runtime, floor_transitions
+		)
+		suite.assert_true(not snapshot.is_empty(), "%s event runtime seals" % phase)
+		if snapshot.is_empty():
+			continue
+		var validated: Dictionary = seal.call(
+			"validate", snapshot, registry, active_plan, run_economy, merchant_state, event_runtime
+		)
+		suite.assert_true(bool(validated.get("ok", false)), "%s event runtime verifies" % phase)
+		suite.assert_equal(validated.get("snapshot"), snapshot, "%s Replay values round trip" % phase)
+		var completed_count := 1 if phase in [
+			"resolved", "dismissed", "reward_completed", "encounter_completed", "pending_publication",
+		] else 0
+		suite.assert_equal(
+			(snapshot["event_transaction_facts"] as Array).size(), completed_count,
+			"%s seals only completed event transactions" % phase
+		)
+		var receipt_count := 0 if phase in ["open", "reserved"] else 1
+		suite.assert_equal(
+			(snapshot["event_receipt_facts"] as Array).size(), receipt_count,
+			"%s seals committed consequence receipts independently from continuation completion" % phase
+		)
+		if phase == "pending_publication":
+			suite.assert_equal((event_runtime["pending_facts"] as Array).size(), 1, "fixture retains an unacknowledged committed fact")
+			var pending_publication_count := 0
+			for fact: Dictionary in snapshot["event_publication_facts"]:
+				if str(fact["status"]) == "pending":
+					pending_publication_count += 1
+			suite.assert_equal(pending_publication_count, 1, "Replay seals pending publication status")
+
+	var pending := snapshots.get("pending_reward", {}) as Dictionary
+	var reserved := _dungeon_event_runtime_for_plan(
+		registry, active_plan, "reserved", "event_trapped_traveler"
+	)
+	var false_receipt := pending.duplicate(true)
+	false_receipt["consequence_runtime"]["participant_snapshots"]["event_state"] = (
+		_event_state_from_runtime(reserved).duplicate(true)
+	)
+	var missing_receipt := pending.duplicate(true)
+	missing_receipt["consequence_runtime"]["completed_transaction_ids"] = []
+	missing_receipt["consequence_runtime"]["publications"] = []
+	missing_receipt["consequence_runtime"]["revision"] = 0
+	missing_receipt["emitted_fact_ids"] = reserved["emitted_fact_ids"].duplicate()
+	missing_receipt["publication_ledger"] = reserved["publication_ledger"].duplicate(true)
+	missing_receipt["publication_digest"] = reserved["publication_digest"]
+	var unknown_outcome := reserved.duplicate(true)
+	var unknown_state := _event_state_from_runtime(unknown_outcome)
+	var node_key := str(unknown_state["selected_event_by_node"].keys()[0])
+	unknown_state["selected_event_by_node"][node_key]["outcome_id"] = "unknown_authored_outcome"
+	unknown_state["pending_transaction"]["outcome_id"] = "unknown_authored_outcome"
+	var mismatched_repeat := (snapshots["open"] as Dictionary).duplicate(true)
+	_event_state_from_runtime(mismatched_repeat)["selected_event_by_node"][node_key]["repeat_policy"] = "repeatable"
+	var wrong_schema_type := (snapshots["open"] as Dictionary).duplicate(true)
+	wrong_schema_type["schema_version"] = "1"
+	var wrong_encounter_type := (snapshots["open"] as Dictionary).duplicate(true)
+	wrong_encounter_type["encounter_success_by_transaction"] = []
+	for mutation: Dictionary in [
+		{"runtime": false_receipt, "label": "reserved event with a committed consequence receipt"},
+		{"runtime": missing_receipt, "label": "pending event without its committed consequence receipt"},
+		{"runtime": unknown_outcome, "label": "outcome id absent from authored option outcomes"},
+		{"runtime": mismatched_repeat, "label": "repeat policy differs from the authored definition"},
+		{"runtime": wrong_schema_type, "label": "runtime schema version has the wrong type"},
+		{"runtime": wrong_encounter_type, "label": "encounter success map has the wrong type"},
+	]:
+		suite.assert_true(
+			(seal.call(
+				"capture", registry, active_plan, active_plan["selected_edge_ids"], room_facts,
+				run_economy, merchant_state, mutation["runtime"], floor_transitions
+			) as Dictionary).is_empty(), "capture rejects %s" % str(mutation["label"])
+		)
+
+
+func _test_event_runtime_authority_rejections(
+	suite,
+	seal: RefCounted,
+	snapshot: Dictionary,
+	registry: RefCounted,
+	plan: Dictionary,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
+	event_runtime: Dictionary,
+	floor_transitions: Array
+) -> void:
+	var mutations: Array[Dictionary] = []
+	for participant: String in ["economy", "event_state", "health", "modifier", "resource", "route"]:
+		for malformed: bool in [false, true]:
+			var candidate := event_runtime.duplicate(true)
+			var participants := candidate["consequence_runtime"]["participant_snapshots"] as Dictionary
+			if malformed:
+				participants[participant]["revision"] = "invalid_revision"
+			else:
+				participants[participant] = {}
+			mutations.append({
+				"runtime": candidate,
+				"label": "%s %s participant" % ["malformed" if malformed else "empty", participant],
+			})
+	var economy_drift := event_runtime.duplicate(true)
+	var economy = RunEconomyStateScript.new()
+	var profile_source: Dictionary = registry.call("resolve_economy_profile", &"launch_economy_v1")
+	var profile: Dictionary = {}
+	for field: String in EconomyProfileScript.ROOT_FIELDS:
+		profile[field] = profile_source[field]
+	assert(bool(economy.configure(profile, int(run_economy["initial_gold"])).get("ok", false)))
+	assert(economy.restore_snapshot(run_economy))
+	var prepared: Dictionary = economy.prepare_transaction(
+		"replay_economy_drift", 1, economy.revision(), {"operation": "gold_delta"}
+	)
+	assert(bool(prepared.get("ok", false)))
+	assert(bool(economy.commit_transaction(prepared["ticket"]).get("ok", false)))
+	economy_drift["consequence_runtime"]["participant_snapshots"]["economy"] = economy.snapshot()
+	mutations.append({"runtime": economy_drift, "label": "restorable economy differs from seal input"})
+	var route_drift := event_runtime.duplicate(true)
+	var route = EventRouteAuthorityScript.new()
+	assert(route.configure(_with_current_node_cleared(plan, false)))
+	route_drift["consequence_runtime"]["participant_snapshots"]["route"] = route.snapshot()
+	mutations.append({"runtime": route_drift, "label": "restorable route differs from seal input"})
+	var projection_drift := event_runtime.duplicate(true)
+	projection_drift["consequence_runtime"]["participant_snapshots"]["modifier"]["narrative_flags"] = {"forged_flag": true}
+	mutations.append({"runtime": projection_drift, "label": "modifier and event flags disagree"})
+	var zero_chain := event_runtime.duplicate(true)
+	for entry: Dictionary in zero_chain["publication_ledger"]:
+		entry["chain_hash"] = "0".repeat(64)
+	zero_chain["publication_digest"] = "0".repeat(64)
+	mutations.append({"runtime": zero_chain, "label": "all-zero publication chain"})
+	var broken_chain := event_runtime.duplicate(true)
+	broken_chain["publication_ledger"][0]["chain_hash"] = "0".repeat(64)
+	mutations.append({"runtime": broken_chain, "label": "broken intermediate publication chain"})
+	var wrong_identity := event_runtime.duplicate(true)
+	wrong_identity["consequence_runtime"]["participant_snapshots"]["event_state"]["content_fingerprint"] = "c".repeat(64)
+	mutations.append({"runtime": wrong_identity, "label": "publication content identity changed"})
+	for mutation: Dictionary in mutations:
+		var candidate := mutation["runtime"] as Dictionary
+		suite.assert_true(
+			(seal.call(
+				"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+			run_economy, merchant_state, candidate, floor_transitions
+			) as Dictionary).is_empty(), "capture rejects %s" % str(mutation["label"])
+		)
+		var forged_snapshot := snapshot.duplicate(true)
+		forged_snapshot["event_runtime_digest"] = ReplayRecorderScript.value_digest(candidate)
+		for index: int in range((candidate["publication_ledger"] as Array).size()):
+			forged_snapshot["event_publication_facts"][index]["chain_hash"] = (
+				candidate["publication_ledger"][index]["chain_hash"]
+			)
+		forged_snapshot["snapshot_digest"] = seal.call("snapshot_digest", forged_snapshot)
+		_assert_rejected(
+			suite, seal, forged_snapshot, registry, plan, run_economy, merchant_state,
+			candidate, &"EVENT_RUNTIME_INVALID", "re-signed validation rejects %s" % str(mutation["label"])
+		)
+	for secret: String in ["", "too_short", "wrong-event-publication-secret-0123456789abcdef0123456789abcdef"]:
+		var wrong_key_seal: RefCounted = load(SEAL_PATH).new(secret)
+		suite.assert_true((wrong_key_seal.call(
+			"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+			run_economy, merchant_state, event_runtime, floor_transitions
+		) as Dictionary).is_empty(), "capture requires the original publication secret")
+		_assert_rejected(
+			suite, wrong_key_seal, snapshot, registry, plan, run_economy, merchant_state,
+			event_runtime, &"EVENT_RUNTIME_INVALID", "validation rejects missing or wrong publication secret"
+		)
+	var empty_history := _empty_dungeon_event_runtime(registry, plan)
+	suite.assert_true(
+		bool(seal.call("_event_runtime_restores", registry, plan, run_economy, empty_history)),
+		"erased-history fixture retains all real authorities and the original publication secret"
+	)
+	suite.assert_equal(
+		_event_state_from_runtime(empty_history)["selected_event_by_node"], {},
+		"erased-history fixture removes every event assignment"
+	)
+	suite.assert_true((seal.call(
+		"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+		run_economy, merchant_state, empty_history, floor_transitions
+	) as Dictionary).is_empty(), "modern capture requires history for every cleared event node")
+	var erased_modern := snapshot.duplicate(true)
+	erased_modern["event_runtime_digest"] = ReplayRecorderScript.value_digest(empty_history)
+	for field: String in [
+		"event_assignment_facts", "event_outcome_facts", "event_transaction_facts",
+		"event_receipt_facts", "event_publication_facts",
+	]:
+		erased_modern[field] = []
+	erased_modern["snapshot_digest"] = seal.call("snapshot_digest", erased_modern)
+	_assert_rejected(
+		suite, seal, erased_modern, registry, plan, run_economy, merchant_state,
+		empty_history, &"EVENT_RUNTIME_INVALID", "re-signed modern seal cannot erase cleared event history",
+		"selected_event_by_node.missing_cleared_event"
+	)
+	var erased_history := snapshot.duplicate(true)
+	for field: String in [
+		"event_runtime_digest", "event_assignment_facts", "event_outcome_facts",
+		"event_transaction_facts", "event_receipt_facts", "event_publication_facts",
+	]:
+		erased_history.erase(field)
+	erased_history["event_resolution_digest"] = ReplayRecorderScript.value_digest([])
+	erased_history["snapshot_digest"] = seal.call("snapshot_digest", erased_history)
+	var erased_history_result: Dictionary = seal.call(
+		"validate", erased_history, registry, plan, run_economy, merchant_state, []
+	)
+	suite.assert_equal(erased_history_result.get("code"), &"EVENT_RESOLUTION_INVALID", "legacy branch cannot erase cleared event history")
+
+
+func _test_event_route_skip_history(
+	suite,
+	seal: RefCounted,
+	registry: RefCounted,
+	floors: Array,
+	templates: Array,
+	run_economy: Dictionary,
+	merchant_state: Dictionary
+) -> void:
+	for event_position: int in [1, 2]:
+		var fixture := _event_route_skip_fixture(registry, floors, templates, event_position)
+		suite.assert_true(not fixture.is_empty(), "real route skip reaches event at destination %s" % event_position)
+		if fixture.is_empty():
+			continue
+		var plan := fixture["plan"] as Dictionary
+		var runtime := fixture["runtime"] as Dictionary
+		var route := _route_node_ids(plan)
+		var event_node_id := str(route[route.size() - 3 + event_position])
+		var event_node := _node_by_id(plan, event_node_id)
+		var node_key := "%s:%s" % [str(plan["floor_id"]), event_node_id]
+		suite.assert_equal(event_node["room_type"], "event", "route-skip destination is an authored event room")
+		suite.assert_equal(event_node["cleared"], event_position == 1, "only a skipped intermediate is automatically cleared")
+		suite.assert_true(
+			not (_event_state_from_runtime(runtime)["selected_event_by_node"] as Dictionary).has(node_key),
+			"route-skip destination has no event assignment"
+		)
+		suite.assert_true(
+			bool(seal.call("_event_runtime_restores", registry, plan, run_economy, runtime)),
+			"route-skip runtime retains authentic participants and publication history"
+		)
+		var transitions := fixture["transitions"] as Array
+		var snapshot: Dictionary = seal.call(
+			"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+			run_economy, merchant_state, runtime, transitions
+		)
+		suite.assert_true(not snapshot.is_empty(), "route-skip event history captures with complete room facts")
+		if snapshot.is_empty():
+			continue
+		suite.assert_equal(
+			(snapshot["room_facts"] as Array).size(), _room_fact_inputs_for_plan(plan).size(),
+			"route skip preserves every entered and cleared room fact"
+		)
+		var validated: Dictionary = seal.call("validate", snapshot, registry, plan, run_economy, merchant_state, runtime)
+		suite.assert_true(bool(validated.get("ok", false)), "authentic route-skip event history validates")
+		if event_position == 1:
+			var incomplete := snapshot.duplicate(true)
+			incomplete["room_facts"] = (incomplete["room_facts"] as Array).filter(
+				func(fact: Dictionary) -> bool: return str(fact["node_id"]) != event_node_id
+			)
+			for index: int in range((incomplete["room_facts"] as Array).size()):
+				incomplete["room_facts"][index]["sequence"] = index
+			incomplete["snapshot_digest"] = seal.call("snapshot_digest", incomplete)
+			_assert_rejected(
+				suite, seal, incomplete, registry, plan, run_economy, merchant_state, runtime,
+				&"ROOM_FACT_INVALID", "route skip does not permit omitted intermediate room facts"
+			)
+			continue
+		var cleared_plan := _with_current_node_cleared(plan, true)
+		var cleared_runtime := runtime.duplicate(true)
+		cleared_runtime["consequence_runtime"]["participant_snapshots"]["route"]["plan"] = cleared_plan
+		suite.assert_true(
+			bool(seal.call("_event_runtime_restores", registry, cleared_plan, run_economy, cleared_runtime)),
+			"cleared landing fixture still restores every runtime authority"
+		)
+		suite.assert_true((seal.call(
+			"capture", registry, cleared_plan, cleared_plan["selected_edge_ids"], _room_fact_inputs_for_plan(cleared_plan),
+			run_economy, merchant_state, cleared_runtime, transitions
+		) as Dictionary).is_empty(), "route-skip landing event still requires its own history when cleared")
+		var forged := snapshot.duplicate(true)
+		var cleared_fact := (forged["room_facts"] as Array).back().duplicate(true) as Dictionary
+		cleared_fact["fact_type"] = "room_cleared"
+		cleared_fact["sequence"] = (forged["room_facts"] as Array).size()
+		(forged["room_facts"] as Array).append(cleared_fact)
+		forged["event_runtime_digest"] = ReplayRecorderScript.value_digest(cleared_runtime)
+		forged["snapshot_digest"] = seal.call("snapshot_digest", forged)
+		_assert_rejected(
+			suite, seal, forged, registry, cleared_plan, run_economy, merchant_state, cleared_runtime,
+			&"EVENT_RUNTIME_INVALID", "re-signed route skip cannot erase its landing event history",
+			"selected_event_by_node.missing_cleared_event"
+		)
+
+
+func _test_room_completion_history_binding(suite, seal: RefCounted, registry: RefCounted, plan: Dictionary, route_prefix: Array, room_facts: Array, economy: Dictionary, merchants: Dictionary, events: Dictionary, transitions: Array) -> void:
+	var history: Array = []
+	for node_id: String in plan["visited_node_ids"]:
+		var node := _node_by_id(plan, node_id)
+		if node_id == str(plan["entry_node_id"]) or not bool(node.get("cleared", false)):
+			continue
+		history.append({"type": "room_completed_v1", "sequence": history.size() + 1, "floor_id": plan["floor_id"], "floor_index": plan["floor_index"], "node_id": node_id})
+	var captured: Dictionary = seal.call("capture", registry, plan, route_prefix, room_facts, economy, merchants, events, transitions, {}, history)
+	suite.assert_true(not captured.is_empty(), "Replay captures modifier room lifetime history")
+	if captured.is_empty():
+		return
+	var validated: Dictionary = seal.call("validate", captured, registry, plan, economy, merchants, events, {}, history)
+	suite.assert_true(bool(validated.get("ok", false)), "Replay restores exact room lifetime history")
+	var changed: Dictionary = seal.call("validate", captured, registry, plan, economy, merchants, events, {}, [])
+	suite.assert_equal(changed.get("code"), &"ROOM_COMPLETION_HISTORY_DRIFT", "Replay refuses cleared-room history deletion")
+	var downgraded := captured.duplicate(true)
+	downgraded.erase("room_completion_events_digest")
+	downgraded["snapshot_digest"] = seal.call("snapshot_digest", downgraded)
+	var refused: Dictionary = seal.call("validate", downgraded, registry, plan, economy, merchants, events, {}, history)
+	suite.assert_equal(refused.get("code"), &"ROOM_COMPLETION_HISTORY_MISSING", "Replay cannot drop the history binding while lifetime facts exist")
+
+
+func _event_route_skip_fixture(
+	registry: RefCounted, floors: Array, templates: Array, event_position: int
+) -> Dictionary:
+	for seed_value: int in range(1, 65):
+		var generated: Dictionary = FloorPlanGeneratorScript.new().generate(seed_value, floors[2], templates)
+		if not bool(generated.get("ok", false)):
+			continue
+		var floor_plan = FloorPlanScript.new()
+		if not bool(floor_plan.configure(generated["plan"], floors[2], templates).get("ok", false)):
+			continue
+		while floor_plan.snapshot()["current_node_id"] != floor_plan.snapshot()["boss_node_id"]:
+			var edge := _first_open_edge(floor_plan.snapshot())
+			if not bool(floor_plan.select_edge(StringName(str(edge["id"])), floor_plan.revision()).get("ok", false)):
+				break
+			var plan := _with_current_node_cleared(floor_plan.snapshot(), true)
+			var node := _node_by_id(plan, str(plan["current_node_id"]))
+			if str(node["room_type"]) != "event":
+				if not bool(floor_plan.configure(plan, floors[2], templates).get("ok", false)):
+					break
+				continue
+			var route = EventRouteAuthorityScript.new()
+			if not route.configure(plan):
+				break
+			var preview: Dictionary = route.prepare_operations(
+				"replay_route_skip_probe", [{"operation": "route_skip", "arguments": {"rooms": 2}}], 0
+			)
+			if not bool(preview.get("ok", false)):
+				break
+			var preview_plan := preview["ticket"]["after"]["plan"] as Dictionary
+			var preview_route := _route_node_ids(preview_plan)
+			var destination := _node_by_id(preview_plan, preview_route[preview_route.size() - 3 + event_position])
+			if str(destination["room_type"]) != "event":
+				break
+			var fixture := _event_runtime_fixture(registry, plan, "event_void_rift")
+			if fixture.is_empty():
+				return {}
+			var runtime: RefCounted = fixture["runtime"]
+			if not bool(runtime.call("open_event", {
+				"floor_id": str(plan["floor_id"]), "floor_index": int(plan["floor_index"]),
+				"node_id": str(plan["current_node_id"]), "primary_event_id": str(node["event_id"]),
+			}, {}).get("ok", false)):
+				return {}
+			if not bool(runtime.call("choose_option", &"commit", _event_global_revision).get("ok", false)):
+				return {}
+			var event_runtime: Dictionary = runtime.call("snapshot")
+			var transitions: Array[Dictionary] = []
+			for index: int in range(3):
+				var prior: Dictionary = {} if index == 0 else FloorPlanGeneratorScript.new().generate(seed_value, floors[index - 1], templates)
+				transitions.append({
+					"sequence": index,
+					"from_floor_id": "" if index == 0 else str(floors[index - 1]["id"]),
+					"to_floor_id": str(floors[index]["id"]),
+					"completed_plan_digest": "" if index == 0 else str(prior["plan"]["generation_digest"]),
+				})
+			return {
+				"plan": event_runtime["consequence_runtime"]["participant_snapshots"]["route"]["plan"],
+				"runtime": event_runtime, "transitions": transitions,
+			}
+	return {}
+
+
 func _test_floor_rule_replay_round_trip(
 	suite,
 	seal: RefCounted,
@@ -573,7 +1062,7 @@ func _test_floor_rule_replay_round_trip(
 	room_facts: Array,
 	run_economy: Dictionary,
 	merchant_state: Dictionary,
-	event_resolutions: Array,
+	event_resolutions: Dictionary,
 	floor_transitions: Array
 ) -> void:
 	var runtime: RefCounted = CrumblingGroundRuleScript.new()
@@ -621,7 +1110,8 @@ func _test_later_floor_transition_authority(
 	floors: Array,
 	templates: Array,
 	run_economy: Dictionary,
-	merchant_state: Dictionary
+	merchant_state: Dictionary,
+	prior_event_runtime: Dictionary
 ) -> void:
 	var generated: Dictionary = FloorPlanGeneratorScript.new().generate(
 		20261001, floors[1], templates
@@ -636,6 +1126,7 @@ func _test_later_floor_transition_authority(
 		suite.assert_true(false, "later-floor prior plan generates")
 		return
 	var later_plan: Dictionary = generated["plan"]
+	var empty_event_runtime := _empty_dungeon_event_runtime(registry, later_plan)
 	var transitions: Array = [
 		{
 			"sequence": 0,
@@ -652,22 +1143,108 @@ func _test_later_floor_transition_authority(
 	]
 	var later_snapshot: Dictionary = seal.call(
 		"capture", registry, later_plan, [], [], run_economy, merchant_state,
-		[], transitions
+		empty_event_runtime, transitions
 	)
 	suite.assert_true(not later_snapshot.is_empty(), "later-floor canonical transition chain captures")
 	if later_snapshot.is_empty():
 		return
 	var valid: Dictionary = seal.call(
 		"validate", later_snapshot, registry, later_plan, run_economy,
-		merchant_state, []
+		merchant_state, empty_event_runtime
 	)
 	suite.assert_true(bool(valid.get("ok", false)), "later-floor canonical transition chain validates")
+	_test_legacy_empty_event_history(
+		suite, later_snapshot, registry, later_plan, run_economy,
+		merchant_state, empty_event_runtime, transitions
+	)
+	var historical_runtime := prior_event_runtime.duplicate(true)
+	var current_route = EventRouteAuthorityScript.new()
+	suite.assert_true(current_route.configure(later_plan), "later-floor route authority configures")
+	historical_runtime["consequence_runtime"]["participant_snapshots"]["route"] = current_route.snapshot()
+	historical_runtime["active_node_key"] = ""
+	historical_runtime["active_event_id"] = ""
+	var historical_snapshot: Dictionary = seal.call(
+		"capture", registry, later_plan, [], [], run_economy, merchant_state,
+		historical_runtime, transitions
+	)
+	suite.assert_true(not historical_snapshot.is_empty(), "later floor retains authoritative prior-floor event history")
+	if not historical_snapshot.is_empty():
+		var historical_valid: Dictionary = seal.call(
+			"validate", historical_snapshot, registry, later_plan, run_economy,
+			merchant_state, historical_runtime
+		)
+		suite.assert_true(bool(historical_valid.get("ok", false)), "historical event history verifies against its canonical floor")
 	var forged := later_snapshot.duplicate(true)
 	forged["floor_transitions"][1]["completed_plan_digest"] = "0".repeat(64)
 	forged["snapshot_digest"] = seal.call("snapshot_digest", forged)
 	_assert_rejected(
-		suite, seal, forged, registry, later_plan, run_economy, merchant_state, [],
+		suite, seal, forged, registry, later_plan, run_economy, merchant_state,
+		empty_event_runtime,
 		&"FLOOR_TRANSITION_INVALID", "re-signed prior floor digest drift"
+	)
+
+
+func _test_legacy_empty_event_history(
+	suite,
+	modern_snapshot: Dictionary,
+	registry: RefCounted,
+	plan: Dictionary,
+	run_economy: Dictionary,
+	merchant_state: Dictionary,
+	modern_runtime: Dictionary,
+	transitions: Array
+) -> void:
+	var legacy := modern_snapshot.duplicate(true)
+	for field: String in [
+		"event_runtime_digest", "event_assignment_facts", "event_outcome_facts",
+		"event_transaction_facts", "event_receipt_facts", "event_publication_facts",
+	]:
+		legacy.erase(field)
+	legacy["event_resolution_digest"] = ReplayRecorderScript.value_digest([])
+	var legacy_reader: RefCounted = load(SEAL_PATH).new()
+	legacy["snapshot_digest"] = legacy_reader.call("snapshot_digest", legacy)
+	var validated: Dictionary = legacy_reader.call(
+		"validate", legacy, registry, plan, run_economy, merchant_state, []
+	)
+	suite.assert_true(bool(validated.get("ok", false)), "historical schema-3 empty event history remains readable without a secret")
+	suite.assert_equal(validated.get("snapshot"), legacy, "legacy read preserves historical bytes")
+	suite.assert_true((legacy_reader.call(
+		"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+		run_economy, merchant_state, [], transitions
+	) as Dictionary).is_empty(), "new capture cannot use the legacy empty Array bypass")
+	for legacy_input: Variant in [[{"event_id": "forged_event"}], modern_runtime]:
+		var rejected: Dictionary = legacy_reader.call(
+			"validate", legacy, registry, plan, run_economy, merchant_state, legacy_input
+		)
+		suite.assert_equal(rejected.get("code"), &"EVENT_RESOLUTION_INVALID", "legacy reader accepts only empty event history")
+	var forged_digest := legacy.duplicate(true)
+	forged_digest["event_resolution_digest"] = "0".repeat(64)
+	forged_digest["snapshot_digest"] = legacy_reader.call("snapshot_digest", forged_digest)
+	var rejected_digest: Dictionary = legacy_reader.call(
+		"validate", forged_digest, registry, plan, run_economy, merchant_state, []
+	)
+	suite.assert_equal(rejected_digest.get("code"), &"EVENT_RESOLUTION_INVALID", "legacy empty history digest remains authoritative")
+	var mixed_fields := legacy.duplicate(true)
+	mixed_fields["event_runtime_digest"] = modern_snapshot["event_runtime_digest"]
+	mixed_fields["snapshot_digest"] = legacy_reader.call("snapshot_digest", mixed_fields)
+	var rejected_mixed: Dictionary = legacy_reader.call(
+		"validate", mixed_fields, registry, plan, run_economy, merchant_state, []
+	)
+	suite.assert_equal(rejected_mixed.get("code"), &"INVALID_FIELDS", "legacy and modern Replay fields cannot be mixed")
+	suite.assert_true((legacy_reader.call(
+		"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+		run_economy, merchant_state, modern_runtime, transitions
+	) as Dictionary).is_empty(), "modern empty runtime still needs its authenticated publication root")
+	var zero_root := modern_runtime.duplicate(true)
+	zero_root["publication_digest"] = "0".repeat(64)
+	var modern_reader: RefCounted = load(SEAL_PATH).new(PUBLICATION_SECRET)
+	suite.assert_true((modern_reader.call(
+		"capture", registry, plan, plan["selected_edge_ids"], _room_fact_inputs_for_plan(plan),
+		run_economy, merchant_state, zero_root, transitions
+	) as Dictionary).is_empty(), "modern empty publication root cannot be forged")
+	_assert_rejected(
+		suite, modern_reader, modern_snapshot, registry, plan, run_economy, merchant_state,
+		zero_root, &"EVENT_RUNTIME_INVALID", "modern empty root rejects re-signed drift"
 	)
 
 
@@ -685,32 +1262,165 @@ func _node_by_id(plan: Dictionary, node_id: String) -> Dictionary:
 	return {}
 
 
-func _event_resolutions_for_plan(
-	seal: RefCounted,
+func _dungeon_event_runtime_for_plan(
 	registry: RefCounted,
-	plan: Dictionary
-) -> Array:
-	var result: Array[Dictionary] = []
+	plan: Dictionary,
+	phase: String = "resolved",
+	selected_event_id: String = ""
+) -> Dictionary:
 	for node_id: String in _route_node_ids(plan):
 		var node: Dictionary = _node_by_id(plan, node_id)
-		var event_id := str(node.get("event_id", ""))
-		if event_id.is_empty() or not bool(node.get("cleared", false)):
+		var primary_event_id := str(node.get("event_id", ""))
+		if primary_event_id.is_empty():
 			continue
-		var definition: Dictionary = registry.resolve_dungeon_event(StringName(event_id))
-		var options := definition.get("options", []) as Array
-		if options.is_empty():
-			return []
-		var option_id := str((options[0] as Dictionary).get("id", ""))
-		result.append({
-			"event_id": event_id,
+		var event_id := selected_event_id if not selected_event_id.is_empty() else (
+			"event_trapped_traveler"
+			if primary_event_id != "event_trapped_traveler"
+			else "event_chronal_altar"
+		)
+		if phase in ["pending_reward", "reward_completed"]:
+			event_id = "event_trapped_traveler"
+		elif phase in ["pending_encounter", "encounter_completed"]:
+			event_id = "event_sleeping_guardian"
+		var fixture := _event_runtime_fixture(registry, plan, event_id)
+		if fixture.is_empty():
+			return {}
+		var runtime: RefCounted = fixture["runtime"]
+		var event_state: RefCounted = fixture["event_state"]
+		var floor_id := str(plan.get("floor_id", ""))
+		var node_key := "%s:%s" % [floor_id, node_id]
+		var opened: Dictionary = runtime.call("open_event", {
+			"floor_id": floor_id,
+			"floor_index": int(plan.get("floor_index", 0)),
 			"node_id": node_id,
-			"option_id": option_id,
-			"outcome_id": seal.call(
-				"expected_event_outcome_id", definition, node_id, option_id
-			),
-			"sequence": result.size(),
-		})
-	return result
+			"primary_event_id": primary_event_id,
+		}, {})
+		if not bool(opened.get("ok", false)):
+			return {}
+		if phase == "reserved":
+			var definition := fixture["definition"] as Dictionary
+			var option := (definition["options"] as Array)[0] as Dictionary
+			var outcome := (option["outcomes"] as Array)[0] as Dictionary
+			var reserved: Dictionary = event_state.call(
+				"reserve_option", node_key, "event_tx_v1:%s:1" % event_id,
+				str(option["id"]), str(outcome["id"]), str(outcome["outcome_key"]), 1
+			)
+			if not bool(reserved.get("ok", false)):
+				return {}
+		elif phase != "open":
+			var option_id := &"decline" if phase in ["resolved", "dismissed", "pending_publication"] else &"commit"
+			_accept_event_facts = phase != "pending_publication"
+			var chosen: Dictionary = runtime.call("choose_option", option_id, _event_global_revision)
+			if not bool(chosen.get("ok", false)) and not bool(chosen.get("pending_publication", false)):
+				return {}
+			if phase == "reward_completed":
+				var pending := _event_state_from_runtime(runtime.call("snapshot"))
+				if not bool(runtime.call(
+					"complete_reward", str(pending["pending_reward"]["continuation_id"]),
+					{"reward_id": "blessing_fixture"}, _event_global_revision
+				).get("ok", false)):
+					return {}
+			elif phase == "encounter_completed":
+				var pending := _event_state_from_runtime(runtime.call("snapshot"))
+				if not bool(runtime.call(
+					"complete_encounter", str(pending["pending_encounter"]["continuation_id"]),
+					true, {}, _event_global_revision
+				).get("ok", false)):
+					return {}
+			elif phase == "dismissed":
+				if not bool(runtime.call("dismiss_result", _event_global_revision).get("ok", false)):
+					return {}
+		var result: Dictionary = runtime.call("snapshot")
+		return result if bool(runtime.call("can_restore_snapshot", result)) else {}
+	return {}
+
+
+func _event_runtime_fixture(
+	registry: RefCounted, plan: Dictionary, event_id: String
+) -> Dictionary:
+	_event_global_revision = 10
+	_accept_event_facts = true
+	_event_provider_context = {
+		"global_revision": _event_global_revision,
+		"selection": {
+			"run_seed": int(plan["run_seed"]), "availability": "LAUNCH",
+			"health": {"current": 80.0, "maximum": 100.0},
+			"economy": {"gold": 230}, "build": {"curse_ids": []},
+			"resources": {"time_shard": 2, "forge_essence": 1},
+			"flags": {}, "meta": {},
+		},
+		"requirements": {
+			"resources": {"time_shard": 2, "forge_essence": 1},
+			"health": {"current": 80.0, "maximum": 100.0},
+			"gold": 230, "reward_tags": [], "curse_ids": [], "narrative_flags": {},
+			"floor_index": int(plan["floor_index"]),
+		},
+	}
+	var resource = EventResourceAuthorityScript.new()
+	var health = EventHealthAuthorityScript.new()
+	var modifier = EventModifierAuthorityScript.new()
+	var route = EventRouteAuthorityScript.new()
+	var economy = RunEconomyStateScript.new()
+	var event_state = DungeonEventRunStateScript.new()
+	var profile: Dictionary = {}
+	var source: Dictionary = registry.resolve_economy_profile(&"launch_economy_v1")
+	for field: String in EconomyProfileScript.ROOT_FIELDS:
+		profile[field] = source[field]
+	if (
+		not resource.configure({"time_shard": 2, "forge_essence": 1})
+		or not health.configure(80.0, 100.0)
+		or not modifier.configure([], {}, [])
+		or not route.configure(plan)
+		or not bool(economy.configure(profile, 0).get("ok", false))
+		or not economy.restore_snapshot(_run_economy_fixture(registry))
+		or not bool(event_state.configure("b".repeat(64)).get("ok", false))
+	):
+		return {}
+	var consequence = ConsequenceRuntimeScript.new()
+	if not consequence.configure(resource, health, economy, modifier, route, event_state):
+		return {}
+	var definition_source: Dictionary = registry.resolve_dungeon_event(StringName(event_id))
+	var definition: Dictionary = {}
+	for field: String in DungeonEventDefinitionScript.ROOT_FIELDS:
+		definition[field] = definition_source[field]
+	var runtime = DungeonEventRuntimeScript.new()
+	if not runtime.configure(
+		[definition], DungeonEventSelectorScript.new(), event_state,
+		EventRequirementServiceScript.new(), consequence,
+		Callable(self, "_provide_event_context"), Callable(self, "_commit_event_state"),
+		Callable(self, "_publish_event_fact"), PUBLICATION_SECRET
+	):
+		return {}
+	return {"runtime": runtime, "event_state": event_state, "definition": definition}
+
+
+func _empty_dungeon_event_runtime(registry: RefCounted, plan: Dictionary) -> Dictionary:
+	var fixture := _event_runtime_fixture(registry, plan, "event_chronal_altar")
+	return fixture["runtime"].call("snapshot") if not fixture.is_empty() else {}
+
+
+func _provide_event_context() -> Dictionary:
+	_event_provider_context["global_revision"] = _event_global_revision
+	return _event_provider_context.duplicate(true)
+
+
+func _commit_event_state(_command: Dictionary, expected_revision: int) -> Dictionary:
+	if expected_revision != _event_global_revision:
+		return {"ok": false, "code": &"STALE_REVISION"}
+	_event_global_revision += 1
+	return {"ok": true, "code": &"OK", "new_revision": _event_global_revision}
+
+
+func _publish_event_fact(_fact_id: String, _payload: Dictionary) -> bool:
+	return _accept_event_facts
+
+
+func _event_state_from_runtime(event_runtime: Dictionary) -> Dictionary:
+	return (
+		((event_runtime.get("consequence_runtime", {}) as Dictionary)
+			.get("participant_snapshots", {}) as Dictionary)
+			.get("event_state", {}) as Dictionary
+	)
 
 
 func _room_fact_inputs_for_plan(plan: Dictionary) -> Array:

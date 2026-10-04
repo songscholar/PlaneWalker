@@ -6,10 +6,244 @@ const ArchetypeProfileScript := preload("res://scripts/progression/archetype_pro
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunViewStateScript := preload("res://scripts/ui/contracts/run_view_state.gd")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
+const DungeonViewRulesScript := preload("res://scripts/ui/contracts/dungeon_view_state_rules.gd")
+const DungeonMapViewScript := preload("res://scripts/ui/contracts/dungeon_map_view_state.gd")
+const MerchantViewScript := preload("res://scripts/ui/contracts/merchant_view_state.gd")
+const DungeonEventViewScript := preload("res://scripts/ui/contracts/dungeon_event_view_state.gd")
+const RoomInteractionViewScript := preload("res://scripts/ui/contracts/room_interaction_view_state.gd")
+const FloorTransitionViewScript := preload("res://scripts/ui/contracts/floor_transition_view_state.gd")
+const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
+const DungeonEventRuntimeScript := preload("res://scripts/events/dungeon_event_runtime.gd")
 
 var _last_run_id: String = ""
 var _view_revision: int = -1
 var _latest_view_state: Dictionary = {}
+
+
+func project_dungeon_map(authoritative: Dictionary, choices: Array, floor: Dictionary):
+	var plan_value: Variant = authoritative.get("floor_plan")
+	if not plan_value is Dictionary or not _dungeon_authority_valid(authoritative):
+		return DungeonViewRulesScript.reject(authoritative, "floor_plan")
+	var plan := plan_value as Dictionary
+	if (
+		floor.get("id") != plan.get("floor_id")
+		or not floor.get("name_key") is String
+		or not plan.get("nodes") is Array
+		or not plan.get("edges") is Array
+		or not plan.get("selected_edge_ids") is Array
+	):
+		return DungeonViewRulesScript.reject(authoritative, "floor")
+	var view := _dungeon_header(authoritative)
+	view.merge({
+		"floor_id": plan.get("floor_id"),
+		"floor_index": plan.get("floor_index"),
+		"floor_name_key": floor["name_key"],
+		"gold": _dungeon_gold(authoritative),
+		"current_node_id": plan.get("current_node_id"),
+		"boss_distance": 0,
+		"nodes": [],
+		"edges": [],
+		"routes": [],
+	})
+	var nodes_by_id: Dictionary = {}
+	var boss_layer := -1
+	var current_layer := -1
+	for node_value: Variant in plan["nodes"]:
+		if not node_value is Dictionary:
+			return DungeonViewRulesScript.reject(authoritative, "nodes")
+		var node := node_value as Dictionary
+		if not node.get("revealed") is bool or not node.get("layer") is int:
+			return DungeonViewRulesScript.reject(authoritative, "nodes.knowledge")
+		var room_type := str(node.get("room_type", "")) if bool(node["revealed"]) else "unknown"
+		var projected := {
+			"id": node.get("id"),
+			"layer": node["layer"],
+			"room_type": room_type,
+			"name_key": _dungeon_room_key(room_type),
+			"revealed": node["revealed"],
+			"visited": node.get("visited"),
+			"cleared": node.get("cleared"),
+			"current": node.get("id") == plan.get("current_node_id"),
+		}
+		(view["nodes"] as Array).append(projected)
+		nodes_by_id[str(node.get("id", ""))] = projected
+		if node.get("id") == plan.get("boss_node_id"):
+			boss_layer = int(node["layer"])
+		if node.get("id") == plan.get("current_node_id"):
+			current_layer = int(node["layer"])
+	if boss_layer < 0 or current_layer < 0:
+		return DungeonViewRulesScript.reject(authoritative, "current_node_id")
+	view["boss_distance"] = maxi(0, boss_layer - current_layer)
+	var selected: Array = plan.get("selected_edge_ids", [])
+	for edge_value: Variant in plan["edges"]:
+		if not edge_value is Dictionary:
+			return DungeonViewRulesScript.reject(authoritative, "edges")
+		var edge := edge_value as Dictionary
+		(view["edges"] as Array).append({
+			"id": edge.get("id"),
+			"source_node_id": edge.get("source_node_id"),
+			"destination_node_id": edge.get("destination_node_id"),
+			"selected": selected.has(edge.get("id")),
+		})
+	for choice_value: Variant in choices:
+		if not choice_value is Dictionary:
+			return DungeonViewRulesScript.reject(authoritative, "routes")
+		var choice := choice_value as Dictionary
+		var node_value: Variant = nodes_by_id.get(str(choice.get("node_id", "")))
+		if not node_value is Dictionary:
+			return DungeonViewRulesScript.reject(authoritative, "routes.node_id")
+		var node := node_value as Dictionary
+		var phase := int(authoritative.get("phase", -1))
+		var initial_route: bool = (
+			phase == RunPhaseScript.Value.ROOM_ACTIVE
+			and node.get("layer") == 1
+			and plan.get("current_node_id") == "entry"
+		)
+		var available: bool = (
+			not bool(authoritative.get("suspended", false))
+			and (phase == RunPhaseScript.Value.ROOM_RESOLVING or initial_route)
+		)
+		(view["routes"] as Array).append({
+			"edge_id": choice.get("edge_id"),
+			"node_id": node["id"],
+			"choice_order": choice.get("choice_order"),
+			"room_type": node["room_type"],
+			"name_key": node["name_key"],
+			"available": available,
+			"disabled_reason_key": "" if available else "UI_ROUTE_UNAVAILABLE",
+		})
+	return DungeonMapViewScript.validate(view)
+
+
+func project_merchant(authoritative: Dictionary, source: Dictionary, content: Array, services: Array = []):
+	var source_fields := [
+		"node_key", "merchant_id", "name_key", "description_key", "intro_key",
+		"farewell_key", "services", "gold", "economy_revision", "inventory",
+		"service_state", "visibility",
+	]
+	if (
+		not _dungeon_authority_valid(authoritative)
+		or not DungeonViewRulesScript.exact(source, source_fields)
+		or not source.get("inventory") is Dictionary
+		or not source["inventory"].get("offers") is Array
+		or not source.get("services") is Array
+	):
+		return DungeonViewRulesScript.reject(authoritative, "merchant")
+	for service: Variant in services:
+		if not service is Dictionary or not (source["services"] as Array).has(service.get("action_id")):
+			return DungeonViewRulesScript.reject(authoritative, "services.action_id")
+	var content_by_id: Dictionary = {}
+	for definition_value: Variant in content:
+		if not definition_value is Dictionary:
+			return DungeonViewRulesScript.reject(authoritative, "content")
+		var definition := definition_value as Dictionary
+		if content_by_id.has(definition.get("id")):
+			return DungeonViewRulesScript.reject(authoritative, "content.id")
+		content_by_id[definition.get("id")] = definition
+	var view := _dungeon_header(authoritative)
+	view.merge({
+		"merchant_id": source["merchant_id"],
+		"name_key": source["name_key"],
+		"description_key": source["description_key"],
+		"intro_key": source["intro_key"],
+		"gold": source["gold"],
+		"offers": [],
+		"services": services.duplicate(true),
+	})
+	for offer_value: Variant in source["inventory"]["offers"]:
+		if not offer_value is Dictionary or not DungeonViewRulesScript.exact(offer_value, ["offer_id", "reward_id", "category", "rarity", "price", "sold"]):
+			return DungeonViewRulesScript.reject(authoritative, "offers")
+		var offer := offer_value as Dictionary
+		var definition_value: Variant = content_by_id.get(offer["reward_id"])
+		if not definition_value is Dictionary or not offer["price"] is int or not source["gold"] is int or not offer["sold"] is bool:
+			return DungeonViewRulesScript.reject(authoritative, "offers.content_id")
+		var definition := definition_value as Dictionary
+		if definition.get("category") != offer["category"] or definition.get("rarity") != offer["rarity"]:
+			return DungeonViewRulesScript.reject(authoritative, "offers.content")
+		var affordable := int(source["gold"]) >= int(offer["price"])
+		var available := affordable and not bool(offer["sold"])
+		(view["offers"] as Array).append({
+			"offer_id": offer["offer_id"],
+			"content_id": offer["reward_id"],
+			"category": offer["category"],
+			"rarity": offer["rarity"],
+			"name_key": definition.get("name_key"),
+			"description_key": definition.get("description_key"),
+			"price": offer["price"],
+			"sold": offer["sold"],
+			"affordable": affordable,
+			"available": available,
+			"disabled_reason_key": (
+				"" if available
+				else "UI_MERCHANT_SOLD" if offer["sold"]
+				else "UI_MERCHANT_INSUFFICIENT_GOLD"
+			),
+		})
+	return MerchantViewScript.validate(view)
+
+
+func project_dungeon_event(authoritative: Dictionary, source: Dictionary, reward_offer: Dictionary = {}):
+	if not _dungeon_authority_valid(authoritative) or not DungeonViewRulesScript.exact(source, DungeonEventRuntimeScript.VIEW_FIELDS) or source.get("revision") != authoritative.get("revision"):
+		return DungeonViewRulesScript.reject(authoritative, "event")
+	var view := source.duplicate(true)
+	view.merge(_dungeon_header(authoritative), true)
+	if not reward_offer.is_empty():
+		view["reward_offer"] = reward_offer.duplicate(true)
+	return DungeonEventViewScript.validate(view)
+
+
+func project_room_interaction(authoritative: Dictionary, source: Dictionary):
+	if not _dungeon_authority_valid(authoritative) or not DungeonViewRulesScript.exact(source, ["room_type", "node_id", "name_key", "description_key", "choices"]):
+		return DungeonViewRulesScript.reject(authoritative, "room")
+	var view := source.duplicate(true)
+	view.merge(_dungeon_header(authoritative), true)
+	return RoomInteractionViewScript.validate(view)
+
+
+func project_floor_transition(authoritative: Dictionary, floors: Array):
+	if not _dungeon_authority_valid(authoritative) or not authoritative.get("completed_floor_ids") is Array:
+		return DungeonViewRulesScript.reject(authoritative, "completed_floor_ids")
+	var completed: Array = authoritative["completed_floor_ids"]
+	if completed.is_empty() or completed.size() >= 5 or floors.size() != 5:
+		return DungeonViewRulesScript.reject(authoritative, "completed_floor_ids")
+	var index := completed.size() - 1
+	for floor_index: int in range(floors.size()):
+		if not floors[floor_index] is Dictionary or floors[floor_index].get("id") != FloorDefinitionScript.FLOOR_IDS[floor_index]:
+			return DungeonViewRulesScript.reject(authoritative, "floors")
+	for floor_index: int in range(completed.size()):
+		if completed[floor_index] != FloorDefinitionScript.FLOOR_IDS[floor_index]:
+			return DungeonViewRulesScript.reject(authoritative, "completed_floor_ids")
+	var view := _dungeon_header(authoritative)
+	view.merge({
+		"completed_floor_id": floors[index]["id"],
+		"completed_floor_index": index,
+		"completed_name_key": floors[index]["name_key"],
+		"next_floor_id": floors[index + 1]["id"],
+		"next_floor_index": index + 1,
+		"next_name_key": floors[index + 1]["name_key"],
+		"gold": _dungeon_gold(authoritative),
+		"available": int(authoritative.get("phase", RunPhaseScript.Value.RUN_PREPARING)) == RunPhaseScript.Value.RUN_PREPARING,
+	})
+	return FloorTransitionViewScript.validate(view)
+
+
+func _dungeon_header(authoritative: Dictionary) -> Dictionary:
+	return {"schema_version": 1, "revision": authoritative["revision"], "run_id": authoritative["run_id"]}
+
+
+func _dungeon_authority_valid(authoritative: Dictionary) -> bool:
+	return DungeonViewRulesScript.identifier(authoritative.get("run_id")) and DungeonViewRulesScript.integer(authoritative.get("revision")) and int(authoritative["revision"]) >= 0
+
+
+func _dungeon_gold(authoritative: Dictionary) -> int:
+	var economy: Variant = authoritative.get("run_economy", {})
+	if not economy is Dictionary or not DungeonViewRulesScript.integer(economy.get("balance")):
+		return -1
+	return int(economy["balance"])
+
+
+func _dungeon_room_key(room_type: String) -> String:
+	return "UI_ROOM_UNKNOWN" if room_type == "unknown" else "ROOM_TYPE_%s" % room_type.to_upper()
 
 
 func project(
@@ -102,7 +336,7 @@ func project(
 			"index": room_index,
 			"total": room_total,
 			"type": room_type,
-			"title_key": "ROOM_M1_%02d" % room_index,
+			"title_key": _dungeon_room_key(room_type) if str(room_definition.get("runtime_mode", "")) == "launch" else "ROOM_M1_%02d" % room_index,
 		},
 		"player": player_view,
 		"weapon_state": (weapon_projection["weapon_state"] as Dictionary).duplicate(true),
@@ -126,6 +360,11 @@ func project(
 			"show_pause": suspended or bool(ui_context.get("show_pause", false)),
 		},
 	}
+	if ui_context.has("dungeon_state"):
+		var dungeon_validation = DungeonMapViewScript.validate(ui_context["dungeon_state"])
+		if not dungeon_validation.ok:
+			return dungeon_validation
+		view_state["dungeon_state"] = (ui_context["dungeon_state"] as Dictionary).duplicate(true)
 	var validation = RunViewStateScript.validate(view_state)
 	if not validation.ok:
 		return validation
@@ -646,6 +885,7 @@ func _boss_view(phase: int, boss_snapshot: Variant) -> Variant:
 
 func _shows_hud(phase: int) -> bool:
 	return phase in [
+		RunPhaseScript.Value.ROOM_ACTIVE,
 		RunPhaseScript.Value.ROOM_ENTERING,
 		RunPhaseScript.Value.COMBAT_ACTIVE,
 		RunPhaseScript.Value.ROOM_RESOLVING,
@@ -686,5 +926,7 @@ func _phase_name(phase: int) -> String:
 			return "VICTORY"
 		RunPhaseScript.Value.DEFEAT:
 			return "DEFEAT"
+		RunPhaseScript.Value.ROOM_ACTIVE:
+			return "ROOM_ACTIVE"
 		_:
 			return ""

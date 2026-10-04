@@ -6,7 +6,7 @@
 - Applies To: Fifteen regular events, three special events, exact operation contracts, deterministic selection, event state, atomic consequences, pending reward/combat continuations, UI-safe ViewState, Save/Replay, smoke testing, and certification
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-01-plane-walker-p14-five-floor-dungeon-design.md`, `docs/superpowers/plans/2026-10-01-plane-walker-p14-five-floor-dungeon.md`, `docs/current/2026-10-02-p14e-launch-economy-merchants-evidence.md`, `docs/contracts/content-pack-v2.md`, `docs/contracts/save-service-v3.md`
-- Last Verified: 2026-10-02
+- Last Verified: 2026-10-04
 - Exit Gate: All eighteen events and every option execute through real handlers or exact authored requirement rejection; pending continuations, atomic rollback, Save/Replay, full smoke matrix, and complete repository validation pass
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -283,19 +283,21 @@ Final review also verifies synchronous publication reentry rejection, durable pe
 **Interfaces:**
 - Produces `open_current_event`, `event_view_state`, `choose_current_event_option`, `complete_current_event_reward`, `complete_current_event_encounter`, and `dismiss_current_event`.
 
-- [ ] **Step 1: Write real Base Pack and generated-FloorPlan RED tests**
+- [x] **Step 1: Write real Base Pack and generated-FloorPlan RED tests**
 
 Cover the Launch production path, not only direct Facade calls: `RunRuntimeHost.start_run()` must create, configure, attach, and connect a `RoomRuntime` for FloorPlan runs; the Host and RoomRuntime must have one explicit `room_started` publication owner; event rooms cannot clear before an authenticated pending continuation resolves and the result is dismissed. Restore coverage must prove that actual selected-event overlay is rebuilt without changing the generated FloorPlan digest.
 
-- [ ] **Step 2: Implement `RunState.commit_event_transaction_state` and `RunOrchestrator.commit_event_transaction` with full candidate prevalidation**
+- [x] **Step 2: Implement `RunState.commit_event_transaction_state` and `RunOrchestrator.commit_event_transaction` with full candidate prevalidation**
 
 Make the complete `dungeon_event_state` snapshot the sole event authority in RunState. Include assignment, repeat history, resolved outcomes, pending transaction/reward/encounter, completed transaction IDs, flags, modifiers, and event revision in the main RunState snapshot, floor transaction snapshot, strict candidate validation, rollback, reset, Save restoration, and Replay-facing state. Remove or migrate the legacy shallow `seen_event_ids` source so two event histories cannot drift.
 
-- [ ] **Step 3: Integrate Launch Host/RoomRuntime ownership, selected-event overlay, and clear gating**
+- [x] **Step 3: Integrate Launch Host/RoomRuntime ownership, selected-event overlay, and clear gating**
 
 The FloorPlan node `event_id` remains only the deterministic primary candidate and stays inside the generation digest. After `DungeonEventSelector` freezes the actual assignment, RunDirector and Facade must overlay that selected event into the runtime room definition without mutating the FloorPlan; restore must reconstruct the same overlay from `dungeon_event_state`. The Launch Host production path must create and connect RoomRuntime before entering the first FloorPlan room, and RoomRuntime may clear an event room only after the authenticated reward/encounter continuation resolves and the resolved result is dismissed.
 
-- [ ] **Step 4: Run event Facade/lifecycle plus floor lifecycle GREEN and commit `feat(events): integrate launch event runtime`**
+- [x] **Step 4: Run event Facade/lifecycle plus floor lifecycle GREEN and commit `feat(events): integrate launch event runtime`**
+
+**Completed:** `5185c1b`, `b7499c6`, and `c16d39a`. The 2026-10-04 repository audit ran the production event Facade, room lifecycle, and floor lifecycle scenes successfully. The complete audit had one unrelated stale source-contract assertion; the corrected reward-delegation contract subsequently passed its focused gate.
 
 ---
 
@@ -309,11 +311,15 @@ The FloorPlan node `event_id` remains only the deterministic primary candidate a
 - Create: `tests/unit/save/event_save_restore_test.tscn`
 - Modify: `tests/replay/run_dungeon_replay_test.gd`
 
-- [ ] **Step 1: Write RED tests for open, reserved, pending reward, pending encounter, resolved, and dismissed snapshots plus re-signed Replay drift**
+- [x] **Step 1: Write RED tests for open, reserved, pending reward, pending encounter, resolved, and dismissed snapshots plus re-signed Replay drift**
 
-- [ ] **Step 2: Reconstruct strict event candidates in Save and seal actual selection/outcome/receipt facts in Replay**
+- [x] **Step 2: Reconstruct strict event candidates in Save and seal actual selection/outcome/receipt facts in Replay**
 
 - [ ] **Step 3: Run event save, SaveEnvelope, and dungeon Replay GREEN and commit `feat(replay): seal launch dungeon events`**
+
+**Implementation and focused verification (2026-10-04):** Complete in the current working tree. Save validation restores all six event phases and rejects participant/domain drift, unauthored assignments, invalid floor identity, and authenticated-publication drift. Modern Replay seals assignment, outcome, completed transaction, consequence receipt, publication, and runtime digest facts; only empty legacy event histories remain readable. The focused `save` gate passed `6 / 6`, and `run_dungeon_replay` passed `1 / 1`, with no unknown leak warnings. The integration owner must record the focused changes in a commit and complete repository certification before this final step is checked.
+
+The audit added a failing six-phase regression for removing both runtime and seen-event projection, then fixed the missing initialized-resource boundary. It also added physical SaveService JSON write/read coverage for every phase.
 
 ---
 
@@ -327,15 +333,17 @@ The FloorPlan node `event_id` remains only the deterministic primary candidate a
 - Modify: `docs/README.md`
 - Create: `docs/current/2026-10-02-p14f-dungeon-events-evidence.md`
 
-- [ ] **Step 1: Enumerate all eighteen events and every option**
+- [x] **Step 1: Enumerate all eighteen events and every option**
 
 Every option executes a real handler to terminal or authenticated pending state, or returns its exact authored requirement rejection. Identity-only handlers, silent no-ops, unknown IDs, missing publication, and un-restorable pending state fail.
 
-- [ ] **Step 2: Run all P14F focused filters plus `run_dungeon_replay`**
+- [x] **Step 2: Run all P14F focused filters plus `run_dungeon_replay`**
 
 - [ ] **Step 3: Run `git diff --check` and `./tools/validate_project.sh`; scan logs for all unregistered errors/leaks**
 
 - [ ] **Step 4: Record exact counts/logs/rollback point and commit `docs(p14): certify dungeon events`**
+
+**Focused evidence (2026-10-04):** `6fc950b` contains the exhaustive event matrix. It executes `18` events, `36` options, and `39` authored branches twice, including authenticated reward/encounter continuations and exact requirement rejection. The `events/` focused gate passed `10 / 10`, Save passed `6 / 6`, Replay passed `1 / 1`, and the corrected authority contract passed `1 / 1`. Logs and remaining certification boundaries are recorded in `docs/current/2026-10-02-p14f-dungeon-events-evidence.md`. `git diff --check` passed. Full repository validation, the reviewed implementation commit, and the final documentation-certification commit remain owned by the integration gate; these unchecked steps are not represented as complete.
 
 ## Plan self-review
 

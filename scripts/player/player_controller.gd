@@ -2,6 +2,7 @@ class_name PlayerController
 extends CharacterBody2D
 
 const StatsResource := preload("res://scripts/core/stats.gd")
+const EventTemporaryModifierLayerScript := preload("res://scripts/events/event_temporary_modifier_layer.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
 const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtime.gd")
 const EffectHandlerCatalogScript := preload(
@@ -229,6 +230,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 }
 
 @export var stats: Resource
+var _event_temporary_modifier_layer: RefCounted = EventTemporaryModifierLayerScript.new()
 
 @onready var health: Node = $HealthComponent
 @onready var loadout_runtime: Node = $PlayerLoadoutRuntime
@@ -992,8 +994,34 @@ func _reset_weapon_adapters() -> void:
 			(adapter_value as Node).call("reset_runtime_state")
 
 
+func sync_event_temporary_modifiers(modifiers: Array) -> bool:
+	if stats == null or time_manager == null:
+		return false
+	var candidate = EventTemporaryModifierLayerScript.new()
+	if not candidate.replace_projection(modifiers) or not is_finite(float(stats.attack) * candidate.attack_multiplier()):
+		return false
+	if not time_manager.call("set_event_energy_regen_multiplier", candidate.energy_regen_multiplier()):
+		return false
+	_event_temporary_modifier_layer = candidate
+	_sync_weapon_adapter_stats()
+	return true
+
+
+func event_temporary_modifier_snapshot() -> Array:
+	return _event_temporary_modifier_layer.call("snapshot")
+
+
+func get_effective_attack() -> float:
+	return float(stats.attack) * float(_event_temporary_modifier_layer.call("attack_multiplier")) if stats != null else 0.0
+
+
+func get_damage_taken_multiplier() -> float:
+	return _event_temporary_modifier_layer.call("damage_taken_multiplier")
+
+
 func _sync_weapon_adapter_stats() -> void:
-	var character_attack_scale := float(stats.attack) / 30.0
+	var effective_attack := get_effective_attack()
+	var character_attack_scale := effective_attack / 30.0
 	var committed_attack_speed := (
 		float(stats.attack_speed) * _time_acceleration_multiplier
 	)
@@ -1004,7 +1032,7 @@ func _sync_weapon_adapter_stats() -> void:
 		var base_attack: float
 		match weapon_id:
 			&"sword", &"bow":
-				base_attack = float(stats.attack)
+				base_attack = effective_attack
 			&"gun":
 				base_attack = GUN_BASE_ATTACK * character_attack_scale
 			&"staff":
@@ -1671,7 +1699,7 @@ func _submit_character_frame_intent(
 		"position": global_position,
 		"current_hp": float(health.get("current_hp")) if health != null else 0.0,
 		"maximum_hp": float(health.get("max_hp")) if health != null else 0.0,
-		"attack": float(stats.attack) if stats != null else 0.0,
+		"attack": get_effective_attack(),
 		"aim_direction": _last_weapon_aim_direction.normalized(),
 		"time_energy": float(time_manager.get("energy")) if time_manager != null else 0.0,
 		"movement": frame_intents.get("movement", Vector2.ZERO),
@@ -2409,6 +2437,7 @@ func reset_runtime_state() -> bool:
 	velocity = Vector2.ZERO
 	_last_move_direction = Vector2.RIGHT
 	_floor_rule_modifiers.clear()
+	_event_temporary_modifier_layer.call("replace_projection", [])
 	if weapon_action_coordinator != null:
 		weapon_action_coordinator.reset_runtime_state(&"player_runtime_reset")
 		_capture_next_weapon_action_token_floor()
@@ -3962,6 +3991,7 @@ func full_player_replay_snapshot() -> Dictionary:
 		snapshot["active_item_state"] = active_item_state
 		snapshot["reward_effect_state"] = reward_effect_state
 		snapshot["live_talent_state"] = live_talent_state
+		snapshot["event_temporary_modifiers"] = event_temporary_modifier_snapshot()
 	return snapshot
 
 
@@ -4048,6 +4078,9 @@ func _install_full_player_replay_snapshot(value: Dictionary, for_rollback: bool)
 		return false
 	var time_target := (value.get("time_manager_state", {}) as Dictionary).duplicate(true)
 	if not bool(time_manager.call("restore_replay_snapshot", time_target)):
+		_rollback_full_player_world_restore(world_ticket, for_rollback)
+		return false
+	if not sync_event_temporary_modifiers(value.get("event_temporary_modifiers", [])):
 		_rollback_full_player_world_restore(world_ticket, for_rollback)
 		return false
 	var action_target := (value.get("action_state", {}) as Dictionary).duplicate(true)
@@ -4183,6 +4216,8 @@ func _rollback_full_player_world_restore(ticket: Dictionary, for_rollback: bool)
 
 
 func _can_install_full_player_replay_snapshot(value: Dictionary) -> bool:
+	if value.has("event_temporary_modifiers") and not ReplayRecorderScript.validate_full_player_event_modifiers(value["event_temporary_modifiers"]):
+		return false
 	if value.has("active_item_state") and (
 		active_item_runtime == null
 		or not active_item_runtime.has_method("can_restore_snapshot")
@@ -4301,6 +4336,7 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 		fields.append("active_item_state")
 		fields.append("reward_effect_state")
 		fields.append("live_talent_state")
+		fields.append("event_temporary_modifiers")
 	if value.size() != fields.size():
 		return {}
 	for field: String in fields:
@@ -4344,6 +4380,8 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 	):
 		return {}
 	if expected_schema_version == ReplayRecorderScript.FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		if not ReplayRecorderScript.validate_full_player_event_modifiers(value.get("event_temporary_modifiers")):
+			return {}
 		var active_item_state := value.get("active_item_state", {}) as Dictionary
 		if (
 			active_item_runtime == null
@@ -10031,7 +10069,7 @@ func _weapon_mastery_context(action_token: int, semantic_context: Dictionary) ->
 		"owner_character_generation": _owner_character_generation,
 		"maximum_hp": float(health.max_hp) if health != null else 0.0,
 		"position": global_position,
-		"attack": float(stats.attack),
+		"attack": get_effective_attack(),
 		"aim_direction": _last_weapon_aim_direction,
 		"weapon_action_generation": int(_weapon_action_generations_by_token.get(action_token, 0)),
 		"tags": (semantic_context.get("tags", []) as Array).duplicate(true),
@@ -10301,7 +10339,7 @@ func _cancel_weapon_action(reason: StringName) -> void:
 
 func _time_skill_context(skill_id: StringName) -> Dictionary:
 	var context := {
-		"attack": float(stats.attack) if stats != null else 0.0,
+		"attack": get_effective_attack(),
 		"equipped_time_abilities": (
 			loadout_runtime.time_ability_ids()
 			if loadout_runtime != null and loadout_runtime.has_method("time_ability_ids")

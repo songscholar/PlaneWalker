@@ -187,7 +187,7 @@ class PlayerFixture:
 		return true
 
 	func reward_effect_snapshot() -> Dictionary:
-		return {"configured": true}
+		return {"configured": true, "health": {"current_hp": 100.0, "max_hp": 100.0}}
 
 	func restore_reward_effect_snapshot(_value: Dictionary) -> bool:
 		return true

@@ -6,7 +6,7 @@ const ReplayPlayerScript := preload("res://scripts/replay/replay_player.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
 
-const LAUNCH_SCHEMA_VERSION := 6
+const LAUNCH_SCHEMA_VERSION := 7
 const CHARACTER_IDS: Array[StringName] = [
 	&"wanderer",
 	&"time_guardian",
@@ -59,6 +59,7 @@ func _run() -> void:
 		await _test_active_item_round_trip_and_tamper_rejection()
 		await _test_dash_and_reward_invulnerability_round_trip_and_rollback()
 		await _test_legacy_launch_v4_and_v5_fail_closed_after_authentication()
+		await _test_event_modifier_replay_and_legacy_v6()
 	_suite.finish(get_tree())
 
 
@@ -72,7 +73,7 @@ func _test_five_character_round_trips() -> void:
 		_suite.assert_equal(
 			int(initial.get("schema_version", 0)),
 			LAUNCH_SCHEMA_VERSION,
-			"%s Launch snapshot uses Player Replay schema 6" % label
+			"%s Launch snapshot uses Player Replay schema 7" % label
 		)
 		_suite.assert_true(
 			initial.get("active_item_state") is Dictionary,
@@ -90,7 +91,7 @@ func _test_five_character_round_trips() -> void:
 			(initial.get("player_state", {}) as Dictionary).get(
 				"invulnerability_state"
 			) is Dictionary,
-			"%s Launch schema 6 seals non-reward invulnerability state" % label
+			"%s Launch schema 7 seals non-reward invulnerability state" % label
 		)
 
 		var recorder = ReplayRecorderScript.new()
@@ -122,19 +123,19 @@ func _test_five_character_round_trips() -> void:
 		_suite.assert_equal(
 			int(replay.get("schema_version", 0)),
 			LAUNCH_SCHEMA_VERSION,
-			"%s Launch Replay root uses schema 6" % label
+			"%s Launch Replay root uses schema 7" % label
 		)
 		for frame_value: Variant in replay.get("frames", []) as Array:
 			var frame := frame_value as Dictionary
 			_suite.assert_equal(
 				int(frame.get("schema_version", 0)),
 				LAUNCH_SCHEMA_VERSION,
-				"%s Launch Replay frame uses schema 6" % label
+				"%s Launch Replay frame uses schema 7" % label
 			)
 			_suite.assert_equal(
 				int((frame.get("snapshot", {}) as Dictionary).get("schema_version", 0)),
 				LAUNCH_SCHEMA_VERSION,
-				"%s embedded Launch snapshot uses schema 6" % label
+				"%s embedded Launch snapshot uses schema 7" % label
 			)
 
 		var target := await _spawn_launch_player(character_id, 4100 + character_index)
@@ -172,6 +173,93 @@ func _test_five_character_round_trips() -> void:
 		await _free_player(mismatched)
 		await _free_player(target)
 		await _free_player(source)
+
+
+func _test_event_modifier_replay_and_legacy_v6() -> void:
+	var source := await _spawn_launch_player(&"wanderer", 5401)
+	var projection := [
+		{"modifier_id": "heroic_guard", "magnitude": 1.2, "source_transaction_id": "tx_replay_guard"},
+		{"modifier_id": "tranquility", "magnitude": 1.25, "source_transaction_id": "tx_replay_regen"},
+		{"modifier_id": "weapon_temper", "magnitude": 1.1, "source_transaction_id": "tx_replay_temper"},
+	]
+	_suite.assert_true(source.sync_event_temporary_modifiers(projection), "Replay source installs independent authored event effects")
+	var active: Dictionary = source.full_player_replay_snapshot()
+	_suite.assert_true(active.get("event_temporary_modifiers") is Array, "full Player checkpoint seals event modifier projection")
+	if not active.get("event_temporary_modifiers") is Array:
+		await _free_player(source)
+		return
+	_suite.assert_equal(active["schema_version"], 7, "Launch event projection has an explicit Player Replay schema 7")
+	_suite.assert_equal(active["event_temporary_modifiers"], projection, "checkpoint seals magnitude and stable source identity")
+	var identity: Dictionary = source.full_player_replay_identity()
+	var recorder = ReplayRecorderScript.new()
+	_suite.assert_true(recorder.start_full_player_recording(identity, 5401).get("ok", false), "event Replay recording starts")
+	_suite.assert_true(recorder.record_full_player_frame(active, _frame_intents(0), []).get("ok", false), "active event checkpoint records")
+	_suite.assert_true(source.advance_action_frame({}), "active event advances through the authoritative frame clock")
+	var active_later: Dictionary = source.full_player_replay_snapshot()
+	_suite.assert_true(recorder.record_full_player_frame(active_later, _frame_intents(1), []).get("ok", false), "active event later checkpoint records")
+	_suite.assert_true(source.sync_event_temporary_modifiers([]), "domain expiry removes event effects before the next frame")
+	_suite.assert_true(source.advance_action_frame({}), "expired event advances the next authoritative frame")
+	var expired: Dictionary = source.full_player_replay_snapshot()
+	_suite.assert_true(recorder.record_full_player_frame(expired, _frame_intents(2), []).get("ok", false), "expired event checkpoint records")
+	var finished: Dictionary = recorder.finish_full_player_recording()
+	_suite.assert_true(finished.get("ok", false), "event Replay recording seals")
+	var replay: Dictionary = finished.get("replay", {})
+	var target := await _spawn_launch_player(&"wanderer", 5401)
+	var replay_player = ReplayPlayerScript.new()
+	_suite.assert_true(replay_player.load_full_player_replay(replay, target.full_player_replay_identity()).get("ok", false), "event Replay loads into a fresh matching Player")
+	_suite.assert_true(replay_player.restore_full_player_frame(target, 1).get("ok", false), "event Replay restores an active checkpoint independently from Dungeon")
+	_suite.assert_equal(target.event_temporary_modifier_snapshot(), projection, "independent Replay restores all three real event sources")
+	_suite.assert_close(target.get_effective_attack(), float(target.stats.attack) * 1.1, "independent Replay restores actual attack")
+	_suite.assert_close(target.get_node("SwordWeapon").base_attack, target.get_effective_attack(), "independent Replay rebinds the real weapon adapter attack")
+	_suite.assert_close(target.get_damage_taken_multiplier(), 1.0 / 1.2, "independent Replay restores actual incoming damage")
+	_suite.assert_close(target.get_node("TimeManager").event_energy_regen_multiplier(), 1.25, "independent Replay restores actual regeneration")
+	_suite.assert_true(replay_player.restore_full_player_frame(target, 1).get("ok", false), "same active checkpoint restores idempotently")
+	_suite.assert_equal(target.full_player_replay_snapshot(), active_later, "same checkpoint cannot stack event magnitude")
+	_suite.assert_true(replay_player.restore_full_player_frame(target, 2).get("ok", false), "independent Replay restores expiry")
+	_suite.assert_equal(target.full_player_replay_snapshot(), expired, "independent Replay reproduces the exact expired checkpoint")
+	_suite.assert_equal(target.event_temporary_modifier_snapshot(), [], "expired checkpoint clears the physical layer")
+	_suite.assert_close(target.get_damage_taken_multiplier(), 1.0, "expired checkpoint restores unmodified mitigation")
+	_suite.assert_close(target.get_node("TimeManager").event_energy_regen_multiplier(), 1.0, "expired checkpoint restores unmodified regeneration")
+	var unauthenticated := replay.duplicate(true)
+	unauthenticated["frames"][0]["snapshot"]["event_temporary_modifiers"][0]["magnitude"] = 1.3
+	_suite.assert_equal(ReplayPlayerScript.new().load_full_player_replay(unauthenticated, identity).get("code"), &"FULL_PLAYER_FRAME_DIGEST_MISMATCH", "event projection is authenticated before restore")
+	for candidate: Array in [
+		[{"modifier_id": "unknown", "magnitude": 1.1, "source_transaction_id": "tx_unknown"}],
+		[{"modifier_id": "weapon_temper", "magnitude": 11.0, "source_transaction_id": "tx_large"}],
+		[projection[0], projection[0]],
+	]:
+		var forged := replay.duplicate(true)
+		forged["frames"][0]["snapshot"]["event_temporary_modifiers"] = candidate
+		_rehash_full_player_replay(forged)
+		_suite.assert_equal(ReplayPlayerScript.new().load_full_player_replay(forged, identity).get("code"), &"FULL_PLAYER_EVENT_MODIFIER_STATE_INVALID", "rehashing cannot legalize an invalid event projection")
+	var atomic_target := await _spawn_launch_player(&"wanderer", 5401)
+	atomic_target.sync_event_temporary_modifiers([{"modifier_id": "past_strength", "magnitude": 1.15, "source_transaction_id": "tx_atomic_before"}])
+	atomic_target.set("active_item_runtime", FailOnceActiveItemRuntime.new(atomic_target.active_item_snapshot()))
+	var before: Dictionary = atomic_target.full_player_replay_snapshot()
+	_suite.assert_true(not atomic_target.restore_full_player_replay_snapshot(active_later), "downstream participant failure rejects event Replay installation")
+	_suite.assert_equal(atomic_target.full_player_replay_snapshot(), before, "failed Replay restore compensates the previous event layer and all participants")
+	await _free_player(atomic_target)
+	await _free_player(target)
+	await _free_player(source)
+	var legacy_source := await _spawn_launch_player(&"wanderer", 5402)
+	var legacy_recorder = ReplayRecorderScript.new()
+	legacy_recorder.start_full_player_recording(legacy_source.full_player_replay_identity(), 5402)
+	legacy_recorder.record_full_player_frame(legacy_source.full_player_replay_snapshot(), _frame_intents(0), [])
+	var legacy_current: Dictionary = legacy_recorder.finish_full_player_recording().get("replay", {})
+	var legacy := _legacy_launch_replay(legacy_current, 6)
+	var legacy_copy := legacy.duplicate(true)
+	var legacy_target := await _spawn_launch_player(&"wanderer", 5402)
+	legacy_target.sync_event_temporary_modifiers([{"modifier_id": "weapon_temper", "magnitude": 1.1, "source_transaction_id": "tx_legacy_target"}])
+	var legacy_player = ReplayPlayerScript.new()
+	_suite.assert_true(legacy_player.load_full_player_replay(legacy, legacy_target.full_player_replay_identity()).get("ok", false), "authenticated legacy schema 6 migrates with an empty event layer")
+	_suite.assert_true(legacy_player.restore_full_player_frame(legacy_target, 0).get("ok", false), "legacy schema 6 restores into the current Player")
+	_suite.assert_equal(legacy_target.event_temporary_modifier_snapshot(), [], "legacy migration cannot preserve unrelated currently installed event effects")
+	_suite.assert_equal(legacy, legacy_copy, "legacy Replay migration preserves caller bytes and digests")
+	var legacy_tampered := legacy.duplicate(true)
+	legacy_tampered["frames"][0]["snapshot"]["player_state"]["position"] += Vector2.ONE
+	_suite.assert_equal(ReplayPlayerScript.new().load_full_player_replay(legacy_tampered, legacy_source.full_player_replay_identity()).get("code"), &"FULL_PLAYER_FRAME_DIGEST_MISMATCH", "legacy schema 6 is authenticated before migration refreshes digests")
+	await _free_player(legacy_target)
+	await _free_player(legacy_source)
 
 
 func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
@@ -861,6 +949,9 @@ func _legacy_launch_replay(current: Dictionary, version: int) -> Dictionary:
 		frame["schema_version"] = version
 		var snapshot := frame.get("snapshot", {}) as Dictionary
 		snapshot["schema_version"] = version
+		snapshot.erase("event_temporary_modifiers")
+		if version == 6:
+			continue
 		(snapshot.get("player_state", {}) as Dictionary).erase("invulnerability_state")
 		snapshot.erase("reward_effect_state")
 		snapshot.erase("live_talent_state")

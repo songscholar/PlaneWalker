@@ -336,7 +336,8 @@ func restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if value["run_start_player_baseline"] != _run_start_player_baseline:
 		return false
-	if not _ledger_matches_build(value["definition_ledger"] as Array[Dictionary], _build.call("transaction_snapshot")):
+	var normalized: Dictionary = _normalize_ledger(value["definition_ledger"])
+	if not _ledger_matches_build(normalized["ledger"], _build.call("transaction_snapshot")):
 		return false
 	return _restore_authority_snapshot_unchecked(value)
 
@@ -381,6 +382,8 @@ func _project_player_snapshot(ledger: Array[Dictionary]) -> Dictionary:
 		_cancel_projection(publication_started, original)
 		return _failure(&"BASELINE_RESTORE_FAILED")
 	for definition: Dictionary in ledger:
+		if definition.get("category") == "talent" or _is_active_item_definition(definition):
+			continue
 		var current_value: Variant = _player.call("reward_effect_snapshot")
 		if not current_value is Dictionary:
 			_cancel_projection(publication_started, original)
@@ -594,7 +597,8 @@ func _restore_player(value: Dictionary) -> bool:
 
 func _restore_authority_snapshot_unchecked(value: Dictionary) -> bool:
 	_run_start_player_baseline = (value["run_start_player_baseline"] as Dictionary).duplicate(true)
-	_definition_ledger = (value["definition_ledger"] as Array).duplicate(true)
+	var normalized: Dictionary = _normalize_ledger(value["definition_ledger"])
+	_definition_ledger = (normalized["ledger"] as Array[Dictionary]).duplicate(true)
 	_completed_transaction_ids.clear()
 	for id_value: Variant in value["completed_transaction_ids"] as Array:
 		_completed_transaction_ids[str(id_value)] = true

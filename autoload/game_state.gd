@@ -4,6 +4,7 @@ const SaveEnvelopeScript := preload("res://scripts/save/save_envelope.gd")
 const SaveMigrationRegistryScript := preload("res://scripts/save/save_migration_registry.gd")
 const SaveResultScript := preload("res://scripts/save/save_result.gd")
 const SaveServiceScript := preload("res://scripts/save/save_service.gd")
+const RuntimeUserDataPathScript := preload("res://scripts/save/runtime_user_data_path.gd")
 
 const SAVE_GAME_VERSION := "0.4.0-dev"
 const DEFAULT_PROFILE_ID := "slot_1"
@@ -54,6 +55,8 @@ var _save_service_path: String = ""
 
 
 func _ready() -> void:
+	if save_path == "user://plane_walker_save.json":
+		save_path = RuntimeUserDataPathScript.resolve_default(save_path, "plane_walker_save.json")
 	load_persistent()
 
 
@@ -142,6 +145,8 @@ func reset_persistent_data(delete_file: bool = false) -> void:
 
 
 func _ensure_save_service():
+	if save_path.is_empty():
+		return SaveResultScript.failure(&"INVALID_ARGUMENT", {"field": "save_path", "reason": "invalid_data_directory"})
 	if _save_service != null and _save_service_path == save_path:
 		return SaveResultScript.success()
 	var service = SaveServiceScript.new()

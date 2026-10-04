@@ -120,7 +120,14 @@ func _test_real_facade_merchant_flow_and_restore(suite) -> void:
 	if not facade.has_method("grant_run_gold"):
 		return
 
+	suite.assert_true(_follow_path_to_shop(suite, facade, path), "generated FloorPlan route reaches the Wayfarer shop")
+	if str((facade.call("current_room_definition") as Dictionary).get("room_type", "")) != "shop":
+		return
+
 	var before_grant: Dictionary = facade.call("snapshot")
+	var before_economy := before_grant["run_economy"] as Dictionary
+	var before_balance := int(before_economy["balance"])
+	var before_ledger_size := (before_economy["ledger"] as Array).size()
 	var granted = facade.call("grant_run_gold", "tx_test_shop_income", GOLD_GRANT, "test_room_reward")
 	suite.assert_true(_result_ok(granted), "authoritative room income commits")
 	if not _result_ok(granted):
@@ -132,9 +139,10 @@ func _test_real_facade_merchant_flow_and_restore(suite) -> void:
 		"gold income advances RunState exactly once"
 	)
 	var granted_economy := after_grant["run_economy"] as Dictionary
-	suite.assert_equal(int(granted_economy["balance"]), GOLD_GRANT, "gold income reaches the canonical economy snapshot")
+	suite.assert_equal(int(granted_economy["balance"]), before_balance + GOLD_GRANT, "gold income adds exactly to the canonical room-income balance")
+	suite.assert_equal((granted_economy["ledger"] as Array).size(), before_ledger_size + 1, "gold grant adds exactly one typed economy fact")
 	suite.assert_equal(
-		str((granted_economy["ledger"] as Array)[0].get("operation", "")),
+		str((granted_economy["ledger"] as Array)[before_ledger_size].get("operation", "")),
 		"gold_delta",
 		"gold income records a typed economy fact"
 	)
@@ -142,10 +150,6 @@ func _test_real_facade_merchant_flow_and_restore(suite) -> void:
 	var duplicate_grant = facade.call("grant_run_gold", "tx_test_shop_income", GOLD_GRANT, "test_room_reward")
 	suite.assert_true(not _result_ok(duplicate_grant), "duplicate gold transaction is rejected")
 	suite.assert_equal(facade.call("snapshot"), duplicate_grant_before, "duplicate gold transaction mutates nothing")
-
-	suite.assert_true(_follow_path_to_shop(suite, facade, path), "generated FloorPlan route reaches the Wayfarer shop")
-	if str((facade.call("current_room_definition") as Dictionary).get("room_type", "")) != "shop":
-		return
 
 	var runner := InertEncounterRunner.new()
 	add_child(runner)
@@ -170,7 +174,7 @@ func _test_real_facade_merchant_flow_and_restore(suite) -> void:
 	)
 	var view_before: Dictionary = facade.call("merchant_view_state")
 	suite.assert_equal(str(view_before.get("merchant_id", "")), "merchant_wayfarer", "the generated room resolves its authored merchant")
-	suite.assert_equal(int(view_before.get("gold", -1)), GOLD_GRANT, "merchant view reads canonical gold")
+	suite.assert_equal(int(view_before.get("gold", -1)), before_balance + GOLD_GRANT, "merchant view reads canonical room and grant income")
 	var inventory_before := view_before.get("inventory", {}) as Dictionary
 	suite.assert_true(not (inventory_before.get("offers", []) as Array).is_empty(), "real deterministic inventory exposes offers")
 	if (inventory_before.get("offers", []) as Array).is_empty():
@@ -208,6 +212,7 @@ func _test_real_facade_merchant_flow_and_restore(suite) -> void:
 		"purchase advances RunState exactly once"
 	)
 	var after_purchase_view: Dictionary = facade.call("merchant_view_state")
+	suite.assert_equal(int(after_purchase_view["gold"]), before_balance + GOLD_GRANT - int(first_offer["price"]), "purchase debits exactly the authored offer quote")
 	suite.assert_true(
 		_offer_sold(after_purchase_view["inventory"], str(first_offer["offer_id"])),
 		"purchased offer is authoritatively sold"
@@ -291,7 +296,7 @@ func _test_real_facade_merchant_flow_and_restore(suite) -> void:
 	)
 
 	var saved_run_state: Dictionary = facade.call("snapshot")
-	_assert_persisted_transactions(suite, saved_run_state)
+	_assert_persisted_transactions(suite, saved_run_state, before_economy)
 	var saved_player_state := player.reward_effect_snapshot()
 	var saved_merchant_view: Dictionary = facade.call("merchant_view_state")
 
@@ -444,12 +449,17 @@ func _follow_path_to_shop(suite, facade: RefCounted, path: Array[String]) -> boo
 	return false
 
 
-func _assert_persisted_transactions(suite, snapshot: Dictionary) -> void:
+func _assert_persisted_transactions(suite, snapshot: Dictionary, before_economy: Dictionary) -> void:
 	var economy := snapshot.get("run_economy", {}) as Dictionary
 	var merchant := snapshot.get("merchant_state", {}) as Dictionary
 	var ledger := economy.get("ledger", []) as Array
 	var nodes := merchant.get("nodes", []) as Array
-	suite.assert_equal(ledger.size(), 5, "income, purchase, reroll, heal, and sale persist five economy facts")
+	var before_ledger := before_economy["ledger"] as Array
+	suite.assert_equal(ledger.size(), before_ledger.size() + 5, "grant, purchase, reroll, heal, and sale add exactly five economy facts")
+	suite.assert_equal(ledger.slice(0, before_ledger.size()), before_ledger, "merchant operations preserve authored room income facts exactly")
+	var grant_entry := _ledger_entry(ledger, "tx_test_shop_income")
+	suite.assert_equal(int(grant_entry.get("amount", 0)), GOLD_GRANT, "grant receipt records the exact positive grant amount")
+	var expected_balance := int(before_economy["balance"]) + GOLD_GRANT
 	suite.assert_equal(nodes.size(), 1, "one visited shop persists one merchant node")
 	if nodes.size() != 1:
 		return
@@ -468,6 +478,10 @@ func _assert_persisted_transactions(suite, snapshot: Dictionary) -> void:
 		var ledger_entry := _ledger_entry(ledger, expected_ids[index])
 		suite.assert_true(not ledger_entry.is_empty(), "merchant fact has a matching economy ledger entry")
 		if not ledger_entry.is_empty():
+			var amount := int(fact.get("amount", -1))
+			var expected_delta := amount if str(fact.get("service_id", "")) == "sell_reward" else -amount
+			expected_balance += expected_delta
+			suite.assert_equal(int(ledger_entry.get("amount", 0)), expected_delta, "purchase/reroll/heal debit and sale credit the exact receipt amount")
 			suite.assert_equal(
 				int(fact.get("economy_revision", -1)),
 				int(ledger_entry.get("revision", -2)),
@@ -478,6 +492,7 @@ func _assert_persisted_transactions(suite, snapshot: Dictionary) -> void:
 				absi(int(ledger_entry.get("amount", 0))),
 				"merchant fact amount matches the economy debit"
 			)
+	suite.assert_equal(int(economy["balance"]), expected_balance, "final balance equals prior room income plus grant and four exact merchant receipt deltas")
 
 
 func _ledger_entry(ledger: Array, transaction_id: String) -> Dictionary:

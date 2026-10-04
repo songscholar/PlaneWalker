@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P2, P3, P4/P5, P6, P8, P10A, P11 five weapons, P12 five characters, P13A eight-archetype authority, and P13B exact `50 / 28 / 18 / 15` Launch pools/effects are certified locally; Replay schema 6, SaveEnvelope schema 3, deterministic formation, active-item UI, and the 150-loadout matrix are complete; P14A–P14E content authority, deterministic FloorPlan, five-floor lifecycle, room streaming, floor rules, Launch economy, five merchants, Save v3, Runtime routing, and dungeon Replay are complete, with P14F event runtimes active; P7/P9 continues with honest coverage/export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P11 five weapons, P12 five characters, and P13 complete Launch pools are certified locally; P14 event effects, six native dungeon panels, physical Save continuation, and full Player Replay schema 7 are implemented with focused verification; final combined P14 repository certification is pending. P15 hostile foundations and the native Sentinel are implemented but inactive. P7/P9 retains coverage and formal export blockers; formal state remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -50,8 +50,8 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
-| Full Product Content | Active / Phased program | P11 五武器、P12 五角色、P13A 八流派权威和 P13B 真实 `50 / 28 / 18 / 15` 内容池/效果已本地认证，包含 8 主动道具 UI、15 天赋、Replay schema 6、Save schema 3、240 synthetic samples 与 150 组合矩阵；P14A–P14E 已完成，当前实施 P14F 的 15 个普通事件与 3 个特殊事件运行时，后续继续地图/商店/事件 UI、P15 五 Boss、Hub、叙事与 Expansion 系统 |
-| Launch / Expansion Systems | Active / Phased program | P14 五层地牢是当前仓库阶段；Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod 管理、外观和 DLC 内容包继续按批准顺序实施；现有 Replay 运行时权威不等同于完整回放产品体验 |
+| Full Product Content | Active / Phased program | P11、P12、P13 已认证；P14 18 个事件、原生地图/商店/事件等六面板、临时效果期限、Save 延续和 Player Replay 7 已专项通过，最终组合门禁待完成；P15 已有攻击/遭遇基础和未激活的原生 Sentinel，剩余敌人及五 Boss 继续实施 |
+| Launch / Expansion Systems | Active / Phased program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod、外观和 DLC 仍未全部实现；本地 macOS 编辑器运行时包可启动，不代表正式三平台发布认证 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
 
@@ -119,6 +119,14 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P14 Five-Floor Dungeon Design](superpowers/specs/2026-10-01-plane-walker-p14-five-floor-dungeon-design.md) | 五层确定性路线图、30 房间场景、楼层规则、经济、商人、事件、地图/UI、Save/Replay 权威 | Approved / Current authority |
 | [P14 Five-Floor Dungeon Plan](superpowers/plans/2026-10-01-plane-walker-p14-five-floor-dungeon.md) | P14A–P14H 内容权威、FloorPlan、生命周期、房间流式加载、经济事件、UI、模拟与认证计划 | Active / Current |
 | [P14F Dungeon Events Plan](superpowers/plans/2026-10-02-plane-walker-p14f-dungeon-events.md) | 18 事件数据闭环、确定性选择、原子后果、延续事务、Save/Replay、全事件 smoke 与认证 | Active / Current |
+| [P14F Dungeon Events Evidence](current/2026-10-02-p14f-dungeon-events-evidence.md) | 事件事务、存档和回放的实际执行与恢复证据 | Implemented / Current |
+| [P14G Production Flow Plan](superpowers/plans/2026-10-04-plane-walker-p14g-production-flow.md) | 原生地牢面板与生产流程集成计划 | Active / Current |
+| [P14G Production Flow Evidence](current/2026-10-04-p14g-production-flow-evidence.md) | 五层原生操作、手柄焦点、多分辨率与双语验证 | Verified Locally / Current |
+| [P14 Event Lifetime and Player Replay Evidence](current/2026-10-04-p14-event-lifetime-replay-evidence.md) | 事件实际效果、跨层期限、商店存档延续与玩家 Replay 7 | Verified Locally / Current |
+| [P14H Retention Review](current/2026-10-04-p14h-retention-review.md) | 确定性报告、奖励补偿、离线运行包与最终门禁边界 | Focused Verified / Current |
+| [P15 Enemies and Bosses Design](superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md) | 22 敌人、五 Boss、攻击契约、遭遇与原生演员集成 | Approved / Current authority |
+| [P15 Enemies and Bosses Plan](superpowers/plans/2026-10-04-plane-walker-p15-enemies-bosses.md) | 固定帧敌方行为、内容目录与真实场景实现计划 | Active / Current |
+| [P15 Hostile Foundation Evidence](current/2026-10-04-p15-hostile-foundation-evidence.md) | 已验证的攻击状态、遭遇状态与目录基础 | Verified Locally / Current |
 | [P14E Launch Economy and Merchants Evidence](current/2026-10-02-p14e-launch-economy-merchants-evidence.md) | 原子经济、五商人、八类服务、楼层结算、Save/Replay、真实商店链路与 197 场景整库认证 | Verified Locally / Current |
 | [P11A Shared Weapon Authority Evidence](current/2026-09-29-p11a-shared-weapon-authority-evidence.md) | Profile、Coordinator、语义输入、Modifier、typed facts、完整性及 69 场景全量认证 | Verified Locally / Current |
 | [P11B Sword Migration Evidence](current/2026-09-29-p11b-sword-migration-evidence.md) | Sword Coordinator 迁移、M1 帧表/伤害权威、Active cue、输入优先级及 73 场景全量认证 | Verified Locally / Current |

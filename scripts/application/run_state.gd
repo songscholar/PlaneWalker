@@ -4,10 +4,14 @@ extends RefCounted
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
+const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorDefinitionScript := preload("res://scripts/dungeon/floor_definition.gd")
 const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 const DungeonEventRunStateScript := preload("res://scripts/events/dungeon_event_run_state.gd")
+const EventModifierLifetimeScript := preload("res://scripts/events/event_modifier_lifetime.gd")
+const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const PLAYER_REWARD_BASELINE := "player_reward_run_start_baseline"
 
 const REWARD_REPLAY_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -58,6 +62,7 @@ const FLOOR_TRANSACTION_FIELDS: Array[String] = [
 	"suspended",
 	"open_offer",
 	"result",
+	"events",
 	"run_seed",
 	"current_floor",
 	"current_room",
@@ -243,6 +248,33 @@ func restore_selection_transaction_snapshot(value: Dictionary) -> bool:
 	return selection_transaction_snapshot() == value
 
 
+func observe_player_health(current: float, maximum: float) -> bool:
+	if not is_launch_floor_mode() or dungeon_event_runtime.is_empty():
+		return false
+	if not is_finite(current) or not is_finite(maximum) or maximum <= 0.0 or current < 0.0 or current > maximum:
+		return false
+	var parts := _event_runtime_parts(dungeon_event_runtime)
+	if parts.is_empty():
+		return false
+	var health := (parts["health"] as Dictionary).duplicate(true)
+	health["current"] = current
+	health["maximum"] = maximum
+	resources["health"] = health.duplicate(true)
+	dungeon_event_runtime["consequence_runtime"]["participant_snapshots"]["health"] = health
+	return true
+
+
+func bind_player_reward_baseline(value: Dictionary) -> bool:
+	if not is_launch_floor_mode() or not ReplayRecorderScript.validate_full_player_reward_effect_state(value):
+		return false
+	if resources.has(PLAYER_REWARD_BASELINE):
+		return resources[PLAYER_REWARD_BASELINE] == value
+	if not build_state.transaction_snapshot().get("reward_history", []).is_empty():
+		return false
+	resources[PLAYER_REWARD_BASELINE] = value.duplicate(true)
+	return true
+
+
 func apply_reward_definition(definition: Dictionary) -> Dictionary:
 	var before_build: Dictionary = build_state.transaction_snapshot()
 	var before_event_runtime := dungeon_event_runtime.duplicate(true)
@@ -421,6 +453,8 @@ func initialize_launch_event_state(runtime_snapshot: Dictionary) -> bool:
 		"resource": (parts["resource"] as Dictionary).duplicate(true),
 		"health": (parts["health"] as Dictionary).duplicate(true),
 	}
+	if resources.has(PLAYER_REWARD_BASELINE):
+		candidate_resources[PLAYER_REWARD_BASELINE] = resources[PLAYER_REWARD_BASELINE].duplicate(true)
 	if not _event_candidate_matches_domains(
 		runtime_snapshot,
 		run_economy,
@@ -473,7 +507,10 @@ func commit_event_transaction_state(candidate: Dictionary) -> bool:
 	dungeon_event_runtime = runtime_value.duplicate(true)
 	run_economy = economy_value.duplicate(true)
 	floor_plan = floor_value.duplicate(true)
+	var baseline: Dictionary = resources.get(PLAYER_REWARD_BASELINE, {}).duplicate(true)
 	resources = resources_value.duplicate(true)
+	if not baseline.is_empty():
+		resources[PLAYER_REWARD_BASELINE] = baseline
 	seen_event_ids = _event_seen_ids(runtime_value)
 	if build_state.transaction_snapshot() != build_value:
 		build_state.restore_transaction_snapshot(before_build)
@@ -558,6 +595,11 @@ func complete_current_floor_node(node_id: String) -> Dictionary:
 	)
 	if candidate == null:
 		return {"ok": false, "code": &"INTEGRITY_FAILURE", "context": {"field": "floor_plan"}}
+	var ledger := EventModifierLifetimeScript.append_completed_room(
+		events, str(floor_plan["floor_id"]), current_floor_index, node_id
+	)
+	if not bool(ledger.get("ok", false)):
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "context": {"field": "events"}}
 	var previous_plan := floor_plan.duplicate(true)
 	var previous_event_runtime := dungeon_event_runtime.duplicate(true)
 	floor_plan = candidate.snapshot()
@@ -569,6 +611,7 @@ func complete_current_floor_node(node_id: String) -> Dictionary:
 			"code": &"INTEGRITY_FAILURE",
 			"context": {"field": "dungeon_event_runtime.route"},
 		}
+	events = (ledger["context"]["events"] as Array).duplicate(true)
 	return {"ok": true, "node": current_floor_node(), "plan": floor_plan.duplicate(true)}
 
 
@@ -595,6 +638,7 @@ func floor_transaction_snapshot() -> Dictionary:
 		"suspended": suspended,
 		"open_offer": open_offer.duplicate(true),
 		"result": result.duplicate(true),
+		"events": events.duplicate(true),
 		"run_seed": run_seed,
 		"current_floor": current_floor,
 		"current_room": current_room,
@@ -629,6 +673,8 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 		or typeof(value["suspended"]) != TYPE_BOOL
 		or not value["open_offer"] is Dictionary
 		or not value["result"] is Dictionary
+		or not value["events"] is Array
+		or not bool(EventModifierLifetimeScript.validate_events(value["events"]).get("ok", false))
 		or typeof(value["run_seed"]) != TYPE_INT
 		or typeof(value["current_floor"]) != TYPE_INT
 		or int(value["current_floor"]) < 0
@@ -660,6 +706,8 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	):
 		return false
 	var plan: Dictionary = value["floor_plan"]
+	if not EventModifierLifetimeScript.history_matches_plan(value["events"], plan):
+		return false
 	var floor_definition: Dictionary = value["floor_definition"]
 	var room_templates: Array = value["room_templates"]
 	var floor_index := int(value["current_floor_index"])
@@ -785,6 +833,14 @@ func can_restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 			else RunPhaseScript.Value.RUN_PREPARING
 		)
 		return int(value["phase"]) == expected_completed_phase
+	if int(value["phase"]) == RunPhaseScript.Value.SELECTION_ACTIVE:
+		var offer := value["open_offer"] as Dictionary
+		return (
+			bool(current_node.get("cleared", false))
+			and str(current_node.get("room_type", "")) in ["combat", "elite", "treasure", "rest"]
+			and SelectionOfferScript.validate(offer).ok
+			and int(offer.get("revision", -1)) <= int(value["revision"])
+		)
 	return _active_floor_phase_is_valid(int(value["phase"]), plan, current_node)
 
 
@@ -796,6 +852,7 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	suspended = bool(value["suspended"])
 	open_offer = (value["open_offer"] as Dictionary).duplicate(true)
 	result = (value["result"] as Dictionary).duplicate(true)
+	events = (value["events"] as Array).duplicate(true)
 	run_seed = int(value["run_seed"])
 	current_floor = int(value["current_floor"])
 	current_room = int(value["current_room"])
@@ -863,6 +920,7 @@ func restore_launch_run_snapshot(
 		"suspended": bool(value.get("suspended", false)),
 		"open_offer": (value.get("open_offer", {}) as Dictionary).duplicate(true),
 		"result": (value.get("result", {}) as Dictionary).duplicate(true),
+		"events": (value.get("events", []) as Array).duplicate(true),
 		"run_seed": int(value.get("run_seed", 0)),
 		"current_floor": int(value.get("current_floor", 0)),
 		"current_room": int(value.get("current_room", 0)),
@@ -1064,6 +1122,7 @@ func _sync_event_runtime_external_domains() -> bool:
 	modifier["curse_ids"] = (
 		build_state.transaction_snapshot().get("curses", []) as Array
 	).duplicate()
+	(modifier["curse_ids"] as Array).sort()
 	participants["modifier"] = modifier
 	consequence["participant_snapshots"] = participants
 	candidate["consequence_runtime"] = consequence
@@ -1084,9 +1143,16 @@ func _event_candidate_matches_domains(
 	validation_room_templates: Array = []
 ) -> bool:
 	var parts := _event_runtime_parts(runtime_snapshot)
+	var expected_resource_fields := EVENT_RESOURCE_BUNDLE_FIELDS.duplicate()
+	if resource_bundle.has(PLAYER_REWARD_BASELINE):
+		expected_resource_fields.append(PLAYER_REWARD_BASELINE)
+		if not resource_bundle[PLAYER_REWARD_BASELINE] is Dictionary or not ReplayRecorderScript.validate_full_player_reward_effect_state(resource_bundle[PLAYER_REWARD_BASELINE]):
+			return false
+		if not allow_uninitialized and resource_bundle[PLAYER_REWARD_BASELINE] != resources.get(PLAYER_REWARD_BASELINE, {}):
+			return false
 	if (
 		parts.is_empty()
-		or not _has_exact_fields(resource_bundle, EVENT_RESOURCE_BUNDLE_FIELDS)
+		or not _has_exact_fields(resource_bundle, expected_resource_fields)
 		or not resource_bundle["resource"] is Dictionary
 		or not resource_bundle["health"] is Dictionary
 		or not build_state.can_restore_transaction_snapshot(build_snapshot)
@@ -1114,7 +1180,8 @@ func _event_candidate_matches_domains(
 		return false
 	var modifier := parts["modifier"] as Dictionary
 	var event_state := parts["event_state"] as Dictionary
-	var build_curses: Array = build_snapshot.get("curses", [])
+	var build_curses: Array = (build_snapshot.get("curses", []) as Array).duplicate()
+	build_curses.sort()
 	if (
 		not modifier.get("curse_ids") is Array
 		or (modifier["curse_ids"] as Array) != build_curses

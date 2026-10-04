@@ -1543,7 +1543,7 @@ static func _is_deterministic_value(value: Variant, depth: int) -> bool:
 			return is_finite(float(value))
 		TYPE_STRING, TYPE_STRING_NAME:
 			var text := str(value)
-			return text.length() <= 1024 and not text.contains("\u0000")
+			return text.length() <= 1024 and not text.to_utf8_buffer().has(0)
 		TYPE_VECTOR2:
 			var vector := value as Vector2
 			return is_finite(vector.x) and is_finite(vector.y)

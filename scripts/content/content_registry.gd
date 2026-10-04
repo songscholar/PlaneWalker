@@ -1595,6 +1595,17 @@ func _first_specialized_reference_error(
 						definitions_by_id
 					)
 				if reference_error.is_empty():
+					for merchant_id: String in definition["merchant_ids"]:
+						var merchant: Dictionary = definitions_by_id[merchant_id]
+						var floor_number := int(definition["order"])
+						if floor_number < int(merchant["floor_min"]) or floor_number > int(merchant["floor_max"]):
+							reference_error = {
+								"content_id": str(definition["id"]),
+								"reference_id": merchant_id,
+								"reason": "merchant_floor_range",
+							}
+							break
+				if reference_error.is_empty():
 					reference_error = _specialized_reference_field_error(
 						definition,
 						"event_ids",

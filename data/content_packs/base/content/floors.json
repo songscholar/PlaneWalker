@@ -35,8 +35,7 @@
     "encounter_profile_id": "encounter_profile_ruins_adapter_v1",
     "economy_profile_id": "launch_economy_v1",
     "merchant_ids": [
-      "merchant_wayfarer",
-      "merchant_chronomancer"
+      "merchant_wayfarer"
     ],
     "event_ids": [
       "event_chronal_altar",

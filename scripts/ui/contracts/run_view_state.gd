@@ -3,6 +3,7 @@ extends RefCounted
 
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const ArchetypeProfileScript := preload("res://scripts/progression/archetype_profile.gd")
+const DungeonMapViewStateScript := preload("res://scripts/ui/contracts/dungeon_map_view_state.gd")
 
 const M1_ARCHETYPE_IDS: Array[String] = [
 	"freeze_burst",
@@ -24,6 +25,7 @@ const PHASES: Array[String] = [
 	"BOSS_ACTIVE",
 	"VICTORY",
 	"DEFEAT",
+	"ROOM_ACTIVE",
 ]
 const WEAPON_PHASES: Array[String] = [
 	"READY",
@@ -216,6 +218,12 @@ static func validate(value: Variant):
 		return _failure(revision, "suspended", "expected boolean")
 	if not _is_integer(state.get("run_time_ms")) or int(state["run_time_ms"]) < 0:
 		return _failure(revision, "run_time_ms", "expected non-negative integer")
+	if state.has("dungeon_state"):
+		var dungeon_validation = DungeonMapViewStateScript.validate(state["dungeon_state"])
+		if not dungeon_validation.ok:
+			return _failure(revision, "dungeon_state", "invalid dungeon projection")
+		if str(state["dungeon_state"]["run_id"]) != str(state["run_id"]):
+			return _failure(revision, "dungeon_state.run_id", "run identity mismatch")
 	for legacy_field: String in LEGACY_WEAPON_FIELDS:
 		if state.has(legacy_field):
 			return _failure(revision, legacy_field, "legacy weapon field is not supported")

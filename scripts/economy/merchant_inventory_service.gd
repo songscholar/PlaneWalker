@@ -5,6 +5,7 @@ const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const MerchantDefinitionScript := preload("res://scripts/dungeon/merchant_definition.gd")
 const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
 const ShopPriceServiceScript := preload("res://scripts/economy/shop_price_service.gd")
+const RewardCompatibilityScript := preload("res://scripts/rewards/reward_compatibility.gd")
 
 const SNAPSHOT_SCHEMA_VERSION := 1
 const TRANSACTION_SCHEMA_VERSION := 1
@@ -786,21 +787,7 @@ func _required_tags_match(required_tags: Array, definition: Dictionary) -> bool:
 
 
 func _definition_matches_context(definition: Dictionary, context: Dictionary) -> bool:
-	var compatibility := definition["compatibility"] as Dictionary
-	for key_value: Variant in compatibility.keys():
-		var key := str(key_value)
-		var allowed := compatibility[key] as Array
-		if allowed.is_empty():
-			continue
-		var selected: Array = context.get(key, [])
-		var matched := false
-		for selected_value: Variant in selected:
-			if allowed.has(str(selected_value)):
-				matched = true
-				break
-		if not matched:
-			return false
-	return true
+	return RewardCompatibilityScript.matches(definition, context)
 
 
 func _valid_offer(value: Dictionary) -> bool:

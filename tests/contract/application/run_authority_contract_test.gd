@@ -1,9 +1,11 @@
 extends Node
 
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const RunOrchestratorScript := preload("res://scripts/application/run_orchestrator.gd")
 const GAME_STATE_PATH := "res://autoload/game_state.gd"
 const RUN_BUILD_STATE_PATH := "res://scripts/progression/run_build_state.gd"
 const RUN_ORCHESTRATOR_PATH := "res://scripts/application/run_orchestrator.gd"
+const RUN_STATE_PATH := "res://scripts/application/run_state.gd"
 const PRODUCTION_ROOTS: Array[String] = [
 	"res://autoload",
 	"res://scripts",
@@ -59,6 +61,25 @@ const FORBIDDEN_PRODUCTION_TOKENS: Array[String] = [
 ]
 
 
+class CountingBuildState:
+	extends RefCounted
+
+	var base: RefCounted
+	var application_count := 0
+	var last_definition: Dictionary = {}
+
+	func _init(source: RefCounted) -> void:
+		base = source
+
+	func apply_definition(definition: Dictionary) -> Dictionary:
+		application_count += 1
+		last_definition = definition.duplicate(true)
+		return base.call("apply_definition", definition)
+
+	func transaction_snapshot() -> Dictionary:
+		return base.call("transaction_snapshot")
+
+
 func _ready() -> void:
 	call_deferred("_run")
 
@@ -78,6 +99,7 @@ func _run() -> void:
 	)
 	_assert_production_authority(suite)
 	_assert_build_definition_authority(suite)
+	_test_build_definition_delegation(suite)
 	_test_profile_summary_persistence(suite)
 	suite.finish(get_tree())
 
@@ -100,15 +122,21 @@ func _assert_production_authority(suite) -> void:
 func _assert_build_definition_authority(suite) -> void:
 	var build_source := _read_text(RUN_BUILD_STATE_PATH)
 	var orchestrator_source := _read_text(RUN_ORCHESTRATOR_PATH)
+	var state_source := _read_text(RUN_STATE_PATH)
 	suite.assert_true(not build_source.is_empty(), "RunBuildState source is readable")
 	suite.assert_true(not orchestrator_source.is_empty(), "RunOrchestrator source is readable")
+	suite.assert_true(not state_source.is_empty(), "RunState source is readable")
 	suite.assert_true(
 		build_source.contains("func apply_definition("),
 		"RunBuildState owns the single resolved-definition application boundary"
 	)
 	suite.assert_true(
-		orchestrator_source.contains("build_state.apply_definition(definition)"),
-		"RunOrchestrator delegates selected definitions to RunBuildState authority"
+		orchestrator_source.contains("_state.apply_reward_definition(definition)"),
+		"RunOrchestrator delegates selected definitions through the RunState transaction boundary"
+	)
+	suite.assert_equal(
+		state_source.count("build_state.apply_definition("), 1,
+		"RunState has one resolved-definition application call to BuildState authority"
 	)
 	for legacy_route: String in [
 		"build_state.record_item(",
@@ -120,6 +148,32 @@ func _assert_build_definition_authority(suite) -> void:
 			not orchestrator_source.contains(legacy_route),
 			"RunOrchestrator no longer branches build scoring through %s" % legacy_route
 		)
+
+
+func _test_build_definition_delegation(suite) -> void:
+	var orchestrator = RunOrchestratorScript.new()
+	var state: RefCounted = orchestrator.get("_state")
+	var authority := CountingBuildState.new(state.get("build_state"))
+	state.set("build_state", authority)
+	var definition := {
+		"id": "authority_item", "category": "item",
+		"archetype": "freeze_burst", "effects": {"damage_multiplier": 1.25},
+	}
+	var applied: Dictionary = orchestrator.call("_record_selected_definition", definition)
+	suite.assert_true(bool(applied.get("ok", false)), "wrapped reward delegation accepts a valid definition")
+	suite.assert_equal(authority.application_count, 1, "wrapped reward delegates to BuildState exactly once")
+	suite.assert_equal(authority.last_definition, definition, "wrapped reward preserves the complete resolved definition")
+	var before := authority.transaction_snapshot()
+	suite.assert_equal(before["reward_history"], [definition], "only BuildState records the resolved reward")
+	var empty_result: Dictionary = orchestrator.call("_record_selected_definition", {})
+	suite.assert_true(bool(empty_result.get("ok", false)), "empty compatibility resolution remains a no-op")
+	suite.assert_equal(authority.application_count, 1, "empty compatibility resolution never invokes BuildState")
+	var rejected: Dictionary = orchestrator.call("_record_selected_definition", {
+		"id": "invalid_reward", "category": "unknown", "effects": {},
+	})
+	suite.assert_true(not bool(rejected.get("ok", false)), "wrapped delegation propagates authority rejection")
+	suite.assert_equal(authority.application_count, 2, "rejected definition is checked once by BuildState")
+	suite.assert_equal(authority.transaction_snapshot(), before, "authority rejection preserves the complete build snapshot")
 
 
 func _test_profile_summary_persistence(suite) -> void:

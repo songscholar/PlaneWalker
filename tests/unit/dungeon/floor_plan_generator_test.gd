@@ -6,6 +6,7 @@ const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_gene
 
 const FLOOR_PATH := "res://data/content_packs/base/content/floors.json"
 const TEMPLATE_PATH := "res://data/content_packs/base/content/room_templates.json"
+const MERCHANT_PATH := "res://data/content_packs/base/content/merchants.json"
 
 
 func _ready() -> void:
@@ -16,6 +17,9 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	var floors: Array = _load_json_array(FLOOR_PATH)
 	var templates: Array = _load_json_array(TEMPLATE_PATH)
+	var merchants_by_id: Dictionary = {}
+	for merchant: Dictionary in _load_json_array(MERCHANT_PATH):
+		merchants_by_id[str(merchant["id"])] = merchant
 	suite.assert_equal(floors.size(), 5, "generator fixture exposes five floors")
 	suite.assert_equal(templates.size(), 30, "generator fixture exposes thirty room templates")
 
@@ -32,6 +36,13 @@ func _run() -> void:
 			suite.assert_equal(first, repeated, "%s is byte-identical on repeat" % label)
 			var plan: Dictionary = first.get("plan", {})
 			_assert_plan_invariants(suite, plan, floor, templates, label)
+			for node: Dictionary in plan.get("nodes", []):
+				if str(node.get("room_type", "")) != "shop":
+					continue
+				var merchant: Dictionary = merchants_by_id.get(str(node["merchant_id"]), {})
+				suite.assert_true(not merchant.is_empty(), "%s merchant resolves" % label)
+				if not merchant.is_empty():
+					suite.assert_true(int(floor["order"]) >= int(merchant["floor_min"]) and int(floor["order"]) <= int(merchant["floor_max"]), "%s merchant supports generated floor" % label)
 
 	var missing_boss_templates := templates.filter(
 		func(template: Variant) -> bool:

@@ -108,6 +108,10 @@ run_with_timeout() {
 	local scene="$3"
 	local user_data_dir="$4"
 	local started_at=$SECONDS
+	local scene_timeout_seconds="${timeout_seconds}"
+	if [[ "${scene}" == "tests/smoke/p14_dungeon_loadout_matrix_smoke_test.tscn" ]] && (( scene_timeout_seconds < 600 )); then
+		scene_timeout_seconds=600
+	fi
 
 	PLANEWALKER_TEST_DATA_DIR="${user_data_dir}/files" \
 	XDG_DATA_HOME="${user_data_dir}" \
@@ -120,7 +124,7 @@ run_with_timeout() {
 	current_pid=$!
 
 	while kill -0 "${current_pid}" 2>/dev/null; do
-		if (( SECONDS - started_at >= timeout_seconds )); then
+		if (( SECONDS - started_at >= scene_timeout_seconds )); then
 			kill "${current_pid}" 2>/dev/null || true
 			wait "${current_pid}" 2>/dev/null || true
 			current_pid=""

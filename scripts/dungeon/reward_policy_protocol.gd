@@ -13,6 +13,18 @@ const POLICY_ID_BY_ROOM_TYPE := {
 	"boss": "reward_policy_boss_v1",
 	"rest": "reward_policy_rest_v1",
 }
+const GOLD_BY_ROOM_TYPE := {
+	"combat": [30, 38, 45, 55, 58],
+	"elite": [50, 60, 75, 90, 90],
+	"treasure": [40, 50, 60, 70, 75],
+	"boss": [60, 75, 95, 115, 100],
+}
+
+
+static func gold_for(room_type: String, floor_index: int) -> int:
+	if floor_index < 0 or floor_index >= 5:
+		return 0
+	return int(GOLD_BY_ROOM_TYPE[room_type][floor_index]) if GOLD_BY_ROOM_TYPE.has(room_type) else 0
 
 
 static func actionable_room_types() -> Array[String]:

@@ -62,6 +62,7 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_open_freezes_assignment_and_view_is_safe(suite)
 	_test_disabled_reason_and_preview_category(suite)
+	_test_route_preflight_is_visible_and_side_effect_free(suite)
 	_test_hidden_weighted_outcome_channel_and_immediate_resolution(suite)
 	_test_pending_reward_continuation_and_restore(suite)
 	_test_pending_encounter_continuation(suite)
@@ -126,6 +127,25 @@ func _test_disabled_reason_and_preview_category(suite) -> void:
 		"choice rejection retains the exact safe reason"
 	)
 	suite.assert_equal(runtime.call("snapshot"), before, "disabled choice is atomic")
+
+
+func _test_route_preflight_is_visible_and_side_effect_free(suite) -> void:
+	var definition := _immediate_event()
+	definition["options"][0]["outcomes"][0]["consequences"] = [{"operation": "route_skip", "arguments": {"rooms": 2}}]
+	var fixture := _fixture([definition], CountingSelector.new())
+	var runtime: RefCounted = fixture["runtime"]
+	var opened: Dictionary = runtime.call("open_event", _room(), {})
+	suite.assert_true(bool(opened.get("ok", false)), "protected route event opens")
+	if not bool(opened.get("ok", false)):
+		return
+	var before: Dictionary = runtime.call("snapshot")
+	var commit := _option_view(runtime.call("view_state"), "commit")
+	suite.assert_true(not bool(commit["eligible"]), "route option disables when every outcome crosses protected Boss")
+	suite.assert_equal(commit["disabled_reason_key"], "EVENT_REQUIREMENT_ROUTE_UNAVAILABLE", "protected route exposes a localized availability reason")
+	suite.assert_equal(runtime.call("snapshot"), before, "route preflight never consumes or changes the domain")
+	var rejected: Dictionary = runtime.call("choose_option", &"commit", _global_revision)
+	suite.assert_equal(rejected.get("code"), &"OPTION_INELIGIBLE", "protected route command rejects before reservation")
+	suite.assert_equal(runtime.call("snapshot"), before, "rejected route command preserves complete event state")
 
 
 func _test_hidden_weighted_outcome_channel_and_immediate_resolution(suite) -> void:

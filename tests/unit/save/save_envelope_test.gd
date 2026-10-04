@@ -9,6 +9,7 @@ const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.
 const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 const FloorPlanScript := preload("res://scripts/dungeon/floor_plan.gd")
 const FloorPlanGeneratorScript := preload("res://scripts/dungeon/floor_plan_generator.gd")
+const ContentRegistryScript := preload("res://scripts/content/content_registry.gd")
 const CrumblingGroundRuleScript := preload(
 	"res://scripts/dungeon/floor_rules/crumbling_ground_rule.gd"
 )
@@ -44,6 +45,8 @@ func _run() -> void:
 	_test_native_v2_profile_runtime_fields_are_strict(suite)
 	_test_native_v2_runtime_state_survives_json_round_trip(suite)
 	_test_native_v3_active_run_round_trip(suite)
+	_test_native_v3_effect_types_survive_json_round_trip(suite)
+	_test_v3_event_runtime_creation_and_legacy_boundary(suite)
 	_test_native_v3_economy_and_merchant_authority_validation_fails_closed(suite)
 	_test_completed_floor_active_run_round_trip(suite)
 	_test_native_v3_active_run_validation_fails_closed(suite)
@@ -280,6 +283,10 @@ func _test_native_v2_runtime_state_survives_json_round_trip(suite) -> void:
 	if validated.ok:
 		suite.assert_equal(validated.payload["payload"]["active_item_state"], active_state, "configured active integers normalize losslessly")
 		suite.assert_equal(validated.payload["payload"]["reward_effect_state"], reward_state, "non-empty reward integers normalize losslessly")
+		var bow_adapter: Dictionary = validated.payload["payload"]["reward_effect_state"]["weapon"]["runtime"]["bow"]["adapter_snapshot"]
+		suite.assert_equal(typeof(bow_adapter["starfall_elapsed_frames"]), TYPE_INT, "bow adapter frame count restores its canonical integer type")
+		var gauntlets_combo: Dictionary = validated.payload["payload"]["reward_effect_state"]["weapon"]["runtime"]["gauntlets"]["combo_state"]
+		suite.assert_equal(typeof(gauntlets_combo["combo_timeout_cap_frames"]), TYPE_INT, "gauntlets combo timeout cap restores its canonical integer type")
 
 
 func _test_native_v3_active_run_round_trip(suite) -> void:
@@ -288,7 +295,6 @@ func _test_native_v3_active_run_round_trip(suite) -> void:
 		return
 	var active_run := _active_run_fixture("LAUNCH", _generated_floor_plan())
 	active_run["consumed_offer_ids"] = ["run-save-v3:room-01:item:7"]
-	active_run["seen_event_ids"] = ["event.echo"]
 	var created = SaveEnvelopeScript.create_profile(
 		"slot_1", "base", 14, "0.4.0-dev",
 		"2026-09-28T08:00:00Z", "2026-09-28T09:10:00Z",
@@ -311,6 +317,71 @@ func _test_native_v3_active_run_round_trip(suite) -> void:
 	]:
 		suite.assert_equal(typeof(restored[integer_field]), TYPE_INT, "%s normalizes to TYPE_INT" % integer_field)
 	suite.assert_equal(typeof(restored["floor_plan"]["floor_index"]), TYPE_INT, "FloorPlan integers normalize to TYPE_INT")
+
+
+func _test_native_v3_effect_types_survive_json_round_trip(suite) -> void:
+	var registry = ContentRegistryScript.new()
+	var report = registry.load_packs(
+		[{"path": "res://data/content_packs/base/pack.json", "required": true}],
+		"0.4.0-dev", &"LAUNCH"
+	)
+	suite.assert_true(not report.has_blocking_errors(), "reward history loads authoritative canonical content")
+	var talent: Dictionary = registry.get_content(&"tal_eternity_reserve")
+	var item: Dictionary = registry.get_content(&"rewind_echo")
+	suite.assert_equal(typeof(talent["effects"]["talent_wayfarer_energy_restore"]), TYPE_INT, "canonical talent energy is an integer")
+	suite.assert_equal(typeof(talent["effects"]["low_energy_threshold"]), TYPE_FLOAT, "whole-valued numeric effects remain floating point")
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var active_run := _active_run_fixture("LAUNCH", _generated_floor_plan())
+	active_run["build"]["reward_history"] = [talent.duplicate(true), item.duplicate(true)]
+	active_run["build"]["talents"] = ["tal_eternity_reserve"]
+	active_run["build"]["items"] = ["rewind_echo"]
+	var created = SaveEnvelopeScript.create_profile(
+		"slot_1", "base", 15, "0.4.0-dev",
+		"2026-09-28T08:00:00Z", "2026-10-04T11:00:00Z",
+		fixture["content_snapshot"], {"active_run_state": active_run}
+	)
+	suite.assert_true(created.ok, "canonical reward history seals without changing definitions")
+	if not created.ok:
+		return
+	var parsed: Variant = JSON.parse_string(JSON.stringify(created.payload, "", true, true))
+	var validated = SaveEnvelopeScript.validate(parsed, &"profile", "slot_1", "base")
+	suite.assert_true(validated.ok, "canonical reward history validates after physical JSON round trip")
+	if not validated.ok:
+		return
+	var restored := validated.payload["payload"]["active_run_state"] as Dictionary
+	suite.assert_equal(restored, active_run, "typed canonical rewards round trip without strict snapshot drift")
+	var effects := restored["build"]["reward_history"][0]["effects"] as Dictionary
+	suite.assert_equal(typeof(effects["talent_wayfarer_energy_restore"]), TYPE_INT, "persisted talent integer is restored by its effect descriptor")
+	suite.assert_equal(typeof(effects["low_energy_threshold"]), TYPE_FLOAT, "persisted whole-valued numeric effect retains its float type")
+	suite.assert_equal(typeof(effects["low_energy_regen_multiplier"]), TYPE_FLOAT, "integer-valued multiplier is never broadly coerced to int")
+
+
+func _test_v3_event_runtime_creation_and_legacy_boundary(suite) -> void:
+	var fixture := _read_json(PROFILE_FIXTURE_PATH, suite)
+	var legacy_run := _active_run_fixture("LAUNCH", _generated_floor_plan())
+	legacy_run.erase("dungeon_event_runtime")
+	for seen_ids: Array in [[], ["event.echo"]]:
+		legacy_run["seen_event_ids"] = seen_ids.duplicate()
+		var legacy := fixture.duplicate(true)
+		legacy["payload"]["active_run_state"] = legacy_run.duplicate(true)
+		_resign(legacy)
+		var validated = SaveEnvelopeScript.validate(legacy, &"profile", "slot_1", "base")
+		suite.assert_true(validated.ok, "historical v3 without event runtime remains readable")
+		if validated.ok:
+			suite.assert_equal(
+				validated.payload["payload"]["active_run_state"], legacy_run,
+				"historical v3 event projection is preserved without fabricating runtime"
+			)
+		var created = SaveEnvelopeScript.create_profile(
+			"slot_1", "base", 18, "0.4.0-dev",
+			"2026-09-28T08:00:00Z", "2026-10-02T08:00:00Z",
+			fixture.get("content_snapshot", {}), {"active_run_state": legacy_run}
+		)
+		suite.assert_equal(created.code, &"INVALID_ARGUMENT", "new Launch saves require explicit event runtime")
+		suite.assert_equal(
+			created.metadata.get("field"), "payload.active_run_state.dungeon_event_runtime",
+			"missing runtime creation identifies the event boundary"
+		)
 
 
 func _test_completed_floor_active_run_round_trip(suite) -> void:
@@ -356,6 +427,14 @@ func _test_native_v3_economy_and_merchant_authority_validation_fails_closed(suit
 	suite.assert_true(canonical.ok, "canonical economy and merchant authorities restore from Save")
 	if not canonical.ok:
 		return
+	var json_document: Variant = JSON.parse_string(JSON.stringify(created.payload, "", true, true))
+	var json_validated = SaveEnvelopeScript.validate(json_document, &"profile", "slot_1", "base")
+	suite.assert_true(json_validated.ok, "merchant Save authority validates after JSON I/O")
+	if json_validated.ok:
+		var restored_run := json_validated.payload["payload"]["active_run_state"] as Dictionary
+		var restored_offer := restored_run["merchant_state"]["nodes"][0]["inventory"]["offers"][0] as Dictionary
+		suite.assert_equal(typeof(restored_offer["price"]), TYPE_INT, "merchant offer price retains its authored integer type")
+		suite.assert_equal(restored_run, active_run, "merchant authority preserves exact snapshot values through JSON I/O")
 	var corruptions: Array[Dictionary] = [
 		{
 			"label": "economy balance no longer replays from its ledger",
@@ -427,6 +506,7 @@ func _test_native_v3_active_run_validation_fails_closed(suite) -> void:
 		{"label": "event id duplication", "field": "payload.active_run_state.seen_event_ids", "mutate": func(run: Dictionary): run["seen_event_ids"] = ["event_echo", "event_echo"]},
 		{"label": "merchant container corruption", "field": "payload.active_run_state.merchant_state", "mutate": func(run: Dictionary): run["merchant_state"] = []},
 		{"label": "floor-rule container corruption", "field": "payload.active_run_state.floor_rule_state", "mutate": func(run: Dictionary): run["floor_rule_state"] = []},
+		{"label": "event-runtime container corruption", "field": "payload.active_run_state.dungeon_event_runtime", "mutate": func(run: Dictionary): run["dungeon_event_runtime"] = []},
 		{"label": "plan digest drift", "field": "payload.active_run_state.floor_plan.generation_digest", "mutate": func(run: Dictionary): run["floor_plan"]["generation_digest"] = "0".repeat(64)},
 		{"label": "plan abandoned-route drift", "field": "payload.active_run_state.floor_plan.abandoned_node_ids", "mutate": func(run: Dictionary): run["floor_plan"]["abandoned_node_ids"] = ["boss"]},
 		{"label": "plan unknown field", "field": "payload.active_run_state.floor_plan", "mutate": func(run: Dictionary): run["floor_plan"]["unknown"] = true},
@@ -559,6 +639,7 @@ func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionar
 		"completed_floor_ids": [],
 		"run_economy": {},
 		"seen_event_ids": [],
+		"dungeon_event_runtime": {},
 		"merchant_state": {},
 		"floor_rule_state": {},
 	}
@@ -808,7 +889,7 @@ func _non_empty_reward_state() -> Dictionary:
 				"bow": {
 					"schema_version": 1, "active_token": 4,
 					"reward_eligible_tokens": [2, 4],
-					"adapter_snapshot": {"last_runtime_frame": 40},
+					"adapter_snapshot": {"last_runtime_frame": 40, "starfall_elapsed_frames": 0},
 				},
 				"gun": {
 					"schema_version": 1, "ammo": 8,
@@ -824,6 +905,7 @@ func _non_empty_reward_state() -> Dictionary:
 					"schema_version": 1, "chain_step": 3, "combo_count": 5,
 					"combo_remaining_frames": 20, "action_token_floor": 7,
 					"aura_source_generation": 2, "active_token": 8,
+					"combo_state": {"combo_timeout_cap_frames": 120},
 				},
 			},
 		},

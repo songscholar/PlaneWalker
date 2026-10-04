@@ -144,6 +144,7 @@ var low_energy_threshold: float = 30.0
 var time_stop_self_damage: float = 0.0
 var rewind_self_damage: float = 0.0
 var _floor_rule_cost_multiplier: float = 1.0
+var _event_energy_regen_multiplier: float = 1.0
 var _cooldowns: Dictionary = {
 	&"time_stop": 0.0,
 	&"time_rewind": 0.0,
@@ -225,6 +226,17 @@ func set_floor_rule_cost_multiplier(value: float) -> bool:
 
 func floor_rule_cost_multiplier() -> float:
 	return _floor_rule_cost_multiplier
+
+
+func set_event_energy_regen_multiplier(value: float) -> bool:
+	if not is_finite(value) or value <= 0.0:
+		return false
+	_event_energy_regen_multiplier = value
+	return true
+
+
+func event_energy_regen_multiplier() -> float:
+	return _event_energy_regen_multiplier
 
 
 func _floor_rule_adjusted_cost(base_cost: float, reward_multiplier: float) -> float:
@@ -2152,6 +2164,7 @@ func reset_runtime_state(reset_frame_clock: bool = false) -> void:
 		_last_runtime_frame = 0
 	_energy_regen_remainder = 0
 	_floor_rule_cost_multiplier = 1.0
+	_event_energy_regen_multiplier = 1.0
 	energy = max_energy
 	# A full runtime reset invalidates any prepared external-resource ticket even
 	# when the numeric balance was already at maximum.
@@ -2877,7 +2890,7 @@ func _regen_energy(delta: float) -> void:
 		return
 	var regen_multiplier := low_energy_regen_multiplier if energy < low_energy_threshold else 1.0
 	var energy_before := energy
-	energy = minf(max_energy, energy + energy_regen * regen_multiplier * delta)
+	energy = minf(max_energy, energy + energy_regen * regen_multiplier * _event_energy_regen_multiplier * delta)
 	if energy != energy_before:
 		_resource_revision += 1
 	_publish_energy_changed(energy, max_energy)
@@ -2888,7 +2901,7 @@ func _regen_energy_fixed_frame() -> void:
 		_energy_regen_remainder = 0
 		return
 	var regen_multiplier := low_energy_regen_multiplier if energy < low_energy_threshold else 1.0
-	var scaled_per_second := roundi(energy_regen * regen_multiplier * float(ENERGY_FIXED_POINT_SCALE))
+	var scaled_per_second := roundi(energy_regen * regen_multiplier * _event_energy_regen_multiplier * float(ENERGY_FIXED_POINT_SCALE))
 	if scaled_per_second <= 0:
 		return
 	var accumulated := _energy_regen_remainder + scaled_per_second

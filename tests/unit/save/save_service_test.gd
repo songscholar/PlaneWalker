@@ -46,6 +46,7 @@ func _run() -> void:
 	_test_v1_profile_and_settings_migrate_on_production_load(suite)
 	_test_v2_profile_and_settings_rewrite_to_v3(suite)
 	_test_v2_active_launch_runs_rewrite_to_v3(suite)
+	_test_legacy_event_history_migrates_without_recovery(suite)
 	_test_native_v3_active_run_round_trip(suite)
 	_test_real_consumed_draft_offer_id_round_trip(suite)
 	_test_unsafe_active_launch_migration_refuses_recovery(suite)
@@ -60,6 +61,7 @@ func _run() -> void:
 	_test_backup_two_recovery_and_all_corrupt_result(suite)
 	_test_forward_version_refuses_backup_fallback(suite)
 	_test_content_mismatch_refuses_backup_fallback(suite)
+	_test_content_mismatch_requires_valid_envelope(suite)
 	_test_write_reentry_returns_busy(suite)
 	_test_path_traversal_is_rejected(suite)
 
@@ -279,13 +281,20 @@ func _test_v2_profile_and_settings_rewrite_to_v3(suite) -> void:
 
 
 func _test_v2_active_launch_runs_rewrite_to_v3(suite) -> void:
-	for floor_index: int in [0, 2]:
-		var case_name := "v2_active_launch_floor_%d" % floor_index
+	for fixture: Dictionary in [
+		{"milestone": "LAUNCH", "floor_index": 0},
+		{"milestone": "LAUNCH", "floor_index": 2},
+		{"milestone": "EXPANSION", "floor_index": 0},
+		{"milestone": "EXPANSION", "floor_index": 2},
+	]:
+		var milestone := str(fixture["milestone"])
+		var floor_index := int(fixture["floor_index"])
+		var case_name := "v2_active_%s_floor_%d" % [milestone.to_lower(), floor_index]
 		var plan := _generated_floor_plan(floor_index)
 		suite.assert_true(not plan.is_empty(), "%s generates its complete FloorPlan" % case_name)
 		if plan.is_empty():
 			continue
-		var active_run := _active_run_fixture("LAUNCH", plan)
+		var active_run := _active_run_fixture(milestone, plan)
 		var service = _new_service(case_name, _content_snapshot("%x" % (floor_index + 5)), suite)
 		suite.assert_true(
 			service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run}).ok,
@@ -294,13 +303,14 @@ func _test_v2_active_launch_runs_rewrite_to_v3(suite) -> void:
 		var profile_path := _profile_path(case_name, "primary.json")
 		var legacy_profile := _read_json(profile_path, suite)
 		legacy_profile["schema_version"] = 2
+		(legacy_profile["payload"]["active_run_state"] as Dictionary).erase("dungeon_event_runtime")
 		_resign(legacy_profile)
 		_write_text(profile_path, JSON.stringify(legacy_profile, "", true, true))
 
 		var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
 		suite.assert_true(
 			loaded.ok,
-			"%s migrates a complete active Launch run: %s" % [case_name, str(loaded.to_dictionary())]
+			"%s migrates a complete active run: %s" % [case_name, str(loaded.to_dictionary())]
 		)
 		if loaded.ok:
 			suite.assert_equal(
@@ -315,19 +325,72 @@ func _test_v2_active_launch_runs_rewrite_to_v3(suite) -> void:
 		)
 
 
+func _test_legacy_event_history_migrates_without_recovery(suite) -> void:
+	var plan := _generated_floor_plan(2)
+	suite.assert_true(not plan.is_empty(), "historical event SaveService fixture generates")
+	if plan.is_empty():
+		return
+	for milestone: String in ["LAUNCH", "EXPANSION"]:
+		for source_version: int in [1, 2]:
+			var case_name := "v%d_%s_event_history" % [source_version, milestone.to_lower()]
+			var service = _new_service(case_name, _content_snapshot("e"), suite)
+			suite.assert_true(
+				service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "older_backup"}).ok,
+				"%s writes a distinguishable older backup" % case_name
+			)
+			var active_run := _active_run_fixture(milestone, plan)
+			suite.assert_true(
+				service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run}).ok,
+				"%s writes its setup envelope" % case_name
+			)
+			active_run["seen_event_ids"] = ["event.echo", "event.hidden_cache"]
+			active_run.erase("dungeon_event_runtime")
+			var profile_path := _profile_path(case_name, "primary.json")
+			var legacy_profile := _read_json(profile_path, suite)
+			legacy_profile["schema_version"] = source_version
+			legacy_profile["payload"]["active_run_state"] = active_run.duplicate(true)
+			if source_version == 1:
+				(legacy_profile["payload"] as Dictionary).erase("active_item_state")
+				(legacy_profile["payload"] as Dictionary).erase("reward_effect_state")
+			_resign(legacy_profile)
+			_write_text(profile_path, JSON.stringify(legacy_profile, "", true, true))
+			var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+			suite.assert_equal(loaded.code, &"OK", "%s loads without corruption recovery" % case_name)
+			suite.assert_equal(loaded.source_kind, &"primary", "%s never falls back to its older backup" % case_name)
+			suite.assert_equal(_quarantine_file_count(case_name), 0, "%s never quarantines valid history" % case_name)
+			if loaded.code != &"OK":
+				continue
+			suite.assert_equal(loaded.migrated_from, source_version, "%s records its source version" % case_name)
+			suite.assert_equal(loaded.migrated_to, 3, "%s reaches schema v3" % case_name)
+			suite.assert_true(not loaded.player_notice_required, "%s needs no recovery notice" % case_name)
+			suite.assert_true(loaded.payload.get("active_run_state") == active_run, "%s preserves event history and all run domains" % case_name)
+			var migrated_primary := _read_json(profile_path, suite)
+			suite.assert_equal(migrated_primary.get("schema_version"), 3.0, "%s rewrites its primary as legacy v3" % case_name)
+			var persisted_run := migrated_primary.get("payload", {}).get("active_run_state", {}) as Dictionary
+			suite.assert_true(not persisted_run.has("dungeon_event_runtime"), "%s persists no fabricated event authority" % case_name)
+			var reloaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+			suite.assert_equal(reloaded.code, &"OK", "%s reloads its migrated v3 primary" % case_name)
+			suite.assert_true(reloaded.payload.get("active_run_state") == active_run, "%s retains history after a second load" % case_name)
+			var primary_before_write := _read_text(profile_path)
+			var rejected_write = service.save_profile(PROFILE_ID, SAVE_DOMAIN, loaded.payload)
+			suite.assert_equal(rejected_write.code, &"INVALID_ARGUMENT", "%s remains read-only until a complete event authority exists" % case_name)
+			suite.assert_equal(_read_text(profile_path), primary_before_write, "%s rejected write preserves the migrated primary" % case_name)
+
+
 func _test_native_v3_active_run_round_trip(suite) -> void:
 	var plan := _generated_floor_plan()
 	suite.assert_true(not plan.is_empty(), "SaveService active-run fixture generates a FloorPlan")
 	if plan.is_empty():
 		return
-	var active_run := _active_run_fixture("LAUNCH", plan)
-	var service = _new_service("active_run_round_trip", _content_snapshot("3"), suite)
-	var saved = service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run})
-	suite.assert_true(saved.ok, "native v3 active run writes to disk: %s" % str(saved.to_dictionary()))
-	var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
-	suite.assert_true(loaded.ok, "native v3 active run loads from disk: %s" % str(loaded.to_dictionary()))
-	if loaded.ok:
-		suite.assert_equal(loaded.payload.get("active_run_state"), active_run, "active RunState and FloorPlan survive SaveService JSON I/O")
+	for milestone: String in ["LAUNCH", "EXPANSION"]:
+		var active_run := _active_run_fixture(milestone, plan)
+		var service = _new_service("active_run_round_trip_%s" % milestone.to_lower(), _content_snapshot("3"), suite)
+		var saved = service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"active_run_state": active_run})
+		suite.assert_true(saved.ok, "native v3 %s run writes to disk: %s" % [milestone, str(saved.to_dictionary())])
+		var loaded = service.load_profile(PROFILE_ID, SAVE_DOMAIN)
+		suite.assert_true(loaded.ok, "native v3 %s run loads from disk: %s" % [milestone, str(loaded.to_dictionary())])
+		if loaded.ok:
+			suite.assert_equal(loaded.payload.get("active_run_state"), active_run, "%s RunState and FloorPlan survive SaveService JSON I/O" % milestone)
 
 
 func _test_real_consumed_draft_offer_id_round_trip(suite) -> void:
@@ -587,6 +650,28 @@ func _test_content_mismatch_refuses_backup_fallback(suite) -> void:
 	suite.assert_equal(result.code, &"CONTENT_MISMATCH", "incompatible content snapshot is refused")
 	suite.assert_equal(result.metadata.get("actual_aggregate"), _content_snapshot("9").get("aggregate_sha256"), "mismatch reports stored aggregate")
 	suite.assert_equal(_quarantine_file_count("content_refusal"), 0, "content mismatch never triggers backup rollback")
+
+
+func _test_content_mismatch_requires_valid_envelope(suite) -> void:
+	var case_name := "content_boundary_validation"
+	var service = _new_service(case_name, _content_snapshot("b"), suite)
+	suite.assert_true(service.save_profile(PROFILE_ID, SAVE_DOMAIN, {"value": "primary"}).ok, "content-boundary fixture writes")
+	var path := _profile_path(case_name, "primary.json")
+	var original := _read_json(path, suite)
+	var incompatible = _new_service(case_name, _content_snapshot("c"), suite)
+	var tampered := original.duplicate(true)
+	tampered["payload"]["value"] = "tampered"
+	_write_text(path, JSON.stringify(tampered, "", true, true))
+	var invalid_integrity = incompatible.inspect_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_equal(invalid_integrity.code, &"CORRUPT", "content mismatch never bypasses envelope integrity")
+	suite.assert_equal(invalid_integrity.metadata.get("field"), "integrity.digest", "invalid integrity is reported before content compatibility")
+	tampered = original.duplicate(true)
+	tampered["unexpected"] = true
+	_resign(tampered)
+	_write_text(path, JSON.stringify(tampered, "", true, true))
+	var invalid_structure = incompatible.inspect_profile(PROFILE_ID, SAVE_DOMAIN)
+	suite.assert_equal(invalid_structure.code, &"CORRUPT", "content mismatch never bypasses the closed envelope structure")
+	suite.assert_equal(invalid_structure.metadata.get("field"), "document", "invalid envelope fields are reported before compatibility")
 
 
 func _test_write_reentry_returns_busy(suite) -> void:
@@ -867,6 +952,7 @@ func _active_run_fixture(milestone: String, floor_plan: Dictionary) -> Dictionar
 		"seen_event_ids": [],
 		"merchant_state": {},
 		"floor_rule_state": {},
+		"dungeon_event_runtime": {},
 	}
 
 
@@ -874,7 +960,7 @@ func _legacy_active_run(milestone: String) -> Dictionary:
 	var run := _active_run_fixture(milestone, {})
 	for field: String in [
 		"current_floor_index", "floor_plan", "completed_floor_ids", "run_economy",
-		"seen_event_ids", "merchant_state", "floor_rule_state",
+		"seen_event_ids", "merchant_state", "floor_rule_state", "dungeon_event_runtime",
 	]:
 		run.erase(field)
 	return run

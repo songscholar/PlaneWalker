@@ -11,6 +11,7 @@ const P14_DEFAULTS := {
 	"seen_event_ids": [],
 	"merchant_state": {},
 	"floor_rule_state": {},
+	"dungeon_event_runtime": {},
 }
 const FLOOR_PLAN_MILESTONES: Array[String] = ["LAUNCH", "EXPANSION"]
 
@@ -59,9 +60,18 @@ func migrate(document: Dictionary, _context: Dictionary = {}):
 				{"milestone": milestone}
 			)
 
+	var preserve_legacy_event_history := (
+		FLOOR_PLAN_MILESTONES.has(milestone)
+		and active_run.get("seen_event_ids") is Array
+		and not (active_run["seen_event_ids"] as Array).is_empty()
+	)
 	var defaults_added := false
 	for field: String in P14_DEFAULTS:
 		if active_run.has(field):
+			continue
+		# Recorded legacy events cannot be represented by an empty event authority.
+		# Keep this field absent so v3 reads retain the historical projection.
+		if field == "dungeon_event_runtime" and preserve_legacy_event_history:
 			continue
 		active_run[field] = _deep_copy(P14_DEFAULTS[field])
 		defaults_added = true

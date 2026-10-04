@@ -162,6 +162,12 @@ class ExportExecutorContractTest(unittest.TestCase):
             )
             for target in report["targets"]:
                 self.assertRegex(target["artifact_evidence"]["sha256"], r"^[0-9a-f]{64}$")
+                editor = Path(target["command"][0])
+                self.assertTrue(editor.is_relative_to(fixture.root.resolve() / "build"))
+                self.assertEqual(editor.read_bytes(), fake_godot.read_bytes())
+                self.assertTrue((editor.parent / "_sc_").is_file())
+                template_link = editor.parent / "editor_data" / "export_templates" / "4.6.1.stable"
+                self.assertEqual(template_link.resolve(), templates.resolve())
             self.assertEqual(len(fixture.export_call_log.read_text().splitlines()), 3)
             self.assertEqual(read_json(fixture.evidence_output), report)
 

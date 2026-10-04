@@ -3,6 +3,7 @@ extends RefCounted
 
 const InputActionContractScript := preload("res://scripts/input/input_action_contract.gd")
 const InputBindingCodecScript := preload("res://scripts/input/input_binding_codec.gd")
+const RuntimeUserDataPathScript := preload("res://scripts/save/runtime_user_data_path.gd")
 
 const SCHEMA_VERSION := 4
 const SCHEMA_THREE_VERSION := 3
@@ -74,7 +75,10 @@ var _root_path: String = ""
 
 
 func configure(root_path: String = "user://plane_walker/input") -> void:
-	_root_path = ProjectSettings.globalize_path(root_path)
+	var selected := root_path
+	if selected == "user://plane_walker/input":
+		selected = RuntimeUserDataPathScript.resolve_default(selected, "plane_walker/input")
+	_root_path = ProjectSettings.globalize_path(selected) if not selected.is_empty() else ""
 
 
 func primary_path() -> String:

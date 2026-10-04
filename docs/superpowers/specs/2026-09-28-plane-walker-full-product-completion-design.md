@@ -4,7 +4,7 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P2, P3, P4/P5, P6, P8, P10A, P11 five complete weapons, P12 five complete characters, P13A Launch archetype authority, and P13B complete `50 / 28 / 18 / 15` Launch pools/effects are locally certified; P14 five-floor dungeon delivery is the active content stage; P7/P9 remains externally blocked by line-coverage, export-template, and packaged-startup evidence
+- Implementation Status: Active; P11 five weapons, P12 five characters, and P13 complete Launch pools are locally certified. P14 events, native dungeon panels, physical Save continuation, event lifetime, and full Player Replay 7 have focused verification; combined certification is pending. P15 hostile foundations and native Sentinel remain inactive. P16 Hub/meta/narrative and later Expansion systems are incomplete. Formal line-coverage and three-platform export evidence remain unavailable; a local macOS editor-runtime package has verified startup.
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope

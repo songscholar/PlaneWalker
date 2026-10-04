@@ -122,9 +122,10 @@ func prepare_operations(
 				(after["narrative_flags"] as Dictionary)[str(arguments["flag"])] = bool(arguments["value"])
 			"temporary_modifier":
 				var modifier_id := str(arguments["modifier_id"])
-				for existing_value: Variant in after["temporary_modifiers"]:
-					if str((existing_value as Dictionary)["modifier_id"]) == modifier_id:
-						return _failure(&"MODIFIER_ALREADY_PRESENT", {"modifier_id": modifier_id})
+				var modifiers := after["temporary_modifiers"] as Array
+				for index: int in range(modifiers.size() - 1, -1, -1):
+					if str((modifiers[index] as Dictionary)["modifier_id"]) == modifier_id:
+						modifiers.remove_at(index)
 				(after["temporary_modifiers"] as Array).append({
 					"modifier_id": modifier_id,
 					"duration_rooms": int(arguments["duration_rooms"]),
@@ -172,6 +173,7 @@ func rollback_operations(receipt: Dictionary) -> Dictionary:
 
 func _normalize_operations(value: Array) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	var modifier_ids: Dictionary = {}
 	for entry: Variant in value:
 		if not entry is Dictionary or not _exact_fields(entry as Dictionary, ["operation", "arguments"]):
 			return []
@@ -210,6 +212,9 @@ func _normalize_operations(value: Array) -> Array[Dictionary]:
 					or float(arguments["magnitude"]) > 10.0
 				):
 					return []
+				if modifier_ids.has(arguments["modifier_id"]):
+					return []
+				modifier_ids[arguments["modifier_id"]] = true
 			_:
 				return []
 		result.append({"operation": operation, "arguments": arguments.duplicate(true)})
@@ -273,6 +278,7 @@ func _normalize_modifiers(value: Array) -> Array[Dictionary]:
 			or typeof(modifier.get("magnitude")) not in [TYPE_INT, TYPE_FLOAT]
 			or not is_finite(float(modifier["magnitude"]))
 			or float(modifier["magnitude"]) <= 0.0
+			or float(modifier["magnitude"]) > 10.0
 			or not _valid_id(str(modifier.get("source_transaction_id", "")))
 		):
 			return []

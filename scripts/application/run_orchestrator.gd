@@ -58,6 +58,18 @@ func restore_floor_transaction_snapshot(value: Dictionary) -> bool:
 	return _state.restore_floor_transaction_snapshot(value.duplicate(true))
 
 
+func observe_player_health(current: float, maximum: float) -> bool:
+	if not _pending_route_transition.is_empty():
+		return false
+	return _state.observe_player_health(current, maximum)
+
+
+func bind_player_reward_baseline(value: Dictionary) -> bool:
+	if not _pending_route_transition.is_empty():
+		return false
+	return _state.bind_player_reward_baseline(value.duplicate(true))
+
+
 func reward_build_participant() -> Object:
 	return _state.build_state
 
@@ -646,6 +658,8 @@ func commit_selection_and_transition(definition: Dictionary = {}):
 			{"field": str(build_result.get("field", "build"))}
 		)
 	_state.open_offer = {}
+	if _state.is_launch_floor_mode():
+		return _accept_phase(RunPhaseScript.Value.ROOM_RESOLVING)
 	_state.phase = RunPhaseScript.Value.ROOM_TRANSITION
 	var selection_revision: int = int(_state.advance_revision())
 	_state.current_room += 1

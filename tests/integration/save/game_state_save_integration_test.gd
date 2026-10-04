@@ -67,14 +67,16 @@ func _test_legacy_import_is_one_time_and_preserves_source() -> void:
 
 
 func _test_defaults_and_active_run_round_trip() -> void:
-	_begin_case("active_run_round_trip")
-	_suite.assert_equal(GameState.persistent.get("active_run_state"), {}, "GameState defaults expose the no-active-run sentinel")
-	var active_run := _m1_active_run()
-	GameState.persistent["active_run_state"] = active_run
-	_suite.assert_true(GameState.save_persistent(), "GameState persists a complete active RunState snapshot")
-	GameState.persistent = {"sentinel": "before-active-run-load"}
-	_suite.assert_true(GameState.load_persistent(), "GameState reloads the active RunState snapshot")
-	_suite.assert_equal(GameState.persistent.get("active_run_state"), active_run, "GameState active run round trips losslessly")
+	for milestone: String in ["M1", "LAUNCH", "EXPANSION"]:
+		_begin_case("active_run_round_trip_%s" % milestone.to_lower())
+		_suite.assert_equal(GameState.persistent.get("active_run_state"), {}, "GameState defaults expose the no-active-run sentinel")
+		var active_run := _m1_active_run()
+		active_run["config"]["milestone"] = milestone
+		GameState.persistent["active_run_state"] = active_run
+		_suite.assert_true(GameState.save_persistent(), "GameState persists a complete %s RunState snapshot before floor generation" % milestone)
+		GameState.persistent = {"sentinel": "before-active-run-load"}
+		_suite.assert_true(GameState.load_persistent(), "GameState reloads the %s RunState snapshot" % milestone)
+		_suite.assert_equal(GameState.persistent.get("active_run_state"), active_run, "GameState %s run round trips losslessly" % milestone)
 
 
 func _test_settings_and_profile_statistics_round_trip() -> void:
@@ -317,6 +319,7 @@ func _m1_active_run() -> Dictionary:
 		"seen_event_ids": [],
 		"merchant_state": {},
 		"floor_rule_state": {},
+		"dungeon_event_runtime": {},
 	}
 
 

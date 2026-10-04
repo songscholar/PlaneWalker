@@ -259,7 +259,12 @@ func _refresh_control_visual() -> void:
 
 func _on_damaged(_amount: float, _current_hp: float) -> void:
 	visual.color = Color(1.0, 0.45, 0.35)
-	await get_tree().create_timer(0.08).timeout
+	var flash := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	flash.tween_interval(0.08)
+	flash.tween_callback(_finish_damage_flash)
+
+
+func _finish_damage_flash() -> void:
 	if health.is_alive():
 		_restore_visual_color()
 
@@ -273,8 +278,9 @@ func _on_died(_killer: Variant) -> void:
 	retire_hostile_identity(&"death")
 	visual.color = Color(0.25, 0.25, 0.28)
 	set_physics_process(false)
-	await get_tree().create_timer(0.2).timeout
-	queue_free()
+	var retirement := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	retirement.tween_interval(0.2)
+	retirement.tween_callback(queue_free)
 
 
 func _restore_visual_color() -> void:

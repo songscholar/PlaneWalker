@@ -516,6 +516,19 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 			"parse_line": parser.get_error_line(),
 		})
 	var document: Dictionary = parser.data
+	var boundary = SaveEnvelopeScript.validate_document_boundary(
+		document, document_kind, profile_id, save_domain
+	)
+	if not boundary.ok:
+		boundary.metadata["path"] = path
+		return boundary
+	if document_kind == &"profile" and not _content_snapshot_matches(boundary.payload.get("content_snapshot", {})):
+		var actual_snapshot: Dictionary = boundary.payload.get("content_snapshot", {})
+		return SaveResultScript.failure(&"CONTENT_MISMATCH", {
+			"path": path,
+			"expected_aggregate": _content_snapshot.get("aggregate_sha256", ""),
+			"actual_aggregate": actual_snapshot.get("aggregate_sha256", ""),
+		})
 	var validation = SaveEnvelopeScript.validate(document, document_kind, profile_id, save_domain)
 	if not validation.ok:
 		validation.metadata["path"] = path
@@ -543,13 +556,6 @@ func _read_and_validate(path: String, document_kind: StringName, profile_id: Str
 		if not validation.ok:
 			validation.metadata["path"] = path
 			return validation
-	if document_kind == &"profile" and not _content_snapshot_matches(validation.payload.get("content_snapshot", {})):
-		var actual_snapshot: Dictionary = validation.payload.get("content_snapshot", {})
-		return SaveResultScript.failure(&"CONTENT_MISMATCH", {
-			"path": path,
-			"expected_aggregate": _content_snapshot.get("aggregate_sha256", ""),
-			"actual_aggregate": actual_snapshot.get("aggregate_sha256", ""),
-		})
 	return SaveResultScript.success(validation.payload, {
 		"path": path,
 		"sequence": int(validation.payload.get("sequence", 0)),

@@ -196,6 +196,10 @@ printf '\n== Launch pool simulation contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.simulation.test_launch_pool_report
 
+printf '\n== Five-floor dungeon simulation contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+	tests.contract.simulation.test_dungeon_simulation_report
+
 printf '\n== M1 release gate contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.m1.test_m1_gate
 
@@ -206,7 +210,8 @@ printf '\n== Export contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.export.test_export_preflight \
 	tests.contract.export.test_export_executor \
-	tests.contract.export.test_certify_checkout
+	tests.contract.export.test_certify_checkout \
+	tests.contract.export.test_portable_runtime
 PYTHONDONTWRITEBYTECODE=1 python3 tools/export/preflight.py \
 	--mode contract \
 	--json-output "${validation_log_dir}/export-preflight.json"

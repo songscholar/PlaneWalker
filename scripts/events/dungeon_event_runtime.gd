@@ -87,6 +87,7 @@ func configure(
 		])
 		or not _has_methods(requirement_service, [&"evaluate"])
 		or not _has_methods(consequence_runtime, [
+			&"can_apply_route_consequences",
 			&"snapshot", &"can_restore_snapshot", &"restore_snapshot",
 			&"prepare_consequences", &"commit_consequences", &"rollback_consequences",
 		])
@@ -302,6 +303,10 @@ func choose_option(option_id: StringName, expected_revision: int) -> Dictionary:
 		return _failure(&"OPTION_INELIGIBLE", {
 			"disabled_reason_key": _disabled_reason(evaluated),
 		})
+	if not _option_has_available_route(option):
+		return _failure(&"OPTION_INELIGIBLE", {
+			"disabled_reason_key": "EVENT_REQUIREMENT_ROUTE_UNAVAILABLE",
+		})
 	var outcome := _select_outcome(
 		option,
 		definition,
@@ -310,6 +315,12 @@ func choose_option(option_id: StringName, expected_revision: int) -> Dictionary:
 	)
 	if outcome.is_empty():
 		return _failure(&"OUTCOME_NOT_AVAILABLE")
+	if not bool(_consequences.call(
+		"can_apply_route_consequences", (outcome["consequences"] as Array).duplicate(true)
+	)):
+		return _failure(&"OPTION_INELIGIBLE", {
+			"disabled_reason_key": "EVENT_REQUIREMENT_ROUTE_UNAVAILABLE",
+		})
 	var transaction_id := "event_tx_v1:%s:%d" % [
 		_active_event_id,
 		int(event_snapshot.get("revision", 0)),
@@ -950,6 +961,9 @@ func _option_view(option: Dictionary, requirement_context: Dictionary) -> Dictio
 		reason = "EVENT_REQUIREMENT_INVALID"
 	elif not eligible:
 		reason = _disabled_reason(evaluated)
+	elif not _option_has_available_route(option):
+		eligible = false
+		reason = "EVENT_REQUIREMENT_ROUTE_UNAVAILABLE"
 	return {
 		"id": str(option.get("id", "")),
 		"label_key": str(option.get("label_key", "")),
@@ -958,6 +972,16 @@ func _option_view(option: Dictionary, requirement_context: Dictionary) -> Dictio
 		"outcome_visibility": str(option.get("outcome_visibility", "")),
 		"visible_preview": _visible_preview(option),
 	}
+
+
+func _option_has_available_route(option: Dictionary) -> bool:
+	for outcome_value: Variant in option.get("outcomes", []):
+		if outcome_value is Dictionary and bool(_consequences.call(
+			"can_apply_route_consequences",
+			((outcome_value as Dictionary).get("consequences", []) as Array).duplicate(true)
+		)):
+			return true
+	return false
 
 
 func _visible_preview(option: Dictionary) -> Array[String]:

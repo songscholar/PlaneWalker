@@ -145,6 +145,35 @@ func complete_current_room() -> Variant:
 	return _complete_current_room()
 
 
+func synchronize_completed_interaction() -> Variant:
+	if not _room_active or _room_terminal or _facade == null:
+		return _failure_result(&"TERMINAL_STATE", {"operation": "synchronize_completed_interaction"})
+	var state: Dictionary = _facade.call("snapshot")
+	var plan := state.get("floor_plan", {}) as Dictionary
+	if (
+		str(_current_room.get("runtime_mode", "")) != "launch"
+		or str(_current_room.get("room_type", "")) not in ["treasure", "rest"]
+		or int(state.get("phase", -1)) not in [
+			RunPhaseScript.Value.ROOM_RESOLVING, RunPhaseScript.Value.SELECTION_ACTIVE,
+		]
+		or str(plan.get("current_node_id", "")) != str(_current_room_id)
+	):
+		return _failure_result(&"INVALID_PHASE", {"operation": "synchronize_completed_interaction"})
+	var current_node: Dictionary = {}
+	for node: Dictionary in plan.get("nodes", []):
+		if str(node.get("id", "")) == str(_current_room_id):
+			current_node = node
+			break
+	if current_node.is_empty() or not bool(current_node.get("cleared", false)):
+		return _failure_result(&"INVALID_PHASE", {"operation": "synchronize_completed_interaction"})
+	_room_terminal = true
+	_room_active = false
+	_cancel_runner()
+	var revision := _current_revision()
+	room_cleared.emit(_current_room_id, revision)
+	return CommandResultScript.success(revision, {"room_completed": true})
+
+
 func event_view_state() -> Dictionary:
 	if not _is_active_launch_event() or not _facade.has_method("event_view_state"):
 		return {}

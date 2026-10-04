@@ -116,6 +116,27 @@ func restore_snapshot(value: Dictionary) -> bool:
 	return true
 
 
+func can_apply_route_consequences(consequences: Array) -> bool:
+	if not _configured or not _integrity_failure.is_empty():
+		return false
+	var normalized := _normalize_consequences(consequences)
+	if normalized.is_empty():
+		return false
+	var partitioned := _partition(normalized)
+	if not bool(partitioned.get("ok", false)):
+		return false
+	var operations := partitioned["route"] as Array
+	if operations.is_empty():
+		return true
+	var route_snapshot := _dictionary(_route.call("snapshot"))
+	var revision := int(route_snapshot.get("revision", -1))
+	var prepared := _dictionary(_route.call(
+		"prepare_operations", "event_route_preview:%d" % revision,
+		operations.duplicate(true), revision
+	))
+	return bool(prepared.get("ok", false))
+
+
 func prepare_consequences(
 	transaction_id: String,
 	consequences: Array,
@@ -225,6 +246,10 @@ func commit_consequences(ticket: Dictionary) -> Dictionary:
 		}))
 	if not bool(event_result.get("ok", false)):
 		return _commit_failure(transaction_id, "event_state", event_result, committed, event_ticket, before)
+	if not pending_kind.is_empty():
+		var modifier_snapshot := _dictionary(_modifier.call("snapshot"))
+		if not bool(_event_state.call("synchronize_pending_modifiers", event_ticket, modifier_snapshot["narrative_flags"], modifier_snapshot["temporary_modifiers"])):
+			return _commit_failure(transaction_id, "event_state", _failure(&"MODIFIER_SYNC_FAILED"), committed, event_ticket, before)
 	var event_rollback: Dictionary = event_ticket.duplicate(true)
 	if event_result.get("receipt") is Dictionary:
 		event_rollback = (event_result["receipt"] as Dictionary).duplicate(true)

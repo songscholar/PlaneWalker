@@ -295,6 +295,17 @@ func mark_pending_encounter(ticket: Dictionary, pending: Dictionary) -> Dictiona
 	return _success({"pending_encounter": _pending_encounter.duplicate(true), "revision": _revision})
 
 
+func synchronize_pending_modifiers(ticket: Dictionary, flags: Dictionary, modifiers: Array) -> bool:
+	if not _active_ticket_error(ticket, ["pending_reward", "pending_encounter"]).is_empty():
+		return false
+	var normalized := _normalize_resolution({"result_key": _pending_transaction["outcome_key"], "narrative_flags": flags, "temporary_modifiers": modifiers}, str(_pending_transaction["transaction_id"]))
+	if normalized.is_empty():
+		return false
+	_narrative_flags = normalized["narrative_flags"].duplicate(true)
+	_temporary_modifiers.assign(normalized["temporary_modifiers"])
+	return true
+
+
 func resolve_option(ticket: Dictionary, resolution: Dictionary) -> Dictionary:
 	var ticket_error := _active_ticket_error(
 		ticket, ["reserved", "pending_reward", "pending_encounter"]
@@ -469,7 +480,7 @@ func _normalize_snapshot(value: Dictionary, allow_pending: bool) -> Dictionary:
 	var flags := _normalize_flags(value["narrative_flags"] as Dictionary)
 	if flags.is_empty() and not (value["narrative_flags"] as Dictionary).is_empty():
 		return {}
-	var modifiers := _normalize_modifiers(value["temporary_modifiers"] as Array, completed, "")
+	var modifiers := _normalize_modifiers(value["temporary_modifiers"] as Array, completed, str(value.get("pending_transaction", {}).get("transaction_id", "")))
 	if modifiers.is_empty() and not (value["temporary_modifiers"] as Array).is_empty():
 		return {}
 
@@ -829,7 +840,7 @@ func _normalize_modifiers(
 			or not _finite_in_range(entry["magnitude"], -100.0, 100.0)
 			or is_zero_approx(float(entry["magnitude"]))
 			or not _matches(TRANSACTION_ID_PATTERN, entry["source_transaction_id"])
-			or not allowed_transaction_ids.has(str(entry["source_transaction_id"]))
+			or (not allowed_transaction_ids.has(str(entry["source_transaction_id"])) and str(entry["source_transaction_id"]) != current_transaction_id)
 		):
 			return []
 		var identity := "%s:%s" % [str(entry["modifier_id"]), str(entry["source_transaction_id"])]

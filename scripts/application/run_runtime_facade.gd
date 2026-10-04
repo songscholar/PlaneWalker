@@ -46,6 +46,8 @@ const MerchantInventoryServiceScript := preload(
 )
 const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
 const MerchantRuntimeScript := preload("res://scripts/economy/merchant_runtime.gd")
+const MerchantRewardRuntimeScript := preload("res://scripts/economy/merchant_reward_runtime.gd")
+const EventModifierLifetimeScript := preload("res://scripts/events/event_modifier_lifetime.gd")
 const MerchantServiceAuthorityScript := preload(
 	"res://scripts/economy/merchant_service_authority.gd"
 )
@@ -77,6 +79,10 @@ const EventResourceAuthorityScript := preload("res://scripts/events/event_resour
 const EventHealthAuthorityScript := preload("res://scripts/events/event_health_authority.gd")
 const EventModifierAuthorityScript := preload("res://scripts/events/event_modifier_authority.gd")
 const EventRouteAuthorityScript := preload("res://scripts/events/event_route_authority.gd")
+const RoomRewardPolicyScript := preload("res://scripts/dungeon/reward_policy_protocol.gd")
+const PlayerRewardTransactionScript := preload("res://scripts/application/player_reward_transaction.gd")
+const RunBuildStateScript := preload("res://scripts/progression/run_build_state.gd")
+const RewardCompatibilityScript := preload("res://scripts/rewards/reward_compatibility.gd")
 
 const GAME_VERSION := "0.4.0-dev"
 const DEFAULT_CONTENT_PATH := "res://data/content_packs/base/pack.json"
@@ -114,6 +120,7 @@ var _event_definitions: Array[Dictionary] = []
 var _event_content_fingerprint: String = ""
 var _event_runtime: RefCounted
 var _published_event_fact_ids: Dictionary = {}
+var _pending_event_reward_definition: Dictionary = {}
 
 
 func _notification(what: int) -> void:
@@ -755,12 +762,10 @@ func complete_current_room():
 				&"INVALID_PHASE", _revision(), {"operation": "complete_current_room"}
 			)
 		var is_boss := str(room.get("room_type", "")) == "boss"
-		var floor_before: Dictionary = (
-			_orchestrator.floor_transaction_snapshot() if is_boss else {}
-		)
+		var floor_before: Dictionary = _orchestrator.floor_transaction_snapshot()
 		var economy_before: Dictionary = (
 			_economy_state.call("snapshot")
-			if is_boss and _economy_state != null
+			if _economy_state != null
 			else {}
 		)
 		var completed = _orchestrator.complete_floor_node(
@@ -768,6 +773,21 @@ func complete_current_room():
 		)
 		if not completed.ok:
 			return completed
+		if not _sync_player_event_modifiers():
+			_restore_floor_and_economy(floor_before, economy_before)
+			_sync_player_event_modifiers()
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "event_modifier_projection"})
+		var payout := RoomRewardPolicyScript.gold_for(str(room.get("room_type", "")), int(room.get("floor_index", -1)))
+		if payout > 0:
+			var granted = grant_run_gold(
+				"room_gold:%s:%s" % [room["floor_id"], room["node_id"]], payout,
+				"room_reward:%s" % room["reward_policy_id"]
+			)
+			if not granted.ok:
+				if not _restore_floor_and_economy(floor_before, economy_before) or not _refresh_event_runtime_from_state():
+					return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "room_gold_rollback"})
+				return granted
+			completed = CommandResultScript.success(_revision(), {"room_gold": payout})
 		if not is_boss:
 			return completed
 		if _economy_state == null or _merchant_run_state == null:
@@ -823,6 +843,8 @@ func complete_current_room():
 			return floor_completed
 		_floor_rule_runtime = null
 		_floor_rule_effect_authority = null
+		if not _sync_player_event_modifiers():
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "terminal_event_modifiers"})
 		var completion_context: Dictionary = floor_completed.context.duplicate(true)
 		completion_context["economy_settlement"] = settlement.duplicate(true)
 		return CommandResultScript.success(
@@ -858,6 +880,145 @@ func complete_current_room():
 	return CommandResultScript.success(opened.new_revision, {"offer": offer})
 
 
+func _dungeon_command(expected_revision: int):
+	var readiness = _require_booted("dungeon_interaction")
+	if not readiness.ok:
+		return readiness
+	if expected_revision != _revision():
+		return CommandResultScript.failure(&"STALE_REVISION", _revision())
+	var state: Dictionary = _orchestrator.snapshot()
+	if not _is_floor_plan_run() or not _route_transactions.is_empty() or bool(state.get("suspended", false)):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	if _orchestrator.is_terminal():
+		return CommandResultScript.failure(&"TERMINAL_STATE", _revision())
+	return CommandResultScript.success(_revision())
+
+
+func _launch_reward_room(kind: String = "") -> Dictionary:
+	var room := current_room_definition()
+	if room.is_empty():
+		return {}
+	room["room_number"] = int(room["floor_index"]) * 16 + int(room["room_number"])
+	var state: Dictionary = _orchestrator.snapshot()
+	room["reward_kind"] = kind if not kind.is_empty() else (
+		"starter" if str(state.get("build", {}).get("dominant_archetype", "")).is_empty() else "reinforcement"
+	)
+	return room
+
+
+func open_current_room_reward(expected_revision: int, reward_kind: String = ""):
+	var ready = _dungeon_command(expected_revision)
+	if not ready.ok:
+		return ready
+	var state: Dictionary = _orchestrator.snapshot()
+	if int(state["phase"]) == RunPhaseScript.Value.SELECTION_ACTIVE:
+		return CommandResultScript.success(_revision(), {"offer": state["open_offer"].duplicate(true)})
+	var room := _launch_reward_room(reward_kind)
+	if _orchestrator.phase() != RunPhaseScript.Value.ROOM_RESOLVING or str(room.get("room_type", "")) not in ["combat", "elite", "treasure", "rest"]:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var prefix := "%s:room-%02d:" % [state["run_id"], room["room_number"]]
+	for id: String in state["consumed_offer_ids"]:
+		if id.begins_with(prefix):
+			return CommandResultScript.failure(&"ALREADY_CONSUMED", _revision())
+	var created = _draft.create_offer(_registry, state, room)
+	if not created.ok:
+		return created
+	var offer: Dictionary = created.context["offer"]
+	var opened = _orchestrator.open_selection(offer)
+	if not opened.ok:
+		_draft.close_offer(offer["offer_id"])
+		return opened
+	return CommandResultScript.success(_revision(), {"offer": offer})
+
+
+func commit_current_reward(offer_id: String, option_id: String, offer_revision: int):
+	if not _is_floor_plan_run() or _merchant_player == null:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var reserved = reserve_selection(offer_id, option_id, offer_revision)
+	if not reserved.ok:
+		return reserved
+	var transaction = PlayerRewardTransactionScript.new()
+	transaction.configure(_merchant_player, _merchant_reward_runtime)
+	if not transaction.apply(reserved.context["definition"]):
+		cancel_reserved_selection(reserved.context["reservation_id"])
+		return CommandResultScript.failure(&"COMMIT_FAILED" if transaction.rollback() else &"INTEGRITY_FAILURE", _revision())
+	var committed = commit_reserved_selection(reserved.context["reservation_id"])
+	if not committed.ok:
+		cancel_reserved_selection(reserved.context["reservation_id"])
+		if not transaction.rollback():
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision())
+		return committed
+	if not transaction.commit() or not _sync_player_health_observation():
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"committed": true})
+	return committed
+
+
+func room_interaction_view_state() -> Dictionary:
+	var room := current_room_definition()
+	var kind := str(room.get("room_type", ""))
+	if kind not in ["treasure", "rest"]:
+		return {}
+	var description := "UI_TREASURE_PROMPT" if kind == "treasure" else "UI_REST_PROMPT"
+	var choices: Array[Dictionary] = []
+	var health := _physical_health()
+	if kind == "treasure":
+		choices.append(_room_choice("claim", "UI_TREASURE_CLAIM", description, true))
+	else:
+		choices.append(_room_choice("heal", "UI_MERCHANT_HEAL", "UI_REST_HEAL_DESC", not health.is_empty() and float(health["current_hp"]) < float(health["max_hp"]), "UI_HEAL_NOT_NEEDED"))
+		var owned: Array = _orchestrator.snapshot().get("build", {}).get("talents", [])
+		var available := false
+		for definition: Dictionary in _registry.get_by_category(&"talent", &"LAUNCH"):
+			if (definition.get("compatibility", {}).get("character_ids", []) as Array).has(str(_orchestrator.snapshot()["config"]["character_id"])) and not owned.has(definition["id"]):
+				available = true
+		choices.append(_room_choice("upgrade", "UI_REST_UPGRADE", "UI_REST_UPGRADE_DESC", available, "UI_REST_UPGRADE_UNAVAILABLE"))
+	choices.append(_room_choice("leave", "UI_ROOM_LEAVE", description, true))
+	return {"room_type": kind, "node_id": room["node_id"], "name_key": "ROOM_TYPE_%s" % kind.to_upper(), "description_key": description, "choices": choices}
+
+
+func _room_choice(id: String, key: String, description: String, available: bool, reason: String = "") -> Dictionary:
+	return {"id": id, "label_key": key, "description_key": description, "available": available, "disabled_reason_key": "" if available else reason}
+
+
+func resolve_current_room_interaction(choice_id: StringName, expected_revision: int):
+	var readiness = _dungeon_command(expected_revision)
+	if not readiness.ok:
+		return readiness
+	if _orchestrator.phase() != RunPhaseScript.Value.ROOM_ACTIVE:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var source := room_interaction_view_state()
+	var eligible := false
+	for choice: Dictionary in source.get("choices", []):
+		if choice["id"] == str(choice_id) and choice["available"]:
+			eligible = true
+	if not eligible:
+		return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision())
+	var transaction = PlayerRewardTransactionScript.new()
+	var healing := str(choice_id) == "heal"
+	if healing:
+		var health := _physical_health()
+		transaction.configure(_merchant_player, _merchant_reward_runtime)
+		if not transaction.apply({"id": "rest_heal", "category": "item", "effects": {"heal": float(health["max_hp"]) * 0.4}}):
+			return CommandResultScript.failure(&"COMMIT_FAILED" if transaction.rollback() else &"INTEGRITY_FAILURE", _revision())
+	var before: Dictionary = _orchestrator.floor_transaction_snapshot()
+	var economy_before: Dictionary = _economy_state.call("snapshot")
+	var completed = complete_current_room()
+	if not completed.ok:
+		if healing and not transaction.rollback():
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision())
+		return completed
+	var context := {"room_completed": true}
+	if str(choice_id) in ["claim", "upgrade"]:
+		var opened = open_current_room_reward(_revision(), "talent" if str(choice_id) == "upgrade" else "")
+		if not opened.ok:
+			if not _restore_floor_and_economy(before, economy_before) or not _refresh_event_runtime_from_state():
+				return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision())
+			return opened
+		context["offer"] = opened.context["offer"]
+	if healing and (not transaction.commit() or not _sync_player_health_observation()):
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"committed": true})
+	return CommandResultScript.success(_revision(), context)
+
+
 func submit_selection(offer_id: String, option_id: String, revision: int):
 	var reserved = reserve_selection(offer_id, option_id, revision)
 	if not reserved.ok:
@@ -887,6 +1048,8 @@ func reserve_selection(offer_id: String, option_id: String, revision: int):
 			_revision(),
 			{"operation": "submit_selection"}
 		)
+	if _is_floor_plan_run() and bool(_orchestrator.snapshot().get("suspended", false)):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
 
 	var canonical: Dictionary = _orchestrator.snapshot().get("open_offer", {})
 	if str(canonical.get("offer_id", "")) != offer_id:
@@ -907,6 +1070,14 @@ func reserve_selection(offer_id: String, option_id: String, revision: int):
 		)
 
 	var resolved = _draft.resolve_option(canonical, StringName(option_id))
+	if not resolved.ok and resolved.code == &"OFFER_CLOSED" and _is_floor_plan_run():
+		var restored_state: Dictionary = _orchestrator.snapshot()
+		restored_state["revision"] = int(canonical["revision"])
+		var kind := "talent" if canonical["category"] == "talent" else "contract" if canonical["category"] == "contract" else ""
+		var recreated = _draft.create_offer(_registry, restored_state, _launch_reward_room(kind))
+		if not recreated.ok or recreated.context.get("offer", {}) != canonical:
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "restored_offer"})
+		resolved = _draft.resolve_option(canonical, StringName(option_id))
 	if not resolved.ok:
 		return resolved
 	var definition: Dictionary = resolved.context["definition"]
@@ -1048,7 +1219,10 @@ func player_died(context: Dictionary = {}):
 	var readiness = _require_booted("player_died")
 	if not readiness.ok:
 		return readiness
-	return _orchestrator.player_died(context)
+	var result = _orchestrator.player_died(context)
+	if result.ok and not _sync_player_event_modifiers():
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "terminal_event_modifiers"})
+	return result
 
 
 func boss_defeated(context: Dictionary = {}):
@@ -1082,6 +1256,8 @@ func advance_time(delta_seconds: float):
 func snapshot() -> Dictionary:
 	if _orchestrator == null:
 		return {}
+	_sync_player_health_observation()
+	_sync_player_event_modifiers()
 	return _orchestrator.snapshot()
 
 
@@ -1229,12 +1405,17 @@ func event_view_state() -> Dictionary:
 
 
 func choose_current_event_option(option_id: StringName, expected_revision: int):
+	if not _sync_player_health_observation():
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision())
 	var readiness = _require_event_room("choose_current_event_option")
 	if not readiness.ok:
 		return readiness
-	return _event_command_result(
+	var result = _event_command_result(
 		_event_runtime.call("choose_option", option_id, expected_revision)
 	)
+	if result.ok:
+		_sync_player_health_observation()
+	return result
 
 
 func complete_current_event_reward(
@@ -1251,6 +1432,64 @@ func complete_current_event_reward(
 		result.duplicate(true),
 		expected_revision
 	))
+
+
+func event_reward_offer() -> Dictionary:
+	var continuation := _current_event_continuation()
+	if continuation.get("kind") != "reward":
+		return {}
+	var category := str(continuation["pool_id"]).trim_prefix("rare_")
+	var owned := _orchestrator.snapshot().get("build", {}) as Dictionary
+	var candidates: Array[Dictionary] = []
+	for definition: Dictionary in _registry.get_by_category(StringName(category), &"LAUNCH"):
+		if not RewardCompatibilityScript.matches(definition, RewardCompatibilityScript.context_for(_orchestrator.snapshot()["config"])):
+			continue
+		if (owned.get("items", []) as Array).has(definition["id"]) or (owned.get("blessings", []) as Array).has(definition["id"]):
+			continue
+		if str(continuation["pool_id"]).begins_with("rare_") and definition.get("rarity") not in ["rare", "legendary", "unique"]:
+			continue
+		candidates.append(definition)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["id"]) < str(b["id"]))
+	var state: Dictionary = _orchestrator.snapshot()
+	var rng := SeedServiceScript.make_rng(int(state["run_seed"]), StringName("event_reward:%s" % continuation["continuation_id"]), int(state["current_floor"]), int(state["current_room"]), 0)
+	for i: int in range(candidates.size() - 1, 0, -1):
+		var other := rng.randi_range(0, i)
+		var value := candidates[i]
+		candidates[i] = candidates[other]
+		candidates[other] = value
+	var options: Array[Dictionary] = []
+	for definition: Dictionary in candidates.slice(0, mini(int(continuation["count"]), candidates.size())):
+		options.append(_draft.call("option_for_definition", definition))
+	if options.is_empty():
+		return {}
+	return {"schema_version": 1, "offer_id": "reward:%s" % continuation["continuation_id"], "category": category, "title_key": "CHOICE_TITLE_%s" % category.to_upper(), "revision": _revision(), "can_skip": false, "options": options, "continuation_id": continuation["continuation_id"]}
+
+
+func submit_current_event_reward(option_id: StringName, expected_revision: int):
+	var ready = _dungeon_command(expected_revision)
+	if not ready.ok:
+		return ready
+	var offer := event_reward_offer()
+	var definition: Dictionary = {}
+	for option: Dictionary in offer.get("options", []):
+		if option["option_id"] == str(option_id):
+			definition = _registry.get_content(StringName(option["content_id"]))
+	if definition.is_empty() or _merchant_player == null:
+		return CommandResultScript.failure(&"OPTION_NOT_FOUND", _revision())
+	var transaction = PlayerRewardTransactionScript.new()
+	transaction.configure(_merchant_player, _merchant_reward_runtime)
+	if not transaction.apply(definition):
+		return CommandResultScript.failure(&"COMMIT_FAILED" if transaction.rollback() else &"INTEGRITY_FAILURE", _revision())
+	_pending_event_reward_definition = definition.duplicate(true)
+	var result = complete_current_event_reward(offer["continuation_id"], {"content_id": definition["id"]}, expected_revision)
+	_pending_event_reward_definition.clear()
+	if not result.ok and not bool(result.context.get("committed", false)):
+		if not transaction.rollback():
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision())
+		return result
+	if not transaction.commit() or not _sync_player_health_observation():
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"committed": true})
+	return result
 
 
 func complete_current_event_encounter(
@@ -1354,7 +1593,7 @@ func _sync_event_runtime_floor_plan() -> bool:
 	if not bool(candidate.get("ok", false)):
 		return false
 	_event_runtime = candidate["runtime"] as RefCounted
-	return true
+	return _sync_player_event_modifiers()
 
 
 func _refresh_event_runtime_from_state() -> bool:
@@ -1373,7 +1612,7 @@ func _refresh_event_runtime_from_state() -> bool:
 	if not bool(candidate.get("ok", false)):
 		return false
 	_event_runtime = candidate["runtime"] as RefCounted
-	return true
+	return _sync_player_event_modifiers()
 
 
 func _restore_route_runtime_adapters_after_rollback() -> bool:
@@ -1505,6 +1744,68 @@ func configure_merchant_effect_authority(
 	var baseline_value: Variant = player.call("reward_effect_snapshot")
 	if baseline_value is Dictionary and not (baseline_value as Dictionary).is_empty():
 		_merchant_run_start_player_baseline = (baseline_value as Dictionary).duplicate(true)
+		var state: Dictionary = _orchestrator.snapshot()
+		var stored_baseline: Variant = state.get("resources", {}).get("player_reward_run_start_baseline", {})
+		if stored_baseline is Dictionary and not stored_baseline.is_empty():
+			_merchant_run_start_player_baseline = stored_baseline.duplicate(true)
+		elif _is_floor_plan_run() and baseline_value.has("schema_version") and state.get("build", {}).get("reward_history", []).is_empty():
+			if not _orchestrator.bind_player_reward_baseline(baseline_value):
+				return false
+	return _sync_player_health_observation() and _sync_player_event_modifiers()
+
+
+func _physical_health() -> Dictionary:
+	if _merchant_player == null or not is_instance_valid(_merchant_player):
+		return {}
+	var value: Variant = _merchant_player.call("reward_effect_snapshot")
+	if not value is Dictionary or not value.get("health") is Dictionary:
+		return {}
+	return (value["health"] as Dictionary).duplicate(true)
+
+
+func _sync_player_event_modifiers() -> bool:
+	if _merchant_player == null or not is_instance_valid(_merchant_player):
+		return true
+	if not _merchant_player.has_method("sync_event_temporary_modifiers"):
+		return true
+	if _orchestrator == null:
+		return false
+	var state: Dictionary = _orchestrator.snapshot()
+	var runtime := state.get("dungeon_event_runtime", {}) as Dictionary
+	if runtime.is_empty() or _orchestrator.is_terminal():
+		return bool(_merchant_player.call("sync_event_temporary_modifiers", []))
+	var parts := runtime["consequence_runtime"]["participant_snapshots"] as Dictionary
+	var event_state := parts["event_state"] as Dictionary
+	var projection := EventModifierLifetimeScript.active_projection(
+		state["events"], event_state["selected_event_by_node"],
+		(parts["modifier"] as Dictionary)["temporary_modifiers"]
+	)
+	return bool(projection.get("ok", false)) and bool(_merchant_player.call(
+		"sync_event_temporary_modifiers", projection["context"]["modifiers"]
+	))
+
+
+func _sync_player_health_observation() -> bool:
+	if _merchant_player == null or _event_runtime == null or _orchestrator == null:
+		return true
+	if not _route_transactions.is_empty():
+		return true
+	var physical := _physical_health()
+	if not physical.get("current_hp") is float and not physical.get("current_hp") is int:
+		return false
+	var current := float(physical["current_hp"])
+	var maximum := float(physical.get("max_hp", 0.0))
+	var runtime_snapshot: Dictionary = _orchestrator.snapshot()["dungeon_event_runtime"].duplicate(true)
+	var participants := runtime_snapshot["consequence_runtime"]["participant_snapshots"] as Dictionary
+	var health := participants["health"] as Dictionary
+	if float(health["current"]) == current and float(health["maximum"]) == maximum:
+		return true
+	health["current"] = current
+	health["maximum"] = maximum
+	var candidate := _event_runtime_candidate(_orchestrator, _director, _economy_state, runtime_snapshot)
+	if not bool(candidate.get("ok", false)) or not _orchestrator.observe_player_health(current, maximum):
+		return false
+	_event_runtime = candidate["runtime"]
 	return true
 
 
@@ -1595,6 +1896,21 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 		return CommandResultScript.failure(
 			&"INVALID_ARGUMENT", _revision(), {"operation": "restore_launch_run"}
 		)
+	value = value.duplicate(true)
+	var restore_parts: Dictionary = {}
+	var restore_runtime: Variant = value.get("dungeon_event_runtime", {})
+	if restore_runtime is Dictionary and restore_runtime.get("consequence_runtime") is Dictionary:
+		var participant_value: Variant = restore_runtime["consequence_runtime"].get("participant_snapshots", {})
+		if participant_value is Dictionary:
+			restore_parts = participant_value
+	if value.get("events") is Array and restore_parts.get("event_state") is Dictionary and restore_parts.get("modifier") is Dictionary:
+		var baseline := EventModifierLifetimeScript.normalize_legacy_baselines(
+			value["events"], restore_parts["event_state"].get("selected_event_by_node", {}),
+			restore_parts["modifier"].get("temporary_modifiers", [])
+		)
+		if not bool(baseline.get("ok", false)):
+			return CommandResultScript.failure(&"INVALID_ARGUMENT", _revision(), {"field": "events", "stage": "event_modifier_migration"})
+		value["events"] = (baseline["context"]["events"] as Array).duplicate(true)
 	var config := RunConfigScript.normalized(value.get("config", {}) as Dictionary)
 	var validation = RunConfigScript.validate(config)
 	if not validation.ok or not _is_floor_plan_milestone(str(config.get("milestone", ""))):
@@ -1710,6 +2026,7 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 	var previous_event_runtime = _event_runtime
 	var previous_loadout := _accepted_loadout.duplicate(true)
 	var previous_sessions := _merchant_sessions.duplicate()
+	var previous_player_baseline := _merchant_run_start_player_baseline.duplicate(true)
 	_orchestrator = candidate_orchestrator
 	_director = candidate_director
 	_economy_state = candidate_economy
@@ -1726,7 +2043,10 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 		effect_authority if candidate_floor_rule_runtime != null else null
 	)
 	_merchant_sessions.clear()
-	if not _restore_current_merchant_session_from_snapshot():
+	var saved_baseline: Variant = value.get("resources", {}).get("player_reward_run_start_baseline", {})
+	if saved_baseline is Dictionary and not saved_baseline.is_empty():
+		_merchant_run_start_player_baseline = saved_baseline.duplicate(true)
+	if not _restore_current_merchant_session_from_snapshot() or not _sync_player_event_modifiers():
 		_orchestrator = previous_orchestrator
 		_director = previous_director
 		_economy_state = previous_economy
@@ -1736,6 +2056,7 @@ func restore_launch_run(value: Dictionary, effect_authority: Variant = null):
 		_floor_rule_effect_authority = previous_floor_rule_effect_authority
 		_accepted_loadout = previous_loadout
 		_merchant_sessions = previous_sessions
+		_merchant_run_start_player_baseline = previous_player_baseline
 		candidate_director.free()
 		return CommandResultScript.failure(
 			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
@@ -1867,7 +2188,7 @@ func open_current_merchant():
 	if not runtime.configure(
 		_economy_state,
 		inventory,
-		_merchant_reward_runtime,
+		MerchantRewardRuntimeScript.new(_merchant_reward_runtime, _merchant_player),
 		_merchant_player,
 		service_authority,
 		Callable(self, "_commit_merchant_state_payload").bind(node_key, merchant_id)
@@ -1936,6 +2257,63 @@ func merchant_view_state() -> Dictionary:
 			else {}
 		),
 	}
+
+
+func merchant_service_choices() -> Array[Dictionary]:
+	var source := merchant_view_state()
+	var result: Array[Dictionary] = []
+	if source.is_empty():
+		return result
+	var room := current_room_definition()
+	var floor_number := int(room["floor_index"]) + 1
+	var price = ShopPriceServiceScript.new()
+	var health := _physical_health()
+	var build := _orchestrator.snapshot()["build"] as Dictionary
+	var service_state := source["service_state"] as Dictionary
+	for id: String in source["services"]:
+		if id == "purchase_reward":
+			continue
+		var targets: Array[String] = ["player"]
+		var cost_kind := "gold"
+		var amount := 0
+		var available := true
+		var reason := "UI_MERCHANT_INSUFFICIENT_GOLD"
+		if id == "reroll":
+			var quote: Dictionary = price.reroll_price(_economy_profile, int(source["inventory"].get("reroll_count", 0)))
+			available = bool(quote.get("ok", false))
+			amount = int(quote.get("price", 0))
+		elif id == "health_trade":
+			targets.clear()
+			for offer: Dictionary in source["inventory"]["offers"]:
+				if not offer["sold"]:
+					targets.append(str(offer["offer_id"]))
+			cost_kind = "health"
+			amount = ceili(float(health.get("current_hp", 0.0)) * MerchantHealthTradeAuthorityScript.HEALTH_COST_RATIO)
+			available = float(health.get("current_hp", 0.0)) - amount >= 1.0
+			reason = "UI_REQUIREMENT_UNMET"
+		elif id == "sell_reward":
+			targets.clear()
+			for definition: Dictionary in build["reward_history"]:
+				if definition["category"] == "blessing" or (definition["category"] == "item" and definition.get("item_mode") == "passive"):
+					targets.append(str(definition["id"]))
+			cost_kind = "reward"
+		elif id == "cleanse_curse":
+			targets.assign(build["curses"])
+		if id in ["heal", "weapon_upgrade", "cleanse_curse", "route_reveal"]:
+			var quote: Dictionary = price.service_price(_economy_profile, StringName(id), floor_number)
+			available = bool(quote.get("ok", false))
+			amount = int(quote.get("price", 0))
+		if cost_kind == "gold" and amount > int(source["gold"]):
+			available = false
+		if id == "heal" and float(health.get("current_hp", 0.0)) >= float(health.get("max_hp", 0.0)):
+			available = false
+			reason = "UI_HEAL_NOT_NEEDED"
+		if id == "weapon_upgrade" and int(service_state.get("authorities", {}).get("weapon_upgrade", {}).get("level", 0)) >= MerchantWeaponUpgradeAuthorityScript.MAX_LEVEL:
+			available = false
+			reason = "UI_REST_UPGRADE_UNAVAILABLE"
+		for target: String in targets:
+			result.append({"action_id": id, "target_id": target, "label_key": "UI_MERCHANT_%s" % id.to_upper(), "cost_kind": cost_kind, "price": amount, "available": available, "disabled_reason_key": "" if available else reason})
+	return result
 
 
 func purchase_current_merchant(transaction_id: String, offer_id: String):
@@ -2147,7 +2525,7 @@ func _restore_current_merchant_session_from_snapshot() -> bool:
 	if not runtime.configure(
 		_economy_state,
 		inventory,
-		_merchant_reward_runtime,
+		MerchantRewardRuntimeScript.new(_merchant_reward_runtime, _merchant_player),
 		_merchant_player,
 		service_authority,
 		Callable(self, "_commit_merchant_state_payload").bind(node_key, merchant_id)
@@ -2240,6 +2618,9 @@ func _create_merchant_service_router(
 				"run_start_player_baseline", {}
 			) as Dictionary
 			if not saved_baseline.is_empty():
+				var run_baseline: Dictionary = _orchestrator.snapshot().get("resources", {}).get("player_reward_run_start_baseline", {})
+				if not run_baseline.is_empty() and run_baseline != saved_baseline:
+					return _merchant_service_configuration_failure("reward_mutation", {"code": &"BASELINE_MISMATCH"})
 				baseline = saved_baseline.duplicate(true)
 				_merchant_run_start_player_baseline = baseline.duplicate(true)
 		if baseline.is_empty():
@@ -2490,24 +2871,11 @@ func _restore_floor_and_economy(
 	var economy_restored := bool(_economy_state.call(
 		"restore_snapshot", economy_snapshot.duplicate(true)
 	))
-	return floor_restored and economy_restored
+	return floor_restored and economy_restored and _sync_player_event_modifiers()
 
 
 func _merchant_compatibility_context() -> Dictionary:
-	var archetype_ids: Array[String] = []
-	for definition_value: Variant in _registry.call("get_by_category", &"archetype_profile"):
-		if definition_value is Dictionary:
-			var archetype_id := str((definition_value as Dictionary).get("id", ""))
-			if not archetype_id.is_empty() and not archetype_ids.has(archetype_id):
-				archetype_ids.append(archetype_id)
-	archetype_ids.sort()
-	var weapon_ids: Array[String] = []
-	var weapon_value: Variant = _accepted_loadout.get("weapon", {})
-	if weapon_value is Dictionary:
-		var weapon_id := str((weapon_value as Dictionary).get("id", ""))
-		if not weapon_id.is_empty():
-			weapon_ids.append(weapon_id)
-	return {"archetype_ids": archetype_ids, "weapon_ids": weapon_ids}
+	return RewardCompatibilityScript.context_for(_orchestrator.snapshot()["config"])
 
 
 func _event_runtime_candidate(
@@ -2559,6 +2927,7 @@ func _event_runtime_candidate(
 
 	var modifier = EventModifierAuthorityScript.new()
 	var curse_ids: Array = (build.get("curses", []) as Array).duplicate()
+	curse_ids.sort()
 	var narrative_flags: Dictionary = {}
 	var temporary_modifiers: Array = []
 	if not participants.is_empty():
@@ -2706,6 +3075,22 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 	if build_participant == null or not build_participant.has_method("transaction_snapshot"):
 		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_build_participant"}}
 	var build := (build_participant.call("transaction_snapshot") as Dictionary).duplicate(true)
+	var candidate_build = RunBuildStateScript.new()
+	if not candidate_build.restore_transaction_snapshot(build):
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_build_candidate"}}
+	var physical_transactions: Array = []
+	var curse_definitions: Array[Dictionary] = []
+	if str(command.get("operation", "")) == "complete_reward" and not _pending_event_reward_definition.is_empty():
+		if not bool(candidate_build.apply_definition(_pending_event_reward_definition).get("ok", false)):
+			return {"ok": false, "code": &"INVALID_ARGUMENT", "new_revision": _revision(), "context": {"stage": "event_reward_build"}}
+	for curse_id: String in modifier.get("curse_ids", []):
+		if (build.get("curses", []) as Array).has(curse_id):
+			continue
+		var curse := _registry.get_content(StringName(curse_id)) as Dictionary
+		if curse.is_empty() or not bool(candidate_build.apply_definition(curse).get("ok", false)):
+			return {"ok": false, "code": &"INVALID_ARGUMENT", "new_revision": _revision(), "context": {"stage": "event_curse_content"}}
+		curse_definitions.append(curse)
+	build = candidate_build.transaction_snapshot()
 	build["curses"] = (modifier.get("curse_ids", []) as Array).duplicate()
 	var route := participants.get("route", {}) as Dictionary
 	var candidate := {
@@ -2718,6 +3103,12 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 		},
 		"build": build,
 	}
+	var projection := EventModifierLifetimeScript.active_projection(
+		_orchestrator.snapshot()["events"], event_state["selected_event_by_node"],
+		modifier["temporary_modifiers"]
+	)
+	if not bool(projection.get("ok", false)):
+		return {"ok": false, "code": &"INVALID_ARGUMENT", "new_revision": _revision(), "context": {"stage": "event_modifier_lifetime"}}
 	if _economy_state == null or _economy_state.call("snapshot") != candidate["run_economy"]:
 		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_economy_drift"}}
 	var candidate_director = RunDirectorScript.new()
@@ -2727,8 +3118,38 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 	if not _overlay_event_assignments(candidate_director, runtime_snapshot):
 		candidate_director.free()
 		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_director_overlay"}}
+	if _merchant_player != null:
+		for curse: Dictionary in curse_definitions:
+			var transaction = PlayerRewardTransactionScript.new()
+			transaction.configure(_merchant_player, _merchant_reward_runtime)
+			if not transaction.apply(curse):
+				var rolled_back: bool = transaction.rollback()
+				for previous: Variant in physical_transactions:
+					rolled_back = previous.rollback() and rolled_back
+				candidate_director.free()
+				return {"ok": false, "code": &"COMMIT_FAILED" if rolled_back else &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"stage": "event_curse_effect"}}
+			physical_transactions.append(transaction)
+	var physical_before: Dictionary = {}
+	if _merchant_player != null and str(command.get("operation", "")) == "choose_option":
+		physical_before = _merchant_player.call("reward_effect_snapshot")
+		var physical_after := physical_before.duplicate(true)
+		var old_health := _orchestrator.snapshot().get("resources", {}).get("health", {}) as Dictionary
+		var target := float(candidate["resources"]["health"]["current"])
+		var delta := target - float(old_health.get("current", target))
+		physical_after["health"]["current_hp"] = clampf(float(physical_after["health"]["current_hp"]) + delta, 0.0, float(physical_after["health"]["max_hp"]))
+		if physical_after["health"].has("dead"):
+			physical_after["health"]["dead"] = float(physical_after["health"]["current_hp"]) <= 0.0
+		if not bool(_merchant_player.call("restore_reward_effect_snapshot", physical_after)):
+			for transaction: Variant in physical_transactions:
+				transaction.rollback()
+			candidate_director.free()
+			return {"ok": false, "code": &"COMMIT_FAILED", "new_revision": _revision(), "context": {"stage": "event_physical_health"}}
 	var committed = _orchestrator.commit_event_transaction(candidate, expected_revision)
 	if not committed.ok:
+		if not physical_before.is_empty():
+			_merchant_player.call("restore_reward_effect_snapshot", physical_before)
+		for transaction: Variant in physical_transactions:
+			transaction.rollback()
 		candidate_director.free()
 		return {
 			"ok": false,
@@ -2736,6 +3157,13 @@ func _commit_event_runtime_state(command: Dictionary, expected_revision: int) ->
 			"new_revision": committed.new_revision,
 			"context": committed.context.duplicate(true),
 		}
+	if not _sync_player_event_modifiers():
+		candidate_director.free()
+		return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"committed": true, "stage": "event_modifier_projection"}}
+	for transaction: Variant in physical_transactions:
+		if not transaction.commit():
+			candidate_director.free()
+			return {"ok": false, "code": &"INTEGRITY_FAILURE", "new_revision": _revision(), "context": {"committed": true, "stage": "event_curse_publication"}}
 	var previous_director = _director
 	_director = candidate_director
 	if previous_director != null and is_instance_valid(previous_director):

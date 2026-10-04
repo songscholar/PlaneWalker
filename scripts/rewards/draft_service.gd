@@ -4,6 +4,7 @@ extends RefCounted
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const SeedServiceScript := preload("res://scripts/core/seed_service.gd")
 const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
+const RewardCompatibilityScript := preload("res://scripts/rewards/reward_compatibility.gd")
 
 const M1_ARCHETYPES: Array[String] = [
 	"freeze_burst",
@@ -84,6 +85,7 @@ func create_offer(registry, state_snapshot: Dictionary, room_definition: Diction
 		revision
 	)
 	var owned_ids := _owned_ids(state_snapshot.get("build", {}))
+	var compatibility := RewardCompatibilityScript.context_for(state_snapshot.get("config", {})) if not M1_COMPATIBLE_MILESTONES.has(milestone) else {}
 	if not profiles.is_empty():
 		var coverage_error := _launch_coverage_error(registry, StringName(milestone), profiles)
 		if not coverage_error.is_empty():
@@ -94,7 +96,8 @@ func create_offer(registry, state_snapshot: Dictionary, room_definition: Diction
 			var starter_candidates := _filter_candidates(
 				registry.get_by_category(&"item", StringName(milestone)),
 				owned_ids,
-				milestone
+				milestone,
+				compatibility
 			)
 			definitions = (
 				_starter_offer(starter_candidates, rng)
@@ -114,7 +117,7 @@ func create_offer(registry, state_snapshot: Dictionary, room_definition: Diction
 			reinforcement_candidates.append_array(registry.get_by_category(&"item", StringName(milestone)))
 			reinforcement_candidates.append_array(registry.get_by_category(&"blessing", StringName(milestone)))
 			definitions = _reinforcement_offer(
-				_filter_candidates(reinforcement_candidates, owned_ids, milestone),
+				_filter_candidates(reinforcement_candidates, owned_ids, milestone, compatibility),
 				dominant_archetype,
 				rng
 			)
@@ -129,7 +132,8 @@ func create_offer(registry, state_snapshot: Dictionary, room_definition: Diction
 			var talent_candidates := _filter_candidates(
 				registry.get_by_category(&"talent", StringName(milestone)),
 				owned_ids,
-				milestone
+				milestone,
+				compatibility
 			).filter(
 				func(definition: Dictionary) -> bool:
 					return _talent_matches_character(
@@ -140,20 +144,27 @@ func create_offer(registry, state_snapshot: Dictionary, room_definition: Diction
 			)
 			definitions = _talent_offer(
 				talent_candidates,
-				rng
+				rng,
+				not M1_COMPATIBLE_MILESTONES.has(milestone)
 			)
 		"contract":
 			definitions = _contract_offer(
 				_filter_candidates(
 					registry.get_by_category(&"curse", StringName(milestone)),
 					owned_ids,
-					milestone
+					milestone,
+					compatibility
 				),
 				rng,
 				milestone
 			)
 
-	if definitions.size() != 3:
+	if definitions.size() != 3 and reward_kind == "reinforcement" and not M1_COMPATIBLE_MILESTONES.has(milestone):
+		var remaining: Array[Dictionary] = []
+		remaining.append_array(registry.get_by_category(&"item", StringName(milestone)))
+		remaining.append_array(registry.get_by_category(&"blessing", StringName(milestone)))
+		definitions = _shuffled(_filter_candidates(remaining, owned_ids, milestone, compatibility), rng).slice(0, 3)
+	if definitions.size() != 3 and not (reward_kind == "talent" and not M1_COMPATIBLE_MILESTONES.has(milestone) and not definitions.is_empty()):
 		return CommandResultScript.failure(
 			&"CONTENT_NOT_AVAILABLE",
 			revision,
@@ -292,8 +303,8 @@ func _reinforcement_offer(
 	]
 
 
-func _talent_offer(candidates: Array[Dictionary], rng: RandomNumberGenerator) -> Array[Dictionary]:
-	if candidates.size() < 3:
+func _talent_offer(candidates: Array[Dictionary], rng: RandomNumberGenerator, allow_remaining: bool = false) -> Array[Dictionary]:
+	if candidates.size() < 3 and not allow_remaining:
 		return []
 	return _shuffled(candidates, rng).slice(0, 3)
 
@@ -322,6 +333,10 @@ func _contract_offer(
 	return selected
 
 
+func option_for_definition(definition: Dictionary) -> Dictionary:
+	return _to_option(definition)
+
+
 func _to_option(definition: Dictionary) -> Dictionary:
 	var content_id := str(definition.get("id", ""))
 	var archetype := str(definition.get("archetype", ""))
@@ -347,7 +362,8 @@ func _to_option(definition: Dictionary) -> Dictionary:
 func _filter_candidates(
 	candidates: Array[Dictionary],
 	owned_ids: Dictionary,
-	milestone: String = "M1"
+	milestone: String = "M1",
+	compatibility: Dictionary = {}
 ) -> Array[Dictionary]:
 	var filtered: Array[Dictionary] = []
 	var allowed_archetypes := (
@@ -360,6 +376,8 @@ func _filter_candidates(
 		if content_id.is_empty() or owned_ids.has(content_id):
 			continue
 		if not definition.get("availability", []).has(milestone):
+			continue
+		if not compatibility.is_empty() and not RewardCompatibilityScript.matches(definition, compatibility):
 			continue
 		var archetype := str(definition.get("archetype", ""))
 		if not archetype.is_empty() and not allowed_archetypes.has(archetype):

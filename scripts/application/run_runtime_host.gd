@@ -46,7 +46,9 @@ var _ended_run_id: String = ""
 var _run_serial: int = 0
 var _hud_render_accumulator: float = 0.0
 var _selection_safety_active: bool = false
+var _dungeon_selection_active: bool = false
 var _player_process_mode: ProcessMode = Node.PROCESS_MODE_INHERIT
+var _room_controller_process_mode: ProcessMode = Node.PROCESS_MODE_INHERIT
 var _reward_effect_runtime: RefCounted = PlayerRewardEffectRuntimeScript.new()
 var _route_scene_adapter: Variant = null
 var _floor_rule_effect_authority: Variant = null
@@ -83,8 +85,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not _active or _facade == null or _active_run_id.is_empty():
 		return
-	_facade.call("advance_time", maxf(0.0, delta))
-	_advance_floor_rule_from_host()
+	if not _selection_safety_active:
+		_facade.call("advance_time", maxf(0.0, delta))
+		_advance_floor_rule_from_host()
 	_hud_render_accumulator += maxf(0.0, delta)
 	if _hud_render_accumulator < HUD_RENDER_INTERVAL:
 		return
@@ -128,6 +131,7 @@ func start_run(config: Dictionary) -> Variant:
 			&"AUTHORED_RUNTIME_CONFIGURATION_FAILED",
 			{"floor_rule_runtime_reset": false}
 		)
+	_dungeon_selection_active = false
 	_set_selection_safety(false)
 	if _choice_panel != null:
 		_choice_panel.close_panel()
@@ -281,6 +285,118 @@ func runtime_snapshot() -> Dictionary:
 	if _facade == null:
 		return {}
 	return (_facade.call("snapshot") as Dictionary).duplicate(true)
+
+
+func dungeon_ui_context() -> Dictionary:
+	var state := runtime_snapshot()
+	if _facade == null or not _is_floor_plan_snapshot(state):
+		return {}
+	var registry: RefCounted = _facade.call("content_registry")
+	if registry == null:
+		return {}
+	var context := {
+		"state": state,
+		"room": _facade.call("current_room_definition"),
+		"floors": registry.call("get_floor_definitions", &"LAUNCH"),
+		"content": registry.call("all_content"),
+		"routes": route_choices(),
+		"merchant": _facade.call("merchant_view_state"),
+		"event": _facade.call("event_view_state"),
+		"merchant_services": [],
+		"event_reward": {},
+		"interaction": {},
+	}
+	if _facade.has_method("merchant_service_choices"):
+		context["merchant_services"] = _facade.call("merchant_service_choices")
+	if _facade.has_method("event_reward_offer"):
+		context["event_reward"] = _facade.call("event_reward_offer")
+	if _facade.has_method("room_interaction_view_state"):
+		context["interaction"] = _facade.call("room_interaction_view_state")
+	return context
+
+
+func set_dungeon_selection_safety(active_selection: bool) -> void:
+	_dungeon_selection_active = active_selection
+	_set_selection_safety(active_selection or (_choice_panel != null and _choice_panel.visible))
+
+
+func choose_event_option(option_id: StringName, expected_revision: int) -> Variant:
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	return _room_runtime.call("choose_current_event_option", option_id, expected_revision)
+
+
+func submit_event_reward(option_id: StringName, expected_revision: int) -> Variant:
+	if _facade == null or not _facade.has_method("submit_current_event_reward"):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var result: Variant = _facade.call("submit_current_event_reward", option_id, expected_revision)
+	if result != null and bool(result.get("ok")):
+		if _room_runtime == null or not bool(_room_runtime.call("sync_event_result", result)):
+			return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "event_reward_sync"})
+	return result
+
+
+func dismiss_event(expected_revision: int) -> Variant:
+	if _room_runtime == null or not is_instance_valid(_room_runtime):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var dismissed: Variant = _room_runtime.call("dismiss_current_event", expected_revision)
+	if dismissed == null or not bool(dismissed.get("ok")):
+		return dismissed
+	return _room_runtime.call("complete_current_room")
+
+
+func resolve_room_interaction(choice_id: StringName, expected_revision: int) -> Variant:
+	if (
+		_facade == null
+		or _room_runtime == null
+		or not _facade.has_method("resolve_current_room_interaction")
+	):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	var resolved: Variant = _facade.call("resolve_current_room_interaction", choice_id, expected_revision)
+	if resolved == null or not bool(resolved.get("ok")):
+		return resolved
+	var published: Variant = _room_runtime.call("synchronize_completed_interaction")
+	if published == null or not bool(published.get("ok")):
+		return CommandResultScript.failure(&"INTEGRITY_FAILURE", _revision(), {"stage": "room_interaction_sync"})
+	return resolved
+
+
+func leave_merchant(expected_revision: int) -> Variant:
+	var validation = _validate_dungeon_revision(expected_revision)
+	if not validation.ok:
+		return validation
+	if _room_runtime == null:
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	return _room_runtime.call("leave_current_shop")
+
+
+func merchant_action(action_id: StringName, target_id: StringName, expected_revision: int) -> Variant:
+	var validation = _validate_dungeon_revision(expected_revision)
+	if not validation.ok:
+		return validation
+	var state := runtime_snapshot()
+	var plan := state.get("floor_plan", {}) as Dictionary
+	var transaction_id := "ui_%s" % (
+		"%s:%s:%s:%s:%s:%d" % [
+			str(state.get("run_id", "")), str(plan.get("floor_id", "")),
+			str(plan.get("current_node_id", "")), str(action_id), str(target_id), expected_revision,
+		]
+	).sha256_text().substr(0, 48)
+	match action_id:
+		&"purchase_reward":
+			return _facade.call("purchase_current_merchant", transaction_id, str(target_id))
+		&"reroll":
+			return _facade.call("reroll_current_merchant", transaction_id)
+		_:
+			return _facade.call("execute_current_merchant_service", transaction_id, action_id, str(target_id))
+
+
+func _validate_dungeon_revision(expected_revision: int):
+	if _facade == null or not _is_floor_plan_snapshot(runtime_snapshot()):
+		return CommandResultScript.failure(&"INVALID_PHASE", _revision())
+	if expected_revision != _revision():
+		return CommandResultScript.failure(&"STALE_REVISION", _revision())
+	return CommandResultScript.success(_revision())
 
 
 func configure_route_scene_adapter(adapter: Variant) -> bool:
@@ -546,6 +662,7 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 					"stage": "route_room_runtime_entry",
 					"transition_id": transition_id,
 					"code": entry_code,
+					"entry_context": entered.context.duplicate(true) if entered != null else {},
 				}
 			)
 	var final_revision := _revision()
@@ -641,11 +758,13 @@ func select_route(edge_id: StringName, expected_revision: int = -1) -> Variant:
 	return CommandResultScript.success(final_revision, context)
 
 
-func start_next_floor() -> Variant:
+func start_next_floor(expected_revision: int = -1) -> Variant:
 	if _facade == null or not _facade.has_method("start_next_floor"):
 		return CommandResultScript.failure(
 			&"INVALID_PHASE", _revision(), {"operation": "start_next_floor"}
 		)
+	if expected_revision >= 0 and expected_revision != _revision():
+		return CommandResultScript.failure(&"STALE_REVISION", _revision())
 	var started: Variant = _facade.call("start_next_floor")
 	if started != null and bool(started.get("ok")):
 		_publish_floor_started_once(runtime_snapshot())
@@ -943,6 +1062,9 @@ func _choice_offer_for_player(offer: Dictionary) -> Dictionary:
 
 
 func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> void:
+	if _is_floor_plan_snapshot(runtime_snapshot()):
+		_submit_launch_reward(offer_id, option_id, revision)
+		return
 	if (
 		_facade == null
 		or _choice_panel == null
@@ -1171,6 +1293,20 @@ func _on_option_chosen(offer_id: String, option_id: String, revision: int) -> vo
 		_room_runtime.call_deferred("begin_current_room")
 
 
+func _submit_launch_reward(offer_id: String, option_id: String, revision: int) -> void:
+	if _facade == null or _choice_panel == null or not _facade.has_method("commit_current_reward"):
+		return
+	var committed: Variant = _facade.call("commit_current_reward", offer_id, option_id, revision)
+	if committed == null or not bool(committed.get("ok")):
+		_choice_panel.show_rejection(_rejection_message_key(committed) if committed is RefCounted else "CHOICE_REJECTED")
+		return
+	var definition := (committed.context.get("definition", {}) as Dictionary).duplicate(true)
+	if not definition.is_empty():
+		EventBus.reward_selected.emit(_active_run_id, definition, int(committed.new_revision))
+	_choice_panel.close_panel()
+	_set_selection_safety(_dungeon_selection_active)
+
+
 func _fail_reward_integrity(context: Dictionary) -> void:
 	var terminal_context := {
 		"result": "runtime_error",
@@ -1328,6 +1464,12 @@ func _publish_pending_initial_room_cleared(run_id: String) -> void:
 func _publish_room_cleared(run_id: String, room_id: StringName, revision: int) -> void:
 	EventBus.room_cleared.emit(run_id, room_id, revision)
 	var state := runtime_snapshot()
+	if _is_floor_plan_snapshot(state) and int(state.get("phase", -1)) == RunPhaseScript.Value.ROOM_RESOLVING:
+		var room := (_facade.call("current_room_definition") as Dictionary)
+		if str(room.get("room_type", "")) in ["combat", "elite"] and _facade.has_method("open_current_room_reward"):
+			var opened: Variant = _facade.call("open_current_room_reward", _revision())
+			if opened != null and bool(opened.get("ok")):
+				state = runtime_snapshot()
 	if int(state.get("phase", -1)) == RunPhaseScript.Value.SELECTION_ACTIVE:
 		_open_offer(state.get("open_offer", {}))
 
@@ -1509,7 +1651,7 @@ func _advance_floor_rule_from_host() -> void:
 	):
 		return
 	var state := runtime_snapshot()
-	if RunPhaseScript.is_terminal(int(state.get("phase", -1))):
+	if int(state.get("phase", -1)) != RunPhaseScript.Value.ROOM_ACTIVE:
 		return
 	var floor_rule_state: Dictionary = state.get("floor_rule_state", {})
 	if floor_rule_state.is_empty():
@@ -1672,11 +1814,16 @@ func _set_selection_safety(active_selection: bool) -> void:
 			_player_process_mode = _player.process_mode
 			_player.process_mode = Node.PROCESS_MODE_DISABLED
 		_clear_hostile_transients()
+		if _room_controller != null and is_instance_valid(_room_controller):
+			_room_controller_process_mode = _room_controller.process_mode
+			_room_controller.process_mode = Node.PROCESS_MODE_DISABLED
 		return
 	if not _selection_safety_active:
 		return
 	if _player != null and is_instance_valid(_player):
 		_player.process_mode = _player_process_mode
+	if _room_controller != null and is_instance_valid(_room_controller):
+		_room_controller.process_mode = _room_controller_process_mode
 	_selection_safety_active = false
 
 

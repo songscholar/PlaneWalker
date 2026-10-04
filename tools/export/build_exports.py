@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Sequence
 
 from artifact_evidence import describe_artifact, scan_export_logs
+from portable_runtime import prepare_self_contained_editor
 from preflight import (
     validate_contract,
     validate_local_environment,
@@ -139,6 +140,25 @@ def run_exports(
         report["classification"] = "blocked"
         return _finish(report, evidence_path, EXIT_ENVIRONMENT_BLOCKED)
     resolved_godot = str(godot_details["binary"])
+    if templates_dir is not None:
+        try:
+            resolved_godot = str(prepare_self_contained_editor(
+                root,
+                Path(resolved_godot),
+                Path(str(godot_details["templates_dir"])),
+                str(godot_details["template_version_directory"]),
+            ))
+        except (OSError, ValueError) as error:
+            issues.append({
+                "code": "project_local_editor_failed", "category": "blocked",
+                "message": str(error),
+            })
+            for target in target_records:
+                target["status"] = "blocked"
+            report["status"] = "blocked"
+            report["classification"] = "blocked"
+            return _finish(report, evidence_path, EXIT_ENVIRONMENT_BLOCKED)
+        godot_details["project_local_editor"] = resolved_godot
 
     any_failed = False
     for target in target_records:

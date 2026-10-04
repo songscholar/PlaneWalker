@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/rooms/combat_room_01.tscn" id="2_combat_room"]
@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/candidate_loadout_panel.tscn" id="10_candidate_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/launch_loadout_panel.tscn" id="11_launch_panel"]
 [ext_resource type="Script" path="res://scripts/dungeon/room_scene_host.gd" id="12_room_scene_host"]
+[ext_resource type="Script" path="res://scripts/application/dungeon_flow_coordinator.gd" id="13_dungeon_flow"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -38,6 +39,11 @@ event_rooms = Array[int]([])
 process_mode = 3
 script = ExtResource("5_runtime_host")
 room_controller_path = NodePath("../CombatRoom01")
+
+[node name="DungeonFlow" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("13_dungeon_flow")
+runtime_host_path = NodePath("../RunRuntimeHost")
 
 [node name="AccessibilityRuntime" type="Node" parent="."]
 process_mode = 3

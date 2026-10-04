@@ -860,6 +860,7 @@ func _validate_full_player_replay(
 		if replay_schema_version in [
 			ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION,
 			ReplayRecorderScript.FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SCHEMA_VERSION,
+			ReplayRecorderScript.FULL_PLAYER_LEGACY_REWARD_LAUNCH_SCHEMA_VERSION,
 		]
 		else 0
 	)
@@ -871,22 +872,12 @@ func _validate_full_player_replay(
 	if replay_schema_version != current_schema_version and not is_legacy_launch:
 		return _failure(&"FULL_PLAYER_REPLAY_SCHEMA_VERSION_MISMATCH")
 	var expected_frame_schema_version := (
-		(
-			ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_FRAME_SCHEMA_VERSION
-			if legacy_launch_schema_version
-				== ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION
-			else ReplayRecorderScript.FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_FRAME_SCHEMA_VERSION
-		)
+		legacy_launch_schema_version
 		if is_legacy_launch
 		else ReplayRecorderScript.full_player_frame_schema_version_for_identity(identity)
 	)
 	var expected_snapshot_schema_version := (
-		(
-			ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-			if legacy_launch_schema_version
-				== ReplayRecorderScript.FULL_PLAYER_LEGACY_LAUNCH_SCHEMA_VERSION
-			else ReplayRecorderScript.FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_SCHEMA_VERSION
-		)
+		legacy_launch_schema_version
 		if is_legacy_launch
 		else ReplayRecorderScript.full_player_snapshot_schema_version_for_identity(identity)
 	)

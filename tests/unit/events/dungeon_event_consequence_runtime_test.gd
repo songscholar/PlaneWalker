@@ -484,6 +484,11 @@ func _test_all_ten_consequences_and_exactly_once(suite) -> void:
 	var committed: Dictionary = runtime.call("commit_consequences", prepared.get("ticket", {}))
 	suite.assert_true(bool(committed.get("ok", false)), "mixed consequence transaction commits")
 	var snapshot: Dictionary = runtime.call("snapshot")
+	suite.assert_true(runtime.call("_normalize_snapshot", snapshot) != {}, "committed pending snapshot validates for compensation")
+	for participant: String in snapshot["participant_snapshots"]:
+		var authority: Object = runtime.get("_%s" % participant)
+		if authority != null:
+			suite.assert_true(authority.call("can_restore_snapshot", snapshot["participant_snapshots"][participant]), "committed participant validates: %s" % participant)
 	suite.assert_equal(fixture["economy"].balance(), 90, "gold consequence debits real economy authority")
 	suite.assert_equal(fixture["economy"].revision(), 1, "gold consequence advances economy revision once")
 	suite.assert_equal(

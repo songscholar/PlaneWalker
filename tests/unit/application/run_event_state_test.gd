@@ -38,7 +38,55 @@ func _run() -> void:
 	_test_initialization_snapshot_and_restore(suite, floors[0], templates)
 	_test_atomic_event_candidate_commit(suite, floors[0], templates)
 	_test_pending_route_rejects_external_commit(suite, floors[0], templates)
+	_test_curse_membership_projection_is_canonical(suite, floors[0], templates)
+	_test_room_completion_ledger_rolls_back_with_floor(suite, floors[0], templates)
 	suite.finish(get_tree())
+
+
+func _test_room_completion_ledger_rolls_back_with_floor(suite, floor: Dictionary, templates: Array) -> void:
+	var fixture := _event_room_fixture(suite, floor, templates, "run-event-clear-ledger")
+	if fixture.is_empty():
+		return
+	var orchestrator = fixture["orchestrator"]
+	var before: Dictionary = orchestrator.floor_transaction_snapshot()
+	var node_id := str(fixture["node"]["id"])
+	var completed = orchestrator.complete_floor_node(node_id, orchestrator.revision())
+	suite.assert_true(completed.ok, "room completion records a domain clear")
+	var facts := orchestrator.snapshot()["events"] as Array
+	suite.assert_equal(facts.size(), (before["events"] as Array).size() + 1, "successful room completion persists one lifetime fact")
+	if not facts.is_empty():
+		suite.assert_equal(facts.back(), {
+			"type": "room_completed_v1", "sequence": (before["events"] as Array).size() + 1,
+			"floor_id": floor["id"], "floor_index": 0, "node_id": node_id,
+		}, "clear ledger identifies exactly the successfully completed room")
+	var rejected = orchestrator.complete_floor_node(node_id, orchestrator.revision())
+	suite.assert_true(not rejected.ok, "duplicate completion is rejected")
+	suite.assert_equal(orchestrator.snapshot()["events"], facts, "rejected completion never consumes modifier lifetime")
+	suite.assert_true(orchestrator.restore_floor_transaction_snapshot(before), "floor rollback restores the clear ledger")
+	suite.assert_equal(orchestrator.snapshot()["events"], before["events"], "compensation restores the pre-clear lifetime")
+	var forged := before.duplicate(true)
+	forged["events"][0]["node_id"] = "forged_room"
+	suite.assert_true(not orchestrator.can_restore_floor_transaction_snapshot(forged), "clear history cannot invent a room absent from the current FloorPlan")
+
+
+func _test_curse_membership_projection_is_canonical(suite, floor: Dictionary, templates: Array) -> void:
+	var fixture := _event_room_fixture(suite, floor, templates, "run-event-curse-order")
+	if fixture.is_empty():
+		return
+	var orchestrator = fixture["orchestrator"]
+	var state: RefCounted = orchestrator.get("_state")
+	for curse_id: String in ["curse_fickle_time", "curse_brittle_pact"]:
+		var applied: Dictionary = state.call("apply_reward_definition", {
+			"id": curse_id, "category": "curse", "archetype": "", "effects": {},
+		})
+		suite.assert_true(bool(applied.get("ok", false)), "curse acquisition synchronizes event membership")
+	var snapshot: Dictionary = orchestrator.snapshot()
+	var modifier := snapshot["dungeon_event_runtime"]["consequence_runtime"]["participant_snapshots"]["modifier"] as Dictionary
+	suite.assert_equal(snapshot["build"]["curses"], ["curse_fickle_time", "curse_brittle_pact"], "BuildState preserves acquisition order")
+	suite.assert_equal(modifier["curse_ids"], ["curse_brittle_pact", "curse_fickle_time"], "event membership is sorted independently of acquisition order")
+	var authority = EventModifierAuthorityScript.new()
+	suite.assert_true(authority.configure(modifier["curse_ids"], modifier["narrative_flags"], modifier["temporary_modifiers"]), "canonical modifier projection configures after two curse acquisitions")
+	suite.assert_true(orchestrator.restore_launch_run_snapshot(snapshot, floor, templates), "sorted event membership and ordered BuildState restore together")
 
 
 func _test_initialization_snapshot_and_restore(suite, floor: Dictionary, templates: Array) -> void:

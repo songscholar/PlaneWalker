@@ -17,6 +17,7 @@ const FloorRuleEffectAuthorityScript := preload(
 @onready var subtitle_label: Label = $StartMenu/Panel/Margin/VBox/Subtitle
 @onready var pause_menu: CanvasLayer = $PauseMenu
 @onready var runtime_host: Node = $RunRuntimeHost
+@onready var dungeon_flow: Node = $DungeonFlow
 @onready var launch_room_scene_host: Node = $LaunchRoomSceneHost
 @onready var accessibility_runtime: Node = $AccessibilityRuntime
 @onready var input_remap_panel: Control = $InputRemapLayer/InputRemapPanel
@@ -114,6 +115,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		or launch_loadout_panel.visible
 	):
 		return
+	if not start_menu.visible and bool(dungeon_flow.call("handle_input", event)):
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
 		return
@@ -182,6 +186,7 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	FocusCoordinator.close_scope(start_menu)
 	start_menu.visible = false
 	_on_run_started(config)
+	dungeon_flow.call("refresh", true)
 	return true
 
 

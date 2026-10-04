@@ -226,6 +226,8 @@ func _owner_is_alive() -> bool:
 
 
 func _read_owner_attack() -> float:
+	if owner_entity.has_method("get_effective_attack"):
+		return maxf(0.0, float(owner_entity.call("get_effective_attack")))
 	var stats: Variant = owner_entity.get("stats")
 	if stats == null:
 		return 0.0

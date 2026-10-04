@@ -5,6 +5,7 @@ const ActiveItemRuntimeScript := preload("res://scripts/items/active_item_runtim
 const CharacterTalentStateScript := preload(
 	"res://scripts/player/characters/character_talent_state.gd"
 )
+const EventModifierLayerScript := preload("res://scripts/events/event_temporary_modifier_layer.gd")
 
 const SCHEMA_ID := "planewalker.weapon_runtime_replay"
 const SCHEMA_VERSION := 6
@@ -14,9 +15,12 @@ const FULL_PLAYER_SCHEMA_ID := "planewalker.full_player_replay"
 const FULL_PLAYER_SCHEMA_VERSION := 2
 const FULL_PLAYER_FRAME_SCHEMA_VERSION := 2
 const FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION := 2
-const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 6
-const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 6
-const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 6
+const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 7
+const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 7
+const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 7
+const FULL_PLAYER_LEGACY_REWARD_LAUNCH_SCHEMA_VERSION := 6
+const FULL_PLAYER_LEGACY_REWARD_LAUNCH_FRAME_SCHEMA_VERSION := 6
+const FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 6
 const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SCHEMA_VERSION := 5
 const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_FRAME_SCHEMA_VERSION := 5
 const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 5
@@ -273,6 +277,7 @@ const FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS: Array[String] = [
 	"active_item_state",
 	"reward_effect_state",
 	"live_talent_state",
+	"event_temporary_modifiers",
 ]
 const FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_FIELDS: Array[String] = [
 	"schema_version",
@@ -1026,9 +1031,13 @@ static func validate_full_player_snapshot(
 				"field": dictionary_field,
 			})
 	var player_state := snapshot.get("player_state", {}) as Dictionary
+	var has_launch_reward_state := snapshot_schema_version in [
+		FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION,
+		FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION,
+	]
 	var expected_player_fields := (
 		FULL_PLAYER_LAUNCH_STATE_FIELDS
-		if snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		if has_launch_reward_state
 		else FULL_PLAYER_STATE_FIELDS
 	)
 	if not _has_exact_fields_static(player_state, expected_player_fields):
@@ -1036,7 +1045,7 @@ static func validate_full_player_snapshot(
 			"field": "player_state",
 		})
 	if (
-		snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		has_launch_reward_state
 		and not player_state.get("invulnerability_state") is Dictionary
 	):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_FIELDS_MISMATCH", {
@@ -1052,7 +1061,7 @@ static func validate_full_player_snapshot(
 	):
 		return _failure(&"FULL_PLAYER_SNAPSHOT_FIELDS_MISMATCH")
 	if (
-		snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+		has_launch_reward_state
 		and (
 			not snapshot.get("active_item_state") is Dictionary
 			or not validate_full_player_active_item_state(
@@ -1062,7 +1071,9 @@ static func validate_full_player_snapshot(
 		)
 	):
 		return _failure(&"FULL_PLAYER_ACTIVE_ITEM_STATE_INVALID")
-	if snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+	if snapshot_schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION and not validate_full_player_event_modifiers(snapshot.get("event_temporary_modifiers")):
+		return _failure(&"FULL_PLAYER_EVENT_MODIFIER_STATE_INVALID")
+	if has_launch_reward_state:
 		var reward_effect_value: Variant = snapshot.get("reward_effect_state")
 		if (
 			not reward_effect_value is Dictionary
@@ -1434,7 +1445,18 @@ static func _full_player_snapshot_fields_for_schema(
 		return FULL_PLAYER_LEGACY_ACTIVE_LAUNCH_SNAPSHOT_FIELDS
 	if not is_m1 and schema_version == FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
 		return FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS
+	if not is_m1 and schema_version == FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+		var legacy_fields := FULL_PLAYER_LAUNCH_SNAPSHOT_FIELDS.duplicate()
+		legacy_fields.erase("event_temporary_modifiers")
+		return legacy_fields
 	return []
+
+
+static func validate_full_player_event_modifiers(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	var candidate = EventModifierLayerScript.new()
+	return candidate.replace_projection(value) and candidate.snapshot() == value
 
 
 static func validate_full_player_frame_intents(value: Dictionary) -> bool:
@@ -1719,6 +1741,13 @@ static func normalize_full_player_snapshot(snapshot: Dictionary) -> Dictionary:
 			and _has_exact_fields_static(normalized, legacy_launch_fields)
 		):
 			return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID")
+		if not identity.is_empty() and snapshot_schema_version == FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION:
+			var legacy_validation := validate_full_player_snapshot(normalized, identity, snapshot_schema_version)
+			if not legacy_validation.get("ok", false):
+				return legacy_validation
+			normalized["schema_version"] = FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION
+			normalized["event_temporary_modifiers"] = []
+			migrated = true
 	var action_value: Variant = normalized.get("character_action_state")
 	if not action_value is Dictionary:
 		return _failure(&"FULL_PLAYER_CHARACTER_ACTION_STATE_INVALID")
@@ -1755,6 +1784,7 @@ static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
 	)
 	if migrates_legacy_launch:
 		return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID")
+	var migrates_event_projection := not identity.is_empty() and str(identity.get("character_profile_id", "")) != "wanderer_m1_v1" and int(normalized.get("schema_version", 0)) == FULL_PLAYER_LEGACY_REWARD_LAUNCH_SCHEMA_VERSION
 	var frames_value: Variant = normalized.get("frames")
 	if not frames_value is Array or (frames_value as Array).is_empty():
 		return _failure(&"FULL_PLAYER_REPLAY_FRAMES_INVALID")
@@ -1785,14 +1815,14 @@ static func normalize_full_player_replay(replay: Dictionary) -> Dictionary:
 		frame["snapshot"] = (
 			snapshot_context.get("snapshot", {}) as Dictionary
 		).duplicate(true)
-		if migrates_legacy_launch:
+		if migrates_event_projection:
 			frame["schema_version"] = FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION
 		migrated = migrated or bool(snapshot_context.get("migrated", false))
 		frame["digest"] = full_player_frame_digest(frame)
 		if not _is_sha256(frame["digest"]):
 			return _failure(&"FULL_PLAYER_REPLAY_MIGRATION_INVALID", {"index": index})
 	var terminal_snapshot := (frames[-1] as Dictionary).get("snapshot", {}) as Dictionary
-	if migrates_legacy_launch:
+	if migrates_event_projection:
 		normalized["schema_version"] = FULL_PLAYER_LAUNCH_SCHEMA_VERSION
 		migrated = true
 	normalized["terminal_snapshot_digest"] = value_digest(terminal_snapshot)

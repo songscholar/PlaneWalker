@@ -40,6 +40,7 @@ func _run() -> void:
 	_test_default_v2_to_v3_settings_only_advance_version(suite)
 	_test_default_v2_to_v3_adds_m1_dungeon_defaults(suite)
 	_test_default_v2_to_v3_preserves_complete_launch_floor_plans(suite)
+	_test_legacy_event_history_does_not_invent_runtime(suite)
 	_test_default_v2_to_v3_rejects_unsafe_active_launch_run(suite)
 	_test_legacy_v0_migrates_through_v3_defaults(suite)
 	suite.finish(get_tree())
@@ -333,15 +334,25 @@ func _test_default_v2_to_v3_adds_m1_dungeon_defaults(suite) -> void:
 	suite.assert_equal(migrated_run.get("seen_event_ids"), [], "M1 run receives an empty event prefix")
 	suite.assert_equal(migrated_run.get("merchant_state"), {}, "M1 run receives an empty merchant domain")
 	suite.assert_equal(migrated_run.get("floor_rule_state"), {}, "M1 run receives an empty floor-rule domain")
+	suite.assert_equal(migrated_run.get("dungeon_event_runtime"), {}, "M1 run receives an empty event-runtime domain")
 
 
 func _test_default_v2_to_v3_preserves_complete_launch_floor_plans(suite) -> void:
-	for floor_index: int in [0, 2]:
+	for fixture: Dictionary in [
+		{"milestone": "LAUNCH", "floor_index": 0},
+		{"milestone": "LAUNCH", "floor_index": 2},
+		{"milestone": "EXPANSION", "floor_index": 0},
+		{"milestone": "EXPANSION", "floor_index": 2},
+	]:
+		var milestone := str(fixture["milestone"])
+		var floor_index := int(fixture["floor_index"])
+		var label := "v2 %s floor %d" % [milestone, floor_index]
 		var plan := _generated_floor_plan(floor_index)
-		suite.assert_true(not plan.is_empty(), "v2 Launch floor %d fixture generates" % floor_index)
+		suite.assert_true(not plan.is_empty(), "%s fixture generates" % label)
 		if plan.is_empty():
 			continue
 		var active_run := _complete_launch_active_run(plan)
+		active_run["config"]["milestone"] = milestone
 		var source := {
 			"schema_version": 2,
 			"document_kind": "profile",
@@ -351,15 +362,51 @@ func _test_default_v2_to_v3_preserves_complete_launch_floor_plans(suite) -> void
 				"active_run_state": active_run.duplicate(true),
 			},
 		}
+		(source["payload"]["active_run_state"] as Dictionary).erase("dungeon_event_runtime")
 		var original := source.duplicate(true)
 		var result = SaveMigrationRegistryScript.new().migrate(source, 3)
-		_suite_result_ok(suite, result, "complete v2 Launch floor %d migrates to v3" % floor_index)
-		suite.assert_equal(source, original, "complete v2 Launch floor %d preserves source bytes" % floor_index)
+		_suite_result_ok(suite, result, "complete %s migrates to v3" % label)
+		suite.assert_equal(source, original, "complete %s preserves source bytes" % label)
 		if result.ok:
 			suite.assert_equal(
 				result.payload.get("payload", {}).get("active_run_state"),
 				active_run,
-				"complete v2 Launch floor %d remains lossless" % floor_index
+				"complete %s preserves its domains and adds the empty event authority" % label
+			)
+
+
+func _test_legacy_event_history_does_not_invent_runtime(suite) -> void:
+	var plan := _generated_floor_plan(2)
+	suite.assert_true(not plan.is_empty(), "historical event migration fixture generates")
+	if plan.is_empty():
+		return
+	for milestone: String in ["LAUNCH", "EXPANSION"]:
+		for source_version: int in [1, 2]:
+			var label := "v%d %s event history" % [source_version, milestone]
+			var active_run := _complete_launch_active_run(plan)
+			active_run["config"]["milestone"] = milestone
+			active_run["seen_event_ids"] = ["event.echo", "event.hidden_cache"]
+			active_run.erase("dungeon_event_runtime")
+			var source := {
+				"schema_version": source_version,
+				"document_kind": "profile",
+				"payload": {
+					"active_item_state": _empty_active_item_state(),
+					"reward_effect_state": {},
+					"active_run_state": active_run.duplicate(true),
+				},
+			}
+			var original := source.duplicate(true)
+			var result = SaveMigrationRegistryScript.new().migrate(source, 3)
+			_suite_result_ok(suite, result, "%s migrates to readable legacy v3" % label)
+			suite.assert_equal(source, original, "%s preserves source bytes" % label)
+			if not result.ok:
+				continue
+			var migrated_run := result.payload.get("payload", {}).get("active_run_state", {}) as Dictionary
+			suite.assert_true(migrated_run == active_run, "%s preserves every historical domain" % label)
+			suite.assert_true(
+				not migrated_run.has("dungeon_event_runtime"),
+				"%s does not invent an empty authority over recorded events" % label
 			)
 
 
@@ -528,6 +575,7 @@ func _complete_launch_active_run(plan: Dictionary) -> Dictionary:
 		"seen_event_ids": [],
 		"merchant_state": {},
 		"floor_rule_state": {},
+		"dungeon_event_runtime": {},
 	}
 
 

@@ -15,6 +15,21 @@ const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 const RunEconomyStateScript := preload("res://scripts/economy/run_economy_state.gd")
 const MerchantRunStateScript := preload("res://scripts/economy/merchant_run_state.gd")
+const DungeonEventRunStateScript := preload(
+	"res://scripts/events/dungeon_event_run_state.gd"
+)
+const DungeonEventDefinitionScript := preload("res://scripts/dungeon/dungeon_event_definition.gd")
+const DungeonEventRuntimeScript := preload("res://scripts/events/dungeon_event_runtime.gd")
+const DungeonEventSelectorScript := preload("res://scripts/events/dungeon_event_selector.gd")
+const EventRequirementServiceScript := preload("res://scripts/events/event_requirement_service.gd")
+const DungeonEventConsequenceRuntimeScript := preload(
+	"res://scripts/events/dungeon_event_consequence_runtime.gd"
+)
+const EventHealthAuthorityScript := preload("res://scripts/events/event_health_authority.gd")
+const EventModifierAuthorityScript := preload("res://scripts/events/event_modifier_authority.gd")
+const EventResourceAuthorityScript := preload("res://scripts/events/event_resource_authority.gd")
+const EventRouteAuthorityScript := preload("res://scripts/events/event_route_authority.gd")
+const EventModifierLifetimeScript := preload("res://scripts/events/event_modifier_lifetime.gd")
 
 const SCHEMA_ID := "planewalker.run_dungeon_replay"
 const SCHEMA_VERSION := 3
@@ -32,10 +47,20 @@ const SNAPSHOT_FIELDS: Array[String] = [
 	"merchant_state_digest",
 	"merchant_transaction_facts",
 	"merchant_audit_facts",
-	"event_resolution_digest",
+	"event_runtime_digest",
+	"event_assignment_facts",
+	"event_outcome_facts",
+	"event_transaction_facts",
+	"event_receipt_facts",
+	"event_publication_facts",
 	"floor_rule_state_digest",
+	"room_completion_events_digest",
 	"floor_transitions",
 	"snapshot_digest",
+]
+const EVENT_SEAL_FIELDS: Array[String] = [
+	"event_runtime_digest", "event_assignment_facts", "event_outcome_facts",
+	"event_transaction_facts", "event_receipt_facts", "event_publication_facts",
 ]
 const ROOM_FACT_INPUT_FIELDS: Array[String] = ["node_id", "fact_type", "sequence"]
 const ROOM_FACT_FIELDS: Array[String] = [
@@ -46,8 +71,26 @@ const ROOM_FACT_FIELDS: Array[String] = [
 	"template_id",
 	"definition_digest",
 ]
-const EVENT_RESOLUTION_FIELDS: Array[String] = [
-	"event_id", "node_id", "option_id", "outcome_id", "sequence",
+const EVENT_RUNTIME_FIELDS: Array[String] = [
+	"schema_id", "schema_version", "active_node_key", "active_event_id",
+	"encounter_success_by_transaction", "emitted_fact_ids", "pending_facts",
+	"publication_ledger", "publication_digest", "consequence_runtime",
+]
+const EVENT_CONSEQUENCE_FIELDS: Array[String] = [
+	"schema_id", "schema_version", "completed_transaction_ids", "publications",
+	"integrity_failure", "participant_snapshots", "revision",
+]
+const EVENT_PARTICIPANT_FIELDS: Array[String] = [
+	"economy", "event_state", "health", "modifier", "resource", "route",
+]
+const EVENT_PUBLICATION_FIELDS: Array[String] = [
+	"transaction_id", "phase", "result_key", "pending_kind",
+]
+const EVENT_LEDGER_FIELDS: Array[String] = [
+	"chain_hash", "fact_id", "payload", "status",
+]
+const EVENT_PENDING_FACT_FIELDS: Array[String] = [
+	"fact_id", "payload",
 ]
 const FLOOR_TRANSITION_FIELDS: Array[String] = [
 	"sequence", "from_floor_id", "to_floor_id", "completed_plan_digest",
@@ -62,9 +105,16 @@ const MERCHANT_AUDIT_FIELDS: Array[String] = [
 	"completed_transaction_ids", "service_completed_transaction_ids",
 ]
 const VALID_ROOM_FACT_TYPES: Array[String] = ["room_entered", "room_cleared"]
-const EVENT_OUTCOME_SCHEMA_ID := "event_outcome_v1"
 const STABLE_ID_PATTERN := "^[a-z0-9][a-z0-9_:-]{0,95}$"
 const SHA256_PATTERN := "^[a-f0-9]{64}$"
+
+var _event_publication_secret := ""
+
+
+func _init(event_publication_secret: String = "") -> void:
+	# Modern snapshots require the original runtime's secret, including empty ledgers.
+	# The default is retained only for reading legacy schema-3 empty event histories.
+	_event_publication_secret = event_publication_secret
 
 
 func capture(
@@ -74,10 +124,15 @@ func capture(
 	room_fact_inputs: Array,
 	run_economy: Dictionary,
 	merchant_state: Dictionary,
-	event_resolutions: Array,
+	dungeon_event_runtime: Variant,
 	floor_transitions: Array,
-	floor_rule_state: Dictionary = {}
+	floor_rule_state: Dictionary = {},
+	run_events: Array = []
 ) -> Dictionary:
+	if not dungeon_event_runtime is Dictionary:
+		return {}
+	if not EventModifierLifetimeScript.history_matches_plan(run_events, floor_plan):
+		return {}
 	var content_snapshot := ContentSnapshotProviderScript.snapshot(registry)
 	if content_snapshot.is_empty():
 		return {}
@@ -105,14 +160,15 @@ func capture(
 		return {}
 	var economy_digest := ReplayRecorderScript.value_digest(run_economy)
 	var merchant_digest := ReplayRecorderScript.value_digest(merchant_state)
-	var event_digest := _event_resolution_digest(
-		registry, floor_plan, route_prefix, event_resolutions
+	var event_result := _event_replay_facts(
+		registry, floor_plan, route_prefix, room_result["facts"] as Array,
+		dungeon_event_runtime, run_economy
 	)
 	var floor_rule_digest := ReplayRecorderScript.value_digest(floor_rule_state)
 	if (
 		not _is_sha256(economy_digest)
 		or not _is_sha256(merchant_digest)
-		or not _is_sha256(event_digest)
+		or not bool(event_result.get("ok", false))
 		or not _is_sha256(floor_rule_digest)
 		or not ReplaySafeValueScript.is_supported(floor_rule_state)
 	):
@@ -139,8 +195,14 @@ func capture(
 		"merchant_state_digest": merchant_digest,
 		"merchant_transaction_facts": merchant_facts.duplicate(true),
 		"merchant_audit_facts": merchant_audit.duplicate(true),
-		"event_resolution_digest": event_digest,
+		"event_runtime_digest": str(event_result["runtime_digest"]),
+		"event_assignment_facts": (event_result["assignment_facts"] as Array).duplicate(true),
+		"event_outcome_facts": (event_result["outcome_facts"] as Array).duplicate(true),
+		"event_transaction_facts": (event_result["transaction_facts"] as Array).duplicate(true),
+		"event_receipt_facts": (event_result["receipt_facts"] as Array).duplicate(true),
+		"event_publication_facts": (event_result["publication_facts"] as Array).duplicate(true),
 		"floor_rule_state_digest": floor_rule_digest,
+		"room_completion_events_digest": ReplayRecorderScript.value_digest(run_events),
 		"floor_transitions": floor_transitions.duplicate(true),
 	}
 	result["snapshot_digest"] = snapshot_digest(result)
@@ -153,10 +215,21 @@ func validate(
 	floor_plan: Dictionary,
 	run_economy: Dictionary,
 	merchant_state: Dictionary,
-	event_resolutions: Array,
-	floor_rule_state: Dictionary = {}
+	dungeon_event_runtime: Variant,
+	floor_rule_state: Dictionary = {},
+	run_events: Array = []
 ) -> Dictionary:
-	if not _has_exact_fields(value, SNAPSHOT_FIELDS):
+	var legacy_empty_history := value.has("event_resolution_digest")
+	var expected_fields := SNAPSHOT_FIELDS.duplicate()
+	if not value.has("room_completion_events_digest"):
+		expected_fields.erase("room_completion_events_digest")
+		if not run_events.is_empty():
+			return _failure(&"ROOM_COMPLETION_HISTORY_MISSING")
+	if legacy_empty_history:
+		for field: String in EVENT_SEAL_FIELDS:
+			expected_fields.erase(field)
+		expected_fields.append("event_resolution_digest")
+	if not _has_exact_fields(value, expected_fields):
 		return _failure(&"INVALID_FIELDS")
 	if not ReplaySafeValueScript.is_supported(value):
 		return _failure(&"UNSAFE_VALUE")
@@ -164,6 +237,13 @@ func validate(
 		return _failure(&"INVALID_SHAPE")
 	if str(value["snapshot_digest"]) != snapshot_digest(value):
 		return _failure(&"SNAPSHOT_DIGEST_MISMATCH")
+	if not EventModifierLifetimeScript.history_matches_plan(run_events, floor_plan):
+		return _failure(&"ROOM_COMPLETION_HISTORY_INVALID")
+	if value.has("room_completion_events_digest") and (
+		not _is_sha256(value["room_completion_events_digest"])
+		or value["room_completion_events_digest"] != ReplayRecorderScript.value_digest(run_events)
+	):
+		return _failure(&"ROOM_COMPLETION_HISTORY_DRIFT")
 	if (
 		typeof(value["schema_id"]) != TYPE_STRING
 		or str(value["schema_id"]) != SCHEMA_ID
@@ -180,10 +260,18 @@ func validate(
 		or not _is_sha256(value["plan_digest"])
 		or not _is_sha256(value["economy_state_digest"])
 		or not _is_sha256(value["merchant_state_digest"])
-		or not _is_sha256(value["event_resolution_digest"])
 		or not _is_sha256(value["floor_rule_state_digest"])
 	):
 		return _failure(&"INVALID_SHAPE")
+	if legacy_empty_history:
+		if not _is_sha256(value["event_resolution_digest"]):
+			return _failure(&"INVALID_SHAPE")
+	else:
+		if not _is_sha256(value["event_runtime_digest"]):
+			return _failure(&"INVALID_SHAPE")
+		for field: String in EVENT_SEAL_FIELDS:
+			if field != "event_runtime_digest" and not value[field] is Array:
+				return _failure(&"INVALID_SHAPE")
 	var generator_version := str(value["generator_version"])
 	if not SUPPORTED_GENERATOR_VERSIONS.has(generator_version):
 		return _failure(&"GENERATOR_VERSION_UNSUPPORTED", {
@@ -237,13 +325,11 @@ func validate(
 		return audit_drift
 	if ReplayRecorderScript.value_digest(merchant_state) != str(value["merchant_state_digest"]):
 		return _failure(&"MERCHANT_STATE_DRIFT")
-	var event_digest := _event_resolution_digest(
-		registry, floor_plan, route_prefix, event_resolutions
+	var event_validation := _validate_event_seal(
+		value, registry, floor_plan, run_economy, dungeon_event_runtime
 	)
-	if not _is_sha256(event_digest):
-		return _failure(&"EVENT_RESOLUTION_INVALID")
-	if event_digest != str(value["event_resolution_digest"]):
-		return _failure(&"EVENT_RESOLUTION_DRIFT")
+	if not bool(event_validation.get("ok", false)):
+		return event_validation
 	if (
 		not ReplaySafeValueScript.is_supported(floor_rule_state)
 		or ReplayRecorderScript.value_digest(floor_rule_state)
@@ -264,6 +350,48 @@ func validate(
 		"code": &"OK",
 		"snapshot": value.duplicate(true),
 	}
+
+
+func _validate_event_seal(
+	value: Dictionary,
+	registry: Variant,
+	plan: Dictionary,
+	run_economy: Dictionary,
+	event_value: Variant
+) -> Dictionary:
+	var route_prefix := value["route_prefix"] as Array
+	if value.has("event_resolution_digest"):
+		# Read the pre-event schema-3 shape only when its history was empty.
+		if (
+			not event_value is Array
+			or not (event_value as Array).is_empty()
+			or str(value["event_resolution_digest"]) != ReplayRecorderScript.value_digest([])
+		):
+			return _failure(&"EVENT_RESOLUTION_INVALID")
+		for fact: Dictionary in value["room_facts"]:
+			if str(fact["room_type"]) == "event" and str(fact["fact_type"]) == "room_cleared":
+				return _failure(&"EVENT_RESOLUTION_INVALID")
+		return {"ok": true, "code": &"OK"}
+	if not event_value is Dictionary:
+		return _failure(&"EVENT_RUNTIME_INVALID")
+	var event_result := _event_replay_facts(
+		registry, plan, route_prefix, value["room_facts"] as Array,
+		event_value as Dictionary, run_economy
+	)
+	if not bool(event_result.get("ok", false)):
+		return _failure(&"EVENT_RUNTIME_INVALID", event_result.get("context", {}) as Dictionary)
+	for fact_check: Dictionary in [
+		{"field": "event_assignment_facts", "actual": event_result["assignment_facts"], "code": &"EVENT_ASSIGNMENT_DRIFT"},
+		{"field": "event_outcome_facts", "actual": event_result["outcome_facts"], "code": &"EVENT_OUTCOME_DRIFT"},
+		{"field": "event_transaction_facts", "actual": event_result["transaction_facts"], "code": &"EVENT_TRANSACTION_DRIFT"},
+		{"field": "event_receipt_facts", "actual": event_result["receipt_facts"], "code": &"EVENT_RECEIPT_DRIFT"},
+		{"field": "event_publication_facts", "actual": event_result["publication_facts"], "code": &"EVENT_PUBLICATION_DRIFT"},
+	]:
+		if value[fact_check["field"]] != fact_check["actual"]:
+			return _failure(fact_check["code"], {"field": fact_check["field"]})
+	if str(event_result["runtime_digest"]) != str(value["event_runtime_digest"]):
+		return _failure(&"EVENT_RUNTIME_DRIFT")
+	return {"ok": true, "code": &"OK"}
 
 
 func snapshot_digest(value: Dictionary) -> String:
@@ -555,127 +683,669 @@ func _room_fact_inputs(room_facts: Array) -> Array:
 	return result
 
 
-func expected_event_outcome_id(
-	definition: Dictionary,
-	node_id: String,
-	option_id: String
-) -> String:
-	if node_id.is_empty() or option_id.is_empty():
-		return ""
-	var selected_option: Dictionary = {}
-	for option_value: Variant in definition.get("options", []):
-		if (
-			option_value is Dictionary
-			and str((option_value as Dictionary).get("id", "")) == option_id
-		):
-			selected_option = (option_value as Dictionary).duplicate(true)
-			break
-	if selected_option.is_empty():
-		return ""
-	var outcome_digest := ReplayRecorderScript.value_digest({
-		"schema_id": EVENT_OUTCOME_SCHEMA_ID,
-		"event_id": str(definition.get("id", "")),
-		"node_id": node_id,
-		"option_id": option_id,
-		"outcome_channel": str(definition.get("outcome_channel", "")),
-		"outcome_key": str(selected_option.get("outcome_key", "")),
-		"consequences": selected_option.get("consequences", []).duplicate(true),
-	})
-	return (
-		"%s:%s" % [EVENT_OUTCOME_SCHEMA_ID, outcome_digest]
-		if _is_sha256(outcome_digest)
-		else ""
-	)
-
-
-func _event_resolution_digest(
+func _event_replay_facts(
 	registry: Variant,
 	plan: Dictionary,
 	route_prefix: Array,
-	event_resolutions: Array
-) -> String:
+	room_facts: Array,
+	event_runtime: Dictionary,
+	run_economy: Dictionary
+) -> Dictionary:
 	if (
 		registry == null
 		or not registry is Object
 		or not registry.has_method("resolve_dungeon_event")
-		or not ReplaySafeValueScript.is_supported(event_resolutions)
+		or not ReplaySafeValueScript.is_supported(event_runtime)
+		or not _has_exact_fields(event_runtime, EVENT_RUNTIME_FIELDS)
+		or typeof(event_runtime.get("schema_id")) != TYPE_STRING
+		or str(event_runtime.get("schema_id", ""))
+		!= "planewalker.dungeon_event_runtime"
+		or typeof(event_runtime.get("schema_version")) != TYPE_INT
+		or int(event_runtime.get("schema_version", 0)) != 1
+		or typeof(event_runtime.get("active_node_key")) != TYPE_STRING
+		or typeof(event_runtime.get("active_event_id")) != TYPE_STRING
+		or not event_runtime.get("encounter_success_by_transaction") is Dictionary
+		or not event_runtime.get("consequence_runtime") is Dictionary
 	):
-		return ""
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "runtime"})
+	var consequence := event_runtime["consequence_runtime"] as Dictionary
+	if (
+		not _has_exact_fields(consequence, EVENT_CONSEQUENCE_FIELDS)
+		or typeof(consequence.get("schema_id")) != TYPE_STRING
+		or str(consequence.get("schema_id", ""))
+		!= "planewalker.dungeon_event_consequence_runtime"
+		or typeof(consequence.get("schema_version")) != TYPE_INT
+		or int(consequence.get("schema_version", 0)) != 1
+		or typeof(consequence.get("revision")) != TYPE_INT
+		or int(consequence.get("revision", -1)) < 0
+		or not consequence.get("integrity_failure") is Dictionary
+		or not (consequence.get("integrity_failure", {}) as Dictionary).is_empty()
+		or not consequence.get("participant_snapshots") is Dictionary
+		or not consequence.get("completed_transaction_ids") is Array
+		or not consequence.get("publications") is Array
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence_runtime"})
+	var participants := consequence["participant_snapshots"] as Dictionary
+	if (
+		not _has_exact_fields(participants, EVENT_PARTICIPANT_FIELDS)
+		or not participants.get("event_state") is Dictionary
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "participant_snapshots"})
+	for participant: String in EVENT_PARTICIPANT_FIELDS:
+		if not participants.get(participant) is Dictionary:
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "participant_snapshots.%s" % participant})
+	var event_state := participants["event_state"] as Dictionary
+	var content_fingerprint := str(event_state.get("content_fingerprint", ""))
+	var state_candidate = DungeonEventRunStateScript.new()
+	if (
+		not bool(state_candidate.configure(content_fingerprint).get("ok", false))
+		or not state_candidate.can_restore_snapshot(event_state)
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "event_state"})
+	if not _event_runtime_restores(registry, plan, run_economy, event_runtime):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "runtime_authorities"})
+
 	var nodes_by_id := _nodes_by_id(plan)
 	var route_node_ids := _route_node_ids(plan, route_prefix)
-	var expected_event_node_ids: Array[String] = []
-	for node_id: String in route_node_ids:
-		if not nodes_by_id.has(node_id):
-			return ""
-		var route_node := nodes_by_id[node_id] as Dictionary
+	var nodes_by_floor := {str(plan.get("floor_id", "")): nodes_by_id}
+	var floor_authority: Dictionary = {}
+	var assignments := event_state.get("selected_event_by_node", {}) as Dictionary
+	var assignment_keys: Array[String] = []
+	for key_value: Variant in assignments.keys():
+		assignment_keys.append(str(key_value))
+	assignment_keys.sort()
+	var assignment_facts: Array[Dictionary] = []
+	var assignment_by_transaction: Dictionary = {}
+	var expected_receipt_ids: Array[String] = []
+	for sequence: int in range(assignment_keys.size()):
+		var node_key := assignment_keys[sequence]
+		var assignment := assignments[node_key] as Dictionary
+		var node_id := str(assignment.get("node_id", ""))
+		var floor_id := str(assignment.get("floor_id", ""))
+		var floor_index := FloorDefinitionScript.FLOOR_IDS.find(floor_id)
+		var current_floor_index := int(plan.get("floor_index", -1))
+		var phase := str(assignment.get("phase", ""))
 		if (
-			str(route_node.get("room_type", "")) == "event"
-			and bool(route_node.get("cleared", false))
+			node_key != "%s:%s" % [floor_id, node_id]
+			or floor_index < 0
+			or floor_index > current_floor_index
+			or int(assignment.get("floor_index", -1)) != floor_index
+			or (floor_index == current_floor_index and not route_node_ids.has(node_id))
+			or (floor_index < current_floor_index and phase not in ["resolved", "dismissed"])
 		):
-			expected_event_node_ids.append(node_id)
-	if event_resolutions.size() != expected_event_node_ids.size():
-		return ""
-	var sealed: Array[Dictionary] = []
-	var seen_nodes: Dictionary = {}
-	for index: int in range(event_resolutions.size()):
-		var resolution_value: Variant = event_resolutions[index]
-		if not resolution_value is Dictionary:
-			return ""
-		var resolution := resolution_value as Dictionary
-		if not _has_exact_fields(resolution, EVENT_RESOLUTION_FIELDS):
-			return ""
-		if typeof(resolution.get("sequence")) != TYPE_INT or int(resolution["sequence"]) != index:
-			return ""
-		for field: String in ["event_id", "node_id", "option_id", "outcome_id"]:
-			if typeof(resolution.get(field)) != TYPE_STRING or str(resolution[field]).is_empty():
-				return ""
-		var event_id := str(resolution["event_id"])
-		var node_id := str(resolution["node_id"])
+			return _failure(&"EVENT_RUNTIME_INVALID", {
+				"field": "selected_event_by_node", "node_key": node_key,
+			})
+		if not nodes_by_floor.has(floor_id):
+			if floor_authority.is_empty():
+				floor_authority = _authority_bundle(registry)
+			if not bool(floor_authority.get("ok", false)):
+				return _failure(&"EVENT_RUNTIME_INVALID", {"field": "selected_event_by_node.floor"})
+			var generated: Dictionary = FloorPlanGeneratorScript.new().generate(
+				int(plan.get("run_seed", 0)),
+				(floor_authority["floors"] as Array)[floor_index],
+				floor_authority["templates"] as Array
+			)
+			if not bool(generated.get("ok", false)):
+				return _failure(&"EVENT_RUNTIME_INVALID", {"field": "selected_event_by_node.floor"})
+			nodes_by_floor[floor_id] = _nodes_by_id(generated["plan"] as Dictionary)
+		var assignment_nodes := nodes_by_floor[floor_id] as Dictionary
 		if (
-			node_id != expected_event_node_ids[index]
-			or seen_nodes.has(node_id)
-			or not nodes_by_id.has(node_id)
+			not assignment_nodes.has(node_id)
+			or str((assignment_nodes[node_id] as Dictionary).get("room_type", "")) != "event"
 		):
-			return ""
-		seen_nodes[node_id] = true
-		var node := nodes_by_id[node_id] as Dictionary
-		if (
-			str(node.get("room_type", "")) != "event"
-			or not bool(node.get("cleared", false))
-			or str(node.get("event_id", "")) != event_id
-		):
-			return ""
-		var definition_value: Variant = registry.call(
-			"resolve_dungeon_event", StringName(event_id)
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "selected_event_by_node.node"})
+		var authored := _authored_event_selection(
+			registry,
+			str(assignment.get("event_id", "")),
+			str(assignment.get("option_id", "")),
+			str(assignment.get("outcome_id", ""))
 		)
-		if not definition_value is Dictionary or (definition_value as Dictionary).is_empty():
-			return ""
-		var definition := definition_value as Dictionary
+		if not bool(authored.get("ok", false)):
+			return _failure(&"EVENT_RUNTIME_INVALID", {
+				"field": "selected_event_by_node.authored", "node_key": node_key,
+			})
+		if phase != "open":
+			var outcome := authored.get("outcome", {}) as Dictionary
+			if (
+				outcome.is_empty()
+				or str(assignment.get("outcome_key", ""))
+				!= str(outcome.get("outcome_key", ""))
+			):
+				return _failure(&"EVENT_RUNTIME_INVALID", {
+					"field": "selected_event_by_node.outcome", "node_key": node_key,
+				})
+		var definition := authored["definition"] as Dictionary
 		if (
-			str(definition.get("id", "")) != event_id
-			or str(definition.get("category", "")) != "dungeon_event"
+			str(assignment.get("repeat_policy", "")) != str(definition.get("repeat_policy", ""))
+			or int(assignment.get("floor_index", -1)) + 1 < int(definition.get("floor_min", 1))
+			or int(assignment.get("floor_index", -1)) + 1 > int(definition.get("floor_max", 5))
 		):
-			return ""
-		var option_found := false
-		for option_value: Variant in definition.get("options", []):
-			if option_value is Dictionary and str((option_value as Dictionary).get("id", "")) == str(resolution["option_id"]):
-				option_found = true
-				break
-		if not option_found:
-			return ""
-		if str(resolution["outcome_id"]) != expected_event_outcome_id(
-			definition,
-			node_id,
-			str(resolution["option_id"])
-		):
-			return ""
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "selected_event_by_node.definition"})
 		var definition_digest := ReplayRecorderScript.value_digest(definition)
 		if not _is_sha256(definition_digest):
-			return ""
-		var sealed_resolution := resolution.duplicate(true)
-		sealed_resolution["definition_digest"] = definition_digest
-		sealed.append(sealed_resolution)
-	return ReplayRecorderScript.value_digest(sealed)
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "definition_digest"})
+		var fact := assignment.duplicate(true)
+		fact["sequence"] = sequence
+		fact["node_key"] = node_key
+		fact["primary_event_id"] = str(
+			(assignment_nodes[node_id] as Dictionary).get("event_id", "")
+		)
+		fact["definition_digest"] = definition_digest
+		assignment_facts.append(fact)
+		var transaction_id := str(assignment.get("transaction_id", ""))
+		if not transaction_id.is_empty():
+			if assignment_by_transaction.has(transaction_id):
+				return _failure(&"EVENT_RUNTIME_INVALID", {"field": "transaction_id"})
+			var pending_kind := ""
+			var route_skip_rooms := 0
+			var authored_outcome := authored["outcome"] as Dictionary
+			for operation_value: Variant in authored_outcome.get("consequences", []):
+				var operation := str((operation_value as Dictionary).get("operation", ""))
+				if operation == "reward_draft":
+					pending_kind = "reward"
+				elif operation == "encounter_start":
+					pending_kind = "encounter"
+				elif operation == "route_skip":
+					route_skip_rooms = int((operation_value as Dictionary)["arguments"]["rooms"])
+			if phase not in ["open", "reserved"]:
+				expected_receipt_ids.append(transaction_id)
+			assignment_by_transaction[transaction_id] = {
+				"node_key": node_key,
+				"assignment": assignment.duplicate(true),
+				"pending_kind": pending_kind,
+				"route_skip_rooms": route_skip_rooms,
+			}
+
+	var outcomes := event_state.get("resolved_outcomes", []) as Array
+	var outcome_facts: Array[Dictionary] = []
+	var outcome_by_transaction: Dictionary = {}
+	for sequence: int in range(outcomes.size()):
+		var outcome_value: Variant = outcomes[sequence]
+		if not outcome_value is Dictionary:
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "resolved_outcomes"})
+		var outcome := outcome_value as Dictionary
+		var transaction_id := str(outcome.get("transaction_id", ""))
+		if not assignment_by_transaction.has(transaction_id):
+			return _failure(&"EVENT_RUNTIME_INVALID", {
+				"field": "resolved_outcomes.transaction_id",
+			})
+		var assignment := (
+			assignment_by_transaction[transaction_id] as Dictionary
+		)["assignment"] as Dictionary
+		if (
+			str(outcome.get("node_key", ""))
+			!= str((assignment_by_transaction[transaction_id] as Dictionary)["node_key"])
+			or str(outcome.get("event_id", "")) != str(assignment.get("event_id", ""))
+			or str(outcome.get("option_id", "")) != str(assignment.get("option_id", ""))
+			or str(outcome.get("outcome_id", "")) != str(assignment.get("outcome_id", ""))
+			or str(outcome.get("outcome_key", "")) != str(assignment.get("outcome_key", ""))
+			or str(outcome.get("result_key", "")) != str(assignment.get("result_key", ""))
+		):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "resolved_outcomes.identity"})
+		var fact := outcome.duplicate(true)
+		fact["sequence"] = sequence
+		outcome_facts.append(fact)
+		outcome_by_transaction[transaction_id] = outcome.duplicate(true)
+
+	var state_completed_value: Variant = _sorted_stable_ids(
+		event_state.get("completed_transaction_ids")
+	)
+	if state_completed_value == null:
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "completed_transaction_ids"})
+	var state_completed := state_completed_value as Array
+	var transaction_facts: Array[Dictionary] = []
+	for sequence: int in range(state_completed.size()):
+		var transaction_id := str(state_completed[sequence])
+		if not outcome_by_transaction.has(transaction_id):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "completed_transaction_ids"})
+		var outcome := outcome_by_transaction[transaction_id] as Dictionary
+		transaction_facts.append({
+			"sequence": sequence,
+			"transaction_id": transaction_id,
+			"node_key": str(outcome.get("node_key", "")),
+			"event_id": str(outcome.get("event_id", "")),
+			"option_id": str(outcome.get("option_id", "")),
+			"outcome_id": str(outcome.get("outcome_id", "")),
+			"result_key": str(outcome.get("result_key", "")),
+		})
+
+	var receipt_ids_value: Variant = _sorted_stable_ids(
+		consequence.get("completed_transaction_ids")
+	)
+	if receipt_ids_value == null:
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.completed"})
+	var receipt_ids := receipt_ids_value as Array
+	expected_receipt_ids.sort()
+	if receipt_ids != expected_receipt_ids:
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "receipt_completion"})
+	if int(consequence.get("revision", -1)) != receipt_ids.size():
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.revision"})
+	var publications := consequence.get("publications", []) as Array
+	if publications.size() != receipt_ids.size():
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.publications"})
+	var receipt_facts: Array[Dictionary] = []
+	var receipt_by_transaction: Dictionary = {}
+	for sequence: int in range(publications.size()):
+		var publication_value: Variant = publications[sequence]
+		if not publication_value is Dictionary:
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.publications"})
+		var publication := publication_value as Dictionary
+		var transaction_id := str(publication.get("transaction_id", ""))
+		for field: String in EVENT_PUBLICATION_FIELDS:
+			if typeof(publication.get(field)) != TYPE_STRING:
+				return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.publications"})
+		if (
+			not _has_exact_fields(publication, EVENT_PUBLICATION_FIELDS)
+			or sequence >= receipt_ids.size()
+			or transaction_id != str(receipt_ids[sequence])
+			or not assignment_by_transaction.has(transaction_id)
+			or str(publication.get("phase", ""))
+			not in ["resolved", "pending_reward", "pending_encounter"]
+		):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.publications"})
+		var assignment := (
+			assignment_by_transaction[transaction_id] as Dictionary
+		)["assignment"] as Dictionary
+		if str(publication.get("result_key", "")) != str(assignment.get("outcome_key", "")):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.result_key"})
+		var phase := str(publication.get("phase", ""))
+		var pending_kind := str(publication.get("pending_kind", ""))
+		var authored_pending_kind := str(
+			(assignment_by_transaction[transaction_id] as Dictionary)["pending_kind"]
+		)
+		var assignment_phase := str(assignment.get("phase", ""))
+		if (
+			(phase == "resolved" and not pending_kind.is_empty())
+			or (phase == "pending_reward" and pending_kind != "reward")
+			or (phase == "pending_encounter" and pending_kind != "encounter")
+			or pending_kind != authored_pending_kind
+			or (assignment_phase.begins_with("pending_") and assignment_phase != phase)
+		):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "consequence.pending_kind"})
+		var fact := publication.duplicate(true)
+		fact["sequence"] = sequence
+		receipt_facts.append(fact)
+		receipt_by_transaction[transaction_id] = publication.duplicate(true)
+	for transaction_id_value: Variant in state_completed:
+		if not receipt_by_transaction.has(str(transaction_id_value)):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "receipt_completion"})
+	var skipped_node_ids := _event_route_skip_intermediates(
+		plan, route_node_ids, nodes_by_id, assignment_by_transaction,
+		receipt_by_transaction, participants["route"] as Dictionary
+	)
+	for fact: Dictionary in room_facts:
+		if str(fact["room_type"]) != "event" or str(fact["fact_type"]) != "room_cleared":
+			continue
+		var node_id := str(fact["node_id"])
+		var node_key := "%s:%s" % [str(plan["floor_id"]), node_id]
+		if not assignments.has(node_key) and not skipped_node_ids.has(node_id):
+			return _failure(&"EVENT_RUNTIME_INVALID", {
+				"field": "selected_event_by_node.missing_cleared_event", "node_key": node_key,
+			})
+
+	var expected_payloads := _expected_event_publication_payloads(
+		assignments,
+		receipt_by_transaction,
+		event_runtime.get("encounter_success_by_transaction", {}) as Dictionary
+	)
+	if expected_payloads.is_empty() and not assignments.is_empty():
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication_payloads"})
+	var publication_result := _event_publication_facts(
+		event_runtime, expected_payloads
+	)
+	if not bool(publication_result.get("ok", false)):
+		return publication_result
+	var active_node_key := str(event_runtime.get("active_node_key", ""))
+	var active_event_id := str(event_runtime.get("active_event_id", ""))
+	if active_node_key.is_empty() != active_event_id.is_empty():
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "active_event"})
+	if not active_node_key.is_empty() and (
+		not assignments.has(active_node_key)
+		or str((assignments[active_node_key] as Dictionary).get("event_id", ""))
+		!= active_event_id
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "active_event"})
+	var runtime_digest := ReplayRecorderScript.value_digest(event_runtime)
+	if not _is_sha256(runtime_digest):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "runtime_digest"})
+	return {
+		"ok": true,
+		"code": &"OK",
+		"runtime_digest": runtime_digest,
+		"assignment_facts": assignment_facts,
+		"outcome_facts": outcome_facts,
+		"transaction_facts": transaction_facts,
+		"receipt_facts": receipt_facts,
+		"publication_facts": publication_result["facts"],
+	}
+
+
+func _event_route_skip_intermediates(
+	plan: Dictionary,
+	route_node_ids: Array[String],
+	nodes_by_id: Dictionary,
+	assignment_by_transaction: Dictionary,
+	receipt_by_transaction: Dictionary,
+	route_authority: Dictionary
+) -> Dictionary:
+	var result: Dictionary = {}
+	var route_completed := route_authority["completed_transaction_ids"] as Array
+	for transaction_id: String in assignment_by_transaction:
+		var selection := assignment_by_transaction[transaction_id] as Dictionary
+		var assignment := selection["assignment"] as Dictionary
+		var rooms := int(selection["route_skip_rooms"])
+		if (
+			rooms < 1
+			or str(assignment["floor_id"]) != str(plan["floor_id"])
+			or not receipt_by_transaction.has(transaction_id)
+			or not route_completed.has(transaction_id)
+		):
+			continue
+		var source_index := route_node_ids.find(str(assignment["node_id"]))
+		if source_index < 0 or source_index + rooms >= route_node_ids.size():
+			continue
+		var intermediates: Array[String] = []
+		var legal_path := true
+		for offset: int in range(1, rooms + 1):
+			var node_id := route_node_ids[source_index + offset]
+			var node := nodes_by_id[node_id] as Dictionary
+			if (
+				EventRouteAuthorityScript.RESTRICTED_ROOM_TYPES.has(str(node["room_type"]))
+				or not bool(node["visited"])
+				or (offset < rooms and not bool(node["cleared"]))
+			):
+				legal_path = false
+				break
+			# The landing room is entered, not skipped, and always needs its own history.
+			if offset < rooms:
+				intermediates.append(node_id)
+		if legal_path:
+			for node_id: String in intermediates:
+				result[node_id] = true
+	return result
+
+
+func _event_runtime_restores(
+	registry: Variant,
+	plan: Dictionary,
+	run_economy: Dictionary,
+	event_runtime: Dictionary
+) -> bool:
+	var consequence_snapshot := event_runtime["consequence_runtime"] as Dictionary
+	var participants := consequence_snapshot["participant_snapshots"] as Dictionary
+	var resource_snapshot := participants["resource"] as Dictionary
+	var health_snapshot := participants["health"] as Dictionary
+	var modifier_snapshot := participants["modifier"] as Dictionary
+	var route_snapshot := participants["route"] as Dictionary
+	var event_snapshot := participants["event_state"] as Dictionary
+	if (
+		participants["economy"] != run_economy
+		or not resource_snapshot.get("resources") is Dictionary
+		or typeof(health_snapshot.get("current")) not in [TYPE_INT, TYPE_FLOAT]
+		or typeof(health_snapshot.get("maximum")) not in [TYPE_INT, TYPE_FLOAT]
+		or not modifier_snapshot.get("curse_ids") is Array
+		or not modifier_snapshot.get("narrative_flags") is Dictionary
+		or not modifier_snapshot.get("temporary_modifiers") is Array
+		or modifier_snapshot["narrative_flags"] != event_snapshot["narrative_flags"]
+		or modifier_snapshot["temporary_modifiers"] != event_snapshot["temporary_modifiers"]
+		or not route_snapshot.get("plan") is Dictionary
+		or route_snapshot["plan"] != plan
+		or not registry.has_method("get_by_category")
+	):
+		return false
+	var resource = EventResourceAuthorityScript.new()
+	var health = EventHealthAuthorityScript.new()
+	var economy = RunEconomyStateScript.new()
+	var modifier = EventModifierAuthorityScript.new()
+	var route = EventRouteAuthorityScript.new()
+	var event_state = DungeonEventRunStateScript.new()
+	var profile_value: Variant = registry.call(
+		"resolve_economy_profile", StringName(str(run_economy["profile_id"]))
+	)
+	var profile := _closed_definition(profile_value, EconomyProfileScript.ROOT_FIELDS)
+	if (
+		profile.is_empty()
+		or not resource.configure((resource_snapshot["resources"] as Dictionary).duplicate(true))
+		or not resource.restore_snapshot(resource_snapshot.duplicate(true))
+		or resource.snapshot() != resource_snapshot
+		or not health.configure(float(health_snapshot["current"]), float(health_snapshot["maximum"]))
+		or not health.restore_snapshot(health_snapshot.duplicate(true))
+		or health.snapshot() != health_snapshot
+		or not bool(economy.configure(profile, int(run_economy["initial_gold"])).get("ok", false))
+		or not economy.restore_snapshot(run_economy.duplicate(true))
+		or economy.snapshot() != run_economy
+		or not modifier.configure(
+			(modifier_snapshot["curse_ids"] as Array).duplicate(),
+			(modifier_snapshot["narrative_flags"] as Dictionary).duplicate(true),
+			(modifier_snapshot["temporary_modifiers"] as Array).duplicate(true)
+		)
+		or not modifier.restore_snapshot(modifier_snapshot.duplicate(true))
+		or modifier.snapshot() != modifier_snapshot
+		or not route.configure(plan.duplicate(true))
+		or not route.restore_snapshot(route_snapshot.duplicate(true))
+		or route.snapshot() != route_snapshot
+		or not bool(event_state.configure(str(event_snapshot["content_fingerprint"])).get("ok", false))
+		or not event_state.restore_snapshot(event_snapshot.duplicate(true))
+		or event_state.snapshot() != event_snapshot
+	):
+		return false
+	var consequence = DungeonEventConsequenceRuntimeScript.new()
+	if (
+		not consequence.configure(resource, health, economy, modifier, route, event_state)
+		or not consequence.restore_snapshot(consequence_snapshot.duplicate(true))
+		or consequence.snapshot() != consequence_snapshot
+	):
+		return false
+	var definitions_value: Variant = registry.call("get_by_category", &"dungeon_event", &"LAUNCH")
+	if not definitions_value is Array or (definitions_value as Array).is_empty():
+		return false
+	var definitions: Array[Dictionary] = []
+	for definition_value: Variant in definitions_value as Array:
+		var definition := _closed_definition(definition_value, DungeonEventDefinitionScript.ROOT_FIELDS)
+		if definition.is_empty():
+			return false
+		definitions.append(definition)
+	var runtime = DungeonEventRuntimeScript.new()
+	return (
+		runtime.configure(
+			definitions, DungeonEventSelectorScript.new(), event_state,
+			EventRequirementServiceScript.new(), consequence,
+			func() -> Dictionary: return {},
+			func(_command: Dictionary, _revision: int) -> Dictionary: return {},
+			func(_fact_id: String, _payload: Dictionary) -> bool: return false,
+			_event_publication_secret
+		)
+		and runtime.restore_snapshot(event_runtime.duplicate(true))
+		and runtime.snapshot() == event_runtime
+	)
+
+
+func _authored_event_selection(
+	registry: Variant,
+	event_id: String,
+	option_id: String,
+	outcome_id: String
+) -> Dictionary:
+	var definition_value: Variant = registry.call(
+		"resolve_dungeon_event", StringName(event_id)
+	)
+	if not definition_value is Dictionary or (definition_value as Dictionary).is_empty():
+		return _failure(&"EVENT_RUNTIME_INVALID")
+	var definition := definition_value as Dictionary
+	if (
+		str(definition.get("category", "")) != "dungeon_event"
+		or str(definition.get("id", "")) != event_id
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID")
+	if option_id.is_empty() and outcome_id.is_empty():
+		return {"ok": true, "definition": definition.duplicate(true), "option": {}, "outcome": {}}
+	if option_id.is_empty() or outcome_id.is_empty():
+		return _failure(&"EVENT_RUNTIME_INVALID")
+	for option_value: Variant in definition.get("options", []):
+		if not option_value is Dictionary:
+			continue
+		var option := option_value as Dictionary
+		if str(option.get("id", "")) != option_id:
+			continue
+		for outcome_value: Variant in option.get("outcomes", []):
+			if (
+				outcome_value is Dictionary
+				and str((outcome_value as Dictionary).get("id", "")) == outcome_id
+			):
+				return {
+					"ok": true,
+					"definition": definition.duplicate(true),
+					"option": option.duplicate(true),
+					"outcome": (outcome_value as Dictionary).duplicate(true),
+				}
+	return _failure(&"EVENT_RUNTIME_INVALID")
+
+
+func _expected_event_publication_payloads(
+	assignments: Dictionary,
+	receipts: Dictionary,
+	encounter_success: Dictionary
+) -> Dictionary:
+	var result: Dictionary = {}
+	var required_encounter_ids: Array[String] = []
+	for node_key_value: Variant in assignments.keys():
+		var node_key := str(node_key_value)
+		var assignment := assignments[node_key_value] as Dictionary
+		var event_id := str(assignment.get("event_id", ""))
+		result["event_opened:%s:%s" % [node_key, event_id]] = {
+			"kind": "event_opened", "event_id": event_id, "node_key": node_key,
+		}
+		var transaction_id := str(assignment.get("transaction_id", ""))
+		if transaction_id.is_empty():
+			continue
+		if receipts.has(transaction_id):
+			var receipt := receipts[transaction_id] as Dictionary
+			result["event_committed:%s" % transaction_id] = {
+				"kind": "event_committed",
+				"event_id": event_id,
+				"node_key": node_key,
+				"phase": str(receipt.get("phase", "")),
+				"pending_kind": str(receipt.get("pending_kind", "")),
+				"result_key": str(receipt.get("result_key", "")),
+			}
+			var pending_kind := str(receipt.get("pending_kind", ""))
+			var phase := str(assignment.get("phase", ""))
+			if pending_kind == "reward" and phase in ["resolved", "dismissed"]:
+				result["event_reward_completed:%s" % transaction_id] = {
+					"kind": "event_reward_completed",
+					"event_id": event_id,
+					"node_key": node_key,
+					"result_key": str(assignment.get("outcome_key", "")),
+				}
+			elif pending_kind == "encounter" and phase in ["resolved", "dismissed"]:
+				required_encounter_ids.append(transaction_id)
+				if not encounter_success.has(transaction_id):
+					return {}
+				result["event_encounter_completed:%s" % transaction_id] = {
+					"kind": "event_encounter_completed",
+					"event_id": event_id,
+					"node_key": node_key,
+					"result_key": str(assignment.get("outcome_key", "")),
+					"success": bool(encounter_success[transaction_id]),
+				}
+		if str(assignment.get("phase", "")) == "dismissed":
+			result["event_dismissed:%s" % transaction_id] = {
+				"kind": "event_dismissed",
+				"event_id": event_id,
+				"node_key": node_key,
+				"result_key": str(assignment.get("result_key", "")),
+			}
+	var actual_encounter_ids: Array[String] = []
+	for key_value: Variant in encounter_success.keys():
+		if typeof(encounter_success[key_value]) != TYPE_BOOL:
+			return {}
+		actual_encounter_ids.append(str(key_value))
+	required_encounter_ids.sort()
+	actual_encounter_ids.sort()
+	return result if required_encounter_ids == actual_encounter_ids else {}
+
+
+func _event_publication_facts(
+	event_runtime: Dictionary,
+	expected_payloads: Dictionary
+) -> Dictionary:
+	if (
+		not event_runtime.get("emitted_fact_ids") is Array
+		or not event_runtime.get("pending_facts") is Array
+		or not event_runtime.get("publication_ledger") is Array
+		or not _is_sha256(event_runtime.get("publication_digest"))
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication"})
+	var emitted_value: Variant = _sorted_stable_ids(event_runtime["emitted_fact_ids"])
+	if emitted_value == null:
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "emitted_fact_ids"})
+	var emitted := emitted_value as Array
+	if emitted != event_runtime["emitted_fact_ids"]:
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "emitted_fact_ids"})
+	var pending_by_id: Dictionary = {}
+	var previous_pending_id := ""
+	for pending_value: Variant in event_runtime["pending_facts"] as Array:
+		if not pending_value is Dictionary:
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "pending_facts"})
+		var pending := pending_value as Dictionary
+		var fact_id := str(pending.get("fact_id", ""))
+		if (
+			not _has_exact_fields(pending, EVENT_PENDING_FACT_FIELDS)
+			or not pending.get("payload") is Dictionary
+			or fact_id.is_empty()
+			or pending_by_id.has(fact_id)
+			or emitted.has(fact_id)
+			or (not previous_pending_id.is_empty() and fact_id <= previous_pending_id)
+		):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "pending_facts"})
+		pending_by_id[fact_id] = (pending["payload"] as Dictionary).duplicate(true)
+		previous_pending_id = fact_id
+	var ledger := event_runtime["publication_ledger"] as Array
+	if ledger.size() != emitted.size() + pending_by_id.size():
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication_ledger"})
+	var facts: Array[Dictionary] = []
+	var recorded_ids: Array[String] = []
+	var previous_fact_id := ""
+	for sequence: int in range(ledger.size()):
+		var entry_value: Variant = ledger[sequence]
+		if not entry_value is Dictionary:
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication_ledger"})
+		var entry := entry_value as Dictionary
+		var fact_id := str(entry.get("fact_id", ""))
+		var status := str(entry.get("status", ""))
+		if (
+			not _has_exact_fields(entry, EVENT_LEDGER_FIELDS)
+			or not _is_sha256(entry.get("chain_hash"))
+			or not entry.get("payload") is Dictionary
+			or not expected_payloads.has(fact_id)
+			or entry["payload"] != expected_payloads[fact_id]
+			or (not previous_fact_id.is_empty() and fact_id <= previous_fact_id)
+			or (status == "emitted" and not emitted.has(fact_id))
+			or (status == "pending" and not pending_by_id.has(fact_id))
+			or status not in ["emitted", "pending"]
+		):
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication_ledger"})
+		if status == "pending" and pending_by_id[fact_id] != entry["payload"]:
+			return _failure(&"EVENT_RUNTIME_INVALID", {"field": "pending_payload"})
+		var fact := entry.duplicate(true)
+		fact["sequence"] = sequence
+		facts.append(fact)
+		recorded_ids.append(fact_id)
+		previous_fact_id = fact_id
+	var expected_ids: Array[String] = []
+	for fact_id_value: Variant in expected_payloads.keys():
+		expected_ids.append(str(fact_id_value))
+	expected_ids.sort()
+	if recorded_ids != expected_ids:
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication_fact_ids"})
+	if (
+		not ledger.is_empty()
+		and str(event_runtime["publication_digest"])
+		!= str((ledger[-1] as Dictionary).get("chain_hash", ""))
+	):
+		return _failure(&"EVENT_RUNTIME_INVALID", {"field": "publication_digest"})
+	return {"ok": true, "code": &"OK", "facts": facts}
 
 
 func _run_economy_is_valid(value: Dictionary, registry: Variant) -> bool:
