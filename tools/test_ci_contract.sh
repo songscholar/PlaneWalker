@@ -103,12 +103,12 @@ make_fake_native_probe_python() {
 	printf '%s\n' \
 		'#!/usr/bin/env bash' \
 		'set -eu' \
-		'if [[ $# == 3 && "${1:-}" == -m && "${2:-}" == unittest && "${3:-}" == tests.contract.simulation.test_dungeon_simulation_report ]]; then' \
+		'if [[ $# == 3 && "${1:-}" == -m && "${2:-}" == unittest && ( "${3:-}" == tests.contract.simulation.test_dungeon_simulation_report || "${3:-}" == tests.contract.export.test_content_pack_source_export ) ]]; then' \
 		'  import_count=0' \
 		'  if [[ -f "${GODOT_BIN}.state" ]]; then import_count="$(cat "${GODOT_BIN}.state")"; fi' \
-		'  [[ "${import_count}" == 2 ]] || { printf "FAIL: native dungeon probe must run after bootstrap and clean imports\\n" >&2; exit 92; }' \
+		'  [[ "${import_count}" == 2 ]] || { printf "FAIL: native contracts must run after bootstrap and clean imports\\n" >&2; exit 92; }' \
 		'  printf "%s\\n" "$*" >>"${PLANEWALKER_CI_PROBE_TRACE:?}"' \
-		'  printf "CI FIXTURE: native dungeon probe dependency mocked after clean import\\n"' \
+		'  printf "CI FIXTURE: native dependency mocked after clean import\\n"' \
 		'  exit 0' \
 		'fi' \
 		'exec '"${quoted_python}"' "$@"' >"${target}"
@@ -307,9 +307,11 @@ assert_contains "$(cat "${bootstrap_output}")" "cannot persist global Godot edit
 assert_contains "$(cat "${bootstrap_output}")" "Discovered scene tests: ${scene_count}" "validation executes every discovered scene"
 assert_contains "$(cat "${bootstrap_output}")" "Scene tests: ${scene_count} passed, 0 failed" "validation reports the complete discovered scene count"
 assert_file_contains "${TEMP_DIR}/native-probe-bootstrap_expected.trace" '^-m unittest tests\.contract\.simulation\.test_dungeon_simulation_report$' "validation still calls the real native module after both imports"
-[[ "$(wc -l <"${TEMP_DIR}/native-probe-bootstrap_expected.trace" | tr -d ' ')" == 1 ]] \
-	|| fail "the native dungeon contract module must be invoked exactly once"
-assert_contains "$(cat "${bootstrap_output}")" "native dungeon probe dependency mocked after clean import" "native probe fixture boundary is explicit"
+
+assert_file_contains "${TEMP_DIR}/native-probe-bootstrap_expected.trace" '^-m unittest tests\.contract\.export\.test_content_pack_source_export$' "validation calls the native PCK export module after both imports"
+[[ "$(wc -l <"${TEMP_DIR}/native-probe-bootstrap_expected.trace" | tr -d ' ')" == 2 ]] \
+	|| fail "both native contract modules must be invoked exactly once"
+assert_contains "$(cat "${bootstrap_output}")" "native dependency mocked after clean import" "native probe fixture boundary is explicit"
 
 set +e
 run_fake_validation bootstrap_partial "${TEMP_DIR}/bootstrap-partial.out"
@@ -334,9 +336,10 @@ editor_warning_output="${TEMP_DIR}/editor-warning.out"
 run_fake_validation editor_warning_only "${editor_warning_output}" \
 	|| fail "editor settings write failures must remain an environment warning"
 assert_contains "$(cat "${editor_warning_output}")" "cannot persist global Godot editor settings" "editor settings warning classification"
-assert_contains "$(cat "${editor_warning_output}")" "native dungeon probe dependency mocked after clean import" "editor warning fixture reaches the native probe after imports"
+assert_contains "$(cat "${editor_warning_output}")" "native dependency mocked after clean import" "editor warning fixture reaches the native probe after imports"
 assert_file_contains "${TEMP_DIR}/native-probe-editor_warning_only.trace" '^-m unittest tests\.contract\.simulation\.test_dungeon_simulation_report$' "editor warning fixture invokes the real native module command"
-[[ "$(wc -l <"${TEMP_DIR}/native-probe-editor_warning_only.trace" | tr -d ' ')" == 1 ]] \
+assert_file_contains "${TEMP_DIR}/native-probe-editor_warning_only.trace" '^-m unittest tests\.contract\.export\.test_content_pack_source_export$' "editor warning fixture invokes the native PCK export module command"
+[[ "$(wc -l <"${TEMP_DIR}/native-probe-editor_warning_only.trace" | tr -d ' ')" == 2 ]] \
 	|| fail "the editor warning fixture must invoke the native module exactly once"
 
 printf 'PASS: test and CI contract is satisfied (%d discovered scenes)\n' "${scene_count}"

@@ -52,12 +52,40 @@ Only the known macOS system-CA diagnostic with its original callsite is classifi
 as environmental. Script/resource errors, other engine errors, and leaks fail
 the build even if Godot exits zero.
 
-This package is an explicit editor-runtime fallback, not a release-template
-export. The startup check does not certify five-floor combat, visual layouts,
-controller flows, other platforms, signing, or notarization. Godot itself may
-create its default empty macOS engine data directory; application persistence
-uses the isolated directory. Formal release exports remain pending until the
-official templates are available and the normal export certification passes.
+This package is an explicit editor-runtime fallback. The startup check does not
+certify five-floor combat, visual layouts, controller flows, other platforms,
+signing, or notarization. Godot itself may create its default empty macOS engine
+data directory; application persistence uses the isolated directory. Formal
+release exports use official templates and the normal export certification.
+
+## Retained Detached Builds
+
+The clean-checkout certifier can retain authenticated release artifacts before
+deleting its temporary checkout and run the existing host startup verifier:
+
+```sh
+python3 tools/export/certify_checkout.py \
+  --commit HEAD \
+  --godot-bin /Applications/Godot.app/Contents/MacOS/Godot \
+  --templates-dir build/toolchain/godot-4.6.1/templates/4.6.1.stable \
+  --artifact-dir build/certified/current-candidate \
+  --verify-packaged-startup \
+  --evidence-output build/export-evidence/current-candidate.json \
+  --log-dir build/export-evidence/current-candidate-logs
+```
+
+Use an empty artifact directory and a fresh log directory. Existing packages
+are refused before validation. Each artifact is authenticated against the export
+report before copying, then hashed again in both locations. Relative internal
+bundle links and executable modes survive; escaping paths/links and changed
+bytes fail retention. The report's `retained_path` values locate the surviving
+packages, while startup reports/logs are copied under the supplied log directory.
+
+Startup executes the release artifact from an empty directory with isolated
+application data, without a source-project path. Passing this host check clears
+only `packaged_startup`; missing real line coverage still blocks certification.
+Other platforms, complete gameplay and human feedback require their own evidence.
+The certifier's `--godot-bin` also selects the editor for clean validation.
 
 ## Runtime Data Directory
 

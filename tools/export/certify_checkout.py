@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Sequence
 
 from build_exports import collect_git_state, git_output, utc_now
+from artifact_evidence import describe_artifact
 from preflight import write_json_atomic
 
 
@@ -37,6 +39,10 @@ def certify_checkout(
     validation_timeout_seconds: int,
     export_timeout_seconds: int,
     allow_source_dirty_candidate: bool,
+    *,
+    artifact_dir: Path | None = None,
+    verify_startup: bool = False,
+    startup_timeout_seconds: int = 60,
 ) -> tuple[dict[str, object], int]:
     """Clone a committed revision locally, validate it, then invoke export evidence."""
 
@@ -64,6 +70,8 @@ def certify_checkout(
         "checkout": None,
         "validation": None,
         "export": None,
+        "retained_artifacts": None,
+        "packaged_startup": None,
         "issues": issues,
     }
 
@@ -74,11 +82,11 @@ def certify_checkout(
             "message": f"cannot resolve committed revision {commit} from {source}",
         })
         return _finish(report, evidence_path, EXIT_INVALID)
-    if validation_timeout_seconds <= 0 or export_timeout_seconds <= 0:
+    if validation_timeout_seconds <= 0 or export_timeout_seconds <= 0 or startup_timeout_seconds <= 0:
         issues.append({
             "code": "timeout_invalid",
             "category": "error",
-            "message": "validation and export timeouts must be positive integers",
+            "message": "validation, export and startup timeouts must be positive integers",
         })
         return _finish(report, evidence_path, EXIT_INVALID)
     source_is_clean = bool(source_state.get("worktree_clean"))
@@ -92,9 +100,24 @@ def certify_checkout(
         })
         return _finish(report, evidence_path, EXIT_BLOCKED)
 
+    destination = None
+    if artifact_dir is not None:
+        try:
+            destination = _source_path(source, artifact_dir)
+            destination.relative_to(source)
+            if destination == source or (destination.exists() and (
+                not destination.is_dir() or any(destination.iterdir())
+            )):
+                raise ValueError("artifact destination must be an empty directory inside the source workspace")
+        except (OSError, ValueError) as error:
+            report["status"] = "blocked"
+            report["classification"] = "artifact_destination_unavailable"
+            issues.append({"code": "artifact_destination_unavailable", "category": "blocked", "message": str(error)})
+            return _finish(report, evidence_path, EXIT_BLOCKED)
+
     logs_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="planewalker-certify-") as temp:
-        checkout = Path(temp) / "checkout"
+        checkout = Path(temp).resolve() / "checkout"
         clone_error = _clone_revision(source, checkout, resolved_commit)
         if clone_error is not None:
             issues.append({
@@ -131,6 +154,7 @@ def certify_checkout(
             checkout,
             logs_root,
             validation_timeout_seconds,
+            godot_bin,
         )
         report["validation"] = validation
         if validation["status"] != "pass":
@@ -220,10 +244,48 @@ def certify_checkout(
                 issues.extend(_copy_issues(export_report.get("issues")))
             return _finish(report, evidence_path, EXIT_FAILED)
 
+        startup_passed = False
+        startup_exit = EXIT_PASS
+        if verify_startup:
+            startup, startup_exit = _run_packaged_startup(
+                source, checkout, logs_root, startup_timeout_seconds,
+            )
+            report["packaged_startup"] = startup
+            startup_passed = startup_exit == EXIT_PASS and startup.get("status") == "pass"
+            if not startup_passed:
+                issues.append({
+                    "code": "packaged_startup_failed", "category": "failed",
+                    "message": str(startup.get("failure", "host startup did not pass")),
+                })
+
+        if destination is not None:
+            retained = _retain_artifacts(checkout, destination, source, export_report)
+            report["retained_artifacts"] = retained
+            if retained["status"] != "pass":
+                report["status"] = "failed"
+                report["classification"] = "artifact_retention_failed"
+                issues.append({"code": "artifact_retention_failed", "category": "failed", "message": retained["failure"]})
+                return _finish(report, evidence_path, EXIT_FAILED)
+
+        checkout_after = collect_git_state(checkout)
+        _set_checkout_after(report, checkout_after)
+        if not checkout_after.get("worktree_clean"):
+            report["status"] = "failed"
+            report["classification"] = "checkout_dirty_after_execution"
+            issues.append({"code": "checkout_dirty_after_execution", "category": "failed", "message": "packaged startup modified checkout state"})
+            return _finish(report, evidence_path, EXIT_FAILED)
+
+        report["remaining_gates"] = ([] if not coverage_pending else ["coverage"]) + (
+            [] if startup_passed else ["packaged_startup"]
+        )
+        if verify_startup and not startup_passed:
+            report["status"] = "blocked" if startup_exit == EXIT_BLOCKED else "failed"
+            report["classification"] = "packaged_startup_failed"
+            return _finish(report, evidence_path, EXIT_BLOCKED if startup_exit == EXIT_BLOCKED else EXIT_FAILED)
+
         if coverage_pending:
             report["status"] = "blocked"
             report["classification"] = "coverage_pending"
-            report["remaining_gates"] = ["coverage", "packaged_startup"]
             return _finish(report, evidence_path, EXIT_BLOCKED)
 
         report["status"] = "pass"
@@ -232,7 +294,6 @@ def certify_checkout(
             if source_is_clean
             else "non_release_dirty_source_candidate"
         )
-        report["remaining_gates"] = ["packaged_startup"]
         return _finish(report, evidence_path, EXIT_PASS)
 
 
@@ -274,6 +335,7 @@ def _run_validation(
     checkout: Path,
     logs_root: Path,
     timeout_seconds: int,
+    godot_bin: str,
 ) -> dict[str, object]:
     stdout_log = logs_root / "validation.stdout.log"
     validation_log_dir = logs_root / "validation"
@@ -281,6 +343,7 @@ def _run_validation(
     environment = dict(os.environ)
     environment["VALIDATION_LOG_DIR"] = str(validation_log_dir)
     environment["TEST_LOG_DIR"] = str(validation_log_dir / "scene-tests")
+    environment["GODOT_BIN"] = godot_bin
     command = [str(checkout / "tools" / "validate_project.sh")]
     started = time.monotonic()
     try:
@@ -398,6 +461,110 @@ def _set_checkout_after(report: dict[str, object], state: dict[str, object]) -> 
     checkout = report.get("checkout")
     if isinstance(checkout, dict):
         checkout["clean_after_execution"] = bool(state.get("worktree_clean"))
+
+
+def _retain_artifacts(
+    checkout: Path, destination: Path, source: Path, export_report: dict[str, object],
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "status": "failed", "root": _display_path(destination, source),
+        "targets": [], "failure": "",
+    }
+    try:
+        targets = export_report.get("targets")
+        if not isinstance(targets, list) or not targets:
+            raise ValueError("export report has no artifacts to retain")
+        prepared = []
+        seen_ids: set[str] = set()
+        paths: list[Path] = []
+        for target in targets:
+            if not isinstance(target, dict) or target.get("status") != "pass":
+                raise ValueError("only passing export targets may be retained")
+            identity = target.get("id")
+            if not isinstance(identity, str) or not identity or identity in seen_ids:
+                raise ValueError("export target identity is missing or repeated")
+            seen_ids.add(identity)
+            relative = Path(str(target.get("artifact", "")))
+            if relative.is_absolute() or ".." in relative.parts or relative.parts[:1] != ("build",):
+                raise ValueError("export artifact must be a relative build path")
+            if any(relative == previous or relative in previous.parents or previous in relative.parents for previous in paths):
+                raise ValueError("export artifact paths overlap")
+            paths.append(relative)
+            artifact = checkout / relative
+            artifact.resolve().relative_to(checkout)
+            kind = str(target.get("artifact_kind", ""))
+            evidence = describe_artifact(artifact, checkout, kind)
+            if evidence != target.get("artifact_evidence"):
+                raise ValueError(f"export artifact changed: {identity}")
+            if kind == "directory":
+                for entry in artifact.rglob("*"):
+                    if entry.is_symlink():
+                        if Path(os.readlink(entry)).is_absolute():
+                            raise ValueError("bundle contains an absolute symbolic link")
+                        entry.resolve().relative_to(artifact)
+            prepared.append((identity, relative, artifact, kind, evidence))
+
+        destination.mkdir(parents=True, exist_ok=True)
+        if any(destination.iterdir()):
+            raise ValueError("artifact destination became occupied before retention")
+        for identity, relative, artifact, kind, evidence in prepared:
+            retained_path = destination / relative
+            retained_path.parent.mkdir(parents=True, exist_ok=True)
+            if kind == "directory":
+                shutil.copytree(artifact, retained_path, symlinks=True)
+            else:
+                shutil.copy2(artifact, retained_path)
+            after = describe_artifact(retained_path, destination, kind)
+            if after != evidence or describe_artifact(artifact, checkout, kind) != evidence:
+                raise ValueError(f"retained artifact digest differs: {identity}")
+            result["targets"].append({
+                "id": identity, "retained_path": _display_path(retained_path, source),
+                "artifact_evidence": after,
+            })
+        result["status"] = "pass"
+    except (OSError, ValueError) as error:
+        result["failure"] = str(error)
+    return result
+
+
+def _run_packaged_startup(
+    source: Path, checkout: Path, logs_root: Path, timeout_seconds: int,
+) -> tuple[dict[str, object], int]:
+    local_logs = checkout / "build" / "certification-startup"
+    local_report = local_logs / "report.json"
+    retained_logs = logs_root / "packaged-startup"
+    stdout_log = logs_root / "packaged-startup.stdout.log"
+    command = [
+        sys.executable, str(checkout / "tools" / "export" / "verify_packaged_startup.py"),
+        "--project-root", str(checkout),
+        "--export-report", str(logs_root / "export-report.json"),
+        "--evidence-output", str(local_report), "--log-dir", str(local_logs / "logs"),
+        "--timeout-seconds", str(timeout_seconds),
+    ]
+    try:
+        # The verifier authenticates the export bytes and launches without a source path.
+        # Its report input must be inside the isolated checkout's project boundary.
+        local_export = checkout / "build" / "certification-export-report.json"
+        local_export.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(logs_root / "export-report.json", local_export)
+        command[command.index("--export-report") + 1] = str(local_export)
+        with stdout_log.open("w", encoding="utf-8") as output:
+            completed = subprocess.run(
+                command, cwd=checkout, env=dict(os.environ), stdout=output,
+                stderr=subprocess.STDOUT, check=False, timeout=timeout_seconds + 30,
+            )
+        report = json.loads(local_report.read_text(encoding="utf-8"))
+        if not isinstance(report, dict):
+            raise ValueError("packaged startup report must be an object")
+        if retained_logs.exists():
+            raise ValueError("startup evidence destination is already occupied")
+        shutil.copytree(local_logs, retained_logs)
+        report["retained_evidence"] = _file_evidence(retained_logs / "report.json", source)
+        report["retained_logs"] = _display_path(retained_logs / "logs", source)
+        report["orchestrator_stdout"] = _file_evidence(stdout_log, source)
+        return report, completed.returncode
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        return {"status": "failed", "failure": str(error)}, EXIT_FAILED
 
 
 def _file_evidence(path: Path, source: Path) -> dict[str, object]:
@@ -656,6 +823,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--validation-timeout-seconds", type=int, default=1800)
     parser.add_argument("--export-timeout-seconds", type=int, default=900)
     parser.add_argument("--allow-source-dirty-candidate", action="store_true")
+    parser.add_argument("--artifact-dir", type=Path, help="Retain verified packages in an empty workspace directory")
+    parser.add_argument("--verify-packaged-startup", action="store_true")
+    parser.add_argument("--startup-timeout-seconds", type=int, default=60)
     return parser
 
 
@@ -671,6 +841,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.validation_timeout_seconds,
         args.export_timeout_seconds,
         args.allow_source_dirty_candidate,
+        artifact_dir=args.artifact_dir,
+        verify_startup=args.verify_packaged_startup,
+        startup_timeout_seconds=args.startup_timeout_seconds,
     )
     sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     return exit_code

@@ -212,8 +212,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.export.test_export_preflight \
 	tests.contract.export.test_export_executor \
 	tests.contract.export.test_certify_checkout \
-	tests.contract.export.test_portable_runtime \
-	tests.contract.export.test_content_pack_source_export
+	tests.contract.export.test_portable_runtime
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.export.test_packaged_startup
 PYTHONDONTWRITEBYTECODE=1 python3 tools/export/preflight.py \
 	--mode contract \
@@ -226,6 +225,10 @@ printf 'PASS: bootstrap import completed with only approved generated-resource/e
 printf '\n== Godot clean second import ==\n'
 run_import_phase clean
 printf 'PASS: clean second import completed without project errors\n'
+
+printf '\n== Native content pack export contracts ==\n'
+PYTHONDONTWRITEBYTECODE=1 GODOT_BIN="${godot_bin}" python3 -m unittest \
+	tests.contract.export.test_content_pack_source_export
 
 printf '\n== Five-floor dungeon simulation contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 GODOT_BIN="${godot_bin}" python3 -m unittest \
