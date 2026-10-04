@@ -2708,6 +2708,9 @@
       "explosion_damage": 40,
       "explosion_radius_px": 48,
       "corpse_explosion_warning_frames": 60,
+      "corpse_pool_radius_px": 32,
+      "corpse_pool_damage": 8,
+      "corpse_pool_tick_frames": 60,
       "pool_lifetime_frames": 180
     },
     "actions": [
