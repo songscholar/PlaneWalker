@@ -13,6 +13,7 @@ const SNAPSHOT_FIELDS: Array[String] = [
 	"committed_geometry", "geometry_generations", "resolved_hit_indices", "cooldowns", "idle_through_frame", "paused_frames",
 ]
 const MAX_COUNTER := 2147483647
+const BOSS_ACTION_PREFIXES := {"ruin_king": "guardian_", "forest_heart": "matriarch_", "time_sovereign": "traitor_", "forge_colossus": "forge_", "void_throne": "voidking_"}
 
 var _actions: Dictionary = {}
 var _definition: Dictionary = {}
@@ -39,7 +40,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		if not normalized.ok:
 			return normalized
 		var action: Dictionary = normalized.definition
-		if _actions.has(action.id) or not action.id.begins_with(definition.id + "."):
+		if _actions.has(action.id) or not _action_belongs_to_actor(action.id, definition.id, definition.actor_kind):
 			_actions.clear()
 			return _failure("actions.id", "duplicate_or_foreign")
 		_actions[action.id] = action
@@ -58,6 +59,12 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		"cooldowns": {}, "idle_through_frame": int(identity.runtime_frame) - 1, "paused_frames": 0,
 	}
 	return {"ok": true, "snapshot": snapshot(), "context": {}}
+
+
+static func _action_belongs_to_actor(action_id: String, definition_id: String, actor_kind: String) -> bool:
+	if actor_kind != "boss":
+		return action_id.begins_with(definition_id + ".")
+	return BOSS_ACTION_PREFIXES.has(definition_id) and (action_id.begins_with(BOSS_ACTION_PREFIXES[definition_id]) or (definition_id == "time_sovereign" and action_id.begins_with("traitor.counter_")))
 
 
 func request_action(action_id: String, context: Dictionary) -> Dictionary:

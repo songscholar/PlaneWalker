@@ -23,7 +23,7 @@ const PARAMETER_RULES := {
 	"shield": {"shield_fraction": [0, 0.3, false], "lifetime_frames": [1, 600, true]},
 	"summon": {"definition_id": "id", "count": [1, 8, true], "lifetime_frames": [1, 1200, true]},
 	"blink": {"travel_px": [0, 160, false], "transit_frames": [1, 30, true], "landing_warning_frames": [23, 120, true]},
-	"wall": {"hit_points": [1, 100, false], "lifetime_frames": [1, 1200, true], "gap_px": [32, 320, false]},
+	"wall": {"hit_points": [1, 150, false], "lifetime_frames": [1, 1200, true], "gap_px": [32, 320, false]},
 	"link": {"hit_points": [1, 100, false], "lifetime_frames": [1, 1200, true], "attack_multiplier": [1, 1.25, false], "speed_multiplier": [1, 1.25, false]},
 	"portal": {"lifetime_frames": [1, 1200, true], "min_distance_px": [96, 640, false], "arrival_clearance_px": [48, 320, false], "transit_cooldown_frames": [12, 600, true], "team_rule": "team_rule"},
 	"self_rewind": {"max_cast_heal": [0, 150, false], "max_total_heal": [0, 300, false], "history_frames": [1, 180, true]},

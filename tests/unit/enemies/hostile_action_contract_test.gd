@@ -50,6 +50,13 @@ func _run() -> void:
 	boss.warning_frames = 24
 	suite.assert_true(not implementation.create(boss, "boss").ok, "Boss warning floor rejects")
 	var invalid_handler := Fixtures.action()
+	var guardian_wall := Fixtures.action()
+	guardian_wall.id = "guardian_stone_wall"
+	guardian_wall.handler_id = "wall"
+	guardian_wall.parameters = {"hit_points": 150.0, "lifetime_frames": 480, "gap_px": 48.0}
+	suite.assert_true(implementation.create(guardian_wall, "boss").ok, "Guardian declared 150 HP wall passes closed action contract")
+	guardian_wall.parameters.hit_points = 151.0
+	suite.assert_true(not implementation.create(guardian_wall, "boss").ok, "Guardian wall rejects HP beyond authored bound")
 	invalid_handler.handler_id = "eval_script"
 	_assert_reject(suite, implementation, invalid_handler, "unsupported handler rejects")
 	var invalid_parameters := Fixtures.action()

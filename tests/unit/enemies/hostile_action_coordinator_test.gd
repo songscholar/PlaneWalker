@@ -22,7 +22,20 @@ func _run() -> void:
 	_test_quantized_geometry(suite, implementation)
 	_test_paused_clock_preserves_hit_and_geometry(suite, implementation)
 	_test_registered_geometry_matches_authored_sweep_and_target_offsets(suite, implementation)
+	_test_boss_canonical_namespaces(suite, implementation)
 	suite.finish(get_tree())
+
+
+func _test_boss_canonical_namespaces(suite: RefCounted, implementation: Script) -> void:
+	var action := Fixtures.action()
+	action.id = "guardian_shield_sweep"
+	var coordinator: RefCounted = implementation.new()
+	suite.assert_true(coordinator.configure({"id": "ruin_king", "actor_kind": "boss", "actions": [action]}, Fixtures.identity()).ok, "Ruin King accepts canonical guardian action namespace")
+	var foreign: RefCounted = implementation.new()
+	suite.assert_true(not foreign.configure({"id": "forest_heart", "actor_kind": "boss", "actions": [action]}, Fixtures.identity()).ok, "Forest Heart rejects Guardian action namespace")
+	suite.assert_equal(foreign.snapshot(), {}, "foreign Boss action rejection retains no usable state")
+	var enemy: RefCounted = implementation.new()
+	suite.assert_true(not enemy.configure({"id": "shattered_sentinel", "actor_kind": "enemy", "actions": [action]}, Fixtures.identity()).ok, "enemy retains canonical species dot namespace")
 
 
 func _configured(suite: RefCounted, implementation: Script) -> RefCounted:
