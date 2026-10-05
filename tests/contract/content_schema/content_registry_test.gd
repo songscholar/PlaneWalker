@@ -28,6 +28,7 @@ const EXPECTED_BASE_CATEGORY_COUNTS := {
 	"summon_definition": 9,
 	"elite_affix_definition": 10,
 	"launch_encounter_profile": 5,
+	"launch_encounter_extension": 2,
 	"meta_node": 42,
 	"hub_district": 3,
 	"forge_definition": 20,

@@ -118,6 +118,8 @@ func start_profile_run(config: Dictionary, service: RefCounted, expected_revisio
 	if not _active_run_id.is_empty() and not RunPhaseScript.is_terminal(int(runtime_snapshot().get("phase", -1))):
 		return CommandResultScript.failure(&"INVALID_PHASE", _revision(), {"operation": "start_profile_run"})
 	var normalized := RunConfigScript.normalized(config)
+	if not normalized.has("launch_encounter_revision"):
+		normalized["launch_encounter_revision"] = 2
 	var validated = RunConfigScript.validate(normalized)
 	if not validated.ok:
 		return validated

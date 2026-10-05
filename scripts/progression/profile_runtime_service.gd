@@ -288,7 +288,7 @@ func frozen_launch_projection() -> Dictionary:
 func pending_launch_config() -> Dictionary:
 	var profile := snapshot()
 	var value: Variant = _payload.get("pending_run_config")
-	if profile.is_empty() or profile.active_launch_receipt.is_empty() or not value is Dictionary or not Catalog.exact_fields(value, RunConfig.DEFAULTS.keys()):
+	if profile.is_empty() or profile.active_launch_receipt.is_empty() or not value is Dictionary or not _canonical_launch_config_fields(value):
 		return {}
 	return _validated_launch_config(value, profile.active_launch_receipt, true)
 
@@ -1301,7 +1301,7 @@ func _native_player_stamp(player: Node) -> Dictionary:
 
 func _validated_launch_config(value: Dictionary, launch: Dictionary, persisted: bool = false) -> Dictionary:
 	for key: Variant in value:
-		if not RunConfig.DEFAULTS.has(key):
+		if not RunConfig.DEFAULTS.has(key) and key != "launch_encounter_revision":
 			return {}
 	var config := RunConfig.normalized(value)
 	if persisted:
@@ -1309,6 +1309,10 @@ func _validated_launch_config(value: Dictionary, launch: Dictionary, persisted: 
 			return {}
 		config.schema_version = int(config.schema_version)
 		config.seed = int(config.seed)
+		if config.has("launch_encounter_revision"):
+			if not Catalog.bounded_int(config.launch_encounter_revision, 1, 2):
+				return {}
+			config.launch_encounter_revision = int(config.launch_encounter_revision)
 	if not RunConfig.validate(config).ok or config.milestone not in ["LAUNCH", "EXPANSION"] or config.seed != launch.seed or config.difficulty != launch.difficulty or config.character_id != launch.character_id or config.weapon_id != launch.weapon_id or config.enabled_time_skills != launch.time_abilities:
 		return {}
 	return config
@@ -1318,7 +1322,14 @@ func _run_config_matches_pending(value: Dictionary) -> bool:
 	if not _payload.has("pending_run_config") or snapshot().active_launch_receipt.is_empty():
 		return true
 	var frozen := pending_launch_config()
-	return not frozen.is_empty() and value.get("config") is Dictionary and Catalog.exact_fields(value.config, RunConfig.DEFAULTS.keys()) and _json_equal(value.config, frozen)
+	return not frozen.is_empty() and value.get("config") is Dictionary and _canonical_launch_config_fields(value.config) and _json_equal(value.config, frozen)
+
+
+func _canonical_launch_config_fields(value: Dictionary) -> bool:
+	var fields: Array = RunConfig.DEFAULTS.keys()
+	if value.has("launch_encounter_revision"):
+		fields.append("launch_encounter_revision")
+	return Catalog.exact_fields(value, fields)
 
 
 func _clone_narrative_run(value: Dictionary) -> RefCounted:

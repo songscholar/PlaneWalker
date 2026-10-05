@@ -23,7 +23,7 @@ func _run() -> void:
 	suite.assert_true(catalog.configure_authored().ok, "inactive catalog reads authoritative hostile content without activating Base Pack")
 	suite.assert_true(catalog.configure(registry).ok, "five profiles with closed references configure")
 	suite.assert_equal(catalog.snapshot().enemy_count, 22, "catalog requires twenty-two ordinary identities")
-	suite.assert_equal(catalog.snapshot().recipe_count, 40, "catalog requires forty concrete recipe records")
+	suite.assert_equal(catalog.snapshot().recipe_count, 42, "catalog retains forty historical recipes and two explicit additive elite recipes")
 	for floor_index: int in range(5):
 		var profile_id: String = Ids.PROFILE_IDS[floor_index]
 		var boss: Dictionary = catalog.encounter_definition(Ids.BOSS_ENCOUNTER_IDS[floor_index], 12, 1, "boss")

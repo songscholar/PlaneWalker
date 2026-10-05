@@ -1,0 +1,72 @@
+[
+  {
+    "category": "launch_encounter_extension",
+    "id": "encounter_extension_ruins_terminal_v2",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_0_NAME",
+    "description_key": "P15_PROFILE_0_DESC",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "tags": ["launch_hostile"],
+    "compatibility": {},
+    "references": ["encounter_profile_ruins_adapter_v1", "ruins_wraith", "stone_shell_strider"],
+    "floor_id": "floor_ruins_of_remnant",
+    "profile_id": "encounter_profile_ruins_adapter_v1",
+    "selection_revision": 2,
+    "recipes": [
+      {
+        "id": "wraith_trial_v2",
+        "room_type": "elite",
+        "template_ids": ["room_elite_arena", "room_elite_trap_arena", "room_elite_guard_corridor", "room_elite_twin_hall", "room_elite_altar_defense"],
+        "threat_budget": 9,
+        "waves": [
+          {
+            "id": "wraith_trial_v2_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 30,
+            "spawns": [
+              {"id": "wraith_trial_v2_spawn_1", "enemy_id": "ruins_wraith", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": -64, "y": 0}, "elite": true, "affix_ids": ["frenzy"], "mechanism_ids": []},
+              {"id": "wraith_trial_v2_spawn_2", "enemy_id": "stone_shell_strider", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": 0, "y": 0}, "elite": false, "affix_ids": [], "mechanism_ids": []},
+              {"id": "wraith_trial_v2_spawn_3", "enemy_id": "ruins_wraith", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": 64, "y": 0}, "elite": false, "affix_ids": [], "mechanism_ids": []}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "launch_encounter_extension",
+    "id": "encounter_extension_forest_terminal_v2",
+    "schema_version": 1,
+    "name_key": "P15_PROFILE_1_NAME",
+    "description_key": "P15_PROFILE_1_DESC",
+    "availability": ["LAUNCH", "EXPANSION"],
+    "tags": ["launch_hostile"],
+    "compatibility": {},
+    "references": ["bramble_mage", "encounter_profile_forest_adapter_v1", "void_spore"],
+    "floor_id": "floor_void_forest",
+    "profile_id": "encounter_profile_forest_adapter_v1",
+    "selection_revision": 2,
+    "recipes": [
+      {
+        "id": "spore_trial_v2",
+        "room_type": "elite",
+        "template_ids": ["room_elite_arena", "room_elite_trap_arena", "room_elite_guard_corridor", "room_elite_twin_hall", "room_elite_altar_defense"],
+        "threat_budget": 11,
+        "waves": [
+          {
+            "id": "spore_trial_v2_wave_1",
+            "delay_frames": 0,
+            "warning_frames": 23,
+            "spawns": [
+              {"id": "spore_trial_v2_spawn_1", "enemy_id": "bramble_mage", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": -64, "y": 0}, "elite": false, "affix_ids": [], "mechanism_ids": []},
+              {"id": "spore_trial_v2_spawn_2", "enemy_id": "void_spore", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": 0, "y": 0}, "elite": true, "affix_ids": ["frenzy"], "mechanism_ids": []},
+              {"id": "spore_trial_v2_spawn_3", "enemy_id": "void_spore", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": 64, "y": 0}, "elite": false, "affix_ids": [], "mechanism_ids": []},
+              {"id": "spore_trial_v2_spawn_4", "enemy_id": "void_spore", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": -64, "y": 64}, "elite": false, "affix_ids": [], "mechanism_ids": []},
+              {"id": "spore_trial_v2_spawn_5", "enemy_id": "void_spore", "spawn_slot_id": "elite_primary", "spawn_offset": {"x": 0, "y": 64}, "elite": false, "affix_ids": [], "mechanism_ids": []}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

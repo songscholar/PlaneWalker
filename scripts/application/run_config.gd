@@ -54,6 +54,11 @@ static func validate(value: Dictionary):
 		seen_skills[str(skill_id)] = true
 	if typeof(config["seed"]) != TYPE_INT:
 		return _invalid("seed")
+	if config.has("launch_encounter_revision") and (
+		typeof(config.launch_encounter_revision) != TYPE_INT
+		or int(config.launch_encounter_revision) not in [1, 2]
+	):
+		return _invalid("launch_encounter_revision")
 	if typeof(config["accessibility_assists"]) != TYPE_DICTIONARY:
 		return _invalid("accessibility_assists")
 	var assists: Dictionary = config["accessibility_assists"]
@@ -68,6 +73,8 @@ static func validate(value: Dictionary):
 
 static func normalized(value: Dictionary) -> Dictionary:
 	var result := DEFAULTS.duplicate(true)
+	if value.has("launch_encounter_revision"):
+		result["launch_encounter_revision"] = value.launch_encounter_revision
 	for field: String in DEFAULTS.keys():
 		if value.has(field):
 			var field_value: Variant = value[field]

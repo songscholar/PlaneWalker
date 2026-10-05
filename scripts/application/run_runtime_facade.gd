@@ -220,6 +220,8 @@ func start_run(config: Dictionary, run_id: String, meta_projection: Dictionary =
 	if not readiness.ok:
 		return readiness
 	var normalized := RunConfigScript.normalized(config)
+	if meta_projection.is_empty() and normalized.milestone in ["LAUNCH", "EXPANSION"] and not normalized.has("launch_encounter_revision"):
+		normalized["launch_encounter_revision"] = 2
 	var config_validation = RunConfigScript.validate(normalized)
 	if not config_validation.ok:
 		return CommandResultScript.failure(
@@ -1398,12 +1400,13 @@ func current_encounter_definition() -> Dictionary:
 			return {}
 		var room_type := str(room.get("type", "combat"))
 		if room_type in ["combat", "elite"]:
-			return _launch_encounter_catalog.resolve_for_node(
+			return _launch_encounter_catalog.resolve_for_revision(
 				encounter_id,
 				int(_orchestrator.snapshot().get("run_seed", 0)),
 				str(room.get("node_id", "")),
 				room_type,
-				str(room.get("template", {}).get("id", ""))
+				str(room.get("template", {}).get("id", "")),
+				int(_orchestrator.snapshot().get("config", {}).get("launch_encounter_revision", 1))
 			)
 		return _launch_encounter_catalog.encounter_definition(
 			encounter_id,

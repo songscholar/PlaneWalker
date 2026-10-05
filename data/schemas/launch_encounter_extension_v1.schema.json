@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/launch-encounter-extension/1.0.0",
+  "title": "Plane Walker Additive Launch Encounter Extension v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "id", "schema_version", "name_key", "description_key", "availability", "tags", "compatibility", "references", "floor_id", "profile_id", "selection_revision", "recipes"],
+  "properties": {
+    "category": {"const": "launch_encounter_extension"},
+    "id": {"enum": ["encounter_extension_ruins_terminal_v2", "encounter_extension_forest_terminal_v2"]},
+    "schema_version": {"type": "integer", "const": 1},
+    "name_key": {"type": "string", "pattern": "^[A-Z0-9_]{1,96}$"},
+    "description_key": {"type": "string", "pattern": "^[A-Z0-9_]{1,96}$"},
+    "availability": {"const": ["LAUNCH", "EXPANSION"]},
+    "tags": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_.]{1,96}$"}},
+    "compatibility": {"type": "object", "additionalProperties": false, "properties": {}},
+    "references": {"type": "array", "minItems": 3, "maxItems": 28, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_.]{1,96}$"}},
+    "floor_id": {"enum": ["floor_ruins_of_remnant", "floor_void_forest"]},
+    "profile_id": {"enum": ["encounter_profile_ruins_adapter_v1", "encounter_profile_forest_adapter_v1"]},
+    "selection_revision": {"type": "integer", "const": 2},
+    "recipes": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/recipe"}}
+  },
+  "$defs": {
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_type", "template_ids", "threat_budget", "waves"],
+      "properties": {
+        "id": {"enum": ["wraith_trial_v2", "spore_trial_v2"]},
+        "room_type": {"const": "elite"},
+        "template_ids": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["room_elite_arena", "room_elite_trap_arena", "room_elite_guard_corridor", "room_elite_twin_hall", "room_elite_altar_defense"]}},
+        "threat_budget": {"type": "integer", "minimum": 4, "maximum": 11},
+        "waves": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "planewalker://schemas/launch-encounter-profile/1.0.0#/$defs/wave"}}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"id": {"const": "encounter_extension_ruins_terminal_v2"}}}, "then": {"properties": {"floor_id": {"const": "floor_ruins_of_remnant"}, "profile_id": {"const": "encounter_profile_ruins_adapter_v1"}, "recipes": {"items": {"properties": {"id": {"const": "wraith_trial_v2"}, "threat_budget": {"maximum": 9}}}}}}},
+    {"if": {"properties": {"id": {"const": "encounter_extension_forest_terminal_v2"}}}, "then": {"properties": {"floor_id": {"const": "floor_void_forest"}, "profile_id": {"const": "encounter_profile_forest_adapter_v1"}, "recipes": {"items": {"properties": {"id": {"const": "spore_trial_v2"}, "threat_budget": {"minimum": 5}}}}}}}
+  ]
+}

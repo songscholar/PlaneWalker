@@ -1,7 +1,8 @@
 # Native Sword Damage Identity
 
 - Status: Verified producer, historical migration, real input and physical recovery
-- Document Role: Focused retention evidence below approved P15 specification
+- Document Role: Current
+- Authority Level: Focused retention evidence below approved P15 specification
 - Applies To: Sword damage producers and historical active action compatibility
 - Owner: Native hostile implementation team
 - Last Verified: 2026-10-05

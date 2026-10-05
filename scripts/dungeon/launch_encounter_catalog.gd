@@ -3,6 +3,7 @@ extends RefCounted
 
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
 const Profile := preload("res://scripts/dungeon/launch_encounter_profile.gd")
+const Extension := preload("res://scripts/dungeon/launch_encounter_extension.gd")
 const Runtime := preload("res://scripts/dungeon/launch_encounter_runtime.gd")
 const Seed := preload("res://scripts/core/seed_service.gd")
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
@@ -16,6 +17,7 @@ var _actors: Dictionary = {}
 var _affixes: Dictionary = {}
 var _profiles: Dictionary = {}
 var _recipes: Dictionary = {}
+var _extensions: Dictionary = {}
 var _boss_encounters: Dictionary = {}
 var _snapshot: Dictionary = {}
 
@@ -61,29 +63,9 @@ func configure(registry: RefCounted) -> Dictionary:
 					return _failure("affix", "invalid_definition", affix_result)
 				_affixes[candidate.id] = affix_result.definition
 	for profile: Dictionary in _profiles.values():
-		for recipe: Dictionary in profile.recipes:
-			for template_id: String in recipe.template_ids:
-				var template: Variant = registry.get_content(StringName(template_id))
-				if not template is Dictionary:
-					return _failure("template_id", "dangling_or_wrong_type")
-				if registry.has_method("get_catalog_entries"):
-					template.erase("pack_id")
-					template.erase("pack_version")
-				var room_result := Room.new().configure(template)
-				if not room_result.ok or template.room_type != recipe.room_type or not template.floor_ids.has(profile.floor_id):
-					return _failure("template_id", "incompatible_definition")
-				if not _valid_spawn_positions(recipe, room_result.definition):
-					return _failure("spawn_offset", "invalid_room_geometry")
-			for wave: Dictionary in recipe.waves:
-				var threat := 0
-				for spawn: Dictionary in wave.spawns:
-					if not _actors.has(spawn.enemy_id) or _actors[spawn.enemy_id].category != "enemy_definition":
-						return _failure("enemy_id", "dangling_reference")
-					threat += int(_actors[spawn.enemy_id].threat_cost) + (3 if spawn.elite else 0)
-				if threat > int(recipe.threat_budget):
-					return _failure("threat_budget", "wave_exceeds_budget")
-			var encounter := {"id": profile.id + "." + recipe.id, "floor_id": profile.floor_id, "recipe_id": recipe.id, "room_type": recipe.room_type, "waves": recipe.waves.duplicate(true)}
-			_recipes[encounter.id] = encounter
+		var recipe_result := _register_recipes(profile.id, profile.floor_id, profile.recipes, registry)
+		if not recipe_result.ok:
+			return recipe_result
 		var floor_index := Ids.PROFILE_IDS.find(profile.id)
 		var boss_warning := 40 if floor_index == 0 else (25 if floor_index == 4 else 30)
 		var boss_encounter := {
@@ -96,6 +78,20 @@ func configure(registry: RefCounted) -> Dictionary:
 		if not boss_result.ok:
 			return _failure("boss_encounter", "invalid_definition")
 		_boss_encounters[profile.boss_encounter_id] = boss_result.definition
+	var extensions: Variant = registry.get_catalog_entries(&"launch_encounter_extension", &"LAUNCH") if registry.has_method("get_catalog_entries") else registry.get_by_category(&"launch_encounter_extension", &"LAUNCH")
+	if not extensions is Array or not extensions.is_empty() and extensions.size() != Extension.IDS.size():
+		return _failure("extensions", "invalid_collection")
+	for candidate: Variant in extensions:
+		if not candidate is Dictionary:
+			return _failure("extension", "invalid_definition")
+		var parsed := Extension.new().configure(candidate)
+		if not parsed.ok or _extensions.has(parsed.get("definition", {}).get("profile_id", "")):
+			return _failure("extension", "invalid_or_duplicate_definition", parsed)
+		var definition: Dictionary = parsed.definition
+		var registered := _register_recipes(definition.profile_id, definition.floor_id, definition.recipes, registry)
+		if not registered.ok:
+			return registered
+		_extensions[definition.profile_id] = definition.recipes.duplicate(true)
 	_snapshot = {"schema_version": 1, "enemy_count": 22, "boss_count": 5, "affix_count": 10, "profile_count": _profiles.size(), "recipe_count": _recipes.size(), "boss_encounter_count": _boss_encounters.size()}
 	return {"ok": true, "snapshot": snapshot(), "context": {}}
 
@@ -126,6 +122,28 @@ func resolve_for_node(profile_id: String, run_seed: int, node_id: String, room_t
 	var rng := Seed.make_rng(run_seed, StringName("launch_encounter_v1:%s:%s" % [profile.floor_id, node_id]))
 	var recipe_id: String = candidates[rng.randi_range(0, candidates.size() - 1)]
 	return _recipes[profile_id + "." + recipe_id].duplicate(true)
+
+
+func resolve_for_revision(profile_id: String, run_seed: int, node_id: String, room_type: String, template_id: String, selection_revision: int, previous_recipe_id: String = "") -> Dictionary:
+	if selection_revision not in [1, 2]:
+		return {}
+	if selection_revision == 1 or profile_id not in [Ids.PROFILE_IDS[0], Ids.PROFILE_IDS[1]] or room_type != "elite":
+		return resolve_for_node(profile_id, run_seed, node_id, room_type, template_id, previous_recipe_id)
+	if _snapshot.is_empty() or not _profiles.has(profile_id) or not _extensions.has(profile_id) or node_id.is_empty() or node_id.length() > 64:
+		return {}
+	var candidates: Array[String] = []
+	var recipes: Array = _profiles[profile_id].recipes.duplicate(true)
+	recipes.append_array(_extensions[profile_id])
+	for recipe: Dictionary in recipes:
+		if recipe.room_type == room_type and (template_id.is_empty() or recipe.template_ids.has(template_id)):
+			candidates.append(recipe.id)
+	candidates.sort()
+	if candidates.size() > 1:
+		candidates.erase(previous_recipe_id)
+	if candidates.is_empty():
+		return {}
+	var rng := Seed.make_rng(run_seed, StringName("launch_encounter_v2:%s:%s" % [_profiles[profile_id].floor_id, node_id]))
+	return _recipes[profile_id + "." + candidates[rng.randi_range(0, candidates.size() - 1)]].duplicate(true)
 
 
 func enemy_definition(enemy_id: String) -> Dictionary:
@@ -208,6 +226,35 @@ func _valid_spawn_positions(recipe: Dictionary, template: Dictionary) -> bool:
 	return true
 
 
+func _register_recipes(profile_id: String, floor_id: String, recipes: Array, registry: RefCounted) -> Dictionary:
+	for recipe: Dictionary in recipes:
+		for template_id: String in recipe.template_ids:
+			var template: Variant = registry.get_content(StringName(template_id))
+			if not template is Dictionary:
+				return _failure("template_id", "dangling_or_wrong_type")
+			if registry.has_method("get_catalog_entries"):
+				template.erase("pack_id")
+				template.erase("pack_version")
+			var room_result := Room.new().configure(template)
+			if not room_result.ok or template.room_type != recipe.room_type or not template.floor_ids.has(floor_id):
+				return _failure("template_id", "incompatible_definition")
+			if not _valid_spawn_positions(recipe, room_result.definition):
+				return _failure("spawn_offset", "invalid_room_geometry")
+		for wave: Dictionary in recipe.waves:
+			var threat := 0
+			for spawn: Dictionary in wave.spawns:
+				if not _actors.has(spawn.enemy_id) or _actors[spawn.enemy_id].category != "enemy_definition":
+					return _failure("enemy_id", "dangling_reference")
+				threat += int(_actors[spawn.enemy_id].threat_cost) + (3 if spawn.elite else 0)
+			if threat > int(recipe.threat_budget):
+				return _failure("threat_budget", "wave_exceeds_budget")
+		var encounter := {"id": profile_id + "." + recipe.id, "floor_id": floor_id, "recipe_id": recipe.id, "room_type": recipe.room_type, "waves": recipe.waves.duplicate(true)}
+		if _recipes.has(encounter.id):
+			return _failure("recipe_id", "duplicate")
+		_recipes[encounter.id] = encounter
+	return {"ok": true}
+
+
 func _failure(field: String, reason: String, detail: Dictionary = {}) -> Dictionary:
 	_clear()
 	return {"ok": false, "code": &"LAUNCH_CATALOG_INVALID", "context": {"field": field, "reason": reason, "detail": detail.duplicate(true)}}
@@ -218,5 +265,6 @@ func _clear() -> void:
 	_affixes.clear()
 	_profiles.clear()
 	_recipes.clear()
+	_extensions.clear()
 	_boss_encounters.clear()
 	_snapshot.clear()

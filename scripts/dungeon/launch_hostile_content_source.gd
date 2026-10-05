@@ -6,6 +6,7 @@ const SOURCES := {
 	"boss_definition": "res://data/content_packs/base/content/bosses.json",
 	"elite_affix_definition": "res://data/content_packs/base/content/elite_affixes.json",
 	"launch_encounter_profile": "res://data/content_packs/base/content/launch_encounters.json",
+	"launch_encounter_extension": "res://data/content_packs/base/content/launch_encounter_extensions.json",
 	"room_template": "res://data/content_packs/base/content/room_templates.json",
 }
 

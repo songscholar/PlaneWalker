@@ -21,6 +21,7 @@ const BossDefinitionScript := preload("res://scripts/enemies/launch/boss_definit
 const SummonDefinitionScript := preload("res://scripts/enemies/launch/summon_definition.gd")
 const EliteAffixDefinitionScript := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
 const LaunchEncounterProfileScript := preload("res://scripts/dungeon/launch_encounter_profile.gd")
+const LaunchEncounterExtensionScript := preload("res://scripts/dungeon/launch_encounter_extension.gd")
 const CosmeticDefinitionScript := preload("res://scripts/content/cosmetic_definition.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
@@ -215,6 +216,7 @@ const SPECIALIZED_CATEGORIES: Array[String] = [
 	"summon_definition",
 	"elite_affix_definition",
 	"launch_encounter_profile",
+	"launch_encounter_extension",
 	"meta_node",
 	"hub_district",
 	"forge_definition",
@@ -1140,6 +1142,8 @@ func _specialized_definition_parse_result(
 			definition_parser = EliteAffixDefinitionScript.new()
 		"launch_encounter_profile":
 			definition_parser = LaunchEncounterProfileScript.new()
+		"launch_encounter_extension":
+			definition_parser = LaunchEncounterExtensionScript.new()
 		_:
 			return {
 				"handled": true,
@@ -1641,10 +1645,16 @@ func _first_specialized_reference_error(
 			continue
 		var reference_error: Dictionary = {}
 		match category:
-			"enemy_definition", "boss_definition", "summon_definition", "launch_encounter_profile":
+			"enemy_definition", "boss_definition", "summon_definition", "launch_encounter_profile", "launch_encounter_extension":
 				reference_error = _specialized_reference_field_error(definition, "floor_id", "floor_definition", definitions_by_id)
 				if reference_error.is_empty() and category == "launch_encounter_profile":
 					reference_error = _specialized_reference_field_error(definition, "boss_id", "boss_definition", definitions_by_id)
+					for recipe: Dictionary in definition.recipes:
+						if not reference_error.is_empty():
+							break
+							reference_error = _specialized_reference_field_error({"id": definition.id, "availability": definition.availability, "template_ids": recipe.template_ids}, "template_ids", "room_template", definitions_by_id)
+				if reference_error.is_empty() and category == "launch_encounter_extension":
+					reference_error = _specialized_reference_field_error(definition, "profile_id", "launch_encounter_profile", definitions_by_id)
 					for recipe: Dictionary in definition.recipes:
 						if not reference_error.is_empty():
 							break
