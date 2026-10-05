@@ -10,6 +10,7 @@ const FloorRuleAuthorityScript := preload("res://scripts/dungeon/floor_rule_effe
 const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const SaveServiceScript := preload("res://scripts/save/save_service.gd")
 const SaveFileOpsScript := preload("res://scripts/save/save_file_ops.gd")
+const RouteFixture := preload("res://tests/support/native_launch_route_fixture.gd")
 
 const ATTACK_IDS := ["weapon_temper", "past_strength", "paradox_echo", "void_bargain_power", "heroic_assault"]
 const GUARD_IDS := ["chronal_grace", "void_bargain_guard", "heroic_guard"]
@@ -43,6 +44,8 @@ func _run() -> void:
 	}, false, true)
 	suite.assert_true(started, "main launches the authored five-floor mode")
 	await get_tree().process_frame
+	RouteFixture.freeze(main)
+	main.get_node("CombatRoom01/Player/HealthComponent").acquire_invulnerability_source(&"controller_fixture")
 	var flow := main.get_node_or_null("DungeonFlow")
 	suite.assert_true(flow != null, "main assembles the dungeon interaction coordinator")
 	if flow != null:
@@ -99,7 +102,7 @@ func _complete_native_dungeon(main: Node, suite: RefCounted) -> void:
 	var flow := main.get_node("DungeonFlow")
 	var room_controller := main.get_node("CombatRoom01")
 	var player := room_controller.get_node("Player")
-	for step: int in range(320):
+	for step: int in range(6000):
 		flow.call("refresh", true)
 		var state: Dictionary = host.call("runtime_snapshot")
 		await _observe_event_modifiers(main, state, player, suite)
@@ -174,13 +177,15 @@ func _complete_native_dungeon(main: Node, suite: RefCounted) -> void:
 			var context: Dictionary = host.call("dungeon_ui_context")
 			var room_type := str(context.get("room", {}).get("room_type", ""))
 			_seen_types[room_type] = true
-			# Use physical hostile death signals while keeping AI movement deterministic.
-			room_controller.process_mode = Node.PROCESS_MODE_DISABLED
+			# Native actors keep their physics space; accepted Player frames own progress.
 			for enemy: Node in room_controller.get_node("Enemies").get_children():
 				var health := enemy.get_node_or_null("HealthComponent")
 				if health != null and not bool(health.get("dead")):
 					health.call("lose_health", 1000000.0, player)
-		await get_tree().process_frame
+			if int(host.runtime_snapshot().phase) in [Phase.Value.COMBAT_ACTIVE, Phase.Value.BOSS_ACTIVE]:
+				suite.assert_true(player.advance_action_frame(), "native combat accepts a deterministic fixture frame")
+		RouteFixture.freeze(main)
+		await get_tree().physics_frame
 	var final: Dictionary = host.call("runtime_snapshot")
 	if not Phase.is_terminal(int(final.get("phase", -1))):
 		print("Native dungeon stalled: phase=", final["phase"], " node=", final["floor_plan"]["current_node_id"], " event=", host.call("dungeon_ui_context").get("event", {}), " runner=", room_controller.call("encounter_runner").call("snapshot"))

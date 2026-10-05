@@ -5,10 +5,15 @@ const MainScene := preload("res://scenes/main.tscn")
 const CommandResultScript := preload("res://scripts/application/command_result.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const FacadeScript := preload("res://scripts/application/run_runtime_facade.gd")
+const RouteFixture := preload("res://tests/support/native_launch_route_fixture.gd")
 
 
 class AcceptingCandidatePlayer:
 	extends Node
+
+	func configure_run(_run_id: StringName) -> bool:
+		return true
 
 	func configure_loadout(_config: Dictionary) -> bool:
 		return true
@@ -27,43 +32,10 @@ class PartialFailureRuntime:
 
 
 class PartialFailureFacade:
-	extends RefCounted
-
-	var config: Dictionary = {}
-	var run_id := ""
-	var revision := 0
-	var phase := RunPhaseScript.Value.HUB
-	var catalog := RefCounted.new()
-
-	func start_run(accepted_config: Dictionary, accepted_run_id: String) -> Variant:
-		config = accepted_config.duplicate(true)
-		run_id = accepted_run_id
-		revision = 1
-		phase = RunPhaseScript.Value.ROOM_TRANSITION
-		return CommandResultScript.success(revision)
-
-	func snapshot() -> Dictionary:
-		return {
-			"run_id": run_id,
-			"revision": revision,
-			"phase": phase,
-			"config": config.duplicate(true),
-		}
+	extends FacadeScript
 
 	func create_room_runtime(_runner: Node) -> Node:
 		return PartialFailureRuntime.new()
-
-	func encounter_catalog() -> RefCounted:
-		return catalog
-
-	func player_died(_context: Dictionary) -> Variant:
-		revision += 1
-		phase = RunPhaseScript.Value.DEFEAT
-		return CommandResultScript.success(revision)
-
-	func advance_time(_delta_seconds: float) -> Variant:
-		return CommandResultScript.failure(&"TERMINAL_STATE", revision)
-
 
 class PartialFailureRoomController:
 	extends Node
@@ -80,9 +52,6 @@ class PartialFailureRoomController:
 		return true
 
 
-var _restart_requested := false
-
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	call_deferred("_run")
@@ -92,9 +61,7 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	get_window().size = Vector2i(640, 360)
 	await _assert_terminal_candidate_fallback(suite)
-	var main := MainScene.instantiate()
-	add_child(main)
-	await _frames(3)
+	var main := await _spawn_main("focus")
 
 	var start_button := main.get_node("StartMenu/Panel/Margin/VBox/StartButton") as Button
 	var candidate_button := main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton") as Button
@@ -197,9 +164,7 @@ func _run() -> void:
 	main.queue_free()
 	await _frames(4)
 
-	main = MainScene.instantiate()
-	add_child(main)
-	await _frames(3)
+	main = await _spawn_main("quick")
 	start_button = main.get_node("StartMenu/Panel/Margin/VBox/StartButton") as Button
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), start_button, "fresh start flow still enters on Quick Start")
 	_send_action(&"ui_accept")
@@ -209,6 +174,14 @@ func _run() -> void:
 	# Let the first encounter's real 0.45-second telegraph complete before this
 	# test later disposes Main; cancelling its awaited timer mid-flight leaks it.
 	await get_tree().create_timer(0.5, true, false, true).timeout
+	RouteFixture.freeze(main)
+	var dungeon_flow: Node = main.get_node("DungeonFlow")
+	var route_panel: Control = dungeon_flow.active_panel()
+	suite.assert_true(route_panel != null, "Quick Start opens the native route before standalone choice-focus coverage")
+	if route_panel != null:
+		route_panel.call("_request_close")
+	dungeon_flow.set_process(false)
+	suite.assert_equal(dungeon_flow.active_panel(), null, "standalone choice fixture retires the prior route focus scope")
 
 	var choice_panel := main.get_node("RunRuntimeHost/ChoiceLayer/ChoicePanelV2") as Control
 	var offer := FixturesScript.load_fixture("res://tests/fixtures/ui/choice_item_three.json")
@@ -299,17 +272,9 @@ func _run() -> void:
 	suite.assert_equal(assists.get("damage_received_multiplier"), GameState.get_setting("damage_received_multiplier", 1.0), "run config records damage assist")
 	suite.assert_equal(assists.get("enemy_telegraph_scale"), GameState.get_setting("enemy_telegraph_scale", 1.0), "run config records telegraph assist")
 
-	EventBus.run_ended.emit("controller-focus-test", {
-		"result": "death",
-		"current_room": 1,
-		"rooms_cleared": 0,
-		"kills": 0,
-		"run_time": 1.0,
-		"rewards": [],
-		"blessings": [],
-		"talent_choices": [],
-		"curses": [],
-	}, 1)
+	var host: Node = main.get_node("RunRuntimeHost")
+	host.native_checkpoint_participants().facade.advance_time(1.0)
+	suite.assert_true(host.native_checkpoint_participants().runtime.report_player_died("controller-focus-test").ok, "actual native terminal enters the result modal")
 	await _frames(3)
 	var restart_button := main.get_node("RunEndOverlay/Panel/Margin/VBox/RestartButton") as Button
 	suite.assert_equal(get_viewport().gui_get_focus_owner(), restart_button, "result modal focuses Restart")
@@ -319,37 +284,29 @@ func _run() -> void:
 		restart_button.pressed.is_connected(production_restart),
 		"result controller action is wired to the production restart path"
 	)
-	# Reloading the current scene would reload this test harness recursively. Replace
-	# only that boundary after proving the production handler is connected, then use
-	# the real controller event and recreate Main to verify the destination state.
-	restart_button.pressed.disconnect(production_restart)
-	restart_button.pressed.connect(_on_test_restart_requested, CONNECT_ONE_SHOT)
 	_send_action(&"ui_accept")
 	await _frames(3)
-	suite.assert_true(_restart_requested, "result ui_accept reaches the restart boundary")
+	suite.assert_true(main.get_node("HubFlowCoordinator").is_hub_visible(), "result ui_accept returns through the actual production Hub boundary")
+	suite.assert_true(not main.get_node("StartMenu").visible, "result return restores the actual Hub first screen")
 	main.queue_free()
 	await _frames(4)
-	var restarted_main := MainScene.instantiate()
-	add_child(restarted_main)
-	await _frames(3)
-	var restarted_start := restarted_main.get_node("StartMenu/Panel/Margin/VBox/StartButton") as Button
-	suite.assert_true(restarted_main.get_node("StartMenu").visible, "result restart returns the flow to Start")
-	suite.assert_equal(get_viewport().gui_get_focus_owner(), restarted_start, "result restart restores Start focus")
+	var restarted_main := await _spawn_main("restarted", false)
+	suite.assert_true(restarted_main.get_node("HubFlowCoordinator").is_hub_visible(), "fresh scene opens the production Hub")
+	suite.assert_true(not restarted_main.get_node("StartMenu").visible, "fresh Hub keeps the compatibility menu hidden")
 	restarted_main.queue_free()
 	await _frames(4)
 	suite.finish(get_tree())
 
 
 func _assert_terminal_candidate_fallback(suite) -> void:
-	var main := MainScene.instantiate()
-	add_child(main)
-	await _frames(3)
+	var main := await _spawn_main("failure")
 	var host := main.get_node("RunRuntimeHost")
 	var candidate_button := main.get_node("StartMenu/Panel/Margin/VBox/CandidateButton") as Button
 	var candidate_panel := main.get_node("CandidateLabLayer/CandidateLoadoutPanel") as Control
 	var real_room_controller: Node = host.get("_room_controller")
 	var real_player: Node = host.get("_player")
 	var failing_facade := PartialFailureFacade.new()
+	suite.assert_true(failing_facade.boot().ok, "partial-failure fixture uses the complete native Facade contract")
 	var accepting_player := AcceptingCandidatePlayer.new()
 	var failing_controller := PartialFailureRoomController.new()
 	host.set("_facade", failing_facade)
@@ -390,7 +347,7 @@ func _assert_terminal_candidate_fallback(suite) -> void:
 	await _frames(4)
 	var snapshot: Dictionary = host.call("runtime_snapshot")
 	var config: Dictionary = snapshot.get("config", {})
-	suite.assert_equal(config.get("milestone"), "M1", "one interact starts the M1 Quick Start after terminal candidate failure")
+	suite.assert_equal(config.get("milestone"), "LAUNCH", "one interact starts the profile Launch after terminal candidate failure")
 	suite.assert_equal(config.get("character_id"), "wanderer", "terminal candidate fallback keeps Quick Start Wanderer")
 	suite.assert_equal(config.get("weapon_id"), "sword", "terminal candidate fallback keeps Quick Start Sword")
 	suite.assert_equal(config.get("enabled_time_skills"), ["stop", "rewind"], "terminal candidate fallback keeps Stop plus Rewind")
@@ -407,6 +364,18 @@ func _frames(count: int) -> void:
 		await get_tree().process_frame
 
 
+func _spawn_main(scenario: String, legacy: bool = true) -> Node:
+	GameState.save_path = OS.get_environment("PLANEWALKER_TEST_DATA_DIR").path_join("controller_ui/" + scenario + "/save.json")
+	var main := MainScene.instantiate()
+	add_child(main)
+	await _frames(3)
+	if legacy:
+		main.get_node("HubFlowCoordinator").hide_hub()
+		main.call("_show_start_menu")
+		await _frames(2)
+	return main
+
+
 func _send_action(action: StringName) -> void:
 	var pressed := InputEventAction.new()
 	pressed.action = action
@@ -416,7 +385,3 @@ func _send_action(action: StringName) -> void:
 	released.action = action
 	released.pressed = false
 	Input.parse_input_event(released)
-
-
-func _on_test_restart_requested() -> void:
-	_restart_requested = true

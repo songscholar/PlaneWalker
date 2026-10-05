@@ -421,6 +421,9 @@ func _apply_runtime_overlay(
 ) -> Variant:
 	if typeof(expected_value) != typeof(live_value):
 		return _duplicate_value(live_value)
+	# Unchanged reward fields must retain the exact live value, including float bits.
+	if typeof(expected_value) == typeof(target_value) and expected_value == target_value:
+		return _duplicate_value(live_value)
 	if (
 		typeof(expected_value) in [TYPE_INT, TYPE_FLOAT]
 		and typeof(target_value) in [TYPE_INT, TYPE_FLOAT]

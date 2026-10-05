@@ -2,6 +2,9 @@ extends Node
 
 const MainScene := preload("res://scenes/main.tscn")
 const TestSuiteScript := preload("res://tests/support/test_suite.gd")
+const Registry := preload("res://scripts/content/content_registry.gd")
+const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
+const ProgressionFixtures := preload("res://tests/support/p16_progression_fixtures.gd")
 const WEAPON_IDS: Array[String] = ["sword", "bow", "gun", "staff", "gauntlets"]
 
 
@@ -22,9 +25,7 @@ func _run() -> void:
 
 
 func _test_rejected_launch(suite) -> void:
-	var main := MainScene.instantiate()
-	add_child(main)
-	await _frames(3)
+	var main := await _spawn_legacy_main("rejected", suite)
 	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
 	var character_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption") as OptionButton
@@ -59,9 +60,7 @@ func _test_rejected_launch(suite) -> void:
 
 
 func _test_real_device_launch(suite) -> void:
-	var main := MainScene.instantiate()
-	add_child(main)
-	await _frames(3)
+	var main := await _spawn_legacy_main("devices", suite)
 	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
 	var character_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption") as OptionButton
@@ -123,9 +122,7 @@ func _test_real_device_launch(suite) -> void:
 
 func _test_launch_weapon(suite, weapon_index: int, weapon_id: String) -> void:
 
-	var main := MainScene.instantiate()
-	add_child(main)
-	await _frames(3)
+	var main := await _spawn_legacy_main(weapon_id, suite)
 	var launch_button := main.get_node("StartMenu/Panel/Margin/VBox/LaunchButton") as Button
 	var panel := main.get_node("LaunchLoadoutLayer/LaunchLoadoutPanel") as Control
 	var character_option := panel.get_node("SafeArea/Center/PanelRoot/Margin/Layout/SelectorGrid/CharacterOption") as OptionButton
@@ -168,6 +165,26 @@ func _test_launch_weapon(suite, weapon_index: int, weapon_id: String) -> void:
 func _frames(count: int) -> void:
 	for _index: int in range(count):
 		await get_tree().process_frame
+
+
+func _spawn_legacy_main(scenario: String, suite: RefCounted) -> Node:
+	GameState.save_path = OS.get_environment("PLANEWALKER_TEST_DATA_DIR").path_join("launch_ui/" + scenario + "/save.json")
+	var registry := Registry.new()
+	registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"LAUNCH")
+	suite.assert_true(GameState.activate_profile_content(registry).ok, "%s: actual content activates an isolated Profile" % scenario)
+	var catalog: RefCounted = Factory.from_registry(registry).context.catalog
+	var service: RefCounted = GameState.profile_runtime_service()
+	var save: RefCounted = GameState.get("_save_service")
+	suite.assert_true(save.save_profile("slot_1", "base", {"meta_profile_state": ProgressionFixtures.profile(catalog)}).ok, "%s: all authored loadouts are physically unlocked" % scenario)
+	suite.assert_true(service.configure(catalog, save, "slot_1", "base").ok, "%s: runtime reloads actual unlock ownership" % scenario)
+	GameState.refresh_profile_state()
+	var main := MainScene.instantiate()
+	add_child(main)
+	await _frames(3)
+	main.get_node("HubFlowCoordinator").hide_hub()
+	main.call("_show_start_menu")
+	await _frames(2)
+	return main
 
 
 func _send_key(keycode: Key) -> void:

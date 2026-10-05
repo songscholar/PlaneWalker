@@ -132,10 +132,43 @@ func _run() -> void:
 	var suite = TestSuiteScript.new()
 	_test_remove_first_middle_and_last_preserves_order(suite)
 	_test_remove_preserves_external_runtime_overlay(suite)
+	_test_unchanged_live_float_survives_reconfiguration_and_remove(suite)
 	_test_category_and_owned_guards(suite)
 	_test_stale_prepare_and_commit_failure_are_atomic(suite)
 	_test_snapshot_restore_preserves_duplicate_ids_and_ledger(suite)
 	suite.finish(get_tree())
+
+
+func _test_unchanged_live_float_survives_reconfiguration_and_remove(suite) -> void:
+	var baseline := {"value": 10.0, "history": [], "time": {"energy": 0.1}}
+	var player := FakePlayer.new()
+	player.state = baseline.duplicate(true)
+	var ledger: Array[Dictionary] = [_definition("item_add", "item", "add", 5.0)]
+	var runtime := FakeRewardRuntime.new()
+	var build := RunBuildStateScript.new()
+	build.reset("LAUNCH")
+	build.apply_definition(ledger[0])
+	runtime.commit(runtime.prepare(ledger[0], player.state).plan, player)
+	player.state.time.energy = 0.2
+	var live := player.reward_effect_snapshot()
+	var authority := AuthorityScript.new()
+	var configured: Dictionary = authority.configure(baseline, ledger, build.transaction_snapshot(), build, player, runtime)
+	suite.assert_true(configured.ok, "native live floating energy cannot prevent reward ledger reconfiguration")
+	suite.assert_equal(player.reward_effect_snapshot(), live, "ledger reconfiguration preserves exact live floating state")
+	if not configured.ok:
+		return
+	var prepared: Dictionary = authority.prepare_remove("remove_float_overlay", "item_add", ["item"])
+	suite.assert_true(prepared.ok, "removing an unrelated reward retains live fractional energy")
+	if not prepared.ok:
+		return
+	suite.assert_equal(prepared.ticket.after_player_snapshot.time.energy, live.time.energy, "unmodified live energy remains bit exact in the removal ticket")
+	var committed: Dictionary = authority.commit_remove(prepared.ticket)
+	suite.assert_true(committed.ok, "fractional runtime overlay commits through actual authority")
+	if committed.ok:
+		suite.assert_equal(player.state.time.energy, live.time.energy, "accepted removal preserves exact fractional energy")
+		suite.assert_equal(player.state.value, 10.0, "accepted removal removes only the authored reward value")
+		suite.assert_true(authority.rollback_remove(committed.receipt).ok, "fractional overlay removal remains reversible")
+		suite.assert_equal(player.reward_effect_snapshot(), live, "rollback restores the exact original live state")
 
 
 func _test_remove_first_middle_and_last_preserves_order(suite) -> void:
