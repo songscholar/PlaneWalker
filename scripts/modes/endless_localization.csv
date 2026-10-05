@@ -1,0 +1,7 @@
+"keys","en","zh_CN"
+"UI_MODE_ENDLESS","Endless Dungeon","无尽地牢"
+"UI_ENDLESS_NEXT_CYCLE","Enter Next Cycle","进入下一轮回"
+"UI_ENDLESS_PROGRESS_FMT","Cycle %d | %d floors cleared | %.2fs","轮回 %d | 已通关 %d 层 | %.2f秒"
+"UI_ENDLESS_SCALING_FMT","Enemy HP x%.2f | Damage x%.2f","敌人生命 x%.2f | 伤害 x%.2f"
+"UI_MODE_STATUS_STARTING","Preparing dungeon","正在准备地牢"
+"UI_MODE_STATUS_CYCLE_CLEAR","Cycle complete","轮回完成"
