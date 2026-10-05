@@ -33,6 +33,13 @@ sequence range, lengths and SHA-256. Physical compare-exchange prevents stale
 writers. A failed partial recording remains explicitly incomplete and cannot
 appear as a certified complete run.
 
+Automatic capture queues immutable chunks to one background writer. At most one
+120-observation chunk is writing and one is buffered. A saturated queue stops
+recording with a visible failure while Player frames continue. Explicit flush,
+terminal finalization and retirement join the writer before returning. The live
+recorder owns stream mutations; Main keeps the archive closed until the writer
+and recording have retired. This is not a general multithreaded store API.
+
 Whole-run viewing reconstructs a new private world at the requested keyframe,
 then applies validated recorded state. Enemy/room/economy presentation shares
 the private World2D and event bus; it cannot publish progression or interact

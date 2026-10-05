@@ -667,7 +667,7 @@ func _can_restore_invalidation_history(candidate: Dictionary) -> bool:
 	var player := get_parent()
 	if (
 		world != null
-		and world.get_script() == SceneScope.ReplayWorld
+		and world is SceneScope.ReplayWorld
 		and world.isolation_valid()
 		and player is Node2D
 		and player.is_inside_tree()
@@ -680,7 +680,15 @@ func _can_restore_invalidation_history(candidate: Dictionary) -> bool:
 	):
 		return true
 	for current_key: Variant in _invalidated_generations.keys():
-		if not candidate.has(current_key) or candidate[current_key] != _invalidated_generations[current_key]:
+		if not candidate.has(current_key):
+			return false
+		var required := (_invalidated_generations[current_key] as Dictionary).duplicate(true)
+		var retained := candidate[current_key] as Dictionary
+		if int(retained.revision) < int(required.revision):
+			return false
+		# A cold checkpoint may include earlier runs before this same tombstone.
+		required.revision = retained.revision
+		if retained != required:
 			return false
 	return true
 

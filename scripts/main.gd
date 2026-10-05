@@ -19,8 +19,16 @@ const LocalRecordsScript := preload("res://scripts/community/local_run_records.g
 const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const BossRushScript := preload("res://scripts/modes/boss_rush_coordinator.gd")
 const DailyBossScript := preload("res://scripts/modes/daily_boss_coordinator.gd")
-const ReplayLibraryScript := preload("res://scripts/replay/player_replay_library.gd")
+const AuthoredChallengeScript := preload("res://scripts/modes/authored_challenge_coordinator.gd")
+const ReplayLibraryScript := preload("res://scripts/replay/replay_library_router.gd")
 const ReplayLibraryPanelScript := preload("res://scripts/replay/player_replay_library_panel.gd")
+const RunReplayStoreScript := preload("res://scripts/replay/run_replay_stream_store.gd")
+const RunReplayRecorderScript := preload("res://scripts/replay/native_run_replay_recorder.gd")
+const EndlessScript := preload("res://scripts/modes/endless_coordinator.gd")
+const OfflinePlatformScript := preload("res://scripts/platform/offline_platform_provider.gd")
+const ComposedPlatformScript := preload("res://scripts/platform/composed_platform_provider.gd")
+const PlatformPanelScript := preload("res://scripts/platform/platform_panel.gd")
+const ChallengeRewardsPanelScript := preload("res://scripts/ui/challenge_rewards_panel.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -65,8 +73,16 @@ var _last_launch_rejection: Dictionary = {}
 var _local_records: RefCounted
 var _boss_rush: Node2D
 var _daily_boss: Node2D
+var _authored_challenge: Node2D
 var _replay_library: Node
 var _replay_library_panel: Control
+var _run_replay_recorder: Node
+var _replay_notice: Label
+var _replay_notice_until_usec := 0
+var _endless: Node2D
+var _platform_provider: RefCounted
+var _platform_panel: Control
+var _challenge_rewards_panel: Control
 
 
 func _enter_tree() -> void:
@@ -104,7 +120,12 @@ func _ready() -> void:
 	_setup_training()
 	_setup_boss_rush()
 	_setup_daily_boss()
+	_setup_challenge_rewards()
+	_setup_authored_challenge()
+	_setup_endless()
 	_setup_replay_library()
+	_setup_run_replay_recorder()
+	_setup_platform()
 	_setup_narrative()
 	_setup_music()
 	_setup_content_management()
@@ -153,6 +174,20 @@ func _music_context() -> Dictionary:
 			cue_id = "music_boss_" + str(daily.active.definition.boss_id)
 		elif not daily.results.is_empty() and daily.active.is_empty():
 			cue_id = "music_victory" if daily.results[-1].status == "VICTORY" else "music_defeat"
+	elif _authored_challenge != null and _authored_challenge.is_open():
+		var authored: Dictionary = _authored_challenge.runtime().preview()
+		if not str(authored.current_boss_id).is_empty():
+			cue_id = "music_boss_" + str(authored.current_boss_id)
+	elif _endless != null and _endless.is_open() and _endless.runtime().runtime_host() != null:
+		var host: Node = _endless.runtime().runtime_host()
+		var state: Dictionary = host.runtime_snapshot()
+		var phase := int(state.get("phase", -1))
+		if RunPhaseScript.is_terminal(phase):
+			cue_id = "music_victory" if phase == RunPhaseScript.Value.VICTORY else "music_defeat"
+		else:
+			var index := clampi(int(state.get("current_floor_index", 0)), 0, 4)
+			var node: Dictionary = host.native_run_state().current_floor_node() if host.native_run_state() != null else {}
+			cue_id = MusicDirectorScript.BOSS_CUES[index] if node.get("room_type") == "boss" and not node.get("cleared", false) else MusicDirectorScript.FLOOR_CUES[index]
 	elif (_hub_flow == null or not _hub_flow.is_hub_visible()) and combat_room.visible:
 		var state: Dictionary = runtime_host.runtime_snapshot()
 		var phase := int(state.get("phase", -1))
@@ -162,7 +197,7 @@ func _music_context() -> Dictionary:
 			var index := clampi(int(state.get("current_floor_index", 0)), 0, 4)
 			var node: Dictionary = runtime_host.native_run_state().current_floor_node() if runtime_host.native_run_state() != null else {}
 			cue_id = MusicDirectorScript.BOSS_CUES[index] if node.get("room_type") == "boss" and not node.get("cleared", false) else MusicDirectorScript.FLOOR_CUES[index]
-	return {"cue_id": cue_id, "paused": get_tree().paused or _boss_rush != null and _boss_rush.is_open() and _boss_rush.runtime().is_paused() or _daily_boss != null and _daily_boss.is_open() and _daily_boss.runtime().is_paused()}
+	return {"cue_id": cue_id, "paused": get_tree().paused or _boss_rush != null and _boss_rush.is_open() and _boss_rush.runtime().is_paused() or _daily_boss != null and _daily_boss.is_open() and _daily_boss.runtime().is_paused() or _authored_challenge != null and _authored_challenge.is_open() and _authored_challenge.runtime().is_paused() or _endless != null and _endless.is_open() and _endless.runtime().is_paused()}
 
 
 func _setup_content_management() -> void:
@@ -182,9 +217,13 @@ func content_manager() -> RefCounted:
 
 
 func _content_mutation_locked() -> bool:
+	if _challenge_rewards_panel != null and _challenge_rewards_panel.visible:
+		return true
+	if _platform_panel != null and _platform_panel.visible or _endless != null and _endless.is_open():
+		return true
 	if _replay_library_panel != null and _replay_library_panel.visible:
 		return true
-	if _content_reload_pending or _credits_pending or _training_flow != null and _training_flow.is_training_active() or _boss_rush != null and _boss_rush.is_open() or _daily_boss != null and _daily_boss.is_open():
+	if _content_reload_pending or _credits_pending or _training_flow != null and _training_flow.is_training_active() or _boss_rush != null and _boss_rush.is_open() or _daily_boss != null and _daily_boss.is_open() or _authored_challenge != null and _authored_challenge.is_open():
 		return true
 	var service: RefCounted = _profile_service if _profile_service != null else GameState.profile_runtime_service()
 	if service != null and not service.snapshot().active_launch_receipt.is_empty():
@@ -274,7 +313,11 @@ func _setup_hub() -> void:
 	hub.tutorial_requested.connect(_open_hub_tutorial)
 	hub.boss_rush_requested.connect(_open_boss_rush)
 	hub.daily_boss_requested.connect(_open_daily_boss)
+	hub.authored_challenges_requested.connect(_open_authored_challenge)
 	hub.replay_library_requested.connect(_open_replay_library)
+	hub.endless_requested.connect(_open_endless)
+	hub.platform_requested.connect(_open_platform)
+	hub.challenge_rewards_requested.connect(_open_challenge_rewards)
 	hub.settings_requested.connect(_open_hub_setting)
 	start_menu.visible = false
 	FocusCoordinator.close_scope(start_menu)
@@ -318,7 +361,7 @@ func _setup_boss_rush() -> void:
 	var coordinator := BossRushScript.new()
 	coordinator.name = "BossRushCoordinator"
 	add_child(coordinator)
-	var configured: Dictionary = coordinator.configure(runtime_host.content_registry(), _profile_service, GameState.save_path.get_base_dir().path_join("plane_walker/challenges"))
+	var configured: Dictionary = coordinator.configure(runtime_host.content_registry(), _profile_service, GameState.save_path.get_base_dir().path_join("plane_walker/challenges"), true)
 	if not configured.ok:
 		coordinator.queue_free()
 		return
@@ -357,6 +400,71 @@ func _open_daily_boss() -> void:
 		_hub_flow.hide_hub()
 
 
+func _setup_challenge_rewards() -> void:
+	if _profile_service == null or _boss_rush == null or _daily_boss == null:
+		return
+	if not _profile_service.configure_mode_rewards(runtime_host.content_registry(), [_boss_rush.runtime(), _daily_boss.runtime()]).ok:
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "ChallengeRewardsLayer"
+	layer.layer = 63
+	add_child(layer)
+	var panel := ChallengeRewardsPanelScript.new()
+	panel.name = "ChallengeRewardsPanel"
+	layer.add_child(panel)
+	if not panel.configure(_profile_service, _sync_mode_rewards):
+		layer.queue_free()
+		return
+	_challenge_rewards_panel = panel
+	panel.closed.connect(_challenge_rewards_closed)
+
+
+func _sync_mode_rewards() -> Dictionary:
+	var failures: Array[String] = []
+	for mode_id: String in ["boss_rush_carried", "daily_boss"]:
+		var result: Dictionary = _profile_service.claim_mode_rewards(mode_id, int(_profile_service.snapshot().revision))
+		if not result.ok and result.code != &"NOT_FOUND":
+			failures.append(str(result.code))
+	GameState.refresh_profile_state()
+	return {"ok": failures.is_empty(), "failures": failures}
+
+
+func _open_challenge_rewards() -> void:
+	if _challenge_rewards_panel == null or _hub_flow == null or not _hub_flow.is_hub_visible() or not _profile_service.snapshot().active_launch_receipt.is_empty():
+		return
+	_hub_flow.hide_hub()
+	if not _challenge_rewards_panel.open().ok:
+		_challenge_rewards_closed()
+
+
+func _challenge_rewards_closed() -> void:
+	GameState.refresh_profile_state()
+	if _hub_flow != null:
+		_hub_flow.show_hub()
+
+
+func _setup_authored_challenge() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var coordinator := AuthoredChallengeScript.new()
+	coordinator.name = "AuthoredChallengeCoordinator"
+	add_child(coordinator)
+	var configured: Dictionary = coordinator.configure(runtime_host.content_registry(), _profile_service, GameState.save_path.get_base_dir().path_join("plane_walker/authored_challenges"))
+	if not configured.ok:
+		coordinator.queue_free()
+		return
+	_authored_challenge = coordinator
+	coordinator.closed.connect(_on_training_closed)
+
+
+func _open_authored_challenge() -> void:
+	if _authored_challenge == null or _hub_flow == null or not _hub_flow.is_hub_visible() or not _profile_service.snapshot().active_launch_receipt.is_empty():
+		return
+	if _authored_challenge.open().ok:
+		_hub_flow.close_panel()
+		_hub_flow.hide_hub()
+
+
 func _setup_replay_library() -> void:
 	if _profile_service == null or not _profile_error.is_empty():
 		return
@@ -387,9 +495,139 @@ func _setup_replay_library() -> void:
 	panel.closed.connect(_replay_library_closed)
 
 
+func _setup_endless() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var coordinator := EndlessScript.new()
+	coordinator.name = "EndlessCoordinator"
+	add_child(coordinator)
+	if not coordinator.configure(runtime_host.content_registry(), _profile_service, GameState.save_path.get_base_dir().path_join("plane_walker/endless")).ok:
+		coordinator.queue_free()
+		return
+	_endless = coordinator
+	coordinator.closed.connect(_on_training_closed)
+
+
+func _open_endless(config: Dictionary) -> void:
+	if _endless == null or _hub_flow == null or not _hub_flow.is_hub_visible() or not _profile_service.snapshot().active_launch_receipt.is_empty():
+		return
+	var request := {"character_id": config.character_id, "weapon_id": config.weapon_id, "time_abilities": config.enabled_time_skills.duplicate(), "seed": 20261005, "accessibility_assists": {"damage_received_multiplier": float(GameState.persistent.settings.damage_received_multiplier), "enemy_telegraph_scale": float(GameState.persistent.settings.enemy_telegraph_scale)}}
+	if _endless.open(request).ok:
+		_hub_flow.close_panel()
+		_hub_flow.hide_hub()
+
+
+func _setup_platform() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var identity: Dictionary = _profile_service.local_record_storage_identity()
+	var offline := OfflinePlatformScript.new()
+	if not offline.configure(GameState.save_path.get_base_dir().path_join("plane_walker/platform"), "0.4.0-dev", identity.content_snapshot, identity.profile_id, identity.save_domain).ok:
+		return
+	if _local_records != null:
+		offline.attach_local_records(_local_records)
+	var provider := ComposedPlatformScript.new()
+	if not provider.configure(offline).ok:
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "PlatformLayer"
+	layer.layer = 63
+	add_child(layer)
+	var panel := PlatformPanelScript.new()
+	panel.name = "PlatformPanel"
+	layer.add_child(panel)
+	if not panel.configure(provider, _profile_service).ok:
+		layer.queue_free()
+		return
+	_platform_provider = provider
+	_platform_panel = panel
+	panel.set_screenshot_source(func(): return get_viewport().get_texture().get_image())
+	panel.coordinator().attach_replay_library(_replay_library)
+	panel.closed.connect(_platform_closed)
+	_sync_platform_profile()
+
+
+func _sync_platform_profile() -> void:
+	if _platform_provider == null or _profile_service == null:
+		return
+	for id: String in _profile_service.snapshot().unlocked_achievements:
+		_platform_provider.unlock_achievement(id)
+	_platform_provider.set_presence("hub")
+
+
+func _open_platform() -> void:
+	if _platform_panel == null or _hub_flow == null or not _hub_flow.is_hub_visible() or _credits_pending or _content_reload_pending or _content_panel != null and _content_panel.visible:
+		return
+	_hub_flow.close_panel()
+	_hub_flow.hide_hub()
+	if not _platform_panel.open().ok:
+		_platform_closed()
+		_hub_flow.panel_view().show_rejection("UI_PLATFORM_SAVE_FAILED")
+
+
+func _platform_closed() -> void:
+	if _hub_flow != null and not is_queued_for_deletion():
+		_hub_flow.show_hub()
+		_hub_flow.open_function("mirror")
+
+
+func _setup_run_replay_recorder() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var identity: Dictionary = _profile_service.local_record_storage_identity()
+	var root := GameState.save_path.get_base_dir().path_join("plane_walker/run_replays")
+	var storage := RunReplayStoreScript.new()
+	if not storage.configure(root, "0.4.0-dev", identity.content_snapshot, identity.profile_id, identity.save_domain).ok:
+		return
+	var recorder := RunReplayRecorderScript.new()
+	recorder.name = "NativeRunReplayRecorder"
+	add_child(recorder)
+	if not recorder.configure(runtime_host, storage, root).ok:
+		recorder.queue_free()
+		return
+	_run_replay_recorder = recorder
+	recorder.rejected.connect(_on_run_replay_rejected)
+	if _replay_library != null:
+		_replay_library.attach_stream_store(storage, runtime_host.content_registry())
+	var layer := CanvasLayer.new()
+	layer.name = "ReplayNoticeLayer"
+	layer.layer = 26
+	add_child(layer)
+	_replay_notice = Label.new()
+	_replay_notice.name = "ReplayNotice"
+	_replay_notice.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_replay_notice.offset_left = -156
+	_replay_notice.offset_right = 156
+	_replay_notice.offset_top = -108
+	_replay_notice.offset_bottom = -72
+	_replay_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_replay_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_replay_notice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_replay_notice.add_theme_font_size_override("font_size", 13)
+	_replay_notice.add_theme_color_override("font_color", Color(1, 0.82, 0.48))
+	_replay_notice.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08))
+	_replay_notice.add_theme_constant_override("outline_size", 5)
+	_replay_notice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_replay_notice.visible = false
+	layer.add_child(_replay_notice)
+
+
+func _on_run_replay_rejected(_code: StringName) -> void:
+	if _replay_notice == null:
+		return
+	_replay_notice.text = tr("UI_REPLAY_RECORDING_FAILED")
+	_replay_notice.visible = true
+	_replay_notice_until_usec = Time.get_ticks_usec() + 8000000
+
+
 func _open_replay_library() -> void:
 	if _replay_library_panel == null or _hub_flow == null or not _hub_flow.is_hub_visible() or _credits_pending or _content_reload_pending or _content_panel != null and _content_panel.visible:
 		return
+	if _run_replay_recorder != null:
+		var recording: Dictionary = _run_replay_recorder.snapshot()
+		if recording.active or recording.pending_write:
+			_hub_flow.panel_view().show_rejection("UI_REPLAY_RECORDING_BUSY")
+			return
 	_hub_flow.close_panel()
 	_hub_flow.hide_hub()
 	var opened: Dictionary = _replay_library_panel.open()
@@ -419,6 +657,8 @@ func _start_hub_training(task_id: StringName, expected_revision: int) -> bool:
 
 
 func _on_training_closed() -> void:
+	if _challenge_rewards_panel != null:
+		_sync_mode_rewards()
 	GameState.refresh_profile_state()
 	if _hub_flow != null:
 		_hub_flow.show_hub()
@@ -501,6 +741,7 @@ func _configure_production_profile() -> void:
 
 
 func _sync_local_records() -> Dictionary:
+	_sync_platform_profile()
 	return _local_records.sync_settled_run() if _local_records != null else {"ok": false, "code": &"PROVIDER_UNAVAILABLE", "context": {}}
 
 
@@ -566,7 +807,17 @@ func _apply_localization() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _challenge_rewards_panel != null and _challenge_rewards_panel.visible:
+		return
+	if _platform_panel != null and _platform_panel.visible:
+		return
+	if _endless != null and _endless.handle_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if _replay_library_panel != null and _replay_library_panel.visible:
+		return
+	if _authored_challenge != null and _authored_challenge.handle_input(event):
+		get_viewport().set_input_as_handled()
 		return
 	if _daily_boss != null and _daily_boss.handle_input(event):
 		get_viewport().set_input_as_handled()
@@ -602,6 +853,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	var phase := int(runtime_host.call("runtime_snapshot").get("phase", RunPhaseScript.Value.HUB))
 	if event.is_action_pressed("interact") and RunPhaseScript.is_terminal(phase):
 		return_to_hub()
+
+
+func _apply_equipped_cosmetic(from_candidate: bool) -> void:
+	var cosmetic_id := ""
+	if not from_candidate and _profile_service != null:
+		cosmetic_id = _profile_service.equipped_cosmetic(str(runtime_host.runtime_snapshot().config.character_id))
+	CombatFeedback.apply_player_cosmetic(combat_room.get_node("Player"), cosmetic_id)
 
 
 func _start_new_run() -> void:
@@ -682,6 +940,7 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 	_last_launch_rejection.clear()
 	_room_presentation.set_launch_mode(str(runtime_host.runtime_snapshot().config.get("milestone", "")) in ["LAUNCH", "EXPANSION"])
 	_room_presentation.synchronize_active_room(bool(started.context.get("restored", false)))
+	_apply_equipped_cosmetic(from_candidate)
 	if not from_candidate:
 		var bound: Dictionary = _narrative_flow.bind_active_run() if _narrative_flow != null else {"ok": false, "code": &"NARRATIVE_NOT_CONFIGURED"}
 		if not bound.ok:
@@ -723,6 +982,10 @@ func _launch_run(config: Dictionary, from_candidate: bool, from_launch: bool = f
 		else:
 			checkpoint_current_run()
 	var snapshot: Dictionary = runtime_host.runtime_snapshot()
+	if not from_candidate and _run_replay_recorder != null:
+		var recorded: Dictionary = _run_replay_recorder.start(bool(started.context.get("restored", false)))
+		if not recorded.ok:
+			_on_run_replay_rejected(recorded.code)
 	if RunPhaseScript.is_terminal(int(snapshot.phase)):
 		_on_run_ended(str(snapshot.run_id), snapshot.result, int(snapshot.revision))
 	return true
@@ -747,6 +1010,8 @@ func _native_checkpoint_stamp() -> String:
 
 
 func _process(_delta: float) -> void:
+	if _replay_notice != null and _replay_notice.visible and Time.get_ticks_usec() >= _replay_notice_until_usec:
+		_replay_notice.visible = false
 	if _profile_service == null or _credits_pending or _hub_flow == null or _hub_flow.is_hub_visible() or _profile_service.snapshot().active_launch_receipt.is_empty():
 		return
 	var stamp := _native_checkpoint_stamp()

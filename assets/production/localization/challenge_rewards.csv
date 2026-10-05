@@ -1,0 +1,5 @@
+keys,en,zh_CN
+UI_CHALLENGE_REWARDS,Challenge Equipment,挑战装备
+UI_CHALLENGE_BOSS_DAMAGE_MULTIPLIER_FMT,Boss damage +%d%%,Boss 伤害 +%d%%
+UI_CHALLENGE_MOVE_SPEED_MULTIPLIER_FMT,Movement speed +%d%%,移动速度 +%d%%
+UI_CHALLENGE_DASH_SPEED_MULTIPLIER_FMT,Dash speed +%d%%,闪避速度 +%d%%

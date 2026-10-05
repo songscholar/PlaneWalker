@@ -12,6 +12,7 @@ const MAX_RUN_BYTES := 64 * 1024 * 1024
 const MAX_ARCHIVE_BYTES := 256 * 1024 * 1024
 const MAX_PHYSICAL_BYTES := MAX_ARCHIVE_BYTES
 const MAX_IDENTITY_BYTES := 1024 * 1024
+const MAX_PACKAGE_BYTES := 96 * 1024 * 1024
 const DESCRIPTOR_FIELDS := ["schema_id", "schema_version", "first_sequence", "last_sequence", "observation_count", "raw_size", "compressed_size", "raw_sha256", "compressed_sha256"]
 const ENTRY_FIELDS := ["id", "identity_base64", "identity_sha256", "seed", "status", "observation_count", "compressed_bytes", "chunks"]
 const STATUSES := ["RECORDING", "COMPLETE", "INTERRUPTED", "FAILED"]
@@ -21,6 +22,10 @@ var _save_id := ""
 var _directory := ""
 var _manifest: Dictionary = {}
 var _busy := false
+var _compatibility: Dictionary = {}
+var _cached_digest := ""
+var _cached_observations: Array = []
+var _manifest_directory := ""
 
 
 func configure(root_path: String, game_version: String, binding: Dictionary, profile_id: String, save_domain: String, injector: Callable = Callable()) -> Dictionary:
@@ -32,9 +37,11 @@ func configure(root_path: String, game_version: String, binding: Dictionary, pro
 		return _failure(result.code)
 	_save_id = "stream_" + Envelope.canonical_json({"game_version": game_version, "content_snapshot": binding, "profile_id": profile_id, "save_domain": save_domain}).sha256_text().substr(0, 25)
 	_directory = ProjectSettings.globalize_path(root_path).path_join("chunks").path_join(_save_id)
+	_manifest_directory = ProjectSettings.globalize_path(root_path).path_join("profiles").path_join(_save_id).path_join("local")
 	if DirAccess.make_dir_recursive_absolute(_directory) != OK:
 		return _failure(&"RUN_REPLAY_STORE_IO_FAILED")
 	_save = save
+	_compatibility = {"game_version": game_version, "content_snapshot": binding.duplicate(true)}
 	var loaded := reload()
 	if not loaded.ok:
 		_save = null
@@ -74,6 +81,8 @@ func reload() -> Dictionary:
 	if not validated.ok:
 		return _finish_failure(validated.code)
 	_manifest = validated.context.manifest
+	_cached_digest = ""
+	_cached_observations.clear()
 	_busy = false
 	return _success()
 
@@ -126,7 +135,7 @@ func append(id: String, observations: Array) -> Dictionary:
 		return validation
 	# Publish immutable authenticated bytes before promoting their manifest reference.
 	var written := _write_chunk(chunk)
-	return _commit(candidate, id) if written.ok else written
+	return _commit(candidate, id, false) if written.ok else written
 
 
 func read(id: String, sequence: int) -> Dictionary:
@@ -135,14 +144,107 @@ func read(id: String, sequence: int) -> Dictionary:
 		return _failure(&"RUN_REPLAY_STORE_NOT_FOUND")
 	for descriptor: Dictionary in entry.chunks:
 		if sequence >= int(descriptor.first_sequence) and sequence <= int(descriptor.last_sequence):
-			var loaded := _read_chunk(descriptor)
-			if not loaded.ok:
-				return loaded
-			var decoded := Codec.decode(loaded.context.chunk)
+			var decoded := _observations(descriptor)
 			if not decoded.ok:
 				return decoded
 			return _success({"observation": decoded.context.observations[sequence - int(descriptor.first_sequence)]})
 	return _failure(&"RUN_REPLAY_STORE_NOT_FOUND")
+
+
+func _observations(descriptor: Dictionary) -> Dictionary:
+	# Authenticate disk even for a cached chunk so removal/corruption never hides.
+	var loaded := _read_chunk(descriptor)
+	if not loaded.ok:
+		return loaded
+	if _cached_digest == descriptor.compressed_sha256:
+		return _success({"observations": _cached_observations})
+	var decoded := Codec.decode(loaded.context.chunk)
+	if decoded.ok:
+		_cached_digest = descriptor.compressed_sha256
+		_cached_observations = decoded.context.observations.duplicate(true)
+	return decoded
+
+
+func transition_rows(id: String) -> Dictionary:
+	var entry := _entry(id)
+	if entry.is_empty():
+		return _failure(&"RUN_REPLAY_STORE_NOT_FOUND")
+	var rows: Array[Dictionary] = []
+	for descriptor: Dictionary in entry.chunks:
+		var decoded := _observations(descriptor)
+		if not decoded.ok:
+			return decoded
+		for observation: Dictionary in decoded.context.observations:
+			if observation.get("kind") != "frame":
+				rows.append({"sequence": observation.sequence, "kind": str(observation.get("kind", "")), "floor_id": str(observation.get("scene", {}).get("binding", {}).get("floor_id", "")), "room_id": str(observation.get("scene", {}).get("binding", {}).get("node_id", ""))})
+	return _success({"rows": rows})
+
+
+func export_json(id: String) -> Dictionary:
+	var entry := _entry(id)
+	if entry.is_empty() or entry.status == "RECORDING":
+		return _failure(&"RUN_REPLAY_STORE_STATUS_INVALID")
+	var chunks: Array[Dictionary] = []
+	for descriptor: Dictionary in entry.chunks:
+		var loaded := _read_chunk(descriptor)
+		if not loaded.ok:
+			return loaded
+		if not Codec.decode(loaded.context.chunk).ok:
+			return _failure(&"RUN_REPLAY_CHUNK_INVALID")
+		chunks.append({"digest": descriptor.compressed_sha256, "base64": Marshalls.raw_to_base64(loaded.context.chunk.bytes)})
+	var package := {"schema_id": "planewalker.run_replay_package", "schema_version": 1, "compatibility": _compatibility.duplicate(true), "entry": entry, "chunks": chunks}
+	var encoded := JSON.stringify(package)
+	return _success({"json": encoded}) if encoded.to_utf8_buffer().size() <= MAX_PACKAGE_BYTES else _failure(&"RUN_REPLAY_STORE_CAPACITY")
+
+
+func import_json(encoded: String) -> Dictionary:
+	if _save == null or _busy or encoded.is_empty() or encoded.to_utf8_buffer().size() > MAX_PACKAGE_BYTES:
+		return _failure(&"RUN_REPLAY_PACKAGE_INVALID")
+	var checked := validate_package(JSON.parse_string(encoded), str(_compatibility.game_version), _compatibility.content_snapshot)
+	if not checked.ok:
+		return checked
+	var entry: Dictionary = checked.context.package.entry
+	var existing := _entry(entry.id)
+	if not existing.is_empty():
+		return _success({"id": entry.id}) if _same(existing, entry) else _failure(&"RUN_REPLAY_PACKAGE_INVALID")
+	var candidate := _manifest.duplicate(true)
+	candidate.entries.append(entry)
+	candidate.revision += 1
+	var admitted := _validate(candidate)
+	if not admitted.ok:
+		return admitted
+	for chunk: Dictionary in checked.context.decoded_chunks:
+		var written := _write_chunk(chunk)
+		if not written.ok:
+			return written
+	return _commit(candidate, str(entry.id))
+
+
+static func validate_package(parsed: Variant, game_version: String, binding: Dictionary) -> Dictionary:
+	if not parsed is Dictionary or not _fields(parsed, ["schema_id", "schema_version", "compatibility", "entry", "chunks"]) or parsed.schema_id != "planewalker.run_replay_package" or parsed.schema_version != 1 or not parsed.compatibility is Dictionary or not parsed.entry is Dictionary or not parsed.chunks is Array:
+		return _failure(&"RUN_REPLAY_PACKAGE_INVALID")
+	if not _same(parsed.compatibility, {"game_version": game_version, "content_snapshot": binding}):
+		return _failure(&"REPLAY_PACKAGE_INCOMPATIBLE")
+	if JSON.stringify(parsed).to_utf8_buffer().size() > MAX_PACKAGE_BYTES:
+		return _failure(&"RUN_REPLAY_STORE_CAPACITY")
+	var validated := _validate({"schema_version": 1, "revision": 0, "entries": [parsed.entry]})
+	if not validated.ok or parsed.entry.get("status") == "RECORDING" or parsed.chunks.size() != parsed.entry.get("chunks", []).size():
+		return _failure(&"RUN_REPLAY_PACKAGE_INVALID")
+	var entry: Dictionary = validated.context.manifest.entries[0]
+	var chunks: Array[Dictionary] = []
+	for index: int in range(parsed.chunks.size()):
+		var source: Variant = parsed.chunks[index]
+		var descriptor: Dictionary = entry.chunks[index]
+		if not source is Dictionary or not _fields(source, ["digest", "base64"]) or source.digest != descriptor.compressed_sha256 or not source.base64 is String or source.base64.length() > MAX_PACKAGE_BYTES or source.base64.length() % 4 != 0:
+			return _failure(&"RUN_REPLAY_PACKAGE_INVALID")
+		var chunk := descriptor.duplicate(true)
+		chunk.bytes = Marshalls.base64_to_raw(source.base64)
+		if Marshalls.raw_to_base64(chunk.bytes) != source.base64 or not Codec.decode(chunk).ok:
+			return _failure(&"RUN_REPLAY_PACKAGE_INVALID")
+		chunks.append(chunk)
+	var package: Dictionary = parsed.duplicate(true)
+	package.entry = entry
+	return _success({"package": package, "decoded_chunks": chunks})
 
 
 func finish(id: String, status: String) -> Dictionary:
@@ -174,7 +276,41 @@ func remove(id: String) -> Dictionary:
 	return _commit(candidate, id)
 
 
-func _commit(candidate: Dictionary, id: String) -> Dictionary:
+func collect_garbage() -> Dictionary:
+	if _save == null or _busy:
+		return _failure(&"RUN_REPLAY_STORE_NOT_READY")
+	var referenced: Dictionary = {}
+	# Both recovery generations must retain every referenced immutable chunk.
+	for filename: String in [Save.PRIMARY_FILE, Save.PENDING_FILE, Save.BACKUP_ONE_FILE, Save.BACKUP_TWO_FILE]:
+		var path := _manifest_directory.path_join(filename)
+		if not FileAccess.file_exists(path):
+			continue
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null or file.get_length() > 16 * 1024 * 1024:
+			return _failure(&"RUN_REPLAY_STORE_IO_FAILED")
+		var checked = Envelope.validate(JSON.parse_string(file.get_as_text()), &"profile", _save_id, "local")
+		file.close()
+		if not checked.ok or not _same(checked.payload.content_snapshot, _compatibility.content_snapshot):
+			return _failure(&"RUN_REPLAY_STORE_MANIFEST_INVALID")
+		var validated := _validate(checked.payload.payload.get("run_replay_streams", {}))
+		if not validated.ok:
+			return validated
+		for entry: Dictionary in validated.context.manifest.entries:
+			for chunk: Dictionary in entry.chunks:
+				referenced[str(chunk.compressed_sha256) + ".zst"] = true
+	var directory := DirAccess.open(_directory)
+	if directory == null:
+		return _failure(&"RUN_REPLAY_STORE_IO_FAILED")
+	var reclaimed := 0
+	for filename: String in directory.get_files():
+		if filename.ends_with(".zst") and Recorder._is_sha256(filename.trim_suffix(".zst")) and not referenced.has(filename):
+			if directory.remove(filename) != OK:
+				return _failure(&"RUN_REPLAY_STORE_IO_FAILED")
+			reclaimed += 1
+	return _success({"reclaimed_chunks": reclaimed})
+
+
+func _commit(candidate: Dictionary, id: String, reclaim: bool = true) -> Dictionary:
 	var validated := _validate(candidate)
 	if not validated.ok:
 		return validated
@@ -194,6 +330,9 @@ func _commit(candidate: Dictionary, id: String) -> Dictionary:
 		reconciled = true
 	_manifest = validated.context.manifest
 	_busy = false
+	# Recovery-manifest scanning belongs to archive boundaries, not every batch.
+	if reclaim:
+		collect_garbage()
 	return _success({"id": id, "reconciled_committed_write": reconciled})
 
 
@@ -243,7 +382,7 @@ func _read_chunk(descriptor: Dictionary) -> Dictionary:
 	return _success({"chunk": chunk})
 
 
-func _validate(value: Variant) -> Dictionary:
+static func _validate(value: Variant) -> Dictionary:
 	if not value is Dictionary or not _fields(value, ["schema_version", "revision", "entries"]) or not _integer(value.schema_version, 1, 1) or not _integer(value.revision, 0, 2147483647) or not value.entries is Array or value.entries.size() > MAX_ENTRIES:
 		return _failure(&"RUN_REPLAY_STORE_MANIFEST_INVALID")
 	var result := {"schema_version": 1, "revision": int(value.revision), "entries": []}

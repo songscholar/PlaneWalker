@@ -33,6 +33,10 @@ func _run() -> void:
 		suite.finish(get_tree())
 		return
 	var id: String = started.context.id
+	var orphan_path := str(store.storage_identity().chunk_directory).path_join("a".repeat(64) + ".zst")
+	var orphan := FileAccess.open(orphan_path, FileAccess.WRITE)
+	orphan.store_8(1)
+	orphan.close()
 	var stale: RefCounted = store_script.new()
 	suite.assert_true(stale.configure(root, "0.4.0-dev", binding, "slot_1", "base").ok, "second instance reads the initial durable stream")
 	var expected: Array[Dictionary] = []
@@ -47,6 +51,7 @@ func _run() -> void:
 			suite.assert_true(store.append(id, chunk).ok, "accepted native observations persist as an immutable chunk")
 			chunk.clear()
 	suite.assert_true(store.append(id, chunk).ok, "last partial chunk persists without losing frames")
+	suite.assert_true(FileAccess.file_exists(orphan_path), "continuous recording defers recovery-manifest reclamation to an explicit or terminal boundary")
 	suite.assert_equal(store.rows()[0].observation_count, 245, "physical manifest retains every committed observation")
 	suite.assert_true(not stale.finish(id, "INTERRUPTED").ok, "stale finalization cannot override a newer physical manifest")
 	var fresh: RefCounted = store_script.new()
@@ -61,6 +66,7 @@ func _run() -> void:
 	suite.assert_true(not fresh.finish(id, "INTERRUPTED").ok and fresh.snapshot() == before, "failed manifest promotion preserves committed memory")
 	fresh.set_fault_injector(Callable())
 	suite.assert_true(fresh.finish(id, "INTERRUPTED").ok, "interrupted recording is explicit and durably finalized")
+	suite.assert_true(not FileAccess.file_exists(orphan_path), "terminal archive transaction reclaims unreferenced managed bytes")
 	suite.assert_equal(fresh.rows()[0].status, "INTERRUPTED", "interrupted tape is never labeled complete")
 	suite.assert_true(not fresh.append(id, []).ok, "closed stream cannot append")
 	var domain: RefCounted = store_script.new()

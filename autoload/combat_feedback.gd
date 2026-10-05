@@ -501,6 +501,11 @@ func _scan_for_actors() -> void:
 	_had_combat_actor = _had_combat_actor or found_actor
 
 
+func apply_player_cosmetic(actor: Node2D, cosmetic_id: String) -> bool:
+	var proxy := _ensure_actor_proxy(actor)
+	return proxy != null and proxy.apply_cosmetic(cosmetic_id)
+
+
 func _ensure_actor_proxy(actor: Node2D) -> Node:
 	if actor == null or not is_instance_valid(actor):
 		return null

@@ -5,10 +5,15 @@ signal command_requested(command: Dictionary, revision: int)
 signal tutorial_requested
 signal boss_rush_requested(config: Dictionary)
 signal daily_boss_requested
+signal authored_challenges_requested
 signal replay_library_requested
+signal endless_requested(config: Dictionary)
+signal platform_requested
+signal challenge_rewards_requested
 
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
 const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
+const CosmeticsPanel := preload("res://scripts/ui/hub_cosmetics_panel.gd")
 
 var _selectors: Dictionary = {}
 var _build_name: LineEdit
@@ -76,7 +81,9 @@ func _render_loadout() -> void:
 			selected_pair = str(row.id)
 	_add_selector("time_pair", tr("UI_LAUNCH_TIME_PAIR_LABEL"), _state.loadout.time_pairs, selected_pair)
 	_add_action("boss_rush", tr("UI_MODE_BOSS_RUSH"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): boss_rush_requested.emit(_state.loadout.selected.duplicate(true)))
+	_add_action("endless", tr("UI_MODE_ENDLESS"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): endless_requested.emit(_state.loadout.selected.duplicate(true)))
 	_add_action("daily_boss", tr("UI_DAILY_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): daily_boss_requested.emit())
+	_add_action("authored_challenges", tr("UI_AUTHORED_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): authored_challenges_requested.emit())
 	var launch := Button.new()
 	launch.name = "LaunchButton"
 	launch.text = tr("UI_HUB_ENTER")
@@ -273,12 +280,21 @@ func _save_build() -> void:
 func _render_collection(kind: String) -> void:
 	if kind == "archive":
 		_add_action("replay_library", tr("UI_REPLAY_LIBRARY"), "", true, "", func(): replay_library_requested.emit())
+	if kind == "gallery":
+		_add_action("challenge_rewards", tr("UI_CHALLENGE_REWARDS"), "", true, "", func(): challenge_rewards_requested.emit())
+		var cosmetics := CosmeticsPanel.new()
+		rows_container.add_child(cosmetics)
+		if cosmetics.configure(_state.cosmetics, _emit_operation, _activate_action, _epoch):
+			_actions.append_array(cosmetics.action_buttons())
+		else:
+			cosmetics.queue_free()
 	var rows: Array = _state.collections[kind]
 	if rows.is_empty():
 		_add_text(tr("UI_HUB_EMPTY"))
 	for row: Dictionary in rows:
 		_add_text("%s  %s" % [tr(str(row.name_key)), tr("UI_HUB_OWNED" if row.owned else "UI_HUB_LOCKED")])
 	if kind == "mirror":
+		_add_action("platform", tr("UI_PLATFORM_TITLE"), "", true, "", func(): platform_requested.emit())
 		_render_providers()
 
 
@@ -331,7 +347,7 @@ func _render_dialogue() -> void:
 
 func _emit_operation(operation: String, payload: Dictionary) -> void:
 	var prepared := payload.duplicate(true)
-	if operation in ["meta_unlock", "forge_upgrade", "enchant_preference", "void_temper", "build_save", "build_remove", "narrative_dialogue"]:
+	if operation in ["meta_unlock", "forge_upgrade", "enchant_preference", "void_temper", "build_save", "build_remove", "narrative_dialogue", "cosmetic_claim", "cosmetic_equip"]:
 		prepared.command_id = "hub:%d:%d:%s" % [int(_state.revision), int(_state.epoch), operation]
 		prepared.kind = operation
 	command_requested.emit({"epoch": _state.epoch, "function_id": _state.function_id, "operation": operation, "payload": prepared}, int(_state.revision))

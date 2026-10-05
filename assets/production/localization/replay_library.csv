@@ -15,3 +15,11 @@ UI_REPLAY_INVALID,This replay could not be opened,无法打开这条回放
 UI_REPLAY_FULL,Replay storage is full,回放存储已满
 UI_REPLAY_INCOMPATIBLE,This replay uses different game content,这条回放使用了不同的游戏内容
 UI_REPLAY_SAVE_FAILED,Save failed. Reopen the replay library and try again.,保存失败。请重新打开回放列表后重试。
+UI_REPLAY_STATUS_COMPLETE,Complete,完整
+UI_REPLAY_STATUS_INTERRUPTED,Interrupted,中断片段
+UI_REPLAY_STATUS_FAILED,Recording failed,录制失败
+UI_REPLAY_STATUS_RECORDING,Recording,录制中
+UI_REPLAY_PREVIOUS_ROOM,Previous room,上一房间
+UI_REPLAY_NEXT_ROOM,Next room,下一房间
+UI_REPLAY_RECORDING_FAILED,Replay recording unavailable,回放录制暂不可用
+UI_REPLAY_RECORDING_BUSY,Replay is still being saved,回放仍在保存

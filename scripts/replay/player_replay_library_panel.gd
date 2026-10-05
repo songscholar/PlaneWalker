@@ -6,6 +6,7 @@ var _speed: OptionButton
 var _timeline: HSlider
 var _time_label: Label
 var _play: Button
+var _room_label: Label
 var _import: FileDialog
 var _delete: ConfirmationDialog
 var _delete_id := ""
@@ -84,8 +85,9 @@ func _render_state() -> void:
 	_timeline = null
 	_time_label = null
 	_play = null
+	_room_label = null
 	title_label.text = tr("UI_REPLAY_LIBRARY")
-	summary_label.text = tr("UI_REPLAY_COUNT_FMT") % [int(_state.entries.size()), 20]
+	summary_label.text = tr("UI_REPLAY_COUNT_FMT") % [int(_state.entries.size()), 40 if _library.has_method("attach_stream_store") else 20]
 	if str(_state.selection.selected_id).is_empty():
 		_add_action("import", tr("UI_REPLAY_IMPORT"), "", true, "", _choose_import)
 	if _state.entries.is_empty():
@@ -98,7 +100,8 @@ func _render_state() -> void:
 	_selector.add_theme_font_size_override("font_size", 12)
 	_selector.add_item(tr("UI_REPLAY_SELECT"))
 	for row: Dictionary in _state.entries:
-		_selector.add_item("%s / %s / %.2fs / #%d" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper()), float(int(row.last_frame) - int(row.first_frame)) / 60.0, int(row.seed)])
+		var status := " / " + tr("UI_REPLAY_STATUS_" + str(row.status)) if row.has("status") else ""
+		_selector.add_item("%s / %s / %.2fs / #%d%s" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper()), float(int(row.last_frame) - int(row.first_frame)) / 60.0, int(row.seed), status])
 		_selector.set_item_metadata(_selector.item_count - 1, row.id)
 		if row.id == _state.selection.selected_id:
 			_selector.select(_selector.item_count - 1)
@@ -115,7 +118,7 @@ func _render_state() -> void:
 	view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	view.custom_minimum_size = Vector2(0, 96)
+	view.custom_minimum_size = Vector2(0, 180)
 	view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows_container.add_child(view)
 	_timeline = HSlider.new()
@@ -146,6 +149,13 @@ func _render_state() -> void:
 	_tool(tools, "remove", "x", "UI_REPLAY_REMOVE", _choose_remove)
 	_time_label = _label("", "ReplayTime", 11)
 	rows_container.add_child(_time_label)
+	if _state.selection.has("bookmarks"):
+		var transitions := HBoxContainer.new()
+		rows_container.add_child(transitions)
+		_tool(transitions, "previous_room", "<", "UI_REPLAY_PREVIOUS_ROOM", func(): _library.seek_transition(-1))
+		_tool(transitions, "next_room", ">", "UI_REPLAY_NEXT_ROOM", func(): _library.seek_transition(1))
+		_room_label = _label("", "ReplayRoom", 11)
+		rows_container.add_child(_room_label)
 	_update_timeline()
 
 
@@ -174,6 +184,10 @@ func _update_timeline() -> void:
 		if _speed.get_item_metadata(index) == state.speed:
 			_speed.select(index)
 	_time_label.text = "%.2fs / %.2fs" % [float(state.cursor) / 60.0, float(maxi(0, int(state.frame_count) - 1)) / 60.0]
+	if is_instance_valid(_room_label):
+		var observation: Dictionary = _library.current_world().observation()
+		var binding: Dictionary = observation.get("scene", {}).get("binding", {})
+		_room_label.text = tr("FLOOR_%s_NAME" % str(binding.get("floor_id", "")).trim_prefix("floor_").to_upper()) if not binding.is_empty() else ""
 
 
 func _focus_controls() -> Array[Control]:
@@ -277,7 +291,7 @@ func _dialog_input(event: InputEvent, dialog: Window) -> void:
 
 func _show_failure(code: StringName) -> void:
 	var key := "UI_REPLAY_INVALID"
-	if code == &"REPLAY_ARCHIVE_CAPACITY":
+	if code in [&"REPLAY_ARCHIVE_CAPACITY", &"RUN_REPLAY_STORE_CAPACITY"]:
 		key = "UI_REPLAY_FULL"
 	elif code == &"REPLAY_PACKAGE_INCOMPATIBLE":
 		key = "UI_REPLAY_INCOMPATIBLE"

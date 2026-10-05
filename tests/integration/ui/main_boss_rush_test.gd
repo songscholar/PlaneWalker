@@ -21,6 +21,27 @@ func _run() -> void:
 		suite.finish(get_tree())
 		return
 	var hub: Node = main.get_node("HubFlowCoordinator")
+	var flow: Node = coordinator.runtime()
+	suite.assert_true(flow.uses_carried_rules(), "production Main selects the complete carried Boss Rush rules")
+	suite.assert_true(not flow.is_unlocked(), "fresh production Profile exposes the first-victory gate")
+	var service: RefCounted = GameState.profile_runtime_service()
+	var fixture: Dictionary = service.snapshot()
+	fixture.statistics.finished_runs = 1
+	fixture.statistics.victories = 1
+	var save: RefCounted = service.get("_save")
+	var catalog: RefCounted = service.get("_catalog")
+	suite.assert_true(save.save_profile("slot_1", "base", {"meta_profile_state": fixture}).ok and service.configure(catalog, save, "slot_1", "base").ok, "actual Main reloads a physical eligible Profile fixture")
+	main.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	GameState.set("_profile_runtime", null)
+	main = Main.instantiate()
+	add_child(main)
+	await get_tree().process_frame
+	coordinator = main.get_node("BossRushCoordinator")
+	hub = main.get_node("HubFlowCoordinator")
+	flow = coordinator.runtime()
+	suite.assert_true(flow.is_unlocked(), "cold production Main reads the eligible physical Profile")
 	suite.assert_true(hub.travel("hub_council").ok and hub.open_function("gateway").ok, "actual authored gateway opens in the council district")
 	var launch: Button
 	for action: Control in hub.panel_view().action_controls():
@@ -40,7 +61,6 @@ func _run() -> void:
 	var retired: Callable = start.pressed.get_connections()[0].callable
 	start.pressed.emit()
 	await get_tree().process_frame
-	var flow: Node = coordinator.runtime()
 	var playing: bool = flow.is_active() and flow.current_player() != null and not coordinator.panel().visible
 	suite.assert_true(playing, "actual start control enters native combat: " + str([flow.snapshot(), flow.get("_native_failure"), coordinator.panel().error_label.text, coordinator.is_open()]))
 	if not playing:

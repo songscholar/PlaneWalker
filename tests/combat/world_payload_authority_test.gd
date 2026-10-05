@@ -83,6 +83,7 @@ func _run() -> void:
 	_test_generation_invalidation_watermark_is_bounded_and_permanent()
 	_test_generation_reset_preflight_is_pure_and_lock_aware()
 	_test_replay_restore_cannot_cross_invalidation_boundary()
+	_test_cold_restore_rebases_matching_invalidation_history()
 	_suite.finish(get_tree())
 
 
@@ -831,6 +832,38 @@ func _test_replay_restore_cannot_cross_invalidation_boundary() -> void:
 	)
 	_suite.assert_equal(authority.replay_snapshot(), after_invalidation, "rejected stale Replay leaves tombstone and state exact")
 	authority.queue_free()
+
+
+func _test_cold_restore_rebases_matching_invalidation_history() -> void:
+	var fresh = _authority_with_factory(&"time_rift")
+	var retained = _authority_with_factory(&"time_rift")
+	fresh.invalidate_generation(&"standalone", 2, &"run_replacement")
+	fresh.invalidate_generation(&"run-second", 1, &"player_runtime_reset")
+	retained.invalidate_generation(&"standalone", 2, &"run_replacement")
+	retained.invalidate_generation(&"run-first", 2, &"player_died")
+	retained.invalidate_generation(&"run-second", 1, &"player_runtime_reset")
+	var fresh_before: Dictionary = fresh.replay_snapshot()
+	var target: Dictionary = retained.replay_snapshot()
+	var forged := target.duplicate(true)
+	for row: Dictionary in forged.invalidated_generations:
+		if row.run_id == &"run-second":
+			row.reason = &"unrelated_reason"
+	_suite.assert_true(not fresh.restore_replay_snapshot(forged), "cold history rebase rejects a changed invalidation reason")
+	_suite.assert_equal(fresh.replay_snapshot(), fresh_before, "refused history rebase preserves the entire live authority")
+	_suite.assert_true(fresh.restore_replay_snapshot(target), "cold restore accepts matching generation tombstones at higher retained revisions")
+	_suite.assert_equal(fresh.replay_snapshot(), target, "cold restore retains the exact previous-run history and revision watermark")
+	var reordered := target.duplicate(true)
+	for row: Dictionary in reordered.invalidated_generations:
+		if row.run_id == &"run-first":
+			row.revision = 3
+		elif row.run_id == &"run-second":
+			row.revision = 2
+	_suite.assert_true(not fresh.restore_replay_snapshot(reordered), "retained history cannot reduce one tombstone revision while keeping every run key")
+	_suite.assert_equal(fresh.replay_snapshot(), target, "refused tombstone revision rollback leaves the exact live history")
+	_suite.assert_true(not fresh.restore_replay_snapshot(fresh_before), "rebased live history cannot drop previous-run tombstones or reduce revisions")
+	_suite.assert_equal(fresh.replay_snapshot(), target, "history rollback refusal preserves the accepted retained tombstones")
+	fresh.queue_free()
+	retained.queue_free()
 
 
 func _authority_with_factory(handler_id: StringName):

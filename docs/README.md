@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P11 five weapons, P12 five characters and P13 complete Launch pools are locally certified. P14 native dungeon panels and Save/Replay have focused verification. P15 production native encounters, five Boss foundations, Time Watch and live combat checkpoints are active; remaining species, affixes and Boss arena constructs continue. P16 native Hub/meta/training/tutorial, narrative/endings and trusted active-content migration have focused evidence. P17 actor/enemy raster assets and music, P18 local Mod/DLC management, P20A native build sharing and P20B durable local records have focused evidence. P21 native modes and P22 replay productization are active. Combined clean-checkout validation, line coverage, retained release exports and full-gameplay certification remain pending. Formal M1 remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P11 five weapons, P12 five characters and P13 complete Launch pools are locally certified. P14 native dungeon panels and Save/Replay have focused verification. P15 production native encounters, five Boss foundations, Time Watch, Forest roots, Nullified/Shielded elites and live combat checkpoints have focused evidence; remaining species, affixes and Boss auxiliary arenas continue. P16 native Hub/meta/training/tutorial, narrative/endings and trusted active-content migration have focused evidence. P17 raster assets/music, P18 local Mod/DLC management, P20 native sharing/local records, P21 carried Boss Rush/Daily/Endless, P22 private native run replay, P23 free cosmetics, P24 offline platform and P26 authenticated challenge rewards have focused evidence. Combined clean-checkout validation, exact-source line coverage, retained release exports and complete native gameplay remain pending. Formal M1 remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -92,10 +92,36 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P22C Streamed Run Replay Design](superpowers/specs/2026-10-05-p22c-streamed-run-replay-design.md) | 整局录制、精确差量分块、物理持久化和隔离播放 | Approved / Current authority |
 | [P22C Streamed Run Replay Plan](superpowers/plans/2026-10-05-p22c-streamed-run-replay.md) | 长局压缩、实际原生观察与完整世界回放实施 | Active / Current |
 | [P22C Run Replay Codec Evidence](current/2026-10-05-p22c-run-replay-codec-evidence.md) | 实际角色快照的类型精确保留、差量重建和有界压缩 | Focused Verified / Partial milestone |
+| [P22C Physical Run Replay Stream Evidence](current/2026-10-05-p22c-run-replay-stream-evidence.md) | 整局物理分块、精确读取、并发版本拒绝、故障恢复和空间预算 | Focused Verified / Partial milestone |
+| [P22C Native Run Replay Evidence](current/2026-10-05-p22c-native-run-replay-evidence.md) | 正式整局录制、隔离原生世界、历史寻址、物理导入导出和三种分辨率 | Focused Verified / Long gameplay certification pending |
+| [P21D Native Endless Design](superpowers/specs/2026-10-05-p21d-native-endless-design.md) | 五层连续循环、跨循环构筑与资源、有界难度和独立冷恢复 | Approved / Current authority |
+| [P21D Native Endless Plan](superpowers/plans/2026-10-05-p21d-native-endless.md) | 正式五层循环、耐久服务、原生流程与据点入口实施 | Active / Current |
+| [P21D Native Endless Evidence](current/2026-10-05-p21d-native-endless-evidence.md) | 真实五层循环、构筑与资源继承、有界强度和物理冷恢复 | Focused Verified / Combined certification pending |
+| [P21E Daily Rewards Design](superpowers/specs/2026-10-05-p21e-daily-rewards-design.md) | 每日条件、认证奖励、连续通关和免费兑换 | Approved / Current authority |
+| [P21E Daily Rewards Plan](superpowers/plans/2026-10-05-p21e-daily-rewards.md) | 原生条件、物理奖励和每日代币实施 | Active / Current |
+| [P21E Daily Rewards Evidence](current/2026-10-05-p21e-daily-rewards-evidence.md) | 每日参与与胜利、连续奖励、无伤认证、代币兑换和手柄重试 | Focused Verified / Remaining special rules active |
+| [P21F Daily Conditions Design](superpowers/specs/2026-10-05-p21f-daily-conditions-design.md) | 每日五种特殊条件的正式战斗规则 | Approved / Current authority |
+| [P21F Daily Conditions Plan](superpowers/plans/2026-10-05-p21f-daily-conditions.md) | 真实条件、冷恢复和历史会话迁移实施 | Active / Current |
+| [P25 Carried Boss Rush Design](superpowers/specs/2026-10-05-p25-carried-boss-rush-design.md) | 连续 Boss 战、携带资源、统一难度与认证结算 | Approved / Current authority |
+| [P25 Carried Boss Rush Plan](superpowers/plans/2026-10-05-p25-carried-boss-rush-plan.md) | 连战构筑、场地强度、耐久奖励与原生入口实施 | Active / Current |
+| [P25 Carried Boss Rush Evidence](current/2026-10-05-p25-carried-boss-rush-evidence.md) | 连续五战、资源与物品继承、必选奖励、冷恢复和原生界面 | Focused Verified / Profile reward integration active |
+| [P26 Challenge Rewards Design](superpowers/specs/2026-10-05-p26-mode-rewards-design.md) | 正式模式结算的耐久奖励凭据与冻结装备边界 | Approved / Current authority |
+| [P26 Challenge Rewards Plan](superpowers/plans/2026-10-05-p26-mode-rewards-plan.md) | 认证领取、独立收藏、装备与保存故障实施 | Active / Current |
+| [P26 Challenge Rewards Evidence](current/2026-10-05-p26-mode-rewards-evidence.md) | 真实五 Boss、七日 Daily、原子领取与历史存档迁移 | Focused Verified / Runtime integration active |
+| [P26 Native Challenge Collection Evidence](current/2026-10-05-p26-native-challenge-collection-evidence.md) | Main 自动领取、据点装备控件、保存重试和手柄返回 | Focused Verified / Current |
+| [P24 Offline Platform Design](superpowers/specs/2026-10-05-p24-offline-platform-design.md) | 离线身份、成就、缓存、排行、分享和可选服务组合 | Approved / Current authority |
+| [P24 Offline Platform Plan](superpowers/plans/2026-10-05-p24-offline-platform-plan.md) | 耐久服务、原生操作窗口与据点入口实施 | Active / Current |
+| [P24 Offline Platform Evidence](current/2026-10-05-p24-offline-platform-evidence.md) | 本地账号、实际 Profile 备份、回放分享、故障和手柄验证 | Focused Verified / Current |
 | [P23 Free Cosmetics Design](superpowers/specs/2026-10-05-p23-free-cosmetics-design.md) | 免费外观收藏、独立保存与冻结装备边界 | Approved / Current authority |
 | [P23 Free Cosmetics Plan](superpowers/plans/2026-10-05-p23-free-cosmetics-plan.md) | 领取、装备、原生预览和正式配装实施 | Active / Current |
-| [Native Forest Roots Plan](superpowers/plans/2026-10-05-native-forest-roots.md) | 森林根须领域与原生机制实施 | Active / Current |
+| [P23 Free Cosmetics Evidence](current/2026-10-05-p23-free-cosmetics-evidence.md) | 15 个免费外观、独立保存、手柄操作、原生五角色图集和恢复 | Focused Verified / Current |
+| [Native Forest Roots Plan](superpowers/plans/2026-10-05-native-forest-roots.md) | 森林根须领域与原生机制实施 | Completed / Historical |
+| [Native Forest Roots Evidence](current/2026-10-05-p15b-native-forest-roots-evidence.md) | 原生根须伤害、暴露、第二阶段重建、事务回滚与冷恢复 | Focused Verified / Current |
+| [Native Forest Root Sweep Plan](superpowers/plans/2026-10-05-native-forest-root-sweep.md) | 存活根须选择、真实原点扫击、取消和历史快照兼容 | Active / Current |
+| [Native Forest Root Sweep Evidence](current/2026-10-05-p15b-native-forest-root-sweep-evidence.md) | 根须原点预警、取消、回滚、位移场景和历史凭据验证 | Focused Verified / Current |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
+| [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
+| [Native Shielded Elite Evidence](current/2026-10-05-native-elite-shielded-evidence.md) | 真实护盾、破盾暴露、再生、锚定组合与事务回滚 | Focused Verified / Remaining affixes active |
 | [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
 | [Native UI Certification Repairs](current/2026-10-05-native-ui-certification-repairs-evidence.md) | 原生菜单夹具、五层面板流程和奖励浮点精度修复 | Focused Verified / Current |
 | [Native Narrative Checkpoint Regression](current/2026-10-05-native-narrative-regression-evidence.md) | 正式路线、结局退休后的完整角色冷恢复和一次性交接 | Focused Verified / Current |
@@ -110,6 +136,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P21B Native Daily Boss Evidence](current/2026-10-05-p21b-native-daily-boss-evidence.md) | 固定配装、每日三次、实际首领胜负、冷恢复和双语操作验证 | Focused Verified / Current |
 | [P21C Authored Challenges Design](superpowers/specs/2026-10-05-p21c-authored-challenges-design.md) | 五武器固定配装、三首领与差异化挑战目标 | Approved / Current authority |
 | [P21C Authored Challenges Plan](superpowers/plans/2026-10-05-p21c-authored-challenges.md) | 原生关卡目标、独立挑战记录和据点入口实施 | Active / Current |
+| [P21C Native Authored Challenges Evidence](current/2026-10-05-p21c-native-authored-challenges-evidence.md) | 五武器固定配装、三首领目标、独立记录、原生入口和 40 个窗口状态 | Focused Verified / Current |
+| [P21D Native Endless Design](superpowers/specs/2026-10-05-p21d-native-endless-design.md) | 五层循环、构筑延续、饱和难度与独立耐久存档 | Approved / Current authority |
+| [P21D Native Endless Plan](superpowers/plans/2026-10-05-p21d-native-endless.md) | 原生循环、冷恢复、手柄和真实五层通关实施 | Active / Current |
 | [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
 | [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
 | [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Historical contract |

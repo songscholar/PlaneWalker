@@ -5,6 +5,7 @@
 - Authority Level: Evidence below approved P15 specification section 6
 - Applies To: Native revision four, Stop/Rift/Health, accepted-frame compensation, physical persistence and presentation
 - Owner: Native hostile implementation team
+- Depends On: `../superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`
 - Last Verified: 2026-10-05
 
 ## Verified Behavior
