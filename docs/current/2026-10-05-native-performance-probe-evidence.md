@@ -5,7 +5,7 @@
 - Authority Level: Verification evidence below approved native performance specification
 - Applies To: Actual Main, Hub, combat and independent automatic recording
 - Owner: Plane Walker verification lane
-- Last Verified: 2026-10-05
+- Last Verified: 2026-10-06
 - Depends On: `docs/superpowers/specs/2026-10-05-native-performance-probe-design.md`
 
 ## Executable Probe
@@ -55,3 +55,55 @@ These short samples do not certify 60 FPS, worst-case saturation, human play,
 unassisted victory, a 45-minute recording, rendering or later Boss phases.
 Longer runs must retain unique actual samples and observed load rather than
 substitute repeated tape values or hypothetical concurrency.
+
+## Current Frame Diagnosis
+
+The isolated checkout
+`build/retained-checkout/native-recorder-profile-be58030-20261006` starts at
+`be580300a80888882d70dff5ac0863c3ed7359d6`. Five consecutive diagnostic
+runs add progressively finer timing inside Player, hostile bridge, recorder,
+Boss runtime and native geometry methods. These edits remain only in that
+checkout. The final diff is seven files, 121 added lines and two replaced lines;
+production source does not contain the instrumentation.
+
+Reports are retained at `build/profile/report.json`,
+`build/profile-player/report.json`, `build/profile-bridge/report.json`,
+`build/profile-boss/report.json` and `build/profile-geometry/report.json`
+inside that checkout. All explicitly set `diagnostic_instrumented: true`.
+Each records 600 distinct accepted floor-2 Boss phase-0 Player frames,
+independent automatic recording and exact fresh physical first/last readback.
+All five have identical first/last tape hashes and strict clean stdout/engine
+logs. No source was changed during an individual run.
+
+The Player diagnostic gives the following mean elapsed wall times. Substeps
+include their nested work and must not be added again to parent totals.
+
+| Player frame step | Mean |
+| --- | ---: |
+| Intent validation and preflight | 0.400 ms |
+| Transaction preimage | 0.242 ms |
+| Hostile begin and event buffers | 0.657 ms |
+| Native clocks and character preparation | 0.139 ms |
+| Weapon and character commit | 0.119 ms |
+| World, rewind, intents and movement | 0.085 ms |
+| Hostile preparation | 16.020 ms |
+| Buffer commit and fact baseline | 5.267 ms |
+| Native publication and automatic recording | 7.549 ms |
+| Entire Player advance | 30.557 ms |
+
+Within recording, native cold snapshot creation/validation averages 4.100 ms,
+Player validation 1.558 ms and detached latest-observation copying 0.655 ms.
+The final nested Boss diagnostic records 4,552 full-validation contexts,
+3,411 positive cache hits, 1,141 uncached accepted snapshots and 570 fresh
+configurations. Context encoding totals 459.706 ms, snapshot encoding
+621.563 ms, uncached validation 1,161.474 ms and configuration 467.572 ms.
+Native Boss geometry inspection totals 767.369 ms across 5,691 calls and is
+already included in its enclosing frame work.
+
+These measurements identify hostile preparation, repeated transaction
+validation and native recording as remaining costs. They do not justify
+skipping validation or claim a verified optimization. They ran headless with
+fixed-FPS scheduling during parallel matrix/scene validation; elapsed timings
+include instrumentation and host contention. The 16.667 ms rendered target,
+late phases, sustained recording and bounded memory remain pending separate
+uninstrumented certification.
