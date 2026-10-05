@@ -100,8 +100,8 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	return _sync_native(value, true)
 
 
-func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = []) -> Dictionary:
-	if foreign_active_zones < 0 or foreign_active_zones > Runtime.MAX_ZONES or not _pending.is_empty() or context.runtime_frame != int(snapshot().runtime_frame) + 1 or context.run_id != snapshot().run_id or not _native_matches(snapshot()):
+func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = [], foreign_constructs: int = 0) -> Dictionary:
+	if foreign_constructs < 0 or foreign_constructs > 8 or foreign_active_zones < 0 or foreign_active_zones > Runtime.MAX_ZONES or not _pending.is_empty() or context.runtime_frame != int(snapshot().runtime_frame) + 1 or context.run_id != snapshot().run_id or not _native_matches(snapshot()):
 		return _failure("unavailable_or_native_projection")
 	var before := snapshot()
 	var has_live_payloads: bool = not before.projectiles.is_empty() or not before.zones.is_empty()
@@ -145,7 +145,7 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 	preview.retire_arena_payloads(retired_sources)
 	preview.retire_payload_sources(retired_children)
 	var zone_capacity := Runtime.MAX_ZONES - foreign_active_zones
-	var debris_context := _debris_context(before, context, contacts, motion)
+	var debris_context := _debris_context(before, context, contacts, motion, foreign_constructs)
 	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity, debris_context)
 	if not advanced.ok:
 		return advanced
@@ -358,11 +358,11 @@ func _debris_matches(value: Dictionary) -> bool:
 	return true
 
 
-func _debris_context(value: Dictionary, context: Dictionary, contacts: Dictionary, motion: Dictionary) -> Dictionary:
+func _debris_context(value: Dictionary, context: Dictionary, contacts: Dictionary, motion: Dictionary, foreign_constructs: int = 0) -> Dictionary:
 	if value.get("schema_version") != 2:
 		return {"occupied": {}, "foreign_constructs": 0, "retired_sources": [], "static_exclusions": []}
 	var occupied: Dictionary = {}
-	var count := 0
+	var count := foreign_constructs
 	var retired: Array[String] = []
 	for source: String in context.actors:
 		var actor: Node2D = context.actors[source]

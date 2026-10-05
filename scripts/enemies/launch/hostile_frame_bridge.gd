@@ -57,6 +57,8 @@ func configure(player: Node2D, registry: RefCounted, actors: Array, effects: Ref
 	_registry = registry
 	_actors = candidate
 	_effects = effects
+	if effects.has_method("configure_spatial_frame_authority") and not effects.configure_spatial_frame_authority(self):
+		return false
 	_last_runtime_frame = int(player.get("_runtime_frame"))
 	for actor: Node2D in _actors.values():
 		if actor.has_method("configure_hostile_threat_authority") and not bool(actor.call("configure_hostile_threat_authority", registry, Callable(self, "_current_runtime_frame"))):
@@ -194,6 +196,8 @@ func prepare_frame(ticket: Dictionary) -> bool:
 	_active.prepared = true
 	var batches: Array[Dictionary] = []
 	var target_id := _player_target_id()
+	if _effects.has_method("apply_native_portal_transits") and not _effects.apply_native_portal_transits(int(ticket.runtime_frame), _actors, {target_id: _player}, self):
+		return false
 	# Grants enter recipient controls before this frame builds its attack facts.
 	for record: Dictionary in _active.records:
 		if record.actor.has_method("settle_launch_chaining") and not record.actor.settle_launch_chaining(_actors, int(ticket.runtime_frame), self):

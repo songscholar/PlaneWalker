@@ -7,7 +7,11 @@ const Geometry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const ActorScript := preload("res://scripts/enemies/launch/launch_hostile_actor.gd")
 const ZoneProjection := preload("res://scripts/enemies/launch/launch_semantic_zone_projection.gd")
 const StormPattern := preload("res://scripts/enemies/launch/launch_storm_pattern.gd")
-const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "heal_sources", "heal_recipients", "histories", "zones", "statuses"]
+const Spatial := preload("res://scripts/enemies/launch/enemy_spatial_runtime.gd")
+const SpatialConstruct := preload("res://scripts/enemies/launch/launch_enemy_spatial_construct.gd")
+const Calculator := preload("res://scripts/combat/damage_calculator.gd")
+const LEGACY_STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "heal_sources", "heal_recipients", "histories", "zones", "statuses"]
+const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "heal_sources", "heal_recipients", "histories", "zones", "statuses", "spatial"]
 const ZONE_FIELDS := ["id", "source_id", "action_id", "generation", "hit_index", "reserved_frame", "active_frame", "expires_frame", "geometry", "initial_damage", "damage", "damage_type", "tick_damage_type", "tick_frames", "warning_frames", "lifetime_frames", "slow_multiplier", "slow_frames", "enemy_only_freeze", "owner_immunity", "ally_damage", "owner_zone_cap", "phase"]
 const STATUS_FIELDS := ["id", "target_id", "expires_frame", "slow_multiplier", "speed_multiplier", "attack_multiplier", "freeze_actions"]
 const MAX_CLAIMS := 4096
@@ -23,12 +27,15 @@ var _root: Node2D
 var _nodes: Dictionary = {}
 var _targets: Dictionary = {}
 var _geometry: RefCounted = Geometry.new()
+var _spatial: RefCounted = Spatial.new()
+var _spatial_nodes := {}
+var _frame_authority: WeakRef
 
 
 func configure(run_id: String, frame: int = 0) -> bool:
-	if not _pending.is_empty() or not _nodes.is_empty() or not _stable(run_id) or not _frame(frame):
+	if not _pending.is_empty() or not _nodes.is_empty() or not _stable(run_id) or not _frame(frame) or not _spatial.configure_catalog():
 		return false
-	_state = {"schema_version": 1, "run_id": run_id, "initial_frame": frame, "runtime_frame": frame, "claims": [], "heal_sources": {}, "heal_recipients": {}, "histories": {}, "zones": [], "statuses": []}
+	_state = {"schema_version": 2, "run_id": run_id, "initial_frame": frame, "runtime_frame": frame, "claims": [], "heal_sources": {}, "heal_recipients": {}, "histories": {}, "zones": [], "statuses": [], "spatial": Spatial.initial_state(run_id, frame)}
 	return true
 
 
@@ -62,6 +69,8 @@ func dispose_native_effects() -> bool:
 		return false
 	_state.zones = []
 	_state.statuses = []
+	for row: Dictionary in _state.spatial.rows:
+		row.phase = "RETIRED"
 	_prune_native(_state)
 	_targets.clear()
 	_root = null
@@ -84,8 +93,189 @@ func pending_work() -> Dictionary:
 	return {"zones": _state.get("zones", []).size()}
 
 
+func native_spatial_nodes() -> Array[Node2D]:
+	var result: Array[Node2D] = []
+	for row: Dictionary in _state.get("spatial", {}).get("rows", []):
+		if row.phase in ["WARNING", "ACTIVE", "COLLAPSE"] and is_instance_valid(_spatial_nodes.get(row.id)):
+			result.append(_spatial_nodes[row.id])
+	return result
+
+
+func configure_spatial_frame_authority(authority: RefCounted) -> bool:
+	if authority == null or not authority.has_method("frame_transaction_is_active") or _frame_authority != null and _frame_authority.get_ref() != authority:
+		return false
+	_frame_authority = weakref(authority)
+	return true
+
+
+func apply_native_portal_transits(frame: int, targets: Dictionary, authority: RefCounted) -> bool:
+	if _state.is_empty() or not _pending.is_empty() or _frame_authority == null or _frame_authority.get_ref() != authority or not authority.frame_transaction_is_active() or frame != int(_state.runtime_frame) + 1 or not _native_matches(_state):
+		return false
+	var keys: Array = targets.keys()
+	keys.sort()
+	var moved := {}
+	for row: Dictionary in _state.spatial.rows:
+		if row.kind != "portal" or row.phase != "ACTIVE" or frame >= int(row.expires_frame):
+			continue
+		for id: String in keys:
+			var target: Variant = targets[id]
+			if moved.has(id) or not is_instance_valid(target) or not target is CharacterBody2D or target.get_node("HealthComponent").dead or target.get_node("HealthComponent").frame_signal_transaction_runtime_frame() != frame:
+				continue
+			var player: bool = target is PlayerController
+			if player and row.parameters.team_rule == "enemy_only" or frame < int(row.transit_claims.get(id, -12)) + 12:
+				continue
+			if not player:
+				var affix: Variant = target.get("_affix_runtime")
+				if affix != null and affix.displacement_multiplier() == 0.0 or target.has_method("is_time_stopped") and target.is_time_stopped():
+					continue
+			for endpoint: int in range(2):
+				var entry := _vector(row.geometry[endpoint].origin)
+				if target.global_position.distance_to(entry) > 16.0:
+					continue
+				var exit := _vector(row.geometry[1 - endpoint].origin)
+				var destination := exit + entry.direction_to(exit) * 24.0
+				var safe := _portal_inside_room(row, target, destination, targets)
+				for other: Variant in targets.values():
+					if is_instance_valid(other) and other is PlayerController and other != target and destination.distance_to(other.global_position) < 48.0:
+						safe = false
+				var arrival: Transform2D = target.global_transform
+				arrival.origin = destination
+				if safe and not target.test_move(arrival, Vector2.ZERO, null, 0.08, true):
+					target.global_position = destination
+					row.transit_claims[id] = frame
+					moved[id] = true
+				break
+	return _spatial.valid_state(_state.spatial) and _sync_spatial_native(_state)
+
+
+func _portal_inside_room(row: Dictionary, target: CharacterBody2D, destination: Vector2, targets: Dictionary) -> bool:
+	var owner: Variant = targets.get(row.owner_id)
+	if not is_instance_valid(owner) or not owner.has_method("launch_room_motion_snapshot"):
+		return false
+	var room: Dictionary = owner.launch_room_motion_snapshot()
+	if room.is_empty():
+		return false
+	var bounds: Dictionary = room.bounds
+	var shape := target.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape == null or not shape.shape is CircleShape2D:
+		return false
+	return Rect2(float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height)).grow(-float(shape.shape.radius)).has_point(destination)
+
+
+func receive_spatial_hit(id: String, info: RefCounted) -> float:
+	if _state.is_empty() or not _pending.is_empty() or info == null or not _native_matches(_state):
+		return 0.0
+	var attacker: Node = info.attacker
+	var run := StringName(str(_state.run_id))
+	var target: Variant = _spatial_nodes.get(id)
+	if not is_instance_valid(attacker) or not attacker is PlayerController or not is_instance_valid(target) or not attacker.authenticates_native_damage_run(info, target, run):
+		return 0.0
+	var frame: int = attacker.health.frame_signal_transaction_runtime_frame()
+	var before := snapshot()
+	var amount: float = _spatial.accept_damage(_state.spatial, id, {"run_id": str(run), "source_id": str(info.hostile_source_id), "generation": int(info.attack_generation), "hit_index": int(info.hit_index), "runtime_frame": int(_state.runtime_frame) if frame < 0 else frame, "amount": Calculator.critical_amount(info, float(info.amount))})
+	if amount <= 0.0:
+		return 0.0
+	_apply_link_statuses(_state)
+	if not _sync_spatial_native(_state) or not _apply_statuses(_state, _targets):
+		_state = before
+		_sync_spatial_native(before)
+		_apply_statuses(before, _targets)
+		return 0.0
+	return amount
+
+
+func _spatial_observations(actors: Dictionary, targets: Dictionary, frame: int) -> Dictionary:
+	var result := {}
+	for id: String in targets:
+		var target: Node2D = targets[id]
+		var dead: bool = target.get_node("HealthComponent").dead
+		var kind := "player"
+		if actors.has(id):
+			kind = str(target.get("_launch_definition").actor_kind)
+			var prepared: Dictionary = target.get("_prepared_launch_frame")
+			dead = dead or bool((prepared.after.runtime if not prepared.is_empty() else target.launch_runtime_snapshot().runtime).terminal)
+		result[id] = {"position": _point(_predicted_position(target, frame)), "dead": dead, "kind": kind}
+	return result
+
+
+func _spatial_safe(row: Dictionary, targets: Dictionary, frame: int) -> bool:
+	if not _root_ready():
+		return false
+	if row.kind == "link":
+		return true
+	var owner: Variant = targets.get(row.owner_id)
+	var room: Dictionary = owner.launch_room_motion_snapshot() if is_instance_valid(owner) and owner.has_method("launch_room_motion_snapshot") else {}
+	var bounds: Dictionary = room.get("bounds", {"x": 0.0, "y": 0.0, "width": 640.0, "height": 360.0})
+	var rectangle := Rect2(float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
+	for fact: Dictionary in row.geometry:
+		var origin := _vector(fact.origin)
+		var direction := _vector(fact.aim_direction)
+		var destination := origin + direction * float(fact.length)
+		if not rectangle.grow(-float(fact.radius)).has_point(origin) or not rectangle.grow(-float(fact.radius)).has_point(destination):
+			return false
+		if row.kind == "portal":
+			for target: Variant in targets.values():
+				if is_instance_valid(target) and target is PlayerController and origin.distance_to(_predicted_position(target, frame)) < 48.0:
+					return false
+			continue
+		var query := PhysicsShapeQueryParameters2D.new()
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(float(fact.length), float(fact.radius) * 2.0)
+		query.shape = shape
+		query.transform = Transform2D(direction.angle(), origin + direction * float(fact.length) * 0.5)
+		query.collision_mask = 1 | 2 | 4
+		query.collide_with_bodies = true
+		query.collide_with_areas = false
+		for node: Node2D in native_spatial_nodes():
+			var sibling: Dictionary = node.native_construct_snapshot()
+			if sibling.owner_id == row.owner_id and sibling.generation == row.generation:
+				query.exclude.append(node.get_rid())
+		if not _root.get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+			return false
+		for target: Variant in targets.values():
+			if is_instance_valid(target) and target is Node2D:
+				var expanded := fact.duplicate(true)
+				var body_shape := target.get_node_or_null("CollisionShape2D") as CollisionShape2D
+				if body_shape != null and body_shape.shape is CircleShape2D:
+					expanded.radius += float(body_shape.shape.radius)
+				if _contains(expanded, _predicted_position(target, frame)):
+					return false
+	return row.kind != "portal" or _vector(row.geometry[0].origin).distance_to(_vector(row.geometry[1].origin)) >= 96.0
+
+
+func _apply_link_statuses(value: Dictionary) -> void:
+	value.statuses = value.statuses.filter(func(status: Dictionary): return not str(status.id).begins_with("link_"))
+	for row: Dictionary in value.spatial.rows:
+		if row.kind != "link" or row.phase != "ACTIVE":
+			continue
+		for recipient: String in row.recipients:
+			_upsert_status(value, {"id": "link_" + JSON.stringify([row.id, recipient]).sha256_text().substr(0, 40), "target_id": recipient, "expires_frame": int(row.expires_frame), "slow_multiplier": 1.0, "speed_multiplier": float(row.parameters.speed_multiplier), "attack_multiplier": float(row.parameters.attack_multiplier), "freeze_actions": false})
+
+
+func _sync_spatial_native(value: Dictionary) -> bool:
+	var live := {}
+	for row: Dictionary in value.get("spatial", {}).get("rows", []):
+		if row.phase not in ["WARNING", "ACTIVE", "COLLAPSE"]:
+			continue
+		if not _root_ready():
+			return false
+		if not is_instance_valid(_spatial_nodes.get(row.id)):
+			var node := SpatialConstruct.new()
+			node.configure(self, row.id)
+			_root.add_child(node)
+			_spatial_nodes[row.id] = node
+		if not _spatial_nodes[row.id].present(row, int(value.runtime_frame)):
+			return false
+		live[row.id] = true
+	for id: String in _spatial_nodes:
+		if not live.has(id) and is_instance_valid(_spatial_nodes[id]):
+			_spatial_nodes[id].deactivate()
+	return true
+
+
 func can_restore_transaction_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.run_id != _state.run_id or value.initial_frame != _state.initial_frame or not _frame(value.runtime_frame) or value.runtime_frame < value.initial_frame or not _claims(value.claims):
+	value = normalize_transaction_snapshot(value)
+	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 2 or value.run_id != _state.run_id or value.initial_frame != _state.initial_frame or not _frame(value.runtime_frame) or value.runtime_frame < value.initial_frame or not _claims(value.claims) or not value.spatial is Dictionary or not _spatial.valid_state(value.spatial) or value.spatial.run_id != value.run_id or value.spatial.initial_frame != value.initial_frame or value.spatial.runtime_frame != value.runtime_frame:
 		return false
 	if not value.zones is Array or value.zones.size() > MAX_RESERVATIONS or not value.statuses is Array or value.statuses.size() > 256 or not _valid_heals(value.heal_sources, value.heal_recipients) or not _valid_histories(value.histories, value.runtime_frame):
 		return false
@@ -107,6 +297,7 @@ func can_restore_transaction_snapshot(value: Dictionary) -> bool:
 
 
 func restore_transaction_snapshot(value: Dictionary) -> bool:
+	value = normalize_transaction_snapshot(value)
 	if not _pending.is_empty() or not can_restore_transaction_snapshot(value):
 		return false
 	var before := snapshot()
@@ -119,7 +310,21 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	return false
 
 
-func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = []) -> Dictionary:
+static func normalize_transaction_snapshot(value: Dictionary) -> Dictionary:
+	if typeof(value.get("schema_version")) != TYPE_INT:
+		return {}
+	if value.schema_version == 2:
+		return value.duplicate(true)
+	if value.schema_version != 1 or not Contract.exact_fields(value, LEGACY_STATE_FIELDS):
+		return {}
+	var normalized := value.duplicate(true)
+	normalized.schema_version = 2
+	normalized["spatial"] = Spatial.initial_state(str(value.run_id), int(value.initial_frame))
+	normalized.spatial.runtime_frame = value.runtime_frame
+	return normalized
+
+
+func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = [], foreign_constructs: int = 0) -> Dictionary:
 	if _state.is_empty() or not _pending.is_empty() or foreign_active_zones < 0 or foreign_active_zones > MAX_ZONES or not Contract.exact_fields(context, ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]) or context.run_id != _state.run_id or not _frame(context.runtime_frame) or context.runtime_frame != int(_state.runtime_frame) + 1 or not context.actors is Dictionary or not context.targets is Dictionary or batches.size() > 32 or not _native_matches(snapshot()):
 		return _failure("context_or_projection")
 	var before := snapshot()
@@ -140,6 +345,15 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 	if observations.size() != targets.size():
 		return _failure("native_targets")
 	_record_histories(next, context.actors)
+	var spatial_observations := _spatial_observations(context.actors, targets, int(context.runtime_frame))
+	var spatial_advanced: Dictionary = _spatial.advance(next.spatial, int(context.runtime_frame), spatial_observations, func(row: Dictionary): return _spatial_safe(row, targets, int(context.runtime_frame)), foreign_constructs)
+	if not spatial_advanced.ok:
+		return _failure("spatial_frame")
+	for row: Dictionary in spatial_advanced.collapse_warnings:
+		for index: int in range(row.geometry.size()):
+			var collapse := {"hostile_source_id": row.owner_id, "attack_generation": row.generation, "runtime_frame": next.runtime_frame, "position": row.geometry[index].origin.duplicate(true), "parameters": {"warning_frames": 45, "damage": 20.0, "radius": 32.0}}
+			if not _reserve_explosion(next, collapse, zone_capacity, "plane_ripper.portal_collapse.%s.%d" % [str(row.id), index], "void"):
+				return _failure("portal_collapse")
 	var health_requests: Array[Dictionary] = []
 	var pending_heals: Dictionary = {}
 	var damages: Array[Dictionary] = []
@@ -181,8 +395,14 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 					if not _reserve_zones(next, request, definition, action, zone_capacity, _zone_attack_multiplier(wrapper.batch, action), int(actor.get("_launch_identity").seed)):
 						return _failure("zone_reservation")
 				"wall":
-					if not actor.has_method("prepared_launch_wall_effect_allowed") or not actor.prepared_launch_wall_effect_allowed(request):
+					if definition.actor_kind != "boss":
+						if not _spatial.reserve(next.spatial, request, definition.id, spatial_observations):
+							return _failure("enemy_wall")
+					elif not actor.has_method("prepared_launch_wall_effect_allowed") or not actor.prepared_launch_wall_effect_allowed(request):
 						return _failure("unsealed_native_wall")
+				"link", "portal":
+					if not _spatial.reserve(next.spatial, request, definition.id, spatial_observations):
+						return _failure("enemy_spatial")
 				"summon":
 					pass
 				_: return _failure("unimplemented_semantic_handler")
@@ -232,6 +452,7 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 		if bool(actor.launch_runtime_snapshot().runtime.terminal) and not _prepare_terminal_effects(next, actor, actor.get("_launch_definition"), context.actors, zone_capacity, retired_children.has(id)):
 			return _failure("finalized_terminal_semantics")
 	_advance_zones(next, targets, context.actors, damages, zone_capacity)
+	_apply_link_statuses(next)
 	if not can_restore_transaction_snapshot(next) or (not next.zones.is_empty() and not _root_ready()):
 		return _failure("candidate_state_or_root")
 	var ticket := {"ticket_id": _next_ticket, "before": before, "after": next, "targets": targets, "observations": observations, "status_before": _status_checkpoints(targets)}
@@ -301,6 +522,9 @@ func work_records_for_snapshot(value: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
 	for row: Dictionary in value.get("zones", []):
 		result[row.id] = {"kind": "zone", "owner_source_id": row.source_id, "phase": "PENDING" if row.phase == "PENDING" else "ACTIVE"}
+	for row: Dictionary in value.get("spatial", {}).get("rows", []):
+		if row.phase != "RETIRED":
+			result[row.id] = {"kind": "construct", "owner_source_id": row.owner_id, "phase": "PENDING" if row.phase == "PENDING" else "ACTIVE"}
 	return result
 
 
@@ -654,6 +878,8 @@ func _restore_status_checkpoints(records: Array) -> bool:
 
 
 func _sync_native(value: Dictionary, prune: bool = false) -> bool:
+	if not _sync_spatial_native(value):
+		return false
 	var live: Dictionary = {}
 	for row: Dictionary in value.zones:
 		if row.phase == "PENDING":
@@ -676,6 +902,19 @@ func _sync_native(value: Dictionary, prune: bool = false) -> bool:
 
 
 func _prune_native(value: Dictionary) -> void:
+	var spatial_live := {}
+	for row: Dictionary in value.get("spatial", {}).get("rows", []):
+		if row.phase in ["WARNING", "ACTIVE", "COLLAPSE"]:
+			spatial_live[row.id] = true
+	for id: String in _spatial_nodes.keys():
+		if not spatial_live.has(id):
+			var node: Node = _spatial_nodes[id]
+			_spatial_nodes.erase(id)
+			if is_instance_valid(node):
+				node.deactivate()
+				if node.get_parent() != null:
+					node.get_parent().remove_child(node)
+				node.queue_free()
 	var live: Dictionary = {}
 	for row: Dictionary in value.zones:
 		if row.phase != "PENDING":
@@ -695,6 +934,9 @@ func _native_matches(value: Dictionary) -> bool:
 		return false
 	for row: Dictionary in value.get("zones", []):
 		if row.phase != "PENDING" and (not _nodes.has(row.id) or not is_instance_valid(_nodes[row.id]) or not _nodes[row.id].matches_record(row)):
+			return false
+	for row: Dictionary in value.get("spatial", {}).get("rows", []):
+		if row.phase in ["WARNING", "ACTIVE", "COLLAPSE"] and (not is_instance_valid(_spatial_nodes.get(row.id)) or _spatial_nodes[row.id].get_parent() != _root or not _spatial_nodes[row.id].matches_record(row, int(value.runtime_frame))):
 			return false
 	return true
 
@@ -737,6 +979,10 @@ func _record_histories(next: Dictionary, actors: Dictionary) -> void:
 
 static func _vector(point: Dictionary) -> Vector2:
 	return Vector2(float(point.x), float(point.y))
+
+
+static func _point(value: Vector2) -> Dictionary:
+	return {"x": value.x, "y": value.y}
 
 
 func _contains(fact: Dictionary, position: Vector2) -> bool:

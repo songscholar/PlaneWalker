@@ -1,0 +1,9 @@
+Enemy spatial mechanism atlases
+
+Copyright 2026 Plane Walker contributors.
+Dedicated to the public domain under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Original pixel artwork is reproduced by
+tools/production_art/generate_enemy_spatial_atlases.py.
+No external images, fonts, or paid assets are used.

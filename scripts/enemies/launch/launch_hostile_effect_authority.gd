@@ -8,6 +8,7 @@ const Damage := preload("res://scripts/combat/damage_info.gd")
 const Payloads := preload("res://scripts/enemies/launch/launch_hostile_payload_authority.gd")
 const Semantics := preload("res://scripts/enemies/launch/launch_semantic_effect_authority.gd")
 const Summons := preload("res://scripts/enemies/launch/launch_summon_authority.gd")
+const Spatial := preload("res://scripts/enemies/launch/enemy_spatial_runtime.gd")
 const CONTEXT_FIELDS: Array[String] = ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]
 const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "health_records", "source_batches", "actors", "targets", "threat_registry", "payload_ticket", "semantic_ticket", "summon_ticket"]
 const MAX_CLAIMS := 4096
@@ -77,7 +78,20 @@ func native_debris_nodes() -> Array[Node2D]:
 
 
 func arena_debris_active_count() -> int:
-	return _payloads.debris_active_count()
+	return _payloads.debris_active_count() + Spatial.active_count(_semantics.snapshot().spatial)
+
+
+static func _foreign_construct_count(actors: Dictionary, payloads: Dictionary) -> int:
+	var count: int = payloads.get("arena_debris", {}).get("rows", []).filter(func(row: Dictionary): return row.phase == "ACTIVE").size()
+	for actor: Node2D in actors.values():
+		var prepared: Dictionary = actor.get("_prepared_launch_frame")
+		var state: Dictionary = prepared.after.runtime if not prepared.is_empty() else actor.launch_runtime_snapshot().runtime
+		var arena: Dictionary = state.get("arena_state", {})
+		if arena.is_empty() or arena.get("terminal", false):
+			continue
+		for row: Dictionary in arena.get("covers", []) + arena.get("walls", []) + arena.get("roots", []):
+			count += int(not row.broken and not row.get("expired", false) and not row.get("retired", false))
+	return count
 
 
 func semantic_snapshot() -> Dictionary:
@@ -86,6 +100,20 @@ func semantic_snapshot() -> Dictionary:
 
 func native_semantic_nodes() -> Array[Node2D]:
 	return _semantics.native_nodes()
+
+
+func native_spatial_nodes() -> Array[Node2D]:
+	return _semantics.native_spatial_nodes()
+
+
+func configure_spatial_frame_authority(authority: RefCounted) -> bool:
+	return _semantics.configure_spatial_frame_authority(authority)
+
+
+func apply_native_portal_transits(frame: int, actors: Dictionary, targets: Dictionary, authority: RefCounted) -> bool:
+	var combined := actors.duplicate()
+	combined.merge(targets)
+	return _pending.is_empty() and not _publishing and _semantics.apply_native_portal_transits(frame, combined, authority)
 
 
 func bind_native_targets(actors: Dictionary, targets: Dictionary) -> bool:
@@ -130,12 +158,17 @@ static func normalize_transaction_snapshot(value: Dictionary) -> Dictionary:
 	if typeof(value.get("schema_version")) != TYPE_INT:
 		return {}
 	if value.schema_version == 2:
-		return value.duplicate(true)
+		var normalized := value.duplicate(true)
+		if not normalized.get("semantics") is Dictionary:
+			return {}
+		normalized.semantics = Semantics.normalize_transaction_snapshot(normalized.semantics)
+		return normalized
 	if value.schema_version != 1 or not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads", "semantics"]) or not value.semantics is Dictionary or not value.semantics.has("initial_frame"):
 		return {}
 	var migrated := value.duplicate(true)
 	migrated.schema_version = 2
 	migrated["summons"] = {"schema_version": 1, "run_id": value.run_id, "initial_frame": value.semantics.initial_frame, "runtime_frame": value.runtime_frame, "claims": [], "rows": []}
+	migrated.semantics = Semantics.normalize_transaction_snapshot(migrated.semantics)
 	return migrated
 
 
@@ -287,7 +320,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 				return prepared
 			damages.append(prepared.record)
 	var retired_children: Array[String] = _summons.retired_owner_child_sources(context.actors)
-	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context, _semantics.active_zone_count_for_snapshot(next.semantics, int(context.runtime_frame)), retired_children)
+	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context, _semantics.active_zone_count_for_snapshot(next.semantics, int(context.runtime_frame)), retired_children, Spatial.active_count(next.semantics.spatial))
 	if not payload_prepared.ok:
 		return payload_prepared
 	for request: Dictionary in payload_prepared.damage_requests:
@@ -300,7 +333,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	if not _prepare_payload_registry(payload_prepared.ticket.before, payload_prepared.ticket.after, projected, operations):
 		_payloads.rollback(payload_prepared.ticket)
 		return _failure("payload_threat_registry")
-	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after), retired_children)
+	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after), retired_children, _foreign_construct_count(context.actors, payload_prepared.ticket.after))
 	if not semantic_prepared.ok:
 		_payloads.rollback(payload_prepared.ticket)
 		return semantic_prepared

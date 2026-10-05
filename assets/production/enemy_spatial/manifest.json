@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_enemy_spatial_atlases.py",
+  "atlases": [
+    {
+      "id": "bramble_wall",
+      "path": "bramble_wall.png",
+      "frame_size": [
+        64,
+        16
+      ],
+      "frames": [
+        "warning",
+        "active_1",
+        "active_2",
+        "active_3"
+      ],
+      "sha256": "b2f337d69e51a379dd87fbfe23de15177ac3a24e91296bd65a2d84781232af52"
+    },
+    {
+      "id": "web_wall",
+      "path": "web_wall.png",
+      "frame_size": [
+        64,
+        16
+      ],
+      "frames": [
+        "warning",
+        "active_1",
+        "active_2",
+        "active_3"
+      ],
+      "sha256": "1a28f8ae0b2767b236104217b0279dcba946e3dee8339f852e659c4f1286f624"
+    },
+    {
+      "id": "web_link",
+      "path": "web_link.png",
+      "frame_size": [
+        64,
+        16
+      ],
+      "frames": [
+        "warning",
+        "active_1",
+        "active_2",
+        "active_3"
+      ],
+      "sha256": "a087d39c562d056c92a8d0eff60f4d3355ee9bbb744589e1260e6ad456c4f20e"
+    },
+    {
+      "id": "portal_both",
+      "path": "portal_both.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "warning",
+        "active_1",
+        "active_2",
+        "active_3"
+      ],
+      "sha256": "509a1c669c5cd2f5b4bfdc64983bcf03e0ed1805cd419ee747b3d23db8800637"
+    },
+    {
+      "id": "portal_enemy",
+      "path": "portal_enemy.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "warning",
+        "active_1",
+        "active_2",
+        "active_3"
+      ],
+      "sha256": "714984e37ef3f4513f39f035c19b68f79b62a35a3f03bb35c53f388dcd626e6e"
+    }
+  ]
+}

@@ -5,11 +5,12 @@ const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.g
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const Debris := preload("res://scripts/enemies/launch/launch_ruin_debris.gd")
 const ForestAuxiliary := preload("res://scripts/enemies/launch/launch_forest_auxiliary_construct.gd")
+const EnemySpatial := preload("res://scripts/enemies/launch/launch_enemy_spatial_construct.gd")
 const PLAYER_ATTACK_MASK := 1 | 4
 
 
 static func is_arena_construct(target: Node) -> bool:
-	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris or target is ForestAuxiliary)
+	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris or target is ForestAuxiliary or target is EnemySpatial)
 
 
 static func is_attackable(target: Node) -> bool:
@@ -17,6 +18,9 @@ static func is_attackable(target: Node) -> bool:
 		return false
 	if target.is_in_group("enemies"):
 		return true
+	if target is EnemySpatial:
+		var spatial: Dictionary = target.native_construct_snapshot()
+		return spatial.get("phase", "") == "ACTIVE" and spatial.get("kind", "") in ["wall", "link"] and float(spatial.get("hp", 0.0)) > 0.0
 	if is_arena_construct(target):
 		var state: Dictionary = target.native_construct_snapshot()
 		return state.has("current_hp") and not bool(state.get("broken", false)) and not bool(state.get("retired", false)) and not bool(state.get("expired", false)) and not bool(state.get("used", false)) and target.collision_layer == 1
