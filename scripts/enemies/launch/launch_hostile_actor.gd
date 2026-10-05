@@ -236,7 +236,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var displacement := _vector(motion.displacement) * (1.0 if relocation else float(status_preview.slow_multiplier()))
 	if lethal_pending or externally_paused or motion.action_paused or phase_blocks:
 		displacement = Vector2.ZERO
-	else:
+	elif not relocation:
 		displacement += _knockback_velocity / 60.0
 	if not teleport_relocation.is_empty():
 		relocation = true

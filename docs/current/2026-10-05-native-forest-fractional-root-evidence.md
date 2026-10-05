@@ -1,7 +1,7 @@
 # Native Forest Fractional Root Evidence
 
 - Status: Focused Verified / Current
-- Document Role: Focused native root receipt and cold-state regression
+- Document Role: Current focused native root receipt and cold-state regression
 - Authority Level: Approved P15 and project standing authorization
 - Applies To: Fractional weapon root destruction and phase retirement
 - Owner: Plane Walker native hostile integration team
