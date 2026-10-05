@@ -201,9 +201,13 @@ func _test_actual_weapon_payloads() -> void:
 		payload.global_position = player.global_position
 		var watch := actor.get_node("WatchHurtbox") as Area2D
 		payload.call("_on_area_entered", watch)
+		if weapon == "gauntlets":
+			await get_tree().process_frame
 		var amount: float = 2000.0 - float(actor.get_node("HealthComponent").current_hp)
 		suite.assert_true(amount > 0.0 and is_equal_approx(float(runtime.snapshot().mechanism_state.rewind.weakpoint_damage), amount), "actual " + weapon + " native collision settles real Health and watch threshold")
 		payload.call("_on_area_entered", watch)
+		if weapon == "gauntlets":
+			await get_tree().process_frame
 		suite.assert_equal(actor.get_node("HealthComponent").current_hp, 2000.0 - amount, "actual " + weapon + " native collision deduplicates one Boss target")
 		payload.queue_free()
 		actor.queue_free()
