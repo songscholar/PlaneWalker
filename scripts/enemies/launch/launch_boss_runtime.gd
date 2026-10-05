@@ -1133,8 +1133,8 @@ func restore_snapshot(value: Dictionary) -> bool:
 	if _time_auxiliary != null and not _time_auxiliary.restore_snapshot(value.time_auxiliary):
 		return false
 	_action = action
-	_legacy_void_action = _void_arena != null and value.action.definition_digest != _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged)).snapshot().definition_digest
-	_legacy_time_action = _time_response != null and value.action.definition_digest != _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged)).snapshot().definition_digest
+	_legacy_void_action = _void_arena != null and value.action.definition_digest != _action_validation_template(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, true, _snapshot_validation_context()).definition_digest
+	_legacy_time_action = _time_response != null and value.action.definition_digest != _action_validation_template(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, true, _snapshot_validation_context()).definition_digest
 	_state = value.duplicate(true)
 	_state.erase("action")
 	_state.erase("control")
