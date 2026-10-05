@@ -11,8 +11,8 @@ var _configuration: Dictionary = {}
 var _native_revision := 1
 
 
-func configure(rows: Array, floor_index: int, native_revision: int = 2) -> Dictionary:
-	if not _rows.is_empty() or not Contract.integer_in_range(floor_index, 1, 5) or native_revision not in [1, 2] or rows.is_empty() or rows.size() > 2:
+func configure(rows: Array, floor_index: int, native_revision: int = 3) -> Dictionary:
+	if not _rows.is_empty() or not Contract.integer_in_range(floor_index, 1, 5) or native_revision not in [1, 2, 3] or rows.is_empty() or rows.size() > 2:
 		return {"ok": false}
 	var parsed: Array = []
 	var seen: Array = []
@@ -37,8 +37,8 @@ func project(definition: Dictionary) -> Dictionary:
 		return {"ok": false}
 	ids.sort()
 	var configuration := {"ids": ids, "floor_index": _floor, "pending_ids": [], "damage_taken_multiplier": 1.0, "knockback_resistance": 0.0}
-	if _native_revision == 2:
-		configuration["native_revision"] = 2
+	if _native_revision >= 2:
+		configuration["native_revision"] = _native_revision
 	var projected := definition.duplicate(true)
 	for row: Dictionary in _rows:
 		var parameters: Dictionary = row.parameters
@@ -56,12 +56,15 @@ func project(definition: Dictionary) -> Dictionary:
 			"regenerating":
 				if _native_revision == 1:
 					configuration.pending_ids.append(row.id)
+			"anchored":
+				if _native_revision < 3:
+					configuration.pending_ids.append(row.id)
 			_:
 				configuration.pending_ids.append(row.id)
 	configuration.pending_ids.sort()
 	var binding := {"rows": _rows, "floor_index": _floor}
-	if _native_revision == 2:
-		binding["native_revision"] = 2
+	if _native_revision >= 2:
+		binding["native_revision"] = _native_revision
 	projected["affix_signature"] = JSON.stringify(binding, "", true, true).sha256_text()
 	_configuration = configuration
 	return {"ok": true, "definition": projected, "configuration": snapshot()}

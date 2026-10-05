@@ -206,7 +206,7 @@ func spawn_actor(spawn: Dictionary) -> bool:
 	return true
 
 
-func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false, affix_revision: int = 2) -> Node2D:
+func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false, affix_revision: int = 3) -> Node2D:
 	var definition: Dictionary = _facade.encounter_catalog().enemy_definition(str(spawn.enemy_id))
 	var resource: Resource = load(str(definition.get("scene", ""))) if ResourceLoader.exists(str(definition.get("scene", ""))) else null
 	var marker: Node2D = _scene.get_node_or_null("EncounterAnchors/" + str(spawn.spawn_slot_id)) as Node2D

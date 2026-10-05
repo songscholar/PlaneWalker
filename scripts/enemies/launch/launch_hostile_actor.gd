@@ -57,7 +57,7 @@ func owns_actor_presentation() -> bool:
 	return true
 
 
-func configure_launch_affixes(definitions: Array, floor_index: int, native_revision: int = 2) -> Dictionary:
+func configure_launch_affixes(definitions: Array, floor_index: int, native_revision: int = 3) -> Dictionary:
 	if not _launch_definition.is_empty() or _affix_projection != null or not _prepared_launch_frame.is_empty():
 		return _launch_failure("affix_configuration_busy")
 	var candidate := AffixProjection.new()
@@ -91,7 +91,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") == 2:
+	if affix_configuration.get("native_revision") in [2, 3]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -176,7 +176,8 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if not status_preview.restore_transaction_snapshot(before.status):
 		return _launch_failure("status_checkpoint")
 	var next_credit := _action_credit
-	var externally_paused: bool = status_preview.is_frozen()
+	var anchored_recovery: bool = _affix_runtime != null and _affix_runtime.is_anchor_recovering()
+	var externally_paused: bool = status_preview.is_frozen() or _native_action_activation_blocked(frame, observations) or anchored_recovery
 	if not externally_paused and not preview.control_modifiers().action_paused:
 		next_credit += minf(1.0, float(status_preview.attack_speed_multiplier()))
 		externally_paused = next_credit < 1.0
@@ -192,7 +193,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		var affix_preview := AffixRuntime.new()
 		if not affix_preview.configure(_affix_configuration, _launch_identity, max_hp) or not affix_preview.restore_snapshot(before.affix_runtime):
 			return _launch_failure("affix_checkpoint")
-		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, externally_paused or bool(motion.action_paused), health.healing_multiplier)
+		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, status_preview.is_frozen() or (externally_paused and not anchored_recovery) or bool(motion.action_paused), health.healing_multiplier)
 		if not advanced.ok:
 			return _launch_failure("affix_frame")
 		affix_after = affix_preview.snapshot()
@@ -282,6 +283,10 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	_prepared_launch_frame = ticket.duplicate(true)
 	_prepared_frame_committed = false
 	return {"ok": true, "ticket": ticket.duplicate(true), "batch": batch.duplicate(true)}
+
+
+func _native_action_activation_blocked(_frame: int, _observations: Dictionary) -> bool:
+	return false
 
 
 func can_commit_launch_frame(ticket: Dictionary) -> bool:
@@ -440,7 +445,8 @@ func get_damage_taken_multiplier() -> float:
 
 
 func apply_knockback(knockback: Vector2) -> void:
-	super.apply_knockback(knockback * (1.0 - float(_affix_configuration.get("knockback_resistance", 0.0))))
+	var displacement: float = _affix_runtime.displacement_multiplier() if _affix_runtime != null else 1.0
+	super.apply_knockback(knockback * displacement * (1.0 - float(_affix_configuration.get("knockback_resistance", 0.0))))
 
 
 func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: float) -> Dictionary:
@@ -490,6 +496,7 @@ func commit_hostile_lethal_transition(damage_info: RefCounted, final_amount: flo
 
 func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
 	var staged := false
+	var accepted_damage_frame := -1
 	if not _launch_definition.is_empty() and damage_info != null and is_finite(final_amount) and final_amount > 0.0:
 		var info: Dictionary = damage_info.snapshot()
 		var frame: int = health.frame_signal_transaction_runtime_frame()
@@ -498,12 +505,17 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 		var identity := JSON.stringify([info.run_id, info.target_id, info.hostile_source_id, info.attack_generation, info.hit_index])
 		var result: Dictionary = _launch_runtime.accept_damage_fact({"fact_id": identity.sha256_text(), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": final_amount, "hp_after": health.current_hp})
 		staged = result.ok
+		if staged:
+			accepted_damage_frame = frame
 		if result.ok and _affix_runtime != null and damage_info.tags.has("attack:heavy"):
 			_affix_runtime.interrupt_regeneration(frame)
 		if result.ok and _hostile_threat_registry != null:
 			for generation: int in result.retired_generations:
 				_hostile_threat_registry.retire(hostile_source_id, generation)
-	return super.apply_weapon_hit_control(damage_info, final_amount) or staged
+	var controlled := super.apply_weapon_hit_control(damage_info, final_amount)
+	if controlled and staged and _affix_runtime != null:
+		_affix_runtime.accept_launch_control(accepted_damage_frame)
+	return controlled or staged
 
 
 func cancel_active_attack() -> void:
@@ -714,6 +726,9 @@ func can_restore_native_cold_snapshot(value: Dictionary, source_resolver: Callab
 		return false
 	var state := _cold_actor_state(value.actor, source_resolver)
 	if state.is_empty() or not _can_restore_actor_state(state) or not health.can_restore_replay_snapshot(value.health):
+		return false
+	var anchored: Dictionary = state.get("affix_runtime", {}).get("anchored", {})
+	if not anchored.is_empty() and int(anchored.last_control_frame) > int(state.runtime.runtime_frame):
 		return false
 	if value.health.dead != state.runtime.terminal:
 		return false
