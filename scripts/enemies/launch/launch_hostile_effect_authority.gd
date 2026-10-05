@@ -161,7 +161,7 @@ func launch_transaction_snapshot() -> Dictionary:
 
 
 func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
-	value = normalize_transaction_snapshot(value)
+	value = _validation_snapshot(value)
 	if value.is_empty() or not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads", "semantics", "summons"]) or value.schema_version != 2 or value.run_id != _state.run_id or typeof(value.runtime_frame) != TYPE_INT or not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.payloads is Dictionary or not _payloads.can_restore_transaction_snapshot(value.payloads) or not value.semantics is Dictionary or not _semantics.can_restore_transaction_snapshot(value.semantics) or not value.summons is Dictionary or not _summons.can_restore_snapshot(value.summons):
 		return false
 	var seen: Dictionary = {}
@@ -188,6 +188,20 @@ static func normalize_transaction_snapshot(value: Dictionary) -> Dictionary:
 	migrated["summons"] = {"schema_version": 1, "run_id": value.run_id, "initial_frame": value.semantics.initial_frame, "runtime_frame": value.runtime_frame, "claims": [], "rows": []}
 	migrated.semantics = Semantics.normalize_transaction_snapshot(migrated.semantics)
 	return migrated
+
+
+static func _validation_snapshot(value: Dictionary) -> Dictionary:
+	if typeof(value.get("schema_version")) != TYPE_INT or value.schema_version != 2:
+		return normalize_transaction_snapshot(value)
+	if not value.get("semantics") is Dictionary:
+		return {}
+	var semantics := Semantics._validation_snapshot(value.semantics)
+	if is_same(semantics, value.semantics):
+		return value
+	# Only a migrated child needs a new envelope; validators never mutate it.
+	var normalized := value.duplicate()
+	normalized.semantics = semantics
+	return normalized
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:

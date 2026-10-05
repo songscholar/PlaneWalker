@@ -105,6 +105,10 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Void Geometry Query Evidence](current/2026-10-06-native-void-geometry-query-evidence.md) | 实体几何、阶段与拾取物状态一致，相邻权威回归 | Focused Verified / Full performance pending |
 | [Native Void Exposure Query Plan](current/2026-10-06-native-void-exposure-query-plan.md) | 虚空暴露截止帧窄查询、原始边界语义及历史恢复验收 | Approved / Current |
 | [Native Void Exposure Query Evidence](current/2026-10-06-native-void-exposure-query-evidence.md) | 真实触手暴露、精确截止帧、零历史复制和完整回滚验证 | Focused Verified / Full performance pending |
+| [Native Action Validation Template Plan](current/2026-10-06-native-action-validation-template-plan.md) | 动作完整静态校验、有界不可变配置模板和独立可变恢复 | Approved / Current |
+| [Native Action Validation Template Evidence](current/2026-10-06-native-action-validation-template-evidence.md) | 完整动作校验、不可变模板容量和真实独立恢复回归 | Focused Verified / Full performance pending |
+| [Native Validation Input Plan](current/2026-10-06-native-validation-input-plan.md) | 当前快照只读校验、混合版本迁移与完整历史拒绝合同 | Approved / Current |
+| [Native Validation Input Evidence](current/2026-10-06-native-validation-input-evidence.md) | 八种版本迁移、完整历史校验和真实伤害存档录制回归 | Focused Verified / Full performance pending |
 | [Native Boss UI Query Plan](current/2026-10-06-native-boss-ui-query-plan.md) | 首领可见状态窄查询、完整存档历史和界面字段保留 | Approved / Current |
 | [Native Boss UI Query Evidence](current/2026-10-06-native-boss-ui-query-evidence.md) | 五首领界面字段一致、重复查询不复制完整历史 | Focused Verified / Full performance pending |
 | [Void Event Checkpoint Plan](current/2026-10-06-void-event-checkpoint-plan.md) | 精确历史检查点复用、完整派生状态核对与过期回滚保留 | Approved / Current |

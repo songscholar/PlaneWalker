@@ -469,7 +469,7 @@ func cold_snapshot() -> Dictionary:
 
 
 static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: String, frame: int) -> bool:
-	value = normalize_cold_snapshot(value)
+	value = _validation_snapshot(value)
 	if value.is_empty() or not Contract.exact_fields(value, COLD_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 2 or not value.definition is Dictionary or not value.encounter is Dictionary or not value.effects is Dictionary or not value.actors is Dictionary or not value.summon_actors is Dictionary or not value.threats is Array or not Contract.integer_in_range(value.run_seed, -2147483648, 2147483647) or value.last_flushed_frame != frame or not Replay.replay_value_is_safe(value):
 		return false
 	var state: Dictionary = value.encounter
@@ -604,6 +604,21 @@ static func normalize_cold_snapshot(value: Dictionary) -> Dictionary:
 		return {}
 	migrated.effects = Effects.normalize_transaction_snapshot(migrated.effects)
 	return migrated if not migrated.effects.is_empty() else {}
+
+
+static func _validation_snapshot(value: Dictionary) -> Dictionary:
+	if typeof(value.get("schema_version")) != TYPE_INT or value.schema_version != 2:
+		return normalize_cold_snapshot(value)
+	if not value.get("effects") is Dictionary:
+		return {}
+	var effects := Effects._validation_snapshot(value.effects)
+	if effects.is_empty():
+		return {}
+	if is_same(effects, value.effects):
+		return value
+	var normalized := value.duplicate()
+	normalized.effects = effects
+	return normalized
 
 
 static func _valid_cold_child(saved: Variant, row: Dictionary, run_id: String, frame: int) -> bool:

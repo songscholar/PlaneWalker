@@ -282,7 +282,7 @@ func _sync_spatial_native(value: Dictionary) -> bool:
 
 
 func can_restore_transaction_snapshot(value: Dictionary) -> bool:
-	value = normalize_transaction_snapshot(value)
+	value = _validation_snapshot(value)
 	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 2 or value.run_id != _state.run_id or value.initial_frame != _state.initial_frame or not _frame(value.runtime_frame) or value.runtime_frame < value.initial_frame or not _claims(value.claims) or not value.spatial is Dictionary or not _spatial.valid_state(value.spatial) or value.spatial.run_id != value.run_id or value.spatial.initial_frame != value.initial_frame or value.spatial.runtime_frame != value.runtime_frame:
 		return false
 	if not value.zones is Array or value.zones.size() > MAX_RESERVATIONS or not value.statuses is Array or value.statuses.size() > 256 or not _valid_heals(value.heal_sources, value.heal_recipients) or not _valid_histories(value.histories, value.runtime_frame):
@@ -330,6 +330,10 @@ static func normalize_transaction_snapshot(value: Dictionary) -> Dictionary:
 	normalized["spatial"] = Spatial.initial_state(str(value.run_id), int(value.initial_frame))
 	normalized.spatial.runtime_frame = value.runtime_frame
 	return normalized
+
+
+static func _validation_snapshot(value: Dictionary) -> Dictionary:
+	return value if typeof(value.get("schema_version")) == TYPE_INT and value.schema_version == 2 else normalize_transaction_snapshot(value)
 
 
 func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = [], foreign_constructs: int = 0, projectile_impacts: Array = []) -> Dictionary:

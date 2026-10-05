@@ -137,3 +137,44 @@ Concurrent native matrix workers remain active. The changed lifecycle origin
 and multiple integrated repairs preclude an isolated optimization claim.
 This run does not certify rendering, total process memory, saturation or a
 45-minute actual recording. The new equality-only optimization is not included.
+
+## Complete Comparison And Exposure Follow-Up
+
+The clean detached clone at
+`build/retained-checkout/native-unified-546779f-20261006/` freezes
+`546779f9af6f3efe7bf551734398a9a1a9a1b1d0`. It includes complete-state equality,
+Actor comparison and sealing queries, and the Void exposure query. The unchanged
+uninstrumented runtime aggregate is
+`086f8e32c93e16e2adedc9ceb4a8f4755a28b0f5829686d6e511e8932e71acfc`.
+Its second import and final stdout/Godot runtime logs pass strict validation.
+The report at `build/floor4-phase2-compared-late-600/report.json` has SHA-256
+`f7f3d81a96b4ad7194c36bf53f5be39d2a1577ffea88c273adb0cba695705a9a`.
+
+Hub wait remains twelve frames. Real Sword input admits phase two after
+2,501 frames; every measured frame from 2,502 to 3,101 accepts. All 601 durable
+observations remain classified `INTERRUPTED`, with no failure. Fresh physical
+first/last complete typed bytes match their measured observations. Their hashes
+are exactly the same as the preceding `5a7fb3e` 600-frame endpoints. This proves
+endpoint equivalence, not a comparison of all intervening observation bytes.
+
+| Actual v2 Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 62.410 ms | 96.317 ms | 140.795 ms |
+| Same-frame Player and Host work | 64.132 ms | 98.870 ms | 143.976 ms |
+| Same-frame wall interval, including waits and observer | 73.968 ms | 112.916 ms | 158.610 ms |
+
+Measured wall duration is 44.382 seconds for ten native seconds. Retention takes
+10.212 seconds. Observed peaks remain one actor, six threats and three zones.
+Peak native static allocation is 701,569,864 bytes. Real macOS PID 24586 has
+1,812 valid RSS samples, one unavailable sample and a sampled peak of
+2,292,629,504 bytes. RSS scope spans that Godot process from its announcement,
+including admission and retention; it does not isolate the measured combat
+interval or prove an absolute total-memory maximum. The unavailable sample is
+retained honestly in the report.
+
+The 16.667 ms frame budget still fails. Sampled RSS also exceeds both decimal
+2 GB and binary 2 GiB. Concurrent native matrix and certification processes
+remain active, so these observations do not isolate individual optimization
+benefits. The later Action validation templates and validation-input projection
+are outside this source. Rendering, sustained recording, saturation, memory
+acceptance and UI completion remain open.
