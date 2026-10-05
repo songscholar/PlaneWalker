@@ -549,7 +549,7 @@ func species_damage_taken_multiplier() -> float:
 
 
 func is_exposed() -> bool:
-	return not _state.is_empty() and not _state.terminal and (int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _conversion.is_character_exposed() or _definition.id == "forest_heart" and _arena.is_exposed() or _void_arena != null and _void_arena.is_exposed() or _void_auxiliary != null and int(_state.runtime_frame) <= int(_void_auxiliary.snapshot().exposure_through_frame))
+	return not _state.is_empty() and not _state.terminal and (int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _conversion.is_character_exposed() or _definition.id == "forest_heart" and _arena.is_exposed() or _void_arena != null and _void_arena.is_exposed() or _void_auxiliary != null and int(_state.runtime_frame) <= _void_auxiliary_exposure_through_frame())
 
 
 func apply_weapon_control_conversion(source_id: String, recovery_frames: int, exposure_frames: int, poise_damage: float) -> bool:
@@ -1344,7 +1344,11 @@ func _delays_action(frame: int) -> bool:
 
 
 func _character_tail_must_wait() -> bool:
-	return not _state.is_empty() and (_action.snapshot().phase == "RECOVERY" or int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _definition.id == "forest_heart" and _arena.is_exposed() or _void_arena != null and _void_arena.is_exposed() or _void_auxiliary != null and int(_state.runtime_frame) <= int(_void_auxiliary.snapshot().exposure_through_frame))
+	return not _state.is_empty() and (_action.snapshot().phase == "RECOVERY" or int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _definition.id == "forest_heart" and _arena.is_exposed() or _void_arena != null and _void_arena.is_exposed() or _void_auxiliary != null and int(_state.runtime_frame) <= _void_auxiliary_exposure_through_frame())
+
+
+func _void_auxiliary_exposure_through_frame() -> int:
+	return _void_auxiliary.native_exposure_through_frame() if _void_auxiliary.has_method("native_exposure_through_frame") else int(_void_auxiliary.snapshot().exposure_through_frame)
 
 
 func _controls_for_frame(frame: int) -> Dictionary:

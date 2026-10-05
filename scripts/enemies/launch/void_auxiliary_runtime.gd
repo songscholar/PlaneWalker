@@ -45,6 +45,10 @@ func matches_snapshot(value: Dictionary) -> bool:
 	return _state == value
 
 
+func native_exposure_through_frame() -> int:
+	return int(_state.get("exposure_through_frame", -1))
+
+
 func bind_origin(origin: Dictionary) -> bool:
 	if _state.is_empty() or not Contract.valid_point(origin) or origin != _state.arena_origin and (not _state.events.is_empty() or _state.runtime_frame != _initial.runtime_frame):
 		return false
