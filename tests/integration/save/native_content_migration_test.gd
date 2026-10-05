@@ -15,6 +15,7 @@ const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Route := preload("res://tests/support/native_launch_route_fixture.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
+const RunConfig := preload("res://scripts/application/run_config.gd")
 
 
 func _ready() -> void:
@@ -79,7 +80,10 @@ func _fixture(suite: RefCounted, terminal: bool, weapon: String = "sword", time_
 		slot = "native_fixture_time_boss"
 	suite.assert_true(save.configure(Paths.resolve_default("user://p16s-fixture", "p16s-fixture"), "0.4.0-dev", binding).ok and service.configure(catalog, save, slot, "base", {"meta_profile_state": Fixtures.profile(catalog)}).ok, "migration fixture owns an actual physical Profile")
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": weapon, "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 4}
-	suite.assert_true(host.start_profile_run(config, service, int(service.snapshot().revision)).ok, "migration fixture launches through actual Host")
+	var historical_config := RunConfig.normalized(config)
+	var prepared: Dictionary = service.prepare_launch({"seed": historical_config.seed, "difficulty": historical_config.difficulty, "character_id": historical_config.character_id, "weapon_id": historical_config.weapon_id, "time_abilities": historical_config.enabled_time_skills}, int(service.snapshot().revision), historical_config)
+	suite.assert_true(prepared.ok and host.retry_profile_startup(service, int(service.snapshot().revision)).ok, "historical migration fixture launches its original frozen config through actual Host retry")
+	suite.assert_true(not host.runtime_snapshot().config.has("launch_encounter_revision"), "historical migration fixture preserves missing selection revision and original seeded recipes")
 	var selected := false
 	if time_boss:
 		selected = await _route_to_time_boss(suite, host)

@@ -77,8 +77,10 @@ Sword damage and historical active cast recovery are retained in the
 
 ## Remaining Gates
 
-The approved historical 40-recipe catalog contains no elite Wraith or elite Spore.
-Their native terminal behavior is verified through explicitly authored test
-encounters; natural route reachability requires a versioned additive content
-migration that preserves old definitions and seeds. Whole-room balance, complete
-P15 certification and private replay projection remain separate gates.
+The versioned additive revision2 catalog now supplies natural elite Wraith and
+Spore routes while preserving the historical forty recipes and revision1 seeds.
+Actual Host traversal, warning and active-child physical recovery, multiple
+terminal deaths and exact historical migration are recorded in
+[natural elite encounter evidence](2026-10-05-natural-elite-encounter-evidence.md).
+Whole-room balance, complete P15 certification and private replay projection
+remain separate gates.

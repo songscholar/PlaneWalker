@@ -1,11 +1,13 @@
 # Natural Elite Encounter Migration
 
-- Status: In Progress
-- Document Role: Plan
+- Status: Verified focused migration; combined certification pending
+- Document Role: Current
 - Authority Level: Implementation plan below approved P15 specification
 - Applies To: Additive Wraith and Spore elite route reachability
 - Owner: Native hostile implementation team
 - Last Verified: 2026-10-05
+- Depends On: [native summon evidence](../../current/2026-10-05-native-summon-evidence.md)
+- Exit Gate: Revision2 natural terminal routes, physical recovery and authenticated historical content migration suites pass; retain exact proof commits and evidence.
 
 ## Completion Criteria
 
@@ -22,3 +24,9 @@
 - Add explicit revision-aware selection to the catalog and bind persisted Run configuration in the Facade.
 - Verify natural native routes, terminal children, cold recovery, historical selection and related content/route/replay suites.
 - Retain code, content, tests and evidence in a precise local commit. External publication remains outside this milestone.
+
+## Retention Evidence
+
+The additive content authority was retained in `412100d`. Exact historical
+descriptor provenance, native migration and natural physical checkpoints are
+recorded in [natural elite encounter evidence](../../current/2026-10-05-natural-elite-encounter-evidence.md).

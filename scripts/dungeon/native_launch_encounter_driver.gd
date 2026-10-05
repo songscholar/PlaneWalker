@@ -56,6 +56,7 @@ var _payload_root: Node2D
 var _actors: Dictionary = {}
 var _observations: Array[Dictionary] = []
 var _retired_sources: Array[String] = []
+var _terminal_death_queue: Dictionary = {}
 var _failure: Dictionary = {}
 var _flushing := false
 var _cancel_pending := false
@@ -154,6 +155,7 @@ func _clear_native() -> void:
 	_actors.clear()
 	_observations.clear()
 	_retired_sources.clear()
+	_terminal_death_queue.clear()
 	_definition.clear()
 	_template.clear()
 	_encounter = null
@@ -290,13 +292,18 @@ func _on_actor_final_death(source: StringName, receipt: String) -> void:
 	var expected := "hostile_defeat:%s" % (str(_player.current_run_id()) + "|" + str(source)).sha256_text().substr(0, 40)
 	if state.is_empty() or not is_instance_valid(health) or not health.dead or health.current_hp > 0.0 or not state.runtime.terminal or state.runtime.identity.run_id != str(_player.current_run_id()) or state.death_receipt != receipt or receipt != expected or state.runtime.runtime_frame != _encounter.snapshot().last_runtime_frame:
 		return
+	var terminal_children: bool = actor.get("_launch_definition").actor_kind == "elite" and (actor.get("_launch_definition").id in ["ruins_wraith", "void_spore"] or not actor.native_splitting_configuration().is_empty())
+	if terminal_children and _bridge.frame_transaction_is_active():
+		# Health publication is sealed; reserve children before releasing this roster row.
+		_terminal_death_queue[str(source)] = receipt
+		return
 	var settlement := _boss_settlement_source(actor)
 	if not settlement.ok:
 		_fail(&"BOSS_SETTLEMENT_SOURCE_INVALID")
 		return
 	var encounter_before: Dictionary = _encounter.snapshot()
 	var effects_before := {}
-	if not _bridge.frame_transaction_is_active() and actor.get("_launch_definition").actor_kind == "elite" and (actor.get("_launch_definition").id in ["ruins_wraith", "void_spore"] or not actor.native_splitting_configuration().is_empty()):
+	if terminal_children:
 		effects_before = _effects.launch_transaction_snapshot()
 		if effects_before.is_empty() or not _effects.bind_native_targets(_actors, {"player:1": _player}) or not _effects.capture_native_terminal_split(actor, receipt, {"player:1": _player}):
 			_fail(&"NATIVE_TERMINAL_SPLIT_INVALID")
@@ -321,6 +328,20 @@ func _on_actor_final_death(source: StringName, receipt: String) -> void:
 		return
 	_actors.erase(str(source))
 	_retired_sources.append(str(source))
+
+
+func _flush_terminal_deaths() -> bool:
+	if _bridge == null or _bridge.frame_transaction_is_active():
+		return false
+	var pending: Dictionary = _terminal_death_queue.duplicate()
+	_terminal_death_queue.clear()
+	var sources: Array = pending.keys()
+	sources.sort()
+	for source: String in sources:
+		_on_actor_final_death(StringName(source), str(pending[source]))
+		if not _failure.is_empty():
+			return false
+	return true
 
 
 func _boss_settlement_source(actor: Node) -> Dictionary:
@@ -354,6 +375,9 @@ func _on_player_frame_committed(frame: int) -> void:
 		_clear_native()
 		return
 	_flushing = true
+	if not _flush_terminal_deaths():
+		_flushing = false
+		return
 	for source: String in _retired_sources:
 		if _bridge.get("_actors").has(source):
 			_bridge.retire_actor(source)
@@ -389,7 +413,7 @@ func _on_player_frame_committed(frame: int) -> void:
 
 
 func _boundary_ready() -> bool:
-	return not _flushing and not _cancel_pending and _failure.is_empty() and _observations.is_empty()
+	return not _flushing and not _cancel_pending and _failure.is_empty() and _observations.is_empty() and _terminal_death_queue.is_empty()
 
 
 func _fail(code: StringName, context: Dictionary = {}) -> bool:

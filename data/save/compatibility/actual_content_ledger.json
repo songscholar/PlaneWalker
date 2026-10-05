@@ -1,7 +1,7 @@
 {
   "schema_id": "planewalker.actual_content_compatibility",
-  "schema_version": 1.0,
-  "save_schema_version": 4.0,
+  "schema_version": 1,
+  "save_schema_version": 4,
   "meta_catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
   "bindings": [
     {
@@ -16,7 +16,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "5f71d5f2974f4b6927594397e593acb75bef7d9806d0fbf0d028f15dc2efc99e"
           }
         ]
@@ -34,7 +34,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "46e09bb02ab515c6ad2944b4c8d30f561fca7fcfe3e28b56afc38fc1154d2903"
           }
         ]
@@ -52,7 +52,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "35b38b70f84c80df5433475c385344b5206eb9922164f8a7aa82277baaca18f7"
           }
         ]
@@ -70,7 +70,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "5410744506218905c156ee9a1ca868a1baa6bf16130602875e8d29aa3d3bbe0a"
           }
         ]
@@ -88,7 +88,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "36a536ae3ea314ee324d2fc7326fc39d2bbdf87302fac9d7b6b04988f04d0175"
           }
         ]
@@ -106,7 +106,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "b758d96e29137ee904948483a186ef0df50b8348f8138217ed1b70d83f9b284f"
           }
         ]
@@ -124,7 +124,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2.0,
+            "schema_version": 2,
             "fingerprint_sha256": "b14fc01a755799d8e546da96a6054397ae6b45ccf2d4f955b2975acbb367dc5d"
           }
         ]
@@ -132,7 +132,7 @@
     },
     {
       "id": "p23_cosmetics",
-      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "descriptor_path": "res://data/save/compatibility/base_p23_before_terminal_encounters.json",
       "source_commits": [
         "089b6d0895b3b0ccfa837ead3d52937af550b06d"
       ],
@@ -147,12 +147,30 @@
           }
         ]
       }
+    },
+    {
+      "id": "p15_native_terminal_encounters",
+      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "source_commits": [
+        "412100dc99004da258e6b332b5797b870399e3e0"
+      ],
+      "snapshot": {
+        "aggregate_sha256": "838c31095581b7abb79a63cb51b025d448c2ddd9d29b8ed75d2a318d8305bb2b",
+        "packs": [
+          {
+            "fingerprint_sha256": "083658d9d4f7af04b6f980f341f948fb75da26b4815a55fbb5b00c7fea8fcdd7",
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2
+          }
+        ]
+      }
     }
   ],
   "transitions": [
     {
       "source_id": "p16_actual",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -161,7 +179,7 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed UI localization, three event enemy anchors and independently tested elite TripleBlink timing and landing correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "reason": "Reviewed UI localization, three event enemy anchors and independently tested elite TripleBlink timing and landing correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior.",
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
         "assets/cosmetics/contact_sheet.png",
@@ -182,12 +200,13 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ]
     },
     {
       "source_id": "p16_hub",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -196,7 +215,7 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed Narrative and Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "reason": "Reviewed Narrative and Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior.",
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
         "assets/cosmetics/contact_sheet.png",
@@ -217,12 +236,13 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ]
     },
     {
       "source_id": "p16_narrative",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -231,7 +251,7 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "reason": "Reviewed Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior.",
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
         "assets/cosmetics/contact_sheet.png",
@@ -252,12 +272,13 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ]
     },
     {
       "source_id": "p16_training",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -266,7 +287,7 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed enemy_wave_primary anchors in three event rooms and templates, and independently tested elite TripleBlink timing and landing correction. All other descriptor fields, localization, Meta progression and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "reason": "Reviewed enemy_wave_primary anchors in three event rooms and templates, and independently tested elite TripleBlink timing and landing correction. All other descriptor fields, localization, Meta progression and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior.",
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
         "assets/cosmetics/contact_sheet.png",
@@ -287,17 +308,18 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ]
     },
     {
       "source_id": "p17_native_ambush",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [
         "content/enemies.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed Titan corpse pool damage, tick interval and radius are now canonical data instead of runtime tuning constants. Meta definitions and Profile v4 are unchanged. Active native checkpoints require explicit reconstruction validation before content rebinding. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "reason": "Reviewed Titan corpse pool damage, tick interval and radius are now canonical data instead of runtime tuning constants. Meta definitions and Profile v4 are unchanged. Active native checkpoints require explicit reconstruction validation before content rebinding. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior.",
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
         "assets/cosmetics/contact_sheet.png",
@@ -318,16 +340,17 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ]
     },
     {
       "source_id": "p19_corpse_tuning",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [
         "localization/translations.csv"
       ],
-      "reason": "Reviewed seven native build-sharing UI translation keys only. All gameplay definitions, Meta semantics and Profile v4 remain byte-identical. Active native checkpoints require reconstruction validation before atomic rebinding. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "reason": "Reviewed seven native build-sharing UI translation keys only. All gameplay definitions, Meta semantics and Profile v4 remain byte-identical. Active native checkpoints require reconstruction validation before atomic rebinding. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior.",
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
         "assets/cosmetics/contact_sheet.png",
@@ -348,12 +371,13 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ]
     },
     {
       "source_id": "p20_build_sharing",
-      "target_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
       "allowed_changed_files": [],
       "allowed_added_files": [
         "assets/cosmetics/LICENSE.txt",
@@ -375,9 +399,19 @@
         "assets/cosmetics/wanderer_return.png",
         "assets/cosmetics/wanderer_victory.png",
         "content/cosmetics.json",
-        "localization/cosmetics.csv"
+        "localization/cosmetics.csv",
+        "content/launch_encounter_extensions.json"
       ],
-      "reason": "Reviewed fifteen free original raster appearances, their catalog, supplemental localization and provenance only. Existing authored content, Meta catalog and all required Profile v4 fields remain unchanged. Active native checkpoints retain their explicit reconstruction gate."
+      "reason": "Reviewed fifteen free original raster appearances, their catalog, supplemental localization and provenance only. Existing authored content, Meta catalog and all required Profile v4 fields remain unchanged. Active native checkpoints retain their explicit reconstruction gate. The exact terminal encounter extension is additive; missing Run selection revision preserves all forty historical recipes and deterministic seed behavior."
+    },
+    {
+      "source_id": "p23_cosmetics",
+      "target_id": "p15_native_terminal_encounters",
+      "allowed_changed_files": [],
+      "allowed_added_files": [
+        "content/launch_encounter_extensions.json"
+      ],
+      "reason": "Reviewed additive revision2 elite Wraith and Spore encounter authority. All forty historical recipes and seed behavior, Meta progression definitions, and pre-existing Profile v4 rules remain unchanged. Missing persisted Run selection revision retains revision1."
     }
   ]
 }

@@ -46,9 +46,9 @@ func _ready() -> void:
 
 func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 	var sources: Array = ledger.trusted_sources(_target, _catalog.fingerprint())
-	_suite.assert_equal(sources.size(), 7, "ledger contains only seven audited actual-content sources")
+	_suite.assert_equal(sources.size(), 8, "ledger contains only eight audited actual-content sources")
 	_suite.assert_true(not ledger.audit_view().is_empty(), "ledger authenticates pinned metadata and full descriptor proof")
-	if sources.size() != 7:
+	if sources.size() != 8:
 		return
 	_suite.assert_equal(sources[0], original, "5bee/54bee shared source derives from the complete historical descriptor")
 	var middle: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p16_hub_before_narrative.json"))
@@ -64,6 +64,9 @@ func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 	var before_cosmetics: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p23_before_cosmetics.json"))
 	_suite.assert_equal(sources[6].packs[0].fingerprint_sha256, Descriptor.canonical_digest(before_cosmetics), "cosmetic addition source derives from the complete retained 733c25a descriptor")
 	_test_cosmetic_boundary(ledger, before_cosmetics)
+	var before_terminal: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p23_before_terminal_encounters.json"))
+	_suite.assert_equal(sources[7].packs[0].fingerprint_sha256, Descriptor.canonical_digest(before_terminal), "terminal encounter addition source derives from the complete retained 089b6d0 cosmetic descriptor")
+	_test_terminal_boundary(ledger, before_terminal)
 	_suite.assert_true(ledger.trusted_sources(_target, "0".repeat(64)).is_empty(), "different Meta semantics cannot authorize rebinding")
 	_suite.assert_true(ledger.trusted_sources(sources[0], _catalog.fingerprint()).is_empty(), "unknown or reverse target has no implicit compatibility")
 	for mutation: String in ["pack", "version", "schema", "aggregate", "extra", "mod"]:
@@ -94,8 +97,8 @@ func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 
 func _test_cosmetic_boundary(ledger: RefCounted, source: Dictionary) -> void:
 	var target: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/pack.json"))
-	var added: Array = ledger.audit_view().transitions[-1].allowed_added_files
-	_suite.assert_true(ledger._reviewed_changes_only(source, target, [], added), "only the exact declared cosmetic resources form an additive transition")
+	var added: Array = ledger.COSMETIC_FILES + ledger.TERMINAL_ENCOUNTER_FILES
+	_suite.assert_true(ledger._reviewed_changes_only(source, target, [], added), "only the exact declared cosmetic and terminal encounter resources form an additive transition")
 	for mutation: String in ["existing_hash", "removed_resource", "new_resource", "wrong_manifest", "dependency", "changed_allowlist", "missing_allowlist"]:
 		var changed := target.duplicate(true)
 		var changed_allowlist := added.duplicate()
@@ -112,6 +115,23 @@ func _test_cosmetic_boundary(ledger: RefCounted, source: Dictionary) -> void:
 			"changed_allowlist": changed_allowlist.append("content/items.json")
 			"missing_allowlist": changed_allowlist.pop_back()
 		_suite.assert_true(not ledger._reviewed_changes_only(source, changed, [], changed_allowlist), "cosmetic transition refuses unrelated or incomplete descriptor changes: " + mutation)
+
+
+func _test_terminal_boundary(ledger: RefCounted, source: Dictionary) -> void:
+	var target: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/pack.json"))
+	var added: Array = ledger.TERMINAL_ENCOUNTER_FILES
+	_suite.assert_true(ledger._reviewed_changes_only(source, target, [], added), "cosmetic pack upgrades by exactly one terminal encounter resource")
+	for mutation: String in ["historical_recipe", "wrong_manifest", "missing_allowlist", "extra_allowlist"]:
+		var changed := target.duplicate(true)
+		var allowlist := added.duplicate()
+		match mutation:
+			"historical_recipe": changed.integrity_hashes["content/launch_encounters.json"] = "f".repeat(64)
+			"wrong_manifest":
+				changed.content_manifest.erase(added[0])
+				changed.asset_manifest.append(added[0])
+			"missing_allowlist": allowlist.clear()
+			"extra_allowlist": allowlist.append("content/enemies.json")
+		_suite.assert_true(not ledger._reviewed_changes_only(source, changed, [], allowlist), "terminal transition refuses altered historical recipes and incomplete additions: " + mutation)
 
 
 func _new_save(case_id: String, binding: Dictionary, inject: bool = false) -> RefCounted:

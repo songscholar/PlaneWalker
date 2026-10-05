@@ -16,6 +16,8 @@ const cosmeticFiles = [
     ['default', 'return', 'victory'].map(route => `assets/cosmetics/${character}_${route}.png`)),
   'content/cosmetics.json', 'localization/cosmetics.csv',
 ];
+const terminalEncounterFiles = ['content/launch_encounter_extensions.json'];
+const allowedAdditions = [cosmeticFiles, [...cosmeticFiles, ...terminalEncounterFiles], terminalEncounterFiles];
 const ambushFiles = [
   'assets/rooms/launch/room_event_crossroads.tscn', 'assets/rooms/launch/room_event_mirror_hall.tscn',
   'assets/rooms/launch/room_event_shrine.tscn', 'content/enemies.json', 'content/room_templates.json',
@@ -39,6 +41,13 @@ const catalogConstruction = source => {
   assert(offset >= 0, 'catalog construction entry point exists');
   return source.slice(offset);
 };
+const metaStateDefinition = source => {
+  // e52e705 reserved mode command receipts without changing persisted Meta rules.
+  const historical = 'const RESERVED_COMMAND_PREFIXES := ["forge-enchant-unlock:", "legacy-stat:", "training-claim:", "narrative-source:", "onboarding-progress:", "onboarding-watermark:"]';
+  const current = historical.slice(0, -1) + ', "mode-reward:", "mode-equip:"]';
+  assert(source.includes(historical) || source.includes(current), 'only the exact reviewed mode receipt reservations extend the command boundary');
+  return source.replace(current, historical);
+};
 for (const binding of ledger.bindings) {
   const descriptorPath = binding.descriptor_path.replace(/^res:\/\//, '');
   const descriptor = JSON.parse(read(descriptorPath));
@@ -50,7 +59,11 @@ for (const binding of ledger.bindings) {
       assert.equal(digest(gitRead(commit, `data/content_packs/base/${content}`)), historical.integrity_hashes[content], `authored source content is authentic: ${commit}:${content}`);
     }
     for (const protectedPath of ['data/content/meta_legacy_references.json', 'scripts/progression/meta_profile_state.gd', 'scripts/progression/meta_progression_catalog.gd', 'data/schemas/meta_profile_state_v1.schema.json']) {
-      assert.equal(digest(gitRead(commit, protectedPath)), digest(read(protectedPath)), `Meta definitions and state remain byte-identical: ${commit}:${protectedPath}`);
+      const historical = gitRead(commit, protectedPath);
+      const current = read(protectedPath);
+      assert.equal(digest(protectedPath.endsWith('meta_profile_state.gd') ? metaStateDefinition(historical.toString()) : historical),
+        digest(protectedPath.endsWith('meta_profile_state.gd') ? metaStateDefinition(current.toString()) : current),
+        `Meta definitions and persisted state rules remain identical: ${commit}:${protectedPath}`);
     }
     assert.equal(catalogConstruction(gitRead(commit, 'scripts/progression/meta_catalog_factory.gd').toString()),
       catalogConstruction(read('scripts/progression/meta_catalog_factory.gd').toString()), `catalog construction semantics unchanged: ${commit}`);
@@ -63,12 +76,13 @@ for (const binding of ledger.bindings) {
 for (const edge of ledger.transitions) {
   assert(allowedChanges.some(allowed => JSON.stringify(allowed) === JSON.stringify(edge.allowed_changed_files)),
     'only previously reviewed exact localization and hostile content changes are admitted');
-  assert.deepEqual(edge.allowed_added_files, cosmeticFiles, 'only the exact twenty cosmetic resources are additive');
+  assert(allowedAdditions.some(allowed => JSON.stringify(allowed) === JSON.stringify(edge.allowed_added_files)),
+    'only exact reviewed cosmetic resources and terminal encounter extension are additive');
   const source = structuredClone(bindings.get(edge.source_id));
   const target = bindings.get(edge.target_id);
   for (const added of edge.allowed_added_files) {
     assert(!Object.hasOwn(source.integrity_hashes, added) && Object.hasOwn(target.integrity_hashes, added), 'reviewed added resource is new and authenticated');
-    const manifest = added === 'content/cosmetics.json' ? 'content_manifest' :
+    const manifest = ['content/cosmetics.json', ...terminalEncounterFiles].includes(added) ? 'content_manifest' :
       added === 'localization/cosmetics.csv' ? 'localization_sources' : 'asset_manifest';
     source[manifest].push(added);
     source[manifest].sort();
@@ -81,4 +95,4 @@ for (const edge of ledger.transitions) {
   }
   assert.deepEqual(source, target, `entire descriptor differs only by exact reviewed changes and additions: ${edge.source_id}`);
 }
-console.log(`PASS: ${ledger.bindings.length} committed descriptor proofs, ${ledger.transitions.length} exact reviewed transitions, identical Meta state and existing Profile v4 schema`);
+console.log(`PASS: ${ledger.bindings.length} committed descriptor proofs, ${ledger.transitions.length} exact reviewed transitions, identical persisted Meta state and existing Profile v4 schema`);
