@@ -109,6 +109,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Action Validation Template Evidence](current/2026-10-06-native-action-validation-template-evidence.md) | 完整动作校验、不可变模板容量和真实独立恢复回归 | Focused Verified / Full performance pending |
 | [Native Validation Input Plan](current/2026-10-06-native-validation-input-plan.md) | 当前快照只读校验、混合版本迁移与完整历史拒绝合同 | Approved / Current |
 | [Native Validation Input Evidence](current/2026-10-06-native-validation-input-evidence.md) | 八种版本迁移、完整历史校验和真实伤害存档录制回归 | Focused Verified / Full performance pending |
+| [Native Boss Control Observation Plan](current/2026-10-06-native-boss-control-observation-plan.md) | 首领外观、通用预警和冷威胁窄查询，保留时间首领历史分支 | Implemented / Focused verified |
+| [Native Boss Control Observation Evidence](current/2026-10-06-native-boss-control-observation-evidence.md) | 五首领完整视觉字段与权威字节一致、接触延后时序及相邻回归 | Focused Verified / Integrated performance pending |
 | [Native Boss UI Query Plan](current/2026-10-06-native-boss-ui-query-plan.md) | 首领可见状态窄查询、完整存档历史和界面字段保留 | Approved / Current |
 | [Native Boss UI Query Evidence](current/2026-10-06-native-boss-ui-query-evidence.md) | 五首领界面字段一致、重复查询不复制完整历史 | Focused Verified / Full performance pending |
 | [Void Event Checkpoint Plan](current/2026-10-06-void-event-checkpoint-plan.md) | 精确历史检查点复用、完整派生状态核对与过期回滚保留 | Approved / Current |
@@ -121,6 +123,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Replay Codec Difference Evidence](current/2026-10-06-replay-codec-difference-evidence.md) | 真实块字节一致、编码分段成本、历史共享与缓存微基准 | Focused Verified / Native performance pending |
 | [Replay Codec Immutable Reference Plan](current/2026-10-06-replay-codec-immutable-reference-plan.md) | 块内不可变引用认证、完整安全验证保留和编码吞吐修复 | Approved / Current |
 | [Replay Codec Immutable Reference Evidence](current/2026-10-06-replay-codec-immutable-reference-evidence.md) | 真实录像块的精确字节回归、不可变引用边界与编码耗时对照 | Focused Verified / Sustained recording pending |
+| [Native Replay Read Ownership Plan](current/2026-10-06-native-replay-read-ownership-plan.md) | 私有录像块缓存所有权、公开副本隔离和物理文件重复鉴权 | Implemented / Focused verified |
+| [Native Replay Read Ownership Evidence](current/2026-10-06-native-replay-read-ownership-evidence.md) | 真实录像块读缓存成本、完整公开数据隔离和物理损坏拒绝 | Focused Verified / Integrated measurement pending |
 | [Replay Safety Leaf Plan](current/2026-10-06-replay-safety-leaf-plan.md) | 通用安全遍历的叶子调用消除、完整类型判定与真实快照成本验收 | Approved / Current |
 | [Replay Safety Leaf Evidence](current/2026-10-06-replay-safety-leaf-evidence.md) | 全类型行为保留、真实快照局部成本及录像回放相邻回归 | Focused Verified / Full performance pending |
 | [Unified Native Recording 600 Evidence](current/2026-10-06-native-unified-recording-600-evidence.md) | 600 帧真实持续录制与物理回读成功，整帧性能仍未达标 | Recording Verified / Frame budget failed |
