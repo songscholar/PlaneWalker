@@ -164,7 +164,10 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Expected Engine Error Scope Evidence](current/2026-10-05-expected-engine-error-scope-evidence.md) | 四十二项精确预期诊断、严格双日志检查和二十八个原生专项场景 | Focused Verified / Combined certification pending |
 | [Native Test Physics Space Evidence](current/2026-10-05-native-test-physics-space-evidence.md) | 手动推进玩家保留真实物理空间、冲刺复现与三个专项双日志验证 | Focused Verified / Current |
 | [Native Boss Contact Refresh Evidence](current/2026-10-05-native-boss-contact-refresh-evidence.md) | 实际 Sword 命中回调的碰撞更新、Void 构件与严格回滚验证 | Focused Verified / Current |
-| [Linux Guest Startup Plan](superpowers/plans/2026-10-05-linux-guest-startup.md) | 固定发行包的隔离 Linux 虚拟环境启动与证据分类 | Active / Current |
+| [Linux Guest Startup Plan](superpowers/plans/2026-10-05-linux-guest-startup.md) | 固定发行包的隔离 Linux 虚拟环境启动与证据分类 | Completed / Historical |
+| [Linux Guest Startup Evidence](current/2026-10-05-p19-linux-guest-startup-evidence.md) | 三平台导出、macOS 实际包和 Linux 虚拟环境各十二项启动验证 | Focused Verified / Final clean certification pending |
+| [Native Summon Import Evidence](current/2026-10-05-native-summon-import-evidence.md) | 消除自动加载时的贴图预载错误、固定提交首次与第二次导入 | Focused Verified / Current |
+| [Native Rendered UI Coverage Plan](superpowers/plans/2026-10-05-native-rendered-ui-coverage.md) | 四种分辨率的实际渲染、像素检查与手柄流程认证 | Active / Current |
 | [Native Forge Terminal Evidence](current/2026-10-05-native-forge-terminal-payload-evidence.md) | 首领终结清理真实弹体、规范死亡碰撞及事务恢复 | Focused Verified / Current |
 | [Native Summon Boundary Evidence](current/2026-10-05-native-summon-boundary-evidence.md) | 冻结召唤落点安全准入、合法边缘、静态阻挡及原帧重试 | Focused Verified / Current |
 | [Native Summon Prepublication Evidence](current/2026-10-05-native-summon-prepublication-evidence.md) | 自动选择拒绝未发布预警、合法威胁退役及精确重试 | Focused Verified / Current |
