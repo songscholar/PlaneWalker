@@ -23,7 +23,7 @@ func _run() -> void:
 	var compiler := AffixProjection.new()
 	suite.assert_true(compiler.configure([Content.affix("mirroring")], 4).ok, "default native compiler accepts Mirroring")
 	var projected: Dictionary = compiler.project(parser.runtime_projection("elite"))
-	suite.assert_true(projected.ok and projected.configuration.pending_ids.is_empty() and projected.configuration.native_revision == 9, "native revision nine executes Mirroring")
+	suite.assert_true(projected.ok and projected.configuration.pending_ids.is_empty() and projected.configuration.native_revision == AffixProjection.CURRENT_NATIVE_REVISION, "current native revision executes Mirroring")
 	var runtime := Affix.new()
 	suite.assert_true(runtime.configure(projected.configuration, identity, 160.0), "closed native affix runtime configures Mirroring")
 	var origin := {"x": 320.0, "y": 180.0}
@@ -53,6 +53,12 @@ func _run() -> void:
 			"extra": forged.mirroring.hidden_child = true
 		suite.assert_true(not runtime.restore_snapshot(forged) and runtime.snapshot() == accepted, "native Mirroring refuses %s without mutation" % mutation)
 	var historical := AffixProjection.new()
+	var revision_nine := AffixProjection.new()
+	suite.assert_true(revision_nine.configure([Content.affix("mirroring")], 4, 9).ok, "explicit native revision nine remains supported")
+	var prior: Dictionary = revision_nine.project(parser.runtime_projection("elite"))
+	suite.assert_true(prior.ok and prior.configuration.pending_ids.is_empty() and prior.configuration.native_revision == 9, "explicit revision nine retains executable Mirroring")
+	var prior_runtime := Affix.new()
+	suite.assert_true(prior_runtime.configure(prior.configuration, identity, 160.0) and prior_runtime.snapshot().has("mirroring"), "revision nine independently retains the native Mirroring clock")
 	suite.assert_true(historical.configure([Content.affix("mirroring")], 4, 8).ok, "explicit native revision eight remains supported")
 	var old: Dictionary = historical.project(parser.runtime_projection("elite"))
 	suite.assert_equal(old.configuration.pending_ids, ["mirroring"], "explicit revision eight keeps Mirroring metadata-only")
