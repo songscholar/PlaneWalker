@@ -9,6 +9,8 @@ const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinato
 const AffixProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
 const AffixRuntime := preload("res://scripts/enemies/launch/launch_elite_affix_runtime.gd")
 const AffixCue := preload("res://scripts/enemies/launch/launch_elite_affix_cue.gd")
+const Chaining := preload("res://scripts/enemies/launch/launch_elite_chaining_runtime.gd")
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -93,7 +95,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6, 7]:
+	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6, 7, 8]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -618,6 +620,9 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 		staged = result.ok
 		if staged:
 			accepted_damage_frame = frame
+			if _affix_runtime != null and health.owns_weapon_hit_control_application(damage_info, final_amount) and _authenticates_chaining_player_hit(damage_info):
+				var chaining_identity := JSON.stringify([str(_launch_identity.run_id), str(hostile_source_id), str(damage_info.hostile_source_id), int(damage_info.attack_generation), int(damage_info.hit_index), int(damage_info.damage_type)], "", false).sha256_text()
+				_affix_runtime.accept_chaining_player_damage(frame, chaining_identity, _point(global_position))
 		if result.ok and _affix_runtime != null and damage_info.tags.has("attack:heavy"):
 			_affix_runtime.interrupt_regeneration(frame)
 		if result.ok and _hostile_threat_registry != null:
@@ -627,6 +632,49 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 	if controlled and staged and _affix_runtime != null:
 		_affix_runtime.accept_launch_control(accepted_damage_frame)
 	return controlled or staged
+
+
+func _authenticates_chaining_player_hit(info: RefCounted) -> bool:
+	var attacker: Node = info.attacker
+	if not is_instance_valid(attacker) or not attacker is PlayerController or not attacker.authenticates_native_damage_run(info, self, StringName(str(_launch_identity.run_id))):
+		return false
+	if info.target_id == hostile_source_id or info.target_id == &"pending_target":
+		return true
+	for field: String in ["encounter_spawn_id", "spawn_id", "stable_target_id"]:
+		if has_meta(field) and str(info.target_id) in [str(get_meta(field)), "target:" + str(get_meta(field))]:
+			return true
+	return false
+
+
+func settle_launch_chaining(actors: Dictionary, frame: int, authority: RefCounted) -> bool:
+	if _affix_runtime == null or _affix_runtime.pending_chaining_grants().is_empty():
+		return true
+	if not authority is HostileFrameBridge or not authority.owns_launch_chaining_context(self, actors, frame) or not _prepared_launch_frame.is_empty():
+		return false
+	for grant: Dictionary in _affix_runtime.pending_chaining_grants():
+		var candidates: Array[Dictionary] = []
+		var origin := _vector(grant.source_position)
+		for id: String in actors:
+			var ally: Variant = actors[id]
+			if not ally is LaunchHostileActor or not is_instance_valid(ally) or ally == self or ally.is_queued_for_deletion() or not ally.is_inside_tree() or SceneScope.replay_world(ally) != SceneScope.replay_world(self):
+				continue
+			var state: Dictionary = ally.launch_runtime_snapshot()
+			if state.runtime.identity.run_id != _launch_identity.run_id or state.runtime.terminal or not ally.health.is_alive() or int(state.runtime.runtime_frame) != frame - 1 or not ally.prepared_launch_frame_batch().is_empty():
+				continue
+			var distance: float = origin.distance_squared_to(ally.global_position)
+			if distance <= pow(float(EliteAffixDefinition.PARAMETERS.chaining.recipient_radius_px), 2.0) and state.runtime.control.sources.size() < HostileControlRuntime.MAX_SOURCES:
+				candidates.append({"id": id, "position": _point(ally.global_position), "distance": distance})
+		candidates.sort_custom(func(a: Dictionary, b: Dictionary): return a.id < b.id if a.distance == b.distance else a.distance < b.distance)
+		var recipients: Array[Dictionary] = []
+		for index: int in range(mini(candidates.size(), int(EliteAffixDefinition.PARAMETERS.chaining.recipient_count_cap))):
+			var row: Dictionary = candidates[index]
+			var ally: Node2D = actors[row.id]
+			if not ally.get("_launch_runtime").add_control_source(Chaining.control_id(str(grant.fact_id)), "attack_buff", int(EliteAffixDefinition.PARAMETERS.chaining.buff_frames), float(EliteAffixDefinition.PARAMETERS.chaining.attack_multiplier)):
+				return false
+			recipients.append({"id": row.id, "position": row.position})
+		if not _affix_runtime.settle_chaining_grant(frame, str(grant.fact_id), recipients):
+			return false
+	return true
 
 
 func cancel_active_attack() -> void:
@@ -686,6 +734,7 @@ func _refresh_control_visual() -> void:
 func _refresh_affix_cue() -> void:
 	_refresh_teleport_cue()
 	_refresh_shield_cue()
+	_refresh_chaining_cue()
 	var cue := get_node_or_null("EliteAffixCue") as Node2D
 	if _affix_runtime == null or not _affix_runtime.is_nullified():
 		if cue != null:
@@ -696,7 +745,7 @@ func _refresh_affix_cue() -> void:
 		cue.name = "EliteAffixCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() else (Vector2(-22, -32) if _affix_runtime.is_teleporting() else Vector2(0, -32))
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.chaining_phase() != "ABSENT" else (Vector2(-22, -32) if _affix_runtime.is_teleporting() else Vector2(0, -32))
 	var phase := "READY"
 	if _affix_runtime.snapshot().terminal:
 		phase = "TERMINAL"
@@ -735,13 +784,29 @@ func _refresh_teleport_cue() -> void:
 		cue.name = "EliteTeleportCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.is_nullified() else Vector2(0, -32)
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.is_nullified() or _affix_runtime.chaining_phase() != "ABSENT" else Vector2(0, -32)
 	var state: Dictionary = _affix_runtime.snapshot()
 	var phase: String = "TERMINAL" if state.terminal else str(state.teleporting.phase)
 	var offset := Vector2.ZERO
 	if phase in ["DEPARTURE", "ARRIVAL"]:
 		offset = _vector(state.teleporting.reservations.back().landing) - global_position - cue.position
 	cue.project_teleporting(phase, offset, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
+
+
+func _refresh_chaining_cue() -> void:
+	var cue := get_node_or_null("EliteChainingCue") as Node2D
+	var phase: String = "ABSENT" if _affix_runtime == null else _affix_runtime.chaining_phase()
+	if phase == "ABSENT":
+		if cue != null:
+			cue.visible = false
+		return
+	if cue == null:
+		cue = AffixCue.new()
+		cue.name = "EliteChainingCue"
+		cue.z_index = 5
+		add_child(cue)
+	cue.position = Vector2(-22, -32) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() else Vector2(0, -32)
+	cue.project_chaining(phase, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
 
 
 func _actor_state() -> Dictionary:
@@ -885,6 +950,8 @@ static func _launch_failure(field: String) -> Dictionary:
 func native_cold_snapshot(source_binding: Callable) -> Dictionary:
 	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _prepared_frame_committed or health == null or health.frame_signal_transaction_is_active() or not source_binding.is_valid():
 		return {}
+	if _affix_runtime != null and not _affix_runtime.pending_chaining_grants().is_empty():
+		return {}
 	var state := _actor_state()
 	for row: Dictionary in state.status.entries.values():
 		for field: String in ["damage_source", "damage_attacker"]:
@@ -908,6 +975,12 @@ func can_restore_native_cold_snapshot(value: Dictionary, source_resolver: Callab
 		return false
 	for claim: Dictionary in state.get("affix_runtime", {}).get("shielded", {}).get("damage_claims", []):
 		if int(claim.runtime_frame) > int(state.runtime.runtime_frame):
+			return false
+	for claim: Dictionary in state.get("affix_runtime", {}).get("chaining", {}).get("damage_claims", []):
+		if int(claim.runtime_frame) > int(state.runtime.runtime_frame):
+			return false
+	for grant: Dictionary in state.get("affix_runtime", {}).get("chaining", {}).get("grants", []):
+		if int(grant.settled_frame) == -1 or int(grant.settled_frame) > int(state.runtime.runtime_frame):
 			return false
 	if value.health.dead != state.runtime.terminal:
 		return false

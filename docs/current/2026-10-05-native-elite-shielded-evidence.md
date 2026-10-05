@@ -11,7 +11,8 @@
 ## Verified Behavior
 
 Shielded entered native execution at revision five; the compiler now defaults to
-revision seven. Shielded absorbs damage
+revision eight for native Chaining; revision-seven Shielded behavior is retained.
+Shielded absorbs damage
 after incoming modifiers and flat defense from a pool of30% actual maximum HP.
 The real sentinel elite has160HP and48shield;20 damage spends20shield without
 HP loss, then40 damage consumes28shield and removes12HP. A fractional0.25shield
@@ -140,7 +141,8 @@ line coverage as unsupported. No dependency or authored content fingerprint chan
 
 ## Remaining Gates
 
-Native Chaining, Splitting and Mirroring remain pending. Teleporting has its
+Native Splitting and Mirroring remain pending. Chaining has its separate
+[retained native gate](2026-10-05-native-elite-chaining-evidence.md). Teleporting has its
 separate [retained native gate](2026-10-05-native-elite-teleporting-evidence.md). The full
 legal-pair/control matrix, all-weapon physics contacts, extended4096-receipt
 capacity, whole-room balance and full P15 certification remain separate gates.

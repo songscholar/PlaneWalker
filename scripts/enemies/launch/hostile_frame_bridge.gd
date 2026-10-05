@@ -159,6 +159,10 @@ func prepare_frame(ticket: Dictionary) -> bool:
 	_active.prepared = true
 	var batches: Array[Dictionary] = []
 	var target_id := _player_target_id()
+	# Grants enter recipient controls before this frame builds its attack facts.
+	for record: Dictionary in _active.records:
+		if record.actor.has_method("settle_launch_chaining") and not record.actor.settle_launch_chaining(_actors, int(ticket.runtime_frame), self):
+			return false
 	for record: Dictionary in _active.records:
 		var actor: Node2D = record.actor
 		if not is_instance_valid(actor):
@@ -196,6 +200,10 @@ func prepare_frame(ticket: Dictionary) -> bool:
 			return false
 	var committed: Dictionary = _effects.call("commit", _active.effect_ticket)
 	return bool(committed.get("ok", false)) and (_encounter_authority == null or _encounter_authority.commit(_active.encounter_ticket))
+
+
+func owns_launch_chaining_context(actor: Node2D, actors: Dictionary, frame: int) -> bool:
+	return not _active.is_empty() and bool(_active.prepared) and not _publishing and frame == int(_active.ticket.runtime_frame) and actors == _actors and _actors.get(str(actor.get("hostile_source_id"))) == actor and _active.effect_ticket.is_empty()
 
 
 func prepare_frame_publication(ticket: Dictionary) -> Dictionary:

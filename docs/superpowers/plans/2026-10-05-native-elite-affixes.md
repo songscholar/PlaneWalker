@@ -55,7 +55,7 @@ canonical rows and floor; it does not revise authored content or Save schema.
 - [x] Anchored: native poise/recovery and displacement refusal, actual Stop/Rift, physical checkpoint and accepted-frame compensation.
 - [x] Nullified: retained Stop/Rift/Time/echo interactions, bounded delay/vulnerability, Anchor/Frenzy composition and accessible clock-fragment cue. See [native Nullified evidence](../../current/2026-10-05-native-elite-nullified-evidence.md).
 - [x] Teleport: seeded collision-safe48-80 pixel landing, complete30-frame departure warning and30-frame arrival recovery, actual Player late compensation, typed/physical persistence and accessible native projection. See [native Teleporting evidence](../../current/2026-10-05-native-elite-teleporting-evidence.md).
-- [ ] Chaining: accepted Player damage only, strongest two-ally 1.15 attack buff, 90-frame TTL and 120-frame source cooldown.
+- [x] Chaining: authenticated accepted Player damage, deterministic nearest two-ally1.15 strongest-only attack buff,90 accepted-frame TTL,120-frame source cooldown, actual Sword/Player compensation and accessible native cue. See [native Chaining evidence](../../current/2026-10-05-native-elite-chaining-evidence.md).
 - [ ] Splitting and Mirroring: independently warned finite nonreward ordinary children, no recursive abilities and owner-death retirement.
 - [ ] Whole legal-pair matrix, native presentation/accessibility, Save/Replay and full-room/whole-run certification.
 
@@ -118,3 +118,13 @@ retain metadata-only Shielded behavior.
 - [x] Add damage type to the current shield receipt identity so physical and Time components each settle once; retain duplicate refusal and exact typed cold recovery.
 - [x] Preserve explicit historical5/6 admission and receipt identity, bind promotion through existing definition signature/configuration digest, and reject old state in current configuration.
 - [x] Retain current shared elite7/7, actual Player/Sword late rollback/retry, Actor transaction, production encounter and physical checkpoint evidence.
+
+## Chaining Native Revision Eight
+
+- [x] Retain actual positive Player Health damage against historical metadata-only revision7 RED before certifying current native behavior.
+- [x] Bind Chaining damage admission to Health's owned existing weapon-control call and actual Player/current run/source/world/target authentication.
+- [x] Keep ordered4096-capacity damage and grant receipts in an independent domain helper; validate source cooldown, selected positions, settlement order and cold refusal.
+- [x] Let the owned Bridge settle nearest two96-pixel recipients before native movement/action preparation; retain existing strongest-only controls for exact90 accepted frames.
+- [x] Verify actual ordinary13.8 damage, stronger-source14.4 damage, actual Sword active-frame delivery, source/recipient/full-Player late rollback/retry and finite lethal/no-ally outcomes.
+- [x] Retain exact source/recipient typed and physical SaveService state, terminal/capacity gates, shared elite8/8, Health/transaction/production/physical checkpoint regressions and eight visually inspected Metal captures.
+- [ ] Fix the separate unshielded duplicate body-damage settlement defect with real producer/cold-invariant RED/GREEN and explicit historical boundaries.

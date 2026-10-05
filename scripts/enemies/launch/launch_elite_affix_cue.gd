@@ -45,7 +45,20 @@ func get_snapshot() -> Dictionary:
 	return {"affix_id": _affix_id, "phase": _phase, "high_contrast": _high_contrast, "visual_scale": _visual_scale, "visible": visible}
 
 
+func project_chaining(phase: String, high_contrast: bool, visual_scale: float) -> void:
+	_affix_id = "chaining"
+	_phase = phase
+	_high_contrast = high_contrast
+	_visual_scale = clampf(visual_scale, 1.0, 1.5)
+	scale = Vector2.ONE * _visual_scale
+	visible = phase not in ["ABSENT", "TERMINAL"]
+	queue_redraw()
+
+
 func _draw() -> void:
+	if _affix_id == "chaining":
+		_draw_chaining()
+		return
 	if _affix_id == "teleporting":
 		_draw_teleport()
 		return
@@ -108,3 +121,19 @@ func _draw_teleport() -> void:
 		draw_arc(centre, 15.0, 0, TAU, 24, ink, 2.0)
 		for direction: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
 			draw_line(centre + direction * 18.0, centre + direction * 23.0, ink, 2.0)
+
+
+func _draw_chaining() -> void:
+	var ink := Color.WHITE if _high_contrast else Color(1.0, 0.88, 0.3)
+	if _phase == "COOLDOWN":
+		ink = Color(0.75, 0.75, 0.75) if _high_contrast else Color(0.65, 0.72, 0.76)
+	for side: float in [-1.0, 1.0]:
+		var link := PackedVector2Array([Vector2(-2 * side, -5), Vector2(-7 * side, -5), Vector2(-10 * side, -2), Vector2(-10 * side, 2), Vector2(-7 * side, 5), Vector2(-2 * side, 5)])
+		draw_polyline(link, Color(0.08, 0.08, 0.1), 4.0)
+		draw_polyline(link, ink, 2.0)
+	var bolt := PackedVector2Array([Vector2(2, -8), Vector2(-3, 0), Vector2(3, 0), Vector2(-2, 8)])
+	draw_polyline(bolt, Color(0.08, 0.08, 0.1), 4.0)
+	draw_polyline(bolt, ink, 2.0)
+	if _phase == "TRIGGERED":
+		draw_line(Vector2(-14, -8), Vector2(-11, -5), ink, 2.0)
+		draw_line(Vector2(14, 8), Vector2(11, 5), ink, 2.0)

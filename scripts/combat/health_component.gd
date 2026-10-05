@@ -65,6 +65,7 @@ var _published_damage_context: Dictionary = {}
 var _hostile_lethal_commit_context: Dictionary = {}
 var _hostile_lethal_application_in_progress := false
 var _post_defense_absorption_context: Dictionary = {}
+var _weapon_hit_control_context: Dictionary = {}
 
 
 func _ready() -> void:
@@ -863,7 +864,14 @@ func _apply_hit_reaction(damage_info: RefCounted, final_amount: float, hp_before
 	if damage_info.knockback.length_squared() > 0.0 and owner_entity.has_method("apply_knockback"):
 		owner_entity.apply_knockback(damage_info.knockback)
 	if owner_entity.has_method("apply_weapon_hit_control"):
+		var previous_control_context := _weapon_hit_control_context
+		_weapon_hit_control_context = {"damage_info": damage_info, "amount": final_amount}
 		owner_entity.call("apply_weapon_hit_control", damage_info, final_amount)
+		_weapon_hit_control_context = previous_control_context
+
+
+func owns_weapon_hit_control_application(damage_info: RefCounted, final_amount: float) -> bool:
+	return not _weapon_hit_control_context.is_empty() and _weapon_hit_control_context.damage_info == damage_info and _weapon_hit_control_context.amount == final_amount
 
 
 func _owner_defense_decisions(owner_entity: Node, damage_info: RefCounted) -> Dictionary:

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/combat/launch_elite_chaining_test.gd" id="1"]
+
+[node name="LaunchEliteChainingTest" type="Node"]
+script = ExtResource("1")

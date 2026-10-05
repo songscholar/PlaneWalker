@@ -11,7 +11,8 @@
 ## Verified Behavior
 
 Teleporting entered native execution at revision six. The compiler now defaults
-to revision seven for authenticated Shielded weapon components; Teleporting
+to revision eight for native Chaining after authenticated Shielded weapon
+components in revision seven; Teleporting
 keeps this milestone's revision-six state and behavior. Explicit historical revisions
 one through five retain their original metadata-only Teleporting behavior and
 signatures. The new authoritative state binds configuration, run, hostile source,
@@ -84,7 +85,8 @@ No dependencies or authored content fingerprints changed.
 
 ## Remaining Gates
 
-Native Chaining, Splitting and Mirroring remain pending. The complete legal-pair
+Native Splitting and Mirroring remain pending; Chaining has its
+[retained native gate](2026-10-05-native-elite-chaining-evidence.md). The complete legal-pair
 matrix, all-weapon physics contacts, extended4096-reservation capacity, whole-room
 balance and full P15 certification remain separate gates. The production weapon
 compatibility follow-up is retained in [Shielded evidence](2026-10-05-native-elite-shielded-evidence.md)
