@@ -21,7 +21,9 @@ const Room := preload("res://scripts/dungeon/launch_room_scene.gd")
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
+const SaveStorage := preload("res://scripts/save/save_service.gd")
 const NativeCheckpoint := preload("res://scripts/save/native_run_checkpoint_authority.gd")
+const LocalRecordRules := preload("res://scripts/community/local_run_record_rules.gd")
 const OCCURRENCE_RADIUS := 48.0
 const MAX_OCCURRENCES := 64
 const MIRROR_FIELDS := ["chronos_shards", "existential_imprints", "unlocked_nodes", "discovered_items", "unlocked_characters", "unlocked_weapons", "weapon_proficiency", "npc_affinity", "unlocked_achievements", "cosmetics"]
@@ -238,6 +240,139 @@ func authenticated_active_run(expected_revision: int) -> Dictionary:
 	if launch.is_empty() or not _settlement.verified_run_sources(launch, run_value).ok:
 		return _failure(&"ACTIVE_RUN_INVALID")
 	return _success({"run": run_value.duplicate(true), "launch": launch})
+
+
+func verified_settled_run() -> Dictionary:
+	var ready := _readiness(int(snapshot().get("revision", -1)))
+	if not ready.ok:
+		return ready
+	var profile := snapshot()
+	if not profile.active_launch_receipt.is_empty() or profile.last_settlement_receipt.is_empty():
+		return _failure(&"NO_SETTLED_RUN")
+	var primary = _save.inspect_profile(_profile_id, _save_domain)
+	if not primary.ok or not _json_equal(primary.payload.payload, _with_runtime_defaults(_payload)):
+		return _failure(&"STALE_DURABLE_PROFILE")
+	var terminal: Dictionary = _payload.get("active_run_state", {})
+	var receipt: Dictionary = profile.last_settlement_receipt
+	if receipt.terminal_reason == "abandon":
+		return _failure(&"NO_SETTLED_RUN")
+	return _verified_local_record_source({"profile_id": _profile_id, "save_domain": _save_domain, "content_snapshot": primary.payload.content_snapshot, "terminal": terminal, "launch": _launch_for_run(terminal), "receipt": receipt})
+
+
+func local_record_storage_identity() -> Dictionary:
+	return {"profile_id": _profile_id, "save_domain": _save_domain, "content_snapshot": _save.configured_content_snapshot()} if _save != null else {}
+
+
+func verified_local_record_outbox() -> Dictionary:
+	var ready := _readiness(int(snapshot().get("revision", -1)))
+	if not ready.ok:
+		return ready
+	var primary = _save.inspect_profile(_profile_id, _save_domain)
+	if primary.code == &"NOT_FOUND" and not _payload.has("local_records_outbox"):
+		return _success({"sources": []})
+	if not primary.ok or not _json_equal(primary.payload.payload, _with_runtime_defaults(_payload)):
+		return _failure(&"STALE_DURABLE_PROFILE")
+	var outbox: Variant = _payload.get("local_records_outbox", {"schema_version": 1, "sources": []})
+	if not (Catalog.exact_fields(outbox, ["schema_version", "sources"]) or Catalog.exact_fields(outbox, ["schema_version", "sources", "omitted_count"])) or not Catalog.bounded_int(outbox.schema_version, 1, 1) or not outbox.sources is Array or outbox.sources.size() > LocalRecordRules.MAX_ENTRIES or not Catalog.bounded_int(outbox.get("omitted_count", 0), 0, Catalog.MAX_VALUE):
+		return _failure(&"RECORD_OUTBOX_INVALID")
+	var verified_sources: Array = []
+	var seen: Dictionary = {}
+	for value: Variant in outbox.sources:
+		var verified := _verified_local_record_source(value)
+		if not verified.ok:
+			return verified
+		var identity: String = verified.context.receipt.run_id
+		if seen.has(identity):
+			return _failure(&"RECORD_OUTBOX_INVALID")
+		seen[identity] = true
+		verified_sources.append(verified.context)
+	if verified_sources.is_empty() and not _payload.has("local_records_outbox"):
+		var last := verified_settled_run()
+		if last.ok:
+			verified_sources.append(last.context)
+		elif last.code != &"NO_SETTLED_RUN":
+			return last
+	verified_sources.sort_custom(func(left: Dictionary, right: Dictionary): return left.receipt.sequence < right.receipt.sequence)
+	return _success({"sources": verified_sources, "omitted_count": int(outbox.get("omitted_count", 0))})
+
+
+func acknowledge_local_records(board_storage: RefCounted, board_id: String) -> Dictionary:
+	if not board_storage is SaveStorage or not Paths.validate_id(board_id).ok:
+		return _failure(&"RECORD_ACK_INVALID")
+	var authenticated := verified_local_record_outbox()
+	if not authenticated.ok:
+		return authenticated
+	var outbox: Dictionary = _payload.get("local_records_outbox", {})
+	if outbox.is_empty() or outbox.sources.is_empty():
+		return _success({"acknowledged": 0})
+	var board_primary = board_storage.inspect_profile(board_id, "local")
+	if not board_primary.ok:
+		return _failure(&"RECORD_ACK_INVALID")
+	var board: Variant = board_primary.payload.payload.get("local_run_records")
+	if not LocalRecordRules.valid_board(board, board_primary.payload.content_snapshot, _save_domain) or board_id != LocalRecordRules.board_id(board_primary.payload.content_snapshot, _save_domain):
+		return _failure(&"RECORD_ACK_INVALID")
+	var watermark: Variant = board.watermarks.get(_profile_id, {})
+	if not Catalog.exact_fields(watermark, ["launch_sequence", "run_id", "receipt_digest"]) or not Catalog.bounded_int(watermark.launch_sequence, 1, int(snapshot().launch_sequence)):
+		return _failure(&"RECORD_ACK_INVALID")
+	var watermark_authenticated := false
+	for source: Dictionary in authenticated.context.sources:
+		watermark_authenticated = watermark_authenticated or (_json_equal(source.content_snapshot, board.content_snapshot) and source.receipt.sequence == watermark.launch_sequence and source.receipt.run_id == watermark.run_id and source.receipt.digest == watermark.receipt_digest)
+	if not watermark_authenticated:
+		return _failure(&"RECORD_ACK_INVALID")
+	var remaining: Array = []
+	for source: Dictionary in outbox.sources:
+		var consumed: bool = _json_equal(source.content_snapshot, board.content_snapshot) and (source.receipt.sequence < watermark.launch_sequence or source.receipt.sequence == watermark.launch_sequence and source.receipt.run_id == watermark.run_id and source.receipt.digest == watermark.receipt_digest)
+		if not consumed:
+			remaining.append(source.duplicate(true))
+	var acknowledged: int = outbox.sources.size() - remaining.size()
+	if acknowledged == 0:
+		return _success({"acknowledged": 0})
+	var primary = _save.inspect_profile(_profile_id, _save_domain)
+	if not primary.ok or not _json_equal(primary.payload.payload, _with_runtime_defaults(_payload)):
+		return _failure(&"STALE_DURABLE_PROFILE")
+	var candidate := _payload.duplicate(true)
+	candidate.local_records_outbox = {"schema_version": 1, "sources": remaining, "omitted_count": authenticated.context.get("omitted_count", 0)}
+	_busy = true
+	var written = _save.save_profile_compare_exchange(_profile_id, _save_domain, candidate, primary.payload)
+	if not written.ok:
+		var actual = _save.inspect_profile(_profile_id, _save_domain)
+		if not actual.ok or not _json_equal(actual.payload.payload, _with_runtime_defaults(candidate)):
+			_busy = false
+			return _failure(written.code)
+	_payload = _with_runtime_defaults(candidate)
+	_busy = false
+	return _success({"acknowledged": acknowledged})
+
+
+func _verified_local_record_source(value: Variant) -> Dictionary:
+	if not Catalog.exact_fields(value, ["profile_id", "save_domain", "content_snapshot", "terminal", "launch", "receipt"]) or value.profile_id != _profile_id or value.save_domain != _save_domain or not value.terminal is Dictionary or not value.launch is Dictionary or not value.receipt is Dictionary or not Catalog.exact_fields(value.receipt, ["schema_id", "sequence", "run_id", "terminal_reason", "shards", "imprints", "soul_reserve", "digest"]):
+		return _failure(&"RECORD_OUTBOX_INVALID")
+	var binding = Envelope.create_profile(_profile_id, _save_domain, 0, "local-record", "2000-01-01T00:00:00Z", "2000-01-01T00:00:00Z", value.content_snapshot, {})
+	var normalized = Envelope.validate_active_run_snapshot(value.terminal, _catalog)
+	if not binding.ok or not normalized.ok or normalized.payload.is_empty():
+		return _failure(&"SETTLED_RUN_INVALID")
+	var terminal: Dictionary = normalized.payload
+	var launch: Dictionary = value.launch
+	var receipt: Dictionary = value.receipt
+	var facts: Dictionary = _settlement.verified_terminal_facts(launch, terminal)
+	var sources: Dictionary = _settlement.verified_run_sources(launch, terminal)
+	if not facts.ok or not sources.ok or receipt.schema_id != "meta_settlement_receipt_v1" or not Catalog.bounded_int(receipt.sequence, 1, int(snapshot().launch_sequence)) or receipt.run_id != "meta-run-%s-%d" % [_profile_id, int(receipt.sequence)] or receipt.run_id != facts.context.run_id or receipt.sequence != facts.context.launch_sequence or receipt.terminal_reason != facts.context.terminal_reason:
+		return _failure(&"SETTLED_RUN_INVALID")
+	for field: String in ["shards", "imprints", "soul_reserve"]:
+		if not Catalog.bounded_int(receipt[field], 0, Catalog.MAX_VALUE):
+			return _failure(&"SETTLED_RUN_INVALID")
+	var unsigned := receipt.duplicate(true)
+	unsigned.erase("digest")
+	for field: String in ["sequence", "shards", "imprints", "soul_reserve"]:
+		unsigned[field] = int(unsigned[field])
+	var digest := JSON.stringify({"receipt": unsigned, "projection_digest": launch.projection_digest, "sources": sources.context.sources}, "", true, true).sha256_text()
+	if receipt.digest != digest:
+		return _failure(&"SETTLEMENT_DIGEST_INVALID")
+	if receipt.sequence == snapshot().last_settlement_receipt.get("sequence", -1) and not _json_equal(receipt, snapshot().last_settlement_receipt):
+		return _failure(&"SETTLED_RUN_INVALID")
+	var normalized_receipt := unsigned.duplicate(true)
+	normalized_receipt["digest"] = receipt.digest
+	return _success({"profile_id": _profile_id, "save_domain": _save_domain, "content_snapshot": binding.payload.content_snapshot, "terminal": terminal, "config": terminal.config, "receipt": normalized_receipt, "launch": launch, "facts": facts.context})
 
 
 func enable_workshop(entries: Array) -> Dictionary:
@@ -772,7 +907,25 @@ func settle_terminal(terminal: Dictionary, receipts: Array, expected_revision: i
 	var prepared: Dictionary = _profile.call("prepare_candidate", settlement.context.candidate)
 	if not prepared.ok:
 		return prepared
-	var persisted := _persist_ticket(prepared.context.ticket, {"active_run_state": terminal, "pending_meta_run_projection": {}, "pending_run_config": {}})
+	var retained := verified_local_record_outbox()
+	if not retained.ok:
+		_profile.discard_candidate(prepared.context.ticket)
+		return retained
+	var queue: Array = []
+	for source: Dictionary in retained.context.sources:
+		queue.append({"profile_id": source.profile_id, "save_domain": source.save_domain, "content_snapshot": source.content_snapshot, "terminal": source.terminal, "launch": source.launch, "receipt": source.receipt})
+	queue.append({"profile_id": _profile_id, "save_domain": _save_domain, "content_snapshot": _save.configured_content_snapshot(), "terminal": Envelope.validate_active_run_snapshot(terminal, _catalog).payload, "launch": before.active_launch_receipt.duplicate(true), "receipt": settlement.context.receipt.duplicate(true)})
+	var omitted_count: int = retained.context.get("omitted_count", 0)
+	if queue.size() > LocalRecordRules.MAX_ENTRIES:
+		var ranked: Array = []
+		for source: Dictionary in queue:
+			ranked.append({"source": source, "record": LocalRecordRules.record(source)})
+		ranked.sort_custom(func(left: Dictionary, right: Dictionary): return LocalRecordRules.ranks_before(left.record, right.record))
+		omitted_count = mini(Catalog.MAX_VALUE, omitted_count + queue.size() - LocalRecordRules.MAX_ENTRIES)
+		queue.clear()
+		for index: int in range(LocalRecordRules.MAX_ENTRIES):
+			queue.append(ranked[index].source)
+	var persisted := _persist_ticket(prepared.context.ticket, {"active_run_state": terminal, "pending_meta_run_projection": {}, "pending_run_config": {}, "local_records_outbox": {"schema_version": 1, "sources": queue, "omitted_count": omitted_count}})
 	if persisted.ok:
 		persisted.context["receipt"] = settlement.context.receipt.duplicate(true)
 	return persisted

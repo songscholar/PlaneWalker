@@ -77,6 +77,10 @@ func set_fault_injector(fault_injector: Callable) -> void:
 	_fault_injector = fault_injector
 
 
+func configured_content_snapshot() -> Dictionary:
+	return _content_snapshot.duplicate(true) if _configured else {}
+
+
 func enable_meta_profile(catalog: RefCounted):
 	var validator = MetaProfileScript.new()
 	if not _configured or _write_active or not validator.configure(catalog):
@@ -93,6 +97,18 @@ func save_profile(profile_id: String, save_domain: String, payload: Dictionary):
 		return _busy("save_profile")
 	_write_active = true
 	var result = _save_profile_internal(profile_id, save_domain, payload)
+	_write_active = false
+	return result
+
+
+func save_profile_compare_exchange(profile_id: String, save_domain: String, payload: Dictionary, expected_primary: Dictionary):
+	var readiness = _validate_profile_request(profile_id, save_domain)
+	if not readiness.ok:
+		return readiness
+	if _write_active:
+		return _busy("save_profile_compare_exchange")
+	_write_active = true
+	var result = _save_profile_internal(profile_id, save_domain, payload, expected_primary)
 	_write_active = false
 	return result
 
@@ -221,9 +237,11 @@ func load_settings():
 	return _load_scope(_settings_directory(), &"settings", "", "")
 
 
-func _save_profile_internal(profile_id: String, save_domain: String, payload: Dictionary):
+func _save_profile_internal(profile_id: String, save_domain: String, payload: Dictionary, expected_primary: Variant = null):
 	var directory_path := _profile_directory(profile_id, save_domain)
 	var existing = _inspect_primary(directory_path, &"profile", profile_id, save_domain)
+	if expected_primary != null and not _primary_matches(existing, expected_primary):
+		return SaveResultScript.failure(&"INVALID_ARGUMENT", {"reason": "expected_primary_stale"})
 	var sequence := 0
 	var created_at := ""
 	if existing.ok:
@@ -255,7 +273,9 @@ func _save_profile_internal(profile_id: String, save_domain: String, payload: Di
 		&"profile",
 		profile_id,
 		save_domain,
-		true
+		true,
+		{},
+		expected_primary
 	)
 	if not transaction.ok:
 		return transaction
@@ -313,7 +333,7 @@ func _commit_envelope(
 	save_domain: String,
 	rotate_backups: bool,
 	target_content_snapshot: Dictionary = {},
-	expected_primary: Dictionary = {}
+	expected_primary: Variant = null
 ):
 	var directory_result = _file_ops.ensure_directory(directory_path)
 	if not directory_result.ok:
@@ -377,9 +397,9 @@ func _commit_envelope(
 	fault_result = _inject_fault(&"before_primary_promote")
 	if not fault_result.ok:
 		return fault_result
-	if not expected_primary.is_empty():
-		var preimage = _read_and_validate(primary_path, document_kind, profile_id, save_domain)
-		if not preimage.ok or not _same_json(preimage.payload, expected_primary):
+	if expected_primary != null:
+		var preimage = _inspect_primary(directory_path, document_kind, profile_id, save_domain)
+		if not _primary_matches(preimage, expected_primary):
 			return SaveResultScript.failure(&"INVALID_ARGUMENT", {"reason": "expected_primary_stale"})
 	var promote = _file_ops.rename_file(pending_path, primary_path)
 	if not promote.ok:
@@ -400,6 +420,10 @@ func _commit_envelope(
 		"path": primary_path,
 		"digest": _document_digest(document),
 	})
+
+
+func _primary_matches(actual: RefCounted, expected: Dictionary) -> bool:
+	return actual.code == &"NOT_FOUND" if expected.is_empty() else actual.ok and _same_json(actual.payload, expected)
 
 
 func _rotate_verified_candidate(

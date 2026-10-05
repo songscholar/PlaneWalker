@@ -30,7 +30,7 @@ FocusCoordinator="*res://scripts/ui/focus_coordinator.gd"
 
 [internationalization]
 
-locale/translations=PackedStringArray("res://data/localization/translations.en.translation", "res://data/localization/translations.zh_CN.translation", "res://assets/production/localization/content_management.en.translation", "res://assets/production/localization/content_management.zh_CN.translation")
+locale/translations=PackedStringArray("res://data/localization/translations.en.translation", "res://data/localization/translations.zh_CN.translation", "res://assets/production/localization/content_management.en.translation", "res://assets/production/localization/content_management.zh_CN.translation", "res://assets/production/localization/community.en.translation", "res://assets/production/localization/community.zh_CN.translation")
 locale/fallback="en"
 
 [display]

@@ -54,11 +54,11 @@ func _ready() -> void:
 	hide_hub()
 
 
-func configure(registry: RefCounted, service: RefCounted) -> Dictionary:
+func configure(registry: RefCounted, service: RefCounted, providers: Dictionary = {}) -> Dictionary:
 	if not is_node_ready():
 		return {"ok": false, "code": &"NOT_CONFIGURED", "context": {}}
 	var candidate := Facade.new()
-	var configured: Dictionary = candidate.configure(registry, service)
+	var configured: Dictionary = candidate.configure(registry, service, providers)
 	if not configured.ok:
 		return configured
 	_registry = registry
@@ -175,6 +175,8 @@ func submit_command(command: Dictionary, revision: int) -> Dictionary:
 	refresh()
 	if command.operation == "build_export":
 		_panel.show_share_code(result.context.share_code)
+	elif command.operation == "provider_refresh":
+		_panel.focus_provider_result(str(command.payload.provider_id))
 	if command.operation == "launch":
 		launch_requested.emit(result.context.run_config.duplicate(true))
 	elif command.operation == "resume":

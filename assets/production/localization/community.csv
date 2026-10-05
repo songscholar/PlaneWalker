@@ -1,0 +1,6 @@
+keys,en,zh_CN
+UI_COMMUNITY_LOCAL_RECORDS,Local Records,本地战绩
+UI_COMMUNITY_REFRESH,Refresh,刷新
+UI_COMMUNITY_EMPTY,No records,暂无战绩
+UI_COMMUNITY_SAVE_PENDING,Local records unavailable. Retry refresh.,本地战绩暂不可用，请重试刷新。
+UI_COMMUNITY_UNRANKED,Local / Unranked,本地 / 未排名

@@ -15,6 +15,8 @@ const MusicDirectorScript := preload("res://scripts/audio/music_director.gd")
 const ContentManagerScript := preload("res://scripts/expansion/expansion_content_manager.gd")
 const ContentManagementPanelScript := preload("res://scripts/ui/content_management_panel.gd")
 const StartupDiagnosticScript := preload("res://scripts/operations/packaged_startup_diagnostic.gd")
+const LocalRecordsScript := preload("res://scripts/community/local_run_records.gd")
+const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -56,6 +58,7 @@ var _content_panel: Control
 var _content_revision := 0
 var _content_reload_pending := false
 var _last_launch_rejection: Dictionary = {}
+var _local_records: RefCounted
 
 
 func _enter_tree() -> void:
@@ -234,7 +237,8 @@ func _setup_hub() -> void:
 	var hub := HubFlowScript.new()
 	hub.name = "HubFlowCoordinator"
 	add_child(hub)
-	var configured: Dictionary = hub.configure(runtime_host.content_registry(), _profile_service)
+	var providers: Dictionary = {"leaderboard": _local_records.provider_row} if _local_records != null else {}
+	var configured: Dictionary = hub.configure(runtime_host.content_registry(), _profile_service, providers)
 	if not configured.ok:
 		_profile_error = str(configured.code)
 		hub.queue_free()
@@ -368,6 +372,16 @@ func _configure_production_profile() -> void:
 	var sources: Array = registry.get_catalog_entries(&"narrative_source_definition", &"LAUNCH")
 	if not _profile_service.enable_workshop(workshop).ok or not _profile_service.enable_narrative(narrative, sources).ok:
 		_profile_error = "CONTENT_UNAVAILABLE"
+		return
+	var records := LocalRecordsScript.new()
+	var records_configured := records.configure(_profile_service, GameState.save_path.get_base_dir().path_join("plane_walker/local_records"), "0.4.0-dev", ContentSnapshotScript.snapshot(registry), str(_content_activation.get("save_domain", "base")))
+	if records_configured.ok:
+		_local_records = records
+		_sync_local_records()
+
+
+func _sync_local_records() -> Dictionary:
+	return _local_records.sync_settled_run() if _local_records != null else {"ok": false, "code": &"PROVIDER_UNAVAILABLE", "context": {}}
 
 
 func _configure_launch_dungeon_runtime() -> void:
@@ -781,6 +795,8 @@ func retry_terminal_settlement() -> Dictionary:
 	var profile: Dictionary = _profile_service.snapshot()
 	if profile.active_launch_receipt.is_empty():
 		var same: bool = profile.last_settlement_receipt.get("run_id") == terminal.get("run_id")
+		if same:
+			_sync_local_records()
 		return {"ok": same, "code": &"OK" if same else &"INVALID_PHASE", "context": {}}
 	if int(terminal.phase) == RunPhaseScript.Value.VICTORY:
 		var chosen := false
@@ -797,6 +813,7 @@ func retry_terminal_settlement() -> Dictionary:
 	if settled.ok:
 		_terminal_pending = false
 		GameState.refresh_profile_state()
+		_sync_local_records()
 	else:
 		$RunEndOverlay.show_save_pending()
 	return settled
@@ -824,6 +841,7 @@ func return_to_hub() -> bool:
 
 
 func _show_hub_after_run() -> void:
+	_sync_local_records()
 	get_tree().paused = false
 	_room_presentation.set_launch_mode(false)
 	$RunEndOverlay.hide_overlay()

@@ -277,11 +277,38 @@ func _render_collection(kind: String) -> void:
 
 func _render_providers() -> void:
 	for row: Dictionary in _state.providers:
-		_add_text(tr("UI_HUB_PROVIDER_" + str(row.id).to_upper()))
+		_add_text(tr("UI_COMMUNITY_LOCAL_RECORDS" if row.id == "leaderboard" and row.available else "UI_HUB_PROVIDER_" + str(row.id).to_upper()))
+		_add_action("provider_refresh:" + str(row.id), tr("UI_COMMUNITY_REFRESH"), "", true, "", _emit_operation.bind("provider_refresh", {"provider_id": row.id}))
 		if not row.available:
 			_add_text(tr(str(row.reason_key)))
+		elif row.entries.is_empty():
+			_add_text(tr("UI_COMMUNITY_EMPTY"))
 		for entry: Dictionary in row.entries:
 			_add_text("%s  %d" % [str(entry.name), int(entry.score)])
+			rows_container.get_child(-1).set_meta("provider_record", row.id)
+
+
+func focus_provider_result(id: String) -> void:
+	_focus_provider_result.call_deferred(id, int(_state.epoch))
+
+
+func _focus_provider_result(id: String, epoch: int) -> void:
+	await get_tree().process_frame
+	if not is_inside_tree() or not visible or epoch != int(_state.epoch):
+		return
+	var panel_epoch := _epoch
+	for action: Control in _actions:
+		if action.get_meta("action_id", "") == "provider_refresh:" + id:
+			action.grab_focus()
+			await get_tree().process_frame
+			if not is_inside_tree() or not visible or panel_epoch != _epoch or epoch != int(_state.epoch) or not is_instance_valid(action):
+				return
+			for row: Control in rows_container.get_children():
+				if row.get_meta("provider_record", "") == id:
+					scroll.ensure_control_visible(row)
+					return
+			scroll.ensure_control_visible(action)
+			return
 
 
 func _render_dialogue() -> void:
