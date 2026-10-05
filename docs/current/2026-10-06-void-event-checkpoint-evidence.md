@@ -51,6 +51,8 @@ refusal, actual phase/terminal events, concurrent distinct accepted frames,
 byte-based bounded retention and reconfiguration/origin/run isolation. Actual
 domain and caller bytes remain unchanged. Independent read-only review found
 no production defect after the fresh-call test correction.
+The final scene also passes independently with matching candidate/test hashes
+and strict logs at `build/test-evidence/void-event-checkpoint-independent-green/`.
 
 Seven neighboring scenarios pass with paired strict runtime logs: five
 `void_auxiliary` scenes at `build/void-event-checkpoint-neighbor-regressions/`,

@@ -101,6 +101,12 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Hostile Frame Query Evidence](current/2026-10-06-native-hostile-frame-query-evidence.md) | 五首领预演隔离、完整校验与原生帧对照基准 | Focused Verified / Full performance pending |
 | [Native Hostile Boundary Query Plan](current/2026-10-06-native-hostile-boundary-query-plan.md) | 原生帧边界窄查询、实时身份时钟与完整补偿快照保留 | Approved / Current |
 | [Native Hostile Boundary Query Evidence](current/2026-10-06-native-hostile-boundary-query-evidence.md) | 五首领即时边界、完整回滚及相邻权威场景回归 | Focused Verified / Full performance pending |
+| [Native Void Geometry Query Plan](current/2026-10-06-native-void-geometry-query-plan.md) | Void 几何和拾取物窄投影、完整历史与物理校验保留 | Approved / Current |
+| [Native Void Geometry Query Evidence](current/2026-10-06-native-void-geometry-query-evidence.md) | 实体几何、阶段与拾取物状态一致，相邻权威回归 | Focused Verified / Full performance pending |
+| [Native Boss UI Query Plan](current/2026-10-06-native-boss-ui-query-plan.md) | 首领可见状态窄查询、完整存档历史和界面字段保留 | Approved / Current |
+| [Native Boss UI Query Evidence](current/2026-10-06-native-boss-ui-query-evidence.md) | 五首领界面字段一致、重复查询不复制完整历史 | Focused Verified / Full performance pending |
+| [Void Event Checkpoint Plan](current/2026-10-06-void-event-checkpoint-plan.md) | 精确历史检查点复用、完整派生状态核对与过期回滚保留 | Approved / Current |
+| [Void Event Checkpoint Evidence](current/2026-10-06-void-event-checkpoint-evidence.md) | 相同历史重放 36 次降到 4 次，过期与回滚边界一致 | Focused Verified / Full performance pending |
 | [Native Performance Report Provenance](current/2026-10-06-native-performance-report-provenance-evidence.md) | 失败和超时源码证据、真实落盘状态及外层验收判定回归 | Focused Verified / Full gameplay pending |
 | [Native Five-Floor Victory Evidence](current/2026-10-06-native-five-floor-victory-evidence.md) | 五首领真实击杀、终局碎片接触、结局及奖励存档重新读取 | Focused Verified / Unified certification pending |
 | [Void Phase Projectile Retirement](current/2026-10-06-void-phase-projectile-retirement-plan.md) | Void 阶段切换同步撤销辅助域弹体与原生弹体 | Focused Verified / Full matrix pending |

@@ -47,3 +47,49 @@ The earlier native capacity failure on `54866d4` is repaired in this bounded
 does not certify 45-minute throughput, rendered FPS, peak entity loads or
 memory limits. Later leaf and boundary changes require separate integrated
 source measurements. UI polish is pending and human playtests remain 0/20.
+
+## Leaf and Boundary Integrated Follow-Up
+
+An unchanged `ee642a7` archive at
+`build/retained-checkout/native-unified-ee642a7-20261006/` includes the leaf
+and native-boundary repairs. Its actual fifth-floor phase-two probe admits
+2,501 frames, then strictly passes all 600 measured frames with 601 durable
+observations, an `INTERRUPTED` tape, no recording failure and fresh byte-exact
+physical endpoints. Exit is zero, source is stable and uninstrumented, no
+timeout occurs, and both runtime logs are strict clean. Runtime source aggregate
+is `698bd708cfdb4c3820d38da6edee9e3cb7c3c3b1c72ed6b9f56e929745ce8da6`.
+The report at `build/floor4-phase2-leaf-boundary-late-600/report.json` has SHA-256
+`7d3cb4d6440ae66f9c33e2f7d96e57cb8c58319da9433df96a1d7142d87c85ff`.
+
+Player mean/p95/maximum are 64.680 / 93.924 / 136.540 ms. Measured wall time
+is 45.482 seconds, retention is 9.754 seconds and peak native static allocation
+is 690,500,735 bytes. Observed concurrency remains 1 actor, 6 threats and
+3 zones. This independently successful recording still fails the frame budget.
+Ambient native matrix processes continue; these values are observations, not
+an isolated portable performance guarantee.
+
+Whole endpoint hashes differ from the original `bf00573` run. The authenticated
+comparison at `build/native-leaf-boundary-comparison-20261006/` selects each
+unique actual 601-observation tape, authenticates compressed/raw hashes, applies
+the actual first delta and matches both reconstructed endpoints against each
+report's measured hashes. At both endpoints, native/run/room/scene/publication/
+intents/cosmetic_id subtrees are individually exact native typed bytes. All
+54 differences are Player bookkeeping: action/world-payload revision offset
++108, and rewind sample sequences/history revision/next sample sequence offset
++18. The offsets remain constant through the measured interval. This is not
+whole-observation byte equivalence; startup scheduling is under investigation.
+
+The comparison's first attempt selected the earlier prerequisite tape and
+failed; its logs remain intact and do not count toward success. Corrected and
+then independently hash-authenticated attempts exit zero with clean paired
+logs. Final report SHA-256 is
+`5f16906e498a3d16ce4c80914cf97a74d87b1a9073c2d6d61e098cfc97536156`;
+final diagnostic script SHA-256 is
+`2f246442bb435ab83ff3930e1c21eef0e50b3dbcd124080e74e8de93c3ff9fbf`.
+
+The first archive import reports the known missing generated CSV translation
+derivatives; a second import completes with strict clean paired logs. An initial
+import invocation using a nonexistent log parent crashes in Godot's logger
+before project execution; creating the parent resolves it. These setup
+attempts are not gameplay success evidence. Later geometry, historical-event
+checkpoint and UI-query repairs still require integrated native measurements.
