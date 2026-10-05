@@ -119,6 +119,11 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Replay Safety Leaf Evidence](current/2026-10-06-replay-safety-leaf-evidence.md) | 全类型行为保留、真实快照局部成本及录像回放相邻回归 | Focused Verified / Full performance pending |
 | [Unified Native Recording 600 Evidence](current/2026-10-06-native-unified-recording-600-evidence.md) | 600 帧真实持续录制与物理回读成功，整帧性能仍未达标 | Recording Verified / Frame budget failed |
 | [Main Player Lifecycle Evidence](current/2026-10-06-main-player-lifecycle-evidence.md) | Hub 隐藏战斗帧修复、开局与暂停恢复、不同等待时间的真实录像端点一致 | Focused Verified / Full validation pending |
+| [Unified Native Hotpath Diagnostic](current/2026-10-06-native-unified-hotpath-diagnostic-evidence.md) | 冻结整合源码的主线程热点、插桩边界与真实录像回读 | Diagnostic Verified / Production performance pending |
+| [Native Boss State Comparison Plan](current/2026-10-06-native-boss-state-comparison-plan.md) | 完整状态等值比较由各权威直接判定，保留存档校验与补偿 | Approved / Current |
+| [Native Boss State Comparison Evidence](current/2026-10-06-native-boss-state-comparison-evidence.md) | 五首领和完整子权威等值判定、无历史复制与原生相邻回归 | Focused Verified / Full performance pending |
+| [Native Actor State Comparison Evidence](current/2026-10-06-native-actor-state-comparison-evidence.md) | 五首领提交前等值比较消除历史复制，状态拒绝与完整回滚保持 | Focused Verified / Integrated performance pending |
+| [Native Frame And RSS Measurements](current/2026-10-06-native-frame-rss-measurements-evidence.md) | 同帧总耗时与真实 Godot 进程内存采样，保留历史报告兼容与失败拒绝 | Focused Verified / Full performance pending |
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
 | [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |

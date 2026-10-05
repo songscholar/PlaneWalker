@@ -105,3 +105,35 @@ import invocation using a nonexistent log parent crashes in Godot's logger
 before project execution; creating the parent resolves it. These setup
 attempts are not gameplay success evidence. Later geometry, historical-event
 checkpoint and UI-query repairs still require integrated native measurements.
+
+## Lifecycle And Query Integrated Follow-Up
+
+The unchanged `5a7fb3e` archive at
+`build/retained-checkout/native-unified-5a7fb3e-20261006/` includes the Void
+geometry, event checkpoint, Boss UI-query and Player lifecycle repairs. With
+12 Hub frames, actual Sword input reaches Void phase two in 2,501 frames.
+The report at `build/floor4-phase2-integrated-late-600/report.json` accepts
+all 600 measured frames, 2,502-3,101, and retains 601 durable observations.
+The tape is `INTERRUPTED`, failure is empty and fresh physical endpoints
+match every original typed byte. Source remains unchanged and uninstrumented,
+exit is zero, no timeout occurs and both runtime logs pass strict validation.
+
+Runtime aggregate remains
+`1b12c8ca4d09490ba9aa58e692f4d0767531eedff87f74bd670daa74acf3dfe2`;
+the Player scene hash is
+`a78e91da888e249c9bcaee9e295123ca395eeb444d8a1757c19974bda5d03be6`.
+The runtime inventory does not include scenes, so that hash is stated separately.
+Report SHA-256 is
+`e372d71fc3b1f5736ec6707244730e573d79e76f0305fdcb1d5f8a5d6c11be36`.
+First/last observation hashes are
+`8b7b8ab43674e54121d4568336b5ae14de29b4a9a522acc5c2743a64b83dfe11` /
+`fd46d302787af37d90f09747b52e8faa08395e00b0505fc087edbc6c45ec105a`.
+
+Player mean/p95/maximum are 64.350 / 96.004 / 173.724 ms. Measured wall time
+is 45.829 seconds, retention is 10.216 seconds and peak native static allocation
+is 703,481,579 bytes. Observed peaks are one actor, six threats and three zones.
+This independently successful recording still fails the 16.667 ms frame budget.
+Concurrent native matrix workers remain active. The changed lifecycle origin
+and multiple integrated repairs preclude an isolated optimization claim.
+This run does not certify rendering, total process memory, saturation or a
+45-minute actual recording. The new equality-only optimization is not included.
