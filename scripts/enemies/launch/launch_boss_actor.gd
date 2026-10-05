@@ -122,6 +122,7 @@ func _restore_actor_state(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
+	_flush_queued_control_visual()
 	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king", "forest_heart", "void_throne", "forge_colossus"] and not _native_geometry_matches_definition():
 		return _launch_failure("boss_native_geometry")
 	var result := super.prepare_launch_frame(frame, observations)
@@ -178,6 +179,11 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		result.batch = result.ticket.batch.duplicate(true)
 		_prepared_launch_frame = result.ticket.duplicate(true)
 	return result
+
+
+func launch_transaction_snapshot() -> Dictionary:
+	_flush_queued_control_visual()
+	return super.launch_transaction_snapshot()
 
 
 func _native_relocation_allowed(destination: Vector2, observations: Dictionary) -> bool:

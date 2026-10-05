@@ -7,6 +7,7 @@ signal payload_result(action_token: int, generation: int, result: Dictionary)
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
+const NativeHitbox := preload("res://scripts/combat/hitbox.gd")
 const PIXELS_PER_TILE := 64.0
 
 const VALID_ACTION_IDS: Array[String] = ["arcane_bolt", "charged_element"]
@@ -53,7 +54,7 @@ var _distance_travelled: float = 0.0
 func _ready() -> void:
 	add_to_group("player_projectiles")
 	add_to_group("staff_projectiles")
-	area_entered.connect(_on_area_entered)
+	area_entered.connect(_on_physical_area_entered)
 	if not _execution_active:
 		monitoring = false
 		set_physics_process(false)
@@ -294,6 +295,10 @@ func reset_execution_state() -> void:
 	boss_conversion.clear()
 	monitoring = false
 	set_physics_process(false)
+
+
+func _on_physical_area_entered(area: Area2D) -> void:
+	NativeHitbox.dispatch_contact(_on_area_entered.bind(area))
 
 
 func _on_area_entered(area: Area2D) -> void:

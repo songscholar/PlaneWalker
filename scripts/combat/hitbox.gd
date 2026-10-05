@@ -36,6 +36,12 @@ static func is_dispatching_contact() -> bool:
 	return _contact_dispatch_depth > 0
 
 
+static func dispatch_contact(callback: Callable) -> void:
+	_contact_dispatch_depth += 1
+	callback.call()
+	_contact_dispatch_depth -= 1
+
+
 func _on_area_entered(area: Area2D) -> void:
 	if _active_damage_info == null:
 		return
@@ -45,6 +51,4 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 
 	_hit_areas.append(area)
-	_contact_dispatch_depth += 1
-	area.receive_hit(_active_damage_info.copy_for_source(self))
-	_contact_dispatch_depth -= 1
+	dispatch_contact(Callable(area, "receive_hit").bind(_active_damage_info.copy_for_source(self)))

@@ -24,6 +24,22 @@ death receipts remain synchronous. Preparation, rollback, cold reconstruction
 and all refreshes outside contact dispatch still project synchronously. This
 flag is a presentation scheduling signal, not damage authentication authority.
 
+The fixed-source `9c5d517` full matrix exposed a second boundary: its immediate
+next `physics_frame` resumed before deferred presentation drained. All five
+character shards completed their first Ruin case, then correctly refused the
+next frame because cover HP had changed from80to2 while the actual cover still
+projected80. The original `build/p15-native-9c5d517-source/build/p15-native-full.json`
+is retained as a5/750 failing diagnostic, including the original preparation
+and rollback failures. A pending Boss projection now flushes at transaction
+checkpoint and frame preparation, after physical contact dispatch has ended.
+Only an owned pending refresh triggers this work; ordinary geometry tampering
+still reaches the strict geometry checks.
+
+Bow, Gun and Staff projectile signals and Sword wave/zone signals now share
+the contact-dispatch scope. Their swept/manual delivery keeps its synchronous
+path. Gauntlets already defers its physical signal's target-hit execution and
+needs no additional wrapper.
+
 ## Executable Evidence
 
 `native_void_collision_refresh_test` uses a real Hitbox under the actual Player
@@ -32,6 +48,21 @@ a finite core break and final Boss death. It checks that the contact callback
 retains the old four-node topology, the next frame owns eight exact projected
 constructs, the broken core loses bodyHP once and terminal constructs have no
 live collision or visibility.
+
+The same regression now includes an actual Ruin cover contact followed by
+immediate production `begin_frame`/`prepare_frame`/rollback, with no intervening
+idle wait. Actual Bow, Gun and Staff query signals each cause a Void phase-three
+transition and prove accepted HP is synchronous while collision-body creation
+waits until after the callback. The semantic RED log at
+`build/test-evidence/native-contact-next-frame-red-active-engine.log` retains
+the Ruin preparation/rollback refusals and Bow query-flush errors. GREEN at
+`build/test-evidence/native-contact-next-frame-all-projectiles` passes1/1 with
+strict engine-log validation. Existing Ruin/Void/Time scenes pass3/3 under the
+`native-contact-next-frame-{boss-arena,void-arena,boss-watch}` evidence roots.
+All13native matrix report contracts also pass.
+Gun projectile, Staff damage pipeline, Bow reward and Sword runtime regressions
+pass4/4 under `native-contact-next-frame-{gun,staff,bow,sword}` evidence roots,
+with strict logs preserving synchronous manual/swept delivery.
 
 - Semantic RED: `build/test-evidence/native-void-collision-refresh-owned-red`,
   failed with the original query-flush errors and premature core topology.

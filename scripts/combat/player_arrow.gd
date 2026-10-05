@@ -5,6 +5,7 @@ const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
+const NativeHitbox := preload("res://scripts/combat/hitbox.gd")
 
 @export var speed: float = 520.0
 @export var lifetime: float = 1.5
@@ -54,7 +55,7 @@ var _restored_before_ready: bool = false
 
 func _ready() -> void:
 	add_to_group("player_arrows")
-	area_entered.connect(_on_area_entered)
+	area_entered.connect(_on_physical_area_entered)
 	rotation = direction.angle()
 	if not _restored_before_ready:
 		_start_position = global_position
@@ -173,6 +174,10 @@ func configure_execution(execution: Dictionary) -> bool:
 		var flight_seconds := max_range_pixels / speed if max_range_pixels > 0.0 else lifetime
 		lifetime = maxf(lifetime, flight_seconds + float(trail_duration_frames) / 60.0 + 0.25)
 	return true
+
+
+func _on_physical_area_entered(area: Area2D) -> void:
+	NativeHitbox.dispatch_contact(_on_area_entered.bind(area))
 
 
 func _on_area_entered(area: Area2D) -> void:

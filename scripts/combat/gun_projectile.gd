@@ -9,6 +9,7 @@ signal resource_reward_requested(action_token: int, reward_id: StringName, amoun
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
+const NativeHitbox := preload("res://scripts/combat/hitbox.gd")
 const PIXELS_PER_TILE := 64.0
 const EXECUTION_SNAPSHOT_SCHEMA_VERSION := 1
 const VALID_ACTION_IDS: Array[String] = [
@@ -69,7 +70,7 @@ var _restored_released_attachment: bool = false
 func _ready() -> void:
 	add_to_group("player_projectiles")
 	add_to_group("gun_projectiles")
-	area_entered.connect(_on_area_entered)
+	area_entered.connect(_on_physical_area_entered)
 	if not _execution_active:
 		monitoring = false
 		set_physics_process(false)
@@ -483,6 +484,10 @@ func advance_execution_for_test(frames: int) -> void:
 		if trail_tick_interval_frames > 0 and _execution_frame % trail_tick_interval_frames == 0:
 			_refresh_trail_targets()
 			_tick_trail_targets()
+
+
+func _on_physical_area_entered(area: Area2D) -> void:
+	NativeHitbox.dispatch_contact(_on_area_entered.bind(area))
 
 
 func _on_area_entered(area: Area2D) -> void:

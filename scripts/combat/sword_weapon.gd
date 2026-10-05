@@ -3,6 +3,7 @@ extends Node2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
+const NativeHitbox := preload("res://scripts/combat/hitbox.gd")
 const WEAPON_ID := &"sword"
 const MAX_COMMITTED_GUARD_RESOLUTION_IDS := 512
 const MAX_RESOLUTION_ID_LENGTH := 96
@@ -774,7 +775,7 @@ func _spawn_launch_payload(
 	area.global_rotation = world_direction.angle()
 	var payload_id := _next_launch_payload_id
 	_next_launch_payload_id += 1
-	area.area_entered.connect(_on_launch_payload_area_entered.bind(payload_id))
+	area.area_entered.connect(_on_physical_launch_payload_area_entered.bind(payload_id))
 	_launch_payloads.append({
 		"id": payload_id,
 		"node": area,
@@ -821,6 +822,10 @@ func _spawn_launch_payload_from_snapshot(snapshot_value: Dictionary) -> bool:
 		snapshot_value.get("world_origin"),
 		snapshot_value.get("world_direction")
 	)
+
+
+func _on_physical_launch_payload_area_entered(area: Area2D, payload_id: int) -> void:
+	NativeHitbox.dispatch_contact(_on_launch_payload_area_entered.bind(area, payload_id))
 
 
 func _on_launch_payload_area_entered(area: Area2D, payload_id: int) -> void:
