@@ -107,8 +107,8 @@ dependencies or authored content fingerprints changed.
 
 Native Splitting and Mirroring remain pending. The complete legal-pair matrix,
 all-weapon physical contacts, combined whole-room balance and full P15
-certification remain separate. A distinct unshielded duplicate body-settlement
-defect discovered during testing is an active follow-up: repeated direct Health
-delivery can drift body HP away from the species ledger. This focused Chaining
-gate verifies its own once-only grant and owned Health boundary; it does not
-claim that separate body-settlement defect is fixed.
+certification remain separate. The distinct duplicate body-settlement defect
+discovered during testing is repaired and verified by the focused
+[native body settlement evidence](2026-10-05-native-body-settlement-evidence.md).
+Its production weapon, source ownership, compensation, history and finite
+capacity gates complement this once-only Chaining grant gate.

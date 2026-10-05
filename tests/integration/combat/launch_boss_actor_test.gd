@@ -35,12 +35,12 @@ func _test_actor(scene: PackedScene, definition: Dictionary) -> void:
 	var actor := scene.instantiate()
 	add_child(actor)
 	await get_tree().process_frame
+	actor.global_position = Vector2(100, 100)
 	var parser := Definition.new()
 	parser.configure(definition)
 	var identity := Actions.identity()
 	identity.seed = 42
 	suite.assert_true(actor.configure_launch_definition(parser.runtime_projection(), identity).ok, "actual Boss binds canonical domain: " + definition.id)
-	actor.global_position = Vector2(100, 100)
 	var sprite := actor.get_node("Sprite2D") as Sprite2D
 	suite.assert_true(sprite.texture != null and sprite.texture.get_size() == Vector2(320, 480), "actual Boss uses manifested original six-track raster atlas")
 	suite.assert_true(not actor.get_node("Visual").visible and actor.is_in_group("bosses"), "actual Boss owns native presentation and Boss control group")
@@ -131,7 +131,7 @@ func _test_conversion_endpoints(actor: Node, definition: Dictionary, identity: D
 	var effect := {"kind": "launch", "conversion_id": "gauntlets_poised_launch", "airborne": false, "active_attack_policy": "preserve_committed", "interrupt_active_attack": false, "allowed_states": ["RECOVERY", "EXPOSED"], "poise_damage": 10.0, "boss_poise_multiplier": 1.40, "displacement_pixels": 0.0, "source_id": "gauntlet:actual"}
 	suite.assert_true(actor._resolve_weapon_hit_control(effect, hit, 1.0), "actual Gauntlets use authored positive poise conversion")
 	suite.assert_close(runtime.snapshot().conversion.poise, 14.0, "actual Gauntlets retain exact 1.40 Boss poise factor")
-	suite.assert_true(runtime.restore_snapshot(snapshot), "native endpoint fixture restores full pre-advance frame for transaction gate")
+	suite.assert_true(runtime.restore_snapshot(snapshot), "native endpoint fixture restores full pre-advance frame for transaction gate: " + definition.id)
 
 
 func _test_bridge(scene: PackedScene, definition: Dictionary) -> void:
@@ -144,12 +144,12 @@ func _test_bridge(scene: PackedScene, definition: Dictionary) -> void:
 	var actor := scene.instantiate()
 	actor.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(actor)
+	actor.global_position = Vector2(100, 100)
 	var parser := Definition.new()
 	parser.configure(definition)
 	var identity := Actions.identity()
 	identity.seed = 42
 	actor.configure_launch_definition(parser.runtime_projection(), identity)
-	actor.global_position = Vector2(100, 100)
 	var effects := Effects.new()
 	effects.configure("run-p15")
 	var registry := Registry.new()

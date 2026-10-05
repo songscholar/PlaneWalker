@@ -162,8 +162,7 @@ func _test_actual_weapon_payloads() -> void:
 		var payload: Node2D
 		match weapon:
 			"sword":
-				payload = Hitbox.new()
-				add_child(payload)
+				payload = player.get_node("SwordWeapon/Hitbox") as Node2D
 				payload.activate(Damage.from_plan({"run_id": "run-p15", "target_id": "pending_target", "hostile_source_id": "player:sword", "attack_generation": 11, "action_token": 11, "amount": 16.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player}))
 			"gun":
 				payload = GunScene.instantiate()

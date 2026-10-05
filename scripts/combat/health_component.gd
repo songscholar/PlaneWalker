@@ -66,6 +66,8 @@ var _hostile_lethal_commit_context: Dictionary = {}
 var _hostile_lethal_application_in_progress := false
 var _post_defense_absorption_context: Dictionary = {}
 var _weapon_hit_control_context: Dictionary = {}
+var _hostile_body_commit_context: Dictionary = {}
+var _hostile_body_application_context: Dictionary = {}
 
 
 func _ready() -> void:
@@ -640,6 +642,8 @@ func _resolve_damage(
 		return _prevented_resolution(damage_info, &"target_dead")
 	if _hostile_lethal_application_in_progress:
 		return _prevented_resolution(damage_info, &"hostile_lethal_reentrant")
+	if not _hostile_body_application_context.is_empty():
+		return _prevented_resolution(damage_info, &"hostile_body_reentrant")
 	if invulnerable:
 		return _prevented_resolution(damage_info, &"target_invulnerable")
 	var hostile_owner := get_parent()
@@ -782,6 +786,7 @@ func _apply_damage_resolution_without_absorption(damage_info: RefCounted, resolu
 			&"invalid_decision",
 			&"defense_commit_failed",
 			&"hostile_lethal_reentrant",
+			&"hostile_body_reentrant",
 		]:
 			_emit_damage_observation(damage_info)
 		return resolution
@@ -798,6 +803,17 @@ func _apply_damage_resolution_without_absorption(damage_info: RefCounted, resolu
 		lethal_decision = prepared
 		if not lethal_decision.is_empty() and (lethal_decision.get("ok") != true or typeof(lethal_decision.get("hp_after")) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(lethal_decision.hp_after)) or float(lethal_decision.hp_after) < 0.0 or float(lethal_decision.hp_after) > max_hp or not lethal_owner.has_method("commit_hostile_lethal_transition")):
 			return _prevented_resolution(damage_info, &"hostile_lethal_invalid")
+	var body_decision: Dictionary = {}
+	if lethal_owner != null and lethal_owner.has_method("prepare_hostile_body_damage"):
+		var prepared: Variant = lethal_owner.call("prepare_hostile_body_damage", damage_info, final_amount, lethal_decision)
+		if not prepared is Dictionary:
+			return _prevented_resolution(damage_info, &"hostile_body_invalid")
+		body_decision = prepared
+		if not body_decision.is_empty():
+			if body_decision.get("ok") != true or typeof(body_decision.get("hp_after")) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(body_decision.hp_after)) or float(body_decision.hp_after) < 0.0 or float(body_decision.hp_after) > max_hp or not lethal_owner.has_method("commit_hostile_body_damage") or not lethal_owner.has_method("rollback_hostile_body_damage"):
+				return _prevented_resolution(damage_info, &"hostile_body_invalid")
+			if not _commit_hostile_body(lethal_owner, damage_info, final_amount, lethal_decision, body_decision):
+				return _prevented_resolution(damage_info, &"hostile_body_commit_failed")
 	if bool(snapshot.get("irreversible", false)):
 		var actual_loss := minf(current_hp, final_amount)
 		var claim_result := _record_irreversible_loss(
@@ -811,12 +827,19 @@ func _apply_damage_resolution_without_absorption(damage_info: RefCounted, resolu
 			StringName(str(snapshot.get("run_id", "")))
 		)
 		if not bool(claim_result.get("ok", false)):
+			if not body_decision.is_empty() and not _commit_hostile_body(lethal_owner, damage_info, final_amount, lethal_decision, body_decision, true):
+				push_error("Native body damage rollback failed closed")
 			return _prevented_resolution(
 				damage_info,
 				StringName(str(claim_result.get("code", "irreversible_claim_rejected")).to_lower())
 			)
 	var hp_before := current_hp
-	if not lethal_decision.is_empty():
+	if not body_decision.is_empty():
+		_hostile_body_application_context = {"damage_info": damage_info, "amount": final_amount, "decision": body_decision.duplicate(true)}
+		current_hp = float(body_decision.hp_after)
+		_hostile_lethal_application_in_progress = not lethal_decision.is_empty()
+		_emit_damage_observation(damage_info)
+	elif not lethal_decision.is_empty():
 		_hostile_lethal_commit_context = {"damage_info": damage_info, "amount": final_amount, "decision": lethal_decision.duplicate(true)}
 		var committed: bool = lethal_owner.call("commit_hostile_lethal_transition", damage_info, final_amount, lethal_decision)
 		_hostile_lethal_commit_context.clear()
@@ -834,7 +857,29 @@ func _apply_damage_resolution_without_absorption(damage_info: RefCounted, resolu
 	if current_hp <= 0.0:
 		_die(damage_info.attacker)
 	_hostile_lethal_application_in_progress = false
+	_hostile_body_application_context.clear()
 	return resolution
+
+
+func _commit_hostile_body(owner_entity: Node, info: RefCounted, amount: float, lethal: Dictionary, decision: Dictionary, rollback: bool = false) -> bool:
+	if not _hostile_body_commit_context.is_empty():
+		return false
+	_hostile_body_commit_context = {"damage_info": info, "amount": amount, "lethal": lethal.duplicate(true), "decision": decision.duplicate(true), "rollback": rollback}
+	var result: Variant = owner_entity.call("rollback_hostile_body_damage" if rollback else "commit_hostile_body_damage", info, amount, lethal, decision)
+	_hostile_body_commit_context.clear()
+	return typeof(result) == TYPE_BOOL and result
+
+
+func owns_hostile_body_commit(info: RefCounted, amount: float, lethal: Dictionary, decision: Dictionary, rollback: bool = false) -> bool:
+	return not _hostile_body_commit_context.is_empty() and _hostile_body_commit_context.damage_info == info and _hostile_body_commit_context.amount == amount and _hostile_body_commit_context.lethal == lethal and _hostile_body_commit_context.decision == decision and _hostile_body_commit_context.rollback == rollback
+
+
+func hostile_body_application(info: RefCounted, amount: float) -> Dictionary:
+	return _hostile_body_application_context.decision.duplicate(true) if not _hostile_body_application_context.is_empty() and _hostile_body_application_context.damage_info == info and _hostile_body_application_context.amount == amount else {}
+
+
+func hostile_body_application_is_active() -> bool:
+	return not _hostile_body_application_context.is_empty()
 
 
 func owns_hostile_lethal_commit(damage_info: RefCounted, amount: float, decision: Dictionary) -> bool:

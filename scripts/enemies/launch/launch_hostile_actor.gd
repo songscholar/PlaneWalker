@@ -33,6 +33,7 @@ var _affix_projection: RefCounted
 var _affix_configuration: Dictionary = {}
 var _affix_runtime: RefCounted
 var _shield_absorption_commit_fault_for_test := false
+var _body_damage_commit_fault_for_test := false
 
 
 func _init() -> void:
@@ -584,6 +585,95 @@ func blocks_hostile_body_damage() -> bool:
 	return _launch_definition.get("runtime_kind", "") == "eternal_hound" and int(_launch_runtime.snapshot().get("mechanism_state", {}).get("dormancy_remaining_frames", 0)) > 0
 
 
+func prepare_hostile_body_damage(info: RefCounted, amount: float, lethal: Dictionary) -> Dictionary:
+	if _launch_definition.is_empty():
+		return {}
+	if info == null or not info.is_valid() or not Contract.number_in_range(amount, 0.000001, 1000000.0) or not _authenticates_native_body_damage(info):
+		return {"ok": false}
+	var before: Dictionary = _launch_runtime.snapshot()
+	if before.terminal or (not _prepared_launch_frame.is_empty() and not _prepared_frame_committed) or before.mechanism_state.damage_claims.size() >= _native_body_claim_capacity():
+		return {"ok": false}
+	var expected_hp := float(before.mechanism_state.get("hp_after", before.mechanism_state.get("hp_current", -1.0)))
+	if not is_equal_approx(expected_hp, health.current_hp) or _has_historical_body_claim(before, info):
+		return {"ok": false}
+	var preview: RefCounted = _create_launch_runtime()
+	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(before):
+		return {"ok": false}
+	var hp_after := maxf(0.0, health.current_hp - amount)
+	if not lethal.is_empty():
+		if lethal != prepare_hostile_lethal_transition(info, amount):
+			return {"ok": false}
+		var transition := lethal.duplicate(true)
+		for field: String in ["owner_instance_id", "health_instance_id", "health_before", "damage_digest"]:
+			transition.erase(field)
+		if not preview.commit_lethal_transition(transition):
+			return {"ok": false}
+		hp_after = float(lethal.hp_after)
+	var frame: int = health.frame_signal_transaction_runtime_frame()
+	if frame < 0:
+		frame = _hostile_runtime_frame()
+	var fact := {"fact_id": _native_body_fact_id(info), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": amount, "hp_after": hp_after}
+	var result: Dictionary = preview.accept_damage_fact(fact)
+	if not result.ok:
+		return {"ok": false}
+	return {"ok": true, "hp_after": hp_after, "runtime_frame": frame, "before": before, "after": preview.snapshot(), "fact": fact, "result": result, "health_before": health.runtime_state_snapshot()}
+
+
+func commit_hostile_body_damage(info: RefCounted, amount: float, lethal: Dictionary, decision: Dictionary) -> bool:
+	if _body_damage_commit_fault_for_test or not health.owns_hostile_body_commit(info, amount, lethal, decision) or decision != prepare_hostile_body_damage(info, amount, lethal):
+		return false
+	if not lethal.is_empty():
+		var transition := lethal.duplicate(true)
+		for field: String in ["owner_instance_id", "health_instance_id", "health_before", "damage_digest"]:
+			transition.erase(field)
+		if not _launch_runtime.commit_lethal_transition(transition):
+			return false
+	if _launch_runtime.accept_damage_fact(decision.fact) != decision.result or _launch_runtime.snapshot() != decision.after:
+		_launch_runtime.restore_snapshot(decision.before)
+		return false
+	return true
+
+
+func rollback_hostile_body_damage(info: RefCounted, amount: float, lethal: Dictionary, decision: Dictionary) -> bool:
+	return health.owns_hostile_body_commit(info, amount, lethal, decision, true) and _launch_runtime.snapshot() == decision.after and _launch_runtime.restore_snapshot(decision.before)
+
+
+func _authenticates_native_body_damage(info: RefCounted) -> bool:
+	if info.attacker is PlayerController:
+		return _authenticates_chaining_player_hit(info)
+	return not is_instance_valid(info.attacker) and not is_instance_valid(info.source) and str(info.run_id) == str(_launch_identity.run_id) and str(info.target_id) == str(hostile_source_id)
+
+
+func _native_body_claim_capacity() -> int:
+	return EnemyMechanismHandlers.MAX_DAMAGE_CLAIMS
+
+
+func _native_body_fact_id(info: RefCounted) -> String:
+	if not _affix_configuration.is_empty() and int(_affix_configuration.get("native_revision", 1)) < 7:
+		return _historical_body_fact_id(info)
+	return JSON.stringify(["native_body_v2", str(_launch_identity.run_id), str(hostile_source_id), str(info.hostile_source_id), int(info.attack_generation), int(info.hit_index), int(info.damage_type)]).sha256_text()
+
+
+static func _historical_body_fact_id(info: RefCounted) -> String:
+	return JSON.stringify([str(info.run_id), str(info.target_id), str(info.hostile_source_id), int(info.attack_generation), int(info.hit_index)]).sha256_text()
+
+
+func _has_historical_body_claim(state: Dictionary, info: RefCounted) -> bool:
+	var runs: Array[String] = [str(info.run_id), str(_launch_identity.run_id), "runtime", "legacy_run"]
+	var targets: Array[String] = [str(info.target_id), str(hostile_source_id), "pending_target"]
+	for field: String in ["encounter_spawn_id", "spawn_id", "stable_target_id"]:
+		if has_meta(field):
+			targets.append(str(get_meta(field)))
+			targets.append("target:" + str(get_meta(field)))
+	# Historical components shared one identity; preserve that exclusion across aliases.
+	for run: String in runs:
+		for target: String in targets:
+			var id := JSON.stringify([run, target, str(info.hostile_source_id), int(info.attack_generation), int(info.hit_index)]).sha256_text()
+			if state.mechanism_state.damage_claims.has(id) or state.mechanism_state.damage_claims.has(id.sha256_text()):
+				return true
+	return false
+
+
 func accept_launch_health_fact(fact: Dictionary) -> bool:
 	return is_instance_valid(health) and not health.dead and _launch_runtime.has_method("accept_health_fact") and fact.get("hp_after", -1.0) == health.current_hp and _launch_runtime.accept_health_fact(fact).ok
 
@@ -611,12 +701,11 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 	var staged := false
 	var accepted_damage_frame := -1
 	if not _launch_definition.is_empty() and damage_info != null and is_finite(final_amount) and final_amount > 0.0:
-		var info: Dictionary = damage_info.snapshot()
-		var frame: int = health.frame_signal_transaction_runtime_frame()
+		var body: Dictionary = health.hostile_body_application(damage_info, final_amount)
+		var frame: int = int(body.runtime_frame) if not body.is_empty() else health.frame_signal_transaction_runtime_frame()
 		if frame < 0:
 			frame = _hostile_runtime_frame()
-		var identity := JSON.stringify([info.run_id, info.target_id, info.hostile_source_id, info.attack_generation, info.hit_index])
-		var result: Dictionary = _launch_runtime.accept_damage_fact({"fact_id": identity.sha256_text(), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": final_amount, "hp_after": health.current_hp})
+		var result: Dictionary = body.result if not body.is_empty() else _launch_runtime.accept_damage_fact({"fact_id": _native_body_fact_id(damage_info), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": final_amount, "hp_after": health.current_hp})
 		staged = result.ok
 		if staged:
 			accepted_damage_frame = frame
@@ -628,6 +717,8 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 		if result.ok and _hostile_threat_registry != null:
 			for generation: int in result.retired_generations:
 				_hostile_threat_registry.retire(hostile_source_id, generation)
+			if not body.is_empty() and _launch_definition.get("runtime_kind", "") in ["chrono_guard", "eternal_hound"] and final_amount >= float(body.health_before.current_hp) and health.current_hp > 0.0:
+				_hostile_threat_registry.retire_source(hostile_source_id)
 	var controlled := super.apply_weapon_hit_control(damage_info, final_amount)
 	if controlled and staged and _affix_runtime != null:
 		_affix_runtime.accept_launch_control(accepted_damage_frame)
@@ -948,7 +1039,7 @@ static func _launch_failure(field: String) -> Dictionary:
 
 
 func native_cold_snapshot(source_binding: Callable) -> Dictionary:
-	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _prepared_frame_committed or health == null or health.frame_signal_transaction_is_active() or not source_binding.is_valid():
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _prepared_frame_committed or health == null or health.frame_signal_transaction_is_active() or health.hostile_body_application_is_active() or not source_binding.is_valid():
 		return {}
 	if _affix_runtime != null and not _affix_runtime.pending_chaining_grants().is_empty():
 		return {}

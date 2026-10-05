@@ -25,6 +25,10 @@ func _create_launch_status_runtime() -> RefCounted:
 	return BossStatus.new()
 
 
+func _native_body_claim_capacity() -> int:
+	return BossRuntime.MAX_CLAIMS
+
+
 func _ready() -> void:
 	super._ready()
 	add_to_group("bosses")
@@ -792,21 +796,22 @@ func receive_native_watch_hit(damage_info: RefCounted) -> float:
 		if damage_info.run_id != &"runtime" or not is_instance_valid(attacker) or not attacker is PlayerController or attacker.current_run_id() != run:
 			return 0.0
 	var state: Dictionary = _launch_runtime.snapshot()
-	var id := _damage_identity(damage_info)
+	var id := _native_body_fact_id(damage_info)
 	if state.mechanism_state.damage_claims.has(id):
 		return 0.0
 	return health.take_damage(damage_info)
 
 
 func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
-	var before: Dictionary = _launch_runtime.snapshot()
+	var body: Dictionary = health.hostile_body_application(damage_info, final_amount)
+	var before: Dictionary = body.before if not body.is_empty() else _launch_runtime.snapshot()
 	var accepted := super.apply_weapon_hit_control(damage_info, final_amount)
 	if accepted and _launch_definition.get("id", "") in ["forest_heart", "void_throne"]:
 		_refresh_control_visual()
 	if damage_info == null or before.is_empty() or _launch_definition.get("id", "") != "time_sovereign":
 		return accepted
 	var after: Dictionary = _launch_runtime.snapshot()
-	var id := _damage_identity(damage_info)
+	var id := _native_body_fact_id(damage_info)
 	var rewind: Dictionary = before.mechanism_state.rewind
 	# Group-targeted spells and physical watch collisions settle one body identity.
 	if not before.mechanism_state.damage_claims.has(id) and after.mechanism_state.damage_claims.has(id) and before.action.phase == "WARNING" and before.action.action_id == "traitor_self_rewind" and not rewind.is_empty() and not rewind.consumed:
