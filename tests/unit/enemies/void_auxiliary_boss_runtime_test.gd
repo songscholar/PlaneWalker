@@ -47,6 +47,7 @@ func _ready() -> void:
 		var old := snapshot.duplicate(true)
 		old.schema_version = 5
 		old.erase("void_auxiliary")
+		old.erase("void_half_index")
 		var upgraded: Dictionary = fresh.normalize_native_snapshot(old)
-		suite.assert_true(upgraded.get("schema_version") == 7 and upgraded.void_arena_state == old.void_arena_state, "exact schema5 migration preserves native pillars and cores")
+		suite.assert_true(upgraded.get("schema_version") == 8 and upgraded.void_arena_state == old.void_arena_state, "exact schema5 migration preserves native pillars and cores")
 	suite.finish(get_tree())

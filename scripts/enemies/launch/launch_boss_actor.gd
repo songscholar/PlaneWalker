@@ -249,6 +249,7 @@ func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Diction
 
 
 func _refresh_control_visual() -> void:
+	_refresh_launch_telegraphs()
 	_refresh_native_arena()
 	_refresh_native_void()
 	var state: Dictionary = _launch_runtime.snapshot()

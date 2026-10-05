@@ -11,6 +11,7 @@ const AffixRuntime := preload("res://scripts/enemies/launch/launch_elite_affix_r
 const AffixCue := preload("res://scripts/enemies/launch/launch_elite_affix_cue.gd")
 const Chaining := preload("res://scripts/enemies/launch/launch_elite_chaining_runtime.gd")
 const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+const TelegraphProjection := preload("res://scripts/enemies/launch/launch_hostile_telegraph_projection.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -829,6 +830,7 @@ func _on_died(_killer: Variant) -> void:
 
 
 func _refresh_control_visual() -> void:
+	_refresh_launch_telegraphs()
 	var sprite := get_node_or_null("Sprite2D") as Sprite2D
 	if sprite == null:
 		return
@@ -845,6 +847,14 @@ func _refresh_control_visual() -> void:
 	if state.terminal:
 		sprite.modulate = Color(0.45, 0.45, 0.45)
 	_refresh_affix_cue()
+
+
+func _refresh_launch_telegraphs() -> void:
+	var state: Dictionary = _launch_runtime.snapshot()
+	if state.is_empty():
+		return
+	var phase: String = "TERMINAL" if state.terminal or state.action.action_id == "matriarch_root_sweep" else str(state.action.phase)
+	TelegraphProjection.present(self, native_cold_threat_facts(), str(state.action.action_id), phase)
 
 
 func _refresh_affix_cue() -> void:

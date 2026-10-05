@@ -4,6 +4,7 @@ extends RefCounted
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Definition := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Action := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
+const VoidHalf := preload("res://scripts/enemies/launch/void_half_arena_geometry.gd")
 const FIELDS := ["schema_version", "definition_digest", "identity", "runtime_frame", "arena_origin", "terminal", "phase_index", "casts", "burns", "statuses", "pickups", "landings", "exposure_through_frame", "events"]
 const CAST_FIELDS := ["run_id", "owner_source_id", "action_id", "attack_generation", "runtime_frame", "geometry", "damage_multiplier"]
 const DAMAGE_FIELDS := ["fact_id", "run_id", "owner_source_id", "attack_generation", "hit_index", "target_id", "runtime_frame", "actual_loss"]
@@ -278,9 +279,12 @@ func _status(state: Dictionary, event: Dictionary, modifier: String, multiplier:
 func _geometry(value: Variant, action: Dictionary, state: Dictionary, generation: int) -> bool:
 	if not value is Array or value.size() != action.geometry.size():
 		return false
+	var room_half: bool = action.id in VoidHalf.ACTION_IDS and not value.is_empty() and value[0] is Dictionary and value[0].get("radius") == 90.0 and value[0].get("length") == 640.0
+	if room_half and not VoidHalf.valid_geometry(value, str(action.id), state.arena_origin):
+		return false
 	for index: int in range(value.size()):
 		var row: Variant = value[index]
-		var recipe: Dictionary = action.geometry[index]
+		var recipe: Dictionary = VoidHalf.recipe(str(action.id))[index] if room_half else action.geometry[index]
 		if not row is Dictionary or Action.native_threat_fact(row).is_empty() or row.hostile_source_id != state.identity.hostile_source_id or row.attack_generation != generation + index or row.shape != recipe.shape or row.radius != recipe.radius or row.length != recipe.length or not is_equal_approx(_vector(row.aim_direction).length(), 1.0):
 			return false
 	return true

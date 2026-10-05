@@ -1,6 +1,8 @@
 class_name HostileActionCoordinator
 extends RefCounted
 
+const VoidHalf := preload("res://scripts/enemies/launch/void_half_arena_geometry.gd")
+
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Telegraph := preload("res://scripts/combat/hostile_telegraph_fact.gd")
 const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "actions"]
@@ -284,6 +286,8 @@ static func action_phase(elapsed: int, action: Dictionary) -> String:
 
 
 static func _committed_geometry(action: Dictionary, state: Dictionary, actor_kind: String = "enemy") -> Array[Dictionary]:
+	if actor_kind == "boss" and VoidHalf.current_action(action):
+		return VoidHalf.committed_geometry(action, state)
 	var result: Array[Dictionary] = []
 	var source := _vector(state.committed_origin)
 	var target := _vector(state.committed_target)

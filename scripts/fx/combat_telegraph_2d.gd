@@ -185,13 +185,11 @@ func _draw() -> void:
 
 
 func _draw_cone() -> void:
-	var points := PackedVector2Array([Vector2.ZERO])
-	var start_angle := _aim_direction.angle() - 0.55
-	for index: int in range(13):
-		points.append(Vector2.RIGHT.rotated(start_angle + 1.1 * float(index) / 12.0) * _length)
+	var endpoint := _aim_direction * _length
+	var normal := _aim_direction.orthogonal() * _radius
+	var points := PackedVector2Array([Vector2.ZERO, endpoint + normal, endpoint - normal, Vector2.ZERO])
 	draw_colored_polygon(points, fill_color)
 	draw_polyline(points, outline_color, outline_width, true)
-	draw_line(points[points.size() - 1], Vector2.ZERO, outline_color, outline_width, true)
 	if _high_contrast_danger:
 		draw_polyline(points, HIGH_CONTRAST_FOREGROUND, 1.0, true)
 
@@ -203,11 +201,15 @@ func _draw_circle_proxy(center: Vector2, radius: float) -> void:
 
 
 func _draw_line_proxy() -> void:
-	var normal := _aim_direction.orthogonal() * maxf(5.0, _radius)
 	var endpoint := _aim_direction * _length
-	var polygon := PackedVector2Array([normal, endpoint + normal, endpoint - normal, -normal])
-	draw_colored_polygon(polygon, fill_color)
-	draw_polyline(PackedVector2Array([normal, endpoint + normal, endpoint - normal, -normal, normal]), outline_color, outline_width, true)
+	var points := PackedVector2Array()
+	for index: int in range(25):
+		points.append(endpoint + Vector2.RIGHT.rotated(_aim_direction.angle() - PI * 0.5 + PI * float(index) / 24.0) * _radius)
+	for index: int in range(25):
+		points.append(Vector2.RIGHT.rotated(_aim_direction.angle() + PI * 0.5 + PI * float(index) / 24.0) * _radius)
+	points.append(points[0])
+	draw_colored_polygon(points, fill_color)
+	draw_polyline(points, outline_color, outline_width, true)
 	if _high_contrast_danger:
 		draw_line(Vector2.ZERO, endpoint, HIGH_CONTRAST_FOREGROUND, 1.0, true)
 

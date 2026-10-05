@@ -181,6 +181,9 @@ func _test_authored_actions(suite: RefCounted, implementation: Script, definitio
 		if not request.ok:
 			continue
 		var warning: Dictionary = runtime.snapshot()
+		if action.id == "voidking_void_step":
+			_test_void_step_followup(suite, runtime, frame, action, warning, definition)
+			continue
 		var total_hits := 0
 		var total_effects := 0
 		var last: Dictionary = {}
@@ -191,6 +194,31 @@ func _test_authored_actions(suite: RefCounted, implementation: Script, definitio
 			total_effects += last.get("effect_requests", []).size()
 		suite.assert_true(last.get("phase") == "IDLE" and total_hits == action.hit_schedule.size() and total_effects > 0, "authored Boss move completes exact hit/effect schedule: " + action.id)
 		suite.assert_true(runtime.restore_snapshot(warning), "every real warning restores its authored regime: " + action.id)
+
+
+func _test_void_step_followup(suite: RefCounted, runtime: RefCounted, frame: int, action: Dictionary, warning: Dictionary, definition: Dictionary) -> void:
+	var next_frame := frame
+	var result: Dictionary = {}
+	for offset: int in range(1, int(action.warning_frames) + 1):
+		next_frame = frame + offset
+		var context := _context(next_frame, action)
+		var motion: Dictionary = runtime.motion_for_frame(next_frame, context)
+		if motion.get("relocation", false):
+			context.source_position = {"x": float(context.source_position.x) + float(motion.displacement.x), "y": float(context.source_position.y) + float(motion.displacement.y)}
+		result = runtime.advance_frame(next_frame, context, false)
+		suite.assert_true(result.ok and result.hit_facts.is_empty(), "Void Step warning and accepted landing have no premature damage")
+	var followup: Dictionary = runtime.snapshot().action
+	suite.assert_true(followup.action_id == "voidking_scepter_strike" and followup.phase == "WARNING" and followup.commit_frame == next_frame, "Void Step starts a separate accepted Scepter warning")
+	var strike: Dictionary = definition.actions.filter(func(row: Dictionary): return row.id == "voidking_scepter_strike")[0]
+	var hits := 0
+	for offset: int in range(1, int(strike.warning_frames) + int(strike.active_frames) + int(strike.recovery_frames) + 1):
+		result = runtime.advance_frame(next_frame + offset, _context(next_frame + offset, strike), false)
+		suite.assert_true(result.ok, "separate Scepter follow-up accepts every fixed frame")
+		if offset < int(strike.warning_frames):
+			suite.assert_true(result.hit_facts.is_empty(), "follow-up damage waits for its entire new warning")
+		hits += result.get("hit_facts", []).size()
+	suite.assert_true(result.phase == "IDLE" and hits == strike.hit_schedule.size(), "Void Step completes one full separately warned follow-up")
+	suite.assert_true(runtime.restore_snapshot(warning), "Void Step warning restores before its distinct follow-up")
 
 
 func _test_enrage(suite: RefCounted, implementation: Script, definition: Dictionary, identity: Dictionary) -> void:
@@ -255,10 +283,10 @@ func _test_long_damage_history(suite: RefCounted, implementation: Script, defini
 		suite.assert_true(runtime.accept_damage_fact(fact).ok, "long Boss battle cannot exhaust damage acceptance: " + definition.id)
 		runtime.advance_frame(frame, Actions.context(frame), false)
 	var before: Dictionary = runtime.snapshot()
-	suite.assert_equal(before.mechanism_state.damage_claims.size(), 512, "Boss hit history stays bounded through long accepted battle")
+	suite.assert_equal(before.mechanism_state.damage_claims.size(), 514, "Boss hit history preserves all accepted identities past the former512limit")
 	suite.assert_true(runtime.can_restore_snapshot(before), "bounded long-battle damage checkpoint remains strict and restorable")
 	var old := {"fact_id": "accepted-hit:1", "runtime_frame": 1, "target_source_id": identity.hostile_source_id, "amount": 0.1, "hp_after": float(before.mechanism_state.hp_current) - 0.1}
-	suite.assert_true(not runtime.accept_damage_fact(old).ok and runtime.snapshot() == before, "evicted historical damage identity cannot cross accepted-frame boundary")
+	suite.assert_true(not runtime.accept_damage_fact(old).ok and runtime.snapshot() == before, "old spent damage identity cannot cross accepted-frame boundary")
 
 
 func _test_weapon_source_lifetime(suite: RefCounted, implementation: Script, definition: Dictionary, identity: Dictionary) -> void:

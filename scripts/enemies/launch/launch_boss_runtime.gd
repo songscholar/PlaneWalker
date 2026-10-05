@@ -13,6 +13,7 @@ const ForestAuxiliary := preload("res://scripts/enemies/launch/forest_auxiliary_
 const VoidArena := preload("res://scripts/enemies/launch/void_arena_runtime.gd")
 const VoidAuxiliary := preload("res://scripts/enemies/launch/void_auxiliary_runtime.gd")
 const ForgeArena := preload("res://scripts/enemies/launch/forge_arena_runtime.gd")
+const VoidHalf := preload("res://scripts/enemies/launch/void_half_arena_geometry.gd")
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control", "conversion"]
 const MECHANISM_FIELDS: Array[String] = ["phase_index", "hp_current", "minimum_hp", "phase_transition_until_frame", "enraged", "action_phase_index", "action_enraged", "delay_remaining_frames", "exposure_through_frame", "last_action_id", "consecutive_actions", "damage_claims", "health_claims", "stop_claims", "history", "rewind", "rewind_healing_spent", "weakpoint_claims"]
@@ -34,6 +35,7 @@ var _forest_auxiliary: RefCounted
 var _void_arena: RefCounted
 var _void_auxiliary: RefCounted
 var _forge_arena: RefCounted
+var _legacy_void_action := false
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -45,6 +47,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_void_arena = null
 	_void_auxiliary = null
 	_forge_arena = null
+	_legacy_void_action = false
 	if not Contract.exact_fields(identity, IDENTITY_FIELDS) or not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("identity")
 	var parsed := Definition.new().configure_runtime_projection(definition)
@@ -92,7 +95,8 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	if _arena != null:
 		_state.schema_version = 4 if _definition.id == "forest_heart" else 2
 	if _void_arena != null:
-		_state.schema_version = 7
+		_state.schema_version = 8
+		_state["void_half_index"] = 0
 	if _forge_arena != null:
 		_state.schema_version = 6
 	return {"ok": true, "snapshot": snapshot()}
@@ -122,6 +126,10 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 	if not _sync_action_regime():
 		return _failure("action_regime")
 	var requested_context := context.duplicate(true)
+	if _void_arena != null and action_id in VoidHalf.ACTION_IDS:
+		if not Contract.exact_fields(context, Action.CONTEXT_FIELDS) or not Contract.valid_point(context.source_position) or not Contract.valid_point(context.target_position) or not Contract.valid_point(context.facing_direction, 1) or _vector(context.facing_direction).is_zero_approx():
+			return _failure("half_context")
+		requested_context = VoidHalf.anchored_context(context, _arena_origin, action_id == "voidking_enrage_zero" and int(_state.void_half_index) % 2 == 1)
 	var seed_sac := {}
 	if _forest_auxiliary != null and action_id == "matriarch_void_seed":
 		seed_sac = _forest_auxiliary.select_seed_sac(context.get("target_position", {}))
@@ -150,6 +158,8 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 		restore_snapshot(before)
 		return _failure("seed_commit")
 	if result.ok:
+		if action_id == "voidking_enrage_zero":
+			_state.void_half_index += 1
 		var mechanism: Dictionary = _state.mechanism_state
 		mechanism.consecutive_actions = int(mechanism.consecutive_actions) + 1 if mechanism.last_action_id == action_id else 1
 		mechanism.last_action_id = action_id
@@ -680,15 +690,18 @@ func normalize_native_snapshot(value: Dictionary) -> Dictionary:
 		upgraded["forge_arena_state"] = _forge_arena.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index))
 		return upgraded if can_restore_snapshot(upgraded) else {}
 	if _void_arena != null:
-		if value.get("schema_version") == 7:
+		if value.get("schema_version") == 8:
 			return value.duplicate(true) if can_restore_snapshot(value) else {}
-		if value.get("schema_version") not in [1, 5] or not Contract.exact_fields(value, STATE_FIELDS + (["void_arena_state"] if value.get("schema_version") == 5 else [])) or not value.get("mechanism_state") is Dictionary or not Contract.integer_in_range(value.mechanism_state.get("phase_index"), 0, 2) or not Contract.integer_in_range(value.get("runtime_frame"), int(_state.identity.runtime_frame), VoidArena.MAX_FRAME) or typeof(value.get("terminal")) != TYPE_BOOL:
+		var historical_fields := STATE_FIELDS + (["void_arena_state", "void_auxiliary"] if value.get("schema_version") == 7 else ["void_arena_state"] if value.get("schema_version") == 5 else [])
+		if value.get("schema_version") not in [1, 5, 7] or not Contract.exact_fields(value, historical_fields) or not value.get("mechanism_state") is Dictionary or not Contract.integer_in_range(value.mechanism_state.get("phase_index"), 0, 2) or not Contract.integer_in_range(value.get("runtime_frame"), int(_state.identity.runtime_frame), VoidArena.MAX_FRAME) or typeof(value.get("terminal")) != TYPE_BOOL:
 			return {}
 		var upgraded := value.duplicate(true)
-		upgraded.schema_version = 7
+		upgraded.schema_version = 8
+		upgraded["void_half_index"] = 0
 		if value.schema_version == 1:
 			upgraded["void_arena_state"] = _void_arena.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index))
-		upgraded["void_auxiliary"] = _void_auxiliary.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index))
+		if value.schema_version != 7:
+			upgraded["void_auxiliary"] = _void_auxiliary.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index))
 		return upgraded if can_restore_snapshot(upgraded) else {}
 	if _arena == null:
 		return value.duplicate(true) if can_restore_snapshot(value) else {}
@@ -764,8 +777,8 @@ func can_restore_native_snapshot(value: Dictionary) -> bool:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else [])
-	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (6 if _forge_arena != null else 7 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary", "void_half_index"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else [])
+	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (6 if _forge_arena != null else 8 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
 		return false
 	if _forest_auxiliary != null and (not value.forest_auxiliary is Dictionary or not _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary) or value.forest_auxiliary.runtime_frame != value.runtime_frame or value.forest_auxiliary.terminal != value.terminal):
 		return false
@@ -819,9 +832,18 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			if typeof(id) != TYPE_STRING or id.is_empty() or id.length() > (64 if field == "stop_claims" else 128) or seen.has(id):
 				return false
 			seen[id] = true
-	var action := _make_action(int(mechanism.action_phase_index), mechanism.action_enraged)
+	var action := _action_for_snapshot(value)
 	if action == null or not action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false
+	if _void_arena != null:
+		if not Contract.integer_in_range(value.void_half_index, 0, int(value.action.decision_index)):
+			return false
+		var selected: Dictionary = _action_definition(str(value.action.action_id))
+		if value.action.phase != "IDLE" and VoidHalf.current_action(selected) and value.action.definition_digest == _make_action(int(mechanism.action_phase_index), mechanism.action_enraged).snapshot().definition_digest:
+			if not VoidHalf.valid_geometry(value.action.committed_geometry, str(value.action.action_id), _arena_origin):
+				return false
+			if value.action.action_id == "voidking_enrage_zero" and (int(value.void_half_index) == 0 or (float(value.action.committed_aim.x) < 0.0) != (int(value.void_half_index) % 2 == 0)):
+				return false
 	if _definition.id == "forest_heart":
 		if value.arena_state.historical_sweep_generation >= value.action.next_generation_floor or not _arena.can_restore_sweep_action(value.action, value.arena_state, _arena_trunk_origin):
 			return false
@@ -852,7 +874,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 func restore_snapshot(value: Dictionary) -> bool:
 	if not can_restore_snapshot(value):
 		return false
-	var action := _make_action(int(value.mechanism_state.action_phase_index), value.mechanism_state.action_enraged)
+	var action := _action_for_snapshot(value)
 	if not action.restore_snapshot(value.action) or not _control.restore_snapshot(value.control) or not _conversion.restore_snapshot(value.conversion):
 		return false
 	if _arena != null and not _arena.restore_snapshot(value.arena_state):
@@ -866,6 +888,7 @@ func restore_snapshot(value: Dictionary) -> bool:
 	if _forge_arena != null and not _forge_arena.restore_snapshot(value.forge_arena_state):
 		return false
 	_action = action
+	_legacy_void_action = _void_arena != null and value.action.definition_digest != _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged)).snapshot().definition_digest
 	_state = value.duplicate(true)
 	_state.erase("action")
 	_state.erase("control")
@@ -962,33 +985,49 @@ func _valid_history_row(value: Variant) -> bool:
 
 func _sync_action_regime() -> bool:
 	var mechanism: Dictionary = _state.mechanism_state
-	if _action.snapshot().phase != "IDLE" or int(mechanism.action_phase_index) == int(mechanism.phase_index) and mechanism.action_enraged == mechanism.enraged:
+	if _action.snapshot().phase != "IDLE" or not _legacy_void_action and int(mechanism.action_phase_index) == int(mechanism.phase_index) and mechanism.action_enraged == mechanism.enraged:
 		return true
 	var next := _make_action(int(mechanism.phase_index), mechanism.enraged)
 	if next == null:
 		return false
 	var checkpoint: Dictionary = _action.snapshot()
+	if int(mechanism.action_phase_index) == int(mechanism.phase_index) and mechanism.action_enraged == mechanism.enraged and checkpoint.definition_digest == next.snapshot().definition_digest:
+		return true
 	checkpoint.definition_digest = next.snapshot().definition_digest
 	if not next.restore_snapshot(checkpoint):
 		return false
 	_action = next
+	_legacy_void_action = false
 	mechanism.action_phase_index = mechanism.phase_index
 	mechanism.action_enraged = mechanism.enraged
 	return true
 
 
-func _make_action(phase_index: int, enraged: bool) -> RefCounted:
+func _make_action(phase_index: int, enraged: bool, room_half: bool = true) -> RefCounted:
 	var identity: Dictionary = _state.identity.duplicate(true)
 	identity.erase("seed")
 	var result := Action.new()
-	var actions := _actions_for_regime(phase_index, enraged)
+	var actions := _actions_for_regime(phase_index, enraged, room_half)
 	return result if result.configure({"id": _definition.id, "actor_kind": "boss", "actions": actions}, identity).ok else null
 
 
-func _actions_for_regime(phase_index: int, enraged: bool) -> Array:
+func _action_for_snapshot(value: Dictionary) -> RefCounted:
+	var current := _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged))
+	if current != null and current.can_restore_snapshot(value.action):
+		return current
+	if _void_arena != null:
+		var historical := _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), false)
+		if historical != null and historical.can_restore_snapshot(value.action):
+			return historical
+	return null
+
+
+func _actions_for_regime(phase_index: int, enraged: bool, room_half: bool = true) -> Array:
 	var actions: Array = (_definition.actions + _definition.time_responses).duplicate(true)
 	var overrides: Dictionary = _definition.mechanisms.phase_damage_overrides.get(_definition.phases[phase_index].id, {})
 	for action: Dictionary in actions:
+		if room_half and _definition.id == "void_throne" and action.id in VoidHalf.ACTION_IDS:
+			action.geometry = VoidHalf.recipe(str(action.id))
 		if action.id == "matriarch_void_cage":
 			action.geometry = [{"shape": "line", "origin_offset": {"x": -24.0, "y": -24.0}, "aim_offset_degrees": 90.0, "radius": 5.0, "length": 48.0}, {"shape": "line", "origin_offset": {"x": 24.0, "y": -24.0}, "aim_offset_degrees": 90.0, "radius": 5.0, "length": 48.0}, {"shape": "line", "origin_offset": {"x": -24.0, "y": 24.0}, "aim_offset_degrees": 0.0, "radius": 5.0, "length": 16.0}]
 		if enraged:
