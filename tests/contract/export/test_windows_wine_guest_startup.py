@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -96,6 +97,11 @@ class WindowsWineGuestStartupTest(unittest.TestCase):
         self.assertEqual(command[command.index("--network") + 1], "none")
         self.assertIn("--read-only", command)
         self.assertIn("--pull=never", command)
+        self.assertIn("--init", command)
+        self.assertEqual(command[command.index("--tmpfs") + 1],
+                         f"/tmp:rw,nosuid,exec,size=1024m,uid={os.getuid()},gid={os.getgid()}")
+        self.assertEqual(command[command.index("--memory") + 1], "2048m")
+        self.assertIn("HOME=/tmp", command)
         self.assertEqual(command[command.index("--entrypoint") + 1], "/usr/bin/xvfb-run")
         self.assertIn("/usr/lib/wine/wine64", command)
         self.assertIn("/artifact/PlaneWalker.exe", command)

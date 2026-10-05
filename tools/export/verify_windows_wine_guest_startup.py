@@ -113,13 +113,14 @@ def verify_windows_wine_guest_startup(
         report["docker_image"] = {"image_id": image, "os": "linux", "architecture": "amd64"}
         name = "planewalker-windows-startup-" + uuid.uuid4().hex
         command = prefix + [
-            "run", "--rm", "--name", name, "--pull=never", "--platform", "linux/amd64",
+            "run", "--rm", "--init", "--name", name, "--pull=never", "--platform", "linux/amd64",
             "--network", "none", "--read-only", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--pids-limit", "512",
-            "--memory", "1024m", "--cpus", "2", "--user", f"{os.getuid()}:{os.getgid()}",
-            "--tmpfs", "/tmp:rw,nosuid,size=512m", "--workdir", "/tmp",
+            "--memory", "2048m", "--cpus", "2", "--user", f"{os.getuid()}:{os.getgid()}",
+            "--tmpfs", f"/tmp:rw,nosuid,exec,size=1024m,uid={os.getuid()},gid={os.getgid()}", "--workdir", "/tmp",
             "--mount", f"type=bind,source={artifact},target=/artifact/PlaneWalker.exe,readonly",
             "--mount", f"type=bind,source={logs},target=/output",
+            "--env", "HOME=/tmp", "--env", "USER=planewalker", "--env", "LOGNAME=planewalker",
             "--env", "WINEPREFIX=/tmp/planewalker-wine", "--env", "WINEDEBUG=-all",
             "--env", r"PLANEWALKER_USER_DATA_DIR=Z:\tmp\isolated-user-data",
             "--env", r"PLANEWALKER_STARTUP_REPORT=Z:\output\native-startup.json",
