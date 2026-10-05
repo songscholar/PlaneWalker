@@ -2711,27 +2711,31 @@ static func value_digest(value: Variant) -> String:
 
 
 static func replay_value_is_safe(value: Variant) -> bool:
-	match typeof(value):
-		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_STRING, TYPE_STRING_NAME:
-			return true
-		TYPE_FLOAT:
-			return is_finite(float(value))
-		TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I, TYPE_VECTOR4, TYPE_VECTOR4I:
-			return true
-		TYPE_RECT2, TYPE_RECT2I, TYPE_TRANSFORM2D, TYPE_TRANSFORM3D, TYPE_PLANE:
-			return true
-		TYPE_QUATERNION, TYPE_AABB, TYPE_BASIS, TYPE_PROJECTION, TYPE_COLOR:
-			return true
+	var kind := typeof(value)
+	# NIL through STRING_NAME is the existing contiguous scalar whitelist.
+	if kind <= TYPE_STRING_NAME:
+		return kind != TYPE_FLOAT or is_finite(float(value))
+	match kind:
 		TYPE_ARRAY:
 			for item: Variant in value as Array:
-				if not replay_value_is_safe(item):
+				var item_kind := typeof(item)
+				if item_kind <= TYPE_STRING_NAME:
+					if item_kind == TYPE_FLOAT and not is_finite(float(item)):
+						return false
+				elif not replay_value_is_safe(item):
 					return false
 			return true
 		TYPE_DICTIONARY:
-			for key: Variant in (value as Dictionary).keys():
+			var dictionary: Dictionary = value
+			for key: Variant in dictionary:
 				if typeof(key) not in [TYPE_STRING, TYPE_STRING_NAME, TYPE_INT]:
 					return false
-				if not replay_value_is_safe((value as Dictionary)[key]):
+				var item: Variant = dictionary[key]
+				var item_kind := typeof(item)
+				if item_kind <= TYPE_STRING_NAME:
+					if item_kind == TYPE_FLOAT and not is_finite(float(item)):
+						return false
+				elif not replay_value_is_safe(item):
 					return false
 			return true
 		TYPE_PACKED_BYTE_ARRAY, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_INT64_ARRAY:
