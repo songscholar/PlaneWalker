@@ -80,10 +80,52 @@ Native static allocation is not process RSS. Other frozen long-running
 five-floor validation processes remain concurrently active. This is a focused
 headless timing baseline, not an uncontended 60 FPS or rendered performance gate.
 
+## Isolated Complete-Frame Delta
+
+Implementation commit `a7bddd07e68f1bca47e0190adc6fc533abb2f9bd` overlays exactly
+the three production files onto the same `54866d4` base at
+`build/retained-checkout/native-hostile-query-overlay-54866d4-20261006`.
+The first editor import generates translation resources; the second verified
+import passes strict logs. An independent read-only review finds no actionable
+issue in current-state queries, preview isolation, mandatory restore, or exact
+configuration binding.
+
+`build/floor4-phase2-hostile-query-after-120/report.json` uses the same original
+uninstrumented probe harness and arguments: 120 measured frames, 12 Hub frames,
+floor index 4, phase index 2, fixed 60 Hz, unit time scale, and headless rendering.
+The 410-script runtime aggregate SHA-256 is
+`7a665bf7d52030d162e49393e2c294b42c157b3af0ca704ce2d289a5c7ddc4ba`.
+Mechanically generated `source-manifest.json` files sit beside both reports.
+Their file-level comparison changes only `launch_boss_actor.gd`,
+`launch_boss_runtime.gd`, and `launch_hostile_actor.gd` under
+`scripts/enemies/launch/`. Authoritative content is unchanged.
+
+Admission is still exactly 2,501 native frames. All 120 measured frames
+2,502 through 2,621 pass. Both complete first/last observation hashes and fresh
+physical typed-byte readbacks equal the baseline. Both archives retain the same
+24 compressed chunk filenames and SHA-256 bytes across admission and measured
+tapes, with no physical chunk difference. The measured tape still has 121
+observations, status `INTERRUPTED`, and no recording failure. Both runtime logs
+pass strict error, warning, and leak scans.
+
+| Complete Player Advance | Mean | p95 | Maximum |
+| --- | --- | --- | --- |
+| Uninstrumented baseline | 55.765 ms | 59.371 ms | 80.675 ms |
+| Isolated query and preview slice | 52.909 ms | 62.117 ms | 84.364 ms |
+
+This single ambient-load comparison reduces mean Player advance by 2.856 ms
+(5.12%). The p95 and maximum increase; it does not establish improved tail
+latency. Wall duration changes from 7.682 to 7.361 seconds, physical retention
+from 14.987 to 15.146 seconds, and peak native static allocation from
+590,235,928 to 592,161,271 bytes. Two other frozen long-running five-floor
+processes are active at the after-probe start; one finishes in the surrounding
+validation window. Ambient load is not held constant across this comparison.
+These measurements do not certify uncontended, rendered, or sustained
+performance.
+
 ## Remaining Measurement
 
-Overlay only this slice's three committed production files onto the same
-`54866d4` base, import twice, and repeat the uninstrumented 120-frame interval.
-Compare complete typed observations and full Player advance times before
-another performance slice. Sustained recording still requires the combined
-committed source to pass the separate 600-frame tape/readback gate.
+The complete-frame mean remains above the 16.667 ms budget. Profile remaining
+hotspots on the next unified committed source before another optimization.
+Sustained recording still requires that source to pass the separate 600-frame
+tape/readback gate; this 120-frame result cannot certify background throughput.
