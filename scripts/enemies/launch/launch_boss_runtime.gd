@@ -148,6 +148,7 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	var controls: Dictionary = _control.advance_frame(frame)
 	if not controls.ok:
 		return controls
+	controls.attack_multiplier = float(controls.get("attack_multiplier", 1.0)) * daily_outgoing_multiplier()
 	var delayed := _delays_action(frame)
 	var result: Dictionary = _action.advance_frame(frame, observations, delayed or external_action_paused)
 	if not result.ok:
@@ -207,6 +208,10 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	return result
 
 
+func daily_outgoing_multiplier() -> float:
+	return 2.0 if _definition.get("daily_conditions", {}).get("ids", []).has("final_strike") and not _state.is_empty() and float(_state.mechanism_state.hp_current) < float(_definition.max_hp) * 0.1 else 1.0
+
+
 func charge_contact_fact(frame: int, target_id: String) -> Dictionary:
 	if _state.is_empty() or _state.terminal or frame != int(_state.runtime_frame):
 		return {}
@@ -214,7 +219,9 @@ func charge_contact_fact(frame: int, target_id: String) -> Dictionary:
 	var action := _action_definition(str(state.action_id))
 	if state.phase != "ACTIVE" or action.is_empty() or action.handler_id != "charge" or target_id != state.target_id:
 		return {}
-	return Action._hit_fact(action.hit_schedule[0], action, state)
+	var result := Action._hit_fact(action.hit_schedule[0], action, state)
+	result.damage = float(result.damage) * daily_outgoing_multiplier()
+	return result
 
 
 func add_control_source(source_id: String, kind: String, duration_frames: int, magnitude: float) -> bool:

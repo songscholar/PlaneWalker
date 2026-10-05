@@ -32,7 +32,7 @@ static func _valid_structure(value: Variant, catalog: RefCounted, profile_id: St
 	var fields := ["schema_version", "mode_fingerprint", "latest_day", "days", "active"]
 	if not legacy:
 		fields.append_array(["archived_rewards", "reward_state"])
-	if not Meta.exact_fields(value, fields) or value.schema_version != (1 if legacy else 2) or value.mode_fingerprint != catalog.fingerprint() or not Meta.bounded_int(value.latest_day, -1, Catalog.MAX_DAY) or not value.days is Array or value.days.size() > 31 or not value.active is Dictionary:
+	if not Meta.exact_fields(value, fields) or value.schema_version != (1 if legacy else 2) or value.mode_fingerprint != catalog.fingerprint() and (not legacy or value.mode_fingerprint != catalog.legacy_fingerprint()) or not Meta.bounded_int(value.latest_day, -1, Catalog.MAX_DAY) or not value.days is Array or value.days.size() > 31 or not value.active is Dictionary:
 		return false
 	var active: Dictionary = value.active
 	if not active.is_empty():
@@ -128,10 +128,16 @@ static func run_id(profile_id: String, day: int, attempt: int) -> String:
 static func migrate(value: Variant, catalog: RefCounted, profile_id: String) -> Dictionary:
 	if valid(value, catalog, profile_id):
 		return {"ok": true, "state": normalized(value)}
+	if value is Dictionary and value.get("schema_version") == 2 and value.get("mode_fingerprint") == catalog.legacy_fingerprint():
+		var upgraded: Dictionary = value.duplicate(true)
+		upgraded.mode_fingerprint = catalog.fingerprint()
+		if valid(upgraded, catalog, profile_id):
+			return {"ok": true, "state": normalized(upgraded)}
 	if not _valid_structure(value, catalog, profile_id, true):
 		return {"ok": false, "state": {}}
 	var result: Dictionary = value.duplicate(true)
 	result.schema_version = 2
+	result.mode_fingerprint = catalog.fingerprint()
 	result["archived_rewards"] = Rewards.empty()
 	result["reward_state"] = Rewards.empty()
 	if not result.active.is_empty():

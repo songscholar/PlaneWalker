@@ -46,7 +46,7 @@ func _run() -> void:
 		suite.assert_true(not catalog.valid_projection(changed), "caller cannot replace the daily fixed Build")
 	suite.assert_equal(bosses.size(), 5, "deterministic calendar reaches all five production Bosses")
 	suite.assert_equal(weapons.size(), 5, "deterministic calendar reaches all five production weapons")
-	suite.assert_equal(rules.size(), 3, "calendar reaches all three executable initial conditions")
+	suite.assert_equal(rules.size(), 8, "calendar reaches all eight authored native conditions")
 	var calendar: Array = catalog.calendar(1791129600)
 	suite.assert_equal(calendar.size(), 7, "offline preview includes seven canonical days")
 	suite.assert_equal(calendar[0], after, "calendar begins with actual current daily challenge")

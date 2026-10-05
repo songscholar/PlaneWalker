@@ -7,14 +7,14 @@ const Threats := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Orchestrator := preload("res://scripts/application/run_orchestrator.gd")
 
 
-static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, request: Dictionary, run_id: String, source_prefix: String, encounter_id: String) -> Dictionary:
+static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, request: Dictionary, run_id: String, source_prefix: String, encounter_id: String, player_scene: PackedScene = PlayerScene) -> Dictionary:
 	var room_scene: PackedScene = load(definition.template.scene_path)
 	var boss_scene: PackedScene = load(definition.boss_scene)
 	if room_scene == null or boss_scene == null:
 		return {"ok": false, "reason": "scene_resource"}
 	var room: Node2D = room_scene.instantiate()
 	stage.add_child(room)
-	var player: Node2D = PlayerScene.instantiate()
+	var player: Node2D = player_scene.instantiate()
 	player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 	stage.add_child(player)
 	var native_config := {"milestone": "LAUNCH", "seed": int(request.seed), "character_id": request.character_id, "weapon_id": request.weapon_id, "enabled_time_skills": request.time_abilities.duplicate(), "accessibility_assists": request.accessibility_assists, "character_profile": registry.resolve_character_runtime_profile(StringName(request.character_id), &"LAUNCH"), "weapon_profile": registry.resolve_weapon_runtime_profile(StringName(request.weapon_id), &"LAUNCH")}

@@ -15,6 +15,8 @@ const Content := preload("res://scripts/content/content_snapshot_provider.gd")
 const Meta := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Rewards := preload("res://scripts/modes/daily_reward_state.gd")
+const DailyPlayerScene := preload("res://scripts/modes/daily_player.tscn")
+const BossDefinition := preload("res://scripts/enemies/launch/boss_definition.gd")
 
 var _registry: RefCounted
 var _service: RefCounted
@@ -58,8 +60,16 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String, clo
 	var storage := Save.new()
 	if identity.is_empty() or not Rules.same(identity.content_snapshot, Content.snapshot(registry)) or not storage.configure(root_path, "0.4.0-dev", identity.content_snapshot).ok:
 		return _failure(&"DAILY_CONFIGURATION_INVALID")
-	var id := "daily_" + Rules.canonical({"profile_id": identity.profile_id, "save_domain": identity.save_domain, "content_snapshot": identity.content_snapshot, "mode_fingerprint": catalog.fingerprint()}).sha256_text().substr(0, 26)
+	var id := _mode_save_id(identity, catalog.fingerprint())
 	var loaded = storage.load_profile(id, "local")
+	var upgrading := false
+	if not loaded.ok and loaded.code == &"NOT_FOUND":
+		var legacy = storage.load_profile(_mode_save_id(identity, catalog.legacy_fingerprint()), "local")
+		if legacy.ok:
+			loaded = legacy
+			upgrading = true
+		elif legacy.code != &"NOT_FOUND":
+			return _failure(legacy.code)
 	if not loaded.ok and loaded.code != &"NOT_FOUND":
 		return _failure(loaded.code)
 	var session: Variant = loaded.payload.get("daily_session", {}) if loaded.ok else Session.empty(catalog.fingerprint())
@@ -69,6 +79,15 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String, clo
 	var primary = storage.inspect_profile(id, "local")
 	if not primary.ok and primary.code != &"NOT_FOUND":
 		return _failure(primary.code)
+	if upgrading:
+		if primary.code != &"NOT_FOUND":
+			return _failure(&"DAILY_STALE_PRIMARY")
+		var upgraded = storage.save_profile_compare_exchange(id, "local", {"daily_session": migrated.state}, {})
+		primary = storage.inspect_profile(id, "local")
+		if upgraded.metadata.get("reason") == "expected_primary_stale":
+			return _failure(&"DAILY_STALE_PRIMARY")
+		if not primary.ok or not Rules.same(primary.payload.payload.get("daily_session", {}), migrated.state):
+			return _failure(&"DAILY_SAVE_INVALID")
 	_registry = registry
 	_service = service
 	_catalog = catalog
@@ -288,7 +307,13 @@ func _start_native() -> Dictionary:
 	var active: Dictionary = _state.active
 	_stage = Node2D.new()
 	add_child(_stage)
-	var built: Dictionary = Arena.build(_stage, _registry, _catalog.stage(active.definition), _catalog.request(active.definition), active.run_id, "daily", "daily_boss")
+	var stage_definition: Dictionary = _catalog.stage(active.definition)
+	var original_boss: Dictionary = stage_definition.runtime_definition.duplicate(true)
+	var projected := BossDefinition.daily_projection(original_boss, _catalog.native_condition_ids(active.definition, "boss"))
+	if not projected.ok:
+		return _reject_native("boss_daily_projection")
+	stage_definition.runtime_definition = projected.definition
+	var built: Dictionary = Arena.build(_stage, _registry, stage_definition, _catalog.request(active.definition), active.run_id, "daily", "daily_boss", DailyPlayerScene)
 	if not built.ok:
 		return _reject_native(str(built.get("reason", "arena")))
 	_player = built.player
@@ -309,6 +334,12 @@ func _start_native() -> Dictionary:
 		if not committed.ok:
 			return _reject_native("commit %s: %s" % [definition.id, str(committed)])
 		_build_receipts.append({"definition_id": definition.id, "receipt": committed.context.receipt})
+	var player_rules_before: Dictionary = _player.daily_rule_snapshot()
+	if not _player.configure_daily_rules(_catalog.native_condition_ids(active.definition, "player")):
+		return _reject_native("player_daily_rules")
+	for id: String in active.definition.condition_ids:
+		if Catalog.NATIVE_RULES.has(id):
+			_build_receipts.append({"definition_id": "daily_" + id, "receipt": {"operation_count": 1, "before_snapshot": {"player": player_rules_before.duplicate(true), "boss": original_boss.duplicate(true)}, "after_snapshot": {"player": _player.daily_rule_snapshot(), "boss": projected.definition.duplicate(true)}}})
 	_native_retry = false
 	_paused = false
 	_terminal.clear()
@@ -372,7 +403,7 @@ func _on_boss_death(source: StringName, receipt: String) -> void:
 	var expected := "hostile_defeat:" + (run + "|" + str(source)).sha256_text().substr(0, 40)
 	if native.is_empty() or not native.runtime.terminal or not _boss.health.dead or _boss.health.current_hp > 0.0 or _player.health.dead or source != _boss.hostile_source_id or receipt != expected or native.death_receipt != receipt or str(native.runtime.identity.run_id) != run or str(_player.current_run_id()) != run or _native_frames < 1:
 		return
-	var digest := Replay.value_digest({"boss": native, "player": _player.full_player_replay_snapshot()})
+	var digest := Replay.value_digest({"boss": native, "player": _player.full_player_replay_snapshot(), "daily_player": _player.daily_rule_snapshot()})
 	if digest.is_empty():
 		return
 	_terminal = {"status": "VICTORY", "receipt": receipt, "digest": digest}
@@ -382,7 +413,7 @@ func _on_boss_death(source: StringName, receipt: String) -> void:
 func _on_player_died(_killer: Variant) -> void:
 	if not is_active() or _busy or has_pending_save() or not _terminal.is_empty() or _player.get_parent() != _stage or not _player.health.dead or _player.health.current_hp > 0.0 or _native_frames < 1:
 		return
-	var digest := Replay.value_digest({"boss": _boss.launch_runtime_snapshot(), "player": _player.full_player_replay_snapshot()})
+	var digest := Replay.value_digest({"boss": _boss.launch_runtime_snapshot(), "player": _player.full_player_replay_snapshot(), "daily_player": _player.daily_rule_snapshot()})
 	if not digest.is_empty():
 		_terminal = {"status": "DEFEAT", "receipt": "", "digest": digest}
 		_apply_terminal.call_deferred()
@@ -487,3 +518,7 @@ static func _success() -> Dictionary:
 
 static func _failure(code: StringName) -> Dictionary:
 	return {"ok": false, "code": code, "context": {}}
+
+
+static func _mode_save_id(identity: Dictionary, fingerprint: String) -> String:
+	return "daily_" + Rules.canonical({"profile_id": identity.profile_id, "save_domain": identity.save_domain, "content_snapshot": identity.content_snapshot, "mode_fingerprint": fingerprint}).sha256_text().substr(0, 26)

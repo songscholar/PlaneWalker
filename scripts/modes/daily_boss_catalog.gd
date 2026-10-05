@@ -6,7 +6,8 @@ const Rules := preload("res://scripts/community/local_run_record_rules.gd")
 const Handler := preload("res://scripts/content/effects/effect_handler_catalog.gd")
 const SOURCE := "res://assets/production/modes/daily_boss.json"
 const PROJECTION_FIELDS := ["day_index", "day_key", "reset_at", "seed", "boss_id", "weapon_id", "time_abilities", "item_ids", "blessing_id", "curse_id", "condition_ids"]
-const CONDITION_IDS := ["frail", "melee_specialist", "ranged_specialist"]
+const CONDITION_IDS := ["frail", "melee_specialist", "ranged_specialist", "swift_finish", "dodge_master", "final_strike", "temporal_disorder", "bullet_hell"]
+const NATIVE_RULES := {"swift_finish": {"enrage_frames": 3600}, "dodge_master": {"extra_dashes": 1, "invulnerable_delta_frames": -3}, "final_strike": {"hp_threshold": 0.1, "attack_multiplier": 2.0}, "temporal_disorder": {"cooldown_multiplier": 2.0, "effect_multiplier": 1.5}, "bullet_hell": {"projectile_multiplier": 1.5}}
 const MAX_DAY := 2932896
 
 var _definition: Dictionary = {}
@@ -14,11 +15,12 @@ var _fingerprint := ""
 var _registry: RefCounted
 var _rush: RefCounted
 var _conditions: Dictionary = {}
+var _legacy_fingerprint := ""
 
 
 func configure(registry: RefCounted) -> bool:
 	var source: Variant = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
-	if not Meta.exact_fields(source, ["schema_version", "mode_id", "utc_offset_seconds", "attempt_limit", "archive_days", "character_id", "starting_hp", "presets", "conditions"]) or source.schema_version != 1 or source.mode_id != "daily_boss" or source.utc_offset_seconds != 28800 or source.attempt_limit != 3 or source.archive_days != 31 or source.character_id != "wanderer" or source.starting_hp != 100 or not source.presets is Array or source.presets.size() != 5 or not source.conditions is Array or source.conditions.size() != 3:
+	if not Meta.exact_fields(source, ["schema_version", "mode_id", "utc_offset_seconds", "attempt_limit", "archive_days", "character_id", "starting_hp", "presets", "conditions"]) or source.schema_version != 2 or source.mode_id != "daily_boss" or source.utc_offset_seconds != 28800 or source.attempt_limit != 3 or source.archive_days != 31 or source.character_id != "wanderer" or source.starting_hp != 100 or not source.presets is Array or source.presets.size() != 5 or not source.conditions is Array or source.conditions.size() != 8:
 		return false
 	var rush := Rush.new()
 	if not rush.configure(registry):
@@ -53,14 +55,24 @@ func configure(registry: RefCounted) -> bool:
 					return false
 	var conditions := {}
 	for row: Variant in source.conditions:
-		if not Meta.exact_fields(row, ["id", "name_key", "melee_effects", "ranged_effects"]) or row.id not in CONDITION_IDS or conditions.has(row.id) or not row.name_key is String or not row.name_key.begins_with("UI_DAILY_CONDITION_"):
+		if not Meta.exact_fields(row, ["id", "name_key", "melee_effects", "ranged_effects", "native_rule"]) or row.id not in CONDITION_IDS or conditions.has(row.id) or not row.name_key is String or not row.name_key.begins_with("UI_DAILY_CONDITION_") or not Rules.same(row.native_rule, NATIVE_RULES.get(row.id, {})):
 			return false
 		for key: String in ["melee_effects", "ranged_effects"]:
-			if not row[key] is Dictionary or row[key].is_empty() or handler.validate_effects(row[key], {"category": "curse"}).has_blocking_errors():
+			if not row[key] is Dictionary or row[key].is_empty() != NATIVE_RULES.has(row.id) or handler.validate_effects(row[key], {"category": "curse"}).has_blocking_errors():
 				return false
 		conditions[row.id] = row.duplicate(true)
 	_definition = source.duplicate(true)
 	_fingerprint = Rules.canonical(_definition).sha256_text()
+	var legacy := _definition.duplicate(true)
+	legacy.schema_version = 1
+	legacy.conditions = []
+	for row: Dictionary in _definition.conditions:
+		if NATIVE_RULES.has(row.id):
+			continue
+		var original := row.duplicate(true)
+		original.erase("native_rule")
+		legacy.conditions.append(original)
+	_legacy_fingerprint = Rules.canonical(legacy).sha256_text()
 	_registry = registry
 	_rush = rush
 	_conditions = conditions
@@ -71,21 +83,36 @@ func fingerprint() -> String:
 	return _fingerprint
 
 
+func legacy_fingerprint() -> String:
+	return _legacy_fingerprint
+
+
 func projection(timestamp: int) -> Dictionary:
 	return projection_for_day(day_index(timestamp))
 
 
 func projection_for_day(day: int) -> Dictionary:
+	return _projection_for_day(day, false)
+
+
+func _projection_for_day(day: int, legacy: bool) -> Dictionary:
 	if _definition.is_empty() or day < 0 or day > MAX_DAY:
 		return {}
-	var identity := "plane-walker-daily-boss-v1|%s|%d" % [fingerprint(), day]
+	var identity := "plane-walker-daily-boss-v1|%s|%d" % [legacy_fingerprint() if legacy else fingerprint(), day]
 	var seed := _number(identity, "seed") % Meta.MAX_VALUE
 	var boss_index := _number(identity, "boss") % 5
 	var preset: Dictionary = _definition.presets[_number(identity, "preset") % 5]
-	var rule_index := _number(identity, "rule") % 3
+	var rule_index := _number(identity, "rule") % (3 if legacy else 8)
 	var conditions: Array = [CONDITION_IDS[rule_index]]
 	if _number(identity, "count") % 2 == 1:
-		conditions.append(CONDITION_IDS[1 + _number(identity, "second") % 2] if rule_index == 0 else CONDITION_IDS[0])
+		if legacy:
+			conditions.append(CONDITION_IDS[1 + _number(identity, "second") % 2] if rule_index == 0 else CONDITION_IDS[0])
+		else:
+			var remaining: Array = CONDITION_IDS.duplicate()
+			remaining.erase(CONDITION_IDS[rule_index])
+			if rule_index in [1, 2]:
+				remaining.erase(CONDITION_IDS[3 - rule_index])
+			conditions.append(remaining[_number(identity, "second") % remaining.size()])
 	var date := Time.get_datetime_dict_from_unix_time(day * 86400)
 	return {"day_index": day, "day_key": "%04d-%02d-%02d" % [date.year, date.month, date.day], "reset_at": (day + 1) * 86400 - 28800, "seed": seed, "boss_id": Rush.BOSSES[boss_index], "weapon_id": preset.weapon_id, "time_abilities": preset.time_abilities.duplicate(), "item_ids": preset.item_ids.duplicate(), "blessing_id": preset.blessing_id, "curse_id": preset.curse_id, "condition_ids": conditions}
 
@@ -98,7 +125,7 @@ func calendar(timestamp: int) -> Array:
 
 
 func valid_projection(value: Variant) -> bool:
-	return Meta.exact_fields(value, PROJECTION_FIELDS) and Meta.bounded_int(value.day_index, 0, MAX_DAY) and Rules.same(value, projection_for_day(int(value.day_index)))
+	return Meta.exact_fields(value, PROJECTION_FIELDS) and Meta.bounded_int(value.day_index, 0, MAX_DAY) and (Rules.same(value, projection_for_day(int(value.day_index))) or Rules.same(value, _projection_for_day(int(value.day_index), true)))
 
 
 func stage(definition: Dictionary) -> Dictionary:
@@ -119,7 +146,19 @@ func build_definitions(definition: Dictionary) -> Array[Dictionary]:
 		result.append(_registry.get_content(StringName(id)))
 	var melee: bool = definition.weapon_id in ["sword", "gauntlets"]
 	for id: String in definition.condition_ids:
-		result.append({"id": "daily_" + id, "category": "curse", "effects": _conditions[id]["melee_effects" if melee else "ranged_effects"].duplicate(true)})
+		if not NATIVE_RULES.has(id):
+			result.append({"id": "daily_" + id, "category": "curse", "effects": _conditions[id]["melee_effects" if melee else "ranged_effects"].duplicate(true)})
+	return result
+
+
+func native_condition_ids(definition: Dictionary, domain: String) -> Array:
+	var result: Array = []
+	if not valid_projection(definition) or domain not in ["player", "boss"]:
+		return result
+	var allowed := ["dodge_master", "temporal_disorder"] if domain == "player" else ["swift_finish", "final_strike", "bullet_hell"]
+	for id: String in definition.condition_ids:
+		if allowed.has(id):
+			result.append(id)
 	return result
 
 

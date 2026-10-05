@@ -1,13 +1,18 @@
-keys,zh_CN,en
-UI_DAILY_WALLET_FMT,挑战代币 %d / 挑战金币 %d,Tokens %d / Challenge Gold %d
-UI_DAILY_STREAK_FMT,连续参与 %d 天 / 连续胜利 %d 天,Participation Streak %d / Victory Streak %d
-UI_DAILY_PERFECT_TITLE,完美行者,Perfect Walker
-UI_DAILY_REWARD_DAILY_PARTICIPATION_FRAME,七日参与头像框,Seven-day Participation Frame
-UI_DAILY_REWARD_DAILY_WALKER_FRAME,每日行者头像框,Daily Walker Frame
-UI_DAILY_REWARD_ETERNAL_TRAVELER,永恒旅者,Eternal Traveler
-UI_DAILY_REWARD_DAILY_WEAPON_SKIN,时刻武器外观,Chronal Weapon Skin
-UI_DAILY_REWARD_DAILY_CHARACTER_COLOR,余辉角色配色,Afterglow Character Color
-UI_DAILY_REWARD_DAILY_ARCHIVE_DECORATION,旅途图鉴装饰,Journey Archive Decoration
-UI_DAILY_EXCHANGE_FMT,%s / %d 代币,%s / %d Tokens
-UI_DAILY_OWNED,已拥有,Owned
-UI_DAILY_EXCHANGE_INVALID,兑换不可用,Exchange Unavailable
+keys,en,zh_CN
+UI_DAILY_WALLET_FMT,Tokens %d / Challenge Gold %d,挑战代币 %d / 挑战金币 %d
+UI_DAILY_STREAK_FMT,Participation Streak %d / Victory Streak %d,连续参与 %d 天 / 连续胜利 %d 天
+UI_DAILY_PERFECT_TITLE,Perfect Walker,完美行者
+UI_DAILY_REWARD_DAILY_PARTICIPATION_FRAME,Seven-day Participation Frame,七日参与头像框
+UI_DAILY_REWARD_DAILY_WALKER_FRAME,Daily Walker Frame,每日行者头像框
+UI_DAILY_REWARD_ETERNAL_TRAVELER,Eternal Traveler,永恒旅者
+UI_DAILY_REWARD_DAILY_WEAPON_SKIN,Chronal Weapon Skin,时刻武器外观
+UI_DAILY_REWARD_DAILY_CHARACTER_COLOR,Afterglow Character Color,余辉角色配色
+UI_DAILY_REWARD_DAILY_ARCHIVE_DECORATION,Journey Archive Decoration,旅途图鉴装饰
+UI_DAILY_EXCHANGE_FMT,%s / %d Tokens,%s / %d 代币
+UI_DAILY_OWNED,Owned,已拥有
+UI_DAILY_EXCHANGE_INVALID,Exchange Unavailable,兑换不可用
+UI_DAILY_CONDITION_SWIFT,Swift Finish: Boss Enrages After 60 Seconds,速战速决：Boss在60秒后狂暴
+UI_DAILY_CONDITION_DODGE,Dodge Master: One Extra Dash and 3 Fewer Invulnerable Frames,闪避大师：额外一次闪避且无敌帧减少3帧
+UI_DAILY_CONDITION_FINAL,Final Strike: Boss Attacks Double Below 10% HP,最后一击：Boss生命低于10%时攻击翻倍
+UI_DAILY_CONDITION_TEMPORAL,Temporal Disorder: Double Cooldowns and 50% Longer Time Effects,时间紊乱：时间技能冷却翻倍且持续效果提高50%
+UI_DAILY_CONDITION_BULLETS,Bullet Hell: 50% More Boss Projectiles,弹幕地狱：Boss投射物数量提高50%

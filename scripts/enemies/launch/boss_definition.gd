@@ -903,11 +903,13 @@ const MECHANISM_RULES := {
 
 var _snapshot: Dictionary = {}
 var _difficulty: Dictionary = {}
+var _daily_conditions: Dictionary = {}
 
 
 func configure(source: Dictionary) -> Dictionary:
 	_snapshot.clear()
 	_difficulty.clear()
+	_daily_conditions.clear()
 	if not Action.exact_fields(source, FIELDS):
 		return Contract.failure("boss", "exact_fields_required")
 	var common := Contract.common(source, "boss_definition", Ids.BOSS_IDS)
@@ -1001,12 +1003,17 @@ func runtime_projection() -> Dictionary:
 		result[field] = value.duplicate(true) if value is Array or value is Dictionary else value
 	if not _difficulty.is_empty():
 		result["difficulty"] = _difficulty.duplicate(true)
+	if not _daily_conditions.is_empty():
+		result["daily_conditions"] = _daily_conditions.duplicate(true)
 	return result
 
 
 func configure_runtime_projection(source: Dictionary) -> Dictionary:
 	_snapshot.clear()
 	_difficulty.clear()
+	_daily_conditions.clear()
+	if source.has("daily_conditions"):
+		return _configure_daily_conditions(source)
 	if source.has("difficulty"):
 		return _configure_difficulty(source)
 	if not Action.exact_fields(source, RUNTIME_FIELDS) or source.actor_kind != "boss" or not Ids.BOSS_IDS.has(source.id) or not source.actions is Array:
@@ -1038,6 +1045,62 @@ static func difficulty_projection(base: Dictionary, hp_multiplier: float, damage
 	var projected := _scaled_projection(canonical, hp_multiplier, damage_multiplier)
 	projected["difficulty"] = {"schema_version": 1, "hp_multiplier": hp_multiplier, "damage_multiplier": damage_multiplier, "base": canonical}
 	return {"ok": true, "definition": projected, "context": {}}
+
+
+static func daily_projection(base: Dictionary, ids: Array) -> Dictionary:
+	if base.has("difficulty") or base.has("daily_conditions") or ids.size() > 2:
+		return Contract.failure("daily_conditions", "canonical_base_required")
+	var allowed := ["swift_finish", "final_strike", "bullet_hell"]
+	var sorted: Array = []
+	for id: Variant in ids:
+		if not id is String or id not in allowed or sorted.has(id):
+			return Contract.failure("daily_conditions", "unknown_or_duplicate_rule")
+		sorted.append(id)
+	sorted.sort()
+	var parsed := BossDefinition.new().configure_runtime_projection(base)
+	if not parsed.ok:
+		return parsed
+	var result: Dictionary = parsed.definition.duplicate(true)
+	if sorted.is_empty():
+		return {"ok": true, "definition": result, "context": {}}
+	if sorted.has("swift_finish"):
+		result.enrage.threshold_frames = 3600
+	if sorted.has("bullet_hell"):
+		for action: Dictionary in result.actions + result.time_responses:
+			if action.handler_id != "projectile_volley":
+				continue
+			var original: Array = action.geometry.duplicate(true)
+			var target_count := ceili(original.size() * 1.5)
+			if original.is_empty() or target_count > Action.MAX_PRIMITIVES or action.hit_schedule.size() != original.size():
+				return Contract.failure("daily_conditions", "projectile_lane_contract")
+			for index: int in range(original.size(), target_count):
+				var lane: Dictionary = original[index % original.size()].duplicate(true)
+				lane.aim_offset_degrees = clampf(float(lane.aim_offset_degrees) + 6.0, -180.0, 180.0)
+				action.geometry.append(lane)
+				var hit: Dictionary = action.hit_schedule[index % original.size()].duplicate(true)
+				hit.hit_index = index
+				action.hit_schedule.append(hit)
+			if not Action.create(action, "boss").ok:
+				return Contract.failure("daily_conditions", "invalid_projectile_projection")
+	result["daily_conditions"] = {"schema_version": 1, "ids": sorted, "base": parsed.definition.duplicate(true)}
+	return {"ok": true, "definition": result, "context": {}}
+
+
+func _configure_daily_conditions(source: Dictionary) -> Dictionary:
+	var fields := RUNTIME_FIELDS.duplicate()
+	fields.append("daily_conditions")
+	if not Action.exact_fields(source, fields) or not Action.exact_fields(source.daily_conditions, ["schema_version", "ids", "base"]) or source.daily_conditions.schema_version != 1 or not source.daily_conditions.ids is Array or not source.daily_conditions.base is Dictionary:
+		return Contract.failure("daily_conditions", "exact_fields_required")
+	var projected := daily_projection(source.daily_conditions.base, source.daily_conditions.ids)
+	if not projected.ok or JSON.parse_string(JSON.stringify(source)) != JSON.parse_string(JSON.stringify(projected.definition)):
+		return Contract.failure("daily_conditions", "projection_mismatch")
+	var accepted := configure_runtime_projection(projected.definition.daily_conditions.base)
+	if not accepted.ok:
+		return accepted
+	for field: String in RUNTIME_FIELDS.slice(1):
+		_snapshot[field] = projected.definition[field].duplicate(true) if projected.definition[field] is Array or projected.definition[field] is Dictionary else projected.definition[field]
+	_daily_conditions = projected.definition.daily_conditions.duplicate(true)
+	return {"ok": true, "definition": runtime_projection(), "context": {}}
 
 
 func _configure_difficulty(source: Dictionary) -> Dictionary:

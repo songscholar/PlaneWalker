@@ -40,12 +40,14 @@ func _run() -> void:
 				var condition := str(entry.definition_id).trim_prefix("daily_")
 				if condition == "frail":
 					_suite.assert_true(is_equal_approx(float(entry.receipt.after_snapshot.health.max_hp), float(entry.receipt.before_snapshot.health.max_hp) * 0.7), "frail daily condition actually reduces native maximum HP by thirty percent")
-				else:
+				elif condition in ["melee_specialist", "ranged_specialist"]:
 					var melee: bool = definition.weapon_id in ["sword", "gauntlets"]
 					var factor := 1.3 if (condition == "melee_specialist") == melee else 0.7
 					var before: float = entry.receipt.before_snapshot.weapon.modifiers.get("weapon.damage", 1.0)
 					var after: float = entry.receipt.after_snapshot.weapon.modifiers.get("weapon.damage", 1.0)
 					_suite.assert_true(is_equal_approx(after, before * factor), "specialization changes actual selected weapon damage by the authored factor")
+				else:
+					_suite.assert_true(preload("res://scripts/modes/daily_boss_catalog.gd").NATIVE_RULES.has(condition), "native rule receipt comes from the authoritative daily catalog")
 		var player: Node2D = rich.current_player()
 		var boss: Node2D = rich.current_boss()
 		player.health.invulnerable = true
