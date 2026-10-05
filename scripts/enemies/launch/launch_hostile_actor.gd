@@ -93,7 +93,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") in [2, 3, 4, 5]:
+	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -180,7 +180,8 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var next_credit := _action_credit
 	var anchored_recovery: bool = _affix_runtime != null and _affix_runtime.is_anchor_recovering()
 	var nullified_delay: bool = _affix_runtime != null and _affix_runtime.is_nullified_delayed(frame)
-	var externally_paused: bool = status_preview.is_frozen() or _native_action_activation_blocked(frame, observations) or anchored_recovery or nullified_delay
+	var teleport_recovery: bool = _affix_runtime != null and _affix_runtime.teleport_blocks_actions()
+	var externally_paused: bool = status_preview.is_frozen() or _native_action_activation_blocked(frame, observations) or anchored_recovery or nullified_delay or teleport_recovery
 	if not externally_paused and not preview.control_modifiers().action_paused:
 		next_credit += minf(1.0, float(status_preview.attack_speed_multiplier()))
 		externally_paused = next_credit < 1.0
@@ -192,21 +193,27 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		return motion
 	var affix_after := {}
 	var affix_heal := {"healed_amount": 0.0, "hp_after": health.current_hp}
+	var teleport_relocation := {}
 	if _affix_runtime != null:
 		var affix_preview := AffixRuntime.new()
 		if not affix_preview.configure(_affix_configuration, _launch_identity, max_hp) or not affix_preview.restore_snapshot(before.affix_runtime):
 			return _launch_failure("affix_checkpoint")
-		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, status_preview.is_frozen() or (externally_paused and not anchored_recovery) or nullified_delay or bool(motion.action_paused), health.healing_multiplier)
+		var affix_paused: bool = status_preview.is_frozen() or (externally_paused and not anchored_recovery and not teleport_recovery) or nullified_delay or bool(motion.action_paused)
+		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, affix_paused, health.healing_multiplier, _teleport_frame_observation(affix_preview, affix_paused))
 		if not advanced.ok:
 			return _launch_failure("affix_frame")
 		affix_after = affix_preview.snapshot()
 		affix_heal = {"healed_amount": advanced.healed_amount, "hp_after": advanced.hp_after}
+		teleport_relocation = advanced.teleport_relocation
 	var relocation: bool = bool(motion.get("relocation", false))
 	var displacement := _vector(motion.displacement) * (1.0 if relocation else float(status_preview.slow_multiplier()))
 	if lethal_pending or externally_paused or motion.action_paused:
 		displacement = Vector2.ZERO
 	else:
 		displacement += _knockback_velocity / 60.0
+	if not teleport_relocation.is_empty():
+		relocation = true
+		displacement = _vector(teleport_relocation) - global_position
 	if not _room_motion.is_empty():
 		displacement = _constrain_to_room(global_position + displacement) - global_position
 	var predicted := global_position
@@ -292,8 +299,42 @@ func _native_action_activation_blocked(_frame: int, _observations: Dictionary) -
 	return false
 
 
+func _teleport_frame_observation(affix: RefCounted, paused: bool) -> Dictionary:
+	if not affix.is_teleporting():
+		return {}
+	var landing := {}
+	var allowed := false
+	var state: Dictionary = affix.snapshot().teleporting
+	if not paused and affix.teleport_reservation_due() and not _room_motion.is_empty():
+		for offset: Vector2 in affix.teleport_candidate_offsets():
+			var candidate := global_position + offset
+			if _teleport_landing_safe(candidate):
+				landing = _point(candidate)
+				break
+	elif not paused and state.phase == "DEPARTURE" and int(state.remaining_frames) == 1:
+		var reservation: Dictionary = state.reservations.back()
+		allowed = _vector(reservation.origin).is_equal_approx(global_position) and _teleport_landing_safe(_vector(reservation.landing))
+	return {"source_position": _point(global_position), "landing_position": landing, "arrival_allowed": allowed}
+
+
+func _teleport_landing_safe(destination: Vector2) -> bool:
+	if _room_motion.is_empty() or not _room_motion_is_valid() or not _within_bounds(destination, _motion_bounds(), float(_launch_definition.collision_radius_px)):
+		return false
+	var arrival_transform := global_transform
+	arrival_transform.origin = destination
+	return not test_move(arrival_transform, Vector2.ZERO, null, 0.08, true)
+
+
+func _teleport_candidate_remains_safe(ticket: Dictionary) -> bool:
+	var state: Dictionary = ticket.get("after", {}).get("affix_runtime", {}).get("teleporting", {})
+	if state.is_empty() or state.reservations.is_empty():
+		return true
+	var receipt: Dictionary = state.reservations.back()
+	return receipt.outcome != "LANDED" or int(receipt.arrival_runtime_frame) != int(ticket.runtime_frame) or _teleport_landing_safe(_vector(receipt.landing))
+
+
 func can_commit_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after)
+	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after) and _teleport_candidate_remains_safe(ticket)
 
 
 func commit_launch_frame(ticket: Dictionary) -> bool:
@@ -315,7 +356,7 @@ func rollback_launch_frame(ticket: Dictionary) -> bool:
 
 
 func can_publish_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and _prepared_frame_committed and (_room_motion.is_empty() or (_room_motion_is_valid() and _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px))))
+	return _ticket_matches(ticket) and _prepared_frame_committed and (_room_motion.is_empty() or (_room_motion_is_valid() and _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px)))) and _teleport_candidate_remains_safe(ticket)
 
 
 func publish_launch_frame(ticket: Dictionary) -> bool:
@@ -626,6 +667,7 @@ func _refresh_control_visual() -> void:
 
 
 func _refresh_affix_cue() -> void:
+	_refresh_teleport_cue()
 	_refresh_shield_cue()
 	var cue := get_node_or_null("EliteAffixCue") as Node2D
 	if _affix_runtime == null or not _affix_runtime.is_nullified():
@@ -637,7 +679,7 @@ func _refresh_affix_cue() -> void:
 		cue.name = "EliteAffixCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() else Vector2(0, -32)
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() else (Vector2(-22, -32) if _affix_runtime.is_teleporting() else Vector2(0, -32))
 	var phase := "READY"
 	if _affix_runtime.snapshot().terminal:
 		phase = "TERMINAL"
@@ -659,10 +701,30 @@ func _refresh_shield_cue() -> void:
 		cue.name = "EliteShieldCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(-22, -36) if _affix_runtime.is_nullified() else Vector2(0, -32)
+	cue.position = Vector2(-22, -36) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() else Vector2(0, -32)
 	var state: Dictionary = _affix_runtime.snapshot()
 	var phase := "TERMINAL" if state.terminal else ("INTACT" if float(state.shielded.current_pool) > 0.0 else "BROKEN")
 	cue.project_shielded(phase, float(state.shielded.current_pool) / (max_hp * 0.30), bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
+
+
+func _refresh_teleport_cue() -> void:
+	var cue := get_node_or_null("EliteTeleportCue") as Node2D
+	if _affix_runtime == null or not _affix_runtime.is_teleporting():
+		if cue != null:
+			cue.visible = false
+		return
+	if cue == null:
+		cue = AffixCue.new()
+		cue.name = "EliteTeleportCue"
+		cue.z_index = 5
+		add_child(cue)
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.is_nullified() else Vector2(0, -32)
+	var state: Dictionary = _affix_runtime.snapshot()
+	var phase: String = "TERMINAL" if state.terminal else str(state.teleporting.phase)
+	var offset := Vector2.ZERO
+	if phase in ["DEPARTURE", "ARRIVAL"]:
+		offset = _vector(state.teleporting.reservations.back().landing) - global_position - cue.position
+	cue.project_teleporting(phase, offset, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
 
 
 func _actor_state() -> Dictionary:
@@ -691,6 +753,9 @@ func _can_restore_actor_state(value: Dictionary) -> bool:
 		return false
 	if value.room_motion != _room_motion or (not _room_motion.is_empty() and (not _room_motion_is_valid() or not _within_bounds(_vector(value.position), _motion_bounds(), float(_launch_definition.collision_radius_px)))):
 		return false
+	for reservation: Dictionary in value.get("affix_runtime", {}).get("teleporting", {}).get("reservations", []):
+		if (_room_motion.is_empty() and not reservation.landing.is_empty()) or (not _room_motion.is_empty() and (not _within_bounds(_vector(reservation.origin), _motion_bounds(), float(_launch_definition.collision_radius_px)) or (not reservation.landing.is_empty() and not _within_bounds(_vector(reservation.landing), _motion_bounds(), float(_launch_definition.collision_radius_px))))):
+			return false
 	if not value.weapon_metadata is Dictionary:
 		return false
 	for field: Variant in value.weapon_metadata:

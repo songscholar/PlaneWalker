@@ -6,6 +6,7 @@ var _high_contrast := false
 var _visual_scale := 1.0
 var _affix_id := "nullified"
 var _shield_fraction := 1.0
+var _teleport_offset := Vector2.ZERO
 
 
 func project_nullified(phase: String, high_contrast: bool, visual_scale: float) -> void:
@@ -29,11 +30,25 @@ func project_shielded(phase: String, fraction: float, high_contrast: bool, visua
 	queue_redraw()
 
 
+func project_teleporting(phase: String, landing_offset: Vector2, high_contrast: bool, visual_scale: float) -> void:
+	_affix_id = "teleporting"
+	_phase = phase
+	_teleport_offset = landing_offset
+	_high_contrast = high_contrast
+	_visual_scale = clampf(visual_scale, 1.0, 1.5)
+	scale = Vector2.ONE * _visual_scale
+	visible = phase != "TERMINAL"
+	queue_redraw()
+
+
 func get_snapshot() -> Dictionary:
 	return {"affix_id": _affix_id, "phase": _phase, "high_contrast": _high_contrast, "visual_scale": _visual_scale, "visible": visible}
 
 
 func _draw() -> void:
+	if _affix_id == "teleporting":
+		_draw_teleport()
+		return
 	if _affix_id == "shielded":
 		_draw_shield()
 		return
@@ -77,3 +92,19 @@ func _draw_shield() -> void:
 		draw_polyline(contour, Color(0.08, 0.08, 0.1), 4.0)
 		draw_polyline(contour, ink, 2.0)
 		draw_rect(Rect2(-4, -4, 8 * _shield_fraction, 3), ink)
+
+
+func _draw_teleport() -> void:
+	var ink := Color.WHITE if _high_contrast else Color(0.35, 0.95, 0.82)
+	if _phase == "ARRIVAL" and not _high_contrast:
+		ink = Color(1.0, 0.52, 0.77)
+	for side: float in [-1.0, 1.0]:
+		var arrow := PackedVector2Array([Vector2(-7 * side, -4 * side), Vector2(7 * side, -4 * side), Vector2(3 * side, -8 * side), Vector2(7 * side, -4 * side), Vector2(3 * side, 0)])
+		draw_polyline(arrow, Color(0.08, 0.08, 0.1), 4.0)
+		draw_polyline(arrow, ink, 2.0)
+	if _phase in ["DEPARTURE", "ARRIVAL"]:
+		var centre := _teleport_offset / _visual_scale
+		draw_arc(centre, 15.0, 0, TAU, 24, Color(0.08, 0.08, 0.1), 5.0)
+		draw_arc(centre, 15.0, 0, TAU, 24, ink, 2.0)
+		for direction: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
+			draw_line(centre + direction * 18.0, centre + direction * 23.0, ink, 2.0)

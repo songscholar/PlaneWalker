@@ -54,7 +54,7 @@ canonical rows and floor; it does not revise authored content or Save schema.
 - [x] Shield: native post-defense thirty-percent absorption, once-only 1200-frame regeneration,45-frame break exposure, actual Sword/Player compensation and accessible contour. See [native Shielded evidence](../../current/2026-10-05-native-elite-shielded-evidence.md).
 - [x] Anchored: native poise/recovery and displacement refusal, actual Stop/Rift, physical checkpoint and accepted-frame compensation.
 - [x] Nullified: retained Stop/Rift/Time/echo interactions, bounded delay/vulnerability, Anchor/Frenzy composition and accessible clock-fragment cue. See [native Nullified evidence](../../current/2026-10-05-native-elite-nullified-evidence.md).
-- [ ] Teleport: seeded collision-safe 48-80 pixel landing, complete 30-frame departure warning and 30-frame arrival recovery.
+- [x] Teleport: seeded collision-safe48-80 pixel landing, complete30-frame departure warning and30-frame arrival recovery, actual Player late compensation, typed/physical persistence and accessible native projection. See [native Teleporting evidence](../../current/2026-10-05-native-elite-teleporting-evidence.md).
 - [ ] Chaining: accepted Player damage only, strongest two-ally 1.15 attack buff, 90-frame TTL and 120-frame source cooldown.
 - [ ] Splitting and Mirroring: independently warned finite nonreward ordinary children, no recursive abilities and owner-death retirement.
 - [ ] Whole legal-pair matrix, native presentation/accessibility, Save/Replay and full-room/whole-run certification.
@@ -101,3 +101,12 @@ retain metadata-only Shielded behavior.
 - [x] Project an accessible gold shield contour with visible intact/broken states.
 - [x] Run native Shielded, Health/damage, shared elite, production encounter and physical checkpoint gates; retain focused evidence.
 - [x] Retain Shielded/Anchored absorbed-control RED/GREEN: honest zero-body resolution, one control receipt, threshold recovery, typed/physical persistence and actual Player late rejection retry.
+
+## Teleporting Native Revision Six
+
+- [x] Retain480-frame actual Actor RED before native reservation implementation.
+- [x] Bind deterministic48-80 pixel candidate search to actual room/body authority, complete30-frame departure and30-frame arrival recovery, independent reservation identity and unchanged primary warning ownership.
+- [x] Verify Stop/freeze/Nullified/Rift, same-seed twins, no-safe skip,960-frame retry, typed mid-warning/arrival cold state and physical SaveService.
+- [x] Recheck collision during arrival preparation, commit and publication; compensate late walls and safely complete blocked arrival in place.
+- [x] Verify real Player late World rejection/retry at reservation480 and arrival510; retire pending landing and projection on actual final death.
+- [x] Retain shared elite6/6, native Actor/room regressions and six visually inspected Metal captures.

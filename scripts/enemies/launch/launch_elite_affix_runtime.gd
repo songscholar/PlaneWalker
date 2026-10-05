@@ -5,6 +5,7 @@ const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.
 const Definition := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
 const Identity := preload("res://scripts/enemies/launch/launch_enemy_runtime.gd")
 const Rules := preload("res://scripts/enemies/launch/elite_affix_rules.gd")
+const Teleport := preload("res://scripts/enemies/launch/launch_elite_teleport_runtime.gd")
 const CONFIGURATION_FIELDS := ["ids", "floor_index", "pending_ids", "damage_taken_multiplier", "knockback_resistance", "native_revision"]
 const FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration"]
 const ANCHORED_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored"]
@@ -21,6 +22,7 @@ const SHIELD_FIELDS := ["current_pool", "first_break_frame", "last_break_frame",
 const SHIELD_CLAIM_FIELDS := ["fact_id", "runtime_frame", "amount", "absorbed", "epoch"]
 const MAX_SHIELD_CLAIMS := 4096
 const SHIELD_DAMAGE_BONUS := 0.20
+const TELEPORTING_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored", "nullified", "shielded", "teleporting"]
 
 var _configuration: Dictionary = {}
 var _max_hp := 0.0
@@ -42,13 +44,16 @@ func configure(configuration: Dictionary, identity: Dictionary, max_hp: float) -
 	if configuration.native_revision >= 5:
 		_state.schema_version = 4
 		_state["shielded"] = {"current_pool": _shield_maximum(), "first_break_frame": -1, "last_break_frame": -1, "regeneration_used": false, "regenerated_frame": -1, "damage_claims": []} if configuration.ids.has("shielded") else {}
+	if configuration.native_revision >= 6:
+		_state.schema_version = 5
+		_state["teleporting"] = Teleport.initial_state() if configuration.ids.has("teleporting") else {}
 	if configuration.ids.has("regenerating"):
 		_state.regeneration = {"elapsed_frames": 0, "healed_total": 0.0, "interrupted_through_frame": int(identity.runtime_frame), "last_heal_frame": -1}
 	return true
 
 
 static func _valid_configuration(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 5) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
+	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 6) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
 		return false
 	var seen: Array = []
 	var pending: Array = []
@@ -61,7 +66,7 @@ static func _valid_configuration(value: Dictionary) -> bool:
 				return false
 		seen.append(id)
 		previous = id
-		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded"):
+		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded") and not (value.native_revision >= 6 and id == "teleporting"):
 			pending.append(id)
 	return value.pending_ids == pending and Contract.number_in_range(value.damage_taken_multiplier, 1.2 if seen.has("frenzy") else 1.0, 1.2 if seen.has("frenzy") else 1.0) and Contract.number_in_range(value.knockback_resistance, 0.2 if seen.has("fortified") else 0.0, 0.2 if seen.has("fortified") else 0.0)
 
@@ -70,17 +75,21 @@ static func _stable_identity(value: Variant) -> bool:
 	return typeof(value) == TYPE_STRING and not value.is_empty() and value.length() <= 128 and value == value.strip_edges() and not value.contains("\n") and not value.contains("\r")
 
 
-func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, healing_multiplier: float) -> Dictionary:
+func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, healing_multiplier: float, teleport_observation: Dictionary = {}) -> Dictionary:
 	if _state.is_empty() or _state.terminal or frame != int(_state.runtime_frame) + 1 or not Contract.number_in_range(current_hp, 0.0, _max_hp) or not Contract.number_in_range(healing_multiplier, 0.0, 10.0):
+		return {"ok": false}
+	if is_teleporting() and not dead and not Teleport.valid_observation(teleport_observation):
 		return {"ok": false}
 	_state.runtime_frame = frame
 	var healed := 0.0
+	var teleport_relocation := {}
 	if dead:
 		_state.terminal = true
 		if not _state.get("nullified", {}).is_empty():
 			_state.nullified.sources.clear()
 		if is_shielded():
 			_state.shielded.current_pool = 0.0
+		Teleport.cancel(_state.get("teleporting", {}))
 	elif not paused:
 		if not _state.get("anchored", {}).is_empty():
 			_state.anchored.elapsed_frames += 1
@@ -105,7 +114,27 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 		_state.shielded.current_pool = _shield_maximum()
 		_state.shielded.regeneration_used = true
 		_state.shielded.regenerated_frame = frame
-	return {"ok": true, "healed_amount": healed, "hp_after": current_hp + healed}
+	if not dead and is_teleporting():
+		var advanced := Teleport.advance(_state.teleporting, frame, paused, teleport_observation)
+		_state.teleporting = advanced.state
+		teleport_relocation = advanced.relocation
+	return {"ok": true, "healed_amount": healed, "hp_after": current_hp + healed, "teleport_relocation": teleport_relocation}
+
+
+func is_teleporting() -> bool:
+	return not _state.get("teleporting", {}).is_empty()
+
+
+func teleport_blocks_actions() -> bool:
+	return not _state.is_empty() and not _state.terminal and Teleport.blocks_actions(_state.get("teleporting", {}))
+
+
+func teleport_reservation_due() -> bool:
+	return not _state.is_empty() and not _state.terminal and Teleport.reservation_due(_state.get("teleporting", {}))
+
+
+func teleport_candidate_offsets() -> Array[Vector2]:
+	return Teleport.candidate_offsets(_state.identity, _state.teleporting.reservations.size() + 1) if is_teleporting() else []
 
 
 func displacement_multiplier() -> float:
@@ -244,11 +273,12 @@ func cancel() -> void:
 			_state.nullified.sources.clear()
 		if is_shielded():
 			_state.shielded.current_pool = 0.0
+		Teleport.cancel(_state.get("teleporting", {}))
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
 	var revision: int = int(_configuration.get("native_revision", 0))
-	var fields: Array = SHIELDED_RUNTIME_FIELDS if revision >= 5 else (NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS))
+	var fields: Array = TELEPORTING_RUNTIME_FIELDS if revision >= 6 else (SHIELDED_RUNTIME_FIELDS if revision >= 5 else (NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS)))
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or value.schema_version != _state.schema_version or typeof(value.schema_version) != TYPE_INT or value.configuration_digest != _state.configuration_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Contract.MAX_FRAME) or not value.terminal is bool or not value.regeneration is Dictionary:
 		return false
 	if revision >= 3 and not _can_restore_anchored(value):
@@ -256,6 +286,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if revision >= 4 and not _can_restore_nullified(value):
 		return false
 	if revision >= 5 and not _can_restore_shield(value):
+		return false
+	if revision >= 6 and (not value.teleporting is Dictionary or (_configuration.ids.has("teleporting") and not Teleport.can_restore(value.teleporting, _state.identity, int(value.runtime_frame), value.terminal)) or (not _configuration.ids.has("teleporting") and not value.teleporting.is_empty())):
 		return false
 	if not _configuration.ids.has("regenerating"):
 		return value.regeneration.is_empty()
