@@ -48,6 +48,10 @@ func native_cold_snapshot() -> Dictionary:
 	return _native_launch_driver.cold_snapshot() if _native_launch_driver != null else {}
 
 
+func native_cold_snapshot_matches(value: Dictionary) -> bool:
+	return _native_launch_driver != null and _native_launch_driver.matches_cold_snapshot(value)
+
+
 func restore_native_cold_snapshot(value: Dictionary) -> bool:
 	if _native_launch_driver == null or is_active() or not _encounter.is_empty() or not _native_launch_driver.restore_cold_snapshot(value):
 		return false

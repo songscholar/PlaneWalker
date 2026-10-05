@@ -3,6 +3,8 @@ extends "res://scripts/enemies/launch/launch_hostile_actor.gd"
 
 const BossRuntime := preload("res://scripts/enemies/launch/launch_boss_runtime.gd")
 const BossStatus := preload("res://scripts/enemies/launch/boss_elemental_status_runtime.gd")
+const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
+const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 var _exposure_replay_authority: RefCounted
 
 
@@ -25,6 +27,15 @@ func _ready() -> void:
 func _native_geometry_matches_definition() -> bool:
 	if not super._native_geometry_matches_definition():
 		return false
+	if _launch_definition.get("id", "") == "ruin_king":
+		var arena := get_node_or_null("ArenaConstructs")
+		var state: Dictionary = native_arena_snapshot()
+		if arena == null or arena.get_child_count() != 4 or state.is_empty():
+			return false
+		for index: int in range(4):
+			var cover := arena.get_child(index)
+			if not cover is Construct or not cover.native_geometry_matches(state.covers[index], _native_arena_origin(), bool(state.terminal)):
+				return false
 	if _launch_definition.get("id", "") != "time_sovereign":
 		return true
 	var watch := get_node_or_null("WatchHurtbox") as Area2D
@@ -41,12 +52,38 @@ func _restore_actor_state(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
-	if _launch_definition.get("id", "") == "time_sovereign" and not _native_geometry_matches_definition():
-		return _launch_failure("watch_native_geometry")
-	return super.prepare_launch_frame(frame, observations)
+	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king"] and not _native_geometry_matches_definition():
+		return _launch_failure("boss_native_geometry")
+	var result := super.prepare_launch_frame(frame, observations)
+	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
+		return result
+	var target: Variant = result.ticket.collision_target
+	if target is Construct and target.get_parent() == get_node("ArenaConstructs") and result.ticket.after.runtime.action.action_id == "guardian_charge" and result.ticket.after.runtime.action.phase == "ACTIVE":
+		var preview := BossRuntime.new()
+		preview.configure(_launch_definition, _launch_identity)
+		if not preview.restore_snapshot(result.ticket.after.runtime):
+			return _launch_failure("charge_cover_checkpoint")
+		var impact: Dictionary = preview.accept_arena_charge_impact(str(target.native_construct_snapshot().id))
+		if not impact.ok:
+			return _launch_failure("charge_cover_impact")
+		result.ticket.after.runtime = preview.snapshot()
+		result.ticket.batch.hit_facts = []
+		result.ticket.batch.phase = "IDLE"
+		result.ticket.batch.retired_generations.append_array(impact.retired_generations)
+		result.batch = result.ticket.batch.duplicate(true)
+		_prepared_launch_frame = result.ticket.duplicate(true)
+	return result
+
+
+func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary:
+	var result := super.configure_launch_room_motion(room, template)
+	if result.ok:
+		_refresh_native_arena()
+	return result
 
 
 func _refresh_control_visual() -> void:
+	_refresh_native_arena()
 	var state: Dictionary = _launch_runtime.snapshot()
 	var watch := get_node_or_null("WatchHurtbox") as Area2D
 	if watch != null and not state.is_empty():
@@ -66,6 +103,69 @@ func _refresh_control_visual() -> void:
 	var facing := Vector2.RIGHT if state.action.committed_aim.is_empty() else _vector(state.action.committed_aim)
 	sprite.present(pose, facing, float(state.runtime_frame) / 60.0, false, false)
 	sprite.modulate = Color(0.55, 0.95, 1.0) if _launch_runtime.is_exposed() else Color.WHITE
+
+
+func native_arena_snapshot() -> Dictionary:
+	return _launch_runtime.arena_snapshot()
+
+
+func _native_arena_origin() -> Vector2:
+	return Vector2(float(_room_motion.bounds.x), float(_room_motion.bounds.y)) if not _room_motion.is_empty() else Vector2.ZERO
+
+
+func _refresh_native_arena() -> void:
+	var state := native_arena_snapshot()
+	if state.is_empty():
+		return
+	var arena := get_node_or_null("ArenaConstructs")
+	if arena == null:
+		arena = Node2D.new()
+		arena.name = "ArenaConstructs"
+		add_child(arena)
+		for cover: Dictionary in state.covers:
+			var body := Construct.new()
+			body.name = "Cover%d" % int(cover.slot)
+			body.configure(self, str(cover.id))
+			arena.add_child(body)
+	for index: int in range(mini(arena.get_child_count(), state.covers.size())):
+		arena.get_child(index).present(state.covers[index], _native_arena_origin(), bool(state.terminal))
+
+
+func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:
+	if damage_info == null or native_arena_snapshot().is_empty() or not _native_geometry_matches_definition():
+		return 0.0
+	var attacker: Node = damage_info.attacker
+	var run := StringName(str(_launch_identity.run_id))
+	if not is_instance_valid(attacker) or not attacker is PlayerController or attacker.current_run_id() != run or damage_info.run_id not in [run, &"runtime"]:
+		return 0.0
+	var amount: float = Calculator.critical_amount(damage_info, float(damage_info.amount))
+	if not is_finite(amount) or amount <= 0.0:
+		return 0.0
+	var frame: int = health.frame_signal_transaction_runtime_frame()
+	var result: Dictionary = _launch_runtime.accept_arena_damage_fact({"fact_id": (_damage_identity(damage_info) + ":" + id).sha256_text(), "run_id": str(run), "owner_source_id": str(hostile_source_id), "construct_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "amount": amount})
+	if not result.ok:
+		return 0.0
+	_refresh_native_arena()
+	return float(result.amount)
+
+
+func normalize_native_cold_snapshot(value: Dictionary) -> Dictionary:
+	if not value.get("actor") is Dictionary or not value.actor.get("runtime") is Dictionary:
+		return {}
+	var normalized: Dictionary = _launch_runtime.normalize_native_snapshot(value.actor.runtime)
+	if normalized.is_empty() or not _launch_runtime.can_restore_native_snapshot(normalized):
+		return {}
+	var result := value.duplicate(true)
+	result.actor.runtime = normalized
+	return result
+
+
+func _cold_actor_state(value: Dictionary, source_resolver: Callable) -> Dictionary:
+	var state := super._cold_actor_state(value, source_resolver)
+	if state.is_empty():
+		return {}
+	state.runtime = _launch_runtime.normalize_native_snapshot(state.runtime)
+	return state if not state.runtime.is_empty() and _launch_runtime.can_restore_native_snapshot(state.runtime) else {}
 
 
 func native_watch_snapshot() -> Dictionary:

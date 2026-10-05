@@ -17,6 +17,20 @@
         "broken"
       ],
       "sha256": "f8173737bbc3e2bfbd1c3daa8392ed5d6da0b43f086fca0d0e604e2a2bf2c520"
+    },
+    {
+      "id": "ruins_cover",
+      "path": "ruins_cover.png",
+      "frame_size": [
+        48,
+        48
+      ],
+      "frames": [
+        "intact",
+        "damaged",
+        "debris"
+      ],
+      "sha256": "ef750f390308551273587137d53fa172b7d0818f0743078f52f15b735ce3c5b4"
     }
   ]
 }

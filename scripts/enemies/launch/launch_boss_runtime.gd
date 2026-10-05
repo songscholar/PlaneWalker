@@ -7,6 +7,7 @@ const Conversion := preload("res://scripts/enemies/launch/boss_conversion_runtim
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Definition := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Seeds := preload("res://scripts/core/seed_service.gd")
+const Arena := preload("res://scripts/enemies/launch/boss_arena_runtime.gd")
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control", "conversion"]
 const MECHANISM_FIELDS: Array[String] = ["phase_index", "hp_current", "minimum_hp", "phase_transition_until_frame", "enraged", "action_phase_index", "action_enraged", "delay_remaining_frames", "exposure_through_frame", "last_action_id", "consecutive_actions", "damage_claims", "health_claims", "stop_claims", "history", "rewind", "rewind_healing_spent", "weakpoint_claims"]
@@ -20,18 +21,24 @@ var _state: Dictionary = {}
 var _action: RefCounted
 var _control: RefCounted = Controls.new()
 var _conversion: RefCounted = Conversion.new()
+var _arena: RefCounted
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_definition.clear()
 	_state.clear()
 	_action = null
+	_arena = null
 	if not Contract.exact_fields(identity, IDENTITY_FIELDS) or not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("identity")
 	var parsed := Definition.new().configure_runtime_projection(definition)
 	if not parsed.ok:
 		return parsed
 	_definition = parsed.definition.duplicate(true)
+	if _definition.id == "ruin_king":
+		_arena = Arena.new()
+		if not _arena.configure(_definition, identity).ok:
+			return _failure("arena_configuration")
 	var action_identity := identity.duplicate(true)
 	action_identity.erase("seed")
 	var initial_action := Action.new()
@@ -48,6 +55,8 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		return _failure("conversion_identity")
 	_state = {"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false, "mechanism_state": {"phase_index": 0, "hp_current": float(_definition.max_hp), "minimum_hp": float(_definition.max_hp), "phase_transition_until_frame": int(identity.runtime_frame) - 1, "enraged": false, "action_phase_index": 0, "action_enraged": false, "delay_remaining_frames": 0, "exposure_through_frame": int(identity.runtime_frame) - 1, "last_action_id": "", "consecutive_actions": 0, "damage_claims": [], "health_claims": [], "stop_claims": [], "history": [], "rewind": {}, "rewind_healing_spent": 0.0, "weakpoint_claims": []}}
 	_action = initial_action
+	if _arena != null:
+		_state.schema_version = 2
 	return {"ok": true, "snapshot": snapshot()}
 
 
@@ -110,6 +119,9 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		_control.restore_snapshot(before.control)
 		return result
 	_state.runtime_frame = frame
+	if _arena != null and not _arena.advance_frame(frame):
+		restore_snapshot(before)
+		return _failure("arena_frame")
 	if int(_state.mechanism_state.delay_remaining_frames) > 0 and _action.snapshot().phase in ["WARNING", "RECOVERY"] and not external_action_paused:
 		_state.mechanism_state.delay_remaining_frames -= 1
 	_state.mechanism_state.enraged = frame - int(_state.identity.runtime_frame) >= int(_definition.enrage.threshold_frames)
@@ -309,11 +321,56 @@ func snapshot() -> Dictionary:
 	value["action"] = _action.snapshot()
 	value["control"] = _control.snapshot()
 	value["conversion"] = _conversion.snapshot()
+	if _arena != null:
+		value["arena_state"] = _arena.snapshot()
 	return value
 
 
+func arena_snapshot() -> Dictionary:
+	return _arena.snapshot() if _arena != null else {}
+
+
+func accept_arena_damage_fact(value: Dictionary) -> Dictionary:
+	return _arena.accept_damage_fact(value) if _arena != null and not _state.terminal else _failure("arena_unavailable")
+
+
+func accept_arena_charge_impact(construct_id: String) -> Dictionary:
+	var action: Dictionary = _action.snapshot()
+	if _arena == null or _state.terminal or action.phase != "ACTIVE" or action.action_id != "guardian_charge" or action.geometry_generations.is_empty():
+		return _failure("charge_impact")
+	var fact_id := ("arena_charge:%s:%d:%s" % [_state.identity.hostile_source_id, int(action.geometry_generations[0]), construct_id]).sha256_text()
+	var result: Dictionary = _arena.accept_damage_fact({"fact_id": fact_id, "run_id": str(_state.identity.run_id), "owner_source_id": str(_state.identity.hostile_source_id), "construct_id": construct_id, "runtime_frame": int(_state.runtime_frame), "amount": 80.0})
+	if not result.ok:
+		return result
+	var cancelled: Dictionary = _action.cancel(&"declared_cover_charge_impact")
+	_state.mechanism_state.phase_transition_until_frame = int(_state.runtime_frame) + 59
+	_state.mechanism_state.exposure_through_frame = maxi(int(_state.mechanism_state.exposure_through_frame), int(_state.runtime_frame) + 59)
+	_state.mechanism_state.delay_remaining_frames = 0
+	_conversion.synchronize_tail(_character_tail_must_wait())
+	return {"ok": true, "retired_generations": cancelled.retired_generations}
+
+
+func normalize_native_snapshot(value: Dictionary) -> Dictionary:
+	if _arena == null:
+		return value.duplicate(true) if can_restore_snapshot(value) else {}
+	if value.get("schema_version") == 2:
+		return value.duplicate(true) if can_restore_snapshot(value) else {}
+	if value.get("schema_version") != 1 or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.get("runtime_frame")) != TYPE_INT or typeof(value.get("terminal")) != TYPE_BOOL:
+		return {}
+	var normalized := value.duplicate(true)
+	normalized.schema_version = 2
+	normalized.arena_state = _arena.initial_at_frame(int(value.runtime_frame), bool(value.terminal))
+	return normalized if can_restore_snapshot(normalized) else {}
+
+
+func can_restore_native_snapshot(value: Dictionary) -> bool:
+	return can_restore_snapshot(value) and (_arena == null or _arena.can_restore_snapshot(value.arena_state, true))
+
+
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS + ["arena_state"] if _arena != null else STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+		return false
+	if _arena != null and (not value.arena_state is Dictionary or not _arena.can_restore_snapshot(value.arena_state) or value.arena_state.runtime_frame != value.runtime_frame or value.arena_state.terminal != value.terminal):
 		return false
 	if not value.mechanism_state is Dictionary or not Contract.exact_fields(value.mechanism_state, MECHANISM_FIELDS) or not value.action is Dictionary or not value.control is Dictionary or not value.conversion is Dictionary or not _conversion.can_restore_snapshot(value.conversion):
 		return false
@@ -363,11 +420,14 @@ func restore_snapshot(value: Dictionary) -> bool:
 	var action := _make_action(int(value.mechanism_state.action_phase_index), value.mechanism_state.action_enraged)
 	if not action.restore_snapshot(value.action) or not _control.restore_snapshot(value.control) or not _conversion.restore_snapshot(value.conversion):
 		return false
+	if _arena != null and not _arena.restore_snapshot(value.arena_state):
+		return false
 	_action = action
 	_state = value.duplicate(true)
 	_state.erase("action")
 	_state.erase("control")
 	_state.erase("conversion")
+	_state.erase("arena_state")
 	return true
 
 
@@ -379,6 +439,8 @@ func cancel(reason: StringName = &"cancelled") -> Dictionary:
 	_control.cancel(reason)
 	_conversion.cancel()
 	_state.terminal = true
+	if _arena != null:
+		_arena.retire()
 	_state.mechanism_state.delay_remaining_frames = 0
 	return result
 

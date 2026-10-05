@@ -194,6 +194,8 @@ func _test_actual_weapon_payloads() -> void:
 				payload.owner_entity = player
 				payload.source = player
 				suite.assert_true(payload.configure_execution({"action_token": 15, "generation": 5, "source_action_id": "punch_1", "descriptor_id": "watch_punch", "outcome_index": 0, "deterministic_seed": 42, "kind": "hitbox", "parameters": {"damage_multiplier": 1.0, "combo_eligible": false, "energy_eligible": false, "stop_extension_eligible": false}, "base_attack": 16.0, "direction": Vector2.RIGHT, "target_deduplication": "per_action_target", "progress_claims": {}, "progress_claim_order": [], "damage_claims": {}, "damage_claim_order": []}), "real Gauntlets hit execution binds")
+				payload.owner_entity = player
+				payload.source = player
 				add_child(payload)
 		payload.process_mode = Node.PROCESS_MODE_DISABLED
 		payload.global_position = player.global_position

@@ -43,6 +43,35 @@ def watch_frame(phase: int) -> Image.Image:
     return image
 
 
+def cover_frame(phase: int) -> Image.Image:
+    image = Image.new("RGBA", (48, 48))
+    draw = ImageDraw.Draw(image)
+    stone = (114, 131, 128, 255)
+    light = (172, 185, 170, 255)
+    moss = (92, 154, 110, 255)
+    if phase == 2:
+        draw.polygon(((7, 37), (14, 30), (27, 32), (38, 38), (31, 43), (12, 43)), fill=INK)
+        draw.polygon(((11, 37), (17, 33), (25, 36), (20, 40)), fill=stone)
+        draw.polygon(((25, 37), (31, 35), (35, 39), (29, 41)), fill=light)
+        draw.rectangle((12, 41, 21, 42), fill=moss)
+        return image
+    draw.rectangle((9, 37, 38, 43), fill=INK)
+    draw.rectangle((11, 38, 36, 41), fill=stone)
+    draw.rectangle((14, 9, 33, 38), fill=INK)
+    draw.rectangle((16, 11, 31, 37), fill=stone)
+    draw.rectangle((17, 12, 20, 36), fill=light)
+    draw.rectangle((28, 12, 30, 36), fill=(73, 88, 96, 255))
+    draw.rectangle((10, 5, 37, 12), fill=INK)
+    draw.rectangle((12, 6, 35, 10), fill=light)
+    draw.rectangle((14, 5, 19, 7), fill=moss)
+    draw.line(((22, 16), (25, 20), (23, 27), (27, 31)), fill=CYAN, width=2)
+    draw.rectangle((11, 37, 15, 40), fill=moss)
+    if phase == 1:
+        draw.line(((15, 13), (24, 22), (18, 29), (29, 37)), fill=INK, width=2)
+        draw.line(((30, 16), (24, 22), (31, 28)), fill=RED, width=1)
+    return image
+
+
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     atlas = Image.new("RGBA", (128, 32))
@@ -50,11 +79,19 @@ def main() -> None:
         atlas.paste(watch_frame(phase), (32 * phase, 0))
     path = OUTPUT / "time_watch.png"
     atlas.save(path)
+    cover_atlas = Image.new("RGBA", (144, 48))
+    for phase in range(3):
+        cover_atlas.paste(cover_frame(phase), (48 * phase, 0))
+    cover_path = OUTPUT / "ruins_cover.png"
+    cover_atlas.save(cover_path)
     manifest = {
         "schema_version": 1,
         "license": "CC0-1.0",
         "source": "tools/production_art/generate_boss_construct_atlases.py",
-        "atlases": [{"id": "time_watch", "path": path.name, "frame_size": [32, 32], "frames": ["idle", "warning_a", "warning_b", "broken"], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}],
+        "atlases": [
+            {"id": "time_watch", "path": path.name, "frame_size": [32, 32], "frames": ["idle", "warning_a", "warning_b", "broken"], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()},
+            {"id": "ruins_cover", "path": cover_path.name, "frame_size": [48, 48], "frames": ["intact", "damaged", "debris"], "sha256": hashlib.sha256(cover_path.read_bytes()).hexdigest()},
+        ],
     }
     (OUTPUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (OUTPUT / "LICENSE.txt").write_text(

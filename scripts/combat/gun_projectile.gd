@@ -6,6 +6,7 @@ signal action_hit_confirmed(action_token: int, target: Node)
 signal resource_reward_requested(action_token: int, reward_id: StringName, amount: float)
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
 const PIXELS_PER_TILE := 64.0
 const EXECUTION_SNAPSHOT_SCHEMA_VERSION := 1
 const VALID_ACTION_IDS: Array[String] = [
@@ -486,7 +487,7 @@ func _on_area_entered(area: Area2D) -> void:
 	):
 		return
 	var target := area.get_parent()
-	if target == null or not target.is_in_group("enemies"):
+	if not Targets.is_attackable(target):
 		return
 	var target_id := _stable_target_id(target)
 	if _hit_targets.has(target_id):
@@ -501,6 +502,10 @@ func _on_area_entered(area: Area2D) -> void:
 			DamageInfoScript.DamageType.TIME,
 			["damage:time_component", "non_recursive:time_interaction"]
 		)
+	if Targets.is_arena_construct(target):
+		if pierce_mode != "unlimited" and _hit_targets.size() > pierce:
+			_retire_execution()
+		return
 	_apply_aimed_time_burst(target)
 	projectile_hit_confirmed.emit(action_token, outcome_index, target)
 	_emit_action_confirmation(target)

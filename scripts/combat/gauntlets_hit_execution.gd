@@ -5,6 +5,7 @@ signal payload_result(action_token: int, generation: int, result: Dictionary)
 signal execution_finished(action_token: int, generation: int)
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
 const PIXELS_PER_TILE := 64.0
 const VALID_ACTION_IDS: Array[String] = [
 	"punch_1",
@@ -367,13 +368,13 @@ func _on_area_entered(area: Area2D) -> void:
 	if not _execution_active or area == null or not is_instance_valid(area) or not area.has_method("receive_hit"):
 		return
 	var target := area.get_parent()
-	if target == null or not target.is_in_group("enemies"):
+	if not Targets.is_attackable(target):
 		return
 	_execute_target_hit(target)
 
 
 func _execute_target_hit(target: Node) -> Dictionary:
-	if not _execution_active or target == null or not is_instance_valid(target) or not target.is_in_group("enemies"):
+	if not _execution_active or not Targets.is_attackable(target):
 		return {}
 	var target_id := _stable_target_id(target)
 	if target_id <= 0 or _hit_targets.has(target_id) or not _target_inside_geometry(target):
@@ -412,7 +413,7 @@ func _execute_target_hit(target: Node) -> Dictionary:
 		return {}
 	var impact_position := _target_position(target)
 	var resolved_damage := _deliver_damage_components(target)
-	var eligible_claimed := _claim_progress_once(target_id)
+	var eligible_claimed := not Targets.is_arena_construct(target) and _claim_progress_once(target_id)
 	var combo_eligible := bool(parameters.get("combo_eligible", false)) and eligible_claimed
 	var energy_eligible := bool(parameters.get("energy_eligible", false)) and eligible_claimed
 	var stop_eligible := bool(parameters.get("stop_extension_eligible", false)) and eligible_claimed

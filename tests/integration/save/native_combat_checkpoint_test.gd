@@ -13,6 +13,7 @@ const Checkpoint := preload("res://scripts/save/native_run_checkpoint_authority.
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
+const Damage := preload("res://scripts/combat/damage_info.gd")
 
 
 func _ready() -> void:
@@ -21,7 +22,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "event", "native_drift", "presentation_drift"]:
+	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "boss_cover", "boss_legacy_arena", "event", "native_drift", "presentation_drift"]:
 		var selected := OS.get_environment("PLANEWALKER_CHECKPOINT_CASE")
 		if not selected.is_empty() and selected != case_name:
 			continue
@@ -32,6 +33,7 @@ func _run() -> void:
 
 
 func _exercise(suite: RefCounted, case_name: String) -> void:
+	var boss_case := case_name.begins_with("boss")
 	var main := Main.instantiate()
 	add_child(main)
 	await get_tree().process_frame
@@ -53,7 +55,7 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	if case_name == "event":
 		config.seed = 6
 	suite.assert_true(host.start_profile_run(config, service, int(service.snapshot().revision)).ok, "actual Host accepts the seeded native combat launch")
-	var selected: bool = await _route_to_native_target(suite, host, case_name == "boss") if case_name in ["boss", "semantic_zone"] else await _route_to_encounter(suite, host, case_name == "event")
+	var selected: bool = await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
 	suite.assert_true(selected, "actual Host routes to the authored encounter for " + case_name)
 	if not selected:
 		await _dispose(main)
@@ -80,9 +82,9 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			break
 		if case_name == "warning":
 			ready = native.encounter.status == "WARNING"
-		elif case_name in ["actor_warning", "boss"]:
+		elif case_name == "actor_warning" or boss_case:
 			for state: Dictionary in native.actors.values():
-				ready = ready or state.runtime.action.phase == ("RECOVERY" if case_name == "boss" else "WARNING")
+				ready = ready or state.runtime.action.phase == ("RECOVERY" if boss_case else "WARNING")
 		elif case_name == "semantic_zone":
 			for zone: Dictionary in native.effects.semantics.zones:
 				player.global_position = Vector2(float(zone.geometry.origin.x), float(zone.geometry.origin.y))
@@ -108,9 +110,15 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		for _frame: int in range(29):
 			suite.assert_true(player.advance_action_frame(), "native burn advances to its next tick checkpoint")
 			await get_tree().physics_frame
-	if case_name == "boss":
+	if boss_case:
 		var boss: Node = controller.get_node("Enemies").get_child(0)
 		suite.assert_true(boss.apply_weapon_control_conversion("cold_exposure", 0, 30, 0.0), "actual native Boss retains exposure conversion in its cold checkpoint")
+		if case_name == "boss_cover":
+			# Damage is an explicit native-collision fixture; route and cold owners are real.
+			var cover := boss.get_node("ArenaConstructs/Cover0")
+			var hit := Damage.from_plan({"run_id": str(player.current_run_id()), "target_id": "cold_cover", "hostile_source_id": "player:sword", "attack_generation": 17, "action_token": 17, "amount": 80.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+			suite.assert_equal(cover.get_node("Hurtbox").receive_hit(hit), 80.0, "actual Host cover fixture destroys its authoritative native pillar")
+			suite.assert_true(player.advance_action_frame() and cover.collision_layer == 0, "accepted native Player continuation retains the broken pillar")
 	var before: Dictionary = runner.native_launch_snapshot()
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	var run_before: Dictionary = host.runtime_snapshot()
@@ -128,6 +136,22 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	var profile_before: Dictionary = service.snapshot()
 	var captured := Checkpoint.capture(host)
 	suite.assert_true(captured.ok, "active native checkpoint remains valid after physical promotion")
+	if case_name == "boss_legacy_arena":
+		var historical: Dictionary = Replay.decode_replay_json(captured.context.checkpoint.encounter_codec).replay
+		for source: String in historical.actors:
+			var runtime: Dictionary = historical.actors[source].actor.runtime
+			suite.assert_true(runtime.schema_version == 2 and runtime.arena_state.damage_claims.is_empty(), "actual Ruin checkpoint authenticates current intact native arena before historical encoding")
+			runtime.erase("arena_state")
+			runtime.schema_version = 1
+		var payload: Dictionary = service.payload()
+		payload.native_run_checkpoint = _replace_native(captured.context.checkpoint, historical)
+		payload = JSON.parse_string(JSON.stringify(payload, "", true, true))
+		var historical_save := Save.new()
+		historical_save.configure(Paths.resolve_default("user://p16r-checkpoint", "p16r-checkpoint"), "0.4.0-dev", Content.snapshot(host.content_registry()))
+		historical_save.enable_meta_profile(catalog)
+		var validated := Checkpoint.validate(payload.native_run_checkpoint, payload.active_run_state, payload.reward_effect_state)
+		var written: Variant = historical_save.save_profile(slot, "base", payload)
+		suite.assert_true(validated.ok and written.ok, "actual physical primary retains an exact pre-arena Ruin runtime version1 checkpoint: " + str(validated.code) + " " + str(written.code) + " " + str(written.metadata))
 	if case_name in ["warning", "actor_warning", "payload", "boss"]:
 		_tampered_extensions(suite, captured)
 	suite.assert_equal(runner.native_launch_snapshot(), before, "checkpoint capture cannot advance or mutate actual native combat")

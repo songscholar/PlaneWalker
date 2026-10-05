@@ -2,6 +2,7 @@ class_name PlayerArrow
 extends Area2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
 
 @export var speed: float = 520.0
 @export var lifetime: float = 1.5
@@ -171,7 +172,7 @@ func _on_area_entered(area: Area2D) -> void:
 	if not area.has_method("receive_hit"):
 		return
 	var target := area.get_parent()
-	if target == null or not target.is_in_group("enemies"):
+	if not Targets.is_attackable(target):
 		return
 	var target_id := _stable_target_id(target)
 	if _hit_targets.has(target_id):
@@ -179,6 +180,10 @@ func _on_area_entered(area: Area2D) -> void:
 
 	_hit_targets[target_id] = true
 	_deal_projectile_damage(area)
+	if Targets.is_arena_construct(target):
+		if pierce_mode != "unlimited" and _hit_targets.size() > pierce:
+			queue_free()
+		return
 	_restore_time_energy()
 	_apply_first_hit_control(area)
 	_apply_time_interactions(area)

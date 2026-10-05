@@ -465,9 +465,25 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 	if not _ledger.configure(_encounter, _effects) or not _bridge.configure(_player, _controller.hostile_threat_registry(), _actors.values(), _effects) or not _bridge.configure_encounter_authority(_ledger) or not _bridge._restore_registry(value.threats):
 		return _reject_cold_restore(original_threats)
 	_ledger.encounter_frame_observed.connect(_on_encounter_observed)
-	if cold_snapshot() != value or not _player.configure_hostile_frame_participant(_bridge):
+	if not matches_cold_snapshot(value) or not _player.configure_hostile_frame_participant(_bridge):
 		return _reject_cold_restore(original_threats)
 	return true
+
+
+func matches_cold_snapshot(value: Dictionary) -> bool:
+	if not value.get("actors") is Dictionary or value.actors.size() != _actors.size():
+		return false
+	var normalized := value.duplicate(true)
+	for source: String in _actors:
+		if not value.actors.has(source):
+			return false
+		var actor: Node = _actors[source]
+		if actor.has_method("normalize_native_cold_snapshot"):
+			var candidate: Dictionary = actor.normalize_native_cold_snapshot(value.actors[source])
+			if candidate.is_empty():
+				return false
+			normalized.actors[source] = candidate
+	return cold_snapshot() == normalized
 
 
 func discard_cold_restore() -> bool:

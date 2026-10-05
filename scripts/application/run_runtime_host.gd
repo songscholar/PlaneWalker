@@ -220,7 +220,7 @@ func _native_checkpoint_encounter_matches(expected: Dictionary) -> bool:
 	if not is_instance_valid(_room_controller):
 		return false
 	var runner: Node = _room_controller.encounter_runner()
-	return not runner.is_active() if expected.is_empty() else runner.native_cold_snapshot() == expected
+	return not runner.is_active() if expected.is_empty() else runner.native_cold_snapshot_matches(expected)
 
 
 func native_checkpoint_participants() -> Dictionary:

@@ -4,6 +4,7 @@ extends Area2D
 signal payload_result(action_token: int, generation: int, result: Dictionary)
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
 const PIXELS_PER_TILE := 64.0
 
 const VALID_ACTION_IDS: Array[String] = ["arcane_bolt", "charged_element"]
@@ -295,7 +296,7 @@ func _on_area_entered(area: Area2D) -> void:
 	):
 		return
 	var target := area.get_parent()
-	if target == null or not target.is_in_group("enemies"):
+	if not Targets.is_attackable(target):
 		return
 	var target_id := _stable_target_id(target)
 	if target_id <= 0 or _hit_targets.has(target_id):
@@ -325,6 +326,8 @@ func _execute_target_hit(target: Node) -> Dictionary:
 		_primary_knockback(target)
 	)
 	var candidates: Array[Dictionary] = []
+	if Targets.is_arena_construct(target):
+		return _resolve_hit(target_id, candidates, primary_damage, impact_position)
 	match element_id:
 		"fire":
 			_execute_fire_impact(target)
