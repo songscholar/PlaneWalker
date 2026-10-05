@@ -1,0 +1,41 @@
+{
+  "pack_id": "temporal_frontiers",
+  "pack_version": "1.0.0",
+  "schema_version": 2,
+  "game_version_range": ">=0.4.0 <1.0.0",
+  "dependencies": [
+    {
+      "pack_id": "base",
+      "version_range": ">=0.4.0 <1.0.0",
+      "required": true
+    }
+  ],
+  "load_order": 100,
+  "content_manifest": [
+    "content/enemies.json",
+    "content/encounters.json"
+  ],
+  "localization_sources": [
+    "localization/strings.csv"
+  ],
+  "asset_manifest": [
+    "assets/echo_lancer.png",
+    "assets/mire_cantor.png",
+    "assets/parallax_guard.png",
+    "assets/cinder_drake.png",
+    "assets/prism_seer.png",
+    "assets/provenance.json"
+  ],
+  "integrity_hashes": {
+    "content/enemies.json": "f9b0518a3908a8e62c3ce5dade4bfd7810cac1c9a362c229cf16f9fd97c8fc86",
+    "content/encounters.json": "c541be0d0e5ebbf274b3b66b8eedf940afb7fd41784a55d91fc44e9014655f2f",
+    "localization/strings.csv": "45cbfdb46ce2cdb12336c9ba2d71b7da2322a8d5c1fc1dd344dec3db25830ff5",
+    "assets/echo_lancer.png": "bffec8d632fcd5d8199b0acd87e4ea1be3588ada5c6f21323408130d278c9140",
+    "assets/mire_cantor.png": "ffd3695962cd1c79e002db9140ebb7d0cea86fa76849a192e271addede396e9d",
+    "assets/parallax_guard.png": "e144a50870230da5d76f18a5c7792729c4019c175caa437c7ca443d7219bf5f4",
+    "assets/cinder_drake.png": "6cd600ab04678459d670bd9ea0410025eb8a9942b9d0638bb6949078879aa8d3",
+    "assets/prism_seer.png": "b9f8691d54f9e2364ff01998826ee46280b2b4acf4c9ac49aadaf6813abece1e",
+    "assets/provenance.json": "239908a04821d9bcbf90ee240ab13e4cf55ae3769633b5b50b69e80bd9114ad2"
+  },
+  "entitlement_tag": ""
+}

@@ -3,6 +3,7 @@ extends RefCounted
 
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
+const ExpansionEnemy := preload("res://scripts/enemies/expansion/expansion_enemy_definition.gd")
 const AffixRules := preload("res://scripts/enemies/launch/elite_affix_rules.gd")
 const ROOT_FIELDS: Array[String] = ["id", "floor_id", "recipe_id", "room_type", "waves"]
 const WAVE_FIELDS: Array[String] = ["id", "delay_frames", "warning_frames", "spawns"]
@@ -343,6 +344,9 @@ static func normalize_encounter(source: Dictionary) -> Dictionary:
 			if source.room_type == "boss":
 				if spawn.enemy_id != Ids.BOSS_IDS[floor_index] or candidate.spawns.size() != 1 or source.waves.size() != 1:
 					return _failure("spawns.enemy_id", "boss_identity_mismatch")
+			elif ExpansionEnemy.IDS.has(spawn.enemy_id):
+				if ExpansionEnemy.floor_index(spawn.enemy_id) != floor_index + 1 or source.room_type != "combat" or spawn.elite or source.recipe_id != spawn.enemy_id + "_frontiers_v3":
+					return _failure("spawns.enemy_id", "expansion_identity_mismatch")
 			elif not Ids.ENEMY_FLOORS.has(spawn.enemy_id) or int(Ids.ENEMY_FLOORS[spawn.enemy_id]) > floor_index + 1:
 				return _failure("spawns.enemy_id", "unsupported")
 			var expected_slot := "boss_primary" if source.room_type == "boss" else ("elite_primary" if source.room_type == "elite" else "enemy_wave_primary")

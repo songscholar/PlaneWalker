@@ -1,0 +1,272 @@
+[
+  {
+    "category": "expansion_encounter_profile",
+    "id": "expansion_profile_echo_lancer",
+    "schema_version": 1,
+    "name_key": "EXPANSION_ECHO_LANCER_NAME",
+    "description_key": "EXPANSION_ECHO_LANCER_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers"
+    ],
+    "compatibility": {},
+    "references": [
+      "echo_lancer",
+      "encounter_profile_ruins_adapter_v1",
+      "floor_ruins_of_remnant",
+      "room_combat_open_field"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "profile_id": "encounter_profile_ruins_adapter_v1",
+    "selection_revision": 3,
+    "recipes": [
+      {
+        "id": "echo_lancer_frontiers_v3",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field"
+        ],
+        "threat_budget": 2,
+        "waves": [
+          {
+            "id": "echo_lancer_wave",
+            "delay_frames": 0,
+            "warning_frames": 40,
+            "spawns": [
+              {
+                "id": "echo_lancer_spawn",
+                "enemy_id": "echo_lancer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "expansion_encounter_profile",
+    "id": "expansion_profile_mire_cantor",
+    "schema_version": 1,
+    "name_key": "EXPANSION_MIRE_CANTOR_NAME",
+    "description_key": "EXPANSION_MIRE_CANTOR_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers"
+    ],
+    "compatibility": {},
+    "references": [
+      "encounter_profile_forest_adapter_v1",
+      "floor_void_forest",
+      "mire_cantor",
+      "room_combat_open_field"
+    ],
+    "floor_id": "floor_void_forest",
+    "profile_id": "encounter_profile_forest_adapter_v1",
+    "selection_revision": 3,
+    "recipes": [
+      {
+        "id": "mire_cantor_frontiers_v3",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field"
+        ],
+        "threat_budget": 2,
+        "waves": [
+          {
+            "id": "mire_cantor_wave",
+            "delay_frames": 0,
+            "warning_frames": 40,
+            "spawns": [
+              {
+                "id": "mire_cantor_spawn",
+                "enemy_id": "mire_cantor",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "expansion_encounter_profile",
+    "id": "expansion_profile_parallax_guard",
+    "schema_version": 1,
+    "name_key": "EXPANSION_PARALLAX_GUARD_NAME",
+    "description_key": "EXPANSION_PARALLAX_GUARD_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers"
+    ],
+    "compatibility": {},
+    "references": [
+      "encounter_profile_rift_adapter_v1",
+      "floor_time_rift",
+      "parallax_guard",
+      "room_combat_open_field"
+    ],
+    "floor_id": "floor_time_rift",
+    "profile_id": "encounter_profile_rift_adapter_v1",
+    "selection_revision": 3,
+    "recipes": [
+      {
+        "id": "parallax_guard_frontiers_v3",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field"
+        ],
+        "threat_budget": 3,
+        "waves": [
+          {
+            "id": "parallax_guard_wave",
+            "delay_frames": 0,
+            "warning_frames": 40,
+            "spawns": [
+              {
+                "id": "parallax_guard_spawn",
+                "enemy_id": "parallax_guard",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "expansion_encounter_profile",
+    "id": "expansion_profile_cinder_drake",
+    "schema_version": 1,
+    "name_key": "EXPANSION_CINDER_DRAKE_NAME",
+    "description_key": "EXPANSION_CINDER_DRAKE_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers"
+    ],
+    "compatibility": {},
+    "references": [
+      "cinder_drake",
+      "encounter_profile_forge_adapter_v1",
+      "floor_plane_forge",
+      "room_combat_open_field"
+    ],
+    "floor_id": "floor_plane_forge",
+    "profile_id": "encounter_profile_forge_adapter_v1",
+    "selection_revision": 3,
+    "recipes": [
+      {
+        "id": "cinder_drake_frontiers_v3",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field"
+        ],
+        "threat_budget": 4,
+        "waves": [
+          {
+            "id": "cinder_drake_wave",
+            "delay_frames": 0,
+            "warning_frames": 40,
+            "spawns": [
+              {
+                "id": "cinder_drake_spawn",
+                "enemy_id": "cinder_drake",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "expansion_encounter_profile",
+    "id": "expansion_profile_prism_seer",
+    "schema_version": 1,
+    "name_key": "EXPANSION_PRISM_SEER_NAME",
+    "description_key": "EXPANSION_PRISM_SEER_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers"
+    ],
+    "compatibility": {},
+    "references": [
+      "encounter_profile_throne_adapter_v1",
+      "floor_throne_of_void",
+      "prism_seer",
+      "room_combat_open_field"
+    ],
+    "floor_id": "floor_throne_of_void",
+    "profile_id": "encounter_profile_throne_adapter_v1",
+    "selection_revision": 3,
+    "recipes": [
+      {
+        "id": "prism_seer_frontiers_v3",
+        "room_type": "combat",
+        "template_ids": [
+          "room_combat_open_field"
+        ],
+        "threat_budget": 4,
+        "waves": [
+          {
+            "id": "prism_seer_wave",
+            "delay_frames": 0,
+            "warning_frames": 40,
+            "spawns": [
+              {
+                "id": "prism_seer_spawn",
+                "enemy_id": "prism_seer",
+                "spawn_slot_id": "enemy_wave_primary",
+                "spawn_offset": {
+                  "x": 0,
+                  "y": 0
+                },
+                "elite": false,
+                "affix_ids": [],
+                "mechanism_ids": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -17,6 +17,8 @@ const MerchantDefinitionScript := preload("res://scripts/dungeon/merchant_defini
 const EconomyProfileScript := preload("res://scripts/dungeon/economy_profile.gd")
 const P16ContentCatalogScript := preload("res://scripts/content/p16_content_catalog.gd")
 const EnemyDefinitionScript := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const ExpansionEnemyDefinitionScript := preload("res://scripts/enemies/expansion/expansion_enemy_definition.gd")
+const ExpansionEncounterProfileScript := preload("res://scripts/dungeon/expansion_encounter_profile.gd")
 const BossDefinitionScript := preload("res://scripts/enemies/launch/boss_definition.gd")
 const SummonDefinitionScript := preload("res://scripts/enemies/launch/summon_definition.gd")
 const EliteAffixDefinitionScript := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
@@ -217,6 +219,8 @@ const SPECIALIZED_CATEGORIES: Array[String] = [
 	"elite_affix_definition",
 	"launch_encounter_profile",
 	"launch_encounter_extension",
+	"expansion_enemy_definition",
+	"expansion_encounter_profile",
 	"meta_node",
 	"hub_district",
 	"forge_definition",
@@ -1084,13 +1088,20 @@ func _load_pack_definitions(
 	if not closure.ok:
 		return {"ok": false, "definitions": [], "errors": [{"message": "P16 catalog closure failed validation", "context": {"pack_id": pack_id, "code": str(closure.code), "detail": closure.context.duplicate(true)}}]}
 	var hostile_counts: Dictionary = {}
+	var expansion_counts := {"expansion_enemy_definition": 0, "expansion_encounter_profile": 0}
 	for definition: Dictionary in definitions:
+		if expansion_counts.has(definition.category):
+			expansion_counts[definition.category] += 1
 		if P15_CATEGORY_COUNTS.has(definition.category):
 			hostile_counts[definition.category] = int(hostile_counts.get(definition.category, 0)) + 1
 	if not hostile_counts.is_empty():
 		for category: String in P15_CATEGORY_COUNTS:
 			if hostile_counts.get(category, 0) != P15_CATEGORY_COUNTS[category]:
 				return {"ok": false, "definitions": [], "errors": [{"message": "Launch hostile catalog count is incomplete", "context": {"pack_id": pack_id, "category": category}}]}
+	if expansion_counts.values().any(func(count: int): return count > 0):
+		for category: String in expansion_counts:
+			if expansion_counts[category] != 5:
+				return {"ok": false, "definitions": [], "errors": [{"message": "Expansion enemy pack requires five enemies and five profiles", "context": {"pack_id": pack_id, "category": category}}]}
 	definitions.sort_custom(
 		func(left: Dictionary, right: Dictionary) -> bool:
 			return str(left["id"]) < str(right["id"])
@@ -1134,6 +1145,10 @@ func _specialized_definition_parse_result(
 			definition_parser = EconomyProfileScript.new()
 		"enemy_definition":
 			definition_parser = EnemyDefinitionScript.new()
+		"expansion_enemy_definition":
+			definition_parser = ExpansionEnemyDefinitionScript.new()
+		"expansion_encounter_profile":
+			definition_parser = ExpansionEncounterProfileScript.new()
 		"boss_definition":
 			definition_parser = BossDefinitionScript.new()
 		"summon_definition":
@@ -1645,8 +1660,14 @@ func _first_specialized_reference_error(
 			continue
 		var reference_error: Dictionary = {}
 		match category:
-			"enemy_definition", "boss_definition", "summon_definition", "launch_encounter_profile", "launch_encounter_extension":
+			"enemy_definition", "boss_definition", "summon_definition", "launch_encounter_profile", "launch_encounter_extension", "expansion_enemy_definition", "expansion_encounter_profile":
 				reference_error = _specialized_reference_field_error(definition, "floor_id", "floor_definition", definitions_by_id)
+				if reference_error.is_empty() and category == "expansion_encounter_profile":
+					reference_error = _specialized_reference_field_error(definition, "profile_id", "launch_encounter_profile", definitions_by_id)
+					if reference_error.is_empty():
+						reference_error = _specialized_reference_field_error({"id": definition.id, "availability": definition.availability, "template_ids": definition.recipes[0].template_ids}, "template_ids", "room_template", definitions_by_id)
+					if reference_error.is_empty():
+						reference_error = _specialized_reference_field_error({"id": definition.id, "availability": definition.availability, "enemy_id": definition.recipes[0].waves[0].spawns[0].enemy_id}, "enemy_id", "expansion_enemy_definition", definitions_by_id)
 				if reference_error.is_empty() and category == "launch_encounter_profile":
 					reference_error = _specialized_reference_field_error(definition, "boss_id", "boss_definition", definitions_by_id)
 					for recipe: Dictionary in definition.recipes:

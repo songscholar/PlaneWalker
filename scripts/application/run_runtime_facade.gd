@@ -221,7 +221,9 @@ func start_run(config: Dictionary, run_id: String, meta_projection: Dictionary =
 		return readiness
 	var normalized := RunConfigScript.normalized(config)
 	if meta_projection.is_empty() and normalized.milestone in ["LAUNCH", "EXPANSION"] and not normalized.has("launch_encounter_revision"):
-		normalized["launch_encounter_revision"] = 2
+		normalized["launch_encounter_revision"] = default_launch_encounter_revision(str(normalized.milestone))
+	if normalized.get("launch_encounter_revision", 1) == 3 and default_launch_encounter_revision(str(normalized.milestone)) != 3:
+		return CommandResultScript.failure(&"CONTENT_NOT_AVAILABLE", _revision(), {"field": "launch_encounter_revision", "reason": "expansion_pack_required"})
 	var config_validation = RunConfigScript.validate(normalized)
 	if not config_validation.ok:
 		return CommandResultScript.failure(
@@ -1762,6 +1764,12 @@ func room_plan() -> Array[Dictionary]:
 
 func encounter_catalog() -> RefCounted:
 	return _launch_encounter_catalog if _is_floor_plan_run() else _encounter_catalog
+
+
+func default_launch_encounter_revision(milestone: String) -> int:
+	if milestone == "EXPANSION" and _registry != null and _registry.get_by_category(&"expansion_enemy_definition", &"EXPANSION").size() == 5 and _registry.get_by_category(&"expansion_encounter_profile", &"EXPANSION").size() == 5:
+		return 3
+	return 2
 
 
 func content_registry() -> RefCounted:

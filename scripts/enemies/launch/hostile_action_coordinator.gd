@@ -320,7 +320,7 @@ static func _locks_time_receipt_facing(action: Dictionary) -> bool:
 static func _hit_fact(hit: Dictionary, action: Dictionary, state: Dictionary) -> Dictionary:
 	var generation: int = int(state.geometry_generations[0])
 	var geometry: Array = state.committed_geometry.duplicate(true)
-	if action.handler_id == "blink" and int(hit.hit_index) < geometry.size():
+	if (action.handler_id == "blink" or action.id == "prism_seer.prism_sequence") and int(hit.hit_index) < geometry.size():
 		geometry = [geometry[int(hit.hit_index)]]
 		generation = int(state.geometry_generations[int(hit.hit_index)])
 	return {

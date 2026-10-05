@@ -7,6 +7,8 @@ const Extension := preload("res://scripts/dungeon/launch_encounter_extension.gd"
 const Runtime := preload("res://scripts/dungeon/launch_encounter_runtime.gd")
 const Seed := preload("res://scripts/core/seed_service.gd")
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const ExpansionEnemy := preload("res://scripts/enemies/expansion/expansion_enemy_definition.gd")
+const ExpansionProfile := preload("res://scripts/dungeon/expansion_encounter_profile.gd")
 const Boss := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Affix := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
 const Room := preload("res://scripts/dungeon/room_template_definition.gd")
@@ -18,6 +20,7 @@ var _affixes: Dictionary = {}
 var _profiles: Dictionary = {}
 var _recipes: Dictionary = {}
 var _extensions: Dictionary = {}
+var _expansion_profiles: Dictionary = {}
 var _boss_encounters: Dictionary = {}
 var _snapshot: Dictionary = {}
 
@@ -92,7 +95,13 @@ func configure(registry: RefCounted) -> Dictionary:
 		if not registered.ok:
 			return registered
 		_extensions[definition.profile_id] = definition.recipes.duplicate(true)
+	var expansion := _configure_expansion(registry)
+	if not expansion.ok:
+		return expansion
 	_snapshot = {"schema_version": 1, "enemy_count": 22, "boss_count": 5, "affix_count": 10, "profile_count": _profiles.size(), "recipe_count": _recipes.size(), "boss_encounter_count": _boss_encounters.size()}
+	if not _expansion_profiles.is_empty():
+		_snapshot["expansion_enemy_count"] = 5
+		_snapshot["expansion_profile_count"] = 5
 	return {"ok": true, "snapshot": snapshot(), "context": {}}
 
 
@@ -125,6 +134,8 @@ func resolve_for_node(profile_id: String, run_seed: int, node_id: String, room_t
 
 
 func resolve_for_revision(profile_id: String, run_seed: int, node_id: String, room_type: String, template_id: String, selection_revision: int, previous_recipe_id: String = "") -> Dictionary:
+	if selection_revision == 3:
+		return _resolve_expansion(profile_id, run_seed, node_id, room_type, template_id, previous_recipe_id)
 	if selection_revision not in [1, 2]:
 		return {}
 	if selection_revision == 1 or profile_id not in [Ids.PROFILE_IDS[0], Ids.PROFILE_IDS[1]] or room_type != "elite":
@@ -182,6 +193,69 @@ func spawn_slot(slot_id: String) -> Dictionary:
 
 func snapshot() -> Dictionary:
 	return _snapshot.duplicate(true)
+
+
+func supports_expansion_enemies() -> bool:
+	return _expansion_profiles.size() == 5
+
+
+func _configure_expansion(registry: RefCounted) -> Dictionary:
+	var enemies: Array = registry.get_by_category(&"expansion_enemy_definition", &"EXPANSION")
+	var profiles: Array = registry.get_catalog_entries(&"expansion_encounter_profile", &"EXPANSION") if registry.has_method("get_catalog_entries") else registry.get_by_category(&"expansion_encounter_profile", &"EXPANSION")
+	if enemies.is_empty() and profiles.is_empty():
+		return {"ok": true}
+	if enemies.size() != 5 or profiles.size() != 5 or not registry.has_method("active_packs"):
+		return _failure("expansion", "incomplete_or_unsupported")
+	var seen := {}
+	for candidate: Dictionary in enemies:
+		var source := candidate.duplicate(true)
+		source.erase("pack_id")
+		source.erase("pack_version")
+		var parsed := ExpansionEnemy.new().configure(source)
+		if not parsed.ok or seen.has(source.get("id")):
+			return _failure("expansion_enemy", "invalid_or_duplicate")
+		var sprite_path := ""
+		for pack: Dictionary in registry.active_packs():
+			if pack.pack_id == candidate.get("pack_id", "") and pack.asset_manifest.has(source.sprite_asset):
+				sprite_path = str(pack.root_path).path_join(source.sprite_asset)
+				if FileAccess.get_sha256(sprite_path) != pack.integrity_hashes[source.sprite_asset]:
+					return _failure("expansion_sprite", "integrity_mismatch")
+		if sprite_path.is_empty():
+			return _failure("expansion_sprite", "missing_declared_asset")
+		var actor: Dictionary = parsed.definition
+		actor["scene"] = "res://scenes/enemies/expansion_hostile_actor.tscn"
+		actor["sprite_path"] = sprite_path
+		actor["floor_index"] = ExpansionEnemy.floor_index(source.id)
+		_actors[source.id] = actor
+		seen[source.id] = true
+	for candidate: Dictionary in profiles:
+		var parsed := ExpansionProfile.new().configure(candidate)
+		if not parsed.ok or _expansion_profiles.has(candidate.profile_id):
+			return _failure("expansion_profile", "invalid_or_duplicate")
+		var registered := _register_recipes(candidate.profile_id, candidate.floor_id, parsed.definition.recipes, registry)
+		if not registered.ok:
+			return registered
+		_expansion_profiles[candidate.profile_id] = parsed.definition.recipes.duplicate(true)
+	return {"ok": true}
+
+
+func _resolve_expansion(profile_id: String, run_seed: int, node_id: String, room_type: String, template_id: String, previous_recipe_id: String) -> Dictionary:
+	if not supports_expansion_enemies() or _snapshot.is_empty() or not _profiles.has(profile_id) or node_id.is_empty() or node_id.length() > 64 or room_type not in ["combat", "elite"]:
+		return {}
+	var recipes: Array = _profiles[profile_id].recipes.duplicate(true)
+	recipes.append_array(_extensions.get(profile_id, []))
+	recipes.append_array(_expansion_profiles[profile_id])
+	var candidates: Array[String] = []
+	for recipe: Dictionary in recipes:
+		if recipe.room_type == room_type and (template_id.is_empty() or recipe.template_ids.has(template_id)):
+			candidates.append(recipe.id)
+	candidates.sort()
+	if candidates.size() > 1:
+		candidates.erase(previous_recipe_id)
+	if candidates.is_empty():
+		return {}
+	var rng := Seed.make_rng(run_seed, StringName("expansion_encounter_v3:%s:%s" % [_profiles[profile_id].floor_id, node_id]))
+	return _recipes[profile_id + "." + candidates[rng.randi_range(0, candidates.size() - 1)]].duplicate(true)
 
 
 func _normalize_actor(source: Dictionary, category: String) -> Dictionary:
@@ -243,7 +317,7 @@ func _register_recipes(profile_id: String, floor_id: String, recipes: Array, reg
 		for wave: Dictionary in recipe.waves:
 			var threat := 0
 			for spawn: Dictionary in wave.spawns:
-				if not _actors.has(spawn.enemy_id) or _actors[spawn.enemy_id].category != "enemy_definition":
+				if not _actors.has(spawn.enemy_id) or _actors[spawn.enemy_id].category not in ["enemy_definition", "expansion_enemy_definition"]:
 					return _failure("enemy_id", "dangling_reference")
 				threat += int(_actors[spawn.enemy_id].threat_cost) + (3 if spawn.elite else 0)
 			if threat > int(recipe.threat_budget):
@@ -266,5 +340,6 @@ func _clear() -> void:
 	_profiles.clear()
 	_recipes.clear()
 	_extensions.clear()
+	_expansion_profiles.clear()
 	_boss_encounters.clear()
 	_snapshot.clear()

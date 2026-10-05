@@ -56,7 +56,7 @@ static func validate(value: Dictionary):
 		return _invalid("seed")
 	if config.has("launch_encounter_revision") and (
 		typeof(config.launch_encounter_revision) != TYPE_INT
-		or int(config.launch_encounter_revision) not in [1, 2]
+		or int(config.launch_encounter_revision) not in [1, 2, 3]
 	):
 		return _invalid("launch_encounter_revision")
 	if typeof(config["accessibility_assists"]) != TYPE_DICTIONARY:

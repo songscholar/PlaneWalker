@@ -46,6 +46,8 @@ func _render_state() -> void:
 		_add_text(tr("UI_CONTENT_RUN_LOCK"), "RunLock")
 	_add_action("install", tr("UI_CONTENT_INSTALL"), "", not _state.locked, "", _choose_directory)
 	_add_action("refresh", tr("UI_CONTENT_REFRESH"), "", not _state.locked, "", _send.bind("refresh", {}))
+	if not _state.installed.any(func(row: Dictionary): return row.pack_id == "temporal_frontiers"):
+		_add_action("install:temporal_frontiers", tr("UI_CONTENT_FRONTIERS_INSTALL"), "", not _state.locked, "", _send.bind("install", {"path": "res://data/content_packs/temporal_frontiers"}))
 	if _state.installed.is_empty():
 		_add_text(tr("UI_CONTENT_EMPTY"), "EmptyPackages")
 	for row: Dictionary in _state.installed:

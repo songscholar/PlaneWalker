@@ -22,7 +22,7 @@ func _run() -> void:
 	var current := Config.normalized({"milestone": "LAUNCH", "launch_encounter_revision": 2})
 	suite.assert_equal(current.get("launch_encounter_revision", 0), 2, "Run config preserves explicit authored encounter revision")
 	suite.assert_true(not Config.normalized({"milestone": "LAUNCH"}).has("launch_encounter_revision"), "historical missing revision remains absent rather than inventing current content")
-	for invalid: Variant in [0, 3, true, 2.0, "2"]:
+	for invalid: Variant in [0, 4, true, 2.0, "2"]:
 		suite.assert_true(not Config.validate({"milestone": "LAUNCH", "launch_encounter_revision": invalid}).ok, "unsupported or untyped encounter revision refuses")
 	if not catalog.has_method("resolve_for_revision"):
 		suite.finish(get_tree())
@@ -48,7 +48,7 @@ func _run() -> void:
 						found = found or spawn.elite and spawn.enemy_id == species
 					suite.assert_equal(catalog.encounter_definition(recipe.id), recipe, "additive selected recipe resolves to its exact durable authored definition")
 		suite.assert_true(found, "ordinary seeded native selection naturally reaches elite " + species)
-	suite.assert_equal(catalog.call("resolve_for_revision", Ids.PROFILE_IDS[0], 1, "layer_04_a", "elite", "", 3), {}, "unknown selection revision refuses")
+	suite.assert_equal(catalog.call("resolve_for_revision", Ids.PROFILE_IDS[0], 1, "layer_04_a", "elite", "", 3), {}, "Expansion selection without complete optional pack refuses")
 	var historical_registry := Fixtures.registry()
 	historical_registry.rows.erase("launch_encounter_extension")
 	suite.assert_true(catalog.configure(historical_registry).ok, "original complete catalog remains executable without additive content")

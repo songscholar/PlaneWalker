@@ -5,6 +5,7 @@ const Encounter := preload("res://scripts/dungeon/launch_encounter_runtime.gd")
 const Ledger := preload("res://scripts/dungeon/launch_encounter_frame_authority.gd")
 const Effects := preload("res://scripts/enemies/launch/launch_hostile_effect_authority.gd")
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const ExpansionEnemy := preload("res://scripts/enemies/expansion/expansion_enemy_definition.gd")
 const Boss := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Registry := preload("res://scripts/combat/hostile_threat_registry.gd")
@@ -248,6 +249,9 @@ func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vecto
 	actor.set_meta("room_id", StringName(_encounter.snapshot().identity.room_id))
 	_controller.get_node("Enemies").add_child(actor)
 	actor.global_position = position
+	if definition.get("category") == "expansion_enemy_definition" and (not actor.has_method("configure_expansion_visual") or not actor.configure_expansion_visual(str(definition.get("sprite_path", "")))):
+		actor.free()
+		return null
 	if spawn.elite and not legacy_affixes:
 		var affixes: Array = []
 		for affix_id: String in spawn.affix_ids:
@@ -263,15 +267,18 @@ func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vecto
 
 func _actor_runtime_projection(definition: Dictionary, spawn: Dictionary) -> Dictionary:
 	var is_boss: bool = definition.get("category") == "boss_definition"
-	var parser: RefCounted = Boss.new() if is_boss else Enemy.new()
+	var is_expansion: bool = definition.get("category") == "expansion_enemy_definition"
+	if is_expansion and spawn.elite:
+		return {}
+	var parser: RefCounted = Boss.new() if is_boss else (ExpansionEnemy.new() if is_expansion else Enemy.new())
 	var source: Dictionary = {}
-	for field: String in Boss.FIELDS if is_boss else Enemy.FIELDS:
+	for field: String in Boss.FIELDS if is_boss else (ExpansionEnemy.FIELDS if is_expansion else Enemy.FIELDS):
 		if not definition.has(field):
 			return {}
 		source[field] = definition[field]
 	if not parser.configure(source).ok:
 		return {}
-	return parser.runtime_projection() if is_boss else parser.runtime_projection("elite" if spawn.elite else "enemy")
+	return parser.runtime_projection() if is_boss or is_expansion else parser.runtime_projection("elite" if spawn.elite else "enemy")
 
 
 func reject_spawn(spawn: Dictionary, reason: StringName) -> bool:

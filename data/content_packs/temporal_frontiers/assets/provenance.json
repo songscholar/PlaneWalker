@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "author": "Plane Walker project",
+  "source": "Authored pixel masks in tools/generate_temporal_frontiers.py",
+  "assets": [
+    "echo_lancer.png",
+    "mire_cantor.png",
+    "parallax_guard.png",
+    "cinder_drake.png",
+    "prism_seer.png"
+  ]
+}

@@ -10,6 +10,7 @@ const MAX_DESCRIPTOR_BYTES := 256 * 1024
 const ASSET_EXTENSIONS := ["json", "png", "ogg", "wav"]
 const EXECUTABLE_FIELDS := ["script", "script_path", "script_source", "callable", "expression", "gdscript", "scene_path", "resource_path", "native_library", "code"]
 const EXECUTABLE_EXTENSIONS := ["gd", "gdc", "tscn", "scn", "tres", "res", "dll", "dylib", "so", "exe", "sh", "bat", "svg"]
+const BUNDLED_SOURCE := "res://data/content_packs/temporal_frontiers"
 var _root := ""
 var _file_ops = FileOps.new()
 
@@ -155,8 +156,9 @@ func uninstall(fingerprint: String) -> Dictionary:
 
 
 func _capture(source_directory: String) -> Dictionary:
-	var source := ProjectSettings.globalize_path(source_directory).simplify_path()
-	if not source.is_absolute_path() or not DirAccess.dir_exists_absolute(source) or _is_link(source):
+	var bundled := source_directory == BUNDLED_SOURCE
+	var source := source_directory if bundled else ProjectSettings.globalize_path(source_directory).simplify_path()
+	if (not bundled and not source.is_absolute_path()) or not DirAccess.dir_exists_absolute(source) or _is_link(source):
 		return _failure(&"UNSAFE_PATH", {"path": source_directory})
 	var descriptor_path := source.path_join("pack.json")
 	var pack_bytes := _read_bytes(source, "pack.json", MAX_DESCRIPTOR_BYTES)

@@ -1,0 +1,513 @@
+[
+  {
+    "category": "expansion_enemy_definition",
+    "id": "echo_lancer",
+    "schema_version": 1,
+    "name_key": "EXPANSION_ECHO_LANCER_NAME",
+    "description_key": "EXPANSION_ECHO_LANCER_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers",
+      "expansion"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_ruins_of_remnant"
+      ],
+      "actor_kinds": [
+        "enemy"
+      ]
+    },
+    "references": [
+      "floor_ruins_of_remnant"
+    ],
+    "floor_id": "floor_ruins_of_remnant",
+    "runtime_kind": "echo_lancer",
+    "max_hp": 90,
+    "defense": 0,
+    "move_speed": 52,
+    "threat_cost": 2,
+    "collision_radius_px": 12,
+    "sprite_asset": "assets/echo_lancer.png",
+    "actions": [
+      {
+        "id": "echo_lancer.echo_thrust",
+        "handler_id": "melee",
+        "warning_frames": 40,
+        "active_frames": 31,
+        "recovery_frames": 30,
+        "idle_frames": 30,
+        "cooldown_frames": 150,
+        "weight": 1,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 84,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 7,
+            "length": 72
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "physical"
+          },
+          {
+            "offset_frame": 30,
+            "hit_index": 1,
+            "damage": 12,
+            "damage_type": "physical"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 12
+        },
+        "cue_id": "echo_lancer_echo_thrust"
+      }
+    ],
+    "mechanisms": {
+      "first_attack_stagger_frames": 30,
+      "kite_min_px": 0,
+      "kite_max_px": 36
+    }
+  },
+  {
+    "category": "expansion_enemy_definition",
+    "id": "mire_cantor",
+    "schema_version": 1,
+    "name_key": "EXPANSION_MIRE_CANTOR_NAME",
+    "description_key": "EXPANSION_MIRE_CANTOR_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers",
+      "expansion"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_void_forest"
+      ],
+      "actor_kinds": [
+        "enemy"
+      ]
+    },
+    "references": [
+      "floor_void_forest"
+    ],
+    "floor_id": "floor_void_forest",
+    "runtime_kind": "mire_cantor",
+    "max_hp": 100,
+    "defense": 2,
+    "move_speed": 28,
+    "threat_cost": 2,
+    "collision_radius_px": 12,
+    "sprite_asset": "assets/mire_cantor.png",
+    "actions": [
+      {
+        "id": "mire_cantor.mire_verse",
+        "handler_id": "zone",
+        "warning_frames": 50,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 30,
+        "cooldown_frames": 150,
+        "weight": 1,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 220,
+        "geometry": [
+          {
+            "shape": "target_circle",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 28,
+            "length": 0
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 5,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "lifetime_frames": 180,
+          "tick_interval_frames": 60,
+          "slow_multiplier": 0.7,
+          "slow_duration_frames": 60
+        },
+        "cue_id": "mire_cantor_mire_verse"
+      }
+    ],
+    "mechanisms": {
+      "first_attack_stagger_frames": 30,
+      "kite_min_px": 80,
+      "kite_max_px": 144
+    }
+  },
+  {
+    "category": "expansion_enemy_definition",
+    "id": "parallax_guard",
+    "schema_version": 1,
+    "name_key": "EXPANSION_PARALLAX_GUARD_NAME",
+    "description_key": "EXPANSION_PARALLAX_GUARD_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers",
+      "expansion"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_time_rift"
+      ],
+      "actor_kinds": [
+        "enemy"
+      ]
+    },
+    "references": [
+      "floor_time_rift"
+    ],
+    "floor_id": "floor_time_rift",
+    "runtime_kind": "parallax_guard",
+    "max_hp": 130,
+    "defense": 4,
+    "move_speed": 32,
+    "threat_cost": 3,
+    "collision_radius_px": 12,
+    "sprite_asset": "assets/parallax_guard.png",
+    "actions": [
+      {
+        "id": "parallax_guard.split_ray",
+        "handler_id": "melee",
+        "warning_frames": 45,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 30,
+        "cooldown_frames": 150,
+        "weight": 1,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 220,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -18,
+            "radius": 6,
+            "length": 180
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 18,
+            "radius": 6,
+            "length": 180
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 17,
+            "damage_type": "time"
+          }
+        ],
+        "parameters": {
+          "knockback_px": 12
+        },
+        "cue_id": "parallax_guard_split_ray"
+      }
+    ],
+    "mechanisms": {
+      "first_attack_stagger_frames": 30,
+      "kite_min_px": 72,
+      "kite_max_px": 144
+    }
+  },
+  {
+    "category": "expansion_enemy_definition",
+    "id": "cinder_drake",
+    "schema_version": 1,
+    "name_key": "EXPANSION_CINDER_DRAKE_NAME",
+    "description_key": "EXPANSION_CINDER_DRAKE_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers",
+      "expansion"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_plane_forge"
+      ],
+      "actor_kinds": [
+        "enemy"
+      ]
+    },
+    "references": [
+      "floor_plane_forge"
+    ],
+    "floor_id": "floor_plane_forge",
+    "runtime_kind": "cinder_drake",
+    "max_hp": 160,
+    "defense": 6,
+    "move_speed": 55,
+    "threat_cost": 4,
+    "collision_radius_px": 12,
+    "sprite_asset": "assets/cinder_drake.png",
+    "actions": [
+      {
+        "id": "cinder_drake.cinder_charge",
+        "handler_id": "charge",
+        "warning_frames": 40,
+        "active_frames": 36,
+        "recovery_frames": 30,
+        "idle_frames": 30,
+        "cooldown_frames": 150,
+        "weight": 1,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 140,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 12,
+            "length": 96
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 20,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "travel_px": 96,
+          "speed_px_per_second": 160,
+          "knockback_px": 16
+        },
+        "cue_id": "cinder_drake_cinder_charge"
+      },
+      {
+        "id": "cinder_drake.cinder_fan",
+        "handler_id": "projectile_volley",
+        "warning_frames": 40,
+        "active_frames": 1,
+        "recovery_frames": 30,
+        "idle_frames": 30,
+        "cooldown_frames": 150,
+        "weight": 1,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 220,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -28,
+            "radius": 4,
+            "length": 72
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 4,
+            "length": 72
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 28,
+            "radius": 4,
+            "length": 72
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 9,
+            "damage_type": "fire"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 1,
+            "damage": 9,
+            "damage_type": "fire"
+          },
+          {
+            "offset_frame": 0,
+            "hit_index": 2,
+            "damage": 9,
+            "damage_type": "fire"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 150,
+          "lifetime_frames": 90,
+          "pierce_count": 0
+        },
+        "cue_id": "cinder_drake_cinder_fan"
+      }
+    ],
+    "mechanisms": {
+      "first_attack_stagger_frames": 30,
+      "kite_min_px": 0,
+      "kite_max_px": 72
+    }
+  },
+  {
+    "category": "expansion_enemy_definition",
+    "id": "prism_seer",
+    "schema_version": 1,
+    "name_key": "EXPANSION_PRISM_SEER_NAME",
+    "description_key": "EXPANSION_PRISM_SEER_DESC",
+    "availability": [
+      "EXPANSION"
+    ],
+    "tags": [
+      "temporal_frontiers",
+      "expansion"
+    ],
+    "compatibility": {
+      "floor_ids": [
+        "floor_throne_of_void"
+      ],
+      "actor_kinds": [
+        "enemy"
+      ]
+    },
+    "references": [
+      "floor_throne_of_void"
+    ],
+    "floor_id": "floor_throne_of_void",
+    "runtime_kind": "prism_seer",
+    "max_hp": 180,
+    "defense": 8,
+    "move_speed": 24,
+    "threat_cost": 4,
+    "collision_radius_px": 12,
+    "sprite_asset": "assets/prism_seer.png",
+    "actions": [
+      {
+        "id": "prism_seer.prism_sequence",
+        "handler_id": "projectile_volley",
+        "warning_frames": 50,
+        "active_frames": 51,
+        "recovery_frames": 30,
+        "idle_frames": 30,
+        "cooldown_frames": 150,
+        "weight": 1,
+        "max_consecutive": 1,
+        "distance_min_px": 0,
+        "distance_max_px": 220,
+        "geometry": [
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": -20,
+            "radius": 4,
+            "length": 72
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 0,
+            "radius": 4,
+            "length": 72
+          },
+          {
+            "shape": "line",
+            "origin_offset": {
+              "x": 0,
+              "y": 0
+            },
+            "aim_offset_degrees": 20,
+            "radius": 4,
+            "length": 72
+          }
+        ],
+        "hit_schedule": [
+          {
+            "offset_frame": 0,
+            "hit_index": 0,
+            "damage": 12,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 25,
+            "hit_index": 1,
+            "damage": 12,
+            "damage_type": "void"
+          },
+          {
+            "offset_frame": 50,
+            "hit_index": 2,
+            "damage": 12,
+            "damage_type": "void"
+          }
+        ],
+        "parameters": {
+          "speed_px_per_second": 170,
+          "lifetime_frames": 84,
+          "pierce_count": 0
+        },
+        "cue_id": "prism_seer_prism_sequence"
+      }
+    ],
+    "mechanisms": {
+      "first_attack_stagger_frames": 30,
+      "kite_min_px": 96,
+      "kite_max_px": 160
+    }
+  }
+]

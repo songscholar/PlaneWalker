@@ -1310,7 +1310,7 @@ func _validated_launch_config(value: Dictionary, launch: Dictionary, persisted: 
 		config.schema_version = int(config.schema_version)
 		config.seed = int(config.seed)
 		if config.has("launch_encounter_revision"):
-			if not Catalog.bounded_int(config.launch_encounter_revision, 1, 2):
+			if not Catalog.bounded_int(config.launch_encounter_revision, 1, 3):
 				return {}
 			config.launch_encounter_revision = int(config.launch_encounter_revision)
 	if not RunConfig.validate(config).ok or config.milestone not in ["LAUNCH", "EXPANSION"] or config.seed != launch.seed or config.difficulty != launch.difficulty or config.character_id != launch.character_id or config.weapon_id != launch.weapon_id or config.enabled_time_skills != launch.time_abilities:
