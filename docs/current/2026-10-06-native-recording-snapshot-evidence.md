@@ -98,10 +98,52 @@ public mutation isolation or private observation ownership. Godot is
 `4.6.1.stable.official.14d19694e`. Line coverage is unsupported. Documentation
 governance and diff whitespace checks pass, and no dependency is added.
 
+## Actual Late-Phase Measurement Refusal
+
+The uninstrumented archive of
+`54866d42fb0bf46e55f9afa4bb442595dab14c25` is retained at
+`build/retained-checkout/native-recording-after-54866d4-20261006`.
+Its 410 runtime scripts have aggregate SHA-256
+`468f88a7b2796fcb6a3ea1758a39ba9bf7018b34503812a35c39cf9b059cf160`.
+Two editor imports complete; the verified import has no runtime errors or leaks.
+Its actual authoritative content aggregate is
+`838c31095581b7abb79a63cb51b025d448c2ddd9d29b8ed75d2a318d8305bb2b`.
+
+`build/floor4-phase2-late-600/report.json` requests 600 actual fifth-floor Void
+Boss phase-index-2 frames. Real Sword phase admission completes after 2,501
+native frames. Measurement records frames 2,502 through 2,740, then the next
+frame stops recording with `RUN_REPLAY_RECORDER_CAPACITY`: the prior background
+write has not finished when its next 120-observation buffer fills. The surviving
+physical measured entry is honestly `FAILED`, with one 120-observation chunk;
+it is not a complete 601-observation measured tape.
+
+The partial report has 240 timed Player calls but only 239 accepted measured
+observations, so it fails the report's sample-count contract. These numbers are
+diagnostic observations only:
+
+| Partial Metric | Mean | p95 | Maximum |
+| --- | --- | --- | --- |
+| Player advance | 82.271 ms | 125.526 ms | 142.288 ms |
+| Host processing | 1.807 ms | 4.999 ms | 10.042 ms |
+| Observer | 7.314 ms | 16.149 ms | 19.038 ms |
+
+The partial measurement represents 3.983 native seconds and 22.501 wall
+seconds. Peak Godot native static allocation is 784,819,260 bytes, not process
+RSS. Three other frozen long-running validation processes were concurrently
+active; these timings do not certify an uncontended frame budget.
+
+Both stdout and Godot logs contain exactly the three expected failed assertions
+for observation continuity, tape finish and physical first/last equality. They
+contain no script/parse error or object/RID leak. Fresh first and last readbacks
+are false after the failed tape; no successful readback or FPS gate is claimed.
+The failed archive remains unchanged while main-thread and background-codec
+diagnosis proceed separately. Increasing the recorder buffer is not a remedy
+for the measured throughput deficit.
+
 ## Remaining Measurement
 
-The frame-2741 immutable journal microbenchmark reduces unchanged-prefix work
-to 0.011 ms, but that is one operation. It does not establish the complete
-gameplay frame's performance. The next gate is an uninstrumented clean committed
-source archive measuring actual P3 frames with independent physical tape
-readback, followed by rendered and sustained workload checks as warranted.
+The immutable journal's frame-2741 warm-prefix microbenchmark is 0.011 ms, but
+the full measured frame still exceeds the 16.667 ms budget and sustained
+recording fails. Complete these remaining performance and throughput fixes,
+then repeat uninstrumented late-phase tape measurement and fresh typed-byte
+readback before rendered and sustained workload checks.
