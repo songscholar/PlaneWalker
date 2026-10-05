@@ -11,11 +11,16 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
+import threading
 
 
 ROOT = Path(__file__).resolve().parents[2]
 METRICS = {"player_advance", "host_process", "physics_wait", "observer"}
+FRAME_METRICS = {"frame_work", "frame_wall"}
 COUNTS = {"actors", "summons", "projectiles", "zones", "constructs", "threats"}
+RSS_SOURCES = {"linux": "proc.status.VmRSS_kib", "darwin": "ps.rss_kib", "win32": "GetProcessMemoryInfo.WorkingSetSize"}
+RSS_SCOPE = "godot_process_after_pid_announcement"
 
 
 def _number(value):
@@ -58,8 +63,12 @@ def validate_report(value):
     frames = value.get("sample_frames", {})
     if any(type(frames.get(key)) is not int for key in ["first", "last", "unique_count"]) or frames["first"] < 0 or frames["last"] - frames["first"] + 1 != count or frames["unique_count"] != count:
         raise ValueError("measured samples must be unique consecutive actual Player frames")
+    measurement_version = value.get("measurement_schema_version", 1)
+    if type(measurement_version) is not int or measurement_version not in (1, 2):
+        raise ValueError("unsupported native measurement schema")
     metrics = value.get("metrics", {})
-    if not isinstance(metrics, dict) or set(metrics) != METRICS:
+    required_metrics = METRICS | FRAME_METRICS if measurement_version == 2 else METRICS
+    if not isinstance(metrics, dict) or set(metrics) != required_metrics:
         raise ValueError("independent Player, Host, physics and observer metrics are required")
     for metric in metrics.values():
         _metric(metric, count)
@@ -69,6 +78,16 @@ def validate_report(value):
         _metric(value.get("render_wait"), count)
     elif value.get("render_wait") != {"count": 0}:
         raise ValueError("headless runs cannot invent render timings")
+    if measurement_version == 2:
+        work = metrics["frame_work"]["total_usec"]
+        wall = metrics["frame_wall"]["total_usec"]
+        enclosed_work = metrics["player_advance"]["total_usec"] + metrics["host_process"]["total_usec"]
+        enclosed_wall = work + metrics["physics_wait"]["total_usec"] + metrics["observer"]["total_usec"]
+        if value["rendered"]:
+            enclosed_wall += value["render_wait"]["total_usec"]
+        if work < enclosed_work or wall < enclosed_wall or wall > value["wall_duration_usec"]:
+            raise ValueError("same-frame intervals must enclose actual measured work and waits")
+        _validate_process_rss(value)
     peaks = value.get("observed_peak_counts", {})
     if not isinstance(peaks, dict) or set(peaks) != COUNTS or any(type(count) is not int or count < 0 for count in peaks.values()) or peaks["actors"] < 1:
         raise ValueError("actual nonnegative observed native concurrency is required")
@@ -85,6 +104,106 @@ def validate_report(value):
     if not _number(hub.get("wall_duration_usec")) or type(value.get("peak_native_static_bytes")) is not int or value["peak_native_static_bytes"] <= 0:
         raise ValueError("actual Hub duration and native memory observation are required")
     return value
+
+
+def _validate_process_rss(value):
+    rss = value.get("process_rss")
+    if not isinstance(rss, dict) or type(rss.get("platform")) is not str or rss["platform"] not in RSS_SOURCES or rss.get("source") != RSS_SOURCES[rss["platform"]] or rss.get("scope") != RSS_SCOPE:
+        raise ValueError("actual platform process RSS source and sampling scope are required")
+    for key in ["process_id", "sample_interval_ms", "valid_sample_count", "peak_bytes"]:
+        if type(rss.get(key)) is not int or rss[key] < 1:
+            raise ValueError("process RSS requires positive real samples, bytes and native identity")
+    if type(rss.get("failed_sample_count")) is not int or rss["failed_sample_count"] < 0 or type(value.get("native_process_id")) is not int or value["native_process_id"] != rss["process_id"]:
+        raise ValueError("process RSS samples must belong to the exact native Godot process")
+
+
+def _read_process_rss(process_id, platform):
+    if type(process_id) is not int or not 1 <= process_id <= 4294967295:
+        raise ValueError("native process id must be positive")
+    if platform == "linux":
+        text = Path(f"/proc/{process_id}/status").read_text(encoding="ascii")
+        match = re.search(r"^VmRSS:\s+([0-9]+)\s+kB$", text, re.MULTILINE)
+        result = int(match[1]) * 1024 if match else 0
+    elif platform == "darwin":
+        completed = subprocess.run(["/bin/ps", "-o", "rss=", "-p", str(process_id)], text=True, capture_output=True, timeout=1, check=False)
+        text = completed.stdout.strip()
+        result = int(text) * 1024 if completed.returncode == 0 and re.fullmatch(r"[0-9]+", text) else 0
+    elif platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [(name, ctypes.c_size_t) for name in ["PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage"]]
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessMemoryCounters), wintypes.DWORD]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        handle = kernel.OpenProcess(0x0400 | 0x0010, False, process_id)
+        if not handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            counters = ProcessMemoryCounters()
+            counters.cb = ctypes.sizeof(counters)
+            if not psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+                raise ctypes.WinError(ctypes.get_last_error())
+            result = int(counters.WorkingSetSize)
+        finally:
+            kernel.CloseHandle(handle)
+    else:
+        raise OSError("process RSS sampling is unavailable on this platform")
+    if result <= 0:
+        raise OSError("native process RSS sample is unavailable")
+    return result
+
+
+class _ProcessRssSampler:
+    def __init__(self, stdout_path, platform=None):
+        self.stdout_path = stdout_path
+        self.platform = sys.platform if platform is None else platform
+        self.process_id = 0
+        self.valid_samples = 0
+        self.failed_samples = 0
+        self.peak_bytes = 0
+        self.last_error = ""
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="native-process-rss", daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        if self._thread.ident is not None:
+            self._thread.join()
+
+    def _run(self):
+        while not self._stop.is_set():
+            self._sample()
+            self._stop.wait(0.1)
+
+    def _sample(self):
+        try:
+            if not self.process_id:
+                with self.stdout_path.open(encoding="utf-8") as stream:
+                    text = stream.read(65536)
+                ids = re.findall(r"^NATIVE_PERFORMANCE_PROCESS_PID ([0-9]+)$", text, re.MULTILINE)
+                if len(ids) != 1 or int(ids[0]) < 1:
+                    return
+                self.process_id = int(ids[0])
+            resident = _read_process_rss(self.process_id, self.platform)
+            self.peak_bytes = max(self.peak_bytes, resident)
+            self.valid_samples += 1
+        except (OSError, UnicodeError, ValueError, subprocess.TimeoutExpired) as error:
+            self.failed_samples += 1
+            self.last_error = str(error)[:300]
+
+    def snapshot(self):
+        return {"platform": self.platform, "source": RSS_SOURCES.get(self.platform, "unavailable"), "scope": RSS_SCOPE, "process_id": self.process_id, "sample_interval_ms": 100, "valid_sample_count": self.valid_samples, "failed_sample_count": self.failed_samples, "peak_bytes": self.peak_bytes, "last_error": self.last_error}
 
 
 def _runtime_sources():
@@ -136,13 +255,16 @@ def main():
     manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources}, indent=2, sort_keys=True) + "\n")
     result = None
     timed_out = False
+    rss_sampler = _ProcessRssSampler(stdout_path)
     try:
         with stdout_path.open("w", encoding="utf-8") as stream:
+            rss_sampler.start()
             result = subprocess.run(command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT, timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
         timed_out = True
         raise
     finally:
+        rss_sampler.stop()
         source_identity["runtime_source_stable"] = _runtime_sources() == sources
         source_identity["process_exit_code"] = result.returncode if result is not None else None
         source_identity["timed_out"] = timed_out
@@ -153,6 +275,7 @@ def main():
         if output.is_file():
             retained = json.loads(output.read_text())
             retained["native_status"] = retained.get("status")
+            retained["process_rss"] = rss_sampler.snapshot()
             if not execution_ok:
                 retained["status"] = "failed"
             elif retained.get("status") == "pass":
@@ -168,7 +291,7 @@ def main():
     if not source_identity["runtime_source_stable"]:
         raise SystemExit("runtime sources changed during native performance measurement")
     report = validate_report(json.loads(output.read_text()))
-    print(json.dumps({"report": str(output), "accepted_frames": report["accepted_frames"], "native_duration_ms": report["native_duration_ms"], "wall_duration_usec": report["wall_duration_usec"], "player_advance": report["metrics"]["player_advance"], "observed_peak_counts": report["observed_peak_counts"]}, indent=2))
+    print(json.dumps({"report": str(output), "measurement_schema_version": report.get("measurement_schema_version", 1), "accepted_frames": report["accepted_frames"], "native_duration_ms": report["native_duration_ms"], "wall_duration_usec": report["wall_duration_usec"], "player_advance": report["metrics"]["player_advance"], "frame_work": report["metrics"].get("frame_work"), "frame_wall": report["metrics"].get("frame_wall"), "process_rss": report.get("process_rss"), "observed_peak_counts": report["observed_peak_counts"]}, indent=2))
 
 
 if __name__ == "__main__":

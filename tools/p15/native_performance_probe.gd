@@ -18,7 +18,7 @@ var player: Node2D
 var recorder: Node
 var _retention_store: RefCounted
 var _retention_id := ""
-var report := {"schema_version": 1, "report_kind": "actual_native_main_performance", "status": "failed", "human_playtests": 0, "unassisted_victory": false, "fps_certified": false, "survival_fixture": str(SURVIVAL), "prerequisite_route_fixture": false, "rendered": false, "content_snapshot": {}, "requested_frames": 0, "accepted_frames": 0, "native_duration_ms": 0.0, "wall_duration_usec": 0, "sample_frames": {}, "metrics": {}, "render_wait": {"count": 0}, "observed_peak_counts": {"actors": 0, "summons": 0, "projectiles": 0, "zones": 0, "constructs": 0, "threats": 0}, "recording": {}, "hub": {}, "failures": []}
+var report := {"schema_version": 1, "measurement_schema_version": 2, "native_process_id": 0, "report_kind": "actual_native_main_performance", "status": "failed", "human_playtests": 0, "unassisted_victory": false, "fps_certified": false, "survival_fixture": str(SURVIVAL), "prerequisite_route_fixture": false, "rendered": false, "content_snapshot": {}, "requested_frames": 0, "accepted_frames": 0, "native_duration_ms": 0.0, "wall_duration_usec": 0, "sample_frames": {}, "metrics": {}, "render_wait": {"count": 0}, "observed_peak_counts": {"actors": 0, "summons": 0, "projectiles": 0, "zones": 0, "constructs": 0, "threats": 0}, "recording": {}, "hub": {}, "failures": []}
 
 
 func _ready() -> void:
@@ -27,6 +27,8 @@ func _ready() -> void:
 
 func _run() -> void:
 	suite = Suite.new()
+	report.native_process_id = OS.get_process_id()
+	print("NATIVE_PERFORMANCE_PROCESS_PID ", report.native_process_id)
 	report.requested_frames = _option("FRAMES", 600)
 	report.rendered = OS.get_environment("PLANEWALKER_PERFORMANCE_RENDERED") == "true" and DisplayServer.get_name() != "headless"
 	var registry := Registry.new()
@@ -184,7 +186,7 @@ func _reach_phase(target: int) -> bool:
 
 
 func _measure() -> void:
-	var timings := {"player_advance": [], "host_process": [], "physics_wait": [], "observer": []}
+	var timings := {"player_advance": [], "host_process": [], "physics_wait": [], "observer": [], "frame_work": [], "frame_wall": []}
 	var render_times: Array[int] = []
 	var first: Dictionary = {}
 	var last: Dictionary = {}
@@ -193,7 +195,8 @@ func _measure() -> void:
 	var started := Time.get_ticks_usec()
 	var peak_memory := int(Performance.get_monitor(Performance.MEMORY_STATIC))
 	for index: int in range(report.requested_frames):
-		var before := Time.get_ticks_usec()
+		var frame_started := Time.get_ticks_usec()
+		var before := frame_started
 		var accepted: bool = player.advance_action_frame({"aim": Vector2.RIGHT, "movement": Vector2.ZERO})
 		timings.player_advance.append(Time.get_ticks_usec() - before)
 		if not accepted:
@@ -202,6 +205,7 @@ func _measure() -> void:
 		before = Time.get_ticks_usec()
 		host._process(1.0 / 60.0)
 		timings.host_process.append(Time.get_ticks_usec() - before)
+		timings.frame_work.append(Time.get_ticks_usec() - frame_started)
 		before = Time.get_ticks_usec()
 		await get_tree().physics_frame
 		timings.physics_wait.append(Time.get_ticks_usec() - before)
@@ -221,6 +225,7 @@ func _measure() -> void:
 		_counts()
 		peak_memory = maxi(peak_memory, int(Performance.get_monitor(Performance.MEMORY_STATIC)))
 		timings.observer.append(Time.get_ticks_usec() - before)
+		timings.frame_wall.append(Time.get_ticks_usec() - frame_started)
 		report.accepted_frames += 1
 		if (index + 1) % 600 == 0:
 			print("NATIVE_PERFORMANCE_PROGRESS ", index + 1, "/", report.requested_frames, " recorder=", current.committed_count, " buffered=", current.buffered_count)
