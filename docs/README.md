@@ -190,6 +190,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P15B Native Time Watch Evidence](current/2026-10-05-p15b-native-watch-evidence.md) | 真实武器弱点代理、80 伤害打断、55 帧恢复、致死补偿与冷重建 | Verified Locally / Remaining arena mechanics active |
 | [Native Boss Arena Constructs Plan](superpowers/plans/2026-10-05-native-boss-arena-constructs.md) | 可破坏原生掩体、场地构造物、接受帧补偿和版本化冷恢复 | Active / Current |
 | [P15B Native Ruin Cover Evidence](current/2026-10-05-p15b-native-ruin-cover-evidence.md) | 四个物理掩体、五武器命中、冲锋碰撞和当前/历史冷恢复 | Verified Locally / Remaining arena mechanics active |
+| [P15B Native Ruin Aftershock Evidence](current/2026-10-05-p15b-native-ruin-aftershock-evidence.md) | 延迟余震独立预警、真实伤害、区域预算、所有权退役和冷恢复 | Verified Locally / Dynamic geometry active |
 | [Native Elite Affixes Plan](superpowers/plans/2026-10-05-native-elite-affixes.md) | 十词缀的真实 Health、控制、动态效果和生产冷恢复 | Active / Current |
 | [Native Static Elite Affix Evidence](current/2026-10-05-native-static-elite-affix-evidence.md) | 狂暴和坚固真实伤害、Health、运动与生产历史冷恢复 | Verified Locally / Dynamic affixes active |
 | [Runtime Line Coverage Provider Plan](superpowers/plans/2026-10-05-runtime-line-coverage-provider.md) | 语法树插桩、隔离原生运行和原始源码行命中证据 | Active / Current |

@@ -25,6 +25,7 @@ func _run() -> void:
 		_test_capacity_and_restore(implementation)
 		_test_adversarial_contracts(implementation)
 		_test_authored_boss_ranges_and_piercing(implementation)
+		_test_boss_aftershock(implementation)
 	suite.finish(get_tree())
 
 
@@ -214,3 +215,50 @@ func _test_adversarial_contracts(implementation: Script) -> void:
 			"over_age": invalid.projectiles[0].age = 1
 		suite.assert_true(not runtime.restore_snapshot(invalid), "strict payload snapshot rejects %s" % mutation)
 		suite.assert_equal(runtime.snapshot(), before, "malformed payload restore has no effect")
+
+
+func _aftershock_request(source: String = "hostile-ruin") -> Dictionary:
+	return {"kind": "boss_aftershock", "run_id": "run-p15", "hostile_source_id": source, "runtime_frame": 0, "attack_generation": 7, "position": {"x": 100.0, "y": 100.0}, "bounds": BOUNDS.duplicate(), "parameters": {"delay_frames": 20, "warning_frames": 40, "radius": 32.0, "damage": 12.0}}
+
+
+func _test_boss_aftershock(implementation: Script) -> void:
+	var runtime: RefCounted = implementation.new()
+	runtime.configure("run-p15")
+	var reserved: Dictionary = runtime.reserve_boss_aftershock(_aftershock_request())
+	suite.assert_true(reserved.ok and runtime.snapshot().zones[0].phase == "DORMANT", "authored aftershock reserves its independent20-frame dormant delay")
+	if not reserved.ok:
+		return
+	var initial: Dictionary = runtime.snapshot()
+	suite.assert_true(runtime.can_restore_snapshot(initial), "actual dormant aftershock is a strict restorable payload")
+	for field: String in ["delay_frames", "warning_frames", "radius", "damage_type"]:
+		var forged := initial.duplicate(true)
+		forged.zones[0].definition[field] = "void" if field == "damage_type" else 0
+		suite.assert_true(not runtime.restore_snapshot(forged), "aftershock cannot restore a changed authored contract: " + field)
+		suite.assert_equal(runtime.snapshot(), initial, "forged aftershock state leaves accepted payload unchanged")
+	for frame: int in range(1, 21):
+		suite.assert_true(runtime.advance_frame(frame, _observations({}, {"player": {"x": 100.0, "y": 100.0}})).damage_requests.is_empty(), "dormant aftershock cannot damage Player")
+	suite.assert_equal(runtime.snapshot().zones[0].phase, "WARNING", "aftershock becomes independently warned at accepted frame20")
+	suite.assert_true(runtime.add_control_source(reserved.id, "aftershock-stop", "stop", 3, 1.0), "actual warning accepts positive Stop without removing its damage generation")
+	var checkpoint: Dictionary = runtime.snapshot()
+	var cold: RefCounted = implementation.new()
+	cold.configure("run-p15")
+	suite.assert_true(cold.restore_snapshot(checkpoint), "fresh payload domain restores exact live warning and Stop sources")
+	var hits: Array = []
+	for frame: int in range(21, 64):
+		var advanced: Dictionary = runtime.advance_frame(frame, _observations({}, {"player": {"x": 100.0, "y": 100.0}}))
+		var continued: Dictionary = cold.advance_frame(frame, _observations({}, {"player": {"x": 100.0, "y": 100.0}}))
+		suite.assert_true(advanced.ok and continued == advanced and cold.snapshot() == runtime.snapshot(), "cold warning continuation matches uninterrupted payload at every accepted frame")
+		for hit: Dictionary in advanced.damage_requests:
+			hits.append([frame, hit.damage])
+	suite.assert_equal(hits, [[63, 12.0]], "three Stop frames preserve all40 warning frames and one12HP explosion")
+	var crowded: RefCounted = implementation.new()
+	crowded.configure("run-p15")
+	for slot: int in range(13):
+		suite.assert_true(crowded.reserve_boss_aftershock(_aftershock_request("hostile-ruin-%d" % slot)).ok, "shared zone pressure reserves deterministic aftershock work")
+	suite.assert_equal(crowded.snapshot().zones.filter(func(row: Dictionary): return row.phase == "DORMANT").size(), 12, "dormant aftershocks reserve at most12 shared active-zone slots")
+	suite.assert_equal(crowded.snapshot().zones[12].phase, "PENDING", "thirteenth aftershock waits without shortening its future warning")
+	var retired_owners: Array[String] = ["hostile-ruin-0"]
+	crowded.retire_arena_payloads(retired_owners)
+	crowded.advance_frame(1, _observations())
+	suite.assert_equal(crowded.snapshot().zones[11].phase, "DORMANT", "owner retirement admits the pending aftershock with its complete delay")
+	suite.assert_true(crowded.can_restore_snapshot(crowded.snapshot()), "shared-budget admitted aftershock retains strict identity and clocks")

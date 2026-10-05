@@ -15,6 +15,7 @@ const ArrowScene := preload("res://scenes/combat/player_arrow.tscn")
 const Staff := preload("res://scripts/combat/staff_projectile.gd")
 const Gauntlets := preload("res://scripts/combat/gauntlets_hit_execution.gd")
 const Hitbox := preload("res://scripts/combat/hitbox.gd")
+const RoomScene := preload("res://data/content_packs/base/assets/rooms/launch/room_combat_open_field.tscn")
 var suite: RefCounted
 
 
@@ -42,6 +43,9 @@ func _run() -> void:
 	await _test_weapons()
 	await _test_charge_collision()
 	await _test_beam_cover()
+	await _test_aftershock()
+	await _test_aftershock("phase")
+	await _test_aftershock("death")
 	suite.finish(get_tree())
 
 
@@ -318,3 +322,85 @@ func _test_beam_cover() -> void:
 		actor.queue_free()
 		player.queue_free()
 		await get_tree().process_frame
+
+
+func _test_aftershock(ending: String = "impact") -> void:
+	var actor := _actor()
+	actor.global_position = Vector2(100.0, 120.0)
+	var room := RoomScene.instantiate() as Node2D
+	room.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(room)
+	for template: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/room_templates.json")):
+		if template.id == "room_combat_open_field":
+			suite.assert_true(actor.configure_launch_room_motion(room, template).ok, "native aftershock binds its actual room bounds")
+	var player := _player()
+	var native_root := Node2D.new()
+	add_child(native_root)
+	var registry := Registry.new()
+	var effects := Effects.new()
+	suite.assert_true(effects.configure("run-p15") and effects.configure_native_payloads(native_root), "native aftershock uses actual manifested payload projection")
+	var bridge := Bridge.new()
+	suite.assert_true(bridge.configure(player, registry, [actor], effects), "actual slam and secondary explosion share one accepted frame owner")
+	var started: Dictionary = actor.get("_launch_runtime").request_action("guardian_fist_slam", {"runtime_frame": 0, "source_position": {"x": 100.0, "y": 120.0}, "target_position": {"x": 220.0, "y": 120.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "player:1"})
+	suite.assert_true(started.ok, "native slam locks its original authored target")
+	for fact: Dictionary in started.threat_facts:
+		registry.register_fact(Actions.native_threat_fact(fact))
+	for frame: int in range(1, 116):
+		var before: Dictionary = effects.snapshot()
+		var threats_before: Array = registry.snapshot()
+		var health_checkpoint: Dictionary = player.health.transaction_snapshot()
+		var health_before: Dictionary = player.health.runtime_state_snapshot()
+		var ticket: Dictionary = bridge.begin_frame(frame)
+		if not bridge.prepare_frame(ticket):
+			suite.assert_true(false, "native aftershock prepares frame%d" % frame)
+			bridge.rollback_frame(ticket)
+			break
+		if frame in [55, 75, 115]:
+			suite.assert_true(bridge.rollback_frame(ticket) and player.health.restore_transaction_snapshot(health_checkpoint), "aftershock spawn, warning and hit each compensate a refused whole frame")
+			suite.assert_equal(effects.snapshot(), before, "rejected aftershock transition preserves complete payload and damage ledgers")
+			suite.assert_equal(registry.snapshot(), threats_before, "rejected aftershock transition restores exact native telegraph facts")
+			suite.assert_equal(player.health.runtime_state_snapshot(), health_before, "rejected aftershock damage restores actual Player Health")
+			ticket = bridge.begin_frame(frame)
+			suite.assert_true(bridge.prepare_frame(ticket), "same aftershock transition retries once after full compensation")
+		suite.assert_true(_publish(bridge, ticket), "native aftershock publishes frame%d" % frame)
+		player.health.discard_transaction_snapshot(health_checkpoint)
+		if frame == 55:
+			suite.assert_equal(player.health.current_hp, player.health.max_hp - 25.0, "original slam deals exactly25 actual Player HP")
+			suite.assert_true(effects.payload_snapshot().zones.size() == 1 and effects.payload_snapshot().zones[0].phase == "DORMANT", "slam reserves one independently timed dormant aftershock")
+			if ending != "impact":
+				suite.assert_true(actor.get_node("Hurtbox").receive_hit(_damage(player, 79, 800.0 if ending == "death" else 400.0)) > 0.0, "actual Player damage commits the Boss " + ending + " before its secondary warning")
+		if frame == 56 and ending != "impact":
+			suite.assert_true(effects.payload_snapshot().zones.is_empty(), "actual Boss " + ending + " retires its pending aftershock before activation")
+		if frame == 75 and ending == "impact":
+			suite.assert_true(effects.payload_snapshot().zones.size() == 1 and effects.payload_snapshot().zones[0].phase == "WARNING" and effects.native_payload_nodes().size() == 1, "aftershock displays its own40 complete native warning frames")
+			await _capture_aftershock(effects)
+		if frame in [74, 114]:
+			suite.assert_equal(player.health.current_hp, player.health.max_hp - 25.0, "secondary explosion cannot damage Player before its full60-frame delay")
+		if frame == 115:
+			suite.assert_equal(player.health.current_hp, player.health.max_hp - (37.0 if ending == "impact" else 25.0), "delayed native explosion respects actual accepted impact or owner retirement")
+			suite.assert_true(effects.payload_snapshot().zones.is_empty(), "one-shot aftershock retires its actual native hazard after accepted impact")
+	actor.queue_free()
+	player.queue_free()
+	room.queue_free()
+	native_root.queue_free()
+	await get_tree().process_frame
+
+
+func _capture_aftershock(effects: RefCounted) -> void:
+	if OS.get_environment("PLANEWALKER_CAPTURE_NATIVE") != "1" or DisplayServer.get_name() == "headless":
+		return
+	var payload: Node2D = effects.native_payload_nodes()[0]
+	suite.assert_equal(payload.get_node("Sprite2D").texture.resource_path, "res://assets/production/hostile_effects/physical_pool.png", "native stone aftershock uses its original physical raster")
+	for resolution: Vector2i in [Vector2i(640, 360), Vector2i(1280, 720)]:
+		get_window().size = resolution
+		await get_tree().process_frame
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		var pixels := get_viewport().get_texture().get_image()
+		var colors: Dictionary = {}
+		for y: int in range(88, 152):
+			for x: int in range(188, 252):
+				colors[pixels.get_pixelv(Vector2i(Vector2(x, y) * Vector2(pixels.get_size()) / Vector2(640, 360))).to_rgba32()] = true
+		suite.assert_true(colors.size() >= 4, "native delayed aftershock renders nonblank original pixels at " + str(resolution))
+		var output := "res://build/visual-evidence/p15b-native-arena/ruin-aftershock-warning-%dx%d.png" % [resolution.x, resolution.y]
+		suite.assert_equal(pixels.save_png(output), OK, "native delayed aftershock screenshot is retained")

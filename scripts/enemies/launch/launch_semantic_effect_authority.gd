@@ -184,7 +184,7 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 				damages.append({"payload_id": _id([wrapper.hostile_source_id, hit.attack_generation, "blink"]), "hostile_source_id": wrapper.hostile_source_id, "attack_generation": int(hit.attack_generation), "hit_index": int(hit.hit_index), "target_id": hit.target_id, "runtime_frame": int(context.runtime_frame), "damage": float(hit.damage), "damage_type": hit.damage_type})
 		for request: Dictionary in wrapper.batch.get("mechanism_requests", []):
 			match request.get("kind", ""):
-				"consume_actor", "death_pool": continue
+				"consume_actor", "death_pool", "boss_aftershock": continue
 				"restore_hp", "boss_self_rewind":
 					if not Contract.number_in_range(request.get("amount"), 0.0, 1000000.0) or request.hostile_source_id != wrapper.hostile_source_id or request.runtime_frame != context.runtime_frame:
 						return _failure("health_mechanism")

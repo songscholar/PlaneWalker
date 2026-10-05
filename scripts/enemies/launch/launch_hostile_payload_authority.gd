@@ -33,7 +33,7 @@ func snapshot() -> Dictionary:
 func native_nodes() -> Array[Node2D]:
 	var result: Array[Node2D] = []
 	for row: Dictionary in _records(snapshot()):
-		if row.phase != "PENDING" and _nodes.has(row.id) and is_instance_valid(_nodes[row.id]):
+		if row.phase not in ["PENDING", "DORMANT"] and _nodes.has(row.id) and is_instance_valid(_nodes[row.id]):
 			result.append(_nodes[row.id])
 	return result
 
@@ -101,6 +101,15 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 	preview.configure(before.run_id, before.initial_frame)
 	if not preview.restore_snapshot(before):
 		return _failure("checkpoint")
+	var retired_sources: Array[String] = []
+	for source: String in context.actors:
+		if bool(context.actors[source].launch_runtime_snapshot().runtime.terminal):
+			retired_sources.append(source)
+	for wrapper: Dictionary in batches:
+		var actor: Node2D = context.actors[wrapper.hostile_source_id]
+		if not retired_sources.has(str(wrapper.hostile_source_id)) and actor.has_method("prepared_launch_arena_payloads_retired") and actor.prepared_launch_arena_payloads_retired():
+			retired_sources.append(str(wrapper.hostile_source_id))
+	preview.retire_arena_payloads(retired_sources)
 	var zone_capacity := Runtime.MAX_ZONES - foreign_active_zones
 	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity)
 	if not advanced.ok:
@@ -117,6 +126,10 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 			if not preview.reserve_projectile(hit, room.bounds, mechanisms).ok:
 				return _failure("projectile_reservation")
 		for mechanism: Dictionary in wrapper.batch.get("mechanism_requests", []):
+			if mechanism.get("kind", "") == "boss_aftershock":
+				if _root == null or not actor.has_method("prepared_launch_arena_payload_allowed") or not actor.prepared_launch_arena_payload_allowed(mechanism) or not preview.reserve_boss_aftershock(mechanism, zone_capacity).ok:
+					return _failure("unsealed_boss_aftershock")
+				continue
 			if mechanism.get("kind", "") != "death_pool":
 				continue
 			var room: Dictionary = actor.launch_room_motion_snapshot()
@@ -246,7 +259,7 @@ func _native_matches(value: Dictionary) -> bool:
 			return false
 		var node: Node2D = _nodes[row.id]
 		var position: Dictionary = row.position if row.definition.kind == "projectile" else row.definition.position
-		if not node.is_inside_tree() or node.get_parent() != _root or not node.visible or node.global_position != Vector2(position.x, position.y) or not node.native_definition_matches(row.definition) or row.definition.kind == "projectile" and not node.native_hit_targets_match(row.hit_targets):
+		if not node.is_inside_tree() or node.get_parent() != _root or node.visible != (row.phase != "DORMANT") or node.global_position != Vector2(position.x, position.y) or not node.native_definition_matches(row.definition) or row.definition.kind == "projectile" and not node.native_hit_targets_match(row.hit_targets):
 			return false
 	return true
 

@@ -75,7 +75,7 @@ func present(value: Dictionary, origin: Vector2, terminal: bool) -> void:
 func native_geometry_matches(value: Dictionary, origin: Vector2, terminal: bool) -> bool:
 	var live: bool = not value.broken and not terminal
 	var expected_frame := 2 if value.broken else (1 if float(value.current_hp) <= float(value.max_hp) * 0.5 else 0)
-	if not is_inside_tree() or not is_instance_valid(_sprite) or _sprite.get_parent() != self or not _sprite.is_inside_tree() or visible != not terminal or modulate != Color.WHITE or self_modulate != Color.WHITE:
+	if not is_inside_tree() or not is_instance_valid(_sprite) or _sprite.get_parent() != self or not _sprite.is_inside_tree() or visible != (not terminal) or modulate != Color.WHITE or self_modulate != Color.WHITE:
 		return false
 	if not _sprite.visible or _sprite.texture != ARTWORK or _sprite.hframes != 3 or _sprite.vframes != 1 or _sprite.frame != expected_frame or not _sprite.centered or _sprite.offset != Vector2.ZERO or _sprite.region_enabled or _sprite.flip_h or _sprite.flip_v or _sprite.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST or _sprite.modulate != Color.WHITE or _sprite.self_modulate != Color.WHITE or _sprite.transform != Transform2D(0.0, Vector2(0.0, -8.0)):
 		return false

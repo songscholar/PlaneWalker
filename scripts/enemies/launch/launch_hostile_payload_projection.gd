@@ -63,7 +63,7 @@ func project_record(record: Dictionary, frame: int) -> bool:
 		return false
 	var point: Dictionary = record.position if _definition.kind == "projectile" else _definition.position
 	global_position = Vector2(float(point.x), float(point.y))
-	visible = record.phase != "PENDING"
+	visible = record.phase not in ["PENDING", "DORMANT"]
 	collision_mask = 3 if _definition.kind == "projectile" and visible else 0
 	_sprite.frame = (frame / 6) % 4
 	_sprite.modulate = Color(1.0, 0.95, 0.45, 0.65 if frame % 12 < 6 else 1.0) if record.phase == "WARNING" else Color.WHITE

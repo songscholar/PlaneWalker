@@ -426,10 +426,10 @@ static func _prepare_payload_registry(before: Dictionary, after: Dictionary, reg
 	var before_rows: Dictionary = {}
 	var after_rows: Dictionary = {}
 	for row: Dictionary in before.projectiles + before.zones:
-		if row.phase != "PENDING":
+		if row.phase not in ["PENDING", "DORMANT"]:
 			before_rows[row.id] = row
 	for row: Dictionary in after.projectiles + after.zones:
-		if row.phase != "PENDING":
+		if row.phase not in ["PENDING", "DORMANT"]:
 			after_rows[row.id] = row
 	for id: String in before_rows:
 		if not after_rows.has(id):
@@ -455,7 +455,7 @@ static func _payload_threat_fact(row: Dictionary, frame: int) -> Dictionary:
 	var definition: Dictionary = row.definition
 	var projectile: bool = definition.kind == "projectile"
 	var origin: Dictionary = definition.origin if projectile else definition.position
-	return {"hostile_source_id": StringName(row.id), "attack_generation": 1, "shape": &"line" if projectile else &"circle", "origin": _vector(origin), "aim_direction": _vector(definition.direction) if projectile else Vector2.RIGHT, "target_point": _vector(origin), "summon_slots": [], "radius": definition.radius, "length": definition.range_px if projectile else 0.0, "active_from_frame": definition.reserved_frame, "active_through_frame": frame + int(definition.lifetime_frames) + int(definition.get("warning_frames", 0)) - int(row.age)}
+	return {"hostile_source_id": StringName(row.id), "attack_generation": 1, "shape": &"line" if projectile else &"circle", "origin": _vector(origin), "aim_direction": _vector(definition.direction) if projectile else Vector2.RIGHT, "target_point": _vector(origin), "summon_slots": [], "radius": definition.radius, "length": definition.range_px if projectile else 0.0, "active_from_frame": int(row.activated_frame) + int(definition.get("delay_frames", 0)) if definition.kind == "boss_aftershock" else definition.reserved_frame, "active_through_frame": frame + int(definition.lifetime_frames) + int(definition.get("warning_frames", 0)) + int(definition.get("delay_frames", 0)) - int(row.age)}
 
 
 func _work_snapshot(value: Dictionary) -> Dictionary:

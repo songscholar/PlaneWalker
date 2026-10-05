@@ -57,6 +57,13 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var result := super.prepare_launch_frame(frame, observations)
 	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
 		return result
+	for request: Dictionary in result.ticket.batch.mechanism_requests:
+		if request.get("kind", "") == "boss_aftershock":
+			if _room_motion.is_empty():
+				return _launch_failure("aftershock_room_bounds")
+			request["bounds"] = _room_motion.bounds.duplicate(true)
+	result.batch = result.ticket.batch.duplicate(true)
+	_prepared_launch_frame = result.ticket.duplicate(true)
 	var target: Variant = result.ticket.collision_target
 	if target is Construct and target.get_parent() == get_node("ArenaConstructs") and result.ticket.after.runtime.action.action_id == "guardian_charge" and result.ticket.after.runtime.action.phase == "ACTIVE":
 		var preview := BossRuntime.new()
@@ -167,6 +174,17 @@ func prepared_launch_hit_blocked_by_cover(hit: Dictionary, target: Node2D) -> bo
 		if along > 0.0 and along < length and Geometry2D.get_closest_point_to_segment(center, origin, endpoint).distance_to(center) <= float(cover.radius_px):
 			return true
 	return false
+
+
+func prepared_launch_arena_payload_allowed(request: Dictionary) -> bool:
+	return not _prepared_launch_frame.is_empty() and _launch_definition.get("id", "") == "ruin_king" and request.get("kind", "") == "boss_aftershock" and _prepared_launch_frame.batch.mechanism_requests.has(request) and not _prepared_launch_frame.after.runtime.terminal and not _room_motion.is_empty() and request.get("bounds") == _room_motion.bounds
+
+
+func prepared_launch_arena_payloads_retired() -> bool:
+	if _prepared_launch_frame.is_empty():
+		return false
+	var state: Dictionary = _prepared_launch_frame.after.runtime
+	return bool(state.terminal) or state.mechanism_state.phase_index > 0 and int(state.mechanism_state.phase_transition_until_frame) >= int(_prepared_launch_frame.runtime_frame)
 
 
 func normalize_native_cold_snapshot(value: Dictionary) -> Dictionary:

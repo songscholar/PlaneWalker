@@ -57,6 +57,25 @@ func reserve_death_pool(request: Dictionary, zone_capacity: int = MAX_ZONES) -> 
 	return _reserve_zone(_state, definition, zone_capacity)
 
 
+func reserve_boss_aftershock(request: Dictionary, zone_capacity: int = MAX_ZONES) -> Dictionary:
+	if _state.is_empty() or zone_capacity < 0 or zone_capacity > MAX_ZONES or not Contract.exact_fields(request, ["kind", "run_id", "hostile_source_id", "runtime_frame", "attack_generation", "position", "bounds", "parameters"]) or request.kind != "boss_aftershock" or request.run_id != _state.run_id or request.runtime_frame != _state.runtime_frame or not _stable_id(request.hostile_source_id) or not Contract.integer_in_range(request.attack_generation, 1, MAX_FRAME):
+		return _failure("aftershock_identity")
+	if not _valid_bounds(request.bounds) or not Contract.valid_point(request.position) or not _inside(request.position, request.bounds) or not request.parameters is Dictionary or not Contract.exact_fields(request.parameters, ["delay_frames", "warning_frames", "radius", "damage"]):
+		return _failure("aftershock_parameters")
+	var parameters: Dictionary = request.parameters
+	if not Contract.integer_in_range(parameters.delay_frames, 20, 20) or not Contract.integer_in_range(parameters.warning_frames, 40, 40) or not Contract.number_in_range(parameters.radius, 32.0, 32.0) or not Contract.number_in_range(parameters.damage, 12.0, 14.4):
+		return _failure("aftershock_values")
+	var definition := {"kind": "boss_aftershock", "run_id": request.run_id, "source_id": request.hostile_source_id, "generation": int(request.attack_generation), "hit_index": 61, "reserved_frame": int(request.runtime_frame), "position": Contract.point(request.position), "radius": float(parameters.radius), "damage": float(parameters.damage), "damage_type": "physical", "warning_frames": int(parameters.warning_frames), "delay_frames": int(parameters.delay_frames), "lifetime_frames": 1, "tick_frames": 1, "bounds": request.bounds.duplicate(true), "visual_kind": "physical"}
+	return _reserve_zone(_state, definition, zone_capacity)
+
+
+func retire_arena_payloads(sources: Array[String]) -> void:
+	for index: int in range(_state.zones.size() - 1, -1, -1):
+		var row: Dictionary = _state.zones[index]
+		if row.definition.kind == "boss_aftershock" and sources.has(str(row.definition.source_id)):
+			_state.zones.remove_at(index)
+
+
 func motion_for_frame(frame: int) -> Dictionary:
 	if _state.is_empty() or frame != int(_state.runtime_frame) + 1 or not _frame(frame):
 		return {}
@@ -130,17 +149,20 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 		if not modifier.action_paused:
 			row.age = int(row.age) + 1
 		var definition: Dictionary = row.definition
-		var active_age: int = int(row.age) - int(definition.warning_frames)
+		var delay: int = int(definition.get("delay_frames", 0))
+		if row.phase == "DORMANT" and int(row.age) >= delay:
+			row.phase = "WARNING"
+		var active_age: int = int(row.age) - int(definition.warning_frames) - delay
 		if active_age >= 0:
 			row.phase = "ACTIVE"
-		var pulse: bool = not modifier.action_paused and ((definition.kind == "death_pool" and active_age == 0) or (definition.kind == "impact_pool" and active_age > 0 and active_age % int(definition.tick_frames) == 0))
+		var pulse: bool = not modifier.action_paused and ((definition.kind in ["death_pool", "boss_aftershock"] and active_age == 0) or (definition.kind == "impact_pool" and active_age > 0 and active_age % int(definition.tick_frames) == 0))
 		if pulse:
 			var target_ids: Array = observations.targets.keys()
 			target_ids.sort()
 			for target_id: String in target_ids:
 				if _vector(observations.targets[target_id].position).distance_to(_vector(definition.position)) <= float(definition.radius):
 					damages.append(_damage(row.id, definition, target_id, frame))
-		if (definition.kind == "death_pool" and active_age >= 0) or active_age >= int(definition.lifetime_frames):
+		if (definition.kind in ["death_pool", "boss_aftershock"] and active_age >= 0) or active_age >= int(definition.lifetime_frames):
 			retired.append(row.id)
 		else:
 			retained_zones.append(row)
@@ -222,11 +244,12 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	for row: Variant in value.zones:
 		if not row is Dictionary or not Contract.exact_fields(row, ZONE_FIELDS) or not _valid_live_record(row, value, claims, live, false) or not _valid_zone_definition(row.definition):
 			return false
-		if row.age >= int(row.definition.warning_frames) + int(row.definition.lifetime_frames) or (row.definition.kind == "death_pool" and row.age >= row.definition.warning_frames):
+		var delay: int = int(row.definition.get("delay_frames", 0))
+		if row.age >= int(row.definition.warning_frames) + delay + int(row.definition.lifetime_frames) or (row.definition.kind in ["death_pool", "boss_aftershock"] and row.age >= int(row.definition.warning_frames) + delay):
 			return false
 		if row.phase == "PENDING" and row.age != 0:
 			return false
-		if row.phase != "PENDING" and row.phase != ("WARNING" if row.age < row.definition.warning_frames else "ACTIVE"):
+		if row.phase != "PENDING" and row.phase != ("DORMANT" if row.age < delay else ("WARNING" if row.age < int(row.definition.warning_frames) + delay else "ACTIVE")):
 			return false
 	return _active_count(value.projectiles) <= MAX_PROJECTILES and _active_count(value.zones) <= MAX_ZONES
 
@@ -269,7 +292,7 @@ func _reserve_zone(state: Dictionary, definition: Dictionary, zone_capacity: int
 	var id := _id(definition)
 	if _has_claim(state, definition) or state.projectiles.size() + state.zones.size() >= MAX_RESERVATIONS or state.claims.size() >= MAX_CLAIMS or not _valid_zone_definition(definition):
 		return _failure("zone_reservation")
-	var phase := ("WARNING" if definition.warning_frames > 0 else "ACTIVE") if _active_count(state.zones) < zone_capacity else "PENDING"
+	var phase := ("DORMANT" if int(definition.get("delay_frames", 0)) > 0 else ("WARNING" if definition.warning_frames > 0 else "ACTIVE")) if _active_count(state.zones) < zone_capacity else "PENDING"
 	state.claims.append({"id": id, "key": _reservation_key(definition)})
 	state.zones.append({"id": id, "definition": definition, "phase": phase, "activated_frame": state.runtime_frame if phase != "PENDING" else -1, "age": 0, "control": _new_control(id, int(state.runtime_frame))})
 	return {"ok": true, "id": id, "phase": phase}
@@ -281,7 +304,7 @@ func _impact_definition(projectile: Dictionary, position: Dictionary, frame: int
 
 
 func _valid_live_record(row: Dictionary, state: Dictionary, claims: Dictionary, live: Dictionary, projectile: bool) -> bool:
-	if not row.definition is Dictionary or not Contract.exact_fields(row.definition, PROJECTILE_DEFINITION_FIELDS if projectile else ZONE_DEFINITION_FIELDS) or not _payload_id(row.id) or row.id != _id(row.definition) or not claims.has(row.id) or claims[row.id] != _reservation_key(row.definition) or live.has(row.id) or row.phase not in (["PENDING", "ACTIVE"] if projectile else ["PENDING", "WARNING", "ACTIVE"]):
+	if not row.definition is Dictionary or not Contract.exact_fields(row.definition, PROJECTILE_DEFINITION_FIELDS if projectile else _zone_fields(row.definition)) or not _payload_id(row.id) or row.id != _id(row.definition) or not claims.has(row.id) or claims[row.id] != _reservation_key(row.definition) or live.has(row.id) or row.phase not in (["PENDING", "ACTIVE"] if projectile else ["PENDING", "DORMANT", "WARNING", "ACTIVE"]):
 		return false
 	if not Contract.integer_in_range(row.activated_frame, -1, int(state.runtime_frame)) or not Contract.integer_in_range(row.age, 0, Contract.MAX_FRAME) or not row.definition.has("reserved_frame") or not _frame(row.definition.reserved_frame) or row.definition.reserved_frame < state.initial_frame or row.definition.reserved_frame > state.runtime_frame:
 		return false
@@ -303,7 +326,15 @@ func _valid_projectile_definition(row: Dictionary) -> bool:
 
 
 func _valid_zone_definition(row: Dictionary) -> bool:
-	return Contract.exact_fields(row, ZONE_DEFINITION_FIELDS) and row.kind in ["death_pool", "impact_pool"] and _valid_definition_identity(row) and Contract.valid_point(row.position) and _inside(row.position, row.bounds) and Contract.number_in_range(row.radius, 1, 320) and Contract.integer_in_range(row.warning_frames, 0, 600) and Contract.integer_in_range(row.lifetime_frames, 1, 1200) and Contract.integer_in_range(row.tick_frames, 1, 600) and (row.kind != "death_pool" or (row.warning_frames >= 23 and row.lifetime_frames == 1 and row.tick_frames == 1 and row.hit_index == 63)) and (row.kind != "impact_pool" or row.warning_frames == 0)
+	if not Contract.exact_fields(row, _zone_fields(row)) or row.kind not in ["death_pool", "impact_pool", "boss_aftershock"] or not _valid_definition_identity(row) or not Contract.valid_point(row.position) or not _inside(row.position, row.bounds) or not Contract.number_in_range(row.radius, 1, 320) or not Contract.integer_in_range(row.warning_frames, 0, 600) or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.integer_in_range(row.tick_frames, 1, 600):
+		return false
+	if row.kind == "boss_aftershock":
+		return typeof(row.delay_frames) == TYPE_INT and row.delay_frames == 20 and row.warning_frames == 40 and row.lifetime_frames == 1 and row.tick_frames == 1 and row.hit_index == 61 and row.radius == 32.0 and row.damage_type == "physical" and row.visual_kind == "physical" and Contract.number_in_range(row.damage, 12.0, 14.4)
+	return (row.kind != "death_pool" or (row.warning_frames >= 23 and row.lifetime_frames == 1 and row.tick_frames == 1 and row.hit_index == 63)) and (row.kind != "impact_pool" or row.warning_frames == 0)
+
+
+static func _zone_fields(definition: Dictionary) -> Array:
+	return ZONE_DEFINITION_FIELDS + ["delay_frames"] if definition.get("kind", "") == "boss_aftershock" else ZONE_DEFINITION_FIELDS
 
 
 func _valid_definition_identity(row: Dictionary) -> bool:
@@ -371,7 +402,7 @@ static func _activate_pending(rows: Array, limit: int, frame: int) -> void:
 	var active := _active_count(rows)
 	for row: Dictionary in rows:
 		if row.phase == "PENDING" and active < limit:
-			row.phase = "WARNING" if row.definition.get("warning_frames", 0) > 0 else "ACTIVE"
+			row.phase = "DORMANT" if int(row.definition.get("delay_frames", 0)) > 0 else ("WARNING" if row.definition.get("warning_frames", 0) > 0 else "ACTIVE")
 			row.activated_frame = frame
 			active += 1
 

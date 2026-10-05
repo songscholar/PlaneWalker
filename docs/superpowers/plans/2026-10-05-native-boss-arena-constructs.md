@@ -40,7 +40,7 @@ Interfaces: `BossArenaRuntime.configure(definition: Dictionary, identity: Dictio
 
 ## Task 2: Ruin Dynamic Effects
 
-- [ ] Add slam aftershock at the authored 60f delay with its own40f warning and12 damage/radius32.
+- [x] Add slam aftershock at the authored 60f impact delay containing20f dormant plus40f own warning and12 damage/radius32. Accepted-frame refusal/retry, owner phase/death retirement and actual dormant/warning cold checkpoints are verified in `docs/current/2026-10-05-p15b-native-ruin-aftershock-evidence.md`.
 - [ ] Add HP150/TTL600 wall segments with32px passage and40f collapse warning; debris HP20/TTL480/cap4.
 - [ ] Verify owner/action retirement, cover-blocked beam and charge, combined48px escapes, rollback and cold restore in actual Host combat.
 

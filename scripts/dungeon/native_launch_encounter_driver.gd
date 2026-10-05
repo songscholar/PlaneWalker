@@ -370,7 +370,7 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 	for payload: Dictionary in value.effects.payloads.projectiles + value.effects.payloads.zones:
 		if not sources.has(payload.definition.source_id):
 			return false
-		if payload.phase != "PENDING":
+		if payload.phase not in ["PENDING", "DORMANT"]:
 			sources[payload.id] = true
 			if not payload_facts.register_fact(Effects._payload_threat_fact(payload, frame)):
 				return false

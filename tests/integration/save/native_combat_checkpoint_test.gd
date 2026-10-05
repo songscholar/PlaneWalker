@@ -22,7 +22,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "boss_cover", "boss_legacy_arena", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
+	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
 		var selected := OS.get_environment("PLANEWALKER_CHECKPOINT_CASE")
 		if not selected.is_empty() and selected != case_name:
 			continue
@@ -49,6 +49,8 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	var save := Save.new()
 	var service := Service.new()
 	var slot := "native_combat_" + ("elite_legacy" if case_name == "elite_legacy_affixes" else case_name)
+	if slot.length() > 32:
+		slot = "native_" + case_name
 	suite.assert_true(save.configure(Paths.resolve_default("user://p16r-checkpoint", "p16r-checkpoint"), "0.4.0-dev", Content.snapshot(host.content_registry())).ok, "native combat checkpoint uses actual activated content and physical SaveService")
 	suite.assert_true(service.configure(catalog, save, slot, "base", {"meta_profile_state": Fixtures.profile(catalog)}).ok, "native combat checkpoint configures an authenticated physical Profile")
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 4}
@@ -82,6 +84,9 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			break
 		if case_name == "warning":
 			ready = native.encounter.status == "WARNING"
+		elif case_name.begins_with("boss_aftershock"):
+			for zone: Dictionary in native.effects.payloads.zones:
+				ready = ready or zone.definition.kind == "boss_aftershock" and zone.phase == ("DORMANT" if case_name.ends_with("dormant") else "WARNING")
 		elif case_name == "actor_warning" or boss_case:
 			for state: Dictionary in native.actors.values():
 				ready = ready or state.runtime.action.phase == ("RECOVERY" if boss_case else "WARNING")
@@ -141,7 +146,8 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			await get_tree().physics_frame
 	if boss_case:
 		var boss: Node = controller.get_node("Enemies").get_child(0)
-		suite.assert_true(boss.apply_weapon_control_conversion("cold_exposure", 0, 30, 0.0), "actual native Boss retains exposure conversion in its cold checkpoint")
+		if case_name != "boss_aftershock_dormant":
+			suite.assert_true(boss.apply_weapon_control_conversion("cold_exposure", 0, 30, 0.0), "actual native Boss retains exposure conversion in its cold checkpoint")
 		if case_name == "boss_cover":
 			# Damage is an explicit native-collision fixture; route and cold owners are real.
 			var cover := boss.get_node("ArenaConstructs/Cover0")
