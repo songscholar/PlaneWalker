@@ -23,7 +23,11 @@ var _control: RefCounted = Controls.new()
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_definition.clear()
 	_state.clear()
-	var fields: Array = DEFINITION_FIELDS + ["affix_signature"] if definition.has("affix_signature") else DEFINITION_FIELDS
+	var fields: Array = DEFINITION_FIELDS.duplicate()
+	if definition.has("affix_signature"):
+		fields.append("affix_signature")
+	if definition.has("mechanism_scaling"):
+		fields.append("mechanism_scaling")
 	if not Contract.exact_fields(definition, fields) or not Contract.exact_fields(identity, IDENTITY_FIELDS):
 		return _failure("fields")
 	if definition.has("affix_signature") and (definition.actor_kind != "elite" or not definition.affix_signature is String or definition.affix_signature.length() != 64 or not definition.affix_signature.is_valid_hex_number(false) or definition.affix_signature != definition.affix_signature.to_lower()):
@@ -35,6 +39,13 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	if not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("seed")
 	var authored_mechanisms := DefinitionContract.mechanisms(definition.mechanisms, Enemy.MECHANISM_RULES[definition.id])
+	if definition.has("mechanism_scaling"):
+		var scale: Variant = definition.mechanism_scaling
+		if not Contract.exact_fields(scale, ["schema_version", "damage_multiplier", "base"]) or scale.schema_version != 1 or not Contract.number_in_range(scale.damage_multiplier, 1.0, 2.0):
+			return _failure("mechanism_scaling")
+		authored_mechanisms = Enemy.scaled_mechanisms(scale.base, definition.id, float(scale.damage_multiplier))
+		if not authored_mechanisms.ok or JSON.parse_string(JSON.stringify(definition.mechanisms)) != JSON.parse_string(JSON.stringify(authored_mechanisms.value)):
+			return _failure("mechanism_scaling_projection")
 	if not authored_mechanisms.ok:
 		return authored_mechanisms
 	if authored_mechanisms.value.has("kite_min_px") and authored_mechanisms.value.kite_min_px > authored_mechanisms.value.kite_max_px:

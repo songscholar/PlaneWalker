@@ -4,6 +4,8 @@ extends RefCounted
 const Action := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_definition_contract.gd")
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
+const RUNTIME_FIELDS := ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "collision_radius_px", "actions", "mechanisms"]
+const OUTGOING_DAMAGE_FIELDS := ["impact_pool_damage", "death_pool_damage", "residual_tick_damage", "explosion_damage", "corpse_pool_damage", "elite_burn_damage", "death_collapse_damage"]
 const FIELDS: Array[String] = [
 	"category", "id", "schema_version", "name_key", "description_key", "availability", "tags", "compatibility", "references",
 	"floor_id", "runtime_kind", "max_hp", "defense", "move_speed", "threat_cost", "collision_radius_px", "mechanisms", "actions", "elite_actions",
@@ -314,3 +316,42 @@ func runtime_projection(actor_kind: String = "enemy") -> Dictionary:
 		"move_speed": _snapshot.move_speed, "collision_radius_px": _snapshot.collision_radius_px,
 		"actions": actions, "mechanisms": _snapshot.mechanisms.duplicate(true),
 	}
+
+
+static func difficulty_projection(base: Dictionary, hp_multiplier: float, damage_multiplier: float) -> Dictionary:
+	if not Action.exact_fields(base, RUNTIME_FIELDS) or base.actor_kind not in ["enemy", "elite"] or not Ids.enemy_ids().has(base.id) or base.runtime_kind != base.id or not base.actions is Array or not Action.number_in_range(hp_multiplier, 1.0, 3.0) or not Action.number_in_range(damage_multiplier, 1.0, 2.0):
+		return Contract.failure("difficulty", "canonical_base_and_bounded_multipliers_required")
+	var mechanisms := scaled_mechanisms(base.mechanisms, base.id, damage_multiplier)
+	if not mechanisms.ok:
+		return mechanisms
+	var numbers := Contract.numeric_fields(base, {"max_hp": [1, 1000000, false], "defense": [0, 10000, false], "move_speed": [0, 1000, false], "collision_radius_px": [1, 32, false]})
+	if not numbers.ok:
+		return numbers
+	var result := base.duplicate(true)
+	result.actions = []
+	for row: Variant in base.actions:
+		if not row is Dictionary:
+			return Contract.failure("actions", "expected_dictionary")
+		var parsed := Action.create(row, base.actor_kind)
+		if not parsed.ok:
+			return parsed
+		result.actions.append(parsed.definition)
+	result.max_hp = float(result.max_hp) * hp_multiplier
+	for action: Dictionary in result.actions:
+		for hit: Dictionary in action.hit_schedule:
+			hit.damage = float(hit.damage) * damage_multiplier
+	result.mechanisms = mechanisms.value
+	result["mechanism_scaling"] = {"schema_version": 1, "damage_multiplier": damage_multiplier, "base": base.mechanisms.duplicate(true)}
+	return {"ok": true, "definition": result, "context": {}}
+
+
+static func scaled_mechanisms(base: Variant, id: String, damage_multiplier: float) -> Dictionary:
+	if not MECHANISM_RULES.has(id) or not Action.number_in_range(damage_multiplier, 1.0, 2.0):
+		return Contract.failure("mechanism_scaling", "identity_or_multiplier_invalid")
+	var parsed := Contract.mechanisms(base, MECHANISM_RULES[id])
+	if not parsed.ok:
+		return parsed
+	for field: String in OUTGOING_DAMAGE_FIELDS:
+		if parsed.value.has(field):
+			parsed.value[field] = float(parsed.value[field]) * damage_multiplier
+	return parsed

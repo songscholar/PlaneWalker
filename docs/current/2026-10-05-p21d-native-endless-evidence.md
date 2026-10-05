@@ -14,6 +14,15 @@ and player reward effects to the next deterministic seed. The source Profile is
 unchanged. Cycle count has no 160-floor limit; HP/damage scaling saturates at
 3x/2x and only the most recent 32 cycle summaries are retained.
 
+Difficulty uses one validated enemy projection for all 22 normal and elite
+species. Outgoing acid pools, burn, residual ticks, explosions and collapses
+scale with primary attacks; incoming-damage thresholds and multipliers retain
+their authored meanings. The projection preserves its original mechanism
+recipe, so native configuration, cold restore and acid payload reservation can
+reject forged auxiliary values. Current elite affix signatures coexist with
+the difficulty marker. Daily barrage support expands the maximum distinct
+debris landing index to nine while retaining the four-live-body arena cap.
+
 The independent Profile service atomically commits the private Profile and mode
 aggregate with native checkpoints through compare-and-exchange. Cold restore,
 pre/post-promotion failures, stale writers, interrupted first native startup,
@@ -33,6 +42,10 @@ Verification:
   `build/endless-startup-green`. Five-floor carry/cold cycle included in
   `build/endless-green`.
 - Combined 5/5 logs scanned for ERROR, SCRIPT ERROR and leak diagnostics: none.
+- Auxiliary-difficulty RED `build/endless-scaling-red`; complete 6/6 Endless
+  GREEN `build/endless-scaling-green`. Tests cover all 22 species as normal and
+  elite actors, actual native acid flight/pool damage, forged recipe refusal
+  and cold state. Logs scanned clean.
 
 Integration: instantiate `NativeEndlessFlow`, configure with the loaded registry,
 ordinary Profile service and independent mode root, then bind `EndlessCoordinator`.

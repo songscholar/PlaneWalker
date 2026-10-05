@@ -312,7 +312,16 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 			return {}
 		debris_recipe = {"max_hp": float(mechanisms.debris_hp), "lifetime_frames": int(mechanisms.debris_lifetime_frames), "count_cap": int(mechanisms.debris_count_cap), "radius_px": 12.0}
 	elif not mechanisms.is_empty() and not mechanisms.has("debris_hp"):
-		var parsed := Definitions.mechanisms(mechanisms, Enemy.MECHANISM_RULES.corrosive_moth)
+		var base := mechanisms.duplicate(true)
+		var scaling: Variant = base.get("mechanism_scaling", {})
+		base.erase("mechanism_scaling")
+		var parsed := Definitions.mechanisms(base, Enemy.MECHANISM_RULES.corrosive_moth)
+		if mechanisms.has("mechanism_scaling"):
+			if not Contract.exact_fields(scaling, ["schema_version", "damage_multiplier", "base"]) or scaling.schema_version != 1 or not Contract.number_in_range(scaling.damage_multiplier, 1.0, 2.0):
+				return {}
+			parsed = Enemy.scaled_mechanisms(scaling.base, "corrosive_moth", float(scaling.damage_multiplier))
+			if not parsed.ok or JSON.parse_string(JSON.stringify(base)) != JSON.parse_string(JSON.stringify(parsed.value)):
+				return {}
 		if not parsed.ok:
 			return {}
 		pool = {"radius": float(mechanisms.impact_pool_radius_px), "lifetime_frames": int(mechanisms.impact_pool_lifetime_frames), "damage": float(mechanisms.impact_pool_damage), "tick_frames": int(mechanisms.impact_pool_tick_frames)}
@@ -412,7 +421,7 @@ func _valid_projectile_definition(row: Dictionary) -> bool:
 		return false
 	if row.has("debris_recipe"):
 		var debris := Debris.new()
-		if not row.debris_recipe is Dictionary or not debris.configure(str(row.run_id), int(_state.initial_frame), row.debris_recipe) or row.radius != 5.0 or row.speed != 128.0 or row.lifetime_frames != 90 or row.range_px != 192.0 or row.pierce_count != 0 or row.damage_type != "physical" or not row.impact_pool.is_empty() or row.hit_index > 5:
+		if not row.debris_recipe is Dictionary or not debris.configure(str(row.run_id), int(_state.initial_frame), row.debris_recipe) or row.radius != 5.0 or row.speed != 128.0 or row.lifetime_frames != 90 or row.range_px != 192.0 or row.pierce_count != 0 or row.damage_type != "physical" or not row.impact_pool.is_empty() or row.hit_index >= Debris.MAX_BARRAGE_PROJECTILES:
 			return false
 	if not Contract.number_in_range(row.radius, 1, 320) or not Contract.number_in_range(row.speed, 1, 480) or not Contract.integer_in_range(row.lifetime_frames, 1, 600) or not Contract.number_in_range(row.range_px, 1.0, float(row.speed) * float(row.lifetime_frames) / 60.0) or not Contract.integer_in_range(row.pierce_count, 0, 8) or not row.impact_pool is Dictionary:
 		return false

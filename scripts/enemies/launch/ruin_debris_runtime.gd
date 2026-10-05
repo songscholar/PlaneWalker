@@ -8,6 +8,7 @@ const EVENT_FIELDS := ["run_id", "source_id", "generation", "hit_index", "runtim
 const ROW_FIELDS := ["id", "event", "position", "phase", "activated_frame", "age", "current_hp"]
 const DAMAGE_FIELDS := ["fact_id", "run_id", "construct_id", "runtime_frame", "amount"]
 const MAX_ROWS := 4096
+const MAX_BARRAGE_PROJECTILES := 9
 const MAX_FRAME := 2147483647 - Contract.MAX_FRAME
 var _state: Dictionary = {}
 
@@ -170,7 +171,7 @@ static func _phase(row: Dictionary, value: Dictionary) -> String:
 
 
 static func _valid_event(event: Dictionary, state: Dictionary) -> bool:
-	if not Contract.exact_fields(event, EVENT_FIELDS) or event.run_id != state.run_id or not _id(event.source_id) or not Contract.integer_in_range(event.generation, 1, MAX_FRAME) or not Contract.integer_in_range(event.hit_index, 0, 5) or not Contract.integer_in_range(event.runtime_frame, int(state.initial_frame), int(state.runtime_frame)) or not Contract.valid_point(event.position) or not event.bounds is Dictionary or not Contract.exact_fields(event.bounds, ["x", "y", "width", "height"]) or event.bounds.width != 640.0 or event.bounds.height != 360.0:
+	if not Contract.exact_fields(event, EVENT_FIELDS) or event.run_id != state.run_id or not _id(event.source_id) or not Contract.integer_in_range(event.generation, 1, MAX_FRAME) or not Contract.integer_in_range(event.hit_index, 0, MAX_BARRAGE_PROJECTILES - 1) or not Contract.integer_in_range(event.runtime_frame, int(state.initial_frame), int(state.runtime_frame)) or not Contract.valid_point(event.position) or not event.bounds is Dictionary or not Contract.exact_fields(event.bounds, ["x", "y", "width", "height"]) or event.bounds.width != 640.0 or event.bounds.height != 360.0:
 		return false
 	return Contract.number_in_range(event.bounds.x, -1000000.0, 1000000.0) and Contract.number_in_range(event.bounds.y, -1000000.0, 1000000.0)
 
