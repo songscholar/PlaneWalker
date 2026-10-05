@@ -61,6 +61,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_suite = TestSuiteScript.new()
+	await _assert_retired_spawn_feedback()
 	await _assert_pixel_proxy_contract()
 	_assert_hit_pause_duration_contract()
 	_assert_hit_feedback_profiles()
@@ -82,6 +83,21 @@ func _run() -> void:
 	for _frame: int in range(6):
 		await get_tree().process_frame
 	_suite.finish(get_tree())
+
+
+func _assert_retired_spawn_feedback() -> void:
+	var retired := VelocityActor.new()
+	add_child(retired)
+	CombatFeedback._on_enemy_spawned(retired, {})
+	retired.free()
+	await get_tree().process_frame
+	var surviving := VelocityActor.new()
+	add_child(surviving)
+	CombatFeedback._on_enemy_spawned(surviving, {})
+	await get_tree().process_frame
+	_suite.assert_true(surviving.get_node_or_null("PixelProxyActor") != null, "deferred spawn feedback installs the live actor after an earlier spawn retires")
+	surviving.queue_free()
+	await get_tree().process_frame
 
 
 func _assert_pixel_proxy_contract() -> void:

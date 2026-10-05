@@ -639,7 +639,13 @@ func _on_time_skill_ended(skill_id: StringName, _context: Dictionary) -> void:
 
 func _on_enemy_spawned(enemy: Node, _context: Dictionary) -> void:
 	if enemy is Node2D:
-		call_deferred("_ensure_actor_proxy", enemy as Node2D)
+		call_deferred("_ensure_spawned_actor_proxy", weakref(enemy))
+
+
+func _ensure_spawned_actor_proxy(actor_reference: WeakRef) -> void:
+	var actor: Variant = actor_reference.get_ref()
+	if actor is Node2D and actor.is_inside_tree() and not actor.is_queued_for_deletion():
+		_ensure_actor_proxy(actor)
 
 
 func _on_proxy_cue_requested(cue_id: StringName, _world_position: Vector2, intensity: float) -> void:
