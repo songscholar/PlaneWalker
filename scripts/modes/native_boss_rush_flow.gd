@@ -11,11 +11,7 @@ const Save := preload("res://scripts/save/save_service.gd")
 const Catalog := preload("res://scripts/modes/boss_rush_catalog.gd")
 const Meta := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Rules := preload("res://scripts/community/local_run_record_rules.gd")
-const Orchestrator := preload("res://scripts/application/run_orchestrator.gd")
-const PlayerScene := preload("res://scenes/player/player.tscn")
-const Bridge := preload("res://scripts/enemies/launch/hostile_frame_bridge.gd")
-const Effects := preload("res://scripts/enemies/launch/launch_hostile_effect_authority.gd")
-const Threats := preload("res://scripts/combat/hostile_threat_registry.gd")
+const Arena := preload("res://scripts/modes/native_boss_arena_builder.gd")
 const Content := preload("res://scripts/content/content_snapshot_provider.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 
@@ -204,6 +200,8 @@ func _persist(candidate: Dictionary, action: String) -> Dictionary:
 		return _reject_save(candidate, action, &"CHALLENGE_STALE_PRIMARY")
 	var written = _save.save_profile_compare_exchange(_save_id, "local", {"boss_rush_session": candidate}, _durable)
 	var actual = _save.inspect_profile(_save_id, "local")
+	if written.metadata.get("reason") == "expected_primary_stale":
+		return _reject_save(candidate, action, &"CHALLENGE_STALE_PRIMARY")
 	if not actual.ok or not Rules.same(actual.payload.payload.get("boss_rush_session", {}), candidate):
 		var changed: bool = actual.ok and not Rules.same(actual.payload, _durable)
 		var code: StringName = &"CHALLENGE_STALE_PRIMARY" if changed or written.metadata.get("reason") == "expected_primary_stale" else written.code
@@ -240,63 +238,22 @@ func _reject_save(candidate: Dictionary, action: String, code: StringName) -> Di
 
 func _create_stage() -> bool:
 	_clear_stage()
-	_native_failure = "player_configuration"
 	var definition: Dictionary = _catalog.stage(int(_state.stage_index))
-	var room_scene: PackedScene = load(definition.template.scene_path)
-	var boss_scene: PackedScene = load(definition.boss_scene)
 	_stage = Node2D.new()
 	add_child(_stage)
-	_room = room_scene.instantiate()
-	_stage.add_child(_room)
-	_player = PlayerScene.instantiate()
-	_player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
-	_stage.add_child(_player)
 	var request: Dictionary = _state.request
 	var run_id := "%s-stage-%d" % [_state.run_id, int(_state.stage_index) + 1]
-	var native_config := {"milestone": "LAUNCH", "seed": int(request.seed), "character_id": request.character_id, "weapon_id": request.weapon_id, "enabled_time_skills": request.time_abilities.duplicate(), "accessibility_assists": request.accessibility_assists, "character_profile": _registry.resolve_character_runtime_profile(StringName(request.character_id), &"LAUNCH"), "weapon_profile": _registry.resolve_weapon_runtime_profile(StringName(request.weapon_id), &"LAUNCH")}
-	if not _player.configure_run(StringName(run_id)) or not _player.configure_loadout(native_config):
+	var built: Dictionary = Arena.build(_stage, _registry, definition, request, run_id, "rush", "boss_rush")
+	_native_failure = str(built.get("reason", ""))
+	if not built.ok:
 		_clear_stage()
 		return false
-	_player.global_position = _room.get_node("PlayerEntry").global_position
-	_boss = boss_scene.instantiate()
-	var source_id := "rush-" + run_id.sha256_text().substr(0, 40)
-	_boss.set_meta("run_id", StringName(run_id))
-	_boss.set_meta("encounter_id", &"boss_rush")
-	_boss.set_meta("room_id", StringName(str(definition.template.id)))
-	_boss.set_meta("encounter_spawn_id", source_id)
-	_boss.set_meta("stable_target_id", run_id.sha256_text().substr(0, 12).hex_to_int())
-	_boss.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
-	_stage.add_child(_boss)
-	_boss.global_position = _room.get_node("EncounterAnchors/boss_primary").global_position
-	_boss.target = _player
-	var identity := {"run_id": run_id, "hostile_source_id": source_id, "next_generation_floor": 1, "runtime_frame": int(_player.priority_arbitration_snapshot().frame), "seed": int(request.seed)}
-	var boss_configured: Dictionary = _boss.configure_launch_definition(definition.runtime_definition, identity)
-	_native_failure = "boss_definition: " + str(boss_configured)
-	if not boss_configured.ok:
-		_clear_stage()
-		return false
-	var motion_configured: Dictionary = _boss.configure_launch_room_motion(_room, definition.template)
-	_native_failure = "boss_room_motion: " + str(motion_configured)
-	if not motion_configured.ok or not _boss.configure_character_boss_exposure_replay_authority(RefCounted.new()):
-		_clear_stage()
-		return false
-	var payloads := Node2D.new()
-	_stage.add_child(payloads)
-	_effects = Effects.new()
-	_bridge = Bridge.new()
-	_native_failure = "effects_configuration"
-	if not _effects.configure(run_id, int(identity.runtime_frame)) or not _effects.configure_native_payloads(payloads):
-		_clear_stage()
-		return false
-	_native_failure = "bridge_configuration"
-	if not _bridge.configure(_player, Threats.new(), [_boss], _effects) or not _player.configure_hostile_frame_participant(_bridge):
-		_clear_stage()
-		return false
-	_orchestrator = Orchestrator.new()
-	_orchestrator.enter_hub()
-	_orchestrator.start_run({"milestone": "LAUNCH", "character_id": request.character_id, "weapon_id": request.weapon_id, "enabled_time_skills": request.time_abilities, "seed": int(request.seed), "accessibility_assists": request.accessibility_assists}, run_id)
-	_orchestrator.preparation_completed()
-	_orchestrator.room_entered(true)
+	_room = built.room
+	_player = built.player
+	_boss = built.boss
+	_effects = built.effects
+	_bridge = built.bridge
+	_orchestrator = built.orchestrator
 	_stage_frames = 0
 	_paused = false
 	_terminal.clear()

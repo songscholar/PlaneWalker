@@ -18,6 +18,7 @@ const StartupDiagnosticScript := preload("res://scripts/operations/packaged_star
 const LocalRecordsScript := preload("res://scripts/community/local_run_records.gd")
 const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const BossRushScript := preload("res://scripts/modes/boss_rush_coordinator.gd")
+const DailyBossScript := preload("res://scripts/modes/daily_boss_coordinator.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -61,6 +62,7 @@ var _content_reload_pending := false
 var _last_launch_rejection: Dictionary = {}
 var _local_records: RefCounted
 var _boss_rush: Node2D
+var _daily_boss: Node2D
 
 
 func _enter_tree() -> void:
@@ -97,6 +99,7 @@ func _ready() -> void:
 	_setup_tutorial()
 	_setup_training()
 	_setup_boss_rush()
+	_setup_daily_boss()
 	_setup_narrative()
 	_setup_music()
 	_setup_content_management()
@@ -139,6 +142,12 @@ func _music_context() -> Dictionary:
 			cue_id = "music_victory" if mode_state.status == "VICTORY" else "music_defeat"
 		elif _boss_rush.runtime().is_active():
 			cue_id = "music_boss_" + BossRushScript.Catalog.BOSSES[int(mode_state.stage_index)]
+	elif _daily_boss != null and _daily_boss.is_open():
+		var daily: Dictionary = _daily_boss.runtime().preview()
+		if daily.native_active:
+			cue_id = "music_boss_" + str(daily.active.definition.boss_id)
+		elif not daily.results.is_empty() and daily.active.is_empty():
+			cue_id = "music_victory" if daily.results[-1].status == "VICTORY" else "music_defeat"
 	elif (_hub_flow == null or not _hub_flow.is_hub_visible()) and combat_room.visible:
 		var state: Dictionary = runtime_host.runtime_snapshot()
 		var phase := int(state.get("phase", -1))
@@ -148,7 +157,7 @@ func _music_context() -> Dictionary:
 			var index := clampi(int(state.get("current_floor_index", 0)), 0, 4)
 			var node: Dictionary = runtime_host.native_run_state().current_floor_node() if runtime_host.native_run_state() != null else {}
 			cue_id = MusicDirectorScript.BOSS_CUES[index] if node.get("room_type") == "boss" and not node.get("cleared", false) else MusicDirectorScript.FLOOR_CUES[index]
-	return {"cue_id": cue_id, "paused": get_tree().paused or _boss_rush != null and _boss_rush.is_open() and _boss_rush.runtime().is_paused()}
+	return {"cue_id": cue_id, "paused": get_tree().paused or _boss_rush != null and _boss_rush.is_open() and _boss_rush.runtime().is_paused() or _daily_boss != null and _daily_boss.is_open() and _daily_boss.runtime().is_paused()}
 
 
 func _setup_content_management() -> void:
@@ -168,7 +177,7 @@ func content_manager() -> RefCounted:
 
 
 func _content_mutation_locked() -> bool:
-	if _content_reload_pending or _credits_pending or _training_flow != null and _training_flow.is_training_active() or _boss_rush != null and _boss_rush.is_open():
+	if _content_reload_pending or _credits_pending or _training_flow != null and _training_flow.is_training_active() or _boss_rush != null and _boss_rush.is_open() or _daily_boss != null and _daily_boss.is_open():
 		return true
 	var service: RefCounted = _profile_service if _profile_service != null else GameState.profile_runtime_service()
 	if service != null and not service.snapshot().active_launch_receipt.is_empty():
@@ -257,6 +266,7 @@ func _setup_hub() -> void:
 	hub.resume_requested.connect(_start_hub_run)
 	hub.tutorial_requested.connect(_open_hub_tutorial)
 	hub.boss_rush_requested.connect(_open_boss_rush)
+	hub.daily_boss_requested.connect(_open_daily_boss)
 	hub.settings_requested.connect(_open_hub_setting)
 	start_menu.visible = false
 	FocusCoordinator.close_scope(start_menu)
@@ -313,6 +323,28 @@ func _open_boss_rush(config: Dictionary) -> void:
 		return
 	var request := {"character_id": config.character_id, "weapon_id": config.weapon_id, "time_abilities": config.enabled_time_skills.duplicate(), "seed": 20261005, "accessibility_assists": {"damage_received_multiplier": float(GameState.persistent.settings.damage_received_multiplier), "enemy_telegraph_scale": float(GameState.persistent.settings.enemy_telegraph_scale)}}
 	if _boss_rush.open(request).ok:
+		_hub_flow.close_panel()
+		_hub_flow.hide_hub()
+
+
+func _setup_daily_boss() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var coordinator := DailyBossScript.new()
+	coordinator.name = "DailyBossCoordinator"
+	add_child(coordinator)
+	var configured: Dictionary = coordinator.configure(runtime_host.content_registry(), _profile_service, GameState.save_path.get_base_dir().path_join("plane_walker/daily"))
+	if not configured.ok:
+		coordinator.queue_free()
+		return
+	_daily_boss = coordinator
+	coordinator.closed.connect(_on_training_closed)
+
+
+func _open_daily_boss() -> void:
+	if _daily_boss == null or _hub_flow == null or not _hub_flow.is_hub_visible() or not _profile_service.snapshot().active_launch_receipt.is_empty():
+		return
+	if _daily_boss.open().ok:
 		_hub_flow.close_panel()
 		_hub_flow.hide_hub()
 
@@ -479,6 +511,9 @@ func _apply_localization() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _daily_boss != null and _daily_boss.handle_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if _boss_rush != null and _boss_rush.handle_input(event):
 		get_viewport().set_input_as_handled()
 		return

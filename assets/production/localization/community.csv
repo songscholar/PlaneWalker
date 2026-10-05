@@ -25,3 +25,37 @@ UI_MODE_RELOAD,Reload challenge,重新载入挑战
 UI_MODE_NATIVE_RETRY,Arena unavailable. Continue to retry.,竞技场暂不可用，请继续挑战以重试。
 UI_MODE_PAUSE,Pause,暂停
 UI_MODE_SAVED_LOADOUT_FMT,Saved challenge: %s,已存挑战：%s
+UI_DAILY_TITLE,Daily Boss,每日 Boss
+UI_DAILY_ATTEMPTS_FMT,Attempts remaining: %d / 3,剩余尝试：%d / 3
+UI_DAILY_LOADOUT_FMT,%s / %s + %s,%s / %s + %s
+UI_DAILY_ITEMS_FMT,Items: %s,道具：%s
+UI_DAILY_BLESSING_FMT,Blessing: %s,祝福：%s
+UI_DAILY_CURSE_FMT,Curse: %s,诅咒：%s
+UI_DAILY_CONDITION_FRAIL,Frail: maximum HP -30%,虚弱诅咒：最大生命 -30%
+UI_DAILY_CONDITION_MELEE,Melee specialization: melee +30% / ranged -30%,近战专精：近战 +30% / 远程 -30%
+UI_DAILY_CONDITION_RANGED,Ranged specialization: ranged +30% / melee -30%,远程专精：远程 +30% / 近战 -30%
+UI_DAILY_RESET_FMT,Resets in %02d:%02d:%02d (UTC+8),距离重置 %02d:%02d:%02d（UTC+8）
+UI_DAILY_BEST_FMT,Best: %s,最佳：%s
+UI_DAILY_RESULT_FMT,Attempt %d: %s,第 %d 次：%s
+UI_DAILY_RESULT_VICTORY,Victory,胜利
+UI_DAILY_RESULT_DEFEAT,Defeat,战败
+UI_DAILY_RESULT_ABANDON,Abandoned,已放弃
+UI_DAILY_CALENDAR,Next seven days,未来七天
+UI_DAILY_ABANDON,Abandon attempt,放弃本次尝试
+UI_DAILY_ABANDON_RETURN,Abandon and return,放弃并返回
+UI_DAILY_INTERRUPTED,Interrupted attempt. Abandon to use the next attempt.,上次尝试已中断，放弃后可进行下一次尝试。
+UI_DAILY_NATIVE_RETRY,Arena unavailable. Retry the admitted attempt.,竞技场暂不可用，请重试本次已计数的尝试。
+UI_DAILY_RETRY_ARENA,Retry arena,重试竞技场
+UI_DAILY_CLOCK_INVALID,Daily clock unavailable.,每日时间暂不可用。
+UI_DAILY_MOD_UNAVAILABLE,Daily requires the base game content.,每日挑战需要原版游戏内容。
+UI_DAILY_VICTORY_REQUIRED,Complete the normal game to unlock Daily Boss.,通关普通游戏后解锁每日 Boss。
+UI_DAILY_NORMAL_RUN_ACTIVE,Finish the active normal run first.,请先完成进行中的普通冒险。
+UI_DAILY_CLOCK_ROLLBACK,Clock precedes the latest admitted daily challenge.,当前时间早于最近已参加的每日挑战。
+UI_DAILY_SAVE_PENDING,Daily save pending.,每日存档待保存。
+UI_DAILY_ATTEMPT_ACTIVE,Resolve the admitted daily attempt first.,请先结算本次每日挑战。
+UI_DAILY_ATTEMPTS_EXHAUSTED,All three attempts have been used today.,今日三次尝试已用完。
+UI_DAILY_STALE_PRIMARY,Daily changed. Reload its latest save.,每日挑战已变更，请载入最新存档。
+UI_DAILY_NATIVE_INVALID,Daily arena unavailable.,每日竞技场暂不可用。
+UI_DAILY_COMMAND_INVALID,Daily command unavailable.,每日操作暂不可用。
+UI_DAILY_RETRY_INVALID,Daily retry unavailable.,每日重试暂不可用。
+UI_DAILY_SAVE_INVALID,Daily save unavailable.,每日存档暂不可用。

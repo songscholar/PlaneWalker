@@ -4,6 +4,7 @@ extends "res://scripts/ui/dungeon_panel_view.gd"
 signal command_requested(command: Dictionary, revision: int)
 signal tutorial_requested
 signal boss_rush_requested(config: Dictionary)
+signal daily_boss_requested
 
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
 const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
@@ -74,6 +75,7 @@ func _render_loadout() -> void:
 			selected_pair = str(row.id)
 	_add_selector("time_pair", tr("UI_LAUNCH_TIME_PAIR_LABEL"), _state.loadout.time_pairs, selected_pair)
 	_add_action("boss_rush", tr("UI_MODE_BOSS_RUSH"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): boss_rush_requested.emit(_state.loadout.selected.duplicate(true)))
+	_add_action("daily_boss", tr("UI_DAILY_TITLE"), "", bool(_state.launch_available), str(_state.launch_reason_key) if not _state.launch_available else "", func(): daily_boss_requested.emit())
 	var launch := Button.new()
 	launch.name = "LaunchButton"
 	launch.text = tr("UI_HUB_ENTER")

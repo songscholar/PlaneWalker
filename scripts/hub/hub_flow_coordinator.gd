@@ -5,6 +5,7 @@ signal launch_requested(config: Dictionary)
 signal resume_requested(config: Dictionary)
 signal tutorial_requested
 signal boss_rush_requested(config: Dictionary)
+signal daily_boss_requested
 signal settings_requested(kind: String, restore_focus: Control)
 
 const Facade := preload("res://scripts/hub/hub_runtime_facade.gd")
@@ -51,6 +52,7 @@ func _ready() -> void:
 	_panel.close_requested.connect(func(_revision: int): close_panel())
 	_panel.tutorial_requested.connect(func(): tutorial_requested.emit())
 	_panel.boss_rush_requested.connect(func(config: Dictionary): boss_rush_requested.emit(config))
+	_panel.daily_boss_requested.connect(func(): daily_boss_requested.emit())
 	get_viewport().size_changed.connect(_fit_scene)
 	_fit_scene()
 	hide_hub()

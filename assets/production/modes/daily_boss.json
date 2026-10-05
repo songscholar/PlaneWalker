@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "mode_id": "daily_boss",
+  "utc_offset_seconds": 28800,
+  "attempt_limit": 3,
+  "archive_days": 31,
+  "character_id": "wanderer",
+  "starting_hp": 100,
+  "presets": [
+    {"weapon_id": "sword", "time_abilities": ["stop", "rewind"], "item_ids": ["frozen_burst", "stasis_lens", "brittle_clock"], "blessing_id": "bls_stasis_shatter", "curse_id": "curse_stasis_fracture"},
+    {"weapon_id": "bow", "time_abilities": ["rewind", "accelerate"], "item_ids": ["rewind_echo", "anchor_thread", "history_blade"], "blessing_id": "bls_rewind_path", "curse_id": "curse_blood_memory"},
+    {"weapon_id": "gun", "time_abilities": ["stop", "rift"], "item_ids": ["rift_engine", "rift_anchor", "rift_conductor"], "blessing_id": "bls_rift_bloom", "curse_id": "curse_starved_horizon"},
+    {"weapon_id": "staff", "time_abilities": ["accelerate", "rift"], "item_ids": ["efficient_overdrive", "overdrive_heart", "accelerant_window"], "blessing_id": "bls_overdrive_refund", "curse_id": "curse_burnout_clock"},
+    {"weapon_id": "gauntlets", "time_abilities": ["stop", "accelerate"], "item_ids": ["frozen_afterimage", "efficient_overdrive", "chronal_battery"], "blessing_id": "bls_overdrive_refund", "curse_id": "curse_glass_cadence"}
+  ],
+  "conditions": [
+    {"id": "frail", "name_key": "UI_DAILY_CONDITION_FRAIL", "melee_effects": {"max_hp_multiplier": 0.7}, "ranged_effects": {"max_hp_multiplier": 0.7}},
+    {"id": "melee_specialist", "name_key": "UI_DAILY_CONDITION_MELEE", "melee_effects": {"attack_multiplier": 1.3}, "ranged_effects": {"attack_multiplier": 0.7}},
+    {"id": "ranged_specialist", "name_key": "UI_DAILY_CONDITION_RANGED", "melee_effects": {"attack_multiplier": 0.7}, "ranged_effects": {"attack_multiplier": 1.3}}
+  ]
+}

@@ -27,6 +27,7 @@ func _run() -> void:
 	await _test_faults()
 	await _test_stale_writer()
 	await _test_interleaved_writer()
+	await _test_interleaved_identical()
 	await _test_content_binding()
 	_suite.finish(get_tree())
 
@@ -171,3 +172,19 @@ func _test_content_binding() -> void:
 	add_child(flow)
 	_suite.assert_true(not flow.configure(_registry, fixture.service, fixture.root.path_join("modes")).ok, "registry and Profile storage content identities must match before challenge construction")
 	await _dispose(flow)
+
+
+func _test_interleaved_identical() -> void:
+	var fixture := _fixture("identical-interleaved")
+	var first := _flow(fixture)
+	var second := _flow(fixture)
+	first.set_fault_injector(func(at: StringName):
+		if at == &"before_primary_promote":
+			_suite.assert_true(second.start(REQUEST).ok, "identical Boss Rush candidate has one physical promotion winner")
+		return false)
+	var refused: Dictionary = first.start(REQUEST)
+	_suite.assert_true(not refused.ok and refused.code == &"CHALLENGE_STALE_PRIMARY" and not first.is_active(), "lost identical Boss Rush CAS cannot publish a second active native arena")
+	first.set_fault_injector(Callable())
+	await _dispose(second)
+	_suite.assert_true(first.reload_saved_session().ok and first.snapshot().request == REQUEST, "identical Boss Rush winner survives latest physical checkpoint reload")
+	await _dispose(first)
