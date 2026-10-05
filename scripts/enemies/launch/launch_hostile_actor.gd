@@ -337,14 +337,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	batch["status_tick_requests"] = status_events.burn_ticks.duplicate(true)
 	if _affix_runtime != null:
 		batch["affix_heal"] = affix_heal
-	var after := before.duplicate(true)
-	after.runtime = preview.snapshot()
-	after.status = status_preview.transaction_snapshot()
-	after.position = _point(predicted)
-	after.knockback = _point(_knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() / 60.0))
-	after.action_credit = next_credit
-	if _affix_runtime != null:
-		after.affix_runtime = affix_after
+	var after := _actor_frame_candidate(before, preview.snapshot(), status_preview.transaction_snapshot(), _point(predicted), _point(_knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() / 60.0)), next_credit, affix_after)
 	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch, "health_before": health.runtime_state_snapshot(), "collision_target": collision_target}
 	_next_launch_ticket_id += 1
 	_prepared_launch_frame = ticket.duplicate(true)
@@ -1227,6 +1220,16 @@ func _refresh_splitting_cue() -> void:
 
 func _actor_state() -> Dictionary:
 	return _actor_state_with_runtime(_launch_runtime.snapshot())
+
+
+func _actor_frame_candidate(before: Dictionary, runtime: Dictionary, status: Dictionary, position: Dictionary, knockback: Dictionary, credit: float, affix_runtime: Dictionary) -> Dictionary:
+	# Replacement snapshots are fresh; only unchanged containers need copying.
+	var after := {"runtime": runtime, "status": status, "position": position, "knockback": knockback, "weakpoint_sequence": before.weakpoint_sequence, "stop_sequence": before.stop_sequence, "weapon_claims": before.weapon_claims.duplicate(true), "weapon_claim_order": before.weapon_claim_order.duplicate(true), "blind_sequence": before.blind_sequence, "action_credit": credit, "death_receipt": before.death_receipt, "weapon_metadata": before.weapon_metadata.duplicate(true), "room_motion": before.room_motion.duplicate(true)}
+	if before.has("affixes"):
+		after["affixes"] = before.affixes.duplicate(true)
+	if before.has("affix_runtime"):
+		after["affix_runtime"] = affix_runtime
+	return after
 
 
 func _actor_state_matches(value: Dictionary) -> bool:
