@@ -99,6 +99,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Recording Snapshot Evidence](current/2026-10-06-native-recording-snapshot-evidence.md) | 正式录制快照字节一致、外部修改隔离、拒绝回退与物理回读 | Focused Verified / Native performance pending |
 | [Native Hostile Frame Query Plan](current/2026-10-06-native-hostile-frame-query-plan.md) | 首领窄状态查询、预演隔离复用和完整回滚保留 | Approved / Current |
 | [Native Hostile Frame Query Evidence](current/2026-10-06-native-hostile-frame-query-evidence.md) | 五首领预演隔离、完整校验与原生帧对照基准 | Focused Verified / Full performance pending |
+| [Native Hostile Boundary Query Plan](current/2026-10-06-native-hostile-boundary-query-plan.md) | 原生帧边界窄查询、实时身份时钟与完整补偿快照保留 | Approved / Current |
+| [Native Hostile Boundary Query Evidence](current/2026-10-06-native-hostile-boundary-query-evidence.md) | 五首领即时边界、完整回滚及相邻权威场景回归 | Focused Verified / Full performance pending |
 | [Native Performance Report Provenance](current/2026-10-06-native-performance-report-provenance-evidence.md) | 失败和超时源码证据、真实落盘状态及外层验收判定回归 | Focused Verified / Full gameplay pending |
 | [Native Five-Floor Victory Evidence](current/2026-10-06-native-five-floor-victory-evidence.md) | 五首领真实击杀、终局碎片接触、结局及奖励存档重新读取 | Focused Verified / Unified certification pending |
 | [Void Phase Projectile Retirement](current/2026-10-06-void-phase-projectile-retirement-plan.md) | Void 阶段切换同步撤销辅助域弹体与原生弹体 | Focused Verified / Full matrix pending |
@@ -107,6 +109,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Replay Codec Difference Evidence](current/2026-10-06-replay-codec-difference-evidence.md) | 真实块字节一致、编码分段成本、历史共享与缓存微基准 | Focused Verified / Native performance pending |
 | [Replay Codec Immutable Reference Plan](current/2026-10-06-replay-codec-immutable-reference-plan.md) | 块内不可变引用认证、完整安全验证保留和编码吞吐修复 | Approved / Current |
 | [Replay Codec Immutable Reference Evidence](current/2026-10-06-replay-codec-immutable-reference-evidence.md) | 真实录像块的精确字节回归、不可变引用边界与编码耗时对照 | Focused Verified / Sustained recording pending |
+| [Replay Safety Leaf Plan](current/2026-10-06-replay-safety-leaf-plan.md) | 通用安全遍历的叶子调用消除、完整类型判定与真实快照成本验收 | Approved / Current |
+| [Replay Safety Leaf Evidence](current/2026-10-06-replay-safety-leaf-evidence.md) | 全类型行为保留、真实快照局部成本及录像回放相邻回归 | Focused Verified / Full performance pending |
+| [Unified Native Recording 600 Evidence](current/2026-10-06-native-unified-recording-600-evidence.md) | 600 帧真实持续录制与物理回读成功，整帧性能仍未达标 | Recording Verified / Frame budget failed |
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
 | [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
