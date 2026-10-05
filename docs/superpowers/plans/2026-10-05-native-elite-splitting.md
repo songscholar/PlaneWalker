@@ -97,7 +97,7 @@ reservation assertion.
 - [x] Authenticate copy rows against ordinary canonical parent, source Splitting configuration, slot/count, exact lifetime/warning and dedicated namespace; ordinary ACTION/DEATH/MIRROR records retain their existing validators.
 - [x] Instantiate CopyActor only for `SPLIT` rows; retain original support constructors for the nine authored support IDs.
 - [x] Bind orphan copies to the retained scene fallback and let TTL retire actual HP/body, threats, payloads and pending encounter work.
-- [ ] Retain independent coherent revision-ten code only after actual native gate passes. All native gates are GREEN; precise retention follows the shared index release.
+- [x] Retain independent coherent revision-ten code only after actual native gate passes. All native gates are GREEN; local commit `575a8ec` retains18 precise paths and leaves natural revision3 migration independent.
 
 ## Task 4: Cold And Physical Continuation
 
@@ -130,4 +130,4 @@ than independent principal spawns.
 - [x] Verify actual production Sword contact, all native warning floors, no independent reward, blocked/deferred positions, eight-child capacity, TTL480, source death outside the frame and full late World compensation.
 - [x] Run `--filter launch_elite`, `--filter native_summon`, `--filter native_combat_checkpoint` and `--filter production_launch_encounter` with retained test logs;10/10,4/4,1/1 and1/1 respectively. Physical checkpoint covers the existing21 default cases; the explicit natural Splitting case remains RED until revision3.
 - [x] Scan `*.log` files including ignored paths for script/parse errors, warnings, orphans and leaks; record the four expected injected settlement rejection diagnostics separately.
-- [x] Write consolidated evidence with exact RED/GREEN, reversible choices and remaining certification limits; update the checklist and README index. The next retention adds its exact commit identity.
+- [x] Write consolidated evidence with exact RED/GREEN, reversible choices and remaining certification limits; update the checklist and README index. Native retention is local commit `575a8ec`.

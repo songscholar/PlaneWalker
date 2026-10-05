@@ -10,6 +10,10 @@
 
 ## Retained Behavior
 
+Native mechanism retention is local commit `575a8ec`, containing18 precisely
+staged implementation, test and documentation paths. This keeps the source
+revision3 natural-content migration independently reviewable and reversible.
+
 Native revision10 enables final-death Splitting. Explicit revisions1-9 retain
 their metadata-only signatures, pending IDs and old runtime schema. Revision10
 uses the existing schema7 and has no redundant trait clock or once-only ledger.
