@@ -1,0 +1,44 @@
+keys,en,zh_CN
+UI_HUB_AUTHORED_CHALLENGES,Authored trials,预设挑战
+UI_AUTHORED_TITLE,Authored trials,预设挑战
+UI_AUTHORED_SWORD,Blade against the clock,剑锋竞速
+UI_AUTHORED_BOW,Measured draw,精准弓弦
+UI_AUTHORED_GUN,Relentless pace,疾速枪火
+UI_AUTHORED_STAFF,Unbroken resolve,坚韧法杖
+UI_AUTHORED_GAUNTLETS,Flawless fists,无伤铁拳
+UI_AUTHORED_TOTAL_TIME,Clear all three Bosses within %.0f seconds,在 %.0f 秒内击败三位首领
+UI_AUTHORED_DAMAGE_EVENTS,Take damage at most %d times across three Bosses,三位首领战中受伤不超过 %d 次
+UI_AUTHORED_STAGE_TIME,Clear each Boss within %.0f seconds,每位首领在 %.0f 秒内击败
+UI_AUTHORED_MINIMUM_HP,Finish each Boss with at least %.0f%% HP,击败每位首领时至少保留 %.0f%% 生命
+UI_AUTHORED_NO_DAMAGE,Clear three Bosses without taking damage,无伤击败三位首领
+UI_AUTHORED_STAGE_FMT,Stage %d/3 / %.2fs / %d damage events,第 %d/3 场 / %.2f秒 / 受伤%d次
+UI_AUTHORED_BUILD_FMT,100 HP / %s / %s + %s,100生命 / %s / %s + %s
+UI_AUTHORED_ROUTE_FMT,Bosses: %s,首领：%s
+UI_AUTHORED_ITEMS_FMT,Items: %s,道具：%s
+UI_AUTHORED_BLESSING_FMT,Blessing: %s,祝福：%s
+UI_AUTHORED_CURSE_FMT,Curse: %s,诅咒：%s
+UI_AUTHORED_BEST_FMT,Fresh best: %s,最佳首次成绩：%s
+UI_AUTHORED_HISTORY,Recent attempts,最近挑战
+UI_AUTHORED_RESULT_FMT,Attempt %d / %s / %.2fs / %d hits / %.1f%% HP / %s,第%d次 / %s / %.2f秒 / 受伤%d次 / %.1f%%生命 / %s
+UI_AUTHORED_FRESH,Fresh,首次挑战
+UI_AUTHORED_PRACTICE,Continued practice,继续练习
+UI_AUTHORED_CONTINUE_NOTICE,Continue from the saved Boss entrance as practice,从已保存的首领入口继续练习
+UI_AUTHORED_SAVE_RETURN,Save and return,保存并返回
+UI_AUTHORED_CONTINUE,Continue practice,继续练习
+UI_AUTHORED_ABANDON,Abandon trial,放弃挑战
+UI_AUTHORED_RESULT_VICTORY,Victory,挑战成功
+UI_AUTHORED_RESULT_OBJECTIVE_FAILED,Objective failed,未达成目标
+UI_AUTHORED_RESULT_DEFEAT,Defeat,战败
+UI_AUTHORED_RESULT_ABANDON,Abandoned,已放弃
+UI_AUTHORED_VICTORY_REQUIRED,Complete a normal victory first,先完成一次普通通关
+UI_AUTHORED_MOD_UNAVAILABLE,This trial requires the base content domain,该挑战需要基础内容存档
+UI_AUTHORED_NORMAL_RUN_ACTIVE,Finish or abandon your normal run first,先结束或放弃当前普通冒险
+UI_AUTHORED_ATTEMPT_ACTIVE,An authored trial is already active,已有进行中的预设挑战
+UI_AUTHORED_SAVE_PENDING,The saved trial is awaiting persistence,挑战结果正在等待保存
+UI_AUTHORED_CONFIGURATION_INVALID,Trial storage is unavailable,挑战存储不可用
+UI_AUTHORED_SAVE_INVALID,Trial save could not be verified,无法验证挑战存档
+UI_AUTHORED_CONTENT_INVALID,Trial content could not be verified,无法验证挑战内容
+UI_AUTHORED_NATIVE_INVALID,The admitted arena could not be constructed,已开始的挑战场地暂时无法构建
+UI_AUTHORED_COMMAND_INVALID,Trial state changed; refresh and retry,挑战状态已变化，请刷新后重试
+UI_AUTHORED_RETRY_INVALID,No retry is available for this trial,当前挑战没有可重试的操作
+UI_AUTHORED_STALE_PRIMARY,A newer trial save exists; reload it to continue,已有更新的挑战存档，请重新载入后继续

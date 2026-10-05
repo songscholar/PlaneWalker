@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "mode_id": "authored_challenges",
+  "character_id": "wanderer",
+  "starting_hp": 100,
+  "history_limit": 10,
+  "sets": [
+    {"id": "sword_timer", "name_key": "UI_AUTHORED_SWORD", "seed": 210301, "weapon_id": "sword", "time_abilities": ["stop", "rewind"], "item_ids": ["frozen_burst", "stasis_lens", "brittle_clock"], "blessing_id": "bls_stasis_shatter", "curse_id": "curse_stasis_fracture", "boss_ids": ["ruin_king", "forest_heart", "void_throne"], "objective": {"kind": "total_time", "limit": 18000, "name_key": "UI_AUTHORED_TOTAL_TIME"}},
+    {"id": "bow_precision", "name_key": "UI_AUTHORED_BOW", "seed": 210302, "weapon_id": "bow", "time_abilities": ["rewind", "accelerate"], "item_ids": ["rewind_echo", "anchor_thread", "history_blade"], "blessing_id": "bls_rewind_path", "curse_id": "curse_blood_memory", "boss_ids": ["forest_heart", "time_sovereign", "forge_colossus"], "objective": {"kind": "damage_events", "limit": 6, "name_key": "UI_AUTHORED_DAMAGE_EVENTS"}},
+    {"id": "gun_pace", "name_key": "UI_AUTHORED_GUN", "seed": 210303, "weapon_id": "gun", "time_abilities": ["stop", "rift"], "item_ids": ["rift_engine", "rift_anchor", "rift_conductor"], "blessing_id": "bls_rift_bloom", "curse_id": "curse_starved_horizon", "boss_ids": ["time_sovereign", "forge_colossus", "ruin_king"], "objective": {"kind": "stage_time", "limit": 6000, "name_key": "UI_AUTHORED_STAGE_TIME"}},
+    {"id": "staff_resolve", "name_key": "UI_AUTHORED_STAFF", "seed": 210304, "weapon_id": "staff", "time_abilities": ["accelerate", "rift"], "item_ids": ["efficient_overdrive", "overdrive_heart", "accelerant_window"], "blessing_id": "bls_overdrive_refund", "curse_id": "curse_burnout_clock", "boss_ids": ["forge_colossus", "void_throne", "forest_heart"], "objective": {"kind": "minimum_hp", "limit": 70000, "name_key": "UI_AUTHORED_MINIMUM_HP"}},
+    {"id": "gauntlets_flawless", "name_key": "UI_AUTHORED_GAUNTLETS", "seed": 210305, "weapon_id": "gauntlets", "time_abilities": ["stop", "accelerate"], "item_ids": ["frozen_afterimage", "efficient_overdrive", "chronal_battery"], "blessing_id": "bls_overdrive_refund", "curse_id": "curse_glass_cadence", "boss_ids": ["void_throne", "ruin_king", "time_sovereign"], "objective": {"kind": "no_damage", "limit": 0, "name_key": "UI_AUTHORED_NO_DAMAGE"}}
+  ]
+}
