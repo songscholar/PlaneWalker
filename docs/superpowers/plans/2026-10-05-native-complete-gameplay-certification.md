@@ -6,7 +6,7 @@
 - Applies To: Authentic five-floor gameplay, Boss admission, terminal cleanup and full native matrix
 - Owner: Plane Walker integration lead
 - Depends On: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`
-- Last Verified: 2026-10-05
+- Last Verified: 2026-10-06
 - Exit Gate: Authentic five-floor victory, all 750 native cases, complete clean validation, exact-source coverage and reproducible local packages pass without script errors or leaks.
 
 ## Completion Criteria
@@ -27,7 +27,7 @@
 - Actual Sword collision callbacks exposed Void core shape changes during the physics query flush. Contact-only deferred projection and native regression are retained in `366e7d9`; ordinary frame prepare/rollback projection remains synchronous.
 - Native matrix schema v3 records the actual damage type as part of the production six-field body claim. Physical and authored Time components are distinct facts; duplicate claims remain rejected. Contracts and runner are retained in `08bb13e`.
 - `p15_five_floor_run_test` uses actual Main, a physical unlocked Profile fixture, physical Sword hits, paid Accelerate, all five native Boss receipts, ending controls, credits and fresh physical settlement reload. Explicit survival invulnerability is retained in its report, which never claims unassisted or human victory. Production clocks stay at 60 Hz and time scale 1.0; the complete scene gets fixed-fps wall acceleration and a 7200-second wall bound.
-- The current canonical rerun has reached the third-floor Boss with no new refusal; final victory and durable terminal settlement are still pending.
+- The untouched `4735176` canonical rerun passes all five actual Boss deaths, native final-heart contact, `shattered_freedom`, credits and fresh physical victory settlement. It retains 12,153 accepted combat frames and explicitly declared survival protection. Evidence is in `docs/current/2026-10-06-native-five-floor-victory-evidence.md`; the latest combined source still requires its own full certification.
 - Native Time responses and auxiliary mechanisms, Hound sigil, Phase Ranger relocation, all dynamic elite affixes and authored Expansion enemies have independent retained evidence. The independent synthetic domain matrix passes all 22,500 cases; it does not satisfy the native 750-case gate.
 
 ## Steps
