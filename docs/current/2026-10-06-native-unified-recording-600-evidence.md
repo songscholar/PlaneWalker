@@ -77,7 +77,19 @@ intents/cosmetic_id subtrees are individually exact native typed bytes. All
 54 differences are Player bookkeeping: action/world-payload revision offset
 +108, and rewind sample sequences/history revision/next sample sequence offset
 +18. The offsets remain constant through the measured interval. This is not
-whole-observation byte equivalence; startup scheduling is under investigation.
+whole-observation byte equivalence. The reports use different Hub waits:
+12 frames for `bf00573` and 120 for `ee642a7`. The Player scene's explicit
+PAUSABLE process mode bypassed Main's disabled CombatRoom, advancing hidden
+Player clocks during those waits. The 108 additional frames explain the
+revision difference; rewind samples every six frames, explaining the
+18-sample difference. These measurements therefore do not isolate the leaf
+and boundary optimizations or establish whole-tape equivalence.
+
+The [Main Player Lifecycle Evidence](2026-10-06-main-player-lifecycle-evidence.md)
+retains the production failure, one-line inherited-mode repair, automatic
+launch/selection/pause regressions and two real 120-frame recordings whose
+complete physical endpoints now match despite different Hub waits. This
+repair does not change or recertify either historical 600-frame artifact.
 
 The comparison's first attempt selected the earlier prerequisite tape and
 failed; its logs remain intact and do not count toward success. Corrected and

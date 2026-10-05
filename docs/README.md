@@ -118,6 +118,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Replay Safety Leaf Plan](current/2026-10-06-replay-safety-leaf-plan.md) | 通用安全遍历的叶子调用消除、完整类型判定与真实快照成本验收 | Approved / Current |
 | [Replay Safety Leaf Evidence](current/2026-10-06-replay-safety-leaf-evidence.md) | 全类型行为保留、真实快照局部成本及录像回放相邻回归 | Focused Verified / Full performance pending |
 | [Unified Native Recording 600 Evidence](current/2026-10-06-native-unified-recording-600-evidence.md) | 600 帧真实持续录制与物理回读成功，整帧性能仍未达标 | Recording Verified / Frame budget failed |
+| [Main Player Lifecycle Evidence](current/2026-10-06-main-player-lifecycle-evidence.md) | Hub 隐藏战斗帧修复、开局与暂停恢复、不同等待时间的真实录像端点一致 | Focused Verified / Full validation pending |
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
 | [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
