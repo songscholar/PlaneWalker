@@ -55,7 +55,20 @@ func project_chaining(phase: String, high_contrast: bool, visual_scale: float) -
 	queue_redraw()
 
 
+func project_mirroring(phase: String, high_contrast: bool, visual_scale: float) -> void:
+	_affix_id = "mirroring"
+	_phase = phase
+	_high_contrast = high_contrast
+	_visual_scale = clampf(visual_scale, 1.0, 1.5)
+	scale = Vector2.ONE * _visual_scale
+	visible = phase not in ["ABSENT", "TERMINAL"]
+	queue_redraw()
+
+
 func _draw() -> void:
+	if _affix_id == "mirroring":
+		_draw_mirroring()
+		return
 	if _affix_id == "chaining":
 		_draw_chaining()
 		return
@@ -137,3 +150,18 @@ func _draw_chaining() -> void:
 	if _phase == "TRIGGERED":
 		draw_line(Vector2(-14, -8), Vector2(-11, -5), ink, 2.0)
 		draw_line(Vector2(14, 8), Vector2(11, 5), ink, 2.0)
+
+
+func _draw_mirroring() -> void:
+	var ink := Color.WHITE if _high_contrast else Color(0.93, 0.68, 0.83)
+	if _phase == "COOLDOWN":
+		ink = Color(0.75, 0.75, 0.75) if _high_contrast else Color(0.63, 0.75, 0.73)
+	for offset: Vector2 in [Vector2(-4, -2), Vector2(4, 2)]:
+		var contour := PackedVector2Array([Vector2(-6, -7), Vector2(3, -7), Vector2(6, -4), Vector2(6, 7), Vector2(-6, 7), Vector2(-6, -7)])
+		for index: int in range(contour.size()):
+			contour[index] += offset
+		draw_polyline(contour, Color(0.08, 0.08, 0.1), 4.0)
+		draw_polyline(contour, ink, 2.0)
+	if _phase == "SCHEDULED":
+		draw_line(Vector2(-14, -10), Vector2(-11, -7), ink, 2.0)
+		draw_line(Vector2(14, 10), Vector2(11, 7), ink, 2.0)

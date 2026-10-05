@@ -43,13 +43,13 @@ mirror scheduling without preventing owner combat or frame advancement.
 
 ## Executable Completion Criteria
 
-1. [ ] Retain real metadata-only RED: actual elite configures Mirroring at revision eight, passes native owned frames through 940, and has no native mirror warning or child.
-2. [ ] Pure revision-nine gate: no receipt before 900; frame 900 receipt; Stop pauses the interval; receipt sequence/deadline/position tampering refuses; historical revision eight remains pending; capacity exhaustion does not block owner frames.
-3. [ ] Actual native gate: sealed frame 900 creates visible warning; no child before 940; frame 940 materializes one actual raster child with ordinary HP/damage and real production attack/Player weapon contact.
-4. [ ] Owner death, eight-child capacity, collision obstruction and delayed admission preserve one owner mirror, warning floors and frozen slot. TTL retires both combat source and room work; no reward, affix, healing, revival or child recursion is possible.
-5. [ ] Inject late World rejection at reservation, birth and child-death boundaries. Complete Player, owner, child, authority and encounter work restore exactly; retry accepts once.
-6. [ ] Typed replay and physical SaveService cold state reconstruct owner clock, reservation, warning, active child and remaining lifetime. Erased/future/foreign-owner records refuse reconstruction.
-7. [ ] Native 640x360 and 1280x720 Metal captures show the actual owner cue, warning and mirror raster; accessibility scaling and legal paired cues remain readable with no overlap.
+1. [x] Retain real metadata-only RED: actual elite configures Mirroring at revision eight, passes native owned frames through 900, and has no native mirror warning or child.
+2. [x] Pure revision-nine gate: no receipt before 900; frame 900 receipt; Stop pauses the interval; receipt sequence/deadline/position tampering refuses; historical revision eight remains pending; capacity exhaustion does not block owner frames.
+3. [x] Actual native gate: sealed frame 900 creates visible warning; no child before 940; frame 940 materializes one actual raster child with ordinary HP/damage and real production attack/Player weapon contact.
+4. [x] Owner death, eight-child capacity, collision obstruction and delayed admission preserve one owner mirror, warning floors and frozen slot. TTL retires both combat source and room work; no reward, affix, regeneration, revival or child recursion is possible.
+5. [x] Inject late World rejection at reservation, birth and child-death boundaries. Complete Player, owner, child, authority and encounter work restore exactly; retry accepts once. Exact TTL expiry and deferred admission also compensate.
+6. [x] Typed replay and physical SaveService cold state reconstruct owner clock, reservation, warning, active child and remaining lifetime. Erased/future/foreign-owner records refuse reconstruction.
+7. [x] Native 640x360 and 1280x720 Metal captures show the actual owner cue, warning and mirror raster; accessibility scaling and legal paired cues remain readable with no overlap.
 8. [ ] Scan retained logs for script/parse errors, warnings and leaks; run existing elite, summon, native checkpoint and production encounter gates; retain precise commit and informational milestone evidence.
 
 Verification commands use `tools/run_tests.sh --filter elite_mirroring --timeout

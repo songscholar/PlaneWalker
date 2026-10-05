@@ -97,7 +97,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6, 7, 8]:
+	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6, 7, 8, 9]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -204,7 +204,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		if not affix_preview.configure(_affix_configuration, _launch_identity, max_hp) or not affix_preview.restore_snapshot(before.affix_runtime):
 			return _launch_failure("affix_checkpoint")
 		var affix_paused: bool = status_preview.is_frozen() or (externally_paused and not anchored_recovery and not teleport_recovery) or nullified_delay or bool(motion.action_paused)
-		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, affix_paused, health.healing_multiplier, _teleport_frame_observation(affix_preview, affix_paused))
+		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, affix_paused, health.healing_multiplier, _teleport_frame_observation(affix_preview, affix_paused), _point(global_position))
 		if not advanced.ok:
 			return _launch_failure("affix_frame")
 		affix_after = affix_preview.snapshot()
@@ -375,6 +375,18 @@ func publish_launch_frame(ticket: Dictionary) -> bool:
 
 func prepared_launch_frame_batch() -> Dictionary:
 	return (_prepared_launch_frame.get("batch", {}) as Dictionary).duplicate(true)
+
+
+func prepared_launch_mirroring_reservation() -> Dictionary:
+	if _prepared_launch_frame.is_empty() or _affix_runtime == null or not _affix_runtime.is_mirroring() or _prepared_launch_frame.after.runtime.terminal:
+		return {}
+	var before: Array = _prepared_launch_frame.before.affix_runtime.mirroring.reservations
+	var after: Array = _prepared_launch_frame.after.affix_runtime.mirroring.reservations
+	return after.back().duplicate(true) if after.size() == before.size() + 1 else {}
+
+
+func launch_mirroring_reservations() -> Array:
+	return _affix_runtime.snapshot().get("mirroring", {}).get("reservations", []).duplicate(true) if _affix_runtime != null else []
 
 
 func prepared_launch_frame_position() -> Vector2:
@@ -839,6 +851,7 @@ func _refresh_affix_cue() -> void:
 	_refresh_teleport_cue()
 	_refresh_shield_cue()
 	_refresh_chaining_cue()
+	_refresh_mirroring_cue()
 	var cue := get_node_or_null("EliteAffixCue") as Node2D
 	if _affix_runtime == null or not _affix_runtime.is_nullified():
 		if cue != null:
@@ -849,7 +862,7 @@ func _refresh_affix_cue() -> void:
 		cue.name = "EliteAffixCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.chaining_phase() != "ABSENT" else (Vector2(-22, -32) if _affix_runtime.is_teleporting() else Vector2(0, -32))
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.is_mirroring() or _affix_runtime.chaining_phase() != "ABSENT" else (Vector2(-22, -32) if _affix_runtime.is_teleporting() else Vector2(0, -32))
 	var phase := "READY"
 	if _affix_runtime.snapshot().terminal:
 		phase = "TERMINAL"
@@ -871,7 +884,7 @@ func _refresh_shield_cue() -> void:
 		cue.name = "EliteShieldCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(-22, -36) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() else Vector2(0, -32)
+	cue.position = Vector2(-22, -36) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() or _affix_runtime.is_mirroring() else Vector2(0, -32)
 	var state: Dictionary = _affix_runtime.snapshot()
 	var phase := "TERMINAL" if state.terminal else ("INTACT" if float(state.shielded.current_pool) > 0.0 else "BROKEN")
 	cue.project_shielded(phase, float(state.shielded.current_pool) / (max_hp * 0.30), bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
@@ -888,7 +901,7 @@ func _refresh_teleport_cue() -> void:
 		cue.name = "EliteTeleportCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.is_nullified() or _affix_runtime.chaining_phase() != "ABSENT" else Vector2(0, -32)
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.is_nullified() or _affix_runtime.is_mirroring() or _affix_runtime.chaining_phase() != "ABSENT" else Vector2(0, -32)
 	var state: Dictionary = _affix_runtime.snapshot()
 	var phase: String = "TERMINAL" if state.terminal else str(state.teleporting.phase)
 	var offset := Vector2.ZERO
@@ -909,8 +922,24 @@ func _refresh_chaining_cue() -> void:
 		cue.name = "EliteChainingCue"
 		cue.z_index = 5
 		add_child(cue)
-	cue.position = Vector2(-22, -32) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() else Vector2(0, -32)
+	cue.position = Vector2(-22, -32) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() or _affix_runtime.is_mirroring() else Vector2(0, -32)
 	cue.project_chaining(phase, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
+
+
+func _refresh_mirroring_cue() -> void:
+	var cue := get_node_or_null("EliteMirroringCue") as Node2D
+	var phase: String = "ABSENT" if _affix_runtime == null else _affix_runtime.mirroring_phase()
+	if phase == "ABSENT":
+		if cue != null:
+			cue.visible = false
+		return
+	if cue == null:
+		cue = AffixCue.new()
+		cue.name = "EliteMirroringCue"
+		cue.z_index = 5
+		add_child(cue)
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() or _affix_runtime.chaining_phase() != "ABSENT" else (Vector2(-22, -32) if _affix_runtime.is_nullified() or _affix_runtime.is_teleporting() else Vector2(0, -32))
+	cue.project_mirroring(phase, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
 
 
 func _actor_state() -> Dictionary:

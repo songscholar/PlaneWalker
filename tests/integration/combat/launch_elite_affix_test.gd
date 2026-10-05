@@ -160,8 +160,8 @@ func _test_configuration_rejection() -> void:
 
 
 func _test_signature_binding() -> void:
-	var actor := _actor(["mirroring"], "hostile:affix", 4)
-	suite.assert_equal(actor.launch_affix_snapshot().pending_ids, ["mirroring"], "unimplemented dynamic affix remains explicit pending native scope")
+	var actor := _actor(["splitting"], "hostile:affix", 4)
+	suite.assert_equal(actor.launch_affix_snapshot().pending_ids, ["splitting"], "unimplemented dynamic affix remains explicit pending native scope")
 	var saved: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
 	saved.actor.erase("affixes")
 	var legacy: Node2D = Scene.instantiate()

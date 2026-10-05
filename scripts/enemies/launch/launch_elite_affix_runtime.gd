@@ -7,6 +7,7 @@ const Identity := preload("res://scripts/enemies/launch/launch_enemy_runtime.gd"
 const Rules := preload("res://scripts/enemies/launch/elite_affix_rules.gd")
 const Teleport := preload("res://scripts/enemies/launch/launch_elite_teleport_runtime.gd")
 const Chaining := preload("res://scripts/enemies/launch/launch_elite_chaining_runtime.gd")
+const Mirroring := preload("res://scripts/enemies/launch/launch_elite_mirroring_runtime.gd")
 const CONFIGURATION_FIELDS := ["ids", "floor_index", "pending_ids", "damage_taken_multiplier", "knockback_resistance", "native_revision"]
 const FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration"]
 const ANCHORED_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored"]
@@ -25,6 +26,7 @@ const MAX_SHIELD_CLAIMS := 4096
 const SHIELD_DAMAGE_BONUS := 0.20
 const TELEPORTING_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored", "nullified", "shielded", "teleporting"]
 const CHAINING_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored", "nullified", "shielded", "teleporting", "chaining"]
+const MIRRORING_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored", "nullified", "shielded", "teleporting", "chaining", "mirroring"]
 
 var _configuration: Dictionary = {}
 var _max_hp := 0.0
@@ -52,13 +54,16 @@ func configure(configuration: Dictionary, identity: Dictionary, max_hp: float) -
 	if configuration.native_revision >= 8:
 		_state.schema_version = 6
 		_state["chaining"] = Chaining.initial_state() if configuration.ids.has("chaining") else {}
+	if configuration.native_revision >= 9:
+		_state.schema_version = 7
+		_state["mirroring"] = Mirroring.initial_state() if configuration.ids.has("mirroring") else {}
 	if configuration.ids.has("regenerating"):
 		_state.regeneration = {"elapsed_frames": 0, "healed_total": 0.0, "interrupted_through_frame": int(identity.runtime_frame), "last_heal_frame": -1}
 	return true
 
 
 static func _valid_configuration(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 8) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
+	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 9) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
 		return false
 	var seen: Array = []
 	var pending: Array = []
@@ -71,7 +76,7 @@ static func _valid_configuration(value: Dictionary) -> bool:
 				return false
 		seen.append(id)
 		previous = id
-		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded") and not (value.native_revision >= 6 and id == "teleporting") and not (value.native_revision >= 8 and id == "chaining"):
+		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded") and not (value.native_revision >= 6 and id == "teleporting") and not (value.native_revision >= 8 and id == "chaining") and not (value.native_revision >= 9 and id == "mirroring"):
 			pending.append(id)
 	return value.pending_ids == pending and Contract.number_in_range(value.damage_taken_multiplier, 1.2 if seen.has("frenzy") else 1.0, 1.2 if seen.has("frenzy") else 1.0) and Contract.number_in_range(value.knockback_resistance, 0.2 if seen.has("fortified") else 0.0, 0.2 if seen.has("fortified") else 0.0)
 
@@ -80,10 +85,12 @@ static func _stable_identity(value: Variant) -> bool:
 	return typeof(value) == TYPE_STRING and not value.is_empty() and value.length() <= 128 and value == value.strip_edges() and not value.contains("\n") and not value.contains("\r")
 
 
-func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, healing_multiplier: float, teleport_observation: Dictionary = {}) -> Dictionary:
+func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, healing_multiplier: float, teleport_observation: Dictionary = {}, source_position: Dictionary = {}) -> Dictionary:
 	if _state.is_empty() or _state.terminal or frame != int(_state.runtime_frame) + 1 or not Contract.number_in_range(current_hp, 0.0, _max_hp) or not Contract.number_in_range(healing_multiplier, 0.0, 10.0):
 		return {"ok": false}
 	if is_teleporting() and not dead and not Teleport.valid_observation(teleport_observation):
+		return {"ok": false}
+	if is_mirroring() and not dead and not Contract.valid_point(source_position):
 		return {"ok": false}
 	if not pending_chaining_grants().is_empty():
 		return {"ok": false}
@@ -125,7 +132,24 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 		var advanced := Teleport.advance(_state.teleporting, frame, paused, teleport_observation)
 		_state.teleporting = advanced.state
 		teleport_relocation = advanced.relocation
+	if not dead and is_mirroring():
+		_state.mirroring = Mirroring.advance(_state.mirroring, frame, paused, source_position)
 	return {"ok": true, "healed_amount": healed, "hp_after": current_hp + healed, "teleport_relocation": teleport_relocation}
+
+
+func is_mirroring() -> bool:
+	return not _state.get("mirroring", {}).is_empty()
+
+
+func mirroring_phase() -> String:
+	if not is_mirroring():
+		return "ABSENT"
+	if _state.terminal:
+		return "TERMINAL"
+	if _state.mirroring.reservations.is_empty():
+		return "READY"
+	var latest: Dictionary = _state.mirroring.reservations.back()
+	return "SCHEDULED" if int(_state.runtime_frame) < int(latest.runtime_frame) + int(Definition.PARAMETERS.mirroring.spawn_warning_frames) else "COOLDOWN"
 
 
 func is_teleporting() -> bool:
@@ -309,7 +333,7 @@ func cancel() -> void:
 
 func can_restore_snapshot(value: Dictionary) -> bool:
 	var revision: int = int(_configuration.get("native_revision", 0))
-	var fields: Array = CHAINING_RUNTIME_FIELDS if revision >= 8 else (TELEPORTING_RUNTIME_FIELDS if revision >= 6 else (SHIELDED_RUNTIME_FIELDS if revision >= 5 else (NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS))))
+	var fields: Array = MIRRORING_RUNTIME_FIELDS if revision >= 9 else (CHAINING_RUNTIME_FIELDS if revision >= 8 else (TELEPORTING_RUNTIME_FIELDS if revision >= 6 else (SHIELDED_RUNTIME_FIELDS if revision >= 5 else (NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS)))))
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or value.schema_version != _state.schema_version or typeof(value.schema_version) != TYPE_INT or value.configuration_digest != _state.configuration_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Contract.MAX_FRAME) or not value.terminal is bool or not value.regeneration is Dictionary:
 		return false
 	if revision >= 3 and not _can_restore_anchored(value):
@@ -321,6 +345,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if revision >= 6 and (not value.teleporting is Dictionary or (_configuration.ids.has("teleporting") and not Teleport.can_restore(value.teleporting, _state.identity, int(value.runtime_frame), value.terminal)) or (not _configuration.ids.has("teleporting") and not value.teleporting.is_empty())):
 		return false
 	if revision >= 8 and (not value.chaining is Dictionary or (_configuration.ids.has("chaining") and not Chaining.can_restore(value.chaining, _state.identity, int(value.runtime_frame))) or (not _configuration.ids.has("chaining") and not value.chaining.is_empty())):
+		return false
+	if revision >= 9 and (not value.mirroring is Dictionary or (_configuration.ids.has("mirroring") and not Mirroring.can_restore(value.mirroring, _state.identity, int(value.runtime_frame))) or (not _configuration.ids.has("mirroring") and not value.mirroring.is_empty())):
 		return false
 	if not _configuration.ids.has("regenerating"):
 		return value.regeneration.is_empty()

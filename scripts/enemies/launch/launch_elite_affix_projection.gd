@@ -4,7 +4,7 @@ extends RefCounted
 const Definition := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
 const Rules := preload("res://scripts/enemies/launch/elite_affix_rules.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
-const CURRENT_NATIVE_REVISION := 8
+const CURRENT_NATIVE_REVISION := 9
 
 var _rows: Array = []
 var _floor := 0
@@ -13,7 +13,7 @@ var _native_revision := 1
 
 
 func configure(rows: Array, floor_index: int, native_revision: int = CURRENT_NATIVE_REVISION) -> Dictionary:
-	if not _rows.is_empty() or not Contract.integer_in_range(floor_index, 1, 5) or native_revision not in [1, 2, 3, 4, 5, 6, 7, 8] or rows.is_empty() or rows.size() > 2:
+	if not _rows.is_empty() or not Contract.integer_in_range(floor_index, 1, 5) or native_revision not in [1, 2, 3, 4, 5, 6, 7, 8, 9] or rows.is_empty() or rows.size() > 2:
 		return {"ok": false}
 	var parsed: Array = []
 	var seen: Array = []
@@ -71,6 +71,9 @@ func project(definition: Dictionary) -> Dictionary:
 					configuration.pending_ids.append(row.id)
 			"chaining":
 				if _native_revision < 8:
+					configuration.pending_ids.append(row.id)
+			"mirroring":
+				if _native_revision < 9:
 					configuration.pending_ids.append(row.id)
 			_:
 				configuration.pending_ids.append(row.id)
