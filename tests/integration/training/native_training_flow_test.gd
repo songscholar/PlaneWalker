@@ -240,7 +240,7 @@ func _test_native_refusal(flow: Node, service: RefCounted) -> void:
 	suite.assert_true(adapter.is_live_binding(), "reattached original World revalidates actual native state")
 	suite.assert_true(not player.advance_action_frame({"unknown": true}) and adapter.pending_observations().is_empty(), "rejected input frame cannot grant training progress")
 	world.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame(_intents(1, Vector2.RIGHT)), "actual late World refusal exercises training failed-frame boundary")
+	suite.assert_true(not suite.expect_rejected_player_frame(player, _intents(1, Vector2.RIGHT)), "actual late World refusal exercises training failed-frame boundary")
 	suite.assert_true(adapter.pending_observations().is_empty() and service.snapshot() == before, "rolled-back native frame publishes no training receipt or reward")
 	world.set("_frame_transaction_commit_fault_for_test", false)
 	suite.assert_true(player.advance_action_frame(_intents(1, Vector2.RIGHT)), "exact successful frame retries after native refusal")

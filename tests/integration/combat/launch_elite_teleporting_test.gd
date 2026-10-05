@@ -285,7 +285,7 @@ func _test_actual_player_frame() -> void:
 		var before: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
 		var player_before: Dictionary = player.full_player_replay_snapshot()
 		player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-		suite.assert_true(not player.advance_action_frame(), "late World refuses native teleport boundary%d" % boundary)
+		suite.assert_true(not suite.expect_rejected_player_frame(player), "late World refuses native teleport boundary%d" % boundary)
 		suite.assert_equal(actor.native_cold_snapshot(func(_source: Node): return {}), before, "late World restores exact native reservation and physical transform")
 		suite.assert_equal(player.full_player_replay_snapshot(), player_before, "late teleport refusal restores complete actual Player snapshot")
 		player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)

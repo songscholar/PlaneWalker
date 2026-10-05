@@ -130,7 +130,7 @@ func _test_native_payload(with_wall: bool) -> void:
 			var body: CollisionShape2D = native.get_node("CollisionShape2D")
 			var before: Dictionary = effects.snapshot()
 			body.disabled = true
-			suite.assert_true(not player.advance_action_frame(), "disabled native projectile shape cannot commit an authoritative collision frame")
+			suite.assert_true(not suite.expect_rejected_player_frame(player, {}, "Hostile frame preparation rejected runtime frame"), "disabled native projectile shape cannot commit an authoritative collision frame")
 			suite.assert_equal(effects.snapshot(), before, "native shape rejection restores clock and pending death work")
 			body.disabled = false
 		if frame in [30, 32] or (frame == 43 and not with_wall):
@@ -139,7 +139,7 @@ func _test_native_payload(with_wall: bool) -> void:
 			bridge.reject_at = frame
 			if frame == 32:
 				bridge.time_source_at = frame
-			suite.assert_true(not player.advance_action_frame(), "late native Moth frame rejection compensates projections and time sources")
+			suite.assert_true(not suite.expect_rejected_player_frame(player), "late native Moth frame rejection compensates projections and time sources")
 			suite.assert_equal(effects.snapshot(), before, "frame rollback restores the complete native payload domain")
 			suite.assert_equal(effects.native_payload_nodes().size(), before_nodes, "failed reservation restores the exact active native body count")
 			for node: Node2D in effects.native_payload_nodes():
@@ -263,7 +263,7 @@ func _test_native_death_warning() -> void:
 	suite.assert_true(bridge.configure(player, Threats.new(), [actor], effects) and player.configure_hostile_frame_participant(bridge), "warned death pool binds an actual native terminal transaction")
 	await get_tree().physics_frame
 	var initial_actor: Dictionary = actor.launch_runtime_snapshot()
-	suite.assert_true(not player.advance_action_frame(), "late rejection compensates lethal Health and death reservation together")
+	suite.assert_true(not suite.expect_rejected_player_frame(player), "late rejection compensates lethal Health and death reservation together")
 	suite.assert_equal(actor.launch_runtime_snapshot(), initial_actor, "rejected death cannot keep its reserved generation, terminal flag or lost Health")
 	suite.assert_equal(effects.payload_snapshot().zones, [], "rejected death cannot leave a damaging native pool")
 	var health := player.get_node("HealthComponent")

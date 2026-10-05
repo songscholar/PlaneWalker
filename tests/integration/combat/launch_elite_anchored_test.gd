@@ -221,7 +221,7 @@ func _test_whole_player_frame() -> void:
 	var before: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame(), "actual late World failure rejects Anchor recovery candidate")
+	suite.assert_true(not suite.expect_rejected_player_frame(player), "actual late World failure rejects Anchor recovery candidate")
 	suite.assert_equal(actor.native_cold_snapshot(func(_source: Node): return {}), before, "whole-frame rejection preserves native Health, poise, recovery, claims and species clock")
 	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "whole-frame Anchor rejection preserves complete native Player")
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)

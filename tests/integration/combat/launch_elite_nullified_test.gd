@@ -187,7 +187,7 @@ func _test_whole_player_frame() -> void:
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	var intents := {"dash": [], "weapon": [], "character": [], "movement": Vector2.ZERO, "aim": Vector2.RIGHT, "time": [{"id": "time_slot_1", "edge": "pressed", "mode": "press", "held_frames": 0}]}
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame(intents), "late World failure rejects the actual Stop and Nullified candidate")
+	suite.assert_true(not suite.expect_rejected_player_frame(player, intents), "late World failure rejects the actual Stop and Nullified candidate")
 	suite.assert_true(actor.native_cold_snapshot(func(_source: Node): return {}) == before, "whole-frame rejection preserves native Stop receipts, exposure and Health")
 	suite.assert_true(player.full_player_replay_snapshot() == player_before, "whole-frame rejection preserves native Player energy and ability state")
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)

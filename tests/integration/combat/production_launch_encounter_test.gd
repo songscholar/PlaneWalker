@@ -91,7 +91,7 @@ func _run() -> void:
 	var native_before: Dictionary = runner.native_launch_snapshot()
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame(), "late production World rejection refuses the complete native encounter frame")
+	suite.assert_true(not suite.expect_rejected_player_frame(player), "late production World rejection refuses the complete native encounter frame")
 	suite.assert_equal(runner.native_launch_snapshot(), native_before, "late rejection compensates every production actor, effect and encounter participant")
 	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "late rejection preserves complete native Player state")
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)

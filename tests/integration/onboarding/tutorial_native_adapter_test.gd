@@ -207,7 +207,7 @@ func _test_compensated_frame(implementation: Script, profile: Dictionary, state:
 	var authority: Node = player.get_node("WorldPayloadAuthority")
 	var before: Dictionary = player.full_player_replay_snapshot()
 	authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame(_intents(1, Vector2.RIGHT)), "actual World commit fault rejects a partially prepared movement frame")
+	suite.assert_true(not suite.expect_rejected_player_frame(player, _intents(1, Vector2.RIGHT)), "actual World commit fault rejects a partially prepared movement frame")
 	authority.set("_frame_transaction_commit_fault_for_test", false)
 	suite.assert_equal(player.full_player_replay_snapshot(), before, "native commit failure compensates the full Player preimage")
 	suite.assert_true(committed.is_empty(), "compensated native frame emits no authoritative notification")

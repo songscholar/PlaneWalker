@@ -182,6 +182,7 @@ class InstrumentedProviderTest(unittest.TestCase):
                 '[node name="Fixture" type="Node"]\nscript = ExtResource("1")\n', encoding="utf-8",
             )
             shutil.copy2(ROOT / "tools/run_tests.sh", root / "tools/run_tests.sh")
+            shutil.copy2(ROOT / "tools/runtime_log_validation.py", root / "tools/runtime_log_validation.py")
             shutil.copy2(ROOT / "tools/coverage/collect_gdscript_coverage.py", root / "tools/coverage/collect_gdscript_coverage.py")
             output = Path(temporary) / "evidence"
             result = api.run_coverage(root, shutil.which(os.environ.get("GODOT_BIN", "godot")), output, timeout_seconds=30)

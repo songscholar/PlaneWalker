@@ -139,7 +139,7 @@ func _cold(world: Dictionary) -> Dictionary:
 func _assert_late_rollback(world: Dictionary, label: String) -> void:
 	var before := _cold(world)
 	world.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not world.player.advance_action_frame(), "late World rejection refuses " + label)
+	suite.assert_true(not suite.expect_rejected_player_frame(world.player), "late World rejection refuses " + label)
 	world.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)
 	suite.assert_equal(_cold(world), before, "late World rejection restores complete Player, mother, children and work: " + label)
 

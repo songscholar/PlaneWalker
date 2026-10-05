@@ -161,7 +161,7 @@ func _test_character_rejection_rolls_back_the_complete_frame() -> void:
 	runtime.reject_next_frame = true
 	var before := _complete_frame_snapshot(player)
 	_suite.assert_true(
-		not bool(player.call("advance_action_frame", {"source": "character_rejection"})),
+		not _suite.expect_rejected_player_frame(player, {"source": "character_rejection"}, "CharacterActionCoordinator rejected authoritative runtime frame"),
 		"authoritative frame reports rejection"
 	)
 	_suite.assert_equal(
@@ -233,7 +233,7 @@ func _test_rewind_rejection_restores_active_world_payload_exactly() -> void:
 	add_child(rejecting_rewind)
 	player.rewind_recorder = rejecting_rewind
 	_suite.assert_true(
-		not player.advance_action_frame({}),
+		not _suite.expect_rejected_player_frame(player, {}, "RewindRecorder rejected authoritative runtime frame"),
 		"downstream Rewind rejection aborts the entire authoritative frame"
 	)
 	_suite.assert_equal(
@@ -271,7 +271,7 @@ func _test_event_commit_preflight_is_observer_atomic() -> void:
 	var before: Dictionary = player.full_player_replay_snapshot()
 	_suite.assert_true(not before.is_empty(), "event-settlement fixture captures the complete Player state")
 	_suite.assert_true(
-		not bool(player.advance_action_frame({})),
+		not _suite.expect_rejected_player_frame(player, {}, "Fixed-frame event buffer preflight rejected runtime frame"),
 		"weapon commit preflight fault rejects the authoritative frame"
 	)
 	_suite.assert_equal(
@@ -331,7 +331,7 @@ func _assert_rejected_time_stop_health_publication(lethal: bool) -> void:
 	var cursor_before := int(player_state_before.get("next_time_action_token", -1))
 	var self_damage_cursor_before := int(manager.get("_next_irreversible_self_damage_token"))
 	_suite.assert_true(
-		not player.advance_action_frame({
+		not _suite.expect_rejected_player_frame(player, {
 			"time_slot_1": {"edge": &"pressed"},
 		}),
 		"late settlement fault rejects Time Stop self-damage frame"
@@ -388,7 +388,7 @@ func _test_world_commit_failure_discards_finalized_publications() -> void:
 	var before: Dictionary = player.full_player_replay_snapshot()
 	authority.set("_frame_transaction_commit_fault_for_test", true)
 	_suite.assert_true(
-		not player.advance_action_frame({
+		not _suite.expect_rejected_player_frame(player, {
 			"time_slot_1": {"edge": &"pressed"},
 		}),
 		"World commit fault rejects the finalized fixed-frame publications"
@@ -780,7 +780,7 @@ func _test_loadout_and_reset_reject_locked_world_without_partial_state() -> void
 		"failed loadout configuration preserves the complete Player state"
 	)
 	_suite.assert_true(
-		not bool(player.call("reset_runtime_state")),
+		not _suite.expect_engine_error(Callable(player, "reset_runtime_state"), "WorldPayloadAuthority runtime reset preflight failed closed", "Player.reset_runtime_state injected locked World refusal"),
 		"direct runtime reset reports the same locked-World failure"
 	)
 	_suite.assert_equal(
@@ -824,10 +824,10 @@ func _test_loadout_rewind_failure_restores_every_runtime_participant() -> void:
 	recorder.set_restore_fault_for_test(&"reset_runtime_state")
 
 	_suite.assert_true(
-		not player.configure_loadout({
+		not _suite.expect_engine_error(Callable(player, "configure_loadout").bind({
 			"weapon_id": "sword",
 			"enabled_time_skills": ["stop", "rewind"],
-		}),
+		}), "RewindRecorder runtime reset failed", "Player.configure_loadout injected Rewind reset refusal"),
 		"late Rewind reset rejection aborts loadout configuration"
 	)
 	_suite.assert_equal(player.loadout_runtime.snapshot(), loadout_before, "failed loadout restores old loadout")

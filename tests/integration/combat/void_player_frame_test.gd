@@ -22,7 +22,7 @@ func _run() -> void:
 	var owner_before: Dictionary = context.actor.launch_runtime_snapshot()
 	var effects_before: Dictionary = context.effects.snapshot()
 	context.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not context.player.advance_action_frame(), "late actual World refusal rejects whole native pickup frame")
+	suite.assert_true(not suite.expect_rejected_player_frame(context.player), "late actual World refusal rejects whole native pickup frame")
 	suite.assert_equal(context.player.weapon_replay_snapshot(), player_before, "actual Player rollback compensates energy revision and event buffer")
 	suite.assert_equal(context.actor.launch_runtime_snapshot(), owner_before, "actual Player rollback compensates pickup once only receipt")
 	suite.assert_equal(context.effects.snapshot(), effects_before, "actual Player rollback compensates native effect claims")

@@ -165,7 +165,7 @@ func _test_native_moth_completion(implementation: Script) -> void:
 			var before: Dictionary = ledger.snapshot()
 			var effects_before: Dictionary = effects.snapshot()
 			bridge.reject_at = frame
-			suite.assert_true(not player.advance_action_frame(), "late whole-frame rejection compensates room reservation, death, impact or completion")
+			suite.assert_true(not suite.expect_rejected_player_frame(player), "late whole-frame rejection compensates room reservation, death, impact or completion")
 			suite.assert_equal(ledger.snapshot(), before, "rejected room frame restores exact pending work and accepted clock")
 			suite.assert_equal(effects.snapshot(), effects_before, "room rollback retains the exact authoritative payload transition")
 			suite.assert_equal(observed, [], "rejected native completion emits no room observation")

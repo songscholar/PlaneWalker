@@ -1,6 +1,6 @@
 # Native Main Performance Probe Plan
 
-- Status: Completed development probe / Final certification pending
+- Status: Active / Development probe verified / Final certification pending
 - Document Role: Current executable verification plan
 - Authority Level: Below approved native performance probe specification
 - Applies To: Production Main timing and exact automatic recording retention

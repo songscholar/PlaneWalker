@@ -234,7 +234,7 @@ func _test_native_burn() -> void:
 		suite.assert_equal(twin.native_cold_snapshot(binding), cold, "restored native Staff burn cannot apply original tick twice")
 	var player_before: Dictionary = world.player.full_player_replay_snapshot()
 	world.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not world.player.advance_action_frame(), "late World refusal compensates second real Staff burn tick")
+	suite.assert_true(not suite.expect_rejected_player_frame(world.player), "late World refusal compensates second real Staff burn tick")
 	suite.assert_equal(actor.native_cold_snapshot(binding), cold, "burn refusal restores actual HP, status clock and native receipts")
 	suite.assert_equal(world.player.full_player_replay_snapshot(), player_before, "burn refusal restores complete actual Player")
 	world.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)
@@ -332,7 +332,7 @@ func _test_actual_sword_rollback() -> void:
 	var observations: Array[float] = []
 	actor.health.damaged.connect(func(amount: float, _hp: float): observations.append(amount))
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame() and bridge.produced, "late World refusal rejects actual Sword-produced repeated body hit")
+	suite.assert_true(not suite.expect_rejected_player_frame(player) and bridge.produced, "late World refusal rejects actual Sword-produced repeated body hit")
 	suite.assert_equal(actor.native_cold_snapshot(func(_node: Node): return {}), before, "late Sword refusal refunds body HP, native claims and controls")
 	suite.assert_true(not actor.health.hostile_body_application_is_active() and actor.health.get("_hostile_body_commit_context").is_empty(), "late Sword compensation retains no transient native body receipt ownership")
 	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "late Sword refusal restores complete actual Player")

@@ -204,7 +204,7 @@ func _test_whole_player_frame() -> void:
 	var before: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame(), "actual late World fault rejects native regeneration frame120")
+	suite.assert_true(not suite.expect_rejected_player_frame(player), "actual late World fault rejects native regeneration frame120")
 	suite.assert_equal(actor.native_cold_snapshot(func(_source: Node): return {}), before, "wholeframe rejection preserves Health/spending/claims/speciesclock")
 	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "wholeframe regeneration rejection preserves complete native Player")
 	suite.assert_equal(heals, [], "late World rejection publishes no native healing observation")

@@ -122,7 +122,7 @@ func _portal_interaction(enemy_only: bool) -> void:
 	var owner_before: Dictionary = f.actors[0].launch_runtime_snapshot()
 	var player_before: Dictionary = f.player.weapon_replay_snapshot()
 	f.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not f.player.advance_action_frame(), "late native World refusal rejects actual portal frame")
+	suite.assert_true(not suite.expect_rejected_player_frame(f.player), "late native World refusal rejects actual portal frame")
 	suite.assert_equal(f.effects.snapshot(), before, "portal refusal restores exact transit claims and native work")
 	suite.assert_equal(f.actors[0].launch_runtime_snapshot(), owner_before, "portal refusal restores exact native owner")
 	suite.assert_equal(f.player.weapon_replay_snapshot(), player_before, "portal refusal restores exact Player transaction")

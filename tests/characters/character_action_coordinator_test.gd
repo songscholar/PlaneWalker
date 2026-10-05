@@ -444,7 +444,7 @@ func _test_runtime_restore_rejection_is_atomic() -> void:
 	coordinator.advance_frame(2)
 	var before: Dictionary = coordinator.snapshot()
 	runtime.reject_restore = true
-	_suite.assert_true(not coordinator.restore_snapshot(target), "runtime may reject a staged restore")
+	_suite.assert_true(not _suite.expect_engine_error(Callable(coordinator, "restore_snapshot").bind(target), "CharacterActionCoordinator runtime restore rollback failed", "CharacterActionCoordinator.restore_snapshot injected persistent runtime restore refusal"), "runtime may reject a staged restore")
 	_suite.assert_equal(coordinator.snapshot(), before, "runtime restore rejection leaves live state exact")
 
 

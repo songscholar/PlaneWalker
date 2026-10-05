@@ -193,7 +193,7 @@ func _native_response(ability: String) -> void:
 	var effects_before: Dictionary = f.effects.snapshot()
 	f.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
 	var next: int = f.frame + 1
-	suite.assert_true(not f.player.advance_action_frame({"time_slot_1": {"edge": &"pressed"}}), "late World refusal rejects paid native " + ability)
+	suite.assert_true(not suite.expect_rejected_player_frame(f.player, {"time_slot_1": {"edge": &"pressed"}}), "late World refusal rejects paid native " + ability)
 	suite.assert_equal(f.actor.launch_runtime_snapshot(), initial, "late refusal restores Boss response watermark and queue")
 	suite.assert_equal(f.player.full_player_replay_snapshot(), player_before, "late refusal restores complete paid Player state")
 	suite.assert_equal(f.effects.snapshot(), effects_before, "late refusal restores source-owned native work")
@@ -236,7 +236,7 @@ func _native_response(ability: String) -> void:
 			var shatter_effects: Dictionary = f.effects.snapshot()
 			var shatter_player: Dictionary = f.player.full_player_replay_snapshot()
 			f.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-			suite.assert_true(not f.player.advance_action_frame(), "late World refusal rolls back native field retirement")
+			suite.assert_true(not suite.expect_rejected_player_frame(f.player), "late World refusal rolls back native field retirement")
 			suite.assert_equal(f.actor.launch_runtime_snapshot(), shatter_actor, "rejected field retirement preserves accepted watch conversion")
 			suite.assert_equal(f.effects.snapshot(), shatter_effects, "rejected field retirement restores complete slowfield and modifiers")
 			suite.assert_equal(f.player.full_player_replay_snapshot(), shatter_player, "rejected field retirement preserves exact paid Player")

@@ -185,7 +185,7 @@ func _test_whole_player_rollback() -> void:
 	var before: Array = [source.native_cold_snapshot(func(_node: Node): return {}), ally.native_cold_snapshot(func(_node: Node): return {})]
 	var player_before: Dictionary = world.player.full_player_replay_snapshot()
 	world.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not world.player.advance_action_frame(), "late World rejection compensates actual source and selected native ally")
+	suite.assert_true(not suite.expect_rejected_player_frame(world.player), "late World rejection compensates actual source and selected native ally")
 	suite.assert_equal(source.native_cold_snapshot(func(_node: Node): return {}), before[0], "late refusal refunds source Health, damage identity and cooldown")
 	suite.assert_equal(ally.native_cold_snapshot(func(_node: Node): return {}), before[1], "late refusal refunds actual recipient control and full native state")
 	suite.assert_equal(world.player.full_player_replay_snapshot(), player_before, "late Chaining refusal restores complete Player")
@@ -270,7 +270,7 @@ func _test_actual_sword_frame() -> void:
 	var before: Array = [source.native_cold_snapshot(func(_node: Node): return {}), ally.native_cold_snapshot(func(_node: Node): return {})]
 	var player_before: Dictionary = world.player.full_player_replay_snapshot()
 	world.player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not world.player.advance_action_frame(), "late World refusal rejects actual Sword-produced Chaining damage")
+	suite.assert_true(not suite.expect_rejected_player_frame(world.player), "late World refusal rejects actual Sword-produced Chaining damage")
 	suite.assert_true(world.bridge.delivered > 0, "actual native Sword DamageInfo reached hostile Hurtbox")
 	suite.assert_equal(source.native_cold_snapshot(func(_node: Node): return {}), before[0], "actual Sword refusal restores source HP, claims and cooldown")
 	suite.assert_equal(ally.native_cold_snapshot(func(_node: Node): return {}), before[1], "actual Sword refusal restores native recipient control")

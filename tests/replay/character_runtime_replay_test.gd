@@ -301,7 +301,7 @@ func _test_passive_and_live_talent_round_trip_and_drift_rejection() -> void:
 	var reward_before_rejected_frame: Dictionary = source.reward_effect_snapshot()
 	source.get("weapon_action_coordinator").set("_frame_event_commit_fault_for_test", true)
 	_suite.assert_true(
-		not source.advance_action_frame({}),
+		not _suite.expect_rejected_player_frame(source, {}, "Fixed-frame event buffer preflight rejected runtime frame"),
 		"rejected fixed frame reaches post-decrement rollback"
 	)
 	source.get("weapon_action_coordinator").set("_frame_event_commit_fault_for_test", false)
@@ -866,7 +866,7 @@ func _test_dash_and_reward_invulnerability_round_trip_and_rollback() -> void:
 		"mode": "press",
 	}]
 	_suite.assert_true(
-		not rollback_target.advance_action_frame(dash_intents),
+		not _suite.expect_rejected_player_frame(rollback_target, dash_intents, "Fixed-frame event buffer preflight rejected runtime frame"),
 		"late frame rejection occurs after dash invulnerability creation"
 	)
 	rollback_target.get("weapon_action_coordinator").set(

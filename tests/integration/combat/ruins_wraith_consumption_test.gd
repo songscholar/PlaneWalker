@@ -165,7 +165,7 @@ func _test_player_bridge_consumption() -> void:
 		var before: Dictionary = actor.launch_runtime_snapshot()
 		var before_registry: Array = registry.snapshot()
 		player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-		suite.assert_true(not player.advance_action_frame(), "late World rejection compensates staged self-consumption")
+		suite.assert_true(not suite.expect_rejected_player_frame(player), "late World rejection compensates staged self-consumption")
 		suite.assert_equal(actor.launch_runtime_snapshot(), before, "late World rejection restores exact active Wraith and live Health")
 		suite.assert_equal(registry.snapshot(), before_registry, "late World rejection restores detonation threat ownership")
 		suite.assert_equal(receipts, [], "late World rejection publishes no death receipt")
