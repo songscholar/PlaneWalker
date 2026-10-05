@@ -1264,6 +1264,7 @@ func _commit_launch_action(plan: Dictionary, token: int) -> Dictionary:
 	_active_phase = &"WINDUP"
 	_active_plan = plan.duplicate(true)
 	_modifier_snapshot = (plan["modifier_snapshot"] as Dictionary).duplicate(true)
+	_live_launch_time_context = (plan["time_interactions_snapshot"] as Dictionary).duplicate(true)
 	return {
 		"ok": true,
 		"code": &"OK",
@@ -1768,12 +1769,16 @@ func _valid_launch_restore_snapshot(value: Dictionary) -> bool:
 				return false
 		else:
 			var expected_state := "action_prepared" if active_phase == "WINDUP" else "action_released"
+			var adapter_definition: Dictionary = adapter_snapshot.get("profile_action", {})
+			var expected_definition := committed.duplicate(true)
+			if adapter_definition.has("_execution_base_attack"):
+				expected_definition["_execution_base_attack"] = float(value.active_plan.adapter_snapshot.base_attack)
 			if (
 				not bool(value["adapter_active"])
 				or str(adapter_snapshot.get("phase_state", "")) != expected_state
 				or committed.is_empty()
 				or int(committed.get("token", 0)) != active_token
-				or adapter_snapshot.get("profile_action", {}) != committed
+				or adapter_definition != expected_definition
 			):
 				return false
 	if (
