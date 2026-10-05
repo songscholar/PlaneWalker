@@ -624,23 +624,58 @@ func _test_pause_freezes_active_duration() -> void:
 func _test_disabled_player_freezes_inherited_time_clock() -> void:
 	get_tree().paused = false
 	var player := await _spawn_player()
+	var gameplay_parent := Node2D.new()
+	gameplay_parent.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(gameplay_parent)
+	player.reparent(gameplay_parent)
 	_suite.assert_true(player.configure_loadout(_config(["stop", "accelerate"])), "selection freeze fixture equips Accelerate")
 	var manager: Node = player.get_node("TimeManager")
-	_suite.assert_equal(player.process_mode, Node.PROCESS_MODE_PAUSABLE, "Player scene defaults to pausable processing")
+	var active_mode: Node.ProcessMode = player.process_mode
+	_suite.assert_equal(active_mode, Node.PROCESS_MODE_INHERIT, "Player scene inherits its gameplay parent processing")
 	_suite.assert_equal(manager.process_mode, Node.PROCESS_MODE_INHERIT, "TimeManager inherits the Player process mode")
+	_suite.assert_true(player.can_process() and manager.can_process(), "active gameplay parent enables inherited Player and manager processing")
 	manager.time_accelerate_duration = 0.08
 	_suite.assert_true(player.try_action(&"time_accelerate"), "selection freeze fixture commits Accelerate")
 	var remaining_before: float = float(manager.get("_time_accelerate_remaining"))
+	var frame_before: int = int(player.priority_arbitration_snapshot().get("frame", 0))
+	player.set_physics_process(true)
 
-	player.process_mode = Node.PROCESS_MODE_DISABLED
+	gameplay_parent.process_mode = Node.PROCESS_MODE_DISABLED
+	_suite.assert_true(not player.can_process() and not manager.can_process(), "disabled gameplay parent suspends inherited Player and manager processing")
 	await get_tree().create_timer(0.12, true).timeout
+	_suite.assert_equal(int(player.priority_arbitration_snapshot().get("frame", 0)), frame_before, "disabled gameplay parent freezes the authoritative action frame")
+	_suite.assert_close(float(manager.get("_time_accelerate_remaining")), remaining_before, "disabled gameplay parent freezes the inherited time clock", 0.01)
+	_suite.assert_true(player.is_time_accelerated(), "disabled gameplay parent preserves the active effect")
+
+	gameplay_parent.process_mode = Node.PROCESS_MODE_PAUSABLE
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	_suite.assert_true(not player.can_process() and not manager.can_process(), "disabled Player suspends inherited manager processing during selection")
+	await get_tree().create_timer(0.12, true).timeout
+	_suite.assert_equal(int(player.priority_arbitration_snapshot().get("frame", 0)), frame_before, "disabled Player freezes the authoritative action frame")
 	_suite.assert_close(float(manager.get("_time_accelerate_remaining")), remaining_before, "disabled Player freezes the inherited time clock", 0.01)
 	_suite.assert_true(player.is_time_accelerated(), "disabled Player preserves the active effect during selection")
 
-	player.process_mode = Node.PROCESS_MODE_PAUSABLE
+	player.process_mode = active_mode
+	get_tree().paused = true
+	_suite.assert_true(not player.can_process() and not manager.can_process(), "global pause suspends the inherited gameplay processing chain")
+	await get_tree().create_timer(0.12, true).timeout
+	_suite.assert_equal(int(player.priority_arbitration_snapshot().get("frame", 0)), frame_before, "global pause freezes the authoritative action frame")
+	_suite.assert_close(float(manager.get("_time_accelerate_remaining")), remaining_before, "global pause freezes the inherited time clock", 0.01)
+	_suite.assert_true(player.is_time_accelerated(), "global pause preserves the active effect")
+
+	get_tree().paused = false
+	_suite.assert_true(player.can_process() and manager.can_process(), "resuming gameplay restores inherited Player and manager processing")
+	for _frame: int in range(2):
+		await get_tree().physics_frame
+		await get_tree().process_frame
+	player.set_physics_process(false)
+	_suite.assert_true(int(player.priority_arbitration_snapshot().get("frame", 0)) > frame_before, "resuming gameplay automatically advances the authoritative action frame")
+	_suite.assert_true(float(manager.get("_time_accelerate_remaining")) < remaining_before, "resuming gameplay automatically advances the inherited time clock")
 	_advance(player, 8)
 	_suite.assert_true(not player.is_time_accelerated(), "restoring Player processing lets the effect finish")
 	await _free_player(player)
+	gameplay_parent.queue_free()
+	await get_tree().process_frame
 
 
 func _test_death_cancels_every_active_time_effect_once() -> void:
