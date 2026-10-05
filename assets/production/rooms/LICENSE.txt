@@ -1,0 +1,6 @@
+Plane Walker Original Room Pixel Artwork
+
+Original pixel geometry authored locally for Plane Walker.
+Dedicated under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+Source: tools/production_art/generate_room_atlases.py

@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_room_atlases.py",
+  "atlases": [
+    {
+      "path": "ruins_tiles.png",
+      "size": [
+        128,
+        32
+      ],
+      "sha256": "27dd89044dbc7f4feb93e62bbe0da5f3762720a5ea89e25cdae428a304cd7a5f"
+    },
+    {
+      "path": "ruins_wall.png",
+      "size": [
+        64,
+        32
+      ],
+      "sha256": "da9aadb721e1be81248fa2c71fa8ac234e9777fc22f1928208f2e600a8a939aa"
+    },
+    {
+      "path": "ruins_door.png",
+      "size": [
+        48,
+        80
+      ],
+      "sha256": "b5dee48a8393ce520447c790a8b17f43ed7071b6eb341aa6ef98aeed888da05d"
+    },
+    {
+      "path": "forest_tiles.png",
+      "size": [
+        128,
+        32
+      ],
+      "sha256": "dabb2e4649a4754369a579bf958b559cd9adb343ecce2f7bb8909a00620dd303"
+    },
+    {
+      "path": "forest_wall.png",
+      "size": [
+        64,
+        32
+      ],
+      "sha256": "d1c5750c1f094d90db204eb9f0b02ddd3d75a154821e3f830dfc27ce25de582c"
+    },
+    {
+      "path": "forest_door.png",
+      "size": [
+        48,
+        80
+      ],
+      "sha256": "f652d9275c1972fec274e4b6db922b1d017f259ffc84bfcd53e44277bb495219"
+    },
+    {
+      "path": "rift_tiles.png",
+      "size": [
+        128,
+        32
+      ],
+      "sha256": "b0df956513973430abe32741c1cd6a6a2cb67bedc3fbf29e84c70549342f564a"
+    },
+    {
+      "path": "rift_wall.png",
+      "size": [
+        64,
+        32
+      ],
+      "sha256": "cefeec28b831b4d4800f121b5685316c307e0d658645a9dd031617464e01930e"
+    },
+    {
+      "path": "rift_door.png",
+      "size": [
+        48,
+        80
+      ],
+      "sha256": "6fb7986b687b0170a1d455423e68f3a8b83a37d0ad91a060754a484fe83eb042"
+    },
+    {
+      "path": "forge_tiles.png",
+      "size": [
+        128,
+        32
+      ],
+      "sha256": "d7e136adb93908447f10df78b6e93dd3c085026741cfe823234cae24fe5ac20e"
+    },
+    {
+      "path": "forge_wall.png",
+      "size": [
+        64,
+        32
+      ],
+      "sha256": "8f8217a4ceb506bbdc1c75638115568a71fdcb6c41c33346ff3c6d38382c92c9"
+    },
+    {
+      "path": "forge_door.png",
+      "size": [
+        48,
+        80
+      ],
+      "sha256": "24b7e4b6001d56943800bd9f2d5e504d5801c458b11f2cbbbc936dbcbcdd3db4"
+    },
+    {
+      "path": "void_tiles.png",
+      "size": [
+        128,
+        32
+      ],
+      "sha256": "a54f3853fbb4067ea0354ae19bbb1c8d0528a18e66f8f55f76b0489f2c788a92"
+    },
+    {
+      "path": "void_wall.png",
+      "size": [
+        64,
+        32
+      ],
+      "sha256": "80f5f76d8cfe5e43e46558695681d065d85c0c5168a0e7a45d347ea11b473d11"
+    },
+    {
+      "path": "void_door.png",
+      "size": [
+        48,
+        80
+      ],
+      "sha256": "d9ca6bfcea874a7d25c4369db698377d2bc5832267368e5ff27ba43bda5fc348"
+    },
+    {
+      "path": "landmarks.png",
+      "size": [
+        448,
+        64
+      ],
+      "frames": [
+        "combat",
+        "elite",
+        "boss",
+        "treasure",
+        "shop",
+        "rest",
+        "event"
+      ],
+      "sha256": "6d06bbcf13e64f2221bd03c189b79c9ea8f1143f762df0695666cc424393aa2a"
+    }
+  ]
+}

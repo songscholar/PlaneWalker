@@ -1,10 +1,12 @@
 # Void P3 Dead Player Heal Consumption
 
 - Status: Retained implementation evidence
-- Document Role: Focused P15 correctness retention review
+- Document Role: Current focused P15 correctness retention review
 - Authority Level: Below approved P15 specification
+- Applies To: Dead Player zero-gain P3 heal consumption, retry and cold restoration
 - Owner: Native Boss implementation lead
 - Last Verified: 2026-10-05
+- Depends On: `../../AGENTS.md`, `../superpowers/plans/2026-10-05-native-void-auxiliary.md`
 
 ## Behavior
 

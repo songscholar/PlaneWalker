@@ -127,7 +127,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Forge Arena Evidence](current/2026-10-05-p15-forge-native-evidence.md) | 铁砧、喷口、冷却、真实伤害、五武器输入和物理冷恢复 | Focused Verified / Current |
 | [Native Summon Plan](superpowers/plans/2026-10-05-native-summons.md) | 非递归子单位、真实攻击、数量上限、死亡退役和物理冷恢复 | Active / Current |
 | [Native Void Auxiliary Plan](superpowers/plans/2026-10-05-native-void-auxiliary.md) | 安全闪步、独立爆发预警、状态、能量拾取和半场机制 | Active / Current |
-| [Native Room Artwork Plan](superpowers/plans/2026-10-05-native-room-artwork.md) | 五层真实像素地面、边界、门洞和分类地标原生接入 | Active / Current |
+| [Native Room Artwork Plan](superpowers/plans/2026-10-05-native-room-artwork.md) | 五层真实像素地面、边界、门洞和分类地标原生接入 | Completed / Historical |
+| [Native Room Artwork Evidence](current/2026-10-05-native-room-artwork-evidence.md) | 三十模板绑定、重置重绑、私有回放和三分辨率原生像素对照 | Focused Verified / Combined certification pending |
+| [Void Dead Player Heal Evidence](current/2026-10-05-void-dead-p3-heal-evidence.md) | 死亡玩家消耗第三阶段治疗、复活不补发、回滚和冷恢复 | Focused Verified / Current |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
 | [Native Shielded Elite Evidence](current/2026-10-05-native-elite-shielded-evidence.md) | 真实护盾、破盾暴露、再生、锚定组合与事务回滚 | Focused Verified / Remaining affixes active |

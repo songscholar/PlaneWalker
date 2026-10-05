@@ -2,6 +2,7 @@ class_name LaunchRoomScene
 extends Node2D
 
 const DESIGN_SIZE := Vector2i(640, 360)
+const RoomArtwork := preload("res://scripts/dungeon/native_room_artwork.gd")
 const ROOM_TYPES: Array[String] = ["combat", "elite", "treasure", "shop", "event", "boss", "rest"]
 const FLOOR_PRESENTATION := {
 	"floor_ruins_of_remnant": {
@@ -43,6 +44,7 @@ var _bound: bool = false
 var _active: bool = false
 var _binding_generation: int = 0
 var _binding: Dictionary = {}
+var _room_artwork: RefCounted = RoomArtwork.new()
 
 
 func room_contract_snapshot() -> Dictionary:
@@ -132,6 +134,10 @@ func presentation_snapshot() -> Dictionary:
 	}
 
 
+func room_artwork_snapshot() -> Dictionary:
+	return _room_artwork.presentation_snapshot() if _bound else {}
+
+
 func floor_rule_configuration() -> Dictionary:
 	if not _bound:
 		return {}
@@ -182,6 +188,9 @@ func reset_room_binding() -> void:
 	deactivate_room()
 	_bound = false
 	_binding.clear()
+	var artwork := get_node_or_null("RoomArtwork") as Node2D
+	if artwork != null:
+		artwork.visible = false
 
 
 func _binding_is_valid(node: Dictionary, template: Dictionary, context: Dictionary) -> bool:
@@ -237,6 +246,8 @@ func _apply_floor_palette() -> void:
 		var accent_node := get_node_or_null(accent_path)
 		if accent_node is Polygon2D:
 			(accent_node as Polygon2D).color = presentation["accent_color"] as Color
+	if _room_artwork.configure(_binding, self) and pixel_layer is CanvasItem:
+		(pixel_layer as CanvasItem).visible = false
 
 
 func _floor_rule_zone(zone_id: String, bounds: Rect2) -> Dictionary:
