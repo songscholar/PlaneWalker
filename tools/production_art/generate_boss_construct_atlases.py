@@ -72,6 +72,33 @@ def cover_frame(phase: int) -> Image.Image:
     return image
 
 
+def wall_frame(phase: int) -> Image.Image:
+    image = Image.new("RGBA", (64, 24))
+    draw = ImageDraw.Draw(image)
+    stone = (114, 131, 128, 255)
+    light = (172, 185, 170, 255)
+    moss = (92, 154, 110, 255)
+    if phase == 2:
+        for x in range(2, 62, 12):
+            draw.polygon(((x, 13), (x + 4, 10), (x + 9, 13), (x + 7, 18), (x + 1, 17)), fill=stone, outline=INK)
+            draw.line(((x + 4, 11), (x + 8, 13)), fill=light)
+        return image
+    draw.rectangle((0, 5, 63, 18), fill=INK)
+    draw.rectangle((1, 6, 62, 16), fill=stone)
+    draw.line(((1, 6), (62, 6)), fill=light, width=2)
+    for x in range(0, 64, 16):
+        draw.line(((x, 7), (x, 11)), fill=INK)
+        draw.line(((x + 8, 12), (x + 8, 16)), fill=INK)
+    draw.line(((1, 11), (62, 11)), fill=INK)
+    draw.rectangle((4, 6, 10, 7), fill=moss)
+    draw.rectangle((49, 15, 60, 16), fill=moss)
+    draw.line(((25, 7), (29, 10), (26, 13), (31, 16)), fill=CYAN)
+    if phase == 1:
+        draw.line(((42, 6), (37, 11), (41, 14), (35, 17)), fill=INK, width=2)
+        draw.line(((10, 7), (16, 10), (13, 16)), fill=RED)
+    return image
+
+
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     atlas = Image.new("RGBA", (128, 32))
@@ -84,6 +111,11 @@ def main() -> None:
         cover_atlas.paste(cover_frame(phase), (48 * phase, 0))
     cover_path = OUTPUT / "ruins_cover.png"
     cover_atlas.save(cover_path)
+    wall_atlas = Image.new("RGBA", (192, 24))
+    for phase in range(3):
+        wall_atlas.paste(wall_frame(phase), (64 * phase, 0))
+    wall_path = OUTPUT / "ruins_wall.png"
+    wall_atlas.save(wall_path)
     manifest = {
         "schema_version": 1,
         "license": "CC0-1.0",
@@ -91,6 +123,7 @@ def main() -> None:
         "atlases": [
             {"id": "time_watch", "path": path.name, "frame_size": [32, 32], "frames": ["idle", "warning_a", "warning_b", "broken"], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()},
             {"id": "ruins_cover", "path": cover_path.name, "frame_size": [48, 48], "frames": ["intact", "damaged", "debris"], "sha256": hashlib.sha256(cover_path.read_bytes()).hexdigest()},
+            {"id": "ruins_wall", "path": wall_path.name, "frame_size": [64, 24], "frames": ["intact", "damaged", "debris"], "sha256": hashlib.sha256(wall_path.read_bytes()).hexdigest()},
         ],
     }
     (OUTPUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

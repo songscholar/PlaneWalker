@@ -98,6 +98,11 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 			var direction := _vector(action.committed_aim)
 			var travelled := (_vector(observations.source_position) - _vector(action.committed_origin)).dot(direction)
 			displacement = direction * minf(maxf(0.0, float(definition.parameters.travel_px) - travelled), float(definition.parameters.speed_px_per_second) * float(control.movement_multiplier) / 60.0)
+		elif not definition.is_empty() and definition.handler_id == "wall" and action.phase == "WARNING":
+			var direction := _vector(action.committed_aim)
+			var desired := _vector(action.committed_origin) - direction * (float(_definition.collision_radius_px) + 7.0)
+			var remaining := _vector(observations.source_position).distance_to(desired)
+			displacement = _vector(observations.source_position).direction_to(desired) * minf(remaining, float(_definition.phases[int(_state.mechanism_state.phase_index)].move_speed) / 60.0)
 		elif action.phase == "IDLE":
 			var source := _vector(observations.source_position)
 			var target := _vector(observations.target_position)
@@ -130,6 +135,11 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		return _failure("conversion_frame")
 	result["mechanism_requests"] = []
 	result["threat_facts"] = []
+	if _arena != null:
+		for wall: Dictionary in _arena.snapshot().walls:
+			if wall.broken or frame != int(wall.spawn_frame) + int(wall.lifetime_frames):
+				continue
+			result.mechanism_requests.append({"kind": "boss_wall_collapse", "run_id": str(_state.identity.run_id), "hostile_source_id": str(_state.identity.hostile_source_id), "runtime_frame": frame, "attack_generation": int(wall.attack_generation) + int(wall.slot), "wall_id": str(wall.id), "position": wall.position.duplicate(true), "parameters": {"warning_frames": int(_definition.mechanisms.wall_collapse_warning_frames), "radius": float(_definition.mechanisms.wall_collapse_radius_px), "damage": float(_definition.mechanisms.wall_collapse_damage) * (float(_definition.enrage.damage_multiplier) if _state.mechanism_state.enraged else 1.0) * float(controls.get("attack_multiplier", 1.0))}})
 	for hit: Dictionary in result.hit_facts:
 		hit.damage = float(hit.damage) * float(controls.get("attack_multiplier", 1.0))
 		if _definition.id == "ruin_king" and hit.action_id == "guardian_enrage_collapse":
@@ -345,6 +355,13 @@ func accept_arena_damage_fact(value: Dictionary) -> Dictionary:
 	return _arena.accept_damage_fact(value) if _arena != null and not _state.terminal else _failure("arena_unavailable")
 
 
+func accept_arena_wall_request(request: Dictionary, bounds: Dictionary) -> Dictionary:
+	var action: Dictionary = _action.snapshot()
+	if _arena == null or _state.terminal or action.phase != "ACTIVE" or action.action_id != "guardian_wall" or action.geometry_generations.is_empty() or request.get("attack_generation") != action.geometry_generations[0] or request.get("geometry") != action.committed_geometry:
+		return _failure("wall_action")
+	return _arena.accept_wall_request(request, bounds)
+
+
 func accept_arena_charge_impact(construct_id: String) -> Dictionary:
 	var action: Dictionary = _action.snapshot()
 	if _arena == null or _state.terminal or action.phase != "ACTIVE" or action.action_id != "guardian_charge" or action.geometry_generations.is_empty():
@@ -365,7 +382,11 @@ func normalize_native_snapshot(value: Dictionary) -> Dictionary:
 	if _arena == null:
 		return value.duplicate(true) if can_restore_snapshot(value) else {}
 	if value.get("schema_version") == 2:
-		return value.duplicate(true) if can_restore_snapshot(value) else {}
+		if not value.get("arena_state") is Dictionary:
+			return {}
+		var normalized := value.duplicate(true)
+		normalized.arena_state = _arena.normalize_snapshot(value.arena_state)
+		return normalized if can_restore_snapshot(normalized) else {}
 	if value.get("schema_version") != 1 or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.get("runtime_frame")) != TYPE_INT or typeof(value.get("terminal")) != TYPE_BOOL:
 		return {}
 	var normalized := value.duplicate(true)
@@ -385,6 +406,10 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if not value.mechanism_state is Dictionary or not Contract.exact_fields(value.mechanism_state, MECHANISM_FIELDS) or not value.action is Dictionary or not value.control is Dictionary or not value.conversion is Dictionary or not _conversion.can_restore_snapshot(value.conversion):
 		return false
+	if _arena != null:
+		for claim: Dictionary in value.arena_state.wall_claims:
+			if claim.attack_generation < int(_state.identity.next_generation_floor) or not Contract.integer_in_range(value.action.get("next_generation_floor"), 1, Controls.MAX_COUNTER) or claim.attack_generation + 1 >= int(value.action.next_generation_floor):
+				return false
 	var mechanism: Dictionary = value.mechanism_state
 	if not Contract.integer_in_range(mechanism.phase_index, 0, _definition.phases.size() - 1) or not Contract.integer_in_range(mechanism.action_phase_index, 0, int(mechanism.phase_index)) or not Contract.number_in_range(mechanism.hp_current, 0.0, _definition.max_hp) or not Contract.number_in_range(mechanism.minimum_hp, 0.0, float(mechanism.hp_current)) or int(mechanism.phase_index) != _phase_for_hp(float(mechanism.minimum_hp)):
 		return false

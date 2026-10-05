@@ -4,6 +4,7 @@ extends "res://scripts/enemies/launch/launch_hostile_actor.gd"
 const BossRuntime := preload("res://scripts/enemies/launch/launch_boss_runtime.gd")
 const BossStatus := preload("res://scripts/enemies/launch/boss_elemental_status_runtime.gd")
 const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
+const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 var _exposure_replay_authority: RefCounted
 
@@ -30,11 +31,18 @@ func _native_geometry_matches_definition() -> bool:
 	if _launch_definition.get("id", "") == "ruin_king":
 		var arena := get_node_or_null("ArenaConstructs")
 		var state: Dictionary = native_arena_snapshot()
-		if arena == null or arena.get_child_count() != 4 or state.is_empty():
+		if arena == null or state.is_empty() or arena.get_child_count() != 4 + state.walls.size():
 			return false
 		for index: int in range(4):
 			var cover := arena.get_child(index)
 			if not cover is Construct or not cover.native_geometry_matches(state.covers[index], _native_arena_origin(), bool(state.terminal)):
+				return false
+		for index: int in range(state.walls.size()):
+			var wall := arena.get_child(index + 4)
+			if not wall is Wall or not wall.native_geometry_matches(state.walls[index], _native_arena_origin(), bool(state.terminal)):
+				return false
+		for claim: Dictionary in state.wall_claims:
+			if _room_motion.is_empty() or claim.bounds != _room_motion.bounds:
 				return false
 	if _launch_definition.get("id", "") != "time_sovereign":
 		return true
@@ -57,10 +65,32 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var result := super.prepare_launch_frame(frame, observations)
 	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
 		return result
+	for request: Dictionary in result.ticket.batch.effect_requests:
+		if request.get("handler_id") != "wall":
+			continue
+		var preview := BossRuntime.new()
+		preview.configure(_launch_definition, _launch_identity)
+		if _room_motion.is_empty() or not preview.restore_snapshot(result.ticket.after.runtime):
+			return _launch_failure("wall_admission")
+		if not _wall_static_placement_valid(preview.snapshot().action):
+			var cancelled: Dictionary = preview.cancel_action(&"wall_outside_safe_room_placement")
+			if not cancelled.ok:
+				return _launch_failure("wall_declined_admission")
+			result.ticket.batch.effect_requests = []
+			result.ticket.batch.phase = "IDLE"
+			result.ticket.batch.retired_generations.append_array(cancelled.retired_generations)
+		elif not preview.accept_arena_wall_request(request, _room_motion.bounds).ok:
+			return _launch_failure("wall_admission")
+		result.ticket.after.runtime = preview.snapshot()
 	for request: Dictionary in result.ticket.batch.mechanism_requests:
 		if request.get("kind", "") == "boss_aftershock":
 			if _room_motion.is_empty():
 				return _launch_failure("aftershock_room_bounds")
+			request["bounds"] = _room_motion.bounds.duplicate(true)
+		elif request.get("kind", "") == "boss_wall_collapse":
+			if _room_motion.is_empty():
+				return _launch_failure("wall_collapse_room_bounds")
+			request.position = _point(_native_arena_origin() + _vector(request.position))
 			request["bounds"] = _room_motion.bounds.duplicate(true)
 	result.batch = result.ticket.batch.duplicate(true)
 	_prepared_launch_frame = result.ticket.duplicate(true)
@@ -80,6 +110,43 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		result.batch = result.ticket.batch.duplicate(true)
 		_prepared_launch_frame = result.ticket.duplicate(true)
 	return result
+
+
+func _native_action_activation_blocked(frame: int, observations: Dictionary) -> bool:
+	if _launch_definition.get("id", "") != "ruin_king":
+		return false
+	var action: Dictionary = _launch_runtime.snapshot().action
+	if action.action_id != "guardian_wall" or action.phase != "WARNING" or frame - int(action.commit_frame) - int(action.paused_frames) < 55:
+		return false
+	if _room_motion.is_empty():
+		return true
+	if not _wall_static_placement_valid(action):
+		return false
+	for fact: Dictionary in action.committed_geometry:
+		var origin := _vector(fact.origin)
+		var direction := _vector(fact.aim_direction)
+		var center := origin + direction * 32.0
+		for subject: Dictionary in [{"position": observations.source_position, "radius": float(_launch_definition.collision_radius_px)}, {"position": observations.target_position, "radius": 14.0}]:
+			var offset := (_vector(subject.position) - center).rotated(-direction.angle())
+			var closest := Vector2(clampf(offset.x, -32.0, 32.0), clampf(offset.y, -6.0, 6.0))
+			if offset.distance_to(closest) <= float(subject.radius) + 0.5:
+				return true
+	return false
+
+
+func _wall_static_placement_valid(action: Dictionary) -> bool:
+	if _room_motion.is_empty():
+		return false
+	var bounds := _motion_bounds()
+	var retreat := _vector(action.committed_origin) - _vector(action.committed_aim) * (float(_launch_definition.collision_radius_px) + 7.0)
+	if not _within_bounds(retreat, bounds, float(_launch_definition.collision_radius_px)):
+		return false
+	for fact: Dictionary in action.committed_geometry:
+		var origin := _vector(fact.origin)
+		var endpoint := origin + _vector(fact.aim_direction) * float(fact.length)
+		if not _within_bounds(origin, bounds, 6.0) or not _within_bounds(endpoint, bounds, 6.0):
+			return false
+	return true
 
 
 func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary:
@@ -134,8 +201,48 @@ func _refresh_native_arena() -> void:
 			body.name = "Cover%d" % int(cover.slot)
 			body.configure(self, str(cover.id))
 			arena.add_child(body)
-	for index: int in range(mini(arena.get_child_count(), state.covers.size())):
+	var replace_walls := false
+	for index: int in range(mini(state.walls.size(), arena.get_child_count() - 4)):
+		if arena.get_child(index + 4).native_construct_snapshot().get("id") != state.walls[index].id:
+			replace_walls = true
+	while arena.get_child_count() > (4 if replace_walls else 4 + state.walls.size()):
+		var surplus := arena.get_child(arena.get_child_count() - 1)
+		arena.remove_child(surplus)
+		surplus.queue_free()
+	for index: int in range(4):
 		arena.get_child(index).present(state.covers[index], _native_arena_origin(), bool(state.terminal))
+	for index: int in range(state.walls.size()):
+		var wall: Node2D
+		if arena.get_child_count() <= index + 4:
+			wall = Wall.new()
+			wall.name = "Wall%d" % index
+			wall.configure(self, str(state.walls[index].id))
+			arena.add_child(wall)
+		else:
+			wall = arena.get_child(index + 4)
+		wall.present(state.walls[index], _native_arena_origin(), bool(state.terminal))
+
+
+func prepared_launch_wall_effect_allowed(request: Dictionary) -> bool:
+	if _prepared_launch_frame.is_empty() or request.get("handler_id") != "wall" or not _prepared_launch_frame.batch.effect_requests.has(request) or _room_motion.is_empty():
+		return false
+	var state: Dictionary = _prepared_launch_frame.after.runtime.arena_state
+	for claim: Dictionary in state.wall_claims:
+		if claim.attack_generation == request.attack_generation and claim.runtime_frame == request.runtime_frame and claim.geometry == request.geometry and claim.bounds == _room_motion.bounds:
+			return true
+	return false
+
+
+func prepared_launch_wall_collapse_allowed(request: Dictionary) -> bool:
+	if _prepared_launch_frame.is_empty() or _room_motion.is_empty() or request.get("kind") != "boss_wall_collapse" or not _prepared_launch_frame.batch.mechanism_requests.has(request) or request.get("bounds") != _room_motion.bounds or not request.get("parameters") is Dictionary or not Contract.exact_fields(request.parameters, ["warning_frames", "damage", "radius"]) or request.parameters.warning_frames != 40 or request.parameters.radius != 24.0 or not Contract.number_in_range(request.parameters.damage, 6.4, 12.0):
+		return false
+	var state: Dictionary = _prepared_launch_frame.after.runtime.arena_state
+	if state.terminal:
+		return false
+	for wall: Dictionary in state.walls:
+		if wall.id == request.get("wall_id"):
+			return not wall.broken and wall.expired and request.runtime_frame == int(wall.spawn_frame) + 600 and request.attack_generation == int(wall.attack_generation) + int(wall.slot) and request.position == _point(_native_arena_origin() + _vector(wall.position))
+	return false
 
 
 func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:

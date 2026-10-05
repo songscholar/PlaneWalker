@@ -174,6 +174,9 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 				"zone":
 					if not _reserve_zones(next, request, definition, action, zone_capacity, _zone_attack_multiplier(wrapper.batch, action), int(actor.get("_launch_identity").seed)):
 						return _failure("zone_reservation")
+				"wall":
+					if not actor.has_method("prepared_launch_wall_effect_allowed") or not actor.prepared_launch_wall_effect_allowed(request):
+						return _failure("unsealed_native_wall")
 				_: return _failure("unimplemented_semantic_handler")
 		for hit: Dictionary in wrapper.batch.hit_facts:
 			if hit.handler_id != "blink":
@@ -195,6 +198,13 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 				"warned_explosion":
 					if not _reserve_explosion(next, request, zone_capacity):
 						return _failure("warned_explosion")
+				"boss_wall_collapse":
+					if not actor.has_method("prepared_launch_wall_collapse_allowed") or not actor.prepared_launch_wall_collapse_allowed(request):
+						return _failure("unsealed_wall_collapse")
+					var collapse_claim := JSON.stringify([request.hostile_source_id, request.wall_id, "collapse"]).sha256_text()
+					if next.claims.has(collapse_claim) or next.claims.size() >= MAX_CLAIMS or not _reserve_explosion(next, request, zone_capacity, "ruin_king.wall_collapse", "physical"):
+						return _failure("wall_collapse_reservation")
+					next.claims.append(collapse_claim)
 				_: return _failure("unimplemented_semantic_mechanism")
 		if not _prepare_terminal_effects(next, actor, definition, context.actors, zone_capacity):
 			return _failure("terminal_semantics")
@@ -367,13 +377,13 @@ func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionar
 	return true
 
 
-func _reserve_explosion(next: Dictionary, request: Dictionary, capacity: int) -> bool:
+func _reserve_explosion(next: Dictionary, request: Dictionary, capacity: int, action_id: String = "forge_titan.overheat_explosion", damage_type: String = "fire") -> bool:
 	if next.zones.size() >= MAX_RESERVATIONS or not Contract.valid_point(request.get("position")) or not request.get("parameters") is Dictionary or not Contract.exact_fields(request.parameters, ["warning_frames", "damage", "radius"]) or not Contract.integer_in_range(request.parameters.warning_frames, 23, 600) or not Contract.number_in_range(request.parameters.damage, 0.0, 600.0) or not Contract.number_in_range(request.parameters.radius, 1.0, 320.0):
 		return false
 	var fact := {"hostile_source_id": request.hostile_source_id, "attack_generation": request.attack_generation, "shape": "circle", "origin": request.position.duplicate(true), "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": request.position.duplicate(true), "summon_slots": [], "radius": float(request.parameters.radius), "length": 0.0, "active_from_frame": next.runtime_frame, "active_through_frame": int(next.runtime_frame) + int(request.parameters.warning_frames)}
 	var source := request.duplicate(true)
-	source["action_id"] = "forge_titan.overheat_explosion"
-	var row := _zone(source, fact, 0, float(request.parameters.damage), "fire", int(request.parameters.warning_frames), 1, 1, 1.0, 0)
+	source["action_id"] = action_id
+	var row := _zone(source, fact, 0, float(request.parameters.damage), damage_type, int(request.parameters.warning_frames), 1, 1, 1.0, 0)
 	if _active_zone_count(next) >= capacity:
 		_make_pending(row)
 	next.zones.append(row)

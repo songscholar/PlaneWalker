@@ -31,6 +31,20 @@
         "debris"
       ],
       "sha256": "ef750f390308551273587137d53fa172b7d0818f0743078f52f15b735ce3c5b4"
+    },
+    {
+      "id": "ruins_wall",
+      "path": "ruins_wall.png",
+      "frame_size": [
+        64,
+        24
+      ],
+      "frames": [
+        "intact",
+        "damaged",
+        "debris"
+      ],
+      "sha256": "f2630be6a6a4aca5662aa34c89a2d2057248debf99a20369b93f4db7acc05945"
     }
   ]
 }
