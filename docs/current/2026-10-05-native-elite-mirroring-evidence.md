@@ -120,7 +120,7 @@ complete production room artwork.
 - Final shared elite GREEN: `build/test-evidence/elite-nine-retention`,9/9 after the shared canonical parent/action and terminal self-consumption corrections.
 - Physical native combat checkpoint GREEN: `build/test-evidence/elite-nine-native-checkpoint`,1/1.
 - Production native encounter GREEN: `build/test-evidence/elite-nine-production`,1/1.
-- Fresh shared summon regression: `build/test-evidence/elite-nine-native-summon`,3/4. Lifecycle, materialization and pure domain pass; the expanded ordinary Sword Wraith fixture checks its second child before delayed collision admission finishes. That fixture's physics synchronization correction is being verified separately.
+- Final shared summon regression GREEN: `build/test-evidence/elite-nine-native-summon-final`,4/4. The expanded real five-weapon input and native Wraith/Spore terminal fixture passes after PhysicsServer synchronization and the versioned normal Sword identity repair retained in `50082b3`.
 
 Expected injected failures log settlement rejection at the tested native frame.
 Successful retained logs contain no script/parse errors, warnings, orphan nodes
@@ -129,7 +129,6 @@ authored content fingerprint or external service changes are required.
 
 ## Remaining Gates
 
-The final expanded ordinary Sword Wraith input fixture remains under verification.
 The shared summon implementation is retained in `43b79f0`, including Mirroring
 admission and the harmless RiftWatcher projection repair. Native Splitting, the complete legal-pair matrix,
 combined whole-room balance and complete P15 certification remain separately

@@ -50,7 +50,7 @@ mirror scheduling without preventing owner combat or frame advancement.
 5. [x] Inject late World rejection at reservation, birth and child-death boundaries. Complete Player, owner, child, authority and encounter work restore exactly; retry accepts once. Exact TTL expiry and deferred admission also compensate.
 6. [x] Typed replay and physical SaveService cold state reconstruct owner clock, reservation, warning, active child and remaining lifetime. Erased/future/foreign-owner records refuse reconstruction.
 7. [x] Native 640x360 and 1280x720 Metal captures show the actual owner cue, warning and mirror raster; accessibility scaling and legal paired cues remain readable with no overlap.
-8. [ ] Scan retained logs for script/parse errors, warnings and leaks; run existing elite, summon, native checkpoint and production encounter gates; retain precise commit and informational milestone evidence.
+8. [x] Scan retained logs for script/parse errors, warnings and leaks; run existing elite, summon, native checkpoint and production encounter gates; retain precise commit and informational milestone evidence. Final shared native summon4/4 is retained under `elite-nine-native-summon-final` after the real Sword input fix in `50082b3`.
 
 Verification commands use `tools/run_tests.sh --filter elite_mirroring --timeout
 180` and `--filter native_summon`, with explicit `TEST_LOG_DIR` for retention.
