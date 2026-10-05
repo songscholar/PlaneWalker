@@ -25,6 +25,9 @@ const REWIND_FIELDS: Array[String] = ["attack_generation", "commit_frame", "hist
 const MAX_CLAIMS := 512
 const MAX_DAMAGE_CLAIMS := 10000
 const MAX_SNAPSHOT_VALIDATION_CACHE := 4
+const MAX_ACTION_VALIDATION_CACHE := 4
+const MAX_ACTION_VALIDATION_TEMPLATE_BYTES := 262144
+const MAX_ACTION_VALIDATION_CACHE_BYTES := 1048576
 
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
@@ -43,6 +46,8 @@ var _time_response: RefCounted
 var _time_auxiliary: RefCounted
 var _legacy_time_action := false
 var _snapshot_validation_cache: Array[Dictionary] = []
+var _action_validation_cache: Array[Dictionary] = []
+var _action_validation_cache_bytes := 0
 var _snapshot_validation_cache_mutex := Mutex.new()
 
 
@@ -940,7 +945,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			_snapshot_validation_cache_mutex.unlock()
 			return true
 	_snapshot_validation_cache_mutex.unlock()
-	if not _can_restore_snapshot_uncached(value):
+	if not _can_restore_snapshot_uncached(value, context):
 		return false
 	_snapshot_validation_cache_mutex.lock()
 	for entry: Dictionary in _snapshot_validation_cache:
@@ -957,6 +962,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 func _clear_snapshot_validation_cache() -> void:
 	_snapshot_validation_cache_mutex.lock()
 	_snapshot_validation_cache.clear()
+	_action_validation_cache.clear()
+	_action_validation_cache_bytes = 0
 	_snapshot_validation_cache_mutex.unlock()
 
 
@@ -987,7 +994,7 @@ func _snapshot_validation_context() -> PackedByteArray:
 	return var_to_bytes(context)
 
 
-func _can_restore_snapshot_uncached(value: Dictionary) -> bool:
+func _can_restore_snapshot_uncached(value: Dictionary, context: PackedByteArray = PackedByteArray()) -> bool:
 	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary", "void_half_index"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else []) + (["time_response", "time_auxiliary"] if _time_response != null else [])
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (10 if _time_response != null else 6 if _forge_arena != null else 8 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
 		return false
@@ -1048,12 +1055,14 @@ func _can_restore_snapshot_uncached(value: Dictionary) -> bool:
 			if typeof(id) != TYPE_STRING or id.is_empty() or id.length() > (64 if field == "stop_claims" else 128) or seen.has(id):
 				return false
 			seen[id] = true
-	var action := _action_for_snapshot(value)
-	if action == null or not action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
+	if context.is_empty():
+		context = _snapshot_validation_context()
+	var action := _validation_action_for_snapshot(value, context)
+	if action.is_empty() or not _validation_action_matches(action, value.action) or not _control.can_restore_snapshot(value.control):
 		return false
 	if _time_response != null and not value.time_response.active.is_empty() and value.time_response.active.attack_generation >= int(value.action.next_generation_floor):
 		return false
-	if _time_response != null and value.action.action_id in Definition.RESPONSE_IDS and value.action.definition_digest == _make_action(int(mechanism.action_phase_index), mechanism.action_enraged).snapshot().definition_digest:
+	if _time_response != null and value.action.action_id in Definition.RESPONSE_IDS and value.action.definition_digest == _action_validation_template(int(mechanism.action_phase_index), mechanism.action_enraged, true, true, context).get("definition_digest", ""):
 		var active: Dictionary = value.time_response.active
 		if active.is_empty() or value.action.action_id != "traitor.counter_" + str(active.receipt.ability_id) or value.action.commit_frame != active.start_frame or value.action.geometry_generations[0] != active.attack_generation or active.cancelled or active.shattered:
 			return false
@@ -1065,7 +1074,7 @@ func _can_restore_snapshot_uncached(value: Dictionary) -> bool:
 		if not Contract.integer_in_range(value.void_half_index, 0, int(value.action.decision_index)):
 			return false
 		var selected: Dictionary = _action_definition(str(value.action.action_id))
-		if value.action.phase != "IDLE" and VoidHalf.current_action(selected) and value.action.definition_digest == _make_action(int(mechanism.action_phase_index), mechanism.action_enraged).snapshot().definition_digest:
+		if value.action.phase != "IDLE" and VoidHalf.current_action(selected) and value.action.definition_digest == _action_validation_template(int(mechanism.action_phase_index), mechanism.action_enraged, true, true, context).get("definition_digest", ""):
 			if not VoidHalf.valid_geometry(value.action.committed_geometry, str(value.action.action_id), _arena_origin):
 				return false
 			if value.action.action_id == "voidking_enrage_zero" and (int(value.void_half_index) == 0 or (float(value.action.committed_aim.x) < 0.0) != (int(value.void_half_index) % 2 == 0)):
@@ -1262,6 +1271,56 @@ func _action_for_snapshot(value: Dictionary) -> RefCounted:
 		if historical != null and historical.can_restore_snapshot(value.action):
 			return historical
 	return null
+
+
+func _validation_action_matches(template: Dictionary, value: Dictionary) -> bool:
+	return Action.can_restore_snapshot_with_authority(value, template.actions, template.actor_kind, template.identity, template.definition_digest)
+
+
+func _validation_action_for_snapshot(value: Dictionary, context: PackedByteArray) -> Dictionary:
+	var phase_index := int(value.mechanism_state.action_phase_index)
+	var enraged: bool = value.mechanism_state.action_enraged
+	var template := _action_validation_template(phase_index, enraged, true, true, context)
+	if not template.is_empty() and _validation_action_matches(template, value.action):
+		return template
+	if _void_arena != null:
+		template = _action_validation_template(phase_index, enraged, false, true, context)
+		if not template.is_empty() and _validation_action_matches(template, value.action):
+			return template
+	if _time_response != null:
+		template = _action_validation_template(phase_index, enraged, true, false, context)
+		if not template.is_empty() and _validation_action_matches(template, value.action):
+			return template
+	return {}
+
+
+func _action_validation_template(phase_index: int, enraged: bool, room_half: bool, current_time_responses: bool, context: PackedByteArray) -> Dictionary:
+	_snapshot_validation_cache_mutex.lock()
+	for entry: Dictionary in _action_validation_cache:
+		if entry.context == context and entry.phase_index == phase_index and entry.enraged == enraged and entry.room_half == room_half and entry.current_time_responses == current_time_responses:
+			var retained: Dictionary = entry.template
+			_snapshot_validation_cache_mutex.unlock()
+			return retained
+	_snapshot_validation_cache_mutex.unlock()
+	var configured := _make_action(phase_index, enraged, room_half, current_time_responses)
+	if configured == null:
+		return {}
+	var template: Dictionary = configured.snapshot_validation_template()
+	var retained_bytes := context.size() + var_to_bytes(template).size()
+	if template.is_empty() or retained_bytes > MAX_ACTION_VALIDATION_TEMPLATE_BYTES:
+		return template
+	_snapshot_validation_cache_mutex.lock()
+	for entry: Dictionary in _action_validation_cache:
+		if entry.context == context and entry.phase_index == phase_index and entry.enraged == enraged and entry.room_half == room_half and entry.current_time_responses == current_time_responses:
+			var retained: Dictionary = entry.template
+			_snapshot_validation_cache_mutex.unlock()
+			return retained
+	while _action_validation_cache.size() >= MAX_ACTION_VALIDATION_CACHE or _action_validation_cache_bytes + retained_bytes > MAX_ACTION_VALIDATION_CACHE_BYTES:
+		_action_validation_cache_bytes -= int(_action_validation_cache.pop_front().bytes)
+	_action_validation_cache.append({"context": context, "phase_index": phase_index, "enraged": enraged, "room_half": room_half, "current_time_responses": current_time_responses, "template": template, "bytes": retained_bytes})
+	_action_validation_cache_bytes += retained_bytes
+	_snapshot_validation_cache_mutex.unlock()
+	return template
 
 
 func _actions_for_regime(phase_index: int, enraged: bool, room_half: bool = true, current_time_responses: bool = true) -> Array:

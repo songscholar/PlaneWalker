@@ -226,16 +226,39 @@ func matches_snapshot(value: Dictionary) -> bool:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, SNAPSHOT_FIELDS):
+	return not _state.is_empty() and can_restore_snapshot_with_authority(value, _actions, _definition.actor_kind, _state.identity, _state.definition_digest)
+
+
+func snapshot_validation_template() -> Dictionary:
+	if _state.is_empty():
+		return {}
+	var template := {"actions": _actions.duplicate(true), "actor_kind": _definition.actor_kind, "identity": _state.identity.duplicate(true), "definition_digest": _state.definition_digest}
+	_freeze_validation_template(template)
+	return template
+
+
+static func _freeze_validation_template(value: Variant) -> void:
+	if value is Dictionary:
+		for child: Variant in value.values():
+			_freeze_validation_template(child)
+		value.make_read_only()
+	elif value is Array:
+		for child: Variant in value:
+			_freeze_validation_template(child)
+		value.make_read_only()
+
+
+static func can_restore_snapshot_with_authority(value: Dictionary, actions: Dictionary, actor_kind: String, identity: Dictionary, definition_digest: Variant) -> bool:
+	if not Contract.exact_fields(value, SNAPSHOT_FIELDS):
 		return false
-	if typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.definition_digest != _state.definition_digest or value.identity != _state.identity:
+	if typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.definition_digest != definition_digest or value.identity != identity:
 		return false
 	for field: String in ["last_runtime_frame", "next_generation_floor", "decision_index", "commit_frame", "idle_through_frame", "paused_frames"]:
 		if typeof(value[field]) != TYPE_INT:
 			return false
-	if value.last_runtime_frame < int(_state.identity.runtime_frame) or value.last_runtime_frame > MAX_COUNTER - Contract.MAX_FRAME:
+	if value.last_runtime_frame < int(identity.runtime_frame) or value.last_runtime_frame > MAX_COUNTER - Contract.MAX_FRAME:
 		return false
-	if value.next_generation_floor < int(_state.identity.next_generation_floor) or value.next_generation_floor > MAX_COUNTER or value.decision_index < 0 or value.decision_index > MAX_COUNTER:
+	if value.next_generation_floor < int(identity.next_generation_floor) or value.next_generation_floor > MAX_COUNTER or value.decision_index < 0 or value.decision_index > MAX_COUNTER:
 		return false
 	if value.paused_frames < 0 or value.paused_frames > Contract.MAX_FRAME:
 		return false
@@ -246,15 +269,15 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if value.idle_through_frame < int(value.identity.runtime_frame) - 1 or value.idle_through_frame > value.last_runtime_frame + Contract.MAX_FRAME * 4:
 		return false
 	for action_id: Variant in value.cooldowns:
-		if typeof(action_id) != TYPE_STRING or not _actions.has(action_id) or typeof(value.cooldowns[action_id]) != TYPE_INT:
+		if typeof(action_id) != TYPE_STRING or not actions.has(action_id) or typeof(value.cooldowns[action_id]) != TYPE_INT:
 			return false
 		if value.cooldowns[action_id] < int(value.identity.runtime_frame) or value.cooldowns[action_id] > value.last_runtime_frame + Contract.MAX_FRAME:
 			return false
 	if value.action_id.is_empty():
 		return value.phase == "IDLE" and value.commit_frame == -1 and value.committed_origin == {} and value.committed_target == {} and value.committed_aim == {} and value.target_id == "" and value.committed_geometry == [] and value.geometry_generations == [] and value.resolved_hit_indices == [] and value.paused_frames == 0
-	if not _actions.has(value.action_id) or value.decision_index < 1 or not _valid_stable_id(value.target_id):
+	if not actions.has(value.action_id) or value.decision_index < 1 or not _valid_stable_id(value.target_id):
 		return false
-	var action: Dictionary = _actions[value.action_id]
+	var action: Dictionary = actions[value.action_id]
 	if value.commit_frame < int(value.identity.runtime_frame) or value.commit_frame > value.last_runtime_frame:
 		return false
 	var elapsed: int = value.last_runtime_frame - value.commit_frame - value.paused_frames
@@ -277,7 +300,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			return false
 		if index > 0 and generation != value.geometry_generations[index - 1] + 1:
 			return false
-	if value.next_generation_floor != value.geometry_generations.back() + 1 or value.committed_geometry != _committed_geometry(action, value, _definition.actor_kind):
+	if value.next_generation_floor != value.geometry_generations.back() + 1 or value.committed_geometry != _committed_geometry(action, value, actor_kind):
 		return false
 	var expected_claims: Array = []
 	for hit: Dictionary in action.hit_schedule:
