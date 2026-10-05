@@ -7,6 +7,7 @@
 - Owner: Runtime integration lane
 - Depends On: `../specs/2026-10-05-p21c-authored-challenges-design.md`
 - Last Verified: 2026-10-05
+- Exit Gate: Five authored objective domains, actual three-Boss flows, strict physical recovery, native Main entry and controller/visual scenes pass with clean logs
 
 > Agentic execution continues under the project's standing authorization.
 
