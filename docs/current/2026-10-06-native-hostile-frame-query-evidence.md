@@ -129,3 +129,61 @@ The complete-frame mean remains above the 16.667 ms budget. Profile remaining
 hotspots on the next unified committed source before another optimization.
 Sustained recording still requires that source to pass the separate 600-frame
 tape/readback gate; this 120-frame result cannot certify background throughput.
+
+## Unified Main-Thread Diagnostic
+
+A separate clean `abd5b6f` archive at
+`build/retained-checkout/native-unified-hotpaths-abd5b6f-20261006` includes the
+query slice and committed codec immutable-reference change. It reuses the
+previous mechanical diagnostic wrapper generator and expands the outer cold
+normalization/full verifier, Bridge helpers, preview, and physical geometry
+labels. The timer records Replay safety at outer calls; safety recursion calls
+its unchanged renamed implementation directly. Production source is untouched.
+The generator wraps 152 methods and discloses the stale absent
+`launch_encounter_frame_authority::publish` target. The second verified import
+and two-worker nesting/retention self-check pass strict logs.
+
+`build/floor4-phase2-unified-diagnostic-120/report.json` passes with 2,501
+admission frames and all measured frames 2,502 through 2,621. The instrumented
+410-script aggregate is
+`82498137dc36ecca4aea83e5e5f81892d3f224d1f267cc1938ee7a1d8e938eb6`.
+The corrected harness retains its complete source manifest, stable source flag,
+clean runtime logs, zero exit code, and no timeout. Content, complete first/last
+observation hashes, and fresh physical typed-byte readbacks still match the
+uninstrumented comparison. The tape has 121 observations, is `INTERRUPTED`, and
+has no recording failure.
+
+Instrumented Player advance mean is 58.388 ms, p95 64.808 ms, maximum 95.308 ms.
+Native duration is 2 seconds, wall duration 8.136 seconds, retention 22.661
+seconds, and peak native static allocation 593,299,844 bytes. Ambient frozen
+certification continues into different scenes. Added wrappers and concurrent
+timer mutex costs make this a hotspot diagnostic, not a speedup or throughput
+comparison.
+
+| Main Measurement Method | Calls | Inclusive ms / Frame | Exclusive ms / Frame |
+| --- | --- | --- | --- |
+| Player advance | 120 | 58.382 | 0.789 |
+| Bridge prepare | 120 | 32.088 | 1.407 |
+| Boss actor prepare | 120 | 12.854 | 0.019 |
+| Recorder observe | 120 | 12.603 | 0.095 |
+| Native cold snapshot | 120 | 6.186 | 0.047 |
+| Native cold full verifier | 120 | 5.715 | 0.498 |
+| Native cold normalization | 120 | 0.346 | 0.346 |
+| Full Player verifier | 120 | 4.622 | 0.176 |
+| Outer Replay safety | 1,440 | 7.886 | 7.886 |
+| Boss complete snapshot | 3,040 | 4.531 | 4.531 |
+| Void auxiliary validation | 723 | 3.752 | 3.752 |
+| Boss snapshot validation | 1,080 | 10.751 | 2.847 |
+| Boss physical geometry | 1,200 | 2.847 | 2.792 |
+| Boss validation context | 1,080 | 2.502 | 2.502 |
+| Boss restore | 360 | 10.797 | 1.853 |
+| Action configure | 1,099 | 1.683 | 1.683 |
+| Body/arena preview | 240 | 9.249 | 0.249 |
+| Boss preview configuration | 240 | 0.016 | 0.014 |
+
+Inclusive rows overlap and must not be added. The tiny preview-key cost does
+not justify more configuration-key work. Remaining work is concentrated in
+safety traversal, repeated complete Boss/auxiliary projections and validation,
+and physical geometry preparation. The recorder's worker calls outer Replay
+safety 960,704 times across measurement and retention, so timer mutex overhead
+also affects retention. No codec-throughput conclusion follows from this run.
