@@ -125,10 +125,14 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Forest Auxiliary Evidence](current/2026-10-05-native-forest-auxiliary-evidence.md) | 原生构件、真实伤害与回血、五武器输入、事务回滚和历史冷恢复 | Focused Verified / Current |
 | [Native Arena Integration Evidence](current/2026-10-05-native-arena-integration-evidence.md) | Forest、Void、Forge 的共同帧事务、回放构件和真实 Ruin 武器输入接入 | Focused Verified / Combined certification pending |
 | [Native Forge Arena Evidence](current/2026-10-05-p15-forge-native-evidence.md) | 铁砧、喷口、冷却、真实伤害、五武器输入和物理冷恢复 | Focused Verified / Current |
+| [Native Summon Plan](superpowers/plans/2026-10-05-native-summons.md) | 非递归子单位、真实攻击、数量上限、死亡退役和物理冷恢复 | Active / Current |
+| [Native Void Auxiliary Plan](superpowers/plans/2026-10-05-native-void-auxiliary.md) | 安全闪步、独立爆发预警、状态、能量拾取和半场机制 | Active / Current |
+| [Native Room Artwork Plan](superpowers/plans/2026-10-05-native-room-artwork.md) | 五层真实像素地面、边界、门洞和分类地标原生接入 | Active / Current |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
 | [Native Shielded Elite Evidence](current/2026-10-05-native-elite-shielded-evidence.md) | 真实护盾、破盾暴露、再生、锚定组合与事务回滚 | Focused Verified / Remaining affixes active |
 | [Native Teleporting Elite Evidence](current/2026-10-05-native-elite-teleporting-evidence.md) | 房间安全落点、完整离场预警和到达恢复、碰撞再验证与真实玩家帧回滚 | Focused Verified / Remaining affixes active |
+| [Native Chaining Elite Evidence](current/2026-10-05-native-elite-chaining-evidence.md) | 实际承伤触发、有限友军增益、冷恢复和帧回滚 | Focused Verified / Remaining affixes active |
 | [Native Void Arena Evidence](current/2026-10-05-native-void-arena-evidence.md) | 原生柱体、有限核心轮次、实际治疗与帧补偿和冷恢复 | Focused Verified / Remaining auxiliary moves active |
 | [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
 | [Clean Certification Contract Repairs](current/2026-10-05-clean-certification-contract-repairs.md) | 完整内容计数、真实驱动接口夹具与清洁快照验证 | Focused Verified / Combined certification pending |

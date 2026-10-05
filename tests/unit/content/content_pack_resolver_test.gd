@@ -27,6 +27,7 @@ const SPECIALIZED_CATEGORY_COUNTS := {
 	"narrative_definition": 57,
 	"narrative_source_definition": 13,
 	"tutorial_definition": 34,
+	"cosmetic_definition": 15,
 }
 const P14_MANIFEST_PATHS: Array[String] = [
 	"content/floors.json",
@@ -88,12 +89,14 @@ func _test_project_base_pack(suite) -> void:
 	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
 	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
 	var content_manifest: Array = descriptor.get("content_manifest", [])
-	suite.assert_equal(content_manifest.size(), 26, "project base pack owns every authored P14/P15/P16 source")
+	suite.assert_equal(content_manifest.size(), 27, "project base pack owns every authored source including free cosmetics")
+	suite.assert_true(content_manifest.has("content/cosmetics.json"), "free cosmetic definitions belong to the Base Pack authority")
 	for relative_path: String in P14_MANIFEST_PATHS:
 		suite.assert_true(content_manifest.has(relative_path), "project base pack registers %s" % relative_path)
-	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 1, "project base pack owns localization source")
+	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 2, "project base pack owns content and cosmetic localization sources")
+	suite.assert_true(descriptor.localization_sources.has("localization/cosmetics.csv"), "free cosmetic localization is integrity-bound")
 	var asset_manifest := descriptor.get("asset_manifest", []) as Array
-	suite.assert_equal(asset_manifest.size(), 49, "Launch rooms, authored hostile and Hub assets, and material policy are integrity-bound")
+	suite.assert_equal(asset_manifest.size(), 67, "Launch rooms, authored hostile, Hub and cosmetic assets, and material policy are integrity-bound")
 	suite.assert_true(
 		asset_manifest.has("assets/rooms/launch/launch_room_base.tscn"),
 		"P14D registers the shared Launch room base"
@@ -101,12 +104,12 @@ func _test_project_base_pack(suite) -> void:
 	for asset_value: Variant in asset_manifest:
 		var asset_path := str(asset_value)
 		suite.assert_true(
-			asset_path.begins_with("assets/rooms/launch/") and asset_path.ends_with(".tscn") or asset_path.begins_with("assets/enemies/launch/") and asset_path.get_extension() in ["png", "tscn", "json"] or asset_path.begins_with("assets/hub/") and asset_path.get_extension() in ["png", "json"] or asset_path == "content/meta_material_policy.json",
+			asset_path.begins_with("assets/rooms/launch/") and asset_path.ends_with(".tscn") or asset_path.begins_with("assets/enemies/launch/") and asset_path.get_extension() in ["png", "tscn", "json"] or asset_path.begins_with("assets/hub/") and asset_path.get_extension() in ["png", "json"] or asset_path.begins_with("assets/cosmetics/") and asset_path.get_extension() in ["png", "json"] or asset_path in ["assets/cosmetics/LICENSE.txt", "content/meta_material_policy.json"],
 			"asset stays inside the authored Launch content boundary: %s" % asset_path
 		)
 	suite.assert_equal(
 		(descriptor.get("integrity_hashes", {}) as Dictionary).size(),
-		76,
+		96,
 		"Base Pack integrity closes all content, localization, and declared assets"
 	)
 
@@ -130,9 +133,9 @@ func _test_project_base_pack(suite) -> void:
 			specialized_entries.append(entry)
 		else:
 			generic_entries.append(entry)
-	suite.assert_equal(entries.size(), 431, "project base pack contains the exact complete authored content authority")
+	suite.assert_equal(entries.size(), 446, "project base pack contains the exact complete authored content authority")
 	suite.assert_equal(generic_entries.size(), 152, "generic v2 authority remains frozen at 152 definitions")
-	suite.assert_equal(specialized_entries.size(), 279, "P14/P15/P16 contribute every specialized definition")
+	suite.assert_equal(specialized_entries.size(), 294, "P14/P15/P16 and free cosmetics contribute every specialized definition")
 	for category: String in SPECIALIZED_CATEGORY_COUNTS:
 		var category_count := 0
 		for entry: Dictionary in specialized_entries:
