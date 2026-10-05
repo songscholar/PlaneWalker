@@ -47,7 +47,7 @@ func _run() -> void:
 		await get_tree().process_frame
 	suite.assert_true(reached, "actual Host routes through the generated prerequisites to the event node")
 	if not reached:
-		await _dispose(main)
+		await _dispose(main, suite)
 		suite.finish(get_tree())
 		return
 	var facade: RefCounted = host.native_checkpoint_participants().facade
@@ -59,7 +59,7 @@ func _run() -> void:
 	var catalog: RefCounted = facade.encounter_catalog()
 	suite.assert_true(catalog.has_method("resolve_for_event"), "actual Launch catalog resolves ambush recipes against event geometry and node identity")
 	if anchor == null or not catalog.has_method("resolve_for_event") or view.get("event_id") != "event_sleeping_guardian":
-		await _dispose(main)
+		await _dispose(main, suite)
 		suite.finish(get_tree())
 		return
 	var chosen: Variant = host.choose_event_option(&"commit", int(host.runtime_snapshot().revision))
@@ -68,7 +68,7 @@ func _run() -> void:
 	var started: Dictionary = runner.native_launch_snapshot()
 	suite.assert_true(not started.is_empty() and started.encounter.identity.room_id == "layer_03_c", "event continuation binds the actual native encounter to the event floor node")
 	if not chosen.ok or started.is_empty():
-		await _dispose(main)
+		await _dispose(main, suite)
 		suite.finish(get_tree())
 		return
 	var pending: Dictionary = host.runtime_snapshot()
@@ -105,11 +105,23 @@ func _run() -> void:
 	suite.assert_equal(host.runtime_snapshot(), after, "repeated concrete encounter completion cannot duplicate the event outcome")
 	var dismissed: Variant = host.dismiss_event(int(host.runtime_snapshot().revision))
 	suite.assert_true(dismissed.ok and host.native_run_state().current_floor_node().cleared, "resolved native ambush can dismiss and continue normal room routing")
-	await _dispose(main)
+	await _dispose(main, suite)
 	suite.finish(get_tree())
 
 
-func _dispose(main: Node) -> void:
+func _dispose(main: Node, suite: RefCounted) -> void:
+	var playback_refs: Array[WeakRef] = []
+	var director: Node = main.get_node_or_null("MusicDirector")
+	if director != null:
+		for deck: Node in director.get_children():
+			if deck is AudioStreamPlayer and deck.get_stream_playback() != null:
+				playback_refs.append(weakref(deck.get_stream_playback()))
 	main.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
+	# AudioServer releases stopped playback on its independent mix thread.
+	for _step: int in range(20):
+		if playback_refs.all(func(reference: WeakRef): return reference.get_ref() == null):
+			break
+		await get_tree().create_timer(0.01).timeout
+	suite.assert_true(playback_refs.all(func(reference: WeakRef): return reference.get_ref() == null), "actual Main teardown releases every active music playback before process exit")

@@ -29,6 +29,7 @@ func _run() -> void:
 		await _test_native_storm_death()
 		await _test_native_spore_residual()
 		await _test_native_status_disposal(implementation)
+		await _test_retired_status_disposal()
 	suite.finish(get_tree())
 
 
@@ -359,6 +360,34 @@ func _test_native_status_disposal(implementation: Script) -> void:
 	suite.assert_equal(authority.snapshot().statuses, [], "room disposal clears authoritative finite statuses")
 	actor.queue_free()
 	player.queue_free()
+	await get_tree().process_frame
+
+
+func _test_retired_status_disposal() -> void:
+	var actor := _actor("shattered_sentinel", "hostile:retired")
+	var player := _semantic_player()
+	player.apply_floor_rule_modifier(&"outside_rule", &"movement", &"apply", {"movement_multiplier": 0.8})
+	var root := Node2D.new()
+	add_child(root)
+	var authority := Effects.new()
+	suite.assert_true(authority.configure("run-p15") and authority.configure_native_payloads(root), "real effect aggregate configures before delayed terminal cleanup")
+	suite.assert_true(authority.bind_native_targets({"hostile:retired": actor}, {"player:1": player}), "actual effect aggregate binds native source and surviving Player")
+	var state: Dictionary = authority.launch_transaction_snapshot()
+	state.semantics.statuses = [{"id": "retired_player_status", "target_id": "player:1", "expires_frame": 60, "slow_multiplier": 0.6, "speed_multiplier": 1.0, "attack_multiplier": 1.0, "freeze_actions": false}, {"id": "retired_actor_status", "target_id": "hostile:retired", "expires_frame": 60, "slow_multiplier": 1.0, "speed_multiplier": 1.0, "attack_multiplier": 0.8, "freeze_actions": false}]
+	suite.assert_true(authority.restore_launch_transaction_snapshot(state), "actual aggregate restores source-owned native semantic statuses")
+	suite.assert_true(player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "delayed terminal fixture owns actual Player slowdown")
+	_injure(actor, 1000.0, 1)
+	suite.assert_true(actor.get_node("HealthComponent").dead, "authentic Health damage admits final death before delayed cleanup")
+	await get_tree().create_timer(0.25).timeout
+	await get_tree().process_frame
+	suite.assert_true(not is_instance_valid(actor), "actual native final death releases bound source before terminal retry")
+	suite.assert_true(authority.dispose_native_effects(), "delayed terminal cleanup accepts released native target without a script error")
+	suite.assert_true(not player.floor_rule_effect_snapshot().modifiers.has("launch_semantic|movement"), "released source cannot prevent surviving Player slowdown cleanup")
+	suite.assert_true(player.floor_rule_effect_snapshot().modifiers.has("outside_rule|movement"), "delayed cleanup preserves unrelated surviving Player modifiers")
+	suite.assert_equal(authority.semantic_snapshot().statuses, [], "delayed terminal cleanup clears all finite semantic ownership")
+	suite.assert_true(authority.dispose_native_effects(), "accepted delayed cleanup remains idempotent after target map clears")
+	player.queue_free()
+	root.queue_free()
 	await get_tree().process_frame
 
 

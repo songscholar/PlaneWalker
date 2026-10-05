@@ -270,6 +270,7 @@ func _run() -> void:
 
 	var actual_started = host.call("start_run", _config())
 	suite.assert_true(actual_started.ok, "host starts a run through the real Player authority path")
+	suite.assert_true(host.call("set_run_presentation_visible", true), "host contract fixture enables its actual run HUD projection")
 	var actual_snapshot: Dictionary = host.call("runtime_snapshot")
 	var actual_run_id := str(actual_snapshot.get("run_id", ""))
 	var actual_health: Node = actual_player.get_node("HealthComponent")
@@ -495,7 +496,7 @@ func _assert_main_gameplay_pause_boundary(suite) -> void:
 	await get_tree().process_frame
 	var room: Node = main.get_node("CombatRoom01")
 	room.set("spawn_warning_duration", 0.0)
-	main.call("_start_new_run")
+	suite.assert_true(main.call("_launch_run", _config(), true), "pause fixture enters an actual accepted Main compatibility run")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_suite_process_mode_assertions(suite, room)

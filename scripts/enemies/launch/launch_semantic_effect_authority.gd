@@ -496,8 +496,8 @@ func _zone(request: Dictionary, geometry: Dictionary, index: int, damage: float,
 
 func _apply_statuses(value: Dictionary, targets: Dictionary) -> bool:
 	for id: String in targets:
-		var target: Node2D = targets[id]
-		if not is_instance_valid(target):
+		var target: Variant = targets[id]
+		if not is_instance_valid(target) or not target is Node2D:
 			continue
 		var slow := 1.0
 		var speed := 1.0
@@ -534,7 +534,9 @@ func _apply_statuses(value: Dictionary, targets: Dictionary) -> bool:
 
 func _status_checkpoints(targets: Dictionary) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	for target: Node2D in targets.values():
+	for target: Variant in targets.values():
+		if not is_instance_valid(target) or not target is Node2D:
+			continue
 		if target.has_method("floor_rule_effect_snapshot"):
 			result.append({"target": target, "kind": "player", "snapshot": target.floor_rule_effect_snapshot()})
 		elif _native_actor(target):

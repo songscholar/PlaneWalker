@@ -106,7 +106,7 @@ class FailingInitialRoomFacade:
 	var player_died_calls: int = 0
 	var catalog := RefCounted.new()
 
-	func start_run(accepted_config: Dictionary, accepted_run_id: String) -> Variant:
+	func start_run(accepted_config: Dictionary, accepted_run_id: String, _progression_projection: Dictionary = {}) -> Variant:
 		config = accepted_config.duplicate(true)
 		run_id = accepted_run_id
 		revision = 1
@@ -199,7 +199,7 @@ class SynchronousInitialRoomFacade:
 	var player_died_calls: int = 0
 	var catalog := RefCounted.new()
 
-	func start_run(accepted_config: Dictionary, accepted_run_id: String) -> Variant:
+	func start_run(accepted_config: Dictionary, accepted_run_id: String, _progression_projection: Dictionary = {}) -> Variant:
 		config = accepted_config.duplicate(true)
 		run_id = accepted_run_id
 		revision = 1
