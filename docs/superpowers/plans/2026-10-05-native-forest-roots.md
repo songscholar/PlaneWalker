@@ -1,12 +1,14 @@
 # Native Forest Roots Implementation Plan
 
 - Status: Completed / Historical for the focused root interaction slice
-- Document Role: Current implementation plan
+- Document Role: Historical implementation and verification plan
 - Authority Level: Execution details below the approved P15 specification
 - Applies To: Six Forest root constructs, independent HP,45-frame body exposure and permanent P2 retirement
 - Owner: Native Boss implementation lead
 - Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`, `docs/superpowers/plans/2026-10-05-native-boss-arena-constructs.md`
 - Last Verified: 2026-10-05
+- Implementation Status: Verified locally and retained in commit `adf97fb`
+- Completion Evidence: `docs/current/2026-10-05-p15b-native-forest-roots-evidence.md`, root native/pure contracts and four inspected OpenGL screenshots
 - Exit Gate: Native root hit, refused-frame retry,45-frame exposure, deterministic P2 retirement, exact current/historical cold recovery, logs and raster screenshots pass; full Forest action and loadout gates remain separately recorded.
 
 **Goal:** Retain an actual Forest root interaction with strict pure state, native collision and cold recovery. This slice does not certify the entire Forest arena.
