@@ -14,6 +14,7 @@ var _next_ticket_id := 1
 var _active: Dictionary = {}
 var _detached: Dictionary = {}
 var _publishing := false
+var _last_preparation_rejection: Dictionary = {}
 
 
 func configure(player: Node2D, registry: RefCounted, actors: Array, effects: RefCounted) -> bool:
@@ -193,21 +194,22 @@ func begin_frame(runtime_frame: int) -> Dictionary:
 
 
 func prepare_frame(ticket: Dictionary) -> bool:
+	_last_preparation_rejection.clear()
 	if not _matches(ticket) or bool(_active.prepared):
-		return false
+		return _reject_preparation("ticket", ticket)
 	_active.prepared = true
 	var batches: Array[Dictionary] = []
 	var target_id := _player_target_id()
 	if _effects.has_method("apply_native_portal_transits") and not _effects.apply_native_portal_transits(int(ticket.runtime_frame), _actors, {target_id: _player}, self):
-		return false
+		return _reject_preparation("portal_transit", ticket)
 	# Grants enter recipient controls before this frame builds its attack facts.
 	for record: Dictionary in _active.records:
 		if record.actor.has_method("settle_launch_chaining") and not record.actor.settle_launch_chaining(_actors, int(ticket.runtime_frame), self):
-			return false
+			return _reject_preparation("chaining", ticket)
 	for record: Dictionary in _active.records:
 		var actor: Node2D = record.actor
 		if not is_instance_valid(actor):
-			return false
+			return _reject_preparation("actor_lifetime", ticket)
 		var facing := actor.global_position.direction_to(_player.global_position)
 		if facing.is_zero_approx():
 			facing = Vector2.RIGHT
@@ -216,31 +218,45 @@ func prepare_frame(ticket: Dictionary) -> bool:
 			"target_position": _point(_player.global_position), "facing_direction": _point(facing), "target_id": target_id,
 		})
 		if not bool(result.get("ok", false)) or not result.get("ticket") is Dictionary or not result.get("batch") is Dictionary:
-			return false
+			return _reject_preparation("actor_prepare", ticket, result)
 		record.actor_ticket = result.ticket.duplicate(true)
 		batches.append({"hostile_source_id": record.source_id, "batch": result.batch.duplicate(true)})
 	var context := {"run_id": str(_player.call("current_run_id")), "runtime_frame": int(ticket.runtime_frame), "threat_registry": _registry, "actors": _actors.duplicate(), "targets": {target_id: _player}}
 	var prepared: Dictionary = _effects.call("prepare_effects", batches, context)
 	if not bool(prepared.get("ok", false)) or not prepared.get("ticket") is Dictionary:
-		return false
+		return _reject_preparation("effects_prepare", ticket, prepared)
 	_active.effect_ticket = prepared.ticket.duplicate(true)
 	if not bool(_effects.call("can_commit", _active.effect_ticket)):
-		return false
+		return _reject_preparation("effects_can_commit", ticket)
 	if _encounter_authority != null:
 		var encounter_prepared: Dictionary = _encounter_authority.prepare_frame(_active.effect_ticket)
 		if not encounter_prepared.ok:
-			return false
+			return _reject_preparation("encounter_prepare", ticket, encounter_prepared)
 		_active.encounter_ticket = encounter_prepared.ticket.duplicate(true)
 		if not _encounter_authority.can_commit(_active.encounter_ticket):
-			return false
+			return _reject_preparation("encounter_can_commit", ticket)
 	for record: Dictionary in _active.records:
 		if not bool(record.actor.call("can_commit_launch_frame", record.actor_ticket)):
-			return false
+			return _reject_preparation("actor_can_commit", ticket)
 	for record: Dictionary in _active.records:
 		if not bool(record.actor.call("commit_launch_frame", record.actor_ticket)):
-			return false
+			return _reject_preparation("actor_commit", ticket)
 	var committed: Dictionary = _effects.call("commit", _active.effect_ticket)
-	return bool(committed.get("ok", false)) and (_encounter_authority == null or _encounter_authority.commit(_active.encounter_ticket))
+	if not bool(committed.get("ok", false)):
+		return _reject_preparation("effects_commit", ticket, committed)
+	if _encounter_authority != null and not _encounter_authority.commit(_active.encounter_ticket):
+		return _reject_preparation("encounter_commit", ticket)
+	return true
+
+
+func frame_rejection_snapshot() -> Dictionary:
+	return _last_preparation_rejection.duplicate(true)
+
+
+func _reject_preparation(stage: String, ticket: Dictionary, result: Dictionary = {}) -> bool:
+	var context: Variant = result.get("context", {})
+	_last_preparation_rejection = {"stage": stage, "runtime_frame": int(ticket.get("runtime_frame", -1)), "code": str(result.get("code", "")), "field": str(result.get("field", "")), "context": context.duplicate(true) if context is Dictionary else {}}
+	return false
 
 
 func owns_launch_chaining_context(actor: Node2D, actors: Dictionary, frame: int) -> bool:

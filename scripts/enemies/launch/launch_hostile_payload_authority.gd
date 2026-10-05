@@ -122,16 +122,16 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 		var displacement := Vector2(motion[id].displacement.x, motion[id].displacement.y)
 		if displacement.is_zero_approx():
 			continue
-		var collision := node.move_and_collide(displacement, true)
-		if collision == null:
+		var collision := _native_contact(node, motion[id], context.targets)
+		if collision.is_empty():
 			continue
-		var collider: Object = collision.get_collider()
+		var collider: Object = collision.collider
 		var target_id := ""
 		for candidate: String in context.targets:
 			if context.targets[candidate] == collider:
 				target_id = candidate
 				break
-		var position := node.global_position + collision.get_travel()
+		var position: Vector2 = collision.position
 		# Godot includes overlap recovery in travel; domain impacts stay on the frozen sweep.
 		var trajectory_position := Geometry2D.get_closest_point_to_segment(position, Vector2(motion[id].from.x, motion[id].from.y), Vector2(motion[id].to.x, motion[id].to.y))
 		contacts[id] = {"kind": "world" if target_id.is_empty() else "target", "target_id": target_id, "position": {"x": trajectory_position.x, "y": trajectory_position.y}}
@@ -152,10 +152,17 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 			retired_sources.append(str(wrapper.hostile_source_id))
 	preview.retire_arena_payloads(retired_sources)
 	preview.retire_payload_sources(terminal_sources)
+	var retained_motion: Dictionary = preview.motion_for_frame(context.runtime_frame)
+	for id: String in contacts.keys():
+		if not retained_motion.has(id):
+			# Retired payloads keep their native contact seal but cannot resolve domain damage.
+			contacts.erase(id)
 	var zone_capacity := Runtime.MAX_ZONES - foreign_active_zones
 	var debris_context := _debris_context(before, context, contacts, motion, foreign_constructs)
 	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity, debris_context)
 	if not advanced.ok:
+		if advanced.get("context", {}).get("reason", "") == "contact":
+			advanced.context["native_contact_observations"] = {"contacts": contacts.duplicate(true), "motion": retained_motion.duplicate(true), "targets": target_descriptors.duplicate(true)}
 		return advanced
 	for wrapper: Dictionary in batches:
 		var actor: Node2D = context.actors[wrapper.hostile_source_id]
@@ -208,12 +215,12 @@ func can_commit(ticket: Dictionary) -> bool:
 		if displacement.is_zero_approx():
 			continue
 		var node: CharacterBody2D = _nodes[id]
-		var collision := node.move_and_collide(displacement, true)
-		if (collision == null) != (not sealed_contacts.has(id)):
+		var collision := _native_contact(node, motion[id], ticket.targets)
+		if collision.is_empty() != (not sealed_contacts.has(id)):
 			return false
-		if collision != null:
+		if not collision.is_empty():
 			var contact: Dictionary = sealed_contacts[id]
-			if collision.get_collider() != contact.collider or not (node.global_position + collision.get_travel()).is_equal_approx(contact.position):
+			if collision.collider != contact.collider or not collision.position.is_equal_approx(contact.position):
 				return false
 	return _landing_queries_clear(ticket.landing_queries, ticket.static_exclusions)
 
@@ -483,6 +490,50 @@ static func _target_descriptors(targets: Dictionary) -> Dictionary:
 		if body == null or not body.is_inside_tree() or not body.shape is CircleShape2D or body.disabled or not body.transform.is_equal_approx(Transform2D.IDENTITY) or not target.global_scale.is_equal_approx(Vector2.ONE) or not Contract.number_in_range(body.shape.radius, 1, 32):
 			return {}
 		result[id] = {"position": {"x": target.global_position.x, "y": target.global_position.y}, "collision_radius_px": body.shape.radius}
+	return result
+
+
+static func _native_contact(node: CharacterBody2D, motion: Dictionary, targets: Dictionary) -> Dictionary:
+	var displacement := Vector2(motion.displacement.x, motion.displacement.y)
+	var start := Vector2(motion.from.x, motion.from.y)
+	var end := Vector2(motion.to.x, motion.to.y)
+	var parameters := PhysicsTestMotionParameters2D.new()
+	parameters.from = node.global_transform
+	parameters.motion = displacement
+	parameters.margin = node.safe_margin
+	var exclusions: Array[RID] = []
+	for target: Variant in targets.values():
+		if target is PhysicsBody2D:
+			exclusions.append(target.get_rid())
+	parameters.exclude_bodies = exclusions
+	var world := PhysicsTestMotionResult2D.new()
+	var result := {}
+	var earliest := INF
+	if PhysicsServer2D.body_test_motion(node.get_rid(), parameters, world):
+		var position := node.global_position + world.get_travel()
+		var point := Geometry2D.get_closest_point_to_segment(position, start, end)
+		earliest = start.distance_squared_to(point)
+		result = {"collider": world.get_collider(), "position": position}
+	var shape := node.get_node("CollisionShape2D").shape as CircleShape2D
+	# Kinematic server transforms lag same-frame movement; query the actual current shapes.
+	var target_ids: Array = targets.keys()
+	target_ids.sort()
+	for id: String in target_ids:
+		var target: Node2D = targets[id]
+		if node.get_collision_exceptions().has(target):
+			continue
+		var target_shape := target.get_node("CollisionShape2D").shape as CircleShape2D
+		if not shape.collide_with_motion(node.global_transform, displacement, target_shape, target.global_transform, Vector2.ZERO):
+			continue
+		var radius := float(shape.radius) + float(target_shape.radius)
+		var fraction := 0.0 if start.distance_to(target.global_position) <= radius else Geometry2D.segment_intersects_circle(start, end, target.global_position, radius)
+		if fraction < 0.0 or fraction > 1.0:
+			continue
+		var point := start.lerp(end, fraction)
+		var distance := start.distance_squared_to(point)
+		if distance < earliest:
+			earliest = distance
+			result = {"collider": target, "position": point}
 	return result
 
 

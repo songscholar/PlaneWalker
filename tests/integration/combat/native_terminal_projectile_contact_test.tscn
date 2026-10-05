@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/combat/native_terminal_projectile_contact_test.gd" id="1"]
+
+[node name="NativeTerminalProjectileContactTest" type="Node"]
+script = ExtResource("1")
