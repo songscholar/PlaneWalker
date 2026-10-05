@@ -112,6 +112,7 @@ func _test_translated_and_historical() -> void:
 		legacy_action.request_action("matriarch_root_sweep", _context(0, Vector2(340, 144)))
 		historical.action = legacy_action.snapshot()
 		historical.schema_version = version
+		historical.erase("forest_auxiliary")
 		if version == 1:
 			historical.erase("arena_state")
 		else:
@@ -119,7 +120,7 @@ func _test_translated_and_historical() -> void:
 			for field: String in ["arena_origin", "sweep_claims", "historical_sweep_generation"]:
 				historical.arena_state.erase(field)
 		var normalized: Dictionary = legacy_owner.normalize_native_snapshot(historical)
-		suite.assert_true(not normalized.is_empty() and normalized.schema_version == 3 and normalized.arena_state.schema_version == 2, "explicit historicalBoss%d migrates its active trunk-origin sweep" % version)
+		suite.assert_true(not normalized.is_empty() and normalized.schema_version == 4 and normalized.arena_state.schema_version == 2, "explicit historicalBoss%d migrates its active trunk-origin sweep" % version)
 		if not normalized.is_empty():
 			suite.assert_true(legacy_owner.restore_snapshot(normalized), "historical trunk warning restores through strict current schema")
 			for frame: int in range(1, 46):

@@ -152,6 +152,7 @@ func _check_cold(actor: Node2D, phase: String) -> void:
 	var historical := cold.duplicate(true)
 	historical.actor.runtime.schema_version = 1
 	historical.actor.runtime.erase("arena_state")
+	historical.actor.runtime.erase("forest_auxiliary")
 	suite.assert_true(twin.restore_native_cold_snapshot(historical, func(_binding: Dictionary): return null), "exact historical Forest schema1 receives explicit " + phase + " arena migration")
 	var migrated: Dictionary = twin.native_arena_snapshot()
 	suite.assert_true(migrated.damage_claims.is_empty() and not migrated.roots[0].broken, "historical rootless schema migrates to declared undamaged roots")

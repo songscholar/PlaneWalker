@@ -188,6 +188,7 @@ func _cold(fixture: Dictionary, historical: bool) -> void:
 		for version: int in [1, 2]:
 			var legacy := cold.duplicate(true)
 			legacy.actor.runtime.schema_version = version
+			legacy.actor.runtime.erase("forest_auxiliary")
 			legacy.actor.runtime.action = old_action.snapshot()
 			if version == 1:
 				legacy.actor.runtime.erase("arena_state")

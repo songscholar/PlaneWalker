@@ -4,11 +4,12 @@ extends RefCounted
 const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const Debris := preload("res://scripts/enemies/launch/launch_ruin_debris.gd")
+const ForestAuxiliary := preload("res://scripts/enemies/launch/launch_forest_auxiliary_construct.gd")
 const PLAYER_ATTACK_MASK := 1 | 4
 
 
 static func is_arena_construct(target: Node) -> bool:
-	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris)
+	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris or target is ForestAuxiliary)
 
 
 static func is_attackable(target: Node) -> bool:
@@ -18,7 +19,7 @@ static func is_attackable(target: Node) -> bool:
 		return true
 	if is_arena_construct(target):
 		var state: Dictionary = target.native_construct_snapshot()
-		return not state.is_empty() and not state.broken and target.collision_layer == 1
+		return state.has("current_hp") and not bool(state.get("broken", false)) and not bool(state.get("retired", false)) and not bool(state.get("expired", false)) and not bool(state.get("used", false)) and target.collision_layer == 1
 	return false
 
 

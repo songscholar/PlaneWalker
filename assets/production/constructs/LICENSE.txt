@@ -9,3 +9,7 @@ The dedication applies to the artwork, not game code or project identity.
 
 Source: tools/production_art/generate_boss_construct_atlases.py
 Reproduction: python3 tools/production_art/generate_boss_construct_atlases.py
+
+Forest auxiliary sacs, flowers and walls use the same original-art CC0 dedication.
+Source: tools/production_art/generate_forest_auxiliary_atlases.py
+Reproduction: python3 tools/production_art/generate_forest_auxiliary_atlases.py

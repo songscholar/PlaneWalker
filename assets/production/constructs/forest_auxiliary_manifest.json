@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_forest_auxiliary_atlases.py",
+  "atlases": [
+    {
+      "id": "forest_sac",
+      "path": "forest_sac.png",
+      "frame_size": [
+        48,
+        32
+      ],
+      "frames": [
+        "intact",
+        "marked_or_damaged",
+        "spent_or_broken"
+      ],
+      "sha256": "47732f95aa319d1d0e206728da97d7fee5954fce2e112875c02a96a393761eb0"
+    },
+    {
+      "id": "forest_flower",
+      "path": "forest_flower.png",
+      "frame_size": [
+        48,
+        32
+      ],
+      "frames": [
+        "intact",
+        "marked_or_damaged",
+        "spent_or_broken"
+      ],
+      "sha256": "d45da1233679924037048ebdb71cbb5ec44bfeb29299eb99735e7144367bdc20"
+    },
+    {
+      "id": "forest_wall",
+      "path": "forest_wall.png",
+      "frame_size": [
+        48,
+        32
+      ],
+      "frames": [
+        "intact",
+        "marked_or_damaged",
+        "spent_or_broken"
+      ],
+      "sha256": "23b76f484fcc6cb7e1d492f025c98882712d835713c0bff015a3f30a3f24a5bb"
+    }
+  ]
+}
