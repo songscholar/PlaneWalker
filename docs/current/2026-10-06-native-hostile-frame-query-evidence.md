@@ -36,7 +36,11 @@ verdicts, separate body/arena ownership, mandatory restore before preview reuse,
 changed origin, typed configuration changes, invalid configuration refusal,
 and safe retry.
 
-The following strict scene runs pass without runtime errors, warnings, or leaks:
+The following strict scene runs pass without unexpected runtime errors,
+warnings, or leaks. Bridge declares four exact synchronous refusal scopes and
+Void Player frame declares one. Both stdout and Godot logs pass
+`tools/runtime_log_validation.py --test-suite-scopes`, including exact messages,
+counts, false results, and matching scope completions.
 
 | Contract | Retained Logs |
 | --- | --- |

@@ -612,6 +612,10 @@ func native_runtime_frame() -> int:
 	return int(_state.get("runtime_frame", -1))
 
 
+func native_run_id() -> String:
+	return str(_state.get("identity", {}).get("run_id", ""))
+
+
 func native_is_terminal() -> bool:
 	return bool(_state.get("terminal", false))
 

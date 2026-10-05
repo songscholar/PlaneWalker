@@ -171,6 +171,14 @@ func launch_runtime_snapshot() -> Dictionary:
 	return {"runtime": _launch_runtime.snapshot(), "elemental_status": elemental_status_runtime.snapshot(), "health": health.runtime_state_snapshot() if health != null else {}, "position": _point(global_position), "action_credit": _action_credit, "death_receipt": _death_receipt}
 
 
+func native_frame_boundary() -> Dictionary:
+	if _launch_runtime.has_method("native_run_id") and _launch_runtime.has_method("native_runtime_frame") and _launch_runtime.has_method("native_is_terminal"):
+		var frame: int = _launch_runtime.native_runtime_frame()
+		return {} if frame < 0 else {"run_id": _launch_runtime.native_run_id(), "runtime_frame": frame, "terminal": _launch_runtime.native_is_terminal()}
+	var state: Dictionary = _launch_runtime.snapshot()
+	return {} if state.is_empty() else {"run_id": str(state.identity.run_id), "runtime_frame": state.runtime_frame, "terminal": bool(state.terminal)}
+
+
 func project_runtime_snapshot(value: Dictionary) -> bool:
 	if value != launch_runtime_snapshot():
 		return false

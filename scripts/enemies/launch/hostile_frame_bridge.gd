@@ -43,9 +43,9 @@ func configure(player: Node2D, registry: RefCounted, actors: Array, effects: Ref
 		for method: StringName in [&"launch_runtime_snapshot", &"launch_transaction_snapshot", &"can_restore_launch_transaction_snapshot", &"restore_launch_transaction_snapshot", &"discard_launch_transaction_snapshot", &"prepare_launch_frame", &"can_commit_launch_frame", &"commit_launch_frame", &"can_publish_launch_frame", &"publish_launch_frame"]:
 			if not actor.has_method(method):
 				return false
-		var state: Dictionary = actor.call("launch_runtime_snapshot")
+		var state := _actor_frame_boundary(actor)
 		var source_id := str(actor.get("hostile_source_id"))
-		if not _valid_runtime_id(source_id) or candidate.has(source_id) or state.is_empty() or str(state.runtime.identity.run_id) != str(player.call("current_run_id")) or (not bool(state.runtime.terminal) and int(state.runtime.runtime_frame) != int(player.get("_runtime_frame"))):
+		if not _valid_runtime_id(source_id) or candidate.has(source_id) or state.is_empty() or str(state.run_id) != str(player.call("current_run_id")) or (not bool(state.terminal) and int(state.runtime_frame) != int(player.get("_runtime_frame"))):
 			return false
 		var health := actor.get_node_or_null("HealthComponent")
 		if health == null:
@@ -75,8 +75,8 @@ func register_actor(actor: Node2D) -> bool:
 	if frame_transaction_is_active() or not is_instance_valid(_player) or not is_instance_valid(actor) or not actor.has_method("launch_runtime_snapshot"):
 		return false
 	var source_id := str(actor.get("hostile_source_id"))
-	var state: Dictionary = actor.call("launch_runtime_snapshot")
-	if not _valid_runtime_id(source_id) or _actors.has(source_id) or state.is_empty() or bool(state.runtime.terminal) or str(state.runtime.identity.run_id) != str(_player.call("current_run_id")) or int(state.runtime.runtime_frame) != _last_runtime_frame:
+	var state := _actor_frame_boundary(actor)
+	if not _valid_runtime_id(source_id) or _actors.has(source_id) or state.is_empty() or bool(state.terminal) or str(state.run_id) != str(_player.call("current_run_id")) or int(state.runtime_frame) != _last_runtime_frame:
 		return false
 	var next_actors := _actors.values()
 	next_actors.append(actor)
@@ -99,7 +99,7 @@ func retire_actor(source_id: String) -> bool:
 	if frame_transaction_is_active() or not _actors.has(source_id):
 		return false
 	var actor: Node2D = _actors[source_id]
-	if not is_instance_valid(actor) or not bool((actor.call("launch_runtime_snapshot") as Dictionary).runtime.terminal):
+	if not is_instance_valid(actor) or not bool(_actor_frame_boundary(actor).get("terminal", false)):
 		return false
 	_actors.erase(source_id)
 	return true
@@ -116,10 +116,10 @@ func is_ready_for_frame(runtime_frame: int) -> bool:
 		var actor: Node2D = _actors[source_id]
 		if not is_instance_valid(actor):
 			return false
-		var state: Dictionary = actor.call("launch_runtime_snapshot")
-		if state.is_empty() or str(state.runtime.identity.run_id) != str(_player.call("current_run_id")):
+		var state := _actor_frame_boundary(actor)
+		if state.is_empty() or str(state.run_id) != str(_player.call("current_run_id")):
 			return false
-		if not bool(state.runtime.terminal) and int(state.runtime.runtime_frame) != _last_runtime_frame:
+		if not bool(state.terminal) and int(state.runtime_frame) != _last_runtime_frame:
 			return false
 	return true
 
@@ -145,12 +145,12 @@ func _sync_summon_roster() -> bool:
 			if _actors[source] != actor:
 				return false
 			continue
-		var state: Dictionary = actor.launch_runtime_snapshot()
-		if state.is_empty() or str(state.runtime.identity.run_id) != str(_player.current_run_id()):
+		var state := _actor_frame_boundary(actor)
+		if state.is_empty() or str(state.run_id) != str(_player.current_run_id()):
 			return false
-		if state.runtime.terminal and actor.get_node("HealthComponent").dead:
+		if state.terminal and actor.get_node("HealthComponent").dead:
 			continue
-		if state.runtime.terminal or state.runtime.runtime_frame != _last_runtime_frame or not actor.configure_hostile_threat_authority(_registry, Callable(self, "_current_runtime_frame")):
+		if state.terminal or state.runtime_frame != _last_runtime_frame or not actor.configure_hostile_threat_authority(_registry, Callable(self, "_current_runtime_frame")):
 			return false
 		_actors[source] = actor
 	return true
@@ -179,8 +179,8 @@ func begin_frame(runtime_frame: int) -> Dictionary:
 			return {}
 	for source_id: String in _sorted_sources():
 		var actor: Node2D = _actors[source_id]
-		var state: Dictionary = actor.call("launch_runtime_snapshot")
-		if bool(state.runtime.terminal):
+		var state := _actor_frame_boundary(actor)
+		if bool(state.terminal):
 			continue
 		var checkpoint: Dictionary = actor.call("launch_transaction_snapshot")
 		if checkpoint.is_empty():
@@ -381,6 +381,13 @@ func _matches(ticket: Dictionary) -> bool:
 
 func _publication_matches(publication: Dictionary) -> bool:
 	return not _active.is_empty() and not _active.publication.is_empty() and publication == _active.publication
+
+
+func _actor_frame_boundary(actor: Node2D) -> Dictionary:
+	if actor.has_method("native_frame_boundary"):
+		return actor.call("native_frame_boundary")
+	var state: Dictionary = actor.call("launch_runtime_snapshot")
+	return {} if state.is_empty() else {"run_id": str(state.runtime.identity.run_id), "runtime_frame": state.runtime.runtime_frame, "terminal": bool(state.runtime.terminal)}
 
 
 func _sorted_sources() -> Array:
