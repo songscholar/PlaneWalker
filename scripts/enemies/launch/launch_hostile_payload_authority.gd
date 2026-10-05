@@ -380,8 +380,8 @@ func _debris_context(value: Dictionary, context: Dictionary, contacts: Dictionar
 			continue
 		var room: Dictionary = actor.launch_room_motion_snapshot()
 		var origin := Vector2.ZERO if room.is_empty() else Vector2(float(room.bounds.x), float(room.bounds.y))
-		for row: Dictionary in arena.covers + arena.walls:
-			if row.broken or row.get("expired", false):
+		for row: Dictionary in arena.get("covers", []) + arena.get("walls", []) + arena.get("roots", []):
+			if row.broken or row.get("expired", false) or row.get("retired", false):
 				continue
 			count += 1
 			occupied[source + ":" + row.id] = {"position": {"x": origin.x + float(row.position.x), "y": origin.y + float(row.position.y)}, "radius": float(row.radius_px) + float(row.get("length_px", 0.0)) * 0.5, "clearance": 48.0}

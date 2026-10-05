@@ -45,6 +45,20 @@
         "debris"
       ],
       "sha256": "f2630be6a6a4aca5662aa34c89a2d2057248debf99a20369b93f4db7acc05945"
+    },
+    {
+      "id": "forest_root",
+      "path": "forest_root.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "intact",
+        "damaged",
+        "broken"
+      ],
+      "sha256": "fac79bbc2e5881b8e8f3bf753c165bec2654e0ee2510e95ee9cbfcee0260a273"
     }
   ]
 }

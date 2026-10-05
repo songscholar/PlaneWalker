@@ -5,6 +5,7 @@ const BossRuntime := preload("res://scripts/enemies/launch/launch_boss_runtime.g
 const BossStatus := preload("res://scripts/enemies/launch/boss_elemental_status_runtime.gd")
 const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
+const ForestRoot := preload("res://scripts/enemies/launch/launch_forest_root.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 var _exposure_replay_authority: RefCounted
 var _arena_effects: WeakRef
@@ -29,6 +30,15 @@ func _ready() -> void:
 func _native_geometry_matches_definition() -> bool:
 	if not super._native_geometry_matches_definition():
 		return false
+	if _launch_definition.get("id", "") == "forest_heart":
+		var arena := get_node_or_null("ArenaConstructs")
+		var state := native_arena_snapshot()
+		if arena == null or state.is_empty() or arena.get_child_count() != 6:
+			return false
+		for index: int in range(6):
+			var root := arena.get_child(index)
+			if not root is ForestRoot or not root.native_geometry_matches(state.roots[index], _native_arena_origin(), bool(state.terminal)):
+				return false
 	if _launch_definition.get("id", "") == "ruin_king":
 		var arena := get_node_or_null("ArenaConstructs")
 		var state: Dictionary = native_arena_snapshot()
@@ -61,7 +71,7 @@ func _restore_actor_state(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
-	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king"] and not _native_geometry_matches_definition():
+	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king", "forest_heart"] and not _native_geometry_matches_definition():
 		return _launch_failure("boss_native_geometry")
 	var result := super.prepare_launch_frame(frame, observations)
 	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
@@ -207,6 +217,9 @@ func _refresh_native_arena() -> void:
 	var state := native_arena_snapshot()
 	if state.is_empty():
 		return
+	if _launch_definition.get("id", "") == "forest_heart":
+		_refresh_native_forest(state)
+		return
 	var arena := get_node_or_null("ArenaConstructs")
 	if arena == null:
 		arena = Node2D.new()
@@ -237,6 +250,21 @@ func _refresh_native_arena() -> void:
 		else:
 			wall = arena.get_child(index + 4)
 		wall.present(state.walls[index], _native_arena_origin(), bool(state.terminal))
+
+
+func _refresh_native_forest(state: Dictionary) -> void:
+	var arena := get_node_or_null("ArenaConstructs")
+	if arena == null:
+		arena = Node2D.new()
+		arena.name = "ArenaConstructs"
+		add_child(arena)
+		for row: Dictionary in state.roots:
+			var root := ForestRoot.new()
+			root.name = "Root%d" % int(row.slot)
+			root.configure(self, str(row.id))
+			arena.add_child(root)
+	for index: int in range(6):
+		arena.get_child(index).present(state.roots[index], _native_arena_origin(), bool(state.terminal))
 
 
 func prepared_launch_wall_effect_allowed(request: Dictionary) -> bool:
@@ -275,7 +303,7 @@ func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:
 	var result: Dictionary = _launch_runtime.accept_arena_damage_fact({"fact_id": (_damage_identity(damage_info) + ":" + id).sha256_text(), "run_id": str(run), "owner_source_id": str(hostile_source_id), "construct_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "amount": amount})
 	if not result.ok:
 		return 0.0
-	_refresh_native_arena()
+	_refresh_control_visual()
 	return float(result.amount)
 
 
@@ -363,6 +391,8 @@ func receive_native_watch_hit(damage_info: RefCounted) -> float:
 func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
 	var before: Dictionary = _launch_runtime.snapshot()
 	var accepted := super.apply_weapon_hit_control(damage_info, final_amount)
+	if accepted and _launch_definition.get("id", "") == "forest_heart":
+		_refresh_control_visual()
 	if damage_info == null or before.is_empty() or _launch_definition.get("id", "") != "time_sovereign":
 		return accepted
 	var after: Dictionary = _launch_runtime.snapshot()

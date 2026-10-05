@@ -49,6 +49,7 @@ Interfaces: `BossArenaRuntime.configure(definition: Dictionary, identity: Dictio
 ## Task 3: Forest Arena
 
 - [ ] Add sixHP100 roots, permanent broken segments,45f body exposure and deterministic retirement of three surviving roots inP2.
+  Native HP/break/exposure/P2 retirement is [focused verified](../../current/2026-10-05-p15b-native-forest-roots-evidence.md); this combined gate remains open until surviving-root sweep and permanent segment ownership are verified.
 - [ ] Add fourHP30 sacs, warning interruption and three one-use20HP healing flowers through Player Health.
 - [ ] Add two16px erosion steps, warned cages, actual drain healing caps and owned saplings; verify accepted HP loss and safe routes.
 

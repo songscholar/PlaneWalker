@@ -99,6 +99,28 @@ def wall_frame(phase: int) -> Image.Image:
     return image
 
 
+def root_frame(phase: int) -> Image.Image:
+    image = Image.new("RGBA", (32, 32))
+    draw = ImageDraw.Draw(image)
+    stem = (73, 121, 94, 255)
+    light = (137, 187, 126, 255)
+    violet = (203, 113, 176, 255)
+    if phase == 2:
+        draw.polygon(((4, 23), (10, 19), (16, 22), (24, 18), (28, 24), (22, 27), (8, 27)), fill=INK)
+        draw.line(((6, 24), (12, 22), (16, 24)), fill=stem, width=2)
+        draw.line(((20, 23), (24, 21), (26, 24)), fill=light, width=2)
+        return image
+    draw.polygon(((3, 25), (8, 17), (9, 7), (14, 3), (21, 5), (25, 14), (29, 25), (22, 28), (8, 28)), fill=INK)
+    draw.polygon(((6, 24), (12, 16), (11, 9), (15, 6), (19, 7), (21, 16), (26, 24), (20, 25), (16, 18), (12, 25)), fill=stem)
+    draw.line(((12, 11), (15, 7), (18, 9), (18, 16), (23, 24)), fill=light, width=2)
+    draw.line(((14, 14), (18, 12), (20, 16)), fill=violet, width=2)
+    draw.line(((9, 24), (13, 18)), fill=light)
+    if phase == 1:
+        draw.line(((13, 7), (16, 13), (12, 18), (16, 23)), fill=INK, width=2)
+        draw.rectangle((13, 15, 15, 17), fill=violet)
+    return image
+
+
 def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     atlas = Image.new("RGBA", (128, 32))
@@ -116,6 +138,11 @@ def main() -> None:
         wall_atlas.paste(wall_frame(phase), (64 * phase, 0))
     wall_path = OUTPUT / "ruins_wall.png"
     wall_atlas.save(wall_path)
+    root_atlas = Image.new("RGBA", (96, 32))
+    for phase in range(3):
+        root_atlas.paste(root_frame(phase), (32 * phase, 0))
+    root_path = OUTPUT / "forest_root.png"
+    root_atlas.save(root_path)
     manifest = {
         "schema_version": 1,
         "license": "CC0-1.0",
@@ -124,6 +151,7 @@ def main() -> None:
             {"id": "time_watch", "path": path.name, "frame_size": [32, 32], "frames": ["idle", "warning_a", "warning_b", "broken"], "sha256": hashlib.sha256(path.read_bytes()).hexdigest()},
             {"id": "ruins_cover", "path": cover_path.name, "frame_size": [48, 48], "frames": ["intact", "damaged", "debris"], "sha256": hashlib.sha256(cover_path.read_bytes()).hexdigest()},
             {"id": "ruins_wall", "path": wall_path.name, "frame_size": [64, 24], "frames": ["intact", "damaged", "debris"], "sha256": hashlib.sha256(wall_path.read_bytes()).hexdigest()},
+            {"id": "forest_root", "path": root_path.name, "frame_size": [32, 32], "frames": ["intact", "damaged", "broken"], "sha256": hashlib.sha256(root_path.read_bytes()).hexdigest()},
         ],
     }
     (OUTPUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

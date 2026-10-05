@@ -1,6 +1,6 @@
 # Native Forest Roots Implementation Plan
 
-- Status: Active
+- Status: Completed / Historical for the focused root interaction slice
 - Document Role: Current implementation plan
 - Authority Level: Execution details below the approved P15 specification
 - Applies To: Six Forest root constructs, independent HP,45-frame body exposure and permanent P2 retirement
@@ -15,12 +15,12 @@
 
 ## Tasks
 
-- [ ] Add meaningful pure and native RED tests before implementation.
-- [ ] Implement sixHP100/radius12 root rows preserving48px central/perimeter routes, permanent damage facts,45 accepted exposure frames and once-only deterministic three-survivor P2 retirement.
-- [ ] Project original pixel-art root bodies/Hurtboxes with stable weapon identities; never count roots as enemy deaths or rewards. Keep the trunk always hittable.
-- [ ] Integrate accepted whole-frame compensation, root geometry tamper rejection, current/historical native cold state and owner death retirement.
-- [ ] Verify native break/retry, phase transition/retry, cold recovery, existing Ruin/Watch/Boss/Host checkpoint regressions and native640/1280 visual evidence.
-- [ ] Retain focused evidence and precise local commit. Keep full five-weapon and combined750 loadout/Boss certification open until executed.
+- [x] Add meaningful pure and native RED tests before implementation.
+- [x] Implement sixHP100/radius12 root rows preserving48px central/perimeter routes, permanent damage facts,45 accepted exposure frames and once-only deterministic three-survivor P2 retirement.
+- [x] Project original pixel-art root bodies/Hurtboxes with stable weapon identities; never count roots as enemy deaths or rewards. Keep the trunk always hittable.
+- [x] Integrate accepted whole-frame compensation, root geometry tamper rejection, current/historical native cold state and owner death retirement.
+- [x] Verify native break/retry, phase transition/retry, cold recovery, existing Ruin/Watch/Boss/Host checkpoint regressions and native640/1280 visual evidence.
+- [x] Retain [focused evidence](../../current/2026-10-05-p15b-native-forest-roots-evidence.md) and precise local commit. Keep full five-weapon and combined750 loadout/Boss certification open until executed.
 
 ## Remaining Forest Closure
 
