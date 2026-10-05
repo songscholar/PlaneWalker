@@ -1,6 +1,6 @@
 # Native Same-Frame and Process RSS Measurement Evidence
 
-- Status: Focused Contracts Verified / Actual native probe pending
+- Status: Focused Contracts and Actual Native Collection Verified
 - Document Role: Current measurement implementation and verification evidence
 - Authority Level: Below approved native performance probe specification
 - Applies To: Native Main timing reports and sampled Godot process resident memory
@@ -85,7 +85,67 @@ Retain paired strict runtime logs, version-2 report, source manifest, real
 actors, both new 120-sample distributions, exact physical recording endpoints
 and actual RSS sampling metadata. Ambient native matrix and full-validation
 workers must be disclosed; no isolated performance improvement is claimed.
-At this candidate checkpoint, actual native verification is still pending.
+The focused candidate was retained in `e7ce2c1` and tested without overlays at
+`build/retained-checkout/native-measurements-e7ce2c1-20261006`.
+Fresh import one emitted 88 exact configured missing-translation messages for
+11 valid catalogs. Its stdout and engine error lists are identical, the existing
+bootstrap classifier leaves zero residual errors, and import two passes strict
+paired-log validation.
+
+The actual probe command above exits zero. Both native stdout and engine logs
+pass `tools/runtime_log_validation.py`; no script, engine error or object/RID
+leak occurs. The uninstrumented source manifest records stable runtime bytes,
+no timeout and aggregate SHA-256
+`1b12c8ca4d09490ba9aa58e692f4d0767531eedff87f74bd670daa74acf3dfe2`.
+The archive has no independent Git metadata, so the report honestly leaves its
+embedded revision empty; the retained archive identifies the source commit.
+
+The production Main launches seed 4, Wanderer/Sword, Stop+Accelerate and reaches
+floor-zero combat node `layer_01_a`, with three real actors and one threat. All
+120 requested frames are accepted exactly once, frames 1 through 120, at native
+60 Hz and unit time scale. Headless fixed-fps wall acceleration is explicit.
+The physical tape retains 121 observations, honestly `INTERRUPTED`, no recording
+failure, and exact fresh physical reads of both complete native typed endpoints.
+
+| Actual Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advancement | 10.047 ms | 16.021 ms | 28.287 ms |
+| Same-frame Player + Host interval | 10.554 ms | 16.418 ms | 28.819 ms |
+| Same-frame wall interval | 11.794 ms | 17.911 ms | 30.802 ms |
+
+Measured native duration is 2 seconds and measured wall duration is 1.415473
+seconds. Exact physical retention takes 1.025984 seconds. macOS Godot PID 99265
+has 70 valid RSS samples, zero failed samples and a sampled peak of 720,453,632
+bytes from `ps.rss_kib`. The distinct Godot static-allocation peak is
+403,728,245 bytes. RSS includes process admission/Hub/retention in its declared
+scope, so the two peaks are not category-equivalent measurements.
+
+The actual report SHA-256 is
+`8d842917f7b22686c535d0977ae42ea2fc7bb90d9ffe0c8c0c9034a21c370776`.
+Its source manifest SHA-256 is
+`21d30902328b3a8e29bd2745edb94506fd267f164e818c3aa6a343c98df83ab2`.
+Probe Python/GDScript source digests are respectively
+`e8f3b47fa13b7d2bacdf0274cf77bb57bd12b2ed86e32da17969d42d5ad42f09`
+and `51911c8ef1b62c8e6efd0755612674f5e61d4004d5f2e6d476c0544f5a65f230`.
+All artifacts are below the archive's `build/native-measurements-combat120/`,
+including the ambient-process snapshot. Five native matrix workers and a clean
+full-validation worker were active. This is collection verification under that
+observed contention, not an isolated performance-improvement comparison.
+
+The observed frame-wall p95 exceeds 16.667 ms. No FPS, rendering, sustained
+45-minute, saturation or whole-game/category memory certification follows from
+this 120-frame sample. Actual Windows/Linux RSS collection remains untested on
+those native platforms; Python tests cover declared sources and Linux/macOS
+reader contracts without mislabeling mocks as native execution.
+
+Independent read-only review of `e7ce2c1` by the progress-validation and root
+lanes found no actionable collector issue. They checked report compatibility,
+same-frame intervals, exact target PID and units, Windows ABI and handle cleanup,
+sampler finalization and failed-report retention. The full validator now includes
+`tests.contract.performance.test_native_measurements` alongside the historical
+performance contracts. All 45 tests in that exact validator contract batch pass;
+the log is retained at
+`build/native-measurements-schema-20261006/green/validator-contracts.stdout.log`.
 
 The existing native750 matrix runs on its own untouched `abd5b6f` archive and
 is unaffected. This change collects evidence; it does not lower any frame,

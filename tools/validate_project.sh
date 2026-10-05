@@ -180,6 +180,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.playtest.test_native_boss_matrix_report \
 	tests.contract.playtest.test_synthetic_hostile_matrix_report \
 	tests.contract.performance.test_native_performance_probe \
+	tests.contract.performance.test_native_measurements \
 	tests.contract.test_runtime_log_validation
 
 printf '\n== Launch pool simulation contracts ==\n'
