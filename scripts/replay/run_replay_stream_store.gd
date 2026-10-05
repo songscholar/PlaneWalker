@@ -157,11 +157,12 @@ func _observations(descriptor: Dictionary) -> Dictionary:
 	if not loaded.ok:
 		return loaded
 	if _cached_digest == descriptor.compressed_sha256:
-		return _success({"observations": _cached_observations})
+		# Private consumers only project this data; public results still detach.
+		return {"ok": true, "code": &"OK", "context": {"observations": _cached_observations}}
 	var decoded := Codec.decode(loaded.context.chunk)
 	if decoded.ok:
 		_cached_digest = descriptor.compressed_sha256
-		_cached_observations = decoded.context.observations.duplicate(true)
+		_cached_observations = decoded.context.observations
 	return decoded
 
 
