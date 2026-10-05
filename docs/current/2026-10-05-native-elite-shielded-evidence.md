@@ -6,6 +6,7 @@
 - Applies To: Native revision five, actual Health absorption, accepted-frame compensation, physical persistence and presentation
 - Owner: Native hostile implementation team
 - Last Verified: 2026-10-05
+- Depends On: [approved P15 enemies and bosses design](../superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md), section 6
 
 ## Verified Behavior
 
@@ -31,7 +32,25 @@ lethal transition restores the already committed absorption; the same damage
 identity then retries successfully. External callers cannot commit a prepared
 receipt without Health's owned context. Full absorption uses the existing
 prevented-resolution observation policy, so it does not publish body damage or
-body hit-control effects. Overflow keeps the existing Health/control pipeline.
+body hit confirmation. Overflow keeps the existing Health/control pipeline.
+
+For the approved compatible Shielded/Anchored pair, a Health-authenticated fully
+absorbed launch still admits the incoming weapon control. The existing base
+control validator admits only matching action/source generations, finite
+nonnegative launch displacement and a fresh action token. Anchor then gains20
+poise; the fifth legitimate control spends100poise and owns20 recovery frames.
+The enclosing accepted frame spends one of those frames, leaving19. The native
+species damage-fact endpoint is not called for this absorbed control; its body
+damage ledger and HP remain unchanged. Duplicate shield hits, reused controls,
+malformed controls and a refused absorption commit cannot mint poise. Partial
+overflow admits control only through the ordinary Health pipeline, once.
+Unpaired Shielded retains the existing fully absorbed control policy.
+
+Typed cold state retains the pair's shield, poise and weapon claims. A synthetic
+authenticated launch inside the real Player/Bridge is rejected by a late World
+fault; complete Player and pair state return exactly, then the original identity
+retries once. This focused pair gate does not replace production gauntlet contact
+coverage. Physical SaveService also retains the accepted pair state.
 
 Shield admission receipts bind actual owner run/source, incoming source,
 generation and hit index. Duplicate hits cannot spend shield or HP again even
@@ -82,9 +101,14 @@ The existing Actor raster remains; native Godot draws the small in-game contour.
 - Player weapon/progression integration GREEN: `build/test-evidence/elite-five-final-player-weapons`,5/5.
 - Sword Launch/M1/runtime GREEN: `build/test-evidence/elite-five-final-sword`,4/4.
 - Native Metal GREEN: `build/test-evidence/elite-shielded-native-final-visual.log`, all assertions and pixel checks pass.
+- Shielded/Anchored RED: `build/test-evidence/elite-shield-anchor-red`, missing absorbed-control poise and threshold recovery.
+- Shielded/Anchored GREEN: `build/test-evidence/elite-shield-anchor-corrected`,1/1 with full/partial control, duplicate/malformed control, typed/physical save and real Player late rollback/retry.
+- Pair native Actor GREEN: `build/test-evidence/elite-shield-anchor-native-actor`,1/1.
+- Pair Actor transaction GREEN: `build/test-evidence/elite-shield-anchor-native-transaction`,1/1.
 
 Deliberate World failure emits the existing expected`Fixed-frame event buffer
-settlement rejected runtime frame 5` diagnostic. Existing elite tests similarly
+settlement rejected runtime frame 5` diagnostic. The pair rollback probe adds
+the same expected frame1 diagnostic. Existing elite tests similarly
 retain their deliberate frame1/120 rejection diagnostics. Retained logs contain
 no script/parse errors, warnings, orphan nodes or leaks. Installed Godot reports
 line coverage as unsupported. No dependency or authored content fingerprint changed.
@@ -94,5 +118,5 @@ line coverage as unsupported. No dependency or authored content fingerprint chan
 Native Teleporting, Chaining, Splitting and Mirroring remain pending. The full
 legal-pair/control matrix, all-weapon physics contacts, extended4096-receipt
 capacity, whole-room balance and full P15 certification remain separate gates.
-Full absorption currently follows Health's guard policy; Shielded/Anchored
-fully-absorbed launch poise is explicitly included in the open control matrix.
+The focused Shielded/Anchored absorbed-control gate is complete; production
+gauntlet physics contacts remain included in the open all-weapon matrix.

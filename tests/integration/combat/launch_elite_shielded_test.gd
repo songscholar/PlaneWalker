@@ -34,6 +34,14 @@ class WeaponHitBridge:
 			victim.get_node("Hurtbox").receive_hit(hitbox.get("_active_damage_info").copy_for_source(hitbox))
 		return super.prepare_frame(ticket)
 
+class AnchorShieldBridge:
+	extends "res://scripts/enemies/launch/hostile_frame_bridge.gd"
+	var victim: Node2D
+	var damage_info: RefCounted
+	func prepare_frame(ticket: Dictionary) -> bool:
+		victim.get_node("HealthComponent").take_damage(damage_info)
+		return super.prepare_frame(ticket)
+
 
 func _ready() -> void:
 	call_deferred("_run")
@@ -97,6 +105,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await _test_damage_boundary()
 	await _test_pairs_and_history()
+	await _test_absorbed_anchor_control()
 	await _test_outer_frame()
 	await _test_actual_player_weapon_frame()
 	await _test_presentation()
@@ -195,6 +204,79 @@ func _test_pairs_and_history() -> void:
 	suite.assert_true(not historical.launch_affix_runtime_snapshot().has("shielded"), "historical actor cannot silently acquire native shield receipts")
 	suite.assert_true(not fortified.can_restore_native_cold_snapshot(historical.native_cold_snapshot(func(_source: Node): return {}), func(_binding: Dictionary): return null), "historical compiler signature cannot masquerade as current Shielded behavior")
 	for target: Node2D in [frenzy, fortified, nullified, historical]:
+		target.queue_free()
+	await get_tree().process_frame
+
+
+func _anchor_damage(generation: int, overrides: Dictionary = {}) -> RefCounted:
+	var plan: Dictionary = _damage(generation, 1.0, ["weapon:gauntlets"]).snapshot()
+	plan["control_effect"] = {"kind": "launch", "displacement_pixels": 48.0}
+	plan.merge(overrides, true)
+	return Damage.from_plan(plan)
+
+
+func _test_absorbed_anchor_control() -> void:
+	var actor := _actor(-1, "anchored")
+	var health: Node = actor.get_node("HealthComponent")
+	var body_facts: Dictionary = actor.launch_runtime_snapshot().runtime.mechanism_state.duplicate(true)
+	var uncommitted: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
+	actor.set("_shield_absorption_commit_fault_for_test", true)
+	health.take_damage(_anchor_damage(1))
+	suite.assert_equal(actor.native_cold_snapshot(func(_source: Node): return {}), uncommitted, "refused shield commit cannot retain absorbed Anchor control")
+	actor.set("_shield_absorption_commit_fault_for_test", false)
+	var result: RefCounted = health.resolve_and_apply_damage(_anchor_damage(1))
+	suite.assert_true(result.is_prevented() and result.finalized_damage() == 0.0, "fully absorbed launch retains an honest zero-body prevented resolution")
+	suite.assert_equal(actor.launch_affix_runtime_snapshot().anchored.control_count, 1, "authenticated absorbed launch admits one Anchored control")
+	var before: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
+	health.take_damage(_anchor_damage(1))
+	suite.assert_equal(actor.native_cold_snapshot(func(_source: Node): return {}), before, "duplicate absorbed launch cannot spend shield or admit poise")
+	for entry: Dictionary in [{"action_token": 1}, {"source_generation": 1}, {"control_effect": {"kind": "launch", "displacement_pixels": -1.0}}, {"control_effect": {}}]:
+		health.take_damage(_anchor_damage(100 + actor.launch_affix_runtime_snapshot().shielded.damage_claims.size(), entry))
+	suite.assert_equal(actor.launch_affix_runtime_snapshot().anchored.control_count, 1, "stale tokens and malformed absorbed control cannot mint Anchored poise")
+	for generation: int in range(2, 5):
+		health.take_damage(_anchor_damage(generation))
+	suite.assert_equal(actor.launch_affix_runtime_snapshot().anchored.poise, 80, "four legitimate absorbed launches retain eighty Anchored poise")
+	suite.assert_equal(actor.launch_runtime_snapshot().runtime.mechanism_state, body_facts, "absorbed launch cannot manufacture a native body damage fact")
+	suite.assert_close(health.current_hp, 160.0, "absorbed launch control does not remove body Health")
+	var cold: Dictionary = Replay.decode_replay_json(Replay.encode_replay_json(actor.native_cold_snapshot(func(_source: Node): return {})).json).replay
+	var twin := _actor(-1, "anchored")
+	suite.assert_true(twin.restore_native_cold_snapshot(cold, func(_source: Dictionary): return null), "typed cold pair reconstruction retains absorbed weapon controls")
+	suite.assert_equal(twin.native_cold_snapshot(func(_source: Node): return {}), actor.native_cold_snapshot(func(_source: Node): return {}), "cold pair keeps exact shield, poise and token receipts")
+	var ordinary := _actor()
+	ordinary.get_node("HealthComponent").take_damage(_anchor_damage(1))
+	suite.assert_equal(ordinary.get_weapon_hit_control_snapshot_for_test().claim_count, 0, "Shielded without Anchored retains existing fully absorbed control policy")
+	var overflowing := _actor(-1, "anchored")
+	suite.assert_close(overflowing.get_node("HealthComponent").take_damage(_anchor_damage(1, {"amount": 60.0})), 12.0, "partial absorbed launch retains normal body overflow")
+	suite.assert_equal(overflowing.launch_affix_runtime_snapshot().anchored.control_count, 1, "overflow launch cannot admit poise twice through absorption and Health")
+	var player: Node2D = Player.instantiate()
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(player)
+	player.configure_run(&"run-p15")
+	player.global_position = Vector2(600, 100)
+	var root := Node2D.new()
+	add_child(root)
+	var effects := Effects.new()
+	effects.configure("run-p15")
+	effects.configure_native_payloads(root)
+	var bridge := AnchorShieldBridge.new()
+	bridge.victim = actor
+	bridge.damage_info = _anchor_damage(5)
+	suite.assert_true(bridge.configure(player, Registry.new(), [actor], effects) and player.configure_hostile_frame_participant(bridge), "real Player frame owns fully absorbed threshold rollback")
+	before = actor.native_cold_snapshot(func(_source: Node): return {})
+	var player_before: Dictionary = player.full_player_replay_snapshot()
+	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
+	suite.assert_true(not player.advance_action_frame(), "late World refusal compensates absorbed Shielded Anchored threshold")
+	suite.assert_equal(actor.native_cold_snapshot(func(_source: Node): return {}), before, "outer refusal restores exact shield, poise, recovery and control identity")
+	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "outer absorbed-control refusal restores complete actual Player")
+	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)
+	suite.assert_true(player.advance_action_frame(), "original absorbed threshold retries after real World refusal")
+	suite.assert_equal(actor.launch_affix_runtime_snapshot().anchored.control_count, 5, "accepted retry admits exactly five absorbed controls")
+	suite.assert_equal(actor.launch_affix_runtime_snapshot().anchored.poise, 0, "fifth absorbed control spends the authored hundred poise")
+	suite.assert_equal(actor.launch_affix_runtime_snapshot().anchored.recovery_remaining_frames, 19, "threshold owns twenty recovery frames and spends the accepted candidate once")
+	suite.assert_close(health.current_hp, 160.0, "fully absorbed accepted threshold keeps actual Health intact")
+	await _physical_roundtrip(actor)
+	player.configure_hostile_frame_participant(null)
+	for target: Node in [actor, twin, ordinary, overflowing, player, root]:
 		target.queue_free()
 	await get_tree().process_frame
 

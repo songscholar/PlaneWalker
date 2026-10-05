@@ -481,6 +481,11 @@ func prepare_post_defense_absorption(damage_info: RefCounted, resolution: RefCou
 func commit_post_defense_absorption(damage_info: RefCounted, resolution: RefCounted, decision: Dictionary) -> bool:
 	if _shield_absorption_commit_fault_for_test or not health.owns_post_defense_absorption_commit(damage_info, resolution, decision) or decision != prepare_post_defense_absorption(damage_info, resolution) or not _affix_runtime.restore_snapshot(decision.receipt.after):
 		return false
+	# Absorbed launch controls reach Anchor without manufacturing body damage facts.
+	var anchor: Dictionary = _affix_runtime.snapshot().get("anchored", {})
+	if float(decision.amount_after) == 0.0 and float(decision.absorbed) > 0.0 and not anchor.is_empty() and int(anchor.control_count) < Contract.MAX_FRAME and super.apply_weapon_hit_control(damage_info, float(decision.absorbed)):
+		var frame: int = health.frame_signal_transaction_runtime_frame()
+		_affix_runtime.accept_launch_control(_hostile_runtime_frame() if frame < 0 else frame)
 	_refresh_control_visual()
 	return true
 

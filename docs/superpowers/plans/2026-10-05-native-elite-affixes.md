@@ -100,3 +100,4 @@ retain metadata-only Shielded behavior.
 - [x] Verify actual partial/full absorption, overflow, duplicates, defense/Frenzy/Fortified/Nullified composition, terminal cleanup, late rejection retry and typed/physical cold reconstruction.
 - [x] Project an accessible gold shield contour with visible intact/broken states.
 - [x] Run native Shielded, Health/damage, shared elite, production encounter and physical checkpoint gates; retain focused evidence.
+- [x] Retain Shielded/Anchored absorbed-control RED/GREEN: honest zero-body resolution, one control receipt, threshold recovery, typed/physical persistence and actual Player late rejection retry.
