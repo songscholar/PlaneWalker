@@ -1,0 +1,38 @@
+keys,en,zh_CN
+UI_PLATFORM_TITLE,Platform & Storage,平台与存储
+UI_PLATFORM_STATUS_OFFLINE,Offline,离线
+UI_PLATFORM_STATUS_OFFLINE_FALLBACK,Offline fallback,已切换离线服务
+UI_PLATFORM_STATUS_ONLINE,Connected,已连接
+UI_PLATFORM_SECTION_ACCOUNT,Account,账户
+UI_PLATFORM_SECTION_STORAGE,Storage,存储
+UI_PLATFORM_SECTION_COMMUNITY,Community,社区
+UI_PLATFORM_SECTION_CONTENT,Local Content,本地内容
+UI_PLATFORM_SECTION_SHARING,Sharing,分享
+UI_PLATFORM_DISPLAY_NAME,Display name,显示名称
+UI_PLATFORM_SAVE_NAME,Save name,保存名称
+UI_PLATFORM_ACHIEVEMENTS,Achievements,成就
+UI_PLATFORM_ACHIEVEMENTS_EMPTY,No achievements yet,暂无成就
+UI_PLATFORM_ACHIEVEMENT_FIRST_RUN,First Journey,首次冒险
+UI_PLATFORM_ACHIEVEMENT_FIRST_VICTORY,First Victory,首次胜利
+UI_PLATFORM_ACHIEVEMENT_FIRST_RETURN,First Return,首次归来
+UI_PLATFORM_BACKUP_PROFILE,Back up current profile,备份当前档案
+UI_PLATFORM_EXPORT_PROFILE,Export current profile,导出当前档案
+UI_PLATFORM_EXPORT_BACKUP,Export backup,导出备份
+UI_PLATFORM_CLOUD_EMPTY,No local backups,暂无本地备份
+UI_PLATFORM_FRIENDS,Friends,好友
+UI_PLATFORM_FRIENDS_EMPTY,No friends available offline,离线状态暂无好友
+UI_PLATFORM_LOCAL_BOARD,Local / Unranked,本地 / 未排名
+UI_PLATFORM_BOARD_EMPTY,No local records,暂无本地战绩
+UI_PLATFORM_CONTENT_EMPTY,No additional local content,暂无额外本地内容
+UI_PLATFORM_OWNED,Owned,已拥有
+UI_PLATFORM_UNOWNED,Not owned,未拥有
+UI_PLATFORM_SCREENSHOT,Save screenshot,保存截图
+UI_PLATFORM_SHARE_BUILD,Export build,导出构筑
+UI_PLATFORM_SHARE_REPLAY,Export replay,导出回放
+UI_PLATFORM_BUILDS_EMPTY,No saved builds,暂无已存构筑
+UI_PLATFORM_REPLAYS_EMPTY,No saved replays,暂无已存回放
+UI_PLATFORM_REFRESH,Refresh,刷新
+UI_PLATFORM_SAVED,Saved locally,已保存在本地
+UI_PLATFORM_EXPORTED,Exported locally,已导出至本地
+UI_PLATFORM_SAVE_FAILED,Unable to save. Retry.,保存失败，请重试。
+UI_PLATFORM_STALE,Data changed. Refresh and retry.,数据已变更，请刷新后重试。
