@@ -87,6 +87,44 @@ only `packaged_startup`; missing real line coverage still blocks certification.
 Other platforms, complete gameplay and human feedback require their own evidence.
 The certifier's `--godot-bin` also selects the editor for clean validation.
 
+## Linux Guest Startup
+
+`verify_linux_guest_startup.py` authenticates a retained Linux x86_64 executable
+against its export report, then runs the real Main startup check in a Linux amd64
+Docker guest. Supply an already installed immutable public image with a glibc
+runtime. The verifier does not pull images or use personal Docker credentials.
+For retained certifier output, `--artifact-root` is the retained directory whose
+`build/linux/PlaneWalker.x86_64` was copied from the clean checkout:
+
+```sh
+python3 tools/export/verify_linux_guest_startup.py \
+  --export-report build/export-evidence/current-candidate-logs/export-report.json \
+  --artifact-root build/certified/current-candidate \
+  --docker-host unix:///var/run/docker.sock \
+  --image debian@sha256:ACTUAL_INSTALLED_IMMUTABLE_DIGEST \
+  --evidence-output build/export-evidence/current-linux-guest.json \
+  --log-dir build/export-evidence/current-linux-guest-logs
+```
+
+On Docker Desktop, pass its actual local Unix socket. Every run requires a fresh
+log directory. The container receives only the executable as a read-only mount
+and writable fresh logs; source files are not mounted. It has no network,
+capabilities or writable root filesystem, and uses isolated temporary data.
+Both Docker's inspected image ID and repository digest appear in the report.
+
+Missing Docker, daemon or image produce typed blocked evidence. Changed
+artifacts, architecture/digest mismatches, runtime errors/leaks and malformed or
+incomplete native results fail. Passing evidence is explicitly
+`linux_guest_packaged_startup_verified`, with `actual_linux_host_verified=false`
+and `full_product_certified=false`. It cannot substitute for Linux display/input
+QA, actual Linux or Windows host startup, complete gameplay, or human feedback.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+  tests.contract.export.test_linux_guest_startup \
+  tests.contract.export.test_packaged_startup
+```
+
 ## Runtime Data Directory
 
 Default GameState and input-profile paths read `PLANEWALKER_USER_DATA_DIR` first,
