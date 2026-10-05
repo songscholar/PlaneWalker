@@ -105,6 +105,7 @@ func begin_profile_attack(definition: Dictionary) -> Dictionary:
 	if _attacking or not _valid_profile_attack(definition):
 		return {}
 	_current_attack = definition.duplicate(true)
+	_current_attack["damage_identity_revision"] = 2
 	_attacking = true
 	_active = false
 	if not bool(_current_attack["heavy"]) and bool(_current_attack.get("advance_combo", true)):
@@ -123,7 +124,12 @@ func enter_active_phase() -> bool:
 func enter_profile_active_phase(definition: Dictionary) -> bool:
 	if not _attacking or _active or not _valid_profile_attack(definition):
 		return false
+	# A restored historical cast keeps its producer until that cast finishes.
+	var identity_revision := int(_current_attack.get("damage_identity_revision", 1))
 	_current_attack = definition.duplicate(true)
+	_current_attack.erase("damage_identity_revision")
+	if identity_revision == 2:
+		_current_attack["damage_identity_revision"] = 2
 	_active = true
 	var payload_kind := str(_current_attack.get("payload_kind", "hitbox"))
 	if payload_kind == "guard":
@@ -176,7 +182,7 @@ func _build_damage_info(
 	return DamageInfoScript.from_plan({
 		"run_id": &"legacy_run",
 		"target_id": &"pending_target",
-		"hostile_source_id": &"player_sword",
+		"hostile_source_id": &"player_sword_v2" if int(definition.get("damage_identity_revision", 1)) == 2 else &"player_sword",
 		"attack_generation": int(frozen_identity["attack_generation"]),
 		"action_token": int(frozen_identity["action_token"]),
 		"amount": base_attack * effective_multiplier,
@@ -190,7 +196,7 @@ func _build_damage_info(
 
 func _damage_action_identity() -> Dictionary:
 	if owner_player != null and owner_player.has_method("weapon_damage_action_identity"):
-		var identity_value: Variant = owner_player.call("weapon_damage_action_identity")
+		var identity_value: Variant = owner_player.call("weapon_damage_action_identity", int(_current_attack.get("damage_identity_revision", 1)))
 		if identity_value is Dictionary:
 			var identity: Dictionary = identity_value
 			if (
@@ -414,6 +420,11 @@ func _owner_hp_ratio() -> float:
 
 
 func _valid_profile_attack(definition: Dictionary) -> bool:
+	if definition.has("damage_identity_revision") and (
+		typeof(definition["damage_identity_revision"]) != TYPE_INT
+		or int(definition["damage_identity_revision"]) != 2
+	):
+		return false
 	var damaging := bool(definition.get("damaging", true))
 	if (
 		typeof(definition.get("heavy")) != TYPE_BOOL

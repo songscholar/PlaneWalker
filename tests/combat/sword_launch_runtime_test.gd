@@ -871,9 +871,8 @@ func _test_player_active_hitbox_restore_preserves_damage_identity() -> void:
 		await _free_player(target)
 		return
 
-	# This fixture needs a non-initial generation, but must not depend on an
-	# unrelated idle runtime reset advancing the action identity implicitly.
-	source.weapon_action_coordinator.cancel(&"identity_generation_fixture")
+	for _cancel: int in range(4):
+		source.weapon_action_coordinator.cancel(&"identity_generation_fixture")
 
 	_suite.assert_true(
 		await _drive_player_hitbox_action(source),
@@ -890,7 +889,10 @@ func _test_player_active_hitbox_restore_preserves_damage_identity() -> void:
 	var expected_attack_generation := int(source_damage.get("attack_generation")) if source_damage != null else 0
 	_suite.assert_true(expected_action_token > 1, "identity fixture captures a non-initial action token")
 	_suite.assert_true(expected_attack_generation > 1, "identity fixture captures a non-initial attack generation")
+	_suite.assert_equal(expected_attack_generation, expected_action_token, "current Sword damage generation uses the action token")
+	_suite.assert_equal(str(source_damage.hostile_source_id), "player_sword_v2", "current Sword uses an explicit revised producer namespace")
 	var active_snapshot: Dictionary = source.weapon_action_coordinator.snapshot()
+	_suite.assert_true(int(active_snapshot.generation) > expected_action_token, "cancellation-heavy coordinator epoch remains independent from damage identity")
 
 	_suite.assert_true(
 		target.weapon_action_coordinator.restore_snapshot(active_snapshot),
@@ -915,6 +917,11 @@ func _test_player_active_hitbox_restore_preserves_damage_identity() -> void:
 			"restored ACTIVE Sword preserves the captured attack generation"
 		)
 	var before_rejected_restore: Dictionary = target.weapon_action_coordinator.snapshot()
+	for forged_revision: Variant in [1, 3, 2.0, "2"]:
+		var revision_mismatch := active_snapshot.duplicate(true)
+		revision_mismatch.runtime.adapter.current_attack.damage_identity_revision = forged_revision
+		_suite.assert_true(not target.weapon_action_coordinator.restore_snapshot(revision_mismatch), "ACTIVE Sword rejects unknown or untyped producer revisions")
+		_suite.assert_equal(target.weapon_action_coordinator.snapshot(), before_rejected_restore, "producer revision refusal remains atomic")
 	var malformed := active_snapshot.duplicate(true)
 	var malformed_runtime: Dictionary = malformed["runtime"]
 	var malformed_adapter: Dictionary = malformed_runtime["adapter"]

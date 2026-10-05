@@ -470,16 +470,16 @@ func _weapon_adapter(weapon_id: StringName) -> Node:
 	return _weapon_adapters.get(weapon_id) as Node
 
 
-func weapon_damage_action_identity() -> Dictionary:
-	if weapon_action_coordinator == null or loadout_runtime == null:
+func weapon_damage_action_identity(damage_identity_revision: int = 2) -> Dictionary:
+	if weapon_action_coordinator == null or loadout_runtime == null or damage_identity_revision not in [1, 2]:
 		return {}
 	var action_token := int(weapon_action_coordinator.current_token())
-	var attack_generation := int(_weapon_action_generations_by_token.get(action_token, 0))
-	if action_token <= 0 or attack_generation <= 0:
+	var action_generation := int(_weapon_action_generations_by_token.get(action_token, 0))
+	if action_token <= 0 or action_generation <= 0:
 		return {}
 	return {
 		"weapon_id": loadout_runtime.weapon_id(),
-		"attack_generation": attack_generation,
+		"attack_generation": action_token if damage_identity_revision == 2 else action_generation,
 		"action_token": action_token,
 	}
 

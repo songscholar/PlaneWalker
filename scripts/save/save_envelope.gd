@@ -586,7 +586,7 @@ static func _normalize_persisted_integer_fields(
 		"remaining_frames", "capture_sequence", "sequence", "frame",
 		"current_token", "revision", "next_sample_sequence",
 		"cooldown_remaining_frames", "damage_attack_generation",
-		"damage_action_token", "guard_generation", "guard_elapsed_frames",
+		"damage_action_token", "damage_identity_revision", "guard_generation", "guard_elapsed_frames",
 		"next_fallback_attack_generation", "phase", "run_seed", "current_floor",
 		"current_room", "room_total", "run_time_ms", "current_floor_index",
 		"floor_index", "floor_number", "room_seed", "cycle_index", "layer", "choice_order",

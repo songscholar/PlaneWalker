@@ -696,11 +696,16 @@ func validate_coordinator_snapshot(coordinator_snapshot: Dictionary) -> bool:
 	if not adapter_value is Dictionary:
 		return false
 	var adapter: Dictionary = adapter_value
+	if not adapter.get("current_attack") is Dictionary:
+		return false
 	var damage_token := int(adapter.get("damage_action_token", 0))
 	var damage_generation := int(adapter.get("damage_attack_generation", 0))
 	if (damage_token == 0) != (damage_generation == 0):
 		return false
-	if damage_token > 0 and (damage_token != token or damage_generation != generation):
+	var current_attack: Dictionary = adapter.get("current_attack", {})
+	var identity_revision := int(current_attack.get("damage_identity_revision", 1))
+	var expected_damage_generation := token if identity_revision == 2 else generation
+	if damage_token > 0 and (damage_token != token or damage_generation != expected_damage_generation):
 		return false
 	return true
 
@@ -1291,7 +1296,12 @@ func _validate_commit_plan(plan: Dictionary) -> Dictionary:
 
 
 func _adapter_definition_matches_plan(definition: Dictionary, plan: Dictionary) -> bool:
-	return definition == _profile_attack_definition(plan)
+	var canonical := definition.duplicate(true)
+	if canonical.has("damage_identity_revision"):
+		if typeof(canonical.damage_identity_revision) != TYPE_INT or int(canonical.damage_identity_revision) != 2:
+			return false
+		canonical.erase("damage_identity_revision")
+	return canonical == _profile_attack_definition(plan)
 
 
 func _activate_payload() -> bool:
@@ -1817,7 +1827,7 @@ func _valid_launch_action_restore_state(value: Dictionary, adapter: Dictionary) 
 		or modifiers != plan.get("modifier_snapshot", {})
 		or not bool(adapter["attacking"])
 		or bool(adapter["active"]) != (phase == "ACTIVE")
-		or (adapter["current_attack"] as Dictionary) != _profile_attack_definition(plan)
+		or not _adapter_definition_matches_plan(adapter["current_attack"], plan)
 	):
 		return false
 	var guard_active := bool(launch_adapter.get("guard_active", false))

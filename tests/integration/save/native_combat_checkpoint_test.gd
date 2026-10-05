@@ -23,7 +23,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
+	for case_name: String in ["warning", "fighting", "sword_active", "sword_legacy_active", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
 		var selected := OS.get_environment("PLANEWALKER_CHECKPOINT_CASE")
 		if not selected.is_empty() and selected != case_name:
 			continue
@@ -182,6 +182,30 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			var hit := Damage.from_plan({"run_id": str(player.current_run_id()), "target_id": "cold_cover", "hostile_source_id": "player:sword", "attack_generation": 17, "action_token": 17, "amount": 80.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
 			suite.assert_equal(cover.get_node("Hurtbox").receive_hit(hit), 80.0, "actual Host cover fixture destroys its authoritative native pillar")
 			suite.assert_true(player.advance_action_frame() and cover.collision_layer == 0, "accepted native Player continuation retains the broken pillar")
+	var sword_spent_target := ""
+	if case_name.begins_with("sword_"):
+		player.global_position = Vector2(140, 250)
+		for _cancel: int in range(4):
+			player.weapon_action_coordinator.cancel(&"physical_sword_epoch_fixture")
+		suite.assert_true(player.try_action(&"weapon_primary") and player.call("_submit_weapon_intent", &"weapon_primary", &"released"), "physical checkpoint begins a genuine cancellation-heavy light Sword cast")
+		if case_name == "sword_legacy_active":
+			var legacy_windup: Dictionary = player.weapon_action_coordinator.snapshot()
+			legacy_windup.runtime.adapter.current_attack.erase("damage_identity_revision")
+			suite.assert_true(player.weapon_action_coordinator.restore_snapshot_for_rollback(legacy_windup), "physical historical checkpoint retains the pre-revision WINDUP definition")
+		for _frame: int in range(80):
+			if player.get_node("SwordWeapon/Hitbox").is_active():
+				break
+			suite.assert_true(player.advance_action_frame({"aim": Vector2.LEFT}), "physical Sword checkpoint reaches accepted ACTIVE frame")
+		var active_damage: RefCounted = player.get_node("SwordWeapon/Hitbox").get("_active_damage_info")
+		suite.assert_true(active_damage != null, "physical Sword checkpoint has frozen immutable damage")
+		if active_damage == null:
+			await _dispose(main)
+			return
+		var victim: Node = controller.get_node("Enemies").get_child(0)
+		sword_spent_target = str(victim.hostile_source_id)
+		suite.assert_true(victim.get_node("Hurtbox").receive_hit(active_damage) > 0.0, "physical Sword checkpoint stores an actual already-spent native body receipt")
+		var expected_source := "player_sword" if case_name == "sword_legacy_active" else "player_sword_v2"
+		suite.assert_equal(str(active_damage.hostile_source_id), expected_source, "physical Sword checkpoint keeps its explicit historical or current producer namespace")
 	var before: Dictionary = runner.native_launch_snapshot()
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	var run_before: Dictionary = host.runtime_snapshot()
@@ -254,6 +278,11 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "cold native combat preserves exact full Player replay")
 	suite.assert_true(_equal_json(host.runtime_snapshot(), run_before), "cold combat preserves original Run and route revision")
 	suite.assert_equal(reopened.snapshot(), profile_before, "cold combat cannot mint another launch or revise durable Profile")
+	if case_name.begins_with("sword_"):
+		var restored_damage: RefCounted = player.get_node("SwordWeapon/Hitbox").get("_active_damage_info")
+		var victim: Node = runner.get_node("NativeLaunchEncounterDriver").get("_actors").get(sword_spent_target)
+		suite.assert_true(restored_damage != null and victim != null and victim.get_node("Hurtbox").receive_hit(restored_damage) == 0.0, "fresh physical Sword restore refuses its original already-spent body receipt")
+		suite.assert_equal(runner.native_launch_snapshot(), before, "physical Sword spent refusal preserves exact cold body, ledger and native effect state")
 	if case_name == "presentation_drift":
 		var presented: Variant = host.present_restored_checkpoint(func() -> void: controller.get_node("Enemies").get_child(0).position += Vector2.ONE)
 		suite.assert_true(not presented.ok and presented.code == &"NATIVE_PUBLICATION_PENDING" and player.process_mode == Node.PROCESS_MODE_DISABLED and controller.process_mode == Node.PROCESS_MODE_DISABLED, "first presentation authenticates and freezes native actor drift")
