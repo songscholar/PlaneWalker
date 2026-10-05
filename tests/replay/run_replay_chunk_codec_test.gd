@@ -91,6 +91,27 @@ func _run() -> void:
 		too_many.append({"sequence": sequence, "state": {}})
 	suite.assert_true(not codec.encode(too_many).ok, "chunk cannot exceed 120 observations")
 	suite.assert_true(_exact(observations, original), "encoding and malformed inputs preserve caller-owned snapshots")
+	var typed_before: Dictionary[String, int] = {"x": 1}
+	var typed_after: Dictionary[String, int] = {"x": 2}
+	var typed_observations: Array[Dictionary] = [{"sequence": 0, "typed": typed_before}, {"sequence": 1, "typed": typed_after}]
+	var typed_chunk: Dictionary = codec.encode(typed_observations).context.chunk
+	var typed_payload: Dictionary = bytes_to_var(typed_chunk.bytes.decompress(typed_chunk.raw_size, FileAccess.COMPRESSION_ZSTD))
+	typed_payload.deltas[0].set = [{"path": ["sequence"], "value": 1}, {"path": ["typed", "x"], "value": "wrong-type"}]
+	suite.assert_true(not codec.decode(_repackage(codec, typed_chunk, typed_payload)).ok, "wrong typed destination value refuses before Godot assignment")
+	typed_payload = bytes_to_var(typed_chunk.bytes.decompress(typed_chunk.raw_size, FileAccess.COMPRESSION_ZSTD))
+	typed_payload.deltas[0].set = [{"path": ["sequence"], "value": 1}, {"path": ["typed", 1], "value": 2}]
+	suite.assert_true(not codec.decode(_repackage(codec, typed_chunk, typed_payload)).ok, "wrong typed destination key refuses before Godot lookup")
+	var limit: Array[Dictionary] = [{"sequence": 2147483646}, {"sequence": 2147483647}]
+	var boundary: Dictionary = codec.encode(limit).context.chunk
+	var overflow_payload: Dictionary = bytes_to_var(boundary.bytes.decompress(boundary.raw_size, FileAccess.COMPRESSION_ZSTD))
+	overflow_payload.keyframe.sequence += 1
+	overflow_payload.deltas[0].sequence += 1
+	for patch: Dictionary in overflow_payload.deltas[0].set:
+		if patch.path == ["sequence"]:
+			patch.value += 1
+	boundary.first_sequence += 1
+	boundary.last_sequence += 1
+	suite.assert_true(not codec.decode(_repackage(codec, boundary, overflow_payload)).ok, "decode refuses sequences beyond the encode boundary")
 	suite.finish(get_tree())
 
 

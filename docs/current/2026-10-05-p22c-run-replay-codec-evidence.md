@@ -27,6 +27,13 @@ and floats, String/StringName, typed arrays/dictionaries, vectors, nested
 insertions/deletions, corrupted bytes and correctly rehashed malformed deltas.
 Logs contain no script/resource/invalid-call or ObjectDB/RID leak diagnostics.
 
+Independent review found malformed deltas could target typed dictionaries with
+an incompatible key or value, and the last sequence could exceed the encoder's
+integer limit. Checked destination admission and the decode upper bound now
+refuse before Godot lookup or assignment. Typed key ordering compares equivalent
+untyped key lists without losing the actual encoded dictionary type. The added
+regressions pass in `planewalker-tests.0gknL8` with clean runtime logs.
+
 This is a codec boundary, not whole-run completion. Physical manifests,
 automatic native capture, hostile/room/economy tape, long-run storage and
 isolated whole-world presentation remain required by the following P22C tasks.

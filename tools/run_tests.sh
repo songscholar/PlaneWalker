@@ -153,6 +153,7 @@ log_has_runtime_failure() {
 		-e 'Cannot open file .*\.gd' \
 		-e 'Cannot load resource' \
 		-e 'Invalid (call|get|set)(\.| )' \
+		-e 'ERROR: String formatting error:' \
 		-- "$@" 2>/dev/null
 }
 

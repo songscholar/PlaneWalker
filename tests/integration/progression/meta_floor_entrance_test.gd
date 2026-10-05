@@ -24,11 +24,11 @@ class EventRefreshFault extends Facade:
 class PlayerInstallFault extends PlayerScript:
 	var reject_install_once := false
 
-	func restore_reward_effect_snapshot(value: Dictionary, publish: bool = true) -> bool:
+	func restore_reward_effect_snapshot(value: Dictionary, publish: bool = true, replay_context: Dictionary = {}) -> bool:
 		if reject_install_once:
 			reject_install_once = false
 			return false
-		return super.restore_reward_effect_snapshot(value, publish)
+		return super.restore_reward_effect_snapshot(value, publish, replay_context)
 
 
 func _ready() -> void:

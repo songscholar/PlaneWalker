@@ -41,7 +41,7 @@ static func encode(observations: Array[Dictionary]) -> Dictionary:
 static func decode(chunk: Dictionary) -> Dictionary:
 	if not _fields(chunk, FIELDS) or chunk.schema_id != SCHEMA_ID or typeof(chunk.schema_version) != TYPE_INT or chunk.schema_version != 1:
 		return _failure(&"RUN_REPLAY_CHUNK_INVALID")
-	if not _integer(chunk.first_sequence, 0, 2147483647) or not _integer(chunk.observation_count, 1, MAX_OBSERVATIONS) or typeof(chunk.last_sequence) != TYPE_INT or chunk.last_sequence != chunk.first_sequence + chunk.observation_count - 1:
+	if not _integer(chunk.first_sequence, 0, 2147483647) or not _integer(chunk.observation_count, 1, MAX_OBSERVATIONS) or not _integer(chunk.last_sequence, 0, 2147483647) or chunk.last_sequence != chunk.first_sequence + chunk.observation_count - 1:
 		return _failure(&"RUN_REPLAY_CHUNK_INVALID")
 	if not _integer(chunk.raw_size, 1, MAX_RAW_BYTES) or not _integer(chunk.compressed_size, 1, MAX_COMPRESSED_BYTES) or not chunk.bytes is PackedByteArray or chunk.bytes.size() != chunk.compressed_size:
 		return _failure(&"RUN_REPLAY_CHUNK_SIZE_INVALID")
@@ -93,13 +93,15 @@ static func _difference(before: Variant, after: Variant, path: Array, changes: A
 
 static func _ordered_keys_match(before: Dictionary, after: Dictionary) -> bool:
 	var keys: Array = []
+	var target_keys: Array = []
 	for key: Variant in before:
 		if after.has(key):
 			keys.append(key)
 	for key: Variant in after:
+		target_keys.append(key)
 		if not before.has(key):
 			keys.append(key)
-	return var_to_bytes(keys) == var_to_bytes(after.keys())
+	return var_to_bytes(keys) == var_to_bytes(target_keys)
 
 
 static func _dictionary_types_match(before: Dictionary, after: Dictionary) -> bool:
@@ -121,7 +123,7 @@ static func _apply_delta(before: Dictionary, delta: Variant, sequence: int) -> D
 	var candidate := before.duplicate(true)
 	for path: Array in delta.removed:
 		var parent: Variant = _parent(candidate, path)
-		if not parent is Dictionary or not parent.has(path[-1]):
+		if not parent is Dictionary or not _accepts_key(parent, path[-1]) or not parent.has(path[-1]):
 			return _failure(&"RUN_REPLAY_CHUNK_DELTA_INVALID")
 		parent.erase(path[-1])
 	for patch: Dictionary in delta.set:
@@ -131,7 +133,7 @@ static func _apply_delta(before: Dictionary, delta: Variant, sequence: int) -> D
 			candidate = patch.value.duplicate(true)
 		else:
 			var parent: Variant = _parent(candidate, patch.path)
-			if not parent is Dictionary:
+			if not parent is Dictionary or not _accepts_key(parent, patch.path[-1]) or not _accepts_value(parent, patch.value):
 				return _failure(&"RUN_REPLAY_CHUNK_DELTA_INVALID")
 			parent[patch.path[-1]] = _copy(patch.value)
 	if typeof(candidate.get("sequence")) != TYPE_INT or candidate.sequence != sequence or not _safe(candidate) or byte_digest(var_to_bytes(candidate)) != delta.snapshot_sha256:
@@ -160,10 +162,18 @@ static func _unique_path(path: Variant, existing: Array[Array]) -> bool:
 static func _parent(root: Dictionary, path: Array) -> Variant:
 	var current: Variant = root
 	for index: int in range(path.size() - 1):
-		if not current is Dictionary or not current.has(path[index]):
+		if not current is Dictionary or not _accepts_key(current, path[index]) or not current.has(path[index]):
 			return null
 		current = current[path[index]]
 	return current
+
+
+static func _accepts_key(dictionary: Dictionary, key: Variant) -> bool:
+	return dictionary.get_typed_key_builtin() == TYPE_NIL or dictionary.get_typed_key_builtin() == typeof(key)
+
+
+static func _accepts_value(dictionary: Dictionary, value: Variant) -> bool:
+	return dictionary.get_typed_value_builtin() == TYPE_NIL or dictionary.get_typed_value_builtin() == typeof(value)
 
 
 static func _safe(value: Variant, depth: int = 0) -> bool:
