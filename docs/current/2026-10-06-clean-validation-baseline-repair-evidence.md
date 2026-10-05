@@ -3,7 +3,7 @@
 - Status: Focused Verified / Complete validation pending
 - Document Role: Current focused implementation evidence
 - Authority Level: Below the approved full-product completion specification
-- Applies To: Native combat damage fixtures, event teardown and retained clean validation
+- Applies To: Native combat damage fixtures, event/checkpoint teardown and retained clean validation
 - Owner: Plane Walker integration team
 - Last Verified: 2026-10-06
 - Depends On: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
@@ -87,3 +87,31 @@ the exact single message and returns the command's actual `ok=false`. Both
 original command-code and phase assertions remain. The focused 1/1 GREEN at
 `build/test-evidence/facade-expected-rollback-green/` passes both independent
 logs. No Facade runtime behavior or global log allowlist changed for this fix.
+
+## Phase-Shift Checkpoint Audio Teardown
+
+The broader save regression run retained 25 passing scenes and one strict
+failure in `native_phase_shift_checkpoint_test`. Its assertions printed PASS,
+but both independent logs recorded `ERROR: Player is inactive` at the test's
+`_dispose` override when it queried a stopped MusicDirector deck.
+The original RED remains at
+`build/replay-cache-save-regressions/tests__integration__save__native_phase_shift_checkpoint_test.stdout.log`
+and its adjacent `.godot.log`.
+
+The fixture now uses the existing event teardown pattern:
+`has_stream_playback()` guards acquisition of each weak playback reference.
+All physical Ranger landing, checkpoint continuation, ordinary Sword, paid
+Rewind and historical schema assertions remain. The asynchronous playback
+release wait and final release assertion also remain unchanged. Production
+audio behavior and the global log policy are unchanged.
+
+Three focused reruns passed strict stdout and independent engine-log checks:
+
+- `build/test-evidence/phase-shift-audio-cleanup-green/phase-shift/`: 1/1
+- `build/test-evidence/phase-shift-audio-cleanup-green/natural-elite/`: 1/1
+- `build/test-evidence/phase-shift-audio-cleanup-green/hound-sigil/`: 1/1
+
+The adjacent scenes exercise the same inherited physical checkpoint fixture.
+These ordinary scene runs do not measure runtime line coverage or certify the
+complete product. The immutable `be58030` validator continues on its original
+source and may retain this pre-repair failure when it reaches the save suite.
