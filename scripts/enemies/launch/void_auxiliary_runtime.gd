@@ -5,6 +5,7 @@ const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.
 const Definition := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Action := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const VoidHalf := preload("res://scripts/enemies/launch/void_half_arena_geometry.gd")
+const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const FIELDS := ["schema_version", "definition_digest", "identity", "runtime_frame", "arena_origin", "terminal", "phase_index", "casts", "burns", "statuses", "pickups", "landings", "exposure_through_frame", "events"]
 const CAST_FIELDS := ["run_id", "owner_source_id", "action_id", "attack_generation", "runtime_frame", "geometry", "damage_multiplier"]
 const DAMAGE_FIELDS := ["fact_id", "run_id", "owner_source_id", "attack_generation", "hit_index", "target_id", "runtime_frame", "actual_loss"]
@@ -14,11 +15,15 @@ const EVENT_FIELDS := {"cast": ["kind", "frame", "action_id", "generation", "geo
 const MAX_FRAME := 2147447646
 const MAX_EVENTS := 4096
 const MAX_VALIDATION_CACHE := 4
+const MAX_EVENT_CHECKPOINT_BYTES := 524288
+const MAX_REPLAY_CHECKPOINT_BYTES := 1048576
 static var _validation_cache: Array[Dictionary] = []
 static var _validation_cache_mutex := Mutex.new()
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
 var _initial: Dictionary = {}
+var _event_replay_checkpoint: Dictionary = {}
+var _event_replay_checkpoint_mutex := Mutex.new()
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -28,6 +33,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_definition = parsed.definition.duplicate(true)
 	_state = {"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "arena_origin": {"x": 0.0, "y": 0.0}, "terminal": false, "phase_index": 0, "casts": [], "burns": [], "statuses": [], "pickups": [], "landings": [], "exposure_through_frame": int(identity.runtime_frame) - 1, "events": []}
 	_initial = snapshot()
+	_clear_event_replay_checkpoint()
 	return {"ok": true}
 
 
@@ -40,6 +46,7 @@ func bind_origin(origin: Dictionary) -> bool:
 		return false
 	_state.arena_origin = origin.duplicate(true)
 	_initial.arena_origin = origin.duplicate(true)
+	_clear_event_replay_checkpoint()
 	return true
 
 
@@ -153,23 +160,54 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 	var encoded := var_to_bytes(value)
 	if _validation_cache_contains(context, encoded, accepted_boundary):
 		return true
-	var replay := _initial.duplicate(true)
-	var previous := int(_initial.runtime_frame)
-	for candidate: Variant in value.events:
-		if not candidate is Dictionary or not _valid_event(candidate) or candidate.frame < previous or candidate.frame > int(value.runtime_frame) + (0 if accepted_boundary else 1):
-			return false
-		replay.runtime_frame = mini(int(candidate.frame), int(value.runtime_frame))
-		_refresh(replay)
-		if not _apply(replay, candidate).ok:
-			return false
-		replay.events.append(candidate.duplicate(true))
-		previous = int(candidate.frame)
+	# Serialization alone cannot certify null/freed-Object aliases.
+	var checkpoint_eligible := context.size() <= MAX_EVENT_CHECKPOINT_BYTES and Replay.replay_value_is_safe([_definition, _initial, value.events])
+	var event_bytes := var_to_bytes(value.events) if checkpoint_eligible else PackedByteArray()
+	checkpoint_eligible = checkpoint_eligible and event_bytes.size() <= MAX_EVENT_CHECKPOINT_BYTES
+	var replay := _event_checkpoint_replay(context, event_bytes, int(value.runtime_frame)) if checkpoint_eligible else {}
+	var checkpoint: Dictionary = {}
+	if replay.is_empty():
+		replay = _initial.duplicate(true)
+		var previous := int(_initial.runtime_frame)
+		for candidate: Variant in value.events:
+			if not candidate is Dictionary or not _valid_event(candidate) or candidate.frame < previous or candidate.frame > int(value.runtime_frame) + (0 if accepted_boundary else 1):
+				return false
+			replay.runtime_frame = mini(int(candidate.frame), int(value.runtime_frame))
+			_refresh(replay)
+			if not _apply(replay, candidate).ok:
+				return false
+			replay.events.append(candidate.duplicate(true))
+			previous = int(candidate.frame)
+		# Keep the event-time state, before expiry at the requested later frame.
+		if checkpoint_eligible and previous <= int(value.runtime_frame):
+			var replay_bytes := var_to_bytes(replay)
+			if replay_bytes.size() <= MAX_REPLAY_CHECKPOINT_BYTES:
+				checkpoint = {"context": context, "events": event_bytes, "replay": replay_bytes, "frame": previous}
 	replay.runtime_frame = int(value.runtime_frame)
 	_refresh(replay)
 	var valid: bool = replay == value or JSON.parse_string(JSON.stringify(replay)) == JSON.parse_string(JSON.stringify(value))
 	if valid:
 		_cache_validated_snapshot(context, encoded, accepted_boundary)
+		if not checkpoint.is_empty():
+			_event_replay_checkpoint_mutex.lock()
+			_event_replay_checkpoint = checkpoint
+			_event_replay_checkpoint_mutex.unlock()
 	return valid
+
+
+func _event_checkpoint_replay(context: PackedByteArray, events: PackedByteArray, frame: int) -> Dictionary:
+	var replay_bytes := PackedByteArray()
+	_event_replay_checkpoint_mutex.lock()
+	if not _event_replay_checkpoint.is_empty() and _event_replay_checkpoint.context == context and _event_replay_checkpoint.events == events and frame >= int(_event_replay_checkpoint.frame):
+		replay_bytes = _event_replay_checkpoint.replay
+	_event_replay_checkpoint_mutex.unlock()
+	return bytes_to_var(replay_bytes) if not replay_bytes.is_empty() else {}
+
+
+func _clear_event_replay_checkpoint() -> void:
+	_event_replay_checkpoint_mutex.lock()
+	_event_replay_checkpoint.clear()
+	_event_replay_checkpoint_mutex.unlock()
 
 
 static func _validation_cache_contains(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> bool:
