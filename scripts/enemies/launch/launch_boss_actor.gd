@@ -281,7 +281,13 @@ func _refresh_control_visual() -> void:
 	_refresh_launch_telegraphs()
 	_refresh_native_arena()
 	_refresh_native_void()
-	var state: Dictionary = _launch_runtime.snapshot()
+	var state: Dictionary = {}
+	if _launch_runtime.has_method("native_action_snapshot") and _launch_runtime.has_method("native_runtime_frame") and _launch_runtime.has_method("native_is_terminal"):
+		var frame: int = _launch_runtime.native_runtime_frame()
+		if frame >= 0:
+			state = {"runtime_frame": frame, "terminal": _launch_runtime.native_is_terminal(), "action": _launch_runtime.native_action_snapshot()}
+	else:
+		state = _launch_runtime.snapshot()
 	_refresh_root_sweep_telegraph(state)
 	var watch := get_node_or_null("WatchHurtbox") as Area2D
 	if watch != null and not state.is_empty():

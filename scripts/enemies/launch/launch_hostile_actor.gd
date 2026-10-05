@@ -1097,11 +1097,21 @@ func _refresh_phase_arrival() -> void:
 
 
 func _refresh_launch_telegraphs() -> void:
-	var state: Dictionary = _launch_runtime.snapshot()
-	if state.is_empty():
-		return
-	var phase: String = "TERMINAL" if state.terminal or state.action.action_id == "matriarch_root_sweep" else str(state.action.phase)
-	TelegraphProjection.present(self, native_cold_threat_facts(), str(state.action.action_id), phase)
+	var action: Dictionary
+	var terminal: bool
+	if _launch_runtime.has_method("native_action_snapshot") and _launch_runtime.has_method("native_is_terminal"):
+		action = _launch_runtime.native_action_snapshot()
+		if action.is_empty():
+			return
+		terminal = _launch_runtime.native_is_terminal()
+	else:
+		var state: Dictionary = _launch_runtime.snapshot()
+		if state.is_empty():
+			return
+		action = state.action
+		terminal = state.terminal
+	var phase: String = "TERMINAL" if terminal or action.action_id == "matriarch_root_sweep" else str(action.phase)
+	TelegraphProjection.present(self, native_cold_threat_facts(), str(action.action_id), phase)
 
 
 func _refresh_affix_cue() -> void:
@@ -1423,17 +1433,25 @@ func can_restore_native_cold_snapshot(value: Dictionary, source_resolver: Callab
 
 
 func native_cold_threat_facts() -> Array:
-	var state: Dictionary = _launch_runtime.snapshot()
-	var facts: Array = state.action.committed_geometry.duplicate(true)
-	if state.action.action_id == "traitor_self_rewind" and not state.mechanism_state.rewind.is_empty():
+	var state: Dictionary = {}
+	var current: Dictionary
+	if _launch_runtime.has_method("native_action_snapshot"):
+		current = _launch_runtime.native_action_snapshot()
+		if current.action_id == "traitor_self_rewind":
+			state = _launch_runtime.snapshot()
+	else:
+		state = _launch_runtime.snapshot()
+		current = state.action
+	var facts: Array = current.committed_geometry.duplicate(true)
+	if current.action_id == "traitor_self_rewind" and not state.mechanism_state.rewind.is_empty():
 		var action := {}
 		for candidate: Dictionary in _launch_definition.actions + _launch_definition.get("time_responses", []):
-			if candidate.id == state.action.action_id:
+			if candidate.id == current.action_id:
 				action = candidate
 		if action.is_empty():
 			return []
 		var landing: Dictionary = state.mechanism_state.rewind.landing
-		facts = [{"hostile_source_id": state.identity.hostile_source_id, "attack_generation": state.action.geometry_generations[0], "shape": "circle", "origin": landing, "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": landing, "summon_slots": [], "radius": 16.0, "length": 0.0, "active_from_frame": state.action.commit_frame, "active_through_frame": int(state.action.idle_through_frame) - int(action.idle_frames)}]
+		facts = [{"hostile_source_id": state.identity.hostile_source_id, "attack_generation": current.geometry_generations[0], "shape": "circle", "origin": landing, "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": landing, "summon_slots": [], "radius": 16.0, "length": 0.0, "active_from_frame": current.commit_frame, "active_through_frame": int(current.idle_through_frame) - int(action.idle_frames)}]
 	var result: Array = []
 	for fact: Dictionary in facts:
 		result.append(Actions.native_threat_fact(fact))
