@@ -396,10 +396,10 @@ func _load_candidate(path: String, source: String, expected_schema_version: int)
 	file.close()
 	if read_error != OK:
 		return _failure("IO_ERROR", {"path": path, "source": source, "error": read_error})
-	var parsed: Variant = JSON.parse_string(contents)
-	if typeof(parsed) != TYPE_DICTIONARY:
+	var json := JSON.new()
+	if json.parse(contents) != OK or typeof(json.data) != TYPE_DICTIONARY:
 		return _failure("CORRUPT", {"path": path, "source": source, "reason": "json"})
-	var profile := _normalize_json_profile(parsed as Dictionary)
+	var profile := _normalize_json_profile(json.data as Dictionary)
 	var validation: Dictionary
 	match expected_schema_version:
 		LEGACY_SCHEMA_VERSION:

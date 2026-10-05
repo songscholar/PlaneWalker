@@ -136,8 +136,8 @@ assertions but retained unexpected engine errors in both independent logs:
 | --- | --- | --- |
 | `native_phase_shift_checkpoint_test` | Inactive audio playback query in teardown | `49e8101`, three focused GREEN scenes above |
 | `run_orchestrator_test` | Two unscoped intentional BuildState rollback errors | Exact test scopes, five focused GREEN scenes below |
-| `input_profile_store_test` | Corrupted-file `JSON.parse_string` engine diagnostics | Structured parser repair pending |
-| `input_remap_service_test` | The same corrupted-file parser diagnostic during legacy recovery | Structured parser repair pending |
+| `input_profile_store_test` | Corrupted-file `JSON.parse_string` engine diagnostics | Structured parser, five focused GREEN scenes below |
+| `input_remap_service_test` | The same corrupted-file parser diagnostic during legacy recovery | The same focused parser repair below |
 
 The actual five-floor Main scene and all 150 P14 domain loadout combinations
 passed. The effective Main timeout was 7,200 seconds; the P14 loadout matrix
@@ -176,3 +176,32 @@ Focused GREEN under
 
 The five successful scenes do not replace the four failures retained in the
 original frozen validator or establish runtime line coverage.
+
+## Corrupted Input JSON Recovery
+
+Current-source RED under `build/test-evidence/input-corrupt-json-red/` reproduces
+both frozen input failures independently in `profile/` and `remap/`. The
+fixtures deliberately write malformed primary or backup files and correctly
+recover a verified profile, but `JSON.parse_string` emits engine errors for the
+malformed text. Both assertion sets pass while both strict scene runs fail.
+
+`InputProfileStore._load_candidate()` now uses a `JSON` instance and checks its
+`parse()` status before reading Dictionary data. A parse failure or non-object
+root returns the original `CORRUPT` result and `reason=json`. The existing
+normalization, schema validation, recovery order and migration path remain.
+No expected-error scope or global error suppression is added for corrupt data.
+
+Existing tests remain unchanged. Five focused scenes under
+`build/test-evidence/input-corrupt-json-green/` pass both strict stdout and
+Godot-log validation:
+
+- `profile/`: 1/1, including corrupt primary/backup recovery across schemas 1-4
+- `remap/`: 1/1, including atomic legacy recovery and migration
+- `codec/`: 1/1 input-binding codec
+- `actions/`: 1/1 input action contract
+- `panel/`: 1/1 actual input remap panel
+
+Verified-primary preservation, explicit recovery/migration provenance and
+applied keyboard/controller bindings retain their existing assertions. These
+focused results repair the later source; the immutable failed baseline and
+full integrated validation/coverage boundary remain as recorded above.
