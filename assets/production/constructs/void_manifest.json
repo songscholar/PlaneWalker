@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_void_arena_atlases.py",
+  "atlases": [
+    {
+      "id": "void_pillar",
+      "path": "void_pillar.png",
+      "frame_size": [
+        48,
+        48
+      ],
+      "frames": [
+        "intact",
+        "damaged",
+        "debris"
+      ],
+      "sha256": "d687125e328a7cacd95bb9ace8098e5f8ce0a0a5cf1581fa6db2337e6b50e697"
+    },
+    {
+      "id": "void_core",
+      "path": "void_core.png",
+      "frame_size": [
+        48,
+        48
+      ],
+      "frames": [
+        "intact",
+        "damaged",
+        "debris"
+      ],
+      "sha256": "2db20ba031899f4dc2150fa78acc1856ae5029eb768cc963ad7ebfc3727a2ec6"
+    }
+  ]
+}
