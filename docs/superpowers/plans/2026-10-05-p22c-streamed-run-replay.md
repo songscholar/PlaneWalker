@@ -34,17 +34,17 @@ Files: `scripts/replay/run_replay_chunk_codec.gd`,
 Files: `scripts/replay/run_replay_stream_store.gd`,
 `tests/replay/run_replay_stream_store_test.gd` and its scene.
 
-- [ ] Define missing-store RED for actual multi-chunk writes, physical restart and random seek.
-- [ ] Implement configure, begin, append, finish, reload, rows, read and remove using bound SaveService CAS.
-- [ ] Verify stale writers, promotion faults, missing/corrupt files, incomplete state and compressed run budgets.
-- [ ] Retain the physical stream boundary before automatic capture changes.
+- [x] Define missing-store RED for actual multi-chunk writes, physical restart and random seek.
+- [x] Implement configure, begin, append, finish, reload, rows, read and remove using bound SaveService CAS.
+- [x] Verify stale writers, promotion faults, missing/corrupt files, incomplete state and compressed run budgets.
+- [x] Retain the physical stream boundary before automatic capture changes.
 
 ## Task 3: Automatic Production Capture
 
 Files: `scripts/replay/native_run_replay_recorder.gd`, `scripts/main.gd`,
 actual native replay integration scenes and documentation.
 
-- [ ] Define RED from actual native Main frames, room transitions, rewards/economy and terminal state.
+- [x] Define missing-recorder RED from actual native Main; expand subsequent real room/reward/terminal assertions during implementation.
 - [ ] Observe committed frames and flushed authoritative native state; append exact complete observations.
 - [ ] Keep capture failure independent from gameplay and classify interrupted recordings explicitly.
 - [ ] Verify actual rejected-frame rollback adds no observation and fresh reload preserves the exact tape.
