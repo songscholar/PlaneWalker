@@ -7,6 +7,7 @@
 - Owner: Project integration lead
 - Depends On: `../specs/2026-10-05-p22a-player-replay-archive-design.md`
 - Last Verified: 2026-10-05
+- Exit Gate: Native recording, physical archive reload/fault/stale-writer and isolated actual Player seek/playback tests pass with clean logs; evidence records the remaining full-run tape and Hub scope.
 
 > For agentic workers: Execute focused tasks with their failing tests and retention commits.
 
