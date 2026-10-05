@@ -1,6 +1,8 @@
 class_name Hitbox
 extends Area2D
 
+static var _contact_dispatch_depth := 0
+
 var _active_damage_info: RefCounted
 var _hit_areas: Array[Area2D] = []
 
@@ -30,6 +32,10 @@ func is_active() -> bool:
 	return monitoring and _active_damage_info != null
 
 
+static func is_dispatching_contact() -> bool:
+	return _contact_dispatch_depth > 0
+
+
 func _on_area_entered(area: Area2D) -> void:
 	if _active_damage_info == null:
 		return
@@ -39,4 +45,6 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 
 	_hit_areas.append(area)
+	_contact_dispatch_depth += 1
 	area.receive_hit(_active_damage_info.copy_for_source(self))
+	_contact_dispatch_depth -= 1

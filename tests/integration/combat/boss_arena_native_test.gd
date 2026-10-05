@@ -74,7 +74,7 @@ func _player() -> Node2D:
 
 
 func _damage(player: Node2D, token: int, amount: float = 16.0) -> RefCounted:
-	return Damage.from_plan({"run_id": "run-p15", "target_id": "pending_cover", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+	return Damage.from_plan({"run_id": "run-p15", "target_id": "pending_target", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
 
 
 func _test_damage_transaction(actor: Node2D) -> void:
@@ -231,12 +231,12 @@ func _test_weapons() -> void:
 			payload.payload_result.connect(func(_token: int, _generation: int, result: Dictionary) -> void: payload_results.append(result))
 			suite.assert_true(payload._target_inside_geometry(cover), "actual Gauntlets fixture places the cover inside its authored hit geometry")
 		payload.call("_on_area_entered", cover.get_node("Hurtbox"))
-		if weapon == "gauntlets":
+		if weapon in ["sword", "gauntlets"]:
 			await get_tree().process_frame
 		var hp: float = cover.native_construct_snapshot().current_hp
 		suite.assert_true(hp < 80.0, "actual " + weapon + " collision reduces domain-owned cover HP: " + str(payload_results))
 		payload.call("_on_area_entered", cover.get_node("Hurtbox"))
-		if weapon == "gauntlets":
+		if weapon in ["sword", "gauntlets"]:
 			await get_tree().process_frame
 		suite.assert_equal(cover.native_construct_snapshot().current_hp, hp, "actual " + weapon + " collision deduplicates this construct target")
 		payload.queue_free()

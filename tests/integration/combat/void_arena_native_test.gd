@@ -205,7 +205,9 @@ func _cold(actor: Node2D) -> void:
 	var registry := ContentRegistry.new()
 	registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"LAUNCH")
 	var binding := ContentSnapshot.snapshot(registry)
-	var storage_root := ProjectSettings.globalize_path("res://build/test-data/void-arena")
+	var storage_root := OS.get_environment("PLANEWALKER_TEST_DATA_DIR").path_join("void-arena")
+	if OS.get_environment("PLANEWALKER_TEST_DATA_DIR").is_empty():
+		storage_root = ProjectSettings.globalize_path("res://build/test-data/void-arena")
 	var storage := Save.new()
 	storage.configure(storage_root, "test-void-arena", binding)
 	suite.assert_true(encoded.ok and storage.save_profile("void_schema5", "base", {"codec": encoded.json}).ok, "actual SaveService retains typed native Void phase/core/heal aggregate")

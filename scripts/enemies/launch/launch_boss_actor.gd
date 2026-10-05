@@ -13,8 +13,10 @@ const ForestAuxiliaryConstruct := preload("res://scripts/enemies/launch/launch_f
 const RootTelegraph := preload("res://scripts/fx/combat_telegraph_2d.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 const TimeAuxiliary := preload("res://scripts/enemies/launch/time_sovereign_auxiliary_runtime.gd")
+const NativeHitbox := preload("res://scripts/combat/hitbox.gd")
 var _exposure_replay_authority: RefCounted
 var _arena_effects: WeakRef
+var _queued_control_visual := false
 
 
 func _create_launch_runtime() -> RefCounted:
@@ -259,6 +261,13 @@ func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Diction
 
 
 func _refresh_control_visual() -> void:
+	# A physical hit may create or retire arena bodies while Godot flushes queries.
+	if NativeHitbox.is_dispatching_contact():
+		if not _queued_control_visual:
+			_queued_control_visual = true
+			_flush_queued_control_visual.call_deferred()
+		return
+	_queued_control_visual = false
 	_refresh_launch_telegraphs()
 	_refresh_native_arena()
 	_refresh_native_void()
@@ -282,6 +291,11 @@ func _refresh_control_visual() -> void:
 	var facing := Vector2.RIGHT if state.action.committed_aim.is_empty() else _vector(state.action.committed_aim)
 	sprite.present(pose, facing, float(state.runtime_frame) / 60.0, false, false)
 	sprite.modulate = Color(0.55, 0.95, 1.0) if _launch_runtime.is_exposed() else Color.WHITE
+
+
+func _flush_queued_control_visual() -> void:
+	if _queued_control_visual:
+		_refresh_control_visual()
 
 
 func _refresh_root_sweep_telegraph(state: Dictionary) -> void:
