@@ -92,10 +92,24 @@ caller mutations of nested, typed and packed values preserve the private source.
 Two private observations share frozen history. Worker encoding exactly matches
 encoding detached observations, and decoded caller mutation is also isolated.
 
-This establishes the engine mechanics for this fixture, not a completed native
-recorder optimization. A production journal must seal every supported event
+This establishes detached-copy and worker encoding mechanics for this fixture,
+not a completed native recorder optimization. Dictionary/Array read-only flags
+do not seal Packed-array descendants: a directly retained Packed alias can
+still be mutated without changing the containing Dictionary reference. The
+production journal therefore needs a cold fallback for Packed descendants until
+leaf ownership is separately proven. It must also seal every supported event
 installation, append and replacement path, preserve run/frame identity, and keep
 public snapshots detached. Native recorder changes belong to the parent lane.
+
+`build/packed-history-scan.json` recursively scans every value in the actual
+physical frame-2741 history. It finds zero Packed types/paths among its 116 events
+and 1,246,548 bytes. Counts are Array 2055, Dictionary 8976, String 7302,
+StringName 971, Vector2 580, bool 1813, float 3648 and int 10522. History typed-byte
+SHA-256 is
+`cc6dbd42df03c4ac1e8fbd499a55017fa9c1a3d4e68c8c2e1839d8f289999fec`.
+The physical chunk hashes are validated before extraction, source bytes remain
+unchanged after scanning, and strict runtime error/leak checks pass. This only
+describes that measured history, not every supported event payload.
 
 ## Prefix Cache Microbenchmark
 
