@@ -388,12 +388,12 @@ func _test_boss_capacity() -> void:
 	identity.seed = 42
 	suite.assert_true(actor.configure_launch_definition(parser.runtime_projection(), identity).ok, "actual native Boss configures strict body ledger capacity")
 	var runtime: RefCounted = actor.get("_launch_runtime")
-	for index: int in range(512):
+	for index: int in range(10000):
 		suite.assert_true(runtime.accept_damage_fact({"fact_id": "body-boss-capacity:%d" % index, "runtime_frame": 0, "target_source_id": "body-boss", "amount": 0.000001, "hp_after": float(actor.health.max_hp) - float(index + 1) * 0.000001}).ok, "native Boss accepts bounded fixture receipt %d" % index)
 	actor.health.current_hp = float(runtime.snapshot().mechanism_state.hp_current)
 	var before: Dictionary = actor.native_cold_snapshot(func(_node: Node): return {})
-	var info := Damage.from_plan({"run_id": "run-p15", "target_id": "body-boss", "hostile_source_id": "domain:boss-capacity", "attack_generation": 513, "action_token": 513, "amount": 1.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": [], "can_crit": false})
-	suite.assert_close(actor.health.take_damage(info), 0.0, "513th actual native Boss body receipt refuses its finite admission boundary")
+	var info := Damage.from_plan({"run_id": "run-p15", "target_id": "body-boss", "hostile_source_id": "domain:boss-capacity", "attack_generation": 10001, "action_token": 10001, "amount": 1.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": [], "can_crit": false})
+	suite.assert_close(actor.health.take_damage(info), 0.0, "10001st actual native Boss body receipt refuses its finite admission boundary")
 	suite.assert_equal(actor.native_cold_snapshot(func(_node: Node): return {}), before, "full native Boss body ledger refuses without evicting settled identities or changing HP")
 	suite.assert_true(actor.restore_native_cold_snapshot(Replay.decode_replay_json(Replay.encode_replay_json(before).json).replay, func(_binding: Dictionary): return null), "full native Boss body state reconstructs strict typed cold contract")
 	actor.queue_free()

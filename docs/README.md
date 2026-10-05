@@ -130,7 +130,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Room Artwork Plan](superpowers/plans/2026-10-05-native-room-artwork.md) | 五层真实像素地面、边界、门洞和分类地标原生接入 | Completed / Historical |
 | [Native Room Artwork Evidence](current/2026-10-05-native-room-artwork-evidence.md) | 三十模板绑定、重置重绑、私有回放和三分辨率原生像素对照 | Focused Verified / Combined certification pending |
 | [Void Dead Player Heal Evidence](current/2026-10-05-void-dead-p3-heal-evidence.md) | 死亡玩家消耗第三阶段治疗、复活不补发、回滚和冷恢复 | Focused Verified / Current |
-| [Native Body Settlement Evidence](current/2026-10-05-native-body-settlement-evidence.md) | 扣血前鉴权、生产伤害去重、提交补偿、物理保存和五首领死亡 | Focused Verified / Extended Boss capacity active |
+| [Native Body Settlement Evidence](current/2026-10-05-native-body-settlement-evidence.md) | 扣血前鉴权、生产伤害去重、提交补偿、物理保存和五首领死亡 | Focused Verified / Current |
+| [Native Boss Damage Capacity Evidence](current/2026-10-05-boss-damage-capacity-evidence.md) | 9000 次实际最小伤害、有限容量、旧身份去重和冷恢复 | Focused Verified / Current |
 | [Void Auxiliary Domain And Step Evidence](current/2026-10-05-void-auxiliary-domain-step-evidence.md) | 有限辅助状态、真实安全闪步、落点拒绝、帧回滚与冷恢复 | Focused Verified / Native auxiliary integration active |
 | [Serial Import Recovery Evidence](current/2026-10-05-serial-import-recovery-evidence.md) | 修复并行翻译导入崩溃、全新固定提交两阶段导入和依赖审计 | Focused Verified / Combined certification pending |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |

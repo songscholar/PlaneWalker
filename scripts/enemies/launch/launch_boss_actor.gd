@@ -26,7 +26,7 @@ func _create_launch_status_runtime() -> RefCounted:
 
 
 func _native_body_claim_capacity() -> int:
-	return BossRuntime.MAX_CLAIMS
+	return BossRuntime.MAX_DAMAGE_CLAIMS
 
 
 func _ready() -> void:

@@ -20,6 +20,7 @@ const DAMAGE_FACT_FIELDS: Array[String] = ["fact_id", "runtime_frame", "target_s
 const HISTORY_FIELDS: Array[String] = ["runtime_frame", "position", "hp"]
 const REWIND_FIELDS: Array[String] = ["attack_generation", "commit_frame", "history_reference", "landing", "hp_at_commit", "heal_amount", "healing_spent_before", "weakpoint_damage", "consumed", "cancelled"]
 const MAX_CLAIMS := 512
+const MAX_DAMAGE_CLAIMS := 10000
 
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
@@ -372,11 +373,9 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 	if typeof(value.fact_id) != TYPE_STRING or value.fact_id.is_empty() or value.fact_id.length() > 128 or value.target_source_id != _state.identity.hostile_source_id or typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or not Contract.number_in_range(value.amount, 0.000001, 1000000.0) or not Contract.number_in_range(value.hp_after, 0.0, _definition.max_hp):
 		return _failure("damage_identity_or_value")
 	var mechanism: Dictionary = _state.mechanism_state
-	if mechanism.damage_claims.has(value.fact_id) or not is_equal_approx(maxf(0.0, float(mechanism.hp_current) - float(value.amount)), float(value.hp_after)):
+	if mechanism.damage_claims.size() >= MAX_DAMAGE_CLAIMS or mechanism.damage_claims.has(value.fact_id) or not is_equal_approx(maxf(0.0, float(mechanism.hp_current) - float(value.amount)), float(value.hp_after)):
 		return _failure("duplicate_or_inconsistent_damage")
 	var before := snapshot()
-	if mechanism.damage_claims.size() >= MAX_CLAIMS:
-		mechanism.damage_claims.pop_front()
 	mechanism.damage_claims.append(value.fact_id)
 	mechanism.hp_current = float(value.hp_after)
 	_update_history_hp(int(value.runtime_frame), float(value.hp_after))
@@ -812,7 +811,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if not mechanism.last_action_id.is_empty() and int(mechanism.consecutive_actions) > int(_action_definition(mechanism.last_action_id).max_consecutive):
 		return false
 	for field: String in ["damage_claims", "health_claims", "stop_claims"]:
-		if not mechanism[field] is Array or mechanism[field].size() > MAX_CLAIMS:
+		var capacity := MAX_DAMAGE_CLAIMS if field == "damage_claims" else MAX_CLAIMS
+		if not mechanism[field] is Array or mechanism[field].size() > capacity:
 			return false
 		var seen: Dictionary = {}
 		for id: Variant in mechanism[field]:

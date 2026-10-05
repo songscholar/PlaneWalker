@@ -18,6 +18,7 @@ const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elem
 signal hostile_final_death(source_id: StringName, receipt_id: String)
 
 var _launch_runtime: RefCounted = _create_launch_runtime()
+var _body_preview_runtime: RefCounted
 var _launch_definition: Dictionary = {}
 var _launch_identity: Dictionary = {}
 var _prepared_launch_frame: Dictionary = {}
@@ -107,6 +108,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not health.configure_run(StringName(context.run_id)):
 		return _launch_failure("health_run")
 	_launch_runtime = candidate
+	_body_preview_runtime = null
 	_affix_configuration = affix_configuration
 	_affix_runtime = affix_runtime
 	_launch_definition = definition.duplicate(true)
@@ -596,8 +598,13 @@ func prepare_hostile_body_damage(info: RefCounted, amount: float, lethal: Dictio
 	var expected_hp := float(before.mechanism_state.get("hp_after", before.mechanism_state.get("hp_current", -1.0)))
 	if not is_equal_approx(expected_hp, health.current_hp) or _has_historical_body_claim(before, info):
 		return {"ok": false}
-	var preview: RefCounted = _create_launch_runtime()
-	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(before):
+	if _body_preview_runtime == null:
+		var candidate := _create_launch_runtime()
+		if not candidate.configure(_launch_definition, _launch_identity).ok:
+			return {"ok": false}
+		_body_preview_runtime = candidate
+	var preview: RefCounted = _body_preview_runtime
+	if not preview.restore_snapshot(before):
 		return {"ok": false}
 	var hp_after := maxf(0.0, health.current_hp - amount)
 	if not lethal.is_empty():
@@ -659,6 +666,9 @@ static func _historical_body_fact_id(info: RefCounted) -> String:
 
 
 func _has_historical_body_claim(state: Dictionary, info: RefCounted) -> bool:
+	var claims := {}
+	for claim: String in state.mechanism_state.damage_claims:
+		claims[claim] = true
 	var runs: Array[String] = [str(info.run_id), str(_launch_identity.run_id), "runtime", "legacy_run"]
 	var targets: Array[String] = [str(info.target_id), str(hostile_source_id), "pending_target"]
 	for field: String in ["encounter_spawn_id", "spawn_id", "stable_target_id"]:
@@ -669,7 +679,7 @@ func _has_historical_body_claim(state: Dictionary, info: RefCounted) -> bool:
 	for run: String in runs:
 		for target: String in targets:
 			var id := JSON.stringify([run, target, str(info.hostile_source_id), int(info.attack_generation), int(info.hit_index)]).sha256_text()
-			if state.mechanism_state.damage_claims.has(id) or state.mechanism_state.damage_claims.has(id.sha256_text()):
+			if claims.has(id) or claims.has(id.sha256_text()):
 				return true
 	return false
 

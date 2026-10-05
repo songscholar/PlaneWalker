@@ -83,13 +83,12 @@ orphan nodes or leaks. Installed Godot cannot collect line coverage.
 
 ## Capacity And Remaining Gates
 
-Species admission uses the existing 4096-receipt capacity. Boss admission uses
-the existing 512-receipt capacity. Full ledgers reconstruct typed cold state;
-receipt 4097/513 refuses without HP change, identity eviction or state mutation.
-These are finite fail-closed bounds, not a completed high-hit encounter balance
-gate: a Boss needing more than 512 accepted body components becomes unable to
-admit further body damage. Extended Boss capacity/balance remains open and must
-be resolved before full P15 certification.
+Species admission uses the existing 4096-receipt capacity. The original
+512-receipt Boss limitation is superseded by the verified
+[Native Boss Damage Capacity Evidence](2026-10-05-boss-damage-capacity-evidence.md).
+Boss damage admission now retains 10000 identities; receipt 10001 refuses
+without HP change, identity eviction or state mutation. The actual maximum
+endless Void Boss accepts all 9000 minimum-damage hits and reaches terminal HP.
 
 Native Splitting/Mirroring, the legal-affix pair matrix, complete physical
 contacts, whole-room balance and full P15 certification remain separate. The

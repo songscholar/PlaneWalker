@@ -109,10 +109,10 @@ run_with_timeout() {
 	local user_data_dir="$4"
 	local started_at=$SECONDS
 	local scene_timeout_seconds="${timeout_seconds}"
-	if [[ "${scene}" == "tests/smoke/p14_dungeon_loadout_matrix_smoke_test.tscn" ]] && (( scene_timeout_seconds < 600 )); then
+	if [[ "${scene}" == "tests/smoke/p14_dungeon_loadout_matrix_smoke_test.tscn" || "${scene}" == "tests/integration/combat/boss_damage_capacity_test.tscn" ]] && (( scene_timeout_seconds < 600 )); then
 		scene_timeout_seconds=600
 	fi
-	if [[ "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" || "${scene}" == "tests/integration/ui/p14_controller_flow_test.tscn" ]] && (( scene_timeout_seconds < 300 )); then
+	if [[ "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" || "${scene}" == "tests/integration/save/local_run_records_test.tscn" || "${scene}" == "tests/integration/save/native_content_migration_test.tscn" || "${scene}" == "tests/integration/ui/p14_controller_flow_test.tscn" || "${scene}" == "tests/integration/combat/launch_elite_mirroring_test.tscn" ]] && (( scene_timeout_seconds < 300 )); then
 		scene_timeout_seconds=300
 	fi
 
