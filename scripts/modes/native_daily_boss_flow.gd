@@ -14,6 +14,7 @@ const Rules := preload("res://scripts/community/local_run_record_rules.gd")
 const Content := preload("res://scripts/content/content_snapshot_provider.gd")
 const Meta := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
+const Rewards := preload("res://scripts/modes/daily_reward_state.gd")
 
 var _registry: RefCounted
 var _service: RefCounted
@@ -41,6 +42,10 @@ var _stage_modes: Array[Dictionary] = []
 var _terminal: Dictionary = {}
 var _baseline: Dictionary = {}
 var _build_receipts: Array = []
+var _last_hp := 0.0
+var _last_frame := -1
+var _native_frames := 0
+var _storage_scope: Dictionary = {}
 
 
 func configure(registry: RefCounted, service: RefCounted, root_path: String, clock: Callable = Callable()) -> Dictionary:
@@ -58,7 +63,8 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String, clo
 	if not loaded.ok and loaded.code != &"NOT_FOUND":
 		return _failure(loaded.code)
 	var session: Variant = loaded.payload.get("daily_session", {}) if loaded.ok else Session.empty(catalog.fingerprint())
-	if not Session.valid(session, catalog, identity.profile_id):
+	var migrated := Session.migrate(session, catalog, identity.profile_id)
+	if not migrated.ok:
 		return _failure(&"DAILY_SAVE_INVALID")
 	var primary = storage.inspect_profile(id, "local")
 	if not primary.ok and primary.code != &"NOT_FOUND":
@@ -71,7 +77,8 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String, clo
 	_profile_id = identity.profile_id
 	_domain = identity.save_domain
 	_clock = clock if clock.is_valid() else func(): return int(Time.get_unix_time_from_system())
-	_state = Session.normalized(session)
+	_state = migrated.state
+	_storage_scope = {"root_path": root_path, "save_id": id, "save_domain": "local", "source_owner_id": identity.profile_id, "source_save_domain": identity.save_domain, "content_snapshot": identity.content_snapshot.duplicate(true), "mode_fingerprint": catalog.fingerprint()}
 	_durable = primary.payload.duplicate(true) if primary.ok else {}
 	_camera = Camera2D.new()
 	_camera.position = Vector2(320, 180)
@@ -89,7 +96,7 @@ func preview() -> Dictionary:
 	var definition: Dictionary = _catalog.projection(now)
 	var day: Dictionary = _day(_state, int(definition.day_index)) if not definition.is_empty() else {}
 	var reason := _start_reason(definition)
-	return {"definition": definition, "calendar": _catalog.calendar(now), "remaining_seconds": maxi(0, int(definition.get("reset_at", 0)) - now), "remaining_attempts": 3 - int(day.get("attempts", 0)), "results": day.get("results", []).duplicate(true), "best": day.get("best", {}).duplicate(true), "available": reason == &"", "reason": str(reason), "active": _state.active.duplicate(true), "native_active": is_active(), "native_retry": _native_retry, "paused": _paused, "pending": has_pending_save(), "save_error": str(_save_error)}
+	return {"definition": definition, "calendar": _catalog.calendar(now), "remaining_seconds": maxi(0, int(definition.get("reset_at", 0)) - now), "remaining_attempts": 3 - int(day.get("attempts", 0)), "results": day.get("results", []).duplicate(true), "best": day.get("best", {}).duplicate(true), "available": reason == &"", "reason": str(reason), "active": _state.active.duplicate(true), "native_active": is_active(), "native_retry": _native_retry, "paused": _paused, "pending": has_pending_save(), "save_error": str(_save_error), "rewards": _state.reward_state.duplicate(true), "perfect_title_active": not definition.is_empty() and int(_state.reward_state.perfect_day) == int(definition.day_index), "exchange_available": not _busy and not has_pending_save() and _state.active.is_empty()}
 
 
 func start() -> Dictionary:
@@ -102,11 +109,10 @@ func start() -> Dictionary:
 	if day.is_empty():
 		day = {"day_index": int(definition.day_index), "day_key": definition.day_key, "attempts": 0, "results": [], "best": {}}
 		candidate.days.append(day)
-		while candidate.days.size() > 31:
-			candidate.days.pop_front()
+		Session.trim_archive(candidate)
 	day.attempts += 1
 	candidate.latest_day = int(definition.day_index)
-	candidate.active = {"day_index": int(definition.day_index), "attempt": int(day.attempts), "run_id": Session.run_id(_profile_id, int(definition.day_index), int(day.attempts)), "definition": definition.duplicate(true), "elapsed_frames": 0}
+	candidate.active = {"day_index": int(definition.day_index), "attempt": int(day.attempts), "run_id": Session.run_id(_profile_id, int(definition.day_index), int(day.attempts)), "definition": definition.duplicate(true), "elapsed_frames": 0, "damage_events": 0}
 	return _persist(candidate, "stage")
 
 
@@ -127,16 +133,32 @@ func retry_native() -> Dictionary:
 	return _start_native()
 
 
+func purchase_reward(id: String) -> Dictionary:
+	if _registry == null or _busy or has_pending_save() or not _state.active.is_empty():
+		return _failure(&"DAILY_COMMAND_INVALID")
+	var bought := Rewards.purchase(_state.reward_state, id)
+	if not bought.ok:
+		return _failure(&"DAILY_EXCHANGE_INVALID")
+	var candidate := _state.duplicate(true)
+	candidate.reward_state = bought.state
+	return _persist(candidate, "exchange")
+
+
+func mode_reward_storage_scope() -> Dictionary:
+	return _storage_scope.duplicate(true)
+
+
 func reload_saved_session() -> Dictionary:
 	if _save == null or _busy:
 		return _failure(&"DAILY_RETRY_INVALID")
 	var loaded = _save.load_profile(_save_id, "local")
 	var primary = _save.inspect_profile(_save_id, "local")
 	var session: Variant = loaded.payload.get("daily_session", {}) if loaded.ok else {}
-	if not loaded.ok or not primary.ok or not Session.valid(session, _catalog, _profile_id):
+	var migrated := Session.migrate(session, _catalog, _profile_id)
+	if not loaded.ok or not primary.ok or not migrated.ok:
 		return _failure(&"DAILY_SAVE_INVALID")
 	close()
-	_state = Session.normalized(session)
+	_state = migrated.state
 	_durable = primary.payload.duplicate(true)
 	_pending.clear()
 	_pending_action = ""
@@ -290,8 +312,13 @@ func _start_native() -> Dictionary:
 	_native_retry = false
 	_paused = false
 	_terminal.clear()
+	_last_hp = float(_player.health.current_hp)
+	_last_frame = int(_player.priority_arbitration_snapshot().frame)
+	_native_frames = 0
 	_player.authoritative_frame_committed.connect(_on_frame)
 	_player.health.died.connect(_on_player_died)
+	_player.health.damaged.connect(_on_damage)
+	_player.health.healed.connect(_on_healed)
 	_boss.hostile_final_death.connect(_on_boss_death)
 	_camera.enabled = true
 	_camera.make_current()
@@ -307,11 +334,34 @@ func _reject_native(reason: String) -> Dictionary:
 	return {"ok": false, "code": _save_error, "context": {"reason": reason}}
 
 
-func _on_frame(_frame: int) -> void:
-	if not is_active() or _paused or _busy or has_pending_save() or not _terminal.is_empty():
+func _on_frame(frame: int) -> void:
+	if not is_active() or _paused or _busy or has_pending_save() or not _terminal.is_empty() or frame <= _last_frame or frame != int(_player.priority_arbitration_snapshot().frame):
 		return
+	_last_frame = frame
+	_native_frames += 1
+	_observe_hp(float(_player.health.current_hp))
 	_state.active.elapsed_frames = mini(Meta.MAX_VALUE, int(_state.active.elapsed_frames) + 1)
 	_orchestrator.advance_time(1.0 / 60.0)
+
+
+func _on_damage(amount: float, hp: float) -> void:
+	if _accept_health_notice(amount, hp) and hp < _last_hp:
+		_observe_hp(hp)
+
+
+func _on_healed(amount: float, hp: float) -> void:
+	if _accept_health_notice(amount, hp) and hp > _last_hp:
+		_last_hp = hp
+
+
+func _accept_health_notice(amount: float, hp: float) -> bool:
+	return is_active() and not _paused and not _busy and not has_pending_save() and _terminal.is_empty() and is_finite(amount) and is_finite(hp) and amount > 0 and is_equal_approx(hp, float(_player.health.current_hp))
+
+
+func _observe_hp(hp: float) -> void:
+	if hp < _last_hp and int(_state.active.damage_events) >= 0:
+		_state.active.damage_events = mini(Meta.MAX_VALUE, int(_state.active.damage_events) + 1)
+	_last_hp = hp
 
 
 func _on_boss_death(source: StringName, receipt: String) -> void:
@@ -320,7 +370,7 @@ func _on_boss_death(source: StringName, receipt: String) -> void:
 	var native: Dictionary = _boss.launch_runtime_snapshot()
 	var run := str(_state.active.run_id)
 	var expected := "hostile_defeat:" + (run + "|" + str(source)).sha256_text().substr(0, 40)
-	if native.is_empty() or not native.runtime.terminal or not _boss.health.dead or _boss.health.current_hp > 0.0 or _player.health.dead or source != _boss.hostile_source_id or receipt != expected or native.death_receipt != receipt or str(native.runtime.identity.run_id) != run or str(_player.current_run_id()) != run or int(_state.active.elapsed_frames) < 1:
+	if native.is_empty() or not native.runtime.terminal or not _boss.health.dead or _boss.health.current_hp > 0.0 or _player.health.dead or source != _boss.hostile_source_id or receipt != expected or native.death_receipt != receipt or str(native.runtime.identity.run_id) != run or str(_player.current_run_id()) != run or _native_frames < 1:
 		return
 	var digest := Replay.value_digest({"boss": native, "player": _player.full_player_replay_snapshot()})
 	if digest.is_empty():
@@ -330,7 +380,7 @@ func _on_boss_death(source: StringName, receipt: String) -> void:
 
 
 func _on_player_died(_killer: Variant) -> void:
-	if not is_active() or _busy or has_pending_save() or not _terminal.is_empty() or _player.get_parent() != _stage or not _player.health.dead or _player.health.current_hp > 0.0 or int(_state.active.elapsed_frames) < 1:
+	if not is_active() or _busy or has_pending_save() or not _terminal.is_empty() or _player.get_parent() != _stage or not _player.health.dead or _player.health.current_hp > 0.0 or _native_frames < 1:
 		return
 	var digest := Replay.value_digest({"boss": _boss.launch_runtime_snapshot(), "player": _player.full_player_replay_snapshot()})
 	if not digest.is_empty():
@@ -357,8 +407,9 @@ func _terminal_candidate(status: String, receipt: String, digest: String) -> Dic
 		if status == "VICTORY" and _player.health.current_hp > 0:
 			hp = maxi(1, hp)
 	var day := _day(candidate, int(active.day_index))
-	day.results.append({"attempt": int(active.attempt), "run_id": run, "status": status, "elapsed_frames": int(active.elapsed_frames), "remaining_hp_milli": hp, "hostile_source_id": "daily-" + run.sha256_text().substr(0, 40), "death_receipt": receipt, "native_digest": digest})
+	day.results.append({"attempt": int(active.attempt), "run_id": run, "status": status, "elapsed_frames": int(active.elapsed_frames), "remaining_hp_milli": hp, "hostile_source_id": "daily-" + run.sha256_text().substr(0, 40), "death_receipt": receipt, "native_digest": digest, "damage_events": int(active.damage_events)})
 	day.best = Session.best(day.results)
+	candidate.reward_state = Rewards.award(candidate.reward_state, int(active.day_index), status, int(active.damage_events))
 	candidate.active = {}
 	return candidate
 

@@ -3,6 +3,7 @@ extends "res://scripts/ui/dungeon_panel_view.gd"
 signal action_requested(id: String)
 
 const Meta := preload("res://scripts/progression/meta_progression_catalog.gd")
+const Rewards := preload("res://scripts/modes/daily_reward_state.gd")
 var _countdown: Label
 var _commands: VBoxContainer
 
@@ -68,6 +69,20 @@ func _render_state() -> void:
 		_add_text(tr("UI_DAILY_BEST_FMT") % _result_label(preview.best))
 	for result: Dictionary in preview.results:
 		_add_text(tr("UI_DAILY_RESULT_FMT") % [int(result.attempt), _result_label(result)])
+	if preview.has("rewards"):
+		var rewards: Dictionary = preview.rewards
+		_add_text(tr("UI_DAILY_WALLET_FMT") % [int(rewards.tokens), int(rewards.gold)])
+		_add_text(tr("UI_DAILY_STREAK_FMT") % [int(rewards.participation.streak), int(rewards.victory.streak)])
+		if preview.perfect_title_active:
+			_add_text(tr("UI_DAILY_PERFECT_TITLE"))
+		for id: String in rewards.entitlements:
+			_add_text(tr("UI_DAILY_REWARD_" + id.to_upper()))
+		for id: String in Rewards.PRICES:
+			var owned: bool = rewards.owned_ids.has(id)
+			var text := tr("UI_DAILY_EXCHANGE_FMT") % [tr("UI_DAILY_REWARD_" + id.to_upper()), int(Rewards.PRICES[id])]
+			if owned:
+				text += " / " + tr("UI_DAILY_OWNED")
+			_add_action("exchange:" + id, text, "", preview.exchange_available and not owned and int(rewards.tokens) >= int(Rewards.PRICES[id]), "", func(): action_requested.emit("exchange:" + id))
 	if preview.pending:
 		if preview.save_error == "DAILY_STALE_PRIMARY":
 			_add_text(tr("UI_MODE_STALE"))

@@ -133,7 +133,7 @@ func _action(id: String) -> void:
 		"abandon":
 			result = _flow.abandon()
 		_:
-			result = _failure(&"DAILY_COMMAND_INVALID")
+			result = _flow.purchase_reward(id.substr(9)) if id.begins_with("exchange:") else _failure(&"DAILY_COMMAND_INVALID")
 	_project()
 	if not result.ok:
 		_panel.show_rejection("UI_" + str(result.code) if str(result.code).begins_with("DAILY_") else "UI_MODE_SAVE_PENDING")

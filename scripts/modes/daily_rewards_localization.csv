@@ -1,0 +1,13 @@
+keys,zh_CN,en
+UI_DAILY_WALLET_FMT,挑战代币 %d / 挑战金币 %d,Tokens %d / Challenge Gold %d
+UI_DAILY_STREAK_FMT,连续参与 %d 天 / 连续胜利 %d 天,Participation Streak %d / Victory Streak %d
+UI_DAILY_PERFECT_TITLE,完美行者,Perfect Walker
+UI_DAILY_REWARD_DAILY_PARTICIPATION_FRAME,七日参与头像框,Seven-day Participation Frame
+UI_DAILY_REWARD_DAILY_WALKER_FRAME,每日行者头像框,Daily Walker Frame
+UI_DAILY_REWARD_ETERNAL_TRAVELER,永恒旅者,Eternal Traveler
+UI_DAILY_REWARD_DAILY_WEAPON_SKIN,时刻武器外观,Chronal Weapon Skin
+UI_DAILY_REWARD_DAILY_CHARACTER_COLOR,余辉角色配色,Afterglow Character Color
+UI_DAILY_REWARD_DAILY_ARCHIVE_DECORATION,旅途图鉴装饰,Journey Archive Decoration
+UI_DAILY_EXCHANGE_FMT,%s / %d 代币,%s / %d Tokens
+UI_DAILY_OWNED,已拥有,Owned
+UI_DAILY_EXCHANGE_INVALID,兑换不可用,Exchange Unavailable
