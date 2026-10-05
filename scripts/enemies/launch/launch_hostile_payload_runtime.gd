@@ -98,7 +98,7 @@ func motion_for_frame(frame: int) -> Dictionary:
 		var definition: Dictionary = row.definition
 		var distance := 0.0 if modifiers.action_paused else minf(float(definition.range_px) - float(row.travel), float(definition.speed) * float(modifiers.movement_multiplier) / 60.0)
 		var displacement := {"x": float(definition.direction.x) * distance, "y": float(definition.direction.y) * distance}
-		result[row.id] = {"displacement": displacement, "from": row.position.duplicate(), "to": {"x": float(row.position.x) + float(displacement.x), "y": float(row.position.y) + float(displacement.y)}, "radius": definition.radius, "action_paused": modifiers.action_paused}
+		result[row.id] = {"distance": distance, "displacement": displacement, "from": row.position.duplicate(), "to": {"x": float(row.position.x) + float(displacement.x), "y": float(row.position.y) + float(displacement.y)}, "radius": definition.radius, "action_paused": modifiers.action_paused}
 	return result
 
 
@@ -145,7 +145,8 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 		var step: Dictionary = motion[row.id]
 		if not step.action_paused:
 			row.age = int(row.age) + 1
-			row.travel = minf(float(row.definition.range_px), float(row.travel) + sqrt(float(step.displacement.x) ** 2 + float(step.displacement.y) ** 2))
+			# Integrate authored distance without accumulating rounded direction norm error.
+			row.travel = minf(float(row.definition.range_px), float(row.travel) + float(step.distance))
 			row.position = _trajectory_position(row.definition, float(row.travel))
 		if row.age >= row.definition.lifetime_frames or row.travel >= float(row.definition.range_px) - 0.00001 or not _inside(row.position, row.definition.bounds):
 			_record_debris_impact(next, row.definition, row.position, frame, debris_events)
