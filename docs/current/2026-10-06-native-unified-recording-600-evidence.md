@@ -261,3 +261,48 @@ remain explicit; no unassisted or human victory is claimed. Later Void burn
 queries and Actor candidate changes are outside this frozen source. Final
 committed-source gameplay, rendered load, sustained recording, UI and human
 playtest gates remain open.
+
+## Candidate And Parent Restore Follow-Up
+
+The unchanged clean detached checkout at
+`build/retained-checkout/native-unified-9738bc5-20261006/` freezes
+`9738bc5424d9659b3b6b1cbbe479908ea62542ad`. It includes the Void burn
+snapshot query, Actor candidate replacement, legacy Action digest and Boss
+parent-envelope restoration changes. The 410 runtime scripts retain aggregate
+`6bbbc931c71813cb525b4151947315ecfcf3567fa1bc93b492e7894d8f273931`.
+The first import retains the known missing generated translation bootstrap
+diagnostics; the second import and both final runtime logs pass strict
+validation. The checkout remains clean after execution. The report at
+`build/floor4-phase2-parent-candidate-late-600/report.json` has SHA-256
+`98fa5da923dd073d4df7db6002610227ea08d4b1ed0df42defb1d61147928fbb`.
+
+With twelve Hub frames and real Sword input, Void phase two admits after
+2,501 actual frames. All 600 consecutive measured frames, 2,502-3,101,
+accept. The physical tape retains 601 observations, `INTERRUPTED` status,
+no recording failure and fresh byte-exact physical endpoint reads. First/last
+hashes remain
+`8b7b8ab43674e54121d4568336b5ae14de29b4a9a522acc5c2743a64b83dfe11` /
+`fd46d302787af37d90f09747b52e8faa08395e00b0505fc087edbc6c45ec105a`.
+This compares endpoints, not every intervening tape byte. Source is stable
+and uninstrumented, exit is zero and no timeout occurs.
+
+| Actual v2 Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 52.284 ms | 77.959 ms | 105.958 ms |
+| Same-frame Player and Host work | 53.908 ms | 79.572 ms | 106.839 ms |
+| Same-frame wall interval, including waits and observer | 63.630 ms | 93.160 ms | 121.724 ms |
+
+Measured wall duration is 38.179 seconds for ten native seconds. Physical
+retention takes 8.649 seconds. Peak native static allocation is 718,457,527
+bytes. Observed peaks are one actor, six threats and three zones. Real macOS
+PID 36801 has 1,563 valid RSS samples and one unavailable sample; sampled
+peak is 1,338,032,128 bytes across admission and retention. This bounded
+observation is below both decimal 2 GB and binary 2 GiB, but does not certify
+saturation or an absolute total-memory maximum.
+
+The complete-frame 16.667 ms budget still fails. Concurrent native matrix and
+clean certification workers remain active, so these results do not isolate
+any one optimization. The survival and prerequisite-route fixtures remain
+explicit. Effects snapshot copying and opaque Actor tokens are outside this
+frozen source. Sustained recording, rendered load, final gameplay validation,
+UI acceptance and human playtesting remain open.

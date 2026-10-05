@@ -113,6 +113,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Boss Parent Restore Evidence](current/2026-10-06-native-boss-parent-restore-evidence.md) | 五个 Boss 的实际恢复、原始字段顺序、独立状态和原生事务一致 | Focused Verified / Integrated performance pending |
 | [Native Legacy Action Digest Plan](current/2026-10-06-native-legacy-action-digest-plan.md) | 当前动作配置摘要复用已校验模板，保留历史动作及独立恢复 | Approved / Current |
 | [Native Legacy Action Digest Evidence](current/2026-10-06-native-legacy-action-digest-evidence.md) | 五个 Boss 的当前和历史动作恢复保持一致，额外配置消除 | Focused Verified / Integrated performance pending |
+| [Native Effects Snapshot Copy Plan](current/2026-10-06-native-effects-snapshot-copy-plan.md) | 保留快照字段位置和完整子状态，消除被覆盖分支的重复复制 | Active / Current |
+| [Native Effects Snapshot Copy Evidence](current/2026-10-06-native-effects-snapshot-copy-evidence.md) | 原生事务和历史快照保持逐字节一致，被覆盖子状态复制从 21 次降为 0 次 | Focused Verified / Integrated performance pending |
+| [Native Owned Frame Token Plan](current/2026-10-06-native-owned-frame-token-plan.md) | 原生 Actor 私有候选与精确身份令牌，保留公开票据和原有补偿边界 | Active / Current |
 | [Time Loadout Inheritance Evidence](current/2026-10-06-time-loadout-inheritance-evidence.md) | 实际暂停继承、选择冻结及恢复自动计时回归 | Focused Verified / Integrated clean validation pending |
 | [Native Action Validation Template Plan](current/2026-10-06-native-action-validation-template-plan.md) | 动作完整静态校验、有界不可变配置模板和独立可变恢复 | Approved / Current |
 | [Native Action Validation Template Evidence](current/2026-10-06-native-action-validation-template-evidence.md) | 完整动作校验、不可变模板容量和真实独立恢复回归 | Focused Verified / Full performance pending |
