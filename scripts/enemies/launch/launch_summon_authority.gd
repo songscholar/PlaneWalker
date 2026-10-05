@@ -5,6 +5,8 @@ const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.
 const SummonDefinitionScript := preload("res://scripts/enemies/launch/summon_definition.gd")
 const SummonProjection := preload("res://scripts/enemies/launch/launch_summon_projection.gd")
 const SummonActor := preload("res://scripts/enemies/launch/launch_summon_actor.gd")
+const CopyProjection := preload("res://scripts/enemies/launch/launch_ordinary_copy_projection.gd")
+const CopyActor := preload("res://scripts/enemies/launch/launch_ordinary_copy_actor.gd")
 const EnemyDefinitionScript := preload("res://scripts/enemies/launch/enemy_definition.gd")
 const Mirroring := preload("res://scripts/enemies/launch/launch_elite_mirroring_runtime.gd")
 const AffixDefinitionScript := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
@@ -17,6 +19,7 @@ const MAX_SUMMONS := 8
 const MAX_RESERVATIONS := 256
 const MAX_LEASES := 4096
 const MIRROR_ACTION_ID := "affix_mirroring"
+const SPLIT_ACTION_ID := "affix_splitting"
 var _state: Dictionary = {}
 var _pending: Dictionary = {}
 var _committed := false
@@ -165,14 +168,20 @@ func capture_native_terminal_split(owner: Node2D, receipt: String, targets: Dict
 	var state: Dictionary = owner.launch_runtime_snapshot().runtime
 	var health: Node = owner.get_node("HealthComponent")
 	var expected := "hostile_defeat:%s" % (str(identity.run_id) + "|" + source).sha256_text().substr(0, 40)
-	if _owners.get(source) != owner or definition.actor_kind != "elite" or not _death_actions.has(definition.id) or identity.run_id != _state.run_id or state.runtime_frame != _state.runtime_frame or not state.terminal or not health.dead or health.current_hp != 0.0 or receipt != expected or owner.get("_death_receipt") != expected:
+	var splitting: Dictionary = owner.native_splitting_configuration()
+	if _owners.get(source) != owner or definition.actor_kind != "elite" or (not _death_actions.has(definition.id) and splitting.is_empty()) or identity.run_id != _state.run_id or state.runtime_frame != _state.runtime_frame or not state.terminal or not health.dead or health.current_hp != 0.0 or receipt != expected or owner.get("_death_receipt") != expected:
 		return false
-	if _state.rows.any(func(row: Dictionary): return row.spawn_mode == "DEATH" and row.parent_source_id == source):
+	if _state.rows.any(func(row: Dictionary): return row.spawn_mode in ["DEATH", "SPLIT"] and row.parent_source_id == source):
 		return true
 	var before := snapshot()
 	var next := snapshot()
-	var action: Dictionary = _death_actions[definition.id]
-	if not definition.actions.has(action) or not _reserve_death_rows(next, owner, definition, action, int(state.action.next_generation_floor), owner.global_position, targets) or not can_restore_snapshot(next):
+	var reserved := false
+	if not splitting.is_empty():
+		reserved = _reserve_affix_split(next, owner, definition, owner.global_position, targets)
+	else:
+		var action: Dictionary = _death_actions[definition.id]
+		reserved = definition.actions.has(action) and _reserve_death_rows(next, owner, definition, action, int(state.action.next_generation_floor), owner.global_position, targets)
+	if not reserved or not can_restore_snapshot(next):
 		return false
 	_state = next
 	if not _sync_native(_state):
@@ -295,22 +304,19 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		claims[claim] = true
 	var ids := {}
 	for row: Variant in value.rows:
-		if not row is Dictionary or not Contract.exact_fields(row, ROW_FIELDS) or not _stable(row.parent_source_id) or not Contract.valid_id(row.parent_definition_id) or not Contract.valid_id(row.action_id) or not Contract.integer_in_range(row.generation, 1, 2147400000) or not Contract.integer_in_range(row.slot_index, 0, 7) or row.id != (_mirror_id(value.run_id, row.parent_source_id, row.generation) if row.spawn_mode == "MIRROR" else _id(value.run_id, row.parent_source_id, row.generation, row.slot_index)) or ids.has(row.id) or not Contract.integer_in_range(row.seed, -2147483648, 2147483647) or not Contract.integer_in_range(row.request_frame, int(value.initial_frame) + (0 if row.spawn_mode == "DEATH" else 1), int(value.runtime_frame)) or not Contract.valid_point(row.position) or not row.projection is Dictionary or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.integer_in_range(row.spawn_warning_frames, 30, 120) or row.spawn_mode not in ["ACTION", "DEATH", "MIRROR"] or typeof(row.retire_on_owner_death) != TYPE_BOOL or row.phase not in ["PENDING", "WARNING", "ACTIVE", "RETIRED"] or not row.room_motion is Dictionary or not row.room_motion.get("bounds") is Dictionary:
+		if not row is Dictionary or not Contract.exact_fields(row, ROW_FIELDS) or not _stable(row.parent_source_id) or not Contract.valid_id(row.parent_definition_id) or not Contract.valid_id(row.action_id) or not Contract.integer_in_range(row.generation, 1, 2147400000) or not Contract.integer_in_range(row.slot_index, 0, 7) or row.id != _row_id(value.run_id, row) or ids.has(row.id) or not Contract.integer_in_range(row.seed, -2147483648, 2147483647) or not Contract.integer_in_range(row.request_frame, int(value.initial_frame) + (0 if row.spawn_mode in ["DEATH", "SPLIT"] else 1), int(value.runtime_frame)) or not Contract.valid_point(row.position) or not row.projection is Dictionary or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.integer_in_range(row.spawn_warning_frames, 30, 120) or row.spawn_mode not in ["ACTION", "DEATH", "MIRROR", "SPLIT"] or typeof(row.retire_on_owner_death) != TYPE_BOOL or row.phase not in ["PENDING", "WARNING", "ACTIVE", "RETIRED"] or not row.room_motion is Dictionary or not row.room_motion.get("bounds") is Dictionary:
 			return false
-		var contract: Variant = row.projection.get("summon_contract")
-		if not contract is Dictionary or not contract.get("definition") is Dictionary or not contract.get("parent") is Dictionary:
+		if not _valid_row_projection(row):
 			return false
-		var projection := SummonProjection.create(contract.definition, contract.parent)
 		var death: Dictionary = _death_actions.get(row.parent_definition_id, {})
-		var warning: int = int(AffixDefinitionScript.PARAMETERS.mirroring.spawn_warning_frames) if row.spawn_mode == "MIRROR" else (int(death.get("warning_frames", -1)) if row.spawn_mode == "DEATH" else int(contract.definition.spawn_warning_frames))
-		if not projection.ok or projection.definition != row.projection or row.lifetime_frames > contract.definition.lifetime_frames or row.spawn_warning_frames != warning or not claims.has(JSON.stringify([row.parent_source_id, row.generation, row.action_id]).sha256_text()) or not _within_bounds(row):
+		if not claims.has(JSON.stringify([row.parent_source_id, row.generation, row.action_id]).sha256_text()) or not _within_bounds(row):
 			return false
 		if row.spawn_mode == "DEATH" and (death.is_empty() or row.action_id != death.id or row.slot_index >= death.parameters.count or row.projection.id != death.parameters.definition_id or row.lifetime_frames != death.parameters.lifetime_frames or row.retire_on_owner_death):
 			return false
 		var authored: Dictionary = _summon_actions.get(row.parent_definition_id, {}).get(row.action_id, {})
 		if row.spawn_mode == "ACTION" and (authored.is_empty() or row.projection.id != authored.parameters.definition_id or row.slot_index >= int(authored.parameters.count) or row.lifetime_frames != int(authored.parameters.lifetime_frames) or row.retire_on_owner_death != _summon_owner_retirement.get(row.parent_definition_id)):
 			return false
-		if row.spawn_mode == "MIRROR" and (row.action_id != MIRROR_ACTION_ID or row.slot_index != 0 or row.projection.id != "elite_mirror" or contract.parent != _ordinary_parents.get(row.parent_definition_id, {}) or row.lifetime_frames != int(AffixDefinitionScript.PARAMETERS.mirroring.lifetime_frames) or not row.retire_on_owner_death or int(row.generation) > Mirroring.MAX_RESERVATIONS):
+		if row.spawn_mode == "MIRROR" and (row.action_id != MIRROR_ACTION_ID or row.slot_index != 0 or row.projection.id != "elite_mirror" or row.projection.summon_contract.parent != _ordinary_parents.get(row.parent_definition_id, {}) or row.lifetime_frames != int(AffixDefinitionScript.PARAMETERS.mirroring.lifetime_frames) or not row.retire_on_owner_death or int(row.generation) > Mirroring.MAX_RESERVATIONS):
 			return false
 		for field: String in ["warning_frame", "birth_frame", "expires_frame", "retired_frame"]:
 			if not Contract.integer_in_range(row[field], -1, 2147401200):
@@ -326,6 +332,11 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		if row.phase == "RETIRED" and (row.retired_frame < row.request_frame or row.retired_frame > value.runtime_frame):
 			return false
 		ids[row.id] = true
+	for row: Dictionary in value.rows:
+		if row.spawn_mode == "SPLIT":
+			var pair: Array = value.rows.filter(func(candidate: Dictionary): return candidate.spawn_mode == "SPLIT" and candidate.parent_source_id == row.parent_source_id)
+			if pair.size() != 2 or pair[0].slot_index == pair[1].slot_index or pair[0].projection != pair[1].projection or pair[0].request_frame != pair[1].request_frame or pair[0].seed != pair[1].seed or pair[0].room_motion != pair[1].room_motion or pair[0].position == pair[1].position:
+				return false
 	var live_mirrors := {}
 	for row: Dictionary in value.rows:
 		if row.spawn_mode == "MIRROR" and row.phase != "RETIRED":
@@ -373,7 +384,7 @@ func _sync_native(value: Dictionary, prune: bool = false) -> bool:
 				var room: Node2D = owner.get("_motion_room") if is_instance_valid(owner) else _fallback_room
 				if not is_instance_valid(_root) or not is_instance_valid(room):
 					return false
-				var actor := SummonActor.instantiate_summon(str(row.projection.id))
+				var actor: Node2D = CopyActor.instantiate_copy(str(row.parent_definition_id)) if row.spawn_mode == "SPLIT" else SummonActor.instantiate_summon(str(row.projection.id))
 				if actor == null:
 					return false
 				_root.add_child(actor)
@@ -456,9 +467,13 @@ func _safe(row: Dictionary, targets: Dictionary) -> bool:
 func _reserve_terminal_split(next: Dictionary, owner: Node2D, targets: Dictionary) -> bool:
 	var definition: Dictionary = owner.get("_launch_definition")
 	var prepared: Dictionary = owner.get("_prepared_launch_frame")
-	if definition.actor_kind != "elite" or not _death_actions.has(definition.id) or prepared.is_empty() or not prepared.after.runtime.terminal:
+	if definition.actor_kind != "elite" or prepared.is_empty() or not prepared.after.runtime.terminal:
 		return true
 	if not owner.get_node("HealthComponent").dead and not owner.prepared_launch_frame_consumes_actor():
+		return true
+	if not owner.native_splitting_configuration().is_empty():
+		return _reserve_affix_split(next, owner, definition, Vector2(float(prepared.after.position.x), float(prepared.after.position.y)), targets)
+	if not _death_actions.has(definition.id):
 		return true
 	var action: Dictionary = _death_actions[definition.id]
 	if not definition.actions.has(action):
@@ -466,6 +481,50 @@ func _reserve_terminal_split(next: Dictionary, owner: Node2D, targets: Dictionar
 	var generation: int = int(prepared.before.runtime.action.next_generation_floor)
 	var origin := Vector2(float(prepared.after.position.x), float(prepared.after.position.y))
 	return _reserve_death_rows(next, owner, definition, action, generation, origin, targets)
+
+
+func _reserve_affix_split(next: Dictionary, owner: Node2D, definition: Dictionary, origin: Vector2, targets: Dictionary) -> bool:
+	var source := str(owner.hostile_source_id)
+	var claim := JSON.stringify([source, 1, SPLIT_ACTION_ID]).sha256_text()
+	if next.claims.has(claim):
+		return true
+	if next.claims.size() >= MAX_LEASES or next.rows.size() + 2 > MAX_LEASES or _live_count(next, false) + 2 > MAX_RESERVATIONS:
+		return false
+	var projection := CopyProjection.create(str(definition.id), owner.native_splitting_configuration())
+	var room: Dictionary = owner.launch_room_motion_snapshot()
+	if not projection.ok or room.is_empty():
+		return false
+	var parameters: Dictionary = AffixDefinitionScript.PARAMETERS.splitting
+	var action := {"id": SPLIT_ACTION_ID, "parameters": {"definition_id": definition.id, "lifetime_frames": int(parameters.lifetime_frames)}}
+	var positions: Array[Vector2] = []
+	var receipt := {"sequence": 1, "source_position": {"x": origin.x, "y": origin.y}}
+	for index: int in range(2):
+		var row := _row(next, owner, definition, action, 1, index, receipt.source_position, projection.definition, room)
+		row.id = _split_id(str(next.run_id), source, index)
+		row.spawn_mode = "SPLIT"
+		row.spawn_warning_frames = int(parameters.spawn_warning_frames)
+		row.retire_on_owner_death = false
+		var chosen := {}
+		for position: Vector2 in Mirroring.candidate_positions(owner.get("_launch_identity"), receipt):
+			if positions.any(func(previous: Vector2): return previous.distance_to(position) < float(projection.definition.collision_radius_px) * 2.0 + 4.0):
+				continue
+			row.position = {"x": position.x, "y": position.y}
+			if not _within_bounds(row):
+				continue
+			if chosen.is_empty():
+				chosen = row.position.duplicate(true)
+			if _live_count(next, true) < MAX_SUMMONS and _safe(row, targets):
+				chosen = row.position.duplicate(true)
+				row.phase = "WARNING"
+				row.warning_frame = int(next.runtime_frame)
+				break
+		if chosen.is_empty():
+			return false
+		row.position = chosen
+		positions.append(Vector2(float(chosen.x), float(chosen.y)))
+		next.rows.append(row)
+	next.claims.append(claim)
+	return true
 
 
 func _reserve_death_rows(next: Dictionary, owner: Node2D, definition: Dictionary, action: Dictionary, generation: int, origin: Vector2, targets: Dictionary) -> bool:
@@ -564,7 +623,19 @@ static func valid_mirroring_cold_bindings(value: Dictionary, actors: Dictionary)
 
 
 func _row(next: Dictionary, owner: Node2D, definition: Dictionary, action: Dictionary, generation: int, index: int, position: Dictionary, projection: Dictionary, room: Dictionary) -> Dictionary:
-	return {"id": _id(str(next.run_id), str(owner.hostile_source_id), generation, index), "parent_source_id": str(owner.hostile_source_id), "parent_definition_id": str(definition.id), "action_id": str(action.id), "generation": generation, "slot_index": index, "seed": int(owner.get("_launch_identity").seed), "request_frame": int(next.runtime_frame), "position": position.duplicate(true), "projection": projection.duplicate(true), "lifetime_frames": int(action.parameters.lifetime_frames), "spawn_warning_frames": int(_definitions[action.parameters.definition_id].spawn_warning_frames), "spawn_mode": "ACTION", "retire_on_owner_death": definition.actor_kind == "boss" or bool(definition.mechanisms.get("retire_summons_on_owner_death", false)), "phase": "PENDING", "warning_frame": -1, "birth_frame": -1, "expires_frame": -1, "retired_frame": -1, "room_motion": room.duplicate(true)}
+	return {"id": _id(str(next.run_id), str(owner.hostile_source_id), generation, index), "parent_source_id": str(owner.hostile_source_id), "parent_definition_id": str(definition.id), "action_id": str(action.id), "generation": generation, "slot_index": index, "seed": int(owner.get("_launch_identity").seed), "request_frame": int(next.runtime_frame), "position": position.duplicate(true), "projection": projection.duplicate(true), "lifetime_frames": int(action.parameters.lifetime_frames), "spawn_warning_frames": int(_definitions.get(action.parameters.definition_id, {}).get("spawn_warning_frames", 30)), "spawn_mode": "ACTION", "retire_on_owner_death": definition.actor_kind == "boss" or bool(definition.mechanisms.get("retire_summons_on_owner_death", false)), "phase": "PENDING", "warning_frame": -1, "birth_frame": -1, "expires_frame": -1, "retired_frame": -1, "room_motion": room.duplicate(true)}
+
+
+func _valid_row_projection(row: Dictionary) -> bool:
+	if row.spawn_mode == "SPLIT":
+		return row.action_id == SPLIT_ACTION_ID and row.generation == 1 and row.slot_index in [0, 1] and CopyProjection.validate(row.projection) and row.projection.id == row.parent_definition_id and row.lifetime_frames == int(AffixDefinitionScript.PARAMETERS.splitting.lifetime_frames) and row.spawn_warning_frames == int(AffixDefinitionScript.PARAMETERS.splitting.spawn_warning_frames) and not row.retire_on_owner_death
+	var contract: Variant = row.projection.get("summon_contract")
+	if not contract is Dictionary or not contract.get("definition") is Dictionary or not contract.get("parent") is Dictionary:
+		return false
+	var projection := SummonProjection.create(contract.definition, contract.parent)
+	var death: Dictionary = _death_actions.get(row.parent_definition_id, {})
+	var warning: int = int(AffixDefinitionScript.PARAMETERS.mirroring.spawn_warning_frames) if row.spawn_mode == "MIRROR" else (int(death.get("warning_frames", -1)) if row.spawn_mode == "DEATH" else int(contract.definition.spawn_warning_frames))
+	return projection.ok and projection.definition == row.projection and row.lifetime_frames <= contract.definition.lifetime_frames and row.spawn_warning_frames == warning
 
 
 static func _within_bounds(row: Dictionary) -> bool:
@@ -612,6 +683,16 @@ static func _id(run_id: String, source_id: String, generation: int, slot: int) -
 
 static func _mirror_id(run_id: String, source_id: String, sequence: int) -> String:
 	return "summon_" + JSON.stringify([run_id, source_id, "affix:mirroring", sequence, 0]).sha256_text().substr(0, 56)
+
+
+static func _split_id(run_id: String, source_id: String, slot: int) -> String:
+	return "summon_" + JSON.stringify([run_id, source_id, "affix:splitting", 1, slot]).sha256_text().substr(0, 56)
+
+
+static func _row_id(run_id: String, row: Dictionary) -> String:
+	if row.spawn_mode == "SPLIT":
+		return _split_id(run_id, row.parent_source_id, row.slot_index)
+	return _mirror_id(run_id, row.parent_source_id, row.generation) if row.spawn_mode == "MIRROR" else _id(run_id, row.parent_source_id, row.generation, row.slot_index)
 
 
 static func _stable(value: Variant) -> bool:

@@ -65,7 +65,20 @@ func project_mirroring(phase: String, high_contrast: bool, visual_scale: float) 
 	queue_redraw()
 
 
+func project_splitting(phase: String, high_contrast: bool, visual_scale: float) -> void:
+	_affix_id = "splitting"
+	_phase = phase
+	_high_contrast = high_contrast
+	_visual_scale = clampf(visual_scale, 1.0, 1.5)
+	scale = Vector2.ONE * _visual_scale
+	visible = phase not in ["ABSENT", "TERMINAL"]
+	queue_redraw()
+
+
 func _draw() -> void:
+	if _affix_id == "splitting":
+		_draw_splitting()
+		return
 	if _affix_id == "mirroring":
 		_draw_mirroring()
 		return
@@ -165,3 +178,11 @@ func _draw_mirroring() -> void:
 	if _phase == "SCHEDULED":
 		draw_line(Vector2(-14, -10), Vector2(-11, -7), ink, 2.0)
 		draw_line(Vector2(14, 10), Vector2(11, 7), ink, 2.0)
+
+
+func _draw_splitting() -> void:
+	var ink := Color.WHITE if _high_contrast else Color(0.72, 0.93, 0.38)
+	for side: float in [-1.0, 1.0]:
+		var fragment := PackedVector2Array([Vector2(side * 3, -8), Vector2(side * 10, -5), Vector2(side * 10, 5), Vector2(side * 3, 8), Vector2(side * 5, 2), Vector2(side * 2, -2), Vector2(side * 3, -8)])
+		draw_polyline(fragment, Color(0.08, 0.08, 0.1), 4.0)
+		draw_polyline(fragment, ink, 2.0)

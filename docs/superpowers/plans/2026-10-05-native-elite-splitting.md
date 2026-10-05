@@ -1,3 +1,5 @@
+# Native Elite Splitting Implementation Plan
+
 - Status: Active / Current
 - Document Role: Current focused implementation plan below the approved P15 specification
 - Authority Level: Project standing authorization; approved P15 section6
@@ -5,8 +7,7 @@
 - Last Verified: 2026-10-05
 - Applies To: Native revision-ten Splitting, ordinary copy contracts, shared child authority and physical save continuation
 - Depends On: Approved P15 hostile specification; retained native summon and Mirroring baselines
-
-# Native Elite Splitting Implementation Plan
+- Exit Gate: Native ordinary-copy, elite, summon, checkpoint, production and Metal gates pass; independent natural recipe migration and actual Profile checkpoint remain explicitly tracked until certified
 
 > **For agentic workers:** Execute this focused plan task-by-task in the existing project team. Steps use checkbox syntax for tracking. The owner's project-wide standing authorization and approved P15 specification supply the design decision; milestone review is informational.
 
@@ -71,8 +72,8 @@ reservation assertion.
 - [x] Test wrong parent, affix revision/pair/floor, HP/damage/defense/actions/mechanisms/extra-field mutation and cold definition digest refusal before implementing the helper. The initial missing-module RED is retained under `elite-splitting-copy-red`.
 - [x] Implement canonical projections by parsing the retained authored enemy table; no external parent dictionary can supply altered ordinary combat values.
 - [x] Configure the inherited ordinary runtime through the wrapped definition and keep child actor kind `summon` for existing roster cleanup and recursion refusal.
-- [ ] Test actual ordinary action selection, warning/attack facts, accepted damage, terminal state, controls, deterministic motion and cold continuation with the new pure child identity.
-- [ ] Run `TEST_LOG_DIR=build/test-evidence/elite-splitting-copy-contract tools/run_tests.sh --filter ordinary_copy_runtime --timeout 90` and retain the coherent pure modules/tests with precise paths.
+- [x] Test actual ordinary action selection, warning/attack facts, accepted damage, final-death decisions, controls, deterministic motion and cold continuation with the new pure child identity.
+- [x] Run the canonical contract and expanded control/motion gates; final GREEN is `elite-splitting-copy-state-final`,1/1. Retain the coherent pure modules/tests with precise paths in the native milestone.
 
 ## Task 3: Once-Only Native Death Admission
 
@@ -90,13 +91,13 @@ reservation assertion.
 - Existing `capture_native_terminal_split(owner, receipt, targets)` also admits native Splitting after exact actual out-of-frame Health death, canonical receipt, owned source/run/frame and configured revision-ten trait validation.
 - `SPLIT` rows use `[run, source, "affix:splitting", 1, slot]` identities, slots0/1, generation1, canonical copy projection, frozen position, request/warning frame, lifetime480 and `retire_on_owner_death=false`.
 
-- [ ] Add revision10 to the compiler/runtime/Actor configuration ranges; remove Splitting from current pending IDs while historical revisions retain it.
-- [ ] Before implementation, test in-frame and actual physical out-of-frame death, first lethal once-only claims, duplicate callbacks, compensated retry and no spawn on prevented/nonterminal damage.
-- [ ] Reserve exactly two copy rows before principal defeat can clear a room. Reuse existing native safe admission, warning restarts and global eight-child budget.
-- [ ] Authenticate copy rows against ordinary canonical parent, source Splitting configuration, slot/count, exact lifetime/warning and dedicated namespace; ordinary ACTION/DEATH/MIRROR records retain their existing validators.
-- [ ] Instantiate CopyActor only for `SPLIT` rows; retain original support constructors for the nine authored support IDs.
-- [ ] Bind orphan copies to the retained scene fallback and let TTL retire actual HP/body, threats, payloads and pending encounter work.
-- [ ] Retain independent coherent revision-ten code only after actual native gate passes.
+- [x] Add revision10 to the compiler/runtime/Actor configuration ranges; remove Splitting from current pending IDs while historical revisions retain it.
+- [x] Establish the missing final-death RED before implementation; expand to actual out-of-frame death, once-only claims, duplicate callbacks, compensated retry and no spawn on prevented/nonterminal damage during implementation.
+- [x] Reserve exactly two copy rows before principal defeat can clear a room. Reuse existing native safe admission, warning restarts and global eight-child budget.
+- [x] Authenticate copy rows against ordinary canonical parent, source Splitting configuration, slot/count, exact lifetime/warning and dedicated namespace; ordinary ACTION/DEATH/MIRROR records retain their existing validators.
+- [x] Instantiate CopyActor only for `SPLIT` rows; retain original support constructors for the nine authored support IDs.
+- [x] Bind orphan copies to the retained scene fallback and let TTL retire actual HP/body, threats, payloads and pending encounter work.
+- [ ] Retain independent coherent revision-ten code only after actual native gate passes. All native gates are GREEN; precise retention follows the shared index release.
 
 ## Task 4: Cold And Physical Continuation
 
@@ -111,10 +112,10 @@ authored elite source with a legal revision-ten Splitting configuration and its
 canonical defeat ledger receipt/frame. Both copies remain child work rather
 than independent principal spawns.
 
-- [ ] Test typed warning, pending, active and expired copy states; exact fresh reconstruction and next accepted native frame.
-- [ ] Reject erased claims, source/parent/revision/pair substitution, non-final mother, extra third slot, altered33% HP, future request/birth and shortened warning/TTL.
-- [ ] Run actual SaveService/production checkpoint cold continuation with the dead mother absent and two surviving ordinary copy bodies.
-- [ ] Verify both child death and TTL clear room work without another principal defeat, independent reward, duplicate callback or recursive copies.
+- [x] Test typed warning, pending, active and expired copy states; exact fresh reconstruction and next accepted native frame.
+- [x] Reject erased claims, source/parent/revision substitution, missing sibling/extra third slot, altered33% HP, future request and shortened warning/TTL. Non-final mother capture is refused; birth bounds are enforced by the closed authority.
+- [ ] Certify the production Host/Profile checkpoint with the dead mother absent and two surviving ordinary copy bodies. Actual SaveService aggregate round-trips are GREEN for all14 legal parents; a separate selection revision3 is needed because existing natural recipes contain no Splitting IDs. The explicit checkpoint probe retains the current natural-route RED.
+- [x] Verify both child death and TTL clear room work without another principal defeat, independent reward, duplicate callback or recursive copies.
 
 ## Task 5: Native Presentation And Retention
 
@@ -124,9 +125,9 @@ than independent principal spawns.
 - Modify: `tests/integration/combat/launch_elite_affix_test.gd`
 - Create: `docs/current/2026-10-05-native-elite-splitting-evidence.md`
 
-- [ ] Draw the authored two-fragment Splitting cue, scaled/high-contrast, with separate geometry beside every legal existing cue; gameplay state is unchanged by accessibility settings.
-- [ ] Capture actual mother, two30-frame warning rasters and two original enemy copy atlases at640x360/1280x720 Metal; assert actual pixels and visually inspect retained screenshots.
-- [ ] Verify actual production Sword contact, all native warning floors, no independent reward, blocked/deferred positions, eight-child capacity, TTL480, source death outside the frame and full late World compensation.
-- [ ] Run `--filter launch_elite`, `--filter native_summon`, `--filter native_combat_checkpoint` and `--filter production_launch_encounter` with retained test logs.
-- [ ] Scan `*.log` files including ignored paths for script/parse errors, warnings, orphans and leaks; record expected injected rejection diagnostics separately.
-- [ ] Write consolidated evidence with exact RED/GREEN, commits, reversible choices and remaining certification limits; update this checklist incrementally and coordinate the README index with root.
+- [x] Draw the authored two-fragment Splitting cue, scaled/high-contrast, with separate geometry beside every legal existing cue; gameplay state is unchanged by accessibility settings.
+- [x] Capture actual mother, two30-frame warning rasters and two original enemy copy atlases at640x360/1280x720 Metal; assert actual pixels and visually inspect all twenty retained screenshots.
+- [x] Verify actual production Sword contact, all native warning floors, no independent reward, blocked/deferred positions, eight-child capacity, TTL480, source death outside the frame and full late World compensation.
+- [x] Run `--filter launch_elite`, `--filter native_summon`, `--filter native_combat_checkpoint` and `--filter production_launch_encounter` with retained test logs;10/10,4/4,1/1 and1/1 respectively. Physical checkpoint covers the existing21 default cases; the explicit natural Splitting case remains RED until revision3.
+- [x] Scan `*.log` files including ignored paths for script/parse errors, warnings, orphans and leaks; record the four expected injected settlement rejection diagnostics separately.
+- [x] Write consolidated evidence with exact RED/GREEN, reversible choices and remaining certification limits; update the checklist and README index. The next retention adds its exact commit identity.

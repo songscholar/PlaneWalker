@@ -23,7 +23,10 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	for case_name: String in ["warning", "fighting", "sword_active", "sword_legacy_active", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
+	var cases: Array[String] = ["warning", "fighting", "sword_active", "sword_legacy_active", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]
+	if OS.get_environment("PLANEWALKER_CHECKPOINT_CASE") == "splitting":
+		cases.append("splitting")
+	for case_name: String in cases:
 		var selected := OS.get_environment("PLANEWALKER_CHECKPOINT_CASE")
 		if not selected.is_empty() and selected != case_name:
 			continue
@@ -57,8 +60,9 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 4}
 	if case_name == "event":
 		config.seed = 6
-	suite.assert_true(host.start_profile_run(config, service, int(service.snapshot().revision)).ok, "actual Host accepts the seeded native combat launch")
-	var selected: bool = await _route_to_native_target(suite, host, false, "void_hunter", true) if case_name == "orphan_summon" else await _route_to_native_target(suite, host, false, "forest_caller") if case_name == "summon" else await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
+	var started: Variant = host.start_profile_run(config, service, int(service.snapshot().revision))
+	suite.assert_true(started.ok, "actual Host accepts the seeded native combat launch: " + str(started.code) + " " + str(started.context))
+	var selected: bool = await _route_to_native_target(suite, host, false, "", true, "splitting") if case_name == "splitting" else await _route_to_native_target(suite, host, false, "void_hunter", true) if case_name == "orphan_summon" else await _route_to_native_target(suite, host, false, "forest_caller") if case_name == "summon" else await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
 	suite.assert_true(selected, "actual Host routes to the authored encounter for " + case_name)
 	if not selected:
 		await _dispose(main)
@@ -135,6 +139,25 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		suite.assert_true(is_instance_valid(owner) and owner.get_node("Hurtbox").receive_hit(hit) > 0.0 and not driver.get("_actors").has(summon_owner), "actual authored echo retains its lifetime after authenticated ordinary principal death")
 		suite.assert_true(player.advance_action_frame() and not runner.native_launch_snapshot().summon_actors.is_empty(), "surviving native echo continues after principal retirement")
 		await get_tree().physics_frame
+	if case_name == "splitting":
+		var driver: Node = runner.get_node("NativeLaunchEncounterDriver")
+		var owner: Node2D
+		for actor: Node2D in driver.get("_actors").values():
+			if not actor.native_splitting_configuration().is_empty():
+				owner = actor
+				break
+		suite.assert_true(is_instance_valid(owner), "production checkpoint uses an authored native Splitting mother")
+		if not is_instance_valid(owner):
+			await _dispose(main)
+			return
+		var source := str(owner.hostile_source_id)
+		var hit := Damage.from_plan({"run_id": str(player.current_run_id()), "target_id": source, "hostile_source_id": "domain:cold-splitting", "attack_generation": 501, "action_token": 501, "amount": 100000.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": [], "can_crit": false})
+		suite.assert_true(owner.health.take_damage(hit) > 0.0 and not driver.get("_actors").has(source) and driver.get("_effects").summon_snapshot().rows.size() == 2, "production Driver reserves exactly two orphan children before principal defeat")
+		for _frame: int in range(31):
+			suite.assert_true(player.advance_action_frame(), "production orphan copies retain original full native spawn warning")
+			await get_tree().physics_frame
+		var copy_checkpoint: Dictionary = driver.cold_snapshot()
+		suite.assert_true(not copy_checkpoint.is_empty() and copy_checkpoint.summon_actors.size() == 2 and not copy_checkpoint.actors.has(source) and copy_checkpoint.encounter.defeat_ledger.has(source), "production cold aggregate authenticates surviving copies after mother body is absent")
 	if case_name.begins_with("elite"):
 		var driver: Node = runner.get_node("NativeLaunchEncounterDriver")
 		var elite_seen := false
@@ -329,7 +352,7 @@ func _route_to_encounter(suite: RefCounted, host: Node, event: bool) -> bool:
 	return false
 
 
-func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id: String = "chrono_guard", require_elite: bool = false) -> bool:
+func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id: String = "chrono_guard", require_elite: bool = false, affix_id: String = "") -> bool:
 	for _step: int in range(140):
 		var state: Dictionary = host.runtime_snapshot()
 		var node: Dictionary = host.native_run_state().current_floor_node()
@@ -340,7 +363,7 @@ func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id
 			var waves: Array = definition.get("waves", [])
 			if not waves.is_empty():
 				for spawn: Dictionary in waves[0].spawns:
-					if spawn.enemy_id == enemy_id and (not require_elite or spawn.elite):
+					if (enemy_id.is_empty() or spawn.enemy_id == enemy_id) and (not require_elite or spawn.elite) and (affix_id.is_empty() or spawn.affix_ids.has(affix_id)):
 						return true
 		if not state.open_offer.is_empty():
 			var offer: Dictionary = state.open_offer
@@ -357,6 +380,11 @@ func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id
 				if choice.room_type in ["combat", "elite", "boss"]:
 					selected = choice
 					break
+			if require_elite:
+				for choice: Dictionary in choices:
+					if choice.room_type == "elite":
+						selected = choice
+						break
 			var routed: Variant = host.select_route(StringName(selected.edge_id), int(state.revision))
 			if not routed.ok:
 				suite.assert_true(false, "native cold Boss fixture route fails at " + str(node.id) + ": " + str(routed.code))

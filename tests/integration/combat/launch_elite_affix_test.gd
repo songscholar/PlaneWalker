@@ -161,7 +161,7 @@ func _test_configuration_rejection() -> void:
 
 func _test_signature_binding() -> void:
 	var actor := _actor(["splitting"], "hostile:affix", 4)
-	suite.assert_equal(actor.launch_affix_snapshot().pending_ids, ["splitting"], "unimplemented dynamic affix remains explicit pending native scope")
+	suite.assert_equal(actor.launch_affix_snapshot().pending_ids, [], "revision-ten Splitting is executable native scope")
 	var saved: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
 	saved.actor.erase("affixes")
 	var legacy: Node2D = Scene.instantiate()
@@ -172,7 +172,7 @@ func _test_signature_binding() -> void:
 	identity.hostile_source_id = "hostile:affix"
 	identity.seed = 42
 	suite.assert_true(legacy.configure_launch_definition(parser.runtime_projection("elite"), identity).ok, "closed original elite configures without affix compiler")
-	suite.assert_true(not legacy.can_restore_native_cold_snapshot(saved, func(_binding: Dictionary): return null), "pending-only affine signature prevents stripped-extension downgrade without stat differences")
+	suite.assert_true(not legacy.can_restore_native_cold_snapshot(saved, func(_binding: Dictionary): return null), "stateless Splitting signature prevents stripped-extension downgrade without stat differences")
 	var left := _actor(["frenzy", "anchored"], "hostile:ordered", 3)
 	var right := _actor(["anchored", "frenzy"], "hostile:ordered", 3)
 	suite.assert_equal(left.launch_runtime_snapshot().runtime.definition_digest, right.launch_runtime_snapshot().runtime.definition_digest, "canonical pair compiler is independent of supplied row order")

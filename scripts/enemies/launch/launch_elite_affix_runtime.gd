@@ -63,7 +63,7 @@ func configure(configuration: Dictionary, identity: Dictionary, max_hp: float) -
 
 
 static func _valid_configuration(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 9) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
+	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 10) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
 		return false
 	var seen: Array = []
 	var pending: Array = []
@@ -76,7 +76,7 @@ static func _valid_configuration(value: Dictionary) -> bool:
 				return false
 		seen.append(id)
 		previous = id
-		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded") and not (value.native_revision >= 6 and id == "teleporting") and not (value.native_revision >= 8 and id == "chaining") and not (value.native_revision >= 9 and id == "mirroring"):
+		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded") and not (value.native_revision >= 6 and id == "teleporting") and not (value.native_revision >= 8 and id == "chaining") and not (value.native_revision >= 9 and id == "mirroring") and not (value.native_revision >= 10 and id == "splitting"):
 			pending.append(id)
 	return value.pending_ids == pending and Contract.number_in_range(value.damage_taken_multiplier, 1.2 if seen.has("frenzy") else 1.0, 1.2 if seen.has("frenzy") else 1.0) and Contract.number_in_range(value.knockback_resistance, 0.2 if seen.has("fortified") else 0.0, 0.2 if seen.has("fortified") else 0.0)
 
@@ -139,6 +139,10 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 
 func is_mirroring() -> bool:
 	return not _state.get("mirroring", {}).is_empty()
+
+
+func is_splitting() -> bool:
+	return int(_configuration.get("native_revision", 0)) >= 10 and _configuration.get("ids", []).has("splitting")
 
 
 func mirroring_phase() -> String:

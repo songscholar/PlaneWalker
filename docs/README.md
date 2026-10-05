@@ -128,6 +128,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Summon Plan](superpowers/plans/2026-10-05-native-summons.md) | 非递归子单位、真实攻击、数量上限、死亡退役和物理冷恢复 | Active / Current |
 | [Native Elite Mirroring Evidence](current/2026-10-05-native-elite-mirroring-evidence.md) | 原生镜像双时钟、普通母种数值、真实 Sword、八实体上限、存档续接和十二张 Metal 截图 | Focused Verified / Current |
 | [Native Elite Splitting Plan](superpowers/plans/2026-10-05-native-elite-splitting.md) | 死亡双复制体、普通数值契约、完整预警、孤儿生命周期和原生冷恢复 | Active / Current |
+| [Native Elite Splitting Evidence](current/2026-10-05-native-elite-splitting-evidence.md) | 十四合法母种的实体复制、共享八单位上限、精确寿命、完整回滚和二十张 Metal 截图 | Focused Verified / Natural recipes pending |
 | [Native Summon Evidence](current/2026-10-05-native-summon-evidence.md) | 九种支持单位、原生生命周期、非递归约束和物理冷恢复 | Focused Verified / Current |
 | [Native Enemy Spatial Plan](superpowers/plans/2026-10-05-native-enemy-spatial.md) | 普通与精英敌人的可破坏笼墙、链接增益和安全传送门 | Active / Current |
 | [Native Void Auxiliary Plan](superpowers/plans/2026-10-05-native-void-auxiliary.md) | 安全闪步、独立爆发预警、状态、能量拾取和半场机制 | Active / Current |

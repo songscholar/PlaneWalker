@@ -17,6 +17,8 @@ const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 const EliteProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
 const SummonRuntime := preload("res://scripts/enemies/launch/launch_summon_runtime.gd")
+const CopyRuntime := preload("res://scripts/enemies/launch/launch_ordinary_copy_runtime.gd")
+const CopyProjection := preload("res://scripts/enemies/launch/launch_ordinary_copy_projection.gd")
 const SummonAuthority := preload("res://scripts/enemies/launch/launch_summon_authority.gd")
 const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "summon_actors", "threats", "run_seed", "last_flushed_frame"]
 
@@ -294,7 +296,7 @@ func _on_actor_final_death(source: StringName, receipt: String) -> void:
 		return
 	var encounter_before: Dictionary = _encounter.snapshot()
 	var effects_before := {}
-	if not _bridge.frame_transaction_is_active() and actor.get("_launch_definition").actor_kind == "elite" and actor.get("_launch_definition").id in ["ruins_wraith", "void_spore"]:
+	if not _bridge.frame_transaction_is_active() and actor.get("_launch_definition").actor_kind == "elite" and (actor.get("_launch_definition").id in ["ruins_wraith", "void_spore"] or not actor.native_splitting_configuration().is_empty()):
 		effects_before = _effects.launch_transaction_snapshot()
 		if effects_before.is_empty() or not _effects.bind_native_targets(_actors, {"player:1": _player}) or not _effects.capture_native_terminal_split(actor, receipt, {"player:1": _player}):
 			_fail(&"NATIVE_TERMINAL_SPLIT_INVALID")
@@ -457,6 +459,7 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 	var sources: Dictionary = {}
 	var source_definitions := {}
 	var elite_sources := {}
+	var splitting_sources := {}
 	var ruin_sources: Dictionary = {}
 	for wave: Dictionary in value.definition.waves:
 		for spawn: Dictionary in wave.spawns:
@@ -465,12 +468,22 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 			source_definitions[source] = str(spawn.enemy_id)
 			if spawn.elite:
 				elite_sources[source] = true
+				if spawn.affix_ids.has("splitting"):
+					var ids: Array = spawn.affix_ids.duplicate()
+					ids.sort()
+					splitting_sources[source] = {"ids": ids, "floor_index": Ids.FLOOR_IDS.find(str(value.definition.floor_id)) + 1, "pending_ids": [], "damage_taken_multiplier": 1.2 if ids.has("frenzy") else 1.0, "knockback_resistance": 0.2 if ids.has("fortified") else 0.0, "native_revision": 10}
 			if spawn.enemy_id == "ruin_king":
 				ruin_sources[source] = true
 	var expected_children := {}
 	for row: Dictionary in value.effects.summons.rows:
-		if source_definitions.get(row.parent_source_id) != row.parent_definition_id or row.seed != value.run_seed or row.spawn_mode in ["DEATH", "MIRROR"] and not elite_sources.has(row.parent_source_id):
+		if source_definitions.get(row.parent_source_id) != row.parent_definition_id or row.seed != value.run_seed or row.spawn_mode in ["DEATH", "MIRROR", "SPLIT"] and not elite_sources.has(row.parent_source_id):
 			return false
+		if row.spawn_mode == "SPLIT":
+			var defeated: Dictionary = state.defeat_ledger.get(row.parent_source_id, {})
+			var canonical := CopyProjection.create(str(row.parent_definition_id), splitting_sources.get(row.parent_source_id, {}))
+			var receipt := "hostile_defeat:%s" % (run_id + "|" + str(row.parent_source_id)).sha256_text().substr(0, 40)
+			if defeated.is_empty() or defeated.enemy_id != row.parent_definition_id or defeated.frame != row.request_frame or defeated.receipt_id != receipt or not canonical.ok or canonical.definition != row.projection or value.actors.has(row.parent_source_id):
+				return false
 		sources[row.id] = true
 		if row.phase != "ACTIVE":
 			continue
@@ -566,7 +579,7 @@ static func _valid_cold_child(saved: Variant, row: Dictionary, run_id: String, f
 	if not saved is Dictionary or not Contract.exact_fields(saved, ["schema_version", "definition_id", "identity", "actor", "health"]) or saved.schema_version != 1 or saved.definition_id != row.projection.id or not saved.actor is Dictionary or not saved.actor.get("runtime") is Dictionary or not saved.health is Dictionary:
 		return false
 	var identity := {"run_id": run_id, "hostile_source_id": row.id, "next_generation_floor": 1, "runtime_frame": row.birth_frame, "seed": row.seed}
-	var runtime := SummonRuntime.new()
+	var runtime: RefCounted = CopyRuntime.new() if row.spawn_mode == "SPLIT" else SummonRuntime.new()
 	return saved.identity == identity and runtime.configure(row.projection, identity).ok and runtime.can_restore_snapshot(saved.actor.runtime) and saved.actor.runtime.runtime_frame == frame and not saved.actor.runtime.terminal and saved.health.get("max_hp") == row.projection.max_hp and saved.health.get("current_hp") == saved.actor.runtime.mechanism_state.hp_after and saved.health.get("dead") == false
 
 
