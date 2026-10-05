@@ -80,8 +80,76 @@ The progress-validation lane's independent read-only review found no correctness
 issues in scalar ownership, typed snapshot boundaries, Stop/Rift clocks, contact
 branch behavior, strict overspeed rejection, rollback/retry, or finite retirement.
 
-All fourteen focused scenes pass. New actual Main phase-two reproduction remains
-pending in this first retention record. The earlier refusal runs contain
-no qualified late-phase timing samples. Any subsequent performance run retains
-its survival fixture and route prerequisites and cannot certify production FPS
-or human completion.
+All fourteen focused scenes pass. The earlier refusal runs contain no qualified
+late-phase timing samples.
+
+## Actual Main Third Phase
+
+The uninstrumented `4735176` archive is retained at
+`build/retained-checkout/projectile-scalar-after-4735176-20261006`. Its initial
+editor import log is preserved, followed by a separately verified clean import
+log. The runtime source digest is
+`05890b7bd27f2754f476e307382218edbf82270d60639e592811cfd7ee8af9e5`.
+Archived checkouts have no independent Git metadata; the report therefore keeps
+an empty revision instead of inventing one.
+
+`build/floor4-phase2-late-600/report.json` in that archive passes the actual native
+Main probe and strict stdout/engine error and leak checks. Real Sword input
+reaches phase index 2 in 2501 admission frames. The independent measured tape
+contains the 600 unique consecutive frames 2502 through 3101 plus its initial
+boundary, and fresh physical first/last readback matches exact typed bytes.
+The content fingerprint is
+`838c31095581b7abb79a63cb51b025d448c2ddd9d29b8ed75d2a318d8305bb2b`.
+
+| Actual P3 Metric | Result |
+| --- | --- |
+| Player advance mean / p95 / max | 347.454 / 568.252 / 766.864 ms |
+| Host process mean | 1.848 ms |
+| Independent observer mean | 7.944 ms |
+| Native duration / measurement wall duration | 10.000 / 217.078 seconds |
+| Peak native static memory | 1,464,527,483 bytes |
+| Peak physical counts | actors 1, projectiles 2, zones 3, threats 6; summons/constructs 0 |
+
+The refusal is fixed, but this later workload substantially exceeds the 16.667 ms
+frame budget. It is an explicit performance blocker. These headless measurements
+run on a shared host with other validation workloads; they cannot certify GPU
+rendering, 60 FPS, maximum concurrency, or total process RSS.
+
+## Threaded Diagnostic
+
+The isolated `projectile-scalar-hotpaths-4735176-20261006` archive wraps 125 methods
+mechanically plus the multiline full-player validator. Its diagnostic store has
+per-thread nested stacks, a Mutex, phase tags assigned at call entry, and finishes
+after recording workers join and physical readback completes. A separate strict
+two-worker selfcheck verifies nesting and role/phase ownership. The timing Mutex
+and other host workloads add overhead; diagnostic timings are not certification.
+
+Its `build/floor4-phase2-hotpaths-600/report.json` passes strict checks and reaches
+the same admission frame, measures the same 600 frames, and retains identical
+first/last typed replay hashes as the uninstrumented run. The source digest is
+`cb40bf45dddf4ccfe422b844e8375a1f71f94a10bc99e6abf69b2db582ccc451`.
+
+| Main Thread Method | Inclusive / Exclusive ms per Frame |
+| --- | --- |
+| Player advance | 335.224 / 2.563 |
+| Refresh weapon replay fact baseline | 198.346 / 0.226 |
+| Weapon replay snapshot | 198.120 / 198.120 |
+| Full-player snapshot validation | 47.683 / 47.467 |
+| Native recorder observation | 68.278 / 6.519 |
+| Hostile bridge preparation | 46.920 / 1.939 |
+| Boss runtime snapshot | 6.542 / 6.542 |
+| Native cold snapshot | 7.499 / 5.325 |
+
+Five concurrent writer threads encode five chunks with total codec inclusive time
+85.584 seconds. These concurrent spans must not be added to main-thread cost.
+Entry-phase tags are not an interval split for calls that cross into retention.
+
+A SHA-verified committed physical keyframe at actual frame 2741 contains a
+1,596,244-byte observation: Player 1,386,628 bytes, including 1,246,548 bytes of
+weapon replay events; native state is 109,280 bytes and Run is 94,088 bytes. This
+explains the priority shift to historical replay work. It is a measured later
+state, not a synthetic load or a claim that history can be discarded.
+
+Rendered real-time samples and longer sustained recording remain pending. Every
+probe retains its explicit survival and prerequisite-route fixtures; none claims
+human playtesting, unassisted victory, FPS certification, or line coverage.
