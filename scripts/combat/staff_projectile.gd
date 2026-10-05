@@ -58,6 +58,8 @@ func _ready() -> void:
 		return
 	_start_position = global_position
 	rotation = direction.angle()
+	monitoring = true
+	set_physics_process(true)
 
 
 func _physics_process(delta: float) -> void:
@@ -66,7 +68,12 @@ func _physics_process(delta: float) -> void:
 	var travel := speed * delta
 	if max_range_pixels > 0.0:
 		travel = minf(travel, maxf(0.0, max_range_pixels - _distance_travelled))
-	global_position += direction.normalized() * travel
+	var destination := global_position + direction.normalized() * travel
+	for area: Area2D in Targets.swept_hurtboxes(self, global_position, destination):
+		_on_area_entered(area)
+		if not _execution_active or is_queued_for_deletion():
+			return
+	global_position = destination
 	_distance_travelled += travel
 	if max_range_pixels > 0.0 and _distance_travelled >= max_range_pixels - 0.001:
 		complete_without_hit_for_test()
@@ -810,7 +817,7 @@ func _emit_result(result: Dictionary) -> void:
 
 func _retire() -> void:
 	_execution_active = false
-	monitoring = false
+	set_deferred("monitoring", false)
 	set_physics_process(false)
 	if is_inside_tree() and not is_queued_for_deletion():
 		queue_free()

@@ -225,6 +225,7 @@ func _test_physics_overlap_executes_real_area_hitbox() -> void:
 	_suite.assert_true(weapon.release_profile_action(), "real Area2D hitbox attaches for ACTIVE")
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+	await get_tree().process_frame
 	_suite.assert_equal(hurtbox.received.size(), 1, "physics overlap resolves one real melee hit")
 	if hurtbox.received.size() == 1:
 		_suite.assert_equal(hurtbox.received[0].action_token, 151, "physics hit retains the committed token")

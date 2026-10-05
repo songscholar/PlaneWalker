@@ -2,6 +2,7 @@ class_name SwordWeapon
 extends Node2D
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
+const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
 const WEAPON_ID := &"sword"
 const MAX_COMMITTED_GUARD_RESOLUTION_IDS := 512
 const MAX_RESOLUTION_ID_LENGTH := 96
@@ -733,7 +734,7 @@ func _spawn_launch_payload(
 	var area := Area2D.new()
 	area.name = "Sword%s%d" % [kind.capitalize(), _next_launch_payload_id]
 	area.collision_layer = 0
-	area.collision_mask = 1
+	area.collision_mask = Targets.PLAYER_ATTACK_MASK
 	area.monitoring = true
 	area.monitorable = false
 	area.top_level = true

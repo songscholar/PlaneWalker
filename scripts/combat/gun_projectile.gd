@@ -97,7 +97,12 @@ func _physics_process(delta: float) -> void:
 		var distance := speed * delta
 		if max_range_pixels > 0.0:
 			distance = minf(distance, maxf(0.0, max_range_pixels - _distance_travelled))
-		global_position += direction.normalized() * distance
+		var destination := global_position + direction.normalized() * distance
+		for area: Area2D in Targets.swept_hurtboxes(self, global_position, destination):
+			_on_area_entered(area)
+			if not _execution_active or is_queued_for_deletion():
+				return
+		global_position = destination
 		_distance_travelled += distance
 		if trail_duration_frames > 0:
 			_append_trail_point(global_position)

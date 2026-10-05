@@ -80,6 +80,11 @@ var _collision_shape: CollisionShape2D
 var _completion_emitted: bool = false
 
 
+func _init() -> void:
+	collision_layer = 0
+	collision_mask = Targets.PLAYER_ATTACK_MASK
+
+
 func _ready() -> void:
 	add_to_group("gauntlets_payloads")
 	add_to_group("gauntlets_hit_executions")
@@ -370,7 +375,7 @@ func _on_area_entered(area: Area2D) -> void:
 	var target := area.get_parent()
 	if not Targets.is_attackable(target):
 		return
-	_execute_target_hit(target)
+	_execute_target_hit.call_deferred(target)
 
 
 func _execute_target_hit(target: Node) -> Dictionary:
