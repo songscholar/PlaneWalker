@@ -105,6 +105,13 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Void Geometry Query Evidence](current/2026-10-06-native-void-geometry-query-evidence.md) | 实体几何、阶段与拾取物状态一致，相邻权威回归 | Focused Verified / Full performance pending |
 | [Native Void Exposure Query Plan](current/2026-10-06-native-void-exposure-query-plan.md) | 虚空暴露截止帧窄查询、原始边界语义及历史恢复验收 | Approved / Current |
 | [Native Void Exposure Query Evidence](current/2026-10-06-native-void-exposure-query-evidence.md) | 真实触手暴露、精确截止帧、零历史复制和完整回滚验证 | Focused Verified / Full performance pending |
+| [Native Void Burn Snapshot Query Plan](current/2026-10-06-native-void-burn-snapshot-query-plan.md) | 候选帧灼烧完整校验后只读查询，保留伤害、历史及预演回退 | Approved / Current |
+| [Native Void Burn Snapshot Query Evidence](current/2026-10-06-native-void-burn-snapshot-query-evidence.md) | 实际六次灼烧、完整校验拒绝、预演回退和原生回滚一致 | Focused Verified / Integrated performance pending |
+| [Native Actor Candidate Plan](current/2026-10-06-native-actor-candidate-plan.md) | 原生候选帧替换分支不重复复制，保留独立可变状态和事务出口 | Approved / Current |
+| [Native Actor Candidate Evidence](current/2026-10-06-native-actor-candidate-evidence.md) | 八个实际 Actor、24 次事务流程的完整字节和深层状态隔离一致 | Focused Verified / Integrated performance pending |
+| [Native Boss Parent Restore Plan](current/2026-10-06-native-boss-parent-restore-plan.md) | 完整校验后只复制保留的父状态，保留所有独立子系统恢复 | Approved / Current |
+| [Native Legacy Action Digest Plan](current/2026-10-06-native-legacy-action-digest-plan.md) | 当前动作配置摘要复用已校验模板，保留历史动作及独立恢复 | Approved / Current |
+| [Native Legacy Action Digest Evidence](current/2026-10-06-native-legacy-action-digest-evidence.md) | 五个 Boss 的当前和历史动作恢复保持一致，额外配置消除 | Focused Verified / Integrated performance pending |
 | [Native Action Validation Template Plan](current/2026-10-06-native-action-validation-template-plan.md) | 动作完整静态校验、有界不可变配置模板和独立可变恢复 | Approved / Current |
 | [Native Action Validation Template Evidence](current/2026-10-06-native-action-validation-template-evidence.md) | 完整动作校验、不可变模板容量和真实独立恢复回归 | Focused Verified / Full performance pending |
 | [Native Validation Input Plan](current/2026-10-06-native-validation-input-plan.md) | 当前快照只读校验、混合版本迁移与完整历史拒绝合同 | Approved / Current |

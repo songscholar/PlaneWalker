@@ -218,3 +218,46 @@ individual optimization benefits. Boss control observation and replay Store
 ownership changes are outside this frozen source. Rendered load, sustained
 recording, saturation, memory acceptance, complete UI and human playtesting
 remain open.
+
+## Control Observation And Replay Ownership Follow-Up
+
+The unchanged clean detached checkout at
+`build/retained-checkout/native-unified-26a5d98-20261006/` freezes
+`26a5d98129461b19ed87e40fdb837224bcc47441`. It includes native Boss control
+observation and private replay Store ownership transfer. Its 410 runtime
+scripts retain aggregate
+`122604a98b824db92cb5078616f1b231715a139cdd6758ac06a0a6ec9b4070cd`.
+The second import and both final runtime logs pass strict validation; the
+checkout remains clean. The report at
+`build/floor4-phase2-ownership-late-600/report.json` has SHA-256
+`6362e6a60d8a7406939095244a9460bd1e1575074aaf60b633dcabaea49a6938`.
+
+With twelve Hub frames and actual Sword input, fifth-floor Void phase two
+admits after 2,501 frames. Every measured frame from 2,502 through 3,101
+accepts. All 601 physical observations remain classified `INTERRUPTED`, with
+no recording failure. Fresh physical first/last reads exactly match complete
+native typed bytes. Their hashes match the preceding `0843272` and `546779f`
+endpoints; this is endpoint equivalence, not an intervening-tape comparison.
+Source is stable and uninstrumented, exit is zero and there is no timeout.
+
+| Actual v2 Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 55.982 ms | 84.495 ms | 120.002 ms |
+| Same-frame Player and Host work | 57.742 ms | 87.345 ms | 121.430 ms |
+| Same-frame wall interval, including waits and observer | 67.887 ms | 101.707 ms | 144.314 ms |
+
+Measured wall duration is 40.733 seconds for ten native seconds; physical
+retention takes 8.645 seconds. Peak native static allocation is 705,691,240
+bytes; observed peaks are one actor, six threats and three zones. Real macOS
+PID 94712 has 1,691 valid RSS samples and one unavailable sample. Its sampled
+peak is 1,287,323,648 bytes across admission and retention, below both decimal
+2 GB and binary 2 GiB in this bounded scenario. This is not an absolute
+memory maximum or saturated-load certification.
+
+The complete-frame 16.667 ms budget still fails. Concurrent matrix and clean
+certification workers remain active, so these observations do not isolate
+individual optimization benefits. The survival and prerequisite-route fixtures
+remain explicit; no unassisted or human victory is claimed. Later Void burn
+queries and Actor candidate changes are outside this frozen source. Final
+committed-source gameplay, rendered load, sustained recording, UI and human
+playtest gates remain open.
