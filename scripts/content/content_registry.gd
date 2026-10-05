@@ -21,6 +21,7 @@ const BossDefinitionScript := preload("res://scripts/enemies/launch/boss_definit
 const SummonDefinitionScript := preload("res://scripts/enemies/launch/summon_definition.gd")
 const EliteAffixDefinitionScript := preload("res://scripts/enemies/launch/elite_affix_definition.gd")
 const LaunchEncounterProfileScript := preload("res://scripts/dungeon/launch_encounter_profile.gd")
+const CosmeticDefinitionScript := preload("res://scripts/content/cosmetic_definition.gd")
 
 const VALID_AVAILABILITY: Array[String] = ["M1", "CURRENT", "NEXT", "LAUNCH", "EXPANSION"]
 const VALID_CATEGORIES: Array[String] = [
@@ -203,6 +204,7 @@ const ARCHETYPE_PROFILE_ONLY_FIELDS: Array[String] = [
 	"boss_response_key",
 ]
 const SPECIALIZED_CATEGORIES: Array[String] = [
+	"cosmetic_definition",
 	"floor_definition",
 	"room_template",
 	"dungeon_event",
@@ -1116,6 +1118,8 @@ func _specialized_definition_parse_result(
 				return {"handled": true, "ok": false, "code": &"SPECIALIZED_LOCALIZATION_INVALID", "definition": {}, "context": localization_error}
 		return p16_result
 	match category:
+		"cosmetic_definition":
+			definition_parser = CosmeticDefinitionScript.new()
 		"floor_definition":
 			definition_parser = FloorDefinitionScript.new()
 		"room_template":

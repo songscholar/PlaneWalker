@@ -88,6 +88,13 @@ func project(service: RefCounted, selection: Dictionary, district_id: String, fu
 	var value := {"schema_version": 1, "revision": int(profile.revision), "epoch": epoch, "run_id": str(profile.active_launch_receipt.get("run_id", "")), "district_id": district_id, "panel_id": panel, "function_id": function_id, "currencies": {"chronos_shards": int(profile.chronos_shards), "existential_imprints": int(profile.existential_imprints)}, "repair_stage": int(profile.repair_stage), "districts": districts, "functions": functions, "nodes": nodes, "forge": {"weapons": forge_rows}, "builds": builds, "loadout": {"selected": selection.duplicate(true), "characters": characters, "weapons": weapons, "time_pairs": pairs, "build_save": build_save}, "dialogue": dialogue, "collections": _collections(profile), "providers": providers.duplicate(true), "launch_available": launch_available, "launch_reason_key": "" if launch_available else "HUB_LAUNCH_ACTIVE"}
 	value["resume_available"] = resume_available
 	value["resume_reason_key"] = "" if resume_available else "HUB_LAUNCH_ACTIVE"
+	var cosmetics: Array = []
+	for character: String in ["wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord"]:
+		var cosmetic: Dictionary = service.cosmetic_view(character)
+		if cosmetic.is_empty():
+			return {}
+		cosmetics.append_array(cosmetic.rows)
+	value["cosmetics"] = cosmetics
 	return value.duplicate(true) if Contract.validate(value).ok else {}
 
 

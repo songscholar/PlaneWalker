@@ -1,0 +1,27 @@
+keys,en,zh_CN
+COSMETIC_WANDERER_DEFAULT_NAME,Wanderer · Original,浪人·原初
+COSMETIC_WANDERER_RETURN_NAME,Wanderer · Homecoming,浪人·归途
+COSMETIC_WANDERER_VICTORY_NAME,Wanderer · Triumph,浪人·凯旋
+COSMETIC_TIME_GUARDIAN_DEFAULT_NAME,Time Guardian · Original,时空守卫·原初
+COSMETIC_TIME_GUARDIAN_RETURN_NAME,Time Guardian · Homecoming,时空守卫·归途
+COSMETIC_TIME_GUARDIAN_VICTORY_NAME,Time Guardian · Triumph,时空守卫·凯旋
+COSMETIC_VOID_WALKER_DEFAULT_NAME,Void Walker · Original,虚空行者·原初
+COSMETIC_VOID_WALKER_RETURN_NAME,Void Walker · Homecoming,虚空行者·归途
+COSMETIC_VOID_WALKER_VICTORY_NAME,Void Walker · Triumph,虚空行者·凯旋
+COSMETIC_PRIMORDIAL_KNIGHT_DEFAULT_NAME,Primordial Knight · Original,始源骑士·原初
+COSMETIC_PRIMORDIAL_KNIGHT_RETURN_NAME,Primordial Knight · Homecoming,始源骑士·归途
+COSMETIC_PRIMORDIAL_KNIGHT_VICTORY_NAME,Primordial Knight · Triumph,始源骑士·凯旋
+COSMETIC_TIME_LORD_DEFAULT_NAME,Time Lord · Original,时间领主·原初
+COSMETIC_TIME_LORD_RETURN_NAME,Time Lord · Homecoming,时间领主·归途
+COSMETIC_TIME_LORD_VICTORY_NAME,Time Lord · Triumph,时间领主·凯旋
+COSMETIC_ROUTE_DEFAULT,Original appearance,原初外观
+COSMETIC_ROUTE_RETURN,Return from one expedition,完成一次远征返回据点
+COSMETIC_ROUTE_VICTORY,Win one expedition,完成一次胜利远征
+UI_COSMETIC_COLLECTION,Character appearances,角色外观
+UI_COSMETIC_CLAIM,Claim,领取
+UI_COSMETIC_EQUIP,Equip,装备
+UI_COSMETIC_EQUIPPED,Equipped,已装备
+HUB_COSMETIC_EQUIPPED,This appearance is equipped,已装备此外观
+HUB_COSMETIC_CHARACTER_LOCKED,Unlock this character first,先解锁此角色
+HUB_COSMETIC_RETURN_REQUIRED,Return from one expedition,完成一次远征返回据点
+HUB_COSMETIC_VICTORY_REQUIRED,Win one expedition,完成一次胜利远征

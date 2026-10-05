@@ -10,7 +10,7 @@
 
 The native Hub gallery retains discovered items and gains fifteen free character appearances: the original, first-return and first-victory appearance for each of the five launch characters. The latter two routes require durable finished-run and victory statistics, respectively, plus ownership of the character. There is no purchase, random draw or combat effect.
 
-One authored `cosmetic` catalog defines appearance identity, character, unlock route and the actual raster atlas digest. Preview and gameplay use those same atlases. Original artwork is generated deterministically from the existing original CC0 character source. No external artwork or remote service is required.
+One authored `cosmetic_definition` catalog defines appearance identity, character, unlock route and the actual raster atlas digest. This specialized discriminator preserves the frozen generic content-entry contract. Preview and gameplay use those same atlases. Original artwork is generated deterministically from the existing original CC0 character source. No external artwork or remote service is required.
 
 The existing Meta Profile shape, legacy `cosmetics` references and Meta catalog fingerprint remain stable. A separately versioned `cosmetic_collection` payload owns claimed appearance IDs and equipped IDs by character. Its catalog fingerprint authenticates the independent appearance catalog. A missing payload denotes the original appearance. Commands increment the existing Profile revision, consume the existing bounded Profile command history and use the actual Save promotion transaction; failed promotion cannot publish collection or equipment.
 

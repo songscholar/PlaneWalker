@@ -52,6 +52,7 @@ const CollapsingPlaneRuleScript := preload(
 )
 const MetaProfileScript := preload("res://scripts/progression/meta_profile_state.gd")
 const MetaCompatibilityScript := preload("res://scripts/progression/meta_profile_compatibility.gd")
+const CosmeticCatalogScript := preload("res://scripts/progression/cosmetic_catalog.gd")
 
 const MAGIC := "PWSAVE"
 const SCHEMA_VERSION := 3
@@ -480,6 +481,8 @@ static func _profile_payload_error(
 	allow_legacy_event_runtime: bool = true,
 	meta_catalog: RefCounted = null
 ) -> Dictionary:
+	if payload.has("cosmetic_collection") and schema_version < META_PROFILE_SCHEMA_VERSION:
+		return {"field": "payload.cosmetic_collection", "reason": "meta_profile_required"}
 	if schema_version < 2:
 		return {}
 	if not payload.has("active_item_state"):
@@ -516,6 +519,10 @@ static func _profile_payload_error(
 			return {"field": "payload.meta_profile_state", "reason": "invalid_or_contradictory"}
 		if not MetaCompatibilityScript.run_matches_profile(payload.active_run_state, profile.snapshot(), meta_catalog):
 			return {"field": "payload.active_run_state.resources.meta_run_projection", "reason": "profile_run_mismatch"}
+		if payload.has("cosmetic_collection"):
+			var cosmetics := CosmeticCatalogScript.load_base()
+			if cosmetics == null or not cosmetics.validate_collection(payload.cosmetic_collection, profile.snapshot()):
+				return {"field": "payload.cosmetic_collection", "reason": "invalid_or_unowned"}
 	return {}
 
 

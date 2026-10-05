@@ -202,6 +202,7 @@ var _active_item_cue_id: String = ""
 var _active_item_cue_kind: String = ""
 var _active_item_cue_remaining: float = 0.0
 var _actor_atlas: Sprite2D
+var _cosmetic_id := ""
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -473,9 +474,23 @@ func _sync_actor_atlas() -> void:
 		_actor_atlas.z_index = -1
 		add_child(_actor_atlas)
 	var actor_id := _character_profile_id if not _character_profile_id.is_empty() else "wanderer"
-	if not _actor_atlas.configure(actor_id):
+	if not _actor_atlas.configure(actor_id, _cosmetic_id):
 		return
 	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
+
+
+func apply_cosmetic(cosmetic_id: String) -> bool:
+	if _role != "player" or _actor_atlas == null:
+		return false
+	_refresh_character_presentation()
+	var actor_id := _character_profile_id if not _character_profile_id.is_empty() else "wanderer"
+	var previous := _cosmetic_id
+	if not _actor_atlas.configure(actor_id, cosmetic_id):
+		_actor_atlas.configure(actor_id, previous)
+		return false
+	_cosmetic_id = cosmetic_id
+	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
+	return true
 
 
 func _derive_state_from_actor() -> void:
@@ -612,6 +627,8 @@ func _refresh_character_presentation() -> void:
 	if not profile_value is Dictionary or (profile_value as Dictionary).is_empty():
 		_clear_character_presentation()
 		return
+	if _character_profile_id != profile_id:
+		_cosmetic_id = ""
 	_character_profile_id = profile_id
 	_character_profile = (profile_value as Dictionary).duplicate(true)
 	_palette = {
@@ -631,6 +648,7 @@ func _refresh_character_presentation() -> void:
 
 
 func _clear_character_presentation() -> void:
+	_cosmetic_id = ""
 	_character_profile_id = ""
 	_character_profile.clear()
 	_character_resource_ratio = 0.0

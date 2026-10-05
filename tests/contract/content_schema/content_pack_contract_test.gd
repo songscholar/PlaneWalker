@@ -13,6 +13,7 @@ const HOSTILE_ENTRY_PATH := "res://tests/fixtures/content_packs/invalid_script/c
 const BASE_PACK_PATH := "res://data/content_packs/base/pack.json"
 const BASE_EVENT_PATH := "res://data/content_packs/base/content/dungeon_events.json"
 const SPECIALIZED_SCHEMAS := {
+	"cosmetic_definition": "res://data/schemas/cosmetic_definition_v1.schema.json",
 	"floor_definition": "res://data/schemas/floor_definition_v1.schema.json",
 	"room_template": "res://data/schemas/room_template_v1.schema.json",
 	"dungeon_event": "res://data/schemas/dungeon_event_v1.schema.json",

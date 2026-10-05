@@ -44,6 +44,7 @@
         },
         "active_run_state": {"oneOf":[{"type":"object","maxProperties":0},{"$ref":"#/$defs/active_run_state"}]},
         "meta_profile_state": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0"},
+        "cosmetic_collection": {"$ref":"planewalker://schemas/cosmetic-collection/1.0.0"},
         "chronos_shards": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/bounded_integer"},
         "existential_imprints": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/bounded_integer"},
         "unlocked_nodes": {"$ref":"planewalker://schemas/meta-profile-state/1.0.0#/$defs/unlocked_nodes"},

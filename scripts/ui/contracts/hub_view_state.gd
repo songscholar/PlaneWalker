@@ -3,7 +3,8 @@ extends RefCounted
 
 const Rules := preload("res://scripts/ui/contracts/dungeon_view_state_rules.gd")
 const Config := preload("res://scripts/application/run_config.gd")
-const FIELDS := ["schema_version", "revision", "epoch", "run_id", "district_id", "panel_id", "function_id", "currencies", "repair_stage", "districts", "functions", "nodes", "forge", "builds", "loadout", "dialogue", "collections", "providers", "launch_available", "launch_reason_key", "resume_available", "resume_reason_key"]
+const Cosmetic := preload("res://scripts/content/cosmetic_definition.gd")
+const FIELDS := ["schema_version", "revision", "epoch", "run_id", "district_id", "panel_id", "function_id", "currencies", "repair_stage", "districts", "functions", "nodes", "forge", "builds", "loadout", "dialogue", "collections", "cosmetics", "providers", "launch_available", "launch_reason_key", "resume_available", "resume_reason_key"]
 
 
 static func validate(value: Variant):
@@ -18,11 +19,30 @@ static func validate(value: Variant):
 	for collection: String in ["archive", "gallery", "mirror"]:
 		if not _rows(value.collections[collection], ["id", "name_key", "owned", "available", "reason_key", "cost"], "collection"):
 			return Rules.reject(value, "collections")
+	if not _cosmetics(value.cosmetics):
+		return Rules.reject(value, "cosmetics")
 	if not _rows(value.providers, ["id", "status", "entries", "available", "reason_key", "cost"], "provider") or value.providers.size() != 3 or not _availability({"available": value.launch_available, "reason_key": value.launch_reason_key, "cost": {"chronos_shards": 0, "existential_imprints": 0}}):
 		return Rules.reject(value, "providers")
 	if not _availability({"available": value.resume_available, "reason_key": value.resume_reason_key, "cost": {"chronos_shards": 0, "existential_imprints": 0}}) or value.resume_available and (value.run_id.is_empty() or value.launch_available):
 		return Rules.reject(value, "continuation")
 	return Rules.accept(value)
+
+
+static func _cosmetics(value: Variant) -> bool:
+	if not value is Array or value.size() != 15:
+		return false
+	var ids: Array = []
+	for row: Variant in value:
+		if not Rules.exact(row, ["id", "character_id", "name_key", "description_key", "atlas_path", "owned", "equipped", "operation", "available", "reason_key", "cost"]) or row.character_id not in Cosmetic.CHARACTERS or not Rules.key(row.name_key) or not Rules.key(row.description_key) or typeof(row.owned) != TYPE_BOOL or typeof(row.equipped) != TYPE_BOOL or not _availability(row) or row.cost.chronos_shards != 0 or row.cost.existential_imprints != 0:
+			return false
+		var route := ""
+		for candidate: String in Cosmetic.ROUTES:
+			if row.id == row.character_id + "." + candidate:
+				route = candidate
+		if route.is_empty() or ids.has(row.id) or row.atlas_path != "res://data/content_packs/base/assets/cosmetics/%s_%s.png" % [row.character_id, route] or row.operation != ("cosmetic_equip" if row.owned else "cosmetic_claim") or row.equipped and (not row.owned or row.available):
+			return false
+		ids.append(row.id)
+	return true
 
 
 static func _rows(value: Variant, fields: Array, kind: String) -> bool:

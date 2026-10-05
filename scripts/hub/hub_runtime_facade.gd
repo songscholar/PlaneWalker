@@ -12,7 +12,7 @@ const Config := preload("res://scripts/application/run_config.gd")
 const Projector := preload("res://scripts/hub/hub_view_state_projector.gd")
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
 const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
-const OPERATIONS := {"meta_unlock": ["council"], "forge_upgrade": ["forge"], "enchant_preference": ["forge"], "void_temper": ["forge"], "build_save": ["meditation"], "build_remove": ["meditation"], "build_export": ["meditation"], "build_import": ["meditation"], "build_select": ["meditation", "gateway"], "select_loadout": ["meditation", "gateway"], "launch": ["gateway"], "provider_refresh": ["gateway", "merchant", "mirror"]}
+const OPERATIONS := {"meta_unlock": ["council"], "forge_upgrade": ["forge"], "enchant_preference": ["forge"], "void_temper": ["forge"], "build_save": ["meditation"], "build_remove": ["meditation"], "build_export": ["meditation"], "build_import": ["meditation"], "build_select": ["meditation", "gateway"], "select_loadout": ["meditation", "gateway"], "launch": ["gateway"], "provider_refresh": ["gateway", "merchant", "mirror"], "cosmetic_claim": ["gallery"], "cosmetic_equip": ["gallery"]}
 
 var _registry: RefCounted
 var _service: RefCounted
@@ -37,6 +37,9 @@ func configure(registry: RefCounted, profile_service: RefCounted, providers: Dic
 	var snapshot: Dictionary = profile_service.snapshot()
 	if not built.ok or snapshot.is_empty() or snapshot.catalog_fingerprint != built.context.catalog.fingerprint():
 		return _failure(&"PROFILE_CONTENT_MISMATCH")
+	var cosmetics: Dictionary = profile_service.configure_cosmetics(registry)
+	if not cosmetics.ok:
+		return cosmetics
 	var districts: Dictionary = {}
 	for row: Dictionary in registry.get_catalog_entries(&"hub_district", &"LAUNCH"):
 		var descriptor := District.new()
@@ -120,6 +123,8 @@ func command(value: Dictionary, expected_revision: int) -> Dictionary:
 	var result: Dictionary
 	_busy = true
 	match operation:
+		"cosmetic_claim", "cosmetic_equip":
+			result = _service.execute_cosmetic(payload, expected_revision) if payload.get("kind") == operation else _failure(&"COMMAND_INVALID")
 		"meta_unlock", "forge_upgrade", "enchant_preference", "void_temper", "build_save", "build_remove":
 			result = _service.execute(payload, expected_revision) if payload.get("kind") == operation else _failure(&"COMMAND_INVALID")
 		"narrative_dialogue":

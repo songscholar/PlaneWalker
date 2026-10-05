@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/cosmetic-collection/1.0.0",
+  "title": "Plane Walker Free Cosmetic Collection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_id", "schema_version", "catalog_fingerprint", "claimed_ids", "equipped_by_character"],
+  "properties": {
+    "schema_id": {"const": "cosmetic_collection_v1"},
+    "schema_version": {"const": 1},
+    "catalog_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "claimed_ids": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "pattern": "^(wanderer|time_guardian|void_walker|primordial_knight|time_lord)\\.(return|victory)$"}},
+    "equipped_by_character": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wanderer": {"type": "string", "pattern": "^wanderer\\.(default|return|victory)$"},
+        "time_guardian": {"type": "string", "pattern": "^time_guardian\\.(default|return|victory)$"},
+        "void_walker": {"type": "string", "pattern": "^void_walker\\.(default|return|victory)$"},
+        "primordial_knight": {"type": "string", "pattern": "^primordial_knight\\.(default|return|victory)$"},
+        "time_lord": {"type": "string", "pattern": "^time_lord\\.(default|return|victory)$"}
+      }
+    }
+  }
+}

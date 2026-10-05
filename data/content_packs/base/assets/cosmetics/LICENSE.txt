@@ -1,0 +1,12 @@
+Plane Walker Original Free Appearance Artwork
+
+These fifteen raster animation atlases and their contact sheet are original
+project artwork generated locally from the original Plane Walker actor source.
+No third-party artwork or external image service is used.
+
+The artwork is dedicated to the public domain under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Source: tools/production_art/generate_cosmetic_atlases.py
+Base source: tools/production_art/generate_actor_atlases.py
+Reproduce: python3 tools/production_art/generate_cosmetic_atlases.py

@@ -58,6 +58,7 @@ The generic `content_entry_v2.schema.json` contract remains frozen. Domains whos
 | `dungeon_event` | `dungeon_event_v1.schema.json` | `DungeonEventDefinition` |
 | `merchant_definition` | `merchant_definition_v1.schema.json` | `MerchantDefinition` |
 | `economy_profile` | `economy_profile_v1.schema.json` | `EconomyProfile` |
+| `cosmetic_definition` | `cosmetic_definition_v1.schema.json` | `CosmeticDefinition` |
 
 Each specialized row declares `category`, stable `id`, `schema_version: 1`, and availability. Its parser rejects unknown root fields and normalizes only closed declarative data. Nested keys whose field name ends in `_key` are localization references and must resolve through the candidate pack's localization sources. IDs in registered reference fields must resolve against the same candidate activated-pack set or the closed P14 encounter-adapter taxonomy.
 

@@ -24,6 +24,8 @@ const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const SaveStorage := preload("res://scripts/save/save_service.gd")
 const NativeCheckpoint := preload("res://scripts/save/native_run_checkpoint_authority.gd")
 const LocalRecordRules := preload("res://scripts/community/local_run_record_rules.gd")
+const CosmeticCatalogScript := preload("res://scripts/progression/cosmetic_catalog.gd")
+const CosmeticRuntimeScript := preload("res://scripts/progression/cosmetic_collection_runtime.gd")
 const OCCURRENCE_RADIUS := 48.0
 const MAX_OCCURRENCES := 64
 const MIRROR_FIELDS := ["chronos_shards", "existential_imprints", "unlocked_nodes", "discovered_items", "unlocked_characters", "unlocked_weapons", "weapon_proficiency", "npc_affinity", "unlocked_achievements", "cosmetics"]
@@ -58,6 +60,8 @@ var _training_publication := false
 var _training_recovery_pending := false
 var _native_checkpoint_host: WeakRef
 var _checkpoint_recovery_pending := false
+var _cosmetic_catalog: RefCounted
+var _cosmetic_runtime: RefCounted
 
 
 func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String, save_domain: String, initial_payload: Dictionary = {}) -> Dictionary:
@@ -103,6 +107,8 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 	retire_training()
 	_native_checkpoint_host = null
 	_checkpoint_recovery_pending = false
+	_cosmetic_catalog = null
+	_cosmetic_runtime = null
 	return _success({"snapshot": snapshot()})
 
 
@@ -112,6 +118,58 @@ func snapshot() -> Dictionary:
 
 func payload() -> Dictionary:
 	return _payload.duplicate(true)
+
+
+func configure_cosmetics(registry: RefCounted) -> Dictionary:
+	var ready := _readiness(int(snapshot().get("revision", -1)))
+	if not ready.ok:
+		return ready
+	if registry == null or not registry.has_method("get_catalog_entries"):
+		return _failure(&"CONFIGURATION_INVALID")
+	var catalog := CosmeticCatalogScript.new()
+	var canonical := CosmeticCatalogScript.load_base()
+	var runtime := CosmeticRuntimeScript.new()
+	if not catalog.configure(registry.get_catalog_entries(&"cosmetic_definition", &"LAUNCH")).ok or canonical == null or catalog.fingerprint() != canonical.fingerprint() or not runtime.configure(catalog, _catalog):
+		return _failure(&"COSMETIC_CONTENT_MISMATCH")
+	if not catalog.validate_collection(_payload.get("cosmetic_collection", catalog.empty_collection()), snapshot()):
+		return _failure(&"COSMETIC_COLLECTION_INVALID")
+	_cosmetic_catalog = catalog
+	_cosmetic_runtime = runtime
+	return _success({})
+
+
+func cosmetic_view(character_id: String) -> Dictionary:
+	if _cosmetic_catalog == null:
+		return {}
+	var profile := snapshot()
+	var collection: Dictionary = _payload.get("cosmetic_collection", _cosmetic_catalog.empty_collection())
+	var rows: Array = []
+	for definition: Dictionary in _cosmetic_catalog.for_character(character_id):
+		var status: Dictionary = _cosmetic_catalog.unlock_status(definition.cosmetic_id, profile)
+		var owned: bool = status.ok and (definition.unlock_route == "default" or collection.claimed_ids.has(definition.cosmetic_id))
+		var equipped: bool = status.ok and _cosmetic_catalog.equipped(collection, character_id) == definition.cosmetic_id
+		var available: bool = status.ok and profile.active_launch_receipt.is_empty() and not equipped
+		rows.append({"id": definition.cosmetic_id, "character_id": character_id, "name_key": definition.name_key, "description_key": definition.description_key, "atlas_path": definition.atlas_path, "owned": owned, "equipped": equipped, "operation": "cosmetic_equip" if owned else "cosmetic_claim", "available": available, "reason_key": "" if available else ("HUB_LAUNCH_ACTIVE" if not profile.active_launch_receipt.is_empty() else "HUB_COSMETIC_EQUIPPED" if equipped else "HUB_" + str(status.code)), "cost": {"chronos_shards": 0, "existential_imprints": 0}})
+	return {"character_id": character_id, "equipped_id": _cosmetic_catalog.equipped(collection, character_id), "rows": rows}
+
+
+func equipped_cosmetic(character_id: String) -> String:
+	return _cosmetic_catalog.equipped(_payload.get("cosmetic_collection", _cosmetic_catalog.empty_collection()), character_id) if _cosmetic_catalog != null else character_id + ".default"
+
+
+func execute_cosmetic(command: Dictionary, expected_revision: int) -> Dictionary:
+	var ready := _readiness(expected_revision)
+	if not ready.ok:
+		return ready
+	if _cosmetic_runtime == null:
+		return _failure(&"COSMETICS_NOT_CONFIGURED")
+	var produced: Dictionary = _cosmetic_runtime.prepare(snapshot(), _payload.get("cosmetic_collection", _cosmetic_catalog.empty_collection()), command, expected_revision)
+	if not produced.ok:
+		return produced
+	var prepared: Dictionary = _profile.prepare_candidate(produced.context.candidate)
+	if not prepared.ok:
+		return prepared
+	return _persist_ticket(prepared.context.ticket, {"cosmetic_collection": produced.context.collection})
 
 
 func frozen_launch_projection() -> Dictionary:
@@ -958,6 +1016,8 @@ func _persist_ticket(ticket: Dictionary, payload_changes: Dictionary = {}) -> Di
 		var durable: Dictionary = primary.payload.payload
 		var state = Profile.new()
 		if not durable.get("meta_profile_state") is Dictionary or not state.configure(_catalog, durable.meta_profile_state) or state.snapshot() != snapshot() or not _mirrors_match(durable, state.snapshot()):
+			return _discard_failure(ticket, &"STALE_DURABLE_PROFILE")
+		if payload_changes.has("cosmetic_collection") and not _json_equal(durable.get("cosmetic_collection", _cosmetic_catalog.empty_collection()), _payload.get("cosmetic_collection", _cosmetic_catalog.empty_collection())):
 			return _discard_failure(ticket, &"STALE_DURABLE_PROFILE")
 		next_payload = durable.duplicate(true)
 	elif primary.code != &"NOT_FOUND":

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planewalker://schemas/cosmetic-definition/1.0.0",
+  "title": "Plane Walker Free Cosmetic Definition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category", "id", "schema_version", "name_key", "description_key", "availability", "tags", "compatibility", "effects", "cosmetic_id", "character_id", "unlock_route", "atlas_path", "atlas_sha256"],
+  "properties": {
+    "category": {"const": "cosmetic_definition"},
+    "id": {"type": "string", "pattern": "^cosmetic_(wanderer|time_guardian|void_walker|primordial_knight|time_lord)_(default|return|victory)$"},
+    "schema_version": {"const": 1},
+    "name_key": {"type": "string", "pattern": "^COSMETIC_[A-Z0-9_]+_NAME$"},
+    "description_key": {"enum": ["COSMETIC_ROUTE_DEFAULT", "COSMETIC_ROUTE_RETURN", "COSMETIC_ROUTE_VICTORY"]},
+    "availability": {"const": ["LAUNCH", "EXPANSION"]},
+    "tags": {"const": ["free", "appearance"]},
+    "compatibility": {"type": "object", "maxProperties": 0},
+    "effects": {"type": "object", "maxProperties": 0},
+    "cosmetic_id": {"type": "string", "pattern": "^(wanderer|time_guardian|void_walker|primordial_knight|time_lord)\\.(default|return|victory)$"},
+    "character_id": {"enum": ["wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord"]},
+    "unlock_route": {"enum": ["default", "return", "victory"]},
+    "atlas_path": {"type": "string", "pattern": "^res://data/content_packs/base/assets/cosmetics/(wanderer|time_guardian|void_walker|primordial_knight|time_lord)_(default|return|victory)\\.png$"},
+    "atlas_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

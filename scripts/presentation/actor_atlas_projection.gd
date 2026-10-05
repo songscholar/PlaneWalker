@@ -5,14 +5,16 @@ const ROOT := "res://assets/production/actors/"
 const STATES := ["idle", "move", "attack", "cast", "hurt", "death"]
 const CHARACTERS := ["wanderer", "time_guardian", "void_walker", "primordial_knight", "time_lord"]
 const BOSSES := ["ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne"]
+const Cosmetics := preload("res://scripts/progression/cosmetic_catalog.gd")
 var _actor_id := ""
+var _cosmetic_id := ""
 var _descriptor: Dictionary = {}
 var _state := "idle"
 var _state_clock := 0.0
 
 
-func configure(actor_id: String) -> bool:
-	if actor_id == _actor_id and texture != null:
+func configure(actor_id: String, cosmetic_id: String = "") -> bool:
+	if actor_id == _actor_id and cosmetic_id == _cosmetic_id and texture != null:
 		visible = true
 		return true
 	visible = false
@@ -35,6 +37,12 @@ func configure(actor_id: String) -> bool:
 		if typeof(fps) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(fps)) or float(fps) != floor(float(fps)) or int(fps) < 1 or int(fps) > 30:
 			return false
 	var path := ROOT + actor_id + ".png"
+	if not cosmetic_id.is_empty():
+		var catalog := Cosmetics.load_base()
+		var cosmetic: Dictionary = catalog.definition(cosmetic_id) if catalog != null else {}
+		if cosmetic.is_empty() or cosmetic.character_id != actor_id or actor_id not in CHARACTERS:
+			return false
+		path = cosmetic.atlas_path
 	if not ResourceLoader.exists(path, "Texture2D"):
 		return false
 	var candidate := load(path) as Texture2D
@@ -42,6 +50,7 @@ func configure(actor_id: String) -> bool:
 		return false
 	texture = candidate
 	_actor_id = actor_id
+	_cosmetic_id = cosmetic_id
 	_descriptor = row
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	hframes = 4
@@ -80,4 +89,4 @@ func present(state: StringName, facing: Vector2, clock: float, flash: bool, redu
 
 
 func snapshot() -> Dictionary:
-	return {"actor_id": _actor_id, "state": _state, "frame": frame, "flip_h": flip_h, "visible": visible, "texture_size": texture.get_size() if texture != null else Vector2.ZERO, "filter": texture_filter}
+	return {"actor_id": _actor_id, "cosmetic_id": _cosmetic_id, "state": _state, "frame": frame, "flip_h": flip_h, "visible": visible, "texture_size": texture.get_size() if texture != null else Vector2.ZERO, "filter": texture_filter}
