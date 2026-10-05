@@ -178,3 +178,43 @@ remain active, so these observations do not isolate individual optimization
 benefits. The later Action validation templates and validation-input projection
 are outside this source. Rendering, sustained recording, saturation, memory
 acceptance and UI completion remain open.
+
+## Action Template And Validation Input Follow-Up
+
+The clean detached clone at
+`build/retained-checkout/native-unified-0843272-20261006/` freezes
+`0843272559f7c0084faf6f27d0acb75cb2c4e86b`. It includes the bounded immutable
+Action validation templates and read-only current validation inputs. Its
+unchanged uninstrumented runtime aggregate is
+`fce448c639ba7c94d9e64cbfb415a3a0080f64ca9e7661f64a4817583cf459ce`.
+The second import and both final runtime logs pass strict validation; the
+checkout remains clean after execution. The report at
+`build/floor4-phase2-template-validation-late-600/report.json` has SHA-256
+`754ddf9dadfd39cf5ea083d2d9fb529a349a0006f21cfd814e5aec03372d53b2`.
+
+With twelve Hub frames, Sword admits phase two after 2,501 actual frames.
+All 600 consecutive measured frames, 2,502-3,101, accept. The physical tape
+retains 601 observations, `INTERRUPTED` status and no recording failure.
+Fresh physical first/last complete typed bytes exactly match their measured
+observations. Their hashes match the preceding `546779f` endpoints; this is
+endpoint equivalence, not a full intervening-tape comparison. Source is stable,
+exit is zero, no timeout occurs and there is no runtime instrumentation.
+
+| Actual v2 Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 60.706 ms | 94.529 ms | 134.287 ms |
+| Same-frame Player and Host work | 62.416 ms | 97.469 ms | 138.432 ms |
+| Same-frame wall interval, including waits and observer | 72.791 ms | 110.030 ms | 180.051 ms |
+
+Measured wall duration is 43.675 seconds for ten native seconds; retention
+takes 9.786 seconds. Observed peaks remain one actor, six threats and three
+zones. Peak native static allocation is 707,924,157 bytes. Real macOS PID
+69523 has 1,769 valid RSS samples, one unavailable sample and sampled peak
+2,242,150,400 bytes. The RSS scope includes admission and physical retention,
+not only the measured combat interval. Both decimal 2 GB and binary 2 GiB
+are exceeded. The 16.667 ms frame budget still fails. Concurrent matrix and
+certification workers remain active, so this comparison does not isolate
+individual optimization benefits. Boss control observation and replay Store
+ownership changes are outside this frozen source. Rendered load, sustained
+recording, saturation, memory acceptance, complete UI and human playtesting
+remain open.
