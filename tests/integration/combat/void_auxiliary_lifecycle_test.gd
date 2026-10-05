@@ -9,6 +9,7 @@ func _run() -> void:
 	await _tear()
 	await _vortex()
 	await _phase_zone_retirement()
+	await _phase_projectile_retirement()
 	await _tentacle_exposure()
 	await _death_retirement()
 	await _released_owner_disposal()
@@ -123,6 +124,38 @@ func _phase_zone_retirement() -> void:
 	_frames(context, 48)
 	suite.assert_true(context.effects.snapshot().semantics.zones.is_empty(), "Void phase transition retires source owned native zones")
 	suite.assert_equal(context.player._floor_rule_movement_multiplier(), 1.0, "Void phase transition removes zone slow")
+	await _close_case(context)
+
+
+func _phase_projectile_retirement() -> void:
+	var context := _open_case(false, Vector2(440, 180))
+	context.player.health.defense = 0.0
+	_request(context, "voidking_void_bolt")
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_frames(context, 28)
+	var before_payloads: Dictionary = context.effects.payload_snapshot()
+	suite.assert_equal(before_payloads.projectiles.size(), 1, "phase boundary starts with one committed native Void bolt")
+	suite.assert_equal(context.effects.native_payload_nodes().size(), 1, "committed Void bolt owns one physical projectile body")
+	var hp_before: float = context.player.health.current_hp
+	suite.assert_equal(context.actor.get_node("Hurtbox").receive_hit(_damage(context.player, 30, 2500.0)), 1500.0, "body damage enters P2 while an earlier Void bolt is in flight")
+	var owner_before: Dictionary = context.actor.launch_runtime_snapshot()
+	var ticket: Dictionary = context.bridge.begin_frame(29)
+	var prepared: bool = context.bridge.prepare_frame(ticket)
+	suite.assert_true(prepared, "Void phase retirement prepares its physical projectile boundary")
+	if prepared:
+		suite.assert_true(context.effects.payload_snapshot().projectiles.is_empty() and context.effects.native_payload_nodes().is_empty(), "Void phase retirement removes retired casts' physical projectile work")
+		suite.assert_true(context.bridge.rollback_frame(ticket), "late refusal restores phase-retired native Void projectile")
+		suite.assert_equal(context.effects.payload_snapshot(), before_payloads, "phase rollback restores the exact projectile domain")
+		suite.assert_equal(context.effects.native_payload_nodes().size(), 1, "phase rollback reconstructs the physical projectile body")
+		suite.assert_equal(context.actor.launch_runtime_snapshot(), owner_before, "phase rollback preserves the exact retired auxiliary receipt")
+	_frames(context, 29)
+	suite.assert_true(context.effects.payload_snapshot().projectiles.is_empty() and context.effects.native_payload_nodes().is_empty(), "accepted Void phase boundary retires both domain and native projectile")
+	await _cold_owner(context)
+	_frames(context, 80)
+	suite.assert_equal(context.frame, 80, "retired Void bolt cannot refuse a later physical frame")
+	suite.assert_equal(context.player.health.current_hp, hp_before, "retired Void cast cannot apply delayed damage or status")
+	suite.assert_true(context.actor.native_void_auxiliary_snapshot().statuses.is_empty(), "retired Void bolt cannot publish a new slow receipt")
 	await _close_case(context)
 
 

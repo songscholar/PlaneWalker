@@ -921,6 +921,12 @@ func prepared_launch_arena_payloads_retired() -> bool:
 	return bool(state.terminal) or state.mechanism_state.phase_index > 0 and int(state.mechanism_state.phase_transition_until_frame) >= int(_prepared_launch_frame.runtime_frame)
 
 
+func prepared_launch_payloads_retired() -> bool:
+	if _prepared_launch_frame.is_empty():
+		return false
+	return bool(_prepared_launch_frame.after.runtime.terminal) or _launch_definition.get("id", "") == "void_throne" and prepared_launch_arena_payloads_retired()
+
+
 func normalize_native_cold_snapshot(value: Dictionary) -> Dictionary:
 	if not value.get("actor") is Dictionary or not value.actor.get("runtime") is Dictionary:
 		return {}

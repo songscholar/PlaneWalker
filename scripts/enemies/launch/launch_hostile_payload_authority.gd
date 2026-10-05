@@ -141,17 +141,19 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 	if not preview.restore_snapshot(before):
 		return _failure("checkpoint")
 	var retired_sources: Array[String] = retired_children.duplicate()
-	var terminal_sources: Array[String] = retired_children.duplicate()
+	var fully_retired_sources: Array[String] = retired_children.duplicate()
 	for source: String in context.actors:
 		if bool(context.actors[source].launch_runtime_snapshot().runtime.terminal):
 			retired_sources.append(source)
-			terminal_sources.append(source)
+			fully_retired_sources.append(source)
 	for wrapper: Dictionary in batches:
 		var actor: Node2D = context.actors[wrapper.hostile_source_id]
 		if not retired_sources.has(str(wrapper.hostile_source_id)) and actor.has_method("prepared_launch_arena_payloads_retired") and actor.prepared_launch_arena_payloads_retired():
 			retired_sources.append(str(wrapper.hostile_source_id))
+		if not fully_retired_sources.has(str(wrapper.hostile_source_id)) and actor.has_method("prepared_launch_payloads_retired") and actor.prepared_launch_payloads_retired():
+			fully_retired_sources.append(str(wrapper.hostile_source_id))
 	preview.retire_arena_payloads(retired_sources)
-	preview.retire_payload_sources(terminal_sources)
+	preview.retire_payload_sources(fully_retired_sources)
 	var retained_motion: Dictionary = preview.motion_for_frame(context.runtime_frame)
 	for id: String in contacts.keys():
 		if not retained_motion.has(id):
