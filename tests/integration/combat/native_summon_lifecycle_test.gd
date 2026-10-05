@@ -33,7 +33,7 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
-func _fixture(id: String, count: int = 1) -> Dictionary:
+func _fixture(id: String, count: int = 1, affixes: Array[String] = []) -> Dictionary:
 	var boss_source := Content.boss(id)
 	var is_boss := not boss_source.is_empty()
 	var room_id := "room_boss_" + id if is_boss else "room_boss_time_sovereign"
@@ -58,6 +58,11 @@ func _fixture(id: String, count: int = 1) -> Dictionary:
 		actor.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 		add_child(actor)
 		actor.global_position = Vector2(320, 180)
+		if not affixes.is_empty():
+			var definitions: Array = []
+			for affix: String in affixes:
+				definitions.append(Content.affix(affix))
+			suite.assert_true(actor.configure_launch_affixes(definitions, 5).ok, "actual authored parent binds requested native affixes")
 		var parser: RefCounted = Boss.new() if is_boss else Enemy.new()
 		parser.configure(boss_source if is_boss else Content.enemy(id))
 		var projection: Dictionary = parser.runtime_projection() if is_boss else parser.runtime_projection("elite")

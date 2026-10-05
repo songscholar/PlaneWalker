@@ -228,7 +228,7 @@ func _native_action_activation_blocked(frame: int, observations: Dictionary) -> 
 
 
 func bind_native_construct_budget(authority: RefCounted) -> bool:
-	if authority == null or not authority.has_method("arena_debris_active_count"):
+	if authority == null or not authority.has_method("arena_debris_active_count") or not authority.register_native_construct_owner(self):
 		return false
 	_arena_effects = weakref(authority)
 	return true

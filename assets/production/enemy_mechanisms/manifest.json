@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_enemy_mechanism_atlases.py",
+  "atlases": [
+    {
+      "id": "hound_sigil",
+      "path": "hound_sigil.png",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "sha256": "d3bef638114c93d5e38315d1aaca477204f7a2ab3967771468d866b1bdeab8f1"
+    },
+    {
+      "id": "phase_arrival",
+      "path": "phase_arrival.png",
+      "width": 128,
+      "height": 32,
+      "frame_width": 32,
+      "sha256": "ed75dacf0539410dc6cd522749df1d797558b706d0d19966748d810918a757b9"
+    }
+  ]
+}

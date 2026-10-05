@@ -12,6 +12,9 @@ const AffixCue := preload("res://scripts/enemies/launch/launch_elite_affix_cue.g
 const Chaining := preload("res://scripts/enemies/launch/launch_elite_chaining_runtime.gd")
 const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
 const TelegraphProjection := preload("res://scripts/enemies/launch/launch_hostile_telegraph_projection.gd")
+const HoundSigil := preload("res://scripts/enemies/launch/launch_hound_sigil.gd")
+const SigilDamage := preload("res://scripts/combat/damage_info.gd")
+const SigilCalculator := preload("res://scripts/combat/damage_calculator.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -36,6 +39,8 @@ var _affix_configuration: Dictionary = {}
 var _affix_runtime: RefCounted
 var _shield_absorption_commit_fault_for_test := false
 var _body_damage_commit_fault_for_test := false
+var _sigil_terminal_damage: RefCounted
+var _hound_construct_authority: WeakRef
 
 
 func _init() -> void:
@@ -523,11 +528,15 @@ func clear_damage_vulnerability_source(source_id: StringName) -> bool:
 
 
 func get_damage_taken_multiplier() -> float:
+	if _sigil_terminal_damage != null:
+		return 1.0
 	var affix_bonus: float = _affix_runtime.nullified_damage_bonus() + _affix_runtime.shield_damage_bonus() if _affix_runtime != null else 0.0
 	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus() + affix_bonus) * _launch_runtime.species_damage_taken_multiplier() * float(_affix_configuration.get("damage_taken_multiplier", 1.0)))
 
 
 func prepare_post_defense_absorption(damage_info: RefCounted, resolution: RefCounted) -> Dictionary:
+	if damage_info == _sigil_terminal_damage:
+		return {}
 	if _affix_runtime == null or not _affix_runtime.is_shielded():
 		return {}
 	if damage_info == null or resolution == null or resolution.is_prevented():
@@ -587,6 +596,8 @@ func apply_knockback(knockback: Vector2) -> void:
 
 
 func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: float) -> Dictionary:
+	if damage_info == _sigil_terminal_damage:
+		return {}
 	if _launch_definition.get("runtime_kind", "") not in ["chrono_guard", "eternal_hound"]:
 		return {}
 	if not is_instance_valid(health) or health.dead or damage_info == null or not is_finite(final_amount) or final_amount < health.current_hp or not _launch_runtime.has_method("prepare_lethal_transition"):
@@ -597,6 +608,10 @@ func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: fl
 	var decision: Dictionary = _launch_runtime.prepare_lethal_transition(lethal_frame)
 	if not decision.ok:
 		return decision
+	if not decision.final_death and _launch_definition.runtime_kind == "eternal_hound" and _hound_construct_authority != null:
+		var authority: RefCounted = _hound_construct_authority.get_ref()
+		if authority == null or authority.native_construct_count() >= 8:
+			return {"ok": false}
 	decision["owner_instance_id"] = get_instance_id()
 	decision["health_instance_id"] = health.get_instance_id()
 	decision["health_before"] = health.runtime_state_snapshot()
@@ -605,10 +620,55 @@ func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: fl
 
 
 func blocks_hostile_body_damage() -> bool:
-	return _launch_definition.get("runtime_kind", "") == "eternal_hound" and int(_launch_runtime.snapshot().get("mechanism_state", {}).get("dormancy_remaining_frames", 0)) > 0
+	return _sigil_terminal_damage == null and _launch_definition.get("runtime_kind", "") == "eternal_hound" and int(_launch_runtime.snapshot().get("mechanism_state", {}).get("dormancy_remaining_frames", 0)) > 0
+
+
+func bind_native_construct_budget(authority: RefCounted) -> bool:
+	if authority == null or not authority.has_method("native_construct_count") or not authority.register_native_construct_owner(self):
+		return false
+	_hound_construct_authority = weakref(authority)
+	return true
+
+
+func native_weapon_target_is_active() -> bool:
+	return _hostile_identity_active and not health.dead and not blocks_hostile_body_damage()
+
+
+func receive_native_hound_sigil_hit(info: RefCounted) -> float:
+	if info == null or not info.is_valid() or _launch_definition.get("id") != "eternal_hound" or _sigil_terminal_damage != null or not _native_geometry_matches_definition():
+		return 0.0
+	var attacker: Node = info.attacker
+	if not attacker is PlayerController or not attacker.authenticates_native_damage_run(info, self, StringName(str(_launch_identity.run_id))):
+		return 0.0
+	var amount := SigilCalculator.critical_amount(info, float(info.amount))
+	if not Contract.number_in_range(amount, 0.000001, 1000000.0):
+		return 0.0
+	var before: Dictionary = _launch_runtime.snapshot()
+	var claim := JSON.stringify([str(_launch_identity.run_id), str(hostile_source_id), str(info.hostile_source_id), int(info.attack_generation), int(info.hit_index), int(info.damage_type)], "", false).sha256_text()
+	var result: Dictionary = _launch_runtime.accept_sigil_damage(claim, amount)
+	if not result.ok:
+		return 0.0
+	if result.final_death:
+		# The construct settles one original-principal kill through sealed Health publication.
+		var plan: Dictionary = info.snapshot()
+		plan.amount = health.current_hp
+		plan.target_id = str(hostile_source_id)
+		plan.can_crit = false
+		plan.control_effect = {}
+		_sigil_terminal_damage = SigilDamage.from_plan(plan)
+		health.take_damage(_sigil_terminal_damage)
+		_sigil_terminal_damage = null
+		if not health.dead:
+			_launch_runtime.restore_snapshot(before)
+			_refresh_control_visual()
+			return 0.0
+	_refresh_control_visual()
+	return float(before.mechanism_state.sigil_hp) - float(result.sigil_hp)
 
 
 func prepare_hostile_body_damage(info: RefCounted, amount: float, lethal: Dictionary) -> Dictionary:
+	if info == _sigil_terminal_damage:
+		return {}
 	if _launch_definition.is_empty():
 		return {}
 	if info == null or not info.is_valid() or not Contract.number_in_range(amount, 0.000001, 1000000.0) or not _authenticates_native_body_damage(info):
@@ -706,7 +766,10 @@ func _has_historical_body_claim(state: Dictionary, info: RefCounted) -> bool:
 
 
 func accept_launch_health_fact(fact: Dictionary) -> bool:
-	return is_instance_valid(health) and not health.dead and _launch_runtime.has_method("accept_health_fact") and fact.get("hp_after", -1.0) == health.current_hp and _launch_runtime.accept_health_fact(fact).ok
+	var accepted: bool = is_instance_valid(health) and not health.dead and _launch_runtime.has_method("accept_health_fact") and fact.get("hp_after", -1.0) == health.current_hp and _launch_runtime.accept_health_fact(fact).ok
+	if accepted:
+		_refresh_hound_sigil()
+	return accepted
 
 
 func settle_launch_affix_heal(frame: int, planned: float, actual: float) -> bool:
@@ -838,6 +901,7 @@ func _on_died(_killer: Variant) -> void:
 
 
 func _refresh_control_visual() -> void:
+	_refresh_hound_sigil()
 	_refresh_launch_telegraphs()
 	var sprite := get_node_or_null("Sprite2D") as Sprite2D
 	if sprite == null:
@@ -846,6 +910,8 @@ func _refresh_control_visual() -> void:
 	var state: Dictionary = _launch_runtime.snapshot()
 	if state.is_empty():
 		return
+	if _launch_definition.get("id") == "eternal_hound":
+		sprite.visible = int(state.mechanism_state.dormancy_remaining_frames) == 0
 	match state.action.phase:
 		"WARNING": sprite.frame = 1
 		"ACTIVE": sprite.frame = 2
@@ -855,6 +921,18 @@ func _refresh_control_visual() -> void:
 	if state.terminal:
 		sprite.modulate = Color(0.45, 0.45, 0.45)
 	_refresh_affix_cue()
+
+
+func _refresh_hound_sigil() -> void:
+	if _launch_definition.get("id") != "eternal_hound":
+		return
+	var sigil := get_node_or_null("DormantSigil") as Node2D
+	if sigil == null:
+		sigil = HoundSigil.new()
+		sigil.name = "DormantSigil"
+		sigil.configure(self)
+		add_child(sigil)
+	sigil.present(_launch_runtime.snapshot())
 
 
 func _refresh_launch_telegraphs() -> void:
@@ -1052,6 +1130,7 @@ func _restore_actor_state(value: Dictionary) -> bool:
 			set_meta(field, metadata_value.duplicate(true) if metadata_value is Dictionary else metadata_value)
 		elif has_meta(field):
 			remove_meta(field)
+	_refresh_hound_sigil()
 	return true
 
 
@@ -1060,6 +1139,10 @@ func _ticket_matches(ticket: Dictionary) -> bool:
 
 
 func _native_geometry_matches_definition() -> bool:
+	if _launch_definition.get("id") == "eternal_hound":
+		var sigil := get_node_or_null("DormantSigil")
+		if sigil == null or not sigil.native_geometry_matches(_launch_runtime.snapshot()):
+			return false
 	var body := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	var hurt := get_node_or_null("Hurtbox/CollisionShape2D") as CollisionShape2D
 	var hurtbox := get_node_or_null("Hurtbox") as Area2D

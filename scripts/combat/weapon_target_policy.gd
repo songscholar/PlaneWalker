@@ -6,18 +6,21 @@ const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const Debris := preload("res://scripts/enemies/launch/launch_ruin_debris.gd")
 const ForestAuxiliary := preload("res://scripts/enemies/launch/launch_forest_auxiliary_construct.gd")
 const EnemySpatial := preload("res://scripts/enemies/launch/launch_enemy_spatial_construct.gd")
+const HoundSigil := preload("res://scripts/enemies/launch/launch_hound_sigil.gd")
 const PLAYER_ATTACK_MASK := 1 | 4
 
 
 static func is_arena_construct(target: Node) -> bool:
-	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris or target is ForestAuxiliary or target is EnemySpatial)
+	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris or target is ForestAuxiliary or target is EnemySpatial or target is HoundSigil)
 
 
 static func is_attackable(target: Node) -> bool:
 	if not is_instance_valid(target):
 		return false
 	if target.is_in_group("enemies"):
-		return true
+		return target.native_weapon_target_is_active() if target.has_method("native_weapon_target_is_active") else true
+	if target is HoundSigil:
+		return target.native_weapon_target_is_active()
 	if target is EnemySpatial:
 		var spatial: Dictionary = target.native_construct_snapshot()
 		return spatial.get("phase", "") == "ACTIVE" and spatial.get("kind", "") in ["wall", "link"] and float(spatial.get("hp", 0.0)) > 0.0

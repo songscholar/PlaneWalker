@@ -1,0 +1,7 @@
+Plane Walker original enemy mechanism artwork
+
+These raster atlases were authored locally from original pixel geometry.
+Dedicated to the public domain under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Source: tools/production_art/generate_enemy_mechanism_atlases.py

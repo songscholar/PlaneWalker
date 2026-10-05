@@ -23,6 +23,7 @@ var _payloads: RefCounted = Payloads.new()
 var _semantics: RefCounted = Semantics.new()
 var _summons: RefCounted = Summons.new()
 var _owned_void_resources: Array[Dictionary] = []
+var _construct_owners: Dictionary = {}
 
 
 func configure(run_id: String, runtime_frame: int = 0) -> bool:
@@ -81,11 +82,28 @@ func arena_debris_active_count() -> int:
 	return _payloads.debris_active_count() + Spatial.active_count(_semantics.snapshot().spatial)
 
 
+func register_native_construct_owner(actor: Node2D) -> bool:
+	if not is_instance_valid(actor) or not actor.has_method("launch_runtime_snapshot") or actor.launch_runtime_snapshot().runtime.identity.run_id != _state.get("run_id"):
+		return false
+	_construct_owners[str(actor.hostile_source_id)] = weakref(actor)
+	return true
+
+
+func native_construct_count() -> int:
+	var actors := {}
+	for source: String in _construct_owners:
+		var actor: Node2D = _construct_owners[source].get_ref()
+		if is_instance_valid(actor):
+			actors[source] = actor
+	return _foreign_construct_count(actors, _payloads.snapshot()) + Spatial.active_count(_semantics.snapshot().spatial)
+
+
 static func _foreign_construct_count(actors: Dictionary, payloads: Dictionary) -> int:
 	var count: int = payloads.get("arena_debris", {}).get("rows", []).filter(func(row: Dictionary): return row.phase == "ACTIVE").size()
 	for actor: Node2D in actors.values():
 		var prepared: Dictionary = actor.get("_prepared_launch_frame")
 		var state: Dictionary = prepared.after.runtime if not prepared.is_empty() else actor.launch_runtime_snapshot().runtime
+		count += int(not state.terminal and int(state.mechanism_state.get("dormancy_remaining_frames", 0)) > 0)
 		var arena: Dictionary = state.get("arena_state", {})
 		if arena.is_empty() or arena.get("terminal", false):
 			continue
