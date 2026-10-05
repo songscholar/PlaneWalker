@@ -74,8 +74,63 @@ def validate_localization(project_root: Path | str) -> list[Violation]:
             violations.append(Violation("duplicate-runtime-key", key, _relative_path(root, source), 0, "multiple configured catalogs define the same runtime key"))
         catalog_keys.update(extra)
     violations.extend(_validate_code_references(root, catalog_keys))
-    violations.extend(_validate_content_references(root, catalog_keys))
+    pack_scopes, pack_violations = _content_pack_catalogs(root, catalog_keys)
+    violations.extend(pack_violations)
+    violations.extend(_validate_content_references(root, catalog_keys, pack_scopes))
     return sorted(violations)
+
+
+def _content_pack_catalogs(root: Path, runtime_keys: set[str]) -> tuple[dict[Path, set[str]], list[Violation]]:
+    packs: dict[str, tuple[Path, set[str], list[dict]]] = {}
+    violations: list[Violation] = []
+    for descriptor in sorted((root / "data/content_packs").rglob("pack.json")):
+        try:
+            source = json.loads(descriptor.read_text(encoding="utf-8"))
+            if not isinstance(source, dict) or not isinstance(source.get("pack_id"), str) or not source["pack_id"] or source["pack_id"] in packs:
+                raise ValueError("pack localization requires a unique pack_id")
+            catalogs, dependencies = source.get("localization_sources"), source.get("dependencies", [])
+            if not isinstance(catalogs, list) or not isinstance(dependencies, list):
+                raise ValueError("localization_sources and dependencies must be arrays")
+            pack_root, own_keys, seen_paths = descriptor.parent.resolve(), set(), set()
+            for relative in catalogs:
+                if not isinstance(relative, str) or not relative or "\\" in relative or ":" in relative or Path(relative).is_absolute() or any(part in ["", ".", ".."] for part in relative.split("/")):
+                    raise ValueError("localization source must be a relative path inside its pack")
+                path = (pack_root / relative).resolve()
+                if not path.is_relative_to(pack_root) or path.suffix != ".csv" or path in seen_paths:
+                    raise ValueError("localization source escapes its pack, repeats, or is not CSV")
+                seen_paths.add(path)
+                catalog, errors = _read_catalog(root, path)
+                violations.extend(errors)
+                for key in sorted(own_keys & set(catalog)):
+                    violations.append(Violation("duplicate-pack-key", key, _relative_path(root, path), 0, "multiple declared pack catalogs define the same key"))
+                own_keys.update(catalog)
+            for dependency in dependencies:
+                if not isinstance(dependency, dict) or not isinstance(dependency.get("pack_id"), str) or not dependency["pack_id"] or type(dependency.get("required", True)) is not bool:
+                    raise ValueError("pack dependency must name a pack and a boolean required flag")
+            packs[source["pack_id"]] = (pack_root, own_keys, dependencies)
+        except (OSError, UnicodeError, ValueError) as error:
+            violations.append(Violation("invalid-pack-localization-config", "", _relative_path(root, descriptor), 0, str(error)))
+
+    closures: dict[str, set[str]] = {}
+
+    def resolve(pack_id: str, visiting: set[str]) -> set[str]:
+        if pack_id in closures:
+            return closures[pack_id]
+        pack_root, own_keys, dependencies = packs[pack_id]
+        keys = set(own_keys)
+        if pack_id in visiting:
+            violations.append(Violation("invalid-pack-localization-config", "", _relative_path(root, pack_root / "pack.json"), 0, "cyclic pack localization dependency"))
+            return keys
+        for dependency in dependencies:
+            dependency_id = dependency["pack_id"]
+            if dependency_id in packs:
+                keys.update(resolve(dependency_id, visiting | {pack_id}))
+            elif dependency.get("required", True):
+                violations.append(Violation("invalid-pack-localization-config", "", _relative_path(root, pack_root / "pack.json"), 0, "required localization dependency is absent: " + dependency_id))
+        closures[pack_id] = keys
+        return keys
+
+    return {pack[0]: runtime_keys | resolve(pack_id, set()) for pack_id, pack in packs.items()}, violations
 
 
 def _configured_runtime_resources(root: Path) -> tuple[list[str], list[Violation]]:
@@ -290,17 +345,20 @@ def _decode_literal(value: str, quote: str) -> str:
     return value.replace(f"\\{quote}", quote).replace("\\\\", "\\")
 
 
-def _validate_content_references(root: Path, catalog_keys: set[str]) -> list[Violation]:
+def _validate_content_references(root: Path, catalog_keys: set[str], pack_scopes: dict[Path, set[str]] | None = None) -> list[Violation]:
     violations: list[Violation] = []
-    reported_derived_keys: set[str] = set()
+    reported_derived_keys: set[tuple[Path, str]] = set()
     data_root = root / "data"
     if not data_root.is_dir():
         return violations
+    ordered_scopes = sorted(pack_scopes or {}, key=lambda path: len(path.parts), reverse=True)
 
     for content_path in sorted(data_root.rglob("*.json")):
         relative_parts = content_path.relative_to(data_root).parts
         if relative_parts and relative_parts[0] in NON_CONTENT_JSON_ROOTS:
             continue
+        scope = next((path for path in ordered_scopes if content_path.is_relative_to(path)), data_root)
+        available_keys = (pack_scopes or {}).get(scope, catalog_keys)
         try:
             content = json.loads(content_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
@@ -316,7 +374,7 @@ def _validate_content_references(root: Path, catalog_keys: set[str]) -> list[Vio
             continue
 
         for field, key in _content_localization_references(content):
-            if key in catalog_keys:
+            if key in available_keys:
                 continue
             violations.append(
                 Violation(
@@ -324,20 +382,20 @@ def _validate_content_references(root: Path, catalog_keys: set[str]) -> list[Vio
                     key,
                     _relative_path(root, content_path),
                     0,
-                    f"localization value referenced by '{field}' is absent from translations.csv",
+                    f"localization value referenced by '{field}' is absent from configured catalogs and its pack dependencies",
                 )
             )
         for field, key in _content_derived_key_references(content):
-            if key in catalog_keys or key in reported_derived_keys:
+            if key in available_keys or (scope, key) in reported_derived_keys:
                 continue
-            reported_derived_keys.add(key)
+            reported_derived_keys.add((scope, key))
             violations.append(
                 Violation(
                     "missing-derived-key",
                     key,
                     _relative_path(root, content_path),
                     0,
-                    f"localization key derived from '{field}' is absent from translations.csv",
+                    f"localization key derived from '{field}' is absent from configured catalogs and its pack dependencies",
                 )
             )
     return violations

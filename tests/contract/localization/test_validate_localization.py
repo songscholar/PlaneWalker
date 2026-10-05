@@ -35,6 +35,92 @@ SEMANTIC_INPUT_TRANSLATIONS = {
 
 
 class LocalizationContractTest(unittest.TestCase):
+    def test_content_pack_reads_only_declared_own_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            pack = root / "data/content_packs/optional"
+            self._write_pack(pack, "optional", [], ["localization/strings.csv"])
+            self._write(pack / "localization/strings.csv", "keys,en,zh_CN\nOPTIONAL_NAME,Optional,Optional\n")
+            self._write_json(pack / "content/enemies.json", [{"name_key": "OPTIONAL_NAME"}])
+            self.assertEqual(validate_localization(root), [])
+            self._write_pack(pack, "optional", [], [])
+            self.assertContainsCode(validate_localization(root), "missing-content-key")
+
+    def test_optional_catalog_does_not_mask_core_or_unrelated_pack_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            first = root / "data/content_packs/first"
+            self._write_pack(first, "first", [], ["strings.csv"])
+            self._write(first / "strings.csv", "keys,en,zh_CN\nFIRST_NAME,First,First\n")
+            second = root / "data/content_packs/second"
+            self._write_pack(second, "second", [], [])
+            self._write_json(second / "content/enemies.json", [{"name_key": "FIRST_NAME"}])
+            self._write(root / "scripts/ui.gd", 'label.text = tr("FIRST_NAME")\n')
+            violations = validate_localization(root)
+            self.assertContainsCode(violations, "missing-content-key")
+            self.assertContainsCode(violations, "missing-code-key")
+
+    def test_pack_content_resolves_declared_dependency_closure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            parent = root / "data/content_packs/parent"
+            self._write_pack(parent, "parent", [], ["strings.csv"])
+            self._write(parent / "strings.csv", "keys,en,zh_CN\nPARENT_NAME,Parent,Parent\n")
+            middle = root / "data/content_packs/middle"
+            self._write_pack(middle, "middle", ["parent"], [])
+            child = root / "data/content_packs/child"
+            self._write_pack(child, "child", ["middle"], [])
+            self._write_json(child / "content/enemies.json", [{"name_key": "PARENT_NAME"}])
+            self.assertEqual(validate_localization(root), [])
+
+    def test_pack_catalog_boundary_and_csv_contracts_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            pack = root / "data/content_packs/optional"
+            self._write_pack(pack, "optional", [], ["../outside.csv"])
+            self.assertContainsCode(validate_localization(root), "invalid-pack-localization-config")
+            self._write_pack(pack, "optional", [], ["missing.csv"])
+            self.assertContainsCode(validate_localization(root), "missing-catalog")
+            self._write(pack / "missing.csv", "keys,en,zh_CN\nOPTIONAL_FMT,%d,%s\n")
+            self.assertContainsCode(validate_localization(root), "placeholder-mismatch")
+
+    def test_pack_dependencies_refuse_missing_required_or_cycles(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            pack = root / "data/content_packs/optional"
+            self._write_pack(pack, "optional", ["missing"], [])
+            self.assertContainsCode(validate_localization(root), "invalid-pack-localization-config")
+            self._write_pack(pack, "optional", ["other"], [])
+            self._write_pack(root / "data/content_packs/other", "other", ["optional"], [])
+            self.assertContainsCode(validate_localization(root), "invalid-pack-localization-config")
+
+    def test_absent_optional_dependency_is_valid_and_duplicate_pack_keys_refuse(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            pack = root / "data/content_packs/optional"
+            self._write_json(pack / "pack.json", {"pack_id": "optional", "dependencies": [{"pack_id": "missing", "required": False}], "localization_sources": ["first.csv"]})
+            self._write(pack / "first.csv", "keys,en,zh_CN\nOPTIONAL_NAME,Name,Name\n")
+            self.assertEqual(validate_localization(root), [])
+            self._write_pack(pack, "optional", [], ["first.csv", "second.csv"])
+            self._write(pack / "second.csv", "keys,en,zh_CN\nOPTIONAL_NAME,Name,Name\n")
+            self.assertContainsCode(validate_localization(root), "duplicate-pack-key")
+
+    def test_pack_catalog_symlink_cannot_escape_its_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_catalog(root, [])
+            pack = root / "data/content_packs/optional"
+            self._write_pack(pack, "optional", [], ["linked.csv"])
+            self._write(root / "outside.csv", "keys,en,zh_CN\nOPTIONAL_NAME,Name,Name\n")
+            (pack / "linked.csv").symlink_to(root / "outside.csv")
+            self.assertContainsCode(validate_localization(root), "invalid-pack-localization-config")
+
     def test_reads_only_configured_supplemental_runtime_catalogs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -248,6 +334,13 @@ class LocalizationContractTest(unittest.TestCase):
 
     def assertContainsCode(self, violations: list, code: str) -> None:  # noqa: N802
         self.assertIn(code, [violation.code for violation in violations])
+
+    @staticmethod
+    def _write_pack(pack: Path, pack_id: str, dependencies: list[str], catalogs: list[str]) -> None:
+        LocalizationContractTest._write_json(pack / "pack.json", {
+            "pack_id": pack_id, "dependencies": [{"pack_id": value, "required": True} for value in dependencies],
+            "localization_sources": catalogs,
+        })
 
     @staticmethod
     def _write_catalog(
