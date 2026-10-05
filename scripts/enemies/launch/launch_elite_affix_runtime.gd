@@ -16,6 +16,11 @@ const NULLIFIED_SOURCE_FIELDS := ["id", "applied_frame", "delay_through_frame", 
 const MAX_NULLIFIED_CLAIMS := 4096
 const MAX_NULLIFIED_SOURCES := 64
 const NULLIFIED_DAMAGE_BONUS := 0.20
+const SHIELDED_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored", "nullified", "shielded"]
+const SHIELD_FIELDS := ["current_pool", "first_break_frame", "last_break_frame", "regeneration_used", "regenerated_frame", "damage_claims"]
+const SHIELD_CLAIM_FIELDS := ["fact_id", "runtime_frame", "amount", "absorbed", "epoch"]
+const MAX_SHIELD_CLAIMS := 4096
+const SHIELD_DAMAGE_BONUS := 0.20
 
 var _configuration: Dictionary = {}
 var _max_hp := 0.0
@@ -34,13 +39,16 @@ func configure(configuration: Dictionary, identity: Dictionary, max_hp: float) -
 	if configuration.native_revision >= 4:
 		_state.schema_version = 3
 		_state["nullified"] = {"sources": [], "stop_claims": []} if configuration.ids.has("nullified") else {}
+	if configuration.native_revision >= 5:
+		_state.schema_version = 4
+		_state["shielded"] = {"current_pool": _shield_maximum(), "first_break_frame": -1, "last_break_frame": -1, "regeneration_used": false, "regenerated_frame": -1, "damage_claims": []} if configuration.ids.has("shielded") else {}
 	if configuration.ids.has("regenerating"):
 		_state.regeneration = {"elapsed_frames": 0, "healed_total": 0.0, "interrupted_through_frame": int(identity.runtime_frame), "last_heal_frame": -1}
 	return true
 
 
 static func _valid_configuration(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 4) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
+	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 5) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
 		return false
 	var seen: Array = []
 	var pending: Array = []
@@ -53,7 +61,7 @@ static func _valid_configuration(value: Dictionary) -> bool:
 				return false
 		seen.append(id)
 		previous = id
-		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified"):
+		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified") and not (value.native_revision >= 5 and id == "shielded"):
 			pending.append(id)
 	return value.pending_ids == pending and Contract.number_in_range(value.damage_taken_multiplier, 1.2 if seen.has("frenzy") else 1.0, 1.2 if seen.has("frenzy") else 1.0) and Contract.number_in_range(value.knockback_resistance, 0.2 if seen.has("fortified") else 0.0, 0.2 if seen.has("fortified") else 0.0)
 
@@ -71,6 +79,8 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 		_state.terminal = true
 		if not _state.get("nullified", {}).is_empty():
 			_state.nullified.sources.clear()
+		if is_shielded():
+			_state.shielded.current_pool = 0.0
 	elif not paused:
 		if not _state.get("anchored", {}).is_empty():
 			_state.anchored.elapsed_frames += 1
@@ -91,6 +101,10 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 				regeneration.last_heal_frame = frame
 	if not _state.get("nullified", {}).is_empty():
 		_state.nullified.sources = _state.nullified.sources.filter(func(source: Dictionary): return int(source.vulnerability_through_frame) >= frame)
+	if not dead and is_shielded() and not _state.shielded.regeneration_used and int(_state.shielded.first_break_frame) >= 0 and frame >= int(_state.shielded.first_break_frame) + int(Definition.PARAMETERS.shielded.regeneration_delay_frames):
+		_state.shielded.current_pool = _shield_maximum()
+		_state.shielded.regeneration_used = true
+		_state.shielded.regenerated_frame = frame
 	return {"ok": true, "healed_amount": healed, "hp_after": current_hp + healed}
 
 
@@ -154,6 +168,38 @@ func rift_movement_floor() -> float:
 	return float(Definition.PARAMETERS.nullified.rift_movement_floor) if is_nullified() else 0.40
 
 
+func is_shielded() -> bool:
+	return not _state.get("shielded", {}).is_empty()
+
+
+func shield_damage_bonus() -> float:
+	if not is_shielded() or _state.terminal or int(_state.shielded.last_break_frame) < 0:
+		return 0.0
+	return SHIELD_DAMAGE_BONUS if int(_state.runtime_frame) <= int(_state.shielded.last_break_frame) + int(Definition.PARAMETERS.shielded.break_exposure_frames) - 1 else 0.0
+
+
+func prepare_shield_absorption(frame: int, fact_id: String, amount: float) -> Dictionary:
+	if not is_shielded() or _state.terminal or frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or fact_id.length() != 64 or not fact_id.is_valid_hex_number(false) or not Contract.number_in_range(amount, 0.000001, 1000000.0) or _state.shielded.damage_claims.size() >= MAX_SHIELD_CLAIMS:
+		return {"ok": false}
+	for claim: Dictionary in _state.shielded.damage_claims:
+		if claim.fact_id == fact_id:
+			return {"ok": false}
+	if not _state.shielded.damage_claims.is_empty() and frame < int(_state.shielded.damage_claims.back().runtime_frame):
+		return {"ok": false}
+	var after := snapshot()
+	var absorbed := minf(float(after.shielded.current_pool), amount)
+	after.shielded.current_pool = maxf(0.0, float(after.shielded.current_pool) - absorbed)
+	if absorbed > 0.0 and after.shielded.current_pool == 0.0:
+		after.shielded.first_break_frame = frame if after.shielded.first_break_frame == -1 else after.shielded.first_break_frame
+		after.shielded.last_break_frame = frame
+	after.shielded.damage_claims.append({"fact_id": fact_id, "runtime_frame": frame, "amount": amount, "absorbed": absorbed, "epoch": 1 if after.shielded.regeneration_used else 0})
+	return {"ok": true, "amount_after": amount - absorbed, "absorbed": absorbed, "receipt": {"before": snapshot(), "after": after}}
+
+
+func _shield_maximum() -> float:
+	return _max_hp * float(Definition.PARAMETERS.shielded.shield_fraction)
+
+
 func accept_launch_control(frame: int) -> bool:
 	if _state.is_empty() or _state.terminal or _state.get("anchored", {}).is_empty() or frame not in [int(_state.runtime_frame), int(_state.runtime_frame) + 1] or int(_state.anchored.control_count) >= Contract.MAX_FRAME:
 		return false
@@ -196,16 +242,20 @@ func cancel() -> void:
 		_state.terminal = true
 		if is_nullified():
 			_state.nullified.sources.clear()
+		if is_shielded():
+			_state.shielded.current_pool = 0.0
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
 	var revision: int = int(_configuration.get("native_revision", 0))
-	var fields: Array = NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS)
+	var fields: Array = SHIELDED_RUNTIME_FIELDS if revision >= 5 else (NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS))
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or value.schema_version != _state.schema_version or typeof(value.schema_version) != TYPE_INT or value.configuration_digest != _state.configuration_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Contract.MAX_FRAME) or not value.terminal is bool or not value.regeneration is Dictionary:
 		return false
 	if revision >= 3 and not _can_restore_anchored(value):
 		return false
 	if revision >= 4 and not _can_restore_nullified(value):
+		return false
+	if revision >= 5 and not _can_restore_shield(value):
 		return false
 	if not _configuration.ids.has("regenerating"):
 		return value.regeneration.is_empty()
@@ -269,6 +319,55 @@ func _can_restore_nullified(value: Dictionary) -> bool:
 
 static func _stable_source(value: Variant) -> bool:
 	return value is String and not value.is_empty() and value == value.strip_edges() and value.length() <= 64
+
+
+func _can_restore_shield(value: Dictionary) -> bool:
+	if not value.shielded is Dictionary:
+		return false
+	if not _configuration.ids.has("shielded"):
+		return value.shielded.is_empty()
+	var shield: Dictionary = value.shielded
+	var frame := int(value.runtime_frame)
+	var origin := int(_state.identity.runtime_frame)
+	if not Contract.exact_fields(shield, SHIELD_FIELDS) or not Contract.number_in_range(shield.current_pool, 0.0, _shield_maximum()) or not Contract.integer_in_range(shield.first_break_frame, -1, frame + 1) or not Contract.integer_in_range(shield.last_break_frame, -1, frame + 1) or typeof(shield.regeneration_used) != TYPE_BOOL or not Contract.integer_in_range(shield.regenerated_frame, -1, frame) or not shield.damage_claims is Array or shield.damage_claims.size() > MAX_SHIELD_CLAIMS:
+		return false
+	var pool := _shield_maximum()
+	var first_break := -1
+	var last_break := -1
+	var epoch := 0
+	var previous_frame := origin
+	var seen := {}
+	for claim: Variant in shield.damage_claims:
+		if not claim is Dictionary or not Contract.exact_fields(claim, SHIELD_CLAIM_FIELDS) or not claim.fact_id is String or claim.fact_id.length() != 64 or not claim.fact_id.is_valid_hex_number(false) or seen.has(claim.fact_id) or not Contract.integer_in_range(claim.runtime_frame, previous_frame, frame + 1) or not Contract.number_in_range(claim.amount, 0.000001, 1000000.0) or not Contract.integer_in_range(claim.epoch, epoch, 1) or not Contract.number_in_range(claim.absorbed, 0.0, _shield_maximum()):
+			return false
+		if int(claim.epoch) == 1:
+			if not shield.regeneration_used or first_break < 0 or int(claim.runtime_frame) < int(shield.regenerated_frame):
+				return false
+			if epoch == 0:
+				pool = _shield_maximum()
+				epoch = 1
+		elif shield.regeneration_used and int(claim.runtime_frame) > int(shield.regenerated_frame):
+			return false
+		var absorbed := minf(pool, float(claim.amount))
+		if not is_equal_approx(float(claim.absorbed), absorbed):
+			return false
+		pool = maxf(0.0, pool - absorbed)
+		if absorbed > 0.0 and pool == 0.0:
+			first_break = int(claim.runtime_frame) if first_break == -1 else first_break
+			last_break = int(claim.runtime_frame)
+		seen[claim.fact_id] = true
+		previous_frame = int(claim.runtime_frame)
+	if shield.first_break_frame != first_break or shield.last_break_frame != last_break:
+		return false
+	var deadline: int = first_break + int(Definition.PARAMETERS.shielded.regeneration_delay_frames)
+	if shield.regeneration_used:
+		if first_break < origin or shield.regenerated_frame != deadline or int(shield.regenerated_frame) > frame:
+			return false
+		if epoch == 0:
+			pool = _shield_maximum()
+	elif shield.regenerated_frame != -1 or (first_break >= 0 and (frame > deadline or frame == deadline and not value.terminal)):
+		return false
+	return is_equal_approx(float(shield.current_pool), 0.0 if value.terminal else pool)
 
 
 func restore_snapshot(value: Dictionary) -> bool:

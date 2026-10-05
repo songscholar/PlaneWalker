@@ -30,6 +30,7 @@ var _motion_room_local_bounds := Rect2()
 var _affix_projection: RefCounted
 var _affix_configuration: Dictionary = {}
 var _affix_runtime: RefCounted
+var _shield_absorption_commit_fault_for_test := false
 
 
 func _init() -> void:
@@ -92,7 +93,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") in [2, 3, 4]:
+	if affix_configuration.get("native_revision") in [2, 3, 4, 5]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -346,7 +347,12 @@ func prepared_launch_frame_contacts_target(target: Node2D) -> bool:
 
 
 func prepared_launch_payload_parameters() -> Dictionary:
-	return _launch_definition.mechanisms.duplicate(true) if not _prepared_launch_frame.is_empty() and _launch_definition.runtime_kind == "corrosive_moth" else {}
+	if _prepared_launch_frame.is_empty() or _launch_definition.runtime_kind != "corrosive_moth":
+		return {}
+	var result: Dictionary = _launch_definition.mechanisms.duplicate(true)
+	if _launch_definition.has("mechanism_scaling"):
+		result["mechanism_scaling"] = _launch_definition.mechanism_scaling.duplicate(true)
+	return result
 
 
 func prepared_launch_frame_reserves_death_pool() -> bool:
@@ -450,8 +456,40 @@ func clear_damage_vulnerability_source(source_id: StringName) -> bool:
 
 
 func get_damage_taken_multiplier() -> float:
-	var affix_bonus: float = _affix_runtime.nullified_damage_bonus() if _affix_runtime != null else 0.0
+	var affix_bonus: float = _affix_runtime.nullified_damage_bonus() + _affix_runtime.shield_damage_bonus() if _affix_runtime != null else 0.0
 	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus() + affix_bonus) * _launch_runtime.species_damage_taken_multiplier() * float(_affix_configuration.get("damage_taken_multiplier", 1.0)))
+
+
+func prepare_post_defense_absorption(damage_info: RefCounted, resolution: RefCounted) -> Dictionary:
+	if _affix_runtime == null or not _affix_runtime.is_shielded():
+		return {}
+	if damage_info == null or resolution == null or resolution.is_prevented():
+		return {"ok": false}
+	var source_player: Node = damage_info.attacker
+	var owned_player_source: bool = is_instance_valid(source_player) and source_player.is_in_group("player") and source_player.has_method("current_run_id") and str(source_player.current_run_id()) == str(_launch_identity.run_id)
+	var valid_run: bool = str(damage_info.run_id) == str(_launch_identity.run_id) or (damage_info.run_id == &"legacy_run" and owned_player_source)
+	var valid_target: bool = damage_info.target_id == hostile_source_id or (has_meta("encounter_spawn_id") and str(damage_info.target_id) == str(get_meta("encounter_spawn_id"))) or (damage_info.target_id == &"pending_target" and owned_player_source)
+	if not valid_run or not valid_target:
+		return {"ok": false}
+	var frame: int = health.frame_signal_transaction_runtime_frame()
+	if frame < 0:
+		frame = _hostile_runtime_frame()
+	var fact_id := JSON.stringify([str(_launch_identity.run_id), str(hostile_source_id), str(damage_info.hostile_source_id), int(damage_info.attack_generation), int(damage_info.hit_index)], "", false).sha256_text()
+	return _affix_runtime.prepare_shield_absorption(frame, fact_id, float(resolution.finalized_damage()))
+
+
+func commit_post_defense_absorption(damage_info: RefCounted, resolution: RefCounted, decision: Dictionary) -> bool:
+	if _shield_absorption_commit_fault_for_test or not health.owns_post_defense_absorption_commit(damage_info, resolution, decision) or decision != prepare_post_defense_absorption(damage_info, resolution) or not _affix_runtime.restore_snapshot(decision.receipt.after):
+		return false
+	_refresh_control_visual()
+	return true
+
+
+func rollback_post_defense_absorption(damage_info: RefCounted, resolution: RefCounted, decision: Dictionary) -> bool:
+	if not health.owns_post_defense_absorption_commit(damage_info, resolution, decision, true) or _affix_runtime == null or _affix_runtime.snapshot() != decision.receipt.after or not _affix_runtime.restore_snapshot(decision.receipt.before):
+		return false
+	_refresh_control_visual()
+	return true
 
 
 func apply_knockback(knockback: Vector2) -> void:
@@ -583,6 +621,7 @@ func _refresh_control_visual() -> void:
 
 
 func _refresh_affix_cue() -> void:
+	_refresh_shield_cue()
 	var cue := get_node_or_null("EliteAffixCue") as Node2D
 	if _affix_runtime == null or not _affix_runtime.is_nullified():
 		if cue != null:
@@ -591,9 +630,9 @@ func _refresh_affix_cue() -> void:
 	if cue == null:
 		cue = AffixCue.new()
 		cue.name = "EliteAffixCue"
-		cue.position = Vector2(0, -32)
 		cue.z_index = 5
 		add_child(cue)
+	cue.position = Vector2(22, -32) if _affix_runtime.is_shielded() else Vector2(0, -32)
 	var phase := "READY"
 	if _affix_runtime.snapshot().terminal:
 		phase = "TERMINAL"
@@ -602,6 +641,23 @@ func _refresh_affix_cue() -> void:
 	elif _affix_runtime.nullified_damage_bonus() > 0.0:
 		phase = "EXPOSED"
 	cue.project_nullified(phase, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
+
+
+func _refresh_shield_cue() -> void:
+	var cue := get_node_or_null("EliteShieldCue") as Node2D
+	if _affix_runtime == null or not _affix_runtime.is_shielded():
+		if cue != null:
+			cue.visible = false
+		return
+	if cue == null:
+		cue = AffixCue.new()
+		cue.name = "EliteShieldCue"
+		cue.z_index = 5
+		add_child(cue)
+	cue.position = Vector2(-22, -36) if _affix_runtime.is_nullified() else Vector2(0, -32)
+	var state: Dictionary = _affix_runtime.snapshot()
+	var phase := "TERMINAL" if state.terminal else ("INTACT" if float(state.shielded.current_pool) > 0.0 else "BROKEN")
+	cue.project_shielded(phase, float(state.shielded.current_pool) / (max_hp * 0.30), bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
 
 
 func _actor_state() -> Dictionary:
@@ -763,6 +819,9 @@ func can_restore_native_cold_snapshot(value: Dictionary, source_resolver: Callab
 	var anchored: Dictionary = state.get("affix_runtime", {}).get("anchored", {})
 	if not anchored.is_empty() and int(anchored.last_control_frame) > int(state.runtime.runtime_frame):
 		return false
+	for claim: Dictionary in state.get("affix_runtime", {}).get("shielded", {}).get("damage_claims", []):
+		if int(claim.runtime_frame) > int(state.runtime.runtime_frame):
+			return false
 	if value.health.dead != state.runtime.terminal:
 		return false
 	for field: String in ["hp_after", "hp_current"]:

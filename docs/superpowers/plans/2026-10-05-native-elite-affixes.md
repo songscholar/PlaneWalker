@@ -51,7 +51,7 @@ canonical rows and floor; it does not revise authored content or Save schema.
 ## Dynamic Native Gates
 
 - [x] Regeneration: actual three-percent healing every 120 unpaused frames within the total thirty-percent cap, heavy-hit 120-frame interruption, once-only Health publication, typed physical cold recovery and whole-Player frame compensation. Native compiler revision 2 retains the authentic affix clock; explicit historical revision 1 retains its original metadata-only regeneration behavior. Same-frame support healing consumes only actual regeneration gain. See [native regeneration evidence](../../current/2026-10-05-native-elite-regeneration-evidence.md).
-- [ ] Shield: thirty-percent absorption, once-only 1200-frame regeneration and 45-frame break exposure.
+- [x] Shield: native post-defense thirty-percent absorption, once-only 1200-frame regeneration,45-frame break exposure, actual Sword/Player compensation and accessible contour. See [native Shielded evidence](../../current/2026-10-05-native-elite-shielded-evidence.md).
 - [x] Anchored: native poise/recovery and displacement refusal, actual Stop/Rift, physical checkpoint and accepted-frame compensation.
 - [x] Nullified: retained Stop/Rift/Time/echo interactions, bounded delay/vulnerability, Anchor/Frenzy composition and accessible clock-fragment cue. See [native Nullified evidence](../../current/2026-10-05-native-elite-nullified-evidence.md).
 - [ ] Teleport: seeded collision-safe 48-80 pixel landing, complete 30-frame departure warning and 30-frame arrival recovery.
@@ -82,3 +82,21 @@ through three retain their original metadata-only Nullified behavior.
   typed cold restore, physical SaveService, and legacy revision checks.
 - [x] Run `tools/run_tests.sh --filter launch_elite` plus native Actor/physical
   checkpoint regressions and record focused evidence before revision promotion.
+
+## Shielded Native Revision Five
+
+Shield absorbs the final amount after the existing defense and incoming damage
+modifiers. Its pool is30% of the native elite maximum HP, including compatible
+Fortified scaling. The first break grants45 frames of20% incoming exposure and
+starts an unscaled1200 accepted-frame deadline. That deadline regenerates the
+full pool once; a second break never schedules another regeneration. The exposure
+magnitude and deadline-from-break semantics are reversible tuning decisions
+where P15 does not supply those details. Historical revisions one through four
+retain metadata-only Shielded behavior.
+
+- [x] Retain native Shielded RED for actual absorption and missing authoritative pool.
+- [x] Add a narrow optional Health post-defense absorption prepare/commit/rollback boundary; unchanged owners keep the existing pipeline.
+- [x] Seal bounded shield hit receipts, pool/break/regeneration/exposure clocks and legacy revision signatures.
+- [x] Verify actual partial/full absorption, overflow, duplicates, defense/Frenzy/Fortified/Nullified composition, terminal cleanup, late rejection retry and typed/physical cold reconstruction.
+- [x] Project an accessible gold shield contour with visible intact/broken states.
+- [x] Run native Shielded, Health/damage, shared elite, production encounter and physical checkpoint gates; retain focused evidence.

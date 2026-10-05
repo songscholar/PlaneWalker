@@ -64,6 +64,7 @@ var _published_damage_info: RefCounted
 var _published_damage_context: Dictionary = {}
 var _hostile_lethal_commit_context: Dictionary = {}
 var _hostile_lethal_application_in_progress := false
+var _post_defense_absorption_context: Dictionary = {}
 
 
 func _ready() -> void:
@@ -722,6 +723,52 @@ func _resolve_damage(
 
 
 func _apply_damage_resolution(damage_info: RefCounted, resolution: RefCounted) -> RefCounted:
+	if damage_info == null or resolution == null or resolution.is_prevented() or _damage_bypasses_defense(damage_info.tags):
+		return _apply_damage_resolution_without_absorption(damage_info, resolution)
+	var owner_entity := get_parent()
+	if owner_entity == null or not owner_entity.has_method("prepare_post_defense_absorption"):
+		return _apply_damage_resolution_without_absorption(damage_info, resolution)
+	var prepared: Variant = owner_entity.call("prepare_post_defense_absorption", damage_info, resolution)
+	if prepared is Dictionary and prepared.is_empty():
+		return _apply_damage_resolution_without_absorption(damage_info, resolution)
+	if not prepared is Dictionary or not _valid_absorption_decision(prepared, resolution) or not owner_entity.has_method("commit_post_defense_absorption") or not owner_entity.has_method("rollback_post_defense_absorption"):
+		return _prevented_resolution(damage_info, &"invalid_absorption")
+	var decision: Dictionary = prepared.duplicate(true)
+	var snapshot: Dictionary = resolution.snapshot()
+	var context := _resolution_context(damage_info, snapshot.original_amount, snapshot.post_weapon_defense_amount, snapshot.post_character_defense_amount, snapshot.post_accessibility_amount, decision.amount_after, &"hostile_shield")
+	var absorbed_resolution: RefCounted = DamageResolutionScript.prevented(&"hostile_shield", context) if float(decision.amount_after) == 0.0 else DamageResolutionScript.applied(float(decision.amount_after), context)
+	if absorbed_resolution == null or not _commit_absorption(owner_entity, damage_info, resolution, decision, false):
+		return _prevented_resolution(damage_info, &"absorption_commit_failed")
+	var applied := _apply_damage_resolution_without_absorption(damage_info, absorbed_resolution)
+	if float(decision.amount_after) > 0.0 and (applied == null or applied.is_prevented()):
+		if not _commit_absorption(owner_entity, damage_info, resolution, decision, true):
+			push_error("Post-defense absorption rollback failed closed")
+	return applied
+
+
+func _valid_absorption_decision(decision: Dictionary, resolution: RefCounted) -> bool:
+	if decision.size() != 4 or typeof(decision.get("ok")) != TYPE_BOOL or decision.get("ok") != true or not decision.get("receipt") is Dictionary:
+		return false
+	for field: String in ["amount_after", "absorbed"]:
+		if typeof(decision.get(field)) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(decision[field])) or float(decision[field]) < 0.0:
+			return false
+	return is_equal_approx(float(decision.amount_after) + float(decision.absorbed), float(resolution.finalized_damage()))
+
+
+func _commit_absorption(owner_entity: Node, damage_info: RefCounted, resolution: RefCounted, decision: Dictionary, rollback: bool) -> bool:
+	if not _post_defense_absorption_context.is_empty():
+		return false
+	_post_defense_absorption_context = {"damage_info": damage_info, "resolution": resolution, "decision": decision.duplicate(true), "rollback": rollback}
+	var result: Variant = owner_entity.call("rollback_post_defense_absorption" if rollback else "commit_post_defense_absorption", damage_info, resolution, decision.duplicate(true))
+	_post_defense_absorption_context.clear()
+	return typeof(result) == TYPE_BOOL and result
+
+
+func owns_post_defense_absorption_commit(damage_info: RefCounted, resolution: RefCounted, decision: Dictionary, rollback: bool = false) -> bool:
+	return not _post_defense_absorption_context.is_empty() and _post_defense_absorption_context.damage_info == damage_info and _post_defense_absorption_context.resolution == resolution and _post_defense_absorption_context.decision == decision and _post_defense_absorption_context.rollback == rollback
+
+
+func _apply_damage_resolution_without_absorption(damage_info: RefCounted, resolution: RefCounted) -> RefCounted:
 	if damage_info == null or resolution == null:
 		return resolution
 	var snapshot: Dictionary = resolution.snapshot()
