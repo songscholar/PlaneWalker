@@ -159,10 +159,11 @@ func _test_historical(suite: RefCounted, definition: Dictionary, identity: Dicti
 		var legacy: Dictionary = old.snapshot()
 		legacy.schema_version = 1
 		legacy.erase("time_response")
+		legacy.erase("time_auxiliary")
 		var fresh := Runtime.new()
 		fresh.configure(definition, identity)
 		var normalized: Dictionary = fresh.normalize_native_snapshot(legacy)
-		suite.assert_true(not normalized.is_empty() and normalized.schema_version == 9 and normalized.time_response.watermark.is_empty() and fresh.restore_snapshot(normalized), "exact historical Time Boss receives empty responseledger atframe%d" % target_frame)
+		suite.assert_true(not normalized.is_empty() and normalized.schema_version == 10 and normalized.time_response.watermark.is_empty() and fresh.restore_snapshot(normalized), "exact historical Time Boss receives empty responseledger atframe%d" % target_frame)
 		if normalized.is_empty():
 			continue
 		var next: Dictionary = fresh.advance_frame(target_frame + 1, Actions.context(target_frame + 1), false)

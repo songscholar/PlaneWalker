@@ -118,6 +118,7 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 	var retired: Array[String] = []
 	var retained: Array[Dictionary] = []
 	var impacts: Array[Dictionary] = []
+	var semantic_impacts: Array[Dictionary] = []
 	var debris_events: Array[Dictionary] = []
 	for row: Dictionary in next.projectiles:
 		var control := _advanced_control(row.control, frame)
@@ -135,7 +136,10 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 			if contact.kind == "world" or row.hit_targets.size() > int(row.definition.pierce_count):
 				_record_debris_impact(next, row.definition, contact.position, frame, debris_events)
 				if not row.definition.impact_pool.is_empty():
-					impacts.append(_impact_definition(row.definition, contact.position, frame))
+					if row.definition.impact_pool.has("slow_multiplier"):
+						semantic_impacts.append({"run_id": row.definition.run_id, "hostile_source_id": row.definition.source_id, "attack_generation": int(row.definition.generation), "hit_index": int(row.definition.hit_index), "runtime_frame": frame, "position": Contract.point(contact.position), "parameters": row.definition.impact_pool.duplicate(true)})
+					else:
+						impacts.append(_impact_definition(row.definition, contact.position, frame))
 				retired.append(row.id)
 				continue
 		var step: Dictionary = motion[row.id]
@@ -191,7 +195,7 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 			return _failure("debris_transition")
 		next.arena_debris = debris.snapshot()
 	_state = next
-	return {"ok": true, "runtime_frame": frame, "damage_requests": damages, "retired_payload_ids": retired, "pending_work": pending_work()}
+	return {"ok": true, "runtime_frame": frame, "damage_requests": damages, "retired_payload_ids": retired, "semantic_impacts": semantic_impacts, "pending_work": pending_work()}
 
 
 func add_control_source(payload_id: String, source_id: String, kind: String, duration_frames: int, magnitude: float) -> bool:
@@ -321,6 +325,10 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 			return {}
 		if hit.action_id == "forge_lava_toss":
 			pool = {"radius": float(mechanisms.lava_pool_radius_px), "lifetime_frames": int(mechanisms.lava_pool_lifetime_frames), "damage": float(mechanisms.lava_pool_tick_damage), "tick_frames": int(mechanisms.lava_pool_tick_frames)}
+	elif mechanisms.has("bolt_pool_radius_px"):
+		if hit.action_id != "traitor_chrono_bolt" or not Contract.exact_fields(mechanisms, ["bolt_pool_radius_px", "bolt_pool_lifetime_frames"]) or mechanisms.bolt_pool_radius_px != 16 or mechanisms.bolt_pool_lifetime_frames != 180:
+			return {}
+		pool = {"radius": 16.0, "lifetime_frames": 180, "damage": 0.0, "tick_frames": 60, "slow_multiplier": 0.7}
 	elif not mechanisms.is_empty() and not mechanisms.has("debris_hp"):
 		var base := mechanisms.duplicate(true)
 		var scaling: Variant = base.get("mechanism_scaling", {})
@@ -435,6 +443,8 @@ func _valid_projectile_definition(row: Dictionary) -> bool:
 			return false
 	if not Contract.number_in_range(row.radius, 1, 320) or not Contract.number_in_range(row.speed, 1, 480) or not Contract.integer_in_range(row.lifetime_frames, 1, 600) or not Contract.number_in_range(row.range_px, 1.0, float(row.speed) * float(row.lifetime_frames) / 60.0) or not Contract.integer_in_range(row.pierce_count, 0, 8) or not row.impact_pool is Dictionary:
 		return false
+	if row.impact_pool.has("slow_multiplier"):
+		return Contract.exact_fields(row.impact_pool, ["radius", "lifetime_frames", "damage", "tick_frames", "slow_multiplier"]) and row.damage_type == "time" and row.impact_pool == {"radius": 16.0, "lifetime_frames": 180, "damage": 0.0, "tick_frames": 60, "slow_multiplier": 0.7}
 	return row.impact_pool.is_empty() or (Contract.exact_fields(row.impact_pool, ["radius", "lifetime_frames", "damage", "tick_frames"]) and Contract.number_in_range(row.impact_pool.radius, 1, 320) and Contract.number_in_range(row.impact_pool.damage, 0, 600) and Contract.integer_in_range(row.impact_pool.lifetime_frames, 1, 1200) and Contract.integer_in_range(row.impact_pool.tick_frames, 1, 600))
 
 

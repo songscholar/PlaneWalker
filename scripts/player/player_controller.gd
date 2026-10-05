@@ -1040,6 +1040,9 @@ func get_damage_taken_multiplier() -> float:
 
 func get_damage_taken_multiplier_for(damage_info: RefCounted) -> float:
 	var multiplier := get_damage_taken_multiplier()
+	if damage_info != null and damage_info.damage_type == DamageInfoScript.DamageType.TIME:
+		for entry: Dictionary in _floor_rule_modifiers.values():
+			multiplier = maxf(multiplier, get_damage_taken_multiplier() * float(entry.values.get("time_damage_taken_multiplier", 1.0)))
 	if damage_info != null and damage_info.damage_type == DamageInfoScript.DamageType.VOID:
 		var projection := meta_run_projection_snapshot()
 		if not projection.is_empty():
@@ -3599,6 +3602,8 @@ func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
 			"movement_multiplier",
 			"attack_multiplier",
 			"time_cost_multiplier",
+			"time_regen_multiplier",
+			"time_damage_taken_multiplier",
 			"zone_locked",
 			"safe_area_required",
 			"pull_x",
@@ -3625,6 +3630,14 @@ func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
 	if values.has("attack_multiplier"):
 		var attack_value: Variant = values["attack_multiplier"]
 		if typeof(attack_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(attack_value)) or float(attack_value) < 0.1 or float(attack_value) > 1.0:
+			return false
+	if values.has("time_regen_multiplier"):
+		var regen_value: Variant = values["time_regen_multiplier"]
+		if typeof(regen_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(regen_value)) or float(regen_value) < 0.5 or float(regen_value) > 1.0:
+			return false
+	if values.has("time_damage_taken_multiplier"):
+		var damage_value: Variant = values["time_damage_taken_multiplier"]
+		if typeof(damage_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(damage_value)) or float(damage_value) < 1.0 or float(damage_value) > 1.15:
 			return false
 	for field: String in ["zone_locked", "safe_area_required"]:
 		if values.has(field) and typeof(values[field]) != TYPE_BOOL:
@@ -3677,12 +3690,34 @@ func _sync_floor_rule_time_cost_multiplier() -> bool:
 	if time_manager == null or not time_manager.has_method("set_floor_rule_cost_multiplier"):
 		return false
 	var multiplier := 1.0
+	var regeneration := 1.0
 	for entry_value: Variant in _floor_rule_modifiers.values():
 		if not entry_value is Dictionary:
 			return false
 		var values := (entry_value as Dictionary).get("values", {}) as Dictionary
 		multiplier *= float(values.get("time_cost_multiplier", 1.0))
-	return bool(time_manager.call("set_floor_rule_cost_multiplier", multiplier))
+		regeneration = minf(regeneration, float(values.get("time_regen_multiplier", 1.0)))
+	return bool(time_manager.call("set_floor_rule_cost_multiplier", multiplier)) and bool(time_manager.call("set_hostile_energy_regen_multiplier", regeneration)) and _sync_native_time_mark_visual()
+
+
+func _sync_native_time_mark_visual() -> bool:
+	var marked: bool = _floor_rule_modifiers.values().any(func(entry: Dictionary): return float(entry.values.get("time_damage_taken_multiplier", 1.0)) > 1.0)
+	var indicator := get_node_or_null("NativeTemporalMark") as Sprite2D
+	if marked and indicator == null:
+		indicator = Sprite2D.new()
+		indicator.name = "NativeTemporalMark"
+		indicator.texture = load("res://assets/production/constructs/time_watch.png") as Texture2D
+		indicator.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		indicator.hframes = 4
+		indicator.frame = 1
+		indicator.position = Vector2(0, -26)
+		indicator.scale = Vector2.ONE * 0.5
+		indicator.z_index = 1
+		add_child(indicator)
+	if indicator != null:
+		indicator.visible = marked
+		return indicator.texture != null
+	return true
 
 
 func _character_movement_multiplier() -> float:

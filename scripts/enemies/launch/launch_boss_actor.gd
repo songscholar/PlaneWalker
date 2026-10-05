@@ -12,6 +12,7 @@ const VoidPickup := preload("res://scripts/enemies/launch/launch_void_shard_pick
 const ForestAuxiliaryConstruct := preload("res://scripts/enemies/launch/launch_forest_auxiliary_construct.gd")
 const RootTelegraph := preload("res://scripts/fx/combat_telegraph_2d.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
+const TimeAuxiliary := preload("res://scripts/enemies/launch/time_sovereign_auxiliary_runtime.gd")
 var _exposure_replay_authority: RefCounted
 var _arena_effects: WeakRef
 
@@ -179,7 +180,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 
 func _native_relocation_allowed(destination: Vector2, observations: Dictionary) -> bool:
 	var action: Dictionary = _launch_runtime.snapshot().action
-	if action.action_id != "traitor.counter_rewind":
+	if action.action_id not in ["traitor.counter_rewind", "traitor_blink"]:
 		return true
 	if action.committed_geometry.is_empty() or not destination.is_equal_approx(_vector(action.committed_geometry[0].origin)):
 		return false
@@ -434,6 +435,43 @@ func prepared_launch_void_mechanism_allowed(request: Dictionary) -> bool:
 
 func native_void_auxiliary_snapshot() -> Dictionary:
 	return _launch_runtime.void_auxiliary_snapshot() if not _launch_definition.is_empty() else {}
+
+
+func native_time_auxiliary_snapshot() -> Dictionary:
+	return _launch_runtime.time_auxiliary_snapshot() if _launch_definition.get("id") == "time_sovereign" and _launch_runtime.has_method("time_auxiliary_snapshot") else {}
+
+
+func native_time_damage_multiplier(target_id: String) -> float:
+	var state: Dictionary = _prepared_launch_frame.after.runtime.get("time_auxiliary", {}) if not _prepared_launch_frame.is_empty() else native_time_auxiliary_snapshot()
+	for mark: Dictionary in state.get("marks", []):
+		if mark.target_id == target_id and int(state.runtime_frame) < int(mark.through_frame):
+			return float(mark.multiplier)
+	return 1.0
+
+
+func sync_native_time_auxiliary_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
+	if not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)) or target.get_world_2d() != get_world_2d():
+		return false
+	var multiplier: float = 1.0 if clear else _launch_runtime.time_damage_multiplier(target_id)
+	return target.apply_floor_rule_modifier(StringName("time_auxiliary:" + str(hostile_source_id)), &"mark", &"remove" if multiplier == 1.0 else &"apply", {} if multiplier == 1.0 else {"time_damage_taken_multiplier": multiplier})
+
+
+func settle_native_time_auxiliary_damage(authority: RefCounted, record: Dictionary, loss: float) -> Dictionary:
+	if _arena_effects == null or _arena_effects.get_ref() != authority or not authority.owns_time_auxiliary_damage_record(self, record) or not _prepared_frame_committed or _prepared_launch_frame.is_empty() or _launch_definition.get("id") != "time_sovereign" or not record.target is PlayerController or record.target.get_world_2d() != get_world_2d() or record.target.current_run_id() != StringName(str(_launch_identity.run_id)):
+		return {"ok": false}
+	var request: Dictionary = record.time_auxiliary_damage
+	if request.runtime_frame != _prepared_launch_frame.runtime_frame or not _prepared_launch_frame.batch.hit_facts.any(func(hit: Dictionary): return hit.action_id == request.action_id and hit.attack_generation == request.attack_generation and hit.hit_index == request.hit_index and hit.target_id == request.target_id):
+		return {"ok": false}
+	var receipt := request.duplicate(true)
+	receipt["run_id"] = str(_launch_identity.run_id)
+	receipt["owner_source_id"] = str(hostile_source_id)
+	receipt["actual_loss"] = loss
+	var accepted: Dictionary = _launch_runtime.accept_time_auxiliary_damage_receipt(receipt)
+	if not accepted.ok:
+		return accepted
+	if not sync_native_time_auxiliary_modifier(record.target, str(request.target_id)):
+		return {"ok": false}
+	return {"ok": true, "energy_cost": TimeAuxiliary.collapse_energy_allowance(float(record.resource_manager.energy), loss) if request.action_id == "traitor_enrage_collapse" else 0.0}
 
 
 func sync_native_void_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
@@ -841,6 +879,8 @@ func prepared_launch_arena_payload_allowed(request: Dictionary) -> bool:
 
 
 func prepared_launch_payload_parameters() -> Dictionary:
+	if not _prepared_launch_frame.is_empty() and _launch_definition.get("id", "") == "time_sovereign":
+		return {"bolt_pool_radius_px": _launch_definition.mechanisms.bolt_pool_radius_px, "bolt_pool_lifetime_frames": _launch_definition.mechanisms.bolt_pool_lifetime_frames}
 	if not _prepared_launch_frame.is_empty() and _launch_definition.get("id", "") == "forge_colossus":
 		return {"lava_pool_radius_px": _launch_definition.mechanisms.lava_pool_radius_px, "lava_pool_lifetime_frames": _launch_definition.mechanisms.lava_pool_lifetime_frames, "lava_pool_tick_damage": _launch_definition.mechanisms.lava_pool_tick_damage, "lava_pool_tick_frames": _launch_definition.mechanisms.lava_pool_tick_frames}
 	if _prepared_launch_frame.is_empty() or _launch_definition.get("id", "") != "ruin_king":

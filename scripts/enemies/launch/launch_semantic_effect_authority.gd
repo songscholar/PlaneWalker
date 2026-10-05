@@ -30,6 +30,7 @@ var _geometry: RefCounted = Geometry.new()
 var _spatial: RefCounted = Spatial.new()
 var _spatial_nodes := {}
 var _frame_authority: WeakRef
+var _projectile_impact_authority: WeakRef
 
 
 func configure(run_id: String, frame: int = 0) -> bool:
@@ -43,6 +44,13 @@ func configure_native_root(root: Node2D) -> bool:
 	if _root != null or not _pending.is_empty() or not is_instance_valid(root) or not root.is_inside_tree() or not root.global_transform.is_equal_approx(Transform2D.IDENTITY):
 		return false
 	_root = root
+	return true
+
+
+func bind_projectile_impact_authority(authority: RefCounted) -> bool:
+	if authority == null or not authority.has_method("owns_semantic_impact") or _projectile_impact_authority != null and _projectile_impact_authority.get_ref() != authority:
+		return false
+	_projectile_impact_authority = weakref(authority)
 	return true
 
 
@@ -324,7 +332,7 @@ static func normalize_transaction_snapshot(value: Dictionary) -> Dictionary:
 	return normalized
 
 
-func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = [], foreign_constructs: int = 0) -> Dictionary:
+func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = [], foreign_constructs: int = 0, projectile_impacts: Array = []) -> Dictionary:
 	if _state.is_empty() or not _pending.is_empty() or foreign_active_zones < 0 or foreign_active_zones > MAX_ZONES or not Contract.exact_fields(context, ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]) or context.run_id != _state.run_id or not _frame(context.runtime_frame) or context.runtime_frame != int(_state.runtime_frame) + 1 or not context.actors is Dictionary or not context.targets is Dictionary or batches.size() > 32 or not _native_matches(snapshot()):
 		return _failure("context_or_projection")
 	var before := snapshot()
@@ -334,6 +342,9 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 	for source: String in retired_children:
 		_retire_owned_zones(next, source, context.actors)
 	var zone_capacity := MAX_ZONES - foreign_active_zones
+	for impact: Variant in projectile_impacts:
+		if not impact is Dictionary or not _reserve_time_bolt_impact(next, impact, context, zone_capacity):
+			return _failure("time_bolt_impact")
 	if _active_zone_count(next) > zone_capacity:
 		return _failure("shared_zone_budget")
 	var targets: Dictionary = context.targets.duplicate()
@@ -749,6 +760,9 @@ func _reserve_terminal_zone(next: Dictionary, source: String, species: String, s
 
 
 func _reserve_time_bolt_impact(next: Dictionary, impact: Dictionary, context: Dictionary, capacity: int) -> bool:
+	var authority: RefCounted = _projectile_impact_authority.get_ref() if _projectile_impact_authority != null else null
+	if authority == null or not authority.owns_semantic_impact(impact):
+		return false
 	if not Contract.exact_fields(impact, ["run_id", "hostile_source_id", "attack_generation", "hit_index", "runtime_frame", "position", "parameters"]) or impact.run_id != context.run_id or impact.runtime_frame != context.runtime_frame or not context.actors.has(impact.hostile_source_id) or context.actors[impact.hostile_source_id].get("_launch_definition").id != "time_sovereign" or not Contract.valid_point(impact.position) or impact.parameters != {"radius": 16.0, "lifetime_frames": 180, "damage": 0.0, "tick_frames": 60, "slow_multiplier": 0.7} or not Contract.integer_in_range(impact.attack_generation, 1, MAX_FRAME) or typeof(impact.hit_index) != TYPE_INT or impact.hit_index != 0 or next.zones.size() >= MAX_RESERVATIONS:
 		return false
 	var claim := JSON.stringify([impact.hostile_source_id, impact.attack_generation, "bolt_impact"]).sha256_text()
@@ -853,6 +867,9 @@ func _apply_statuses(value: Dictionary, targets: Dictionary) -> bool:
 						return false
 			if not target.apply_floor_rule_modifier(&"launch_semantic", &"movement", &"apply" if slow != 1.0 or speed != 1.0 else &"remove", {"movement_multiplier": maxf(0.4, slow * speed)} if slow != 1.0 or speed != 1.0 else {}):
 				return false
+			var time_freeze: bool = value.get("zones", []).any(func(zone: Dictionary): return zone.action_id == "traitor_time_freeze" and zone.phase == "ACTIVE" and _contains(zone.geometry, target.global_position))
+			if not target.apply_floor_rule_modifier(&"launch_time_freeze", &"regeneration", &"apply" if time_freeze else &"remove", {"time_regen_multiplier": 0.5} if time_freeze else {}):
+				return false
 			var pull := Vector2.ZERO
 			for zone: Dictionary in value.get("zones", []):
 				if zone.has("pull_parameters") and zone.phase == "ACTIVE" and _contains(zone.geometry, target.global_position):
@@ -864,6 +881,8 @@ func _apply_statuses(value: Dictionary, targets: Dictionary) -> bool:
 				if _native_actor(owner) and owner.get("_launch_definition").id == "forge_colossus" and not owner.sync_native_forge_modifier(target, id, not value.has("zones")):
 					return false
 				if _native_actor(owner) and owner.get("_launch_definition").id == "void_throne" and not owner.sync_native_void_modifier(target, id, not value.has("zones")):
+					return false
+				if _native_actor(owner) and owner.get("_launch_definition").id == "time_sovereign" and not owner.sync_native_time_auxiliary_modifier(target, id, not value.has("zones")):
 					return false
 		elif _native_actor(target):
 			var runtime: RefCounted = target.get("_launch_runtime")

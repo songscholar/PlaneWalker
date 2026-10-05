@@ -26,7 +26,7 @@ var _owned_void_resources: Array[Dictionary] = []
 
 
 func configure(run_id: String, runtime_frame: int = 0) -> bool:
-	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame) or not _semantics.configure(run_id, runtime_frame) or not _summons.configure(run_id, runtime_frame):
+	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame) or not _semantics.configure(run_id, runtime_frame) or not _semantics.bind_projectile_impact_authority(_payloads) or not _summons.configure(run_id, runtime_frame):
 		return false
 	_state = {"schema_version": 2, "run_id": run_id, "runtime_frame": runtime_frame, "claims": []}
 	return true
@@ -333,7 +333,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	if not _prepare_payload_registry(payload_prepared.ticket.before, payload_prepared.ticket.after, projected, operations):
 		_payloads.rollback(payload_prepared.ticket)
 		return _failure("payload_threat_registry")
-	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after), retired_children, _foreign_construct_count(context.actors, payload_prepared.ticket.after))
+	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after), retired_children, _foreign_construct_count(context.actors, payload_prepared.ticket.after), payload_prepared.ticket.semantic_impacts)
 	if not semantic_prepared.ok:
 		_payloads.rollback(payload_prepared.ticket)
 		return semantic_prepared
@@ -473,6 +473,16 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 			return _failure("forge_burn_receipt")
 		if record.has("void_damage") and not record.void_owner.settle_native_void_damage(self, record, maxf(0.0, hp_before - float(record.health.current_hp))):
 			return _failure("void_damage_receipt")
+		if record.has("time_auxiliary_damage"):
+			var accepted: Dictionary = record.time_owner.settle_native_time_auxiliary_damage(self, record, maxf(0.0, hp_before - float(record.health.current_hp)))
+			if not accepted.get("ok", false):
+				return _failure("time_auxiliary_receipt")
+			if record.has("resource_manager"):
+				var buffered: bool = not (record.resource_manager.get("_active_frame_signal_transaction") as Dictionary).is_empty()
+				var current: Dictionary = record.resource_manager.resource_state(&"time_energy")
+				if current != record.resource_before or not record.resource_manager.try_spend_resource(&"time_energy", float(accepted.energy_cost), int(current.revision), &"traitor_enrage_collapse", buffered).ok:
+					return _failure("time_collapse_energy")
+				_owned_void_resources.append({"manager": record.resource_manager, "buffered": buffered, "before": record.resource_before, "after": record.resource_manager.resource_state(&"time_energy")})
 	for record: Dictionary in ticket.health_records:
 		if record.get("forest_drain_reservation", false):
 			continue
@@ -512,7 +522,7 @@ func rollback_effects(ticket: Dictionary) -> bool:
 		return false
 	var ok := true
 	for record: Dictionary in ticket.damage_records:
-		if record.has("void_pickup"):
+		if record.has("void_pickup") or record.has("time_auxiliary_damage") and record.has("resource_manager"):
 			ok = record.resource_manager.restore_resource_state(&"time_energy", record.resource_before, false) and ok
 	_owned_void_resources.clear()
 	for owned: Dictionary in _owned_signals:
@@ -589,6 +599,10 @@ func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dic
 
 func owns_void_damage_record(owner: Node2D, record: Dictionary) -> bool:
 	return not _pending.is_empty() and not _publishing and record.get("void_owner") == owner and _pending.damage_records.has(record) and record.has("void_damage")
+
+
+func owns_time_auxiliary_damage_record(owner: Node2D, record: Dictionary) -> bool:
+	return not _pending.is_empty() and not _publishing and record.get("time_owner") == owner and _pending.damage_records.has(record) and record.has("time_auxiliary_damage")
 
 
 func owns_void_pickup_record(owner: Node2D, record: Dictionary) -> bool:
@@ -850,6 +864,12 @@ func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictio
 			return _failure("damage_plan")
 	record["info"] = info
 	_attach_void_damage(record, actor, hit, claim)
+	if info != null and actor.get("_launch_definition").id == "time_sovereign" and actor.get("_launch_runtime").has_method("accept_time_auxiliary_damage_receipt") and hit.action_id in ["traitor_temporal_slash", "traitor_enrage_collapse"] and target is PlayerController:
+		record["time_owner"] = actor
+		record["time_auxiliary_damage"] = {"fact_id": "time-health:" + claim.substr(0, 40), "action_id": str(hit.action_id), "attack_generation": int(hit.attack_generation), "hit_index": int(hit.hit_index), "target_id": str(hit.target_id), "runtime_frame": int(hit.runtime_frame)}
+		if hit.action_id == "traitor_enrage_collapse":
+			record["resource_manager"] = target.time_manager
+			record["resource_before"] = target.time_manager.resource_state(&"time_energy")
 	return {"ok": true, "record": record}
 
 

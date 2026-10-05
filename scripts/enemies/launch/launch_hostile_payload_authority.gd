@@ -6,7 +6,7 @@ const ProjectionScript := preload("res://scripts/enemies/launch/launch_hostile_p
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const DebrisNode := preload("res://scripts/enemies/launch/launch_ruin_debris.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
-const TICKET_FIELDS := ["ticket_id", "runtime_frame", "before", "after", "damage_requests", "native_contacts", "target_positions", "targets", "landing_queries", "static_exclusions"]
+const TICKET_FIELDS := ["ticket_id", "runtime_frame", "before", "after", "damage_requests", "semantic_impacts", "native_contacts", "target_positions", "targets", "landing_queries", "static_exclusions"]
 
 var _runtime: RefCounted = Runtime.new()
 var _root: Node2D
@@ -31,6 +31,10 @@ func configure_native_root(root: Node2D) -> bool:
 
 func snapshot() -> Dictionary:
 	return _runtime.snapshot()
+
+
+func owns_semantic_impact(impact: Dictionary) -> bool:
+	return not _pending.is_empty() and not _committed and _pending.semantic_impacts.has(impact) and impact.runtime_frame == _pending.runtime_frame
 
 
 func native_nodes() -> Array[Node2D]:
@@ -179,7 +183,7 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 	for row: Dictionary in after.get("arena_debris", {}).get("rows", []):
 		if row.phase == "ACTIVE" and not active_before.has(row.id):
 			landing_queries.append(row.position.duplicate(true))
-	var ticket := {"ticket_id": _next_ticket, "runtime_frame": context.runtime_frame, "before": before, "after": after, "damage_requests": advanced.damage_requests, "native_contacts": native_contacts, "target_positions": target_descriptors, "targets": context.targets.duplicate() if has_live_payloads else {}, "landing_queries": landing_queries, "static_exclusions": debris_context.static_exclusions}
+	var ticket := {"ticket_id": _next_ticket, "runtime_frame": context.runtime_frame, "before": before, "after": after, "damage_requests": advanced.damage_requests, "semantic_impacts": advanced.semantic_impacts, "native_contacts": native_contacts, "target_positions": target_descriptors, "targets": context.targets.duplicate() if has_live_payloads else {}, "landing_queries": landing_queries, "static_exclusions": debris_context.static_exclusions}
 	_next_ticket += 1
 	_pending = ticket.duplicate(true)
 	_committed = false
@@ -376,6 +380,9 @@ func _debris_context(value: Dictionary, context: Dictionary, contacts: Dictionar
 		occupied[source + ":body"] = {"position": {"x": actor.global_position.x, "y": actor.global_position.y}, "radius": radius, "clearance": 0.0}
 		if not prepared.is_empty():
 			occupied[source + ":candidate"] = {"position": prepared.after.position.duplicate(true), "radius": radius, "clearance": 0.0}
+		if not state.terminal and int(state.mechanism_state.get("dormancy_remaining_frames", 0)) > 0:
+			count += 1
+			occupied[source + ":dormant-sigil"] = {"position": {"x": actor.global_position.x, "y": actor.global_position.y}, "radius": 12.0, "clearance": 0.0}
 		var arena: Dictionary = state.get("arena_state", {})
 		if arena.is_empty() or arena.terminal:
 			continue

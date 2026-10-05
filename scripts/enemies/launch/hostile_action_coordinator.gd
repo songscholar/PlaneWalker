@@ -314,7 +314,7 @@ static func _committed_geometry(action: Dictionary, state: Dictionary, actor_kin
 
 
 static func _locks_time_receipt_facing(action: Dictionary) -> bool:
-	return action.id == "traitor.counter_rewind" and action.geometry.size() == 2 and action.geometry[0].shape == "target_circle" and action.geometry[1].shape == "target_circle"
+	return action.id == "traitor_blink" or action.id == "traitor.counter_rewind" and action.geometry.size() == 2 and action.geometry[0].shape == "target_circle" and action.geometry[1].shape == "target_circle"
 
 
 static func _hit_fact(hit: Dictionary, action: Dictionary, state: Dictionary) -> Dictionary:
