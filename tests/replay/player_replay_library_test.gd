@@ -1,0 +1,75 @@
+extends Node
+
+const Suite := preload("res://tests/support/test_suite.gd")
+const Registry := preload("res://scripts/content/content_registry.gd")
+const Binding := preload("res://scripts/content/content_snapshot_provider.gd")
+const Fixture := preload("res://tests/support/player_replay_fixture.gd")
+const EnemyScene := preload("res://scenes/enemies/enemy_tank.tscn")
+const LIBRARY_PATH := "res://scripts/replay/player_replay_library.gd"
+
+
+func _ready() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var suite := Suite.new()
+	suite.assert_true(ResourceLoader.exists(LIBRARY_PATH), "native replay library must exist")
+	if not ResourceLoader.exists(LIBRARY_PATH):
+		suite.finish(get_tree())
+		return
+	var registry := Registry.new()
+	var report = registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"LAUNCH")
+	suite.assert_true(not report.has_blocking_errors(), "library uses actual content")
+	var replay := await Fixture.record(self, registry, suite, "library-recording", 501)
+	var library: Node = load(LIBRARY_PATH).new()
+	add_child(library)
+	var root := OS.get_environment("PLANEWALKER_TEST_DATA_DIR").path_join("replay_library")
+	suite.assert_true(library.configure(root, "0.4.0-dev", Binding.snapshot(registry), "slot_1", "base").ok, "physical library configures")
+	var stored: Dictionary = library.store(replay)
+	suite.assert_true(stored.ok, "actual recording is retained")
+	var id: String = stored.get("context", {}).get("id", "")
+	suite.assert_equal(library.rows().size(), 1, "library projects one validated row")
+	var live := EnemyScene.instantiate()
+	add_child(live)
+	live.process_mode = Node.PROCESS_MODE_DISABLED
+	live.set_physics_process(false)
+	var before: Dictionary = live.get_node("HealthComponent").runtime_state_snapshot()
+	var events: Array = []
+	var observer := func(_ability: StringName, _token: int, _generation: int, _frame: int, _run: StringName, _context: Dictionary): events.append(true)
+	EventBus.time_skill_committed.connect(observer)
+	suite.assert_true(library.select(id).ok, "library admits actual viewing Player")
+	suite.assert_equal(library.current_player().full_player_replay_snapshot(), replay.frames[0].snapshot, "selection restores exact initial state")
+	suite.assert_true(library.seek(3).ok, "timeline seeks")
+	suite.assert_equal(library.current_player().full_player_replay_snapshot(), replay.frames[3].snapshot, "timeline restores recorded state")
+	var state_before: Dictionary = library.snapshot()
+	suite.assert_true(not library.seek(-1).ok and not library.set_speed(3.0).ok, "invalid controls refuse")
+	suite.assert_equal(library.snapshot(), state_before, "invalid controls preserve cursor")
+	suite.assert_true(library.seek(0).ok and library.set_playing(true).ok and library.set_speed(2.0).ok, "playback controls configure")
+	suite.assert_true(library.advance(1.0 / 60.0).ok, "timeline advances at recorded rate")
+	suite.assert_equal(library.snapshot().cursor, 2, "double speed advances two frames")
+	suite.assert_true(library.advance(1.0).ok, "timeline reaches terminal")
+	suite.assert_true(not library.snapshot().playing and library.snapshot().cursor == 4, "terminal playback stops")
+	suite.assert_equal(live.get_node("HealthComponent").runtime_state_snapshot(), before, "viewing preserves live Health")
+	suite.assert_equal(events, [], "viewing publishes no global time facts")
+	var exported: Dictionary = library.export_recording(id)
+	suite.assert_true(exported.ok and FileAccess.file_exists(exported.context.path), "recording exports to managed storage")
+	suite.assert_true(library.import_file(exported.context.path).ok, "physical export imports idempotently")
+	suite.assert_equal(library.rows().size(), 1, "import duplicate does not grow archive")
+	suite.assert_true(not library.import_json("{}").ok, "malformed imports refuse")
+	var fresh: Node = load(LIBRARY_PATH).new()
+	add_child(fresh)
+	suite.assert_true(fresh.configure(root, "0.4.0-dev", Binding.snapshot(registry), "slot_1", "base").ok, "cold archive reloads")
+	suite.assert_equal(fresh.rows(), library.rows(), "cold library matches durable rows")
+	suite.assert_true(library.remove(id).ok, "explicit delete commits")
+	suite.assert_equal(library.rows(), [], "removed recording disappears")
+	suite.assert_true(library.current_player() == null, "deleting active recording destroys its viewing target")
+	suite.assert_true(not fresh.remove(id).ok, "stale library refuses overwriting newer archive")
+	suite.assert_true(fresh.reload().ok, "reopening stale archive reloads the actual primary")
+	suite.assert_equal(fresh.rows(), [], "reloaded stale library projects committed deletion")
+	library.queue_free()
+	fresh.queue_free()
+	live.queue_free()
+	EventBus.time_skill_committed.disconnect(observer)
+	await get_tree().process_frame
+	suite.finish(get_tree())

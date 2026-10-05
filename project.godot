@@ -30,7 +30,7 @@ FocusCoordinator="*res://scripts/ui/focus_coordinator.gd"
 
 [internationalization]
 
-locale/translations=PackedStringArray("res://data/localization/translations.en.translation", "res://data/localization/translations.zh_CN.translation", "res://assets/production/localization/content_management.en.translation", "res://assets/production/localization/content_management.zh_CN.translation", "res://assets/production/localization/community.en.translation", "res://assets/production/localization/community.zh_CN.translation")
+locale/translations=PackedStringArray("res://data/localization/translations.en.translation", "res://data/localization/translations.zh_CN.translation", "res://assets/production/localization/content_management.en.translation", "res://assets/production/localization/content_management.zh_CN.translation", "res://assets/production/localization/community.en.translation", "res://assets/production/localization/community.zh_CN.translation", "res://assets/production/localization/replay_library.en.translation", "res://assets/production/localization/replay_library.zh_CN.translation")
 locale/fallback="en"
 
 [display]
@@ -46,6 +46,48 @@ enabled=PackedStringArray("res://addons/content_pack_source_export/plugin.cfg")
 
 [input]
 
+ui_accept={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"keycode":4194309)
+, Object(InputEventKey,"device":-1,"keycode":4194310)
+, Object(InputEventKey,"device":-1,"keycode":32)
+, Object(InputEventJoypadButton,"device":-1,"button_index":0)
+]
+}
+ui_cancel={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"keycode":4194305)
+, Object(InputEventJoypadButton,"device":-1,"button_index":1)
+]
+}
+ui_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"keycode":4194319)
+, Object(InputEventJoypadButton,"device":-1,"button_index":13)
+, Object(InputEventJoypadMotion,"device":-1,"axis":0,"axis_value":-1.0)
+]
+}
+ui_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"keycode":4194321)
+, Object(InputEventJoypadButton,"device":-1,"button_index":14)
+, Object(InputEventJoypadMotion,"device":-1,"axis":0,"axis_value":1.0)
+]
+}
+ui_up={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"keycode":4194320)
+, Object(InputEventJoypadButton,"device":-1,"button_index":11)
+, Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":-1.0)
+]
+}
+ui_down={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"keycode":4194322)
+, Object(InputEventJoypadButton,"device":-1,"button_index":12)
+, Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":1.0)
+]
+}
 move_up={
 "deadzone": 0.25,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":87,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)

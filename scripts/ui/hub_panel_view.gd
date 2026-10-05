@@ -5,6 +5,7 @@ signal command_requested(command: Dictionary, revision: int)
 signal tutorial_requested
 signal boss_rush_requested(config: Dictionary)
 signal daily_boss_requested
+signal replay_library_requested
 
 const Contract := preload("res://scripts/ui/contracts/hub_view_state.gd")
 const ShareCodec := preload("res://scripts/progression/build_share_codec.gd")
@@ -270,6 +271,8 @@ func _save_build() -> void:
 
 
 func _render_collection(kind: String) -> void:
+	if kind == "archive":
+		_add_action("replay_library", tr("UI_REPLAY_LIBRARY"), "", true, "", func(): replay_library_requested.emit())
 	var rows: Array = _state.collections[kind]
 	if rows.is_empty():
 		_add_text(tr("UI_HUB_EMPTY"))

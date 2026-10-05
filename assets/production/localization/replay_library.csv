@@ -1,0 +1,17 @@
+keys,en,zh_CN
+UI_REPLAY_LIBRARY,Replays,回放
+UI_REPLAY_EMPTY,No saved recordings,暂无已保存的回放
+UI_REPLAY_COUNT_FMT,%d / %d recordings,%d / %d 条回放
+UI_REPLAY_SELECT,Select a recording,选择回放
+UI_REPLAY_IMPORT,Import replay,导入回放
+UI_REPLAY_EXPORT,Export,导出
+UI_REPLAY_EXPORTED,Replay exported,回放已导出
+UI_REPLAY_REMOVE,Delete replay,删除回放
+UI_REPLAY_REMOVE_CONFIRM,Delete this recording?,删除这条回放？
+UI_REPLAY_PLAY,Play,播放
+UI_REPLAY_PAUSE,Pause,暂停
+UI_REPLAY_SPEED,Playback speed,播放速度
+UI_REPLAY_INVALID,This replay could not be opened,无法打开这条回放
+UI_REPLAY_FULL,Replay storage is full,回放存储已满
+UI_REPLAY_INCOMPATIBLE,This replay uses different game content,这条回放使用了不同的游戏内容
+UI_REPLAY_SAVE_FAILED,Save failed. Reopen the replay library and try again.,保存失败。请重新打开回放列表后重试。

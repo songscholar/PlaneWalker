@@ -220,8 +220,8 @@ func _add_action(
 	return button
 
 
-func _activate_action(button: Button, callback: Callable, source_epoch: int) -> void:
-	if source_epoch != _epoch or _submitted or button.disabled or not visible:
+func _activate_action(button: Variant, callback: Callable, source_epoch: int) -> void:
+	if source_epoch != _epoch or _submitted or not visible or not is_instance_valid(button) or not button is Button or button.disabled:
 		return
 	_submitted = true
 	for control: Control in _actions:

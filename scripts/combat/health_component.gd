@@ -1352,6 +1352,10 @@ func invulnerability_replay_snapshot() -> Dictionary:
 
 
 func can_restore_invulnerability_replay_snapshot(value: Dictionary) -> bool:
+	return _valid_invulnerability_replay_snapshot(value, _reward_invulnerability_tokens.keys())
+
+
+func _valid_invulnerability_replay_snapshot(value: Dictionary, reward_tokens: Array) -> bool:
 	if (
 		value.size() != 4
 		or typeof(value.get("invulnerability_token")) != TYPE_INT
@@ -1375,7 +1379,7 @@ func can_restore_invulnerability_replay_snapshot(value: Dictionary) -> bool:
 			or token > int(value["invulnerability_token"])
 			or typeof(remaining.get(str(token))) != TYPE_INT
 			or int(remaining[str(token)]) <= 0
-			or _reward_invulnerability_tokens.has(token)
+			or reward_tokens.has(token)
 		):
 			return false
 		prior = token
@@ -1441,6 +1445,14 @@ func _install_non_reward_invulnerability_frames(token: int, remaining_frames: in
 
 
 func can_restore_reward_effect_snapshot(value: Dictionary) -> bool:
+	var non_reward_tokens: Array = []
+	for token: Variant in _active_invulnerability_tokens:
+		if not _reward_invulnerability_tokens.has(token):
+			non_reward_tokens.append(token)
+	return _valid_reward_effect_snapshot(value, non_reward_tokens)
+
+
+func _valid_reward_effect_snapshot(value: Dictionary, non_reward_tokens: Array) -> bool:
 	const FIELDS: Array[String] = [
 		"current_hp", "max_hp", "defense", "healing_multiplier", "dead",
 		"invulnerable", "invulnerability_token", "reward_invulnerability_tokens",
@@ -1492,13 +1504,40 @@ func can_restore_reward_effect_snapshot(value: Dictionary) -> bool:
 	for key_value: Variant in remaining.keys():
 		if typeof(key_value) != TYPE_STRING or not target_tokens.has(int(str(key_value))):
 			return false
-	for token_value: Variant in _active_invulnerability_tokens.keys():
+	for token_value: Variant in non_reward_tokens:
 		var token := int(token_value)
-		if _reward_invulnerability_tokens.has(token):
-			continue
 		if token > int(value["invulnerability_token"]) or target_tokens.has(token):
 			return false
 	return (not target_tokens.is_empty()) == bool(value["invulnerable"])
+
+
+func can_restore_full_replay_reward_snapshot(value: Dictionary, invulnerability: Dictionary) -> bool:
+	return (
+		value.get("reward_invulnerability_tokens") is Array
+		and invulnerability.get("non_reward_tokens") is Array
+		and value.get("invulnerability_token") == invulnerability.get("invulnerability_token")
+		and _valid_reward_effect_snapshot(value, invulnerability.non_reward_tokens)
+		and _valid_invulnerability_replay_snapshot(invulnerability, value.reward_invulnerability_tokens)
+	)
+
+
+func restore_full_replay_reward_snapshot(value: Dictionary, invulnerability: Dictionary) -> bool:
+	if not can_restore_full_replay_reward_snapshot(value, invulnerability):
+		return false
+	var before := reward_effect_snapshot()
+	var before_invulnerability := invulnerability_replay_snapshot()
+	if _install_full_replay_reward_snapshot(value, invulnerability):
+		return true
+	if not _install_full_replay_reward_snapshot(before, before_invulnerability):
+		push_error("Full Replay Health restore rollback failed")
+	return false
+
+
+func _install_full_replay_reward_snapshot(value: Dictionary, invulnerability: Dictionary) -> bool:
+	for token_value: Variant in _active_invulnerability_tokens.keys():
+		_cancel_invulnerability_token(int(token_value))
+	_active_invulnerability_sources.clear()
+	return restore_reward_effect_snapshot(value) and restore_invulnerability_replay_snapshot(invulnerability)
 
 
 func restore_reward_effect_snapshot(value: Dictionary) -> bool:

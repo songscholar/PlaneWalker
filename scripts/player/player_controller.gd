@@ -3940,6 +3940,34 @@ func weapon_presentation_snapshot() -> Dictionary:
 	return result.duplicate(true)
 
 
+func configure_replay_view_identity(recorded_identity: Dictionary) -> bool:
+	var world := SceneScope.replay_world(self)
+	var identity := ReplayRecorderScript.validate_full_player_identity(recorded_identity)
+	if world == null or not world.isolation_valid() or not world.owns_player(self) or process_mode != Node.PROCESS_MODE_DISABLED or is_physics_processing() or _hostile_frame_participant != null or _run_id != &"standalone" or _runtime_frame != 0 or identity.is_empty() or int(identity.owner_character_generation) < 2:
+		return false
+	var character := _character_profile_catalog_definition(StringName(identity.character_profile_id))
+	var weapon := _weapon_profile_catalog_definition(StringName(identity.weapon_profile_id))
+	if character.is_empty() or weapon.is_empty() or _normalized_mobility_profile(character.get("mobility", {})) != identity.mobility:
+		return false
+	var registry := ContentRegistryScript.new()
+	var report = registry.load_packs([{"path": BASE_CONTENT_PACK_PATH, "required": true}], BASE_CONTENT_PACK_GAME_VERSION, &"LAUNCH")
+	if report.has_blocking_errors():
+		return false
+	var talents: Array = []
+	for id: String in identity.character_talent_ids:
+		talents.append(registry.get_content(StringName(id)))
+	var config := {"milestone": "M1" if identity.character_profile_id == "wanderer_m1_v1" else "LAUNCH", "character_id": identity.character_id, "weapon_id": identity.weapon_id, "character_profile": character, "weapon_profile": weapon, "character_talents": identity.character_talent_ids.duplicate(), "character_talent_definitions": talents, "enabled_time_skills": identity.time_ability_ids.duplicate()}
+	if not configure_run(StringName(identity.run_id)):
+		return false
+	# Loadout reset advances both the payload and character generation once.
+	_owner_character_generation = int(identity.owner_character_generation) - 1
+	if not configure_loadout(config) or not stats.apply_profile(identity.stats):
+		return false
+	_apply_stats_to_components(true)
+	_launch_replay_identity_baseline = identity.duplicate(true)
+	return full_player_replay_identity() == identity
+
+
 func full_player_replay_identity() -> Dictionary:
 	var current := _current_full_player_replay_identity(
 		_launch_replay_identity_baseline.is_empty()
@@ -4185,7 +4213,8 @@ func _install_full_player_replay_snapshot(value: Dictionary, for_rollback: bool)
 		value.has("reward_effect_state")
 		and not restore_reward_effect_snapshot(
 			(value.get("reward_effect_state", {}) as Dictionary).duplicate(true),
-			false
+			false,
+			(value.player_state.get("invulnerability_state", {}) as Dictionary).duplicate(true)
 		)
 	):
 		return false
@@ -4357,7 +4386,8 @@ func _can_install_full_player_replay_snapshot(value: Dictionary) -> bool:
 	if value.has("reward_effect_state") and (
 		not value.get("reward_effect_state") is Dictionary
 		or not can_restore_reward_effect_snapshot(
-			(value["reward_effect_state"] as Dictionary).duplicate(true)
+			(value["reward_effect_state"] as Dictionary).duplicate(true),
+			(value.player_state.get("invulnerability_state", {}) as Dictionary).duplicate(true)
 		)
 	):
 		return false
@@ -4382,10 +4412,13 @@ func _can_install_full_player_replay_snapshot(value: Dictionary) -> bool:
 		or not health.has_method("can_restore_invulnerability_replay_snapshot")
 		or not health.has_method("restore_invulnerability_replay_snapshot")
 		or not player_state.get("invulnerability_state") is Dictionary
-		or not bool(health.call(
-			"can_restore_invulnerability_replay_snapshot",
-			(player_state["invulnerability_state"] as Dictionary).duplicate(true)
-		))
+		or (
+			not value.has("reward_effect_state")
+			and not bool(health.call(
+				"can_restore_invulnerability_replay_snapshot",
+				(player_state["invulnerability_state"] as Dictionary).duplicate(true)
+			))
+		)
 	):
 		return false
 	return (
@@ -4616,9 +4649,10 @@ func _validated_full_player_replay_snapshot(value: Dictionary) -> Dictionary:
 	if is_launch_snapshot and (
 		not player_state.get("invulnerability_state") is Dictionary
 		or health == null
-		or not health.has_method("can_restore_invulnerability_replay_snapshot")
+		or not health.has_method("can_restore_full_replay_reward_snapshot")
 		or not bool(health.call(
-			"can_restore_invulnerability_replay_snapshot",
+			"can_restore_full_replay_reward_snapshot",
+			(value.reward_effect_state.health as Dictionary).duplicate(true),
 			(player_state["invulnerability_state"] as Dictionary).duplicate(true)
 		))
 	):
@@ -11347,18 +11381,22 @@ func reward_effect_snapshot() -> Dictionary:
 	}
 
 
-func can_restore_reward_effect_snapshot(value: Dictionary) -> bool:
+func can_restore_reward_effect_snapshot(value: Dictionary, replay_invulnerability: Dictionary = {}) -> bool:
 	if not _valid_reward_effect_snapshot(value):
 		return false
 	var weapon := value["weapon"] as Dictionary
+	var health_target := (value["health"] as Dictionary).duplicate(true)
+	var health_valid := health != null and health.has_method("can_restore_reward_effect_snapshot")
+	if health_valid:
+		if replay_invulnerability.is_empty():
+			health_valid = bool(health.call("can_restore_reward_effect_snapshot", health_target))
+		else:
+			health_valid = health.has_method("can_restore_full_replay_reward_snapshot") and bool(health.call(
+				"can_restore_full_replay_reward_snapshot", health_target, replay_invulnerability
+			))
 	return (
 		_valid_reward_stats_snapshot(value["stats"] as Dictionary)
-		and health != null
-		and health.has_method("can_restore_reward_effect_snapshot")
-		and bool(health.call(
-			"can_restore_reward_effect_snapshot",
-			(value["health"] as Dictionary).duplicate(true)
-		))
+		and health_valid
 		and time_manager != null
 		and time_manager.has_method("can_restore_reward_effect_snapshot")
 		and bool(time_manager.call(
@@ -11376,16 +11414,18 @@ func can_restore_reward_effect_snapshot(value: Dictionary) -> bool:
 
 func restore_reward_effect_snapshot(
 	value: Dictionary,
-	publish_signals: bool = true
+	publish_signals: bool = true,
+	replay_invulnerability: Dictionary = {}
 ) -> bool:
-	if not can_restore_reward_effect_snapshot(value):
+	if not can_restore_reward_effect_snapshot(value, replay_invulnerability):
 		return false
 	var before := reward_effect_snapshot()
 	if before.is_empty():
 		return false
-	if _install_reward_effect_snapshot(value, publish_signals) and reward_effect_snapshot() == value:
+	var before_invulnerability: Dictionary = health.invulnerability_replay_snapshot() if not replay_invulnerability.is_empty() else {}
+	if _install_reward_effect_snapshot(value, publish_signals, replay_invulnerability) and reward_effect_snapshot() == value:
 		return true
-	if not _install_reward_effect_snapshot(before, false) or reward_effect_snapshot() != before:
+	if not _install_reward_effect_snapshot(before, false, before_invulnerability) or reward_effect_snapshot() != before:
 		push_error("Player reward-effect restore rollback failed")
 	return false
 
@@ -11449,7 +11489,7 @@ func _valid_reward_effect_snapshot(value: Dictionary) -> bool:
 	)
 
 
-func _install_reward_effect_snapshot(value: Dictionary, publish_signals: bool = true) -> bool:
+func _install_reward_effect_snapshot(value: Dictionary, publish_signals: bool = true, replay_invulnerability: Dictionary = {}) -> bool:
 	var energy_before := float(time_manager.get("energy"))
 	var max_energy_before := float(time_manager.get("max_energy"))
 	if not _restore_reward_stats_snapshot(value["stats"] as Dictionary):
@@ -11466,10 +11506,13 @@ func _install_reward_effect_snapshot(value: Dictionary, publish_signals: bool = 
 		)
 	):
 		_queue_reward_energy_signal()
-	if not bool(health.call(
-		"restore_reward_effect_snapshot",
-		(value["health"] as Dictionary).duplicate(true)
-	)):
+	var health_target := (value["health"] as Dictionary).duplicate(true)
+	var health_restored: bool
+	if replay_invulnerability.is_empty():
+		health_restored = bool(health.call("restore_reward_effect_snapshot", health_target))
+	else:
+		health_restored = bool(health.call("restore_full_replay_reward_snapshot", health_target, replay_invulnerability))
+	if not health_restored:
 		return false
 	if not bool(time_manager.call(
 		"restore_reward_effect_snapshot",

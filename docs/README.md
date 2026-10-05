@@ -86,11 +86,24 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P22A Player Replay Archive Design](superpowers/specs/2026-10-05-p22a-player-replay-archive-design.md) | 玩家录制封装、物理回放库、兼容拒绝与隔离播放边界 | Approved / Current authority |
 | [P22A Player Replay Archive Plan](superpowers/plans/2026-10-05-p22a-player-replay-archive.md) | 实际 Player 录制、原子保存、导入导出和寻址播放实施 | Completed / Historical |
 | [P22A Player Replay Archive Evidence](current/2026-10-05-p22a-player-replay-archive-evidence.md) | 物理回放库、故障与并发写保护、实际 Player 隔离寻址播放 | Focused Verified / Current |
+| [P22B Replay Library Design](superpowers/specs/2026-10-05-p22b-replay-library-design.md) | 原生回放库、精确历史寻址、身份重建和隔离恢复 | Approved / Current authority |
+| [P22B Replay Library Plan](superpowers/plans/2026-10-05-p22b-replay-library.md) | 物理列表、播放控制、双语窗口和据点入口实施 | Completed / Historical |
+| [P22B Replay Library Evidence](current/2026-10-05-p22b-replay-library-evidence.md) | 五角色五武器历史寻址、实际手柄控制和原生据点回放库 | Focused Verified / Current |
+| [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
+| [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
+| [Native UI Certification Repairs](current/2026-10-05-native-ui-certification-repairs-evidence.md) | 原生菜单夹具、五层面板流程和奖励浮点精度修复 | Focused Verified / Current |
+| [Native Narrative Checkpoint Regression](current/2026-10-05-native-narrative-regression-evidence.md) | 正式路线、结局退休后的完整角色冷恢复和一次性交接 | Focused Verified / Current |
+| [Native Ruin Wall Evidence](current/2026-10-05-p15b-native-ruin-wall-evidence.md) | 原生墙体寿命、坍塌预警、真实伤害和安全占位 | Focused Verified / Current |
+| [Ruin Debris Domain Evidence](current/2026-10-05-p15b-ruin-debris-domain-evidence.md) | 落地身份、容量、占位、生命值和寿命的纯领域校验 | Focused Verified / Native integration active |
+| [Native Ruin Debris Evidence](current/2026-10-05-p15b-native-ruin-debris-evidence.md) | 实际碎石障碍、共享场地预算、事务回滚和遭遇工作退役 | Focused Verified / Current |
 | [Native Elite Regeneration Evidence](current/2026-10-05-native-elite-regeneration-evidence.md) | 精英真实回血、实际恢复预算、重击中断、Stop 和物理冷恢复 | Focused Verified / Current |
 | [Native Player Weapon Collision Evidence](current/2026-10-05-native-player-weapon-collision-evidence.md) | 五武器真实敌人扣血、高速弹丸扫掠和自然地牢剑击 | Focused Verified / Current |
 | [P21A Native Boss Rush Evidence](current/2026-10-05-p21a-native-boss-rush-evidence.md) | 五 Boss 原生流程、物理存档、失败重试和手柄暂停 | Focused Verified / Current |
 | [P21B Native Daily Boss Design](superpowers/specs/2026-10-05-p21b-native-daily-boss-design.md) | 固定配装、UTC+8 日界、每天三次尝试和原生每日 Boss | Approved / Current authority |
 | [P21B Native Daily Boss Plan](superpowers/plans/2026-10-05-p21b-native-daily-boss.md) | 独立挑战状态、真实道具效果与物理保存实施 | Active / Current |
+| [P21B Native Daily Boss Evidence](current/2026-10-05-p21b-native-daily-boss-evidence.md) | 固定配装、每日三次、实际首领胜负、冷恢复和双语操作验证 | Focused Verified / Current |
+| [P21C Authored Challenges Design](superpowers/specs/2026-10-05-p21c-authored-challenges-design.md) | 五武器固定配装、三首领与差异化挑战目标 | Approved / Current authority |
+| [P21C Authored Challenges Plan](superpowers/plans/2026-10-05-p21c-authored-challenges.md) | 原生关卡目标、独立挑战记录和据点入口实施 | Active / Current |
 | [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
 | [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
 | [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Historical contract |

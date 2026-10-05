@@ -136,6 +136,8 @@ func _commit(candidate: Dictionary, id: String) -> Dictionary:
 	var written = _save.save_profile_compare_exchange(_save_id, "local", {"player_replay_archive": candidate}, expected)
 	var reconciled := false
 	if not written.ok:
+		if written.metadata.get("reason", "") == "expected_primary_stale":
+			return _finish_failure(&"REPLAY_ARCHIVE_STALE_PRIMARY")
 		var inspected = _save.inspect_profile(_save_id, "local")
 		if not inspected.ok or not _same(inspected.payload.payload.get("player_replay_archive", {}), candidate):
 			_busy = false

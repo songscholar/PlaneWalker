@@ -1,6 +1,7 @@
 class_name WorldPayloadAuthority
 extends Node
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
 const SCHEMA_VERSION := 1
 const MAX_SEGMENT_LENGTH := 64
 const MAX_PAYLOAD_ID_LENGTH := 320
@@ -608,12 +609,8 @@ func restore_replay_snapshot(value: Dictionary) -> bool:
 	if replay_snapshot() == value:
 		return true
 	var candidate_invalidations := validated["invalidated_generations_by_key"] as Dictionary
-	for current_key: Variant in _invalidated_generations.keys():
-		if (
-			not candidate_invalidations.has(current_key)
-			or candidate_invalidations[current_key] != _invalidated_generations[current_key]
-		):
-			return false
+	if not _can_restore_invalidation_history(candidate_invalidations):
+		return false
 
 	_mutation_locked = true
 	var staging_root := Node.new()
@@ -664,6 +661,30 @@ func restore_replay_snapshot(value: Dictionary) -> bool:
 	return true
 
 
+func _can_restore_invalidation_history(candidate: Dictionary) -> bool:
+	# A private, disabled viewer may seek across Rewind; live worlds retain history.
+	var world := SceneScope.replay_world(self)
+	var player := get_parent()
+	if (
+		world != null
+		and world.get_script() == SceneScope.ReplayWorld
+		and world.isolation_valid()
+		and player is Node2D
+		and player.is_inside_tree()
+		and not player.is_queued_for_deletion()
+		and world.owns_player(player)
+		and player.process_mode == Node.PROCESS_MODE_DISABLED
+		and not player.is_physics_processing()
+		and player.get("_hostile_frame_participant") == null
+		and player.get("world_payload_authority") == self
+	):
+		return true
+	for current_key: Variant in _invalidated_generations.keys():
+		if not candidate.has(current_key) or candidate[current_key] != _invalidated_generations[current_key]:
+			return false
+	return true
+
+
 func can_restore_replay_snapshot(value: Dictionary) -> bool:
 	if (
 		_mutation_locked
@@ -675,12 +696,8 @@ func can_restore_replay_snapshot(value: Dictionary) -> bool:
 	if validated.is_empty():
 		return false
 	var candidate_invalidations := validated["invalidated_generations_by_key"] as Dictionary
-	for current_key: Variant in _invalidated_generations.keys():
-		if (
-			not candidate_invalidations.has(current_key)
-			or candidate_invalidations[current_key] != _invalidated_generations[current_key]
-		):
-			return false
+	if not _can_restore_invalidation_history(candidate_invalidations):
+		return false
 	for descriptor_value: Variant in validated["descriptors"] as Array:
 		var descriptor := descriptor_value as Dictionary
 		if not _factories.has(str(descriptor["handler_id"])):
@@ -709,12 +726,8 @@ func begin_transaction_restore(value: Dictionary) -> Dictionary:
 	if validated.is_empty():
 		return {}
 	var candidate_invalidations := validated["invalidated_generations_by_key"] as Dictionary
-	for current_key: Variant in _invalidated_generations.keys():
-		if (
-			not candidate_invalidations.has(current_key)
-			or candidate_invalidations[current_key] != _invalidated_generations[current_key]
-		):
-			return {}
+	if not _can_restore_invalidation_history(candidate_invalidations):
+		return {}
 
 	var candidate_descriptors_by_id: Dictionary = {}
 	for descriptor_value: Variant in validated["descriptors"] as Array:

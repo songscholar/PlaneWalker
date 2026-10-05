@@ -135,6 +135,17 @@ func _test_faults_and_stale_writer(first: Dictionary, second: Dictionary) -> voi
 		return false)
 	_suite.assert_true(not interleaved.store(first).ok and callback_state[1], "physical compare-exchange refuses an interleaved writer at promotion")
 	_suite.assert_equal(_archive("interleaved").snapshot(), competitor.snapshot(), "interleaved refusal preserves actual winning primary")
+	var identical_winner := _archive("identical-race")
+	var identical_state := [false, false]
+	var identical_loser := _archive("identical-race", func(point: StringName):
+		if point == &"before_primary_promote" and not identical_state[0]:
+			identical_state[0] = true
+			identical_state[1] = identical_winner.store(first).ok
+		return false)
+	var loser_before: Dictionary = identical_loser.snapshot()
+	_suite.assert_true(not identical_loser.store(first).ok and identical_state[1], "identical-candidate CAS loser cannot claim its write committed")
+	_suite.assert_true(identical_loser.snapshot() == loser_before, "CAS loser preserves its prior memory until explicit reload")
+	_suite.assert_equal(_archive("identical-race").snapshot(), identical_winner.snapshot(), "identical race preserves the actual winner")
 	var recover := _archive("recovery")
 	_suite.assert_true(recover.store(first).ok, "backup recovery fixture commits first recording")
 	var backup: Dictionary = recover.snapshot()

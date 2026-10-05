@@ -1,6 +1,12 @@
 # Native Verification Repairs
 
-Date: 2026-10-05
+- Status: Verified Locally / Combined certification pending
+- Document Role: Current runtime verification repair evidence
+- Authority Level: Below the full product completion specification
+- Applies To: Released semantic targets, lifecycle facades, actual run pause and audio cleanup
+- Owner: Project integration lead
+- Depends On: `../superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
+- Last Verified: 2026-10-05
 
 ## Retained behavior
 
@@ -21,6 +27,23 @@ Date: 2026-10-05
 - Native event encounter GREEN after bounded playback release check: `planewalker-tests.hmzL5l`.
 - All accepted focused logs were scanned for script/deferred errors, physics-query mutation, invalid calls and ObjectDB/RID leaks. No such failures remained.
 - Stock Godot focused runs report `godot_line_coverage_unsupported`; this evidence does not claim a line-coverage percentage.
+
+## Durable Records Stress Budget
+
+The frozen certification's local record scene timed out at the default 90 seconds.
+The same actual physical scene passes with an explicit 300-second budget in
+`planewalker-tests.TE9bGd`; its log timestamps span approximately 150 seconds.
+It retains and validates 1000 queued settlement records, producing an 8.65-MiB
+profile. This scene now receives a 300-second minimum, alongside the existing
+native combat checkpoint exception. The queue size, validation and failure/leak
+gates are preserved. Default invocation GREEN: `planewalker-tests.FjyjkD`.
+
+The complete native content migration scene passes at an explicit 300 seconds in
+`planewalker-tests.pwF1EB`, with approximately 96 seconds between log creation and
+completion. Its five actual physical fixtures, trusted historical migration and
+forged-signature refusals remain intact. It now receives the same scene-specific
+300-second minimum. Default invocation GREEN: `planewalker-tests.NcjsTZ`;
+the complete fixture passes without an explicit timeout override.
 
 ## Limits
 

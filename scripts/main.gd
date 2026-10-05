@@ -19,6 +19,8 @@ const LocalRecordsScript := preload("res://scripts/community/local_run_records.g
 const ContentSnapshotScript := preload("res://scripts/content/content_snapshot_provider.gd")
 const BossRushScript := preload("res://scripts/modes/boss_rush_coordinator.gd")
 const DailyBossScript := preload("res://scripts/modes/daily_boss_coordinator.gd")
+const ReplayLibraryScript := preload("res://scripts/replay/player_replay_library.gd")
+const ReplayLibraryPanelScript := preload("res://scripts/replay/player_replay_library_panel.gd")
 
 @onready var status_label: Label = $DebugLayer/StatusLabel
 @onready var combat_room: Node2D = $CombatRoom01
@@ -63,6 +65,8 @@ var _last_launch_rejection: Dictionary = {}
 var _local_records: RefCounted
 var _boss_rush: Node2D
 var _daily_boss: Node2D
+var _replay_library: Node
+var _replay_library_panel: Control
 
 
 func _enter_tree() -> void:
@@ -100,6 +104,7 @@ func _ready() -> void:
 	_setup_training()
 	_setup_boss_rush()
 	_setup_daily_boss()
+	_setup_replay_library()
 	_setup_narrative()
 	_setup_music()
 	_setup_content_management()
@@ -177,6 +182,8 @@ func content_manager() -> RefCounted:
 
 
 func _content_mutation_locked() -> bool:
+	if _replay_library_panel != null and _replay_library_panel.visible:
+		return true
 	if _content_reload_pending or _credits_pending or _training_flow != null and _training_flow.is_training_active() or _boss_rush != null and _boss_rush.is_open() or _daily_boss != null and _daily_boss.is_open():
 		return true
 	var service: RefCounted = _profile_service if _profile_service != null else GameState.profile_runtime_service()
@@ -267,6 +274,7 @@ func _setup_hub() -> void:
 	hub.tutorial_requested.connect(_open_hub_tutorial)
 	hub.boss_rush_requested.connect(_open_boss_rush)
 	hub.daily_boss_requested.connect(_open_daily_boss)
+	hub.replay_library_requested.connect(_open_replay_library)
 	hub.settings_requested.connect(_open_hub_setting)
 	start_menu.visible = false
 	FocusCoordinator.close_scope(start_menu)
@@ -347,6 +355,53 @@ func _open_daily_boss() -> void:
 	if _daily_boss.open().ok:
 		_hub_flow.close_panel()
 		_hub_flow.hide_hub()
+
+
+func _setup_replay_library() -> void:
+	if _profile_service == null or not _profile_error.is_empty():
+		return
+	var identity: Dictionary = _profile_service.local_record_storage_identity()
+	var library := ReplayLibraryScript.new()
+	library.name = "ReplayLibrary"
+	add_child(library)
+	var configured: Dictionary = library.configure(
+		GameState.save_path.get_base_dir().path_join("plane_walker/replays"),
+		"0.4.0-dev", identity.content_snapshot, identity.profile_id, identity.save_domain
+	)
+	if not configured.ok:
+		library.queue_free()
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "ReplayLibraryLayer"
+	layer.layer = 62
+	add_child(layer)
+	var panel := ReplayLibraryPanelScript.new()
+	panel.name = "ReplayLibraryPanel"
+	layer.add_child(panel)
+	if not panel.configure(library).ok:
+		layer.queue_free()
+		library.queue_free()
+		return
+	_replay_library = library
+	_replay_library_panel = panel
+	panel.closed.connect(_replay_library_closed)
+
+
+func _open_replay_library() -> void:
+	if _replay_library_panel == null or _hub_flow == null or not _hub_flow.is_hub_visible() or _credits_pending or _content_reload_pending or _content_panel != null and _content_panel.visible:
+		return
+	_hub_flow.close_panel()
+	_hub_flow.hide_hub()
+	var opened: Dictionary = _replay_library_panel.open()
+	if not opened.ok:
+		_replay_library_closed()
+		_hub_flow.panel_view().show_rejection("UI_REPLAY_SAVE_FAILED")
+
+
+func _replay_library_closed() -> void:
+	if _hub_flow != null and not is_queued_for_deletion():
+		_hub_flow.show_hub()
+		_hub_flow.open_function("archive")
 
 
 func _start_hub_training(task_id: StringName, expected_revision: int) -> bool:
@@ -511,6 +566,8 @@ func _apply_localization() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _replay_library_panel != null and _replay_library_panel.visible:
+		return
 	if _daily_boss != null and _daily_boss.handle_input(event):
 		get_viewport().set_input_as_handled()
 		return

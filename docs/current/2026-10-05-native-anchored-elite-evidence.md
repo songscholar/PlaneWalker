@@ -1,6 +1,12 @@
 # Native Anchored Elite Evidence
 
-Date: 2026-10-05
+- Status: Verified Locally / Combined certification pending
+- Document Role: Current native elite verification evidence
+- Authority Level: Below the approved enemy and Boss specification
+- Applies To: Native Anchored control, frame rollback and historical cold restoration
+- Owner: Project integration lead
+- Depends On: `../superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`
+- Last Verified: 2026-10-05
 
 ## Executable scope
 
