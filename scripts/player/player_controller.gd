@@ -8,6 +8,8 @@ const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
 const StatsResource := preload("res://scripts/core/stats.gd")
 const MetaStatsScript := preload("res://scripts/progression/meta_stats_applicator.gd")
 const MetaCatalogFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
+const ChallengeRewardCatalogScript := preload("res://scripts/progression/challenge_reward_catalog.gd")
+const ChallengeRewardRules := preload("res://scripts/community/local_run_record_rules.gd")
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const EventTemporaryModifierLayerScript := preload("res://scripts/events/event_temporary_modifier_layer.gd")
 const ItemEffectScript := preload("res://scripts/items/item_effect.gd")
@@ -238,6 +240,7 @@ const WEAPON_MODIFIER_BOUNDS := {
 
 @export var stats: Resource
 var _event_temporary_modifier_layer: RefCounted = EventTemporaryModifierLayerScript.new()
+var _challenge_reward_projection: Dictionary = {}
 
 @onready var health: Node = $HealthComponent
 @onready var loadout_runtime: Node = $PlayerLoadoutRuntime
@@ -1049,6 +1052,23 @@ func meta_run_projection_snapshot() -> Dictionary:
 		return {}
 	var value: Variant = loadout_runtime.snapshot().get("meta_run_projection", {})
 	return value.duplicate(true) if value is Dictionary else {}
+
+
+func challenge_reward_projection_snapshot() -> Dictionary:
+	return _challenge_reward_projection.duplicate(true)
+
+
+func challenge_reward_presentation_snapshot() -> Dictionary:
+	return _challenge_reward_projection.get("presentation", {}).duplicate(true)
+
+
+func get_challenge_outgoing_damage_multiplier(target: Node) -> float:
+	if not is_inside_tree() or not target is LaunchBossActor or not target.is_inside_tree() or SceneScope.replay_world(target) != SceneScope.replay_world(self):
+		return 1.0
+	var identity: Dictionary = target.launch_runtime_snapshot().get("runtime", {}).get("identity", {})
+	if str(identity.get("run_id", "")) != str(_run_id):
+		return 1.0
+	return float(_challenge_reward_projection.modifiers.boss_damage_multiplier) if not _challenge_reward_projection.is_empty() else 1.0
 
 
 func _sync_weapon_adapter_stats() -> void:
@@ -2045,6 +2065,18 @@ func configure_loadout(config: Dictionary, meta_catalog: RefCounted = null) -> b
 	if not _character_profile_allows_milestone(next_config):
 		return false
 	var character_profile := next_config.get("character_profile", {}) as Dictionary
+	var rewards: Variant = next_config.get("challenge_reward_projection", next_config.get("meta_run_projection", {}).get("challenge_reward_projection", {}) if next_config.get("meta_run_projection", {}) is Dictionary else {})
+	if not rewards is Dictionary:
+		return false
+	if not rewards.is_empty():
+		var challenge_catalog := ChallengeRewardCatalogScript.canonical()
+		if challenge_catalog == null or str(next_config.get("milestone", "")) not in ["LAUNCH", "EXPANSION"] or not challenge_catalog.valid_projection(rewards):
+			return false
+	if next_config.get("meta_run_projection") is Dictionary and next_config.meta_run_projection.has("challenge_reward_projection") and not ChallengeRewardRules.same(next_config.meta_run_projection.challenge_reward_projection, rewards):
+		return false
+	if not rewards.is_empty():
+		# Cold JSON and typed replay must capture the same numeric identity.
+		next_config["challenge_reward_projection"] = JSON.parse_string(ChallengeRewardRules.canonical(rewards))
 	var next_stats = StatsResource.new()
 	var permanent_stats: Dictionary = character_profile.get("base_stats", {})
 	if next_config.has("meta_run_projection"):
@@ -2062,11 +2094,15 @@ func configure_loadout(config: Dictionary, meta_catalog: RefCounted = null) -> b
 		permanent_stats = prepared_stats.context.stats
 	if not bool(next_stats.call("apply_profile", permanent_stats)):
 		return false
+	if not rewards.is_empty():
+		next_stats.move_speed *= float(rewards.modifiers.move_speed_multiplier)
 	var next_mobility := _normalized_mobility_profile(
 		character_profile.get("mobility", {}) as Dictionary
 	)
 	if next_mobility.is_empty():
 		return false
+	if not rewards.is_empty():
+		next_mobility.dash_speed *= float(rewards.modifiers.dash_speed_multiplier)
 	var next_weapon_id := StringName(str(next_config.get("weapon_id", "")))
 	var explicit_weapon_profile := next_config.has("weapon_profile")
 	var used_compatibility_profile := false
@@ -2121,6 +2157,7 @@ func configure_loadout(config: Dictionary, meta_catalog: RefCounted = null) -> b
 		return false
 	stats = next_stats
 	_mobility_profile = next_mobility.duplicate(true)
+	_challenge_reward_projection = next_config.get("challenge_reward_projection", {}).duplicate(true)
 	character_runtime = character_assembly.get("runtime") as RefCounted
 	character_action_coordinator = character_assembly.get("coordinator") as RefCounted
 	var assembled_runtime := assembly.get("runtime") as RefCounted
@@ -2167,6 +2204,7 @@ func _loadout_configuration_transaction_snapshot() -> Dictionary:
 		"stats_resource": stats,
 		"stats_state": stats.snapshot() if stats != null and stats.has_method("snapshot") else {},
 		"mobility": mobility_snapshot(),
+		"challenge_reward_projection": _challenge_reward_projection.duplicate(true),
 		"run_id": _run_id,
 		"owner_character_generation": _owner_character_generation,
 		"launch_replay_identity_baseline": _launch_replay_identity_baseline.duplicate(true),
@@ -2203,6 +2241,7 @@ func _rollback_loadout_configuration(before: Dictionary) -> bool:
 		return false
 	stats = prior_stats
 	_mobility_profile = restored_mobility
+	_challenge_reward_projection = before.get("challenge_reward_projection", {}).duplicate(true)
 	_run_id = StringName(str(before.get("run_id", _run_id)))
 	_owner_character_generation = int(before.get(
 		"owner_character_generation",
@@ -3947,7 +3986,10 @@ func configure_replay_view_identity(recorded_identity: Dictionary) -> bool:
 		return false
 	var character := _character_profile_catalog_definition(StringName(identity.character_profile_id))
 	var weapon := _weapon_profile_catalog_definition(StringName(identity.weapon_profile_id))
-	if character.is_empty() or weapon.is_empty() or _normalized_mobility_profile(character.get("mobility", {})) != identity.mobility:
+	var expected_mobility := _normalized_mobility_profile(character.get("mobility", {}))
+	if identity.has("challenge_reward_projection"):
+		expected_mobility = ChallengeRewardCatalogScript.canonical().projected_mobility(identity.character_profile_id, identity.challenge_reward_projection)
+	if character.is_empty() or weapon.is_empty() or not ChallengeRewardRules.same(expected_mobility, identity.mobility):
 		return false
 	var registry := ContentRegistryScript.new()
 	var report = registry.load_packs([{"path": BASE_CONTENT_PACK_PATH, "required": true}], BASE_CONTENT_PACK_GAME_VERSION, &"LAUNCH")
@@ -3957,6 +3999,8 @@ func configure_replay_view_identity(recorded_identity: Dictionary) -> bool:
 	for id: String in identity.character_talent_ids:
 		talents.append(registry.get_content(StringName(id)))
 	var config := {"milestone": "M1" if identity.character_profile_id == "wanderer_m1_v1" else "LAUNCH", "character_id": identity.character_id, "weapon_id": identity.weapon_id, "character_profile": character, "weapon_profile": weapon, "character_talents": identity.character_talent_ids.duplicate(), "character_talent_definitions": talents, "enabled_time_skills": identity.time_ability_ids.duplicate()}
+	if identity.has("challenge_reward_projection"):
+		config["challenge_reward_projection"] = identity.challenge_reward_projection.duplicate(true)
 	if not configure_run(StringName(identity.run_id)):
 		return false
 	# Loadout reset advances both the payload and character generation once.
@@ -4039,6 +4083,9 @@ func _current_full_player_replay_identity(require_exact_initial_talents: bool = 
 	var projection := meta_run_projection_snapshot()
 	if not projection.is_empty():
 		identity["meta_projection_digest"] = projection.projection_digest
+	var challenge := challenge_reward_projection_snapshot()
+	if not challenge.is_empty():
+		identity["challenge_reward_projection"] = challenge
 	return identity
 
 

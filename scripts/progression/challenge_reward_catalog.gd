@@ -2,10 +2,15 @@ extends RefCounted
 
 const Meta := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Rules := preload("res://scripts/community/local_run_record_rules.gd")
+const Paths := preload("res://scripts/save/save_path_policy.gd")
+const Envelope := preload("res://scripts/save/save_envelope.gd")
+const CharacterProfile := preload("res://scripts/player/characters/character_runtime_profile.gd")
 const SOURCE := "res://assets/production/modes/challenge_rewards.json"
 const IDS := ["walker_proof", "speedwalker_boots", "walker_entry", "eternal_walker", "void_walker", "daily_participation_frame", "daily_walker_frame", "eternal_traveler", "daily_weapon_skin", "daily_character_color", "daily_archive_decoration"]
 var _rows: Dictionary = {}
 var _fingerprint := ""
+var _mobility_profiles: Dictionary = {}
+static var _canonical_catalog: RefCounted
 
 
 func configure() -> bool:
@@ -27,9 +32,35 @@ func configure() -> bool:
 		if row.id == "walker_proof" and not Rules.same(row.effects, {"boss_damage_multiplier": 1.15}) or row.id == "speedwalker_boots" and not Rules.same(row.effects, {"move_speed_multiplier": 1.15, "dash_speed_multiplier": 1.2}) or row.kind != "item" and not row.effects.is_empty():
 			return false
 		rows[row.id] = row.duplicate(true)
+	var profiles: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/character_runtime_profiles.json"))
+	if not profiles is Array:
+		return false
+	var mobility_profiles := {}
+	for profile: Variant in profiles:
+		if not profile is Dictionary or not CharacterProfile.new().configure(profile).ok or mobility_profiles.has(profile.id):
+			return false
+		mobility_profiles[profile.id] = profile.mobility.duplicate(true)
 	_rows = rows
 	_fingerprint = Rules.canonical(value).sha256_text()
+	_mobility_profiles = mobility_profiles
 	return true
+
+
+static func canonical() -> RefCounted:
+	if _canonical_catalog == null:
+		var candidate: RefCounted = load("res://scripts/progression/challenge_reward_catalog.gd").new()
+		if not candidate.configure():
+			return null
+		_canonical_catalog = candidate
+	return _canonical_catalog
+
+
+func projected_mobility(profile_id: String, projection_value: Dictionary) -> Dictionary:
+	if not valid_projection(projection_value) or not _mobility_profiles.has(profile_id) or profile_id == "wanderer_m1_v1":
+		return {}
+	var result: Dictionary = _mobility_profiles[profile_id].duplicate(true)
+	result.dash_speed = float(result.dash_speed) * float(projection_value.modifiers.dash_speed_multiplier)
+	return result
 
 
 func fingerprint() -> String:
@@ -70,7 +101,7 @@ func valid_collection(value: Variant) -> bool:
 
 
 func projection(collection: Dictionary, identity: Dictionary) -> Dictionary:
-	if not valid_collection(collection) or not Meta.exact_fields(identity, ["profile_id", "save_domain", "content_snapshot"]):
+	if not valid_collection(collection) or not Meta.exact_fields(identity, ["profile_id", "save_domain", "content_snapshot"]) or not Paths.validate_id(identity.profile_id).ok or not Paths.validate_id(identity.save_domain).ok or not identity.content_snapshot is Dictionary or not Envelope._content_snapshot_error(identity.content_snapshot).is_empty():
 		return {}
 	var modifiers := {"boss_damage_multiplier": 1.0, "move_speed_multiplier": 1.0, "dash_speed_multiplier": 1.0}
 	var presentation := {"character_cosmetic_id": "", "tint": [], "weapon_cosmetic_id": "", "weapon_tint": [], "frame_id": "", "title_id": "", "decoration_id": ""}

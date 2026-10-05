@@ -6,6 +6,8 @@ const CharacterTalentStateScript := preload(
 	"res://scripts/player/characters/character_talent_state.gd"
 )
 const EventModifierLayerScript := preload("res://scripts/events/event_temporary_modifier_layer.gd")
+const ChallengeRewards := preload("res://scripts/progression/challenge_reward_catalog.gd")
+const ChallengeRules := preload("res://scripts/community/local_run_record_rules.gd")
 
 const SCHEMA_ID := "planewalker.weapon_runtime_replay"
 const SCHEMA_VERSION := 6
@@ -19,6 +21,7 @@ const FULL_PLAYER_LAUNCH_SCHEMA_VERSION := 7
 const FULL_PLAYER_LAUNCH_FRAME_SCHEMA_VERSION := 7
 const FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 7
 const FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION := 8
+const FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION := 9
 const FULL_PLAYER_LEGACY_REWARD_LAUNCH_SCHEMA_VERSION := 6
 const FULL_PLAYER_LEGACY_REWARD_LAUNCH_FRAME_SCHEMA_VERSION := 6
 const FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION := 6
@@ -859,6 +862,11 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 		if not _is_sha256(value.meta_projection_digest) or value.get("character_profile_id") == "wanderer_m1_v1":
 			return {}
 		expected_fields.append("meta_projection_digest")
+	if value.has("challenge_reward_projection"):
+		expected_fields.append("challenge_reward_projection")
+		var challenge_catalog := ChallengeRewards.canonical()
+		if challenge_catalog == null or not value.challenge_reward_projection is Dictionary or not challenge_catalog.valid_projection(value.challenge_reward_projection) or not ChallengeRules.same(challenge_catalog.projected_mobility(str(value.get("character_profile_id", "")), value.challenge_reward_projection), value.get("mobility")):
+			return {}
 	if (
 		not _has_exact_fields_static(value, expected_fields)
 		or not replay_value_is_safe(value)
@@ -915,10 +923,14 @@ static func validate_full_player_identity(value: Dictionary) -> Dictionary:
 	}
 	if value.has("meta_projection_digest"):
 		normalized["meta_projection_digest"] = value.meta_projection_digest
+	if value.has("challenge_reward_projection"):
+		normalized["challenge_reward_projection"] = value.challenge_reward_projection.duplicate(true)
 	return normalized
 
 
 static func full_player_schema_version_for_identity(identity: Dictionary) -> int:
+	if identity.has("challenge_reward_projection"):
+		return FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION
 	if identity.has("meta_projection_digest"):
 		return FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION
 	return (
@@ -929,6 +941,8 @@ static func full_player_schema_version_for_identity(identity: Dictionary) -> int
 
 
 static func full_player_frame_schema_version_for_identity(identity: Dictionary) -> int:
+	if identity.has("challenge_reward_projection"):
+		return FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION
 	if identity.has("meta_projection_digest"):
 		return FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION
 	return (
@@ -939,6 +953,8 @@ static func full_player_frame_schema_version_for_identity(identity: Dictionary) 
 
 
 static func full_player_snapshot_schema_version_for_identity(identity: Dictionary) -> int:
+	if identity.has("challenge_reward_projection"):
+		return FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION
 	if identity.has("meta_projection_digest"):
 		return FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION
 	return (
@@ -949,7 +965,7 @@ static func full_player_snapshot_schema_version_for_identity(identity: Dictionar
 
 
 static func is_current_launch_snapshot_schema(version: int) -> bool:
-	return version in [FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION, FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION]
+	return version in [FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION, FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION, FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION]
 
 
 static func _validated_full_player_stats(value: Dictionary) -> Dictionary:
@@ -1054,6 +1070,7 @@ static func validate_full_player_snapshot(
 		FULL_PLAYER_LEGACY_REWARD_LAUNCH_SNAPSHOT_SCHEMA_VERSION,
 		FULL_PLAYER_LAUNCH_SNAPSHOT_SCHEMA_VERSION,
 		FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION,
+		FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION,
 	]
 	var expected_player_fields := (
 		FULL_PLAYER_LAUNCH_STATE_FIELDS
@@ -1451,7 +1468,9 @@ static func _full_player_snapshot_fields_for_schema(
 	schema_version: int
 ) -> Array[String]:
 	var is_m1 := str(identity.get("character_profile_id", "")) == "wanderer_m1_v1"
-	if identity.has("meta_projection_digest") != (schema_version == FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION):
+	if identity.has("challenge_reward_projection") != (schema_version == FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION):
+		return []
+	if identity.has("meta_projection_digest") and schema_version not in [FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION, FULL_PLAYER_CHALLENGE_LAUNCH_SCHEMA_VERSION] or not identity.has("meta_projection_digest") and schema_version == FULL_PLAYER_META_LAUNCH_SCHEMA_VERSION:
 		return []
 	if is_m1 and schema_version == FULL_PLAYER_SNAPSHOT_SCHEMA_VERSION:
 		return FULL_PLAYER_SNAPSHOT_FIELDS

@@ -1309,6 +1309,9 @@ func _install_health_replay_snapshot(value: Dictionary) -> bool:
 func _apply_target_damage_modifiers(damage_info: RefCounted, starting_amount: float) -> float:
 	var amount := starting_amount
 	var owner_entity := get_parent()
+	var attacker: Variant = damage_info.attacker
+	if is_instance_valid(attacker) and attacker is PlayerController and str(damage_info.run_id) == str(attacker.current_run_id()):
+		amount *= attacker.get_challenge_outgoing_damage_multiplier(owner_entity)
 	if owner_entity.is_in_group("player"):
 		amount *= damage_received_multiplier
 	if owner_entity.has_method("get_damage_taken_multiplier_for"):

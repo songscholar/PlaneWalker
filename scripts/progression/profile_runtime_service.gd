@@ -280,6 +280,8 @@ func frozen_launch_projection() -> Dictionary:
 	var projection: Variant = _payload.get("pending_meta_run_projection")
 	if profile.is_empty() or profile.active_launch_receipt.is_empty() or not projection is Dictionary or not MetaProjection.validate(projection, _catalog) or projection.projection_digest != profile.active_launch_receipt.projection_digest:
 		return {}
+	if projection.has("challenge_reward_projection") and not _json_equal(projection.challenge_reward_projection, _challenge_rewards.projection(challenge_reward_collection(), local_record_storage_identity())):
+		return {}
 	return projection.duplicate(true)
 
 
@@ -1036,7 +1038,8 @@ func prepare_launch(request: Dictionary, expected_revision: int, run_config: Dic
 	var frozen_config := _validated_launch_config(config_value, request)
 	if frozen_config.is_empty():
 		return _failure(&"RUN_CONFIG_INVALID")
-	var projected: Dictionary = MetaProjection.from_profile(before, _catalog)
+	var rewards: Dictionary = _challenge_rewards.projection(challenge_reward_collection(), local_record_storage_identity()) if not challenge_reward_collection().equipped_ids.is_empty() else {}
+	var projected: Dictionary = MetaProjection.from_profile(before, _catalog, rewards)
 	if not projected.ok:
 		return projected
 	var candidate := before.duplicate(true)

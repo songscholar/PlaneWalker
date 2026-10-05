@@ -3,20 +3,31 @@ extends RefCounted
 
 const Catalog := preload("res://scripts/progression/meta_progression_catalog.gd")
 const Profile := preload("res://scripts/progression/meta_profile_state.gd")
+const ChallengeRewards := preload("res://scripts/progression/challenge_reward_catalog.gd")
 const FIELDS := ["schema_id", "schema_version", "catalog_fingerprint", "profile_revision", "unlocked_nodes", "stat_bonuses", "direct_combat_budget", "forge_attack_bonuses", "options", "soul_retention", "hub_discount", "projection_digest"]
 
 
-static func from_profile(profile: Dictionary, catalog: RefCounted) -> Dictionary:
+static func from_profile(profile: Dictionary, catalog: RefCounted, challenge_rewards: Dictionary = {}) -> Dictionary:
 	var validator = Profile.new()
 	if not validator.configure(catalog, profile):
 		return {"ok": false, "code": &"PROFILE_INVALID", "context": {}}
-	return {"ok": true, "code": &"OK", "context": {"projection": _derive(validator.snapshot(), catalog)}}
+	if not challenge_rewards.is_empty():
+		var reward_catalog := ChallengeRewards.canonical()
+		if reward_catalog == null or not reward_catalog.valid_projection(challenge_rewards):
+			return {"ok": false, "code": &"PROFILE_INVALID", "context": {}}
+	return {"ok": true, "code": &"OK", "context": {"projection": _derive(validator.snapshot(), catalog, challenge_rewards)}}
 
 
 static func validate(value: Dictionary, catalog: RefCounted = null) -> bool:
 	if catalog == null:
 		return false
-	if not Catalog.exact_fields(value, FIELDS) or value.schema_id != "planewalker.meta_run_projection" or not Catalog.bounded_int(value.schema_version, 1, 1) or not Catalog.bounded_int(value.profile_revision, 0, Catalog.MAX_VALUE) or not Catalog.fingerprint_valid(value.catalog_fingerprint) or not Catalog.fingerprint_valid(value.projection_digest) or not Catalog.valid_stat_budget(value.stat_bonuses) or not Catalog.finite_number(value.direct_combat_budget, 0.0, 0.15) or not Catalog.finite_number(value.soul_retention, 0.3, 0.7) or not Catalog.finite_number(value.hub_discount, 0.0, 0.1):
+	var fields := FIELDS.duplicate()
+	if value.has("challenge_reward_projection"):
+		fields.append("challenge_reward_projection")
+		var reward_catalog := ChallengeRewards.canonical()
+		if reward_catalog == null or not value.challenge_reward_projection is Dictionary or not reward_catalog.valid_projection(value.challenge_reward_projection):
+			return false
+	if not Catalog.exact_fields(value, fields) or value.schema_id != "planewalker.meta_run_projection" or not Catalog.bounded_int(value.schema_version, 1, 1) or not Catalog.bounded_int(value.profile_revision, 0, Catalog.MAX_VALUE) or not Catalog.fingerprint_valid(value.catalog_fingerprint) or not Catalog.fingerprint_valid(value.projection_digest) or not Catalog.valid_stat_budget(value.stat_bonuses) or not Catalog.finite_number(value.direct_combat_budget, 0.0, 0.15) or not Catalog.finite_number(value.soul_retention, 0.3, 0.7) or not Catalog.finite_number(value.hub_discount, 0.0, 0.1):
 		return false
 	if not _sorted_ids(value.unlocked_nodes) or not _sorted_ids(value.options) or not Catalog.exact_fields(value.forge_attack_bonuses, Catalog.WEAPON_IDS):
 		return false
@@ -39,7 +50,7 @@ static func validate(value: Dictionary, catalog: RefCounted = null) -> bool:
 		profile.unlocked_nodes = value.unlocked_nodes.duplicate()
 		for weapon: String in Catalog.WEAPON_IDS:
 			profile.forge_state[weapon].level = int(roundf(float(value.forge_attack_bonuses[weapon]) * 100.0))
-		if not state.restore_snapshot(profile) or _derive(state.snapshot(), catalog).projection_digest != value.projection_digest:
+		if not state.restore_snapshot(profile) or _derive(state.snapshot(), catalog, value.get("challenge_reward_projection", {})).projection_digest != value.projection_digest:
 			return false
 	return true
 
@@ -79,6 +90,8 @@ static func validate_run_resources(bundle: Dictionary, floor_index: int, catalog
 static func digest(value: Dictionary) -> String:
 	var unsigned := value.duplicate(true)
 	unsigned.erase("projection_digest")
+	if unsigned.get("challenge_reward_projection") is Dictionary:
+		unsigned.challenge_reward_projection = unsigned.challenge_reward_projection.get("digest", "")
 	# Hash authored whole percentages and integer counters independently of JSON float spelling.
 	for field: String in ["schema_version", "profile_revision"]:
 		if unsigned.has(field):
@@ -97,8 +110,10 @@ static func _percent_exact(value: Variant) -> bool:
 	return absf(float(value) * 100.0 - roundf(float(value) * 100.0)) <= 0.000000000001
 
 
-static func _derive(profile: Dictionary, catalog: RefCounted) -> Dictionary:
+static func _derive(profile: Dictionary, catalog: RefCounted, challenge_rewards: Dictionary = {}) -> Dictionary:
 	var value := {"schema_id": "planewalker.meta_run_projection", "schema_version": 1, "catalog_fingerprint": catalog.call("fingerprint"), "profile_revision": profile.revision, "unlocked_nodes": profile.unlocked_nodes.duplicate(), "stat_bonuses": Catalog.empty_stat_bonuses(), "direct_combat_budget": 0.0, "forge_attack_bonuses": {}, "options": [], "soul_retention": 0.3, "hub_discount": 0.0}
+	if not challenge_rewards.is_empty():
+		value["challenge_reward_projection"] = challenge_rewards.duplicate(true)
 	for id: String in profile.unlocked_nodes:
 		var definition: Dictionary = catalog.call("definition", StringName(id))
 		for effect: Dictionary in definition.effects:

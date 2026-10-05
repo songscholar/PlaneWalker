@@ -203,6 +203,7 @@ var _active_item_cue_kind: String = ""
 var _active_item_cue_remaining: float = 0.0
 var _actor_atlas: Sprite2D
 var _cosmetic_id := ""
+var _challenge_rewards: Dictionary = {}
 
 
 func bind_actor(actor: Node2D) -> bool:
@@ -426,6 +427,7 @@ func get_snapshot_for_test() -> Dictionary:
 		"boss_luminance": _boss_luminance,
 		"afterimage_count": _afterimage_count,
 		"actor_atlas": _actor_atlas.snapshot() if _actor_atlas != null else {},
+		"challenge_rewards": _challenge_rewards.duplicate(true),
 	}
 
 
@@ -477,6 +479,16 @@ func _sync_actor_atlas() -> void:
 	if not _actor_atlas.configure(actor_id, _cosmetic_id):
 		return
 	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
+	_refresh_challenge_rewards()
+
+
+func _refresh_challenge_rewards() -> void:
+	_challenge_rewards = {}
+	if _actor.has_method("challenge_reward_presentation_snapshot"):
+		_challenge_rewards = _actor.challenge_reward_presentation_snapshot()
+	var tint: Array = _challenge_rewards.get("tint", [])
+	if not tint.is_empty():
+		_actor_atlas.modulate *= Color(tint[0], tint[1], tint[2], tint[3])
 
 
 func apply_cosmetic(cosmetic_id: String) -> bool:
@@ -490,6 +502,7 @@ func apply_cosmetic(cosmetic_id: String) -> bool:
 		return false
 	_cosmetic_id = cosmetic_id
 	_actor_atlas.present(_state, _facing, _phase_clock, _flash_remaining > 0.0, _reduced_motion)
+	_refresh_challenge_rewards()
 	return true
 
 
@@ -1003,6 +1016,9 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 		draw_rect(Rect2(-4, -12, 8, 6), accent, true)
 		draw_rect(Rect2(-12, 0, 4, 12), primary.darkened(0.2), true)
 		draw_rect(Rect2(8, 0, 4, 12), primary.darkened(0.2), true)
+	var weapon_tint: Array = _challenge_rewards.get("weapon_tint", [])
+	if not weapon_tint.is_empty():
+		accent = Color(weapon_tint[0], weapon_tint[1], weapon_tint[2], weapon_tint[3])
 	draw_set_transform(Vector2.ZERO, _facing.angle(), Vector2.ONE)
 	if _weapon_visual_kind() == "bow":
 		_draw_player_bow(accent)
@@ -1018,6 +1034,23 @@ func _draw_player(primary: Color, secondary: Color, accent: Color) -> void:
 	elif _weapon_visual_kind() == "sword":
 		draw_rect(Rect2(10, 2, 14, 4), accent.darkened(0.15), true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_challenge_rewards()
+
+
+func _draw_challenge_rewards() -> void:
+	var frame: String = _challenge_rewards.get("frame_id", "")
+	if not frame.is_empty():
+		var color := Color(0.96, 0.84, 0.3) if frame == "daily_walker_frame" else Color(0.35, 0.95, 0.74)
+		for corner: Vector2 in [Vector2(-18, -22), Vector2(18, -22), Vector2(-18, 20), Vector2(18, 20)]:
+			var inward := Vector2(-signf(corner.x), -signf(corner.y))
+			draw_line(corner, corner + Vector2(inward.x * 6.0, 0), color, 2.0)
+			draw_line(corner, corner + Vector2(0, inward.y * 6.0), color, 2.0)
+	if not str(_challenge_rewards.get("title_id", "")).is_empty():
+		draw_rect(Rect2(-6, -29, 12, 3), Color(0.96, 0.84, 0.3), true)
+		draw_rect(Rect2(-2, -33, 4, 4), Color(0.84, 0.98, 1.0), true)
+	if not str(_challenge_rewards.get("decoration_id", "")).is_empty():
+		draw_rect(Rect2(-24, 7, 6, 8), Color(0.24, 0.85, 0.7), true)
+		draw_line(Vector2(-23, 10), Vector2(-19, 10), Color.WHITE, 1.0)
 
 
 func _draw_character_profile_cues() -> void:

@@ -27,12 +27,25 @@ exact candidate, duplicate claims do not write and stale writers refuse.
 
 The authored catalog freezes effects and presentation into a content-bound
 projection with a canonical digest. Walker Proof supplies Boss damage1.15;
-Speedwalker Boots supply move1.15/dash1.2. Follow-on runtime integration retains
-the exact frozen projection in native Player, checkpoints and replay identity.
+Speedwalker Boots supply move1.15/dash1.2. Selected equipment nests in the Meta
+projection before physical launch promotion; the launch digest authenticates
+its own digest. Native Player derives movement/dash from canonical author base
+without stacking. Health applies proof damage only to an actual bound native
+Boss in the same run. Player-owned presentation applies character and weapon
+tints, earned frame corners, title mark and archive badge. The existing free
+cosmetic atlas route reapplies the challenge tint immediately.
+
+Native Player normalizes projection JSON numbers before identity capture so
+typed replay and physical JSON cold restore agree. Equipment-bearing replays
+use version9; historical Meta version8 and plain Launch version7 retain their
+original contracts. New identity validation checks exact canonical mobility
+with selected boot effects. An isolated viewer reconstructs equipment before
+restoring its recorded stats/checkpoint. Frozen selections cannot change during
+an ordinary active run. Fixed Daily builds retain their authored fairness scope.
 
 ## Exit Gate
 
 Real five-stage Boss Rush and seven-day Daily sources grant only earned rewards.
 All six Profile save faults, retries, stale writers, legacy migration and corrupt
-collections pass with clean Godot logs. Native equipment integration is retained
-in a separate follow-on milestone.
+collections pass with clean Godot logs. Actual Player equipment, physical cold
+checkpoint, replay/viewer, Main/Hub controls and three-resolution rendering pass.
