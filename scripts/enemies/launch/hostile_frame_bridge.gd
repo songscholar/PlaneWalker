@@ -310,7 +310,7 @@ func seal_frame_publication(publication: Dictionary) -> bool:
 	for record: Dictionary in _active.records:
 		if not bool(record.actor.call("discard_launch_transaction_snapshot", record.checkpoint)):
 			return false
-		if bool((record.actor.call("launch_runtime_snapshot") as Dictionary).runtime.terminal):
+		if bool(_actor_frame_boundary(record.actor).terminal):
 			_actors.erase(record.source_id)
 	if _encounter_authority != null and not _encounter_authority.seal_frame_publication(_active.encounter_ticket):
 		return false

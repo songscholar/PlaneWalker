@@ -497,7 +497,7 @@ func _phase_candidate_remains_safe(ticket: Dictionary) -> bool:
 
 
 func can_commit_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after) and _teleport_candidate_remains_safe(ticket) and _phase_candidate_remains_safe(ticket)
+	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state_matches(ticket.before) and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after) and _teleport_candidate_remains_safe(ticket) and _phase_candidate_remains_safe(ticket)
 
 
 func commit_launch_frame(ticket: Dictionary) -> bool:
@@ -1216,12 +1216,22 @@ func _refresh_splitting_cue() -> void:
 
 
 func _actor_state() -> Dictionary:
+	return _actor_state_with_runtime(_launch_runtime.snapshot())
+
+
+func _actor_state_matches(value: Dictionary) -> bool:
+	if not _launch_runtime.has_method("matches_snapshot"):
+		return _actor_state() == value
+	return value.get("runtime") is Dictionary and _launch_runtime.matches_snapshot(value.runtime) and _actor_state_with_runtime(value.runtime) == value
+
+
+func _actor_state_with_runtime(runtime: Dictionary) -> Dictionary:
 	var metadata: Dictionary = {}
 	for field: String in WEAPON_METADATA_FIELDS:
 		if has_meta(field):
 			var value: Variant = get_meta(field)
 			metadata[field] = value.duplicate(true) if value is Dictionary or value is Array else value
-	var state := {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata, "room_motion": launch_room_motion_snapshot()}
+	var state := {"runtime": runtime, "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata, "room_motion": launch_room_motion_snapshot()}
 	if not _affix_configuration.is_empty():
 		state["affixes"] = launch_affix_snapshot()
 	if _affix_runtime != null:
