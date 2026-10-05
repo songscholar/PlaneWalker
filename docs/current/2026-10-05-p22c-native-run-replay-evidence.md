@@ -80,11 +80,18 @@ does not alter live Player state, progression or global gameplay facts.
   `build/test-evidence/replay-reclamation-{red,green}`. Continuous append retains
   orphan bytes; terminal and explicit archive boundaries authenticate all recovery
   manifests before reclamation. Physical quota checks still count every file.
+- Deferred-reclamation full synthetic rerun:
+  `build/test-evidence/replay-budget-45m-deferred-gc/report.json`, 162000 observations,
+  1350 chunks and the same45117332 compressed bytes and exact first/last hashes.
+  Maximum chunk promotion1750.009 ms and p951609.236 ms fit the nominal2000 ms
+  buffer window; elapsed1626729.783 ms and peak static487641442 bytes. The Godot
+  log is clean. This measures repeated actual native samples with new sequence IDs,
+  not a normal-input playthrough or concurrent combat/rendering performance.
 
 ## Remaining Gates
 
 These are focused functional and presentation gates. A complete native
-45-minute five-floor playthrough, long-run recording performance, final
+45-minute five-floor playthrough, concurrent native recording performance, final
 combined clean-checkout certification, exact-source runtime line coverage and
 retained platform exports remain separate gates. Storage COMPLETE describes a
 finalized tape; only the production recorder's terminal checks establish a

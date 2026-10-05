@@ -72,7 +72,8 @@ Files: whole-run isolated world/controller, library projection/panel and native 
 - [x] Define RED for private actual room/hostile reconstruction and seek across room/floor boundaries.
 - [x] Expose complete/incomplete recordings without conflating snapshot viewing with simulation.
 - [x] Verify live state/facts remain unchanged, physical controller controls and supported resolutions.
-- [ ] Run synthetic 45-minute storage budgets plus separate actual gameplay evidence; retain milestone review.
+- [x] Run synthetic 45-minute physical storage and throughput budgets, retaining exact hashes and clean logs.
+- [ ] Complete separate actual 45-minute gameplay and concurrent recording evidence; retain final milestone review.
 
 Focused evidence: `../../current/2026-10-05-p22c-native-run-replay-evidence.md`.
 The final long native run and combined clean-checkout gates remain open.

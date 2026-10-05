@@ -109,7 +109,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P25 Carried Boss Rush Evidence](current/2026-10-05-p25-carried-boss-rush-evidence.md) | 连续五战、资源与物品继承、必选奖励、冷恢复和原生界面 | Focused Verified / Profile reward integration active |
 | [P26 Challenge Rewards Design](superpowers/specs/2026-10-05-p26-mode-rewards-design.md) | 正式模式结算的耐久奖励凭据与冻结装备边界 | Approved / Current authority |
 | [P26 Challenge Rewards Plan](superpowers/plans/2026-10-05-p26-mode-rewards-plan.md) | 认证领取、独立收藏、装备与保存故障实施 | Active / Current |
-| [P26 Challenge Rewards Evidence](current/2026-10-05-p26-mode-rewards-evidence.md) | 真实五 Boss、七日 Daily、原子领取与历史存档迁移 | Focused Verified / Runtime integration active |
+| [P26 Challenge Rewards Evidence](current/2026-10-05-p26-mode-rewards-evidence.md) | 真实结算凭据、冻结伤害和速度、原生外观、冷恢复与回放 | Focused Verified / Current |
 | [P26 Native Challenge Collection Evidence](current/2026-10-05-p26-native-challenge-collection-evidence.md) | Main 自动领取、据点装备控件、保存重试和手柄返回 | Focused Verified / Current |
 | [P24 Offline Platform Design](superpowers/specs/2026-10-05-p24-offline-platform-design.md) | 离线身份、成就、缓存、排行、分享和可选服务组合 | Approved / Current authority |
 | [P24 Offline Platform Plan](superpowers/plans/2026-10-05-p24-offline-platform-plan.md) | 耐久服务、原生操作窗口与据点入口实施 | Active / Current |
