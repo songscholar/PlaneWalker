@@ -8,14 +8,19 @@ const IDENTITY_FIELDS := ["run_id", "hostile_source_id", "next_generation_floor"
 const FACT_FIELDS := ["fact_id", "run_id", "owner_source_id", "construct_id", "runtime_frame", "amount"]
 const MAX_FRAME := 2147447646
 const MAX_EVENTS := 4096
+const MAX_VALIDATION_CACHE := 4
+static var _validation_cache: Array[Dictionary] = []
+static var _validation_cache_mutex := Mutex.new()
 const PILLAR_POSITIONS := [Vector2(160, 104), Vector2(480, 104), Vector2(160, 256), Vector2(480, 256)]
 const CORE_POSITIONS := [Vector2(240, 112), Vector2(400, 112), Vector2(240, 248), Vector2(400, 248)]
 var _definition: Dictionary = {}
 var _initial: Dictionary = {}
 var _state: Dictionary = {}
+var _validation_context := PackedByteArray()
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
+	_validation_context = PackedByteArray()
 	_definition.clear()
 	_initial.clear()
 	_state.clear()
@@ -34,6 +39,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		pillars.append({"id": "void_cover_pillar:%d" % slot, "recipe_id": "void_cover_pillar", "slot": slot, "position": _point(PILLAR_POSITIONS[slot]), "radius_px": 14.0, "max_hp": 120.0, "current_hp": 120.0, "broken": false, "debris": false})
 	_state = {"schema_version": 1, "definition_digest": JSON.stringify({"arena": _definition.arena, "mechanisms": _definition.mechanisms}, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false, "arena_origin": {"x": 0.0, "y": 0.0}, "phase_index": 0, "pillars": pillars, "cores": [], "rounds_started": 0, "round_completed_frame": -1, "exposure_through_frame": int(identity.runtime_frame) - 1, "core_break_claims": [], "player_heal": {}, "events": []}
 	_initial = snapshot()
+	_validation_context = var_to_bytes([_definition, _initial, _state.arena_origin])
 	return {"ok": true, "snapshot": snapshot()}
 
 
@@ -45,6 +51,7 @@ func bind_origin(origin: Dictionary) -> bool:
 	if _state.is_empty() or _state.terminal or not Contract.valid_point(origin) or origin != _state.arena_origin and (int(_state.runtime_frame) != int(_initial.runtime_frame) or not _state.events.is_empty()):
 		return false
 	_state.arena_origin = origin.duplicate(true)
+	_validation_context = var_to_bytes([_definition, _initial, _state.arena_origin])
 	return true
 
 
@@ -83,6 +90,19 @@ func is_exposed() -> bool:
 
 
 func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) -> bool:
+	if _initial.is_empty():
+		return false
+	var context := _validation_context
+	var encoded := var_to_bytes(value)
+	if _validation_cache_contains(context, encoded, accepted_boundary):
+		return true
+	if not _can_restore_snapshot_uncached(value, accepted_boundary):
+		return false
+	_cache_validated_snapshot(context, encoded, accepted_boundary)
+	return true
+
+
+func _can_restore_snapshot_uncached(value: Dictionary, accepted_boundary: bool = false) -> bool:
 	if _initial.is_empty() or not Contract.exact_fields(value, FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.definition_digest != _initial.definition_digest or value.identity != _initial.identity or not Contract.integer_in_range(value.runtime_frame, int(_initial.runtime_frame), MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL or not Contract.valid_point(value.arena_origin) or value.arena_origin != _state.arena_origin or not value.events is Array or value.events.size() > MAX_EVENTS:
 		return false
 	var rebuilt := get_script().new() as RefCounted
@@ -102,6 +122,28 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 	rebuilt._state.runtime_frame = int(value.runtime_frame)
 	rebuilt._state.terminal = value.terminal
 	return rebuilt.snapshot() == value
+
+
+static func _validation_cache_contains(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> bool:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return true
+	_validation_cache_mutex.unlock()
+	return false
+
+
+static func _cache_validated_snapshot(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> void:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return
+	if _validation_cache.size() == MAX_VALIDATION_CACHE:
+		_validation_cache.pop_front()
+	_validation_cache.append({"context": context, "snapshot": encoded, "accepted_boundary": accepted_boundary})
+	_validation_cache_mutex.unlock()
 
 
 func restore_snapshot(value: Dictionary) -> bool:

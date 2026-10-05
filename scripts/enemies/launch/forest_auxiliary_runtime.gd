@@ -9,8 +9,12 @@ const SAC_POSITIONS := [Vector2(176, 136), Vector2(464, 136), Vector2(176, 224),
 const FLOWER_POSITIONS := [Vector2(96, 180), Vector2(320, 288), Vector2(544, 180)]
 const MAX_FRAME := 2147447646
 const MAX_EVENTS := 4096
+const MAX_VALIDATION_CACHE := 4
+static var _validation_cache: Array[Dictionary] = []
+static var _validation_cache_mutex := Mutex.new()
 var _state: Dictionary = {}
 var _initial: Dictionary = {}
+var _validation_context := PackedByteArray()
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -23,6 +27,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	for slot: int in range(3):
 		_state.flowers.append({"id": "forest_healing_flower:%d" % slot, "slot": slot, "position": _point(FLOWER_POSITIONS[slot]), "radius_px": 8.0, "used": false, "heal_amount": 0.0, "used_frame": -1, "target_id": ""})
 	_initial = snapshot()
+	_validation_context = var_to_bytes([_initial, _state.arena_origin])
 	return {"ok": true}
 
 
@@ -35,6 +40,7 @@ func bind_origin(origin: Dictionary) -> bool:
 		return false
 	_state.arena_origin = origin.duplicate(true)
 	_initial.arena_origin = origin.duplicate(true)
+	_validation_context = var_to_bytes([_initial, _state.arena_origin])
 	return true
 
 
@@ -133,6 +139,19 @@ func cage_requests(frame: int) -> Array[Dictionary]:
 
 
 func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) -> bool:
+	if _initial.is_empty():
+		return false
+	var context := _validation_context
+	var encoded := var_to_bytes(value)
+	if _validation_cache_contains(context, encoded, accepted_boundary):
+		return true
+	if not _can_restore_snapshot_uncached(value, accepted_boundary):
+		return false
+	_cache_validated_snapshot(context, encoded, accepted_boundary)
+	return true
+
+
+func _can_restore_snapshot_uncached(value: Dictionary, accepted_boundary: bool = false) -> bool:
 	if _initial.is_empty() or not Contract.exact_fields(value, FIELDS) or value.schema_version != 1 or value.identity != _initial.identity or value.definition_digest != _initial.definition_digest or value.arena_origin != _state.arena_origin or not Contract.integer_in_range(value.runtime_frame, int(_initial.runtime_frame), MAX_FRAME) or not value.events is Array or value.events.size() > MAX_EVENTS:
 		return false
 	var replay := _initial.duplicate(true)
@@ -149,6 +168,28 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 	replay.runtime_frame = int(value.runtime_frame)
 	_refresh(replay)
 	return JSON.parse_string(JSON.stringify(replay)) == JSON.parse_string(JSON.stringify(value))
+
+
+static func _validation_cache_contains(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> bool:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return true
+	_validation_cache_mutex.unlock()
+	return false
+
+
+static func _cache_validated_snapshot(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> void:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return
+	if _validation_cache.size() == MAX_VALIDATION_CACHE:
+		_validation_cache.pop_front()
+	_validation_cache.append({"context": context, "snapshot": encoded, "accepted_boundary": accepted_boundary})
+	_validation_cache_mutex.unlock()
 
 
 func restore_snapshot(value: Dictionary) -> bool:

@@ -10,9 +10,13 @@ const COVER_POSITIONS := [Vector2(192, 120), Vector2(448, 120), Vector2(192, 240
 const VENT_POSITIONS := [Vector2(96, 56), Vector2(544, 56), Vector2(96, 304), Vector2(544, 304)]
 const COOLING_POSITIONS := [Vector2(320, 48), Vector2(320, 312), Vector2(48, 180), Vector2(592, 180)]
 const MAX_EVENTS := 2048
+const MAX_VALIDATION_CACHE := 4
+static var _validation_cache: Array[Dictionary] = []
+static var _validation_cache_mutex := Mutex.new()
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
 var _initial: Dictionary = {}
+var _validation_context := PackedByteArray()
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -28,6 +32,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 			var row := {"id": "%s:%d" % [recipe.id, slot], "recipe_id": str(recipe.id), "slot": slot, "position": _point(positions[slot]), "radius_px": float(recipe.radius_px), "max_hp": float(recipe.max_hp), "current_hp": float(recipe.max_hp), "broken": false}
 			_state[["covers", "vents", "cooling_pools"][kind]].append(row)
 	_initial = snapshot()
+	_validation_context = var_to_bytes([_definition, _initial])
 	return {"ok": true, "snapshot": snapshot()}
 
 
@@ -36,6 +41,7 @@ func bind_origin(origin: Dictionary) -> bool:
 		return false
 	_state.arena_origin = origin.duplicate(true)
 	_initial.arena_origin = origin.duplicate(true)
+	_validation_context = var_to_bytes([_definition, _initial])
 	return true
 
 
@@ -95,6 +101,19 @@ func retire() -> void:
 
 
 func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) -> bool:
+	if _initial.is_empty():
+		return false
+	var context := _validation_context
+	var encoded := var_to_bytes(value)
+	if _validation_cache_contains(context, encoded, accepted_boundary):
+		return true
+	if not _can_restore_snapshot_uncached(value, accepted_boundary):
+		return false
+	_cache_validated_snapshot(context, encoded, accepted_boundary)
+	return true
+
+
+func _can_restore_snapshot_uncached(value: Dictionary, accepted_boundary: bool = false) -> bool:
 	if _initial.is_empty() or not Contract.exact_fields(value, FIELDS) or value.schema_version != 1 or typeof(value.schema_version) != TYPE_INT or value.definition_digest != _initial.definition_digest or value.identity != _initial.identity or value.arena_origin != _initial.arena_origin or not Contract.integer_in_range(value.runtime_frame, int(_initial.runtime_frame), 2147483046) or typeof(value.terminal) != TYPE_BOOL or not value.events is Array or value.events.size() > MAX_EVENTS:
 		return false
 	var candidate: RefCounted = get_script().new()
@@ -112,6 +131,28 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 	if value.terminal:
 		candidate.retire()
 	return candidate.snapshot() == value
+
+
+static func _validation_cache_contains(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> bool:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return true
+	_validation_cache_mutex.unlock()
+	return false
+
+
+static func _cache_validated_snapshot(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> void:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return
+	if _validation_cache.size() == MAX_VALIDATION_CACHE:
+		_validation_cache.pop_front()
+	_validation_cache.append({"context": context, "snapshot": encoded, "accepted_boundary": accepted_boundary})
+	_validation_cache_mutex.unlock()
 
 
 func restore_snapshot(value: Dictionary) -> bool:
