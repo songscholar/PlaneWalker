@@ -1,7 +1,7 @@
 # Native Forge Terminal Payload Evidence
 
 - Status: Focused Verified / Current
-- Document Role: Focused native owner-retirement regression evidence
+- Document Role: Current focused native owner-retirement regression evidence
 - Authority Level: Approved P15 and project standing authorization
 - Applies To: Accepted terminal Boss payload retirement and exact compensation
 - Owner: Plane Walker native hostile integration team

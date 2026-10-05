@@ -1,8 +1,12 @@
 # Native Summon Boundary Admission
 
 - Status: Verified Locally
-- Date: 2026-10-05
-- Scope: Native warning admission, authored room bounds, static obstacles, exact rollback
+- Document Role: Current focused native admission evidence
+- Authority Level: Approved P15 and standing project authorization
+- Applies To: Native warning admission, authored room bounds, static obstacles, exact rollback
+- Owner: Native hostile integration team
+- Last Verified: 2026-10-05
+- Depends On: `../superpowers/plans/2026-10-05-native-complete-gameplay-certification.md`
 
 Time Sovereign's two frozen Timeline Echo slots rotate with the committed aim. At a room edge, one slot can lie outside the child body's safe bounds. Previously the warning continued until native birth rejected the entire fixed frame. The Actor now declines unsafe frozen slots during WARNING, retires their original generations, and retains the accepted cooldown and source identity. It never relocates a warned slot.
 

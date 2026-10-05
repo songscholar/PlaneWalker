@@ -1,8 +1,12 @@
 # Native Void Payload Identity
 
 - Status: Verified Locally
-- Date: 2026-10-05
-- Scope: Separate projectile receipts from independent semantic zone identities
+- Document Role: Current focused native damage identity evidence
+- Authority Level: Approved P15 and standing project authorization
+- Applies To: Separate projectile receipts from independent semantic zone identities
+- Owner: Native hostile integration team
+- Last Verified: 2026-10-05
+- Depends On: `../superpowers/plans/2026-10-05-native-complete-gameplay-certification.md`
 
 Real Boss runs begin with attack generation 1. A later Tear zone uses its own payload identity and generation namespace. The damage preparation previously looked up every payload's generation as an owner attack, so a Tear tick could borrow the earlier Grasp receipt and reject effect commit. Existing auxiliary fixtures started at generation 7 and missed this collision.
 

@@ -7,6 +7,8 @@
 - Owner: Native enemy auxiliary implementation lead
 - Depends On: `AGENTS.md`, `../specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`
 - Last Verified: 2026-10-05
+- Implementation Status: Complete and retained in `ecc8a8b`; focused clean archive verification passed.
+- Completion Evidence: [native Time auxiliaries](../../current/2026-10-05-native-time-auxiliaries-evidence.md)
 - Exit Gate: Authentic casts, accepted-hit receipts, exact rollback, finite expiry and cold reconstruction pass.
 
 **Goal:** Complete Slash mark, Bolt impact slow, Freeze regeneration and Collapse energy effects.
