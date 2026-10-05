@@ -401,7 +401,13 @@ func _test_selection_restore_failure_is_integrity_failure(suite) -> void:
 	var original_orchestrator: RefCounted = facade.get("_orchestrator")
 	facade.set("_orchestrator", FailingRestoreOrchestrator.new(original_orchestrator))
 	facade.set("_draft", FailingCloseDraft.new())
-	var result = facade.commit_reserved_selection(str(reserved.context.get("reservation_id", "")))
+	var response := {}
+	suite.assert_true(not suite.expect_engine_error(func() -> bool:
+		response.value = facade.commit_reserved_selection(str(reserved.context.get("reservation_id", "")))
+		return response.value.ok,
+		"Selection authority rollback failed after DraftService close rejection",
+		"RunRuntimeFacade.commit_reserved_selection injected Draft close and rollback refusal"), "failed authority rollback reports command refusal")
+	var result = response.value
 	suite.assert_equal(result.code, &"INTEGRITY_FAILURE", "Draft close plus authority rollback failure is fail-closed")
 	suite.assert_equal(facade.snapshot().get("phase"), RunPhaseScript.Value.ROOM_ENTERING, "failed rollback is never reported as the pre-commit phase")
 

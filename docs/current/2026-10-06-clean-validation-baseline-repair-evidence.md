@@ -73,3 +73,17 @@ scripts but executes only `seed_service_test`. Its 4,208/88,404 line hits
 The report is retained at `build/coverage/c1a24d4-provider-preflight/run.json`.
 Complete validation and actual full-suite coverage require a fresh committed
 checkout containing the combined repairs and performance changes.
+
+## Additional Facade Refusal Scope
+
+The focused `run_runtime_facade_test` deliberately injects both Draft close and
+authority rollback failure. Its `INTEGRITY_FAILURE` and retained committed
+phase assertions passed, but its exact intentional engine error was unscoped.
+The strict runner correctly rejected the RED retained at
+`build/test-evidence/runtime-query-host-regressions/`.
+
+The test now uses the existing `TestSuite.expect_engine_error` Callable with
+the exact single message and returns the command's actual `ok=false`. Both
+original command-code and phase assertions remain. The focused 1/1 GREEN at
+`build/test-evidence/facade-expected-rollback-green/` passes both independent
+logs. No Facade runtime behavior or global log allowlist changed for this fix.
