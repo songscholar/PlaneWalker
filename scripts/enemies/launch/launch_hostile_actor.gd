@@ -5,6 +5,7 @@ const LaunchRuntime := preload("res://scripts/enemies/launch/launch_enemy_runtim
 const LaunchStatus := preload("res://scripts/enemies/launch/launch_elemental_status_runtime.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
+const SummonContract := preload("res://scripts/enemies/launch/summon_definition.gd")
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const AffixProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
 const AffixRuntime := preload("res://scripts/enemies/launch/launch_elite_affix_runtime.gd")
@@ -250,6 +251,14 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var batch: Dictionary = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
 	if not batch.ok:
 		return batch
+	if batch.phase == "WARNING" and not _native_summon_warning_safe(preview.snapshot().action):
+		var declined: Dictionary = preview.cancel_action(&"summon_frozen_slot_outside_safe_room")
+		if not declined.ok:
+			return _launch_failure("summon_warning_decline")
+		batch.threat_facts = []
+		batch.threat_extensions = []
+		batch.retired_generations.append_array(declined.retired_generations)
+		batch.phase = "IDLE"
 	# A charge's frozen corridor warns its route; damage requires real body contact.
 	var contact_fact: Dictionary = preview.charge_contact_fact(frame, str(observations.target_id))
 	if not contact_fact.is_empty():
@@ -304,6 +313,36 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	_prepared_launch_frame = ticket.duplicate(true)
 	_prepared_frame_committed = false
 	return {"ok": true, "ticket": ticket.duplicate(true), "batch": batch.duplicate(true)}
+
+
+func _native_summon_warning_safe(action: Dictionary) -> bool:
+	if _room_motion.is_empty() or not action.committed_geometry.any(func(row: Dictionary): return row.shape == "summon_slots"):
+		return true
+	var recipe := {}
+	for candidate: Dictionary in _launch_definition.actions:
+		if candidate.id == action.action_id and candidate.handler_id == "summon":
+			recipe = candidate
+			break
+	var contract: Dictionary = SummonContract.CONTRACTS.get(recipe.get("parameters", {}).get("definition_id", ""), {})
+	if contract.is_empty():
+		return false
+	var radius := float(contract.collision_radius_px)
+	var shape := CircleShape2D.new()
+	shape.radius = radius
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.collision_mask = 1
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	for geometry: Dictionary in action.committed_geometry:
+		for slot: Dictionary in geometry.summon_slots:
+			var point := _vector(slot)
+			if not _within_bounds(point, _motion_bounds(), radius):
+				return false
+			query.transform = Transform2D(0.0, point)
+			if not get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+				return false
+	return true
 
 
 func _native_action_activation_blocked(_frame: int, _observations: Dictionary) -> bool:
