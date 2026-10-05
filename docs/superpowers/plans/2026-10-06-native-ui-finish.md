@@ -87,6 +87,12 @@ func configure(registry: RefCounted) -> Dictionary
 func render_build(build: Dictionary) -> Dictionary
 func focus_controls() -> Array[Control]
 
+# ModeCombatHudProjector, RefCounted, scripts/ui/style/mode_combat_hud_projector.gd
+func project(mode_id: String, metadata: Dictionary, player_snapshot: Dictionary, boss_snapshot: Dictionary) -> Dictionary
+
+# ModeCombatHudViewState, RefCounted, scripts/ui/contracts/mode_combat_hud_view_state.gd
+static func validate(value: Variant) -> Dictionary
+
 # UiFinishFixtures, RefCounted, tests/visual/ui_finish_fixtures.gd
 static func state_ids() -> Array[String]
 func configure(main: Node) -> void
@@ -109,6 +115,17 @@ with deterministic Profile data and label assisted states in the manifest.
 All new visual scenes are native `.tscn` scenes, and all new generator/fixture
 output directories stay under the workspace. Art catalog fields and class
 names here must remain identical across tasks.
+
+ModeCombatHudViewState version 1 has exact top-level fields
+`schema_version`, `revision`, `run_id`, `mode_id`, `stage_index`, `stage_total`,
+`elapsed_frames`, `suspended`, `player`, `weapon_state`, `character_state`,
+`active_item_state`, `boss`. Valid modes are `boss_rush`, `daily`, `authored`,
+`endless`; elapsed frames/revision are nonnegative integers; stages satisfy
+`0 <= stage_index < stage_total`; run_id is nonempty. Resource and
+weapon/character/active-item display unions use the existing RunViewState
+validation rules. The pure adapter returns the standard result with
+`context.view_state` after validation, or a typed invalid-projection refusal.
+It consumes current source snapshots, never normalizes or persists mode state.
 
 ## Task 1: Authenticated Art and Fonts
 
@@ -355,8 +372,10 @@ suite.assert_true(panel.back_button.is_visible_in_tree(), "large text retains a 
 **Files:**
 
 - Modify: `scripts/modes/boss_rush_panel_view.gd`, `daily_boss_panel_view.gd`, `authored_challenge_panel_view.gd`, `endless_panel_view.gd` in `scripts/modes/`.
+- Modify presentation construction only: `scripts/modes/boss_rush_coordinator.gd`, `scripts/modes/daily_boss_coordinator.gd`, `scripts/modes/authored_challenge_coordinator.gd`, `scripts/modes/endless_coordinator.gd`.
 - Modify: `scripts/ui/challenge_rewards_panel.gd`.
 - Create: `scenes/ui/modes/mode_header.tscn`, `scenes/ui/modes/boss_track.tscn`, `scenes/ui/modes/mode_record_list.tscn` and `scripts/ui/components/ui_boss_track.gd`.
+- Create: `scripts/ui/views/mode_combat_hud_view.gd`, `scenes/ui/modes/mode_combat_hud.tscn`, `scripts/ui/style/mode_combat_hud_projector.gd`, `scripts/ui/contracts/mode_combat_hud_view_state.gd`.
 - Modify: `tests/ui/boss_rush_visual_test.gd`, `daily_boss_visual_test.gd`, `authored_challenge_visual_test.gd`, `challenge_equipment_visual_test.gd` in `tests/ui/`.
 - Create: `tests/ui/mode_finish_test.gd` and its `.tscn`.
 
@@ -365,7 +384,15 @@ suite.assert_true(panel.back_button.is_visible_in_tree(), "large text retains a 
 card and result presentation from Tasks 5/6; no mode-state normalization in
 the UI. Fixed loadouts remain fixed.
 
-- [ ] Step 1: Add failing tests for authored mode objective/kit art, five-Boss/three-stage track, current cycle/attempt/countdown, carried choices, practice/assist status, earned equipment and pending save errors.
+The four coordinators currently construct independent text HUDs and read
+their current Player/Boss. Replace those UI nodes explicitly; primary
+CombatHudV2 changes alone do not affect these scenes. Collect copied
+`get_player_ui_snapshot()`/Boss facts and session metadata in the coordinator,
+validate the pure projection and render shared resource components in the
+new ModeCombatHud scene. Mode session/native flow mutation code is outside
+this task. Endless uses its existing host snapshot as its read-only source.
+
+- [ ] Step 1: Add failing tests for authored mode objective/kit art, five-Boss/three-stage track, current cycle/attempt/countdown, carried choices, practice/assist status, earned equipment and pending save errors. Validate graphical HP/energy/time/weapon/character slots in each actual mode's combat scene, source snapshot immutability and stale run/revision refusal in the new HUD projection.
 
 ```gdscript
 suite.assert_true(mode_panel.render(mode_state).ok, "mode snapshot renders")
@@ -375,7 +402,7 @@ suite.assert_equal(mode_panel.back_button.disabled, bool(mode_state.pending), "p
 ```
 
 - [ ] Step 2: Run `./tools/run_tests.sh --filter mode_finish`; expected RED: new mode composition absent.
-- [ ] Step 3: Add specific mode artwork/objective/track/record composition with stable commands outside details scroll. Present carried choices via RewardCard, terminal mode result via ResultSummary and reward collection with actual ownership/equip states. Preserve retry/reload identity, attempt decrement boundaries and eligibility disclosure.
+- [ ] Step 3: Add specific mode artwork/objective/track/record composition with stable commands outside details scroll. Replace independent combat Label HUDs with validated ModeCombatHud and shared graphical slots; preserve each mode's timer/pause/active/pending checks. Present carried choices via RewardCard, terminal mode result via ResultSummary and reward collection with actual ownership/equip states. Preserve retry/reload identity, attempt decrement boundaries and eligibility disclosure.
 - [ ] Step 4: Run new scene and current Boss Rush/daily/authored/endless/reward suites. Preserve the current full-resolution visual matrices, inspect large-text current-stage/pending-save/terminal states and drive actual mapped mode return/retry/reward-selection events.
 - [ ] Step 5: Commit reviewed mode/reward presentation paths as `ui: finish native challenge mode presentation`.
 
@@ -491,3 +518,41 @@ resources, missing input actions, unreadable text or unverified local exports.
 This plan is prepared on 2026-10-06 and has not executed any implementation
 steps. UI code, runtime, assets and README remain owned by the existing
 program until the gameplay-first sequencing gate opens.
+
+## Retained Baseline and Parallel Ownership
+
+The following already-existing PNGs were inspected on 2026-10-06. They are
+historical rendered fixture baselines, not newly captured screenshots or
+proof of the current committed source. Their bytes are identified to make
+later comparison precise; no source-commit attribution is invented.
+
+| Baseline path | SHA-256 | Visible gap |
+|---|---|---|
+| `build/p21a-boss-rush-screenshots/combat-zh_CN-1.0-640x360.png` | `36310c128e00475abd76b4335c928386228374a3011e2e7d1b1f9f3206fd0f60` | Top-only plain-text mode/HP display, rectangular Pause command and large unstyled scene colors; graphical shared HUD absent |
+| `build/p16-main-hub-screenshots/forge-zh_CN-1.0-640x360.png` | `b1094031ab4ae92a415446d24874b495c3ea7b3ee69f9ff462eea531212dc566` | Full-screen text list, no focused weapon/anvil/art or upgrade hierarchy |
+| `build/p14-ui-screenshots/map-zh-640x360.png` | `25d121d4a31382b02a6c647f3e398ee39c464001f5943d2495faecc6e11cace7` | Labeled rectangular nodes, no room glyphs/detail composition; scrolled rows require visible-area verification |
+
+Current code dependency observations are explicit:
+
+- `scripts/application/run_runtime_host.gd` creates `scenes/ui/combat_hud_v2.tscn`; the normal expedition presentation belongs to Task 3.
+- The four mode coordinators build separate `_hud` controls and update live text in `_process`; those presentation sections belong to Task 8, with native flow semantics held fixed.
+- `scripts/ui/dungeon_panel_view.gd` owns generic chrome and public `panel_root`, `rows_container`, `scroll`, `footer`, `back_button`; Tasks 4-9 depend on preserving these until scoped adapters are verified.
+- Daily and authored panel views add containers relative to `scroll.get_parent()`; shared chrome changes in Task 2 must retain that structure or provide the tested equivalent before page tasks branch.
+- `scripts/hub/hub_panel_view.gd` owns share drafts, footer controls, `_actions` and epoch callbacks; new page builders consume these rather than install a second command owner.
+- `scripts/replay/player_replay_library_panel.gd` already displays a genuine `SubViewport` via ReplayPicture; Task 9 improves layout and controls while preserving playback authenticity.
+- Existing authenticated actor/hub/room/cosmetic bitmaps can supply previews; no shipping font bundle, shared Theme or complete first-party UI icon atlas currently exists.
+
+After shared resources/components pass, use this ownership partition for the
+four-slot agent team:
+
+| Lane | Owns | Excludes |
+|---|---|---|
+| Integration lead | Shared contracts/catalogs, `scripts/main.gd`, `scenes/main.tscn`, `project.godot`, README, final matrix/export evidence | No worker commits these assembly files independently |
+| Combat lane | Task 3 HUD/inspector/inset, then Task 8 mode presentation and pure adapter | No native gameplay-flow or combat-authority changes |
+| Hub/product lane | Task 4 Hub pages/loadout/collections, then Task 9 replay/platform/content pages | No shared chrome/catalog or Main assembly changes |
+| Run/accessibility lane | Tasks 5/6 choice/map/economy/narrative/results, then Task 7 settings/tutorial/training | No overlapping HUD or Hub page ownership |
+
+The lead integrates assembly requests and runs cross-lane regressions after
+each merge. Workers retain focused commits with exact path lists, communicate
+new component contracts before consuming them, and wait for the shared Theme
+task to pass before modifying their owned native pages.

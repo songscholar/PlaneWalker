@@ -184,6 +184,16 @@ revision/run/epoch checks and `_submitted` guards retain their behavior.
 Commands retain existing signals, argument types, action ids and revisions.
 Views never write Profile, RunState, inventory, currency or save files.
 
+Boss Rush, daily, authored challenges and endless currently build their own
+combat chrome in their coordinators; they do not all instantiate CombatHudV2.
+Task 8 must explicitly replace that presentation with the shared resource
+components and a common mode HUD scene. A pure ModeCombatHudProjector consumes
+the existing mode metadata, `Player.get_player_ui_snapshot()` and accepted
+Boss display facts, then validates a versioned read-only ModeCombatHudViewState.
+It does not fabricate a normal dungeon RunState or change save/replay schemas.
+Retain each coordinator's pause/active/pending-save rules and timed run identity.
+Completing only the primary CombatHudV2 scene cannot complete this milestone.
+
 Shared assets enter through `UiArtCatalog`; shared `Theme` enters through
 `UiTheme`; reusable visual behavior enters through small resource-slot,
 icon-command, currency, tooltip, frame and motion components. These components
