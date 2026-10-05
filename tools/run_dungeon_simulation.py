@@ -50,8 +50,7 @@ def content_digests() -> dict[str, str]:
 
 
 def _runtime_digests() -> dict[str, str]:
-    paths = [PROJECT_ROOT / "tools/dungeon/dungeon_simulation_runner.gd",
-             PROJECT_ROOT / "tools/dungeon/dungeon_simulation_probe.gd"]
+    paths = list((PROJECT_ROOT / "tools/dungeon").rglob("*.gd"))
     paths.extend(sorted((PROJECT_ROOT / "scripts").rglob("*.gd")))
     paths.extend(sorted((PROJECT_ROOT / "scenes/player").rglob("*.tscn")))
     return {str(path.relative_to(PROJECT_ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()

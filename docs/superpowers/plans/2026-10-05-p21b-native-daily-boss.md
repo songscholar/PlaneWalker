@@ -6,6 +6,7 @@
 - Applies To: Daily fixed Build, native Boss, physical attempts and Hub controls
 - Owner: Runtime integration lane
 - Depends On: `../specs/2026-10-05-p21b-native-daily-boss-design.md`
+- Exit Gate: Fixed-Build native combat, physical three-attempt/day/fault/restart tests, Main controller and bilingual resolution QA, Boss Rush regressions, governance/localization checks and error/leak-free logs pass before retention.
 - Last Verified: 2026-10-05
 
 1. Retain failing contract and native tests for UTC+8 identity, three attempts,

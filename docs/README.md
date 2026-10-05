@@ -80,8 +80,17 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | 文档 | 用途 | 状态 |
 |---|---|---|
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
+| [Dungeon Probe Encounter Design](superpowers/specs/2026-10-05-dungeon-probe-native-encounter-design.md) | 合成模拟复用正式遭遇状态机、固定帧与生成及死亡回执 | Approved / Current authority |
+| [Dungeon Probe Encounter Plan](superpowers/plans/2026-10-05-dungeon-probe-native-encounter.md) | 守卫事件回归、工具适配器和三十种子报告修复 | Active / Current |
+| [Dungeon Probe Encounter Repair Evidence](current/2026-10-05-dungeon-probe-encounter-repair-evidence.md) | 正式状态机工具适配、守卫事件回归和整体验证修复 | Focused Verified / Combined certification pending |
 | [P22A Player Replay Archive Design](superpowers/specs/2026-10-05-p22a-player-replay-archive-design.md) | 玩家录制封装、物理回放库、兼容拒绝与隔离播放边界 | Approved / Current authority |
-| [P22A Player Replay Archive Plan](superpowers/plans/2026-10-05-p22a-player-replay-archive.md) | 实际 Player 录制、原子保存、导入导出和寻址播放实施 | Active / Current |
+| [P22A Player Replay Archive Plan](superpowers/plans/2026-10-05-p22a-player-replay-archive.md) | 实际 Player 录制、原子保存、导入导出和寻址播放实施 | Completed / Historical |
+| [P22A Player Replay Archive Evidence](current/2026-10-05-p22a-player-replay-archive-evidence.md) | 物理回放库、故障与并发写保护、实际 Player 隔离寻址播放 | Focused Verified / Current |
+| [Native Elite Regeneration Evidence](current/2026-10-05-native-elite-regeneration-evidence.md) | 精英真实回血、实际恢复预算、重击中断、Stop 和物理冷恢复 | Focused Verified / Current |
+| [Native Player Weapon Collision Evidence](current/2026-10-05-native-player-weapon-collision-evidence.md) | 五武器真实敌人扣血、高速弹丸扫掠和自然地牢剑击 | Focused Verified / Current |
+| [P21A Native Boss Rush Evidence](current/2026-10-05-p21a-native-boss-rush-evidence.md) | 五 Boss 原生流程、物理存档、失败重试和手柄暂停 | Focused Verified / Current |
+| [P21B Native Daily Boss Design](superpowers/specs/2026-10-05-p21b-native-daily-boss-design.md) | 固定配装、UTC+8 日界、每天三次尝试和原生每日 Boss | Approved / Current authority |
+| [P21B Native Daily Boss Plan](superpowers/plans/2026-10-05-p21b-native-daily-boss.md) | 独立挑战状态、真实道具效果与物理保存实施 | Active / Current |
 | [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
 | [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
 | [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Historical contract |

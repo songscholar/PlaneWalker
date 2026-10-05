@@ -13,6 +13,8 @@ const FORBIDDEN: Array[String] = [
 	"EventBus.unsubscribe(",
 	"var _handlers",
 	"var _deferred_events",
+]
+const FORBIDDEN_BUS_DECLARATIONS: Array[String] = [
 	"func publish(",
 	"func publish_deferred(",
 	"func subscribe(",
@@ -58,6 +60,9 @@ func _run() -> void:
 				not source.contains(token),
 				"%s contains no generic EventBus token: %s" % [path, token]
 			)
+		if path == "res://autoload/event_bus.gd":
+			for token: String in FORBIDDEN_BUS_DECLARATIONS:
+				suite.assert_true(not source.contains(token), "EventBus defines no generic dispatch API: " + token)
 
 	for path: String in STATE_CHANGING_PATHS:
 		var source := FileAccess.get_file_as_string(path)

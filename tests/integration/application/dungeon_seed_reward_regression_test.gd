@@ -11,7 +11,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite = TestSuiteScript.new()
-	for seed_value: int in [20261002, 20261022, 20261024]:
+	for seed_value: int in [20261002, 20261006, 20261022, 20261024]:
 		var runner = RunnerScript.new()
 		var player: Node = PlayerScene.instantiate()
 		player.process_mode = Node.PROCESS_MODE_DISABLED

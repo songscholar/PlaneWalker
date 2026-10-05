@@ -7,7 +7,7 @@ const SaveServiceScript := preload("res://scripts/save/save_service.gd")
 const SaveFileOpsScript := preload("res://scripts/save/save_file_ops.gd")
 const ReplaySealScript := preload("res://scripts/replay/run_dungeon_replay_seal.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
-const EncounterRunnerScript := preload("res://scripts/dungeon/encounter_runner.gd")
+const EncounterRunnerScript := preload("res://tools/dungeon/domain_encounter_runner.gd")
 const FloorRuleAuthorityScript := preload("res://scripts/dungeon/floor_rule_effect_authority.gd")
 
 class RuleZoneHost:
@@ -311,8 +311,8 @@ func _visit_event(row: Dictionary) -> void:
 	var encounter_runner := EncounterRunnerScript.new()
 	host.add_child(enemies)
 	host.add_child(encounter_runner)
-	encounter_runner.configure(enemies)
-	encounter_runner.set_timing_override(0.0)
+	var room: Dictionary = _facade.call("current_room_definition")
+	encounter_runner.configure(enemies, str(_player.call("current_run_id")), str(room.get("node_id", "")))
 	var room_runtime: Node = _facade.call("create_room_runtime", encounter_runner)
 	host.add_child(room_runtime)
 	room_runtime.spawn_requested.connect(func(spawn: Dictionary) -> void:
@@ -352,10 +352,14 @@ func _visit_event(row: Dictionary) -> void:
 			_failures.append("event_reward_requires_production_api")
 		view = _facade.call("event_view_state")
 	if str(view.get("phase", "")) == "pending_encounter":
-		for _frame: int in range(128):
+		for _frame: int in range(4096):
 			if not encounter_runner.is_active():
 				break
-			await host.get_tree().process_frame
+			if not encounter_runner.advance_domain_frame().ok:
+				_failures.append("event_encounter_frame_rejected")
+				break
+		if encounter_runner.is_active():
+			_failures.append("event_encounter_frame_budget_exhausted")
 		view = _facade.call("event_view_state")
 	room_runtime.free()
 	encounter_runner.free()

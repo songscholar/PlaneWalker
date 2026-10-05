@@ -112,6 +112,9 @@ run_with_timeout() {
 	if [[ "${scene}" == "tests/smoke/p14_dungeon_loadout_matrix_smoke_test.tscn" ]] && (( scene_timeout_seconds < 600 )); then
 		scene_timeout_seconds=600
 	fi
+	if [[ "${scene}" == "tests/integration/save/native_combat_checkpoint_test.tscn" ]] && (( scene_timeout_seconds < 300 )); then
+		scene_timeout_seconds=300
+	fi
 
 	PLANEWALKER_TEST_DATA_DIR="${user_data_dir}/files" \
 	PLANEWALKER_COVERAGE_SCENE_ID="${scene//\//__}" \

@@ -16,6 +16,10 @@ import run_dungeon_simulation as simulation  # noqa: E402
 
 
 class DungeonSimulationLogContractTest(unittest.TestCase):
+    def test_tool_adapter_is_bound_into_runtime_source_digests(self) -> None:
+        sources = simulation._runtime_digests()
+        self.assertIn("tools/dungeon/domain_encounter_runner.gd", sources)
+
     def test_bootstrap_failure_can_report_zero_entered_floors(self) -> None:
         summary = simulation._run_failure_summaries([
             {"seed": 20261001, "victory": False, "floor_summaries": [], "failures": ["merchant_effect_authority"]},
