@@ -139,6 +139,15 @@ class SyntheticHostileMatrixReportTests(unittest.TestCase):
             self.assertIn("missing_or_invalid_domain_report", shard["errors"])
             self.assertIn("domain_process_failed", shard["errors"])
 
+    def test_retained_commit_refuses_unmatched_archive_bytes(self):
+        binding = MATRIX.source_binding(ROOT)
+        with self.assertRaises(ValueError):
+            MATRIX.source_binding(ROOT, "3739597")
+        report = report_fixture()
+        report["source_binding"].update(retained_exact_source=True, git_commit="3739597" + "0" * 33)
+        self.assertIn("source_binding", MATRIX.validate_report(report, ROOT, require_complete=False))
+        self.assertFalse(binding["retained_exact_source"])
+
 
 if __name__ == "__main__":
     unittest.main()

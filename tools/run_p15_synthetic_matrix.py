@@ -26,13 +26,24 @@ LOG_FAILURE = re.compile(r"(?:SCRIPT ERROR:|ERROR:|Parse Error:|ObjectDB instanc
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 
 
-def source_binding(root: Path) -> dict:
+def source_binding(root: Path, retained_commit: str = "") -> dict:
     paths = sorted(set(root.glob("scripts/**/*.gd")) | set(root.glob("data/content_packs/base/**/*.json")) |
                    {root / "tools/run_p15_synthetic_matrix.py", root / "tools/p15/hostile_synthetic_probe.gd", root / "tools/p15/hostile_synthetic_probe.tscn"})
     hashes = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
     encoded = json.dumps(hashes, sort_keys=True, separators=(",", ":")).encode()
-    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=False)
-    return {"git_commit": revision.stdout.strip(), "domain_files_sha256": hashlib.sha256(encoded).hexdigest(), "files": hashes}
+    revision = subprocess.run(["git", "rev-parse", retained_commit or "HEAD"], cwd=root, capture_output=True, text=True, check=False)
+    commit = revision.stdout.strip()
+    if retained_commit:
+        if re.fullmatch(r"[a-f0-9]{40}", commit) is None:
+            raise ValueError("retained source commit must resolve locally")
+        tree = subprocess.run(["git", "ls-tree", "-r", "--full-tree", commit], cwd=root, capture_output=True, text=True, check=True)
+        blobs = {line.partition("\t")[2]: line.partition("\t")[0].split()[2] for line in tree.stdout.splitlines()}
+        for path in paths:
+            data = path.read_bytes()
+            blob = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+            if blobs.get(str(path.relative_to(root))) != blob:
+                raise ValueError("retained domain source differs from commit: " + str(path.relative_to(root)))
+    return {"git_commit": commit, "retained_exact_source": bool(retained_commit), "domain_files_sha256": hashlib.sha256(encoded).hexdigest(), "files": hashes}
 
 
 def canonical_profiles(root: Path) -> tuple[dict, dict]:
@@ -178,8 +189,11 @@ def validate_report(value: object, root: Path, require_complete: bool = True) ->
     if value.get("action_coverage") != coverage:
         errors.append("action_coverage_mismatch")
     binding = value.get("source_binding")
-    current = source_binding(root)
-    if not isinstance(binding, dict) or binding.get("domain_files_sha256") != current["domain_files_sha256"] or binding.get("files") != current["files"] or re.fullmatch(r"[a-f0-9]{40}", str(binding.get("git_commit", ""))) is None:
+    try:
+        current = source_binding(root, str(binding.get("git_commit", "")) if isinstance(binding, dict) and binding.get("retained_exact_source") is True else "")
+    except (ValueError, subprocess.CalledProcessError):
+        current = {}
+    if not isinstance(binding, dict) or binding.get("domain_files_sha256") != current.get("domain_files_sha256") or binding.get("files") != current.get("files") or re.fullmatch(r"[a-f0-9]{40}", str(binding.get("git_commit", ""))) is None:
         errors.append("source_binding")
     content = value.get("content_snapshot")
     if not isinstance(content, dict) or SHA.fullmatch(str(content.get("aggregate_sha256", ""))) is None or not isinstance(content.get("packs"), list) or len(content["packs"]) != 1 or content["packs"][0].get("pack_id") != "base" or SHA.fullmatch(str(content["packs"][0].get("fingerprint_sha256", ""))) is None:
@@ -230,6 +244,8 @@ def _run_shard(root: Path, binary: str, start: int, count: int, logs: Path, time
             failures.extend(line for line in path.read_text(encoding="utf-8", errors="replace").splitlines() if LOG_FAILURE.search(line))
     try:
         report = json.loads(output.read_text(encoding="utf-8"))
+        if not isinstance(report, dict):
+            raise ValueError("domain report must be an object")
     except (OSError, ValueError):
         report = {}
         failures.append("missing_or_invalid_domain_report")
@@ -252,6 +268,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     parser.add_argument("--godot-bin", default=os.environ.get("GODOT_BIN", "godot"))
     parser.add_argument("--output", type=Path, default=Path("build/p15-synthetic-matrix.json"))
+    parser.add_argument("--source-commit", default="", help="verify every domain input against this retained local Git commit")
     args = parser.parse_args()
     if (args.seed_count, args.loadout_count, args.boss_count) != (30, 150, 5) or args.start < 0 or args.count < 1 or args.start + args.count > CASE_COUNT or not 1 <= args.workers <= 8 or args.shard_size < 1 or args.timeout_seconds < 1:
         parser.error("canonical matrix is30x150x5; ranges, workers and timeouts must be bounded")
@@ -259,7 +276,10 @@ def main() -> int:
     if binary is None:
         parser.error("Godot executable unavailable")
     root = args.project_root.resolve()
-    binding = source_binding(root)
+    try:
+        binding = source_binding(root, args.source_commit)
+    except (ValueError, subprocess.CalledProcessError) as error:
+        parser.error(str(error))
     started = time.monotonic()
     output = (root / args.output).resolve()
     output.relative_to(root)
@@ -279,7 +299,7 @@ def main() -> int:
         report = shard["report"]
         if report.get("schema_version") != 1 or report.get("range_start") != shard["start"] or report.get("requested_case_count") != shard["count"] or report.get("synthetic") is not True or report.get("production_case_count") != 0 or report.get("human_playtests") != 0 or not isinstance(report.get("cases"), list) or len(report["cases"]) != shard["count"]:
             errors.append(f"shard:{shard['start']}:invalid_header")
-        rows.extend(report.get("cases", []))
+        rows.extend(report["cases"] if isinstance(report.get("cases"), list) else [])
         if report.get("errors") != []:
             errors.append(f"shard:{shard['start']}:reported_errors")
         budgets.append(report.get("budgets", {}))
@@ -287,7 +307,7 @@ def main() -> int:
         bindings.append(report.get("content_snapshot", {}))
     coverage = {action: 0 for action in authored_action_ids(root)}
     for row in rows:
-        if row.get("action_id") in coverage:
+        if isinstance(row, dict) and isinstance(row.get("action_id"), str) and row["action_id"] in coverage:
             coverage[row["action_id"]] += 1
     if not bindings or not bindings[0] or any(value != bindings[0] for value in bindings):
         errors.append("content_binding_divergence")
