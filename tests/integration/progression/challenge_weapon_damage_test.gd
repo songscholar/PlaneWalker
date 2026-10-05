@@ -1,6 +1,5 @@
 extends "res://tests/integration/progression/challenge_equipment_test.gd"
 
-const Threats := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Arrow := preload("res://scripts/combat/player_arrow.gd")
 const Bullet := preload("res://scripts/combat/gun_projectile.gd")
 const StaffBolt := preload("res://scripts/combat/staff_projectile.gd")
@@ -36,7 +35,8 @@ func _run() -> void:
 	rush.configure(registry)
 	var stage := Node2D.new()
 	add_child(stage)
-	var arena := Arena.build(stage, registry, rush.stage(0), {"seed": 42, "character_id": "wanderer", "weapon_id": "sword", "time_abilities": ["stop", "rewind"], "accessibility_assists": {"damage_received_multiplier": 1.0, "enemy_telegraph_scale": 1.0}}, "weapon-proof", "proof", "weapon-proof")
+	var sword_bridge := SwordHitBridge.new()
+	var arena := Arena.build(stage, registry, rush.stage(0), {"seed": 42, "character_id": "wanderer", "weapon_id": "sword", "time_abilities": ["stop", "rewind"], "accessibility_assists": {"damage_received_multiplier": 1.0, "enemy_telegraph_scale": 1.0}}, "weapon-proof", "proof", "weapon-proof", Arena.PlayerScene, sword_bridge)
 	suite.assert_true(arena.ok, "real weapon reward fixture binds native Player and Boss")
 	if not arena.ok:
 		stage.queue_free()
@@ -62,10 +62,10 @@ func _run() -> void:
 
 
 func _actual_sword_frame(player: Node, arena: Dictionary) -> void:
-	var bridge := SwordHitBridge.new()
+	var bridge: SwordHitBridge = arena.bridge
 	bridge.source_player = player
 	bridge.boss = arena.boss
-	suite.assert_true(bridge.configure(player, Threats.new(), [arena.boss], arena.effects) and player.configure_hostile_frame_participant(bridge), "actual Sword frame joins native hostile transaction")
+	suite.assert_true(player.get("_hostile_frame_participant") == bridge and bridge.is_ready_for_frame(int(player.priority_arbitration_snapshot().frame) + 1), "actual Sword frame joins its original native hostile transaction")
 	suite.assert_true(player.try_action(&"weapon_primary") and player.call("_submit_weapon_intent", &"weapon_primary", &"released"), "actual Player commits authored Sword light attack")
 	var remaining := 32
 	while remaining > 0:
@@ -78,7 +78,7 @@ func _actual_sword_frame(player: Node, arena: Dictionary) -> void:
 	var boss_before: Dictionary = arena.boss.launch_transaction_snapshot()
 	var player_before: Dictionary = player.full_player_replay_snapshot()
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", true)
-	suite.assert_true(not player.advance_action_frame() and bridge.delivered > 0, "late World refusal observes actual production Sword attack")
+	suite.assert_true(not suite.expect_rejected_player_frame(player) and bridge.delivered > 0, "late World refusal observes actual production Sword attack")
 	suite.assert_equal(arena.boss.launch_transaction_snapshot(), boss_before, "late World refusal restores reward-modified Boss damage")
 	suite.assert_equal(player.full_player_replay_snapshot(), player_before, "late World refusal restores actual Sword and equipped Player")
 	player.world_payload_authority.set("_frame_transaction_commit_fault_for_test", false)
@@ -120,7 +120,10 @@ func _test_source_isolation(player: Node, boss: Node, stage: Node) -> void:
 	stage.add_child(outsider)
 	for run_id: String in ["legacy_run", "runtime", "other-run"]:
 		var info := Damage.from_plan({"run_id": run_id, "target_id": str(boss.get_meta("stable_target_id")), "hostile_source_id": "foreign-proof", "attack_generation": 200, "action_token": 200, "amount": 40.0, "damage_type": Damage.DamageType.PHYSICAL, "source": outsider, "attacker": player, "tags": [], "can_crit": false})
-		suite.assert_close(boss.health.take_damage(info), 40.0 - boss.health.defense, "foreign source/run cannot borrow reward ownership: " + run_id)
+		var before: Dictionary = boss.launch_runtime_snapshot()
+		suite.assert_close(boss.health.call("_apply_target_damage_modifiers", info, 40.0), 40.0, "foreign source/run cannot borrow reward multiplier: " + run_id)
+		suite.assert_close(boss.health.take_damage(info), 0.0, "foreign source/run cannot claim native body authority: " + run_id)
+		suite.assert_equal(boss.launch_runtime_snapshot(), before, "foreign source/run preserves actual Boss HP and damage receipts: " + run_id)
 	var info := Damage.from_plan({"run_id": "runtime", "target_id": str(boss.get_meta("stable_target_id")), "hostile_source_id": "source-proof", "attack_generation": 201, "action_token": 201, "amount": 40.0, "damage_type": Damage.DamageType.PHYSICAL, "source": player.get_node("SwordWeapon/Hitbox"), "attacker": player, "tags": [], "can_crit": false})
 	suite.assert_close(boss.health.take_damage(info), 46.0 - boss.health.defense, "bound actual weapon descendant authenticates compatibility identity")
 	var world := World.new()
@@ -130,5 +133,8 @@ func _test_source_isolation(player: Node, boss: Node, stage: Node) -> void:
 	var config: Dictionary = player.loadout_runtime.snapshot()
 	suite.assert_true(foreign_player.configure_loadout(config), "isolated replay-world Player carries same canonical reward/run fixture")
 	var foreign_info := Damage.from_plan({"run_id": "runtime", "target_id": str(boss.get_meta("stable_target_id")), "hostile_source_id": "world-proof", "attack_generation": 202, "action_token": 202, "amount": 40.0, "damage_type": Damage.DamageType.PHYSICAL, "source": foreign_player.get_node("SwordWeapon/Hitbox"), "attacker": foreign_player, "tags": [], "can_crit": false})
-	suite.assert_close(boss.health.take_damage(foreign_info), 40.0 - boss.health.defense, "matching replay-world identity cannot affect native-world reward damage")
+	var before: Dictionary = boss.launch_runtime_snapshot()
+	suite.assert_close(boss.health.call("_apply_target_damage_modifiers", foreign_info, 40.0), 40.0, "matching replay-world identity cannot borrow native-world reward multiplier")
+	suite.assert_close(boss.health.take_damage(foreign_info), 0.0, "matching replay-world identity cannot claim native-world body authority")
+	suite.assert_equal(boss.launch_runtime_snapshot(), before, "foreign replay-world source preserves actual Boss HP and damage receipts")
 	world.queue_free()

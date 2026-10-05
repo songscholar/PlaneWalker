@@ -7,7 +7,7 @@ const Threats := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Orchestrator := preload("res://scripts/application/run_orchestrator.gd")
 
 
-static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, request: Dictionary, run_id: String, source_prefix: String, encounter_id: String, player_scene: PackedScene = PlayerScene) -> Dictionary:
+static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, request: Dictionary, run_id: String, source_prefix: String, encounter_id: String, player_scene: PackedScene = PlayerScene, frame_bridge: RefCounted = null) -> Dictionary:
 	var room_scene: PackedScene = load(definition.template.scene_path)
 	var boss_scene: PackedScene = load(definition.boss_scene)
 	if room_scene == null or boss_scene == null:
@@ -42,7 +42,7 @@ static func build(stage: Node2D, registry: RefCounted, definition: Dictionary, r
 	var payloads := Node2D.new()
 	stage.add_child(payloads)
 	var effects := Effects.new()
-	var bridge := Bridge.new()
+	var bridge: RefCounted = Bridge.new() if frame_bridge == null else frame_bridge
 	if not effects.configure(run_id, int(identity.runtime_frame)) or not effects.configure_native_payloads(payloads):
 		return {"ok": false, "reason": "effects_configuration"}
 	if not bridge.configure(player, Threats.new(), [boss], effects) or not player.configure_hostile_frame_participant(bridge):
