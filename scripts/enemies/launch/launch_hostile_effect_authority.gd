@@ -48,6 +48,14 @@ func native_payload_nodes() -> Array[Node2D]:
 	return _payloads.native_nodes()
 
 
+func native_debris_nodes() -> Array[Node2D]:
+	return _payloads.native_debris_nodes()
+
+
+func arena_debris_active_count() -> int:
+	return _payloads.debris_active_count()
+
+
 func semantic_snapshot() -> Dictionary:
 	return _semantics.snapshot()
 
@@ -484,6 +492,15 @@ func _work_snapshot(value: Dictionary) -> Dictionary:
 	var records: Dictionary = _semantics.work_records_for_snapshot(value.semantics)
 	for row: Dictionary in value.payloads.projectiles + value.payloads.zones:
 		records[row.id] = {"kind": "projectile" if row.definition.kind == "projectile" else "zone", "owner_source_id": row.definition.source_id, "phase": "PENDING" if row.phase == "PENDING" else "ACTIVE"}
+	for row: Dictionary in value.payloads.get("arena_debris", {}).get("rows", []):
+		var phase: String = row.phase
+		# Weapon facts precede this frame's ledger preparation and remain prior work until acceptance.
+		if phase == "BROKEN":
+			for fact: Dictionary in value.payloads.arena_debris.damage_claims:
+				if fact.construct_id == row.id and fact.runtime_frame > value.runtime_frame:
+					phase = "ACTIVE"
+		if phase in ["ACTIVE", "PENDING"]:
+			records["debris_" + str(row.id).sha256_text().substr(0, 57)] = {"kind": "construct", "owner_source_id": row.event.source_id, "phase": phase}
 	return {"run_id": value.run_id, "runtime_frame": value.runtime_frame, "records": records}
 
 

@@ -43,7 +43,7 @@ Interfaces: `BossArenaRuntime.configure(definition: Dictionary, identity: Dictio
 - [x] Add slam aftershock at the authored 60f impact delay containing20f dormant plus40f own warning and12 damage/radius32. Accepted-frame refusal/retry, owner phase/death retirement and actual dormant/warning cold checkpoints are verified in `docs/current/2026-10-05-p15b-native-ruin-aftershock-evidence.md`.
 - [x] Retire all surviving declared covers at the actual first enrage impact after its complete75f warning. Preserve prior partial HP and broken covers, whole-frame rollback/retry and fresh current native cold reconstruction.
 - [x] Add HP150/TTL600 wall segments with32px passage and40f collapse warning, actual native HP/collision, safe activation, refused-frame retry and current/historical focused cold reconstruction. Evidence: `docs/current/2026-10-05-p15b-native-ruin-wall-evidence.md`.
-- [ ] Add debris HP20/TTL480/cap4 with safe placement and shared construct budget.
+- [x] Add debris HP20/TTL480/cap4 with safe placement, real room physics, accepted Encounter work and shared construct budget. Focused current/historical payload compatibility and fresh native Actor/effects/Encounter continuation: `docs/current/2026-10-05-p15b-native-ruin-debris-evidence.md`. Whole Host and full loadout certification remain open below.
 - [ ] Verify owner/action retirement, cover-blocked beam and charge, combined48px escapes, rollback and cold restore in actual Host combat.
 
 ## Task 3: Forest Arena

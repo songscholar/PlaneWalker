@@ -12,6 +12,7 @@ const Controller := preload("res://scripts/dungeon/room_controller.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const Semantics := preload("res://scripts/enemies/launch/launch_semantic_effect_authority.gd")
+const Debris := preload("res://scripts/enemies/launch/ruin_debris_runtime.gd")
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
 const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "threats", "run_seed", "last_flushed_frame"]
 
@@ -361,14 +362,29 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 	var effects := Effects.new()
 	if not effects.configure(run_id, int(state.identity.runtime_frame)) or not effects.can_restore_launch_transaction_snapshot(value.effects) or value.effects.runtime_frame != frame:
 		return false
+	if value.effects.payloads.get("schema_version") == 2:
+		var debris_state: Dictionary = value.effects.payloads.arena_debris
+		var debris := Debris.new()
+		if not debris.configure(run_id, int(debris_state.initial_frame), debris_state.recipe) or not debris.can_restore_snapshot(debris_state, true):
+			return false
 	var registry := Registry.new()
 	var sources: Dictionary = {}
+	var ruin_sources: Dictionary = {}
 	for wave: Dictionary in value.definition.waves:
 		for spawn: Dictionary in wave.spawns:
-			sources[str(Controller.hostile_source_id_for_spawn({"run_id": run_id}, StringName(room_id), StringName(value.definition.id), spawn, 0))] = true
+			var source := str(Controller.hostile_source_id_for_spawn({"run_id": run_id}, StringName(room_id), StringName(value.definition.id), spawn, 0))
+			sources[source] = true
+			if spawn.enemy_id == "ruin_king":
+				ruin_sources[source] = true
+	for debris: Dictionary in value.effects.payloads.get("arena_debris", {}).get("rows", []):
+		if not ruin_sources.has(debris.event.source_id):
+			return false
+	for source: String in value.effects.payloads.get("arena_debris", {}).get("retirements", {}):
+		if not ruin_sources.has(source):
+			return false
 	var payload_facts := Registry.new()
 	for payload: Dictionary in value.effects.payloads.projectiles + value.effects.payloads.zones:
-		if not sources.has(payload.definition.source_id):
+		if not sources.has(payload.definition.source_id) or payload.definition.has("debris_recipe") and not ruin_sources.has(payload.definition.source_id):
 			return false
 		if payload.phase not in ["PENDING", "DORMANT"]:
 			sources[payload.id] = true

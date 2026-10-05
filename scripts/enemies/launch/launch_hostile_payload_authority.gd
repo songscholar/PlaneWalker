@@ -4,7 +4,9 @@ extends RefCounted
 const Runtime := preload("res://scripts/enemies/launch/launch_hostile_payload_runtime.gd")
 const ProjectionScript := preload("res://scripts/enemies/launch/launch_hostile_payload_projection.gd")
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
-const TICKET_FIELDS := ["ticket_id", "runtime_frame", "before", "after", "damage_requests", "native_contacts", "target_positions", "targets"]
+const DebrisNode := preload("res://scripts/enemies/launch/launch_ruin_debris.gd")
+const Calculator := preload("res://scripts/combat/damage_calculator.gd")
+const TICKET_FIELDS := ["ticket_id", "runtime_frame", "before", "after", "damage_requests", "native_contacts", "target_positions", "targets", "landing_queries", "static_exclusions"]
 
 var _runtime: RefCounted = Runtime.new()
 var _root: Node2D
@@ -13,10 +15,11 @@ var _pending: Dictionary = {}
 var _committed := false
 var _next_ticket := 1
 var _known_targets: Dictionary = {}
+var _debris_nodes: Dictionary = {}
 
 
 func configure(run_id: String, frame: int) -> bool:
-	return _pending.is_empty() and _nodes.is_empty() and _runtime.configure(run_id, frame)
+	return _pending.is_empty() and _nodes.is_empty() and _debris_nodes.is_empty() and _runtime.configure(run_id, frame)
 
 
 func configure_native_root(root: Node2D) -> bool:
@@ -36,6 +39,36 @@ func native_nodes() -> Array[Node2D]:
 		if row.phase not in ["PENDING", "DORMANT"] and _nodes.has(row.id) and is_instance_valid(_nodes[row.id]):
 			result.append(_nodes[row.id])
 	return result
+
+
+func native_debris_nodes() -> Array[Node2D]:
+	var result: Array[Node2D] = []
+	for row: Dictionary in snapshot().get("arena_debris", {}).get("rows", []):
+		if row.phase == "ACTIVE" and _debris_nodes.has(row.id) and is_instance_valid(_debris_nodes[row.id]):
+			result.append(_debris_nodes[row.id])
+	return result
+
+
+func debris_active_count() -> int:
+	return native_debris_nodes().size()
+
+
+func receive_debris_hit(id: String, info: RefCounted) -> float:
+	if not _pending.is_empty() or info == null or not _native_matches(snapshot()):
+		return 0.0
+	var attacker: Node = info.attacker
+	var run := StringName(str(snapshot().run_id))
+	if not is_instance_valid(attacker) or not attacker is PlayerController or attacker.current_run_id() != run or info.run_id not in [run, &"runtime"]:
+		return 0.0
+	var amount: float = Calculator.critical_amount(info, float(info.amount))
+	if not is_finite(amount) or amount <= 0.0:
+		return 0.0
+	var data: Dictionary = info.snapshot()
+	var frame: int = attacker.health.frame_signal_transaction_runtime_frame()
+	var result: Dictionary = _runtime.accept_debris_damage({"fact_id": JSON.stringify([data.run_id, data.target_id, data.hostile_source_id, data.attack_generation, data.hit_index, id]).sha256_text(), "run_id": str(run), "construct_id": id, "runtime_frame": int(snapshot().runtime_frame) if frame < 0 else frame, "amount": amount})
+	if not result.ok or not _sync_debris(snapshot()):
+		return 0.0
+	return float(result.amount)
 
 
 func add_control_source(id: String, source: String, kind: String, frames: int, magnitude: float) -> bool:
@@ -111,7 +144,8 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 			retired_sources.append(str(wrapper.hostile_source_id))
 	preview.retire_arena_payloads(retired_sources)
 	var zone_capacity := Runtime.MAX_ZONES - foreign_active_zones
-	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity)
+	var debris_context := _debris_context(before, context, contacts, motion)
+	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity, debris_context)
 	if not advanced.ok:
 		return advanced
 	for wrapper: Dictionary in batches:
@@ -135,7 +169,16 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 			var room: Dictionary = actor.launch_room_motion_snapshot()
 			if _root == null or room.is_empty() or not actor.has_method("prepared_launch_frame_reserves_death_pool") or not actor.prepared_launch_frame_reserves_death_pool() or not actor.get_node("HealthComponent").dead or mechanism.bounds != room.bounds or not preview.reserve_death_pool(mechanism, zone_capacity).ok:
 				return _failure("unsealed_death_pool")
-	var ticket := {"ticket_id": _next_ticket, "runtime_frame": context.runtime_frame, "before": before, "after": preview.snapshot(), "damage_requests": advanced.damage_requests, "native_contacts": native_contacts, "target_positions": target_descriptors, "targets": context.targets.duplicate() if has_live_payloads else {}}
+	var after: Dictionary = preview.snapshot()
+	var active_before: Dictionary = {}
+	for row: Dictionary in before.get("arena_debris", {}).get("rows", []):
+		if row.phase == "ACTIVE":
+			active_before[row.id] = true
+	var landing_queries: Array[Dictionary] = []
+	for row: Dictionary in after.get("arena_debris", {}).get("rows", []):
+		if row.phase == "ACTIVE" and not active_before.has(row.id):
+			landing_queries.append(row.position.duplicate(true))
+	var ticket := {"ticket_id": _next_ticket, "runtime_frame": context.runtime_frame, "before": before, "after": after, "damage_requests": advanced.damage_requests, "native_contacts": native_contacts, "target_positions": target_descriptors, "targets": context.targets.duplicate() if has_live_payloads else {}, "landing_queries": landing_queries, "static_exclusions": debris_context.static_exclusions}
 	_next_ticket += 1
 	_pending = ticket.duplicate(true)
 	_committed = false
@@ -163,7 +206,7 @@ func can_commit(ticket: Dictionary) -> bool:
 			var contact: Dictionary = sealed_contacts[id]
 			if collision.get_collider() != contact.collider or not (node.global_position + collision.get_travel()).is_equal_approx(contact.position):
 				return false
-	return true
+	return _landing_queries_clear(ticket.landing_queries, ticket.static_exclusions)
 
 
 func commit(ticket: Dictionary) -> bool:
@@ -186,7 +229,7 @@ func rollback(ticket: Dictionary) -> bool:
 
 
 func can_publish(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and _committed and snapshot() == ticket.after and _native_matches(ticket.after)
+	return _ticket_matches(ticket) and _committed and snapshot() == ticket.after and _native_matches(ticket.after) and _landing_queries_clear(ticket.landing_queries, ticket.static_exclusions)
 
 
 func publish(ticket: Dictionary) -> bool:
@@ -229,7 +272,7 @@ func _sync_native(value: Dictionary, prune: bool = false) -> bool:
 			_nodes[id].deactivate()
 	if prune:
 		_prune_native(value)
-	return true
+	return _sync_debris(value, prune)
 
 
 func _prune_native(value: Dictionary) -> void:
@@ -247,6 +290,7 @@ func _prune_native(value: Dictionary) -> void:
 			if node.get_parent() != null:
 				node.get_parent().remove_child(node)
 			node.queue_free()
+	_prune_debris(value)
 
 
 func _native_matches(value: Dictionary) -> bool:
@@ -261,7 +305,152 @@ func _native_matches(value: Dictionary) -> bool:
 		var position: Dictionary = row.position if row.definition.kind == "projectile" else row.definition.position
 		if not node.is_inside_tree() or node.get_parent() != _root or node.visible != (row.phase != "DORMANT") or node.global_position != Vector2(position.x, position.y) or not node.native_definition_matches(row.definition) or row.definition.kind == "projectile" and not node.native_hit_targets_match(row.hit_targets):
 			return false
+	return _debris_matches(value)
+
+
+func _sync_debris(value: Dictionary, prune: bool = false) -> bool:
+	var rows: Dictionary = {}
+	for row: Dictionary in value.get("arena_debris", {}).get("rows", []):
+		if row.activated_frame >= 0:
+			rows[row.id] = row
+		if row.phase != "ACTIVE":
+			continue
+		if not is_instance_valid(_root):
+			return false
+		if not _debris_nodes.has(row.id):
+			var node := DebrisNode.new()
+			node.configure(self, str(row.id))
+			_root.add_child(node)
+			_debris_nodes[row.id] = node
+		_debris_nodes[row.id].present(row)
+	for id: String in _debris_nodes:
+		if rows.has(id):
+			_debris_nodes[id].present(rows[id])
+		else:
+			_debris_nodes[id].deactivate()
+	if prune:
+		_prune_debris(value)
 	return true
+
+
+func _prune_debris(value: Dictionary) -> void:
+	var live: Dictionary = {}
+	for row: Dictionary in value.get("arena_debris", {}).get("rows", []):
+		if row.phase == "ACTIVE":
+			live[row.id] = true
+	for id: String in _debris_nodes.keys():
+		if live.has(id):
+			continue
+		var node: Node = _debris_nodes[id]
+		_debris_nodes.erase(id)
+		if is_instance_valid(node):
+			node.deactivate()
+			if node.get_parent() != null:
+				node.get_parent().remove_child(node)
+			node.queue_free()
+
+
+func _debris_matches(value: Dictionary) -> bool:
+	for row: Dictionary in value.get("arena_debris", {}).get("rows", []):
+		if row.phase == "ACTIVE" and (not _debris_nodes.has(row.id) or not is_instance_valid(_debris_nodes[row.id]) or _debris_nodes[row.id].get_parent() != _root or not _debris_nodes[row.id].native_geometry_matches(row)):
+			return false
+	return true
+
+
+func _debris_context(value: Dictionary, context: Dictionary, contacts: Dictionary, motion: Dictionary) -> Dictionary:
+	if value.get("schema_version") != 2:
+		return {"occupied": {}, "foreign_constructs": 0, "retired_sources": [], "static_exclusions": []}
+	var occupied: Dictionary = {}
+	var count := 0
+	var retired: Array[String] = []
+	for source: String in context.actors:
+		var actor: Node2D = context.actors[source]
+		var state: Dictionary = actor.launch_runtime_snapshot().runtime
+		var prepared: Dictionary = actor.get("_prepared_launch_frame")
+		if not prepared.is_empty():
+			state = prepared.after.runtime
+		if state.terminal and actor.get("_launch_definition").id == "ruin_king":
+			retired.append(source)
+		var radius: float = actor.get("_launch_definition").collision_radius_px
+		occupied[source + ":body"] = {"position": {"x": actor.global_position.x, "y": actor.global_position.y}, "radius": radius, "clearance": 0.0}
+		if not prepared.is_empty():
+			occupied[source + ":candidate"] = {"position": prepared.after.position.duplicate(true), "radius": radius, "clearance": 0.0}
+		var arena: Dictionary = state.get("arena_state", {})
+		if arena.is_empty() or arena.terminal:
+			continue
+		var room: Dictionary = actor.launch_room_motion_snapshot()
+		var origin := Vector2.ZERO if room.is_empty() else Vector2(float(room.bounds.x), float(room.bounds.y))
+		for row: Dictionary in arena.covers + arena.walls:
+			if row.broken or row.get("expired", false):
+				continue
+			count += 1
+			occupied[source + ":" + row.id] = {"position": {"x": origin.x + float(row.position.x), "y": origin.y + float(row.position.y)}, "radius": float(row.radius_px) + float(row.get("length_px", 0.0)) * 0.5, "clearance": 48.0}
+	for id: String in context.targets:
+		var target: Node2D = context.targets[id]
+		var shape := target.get_node_or_null("CollisionShape2D") as CollisionShape2D
+		if shape != null and shape.shape is CircleShape2D:
+			occupied["target:" + id] = {"position": {"x": target.global_position.x, "y": target.global_position.y}, "radius": float(shape.shape.radius), "clearance": 0.0}
+	var bounds: Dictionary = {}
+	var active := 0
+	for row: Dictionary in value.get("arena_debris", {}).get("rows", []):
+		active += int(row.phase == "ACTIVE" and int(row.age) + 1 < 480)
+		if row.phase == "PENDING":
+			bounds[JSON.stringify(row.event.bounds)] = row.event.bounds
+	if active >= mini(4, 8 - count):
+		bounds.clear()
+	for row: Dictionary in value.projectiles:
+		if not row.definition.has("debris_recipe") or row.phase != "ACTIVE":
+			continue
+		if contacts.has(row.id) or not motion[row.id].action_paused and (int(row.age) + 1 >= int(row.definition.lifetime_frames) or Runtime._vector(motion[row.id].from).distance_to(Runtime._vector(row.definition.origin)) + Runtime._vector(motion[row.id].displacement).length() >= float(row.definition.range_px) - 0.00001 or not Runtime._inside(motion[row.id].to, row.definition.bounds)):
+			bounds[JSON.stringify(row.definition.bounds)] = row.definition.bounds
+	var excluded: Array[RID] = []
+	for node: Node2D in native_debris_nodes():
+		excluded.append(node.get_rid())
+	for actor: Node2D in context.actors.values():
+		var arena := actor.get_node_or_null("ArenaConstructs")
+		if arena != null:
+			for body: CollisionObject2D in arena.get_children():
+				excluded.append(body.get_rid())
+	for room_bounds: Dictionary in bounds.values():
+		occupied.merge(_blocked_debris_candidates(room_bounds, excluded))
+	return {"occupied": occupied, "foreign_constructs": count, "retired_sources": retired, "static_exclusions": excluded}
+
+
+func _landing_queries_clear(points: Array, excluded: Array) -> bool:
+	if points.is_empty():
+		return true
+	var query := PhysicsShapeQueryParameters2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = 60.0
+	query.shape = shape
+	query.collision_mask = 1
+	query.collide_with_areas = false
+	var exclusions: Array[RID] = []
+	exclusions.assign(excluded)
+	for node: Node2D in native_debris_nodes():
+		exclusions.append(node.get_rid())
+	query.exclude = exclusions
+	for point: Dictionary in points:
+		query.transform = Transform2D(0.0, Runtime._vector(point))
+		if not _root.get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+			return false
+	return true
+
+
+func _blocked_debris_candidates(bounds: Dictionary, excluded: Array[RID]) -> Dictionary:
+	var blocked: Dictionary = {}
+	var query := PhysicsShapeQueryParameters2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = 60.0
+	query.shape = shape
+	query.collision_mask = 1
+	query.collide_with_areas = false
+	query.exclude = excluded
+	for point: Vector2 in Runtime.Debris.candidate_positions(bounds, {"x": float(bounds.x), "y": float(bounds.y)}):
+		query.transform = Transform2D(0.0, point)
+		if not _root.get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+			blocked["static:%s:%s" % [point.x, point.y]] = {"position": {"x": point.x, "y": point.y}, "radius": 0.0, "clearance": 0.0}
+	return blocked
 
 
 func _ticket_matches(ticket: Dictionary) -> bool:

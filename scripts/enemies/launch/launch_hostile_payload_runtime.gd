@@ -6,12 +6,14 @@ const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinato
 const Controls := preload("res://scripts/enemies/launch/hostile_control_runtime.gd")
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
 const Definitions := preload("res://scripts/enemies/launch/hostile_definition_contract.gd")
+const Debris := preload("res://scripts/enemies/launch/ruin_debris_runtime.gd")
 const MAX_PROJECTILES := 32
 const MAX_ZONES := 12
 const MAX_RESERVATIONS := 256
 const MAX_CLAIMS := 4096
 const MAX_FRAME := 2147483647 - Contract.MAX_FRAME
 const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "projectiles", "zones"]
+const DEBRIS_STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_frame", "claims", "projectiles", "zones", "arena_debris", "debris_impacts"]
 const HIT_FIELDS := ["run_id", "hostile_source_id", "attack_generation", "hit_index", "runtime_frame", "target_id", "action_id", "damage", "damage_type", "handler_id", "geometry", "parameters"]
 const PROJECTILE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "travel", "position", "control", "hit_targets"]
 const ZONE_FIELDS := ["id", "definition", "phase", "activated_frame", "age", "control"]
@@ -37,6 +39,8 @@ func reserve_projectile(hit: Dictionary, bounds: Dictionary, mechanisms: Diction
 	var id := _id(definition)
 	if _has_claim(_state, definition):
 		return _failure("duplicate_reservation")
+	if definition.has("debris_recipe") and not _enable_debris(definition.debris_recipe):
+		return _failure("debris_recipe")
 	var phase := "ACTIVE" if _active_count(_state.projectiles) < MAX_PROJECTILES else "PENDING"
 	var record := {"id": id, "definition": definition, "phase": phase, "activated_frame": _state.runtime_frame if phase == "ACTIVE" else -1, "age": 0, "travel": 0.0, "position": definition.origin.duplicate(), "control": _new_control(id, int(_state.runtime_frame)), "hit_targets": []}
 	_state.claims.append({"id": id, "key": _reservation_key(definition)})
@@ -93,7 +97,7 @@ func motion_for_frame(frame: int) -> Dictionary:
 	return result
 
 
-func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MAX_ZONES) -> Dictionary:
+func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MAX_ZONES, debris_context: Dictionary = {}) -> Dictionary:
 	if _state.is_empty() or zone_capacity < 0 or zone_capacity > MAX_ZONES or frame != int(_state.runtime_frame) + 1 or not _frame(frame) or not _valid_observations(observations):
 		return _failure("frame_or_observations")
 	var motion := motion_for_frame(frame)
@@ -109,6 +113,7 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 	var retired: Array[String] = []
 	var retained: Array[Dictionary] = []
 	var impacts: Array[Dictionary] = []
+	var debris_events: Array[Dictionary] = []
 	for row: Dictionary in next.projectiles:
 		var control := _advanced_control(row.control, frame)
 		if control.is_empty():
@@ -123,6 +128,7 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 				damages.append(_damage(row.id, row.definition, contact.target_id, frame))
 				row.hit_targets.append(contact.target_id)
 			if contact.kind == "world" or row.hit_targets.size() > int(row.definition.pierce_count):
+				_record_debris_impact(next, row.definition, contact.position, frame, debris_events)
 				if not row.definition.impact_pool.is_empty():
 					impacts.append(_impact_definition(row.definition, contact.position, frame))
 				retired.append(row.id)
@@ -133,6 +139,7 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 			row.travel = minf(float(row.definition.range_px), float(row.travel) + sqrt(float(step.displacement.x) ** 2 + float(step.displacement.y) ** 2))
 			row.position = _trajectory_position(row.definition, float(row.travel))
 		if row.age >= row.definition.lifetime_frames or row.travel >= float(row.definition.range_px) - 0.00001 or not _inside(row.position, row.definition.bounds):
+			_record_debris_impact(next, row.definition, row.position, frame, debris_events)
 			retired.append(row.id)
 		else:
 			retained.append(row)
@@ -173,6 +180,11 @@ func advance_frame(frame: int, observations: Dictionary, zone_capacity: int = MA
 			return reserved
 	_activate_pending(next.projectiles, MAX_PROJECTILES, frame)
 	_activate_pending(next.zones, zone_capacity, frame)
+	if next.schema_version == 2:
+		var debris := _debris_runtime(next)
+		if debris == null or not debris.advance_frame(frame, debris_events, debris_context.get("occupied", {}), int(debris_context.get("foreign_constructs", 0)), debris_context.get("retired_sources", [])).ok:
+			return _failure("debris_transition")
+		next.arena_debris = debris.snapshot()
 	_state = next
 	return {"ok": true, "runtime_frame": frame, "damage_requests": damages, "retired_payload_ids": retired, "pending_work": pending_work()}
 
@@ -206,12 +218,22 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func accept_debris_damage(fact: Dictionary) -> Dictionary:
+	var debris := _debris_runtime(_state)
+	if debris == null:
+		return _failure("debris_unavailable")
+	var result: Dictionary = debris.accept_damage_fact(fact)
+	if result.ok:
+		_state.arena_debris = debris.snapshot()
+	return result
+
+
 func pending_work() -> Dictionary:
 	return {"projectiles": _state.get("projectiles", []).size(), "zones": _state.get("zones", []).size()}
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or value.schema_version != 1 or typeof(value.schema_version) != TYPE_INT or value.run_id != _state.run_id or value.initial_frame != _state.initial_frame or not _frame(value.runtime_frame) or value.runtime_frame < value.initial_frame:
+	if _state.is_empty() or typeof(value.get("schema_version")) != TYPE_INT or value.schema_version not in [1, 2] or not Contract.exact_fields(value, DEBRIS_STATE_FIELDS if value.schema_version == 2 else STATE_FIELDS) or value.run_id != _state.run_id or value.initial_frame != _state.initial_frame or not _frame(value.runtime_frame) or value.runtime_frame < value.initial_frame:
 		return false
 	if not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.projectiles is Array or not value.zones is Array or value.projectiles.size() + value.zones.size() > MAX_RESERVATIONS:
 		return false
@@ -227,6 +249,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		if not row is Dictionary or not Contract.exact_fields(row, PROJECTILE_FIELDS) or not _valid_live_record(row, value, claims, live, true):
 			return false
 		if not _valid_projectile_definition(row.definition) or not Contract.number_in_range(row.travel, 0, float(row.definition.range_px) - 0.000001) or not Contract.valid_point(row.position):
+			return false
+		if value.schema_version == 1 and row.definition.has("debris_recipe"):
 			return false
 		if row.position != _trajectory_position(row.definition, float(row.travel)) or not _inside(row.position, row.definition.bounds) or row.age >= row.definition.lifetime_frames:
 			return false
@@ -251,6 +275,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			return false
 		if row.phase != "PENDING" and row.phase != ("DORMANT" if row.age < delay else ("WARNING" if row.age < int(row.definition.warning_frames) + delay else "ACTIVE")):
 			return false
+	if value.schema_version == 2 and not _valid_debris_state(value, claims, keys):
+		return false
 	return _active_count(value.projectiles) <= MAX_PROJECTILES and _active_count(value.zones) <= MAX_ZONES
 
 
@@ -280,12 +306,76 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 	if not Contract.number_in_range(range_px, 1.0, float(hit.parameters.speed_px_per_second) * float(hit.parameters.lifetime_frames) / 60.0) or not _inside(lane.origin, bounds):
 		return {}
 	var pool: Dictionary = {}
-	if not mechanisms.is_empty():
+	var debris_recipe: Dictionary = {}
+	if hit.action_id == "guardian_debris_barrage" and not mechanisms.is_empty():
+		if not Contract.exact_fields(mechanisms, ["debris_hp", "debris_lifetime_frames", "debris_count_cap"]) or mechanisms.debris_hp != 20 or mechanisms.debris_lifetime_frames != 480 or mechanisms.debris_count_cap != 4:
+			return {}
+		debris_recipe = {"max_hp": float(mechanisms.debris_hp), "lifetime_frames": int(mechanisms.debris_lifetime_frames), "count_cap": int(mechanisms.debris_count_cap), "radius_px": 12.0}
+	elif not mechanisms.is_empty() and not mechanisms.has("debris_hp"):
 		var parsed := Definitions.mechanisms(mechanisms, Enemy.MECHANISM_RULES.corrosive_moth)
 		if not parsed.ok:
 			return {}
 		pool = {"radius": float(mechanisms.impact_pool_radius_px), "lifetime_frames": int(mechanisms.impact_pool_lifetime_frames), "damage": float(mechanisms.impact_pool_damage), "tick_frames": int(mechanisms.impact_pool_tick_frames)}
-	return {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool, "pierce_count": int(hit.parameters.pierce_count), "visual_kind": "acid" if hit.action_id.begins_with("corrosive_moth.") else str(hit.damage_type)}
+	var definition := {"kind": "projectile", "run_id": hit.run_id, "source_id": hit.hostile_source_id, "generation": int(lane.attack_generation), "hit_index": int(hit.hit_index), "reserved_frame": int(hit.runtime_frame), "origin": Contract.point(lane.origin), "direction": Contract.point(lane.aim_direction), "radius": float(lane.radius), "speed": float(hit.parameters.speed_px_per_second), "lifetime_frames": int(hit.parameters.lifetime_frames), "range_px": range_px, "damage": float(hit.damage), "damage_type": hit.damage_type, "target_id": hit.target_id, "bounds": bounds.duplicate(true), "impact_pool": pool, "pierce_count": int(hit.parameters.pierce_count), "visual_kind": "acid" if hit.action_id.begins_with("corrosive_moth.") else str(hit.damage_type)}
+	if not debris_recipe.is_empty():
+		definition["debris_recipe"] = debris_recipe
+	return definition if _valid_projectile_definition(definition) else {}
+
+
+func _enable_debris(recipe: Dictionary) -> bool:
+	if _state.schema_version == 2:
+		return _state.arena_debris.recipe == recipe
+	var debris := Debris.new()
+	if not debris.configure(str(_state.run_id), int(_state.initial_frame), recipe):
+		return false
+	var state: Dictionary = debris.snapshot()
+	state.runtime_frame = _state.runtime_frame
+	if not debris.restore_snapshot(state):
+		return false
+	_state.schema_version = 2
+	_state["arena_debris"] = state
+	_state["debris_impacts"] = []
+	return true
+
+
+func _debris_runtime(value: Dictionary) -> RefCounted:
+	if value.get("schema_version") != 2 or not value.get("arena_debris") is Dictionary or not value.arena_debris.get("recipe") is Dictionary:
+		return null
+	var runtime := Debris.new()
+	return runtime if runtime.configure(str(value.run_id), int(value.initial_frame), value.arena_debris.recipe) and runtime.restore_snapshot(value.arena_debris) else null
+
+
+func _valid_debris_state(value: Dictionary, claims: Dictionary, keys: Dictionary) -> bool:
+	var debris := _debris_runtime(value)
+	if debris == null or value.arena_debris.runtime_frame != value.runtime_frame or not value.debris_impacts is Array or value.debris_impacts.size() != value.arena_debris.rows.size():
+		return false
+	for index: int in range(value.debris_impacts.size()):
+		var receipt: Variant = value.debris_impacts[index]
+		if not receipt is Dictionary or not Contract.exact_fields(receipt, ["event", "projectile_definition"]) or not receipt.event is Dictionary or not receipt.projectile_definition is Dictionary:
+			return false
+		var definition: Dictionary = receipt.projectile_definition
+		var event: Dictionary = receipt.event
+		if not definition.has("debris_recipe") or not _valid_projectile_definition(definition) or definition.debris_recipe != value.arena_debris.recipe or not claims.has(_id(definition)) or not keys.has(_reservation_key(definition)) or event != value.arena_debris.rows[index].event or event.run_id != definition.run_id or event.source_id != definition.source_id or event.generation != definition.generation or event.hit_index != definition.hit_index or event.bounds != definition.bounds or event.runtime_frame <= definition.reserved_frame:
+			return false
+		var origin := _vector(definition.origin)
+		var endpoint := origin + _vector(definition.direction) * float(definition.range_px)
+		if Geometry2D.get_closest_point_to_segment(_vector(event.position), origin, endpoint).distance_to(_vector(event.position)) > 0.05:
+			return false
+		if origin.distance_to(_vector(event.position)) > minf(float(definition.range_px), float(definition.speed) * float(event.runtime_frame - definition.reserved_frame) / 60.0) + 0.05:
+			return false
+	return true
+
+
+static func _record_debris_impact(next: Dictionary, definition: Dictionary, position: Dictionary, frame: int, events: Array[Dictionary]) -> void:
+	if not definition.has("debris_recipe"):
+		return
+	var event := {"run_id": definition.run_id, "source_id": definition.source_id, "generation": definition.generation, "hit_index": definition.hit_index, "runtime_frame": frame, "position": position.duplicate(true), "bounds": definition.bounds.duplicate(true)}
+	events.append(event)
+	next.debris_impacts.append({"event": event.duplicate(true), "projectile_definition": definition.duplicate(true)})
+
+
+static func _projectile_fields(definition: Dictionary) -> Array:
+	return PROJECTILE_DEFINITION_FIELDS + ["debris_recipe"] if definition.has("debris_recipe") else PROJECTILE_DEFINITION_FIELDS
 
 
 func _reserve_zone(state: Dictionary, definition: Dictionary, zone_capacity: int = MAX_ZONES) -> Dictionary:
@@ -304,7 +394,7 @@ func _impact_definition(projectile: Dictionary, position: Dictionary, frame: int
 
 
 func _valid_live_record(row: Dictionary, state: Dictionary, claims: Dictionary, live: Dictionary, projectile: bool) -> bool:
-	if not row.definition is Dictionary or not Contract.exact_fields(row.definition, PROJECTILE_DEFINITION_FIELDS if projectile else _zone_fields(row.definition)) or not _payload_id(row.id) or row.id != _id(row.definition) or not claims.has(row.id) or claims[row.id] != _reservation_key(row.definition) or live.has(row.id) or row.phase not in (["PENDING", "ACTIVE"] if projectile else ["PENDING", "DORMANT", "WARNING", "ACTIVE"]):
+	if not row.definition is Dictionary or not Contract.exact_fields(row.definition, _projectile_fields(row.definition) if projectile else _zone_fields(row.definition)) or not _payload_id(row.id) or row.id != _id(row.definition) or not claims.has(row.id) or claims[row.id] != _reservation_key(row.definition) or live.has(row.id) or row.phase not in (["PENDING", "ACTIVE"] if projectile else ["PENDING", "DORMANT", "WARNING", "ACTIVE"]):
 		return false
 	if not Contract.integer_in_range(row.activated_frame, -1, int(state.runtime_frame)) or not Contract.integer_in_range(row.age, 0, Contract.MAX_FRAME) or not row.definition.has("reserved_frame") or not _frame(row.definition.reserved_frame) or row.definition.reserved_frame < state.initial_frame or row.definition.reserved_frame > state.runtime_frame:
 		return false
@@ -318,8 +408,12 @@ func _valid_live_record(row: Dictionary, state: Dictionary, claims: Dictionary, 
 
 
 func _valid_projectile_definition(row: Dictionary) -> bool:
-	if not Contract.exact_fields(row, PROJECTILE_DEFINITION_FIELDS) or row.kind != "projectile" or not _valid_definition_identity(row) or not Contract.valid_point(row.origin) or not Contract.valid_point(row.direction, 1) or not is_equal_approx(_vector(row.direction).length(), 1.0) or not _inside(row.origin, row.bounds) or not _stable_id(row.target_id):
+	if not Contract.exact_fields(row, _projectile_fields(row)) or row.kind != "projectile" or not _valid_definition_identity(row) or not Contract.valid_point(row.origin) or not Contract.valid_point(row.direction, 1) or not is_equal_approx(_vector(row.direction).length(), 1.0) or not _inside(row.origin, row.bounds) or not _stable_id(row.target_id):
 		return false
+	if row.has("debris_recipe"):
+		var debris := Debris.new()
+		if not row.debris_recipe is Dictionary or not debris.configure(str(row.run_id), int(_state.initial_frame), row.debris_recipe) or row.radius != 5.0 or row.speed != 128.0 or row.lifetime_frames != 90 or row.range_px != 192.0 or row.pierce_count != 0 or row.damage_type != "physical" or not row.impact_pool.is_empty() or row.hit_index > 5:
+			return false
 	if not Contract.number_in_range(row.radius, 1, 320) or not Contract.number_in_range(row.speed, 1, 480) or not Contract.integer_in_range(row.lifetime_frames, 1, 600) or not Contract.number_in_range(row.range_px, 1.0, float(row.speed) * float(row.lifetime_frames) / 60.0) or not Contract.integer_in_range(row.pierce_count, 0, 8) or not row.impact_pool is Dictionary:
 		return false
 	return row.impact_pool.is_empty() or (Contract.exact_fields(row.impact_pool, ["radius", "lifetime_frames", "damage", "tick_frames"]) and Contract.number_in_range(row.impact_pool.radius, 1, 320) and Contract.number_in_range(row.impact_pool.damage, 0, 600) and Contract.integer_in_range(row.impact_pool.lifetime_frames, 1, 1200) and Contract.integer_in_range(row.impact_pool.tick_frames, 1, 600))

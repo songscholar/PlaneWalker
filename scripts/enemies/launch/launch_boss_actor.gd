@@ -7,6 +7,7 @@ const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.g
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 var _exposure_replay_authority: RefCounted
+var _arena_effects: WeakRef
 
 
 func _create_launch_runtime() -> RefCounted:
@@ -122,6 +123,14 @@ func _native_action_activation_blocked(frame: int, observations: Dictionary) -> 
 		return true
 	if not _wall_static_placement_valid(action):
 		return false
+	if _arena_effects != null:
+		var authority: RefCounted = _arena_effects.get_ref()
+		var arena := native_arena_snapshot()
+		var live := 0
+		for row: Dictionary in arena.covers + arena.walls:
+			live += int(not row.broken and not bool(row.get("expired", false)))
+		if authority != null and live + int(authority.arena_debris_active_count()) + 2 > 8:
+			return true
 	for fact: Dictionary in action.committed_geometry:
 		var origin := _vector(fact.origin)
 		var direction := _vector(fact.aim_direction)
@@ -132,6 +141,13 @@ func _native_action_activation_blocked(frame: int, observations: Dictionary) -> 
 			if offset.distance_to(closest) <= float(subject.radius) + 0.5:
 				return true
 	return false
+
+
+func bind_native_construct_budget(authority: RefCounted) -> bool:
+	if authority == null or not authority.has_method("arena_debris_active_count"):
+		return false
+	_arena_effects = weakref(authority)
+	return true
 
 
 func _wall_static_placement_valid(action: Dictionary) -> bool:
@@ -285,6 +301,12 @@ func prepared_launch_hit_blocked_by_cover(hit: Dictionary, target: Node2D) -> bo
 
 func prepared_launch_arena_payload_allowed(request: Dictionary) -> bool:
 	return not _prepared_launch_frame.is_empty() and _launch_definition.get("id", "") == "ruin_king" and request.get("kind", "") == "boss_aftershock" and _prepared_launch_frame.batch.mechanism_requests.has(request) and not _prepared_launch_frame.after.runtime.terminal and not _room_motion.is_empty() and request.get("bounds") == _room_motion.bounds
+
+
+func prepared_launch_payload_parameters() -> Dictionary:
+	if _prepared_launch_frame.is_empty() or _launch_definition.get("id", "") != "ruin_king":
+		return {}
+	return {"debris_hp": _launch_definition.mechanisms.debris_hp, "debris_lifetime_frames": _launch_definition.mechanisms.debris_lifetime_frames, "debris_count_cap": _launch_definition.mechanisms.debris_count_cap}
 
 
 func prepared_launch_arena_payloads_retired() -> bool:

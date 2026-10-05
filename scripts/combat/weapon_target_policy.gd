@@ -3,11 +3,12 @@ extends RefCounted
 
 const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
+const Debris := preload("res://scripts/enemies/launch/launch_ruin_debris.gd")
 const PLAYER_ATTACK_MASK := 1 | 4
 
 
 static func is_arena_construct(target: Node) -> bool:
-	return is_instance_valid(target) and (target is Construct or target is Wall)
+	return is_instance_valid(target) and (target is Construct or target is Wall or target is Debris)
 
 
 static func is_attackable(target: Node) -> bool:
