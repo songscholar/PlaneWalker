@@ -1,7 +1,7 @@
 # Native Time Sovereign Auxiliaries Implementation Plan
 
-- Status: In progress
-- Document Role: Current
+- Status: Completed / Historical
+- Document Role: Historical implementation plan
 - Authority Level: Execution details below approved P15
 - Applies To: Regular Time Sovereign native cast auxiliary effects
 - Owner: Native enemy auxiliary implementation lead
@@ -40,17 +40,20 @@
 
 - [x] Real Player cast lifecycle, refused-frame compensation/retry, death/disposal and physical Save/typed Replay reconstruction; cold Boss, Effects and full Player next-frame states equal uninterrupted branch.
 - [x] Verify complete35frame Blink and Slash warnings, collision-safe locked facing landing, native raster projection and retained Stop command inside Freeze.
-- [ ] Export the focused retained source and repeat native/domain/shared checks independently from other current work.
+- [x] Export the focused retained source and repeat native/domain/shared checks independently from other current work.
 
 ## Current Evidence
 
+- Retained implementation: `ecc8a8b`. Independent source archive: `build/test-source/time-auxiliary-retention`.
+- Exact retained source9/9GREEN: auxiliary/native/response domain3 in `build/time-auxiliary-retained-domain-native`; native response1 in `build/time-auxiliary-retained-response`; payload1 in `build/time-auxiliary-retained-payload`; four production Profiles in `build/time-auxiliary-retained-profile-{stop,rewind,accelerate,rift}`.
+- Fresh archive completes asset import and a clean second import; the first import generates absent CSV translation resources. `build/time-auxiliary-retained-reimport.log` has no errors or leak diagnostics.
 - Native auxiliary/domain2/2GREEN: `build/time-auxiliary-final-native2`; added Bolt leave-zone criterion also passes native Metal capture.
 - Schema1/9 migration and strict current state checks: `build/time-auxiliary-domain-migration`.
 - Native response1/1GREEN: `build/time-auxiliary-final-response`; shared projectile domain1/1GREEN: `build/time-auxiliary-shared-payload-final`.
 - Four authentic production Profiles1/1GREEN each: `build/time-auxiliary-profile-{stop,rewind,accelerate,rift}`.
 - Native Compatibility renderer on Apple M4 Pro: Slash mark, Bolt impact and Freeze at640x360,1280x720,2560x1080; captures are in `build/visual-evidence/time-auxiliary/`.
 - `python3 -m pip_audit -r requirements-dev.txt` reports no known vulnerabilities.
-- Only intentional World publication refusal logs at Slash35 and Freeze120 are accepted; no script errors or leak diagnostics in final passing runs.
+- Only intentional World publication refusal logs at auxiliary Slash35/Freeze120 and existing response refusal tests61/130 are accepted; no script errors or leak diagnostics in final passing runs.
 
 ## Reversible Decisions
 
