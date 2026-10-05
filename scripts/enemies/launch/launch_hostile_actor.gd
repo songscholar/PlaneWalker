@@ -26,6 +26,7 @@ signal hostile_final_death(source_id: StringName, receipt_id: String)
 
 var _launch_runtime: RefCounted = _create_launch_runtime()
 var _body_preview_runtime: RefCounted
+var _frame_preview_slots: Dictionary = {}
 var _launch_definition: Dictionary = {}
 var _launch_identity: Dictionary = {}
 var _prepared_launch_frame: Dictionary = {}
@@ -118,6 +119,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 		return _launch_failure("health_run")
 	_launch_runtime = candidate
 	_body_preview_runtime = null
+	_frame_preview_slots.clear()
 	_affix_configuration = affix_configuration
 	_affix_runtime = affix_runtime
 	_launch_definition = definition.duplicate(true)
@@ -142,7 +144,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 
 
 func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary:
-	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or not _room_motion.is_empty() or int(_launch_runtime.snapshot().runtime_frame) != int(_launch_identity.runtime_frame):
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or not _room_motion.is_empty() or _native_runtime_frame(_launch_runtime) != int(_launch_identity.runtime_frame):
 		return _launch_failure("room_motion_busy")
 	var verified: Dictionary = RoomContract.validate(room, template)
 	if not verified.ok or not room.is_inside_tree() or not _translation_only(room.global_transform) or not _native_geometry_matches_definition() or collision_layer != 4 or not get_collision_mask_value(1):
@@ -177,16 +179,15 @@ func project_runtime_snapshot(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
-	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _launch_runtime.snapshot().terminal:
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _native_runtime_is_terminal(_launch_runtime):
 		return _launch_failure("unavailable")
 	if not _room_motion.is_empty() and (not _room_motion_is_valid() or not _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px))):
 		return _launch_failure("room_motion")
 	if not Contract.exact_fields(observations, HostileActionCoordinator.CONTEXT_FIELDS) or not Contract.valid_point(observations.source_position) or not _vector(observations.source_position).is_equal_approx(global_position):
 		return _launch_failure("source_position")
 	var before := _actor_state()
-	var preview: RefCounted = _create_launch_runtime()
-	preview.configure(_launch_definition, _launch_identity)
-	if not preview.restore_snapshot(before.runtime):
+	var preview := _native_frame_preview(before.runtime, &"body")
+	if preview == null:
 		return _launch_failure("runtime_checkpoint")
 	var status_preview: RefCounted = _create_launch_status_runtime()
 	if not status_preview.restore_transaction_snapshot(before.status):
@@ -273,7 +274,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		batch = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
 	if not batch.ok:
 		return batch
-	if batch.phase == "WARNING" and not _native_summon_warning_safe(preview.snapshot().action):
+	if batch.phase == "WARNING" and not _native_summon_warning_safe(_native_runtime_action(preview)):
 		var unpublished_generations: Array[int] = []
 		for fact: Dictionary in batch.threat_facts:
 			unpublished_generations.append(int(fact.attack_generation))
@@ -314,11 +315,11 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		next_credit = 0.0
 	else:
 		status_events = status_preview.advance_frame()
-		if preview.snapshot().terminal:
+		if _native_runtime_is_terminal(preview):
 			status_preview.reset_runtime_state()
 			status_events.burn_ticks = []
 			next_credit = 0.0
-	if _affix_runtime != null and preview.snapshot().terminal:
+	if _affix_runtime != null and _native_runtime_is_terminal(preview):
 		var terminal_affix := AffixRuntime.new()
 		terminal_affix.configure(_affix_configuration, _launch_identity, max_hp)
 		terminal_affix.restore_snapshot(before.affix_runtime)
@@ -341,6 +342,39 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	_prepared_launch_frame = ticket.duplicate(true)
 	_prepared_frame_committed = false
 	return {"ok": true, "ticket": ticket.duplicate(true), "batch": batch.duplicate(true)}
+
+
+func _native_frame_preview(state: Dictionary, slot: StringName) -> RefCounted:
+	if slot not in [&"body", &"arena"]:
+		return null
+	var configuration := var_to_bytes(_native_frame_preview_configuration())
+	var retained: Dictionary = _frame_preview_slots.get(slot, {})
+	var preview: RefCounted = retained.get("runtime") if retained.get("configuration") == configuration else null
+	if preview == null:
+		preview = _create_launch_runtime()
+		if not preview.configure(_launch_definition, _launch_identity).ok:
+			return null
+	# A retained preview never substitutes its previous frame for this boundary.
+	if not preview.restore_snapshot(state):
+		return null
+	_frame_preview_slots[slot] = {"configuration": configuration, "runtime": preview}
+	return preview
+
+
+func _native_frame_preview_configuration() -> Array:
+	return [_launch_definition, _launch_identity]
+
+
+func _native_runtime_frame(runtime: RefCounted) -> int:
+	return runtime.native_runtime_frame() if runtime.has_method("native_runtime_frame") else int(runtime.snapshot().get("runtime_frame", -1))
+
+
+func _native_runtime_is_terminal(runtime: RefCounted) -> bool:
+	return runtime.native_is_terminal() if runtime.has_method("native_is_terminal") else bool(runtime.snapshot().terminal)
+
+
+func _native_runtime_action(runtime: RefCounted) -> Dictionary:
+	return runtime.native_action_snapshot() if runtime.has_method("native_action_snapshot") else runtime.snapshot().action
 
 
 func _native_summon_warning_safe(action: Dictionary) -> bool:
@@ -710,7 +744,7 @@ func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: fl
 		return {"ok": false}
 	var lethal_frame: int = health.frame_signal_transaction_runtime_frame()
 	if lethal_frame < 0:
-		lethal_frame = int(_launch_runtime.snapshot().runtime_frame)
+		lethal_frame = _native_runtime_frame(_launch_runtime)
 	var decision: Dictionary = _launch_runtime.prepare_lethal_transition(lethal_frame)
 	if not decision.ok:
 		return decision
@@ -969,14 +1003,14 @@ func settle_launch_chaining(actors: Dictionary, frame: int, authority: RefCounte
 
 
 func cancel_active_attack() -> void:
-	if not _launch_runtime.snapshot().is_empty() and not _launch_runtime.snapshot().terminal:
+	if _native_runtime_frame(_launch_runtime) >= 0 and not _native_runtime_is_terminal(_launch_runtime):
 		_launch_runtime.cancel_action(&"interrupted")
 	if _hostile_threat_registry != null:
 		_hostile_threat_registry.retire_source(hostile_source_id)
 
 
 func _hostile_runtime_frame() -> int:
-	return int(_launch_runtime.snapshot().get("runtime_frame", 0))
+	return maxi(0, _native_runtime_frame(_launch_runtime))
 
 
 func _on_damaged(_amount: float, _current_hp: float) -> void:
@@ -1277,7 +1311,7 @@ func _native_geometry_matches_definition() -> bool:
 
 
 func _room_motion_is_valid() -> bool:
-	var terminal_projection: bool = health.dead and bool(_launch_runtime.snapshot().terminal) and not _death_receipt.is_empty()
+	var terminal_projection: bool = health.dead and _native_runtime_is_terminal(_launch_runtime) and not _death_receipt.is_empty()
 	var expected_layer: int = 0 if terminal_projection else int(_room_motion.collision_layer)
 	var expected_mask: int = 0 if terminal_projection else int(_room_motion.collision_mask)
 	return is_instance_valid(_motion_room) and _motion_room.is_inside_tree() and _motion_room.global_transform == _motion_room_transform and _physical_camera_bounds(_motion_room) == _motion_room_local_bounds and collision_layer == expected_layer and collision_mask == expected_mask and _native_geometry_matches_definition()

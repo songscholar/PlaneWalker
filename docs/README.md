@@ -98,6 +98,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Recording Snapshot Plan](current/2026-10-06-native-recording-snapshot-plan.md) | 认证历史的录制快照共享、完整校验保留与真实帧回滚验收 | Approved / Current |
 | [Native Recording Snapshot Evidence](current/2026-10-06-native-recording-snapshot-evidence.md) | 正式录制快照字节一致、外部修改隔离、拒绝回退与物理回读 | Focused Verified / Native performance pending |
 | [Native Hostile Frame Query Plan](current/2026-10-06-native-hostile-frame-query-plan.md) | 首领窄状态查询、预演隔离复用和完整回滚保留 | Approved / Current |
+| [Native Hostile Frame Query Evidence](current/2026-10-06-native-hostile-frame-query-evidence.md) | 五首领预演隔离、完整校验与原生帧对照基准 | Focused Verified / Performance comparison pending |
 | [Native Performance Report Provenance](current/2026-10-06-native-performance-report-provenance-evidence.md) | 失败和超时源码证据、真实落盘状态及外层验收判定回归 | Focused Verified / Full gameplay pending |
 | [Void Phase Projectile Retirement](current/2026-10-06-void-phase-projectile-retirement-plan.md) | Void 阶段切换同步撤销辅助域弹体与原生弹体 | Focused Verified / Full matrix pending |
 | [Void Phase Projectile Retirement Evidence](current/2026-10-06-void-phase-projectile-retirement-evidence.md) | 失败组合 619 的三阶段原生击杀、精确存档继续与唯一死亡收据 | Focused Verified / Full matrix pending |

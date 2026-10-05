@@ -608,6 +608,18 @@ func snapshot() -> Dictionary:
 	return value
 
 
+func native_runtime_frame() -> int:
+	return int(_state.get("runtime_frame", -1))
+
+
+func native_is_terminal() -> bool:
+	return bool(_state.get("terminal", false))
+
+
+func native_action_snapshot() -> Dictionary:
+	return _action.snapshot() if _action != null else {}
+
+
 func time_auxiliary_snapshot() -> Dictionary:
 	return _time_auxiliary.snapshot() if _time_auxiliary != null else {}
 

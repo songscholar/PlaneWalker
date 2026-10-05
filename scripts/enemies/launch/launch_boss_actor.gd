@@ -29,6 +29,10 @@ func _create_launch_status_runtime() -> RefCounted:
 	return BossStatus.new()
 
 
+func _native_frame_preview_configuration() -> Array:
+	return super._native_frame_preview_configuration() + [_point(_native_arena_origin()), _point(global_position)]
+
+
 func _native_body_claim_capacity() -> int:
 	return BossRuntime.MAX_DAMAGE_CLAIMS
 
@@ -111,7 +115,7 @@ func _native_geometry_matches_definition() -> bool:
 	var watch := get_node_or_null("WatchHurtbox") as Area2D
 	var shape := get_node_or_null("WatchHurtbox/CollisionShape2D") as CollisionShape2D
 	var primary := get_node("Hurtbox") as Area2D
-	return watch != null and shape != null and shape.shape is CircleShape2D and not shape.disabled and watch.transform == Transform2D.IDENTITY and shape.transform == Transform2D.IDENTITY and shape.shape.radius == float(_launch_definition.collision_radius_px) and watch.collision_layer == (0 if _launch_runtime.snapshot().terminal else 4) and watch.collision_mask == 0 and primary.collision_layer == 0
+	return watch != null and shape != null and shape.shape is CircleShape2D and not shape.disabled and watch.transform == Transform2D.IDENTITY and shape.transform == Transform2D.IDENTITY and shape.shape.radius == float(_launch_definition.collision_radius_px) and watch.collision_layer == (0 if _native_runtime_is_terminal(_launch_runtime) else 4) and watch.collision_mask == 0 and primary.collision_layer == 0
 
 
 func _restore_actor_state(value: Dictionary) -> bool:
@@ -141,7 +145,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		preview.configure(_launch_definition, _launch_identity)
 		if _room_motion.is_empty() or not preview.restore_snapshot(result.ticket.after.runtime):
 			return _launch_failure("wall_admission")
-		if not _wall_static_placement_valid(preview.snapshot().action):
+		if not _wall_static_placement_valid(preview.native_action_snapshot()):
 			var cancelled: Dictionary = preview.cancel_action(&"wall_outside_safe_room_placement")
 			if not cancelled.ok:
 				return _launch_failure("wall_declined_admission")
@@ -187,7 +191,7 @@ func launch_transaction_snapshot() -> Dictionary:
 
 
 func _native_relocation_allowed(destination: Vector2, observations: Dictionary) -> bool:
-	var action: Dictionary = _launch_runtime.snapshot().action
+	var action: Dictionary = _launch_runtime.native_action_snapshot()
 	if action.action_id not in ["traitor.counter_rewind", "traitor_blink"]:
 		return true
 	if action.committed_geometry.is_empty() or not destination.is_equal_approx(_vector(action.committed_geometry[0].origin)):
@@ -197,7 +201,7 @@ func _native_relocation_allowed(destination: Vector2, observations: Dictionary) 
 
 func _native_action_activation_blocked(frame: int, observations: Dictionary) -> bool:
 	if _launch_definition.get("id", "") == "forest_heart":
-		var forest_action: Dictionary = _launch_runtime.snapshot().action
+		var forest_action: Dictionary = _launch_runtime.native_action_snapshot()
 		if forest_action.phase != "WARNING":
 			return false
 		if forest_action.action_id == "matriarch_void_cage" and frame - int(forest_action.commit_frame) - int(forest_action.paused_frames) >= 70:
@@ -208,7 +212,7 @@ func _native_action_activation_blocked(frame: int, observations: Dictionary) -> 
 		return false
 	if _launch_definition.get("id", "") != "ruin_king":
 		return false
-	var action: Dictionary = _launch_runtime.snapshot().action
+	var action: Dictionary = _launch_runtime.native_action_snapshot()
 	if action.action_id != "guardian_wall" or action.phase != "WARNING" or frame - int(action.commit_frame) - int(action.paused_frames) < 55:
 		return false
 	if _room_motion.is_empty():
@@ -434,10 +438,8 @@ func _prepare_native_void_frame(result: Dictionary, observations: Dictionary) ->
 	var state: Dictionary = result.ticket.after.runtime
 	if state.void_arena_state.phase_index == 2 and state.void_arena_state.player_heal.is_empty() and not state.terminal:
 		result.ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
-	var preview := BossRuntime.new()
-	preview.configure(_launch_definition, _launch_identity)
-	preview.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
-	if not preview.restore_snapshot(state):
+	var preview := _native_frame_preview(state, &"arena")
+	if preview == null:
 		return _launch_failure("void_auxiliary_preview")
 	for request: Dictionary in preview.void_burn_damage_requests(frame):
 		result.ticket.batch.mechanism_requests.append({"kind": "void_burn_tick", "request": request.duplicate(true)})
@@ -603,11 +605,10 @@ func _refresh_native_forge(state: Dictionary) -> void:
 
 
 func _prepare_native_forge_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
-	var preview := BossRuntime.new()
-	preview.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
-	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(result.ticket.after.runtime):
+	var preview := _native_frame_preview(result.ticket.after.runtime, &"arena")
+	if preview == null:
 		return _launch_failure("forge_arena_candidate")
-	if not preview.snapshot().terminal:
+	if not preview.native_is_terminal():
 		if not preview.observe_forge_target(str(observations.target_id), observations.target_position).ok:
 			return _launch_failure("forge_cooling_candidate")
 		for request: Dictionary in preview.forge_burn_damage_requests(int(result.ticket.runtime_frame)):
@@ -707,9 +708,8 @@ func _refresh_native_forest_auxiliary(terminal: bool) -> void:
 
 
 func _prepare_native_forest_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
-	var preview := BossRuntime.new()
-	preview.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
-	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(result.ticket.after.runtime):
+	var preview := _native_frame_preview(result.ticket.after.runtime, &"arena")
+	if preview == null:
 		return _launch_failure("forest_auxiliary_candidate")
 	for request: Dictionary in result.ticket.batch.effect_requests:
 		if request.get("action_id") == "matriarch_void_cage" and not preview.accept_forest_cage(request):
@@ -986,7 +986,7 @@ func bind_native_time_manager(manager: Node) -> bool:
 
 func _on_native_ability_committed(receipt: Dictionary) -> void:
 	var manager: Node = _native_time_manager.get_ref() if _native_time_manager != null else null
-	if not is_inside_tree() or not is_instance_valid(manager) or not manager.owns_native_ability_receipt(receipt) or _launch_runtime.snapshot().terminal:
+	if not is_inside_tree() or not is_instance_valid(manager) or not manager.owns_native_ability_receipt(receipt) or _launch_runtime.native_is_terminal():
 		return
 	_launch_runtime.accept_time_ability_receipt(receipt)
 
@@ -1131,7 +1131,7 @@ func _resolve_weapon_hit_control(effect: Dictionary, damage_info: RefCounted, fi
 		return false
 	if not effect.get("allowed_states") is Array or not Contract.number_in_range(effect.get("poise_damage"), 0.000001, 1000000.0) or not Contract.number_in_range(effect.get("boss_poise_multiplier"), 1.40, 1.40) or not Contract.number_in_range(effect.get("displacement_pixels", 0.0), 0.0, 1000000.0):
 		return false
-	var phase: String = _launch_runtime.snapshot().action.phase
+	var phase: String = _launch_runtime.native_action_snapshot().phase
 	var conversion_state := "EXPOSED" if _launch_runtime.is_exposed() and phase != "WARNING" else "WINDUP" if phase == "WARNING" else phase
 	if conversion_state not in effect.allowed_states:
 		return false
