@@ -87,6 +87,17 @@ def validate_report(value):
     return value
 
 
+def _runtime_sources():
+    return {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for directory in ["scripts", "autoload"] for path in sorted((ROOT / directory).rglob("*.gd"))}
+
+
+def _source_identity(sources):
+    git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=ROOT, text=True, capture_output=True, check=False)
+    own_checkout = git_root.returncode == 0 and Path(git_root.stdout.strip()).resolve() == ROOT
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=False) if own_checkout else None
+    return {"revision": revision.stdout.strip() if revision is not None and revision.returncode == 0 else "", "runtime_source_sha256": hashlib.sha256(json.dumps(sources, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "instrumented": False}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -119,21 +130,44 @@ def main():
     if not args.rendered:
         command.append("--headless")
     command.append("res://tools/p15/native_performance_probe.tscn")
-    sources = {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for directory in ["scripts", "autoload"] for path in sorted((ROOT / directory).rglob("*.gd"))}
-    with stdout_path.open("w", encoding="utf-8") as stream:
-        result = subprocess.run(command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT, timeout=args.timeout, check=False)
-    logs = stdout_path.read_text(errors="replace") + (engine_path.read_text(errors="replace") if engine_path.is_file() else "")
-    if result.returncode or re.search(r"SCRIPT ERROR:|Parse Error:|ERROR:|ObjectDB instances leaked|RID allocations leaked", logs):
+    sources = _runtime_sources()
+    source_identity = _source_identity(sources)
+    manifest_path = output.with_name("source-manifest.json")
+    manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources}, indent=2, sort_keys=True) + "\n")
+    result = None
+    timed_out = False
+    try:
+        with stdout_path.open("w", encoding="utf-8") as stream:
+            result = subprocess.run(command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT, timeout=args.timeout, check=False)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        raise
+    finally:
+        source_identity["runtime_source_stable"] = _runtime_sources() == sources
+        source_identity["process_exit_code"] = result.returncode if result is not None else None
+        source_identity["timed_out"] = timed_out
+        logs = stdout_path.read_text(errors="replace") + (engine_path.read_text(errors="replace") if engine_path.is_file() else "")
+        source_identity["runtime_logs_clean"] = not bool(re.search(r"SCRIPT ERROR:|Parse Error:|ERROR:|ObjectDB instances leaked|RID allocations leaked", logs))
+        execution_ok = result is not None and result.returncode == 0 and source_identity["runtime_source_stable"] and source_identity["runtime_logs_clean"]
+        manifest_path.write_text(json.dumps({**source_identity, "runtime_files_sha256": sources, "execution_status": "pass" if execution_ok else "failed"}, indent=2, sort_keys=True) + "\n")
+        if output.is_file():
+            retained = json.loads(output.read_text())
+            retained["native_status"] = retained.get("status")
+            if not execution_ok:
+                retained["status"] = "failed"
+            elif retained.get("status") == "pass":
+                try:
+                    validate_report(retained)
+                except ValueError as error:
+                    retained["status"] = "failed"
+                    retained["validation_failure"] = str(error)
+            retained["source"] = source_identity
+            output.write_text(json.dumps(retained, indent=2, sort_keys=True) + "\n")
+    if result.returncode or not source_identity["runtime_logs_clean"]:
         raise SystemExit(f"actual native performance run failed; inspect {stdout_path}")
-    report = validate_report(json.loads(output.read_text()))
-    git_root = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=ROOT, text=True, capture_output=True, check=False)
-    own_checkout = git_root.returncode == 0 and Path(git_root.stdout.strip()).resolve() == ROOT
-    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=False) if own_checkout else None
-    after_sources = {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for directory in ["scripts", "autoload"] for path in sorted((ROOT / directory).rglob("*.gd"))}
-    if after_sources != sources:
+    if not source_identity["runtime_source_stable"]:
         raise SystemExit("runtime sources changed during native performance measurement")
-    report["source"] = {"revision": revision.stdout.strip() if revision is not None and revision.returncode == 0 else "", "runtime_source_sha256": hashlib.sha256(json.dumps(sources, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "instrumented": False}
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    report = validate_report(json.loads(output.read_text()))
     print(json.dumps({"report": str(output), "accepted_frames": report["accepted_frames"], "native_duration_ms": report["native_duration_ms"], "wall_duration_usec": report["wall_duration_usec"], "player_advance": report["metrics"]["player_advance"], "observed_peak_counts": report["observed_peak_counts"]}, indent=2))
 
 

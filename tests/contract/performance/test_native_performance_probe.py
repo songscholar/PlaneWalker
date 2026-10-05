@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -84,6 +90,74 @@ class NativePerformanceProbeContract(unittest.TestCase):
             candidate[section][key] = value
             with self.subTest(section=section, key=key), self.assertRaises(ValueError):
                 validator(candidate)
+
+    def test_failed_native_process_retains_exact_source_identity(self):
+        probe = self.require_api()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "scripts").mkdir()
+            script = root / "scripts" / "runtime.gd"
+            script.write_text("extends Node\n", encoding="utf-8")
+            output = root / "build" / "failed" / "report.json"
+
+            def run(command, **kwargs):
+                if command[0] == "/fixture/godot":
+                    output.write_text(json.dumps({"status": "failed", "failures": ["recording capacity"]}), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
+
+            with patch.object(probe, "ROOT", root), patch.object(probe.shutil, "which", return_value="/fixture/godot"), patch.object(probe.subprocess, "run", side_effect=run), patch.object(sys, "argv", [str(SOURCE), "--output", str(output), "--frames", "120", "--hub-frames", "12"]):
+                with self.assertRaises(SystemExit):
+                    probe.main()
+            retained = json.loads(output.read_text())
+            expected = {"scripts/runtime.gd": hashlib.sha256(script.read_bytes()).hexdigest()}
+            expected_digest = hashlib.sha256(json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            self.assertEqual(retained["status"], "failed")
+            self.assertEqual(retained["source"]["runtime_source_sha256"], expected_digest)
+            self.assertTrue(retained["source"]["runtime_source_stable"])
+            self.assertEqual(retained["source"]["process_exit_code"], 1)
+            manifest = json.loads(output.with_name("source-manifest.json").read_text())
+            self.assertEqual(manifest["runtime_files_sha256"], expected)
+
+    def test_late_execution_failures_cannot_leave_a_passing_report(self):
+        probe = self.require_api()
+        for failure in ["exit", "log", "source", "timeout", "report"]:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                (root / "scripts").mkdir()
+                script = root / "scripts" / "runtime.gd"
+                script.write_text("extends Node\n", encoding="utf-8")
+                output = root / "build" / "failed" / "report.json"
+
+                def run(command, **kwargs):
+                    if command[0] != "/fixture/godot":
+                        return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
+                    if failure == "timeout":
+                        raise subprocess.TimeoutExpired(command, 1)
+                    native_report = report()
+                    if failure == "report":
+                        native_report["observed_peak_counts"]["actors"] = 0
+                    output.write_text(json.dumps(native_report), encoding="utf-8")
+                    if failure == "source":
+                        script.write_text("extends Node\nvar changed = true\n", encoding="utf-8")
+                    if failure == "log":
+                        kwargs["stdout"].write("SCRIPT ERROR: late failure\n")
+                    return subprocess.CompletedProcess(command, 1 if failure == "exit" else 0)
+
+                with patch.object(probe, "ROOT", root), patch.object(probe.shutil, "which", return_value="/fixture/godot"), patch.object(probe.subprocess, "run", side_effect=run), patch.object(sys, "argv", [str(SOURCE), "--output", str(output), "--frames", "120", "--hub-frames", "12"]):
+                    with self.assertRaises((SystemExit, ValueError, subprocess.TimeoutExpired)):
+                        probe.main()
+                manifest = json.loads(output.with_name("source-manifest.json").read_text())
+                self.assertEqual(manifest["execution_status"], "pass" if failure == "report" else "failed")
+                self.assertEqual(manifest["timed_out"], failure == "timeout")
+                self.assertEqual(manifest["runtime_source_stable"], failure != "source")
+                if failure == "timeout":
+                    self.assertFalse(output.exists(), "timeout metadata cannot invent native sample counts")
+                else:
+                    retained = json.loads(output.read_text())
+                    self.assertEqual(retained["native_status"], "pass")
+                    self.assertEqual(retained["status"], "failed")
+                    with self.assertRaises(ValueError):
+                        probe.validate_report(retained)
 
 
 if __name__ == "__main__":

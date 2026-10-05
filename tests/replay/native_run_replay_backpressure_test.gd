@@ -56,4 +56,8 @@ func _run() -> void:
 	await get_tree().process_frame
 	suite.assert_equal(storage.rows()[0].status, "FAILED", "retirement joins physical work and classifies the partial tape")
 	suite.assert_equal(storage.rows()[0].observation_count, 120, "only the accepted physical batch is retained")
+	var probe: GDScript = load("res://tools/p15/native_performance_probe.gd")
+	suite.assert_true(probe.has_method("retained_recording_status"), "performance evidence must derive actual retained recording status")
+	if probe.has_method("retained_recording_status"):
+		suite.assert_equal(probe.retained_recording_status(storage, str(state.id)), "FAILED", "failed native tape cannot be reported as an ordinary interruption")
 	suite.finish(get_tree())

@@ -16,6 +16,8 @@ var main: Node
 var host: Node
 var player: Node2D
 var recorder: Node
+var _retention_store: RefCounted
+var _retention_id := ""
 var report := {"schema_version": 1, "report_kind": "actual_native_main_performance", "status": "failed", "human_playtests": 0, "unassisted_victory": false, "fps_certified": false, "survival_fixture": str(SURVIVAL), "prerequisite_route_fixture": false, "rendered": false, "content_snapshot": {}, "requested_frames": 0, "accepted_frames": 0, "native_duration_ms": 0.0, "wall_duration_usec": 0, "sample_frames": {}, "metrics": {}, "render_wait": {"count": 0}, "observed_peak_counts": {"actors": 0, "summons": 0, "projectiles": 0, "zones": 0, "constructs": 0, "threats": 0}, "recording": {}, "hub": {}, "failures": []}
 
 
@@ -63,6 +65,11 @@ func _run() -> void:
 	Engine.physics_ticks_per_second = old_ticks
 	Engine.time_scale = old_scale
 	Engine.max_fps = old_fps
+	await _dispose()
+	if _retention_store != null:
+		var reloaded: Dictionary = _retention_store.reload()
+		_check(reloaded.ok, "retired recorder's durable manifest reloads")
+		report.recording.status = retained_recording_status(_retention_store, _retention_id) if reloaded.ok else "UNAVAILABLE"
 	report.status = "pass" if report.failures.is_empty() and report.accepted_frames == report.requested_frames else "failed"
 	var output := OS.get_environment("PLANEWALKER_PERFORMANCE_OUTPUT")
 	DirAccess.make_dir_recursive_absolute(output.get_base_dir())
@@ -70,7 +77,6 @@ func _run() -> void:
 	_check(file != null, "physical metric report opens")
 	if file != null:
 		file.store_string(JSON.stringify(report, "\t", true, true) + "\n")
-	await _dispose()
 	suite.finish(get_tree())
 
 
@@ -245,12 +251,21 @@ func _retain(first: Dictionary, last: Dictionary) -> void:
 	var identity: Dictionary = GameState.profile_runtime_service().local_record_storage_identity()
 	var fresh := Store.new()
 	_check(fresh.configure(recorder.storage_root(), "0.4.0-dev", identity.content_snapshot, identity.profile_id, identity.save_domain).ok, "fresh physical store loads the actual tape")
+	_retention_store = fresh
+	_retention_id = str(recorder.snapshot().id)
 	var first_read: Dictionary = fresh.read(recorder.snapshot().id, int(first.sequence))
 	var last_read: Dictionary = fresh.read(recorder.snapshot().id, int(last.sequence))
 	var first_exact: bool = first_read.ok and var_to_bytes(first_read.context.observation) == var_to_bytes(first)
 	var last_exact: bool = last_read.ok and var_to_bytes(last_read.context.observation) == var_to_bytes(last)
 	_check(first_exact and last_exact, "physical first and last measured automatic samples are byte-exact")
-	report.recording = {"status": "INTERRUPTED", "actual_sample_count": int(report.accepted_frames), "first_sha256": Store.Codec.byte_digest(var_to_bytes(first)), "last_sha256": Store.Codec.byte_digest(var_to_bytes(last)), "physical_first_exact": first_exact, "physical_last_exact": last_exact, "failure": str(recorder.snapshot().failure), "retention_usec": Time.get_ticks_usec() - before, "total_tape_observations": int(recorder.snapshot().observation_count)}
+	report.recording = {"status": retained_recording_status(fresh, _retention_id), "actual_sample_count": int(report.accepted_frames), "first_sha256": Store.Codec.byte_digest(var_to_bytes(first)), "last_sha256": Store.Codec.byte_digest(var_to_bytes(last)), "physical_first_exact": first_exact, "physical_last_exact": last_exact, "failure": str(recorder.snapshot().failure), "retention_usec": Time.get_ticks_usec() - before, "total_tape_observations": int(recorder.snapshot().observation_count)}
+
+
+static func retained_recording_status(storage: RefCounted, id: String) -> String:
+	for row: Dictionary in storage.rows():
+		if str(row.id) == id:
+			return str(row.status)
+	return "UNAVAILABLE"
 
 
 static func _distribution(values: Array) -> Dictionary:

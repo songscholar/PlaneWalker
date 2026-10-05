@@ -97,10 +97,13 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Immutable Replay Journal Evidence](current/2026-10-06-immutable-replay-journal-evidence.md) | 原生回放回归、不可变所有权与后期历史前缀微基准 | Focused Verified / Native recording performance pending |
 | [Native Recording Snapshot Plan](current/2026-10-06-native-recording-snapshot-plan.md) | 认证历史的录制快照共享、完整校验保留与真实帧回滚验收 | Approved / Current |
 | [Native Recording Snapshot Evidence](current/2026-10-06-native-recording-snapshot-evidence.md) | 正式录制快照字节一致、外部修改隔离、拒绝回退与物理回读 | Focused Verified / Native performance pending |
+| [Native Hostile Frame Query Plan](current/2026-10-06-native-hostile-frame-query-plan.md) | 首领窄状态查询、预演隔离复用和完整回滚保留 | Approved / Current |
+| [Native Performance Report Provenance](current/2026-10-06-native-performance-report-provenance-evidence.md) | 失败和超时源码证据、真实落盘状态及外层验收判定回归 | Focused Verified / Full gameplay pending |
 | [Void Phase Projectile Retirement](current/2026-10-06-void-phase-projectile-retirement-plan.md) | Void 阶段切换同步撤销辅助域弹体与原生弹体 | Focused Verified / Full matrix pending |
 | [Void Phase Projectile Retirement Evidence](current/2026-10-06-void-phase-projectile-retirement-evidence.md) | 失败组合 619 的三阶段原生击杀、精确存档继续与唯一死亡收据 | Focused Verified / Full matrix pending |
 | [Replay Codec Difference Plan](current/2026-10-06-replay-codec-difference-plan.md) | 真实长局块的冗余根比较消除、精确字节和递归校验验收 | Approved / Current |
 | [Replay Codec Difference Evidence](current/2026-10-06-replay-codec-difference-evidence.md) | 真实块字节一致、编码分段成本、历史共享与缓存微基准 | Focused Verified / Native performance pending |
+| [Replay Codec Immutable Reference Plan](current/2026-10-06-replay-codec-immutable-reference-plan.md) | 块内不可变引用认证、完整安全验证保留和编码吞吐修复 | Approved / Current |
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
 | [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
