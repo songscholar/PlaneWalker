@@ -373,7 +373,7 @@ func can_restore_runtime_snapshot(value: Dictionary) -> bool:
 			return false
 	var invulnerability_active := bool(value["invulnerability_active"])
 	var source_id := str(value["invulnerability_source_id"])
-	if invulnerability_active != not source_id.is_empty():
+	if invulnerability_active != (not source_id.is_empty()):
 		return false
 	if invulnerability_active:
 		if profile_action.is_empty() or source_id != "gauntlets_cast:%d:%d" % [int(profile_action["token"]), int(profile_action["generation"])]:

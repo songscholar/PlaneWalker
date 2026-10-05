@@ -43,8 +43,7 @@ validate_import_logs() {
 	local stdout_log="$2"
 	local engine_log="$3"
 	local errors_file="${validation_log_dir}/${phase}-import.errors.txt"
-	local has_en_translation_miss=false
-	local has_zh_translation_miss=false
+	local remaining_errors_file="${validation_log_dir}/${phase}-import.remaining-errors.txt"
 	local has_editor_cannot_save=false
 	local has_editor_save_error=false
 	local has_macos_ca_error=false
@@ -69,27 +68,14 @@ validate_import_logs() {
 
 	grep -h '^ERROR:' "${stdout_log}" "${engine_log}" 2>/dev/null \
 		| LC_ALL=C sort -u >"${errors_file}" || true
+	if ! (cd "${PROJECT_ROOT}" && PYTHONDONTWRITEBYTECODE=1 python3 -m tools.validate_import_translations \
+		--project-root "${PROJECT_ROOT}" --phase "${phase}" \
+		--errors-file "${errors_file}" --remaining-errors-file "${remaining_errors_file}"); then
+		return 1
+	fi
 
 	while IFS= read -r line; do
 		case "${line}" in
-			"ERROR: Cannot open file 'res://data/localization/translations.en.translation'."|\
-			"ERROR: Failed loading resource: res://data/localization/translations.en.translation.")
-				if [[ "${phase}" == bootstrap ]]; then
-					has_en_translation_miss=true
-				else
-					has_unclassified_error=true
-					printf 'UNCLASSIFIED ERROR: %s\n' "${line}" >&2
-				fi
-				;;
-			"ERROR: Cannot open file 'res://data/localization/translations.zh_CN.translation'."|\
-			"ERROR: Failed loading resource: res://data/localization/translations.zh_CN.translation.")
-				if [[ "${phase}" == bootstrap ]]; then
-					has_zh_translation_miss=true
-				else
-					has_unclassified_error=true
-					printf 'UNCLASSIFIED ERROR: %s\n' "${line}" >&2
-				fi
-				;;
 			'ERROR: Condition "ret != noErr" is true. Returning: ""')
 				has_macos_ca_error=true
 				;;
@@ -104,15 +90,7 @@ validate_import_logs() {
 				fi
 				;;
 		esac
-	done <"${errors_file}"
-
-	if [[ "${has_en_translation_miss}" != "${has_zh_translation_miss}" ]]; then
-		printf 'ERROR: bootstrap import must miss either both generated translations or neither\n' >&2
-		has_unclassified_error=true
-	fi
-	if [[ "${has_en_translation_miss}" == true ]]; then
-		printf 'WARNING: bootstrap import generated translation resources were absent before bootstrap; both expected CSV derivatives were regenerated.\n' >&2
-	fi
+	done <"${remaining_errors_file}"
 
 	if [[ "${has_editor_cannot_save}" != "${has_editor_save_error}" ]]; then
 		printf 'ERROR: incomplete editor settings environment error signature\n' >&2
@@ -189,6 +167,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 
 printf '\n== Localization contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_validate_localization
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.localization.test_import_translations
 PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_localization.py
 
 printf '\n== Playtest data contracts ==\n'
@@ -238,5 +217,19 @@ printf '\n== Godot scene tests ==\n'
 TEST_LOG_DIR="${TEST_LOG_DIR:-${validation_log_dir}/scene-tests}" \
 	GODOT_BIN="${godot_bin}" \
 	"${SCRIPT_DIR}/run_tests.sh"
+
+if [[ -n "${GDSCRIPT_COVERAGE_PYTHON:-}" ]]; then
+	[[ -x "${GDSCRIPT_COVERAGE_PYTHON}" ]] || fail "coverage Python is not runnable: ${GDSCRIPT_COVERAGE_PYTHON}"
+	printf '\n== Instrumented runtime line coverage ==\n'
+	PYTHONDONTWRITEBYTECODE=1 GODOT_BIN="${godot_bin}" "${GDSCRIPT_COVERAGE_PYTHON}" \
+		-m unittest tests.contract.coverage.test_instrumented_provider
+	PYTHONDONTWRITEBYTECODE=1 "${GDSCRIPT_COVERAGE_PYTHON}" -m tools.coverage.instrumented_provider \
+		--project-root "${PROJECT_ROOT}" --godot-bin "${godot_bin}" \
+		--output-dir "${validation_log_dir}/runtime-line-coverage"
+	PYTHONDONTWRITEBYTECODE=1 python3 tools/coverage/collect_gdscript_coverage.py \
+		--project-root "${PROJECT_ROOT}" --godot-bin "${godot_bin}" \
+		--provider-report "${validation_log_dir}/runtime-line-coverage/provider-report.json" \
+		--output "${TEST_LOG_DIR:-${validation_log_dir}/scene-tests}/gdscript-coverage.json"
+fi
 
 printf '\nPASS: project validation completed\n'

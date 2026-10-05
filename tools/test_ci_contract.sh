@@ -72,7 +72,9 @@ make_fake_import_godot() {
 		'    "ERROR: Cannot open file '\''res://data/localization/translations.en.translation'\''." \' \
 		'    "ERROR: Failed loading resource: res://data/localization/translations.en.translation." \' \
 		'    "ERROR: Cannot open file '\''res://data/localization/translations.zh_CN.translation'\''." \' \
-		'    "ERROR: Failed loading resource: res://data/localization/translations.zh_CN.translation."' \
+		'    "ERROR: Failed loading resource: res://data/localization/translations.zh_CN.translation." \' \
+		'    "ERROR: Cannot open file '\''res://assets/production/localization/content_management.en.translation'\''." \' \
+		'    "ERROR: Failed loading resource: res://assets/production/localization/content_management.zh_CN.translation."' \
 		'}' \
 		'write_editor_warning() {' \
 		'  printf "%s\\n" \' \
@@ -87,6 +89,8 @@ make_fake_import_godot() {
 		'    bootstrap_unexpected_resource:1) write_expected_translations; printf "%s\\n" "ERROR: Failed loading resource: res://scenes/missing_room.tscn." ;;' \
 		'    clean_resource_error:1) write_expected_translations ;;' \
 		'    clean_resource_error:2) printf "%s\\n" "ERROR: Failed loading resource: res://scenes/still_missing.tscn." ;;' \
+		'    clean_translation_error:1) write_expected_translations ;;' \
+		'    clean_translation_error:2) write_expected_translations ;;' \
 		'    editor_warning_only:*) write_editor_warning ;;' \
 		'    unrelated_error:1) printf "%s\\n" "ERROR: Synthetic unrelated engine failure." ;;' \
 		'  esac' \
@@ -323,14 +327,17 @@ run_fake_validation bootstrap_unexpected_resource "${TEMP_DIR}/bootstrap-unexpec
 bootstrap_unexpected_status=$?
 run_fake_validation clean_resource_error "${TEMP_DIR}/clean-resource-error.out"
 clean_resource_error_status=$?
+run_fake_validation clean_translation_error "${TEMP_DIR}/clean-translation-error.out"
+clean_translation_error_status=$?
 run_fake_validation unrelated_error "${TEMP_DIR}/unrelated-error.out"
 unrelated_error_status=$?
 set -e
 [[ ${bootstrap_partial_status} -ne 0 ]] || fail "an incomplete generated-translation pair must fail"
 [[ ${bootstrap_unexpected_status} -ne 0 ]] || fail "an unrelated bootstrap resource error must fail"
 [[ ${clean_resource_error_status} -ne 0 ]] || fail "the clean second import must reject every resource error"
+[[ ${clean_translation_error_status} -ne 0 ]] || fail "the clean second import must reject even configured generated translation misses"
 [[ ${unrelated_error_status} -ne 0 ]] || fail "an unclassified ERROR line must fail"
-for rejected_mode in bootstrap_partial bootstrap_unexpected_resource clean_resource_error unrelated_error; do
+for rejected_mode in bootstrap_partial bootstrap_unexpected_resource clean_resource_error clean_translation_error unrelated_error; do
 	[[ ! -f "${TEMP_DIR}/native-probe-${rejected_mode}.trace" ]] \
 		|| fail "native simulation must not run after a failed import: ${rejected_mode}"
 done

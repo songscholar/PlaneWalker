@@ -114,6 +114,7 @@ run_with_timeout() {
 	fi
 
 	PLANEWALKER_TEST_DATA_DIR="${user_data_dir}/files" \
+	PLANEWALKER_COVERAGE_SCENE_ID="${scene//\//__}" \
 	XDG_DATA_HOME="${user_data_dir}" \
 	XDG_CACHE_HOME="${user_data_dir}/cache" \
 		"${godot_bin}" \

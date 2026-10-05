@@ -208,7 +208,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			return false
 	if value.pending_work.size() > MAX_WORK_RESERVATIONS:
 		return false
-	if value.completion_published != (value.status == "COMPLETE") or (value.status == "FAILED") != not value.failure.is_empty():
+	if value.completion_published != (value.status == "COMPLETE") or (value.status == "FAILED") != (not value.failure.is_empty()):
 		return false
 	if value.status == "FAILED" and (not Contract.exact_fields(value.failure, ["code", "spawn_id", "reason"]) or value.failure.code != "SPAWN_REJECTED" or not _stable_id(value.failure.reason) or not value.pending_spawns.has(value.failure.spawn_id)):
 		return false

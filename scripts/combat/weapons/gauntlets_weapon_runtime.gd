@@ -1744,7 +1744,7 @@ func _valid_restore_snapshot(value: Dictionary) -> bool:
 	var adapter_snapshot := value["adapter"] as Dictionary
 	var adapter_action := adapter_snapshot.get("profile_action", {}) as Dictionary
 	var adapter_released := bool(adapter_snapshot.get("profile_action_released", false))
-	if bool(value["adapter_active"]) != not adapter_action.is_empty():
+	if bool(value["adapter_active"]) != (not adapter_action.is_empty()):
 		return false
 	if active_token == 0:
 		return (

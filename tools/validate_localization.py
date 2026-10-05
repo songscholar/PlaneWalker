@@ -78,7 +78,7 @@ def validate_localization(project_root: Path | str) -> list[Violation]:
     return sorted(violations)
 
 
-def _configured_runtime_catalogs(root: Path) -> tuple[list[Path], list[Violation]]:
+def _configured_runtime_resources(root: Path) -> tuple[list[str], list[Violation]]:
     project = root / "project.godot"
     if not project.is_file():
         return [], []
@@ -93,23 +93,29 @@ def _configured_runtime_catalogs(root: Path) -> tuple[list[Path], list[Violation
         if not value.startswith("PackedStringArray(") or not value.endswith(")"):
             raise ValueError("locale/translations must be a PackedStringArray")
         resources = json.loads("[" + value[len("PackedStringArray("):-1] + "]")
-        paths: set[Path] = set()
         for resource in resources:
             if not isinstance(resource, str) or not resource.startswith("res://"):
                 raise ValueError("translation source must use a repository resource path")
-            path = root / resource[len("res://"):]
-            for locale in CATALOG_COLUMNS[1:]:
-                ending = f".{locale}.translation"
-                if resource.endswith(ending):
-                    path = root / (resource[len("res://"):-len(ending)] + ".csv")
-                    break
-            if not path.resolve().is_relative_to(root):
+            if not (root / resource[len("res://"):]).resolve().is_relative_to(root):
                 raise ValueError("translation source escapes the repository")
-            if path.suffix == ".csv":
-                paths.add(path)
-        return sorted(paths), []
+        return resources, []
     except (OSError, ValueError, configparser.Error) as error:
         return [], [Violation("invalid-runtime-catalog-config", "", "project.godot", 0, str(error))]
+
+
+def _configured_runtime_catalogs(root: Path) -> tuple[list[Path], list[Violation]]:
+    resources, violations = _configured_runtime_resources(root)
+    paths: set[Path] = set()
+    for resource in resources:
+        path = root / resource[len("res://"):]
+        for locale in CATALOG_COLUMNS[1:]:
+            ending = f".{locale}.translation"
+            if resource.endswith(ending):
+                path = root / (resource[len("res://"):-len(ending)] + ".csv")
+                break
+        if path.suffix == ".csv":
+            paths.add(path)
+    return sorted(paths), violations
 
 
 def _validate_required_domain_keys(
