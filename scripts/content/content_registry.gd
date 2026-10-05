@@ -1673,7 +1673,7 @@ func _first_specialized_reference_error(
 					for recipe: Dictionary in definition.recipes:
 						if not reference_error.is_empty():
 							break
-							reference_error = _specialized_reference_field_error({"id": definition.id, "availability": definition.availability, "template_ids": recipe.template_ids}, "template_ids", "room_template", definitions_by_id)
+						reference_error = _specialized_reference_field_error({"id": definition.id, "availability": definition.availability, "template_ids": recipe.template_ids}, "template_ids", "room_template", definitions_by_id)
 				if reference_error.is_empty() and category == "launch_encounter_extension":
 					reference_error = _specialized_reference_field_error(definition, "profile_id", "launch_encounter_profile", definitions_by_id)
 					for recipe: Dictionary in definition.recipes:

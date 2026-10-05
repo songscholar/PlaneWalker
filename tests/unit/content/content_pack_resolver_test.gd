@@ -21,6 +21,7 @@ const SPECIALIZED_CATEGORY_COUNTS := {
 	"summon_definition": 9,
 	"elite_affix_definition": 10,
 	"launch_encounter_profile": 5,
+	"launch_encounter_extension": 2,
 	"meta_node": 42,
 	"hub_district": 3,
 	"forge_definition": 20,
@@ -89,8 +90,9 @@ func _test_project_base_pack(suite) -> void:
 	suite.assert_equal(descriptor.get("pack_id"), "base", "project base pack has stable id")
 	suite.assert_equal(descriptor.get("pack_version"), "0.4.0-dev", "project base pack version matches current M1 cohort")
 	var content_manifest: Array = descriptor.get("content_manifest", [])
-	suite.assert_equal(content_manifest.size(), 27, "project base pack owns every authored source including free cosmetics")
+	suite.assert_equal(content_manifest.size(), 28, "project base pack owns every authored source including cosmetics and encounter extensions")
 	suite.assert_true(content_manifest.has("content/cosmetics.json"), "free cosmetic definitions belong to the Base Pack authority")
+	suite.assert_true(content_manifest.has("content/launch_encounter_extensions.json"), "encounter extensions belong to the Base Pack authority")
 	for relative_path: String in P14_MANIFEST_PATHS:
 		suite.assert_true(content_manifest.has(relative_path), "project base pack registers %s" % relative_path)
 	suite.assert_equal((descriptor.get("localization_sources", []) as Array).size(), 2, "project base pack owns content and cosmetic localization sources")
@@ -109,7 +111,7 @@ func _test_project_base_pack(suite) -> void:
 		)
 	suite.assert_equal(
 		(descriptor.get("integrity_hashes", {}) as Dictionary).size(),
-		96,
+		97,
 		"Base Pack integrity closes all content, localization, and declared assets"
 	)
 
@@ -133,9 +135,9 @@ func _test_project_base_pack(suite) -> void:
 			specialized_entries.append(entry)
 		else:
 			generic_entries.append(entry)
-	suite.assert_equal(entries.size(), 446, "project base pack contains the exact complete authored content authority")
+	suite.assert_equal(entries.size(), 448, "project base pack contains the exact complete authored content authority")
 	suite.assert_equal(generic_entries.size(), 152, "generic v2 authority remains frozen at 152 definitions")
-	suite.assert_equal(specialized_entries.size(), 294, "P14/P15/P16 and free cosmetics contribute every specialized definition")
+	suite.assert_equal(specialized_entries.size(), 296, "P14/P15/P16, cosmetics and encounter extensions contribute every specialized definition")
 	for category: String in SPECIALIZED_CATEGORY_COUNTS:
 		var category_count := 0
 		for entry: Dictionary in specialized_entries:

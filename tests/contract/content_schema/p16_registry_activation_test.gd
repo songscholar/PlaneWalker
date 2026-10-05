@@ -4,7 +4,7 @@ const Suite := preload("res://tests/support/test_suite.gd")
 const Registry := preload("res://scripts/content/content_registry.gd")
 const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const BASE := "res://data/content_packs/base/"
-const COUNTS := {"meta_node": 42, "hub_district": 3, "forge_definition": 20, "narrative_definition": 57, "narrative_source_definition": 13, "tutorial_definition": 34, "enemy_definition": 22, "boss_definition": 5, "summon_definition": 9, "elite_affix_definition": 10, "launch_encounter_profile": 5, "cosmetic_definition": 15}
+const COUNTS := {"meta_node": 42, "hub_district": 3, "forge_definition": 20, "narrative_definition": 57, "narrative_source_definition": 13, "tutorial_definition": 34, "enemy_definition": 22, "boss_definition": 5, "summon_definition": 9, "elite_affix_definition": 10, "launch_encounter_profile": 5, "launch_encounter_extension": 2, "cosmetic_definition": 15}
 var suite: RefCounted
 
 
@@ -21,7 +21,7 @@ func _test_activation() -> void:
 	suite.assert_true(not report.has_blocking_errors(), "actual complete pack activates: %s" % str(report.blocking_errors))
 	if report.has_blocking_errors():
 		return
-	suite.assert_equal(report.loaded_count, 446, "complete base content and fifteen free cosmetics activate exactly")
+	suite.assert_equal(report.loaded_count, 448, "complete base content includes fifteen cosmetics and two encounter extensions")
 	for category: String in COUNTS:
 		suite.assert_equal(registry.get_by_category(StringName(category), &"LAUNCH").size(), COUNTS[category], "complete %s count" % category)
 		suite.assert_true(registry.get_by_category(StringName(category), &"M1").is_empty(), "new %s content does not widen M1" % category)
@@ -86,12 +86,23 @@ func _test_atomic_rejection() -> void:
 	var encounters: Array = corrupt.filter(func(row: Dictionary) -> bool: return row.category == "launch_encounter_profile")
 	encounters[0].recipes[0].template_ids = ["room_combat_missing"]
 	_assert_rejected(corrupt, "encounter templates require actual Registry closure")
+	corrupt = all.duplicate(true)
+	encounters = corrupt.filter(func(row: Dictionary) -> bool: return row.category == "launch_encounter_profile")
+	encounters[0].recipes[-1].template_ids = ["room_elite_missing"]
+	_assert_rejected(corrupt, "later encounter recipes also require Registry closure")
 	var path := _fixture(corrupt)
 	var optional := Registry.new()
 	var report = optional.load_packs([{ "path": BASE + "pack.json", "required": true}, {"path": path, "required": false}], "0.4.0-dev", &"LAUNCH")
 	suite.assert_true(not report.has_blocking_errors(), "optional malformed specialized pack remains isolated")
-	suite.assert_equal(report.loaded_count, 446, "optional isolation preserves complete base contents including free cosmetics")
+	suite.assert_equal(report.loaded_count, 448, "optional isolation preserves complete base contents and encounter extensions")
 	suite.assert_equal(report.isolated_pack_ids, ["p16-registry-probe"], "optional failure names only the malformed pack")
+	var extended := all.duplicate(true)
+	extended.append_array(JSON.parse_string(FileAccess.get_file_as_string(BASE + "content/launch_encounter_extensions.json")))
+	var extended_registry := Registry.new()
+	var extended_report = extended_registry.load_packs([{ "path": _fixture(extended), "required": true}], "0.4.0-dev", &"LAUNCH")
+	suite.assert_true(not extended_report.has_blocking_errors() and extended_report.loaded_count == 433, "positive extensions fixture reaches complete reference validation")
+	_find(extended, "encounter_extension_ruins_terminal_v2").recipes[0].template_ids = ["room_elite_missing"]
+	_assert_rejected(extended, "encounter extensions share exact template Registry closure")
 
 
 func _assert_rejected(rows: Array, message: String) -> void:
