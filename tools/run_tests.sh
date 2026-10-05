@@ -129,7 +129,7 @@ run_with_timeout() {
 	XDG_CACHE_HOME="${user_data_dir}/cache" \
 		"${godot_bin}" \
 		--headless \
-		"${scene_options[@]}" \
+		${scene_options[@]+"${scene_options[@]}"} \
 		--path "${PROJECT_ROOT}" \
 		--log-file "${engine_log}" \
 		"res://${scene}" >"${stdout_log}" 2>&1 &
