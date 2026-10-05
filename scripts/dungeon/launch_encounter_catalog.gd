@@ -13,6 +13,7 @@ const AuthoredSource := preload("res://scripts/dungeon/launch_hostile_content_so
 const BASE_RESOURCE_ROOT := "res://data/content_packs/base/"
 
 var _actors: Dictionary = {}
+var _affixes: Dictionary = {}
 var _profiles: Dictionary = {}
 var _recipes: Dictionary = {}
 var _boss_encounters: Dictionary = {}
@@ -58,6 +59,7 @@ func configure(registry: RefCounted) -> Dictionary:
 				var affix_result := Affix.new().configure(candidate)
 				if not affix_result.ok:
 					return _failure("affix", "invalid_definition", affix_result)
+				_affixes[candidate.id] = affix_result.definition
 	for profile: Dictionary in _profiles.values():
 		for recipe: Dictionary in profile.recipes:
 			for template_id: String in recipe.template_ids:
@@ -128,6 +130,10 @@ func resolve_for_node(profile_id: String, run_seed: int, node_id: String, room_t
 
 func enemy_definition(enemy_id: String) -> Dictionary:
 	return _actors.get(enemy_id, {}).duplicate(true) if not _snapshot.is_empty() else {}
+
+
+func affix_definition(affix_id: String) -> Dictionary:
+	return _affixes.get(affix_id, {}).duplicate(true) if not _snapshot.is_empty() else {}
 
 
 func resolve_for_event(profile_id: String, run_seed: int, node_id: String, template: Dictionary) -> Dictionary:
@@ -209,6 +215,7 @@ func _failure(field: String, reason: String, detail: Dictionary = {}) -> Diction
 
 func _clear() -> void:
 	_actors.clear()
+	_affixes.clear()
 	_profiles.clear()
 	_recipes.clear()
 	_boss_encounters.clear()

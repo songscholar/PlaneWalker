@@ -22,7 +22,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "boss_cover", "boss_legacy_arena", "event", "native_drift", "presentation_drift"]:
+	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "boss_cover", "boss_legacy_arena", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
 		var selected := OS.get_environment("PLANEWALKER_CHECKPOINT_CASE")
 		if not selected.is_empty() and selected != case_name:
 			continue
@@ -48,14 +48,14 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	var catalog: RefCounted = Factory.load_base().context.catalog
 	var save := Save.new()
 	var service := Service.new()
-	var slot := "native_combat_" + case_name
+	var slot := "native_combat_" + ("elite_legacy" if case_name == "elite_legacy_affixes" else case_name)
 	suite.assert_true(save.configure(Paths.resolve_default("user://p16r-checkpoint", "p16r-checkpoint"), "0.4.0-dev", Content.snapshot(host.content_registry())).ok, "native combat checkpoint uses actual activated content and physical SaveService")
 	suite.assert_true(service.configure(catalog, save, slot, "base", {"meta_profile_state": Fixtures.profile(catalog)}).ok, "native combat checkpoint configures an authenticated physical Profile")
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 4}
 	if case_name == "event":
 		config.seed = 6
 	suite.assert_true(host.start_profile_run(config, service, int(service.snapshot().revision)).ok, "actual Host accepts the seeded native combat launch")
-	var selected: bool = await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
+	var selected: bool = await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
 	suite.assert_true(selected, "actual Host routes to the authored encounter for " + case_name)
 	if not selected:
 		await _dispose(main)
@@ -102,6 +102,35 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	if not ready:
 		await _dispose(main)
 		return
+	if case_name.begins_with("elite"):
+		var driver: Node = runner.get_node("NativeLaunchEncounterDriver")
+		var elite_seen := false
+		var current: Dictionary = driver.cold_snapshot()
+		for source: String in current.actors:
+			var saved: Dictionary = current.actors[source]
+			var spawn: Dictionary = driver._cold_spawn(current.definition, str(current.encounter.roster[source].spawn_id))
+			if not spawn.elite:
+				continue
+			elite_seen = true
+			var actor: Node = driver.get("_actors")[source]
+			suite.assert_equal(actor.launch_affix_snapshot().get("ids", []), spawn.affix_ids, "actual production elite configures its canonical authored affixes")
+			var downgraded: Dictionary = saved.duplicate(true)
+			downgraded.actor.erase("affixes")
+			var legacy: Node = driver._instantiate_actor(spawn, saved.identity, actor.global_position, true)
+			suite.assert_true(legacy != null, "explicit historical constructor retains the original metadata-only elite")
+			if legacy == null:
+				continue
+			suite.assert_true(not legacy.can_restore_native_cold_snapshot(downgraded, Callable(driver, "_resolve_cold_source")), "stripping new elite configuration cannot downgrade its sealed runtime definition")
+			if case_name == "elite_legacy_affixes":
+				current.actors[source] = legacy.native_cold_snapshot(Callable(driver, "_cold_source_binding"))
+			legacy.free()
+		if case_name == "elite_legacy_affixes":
+			suite.assert_true(driver.discard_cold_restore() and driver.restore_cold_snapshot(current), "actual Driver reconstructs a closed V1 metadata-only elite without inventing affix effects")
+			for source: String in current.actors:
+				var spawn: Dictionary = driver._cold_spawn(current.definition, str(current.encounter.roster[source].spawn_id))
+				if spawn.elite:
+					suite.assert_equal(driver.get("_actors")[source].launch_affix_snapshot(), {}, "restored historical room retains its original elite behavior")
+		suite.assert_true(elite_seen, "real elite encounter fixture exercises native affix construction")
 	if case_name == "warning":
 		suite.assert_true(publication_refusal.get("safe", false), "actual in-flight warning publication refuses capture without changing durable Profile")
 	if case_name == "burn":
@@ -282,6 +311,39 @@ func _route_to_native_target(suite: RefCounted, host: Node, boss: bool) -> bool:
 					result = host.native_checkpoint_participants().runtime.complete_current_room()
 			if not result.ok:
 				suite.assert_true(false, "native cold Boss fixture completion fails at " + str(node.id) + ": " + str(result.code))
+				return false
+		await get_tree().process_frame
+	return false
+
+
+func _route_to_elite(host: Node) -> bool:
+	for _step: int in range(30):
+		var state: Dictionary = host.runtime_snapshot()
+		var node: Dictionary = host.native_run_state().current_floor_node()
+		if node.room_type == "elite":
+			return true
+		if not state.open_offer.is_empty():
+			var offer: Dictionary = state.open_offer
+			host._on_option_chosen(str(offer.offer_id), str(offer.options[0].option_id), int(offer.revision))
+		elif node.id == state.floor_plan.entry_node_id or node.cleared:
+			var choices: Array = host.route_choices()
+			if choices.is_empty():
+				return false
+			var selected: Dictionary = choices[0]
+			for choice: Dictionary in choices:
+				if choice.room_type == "elite":
+					selected = choice
+					break
+			if not host.select_route(StringName(selected.edge_id), int(state.revision)).ok:
+				return false
+		else:
+			var result: Variant
+			match node.room_type:
+				"shop": result = host.leave_merchant(int(state.revision))
+				"event": result = host.choose_event_option(&"decline", int(state.revision)) if host.dungeon_ui_context().event.phase == "open" else host.dismiss_event(int(state.revision))
+				"treasure", "rest": result = host.resolve_room_interaction(&"leave", int(state.revision))
+				_: result = host.native_checkpoint_participants().runtime.complete_current_room()
+			if not result.ok:
 				return false
 		await get_tree().process_frame
 	return false

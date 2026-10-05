@@ -12,6 +12,7 @@ const Controller := preload("res://scripts/dungeon/room_controller.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const Semantics := preload("res://scripts/enemies/launch/launch_semantic_effect_authority.gd")
+const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
 const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "threats", "run_seed", "last_flushed_frame"]
 
 class ProductionBridge extends "res://scripts/enemies/launch/hostile_frame_bridge.gd":
@@ -205,7 +206,7 @@ func spawn_actor(spawn: Dictionary) -> bool:
 	return true
 
 
-func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2) -> Node2D:
+func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false) -> Node2D:
 	var definition: Dictionary = _facade.encounter_catalog().enemy_definition(str(spawn.enemy_id))
 	var resource: Resource = load(str(definition.get("scene", ""))) if ResourceLoader.exists(str(definition.get("scene", ""))) else null
 	var marker: Node2D = _scene.get_node_or_null("EncounterAnchors/" + str(spawn.spawn_slot_id)) as Node2D
@@ -236,6 +237,13 @@ func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vecto
 	actor.set_meta("room_id", StringName(_encounter.snapshot().identity.room_id))
 	_controller.get_node("Enemies").add_child(actor)
 	actor.global_position = position
+	if spawn.elite and not legacy_affixes:
+		var affixes: Array = []
+		for affix_id: String in spawn.affix_ids:
+			affixes.append(_facade.encounter_catalog().affix_definition(affix_id))
+		if not actor.has_method("configure_launch_affixes") or not actor.configure_launch_affixes(affixes, Ids.FLOOR_IDS.find(str(_definition.floor_id)) + 1).ok:
+			actor.free()
+			return null
 	if not actor.configure_launch_definition(projection, identity).ok or not actor.configure_launch_room_motion(_scene, _template).ok or not _controller._configure_character_boss_exposure_participant(actor):
 		actor.free()
 		return null
@@ -438,7 +446,8 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 	for source: String in value.actors:
 		var saved: Dictionary = value.actors[source]
 		var spawn := _cold_spawn(_definition, str(value.encounter.roster[source].spawn_id))
-		var actor := _instantiate_actor(spawn, saved.identity, Vector2(float(saved.actor.position.x), float(saved.actor.position.y)))
+		# Closed V1 actors carry no compiler binding; their original digest must still match.
+		var actor := _instantiate_actor(spawn, saved.identity, Vector2(float(saved.actor.position.x), float(saved.actor.position.y)), spawn.elite and not saved.actor.has("affixes"))
 		if actor == null:
 			return _reject_cold_restore(original_threats)
 		_actors[source] = actor

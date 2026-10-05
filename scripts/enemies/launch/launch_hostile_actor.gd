@@ -6,6 +6,7 @@ const LaunchStatus := preload("res://scripts/enemies/launch/launch_elemental_sta
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
+const AffixProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -24,6 +25,8 @@ var _room_motion: Dictionary = {}
 var _motion_room: Node2D
 var _motion_room_transform := Transform2D.IDENTITY
 var _motion_room_local_bounds := Rect2()
+var _affix_projection: RefCounted
+var _affix_configuration: Dictionary = {}
 
 
 func _init() -> void:
@@ -52,9 +55,31 @@ func owns_actor_presentation() -> bool:
 	return true
 
 
+func configure_launch_affixes(definitions: Array, floor_index: int) -> Dictionary:
+	if not _launch_definition.is_empty() or _affix_projection != null or not _prepared_launch_frame.is_empty():
+		return _launch_failure("affix_configuration_busy")
+	var candidate := AffixProjection.new()
+	var accepted := candidate.configure(definitions, floor_index)
+	if not accepted.ok:
+		return _launch_failure("affix_configuration")
+	_affix_projection = candidate
+	return {"ok": true}
+
+
+func launch_affix_snapshot() -> Dictionary:
+	return _affix_configuration.duplicate(true)
+
+
 func configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary:
 	if not _prepared_launch_frame.is_empty() or health == null or not _room_motion.is_empty():
 		return _launch_failure("not_ready_or_busy")
+	var affix_configuration := {}
+	if _affix_projection != null:
+		var projected: Dictionary = _affix_projection.project(definition)
+		if not projected.ok:
+			return _launch_failure("affix_projection")
+		definition = projected.definition
+		affix_configuration = projected.configuration
 	var candidate: RefCounted = _create_launch_runtime()
 	var configured: Dictionary = candidate.configure(definition, context)
 	if not configured.ok:
@@ -66,6 +91,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not health.configure_run(StringName(context.run_id)):
 		return _launch_failure("health_run")
 	_launch_runtime = candidate
+	_affix_configuration = affix_configuration
 	_launch_definition = definition.duplicate(true)
 	_launch_identity = context.duplicate(true)
 	configure_hostile_identity(StringName(context.hostile_source_id), int(context.next_generation_floor))
@@ -376,7 +402,11 @@ func clear_damage_vulnerability_source(source_id: StringName) -> bool:
 
 
 func get_damage_taken_multiplier() -> float:
-	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus()) * _launch_runtime.species_damage_taken_multiplier())
+	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus()) * _launch_runtime.species_damage_taken_multiplier() * float(_affix_configuration.get("damage_taken_multiplier", 1.0)))
+
+
+func apply_knockback(knockback: Vector2) -> void:
+	super.apply_knockback(knockback * (1.0 - float(_affix_configuration.get("knockback_resistance", 0.0))))
 
 
 func prepare_hostile_lethal_transition(damage_info: RefCounted, final_amount: float) -> Dictionary:
@@ -471,6 +501,7 @@ func _refresh_control_visual() -> void:
 	var sprite := get_node_or_null("Sprite2D") as Sprite2D
 	if sprite == null:
 		return
+	sprite.scale = Vector2.ONE * (1.15 if _launch_definition.get("actor_kind") == "elite" else 1.0)
 	var state: Dictionary = _launch_runtime.snapshot()
 	if state.is_empty():
 		return
@@ -490,11 +521,15 @@ func _actor_state() -> Dictionary:
 		if has_meta(field):
 			var value: Variant = get_meta(field)
 			metadata[field] = value.duplicate(true) if value is Dictionary or value is Array else value
-	return {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata, "room_motion": launch_room_motion_snapshot()}
+	var state := {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata, "room_motion": launch_room_motion_snapshot()}
+	if not _affix_configuration.is_empty():
+		state["affixes"] = launch_affix_snapshot()
+	return state
 
 
 func _can_restore_actor_state(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, ACTOR_STATE_FIELDS) or not value.runtime is Dictionary or not _launch_runtime.can_restore_snapshot(value.runtime) or not value.status is Dictionary or not elemental_status_runtime.can_restore_transaction_snapshot(value.status):
+	var fields: Array = ACTOR_STATE_FIELDS + ["affixes"] if not _affix_configuration.is_empty() else ACTOR_STATE_FIELDS
+	if not Contract.exact_fields(value, fields) or not _affix_configuration.is_empty() and value.affixes != _affix_configuration or not value.runtime is Dictionary or not _launch_runtime.can_restore_snapshot(value.runtime) or not value.status is Dictionary or not elemental_status_runtime.can_restore_transaction_snapshot(value.status):
 		return false
 	if not Contract.valid_point(value.position) or not Contract.valid_point(value.knockback) or not Contract.number_in_range(value.action_credit, 0.0, 1.0) or typeof(value.death_receipt) != TYPE_STRING:
 		return false

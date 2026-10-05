@@ -23,8 +23,11 @@ var _control: RefCounted = Controls.new()
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_definition.clear()
 	_state.clear()
-	if not Contract.exact_fields(definition, DEFINITION_FIELDS) or not Contract.exact_fields(identity, IDENTITY_FIELDS):
+	var fields: Array = DEFINITION_FIELDS + ["affix_signature"] if definition.has("affix_signature") else DEFINITION_FIELDS
+	if not Contract.exact_fields(definition, fields) or not Contract.exact_fields(identity, IDENTITY_FIELDS):
 		return _failure("fields")
+	if definition.has("affix_signature") and (definition.actor_kind != "elite" or not definition.affix_signature is String or definition.affix_signature.length() != 64 or not definition.affix_signature.is_valid_hex_number(false) or definition.affix_signature != definition.affix_signature.to_lower()):
+		return _failure("affix_signature")
 	if not Mechanisms.ACTION_IDS.has(definition.id) or definition.runtime_kind != definition.id or definition.actor_kind not in ["enemy", "elite"]:
 		return _failure("runtime_kind")
 	if not Contract.number_in_range(definition.max_hp, 1.0, 1000000.0) or not Contract.number_in_range(definition.defense, 0.0, 10000.0) or not Contract.number_in_range(definition.move_speed, 0.0, 1000.0) or not Contract.number_in_range(definition.collision_radius_px, 1.0, 32.0):
