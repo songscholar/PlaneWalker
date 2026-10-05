@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/unit/enemies/void_player_heal_consumption_test.gd" id="1"]
+
+[node name="VoidPlayerHealConsumptionTest" type="Node"]
+script = ExtResource("1")

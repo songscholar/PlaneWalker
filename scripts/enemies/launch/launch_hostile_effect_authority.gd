@@ -372,7 +372,7 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 			continue
 		var amount: float = minf(record.health_amount, maxf(0.0, float(record.health.max_hp) - float(record.health.current_hp)))
 		if amount <= 0.0 or record.health.dead:
-			if record.has("void_player_heal") and not record.health.dead and not record.void_owner.settle_native_void_heal(record.void_player_heal, record.target, 0.0):
+			if record.has("void_player_heal") and not record.void_owner.settle_native_void_heal(record.void_player_heal, record.target, 0.0):
 				return _failure("void_player_heal_receipt")
 			if record.get("affix_health_gain", false) and not record.target.settle_launch_affix_heal(int(ticket.runtime_frame), record.health_amount, 0.0):
 				return _failure("affix_health_settlement")
@@ -497,14 +497,12 @@ func _prepare_void_player_heal(request: Dictionary, context: Dictionary, next: D
 	var record := _target_record(target)
 	if record.is_empty() or not target is PlayerController or not Contract.number_in_range(record.health.healing_multiplier, 0.000001, 1000000.0):
 		return _failure("void_player_heal_target")
-	if record.health_before.runtime.dead:
-		return {"ok": true, "record": {}}
 	var claim := _claim(context.run_id, request.target_id, "void-p3-heal:%s" % request.hostile_source_id, int(request.attack_generation), int(request.hit_index))
 	if next.claims.has(claim):
 		return _failure("void_player_heal_duplicate")
 	next.claims.append(claim)
 	record["target_id"] = request.target_id
-	record["health_amount"] = float(record.health.max_hp) * 0.3
+	record["health_amount"] = 0.0 if record.health_before.runtime.dead else float(record.health.max_hp) * 0.3
 	record["health_fact_id"] = "hostile-health:%s" % claim.substr(0, 40)
 	record["void_owner"] = owner
 	record["void_player_heal"] = request.duplicate(true)

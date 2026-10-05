@@ -358,7 +358,7 @@ func prepared_launch_void_heal_allowed(request: Dictionary) -> bool:
 
 
 func settle_native_void_heal(request: Dictionary, player: Node2D, amount: float) -> bool:
-	return prepared_launch_void_heal_allowed(request) and _prepared_frame_committed and player is PlayerController and player.current_run_id() == StringName(str(_launch_identity.run_id)) and not player.health.dead and _launch_runtime.accept_void_player_heal(str(_launch_identity.run_id), str(request.target_id), int(request.runtime_frame), float(player.health.max_hp), amount, true)
+	return prepared_launch_void_heal_allowed(request) and _prepared_frame_committed and player is PlayerController and player.current_run_id() == StringName(str(_launch_identity.run_id)) and (not player.health.dead or amount == 0.0) and _launch_runtime.accept_void_player_heal(str(_launch_identity.run_id), str(request.target_id), int(request.runtime_frame), float(player.health.max_hp), amount, not player.health.dead)
 
 
 func _native_arena_origin() -> Vector2:

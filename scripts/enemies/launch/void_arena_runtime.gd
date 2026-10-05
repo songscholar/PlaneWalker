@@ -181,7 +181,7 @@ func _accept_damage_event(event: Dictionary) -> Dictionary:
 
 func _accept_heal_event(event: Dictionary) -> Dictionary:
 	var payload: Dictionary = event.payload
-	if not player_heal_pending() or not Contract.exact_fields(payload, ["run_id", "player_source_id", "maximum_hp", "amount", "alive"]) or payload.run_id != _state.identity.run_id or not _id(payload.player_source_id) or not Contract.number_in_range(payload.maximum_hp, 1.0, 1000000.0) or not Contract.number_in_range(payload.amount, 0.0, float(payload.maximum_hp) * 0.3) or typeof(payload.alive) != TYPE_BOOL or not payload.alive:
+	if not player_heal_pending() or not Contract.exact_fields(payload, ["run_id", "player_source_id", "maximum_hp", "amount", "alive"]) or payload.run_id != _state.identity.run_id or not _id(payload.player_source_id) or not Contract.number_in_range(payload.maximum_hp, 1.0, 1000000.0) or not Contract.number_in_range(payload.amount, 0.0, float(payload.maximum_hp) * 0.3) or typeof(payload.alive) != TYPE_BOOL or not payload.alive and payload.amount != 0.0:
 		return _failure("player_heal")
 	_state.player_heal = {"player_source_id": str(payload.player_source_id), "runtime_frame": int(event.runtime_frame), "maximum_hp": float(payload.maximum_hp), "amount": float(payload.amount)}
 	_state.events.append(event.duplicate(true))

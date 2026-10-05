@@ -96,7 +96,7 @@ func _heal_boundary(room: Node2D, health_case: String) -> void:
 	suite.assert_true(bridge.prepare_frame(ticket) and _publish(bridge, ticket), "real%sPlayer never prevents accepted P3 frame" % health_case)
 	var heal: Dictionary = actor.native_void_arena_snapshot().player_heal
 	if health_case == "dead":
-		suite.assert_true(player.health.dead and player.health.current_hp == 0.0 and heal.is_empty(), "Void P3 never revives or fabricates a dead Player heal receipt")
+		suite.assert_true(player.health.dead and player.health.current_hp == 0.0 and heal.get("amount", -1.0) == 0.0 and not actor._launch_runtime.void_player_heal_pending(), "Void P3 consumes a zero heal without reviving a dead Player")
 	else:
 		suite.assert_equal(player.health.current_hp, player.health.max_hp, "Void P3 caps%sactual Health gain" % health_case)
 		suite.assert_equal(heal.get("amount", -1.0), 5.0 if health_case == "capped" else 0.0, "Void P3 records%sactual capped amount exactly once" % health_case)
