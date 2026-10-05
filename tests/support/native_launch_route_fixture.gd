@@ -4,7 +4,7 @@ const Phase := preload("res://scripts/application/run_phase.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 
 
-static func reach(main: Node, suite: RefCounted, final_victory: bool = false) -> bool:
+static func reach(main: Node, suite: RefCounted, final_victory: bool = false, target_floor_index: int = 4, boss_boundary: bool = false) -> bool:
 	var host: Node = main.get_node("RunRuntimeHost")
 	# Combat and Boss receipts are fixtures; route, reward and native handoffs are real.
 	for _step: int in range(140):
@@ -14,7 +14,7 @@ static func reach(main: Node, suite: RefCounted, final_victory: bool = false) ->
 		var node: Dictionary = host.native_run_state().current_floor_node()
 		if final_victory and int(state.phase) == Phase.Value.VICTORY:
 			return true
-		if not final_victory and int(state.current_floor_index) == 4 and node.cleared and node.id != state.floor_plan.entry_node_id and state.open_offer.is_empty():
+		if not final_victory and int(state.current_floor_index) == target_floor_index and node.cleared and node.id != state.floor_plan.entry_node_id and state.open_offer.is_empty() and (not boss_boundary or node.id == state.floor_plan.boss_node_id):
 			return true
 		var result: Variant
 		if not state.open_offer.is_empty():

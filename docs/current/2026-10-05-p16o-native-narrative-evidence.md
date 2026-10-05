@@ -52,12 +52,17 @@ Player processing remains disabled; retirement restores its original mode.
 - Parent independent review found and fixed the terminal story Back escape and stale-story revision trap. Terminal story now requires Continue; both ordinary and terminal stories reproject their already-saved subject/text after stale refusal. Expanded regression `planewalker-tests.zs7puD` passed without script errors/leaks. `python3 tools/document_governance.py` passed with zero violations after shared index integration.
 - Follow-up actual OpenGL 640x360 run passed cleanly: `/private/tmp/plane-walker-p16o-render-review-final.log`, with no script errors, warnings, or leaked resources. Inspected `build/visual-evidence/p16o-native-narrative/terminal-story.png` and `terminal-story-en.png`; saved terminal text wraps correctly and exposes Continue with no Back escape.
 
-The deterministic five-floor integration fixture follows the existing physical
-service test's authored route and canonical boss source setup. Completed floors
-use the canonical RUN_PREPARING phase (final VICTORY), and the fixture retires
-live floor-rule presentation state before direct route traversal. It does not
-claim to simulate five bosses through player combat; production Main handoff
-and framing are verified by the parent-owned Main narrative test and evidence.
+The deterministic five-floor integration fixture now uses the shared
+NativeLaunchRoute fixture's real route selection, reward commits, room handoffs
+and floor entry commands. It stops at each cleared Boss boundary rather than
+directly rewriting phases, floor rules or scene bindings. Combat completion and
+Boss source receipts remain fixtures; this is not five-Boss Player combat
+coverage. A retired ending callback leaves full native publication pending.
+The regression reloads the physical Profile into a fresh Main and restores its
+authenticated native checkpoint, asserting the complete Player codec, canonical
+Run and Profile revision before a new coordinator emits one saved-ending handoff.
+Focused regression evidence is recorded in
+`2026-10-05-native-narrative-regression-evidence.md`.
 
 ## Reversible Decisions And Limits
 

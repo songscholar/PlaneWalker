@@ -2,6 +2,9 @@ extends "res://tests/integration/save/narrative_profile_service_test.gd"
 
 const MainScene := preload("res://scenes/main.tscn")
 const Contract := preload("res://scripts/ui/contracts/narrative_view_state.gd")
+const NativeRoute := preload("res://tests/support/native_launch_route_fixture.gd")
+const NativeCheckpoint := preload("res://scripts/save/native_run_checkpoint_authority.gd")
+const Replay := preload("res://scripts/replay/replay_recorder.gd")
 var _main: Node
 var _flow: Node
 var _host: Node
@@ -29,8 +32,7 @@ func _run() -> void:
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 73}
 	suite.assert_true(_main._launch_run(config, false, true), "actual Main issues a durable Launch receipt")
 	_run_state = _host.native_run_state()
-	_host.set_process(false)
-	_player.set_physics_process(false)
+	NativeRoute.freeze(_main)
 	_main.get_node("CombatRoom01").process_mode = Node.PROCESS_MODE_DISABLED
 	var tutorial: Node = _main.get_node_or_null("TutorialFlow")
 	if tutorial != null:
@@ -87,17 +89,13 @@ func _run() -> void:
 	suite.assert_true(_service.snapshot().narrative_state.consumed_sources.has("dialogue:odysseus_intro"), "refreshed NPC controls remain usable after stale refusal")
 	_flow.close()
 	suite.assert_true(not _flow.terminal_victory().ok, "active nonterminal Run cannot install final heart or choose ending")
-	var templates := _content("room_templates.json")
-	var floors := _content("floors.json")
-	var launch: Dictionary = _service.snapshot().active_launch_receipt
-	# The existing authenticated deterministic fixture traverses real generated nodes and boss receipts.
-	_run_state.floor_rule_state = {}
+	_run_state.run_time_ms = 1000
 	for index: int in range(5):
-		if index > 0:
-			_enter_floor(floors[index], templates)
-		_complete_floor(launch)
-		_run_state.phase = Phase.Value.RUN_PREPARING if index < 4 else Phase.Value.VICTORY
-		_install_actual_room(templates)
+		var reached: bool = await NativeRoute.reach(_main, suite, index == 4, index, true)
+		suite.assert_true(reached, "narrative fixture uses canonical native room reward and floor handoffs to Boss boundary " + str(index))
+		if not reached:
+			await _finish()
+			return
 		if index == 0:
 			suite.assert_true(_flow.refresh_occurrences().ok, "cleared actual room installs floor-authored physical markers")
 			var records: Array = _flow.get("_occurrences")
@@ -116,8 +114,13 @@ func _run() -> void:
 				suite.assert_true(not _flow.process_pending_contact().ok, "physical source save refusal is surfaced")
 				suite.assert_equal(_service.snapshot(), before, "failed contact does not grant authored content")
 				_fault = &""
-				suite.assert_true(_flow.process_pending_contact().ok and _service.snapshot().revision == before.revision + 1, "real contact retries once through production Profile service")
+				var retried: Dictionary = _flow.process_pending_contact()
+				suite.assert_true(retried.ok and _service.snapshot().revision == before.revision + 1, "real contact retries once through production Profile service: " + str(retried))
 				suite.assert_equal(panel.view_state().mode, "story", "saved physical collection opens authored story only after persistence")
+				if not retried.ok or _action("continue") == null:
+					suite.assert_true(false, "saved physical collection must expose actual Continue before stale-revision interaction: " + str(panel.view_state()))
+					await _finish()
+					return
 				var story: Dictionary = panel.view_state()
 				suite.assert_true(_service.execute_narrative({"command_id": "normal-story-concurrent-sibyl", "kind": "narrative_dialogue", "npc_id": "sibyl", "node_id": "sibyl_intro", "choice_id": "sibyl_intro_remember"}, story.revision).ok, "real independent Profile command advances an open source story")
 				before = _service.snapshot()
@@ -158,9 +161,6 @@ func _run() -> void:
 				_action("choice:spare").pressed.emit()
 				suite.assert_true(_service.snapshot().narrative_state.nemesis_choices == ["spare"], "saved native choice records one authenticated encounter")
 				_flow.close()
-	_run_state.phase = Phase.Value.VICTORY
-	_run_state.result = {"result": "victory"}
-	_run_state.run_time_ms = 1000
 	suite.assert_true(_flow.terminal_victory().ok, "canonical native five-floor victory installs final heart contact")
 	suite.assert_true(not panel.visible and _ending_signals.is_empty(), "final fragment is neither automatically granted nor implicitly chosen")
 	var heart: Area2D = _flow.get("_occurrences")[0].token.get_ref()
@@ -224,6 +224,14 @@ func _run() -> void:
 	_action("ending:shattered_freedom").pressed.emit()
 	_retire_on_promote = false
 	suite.assert_true(_ending_signals.is_empty(), "detached save callback cannot emit completion from a retired native binding")
+	suite.assert_true(not _flow.bind_active_run().ok, "retired ending callback cannot discard the unrecovered physical checkpoint through rebind")
+	var saved_payload: Dictionary = _service.payload()
+	before = _service.snapshot()
+	var recovered_ending: bool = await _cold_restore_retired_ending(saved_payload, before)
+	if not recovered_ending:
+		await _finish()
+		return
+	panel = _flow.panel()
 	suite.assert_true(_flow.bind_active_run().ok and _flow.terminal_victory().ok, "new actual binding recovers already saved ending handoff without a second choice")
 	suite.assert_equal(_ending_signals.size(), 1, "saved ending emits exactly one native handoff")
 	_flow.terminal_victory()
@@ -233,8 +241,13 @@ func _run() -> void:
 	for event: Dictionary in _run_state.events:
 		if event.get("type") == Settlement.SOURCE_TYPE:
 			receipts.append(event.receipt)
-	suite.assert_true(_service.settle_terminal(_run_state.snapshot(), receipts, _service.snapshot().revision).ok, "actual terminal settles after saved narrative choice")
-	suite.assert_true(_flow.show_selected_credits("shattered_freedom").ok, "separately saved credits begin only after settlement")
+	var settled: Dictionary = _service.settle_terminal(_run_state.snapshot(), receipts, _service.snapshot().revision)
+	suite.assert_true(settled.ok, "actual terminal settles after saved narrative choice: " + str(settled))
+	var credits: Dictionary = _flow.show_selected_credits("shattered_freedom")
+	suite.assert_true(credits.ok, "separately saved credits begin only after settlement: " + str(credits))
+	if not settled.ok or not credits.ok or _action("credits:shattered_freedom") == null:
+		await _finish()
+		return
 	await _capture("credits-pending")
 	before = _service.snapshot()
 	_fault = &"before_primary_promote"
@@ -251,15 +264,48 @@ func _run() -> void:
 	await _finish()
 
 
-func _install_actual_room(templates: Array) -> void:
-	var node: Dictionary = _run_state.current_floor_node()
-	for template: Dictionary in templates:
-		if template.id != node.template_id:
-			continue
-		var preview: Node = load(template.scene_path).instantiate()
-		var presentation: Dictionary = preview.FLOOR_PRESENTATION[_run_state.floor_plan.floor_id]
-		preview.free()
-		suite.assert_true(_room_host.transition_to(node, template, {"floor_id": _run_state.floor_plan.floor_id, "palette_id": presentation.palette_id, "environment_rule_id": presentation.environment_rule_id, "room_seed": 73}).ok, "narrative occurrence is installed by actual RoomSceneHost transition")
+func _cold_restore_retired_ending(saved_payload: Dictionary, saved_profile: Dictionary) -> bool:
+	_service.get("_save").set_fault_injector(Callable())
+	_main.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_flow = null
+	_run_state = null
+	_player = null
+	_service = null
+	GameState.set("_profile_runtime", null)
+	_main = MainScene.instantiate()
+	add_child(_main)
+	await get_tree().process_frame
+	NativeRoute.freeze(_main)
+	_host = _main.get_node("RunRuntimeHost")
+	_room_host = _main.get_node("LaunchRoomSceneHost")
+	_player = _main.get_node("CombatRoom01/Player")
+	_service = GameState.profile_runtime_service()
+	suite.assert_equal(_service.snapshot(), saved_profile, "physical reload preserves the saved ending Profile and revision")
+	suite.assert_true(NativeCheckpoint.json_equal(_service.payload(), saved_payload), "physical reload preserves every saved native checkpoint participant")
+	var restored: Variant = _host.restore_profile_checkpoint(_service, int(saved_profile.revision))
+	suite.assert_true(restored.ok, "cold native restore authenticates retired-ending participants: " + str(restored.code))
+	if not restored.ok:
+		return false
+	_run_state = _host.native_run_state()
+	var expected_player: Dictionary = Replay.decode_replay_json(saved_payload.native_run_checkpoint.player_codec).replay
+	suite.assert_equal(_player.full_player_replay_snapshot(), expected_player, "retired ending cold recovery restores the exact complete Player codec")
+	suite.assert_true(NativeCheckpoint.json_equal(_run_state.snapshot(), saved_payload.active_run_state), "retired ending cold recovery restores the exact canonical Run")
+	_main.get_node("NarrativeFlow").retire_active_run()
+	_runtime_parent = Node2D.new()
+	_main.add_child(_runtime_parent)
+	_flow = load("res://scripts/narrative/narrative_flow_coordinator.gd").new()
+	_main.add_child(_flow)
+	_flow.set_physics_process(false)
+	var configured: Dictionary = _flow.configure(_host.content_registry(), _service, _host, _room_host, _player, _runtime_parent)
+	suite.assert_true(configured.ok, "fresh narrative coordinator uses physically restored native participants")
+	if not configured.ok:
+		return false
+	_flow.ending_selected.connect(func(id: String, receipt: Dictionary): _ending_signals.append([id, receipt]))
+	_flow.credits_completed.connect(func(id: String, receipt: Dictionary): _credit_signals.append([id, receipt]))
+	_service.get("_save").set_fault_injector(_flow_fault)
+	return true
 
 
 func _action(id: String) -> Button:
