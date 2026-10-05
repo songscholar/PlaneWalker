@@ -44,6 +44,10 @@ window/stretch/scale_mode="integer"
 
 enabled=PackedStringArray("res://addons/content_pack_source_export/plugin.cfg")
 
+[editor]
+
+import/use_multiple_threads=false
+
 [input]
 
 ui_accept={
