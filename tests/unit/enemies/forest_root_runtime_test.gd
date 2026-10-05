@@ -62,7 +62,28 @@ func _ready() -> void:
 		malformed.damage_claims[0].runtime_frame = "invalid"
 		suite.assert_true(not runtime.can_restore_snapshot(malformed), "retirement rejects malformed damage receipts without interpreting them")
 		_test_conversion_tail(parser.runtime_projection(), identity)
+		_test_fractional_break(path, parser.runtime_projection(), identity)
 	suite.finish(get_tree())
+
+
+func _test_fractional_break(path: String, definition: Dictionary, identity: Dictionary) -> void:
+	var runtime: RefCounted = load(path).new()
+	runtime.configure(definition, identity)
+	var amounts := [7.199999999999999, 7.800000000000001, 7.199999999999999, 7.800000000000001, 7.199999999999999, 7.800000000000001, 7.199999999999999, 7.800000000000001, 7.199999999999999, 7.800000000000001, 10.799999999999999, 7.800000000000001, 6.399999999999997]
+	for index: int in range(amounts.size()):
+		var fact := {"fact_id": "fractional-root:%d" % index, "run_id": identity.run_id, "owner_source_id": identity.hostile_source_id, "construct_id": "forest_root:1", "runtime_frame": 0, "amount": amounts[index]}
+		suite.assert_true(runtime.accept_damage_fact(fact).ok, "actual fractional Gauntlet receipt sequence accepts each remaining-HP loss")
+	var broken: Dictionary = runtime.snapshot()
+	suite.assert_true(broken.roots[1].broken and broken.roots[1].current_hp == 0.0 and runtime.is_exposed(), "fractional hits finalize zero root HP with the complete authored exposure")
+	suite.assert_true(runtime.can_restore_snapshot(broken, true) and runtime.restore_snapshot(broken), "fractional root destruction restores through exact ordered arithmetic")
+	suite.assert_true(runtime.accept_phase_retirement(0).ok, "same-frame phase retirement excludes the authentically broken fractional root")
+	suite.assert_equal(runtime.snapshot().phase_retirement.root_ids, ["forest_root:0", "forest_root:2", "forest_root:3"], "fractional death cannot consume a surviving-root retirement slot")
+	var forged := broken.duplicate(true)
+	forged.damage_claims.back().amount += 0.01
+	suite.assert_true(not runtime.can_restore_snapshot(forged, true), "fractional restoration refuses an invented final loss above remaining HP")
+	forged = broken.duplicate(true)
+	forged.damage_claims.back().amount -= 0.01
+	suite.assert_true(not runtime.can_restore_snapshot(forged, true), "fractional restoration refuses a false root break with remaining HP")
 
 
 func _test_conversion_tail(definition: Dictionary, identity: Dictionary) -> void:

@@ -154,7 +154,7 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 		if not Contract.exact_fields(value.phase_retirement, ["runtime_frame", "root_ids"]) or not Contract.integer_in_range(value.phase_retirement.runtime_frame, int(_initial.runtime_frame), int(value.runtime_frame) + (0 if accepted_boundary else 1)) or not value.phase_retirement.root_ids is Array or value.phase_retirement.root_ids != _retirement_ids(value, int(value.phase_retirement.runtime_frame)):
 			return false
 		retired = value.phase_retirement.root_ids
-	var losses: Dictionary = {}
+	var remaining: Dictionary = {}
 	var seen: Dictionary = {}
 	var exposure: int = int(_initial.runtime_frame) - 1
 	var previous_damage_frame: int = int(_initial.runtime_frame)
@@ -167,12 +167,15 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 			return false
 		previous_damage_frame = int(fact.runtime_frame)
 		seen[fact.fact_id] = true
-		losses[fact.construct_id] = float(losses.get(fact.construct_id, 0.0)) + float(fact.amount)
-		if losses[fact.construct_id] == 100.0:
+		var hp := float(remaining.get(fact.construct_id, 100.0))
+		if float(fact.amount) > hp:
+			return false
+		remaining[fact.construct_id] = hp - float(fact.amount)
+		if remaining[fact.construct_id] == 0.0:
 			exposure = maxi(exposure, int(fact.runtime_frame) + 44)
 	for row: Dictionary in value.roots:
-		var loss := float(losses.get(row.id, 0.0))
-		if loss > 100.0 or not Contract.number_in_range(row.current_hp, 0.0, 100.0) or not is_equal_approx(float(row.current_hp), 100.0 - loss) or typeof(row.broken) != TYPE_BOOL or row.broken != (loss == 100.0) or typeof(row.retired) != TYPE_BOOL or row.retired != retired.has(row.id):
+		var hp := float(remaining.get(row.id, 100.0))
+		if not Contract.number_in_range(row.current_hp, 0.0, 100.0) or not is_equal_approx(float(row.current_hp), hp) or typeof(row.broken) != TYPE_BOOL or row.broken != (hp == 0.0) or typeof(row.retired) != TYPE_BOOL or row.retired != retired.has(row.id):
 			return false
 	return typeof(value.exposure_through_frame) == TYPE_INT and value.exposure_through_frame == exposure and _valid_sweep_claims(value)
 
@@ -278,13 +281,13 @@ static func _historical_sweep(action: Dictionary) -> int:
 
 
 static func _retirement_ids(value: Dictionary, frame: int) -> Array[String]:
-	var damage: Dictionary = {}
+	var remaining: Dictionary = {}
 	for fact: Variant in value.damage_claims:
 		if fact is Dictionary and fact.get("construct_id") is String and fact.get("runtime_frame") is int and Contract.number_in_range(fact.get("amount"), 0.000001, 100.0) and fact.runtime_frame <= frame:
-			damage[fact.construct_id] = float(damage.get(fact.construct_id, 0.0)) + float(fact.amount)
+			remaining[fact.construct_id] = float(remaining.get(fact.construct_id, 100.0)) - float(fact.amount)
 	var ids: Array[String] = []
 	for row: Dictionary in value.roots:
-		if float(damage.get(row.id, 0.0)) < 100.0 and ids.size() < 3:
+		if float(remaining.get(row.id, 100.0)) > 0.0 and ids.size() < 3:
 			ids.append(str(row.id))
 	return ids
 

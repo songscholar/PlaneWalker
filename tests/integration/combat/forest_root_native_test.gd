@@ -96,7 +96,7 @@ func _check_native(actor: Node2D, room: Node2D) -> void:
 	actor.get_node("Hurtbox").receive_hit(_damage(player, 2, 600.0))
 	suite.assert_true(bridge.prepare_frame(ticket) and _publish(bridge, ticket), "actual trunk damage retriesP2 with deterministic permanent root retirement")
 	suite.assert_true(not actor.get("_launch_runtime").is_exposed(), "native root exposure expires after its full45-frame window")
-	suite.assert_equal(actor.native_arena_snapshot().phase_retirement.root_ids, ["forest_root:1", "forest_root:2", "forest_root:3"], "realP2 skips permanently broken roots")
+	suite.assert_equal(actor.native_arena_snapshot().phase_retirement.get("root_ids", []), ["forest_root:1", "forest_root:2", "forest_root:3"], "realP2 skips permanently broken roots")
 	suite.assert_equal(actor.health.current_hp, 800.0, "P2 retry applies trunk damage exactly once")
 	await _check_cold(actor, "P2")
 	await _capture(actor, "retired")
@@ -182,7 +182,7 @@ func _capture(actor: Node2D, pose: String) -> void:
 
 
 func _damage(player: Node2D, token: int, amount: float) -> RefCounted:
-	return Damage.from_plan({"run_id": "run-roots", "target_id": "pending-root", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+	return Damage.from_plan({"run_id": "run-roots", "target_id": "forest-root-owner", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
 
 
 func _publish(bridge: RefCounted, ticket: Dictionary) -> bool:
