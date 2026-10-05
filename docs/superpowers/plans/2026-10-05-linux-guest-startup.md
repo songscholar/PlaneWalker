@@ -1,12 +1,13 @@
 # Linux Guest Startup Implementation Plan
 
-- Status: Active
-- Document Role: Current focused export verification plan
+- Status: Completed
+- Document Role: Historical focused export verification plan
 - Authority Level: P19 local platform verification
 - Applies To: Authenticated Linux x86_64 release artifact in a Docker Linux guest
 - Owner: Project owner
 - Last Verified: 2026-10-05
-- Implementation Status: In progress
+- Implementation Status: Completed with conditional imported-source startup evidence
+- Completion Evidence: [Retained exports and guest execution](../../current/2026-10-05-p19-linux-guest-startup-evidence.md)
 - Depends On: [P19 packaged startup evidence](../../current/2026-10-05-p19-packaged-startup-evidence.md); [export tool contract](../../../tools/export/README.md)
 - Exit Gate: Passing refusal contracts and real guest startup with clean logs
 
@@ -30,10 +31,10 @@ The existing host verifier remains the host evidence authority. Extending it wit
 
 ## Real Guest Evidence
 
-- [ ] Obtain the final coherent committed source revision from the integration owner.
-- [ ] Export all three targets from a clean retained checkout; authenticate host macOS startup.
-- [ ] Inspect and record the public immutable guest image, then run Linux guest startup against those exact retained bytes.
-- [ ] Record commands, source/report/artifact hashes, all 12 native checks, strict logs and remaining actual-host limits in current evidence.
+- [x] Obtain coherent committed source `9c5d51799d4451039eaaa3fa1c18a8be4363af4d` from the integration owner.
+- [x] Export all three targets from a clean retained checkout after import; authenticate host macOS startup. First import has an unapproved eager enemy texture diagnostic, reported for correction and explicitly outside this pass.
+- [x] Inspect and record the public immutable guest image; actual Linux executable passed all 12 native startup checks against unchanged retained bytes.
+- [x] Record commands, source/report/artifact hashes, all 12 native checks, strict logs and remaining actual-host/clean-import limits in current evidence.
 
 This gate does not certify five-floor victories, visual layouts, controller interaction, actual Linux-host behavior, Windows-host behavior, signing, or publication. No downloaded image is pulled automatically by the verifier; an unavailable local image produces an explicit typed refusal.
 
