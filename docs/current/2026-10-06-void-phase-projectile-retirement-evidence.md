@@ -3,7 +3,7 @@
 - Status: Implemented / Current
 - Document Role: Current focused implementation and verification evidence
 - Authority Level: Below approved full-product completion contract
-- Applies To: Void Boss phase boundaries in native hostile payload preparation
+- Applies To: Void Boss phase boundaries in native hostile payload preparation and retained native cases 619/513
 - Owner: Native matrix validation lane
 - Depends On: `docs/current/2026-10-06-void-phase-projectile-retirement-plan.md`
 - Last Verified: 2026-10-06
@@ -27,6 +27,38 @@ applies it to the native payload preview. Domain projectiles, physical bodies,
 and their threats now retire with the auxiliary cast. Before-snapshot native
 contact seals remain intact for commit validation and rollback. The strict
 retired-cast receipt validator and public snapshot schemas are unchanged.
+
+## Original Refusals and Source Boundaries
+
+The original matrix remains in the untouched `git archive` extraction of
+`be580300a80888882d70dff5ac0863c3ed7359d6` at
+`build/retained-checkout/p15-native-full-be58030-20261006`. Its runtime/runner
+aggregate SHA-256 is
+`4d105df812e13cfbc95209f6a95a4d13891932a4ebfb0e604385f8d33f2d2db7`,
+recomputed with the runner's exact source-snapshot algorithm. Its final combined
+report is still pending while shard 000 runs; the four other shards have already
+failed. Neither the archive nor any original report was overlaid with fixes.
+
+| Original case | Last accepted frame / HP | Refused runtime frame | Refusal |
+| --- | --- | --- | --- |
+| 619, `time_lord\|sword\|rewind+rift\|void_throne`, seed 20261624 | 2555 / 1764.4799999999982 | 2556 | `effects_commit`, `HOSTILE_EFFECT_INVALID`, `void_damage_receipt` |
+| 513, `primordial_knight\|gun\|stop+rewind\|forge_colossus`, seed 20261518 | 4191 / 283.1875 | 4192 | `effects_can_commit`; actor can commit, payload effects cannot |
+
+The original case reports are, respectively:
+
+- `build/retained-checkout/p15-native-full-be58030-20261006/build/test-evidence/p15-native-full/native-600-150/report.json`.
+- `build/retained-checkout/p15-native-full-be58030-20261006/build/test-evidence/p15-native-full/native-450-150/report.json`.
+
+Each directory retains separate `stdout.log` and `godot.log`. The original
+failures remain failures, including their missing terminal receipts. The
+distinction between last accepted frame and refused runtime frame is intentional.
+
+The separate pure `4735176` archive at
+`build/retained-checkout/p15-case338-scalar4735176-20261006` has aggregate
+`40f975cdee2ae8dd0cfb47402fa0fb28f54de333733f59f2c7c96fc2957d5553`.
+Its `build/p15-case619-before.json` reproduces the same refusal, frame and HP
+after the scalar-distance correction. This establishes that the Void lifecycle
+failure is independently outstanding at that source.
 
 ## Executable Regression
 
@@ -86,5 +118,46 @@ The old failure remains at
 The independent pre-fix reproduction remains at
 `build/retained-checkout/p15-case338-scalar4735176-20261006/build/p15-case619-before.json`.
 
+## Companion Case 513 Scalar Recovery
+
+Case 513 is a Forge scalar-distance refusal, separate from Void cast retirement.
+The [scalar-distance evidence](2026-10-06-projectile-scalar-distance-evidence.md)
+records its correction in `4735176`. An additional independent one-case run
+in the pure `4735176` archive passes before the Void fix is present:
+
+```sh
+python3 tools/run_p15_hostile_matrix.py \
+  --output build/p15-case513-scalar-after.json \
+  --logs build/test-evidence/p15-case513-scalar-after \
+  --start 513 --count 1 --jobs 1 --timeout 900
+```
+
+The pure-scalar report is
+`build/retained-checkout/p15-case338-scalar4735176-20261006/build/p15-case513-scalar-after.json`.
+The independently passing combined `cdea629` report is
+`build/retained-checkout/p15-case619-after-cdea629-20261006/build/p15-case513-after.json`.
+Both retain the identical observations below, with `source.instrumented=false`,
+one requested/observed production case, runner `errors=[]`, case `failures=[]`
+and no original rejection or refused-frame diagnostic:
+
+| Criterion | Both Sources |
+| --- | --- |
+| Terminal result | Frame 4574, final HP 0 |
+| Three authored phase losses | 1141.1875 / 968.75 / 690.0625 |
+| Equipped paid time casts | Stop frame 64, Rewind frame 139 |
+| Positive time interaction | `boss_stop_conversion` |
+| Physical checkpoint and exact continuation | `b9d0a2a09fbe4b87dfa46ca7281e35083bb0ebec99090199497eecf41cf35f37` |
+| Canonical death receipt | Exactly one `hostile_defeat:0782953934678101e0ac731c02269e3f123e2464` |
+
+The two report directories retain separate stdout/engine logs. Both pairs
+independently pass `python3 -m tools.runtime_log_validation` with no allowed
+negative-test scope. The pure-scalar run exits 0 and prints `native shard513:1
+PASS` and `actual native cases1/1; errors0`. This confirms case 513 recovery
+without attributing it to the unrelated Void change.
+
 This certifies the focused regression and its original native case. It does
 not upgrade the failed original 750-case matrix or certify gameplay completion.
+Every one-case report intentionally has `native_complete=false` and
+`p15_complete=false`; a new untouched unified source must independently pass
+the complete 750-case gate. Human playtests, unassisted victory, rendering/FPS,
+statement coverage and full-package completion remain outside this evidence.
