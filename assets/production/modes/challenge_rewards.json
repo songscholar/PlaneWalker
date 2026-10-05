@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "collection_id": "planewalker.challenge_rewards.v1",
+  "rewards": [
+    {"id":"walker_proof","kind":"item","name_key":"UI_RUSH_REWARD_WALKER_PROOF","tint":[],"effects":{"boss_damage_multiplier":1.15}},
+    {"id":"speedwalker_boots","kind":"item","name_key":"UI_RUSH_REWARD_SPEEDWALKER_BOOTS","tint":[],"effects":{"move_speed_multiplier":1.15,"dash_speed_multiplier":1.2}},
+    {"id":"walker_entry","kind":"cosmetic","name_key":"UI_RUSH_REWARD_WALKER_ENTRY","tint":[0.78,0.94,1.0,1.0],"effects":{}},
+    {"id":"eternal_walker","kind":"cosmetic","name_key":"UI_RUSH_REWARD_ETERNAL_WALKER","tint":[1.0,0.87,0.5,1.0],"effects":{}},
+    {"id":"void_walker","kind":"cosmetic","name_key":"UI_RUSH_REWARD_VOID_WALKER","tint":[0.69,0.78,1.0,1.0],"effects":{}},
+    {"id":"daily_participation_frame","kind":"frame","name_key":"UI_CHALLENGE_DAILY_PARTICIPATION_FRAME","tint":[],"effects":{}},
+    {"id":"daily_walker_frame","kind":"frame","name_key":"UI_CHALLENGE_DAILY_WALKER_FRAME","tint":[],"effects":{}},
+    {"id":"eternal_traveler","kind":"title","name_key":"UI_CHALLENGE_ETERNAL_TRAVELER","tint":[],"effects":{}},
+    {"id":"daily_weapon_skin","kind":"weapon_cosmetic","name_key":"UI_CHALLENGE_DAILY_WEAPON_SKIN","tint":[1.0,0.75,0.76,1.0],"effects":{}},
+    {"id":"daily_character_color","kind":"cosmetic","name_key":"UI_CHALLENGE_DAILY_CHARACTER_COLOR","tint":[0.75,1.0,0.79,1.0],"effects":{}},
+    {"id":"daily_archive_decoration","kind":"decoration","name_key":"UI_CHALLENGE_DAILY_ARCHIVE_DECORATION","tint":[],"effects":{}}
+  ]
+}

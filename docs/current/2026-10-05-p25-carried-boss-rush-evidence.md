@@ -51,6 +51,9 @@ and Simplified Chinese production translations are registered by Main ownership.
   visual fixture lacked a qualifying ordinary Profile and was corrected by root.
 - `build/test-evidence/boss-carried-visual-green`: corrected production visual
   scene passes, including eligible physical Profile and required reward choice.
+- `build/boss-carried-durability-green`: forged frame/HP notices refuse; failed
+  promotion retains pending carried HP, retry/cold continuation preserves it,
+  promoted faults reconcile and stale writers cannot replace a newer primary.
 
 Successful logs were scanned for script/parse errors, ERROR lines, leaks and
 orphans. Godot4.6.1 reports line coverage unsupported. Dependency audit command

@@ -9,7 +9,7 @@ const NARRATIVE_FIELDS := ["flags", "artifacts", "environment_records", "hidden_
 const TUTORIAL_FIELDS := ["completed_lessons", "skipped_lessons", "seen_hints", "suppressed", "guided_runs_completed"]
 const STATISTIC_FIELDS := ["finished_runs", "victories", "deaths", "abandons"]
 const MAX_HISTORY := 4096
-const RESERVED_COMMAND_PREFIXES := ["forge-enchant-unlock:", "legacy-stat:", "training-claim:", "narrative-source:", "onboarding-progress:", "onboarding-watermark:"]
+const RESERVED_COMMAND_PREFIXES := ["forge-enchant-unlock:", "legacy-stat:", "training-claim:", "narrative-source:", "onboarding-progress:", "onboarding-watermark:", "mode-reward:", "mode-equip:"]
 
 var _catalog: RefCounted
 var _state: Dictionary = {}

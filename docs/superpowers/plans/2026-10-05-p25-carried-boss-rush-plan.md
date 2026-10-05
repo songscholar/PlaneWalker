@@ -55,7 +55,7 @@ Files: `scripts/modes/boss_rush_carried_rules.gd`,
   validation; include rules in the fingerprint and storage identity.
 - [x] Persist portable Player state with fresh weapon runtime, deterministic
   choices, durable reward ownership and bounded victory history.
-- [ ] Verify fault-retry and stale-writer refusal against the promoted primary.
+- [x] Verify fault-retry and stale-writer refusal against the promoted primary.
 
 ## Task 3: Native Choice and History Menu
 

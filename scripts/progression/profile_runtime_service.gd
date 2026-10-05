@@ -26,6 +26,8 @@ const NativeCheckpoint := preload("res://scripts/save/native_run_checkpoint_auth
 const LocalRecordRules := preload("res://scripts/community/local_run_record_rules.gd")
 const CosmeticCatalogScript := preload("res://scripts/progression/cosmetic_catalog.gd")
 const CosmeticRuntimeScript := preload("res://scripts/progression/cosmetic_collection_runtime.gd")
+const ChallengeRewards := preload("res://scripts/progression/challenge_reward_catalog.gd")
+const ModeRewards := preload("res://scripts/progression/mode_reward_authority.gd")
 const OCCURRENCE_RADIUS := 48.0
 const MAX_OCCURRENCES := 64
 const MIRROR_FIELDS := ["chronos_shards", "existential_imprints", "unlocked_nodes", "discovered_items", "unlocked_characters", "unlocked_weapons", "weapon_proficiency", "npc_affinity", "unlocked_achievements", "cosmetics"]
@@ -62,6 +64,8 @@ var _native_checkpoint_host: WeakRef
 var _checkpoint_recovery_pending := false
 var _cosmetic_catalog: RefCounted
 var _cosmetic_runtime: RefCounted
+var _challenge_rewards: RefCounted
+var _mode_rewards: RefCounted
 
 
 func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String, save_domain: String, initial_payload: Dictionary = {}) -> Dictionary:
@@ -79,6 +83,9 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 		return _failure(&"PROFILE_INVALID")
 	if not _mirrors_match(payload_value, state.snapshot()):
 		return _failure(&"PROFILE_MIRROR_MISMATCH")
+	var challenge_rewards := ChallengeRewards.new()
+	if not challenge_rewards.configure() or not challenge_rewards.valid_collection(payload_value.get("challenge_reward_collection", challenge_rewards.empty_collection())):
+		return _failure(&"MODE_REWARD_COLLECTION_INVALID")
 	var settlement = Settlement.new()
 	var bosses: Dictionary = {}
 	for index: int in range(5):
@@ -109,6 +116,8 @@ func configure(catalog: RefCounted, save_service: RefCounted, profile_id: String
 	_checkpoint_recovery_pending = false
 	_cosmetic_catalog = null
 	_cosmetic_runtime = null
+	_challenge_rewards = challenge_rewards
+	_mode_rewards = null
 	return _success({"snapshot": snapshot()})
 
 
@@ -118,6 +127,100 @@ func snapshot() -> Dictionary:
 
 func payload() -> Dictionary:
 	return _payload.duplicate(true)
+
+
+func configure_mode_rewards(registry: RefCounted, sources: Array) -> Dictionary:
+	if _profile == null or _busy or sources.size() > 2:
+		return _failure(&"MODE_REWARD_SOURCE_INVALID")
+	var authority := ModeRewards.new()
+	if not authority.configure(registry, local_record_storage_identity()):
+		return _failure(&"MODE_REWARD_SOURCE_INVALID")
+	for source: Variant in sources:
+		if not source is Node or not authority.attach(source).ok:
+			return _failure(&"MODE_REWARD_SOURCE_INVALID")
+	_mode_rewards = authority
+	return _success({})
+
+
+func claim_mode_rewards(mode_id: String, expected_revision: int) -> Dictionary:
+	if _mode_rewards == null or _busy or not snapshot().active_launch_receipt.is_empty():
+		return _failure(&"MODE_REWARD_SOURCE_INVALID")
+	if expected_revision != int(snapshot().revision):
+		return _failure(&"STALE_REVISION")
+	var prepared: Dictionary = _mode_rewards.prepare(mode_id, challenge_reward_collection())
+	if not prepared.ok:
+		return prepared
+	if prepared.context.duplicate:
+		return _success({"duplicate": true, "collection": challenge_reward_collection(), "aggregate": prepared.context.aggregate})
+	var candidate := snapshot()
+	if candidate.completed_command_ids.size() >= Profile.MAX_HISTORY or candidate.revision >= Catalog.MAX_VALUE:
+		return _failure(&"TRANSACTION_LIMIT")
+	if candidate.completed_command_ids.has(prepared.context.command_id):
+		return _failure(&"MODE_REWARD_COLLECTION_INVALID")
+	candidate.completed_command_ids.append(prepared.context.command_id)
+	candidate.completed_command_ids.sort()
+	candidate.revision += 1
+	var ticket: Dictionary = _profile.prepare_candidate(candidate)
+	if not ticket.ok:
+		return ticket
+	var result := _persist_ticket(ticket.context.ticket, {"challenge_reward_collection": prepared.context.collection})
+	if result.ok:
+		result.context["collection"] = challenge_reward_collection()
+		result.context["aggregate"] = prepared.context.aggregate.duplicate(true)
+	return result
+
+
+func challenge_reward_collection() -> Dictionary:
+	return _payload.get("challenge_reward_collection", _challenge_rewards.empty_collection()).duplicate(true) if _challenge_rewards != null else {}
+
+
+func challenge_reward_view() -> Dictionary:
+	var collection := challenge_reward_collection()
+	var rows: Array[Dictionary] = []
+	for id: String in collection.get("owned_ids", []):
+		var row: Dictionary = _challenge_rewards.definition(id)
+		row["equipped"] = collection.equipped_ids.has(id)
+		rows.append(row)
+	return {"rows": rows, "revision": int(snapshot().get("revision", 0))}
+
+
+func equip_challenge_reward(id: String, equipped: bool, expected_revision: int) -> Dictionary:
+	if _busy or _challenge_rewards == null or not snapshot().active_launch_receipt.is_empty():
+		return _failure(&"MODE_REWARD_EQUIP_INVALID")
+	if expected_revision != int(snapshot().revision):
+		return _failure(&"STALE_REVISION")
+	var collection := challenge_reward_collection()
+	var definition: Dictionary = _challenge_rewards.definition(id)
+	if definition.is_empty() or not collection.owned_ids.has(id):
+		return _failure(&"MODE_REWARD_NOT_OWNED")
+	if collection.equipped_ids.has(id) == equipped:
+		return _success({"duplicate": true, "collection": collection})
+	if equipped:
+		if definition.kind != "item":
+			for existing: String in collection.equipped_ids.duplicate():
+				if _challenge_rewards.definition(existing).kind == definition.kind:
+					collection.equipped_ids.erase(existing)
+		collection.equipped_ids.append(id)
+	else:
+		collection.equipped_ids.erase(id)
+	collection.equipped_ids.sort()
+	if not _challenge_rewards.valid_collection(collection):
+		return _failure(&"MODE_REWARD_COLLECTION_INVALID")
+	var candidate := snapshot()
+	if candidate.completed_command_ids.size() >= Profile.MAX_HISTORY or candidate.revision >= Catalog.MAX_VALUE:
+		return _failure(&"TRANSACTION_LIMIT")
+	candidate.completed_command_ids.append("mode-equip:%d:%s" % [int(candidate.revision), (id + str(equipped)).sha256_text().substr(0, 32)])
+	candidate.completed_command_ids.sort()
+	candidate.revision += 1
+	var ticket: Dictionary = _profile.prepare_candidate(candidate)
+	return _persist_ticket(ticket.context.ticket, {"challenge_reward_collection": collection}) if ticket.ok else ticket
+
+
+func challenge_reward_projection() -> Dictionary:
+	if _challenge_rewards == null:
+		return _failure(&"MODE_REWARD_COLLECTION_INVALID")
+	var projection: Dictionary = _challenge_rewards.projection(challenge_reward_collection(), local_record_storage_identity())
+	return _success({"projection": projection}) if not projection.is_empty() else _failure(&"MODE_REWARD_COLLECTION_INVALID")
 
 
 func configure_cosmetics(registry: RefCounted) -> Dictionary:
@@ -1019,6 +1122,8 @@ func _persist_ticket(ticket: Dictionary, payload_changes: Dictionary = {}) -> Di
 			return _discard_failure(ticket, &"STALE_DURABLE_PROFILE")
 		if payload_changes.has("cosmetic_collection") and not _json_equal(durable.get("cosmetic_collection", _cosmetic_catalog.empty_collection()), _payload.get("cosmetic_collection", _cosmetic_catalog.empty_collection())):
 			return _discard_failure(ticket, &"STALE_DURABLE_PROFILE")
+		if payload_changes.has("challenge_reward_collection") and not _json_equal(durable.get("challenge_reward_collection", _challenge_rewards.empty_collection()), challenge_reward_collection()):
+			return _discard_failure(ticket, &"STALE_DURABLE_PROFILE")
 		next_payload = durable.duplicate(true)
 	elif primary.code != &"NOT_FOUND":
 		return _discard_failure(ticket, primary.code)
@@ -1033,7 +1138,9 @@ func _persist_ticket(ticket: Dictionary, payload_changes: Dictionary = {}) -> Di
 	next_payload["meta_profile_state"] = candidate.duplicate(true)
 	for field: String in MIRROR_FIELDS:
 		next_payload[field] = _copy(candidate[field])
-	var written = _save.call("save_profile", _profile_id, _save_domain, next_payload)
+	var written = _save.call("save_profile_compare_exchange", _profile_id, _save_domain, next_payload, primary.payload if primary.ok else {}) if payload_changes.has("challenge_reward_collection") else _save.call("save_profile", _profile_id, _save_domain, next_payload)
+	if written.metadata.get("reason") == "expected_primary_stale":
+		return _discard_failure(ticket, &"STALE_DURABLE_PROFILE")
 	var reconciled := false
 	if not written.ok:
 		# Only the promoted primary proves commit; loading could promote an uncommitted pending file.

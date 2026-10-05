@@ -47,6 +47,8 @@ var _carried := false
 var _carry_rules: RefCounted
 var _stage_hp_loss := 0.0
 var _stage_signal_loss := 0.0
+var _stage_last_frame := -1
+var _stage_last_hp := 0.0
 var _root_path := ""
 var _domain := ""
 
@@ -369,12 +371,15 @@ func _create_stage() -> bool:
 	_stage_frames = 0
 	_stage_hp_loss = 0.0
 	_stage_signal_loss = 0.0
+	_stage_last_frame = int(_player.priority_arbitration_snapshot().frame)
+	_stage_last_hp = float(_player.health.current_hp)
 	_paused = false
 	_terminal.clear()
 	_player.authoritative_frame_committed.connect(_on_frame)
 	_player.health.died.connect(_on_player_died)
 	if _carried:
 		_player.health.damaged.connect(_on_player_damaged)
+		_player.health.healed.connect(_on_player_healed)
 	_boss.hostile_final_death.connect(_on_boss_death)
 	_active = true
 	_camera.enabled = true
@@ -384,12 +389,14 @@ func _create_stage() -> bool:
 	return true
 
 
-func _on_frame(_frame: int) -> void:
-	if not _active or _paused or _busy or not _pending.is_empty() or _state.status != "ACTIVE" or _orchestrator.is_terminal():
+func _on_frame(frame: int) -> void:
+	if not _active or _paused or _busy or not _pending.is_empty() or _state.status != "ACTIVE" or _orchestrator.is_terminal() or frame <= _stage_last_frame or frame != int(_player.priority_arbitration_snapshot().frame):
 		return
+	_stage_last_frame = frame
 	_stage_frames += 1
 	_state.elapsed_frames = mini(Meta.MAX_VALUE, int(_state.elapsed_frames) + 1)
 	if _carried:
+		_observe_hp(float(_player.health.current_hp))
 		_capture_damage(_state)
 	_orchestrator.advance_time(1.0 / 60.0)
 
@@ -449,9 +456,23 @@ func _capture_damage(candidate: Dictionary) -> void:
 	_stage_hp_loss = total
 
 
-func _on_player_damaged(amount: float, _current_hp: float) -> void:
-	if _carried and _active and _state.status == "ACTIVE" and is_finite(amount) and amount > 0.0:
-		_stage_signal_loss += amount
+func _on_player_damaged(amount: float, current_hp: float) -> void:
+	if _accept_hp_notice(amount, current_hp) and current_hp < _stage_last_hp:
+		_observe_hp(current_hp)
+
+
+func _on_player_healed(amount: float, current_hp: float) -> void:
+	if _accept_hp_notice(amount, current_hp) and current_hp > _stage_last_hp:
+		_stage_last_hp = current_hp
+
+
+func _accept_hp_notice(amount: float, current_hp: float) -> bool:
+	return _carried and _active and _state.status == "ACTIVE" and not _busy and _pending.is_empty() and _terminal.is_empty() and is_finite(amount) and amount > 0.0 and is_finite(current_hp) and is_equal_approx(current_hp, float(_player.health.current_hp))
+
+
+func _observe_hp(current_hp: float) -> void:
+	_stage_signal_loss += maxf(0.0, _stage_last_hp - current_hp)
+	_stage_last_hp = current_hp
 
 
 func _capture_carried(candidate: Dictionary) -> void:

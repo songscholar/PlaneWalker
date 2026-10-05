@@ -54,6 +54,10 @@ func _run() -> void:
 		return
 	suite.assert_true(flow.current_player().health.max_hp == 100.0 and flow.snapshot().carried.gold == 100, "initial carried baseline is HP100 and gold100")
 	suite.assert_true(flow.current_boss().health.max_hp == 960.0, "native first Boss gets HP1.2")
+	var observation_before: Dictionary = flow.snapshot()
+	flow.current_player().authoritative_frame_committed.emit(999999)
+	flow.current_player().health.damaged.emit(10.0, 90.0)
+	suite.assert_equal(flow.snapshot(), observation_before, "forged frame and HP notifications cannot advance carried challenge facts")
 	for index: int in range(5):
 		var player: Node = flow.current_player()
 		var boss: Node = flow.current_boss()
@@ -102,6 +106,27 @@ func _run() -> void:
 	add_child(flow)
 	suite.assert_true(flow.configure(registry, service, root.path_join("modes"), true).ok and flow.continue_session().ok and is_equal_approx(flow.current_player().health.current_hp, 80.0), "cold active continuation restores HP instead of refreshing it")
 	suite.assert_true(flow.snapshot().continued and Rules.same(flow.snapshot().carried.history, settled.carried.history), "continued status retains exact prior history")
+	flow.current_player().health.lose_health(10, flow.current_boss())
+	flow.set_fault_injector(func(at: StringName): return at == &"before_primary_promote")
+	var failed: Dictionary = flow.save_and_return()
+	suite.assert_true(not failed.ok and flow.has_pending_save() and flow.is_active(), "carried HP save failure freezes and keeps retry candidate")
+	flow.set_fault_injector(Callable())
+	suite.assert_true(flow.retry_save().ok and not flow.is_active(), "carried save retry promotes once then returns")
+	flow.queue_free()
+	await get_tree().process_frame
+	flow = Flow.new()
+	add_child(flow)
+	suite.assert_true(flow.configure(registry, service, root.path_join("modes"), true).ok and flow.continue_session().ok and flow.current_player().health.current_hp == 70.0, "cold carried retry retains actual damaged HP")
+	var stale: Node2D = Flow.new()
+	add_child(stale)
+	suite.assert_true(stale.configure(registry, service, root.path_join("modes"), true).ok, "stale carried writer observes current physical session")
+	flow.current_player().health.lose_health(10, flow.current_boss())
+	flow.set_fault_injector(func(at: StringName): return at == &"after_primary_promote")
+	suite.assert_true(flow.save_and_return().ok and not flow.has_pending_save(), "carried exact promoted primary reconciles reported save failure")
+	var conflicted: Dictionary = stale.continue_session()
+	suite.assert_true(not conflicted.ok and conflicted.code == &"CHALLENGE_STALE_PRIMARY", "stale carried writer cannot replace promoted HP")
+	suite.assert_true(stale.reload_saved_session().ok and stale.snapshot().carried.portable.health.current_hp == 60.0, "stale carried recovery reloads winning HP")
+	stale.queue_free()
 	flow.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
