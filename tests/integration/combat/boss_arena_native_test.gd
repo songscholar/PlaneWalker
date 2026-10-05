@@ -38,8 +38,10 @@ func _run() -> void:
 		await _test_damage_transaction(actor)
 	actor.queue_free()
 	await get_tree().process_frame
+	await _test_projection_tampering()
 	await _test_weapons()
 	await _test_charge_collision()
+	await _test_beam_cover()
 	suite.finish(get_tree())
 
 
@@ -118,6 +120,27 @@ func _test_damage_transaction(actor: Node2D) -> void:
 	twin.queue_free()
 	player.queue_free()
 	await get_tree().process_frame
+
+
+func _test_projection_tampering() -> void:
+	for mutation: String in ["cover_visibility", "sprite_visibility", "debris_frame", "transparent", "scale", "atlas", "offset"]:
+		var actor := _actor()
+		var player := _player()
+		var cover: Node2D = actor.get_node("ArenaConstructs/Cover0")
+		var artwork: Sprite2D = cover.get_child(2)
+		match mutation:
+			"cover_visibility": cover.visible = false
+			"sprite_visibility": artwork.visible = false
+			"debris_frame": artwork.frame = 2
+			"transparent": artwork.modulate = Color(1.0, 1.0, 1.0, 0.0)
+			"scale": artwork.scale = Vector2(2.0, 1.0)
+			"atlas": artwork.texture = preload("res://assets/production/constructs/time_watch.png")
+			"offset": artwork.position += Vector2.ONE
+		var context := {"runtime_frame": 1, "source_position": {"x": 0.0, "y": 0.0}, "target_position": {"x": 220.0, "y": 120.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "player:1"}
+		suite.assert_true(not actor.prepare_launch_frame(1, context).ok and cover.get_node("Hurtbox").receive_hit(_damage(player, 1)) == 0.0, "actual cover artwork tampering rejects both frame and collision: " + mutation)
+		actor.queue_free()
+		player.queue_free()
+		await get_tree().process_frame
 
 
 func _capture_native(actor: Node2D, pose: String) -> void:
@@ -249,3 +272,49 @@ func _test_charge_collision() -> void:
 	actor.queue_free()
 	player.queue_free()
 	await get_tree().process_frame
+
+
+func _test_beam_cover() -> void:
+	for intact: bool in [true, false]:
+		var actor := _actor()
+		actor.global_position = Vector2(100.0, 120.0)
+		var player := _player()
+		var registry := Registry.new()
+		var effects := Effects.new()
+		effects.configure("run-p15")
+		var bridge := Bridge.new()
+		suite.assert_true(bridge.configure(player, registry, [actor], effects), "actual beam binds physical arena and Player damage authority")
+		var runtime: RefCounted = actor.get("_launch_runtime")
+		var started: Dictionary = runtime.request_action("guardian_rift_beam", {"runtime_frame": 0, "source_position": {"x": 100.0, "y": 120.0}, "target_position": {"x": 220.0, "y": 120.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "player:1"})
+		suite.assert_true(started.ok, "native beam commits all three warned hit offsets")
+		for fact: Dictionary in started.threat_facts:
+			registry.register_fact(Actions.native_threat_fact(fact))
+		for frame: int in range(1, 76):
+			if frame == 55 and not intact:
+				suite.assert_equal(actor.get_node("ArenaConstructs/Cover0/Hurtbox").receive_hit(_damage(player, 71, 80.0)), 80.0, "real Player removes beam cover before its first active offset")
+			var health_before: Dictionary = player.health.runtime_state_snapshot()
+			var health_checkpoint: Dictionary = player.health.transaction_snapshot()
+			var state_before: Dictionary = actor.launch_runtime_snapshot()
+			var effects_before: Dictionary = effects.snapshot()
+			var ticket: Dictionary = bridge.begin_frame(frame)
+			if not bridge.prepare_frame(ticket):
+				suite.assert_true(false, "native beam prepares accepted frame%d" % frame)
+				bridge.rollback_frame(ticket)
+				break
+			if frame == 55:
+				suite.assert_true(bridge.rollback_frame(ticket), "first cover adjudication compensates a refused Player sibling")
+				suite.assert_true(player.health.restore_transaction_snapshot(health_checkpoint), "outer Player owner restores its candidate Health after beam rejection")
+				suite.assert_equal(player.health.runtime_state_snapshot(), health_before, "beam refusal restores actual Player HP and irreversible claims")
+				suite.assert_equal(actor.launch_runtime_snapshot(), state_before, "beam refusal restores full native Boss state")
+				suite.assert_equal(effects.snapshot(), effects_before, "beam refusal restores the hostile damage ledger")
+				ticket = bridge.begin_frame(frame)
+				suite.assert_true(bridge.prepare_frame(ticket), "same sealed beam offset retries after rejection")
+			suite.assert_true(_publish(bridge, ticket), "native beam publishes frame%d" % frame)
+			player.health.discard_transaction_snapshot(health_checkpoint)
+			if frame in [55, 65, 75] and intact:
+				suite.assert_equal(player.health.current_hp, player.health.max_hp, "real intact pillar blocks every committed beam hit")
+		if not intact:
+			suite.assert_true(player.health.current_hp < player.health.max_hp, "real broken pillar exposes Player to the same native beam")
+		actor.queue_free()
+		player.queue_free()
+		await get_tree().process_frame

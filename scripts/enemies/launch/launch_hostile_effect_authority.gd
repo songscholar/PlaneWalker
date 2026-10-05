@@ -504,6 +504,9 @@ func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictio
 	next.claims.append(claim)
 	var info: RefCounted
 	if envelope.contains_point(target.global_position, context.runtime_frame):
+		if actor.has_method("prepared_launch_hit_blocked_by_cover") and actor.prepared_launch_hit_blocked_by_cover(hit, target):
+			record["info"] = null
+			return {"ok": true, "record": record}
 		var primitive: Dictionary = hit.geometry[0]
 		var direction := _vector(primitive.origin).direction_to(_vector(primitive.target_point))
 		if direction.is_zero_approx():

@@ -149,6 +149,26 @@ func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:
 	return float(result.amount)
 
 
+func prepared_launch_hit_blocked_by_cover(hit: Dictionary, target: Node2D) -> bool:
+	if _launch_definition.get("id", "") != "ruin_king" or _prepared_launch_frame.is_empty() or not _prepared_launch_frame.batch.hit_facts.has(hit) or hit.action_id != "guardian_rift_beam" or not _native_geometry_matches_definition() or not is_instance_valid(target):
+		return false
+	var state: Dictionary = _prepared_launch_frame.after.runtime.arena_state
+	var origin := _vector(hit.geometry[0].origin)
+	var endpoint := target.global_position
+	var length := origin.distance_to(endpoint)
+	if length <= 0.0:
+		return false
+	var direction := origin.direction_to(endpoint)
+	for cover: Dictionary in state.covers:
+		if cover.broken or state.terminal:
+			continue
+		var center := _native_arena_origin() + _vector(cover.position)
+		var along := (center - origin).dot(direction)
+		if along > 0.0 and along < length and Geometry2D.get_closest_point_to_segment(center, origin, endpoint).distance_to(center) <= float(cover.radius_px):
+			return true
+	return false
+
+
 func normalize_native_cold_snapshot(value: Dictionary) -> Dictionary:
 	if not value.get("actor") is Dictionary or not value.actor.get("runtime") is Dictionary:
 		return {}

@@ -1,6 +1,8 @@
 class_name LaunchBossConstruct
 extends StaticBody2D
 
+const ARTWORK := preload("res://assets/production/constructs/ruins_cover.png")
+
 class ConstructHurtbox extends Area2D:
 	func receive_hit(damage_info: RefCounted) -> float:
 		return get_parent().receive_hit(damage_info)
@@ -37,7 +39,7 @@ func configure(boss: Node2D, id: String) -> void:
 	_hurt_shape.shape = CircleShape2D.new()
 	_hurtbox.add_child(_hurt_shape)
 	_sprite = Sprite2D.new()
-	_sprite.texture = load("res://assets/production/constructs/ruins_cover.png")
+	_sprite.texture = ARTWORK
 	_sprite.hframes = 3
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.position = Vector2(0.0, -8.0)
@@ -72,4 +74,9 @@ func present(value: Dictionary, origin: Vector2, terminal: bool) -> void:
 
 func native_geometry_matches(value: Dictionary, origin: Vector2, terminal: bool) -> bool:
 	var live: bool = not value.broken and not terminal
-	return is_inside_tree() and get_parent() == _boss.get_node("ArenaConstructs") and top_level and _projection == value and global_position == origin + Vector2(float(value.position.x), float(value.position.y)) and global_transform.x == Vector2.RIGHT and global_transform.y == Vector2.DOWN and _body_shape.transform == Transform2D.IDENTITY and _hurtbox.transform == Transform2D.IDENTITY and _hurt_shape.transform == Transform2D.IDENTITY and not _body_shape.disabled and not _hurt_shape.disabled and _body_shape.shape is CircleShape2D and _hurt_shape.shape is CircleShape2D and _body_shape.shape.radius == value.radius_px and _hurt_shape.shape.radius == value.radius_px and collision_layer == (1 if live else 0) and collision_mask == 0 and _hurtbox.collision_layer == (4 if live else 0) and _hurtbox.collision_mask == 0
+	var expected_frame := 2 if value.broken else (1 if float(value.current_hp) <= float(value.max_hp) * 0.5 else 0)
+	if not is_inside_tree() or not is_instance_valid(_sprite) or _sprite.get_parent() != self or not _sprite.is_inside_tree() or visible != not terminal or modulate != Color.WHITE or self_modulate != Color.WHITE:
+		return false
+	if not _sprite.visible or _sprite.texture != ARTWORK or _sprite.hframes != 3 or _sprite.vframes != 1 or _sprite.frame != expected_frame or not _sprite.centered or _sprite.offset != Vector2.ZERO or _sprite.region_enabled or _sprite.flip_h or _sprite.flip_v or _sprite.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST or _sprite.modulate != Color.WHITE or _sprite.self_modulate != Color.WHITE or _sprite.transform != Transform2D(0.0, Vector2(0.0, -8.0)):
+		return false
+	return get_parent() == _boss.get_node("ArenaConstructs") and top_level and _projection == value and global_position == origin + Vector2(float(value.position.x), float(value.position.y)) and global_transform.x == Vector2.RIGHT and global_transform.y == Vector2.DOWN and _body_shape.transform == Transform2D.IDENTITY and _hurtbox.transform == Transform2D.IDENTITY and _hurt_shape.transform == Transform2D.IDENTITY and not _body_shape.disabled and not _hurt_shape.disabled and _body_shape.shape is CircleShape2D and _hurt_shape.shape is CircleShape2D and _body_shape.shape.radius == value.radius_px and _hurt_shape.shape.radius == value.radius_px and collision_layer == (1 if live else 0) and collision_mask == 0 and _hurtbox.collision_layer == (4 if live else 0) and _hurtbox.collision_mask == 0
