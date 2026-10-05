@@ -7,7 +7,7 @@
 - Owner: Project owner
 - Depends On: Approved full-product completion contract
 - Last Verified: 2026-10-06
-- Verification Status: Focused regressions passed; fixed-source native case 619 pending
+- Verification Status: Focused regressions and frozen native case 619 passed
 - Baseline reproduction: native matrix case 619, seed 20261624
 
 ## Confirmed Failure
@@ -69,6 +69,8 @@ payloads, and normal Boss payloads. Every log passes
 refusal scopes where present. The pinned Python requirement audit reports
 no known vulnerabilities; this change adds no dependencies.
 
-The final fixed-source native case result will be recorded separately after
-the code commit is frozen. This document does not certify the full 750-case
-matrix or gameplay completion.
+The frozen `cdea629` native case 619 passes at frame 6142 with all three HP
+phases, both equipped time receipts, exact checkpoint continuation, and one
+canonical death receipt. Its strict source and log evidence is retained in
+`docs/current/2026-10-06-void-phase-projectile-retirement-evidence.md`. This
+document does not certify the full 750-case matrix or gameplay completion.
