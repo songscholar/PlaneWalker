@@ -63,7 +63,9 @@ the next accepted frame without competing resource revisions.
 | Status, Tear, Vortex, phase and exposure | `build/void-aux-lifecycle-red`, `build/void-aux-lifecycle-green` | Phase cleanup RED;1/1GREEN |
 | Physical Save/Replay reconstruction | `build/void-aux-physical-green` |1/1GREEN |
 | Actual Player outer transaction | `build/void-player-frame-green` |1/1GREEN |
+| Normal native weapon input | `build/void-five-weapons-green` |1/1GREEN;Sword,Bow,Gun,Staff,Gauntlets hit real Void pillars |
 | Strongest native hostile slow | `build/void-hostile-slow-red`, `build/void-hostile-slow-green` |0.325vs0.50RED;1/1GREEN |
+| Existing independent floor rules | `build/void-floor-modifier-regression` |1/1GREEN |
 | Freed source and shared semantic regression | `build/void-semantic-fixed-regression` |2/2GREEN;no script errors/leaks |
 | Released Void source cleanup | `build/void-released-owner-red`, `build/void-released-owner-green` | Stale native output RED;1/1GREEN |
 | Broader Void regression before final disposal/slow refinements | `build/void-native-final-regression` |15/15GREEN |
