@@ -7,16 +7,41 @@ const STATE_FIELDS := ["schema_version", "run_id", "initial_frame", "runtime_fra
 const ROW_FIELDS := ["id", "owner_id", "definition_id", "action_id", "generation", "slot", "kind", "geometry", "parameters", "reserved_frame", "warning_frame", "active_frame", "expires_frame", "phase", "hp", "recipients", "transit_claims", "collapse_frame"]
 const MAX_ROWS := 256
 const MAX_CLAIMS := 4096
+const MAX_CATALOG_CACHE := 4
+static var _catalog_cache: Array[Dictionary] = []
+static var _catalog_cache_mutex := Mutex.new()
 var _actions := {}
 
 
 func configure_catalog() -> bool:
+	return _configure_catalog_source(FileAccess.get_file_as_bytes("res://data/content_packs/base/content/enemies.json"))
+
+
+func _configure_catalog_source(source: PackedByteArray) -> bool:
 	_actions.clear()
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/enemies.json"))
+	var cached := _cached_catalog(source)
+	if not cached.is_empty():
+		_actions = cached
+		return true
+	if not _configure_catalog_source_uncached(source):
+		return false
+	_cache_catalog(source, var_to_bytes(_actions))
+	return true
+
+
+func _configure_catalog_source_uncached(source_bytes: PackedByteArray) -> bool:
+	var parser := JSON.new()
+	if parser.parse(source_bytes.get_string_from_utf8()) != OK:
+		return false
+	var data: Variant = parser.data
 	if not data is Array:
 		return false
-	for definition: Dictionary in data:
-		for source: Dictionary in definition.actions + definition.elite_actions:
+	for definition: Variant in data:
+		if not definition is Dictionary or not definition.get("id") is String or not definition.get("actions") is Array or not definition.get("elite_actions") is Array:
+			return false
+		for source: Variant in definition.actions + definition.elite_actions:
+			if not source is Dictionary or not source.get("handler_id") is String:
+				return false
 			if source.handler_id not in ["wall", "link", "portal"]:
 				continue
 			var parsed := Contract.create(source, "elite" if definition.elite_actions.has(source) else "enemy")
@@ -24,6 +49,29 @@ func configure_catalog() -> bool:
 				return false
 			_actions[source.id] = {"definition_id": definition.id, "action": parsed.definition}
 	return _actions.size() == 5
+
+
+static func _cached_catalog(encoded: PackedByteArray) -> Dictionary:
+	_catalog_cache_mutex.lock()
+	for row: Dictionary in _catalog_cache:
+		if row.source == encoded:
+			var state: PackedByteArray = row.state
+			_catalog_cache_mutex.unlock()
+			return bytes_to_var(state)
+	_catalog_cache_mutex.unlock()
+	return {}
+
+
+static func _cache_catalog(encoded: PackedByteArray, state: PackedByteArray) -> void:
+	_catalog_cache_mutex.lock()
+	for row: Dictionary in _catalog_cache:
+		if row.source == encoded:
+			_catalog_cache_mutex.unlock()
+			return
+	if _catalog_cache.size() == MAX_CATALOG_CACHE:
+		_catalog_cache.pop_front()
+	_catalog_cache.append({"source": encoded, "state": state})
+	_catalog_cache_mutex.unlock()
 
 
 static func initial_state(run_id: String, frame: int) -> Dictionary:

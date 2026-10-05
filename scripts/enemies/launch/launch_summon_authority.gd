@@ -20,6 +20,10 @@ const MAX_RESERVATIONS := 256
 const MAX_LEASES := 4096
 const MIRROR_ACTION_ID := "affix_mirroring"
 const SPLIT_ACTION_ID := "affix_splitting"
+const CONTENT := "res://data/content_packs/base/content/"
+const MAX_CATALOG_CACHE := 4
+static var _catalog_cache: Array[Dictionary] = []
+static var _catalog_cache_mutex := Mutex.new()
 var _state: Dictionary = {}
 var _pending: Dictionary = {}
 var _committed := false
@@ -40,20 +44,49 @@ var _fallback_template: Dictionary = {}
 func configure(run_id: String, frame: int) -> bool:
 	if not _pending.is_empty() or not _actors.is_empty() or not _warnings.is_empty() or not _stable(run_id) or not Contract.integer_in_range(frame, 0, 2147400000):
 		return false
+	if not _configure_catalog_sources(FileAccess.get_file_as_bytes(CONTENT + "summons.json"), FileAccess.get_file_as_bytes(CONTENT + "enemies.json"), FileAccess.get_file_as_bytes(CONTENT + "bosses.json")):
+		return false
+	_state = {"schema_version": 1, "run_id": run_id, "initial_frame": frame, "runtime_frame": frame, "claims": [], "rows": []}
+	return true
+
+
+func _configure_catalog_sources(summon_source: PackedByteArray, enemy_source: PackedByteArray, boss_source: PackedByteArray) -> bool:
 	_definitions.clear()
 	_death_actions.clear()
 	_ordinary_parents.clear()
 	_summon_actions.clear()
 	_summon_owner_retirement.clear()
-	var sources: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/summons.json"))
-	if not sources is Array or sources.size() != 9:
+	var encoded := var_to_bytes([summon_source, enemy_source, boss_source])
+	var cached := _cached_catalog(encoded)
+	if not cached.is_empty():
+		_definitions = cached.definitions
+		_death_actions = cached.death_actions
+		_ordinary_parents = cached.ordinary_parents
+		_summon_actions = cached.summon_actions
+		_summon_owner_retirement = cached.summon_owner_retirement
+		return true
+	if not _configure_catalog_sources_uncached(summon_source, enemy_source, boss_source):
 		return false
-	for source: Dictionary in sources:
+	_cache_catalog(encoded, var_to_bytes({"definitions": _definitions, "death_actions": _death_actions, "ordinary_parents": _ordinary_parents, "summon_actions": _summon_actions, "summon_owner_retirement": _summon_owner_retirement}))
+	return true
+
+
+func _configure_catalog_sources_uncached(summon_source: PackedByteArray, enemy_source: PackedByteArray, boss_source: PackedByteArray) -> bool:
+	var sources: Variant = _parse_catalog(summon_source)
+	var enemies: Variant = _parse_catalog(enemy_source)
+	var bosses: Variant = _parse_catalog(boss_source)
+	if not sources is Array or sources.size() != 9 or not enemies is Array or enemies.is_empty() or not bosses is Array or bosses.is_empty():
+		return false
+	for source: Variant in sources:
+		if not source is Dictionary:
+			return false
 		var parser := SummonDefinitionScript.new()
 		if not parser.configure(source).ok or _definitions.has(source.id):
 			return false
 		_definitions[source.id] = parser.snapshot()
-	for enemy: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/enemies.json")):
+	for enemy: Variant in enemies:
+		if not enemy is Dictionary:
+			return false
 		var parser := EnemyDefinitionScript.new()
 		if not parser.configure(enemy).ok:
 			return false
@@ -65,16 +98,26 @@ func configure(run_id: String, frame: int) -> bool:
 			if not parsed.ok or parsed.definition.handler_id != "summon":
 				return false
 			_death_actions[enemy.id] = parsed.definition
-	for boss: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/bosses.json")):
+	for boss: Variant in bosses:
+		if not boss is Dictionary:
+			return false
 		if not _register_summon_actions(boss, "boss"):
 			return false
-	_state = {"schema_version": 1, "run_id": run_id, "initial_frame": frame, "runtime_frame": frame, "claims": [], "rows": []}
 	return true
 
 
+static func _parse_catalog(source: PackedByteArray) -> Variant:
+	var parser := JSON.new()
+	return parser.data if parser.parse(source.get_string_from_utf8()) == OK else null
+
+
 func _register_summon_actions(parent: Dictionary, kind: String) -> bool:
+	if not parent.get("id") is String or not parent.get("actions") is Array or not parent.get("elite_actions", []) is Array or not parent.get("mechanisms") is Dictionary:
+		return false
 	var actions := {}
-	for source: Dictionary in parent.actions + parent.get("elite_actions", []):
+	for source: Variant in parent.actions + parent.get("elite_actions", []):
+		if not source is Dictionary or not source.get("handler_id") is String:
+			return false
 		if source.handler_id != "summon":
 			continue
 		var parsed := Contract.create(source, kind)
@@ -84,6 +127,29 @@ func _register_summon_actions(parent: Dictionary, kind: String) -> bool:
 	_summon_actions[parent.id] = actions
 	_summon_owner_retirement[parent.id] = kind == "boss" or bool(parent.mechanisms.get("retire_summons_on_owner_death", false))
 	return true
+
+
+static func _cached_catalog(encoded: PackedByteArray) -> Dictionary:
+	_catalog_cache_mutex.lock()
+	for row: Dictionary in _catalog_cache:
+		if row.source == encoded:
+			var state: PackedByteArray = row.state
+			_catalog_cache_mutex.unlock()
+			return bytes_to_var(state)
+	_catalog_cache_mutex.unlock()
+	return {}
+
+
+static func _cache_catalog(encoded: PackedByteArray, state: PackedByteArray) -> void:
+	_catalog_cache_mutex.lock()
+	for row: Dictionary in _catalog_cache:
+		if row.source == encoded:
+			_catalog_cache_mutex.unlock()
+			return
+	if _catalog_cache.size() == MAX_CATALOG_CACHE:
+		_catalog_cache.pop_front()
+	_catalog_cache.append({"source": encoded, "state": state})
+	_catalog_cache_mutex.unlock()
 
 
 func configure_native_root(root: Node2D) -> bool:

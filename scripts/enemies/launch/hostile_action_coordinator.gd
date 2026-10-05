@@ -16,6 +16,9 @@ const SNAPSHOT_FIELDS: Array[String] = [
 ]
 const MAX_COUNTER := 2147483647
 const BOSS_ACTION_PREFIXES := {"ruin_king": "guardian_", "forest_heart": "matriarch_", "time_sovereign": "traitor_", "forge_colossus": "forge_", "void_throne": "voidking_"}
+const MAX_CONFIGURATION_CACHE := 4
+static var _configuration_cache: Array[Dictionary] = []
+static var _configuration_cache_mutex := Mutex.new()
 
 var _actions: Dictionary = {}
 var _definition: Dictionary = {}
@@ -23,6 +26,20 @@ var _state: Dictionary = {}
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
+	var encoded := var_to_bytes([definition, identity])
+	var cached := _cached_configuration(encoded)
+	if not cached.is_empty():
+		_actions = cached.actions
+		_definition = cached.definition
+		_state = cached.state
+		return {"ok": true, "snapshot": snapshot(), "context": {}}
+	var result := _configure_uncached(definition, identity)
+	if result.ok:
+		_cache_configuration(encoded, var_to_bytes({"actions": _actions, "definition": _definition, "state": _state}))
+	return result
+
+
+func _configure_uncached(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_actions.clear()
 	_definition.clear()
 	_state.clear()
@@ -61,6 +78,29 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		"cooldowns": {}, "idle_through_frame": int(identity.runtime_frame) - 1, "paused_frames": 0,
 	}
 	return {"ok": true, "snapshot": snapshot(), "context": {}}
+
+
+static func _cached_configuration(encoded: PackedByteArray) -> Dictionary:
+	_configuration_cache_mutex.lock()
+	for row: Dictionary in _configuration_cache:
+		if row.source == encoded:
+			var state: PackedByteArray = row.state
+			_configuration_cache_mutex.unlock()
+			return bytes_to_var(state)
+	_configuration_cache_mutex.unlock()
+	return {}
+
+
+static func _cache_configuration(encoded: PackedByteArray, state: PackedByteArray) -> void:
+	_configuration_cache_mutex.lock()
+	for row: Dictionary in _configuration_cache:
+		if row.source == encoded:
+			_configuration_cache_mutex.unlock()
+			return
+	if _configuration_cache.size() == MAX_CONFIGURATION_CACHE:
+		_configuration_cache.pop_front()
+	_configuration_cache.append({"source": encoded, "state": state})
+	_configuration_cache_mutex.unlock()
 
 
 static func _action_belongs_to_actor(action_id: String, definition_id: String, actor_kind: String) -> bool:
