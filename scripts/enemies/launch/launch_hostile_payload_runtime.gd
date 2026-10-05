@@ -311,6 +311,11 @@ func _projectile_definition(hit: Dictionary, bounds: Dictionary, mechanisms: Dic
 		if not Contract.exact_fields(mechanisms, ["debris_hp", "debris_lifetime_frames", "debris_count_cap"]) or mechanisms.debris_hp != 20 or mechanisms.debris_lifetime_frames != 480 or mechanisms.debris_count_cap != 4:
 			return {}
 		debris_recipe = {"max_hp": float(mechanisms.debris_hp), "lifetime_frames": int(mechanisms.debris_lifetime_frames), "count_cap": int(mechanisms.debris_count_cap), "radius_px": 12.0}
+	elif mechanisms.has("lava_pool_radius_px"):
+		if not Contract.exact_fields(mechanisms, ["lava_pool_radius_px", "lava_pool_lifetime_frames", "lava_pool_tick_damage", "lava_pool_tick_frames"]) or mechanisms.lava_pool_radius_px != 32 or mechanisms.lava_pool_lifetime_frames != 300 or mechanisms.lava_pool_tick_damage != 8 or mechanisms.lava_pool_tick_frames != 60:
+			return {}
+		if hit.action_id == "forge_lava_toss":
+			pool = {"radius": float(mechanisms.lava_pool_radius_px), "lifetime_frames": int(mechanisms.lava_pool_lifetime_frames), "damage": float(mechanisms.lava_pool_tick_damage), "tick_frames": int(mechanisms.lava_pool_tick_frames)}
 	elif not mechanisms.is_empty() and not mechanisms.has("debris_hp"):
 		var base := mechanisms.duplicate(true)
 		var scaling: Variant = base.get("mechanism_scaling", {})

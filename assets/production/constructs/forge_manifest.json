@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_forge_arena_atlases.py",
+  "atlases": [
+    {
+      "id": "forge_anvil",
+      "path": "forge_anvil.png",
+      "frame_size": [
+        48,
+        48
+      ],
+      "frames": [
+        "intact",
+        "damaged",
+        "debris"
+      ],
+      "sha256": "ca00b8936dec329b879f55852d0fd71ca88d1c9450bae41d5f23468f32ab76e0"
+    },
+    {
+      "id": "forge_vent",
+      "path": "forge_vent.png",
+      "frame_size": [
+        48,
+        48
+      ],
+      "frames": [
+        "permanent"
+      ],
+      "sha256": "728d37c3bffd3c70551f917c2e2e687db74e8962bd172324e819c49911618b89"
+    },
+    {
+      "id": "forge_cooling",
+      "path": "forge_cooling.png",
+      "frame_size": [
+        48,
+        48
+      ],
+      "frames": [
+        "permanent"
+      ],
+      "sha256": "2b08544f9b2c409df423b7ea4000a68fcf21dbbcdb40a0da7f7fed74bf8a6ca7"
+    }
+  ]
+}

@@ -2006,6 +2006,7 @@ func _apply_frame_movement(input_vector: Vector2) -> void:
 		velocity = _dash_velocity * _floor_rule_movement_multiplier() + _knockback_velocity
 	else:
 		velocity = input_vector * stats.move_speed * _time_acceleration_multiplier * get_action_movement_multiplier() + _knockback_velocity
+	velocity += _floor_rule_pull_velocity()
 	var remaining_motion := velocity * FIXED_FRAME_SECONDS
 	for _slide_index: int in range(MAX_FIXED_FRAME_SLIDES):
 		if remaining_motion.is_zero_approx():
@@ -3584,6 +3585,9 @@ func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
 			"time_cost_multiplier",
 			"zone_locked",
 			"safe_area_required",
+			"pull_x",
+			"pull_y",
+			"pull_speed",
 		]:
 			return false
 	if values.has("movement_multiplier"):
@@ -3605,7 +3609,21 @@ func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
 	for field: String in ["zone_locked", "safe_area_required"]:
 		if values.has(field) and typeof(values[field]) != TYPE_BOOL:
 			return false
+	if values.has("pull_x") or values.has("pull_y") or values.has("pull_speed"):
+		for field: String in ["pull_x", "pull_y", "pull_speed"]:
+			if not values.has(field) or typeof(values[field]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(values[field])):
+				return false
+		if Vector2(float(values.pull_x), float(values.pull_y)).length() > 1.000001 or float(values.pull_speed) < 0.0 or float(values.pull_speed) > 32.0:
+			return false
 	return true
+
+
+func _floor_rule_pull_velocity() -> Vector2:
+	var pull := Vector2.ZERO
+	for entry: Dictionary in _floor_rule_modifiers.values():
+		var values: Dictionary = entry.values
+		pull += Vector2(float(values.get("pull_x", 0.0)), float(values.get("pull_y", 0.0))) * float(values.get("pull_speed", 0.0))
+	return pull.limit_length(32.0)
 
 
 func _floor_rule_movement_multiplier() -> float:

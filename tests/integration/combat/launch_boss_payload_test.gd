@@ -31,7 +31,7 @@ func _test_native_piercing() -> void:
 		player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 		add_child(player)
 		player.configure_run(&"run-p15")
-		player.global_position = Vector2(x, 100.0)
+		player.global_position = Vector2(x, 180.0)
 		player.get_node("HealthComponent").defense = 0.0
 		player.get_node("HealthComponent").current_hp = 100.0
 		players.append(player)
@@ -39,7 +39,7 @@ func _test_native_piercing() -> void:
 	actor.process_mode = Node.PROCESS_MODE_DISABLED
 	actor.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 	add_child(actor)
-	actor.global_position = Vector2(100.0, 100.0)
+	actor.global_position = Vector2(100.0, 180.0)
 	var parser := Boss.new()
 	parser.configure(Content.boss("forge_colossus"))
 	suite.assert_true(actor.configure_launch_definition(parser.runtime_projection(), {"run_id": "run-p15", "hostile_source_id": "hostile-forge", "next_generation_floor": 7, "runtime_frame": 0, "seed": 42}).ok, "actual Forge binds its authored Boss runtime")
@@ -60,7 +60,7 @@ func _test_native_piercing() -> void:
 	var effects := Effects.new()
 	suite.assert_true(effects.configure("run-p15", 60) and effects.configure_native_payloads(native_root), "actual Boss effects bind the accepted room clock")
 	var threats := Threats.new()
-	var observation := {"runtime_frame": 60, "source_position": {"x": 100.0, "y": 100.0}, "target_position": {"x": 160.0, "y": 100.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "first"}
+	var observation := {"runtime_frame": 60, "source_position": {"x": 100.0, "y": 180.0}, "target_position": {"x": 160.0, "y": 180.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "first"}
 	var started: Dictionary = runtime.request_action("forge_sword_wave", observation)
 	suite.assert_true(started.ok, "authored Forge sword wave commits its complete warning")
 	for fact: Dictionary in started.get("threat_facts", []):
