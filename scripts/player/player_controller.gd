@@ -1062,6 +1062,24 @@ func challenge_reward_presentation_snapshot() -> Dictionary:
 	return _challenge_reward_projection.get("presentation", {}).duplicate(true)
 
 
+func authenticates_native_damage_run(damage_info: RefCounted, target: Node, target_run_id: StringName) -> bool:
+	if damage_info == null or damage_info.attacker != self or _run_id.is_empty() or target_run_id != _run_id or not is_inside_tree() or not is_instance_valid(target) or not target.is_inside_tree() or SceneScope.replay_world(target) != SceneScope.replay_world(self):
+		return false
+	var damage_run := StringName(str(damage_info.run_id))
+	if damage_run != _run_id and damage_run not in [&"legacy_run", &"runtime"]:
+		return false
+	var source: Variant = damage_info.source
+	if not is_instance_valid(source) or not source is Node or not source.is_inside_tree():
+		return false
+	if source == self:
+		return true
+	for adapter_value: Variant in _weapon_adapters.values():
+		var adapter := adapter_value as Node
+		if is_instance_valid(adapter) and (source == adapter or adapter.is_ancestor_of(source)):
+			return true
+	return false
+
+
 func get_challenge_outgoing_damage_multiplier(target: Node) -> float:
 	if not is_inside_tree() or not target is LaunchBossActor or not target.is_inside_tree() or SceneScope.replay_world(target) != SceneScope.replay_world(self):
 		return 1.0

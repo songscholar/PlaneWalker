@@ -29,6 +29,13 @@ Normalized JSON projection numbers preserve exact cold identity. Equipment uses
 explicit Replay9; historical Meta8 and plain Launch7 stay readable. Imported
 equipment checks canonical boot mobility and valid owner/content binding.
 
+The actual five weapon families retain historical `legacy_run`/`runtime` damage
+identifiers. Native damage admission now authenticates the real owning Player,
+its current run, the target's world and the actual registered weapon source
+before accepting those compatibility identifiers. Walker Proof still requires
+the actual native same-run Boss identity. Arbitrary external sources and isolated
+replay worlds cannot borrow the reward modifier.
+
 ## Validation
 
 - `build/mode-reward-red`: missing Profile authority API failed before changes.
@@ -61,9 +68,21 @@ equipment checks canonical boot mobility and valid owner/content binding.
   pass for actual five character/weapon atlases and earned presentation at
   640x360,1280x720,1920x1080. Inspected PNGs are retained under
   `build/p26-equipment-screenshots/native-*.png`.
+- `build/challenge-real-weapon-clean-red`: actual Sword30/expected34.5 and six
+  actual Bow/Gun/Staff/Staff-zone/Gauntlets/Gauntlets-zone40/expected46 failed
+  before the compatibility ownership correction. No script errors or leaks.
+- `build/challenge-real-weapon-green`: the real Player Sword action, seven
+  production damage builders, foreign source/run refusal and replay-world
+  isolation all pass. Late World refusal restores exact Boss and Player
+  snapshots; the same Sword frame retries with the authored15percent modifier.
+- Follow-up regressions: `build/challenge-weapon-equipment-regression`2/2 and
+  `build/challenge-weapon-health-regression`3/3.
 
-Godot4.6.1 scene passes and stdout/engine logs contain no script errors, ERROR
-lines, leaks or orphans. Line coverage is unsupported by this runtime.
+Godot4.6.1 scene passes and stdout/engine logs contain no script errors, leaks
+or orphans. The actual Sword rollback test intentionally emits the established
+`Fixed-frame event buffer settlement rejected runtime frame5` refusal diagnostic;
+its compensation and accepted retry are asserted. The earlier listed equipment
+checks contain no ERROR lines. Line coverage is unsupported by this runtime.
 
 ## Retention
 
