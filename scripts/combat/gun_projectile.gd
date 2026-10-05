@@ -1,6 +1,8 @@
 class_name GunProjectile
 extends Area2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 signal projectile_hit_confirmed(action_token: int, outcome_index: int, target: Node)
 signal action_hit_confirmed(action_token: int, target: Node)
 signal resource_reward_requested(action_token: int, reward_id: StringName, amount: float)
@@ -606,7 +608,7 @@ func _refresh_trail_targets() -> void:
 		_trail_targets.clear()
 		return
 	var active_targets: Dictionary = {}
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if not is_instance_valid(enemy):
 			continue
 		for child: Node in enemy.get_children():
@@ -679,7 +681,7 @@ func _apply_aimed_time_burst(impact_target: Node) -> void:
 		if impact_target is Node2D
 		else global_position
 	)
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		if (enemy as Node2D).global_position.distance_to(center) > radius:
@@ -722,7 +724,7 @@ func _apply_penetration_explosion(impact_target: Node) -> void:
 		else global_position
 	)
 	var impact_id := _stable_target_id(impact_target)
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		if (enemy as Node2D).global_position.distance_to(center) > radius:

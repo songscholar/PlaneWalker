@@ -1,6 +1,8 @@
 class_name PlayerArrow
 extends Area2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 const Targets := preload("res://scripts/combat/weapon_target_policy.gd")
 
@@ -458,7 +460,7 @@ func _refresh_trail_targets() -> void:
 	if trail_width_pixels <= 0.0 or not is_inside_tree():
 		return
 	var active_targets: Dictionary = {}
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if not is_instance_valid(enemy):
 			continue
 		for child: Node in enemy.get_children():
@@ -640,7 +642,7 @@ func _rift_detonation_radius(target: Node, interaction: Dictionary) -> float:
 	if not is_finite(multiplier) or multiplier <= 0.0:
 		return 0.0
 	var resolved_radius := 0.0
-	for rift: Node in get_tree().get_nodes_in_group("time_rifts"):
+	for rift: Node in SceneScope.nodes_in_group(self, "time_rifts"):
 		if not is_instance_valid(rift) or not rift is Node2D:
 			continue
 		var radius_value: Variant = rift.get("radius")
@@ -861,7 +863,7 @@ func _damage_target_id(target: Node) -> StringName:
 func _target_by_stable_id(target_id: int) -> Node:
 	if target_id <= 0 or not is_inside_tree():
 		return null
-	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+	for candidate: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if candidate != null and is_instance_valid(candidate) and _stable_target_id(candidate) == target_id:
 			return candidate
 	return null
@@ -908,7 +910,7 @@ func _deal_radial_time_damage(center: Vector2, radius: float, amount: float, tag
 	if radius <= 0.0 or amount <= 0.0 or not is_inside_tree():
 		return
 	var hit_ids: Dictionary = {}
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if not is_instance_valid(enemy) or hit_ids.has(enemy.get_instance_id()):
 			continue
 		for child: Node in enemy.get_children():

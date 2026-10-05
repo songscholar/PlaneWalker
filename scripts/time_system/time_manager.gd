@@ -1,6 +1,8 @@
 class_name TimeManager
 extends Node
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const TimeRiftScene := preload("res://scenes/time/time_rift.tscn")
 const TimeAbilityIdsScript := preload("res://scripts/time_system/time_ability_ids.gd")
 const TimeActionTransactionScript := preload(
@@ -573,17 +575,17 @@ func _flush_frame_signal_event(event: Dictionary) -> void:
 		&"rewind_committed":
 			rewind_committed.emit((arguments[0] as Dictionary).duplicate(true))
 		&"time_skill_started":
-			EventBus.time_skill_started.emit(
+			SceneScope.event_bus(self).time_skill_started.emit(
 				StringName(str(arguments[0])),
 				(arguments[1] as Dictionary).duplicate(true)
 			)
 		&"time_skill_ended":
-			EventBus.time_skill_ended.emit(
+			SceneScope.event_bus(self).time_skill_ended.emit(
 				StringName(str(arguments[0])),
 				(arguments[1] as Dictionary).duplicate(true)
 			)
 		&"time_skill_committed":
-			EventBus.time_skill_committed.emit(
+			SceneScope.event_bus(self).time_skill_committed.emit(
 				StringName(str(arguments[0])),
 				int(arguments[1]),
 				int(arguments[2]),
@@ -1493,7 +1495,7 @@ func _commit_frozen_time_stop(settlement: Dictionary) -> bool:
 		int(settlement.get("weakpoint_duration_frames", 0))
 	)
 	var weakpoint_bonus := float(settlement.get("weakpoint_damage_bonus", 0.0))
-	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
+	for node: Node in SceneScope.nodes_in_group(self, "time_stoppable"):
 		if node.has_method("apply_time_stop_source"):
 			node.apply_time_stop_source(_time_stop_source_id, authoritative_duration)
 			_time_stop_targets.append(node)
@@ -1843,7 +1845,7 @@ func try_time_stop() -> bool:
 	_weapon_stop_extension_frames = 0
 	_weapon_stop_extension_tokens.clear()
 	_time_stop_targets.clear()
-	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
+	for node: Node in SceneScope.nodes_in_group(self, "time_stoppable"):
 		if node.has_method("apply_time_stop_source"):
 			node.apply_time_stop_source(_time_stop_source_id, authoritative_duration)
 			_time_stop_targets.append(node)
@@ -2636,7 +2638,7 @@ func _reconcile_replay_time_stop_targets(previous_source_id: StringName) -> void
 	_time_stop_targets.clear()
 	if not _time_stop_active or _time_stop_source_id == &"" or _time_stop_remaining <= 0.0:
 		return
-	for node: Node in get_tree().get_nodes_in_group("time_stoppable"):
+	for node: Node in SceneScope.nodes_in_group(self, "time_stoppable"):
 		if node.has_method("apply_time_stop_source"):
 			node.apply_time_stop_source(_time_stop_source_id, _time_stop_remaining)
 			_time_stop_targets.append(node)
@@ -2864,7 +2866,7 @@ func _active_character_boss_exposure_targets(target_identity: Dictionary) -> Arr
 	var bosses: Array[Node] = []
 	if get_tree() == null:
 		return bosses
-	for candidate: Node in get_tree().get_nodes_in_group("bosses"):
+	for candidate: Node in SceneScope.nodes_in_group(self, "bosses"):
 		if (
 			not is_instance_valid(candidate)
 			or candidate.is_queued_for_deletion()

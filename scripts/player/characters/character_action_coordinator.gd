@@ -7,6 +7,7 @@ const CharacterActionContractScript := preload(
 const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 
 var _runtime: RefCounted
+var _publication_bus: Node = EventBus
 var _last_runtime_frame: int = -1
 var _revision: int = 0
 var _prepared_frame: int = -1
@@ -71,7 +72,7 @@ const MASTERY_IDS_BY_FAMILY := {
 }
 
 
-func configure(runtime: Variant) -> bool:
+func configure(runtime: Variant, publication_bus: Node = null) -> bool:
 	if _prepared_frame >= 0 or _mastery_prepare_active():
 		return false
 	var validation: Dictionary = CharacterActionContractScript.validate_runtime(runtime)
@@ -82,6 +83,7 @@ func configure(runtime: Variant) -> bool:
 	if _runtime != null:
 		return false
 	_runtime = runtime as RefCounted
+	_publication_bus = publication_bus if publication_bus != null else EventBus
 	_revision += 1
 	return true
 
@@ -440,7 +442,7 @@ func confirm_weapon_mastery(fact: Variant) -> bool:
 
 
 func _publish_weapon_mastery(normalized: Dictionary) -> void:
-	EventBus.weapon_mastery_confirmed.emit(
+	_publication_bus.weapon_mastery_confirmed.emit(
 		StringName(normalized["weapon_id"]),
 		StringName(normalized["mastery_family"]),
 		StringName(normalized["mastery_id"]),

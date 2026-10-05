@@ -1,6 +1,8 @@
 class_name TimeRift
 extends Area2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const GAMEPLAY_FRAMES_PER_SECOND := 60
 const FRAME_SNAPSHOT_SCHEMA_VERSION := 1
 const FRAME_SNAPSHOT_FIELDS: Array[String] = [
@@ -207,7 +209,7 @@ func _apply_overlapping_targets() -> void:
 		_apply_target(body)
 	for area: Area2D in get_overlapping_areas():
 		_apply_target(area)
-	for body: Node in get_tree().get_nodes_in_group("enemies"):
+	for body: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if body is Node2D and global_position.distance_to(body.global_position) <= radius:
 			_apply_target(body)
 
@@ -281,7 +283,7 @@ func _finish(publish_end_event: bool, release_node: bool = true) -> void:
 	for target: Node in _affected.duplicate():
 		_clear_target(target)
 	if publish_end_event:
-		EventBus.time_skill_ended.emit(&"time_rift", {})
+		SceneScope.event_bus(self).time_skill_ended.emit(&"time_rift", {})
 	if release_node:
 		queue_free()
 

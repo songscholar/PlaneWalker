@@ -1,6 +1,8 @@
 class_name HealthComponent
 extends Node
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const DamageCalculatorScript := preload("res://scripts/combat/damage_calculator.gd")
 const DamageResolutionScript := preload("res://scripts/combat/damage_resolution.gd")
 const IrreversibleCharacterLedgerScript := preload("res://scripts/player/characters/irreversible_character_ledger.gd")
@@ -380,17 +382,17 @@ func _flush_frame_signal_event(event: Dictionary) -> void:
 	var arguments := event.get("arguments", []) as Array
 	match kind:
 		&"damage_about_to_apply":
-			EventBus.damage_about_to_apply.emit(arguments[0], arguments[1])
+			SceneScope.event_bus(self).damage_about_to_apply.emit(arguments[0], arguments[1])
 		&"hit_confirmed":
 			var previous_info := _published_damage_info
 			var previous_context := _published_damage_context
 			_published_damage_info = arguments[0]
 			_published_damage_context = (arguments[3] as Dictionary).duplicate(true)
-			EventBus.hit_confirmed.emit(arguments[0], arguments[1], float(arguments[2]))
+			SceneScope.event_bus(self).hit_confirmed.emit(arguments[0], arguments[1], float(arguments[2]))
 			_published_damage_info = previous_info
 			_published_damage_context = previous_context
 		&"damage_applied":
-			EventBus.damage_applied.emit(arguments[0], arguments[1], float(arguments[2]))
+			SceneScope.event_bus(self).damage_applied.emit(arguments[0], arguments[1], float(arguments[2]))
 		&"damaged":
 			damaged.emit(float(arguments[0]), float(arguments[1]))
 		&"healed":
@@ -398,7 +400,7 @@ func _flush_frame_signal_event(event: Dictionary) -> void:
 		&"died":
 			var killer: Variant = arguments[0] if not arguments.is_empty() else null
 			clear_invulnerability_sources()
-			EventBus.entity_died.emit(get_parent(), killer)
+			SceneScope.event_bus(self).entity_died.emit(get_parent(), killer)
 			died.emit(killer)
 
 

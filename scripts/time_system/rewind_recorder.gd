@@ -1,6 +1,8 @@
 class_name RewindRecorder
 extends Node
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const TICKET_SCHEMA_VERSION := 1
 const GAMEPLAY_FRAMES_PER_SECOND := 60
 const SAMPLE_CADENCE_FRAMES := 6
@@ -306,14 +308,14 @@ func commit_rewind_transaction(ticket: Dictionary) -> bool:
 	target.call("mark_gameplay_rewind_replay_boundary")
 	if not bool(health_publication.get("died", false)):
 		health_component.call("apply_invulnerability", 0.5)
-	EventBus.time_skill_started.emit(&"time_rewind", {})
+	SceneScope.event_bus(self).time_skill_started.emit(&"time_rewind", {})
 	health_component.call("publish_rewind_transaction_state", health_publication)
 	time_manager.call(
 		"publish_gameplay_rewind_commit",
 		public_ticket.duplicate(true),
 		(before["time"] as Dictionary).duplicate(true)
 	)
-	EventBus.time_skill_ended.emit(&"time_rewind", {})
+	SceneScope.event_bus(self).time_skill_ended.emit(&"time_rewind", {})
 	return true
 
 

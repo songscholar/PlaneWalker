@@ -1,6 +1,8 @@
 class_name GauntletsComboAura
 extends Node2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const PIXELS_PER_TILE := 64.0
 const RADIUS_TILES := 2.0
 const SLOW_MULTIPLIER := 0.85
@@ -105,7 +107,7 @@ func _refresh_targets() -> void:
 		return
 	var current: Dictionary = {}
 	var radius_pixels := RADIUS_TILES * PIXELS_PER_TILE
-	for target: Node in get_tree().get_nodes_in_group("enemies"):
+	for target: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if target == null or not is_instance_valid(target) or not target is Node2D:
 			continue
 		if (target as Node2D).global_position.distance_to(global_position) > radius_pixels + 0.001:

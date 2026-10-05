@@ -1,6 +1,8 @@
 class_name GunWeapon
 extends Node2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 signal projectile_hit_confirmed(action_token: int, outcome_index: int, target: Node)
 signal action_hit_confirmed(action_token: int, target: Node)
 signal resource_reward_requested(action_token: int, reward_id: StringName, amount: float)
@@ -84,7 +86,7 @@ func begin_profile_action(definition: Dictionary) -> Dictionary:
 func release_profile_action() -> bool:
 	if _profile_action.is_empty() or _profile_action_released:
 		return false
-	var current_scene := get_tree().current_scene
+	var current_scene := SceneScope.scene_root(self)
 	if not _prepared_projectiles.is_empty() and current_scene == null:
 		return false
 	for prepared: Dictionary in _prepared_projectiles:
@@ -576,7 +578,7 @@ func _duplicate_claims_by_token(value: Dictionary) -> Dictionary:
 
 func _install_staged_runtime_snapshot(value: Dictionary, staged: Dictionary) -> bool:
 	var owned := staged.get("owned", []) as Array
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if not owned.is_empty() and parent == null:
 		return false
 	_discard_current_runtime_projectiles()

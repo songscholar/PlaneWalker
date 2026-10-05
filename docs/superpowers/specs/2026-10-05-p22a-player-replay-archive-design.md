@@ -42,6 +42,15 @@ target and verifies equality using ReplayPlayer. Playback verifies real fixed-fr
 execution and time facts; failed execution restores the target and cursor atomically.
 The viewing target is isolated from the live run and cannot publish Meta rewards.
 
+The target must be created by a dedicated ReplayWorld SubViewport with its own
+World2D and a private instance of the typed event bus. The session binds both
+target and world weakly; moving a globally initialized Player into the viewport
+does not grant admission. Player/time/weapon target queries filter by the actual
+ReplayWorld ancestor, payload spawning uses that root, and playback observes
+the private bus. Production queries exclude replay nodes. A disabled Player in
+the ordinary world is insufficient: Stop and seek can otherwise affect live
+group members, and playback facts can reach live progression subscribers.
+
 P22A covers the existing contiguous full-player recording format. It does not claim
 whole-run hostile/room/economy tape recording, compressed periodic keyframes, or a
 forty-five-minute gameplay recording fits the current codec. Those are explicit

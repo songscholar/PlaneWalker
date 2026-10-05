@@ -1,6 +1,8 @@
 class_name RewindEchoRuntime
 extends Node2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
 
 signal echo_started(path_samples: Array[Vector2])
@@ -169,7 +171,7 @@ func _damage_target_id(target: Node) -> StringName:
 
 func _enemies_near_path() -> Array[Node]:
 	var result: Array[Node] = []
-	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+	for candidate: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if not candidate is Node2D or not is_instance_valid(candidate):
 			continue
 		if _is_point_near_path(candidate.global_position):

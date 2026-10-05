@@ -1,6 +1,8 @@
 class_name StaffProjectile
 extends Area2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 signal payload_result(action_token: int, generation: int, result: Dictionary)
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
@@ -583,7 +585,7 @@ func _targets_in_radius(origin: Vector2, radius_tiles: float) -> Array[Node]:
 		return result
 	var maximum_distance_squared := pow(radius_tiles * PIXELS_PER_TILE, 2.0)
 	var seen: Dictionary = {}
-	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+	for candidate: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if candidate == null or not is_instance_valid(candidate) or not candidate is Node2D:
 			continue
 		var target_id := _stable_target_id(candidate)

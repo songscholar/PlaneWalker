@@ -1,6 +1,8 @@
 class_name GauntletsZoneExecution
 extends Area2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 signal payload_result(action_token: int, generation: int, result: Dictionary)
 
 const DamageInfoScript := preload("res://scripts/combat/damage_info.gd")
@@ -381,7 +383,7 @@ func _targets_in_radius() -> Array[Node]:
 	if not is_inside_tree():
 		return targets
 	var radius := float(parameters.get("radius_tiles", 0.0)) * PIXELS_PER_TILE
-	for target: Node in get_tree().get_nodes_in_group("enemies"):
+	for target: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if target == null or not is_instance_valid(target) or not target is Node2D:
 			continue
 		if (target as Node2D).global_position.distance_to(global_position) <= radius + 0.001:

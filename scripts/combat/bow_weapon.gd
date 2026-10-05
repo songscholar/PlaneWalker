@@ -1,6 +1,8 @@
 class_name BowWeapon
 extends Node2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const ArrowScene := preload("res://scenes/combat/player_arrow.tscn")
 const WEAPON_ID := &"bow"
 const PIXELS_PER_CELL := 64.0
@@ -86,7 +88,7 @@ func release_profile_shot() -> bool:
 			arrow.attack_tags.append(tag)
 	arrow.source = self
 	arrow.owner_entity = owner_player
-	var current_scene := get_tree().current_scene
+	var current_scene := SceneScope.scene_root(self)
 	if current_scene == null:
 		arrow.free()
 		return false
@@ -120,7 +122,7 @@ func begin_profile_action(definition: Dictionary) -> Dictionary:
 
 
 func release_profile_action() -> bool:
-	if _profile_action.is_empty() or _profile_action_released or get_tree().current_scene == null:
+	if _profile_action.is_empty() or _profile_action_released or SceneScope.scene_root(self) == null:
 		return false
 	var rewind_preflight := _prepare_rewind_phantoms(_profile_action)
 	if not bool(rewind_preflight.get("ok", false)):
@@ -162,7 +164,7 @@ func release_profile_action() -> bool:
 	if claim_required and not _claim_rewind_generation(int(rewind_preflight["generation"])):
 		_free_prepared_projectiles(prepared_rewind)
 		prepared_rewind.clear()
-	var current_scene := get_tree().current_scene
+	var current_scene := SceneScope.scene_root(self)
 	for prepared: Dictionary in prepared_main:
 		_attach_prepared_projectile(prepared, current_scene)
 	for prepared: Dictionary in prepared_rewind:
@@ -251,7 +253,7 @@ func gameplay_rewind_committed_payload_guard() -> Dictionary:
 		return {}
 	var instance_ids: Array[int] = []
 	if is_inside_tree():
-		for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+		for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 			if (
 				arrow != null
 				and is_instance_valid(arrow)
@@ -284,7 +286,7 @@ func has_committed_starfall_schedule() -> bool:
 
 func _live_arrow_claims_for_action(token: int, expected: Dictionary) -> Dictionary:
 	if token > 0 and is_inside_tree():
-		for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+		for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 			if (
 				arrow != null
 				and is_instance_valid(arrow)
@@ -317,7 +319,7 @@ func advance_profile_action_for_test(frames: int) -> void:
 func runtime_snapshot() -> Dictionary:
 	var arrows: Array[Dictionary] = []
 	if is_inside_tree():
-		for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+		for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 			if (
 				arrow == null
 				or not is_instance_valid(arrow)
@@ -532,7 +534,7 @@ func _runtime_snapshot_shape_is_valid(value: Dictionary) -> bool:
 
 func _install_runtime_snapshot(value: Dictionary, staged: Dictionary) -> bool:
 	var arrows := staged.get("arrows", []) as Array
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if not arrows.is_empty() and parent == null:
 		return false
 	_discard_runtime_state()
@@ -582,7 +584,7 @@ func _discard_runtime_state() -> void:
 func _clear_spawned_projectiles_immediately() -> void:
 	if not is_inside_tree():
 		return
-	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+	for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 		if arrow != null and is_instance_valid(arrow) and arrow.get("source") == self:
 			if arrow.has_method("reset_execution_state"):
 				arrow.call("reset_execution_state")
@@ -702,14 +704,14 @@ func _stable_target_id(target: Node) -> int:
 func _target_by_stable_id(target_id: int) -> Node:
 	if target_id <= 0 or not is_inside_tree():
 		return null
-	for candidate: Node in get_tree().get_nodes_in_group("enemies"):
+	for candidate: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if candidate != null and is_instance_valid(candidate) and _stable_target_id(candidate) == target_id:
 			return candidate
 	return null
 
 
 func _spawn_projectile(descriptor: Dictionary, definition: Dictionary) -> bool:
-	var current_scene := get_tree().current_scene
+	var current_scene := SceneScope.scene_root(self)
 	if current_scene == null:
 		return false
 	var prepared := _prepare_projectile(descriptor, definition)
@@ -1099,7 +1101,7 @@ func _refresh_starfall_targets() -> void:
 	var radius := float(parameters.get("radius_cells", 0.0)) * PIXELS_PER_CELL
 	var slow_ratio := clampf(float(parameters.get("slow_ratio", 0.0)), 0.0, 0.9)
 	var active: Dictionary = {}
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if (
 			not is_instance_valid(enemy)
 			or not enemy is Node2D
@@ -1195,7 +1197,7 @@ func _clear_starfall_schedule() -> void:
 func _clear_spawned_projectiles() -> void:
 	if not is_inside_tree():
 		return
-	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+	for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 		if (
 			is_instance_valid(arrow)
 			and not arrow.is_queued_for_deletion()
@@ -1207,7 +1209,7 @@ func _clear_spawned_projectiles() -> void:
 func _clear_projectiles_for_action_token(action_token: int) -> void:
 	if not is_inside_tree():
 		return
-	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+	for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 		if (
 			is_instance_valid(arrow)
 			and not arrow.is_queued_for_deletion()

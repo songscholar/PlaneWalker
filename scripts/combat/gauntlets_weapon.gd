@@ -1,6 +1,8 @@
 class_name GauntletsWeapon
 extends Node2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 signal payload_result_reported(action_token: int, generation: int, result: Dictionary)
 signal impact_feedback_requested(action_token: int, generation: int, fact: Dictionary)
 
@@ -106,7 +108,7 @@ func begin_profile_action(definition: Dictionary) -> Dictionary:
 func release_profile_action() -> bool:
 	if _profile_action.is_empty() or _profile_action_released:
 		return false
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if parent == null:
 		return false
 	if (
@@ -559,7 +561,7 @@ func _spawn_echo(
 	if prepared.is_empty():
 		return
 	prepared["global_position"] = result.get("impact_position", payload.global_position)
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if parent != null:
 		_attach_payload(prepared, parent)
 	else:
@@ -601,7 +603,7 @@ func _spawn_zone(
 		"token": action_token,
 		"generation": generation,
 	}
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if parent != null:
 		_attach_payload(prepared, parent)
 	else:
@@ -867,7 +869,7 @@ func _has_exact_fields(value: Dictionary, fields: Array[String]) -> bool:
 func _apply_runtime_snapshot(value: Dictionary) -> bool:
 	if not can_restore_runtime_snapshot(value):
 		return false
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if not (value["owned_payloads"] as Array).is_empty() and parent == null:
 		return false
 	var next_progress_claims := (value["progress_claims"] as Dictionary).duplicate(true)

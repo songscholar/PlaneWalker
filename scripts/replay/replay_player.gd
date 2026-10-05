@@ -1,6 +1,8 @@
 class_name ReplayPlayer
 extends RefCounted
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
 
 var _replay: Dictionary = {}
@@ -333,13 +335,14 @@ func _advance_full_player_target(
 			"run_id": run_id,
 			"context": context.duplicate(true),
 		})
-	EventBus.time_skill_committed.connect(observer)
+	var bus := SceneScope.event_bus(target)
+	bus.time_skill_committed.connect(observer)
 	var result_value: Variant = target.call(
 		"advance_action_frame",
 		frame_intents.duplicate(true)
 	)
-	if EventBus.time_skill_committed.is_connected(observer):
-		EventBus.time_skill_committed.disconnect(observer)
+	if bus.time_skill_committed.is_connected(observer):
+		bus.time_skill_committed.disconnect(observer)
 	return {
 		"ok": typeof(result_value) == TYPE_BOOL and bool(result_value),
 		"verification_facts": observed_facts,

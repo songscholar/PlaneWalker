@@ -1,6 +1,8 @@
 class_name StaffWeapon
 extends Node2D
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 signal payload_result_reported(action_token: int, generation: int, result: Dictionary)
 signal resource_reward_requested(
 	action_token: int,
@@ -104,7 +106,7 @@ func begin_profile_action(definition: Dictionary) -> Dictionary:
 func release_profile_action() -> bool:
 	if _profile_action.is_empty() or _profile_action_released:
 		return false
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if parent == null and not _prepared_payloads.is_empty():
 		return false
 	for prepared: Dictionary in _prepared_payloads:
@@ -801,7 +803,7 @@ func _valid_claim_store(store_value: Variant, order_value: Variant, maximum: int
 
 func _install_staged_runtime_snapshot(value: Dictionary, staged: Dictionary) -> bool:
 	var owned := staged.get("owned", []) as Array
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if not owned.is_empty() and parent == null:
 		return false
 	_discard_current_runtime_payloads()
@@ -1176,7 +1178,7 @@ func _spawn_combination_zone(
 
 
 func _attach_dynamic_zone(execution: Dictionary, position: Vector2) -> void:
-	var parent := get_tree().current_scene if is_inside_tree() else null
+	var parent := SceneScope.scene_root(self) if is_inside_tree() else null
 	if parent == null:
 		return
 	var zone := StaffSpellZoneScene.instantiate()
@@ -1591,7 +1593,7 @@ func _clear_all_status_sources() -> void:
 func _clear_matching_status_sources(source_prefix: String, required_generation: int = -1) -> void:
 	if source_prefix.is_empty() or not is_inside_tree():
 		return
-	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+	for enemy: Node in SceneScope.nodes_in_group(self, "enemies"):
 		if (
 			enemy == null
 			or not is_instance_valid(enemy)

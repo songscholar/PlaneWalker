@@ -3,6 +3,8 @@ extends CharacterBody2D
 
 signal authoritative_frame_committed(frame: int)
 
+const SceneScope := preload("res://scripts/player/player_scene_scope.gd")
+
 const StatsResource := preload("res://scripts/core/stats.gd")
 const MetaStatsScript := preload("res://scripts/progression/meta_stats_applicator.gd")
 const MetaCatalogFactoryScript := preload("res://scripts/progression/meta_catalog_factory.gd")
@@ -119,7 +121,7 @@ class CharacterWorldPayloadNode extends Node2D:
 		if not is_finite(damage) or damage <= 0.0:
 			return
 		var targets_by_identity: Dictionary = {}
-		for candidate: Node in scene_tree.get_nodes_in_group("enemies"):
+		for candidate: Node in SceneScope.nodes_in_group(owner_entity, &"enemies"):
 			if not candidate is Node2D or not is_instance_valid(candidate):
 				continue
 			if not _geometry_contains_point(geometry, (candidate as Node2D).global_position):
@@ -1133,7 +1135,7 @@ func _normalized_mobility_profile(profile: Dictionary) -> Dictionary:
 
 
 func _ready() -> void:
-	add_to_group("player")
+	add_to_group("player" if SceneScope.replay_world(self) == null else "replay_player")
 	if not _discover_weapon_adapters():
 		push_error("Player weapon adapter discovery failed")
 		return
@@ -1171,12 +1173,12 @@ func _ready() -> void:
 		and not gauntlets_weapon.payload_result_reported.is_connected(_on_gauntlets_payload_result_reported)
 	):
 		gauntlets_weapon.payload_result_reported.connect(_on_gauntlets_payload_result_reported)
-	if not EventBus.hit_confirmed.is_connected(_on_weapon_replay_hit_confirmed):
-		EventBus.hit_confirmed.connect(_on_weapon_replay_hit_confirmed)
-	if not EventBus.room_started.is_connected(_on_character_room_started):
-		EventBus.room_started.connect(_on_character_room_started)
-	if not EventBus.room_cleared.is_connected(_on_character_room_cleared):
-		EventBus.room_cleared.connect(_on_character_room_cleared)
+	if not SceneScope.event_bus(self).hit_confirmed.is_connected(_on_weapon_replay_hit_confirmed):
+		SceneScope.event_bus(self).hit_confirmed.connect(_on_weapon_replay_hit_confirmed)
+	if not SceneScope.event_bus(self).room_started.is_connected(_on_character_room_started):
+		SceneScope.event_bus(self).room_started.connect(_on_character_room_started)
+	if not SceneScope.event_bus(self).room_cleared.is_connected(_on_character_room_cleared):
+		SceneScope.event_bus(self).room_cleared.connect(_on_character_room_cleared)
 
 
 func _spawn_character_world_payload(descriptor: Dictionary) -> Node:
@@ -8625,7 +8627,7 @@ func _begin_dash() -> bool:
 		float(_mobility_profile["dash_invulnerable_frames"]) * FIXED_FRAME_SECONDS
 		+ _dash_invulnerable_bonus
 	)
-	EventBus.player_dashed.emit({})
+	SceneScope.event_bus(self).player_dashed.emit({})
 	return true
 
 
@@ -8816,7 +8818,7 @@ func _assemble_character_runtime(config: Dictionary) -> Dictionary:
 	if (
 		not bool(coordinator.call("set_generation_floor", generation_floor))
 		or not bool(coordinator.call("set_next_token_floor", next_token_floor))
-		or not bool(coordinator.call("configure", runtime))
+		or not bool(coordinator.call("configure", runtime, SceneScope.event_bus(self)))
 	):
 		return {"ok": false, "reason": "character_coordinator_configuration_failed"}
 	return {
@@ -9248,7 +9250,7 @@ func _on_weapon_action_committed(
 		committed_plan
 	)
 	_confirm_weapon_action_commit_mastery(weapon_id, action_id, token, context, committed_plan)
-	EventBus.weapon_action_committed.emit(
+	SceneScope.event_bus(self).weapon_action_committed.emit(
 		weapon_id,
 		action_id,
 		token,
@@ -9500,7 +9502,7 @@ func _on_gun_resource_reward_requested(
 	if current <= before:
 		return
 	if _weapon_resource_publication_enabled:
-		EventBus.weapon_resource_changed.emit(
+		SceneScope.event_bus(self).weapon_resource_changed.emit(
 			&"gun",
 			reward_id,
 			current,
@@ -9570,7 +9572,7 @@ func _on_staff_resource_reward_requested(
 	if current <= before:
 		return
 	if _weapon_resource_publication_enabled:
-		EventBus.weapon_resource_changed.emit(
+		SceneScope.event_bus(self).weapon_resource_changed.emit(
 			&"staff",
 			reward_id,
 			current,
@@ -9735,7 +9737,7 @@ func _sync_weapon_resource_facts(reason: StringName) -> void:
 			return
 	_weapon_resource_fact_state[resource_key] = {"current": current, "maximum": maximum}
 	if _weapon_resource_publication_enabled:
-		EventBus.weapon_resource_changed.emit(weapon_id, resource_id, current, maximum, reason)
+		SceneScope.event_bus(self).weapon_resource_changed.emit(weapon_id, resource_id, current, maximum, reason)
 
 
 func _on_staff_payload_result_reported(
@@ -10117,7 +10119,7 @@ func _weapon_mastery_external_snapshot() -> Dictionary:
 		return {}
 	var boss_snapshots: Array[Dictionary] = []
 	if get_tree() != null:
-		for boss: Node in get_tree().get_nodes_in_group("bosses"):
+		for boss: Node in SceneScope.nodes_in_group(self, "bosses"):
 			if (
 				is_instance_valid(boss)
 				and boss.has_method("character_boss_exposure_snapshot")
@@ -10446,9 +10448,9 @@ func _queue_weapon_observation(kind: StringName, arguments: Array) -> void:
 func _flush_weapon_observation(observation: Dictionary) -> void:
 	var arguments := observation.arguments as Array
 	if observation.kind == &"mastery":
-		EventBus.weapon_mastery_confirmed.emit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
+		SceneScope.event_bus(self).weapon_mastery_confirmed.emit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
 	elif observation.kind == &"hit":
-		EventBus.weapon_hit_confirmed.emit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4])
+		SceneScope.event_bus(self).weapon_hit_confirmed.emit(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4])
 
 
 func _on_weapon_runtime_event(event: Dictionary) -> void:
@@ -10462,7 +10464,7 @@ func _on_weapon_runtime_event(event: Dictionary) -> void:
 		"cue_requested":
 			var cue_value: Variant = event.get("cue", {})
 			if cue_value is Dictionary and not (cue_value as Dictionary).is_empty():
-				EventBus.weapon_cue_requested.emit(
+				SceneScope.event_bus(self).weapon_cue_requested.emit(
 					weapon_id,
 					action_id,
 					token,
@@ -10733,7 +10735,7 @@ func _character_forgiveness_descriptor_for_weapon(weapon_id: StringName) -> Dict
 func _clear_owned_player_arrows() -> void:
 	if bow_weapon == null:
 		return
-	for arrow: Node in get_tree().get_nodes_in_group("player_arrows"):
+	for arrow: Node in SceneScope.nodes_in_group(self, "player_arrows"):
 		if (
 			is_instance_valid(arrow)
 			and not arrow.is_queued_for_deletion()
@@ -10746,7 +10748,7 @@ func _clear_owned_player_arrows() -> void:
 func _clear_owned_player_projectiles() -> void:
 	if gun_weapon == null and staff_weapon == null:
 		return
-	for projectile: Node in get_tree().get_nodes_in_group("player_projectiles"):
+	for projectile: Node in SceneScope.nodes_in_group(self, "player_projectiles"):
 		if (
 			is_instance_valid(projectile)
 			and not projectile.is_queued_for_deletion()
@@ -10954,7 +10956,7 @@ func _settle_active_item_claims(
 func _active_item_has_boss_target() -> bool:
 	if not is_inside_tree():
 		return false
-	for candidate: Node in get_tree().get_nodes_in_group("bosses"):
+	for candidate: Node in SceneScope.nodes_in_group(self, "bosses"):
 		if is_instance_valid(candidate) and not candidate.is_queued_for_deletion():
 			return true
 	return false
