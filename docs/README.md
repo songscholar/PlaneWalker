@@ -124,6 +124,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
 | [Native Shielded Elite Evidence](current/2026-10-05-native-elite-shielded-evidence.md) | 真实护盾、破盾暴露、再生、锚定组合与事务回滚 | Focused Verified / Remaining affixes active |
+| [Native Teleporting Elite Evidence](current/2026-10-05-native-elite-teleporting-evidence.md) | 房间安全落点、完整离场预警和到达恢复、碰撞再验证与真实玩家帧回滚 | Focused Verified / Remaining affixes active |
 | [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
 | [Native UI Certification Repairs](current/2026-10-05-native-ui-certification-repairs-evidence.md) | 原生菜单夹具、五层面板流程和奖励浮点精度修复 | Focused Verified / Current |
 | [Native Narrative Checkpoint Regression](current/2026-10-05-native-narrative-regression-evidence.md) | 正式路线、结局退休后的完整角色冷恢复和一次性交接 | Focused Verified / Current |
