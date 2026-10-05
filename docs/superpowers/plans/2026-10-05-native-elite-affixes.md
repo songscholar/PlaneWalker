@@ -110,3 +110,11 @@ retain metadata-only Shielded behavior.
 - [x] Recheck collision during arrival preparation, commit and publication; compensate late walls and safely complete blocked arrival in place.
 - [x] Verify real Player late World rejection/retry at reservation480 and arrival510; retire pending landing and projection on actual final death.
 - [x] Retain shared elite6/6, native Actor/room regressions and six visually inspected Metal captures.
+
+## Authenticated Shield Components Revision Seven
+
+- [x] Retain valid production identity RED for actual Bow/Gun/Staff/Gauntlets and component RED for Bow/Gun physical-plus-Time delivery.
+- [x] Authenticate actual Player/current run, owned registered weapon source and same ReplayWorld at the existing compatibility boundary; verify foreign source, group/method impostor, other-world Player and wrong/absent target refuse.
+- [x] Add damage type to the current shield receipt identity so physical and Time components each settle once; retain duplicate refusal and exact typed cold recovery.
+- [x] Preserve explicit historical5/6 admission and receipt identity, bind promotion through existing definition signature/configuration digest, and reject old state in current configuration.
+- [x] Retain current shared elite7/7, actual Player/Sword late rollback/retry, Actor transaction, production encounter and physical checkpoint evidence.

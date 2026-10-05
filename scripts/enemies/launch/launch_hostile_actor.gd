@@ -93,7 +93,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6]:
+	if affix_configuration.get("native_revision") in [2, 3, 4, 5, 6, 7]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -507,15 +507,32 @@ func prepare_post_defense_absorption(damage_info: RefCounted, resolution: RefCou
 	if damage_info == null or resolution == null or resolution.is_prevented():
 		return {"ok": false}
 	var source_player: Node = damage_info.attacker
-	var owned_player_source: bool = is_instance_valid(source_player) and source_player.is_in_group("player") and source_player.has_method("current_run_id") and str(source_player.current_run_id()) == str(_launch_identity.run_id)
-	var valid_run: bool = str(damage_info.run_id) == str(_launch_identity.run_id) or (damage_info.run_id == &"legacy_run" and owned_player_source)
-	var valid_target: bool = damage_info.target_id == hostile_source_id or (has_meta("encounter_spawn_id") and str(damage_info.target_id) == str(get_meta("encounter_spawn_id"))) or (damage_info.target_id == &"pending_target" and owned_player_source)
+	var current_component_identity: bool = int(_affix_configuration.native_revision) >= 7
+	var owned_player_source: bool
+	var valid_run: bool
+	var valid_target: bool
+	if current_component_identity:
+		owned_player_source = is_instance_valid(source_player) and source_player is PlayerController and source_player.authenticates_native_damage_run(damage_info, self, StringName(str(_launch_identity.run_id)))
+		valid_run = str(damage_info.run_id) == str(_launch_identity.run_id) or (damage_info.run_id in [&"legacy_run", &"runtime"] and owned_player_source)
+		valid_target = damage_info.target_id == hostile_source_id or (has_meta("encounter_spawn_id") and str(damage_info.target_id) == str(get_meta("encounter_spawn_id")))
+		if owned_player_source:
+			valid_target = valid_target or damage_info.target_id == &"pending_target"
+			for field: String in ["encounter_spawn_id", "spawn_id", "stable_target_id"]:
+				if has_meta(field) and str(damage_info.target_id) == "target:" + str(get_meta(field)):
+					valid_target = true
+	else:
+		owned_player_source = is_instance_valid(source_player) and source_player.is_in_group("player") and source_player.has_method("current_run_id") and str(source_player.current_run_id()) == str(_launch_identity.run_id)
+		valid_run = str(damage_info.run_id) == str(_launch_identity.run_id) or (damage_info.run_id == &"legacy_run" and owned_player_source)
+		valid_target = damage_info.target_id == hostile_source_id or (has_meta("encounter_spawn_id") and str(damage_info.target_id) == str(get_meta("encounter_spawn_id"))) or (damage_info.target_id == &"pending_target" and owned_player_source)
 	if not valid_run or not valid_target:
 		return {"ok": false}
 	var frame: int = health.frame_signal_transaction_runtime_frame()
 	if frame < 0:
 		frame = _hostile_runtime_frame()
-	var fact_id := JSON.stringify([str(_launch_identity.run_id), str(hostile_source_id), str(damage_info.hostile_source_id), int(damage_info.attack_generation), int(damage_info.hit_index)], "", false).sha256_text()
+	var fact_identity := [str(_launch_identity.run_id), str(hostile_source_id), str(damage_info.hostile_source_id), int(damage_info.attack_generation), int(damage_info.hit_index)]
+	if current_component_identity:
+		fact_identity.append(int(damage_info.damage_type))
+	var fact_id := JSON.stringify(fact_identity, "", false).sha256_text()
 	return _affix_runtime.prepare_shield_absorption(frame, fact_id, float(resolution.finalized_damage()))
 
 

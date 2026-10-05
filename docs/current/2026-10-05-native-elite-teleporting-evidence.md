@@ -10,7 +10,9 @@
 
 ## Verified Behavior
 
-The native affix compiler defaults to revision six. Explicit historical revisions
+Teleporting entered native execution at revision six. The compiler now defaults
+to revision seven for authenticated Shielded weapon components; Teleporting
+keeps this milestone's revision-six state and behavior. Explicit historical revisions
 one through five retain their original metadata-only Teleporting behavior and
 signatures. The new authoritative state binds configuration, run, hostile source,
 seed, accepted elapsed frames, phase and bounded relocation reservations.
@@ -84,7 +86,7 @@ No dependencies or authored content fingerprints changed.
 
 Native Chaining, Splitting and Mirroring remain pending. The complete legal-pair
 matrix, all-weapon physics contacts, extended4096-reservation capacity, whole-room
-balance and full P15 certification remain separate gates. Current native weapon
-compatibility authentication defects found during review remain a focused follow-up;
-this milestone does not assert that every weapon already reaches native Shielded
-or Walker Proof correctly.
+balance and full P15 certification remain separate gates. The production weapon
+compatibility follow-up is retained in [Shielded evidence](2026-10-05-native-elite-shielded-evidence.md)
+and the Walker Proof gate. This Teleporting milestone does not certify every
+weapon's physical contact.

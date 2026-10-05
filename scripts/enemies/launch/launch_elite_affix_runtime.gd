@@ -53,7 +53,7 @@ func configure(configuration: Dictionary, identity: Dictionary, max_hp: float) -
 
 
 static func _valid_configuration(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 6) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
+	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 7) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
 		return false
 	var seen: Array = []
 	var pending: Array = []

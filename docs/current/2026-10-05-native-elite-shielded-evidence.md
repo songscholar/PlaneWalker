@@ -3,14 +3,15 @@
 - Status: Verified focused gate
 - Document Role: Current retention evidence for native Shielded behavior
 - Authority Level: Evidence below approved P15 specification section 6
-- Applies To: Native revision five, actual Health absorption, accepted-frame compensation, physical persistence and presentation
+- Applies To: Native revisions five through seven, actual Health absorption, authenticated weapon components, accepted-frame compensation, physical persistence and presentation
 - Owner: Native hostile implementation team
 - Last Verified: 2026-10-05
 - Depends On: [approved P15 enemies and bosses design](../superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md), section 6
 
 ## Verified Behavior
 
-The native affix compiler defaults to revision five. Shielded absorbs damage
+Shielded entered native execution at revision five; the compiler now defaults to
+revision seven. Shielded absorbs damage
 after incoming modifiers and flat defense from a pool of30% actual maximum HP.
 The real sentinel elite has160HP and48shield;20 damage spends20shield without
 HP loss, then40 damage consumes28shield and removes12HP. A fractional0.25shield
@@ -52,13 +53,23 @@ fault; complete Player and pair state return exactly, then the original identity
 retries once. This focused pair gate does not replace production gauntlet contact
 coverage. Physical SaveService also retains the accepted pair state.
 
-Shield admission receipts bind actual owner run/source, incoming source,
-generation and hit index. Duplicate hits cannot spend shield or HP again even
-after depletion. The real Sword adapter currently emits`legacy_run` and
-`pending_target`; its actual Player and current run authenticate that compatibility
-path before the shield receipt canonicalizes identity. Wrong run/target, missing
-target and unowned legacy damage refuse without mutation. No Node identity or
-absolute path enters the persisted shield state.
+Revision-seven shield admission receipts bind actual owner run/source, incoming
+source, generation, hit index and damage type. Bow and Gun emit physical and Time
+components with the same generation/hit index; each component consumes shield
+once, while repeated components cannot spend shield or HP after depletion.
+The real Sword adapter emits`legacy_run`; Bow, Gun, Staff and Gauntlets emit
+`runtime`. Their actual Player, registered weapon source, current run and shared
+ReplayWorld authenticate these compatibility identities. Pending targets and
+the current target's authored stable descriptors are accepted only on that
+owned path. Foreign source nodes, player-group/method impostors, a Player from
+another ReplayWorld, wrong targets and absent targets refuse without mutation.
+No Node identity or absolute path enters persisted shield state.
+
+Explicit historical revisions five and six retain their original single-hit
+component identity and compatibility admission rules. Their exact snapshots
+restore only under the corresponding historical configuration. Revision seven
+has a distinct definition signature/configuration digest and refuses those
+snapshots, so previously paid damage cannot silently gain a new receipt identity.
 
 Compatible Frenzy scales incoming damage before absorption. Fortified's240HP
 body derives72shield. Nullified exposure/echo feeds actual absorption and overflow,
@@ -74,6 +85,12 @@ its authored active boundary inside the hostile participant. A late World fault
 restores complete Player/Sword and shield snapshots; retry admits one receipt.
 This is an actual producer/Health/frame integration probe, not a physics contact
 or every-weapon contact certification.
+
+The real Bow/Gun/Staff projectile scenes and Gauntlets execution call their
+production delivery methods against actual native Hurtbox/Health. Bow/Gun each
+spend20 physical plus5 Time from the48 pool, retain two component receipts, reject
+duplicate delivery and reconstruct exact typed cold state. These are production
+delivery-boundary probes; they do not certify every weapon's physical contact.
 
 ## Presentation
 
@@ -105,6 +122,14 @@ The existing Actor raster remains; native Godot draws the small in-game contour.
 - Shielded/Anchored GREEN: `build/test-evidence/elite-shield-anchor-corrected`,1/1 with full/partial control, duplicate/malformed control, typed/physical save and real Player late rollback/retry.
 - Pair native Actor GREEN: `build/test-evidence/elite-shield-anchor-native-actor`,1/1.
 - Pair Actor transaction GREEN: `build/test-evidence/elite-shield-anchor-native-transaction`,1/1.
+- Production identity RED: `build/test-evidence/elite-shield-producers-auth-red`, four actual production compatibility identities cannot reach the shield.
+- Production identity GREEN: `build/test-evidence/elite-shield-producers-auth-green`,1/1.
+- Component identity RED: `build/test-evidence/elite-shield-components-red`, Bow/Gun Time is incorrectly deduplicated and revision-six state has no new-version boundary.
+- Revision-seven component GREEN: `build/test-evidence/elite-shield-components-green`,1/1, actual four delivery methods plus inherited Sword/Player compensation, identity refusal, typed cold and historical5/6 probes.
+- Revision-seven shared elite GREEN: `build/test-evidence/elite-seven-final`,7/7.
+- Revision-seven Actor transaction GREEN: `build/test-evidence/elite-seven-native-transaction`,1/1.
+- Revision-seven physical checkpoint GREEN: `build/test-evidence/elite-seven-native-checkpoint`,1/1.
+- Revision-seven production encounter GREEN: `build/test-evidence/elite-seven-production`,1/1.
 
 Deliberate World failure emits the existing expected`Fixed-frame event buffer
 settlement rejected runtime frame 5` diagnostic. The pair rollback probe adds
@@ -115,7 +140,8 @@ line coverage as unsupported. No dependency or authored content fingerprint chan
 
 ## Remaining Gates
 
-Native Teleporting, Chaining, Splitting and Mirroring remain pending. The full
+Native Chaining, Splitting and Mirroring remain pending. Teleporting has its
+separate [retained native gate](2026-10-05-native-elite-teleporting-evidence.md). The full
 legal-pair/control matrix, all-weapon physics contacts, extended4096-receipt
 capacity, whole-room balance and full P15 certification remain separate gates.
 The focused Shielded/Anchored absorbed-control gate is complete; production
