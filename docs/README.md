@@ -153,13 +153,24 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Hound Sigil Evidence](current/2026-10-05-native-hound-sigil-evidence.md) | 五武器构件伤害、有限休眠、精英词缀、真实 Profile 与冷恢复 | Focused Verified / Current |
 | [Native Phase Ranger Evidence](current/2026-10-05-native-phase-ranger-evidence.md) | 安全冻结落点、真实武器与回溯、历史迁移和物理 Profile | Focused Verified / Current |
 | [Native Boss Loadout Matrix Plan](superpowers/plans/2026-10-05-native-boss-loadout-matrix.md) | 五角色五武器六组时间技能对五首领的七百五十场真实组合 | Active / Current |
+| [Native Boss Matrix Evidence](current/2026-10-05-native-boss-matrix-evidence.md) | 原生组合执行器、真实伤害、时间凭据、物理续接与已通过部分案例 | Partial Verified / Current |
 | [Native Complete Gameplay Plan](superpowers/plans/2026-10-05-native-complete-gameplay-certification.md) | 完整五层真实战斗、七百五十组合、干净验证与本地发行包 | Active / Current |
+| [Synthetic Hostile Domain Matrix Plan](superpowers/plans/2026-10-05-p15-synthetic-domain-matrix.md) | 三十种子与七百五十组合的独立领域重放、恢复和边界验证 | Active / Current |
+| [Native Performance Probe Design](superpowers/specs/2026-10-05-native-performance-probe-design.md) | 正式录制并发、原生战斗负载与 Hub 性能观测边界 | Approved / Current |
+| [Native Performance Probe Plan](superpowers/plans/2026-10-05-native-performance-probe.md) | 真实唯一帧、分段耗时、物理回放落盘与内存测量 | Active / Current |
+| [Native Performance Probe Evidence](current/2026-10-05-native-performance-probe-evidence.md) | 正式 Main 自动录制、唯一帧、Hub 与真实 Boss 负载及物理回放恢复 | Focused Verified / Combined performance pending |
 | [Native Forge Terminal Evidence](current/2026-10-05-native-forge-terminal-payload-evidence.md) | 首领终结清理真实弹体、规范死亡碰撞及事务恢复 | Focused Verified / Current |
 | [Native Summon Boundary Evidence](current/2026-10-05-native-summon-boundary-evidence.md) | 冻结召唤落点安全准入、合法边缘、静态阻挡及原帧重试 | Focused Verified / Current |
+| [Native Summon Prepublication Evidence](current/2026-10-05-native-summon-prepublication-evidence.md) | 自动选择拒绝未发布预警、合法威胁退役及精确重试 | Focused Verified / Current |
 | [Native Void Payload Identity Evidence](current/2026-10-05-native-void-payload-identity-evidence.md) | 第一轮攻击与独立区域身份隔离、真实投射减速及冷恢复 | Focused Verified / Current |
 | [Native Projectile Overlap Evidence](current/2026-10-05-native-projectile-overlap-evidence.md) | 玩家进入飞行弹体的物理接触、真实伤害、精确回滚与穿透 | Focused Verified / Current |
+| [Native Current Target Contact Evidence](current/2026-10-05-native-current-target-contact-evidence.md) | 同帧玩家位置、引擎形状查询、墙体先后、终结接触与回滚 | Focused Verified / Current |
+| [Native Relocation Recoil Evidence](current/2026-10-05-native-relocation-recoil-evidence.md) | 冻结闪步不叠加武器击退、准确落点及原帧重试 | Focused Verified / Current |
+| [Native Void Validation Cache Evidence](current/2026-10-05-native-void-validation-cache-evidence.md) | 完整类型与边界隔离缓存、防篡改及真实原生帧性能测量 | Focused Verified / Current |
+| [Native Forest Fractional Root Evidence](current/2026-10-05-native-forest-fractional-root-evidence.md) | 小数伤害顺序重演、真实根系破坏和恢复校验 | Focused Verified / Current |
 | [Temporal Frontiers Design](superpowers/specs/2026-10-05-p19-temporal-frontiers-design.md) | 独立指纹可选扩展包、五种追加敌人及历史遭遇兼容 | Active / Current |
 | [Temporal Frontiers Plan](superpowers/plans/2026-10-05-p19-temporal-frontiers.md) | 原生敌人、离线安装激活、正式遇敌与冷恢复实施 | Active / Current |
+| [Temporal Frontiers Evidence](current/2026-10-05-p19-temporal-frontiers-evidence.md) | 五种追加原生敌人、独立指纹、真实楼层、冷恢复及打包验证 | Focused Verified / Current |
 | [Serial Import Recovery Evidence](current/2026-10-05-serial-import-recovery-evidence.md) | 修复并行翻译导入崩溃、全新固定提交两阶段导入和依赖审计 | Focused Verified / Combined certification pending |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
