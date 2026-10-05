@@ -5,6 +5,7 @@
 - Authority Level: Approved P15 specification and project standing authorization
 - Applies To: Actual native Actor frame preparation, sealed Effects and threat registry
 - Owner: Native hostile integration team
+- Depends On: `docs/superpowers/plans/2026-10-05-native-boss-loadout-matrix.md`, `docs/current/2026-10-05-native-summon-boundary-evidence.md`
 - Last Verified: 2026-10-05
 
 ## Trigger And Repair
@@ -38,5 +39,14 @@ validation remain unchanged.
   `build/test-evidence/native-boss-matrix-staff-resource-aware-five/native-092-001/report.json`.
 
 No parser errors, runtime errors or leaks were present in the GREEN suites.
-The original matrix case is being rerun separately; this focused repair does
-not certify all750 cases or completion of P15.
+The original actual Staff case92 rerun passed4482frames, every HP phase,
+physical typed checkpoint, exact continuation and authenticated terminal
+cleanup. Its report is `build/p15-native-staff-time-admission-fixed.json`.
+That matrix used the subsequently retired1000tick scheduling harness, so it
+is historical defect evidence. The canonical60Hz actual Staff92 rerun also
+completed4130frames and all runtime assertions; its report is
+`build/p15-native-canonical-clock-staff92.json`. Its initial report validator
+refused production `target:<instance_id>` aliases, which are now explicitly
+retained alongside canonical target and native authentication. Full
+certification must use the final version2 runner/validator together.
+This focused repair does not certify all750 cases or completion of P15.

@@ -40,8 +40,10 @@
 
 The750-case production matrix certifies normal canonical loadouts. Its survival
 fixture measures interaction compatibility rather than unassisted victory or
-balance. Accelerated wall-clock physics must leave gameplay at the production
-fixed60-frame rate. A separately declared hard matrix would contain another750
+balance. Engine physics remains60Hz with time scale1.0; Godot `--fixed-fps 60`
+removes real-time synchronization without changing duration conversions.
+Paced/unpaced actual case data must match before using that scheduler.
+A separately declared hard matrix would contain another750
 cases; it cannot be silently folded into the required count.
 
 The30-seed22500 domain trace report, all48 primary/four response moves, every

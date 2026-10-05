@@ -40,11 +40,13 @@ func run(host: Node, suite: RefCounted) -> Dictionary:
 	var old_ticks := Engine.physics_ticks_per_second
 	var old_fps := Engine.max_fps
 	var old_scale := Engine.time_scale
-	Engine.physics_ticks_per_second = 1000
+	Engine.physics_ticks_per_second = 60
 	Engine.max_fps = 0
-	Engine.time_scale = 1000.0 / 60.0
+	Engine.time_scale = 1.0
+	var clock := {"physics_ticks_per_second": Engine.physics_ticks_per_second, "time_scale": Engine.time_scale}
 	var rows: Array[Dictionary] = []
 	for index: int in range(start, start + count):
+		_suite.assert_true(Engine.physics_ticks_per_second == 60 and Engine.time_scale == 1.0, "every native case retains the production60Hz physical clock")
 		var row := await _run_case(_identity(index))
 		rows.append(row)
 		_suite.assert_true(row.failures.is_empty(), "native matrix " + str(row.identity) + ": " + str(row.failures))
@@ -54,7 +56,7 @@ func run(host: Node, suite: RefCounted) -> Dictionary:
 	Engine.physics_ticks_per_second = old_ticks
 	Engine.max_fps = old_fps
 	Engine.time_scale = old_scale
-	var report := {"schema_version": 1, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "content_snapshot": _binding, "expected_production_case_count": CASE_COUNT, "production_case_count": rows.size(), "range_start": start, "requested_case_count": count, "complete": start == 0 and rows.size() == CASE_COUNT and rows.all(func(row: Dictionary): return row.failures.is_empty()), "cases": rows}
+	var report := {"schema_version": 2, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "clock": clock, "content_snapshot": _binding, "expected_production_case_count": CASE_COUNT, "production_case_count": rows.size(), "range_start": start, "requested_case_count": count, "complete": start == 0 and rows.size() == CASE_COUNT and rows.all(func(row: Dictionary): return row.failures.is_empty()), "cases": rows}
 	var output := OS.get_environment("PLANEWALKER_MATRIX_OUTPUT")
 	if output.is_empty():
 		output = "res://build/p15-native-boss-matrix.json"
@@ -128,7 +130,7 @@ func _run_case(identity: Dictionary) -> Dictionary:
 		var published_loss := float(row._published_losses.pop_front()) if not row._published_losses.is_empty() else 0.0
 		var loss := float(observation.hp_before) - float(observation.hp_after) if observation.has("hp_before") and observation.has("hp_after") else published_loss
 		row.phase_damage[phase] = float(row.phase_damage.get(phase, 0.0)) + loss
-		row.damage_trace.append({"frame": int(player.priority_arbitration_snapshot().frame), "phase_index": int(phase), "amount": amount, "actual_loss": loss, "source_id": str(info.hostile_source_id), "attack_generation": int(info.attack_generation), "hit_index": int(info.hit_index), "tags": info.tags.duplicate(), "accelerated": player.is_time_accelerated()})
+		row.damage_trace.append({"run_id": str(player.current_run_id()), "target_id": str(boss.hostile_source_id), "raw_run_id": str(info.run_id), "raw_target_id": str(info.target_id), "native_authenticated": player.authenticates_native_damage_run(info, boss, player.current_run_id()), "frame": int(player.priority_arbitration_snapshot().frame), "phase_index": int(phase), "amount": amount, "actual_loss": loss, "source_id": str(info.hostile_source_id), "attack_generation": int(info.attack_generation), "hit_index": int(info.hit_index), "tags": info.tags.duplicate(), "accelerated": player.is_time_accelerated()})
 		if player.is_time_accelerated() and not row.positive_time.has("accelerated_physical_hit"):
 			row.positive_time.append("accelerated_physical_hit")
 	)
@@ -136,7 +138,11 @@ func _run_case(identity: Dictionary) -> Dictionary:
 		if str(weapon) == identity.weapon_id:
 			row.weapon_actions.append(str(action))
 	)
-	player.get_node("TimeManager").native_ability_committed.connect(func(receipt: Dictionary): row.time_casts.append(receipt.duplicate(true)))
+	player.get_node("TimeManager").native_ability_committed.connect(func(receipt: Dictionary):
+		row.time_casts.append(receipt.duplicate(true))
+		row["time_effect_receipts"] = row.get("time_effect_receipts", [])
+		row.time_effect_receipts.append({"ability_id": receipt.ability_id, "frame": int(player.priority_arbitration_snapshot().frame), "accelerated": player.is_time_accelerated(), "remaining": float(player.time_manager.replay_snapshot().get("accelerate_remaining", 0.0))})
+	)
 	boss.hostile_final_death.connect(func(source: StringName, receipt: String): row.death_receipts.append({"source_id": str(source), "receipt": receipt}))
 	await _host.get_tree().physics_frame
 	await _host.get_tree().physics_frame
@@ -150,6 +156,10 @@ func _run_case(identity: Dictionary) -> Dictionary:
 		if not is_instance_valid(boss) or boss.health.dead:
 			break
 		var state: Dictionary = boss.launch_runtime_snapshot().runtime
+		if player.is_time_accelerated() and frame % 30 == 0:
+			row["acceleration_window"] = row.get("acceleration_window", [])
+			if row.acceleration_window.size() < 12:
+				row.acceleration_window.append({"frame": frame, "player_state": player.action_state.current_state, "weapon_phase": str(player.weapon_action_coordinator.phase_name()), "remaining": float(player.time_manager.replay_snapshot().get("accelerate_remaining", 0.0)), "distance": player.global_position.distance_to(boss.global_position)})
 		row.observed_phase = int(state.mechanism_state.phase_index)
 		if not str(state.action.action_id).is_empty():
 			row.boss_actions[state.action.action_id] = int(row.boss_actions.get(state.action.action_id, 0)) + 1
@@ -173,6 +183,8 @@ func _run_case(identity: Dictionary) -> Dictionary:
 				press_frame = frame
 				released = false
 				release_frames = 40 if identity.weapon_id in ["sword", "bow", "gun"] else 1
+				if identity.weapon_id == "sword" and player.is_time_accelerated():
+					release_frames = 1
 				if identity.weapon_id == "staff" and float(player.weapon_action_coordinator.get("_runtime").snapshot().mana) >= 20.0:
 					release_frames = 45
 		if not released and frame - press_frame >= release_frames:
@@ -180,6 +192,8 @@ func _run_case(identity: Dictionary) -> Dictionary:
 			released = true
 		if not player.advance_action_frame({"aim": direction, "movement": movement}):
 			row.failures.append("actual Player/hostile fixed frame refused at%d" % frame)
+			if world.bridge.has_method("frame_rejection_snapshot"):
+				row["original_frame_rejection"] = world.bridge.frame_rejection_snapshot()
 			row["refused_frame_state"] = {"boss": boss.launch_runtime_snapshot().runtime, "player_frame": int(player.priority_arbitration_snapshot().frame), "player_weapon": player.weapon_action_coordinator.snapshot(), "work": world.effects.work_snapshot(), "threats": world.bridge.get("_registry").snapshot()}
 			row["refused_frame_diagnostic"] = preload("res://tests/support/native_frame_failure_probe.gd").inspect(player, {str(boss.hostile_source_id): boss}, world.effects, world.bridge.get("_registry"))
 			break
