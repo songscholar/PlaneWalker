@@ -4,3 +4,24 @@ UI_COMMUNITY_REFRESH,Refresh,刷新
 UI_COMMUNITY_EMPTY,No records,暂无战绩
 UI_COMMUNITY_SAVE_PENDING,Local records unavailable. Retry refresh.,本地战绩暂不可用，请重试刷新。
 UI_COMMUNITY_UNRANKED,Local / Unranked,本地 / 未排名
+UI_MODE_BOSS_RUSH,Boss Rush,Boss 连战
+UI_MODE_START,Start challenge,开始挑战
+UI_MODE_CONTINUE,Continue challenge,继续挑战
+UI_MODE_RESUME,Resume,继续战斗
+UI_MODE_NEXT_BOSS,Next Boss,下一位 Boss
+UI_MODE_RETURN,Save and return,保存并返回
+UI_MODE_RETRY_SAVE,Retry save,重试保存
+UI_MODE_SAVE_PENDING,Challenge save pending.,挑战存档待保存。
+UI_MODE_PROGRESS_FMT,%d / %d Bosses - %.2fs,%d / %d 位 Boss - %.2fs
+UI_MODE_STATUS_ACTIVE,Challenge in progress,挑战进行中
+UI_MODE_STATUS_STAGE_CLEAR,Boss defeated,Boss 已击败
+UI_MODE_STATUS_VICTORY,Victory,胜利
+UI_MODE_STATUS_DEFEAT,Defeat,战败
+UI_MODE_FRESH,Fresh challenge,全新挑战
+UI_MODE_CONTINUED,Continued challenge,继续的挑战
+UI_MODE_ASSISTED,Accessibility assists,辅助设置
+UI_MODE_STALE,Challenge changed. Reload its latest save.,挑战已变更，请重新载入最新存档。
+UI_MODE_RELOAD,Reload challenge,重新载入挑战
+UI_MODE_NATIVE_RETRY,Arena unavailable. Continue to retry.,竞技场暂不可用，请继续挑战以重试。
+UI_MODE_PAUSE,Pause,暂停
+UI_MODE_SAVED_LOADOUT_FMT,Saved challenge: %s,已存挑战：%s

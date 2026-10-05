@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "mode_id": "boss_rush",
+  "name_key": "UI_MODE_BOSS_RUSH",
+  "preset": "fresh_stage",
+  "stages": [
+    {"boss_id": "ruin_king", "room_template_id": "room_boss_ruin_king"},
+    {"boss_id": "forest_heart", "room_template_id": "room_boss_forest_heart"},
+    {"boss_id": "time_sovereign", "room_template_id": "room_boss_time_sovereign"},
+    {"boss_id": "forge_colossus", "room_template_id": "room_boss_forge_colossus"},
+    {"boss_id": "void_throne", "room_template_id": "room_boss_void_throne"}
+  ]
+}
