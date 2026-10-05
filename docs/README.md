@@ -89,6 +89,12 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P22B Replay Library Design](superpowers/specs/2026-10-05-p22b-replay-library-design.md) | 原生回放库、精确历史寻址、身份重建和隔离恢复 | Approved / Current authority |
 | [P22B Replay Library Plan](superpowers/plans/2026-10-05-p22b-replay-library.md) | 物理列表、播放控制、双语窗口和据点入口实施 | Completed / Historical |
 | [P22B Replay Library Evidence](current/2026-10-05-p22b-replay-library-evidence.md) | 五角色五武器历史寻址、实际手柄控制和原生据点回放库 | Focused Verified / Current |
+| [P22C Streamed Run Replay Design](superpowers/specs/2026-10-05-p22c-streamed-run-replay-design.md) | 整局录制、精确差量分块、物理持久化和隔离播放 | Approved / Current authority |
+| [P22C Streamed Run Replay Plan](superpowers/plans/2026-10-05-p22c-streamed-run-replay.md) | 长局压缩、实际原生观察与完整世界回放实施 | Active / Current |
+| [P22C Run Replay Codec Evidence](current/2026-10-05-p22c-run-replay-codec-evidence.md) | 实际角色快照的类型精确保留、差量重建和有界压缩 | Focused Verified / Partial milestone |
+| [P23 Free Cosmetics Design](superpowers/specs/2026-10-05-p23-free-cosmetics-design.md) | 免费外观收藏、独立保存与冻结装备边界 | Approved / Current authority |
+| [P23 Free Cosmetics Plan](superpowers/plans/2026-10-05-p23-free-cosmetics-plan.md) | 领取、装备、原生预览和正式配装实施 | Active / Current |
+| [Native Forest Roots Plan](superpowers/plans/2026-10-05-native-forest-roots.md) | 森林根须领域与原生机制实施 | Active / Current |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
 | [Native UI Certification Repairs](current/2026-10-05-native-ui-certification-repairs-evidence.md) | 原生菜单夹具、五层面板流程和奖励浮点精度修复 | Focused Verified / Current |

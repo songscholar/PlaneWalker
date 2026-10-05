@@ -7,6 +7,7 @@
 - Owner: Plane Walker project owner
 - Depends On: `../../../AGENTS.md`, `../specs/2026-10-05-p23-free-cosmetics-design.md`
 - Last Verified: 2026-10-05
+- Exit Gate: Strict catalog, actual atomic saves and cold reload, native gallery/controller flow, launch/resume appearance and provenance checks pass
 
 1. Define failing catalog and physical Save transaction tests for the fifteen appearances, authoritative unlock routes and equipment ownership.
 2. Implement strict authored definition/catalog and versioned collection commands with exact Profile revision checks.
