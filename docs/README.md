@@ -162,6 +162,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Forge Terminal Evidence](current/2026-10-05-native-forge-terminal-payload-evidence.md) | 首领终结清理真实弹体、规范死亡碰撞及事务恢复 | Focused Verified / Current |
 | [Native Summon Boundary Evidence](current/2026-10-05-native-summon-boundary-evidence.md) | 冻结召唤落点安全准入、合法边缘、静态阻挡及原帧重试 | Focused Verified / Current |
 | [Native Summon Prepublication Evidence](current/2026-10-05-native-summon-prepublication-evidence.md) | 自动选择拒绝未发布预警、合法威胁退役及精确重试 | Focused Verified / Current |
+| [Native Summon Terminal Roster Evidence](current/2026-10-05-native-summon-terminal-roster-evidence.md) | 终结子体不阻止原生清理帧、精确补偿与真实兄弟保留 | Focused Verified / Current |
 | [Native Void Payload Identity Evidence](current/2026-10-05-native-void-payload-identity-evidence.md) | 第一轮攻击与独立区域身份隔离、真实投射减速及冷恢复 | Focused Verified / Current |
 | [Native Projectile Overlap Evidence](current/2026-10-05-native-projectile-overlap-evidence.md) | 玩家进入飞行弹体的物理接触、真实伤害、精确回滚与穿透 | Focused Verified / Current |
 | [Native Current Target Contact Evidence](current/2026-10-05-native-current-target-contact-evidence.md) | 同帧玩家位置、引擎形状查询、墙体先后、终结接触与回滚 | Focused Verified / Current |

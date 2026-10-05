@@ -146,7 +146,11 @@ func _sync_summon_roster() -> bool:
 				return false
 			continue
 		var state: Dictionary = actor.launch_runtime_snapshot()
-		if state.is_empty() or state.runtime.terminal or state.runtime.runtime_frame != _last_runtime_frame or str(state.runtime.identity.run_id) != str(_player.current_run_id()) or not actor.configure_hostile_threat_authority(_registry, Callable(self, "_current_runtime_frame")):
+		if state.is_empty() or str(state.runtime.identity.run_id) != str(_player.current_run_id()):
+			return false
+		if state.runtime.terminal and actor.get_node("HealthComponent").dead:
+			continue
+		if state.runtime.terminal or state.runtime.runtime_frame != _last_runtime_frame or not actor.configure_hostile_threat_authority(_registry, Callable(self, "_current_runtime_frame")):
 			return false
 		_actors[source] = actor
 	return true
