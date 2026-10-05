@@ -42,7 +42,7 @@ static func capture(host: Node) -> Dictionary:
 	var native_count := 0
 	if enemies != null:
 		for enemy: Node in enemies.get_children():
-			if not enemy.is_queued_for_deletion():
+			if not enemy.is_queued_for_deletion() and not runner.owns_retired_native_actor(enemy):
 				native_count += 1
 	if enemies == null or native_count != native.get("actors", {}).size():
 		return failure(&"CHECKPOINT_UNSAFE", "live_hostiles")

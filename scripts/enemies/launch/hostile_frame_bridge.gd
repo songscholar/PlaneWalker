@@ -30,7 +30,12 @@ func configure(player: Node2D, registry: RefCounted, actors: Array, effects: Ref
 		if not effects.has_method(method):
 			return false
 	var candidate: Dictionary = {}
-	for value: Variant in actors:
+	var all_actors: Array = actors.duplicate()
+	if effects.has_method("native_summon_actors"):
+		for child: Node2D in effects.native_summon_actors().values():
+			if not all_actors.has(child):
+				all_actors.append(child)
+	for value: Variant in all_actors:
 		if not value is Node2D or not is_instance_valid(value):
 			return false
 		var actor := value as Node2D
@@ -98,6 +103,8 @@ func retire_actor(source_id: String) -> bool:
 func is_ready_for_frame(runtime_frame: int) -> bool:
 	if not is_instance_valid(_player) or _registry == null or _effects == null or not _active.is_empty() or not _detached.is_empty() or _publishing or runtime_frame != _last_runtime_frame + 1:
 		return false
+	if not _sync_summon_roster():
+		return false
 	if _encounter_authority != null and not _encounter_authority.is_ready_for_frame(runtime_frame):
 		return false
 	for source_id: String in _sorted_sources():
@@ -109,6 +116,34 @@ func is_ready_for_frame(runtime_frame: int) -> bool:
 			return false
 		if not bool(state.runtime.terminal) and int(state.runtime.runtime_frame) != _last_runtime_frame:
 			return false
+	return true
+
+
+func _sync_summon_roster() -> bool:
+	if not _effects.has_method("native_summon_actors"):
+		return true
+	var children: Dictionary = _effects.native_summon_actors()
+	for source: String in _actors.keys():
+		if not is_instance_valid(_actors[source]):
+			if not source.begins_with("summon_") or children.has(source):
+				return false
+			_actors.erase(source)
+			continue
+		var actor: Node = _actors[source]
+		if is_instance_valid(actor) and actor.get("_launch_definition").get("actor_kind") == "summon" and not children.has(source):
+			_actors.erase(source)
+	for source: String in children:
+		var actor: Node2D = children[source]
+		if not is_instance_valid(actor) or actor.is_queued_for_deletion() or not _valid_runtime_id(source) or str(actor.hostile_source_id) != source:
+			return false
+		if _actors.has(source):
+			if _actors[source] != actor:
+				return false
+			continue
+		var state: Dictionary = actor.launch_runtime_snapshot()
+		if state.is_empty() or state.runtime.terminal or state.runtime.runtime_frame != _last_runtime_frame or str(state.runtime.identity.run_id) != str(_player.current_run_id()) or not actor.configure_hostile_threat_authority(_registry, Callable(self, "_current_runtime_frame")):
+			return false
+		_actors[source] = actor
 	return true
 
 

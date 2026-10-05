@@ -14,6 +14,7 @@ const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 const Damage := preload("res://scripts/combat/damage_info.gd")
+const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 
 
 func _ready() -> void:
@@ -22,7 +23,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
+	for case_name: String in ["warning", "fighting", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]:
 		var selected := OS.get_environment("PLANEWALKER_CHECKPOINT_CASE")
 		if not selected.is_empty() and selected != case_name:
 			continue
@@ -57,7 +58,7 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	if case_name == "event":
 		config.seed = 6
 	suite.assert_true(host.start_profile_run(config, service, int(service.snapshot().revision)).ok, "actual Host accepts the seeded native combat launch")
-	var selected: bool = await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
+	var selected: bool = await _route_to_native_target(suite, host, false, "void_hunter", true) if case_name == "orphan_summon" else await _route_to_native_target(suite, host, false, "forest_caller") if case_name == "summon" else await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
 	suite.assert_true(selected, "actual Host routes to the authored encounter for " + case_name)
 	if not selected:
 		await _dispose(main)
@@ -72,7 +73,25 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			publication_refusal["safe"] = not refused.ok and refused.code == &"CHECKPOINT_UNSAFE" and service.payload() == before_payload
 		, CONNECT_ONE_SHOT)
 	var ready := false
+	var requested_summon := false
+	var summon_owner := ""
 	for _frame: int in range(600):
+		if case_name in ["summon", "orphan_summon"] and not requested_summon:
+			for actor: Node2D in controller.get_node("Enemies").get_children():
+				var definition: Dictionary = actor.get("_launch_definition")
+				if definition.id != ("forest_caller" if case_name == "summon" else "void_hunter") or case_name == "orphan_summon" and definition.actor_kind != "elite":
+					continue
+				actor.cancel_active_attack()
+				player.global_position = actor.global_position + Vector2(80, 40)
+				var frame: int = actor.get("_launch_runtime").snapshot().runtime_frame
+				var delta := actor.global_position.direction_to(player.global_position)
+				var request: Dictionary = actor.get("_launch_runtime").request_action("forest_caller.void_call" if case_name == "summon" else "void_hunter.hunter_echo", {"runtime_frame": frame, "source_position": {"x": actor.global_position.x, "y": actor.global_position.y}, "target_position": {"x": player.global_position.x, "y": player.global_position.y}, "facing_direction": {"x": delta.x, "y": delta.y}, "target_id": "player:1"})
+				requested_summon = request.ok
+				summon_owner = str(actor.hostile_source_id)
+				for fact: Dictionary in request.get("threat_facts", []):
+					controller.hostile_threat_registry().register_fact(Actions.native_threat_fact(fact))
+				actor.project_runtime_snapshot(actor.launch_runtime_snapshot())
+				break
 		if case_name == "semantic_zone":
 			for actor: Node in controller.get_node("Enemies").get_children():
 				if actor.get("_launch_definition").id == "chrono_guard":
@@ -82,7 +101,9 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		var native: Dictionary = runner.native_launch_snapshot()
 		if native.is_empty():
 			break
-		if case_name == "warning":
+		if case_name in ["summon", "orphan_summon"]:
+			ready = requested_summon and not native.summon_actors.is_empty() and native.summon_actors.values().all(func(state: Dictionary): return state.runtime.runtime_frame == player.priority_arbitration_snapshot().frame)
+		elif case_name == "warning":
 			ready = native.encounter.status == "WARNING"
 		elif case_name.begins_with("boss_aftershock"):
 			for zone: Dictionary in native.effects.payloads.zones:
@@ -107,6 +128,13 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	if not ready:
 		await _dispose(main)
 		return
+	if case_name == "orphan_summon":
+		var driver: Node = runner.get_node("NativeLaunchEncounterDriver")
+		var owner: Node2D = driver.get("_actors").get(summon_owner)
+		var hit := Damage.from_plan({"run_id": str(player.current_run_id()), "target_id": summon_owner, "hostile_source_id": "player:sword", "attack_generation": 501, "action_token": 501, "amount": 100000.0, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+		suite.assert_true(is_instance_valid(owner) and owner.get_node("Hurtbox").receive_hit(hit) > 0.0 and not driver.get("_actors").has(summon_owner), "actual authored echo retains its lifetime after authenticated ordinary principal death")
+		suite.assert_true(player.advance_action_frame() and not runner.native_launch_snapshot().summon_actors.is_empty(), "surviving native echo continues after principal retirement")
+		await get_tree().physics_frame
 	if case_name.begins_with("elite"):
 		var driver: Node = runner.get_node("NativeLaunchEncounterDriver")
 		var elite_seen := false
@@ -232,6 +260,8 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		await _dispose(main)
 		return
 	await get_tree().physics_frame
+	# physics_frame emits before the server consumes reconstructed body transforms.
+	await get_tree().physics_frame
 	for actor: Node in controller.get_node("Enemies").get_children():
 		suite.assert_true(actor_instances.has(str(actor.hostile_source_id)) and actor_instances[str(actor.hostile_source_id)] != actor.get_instance_id(), "cold combat reconstructs a new native actor with its original source identity")
 	for node: Node in runner.get_node("NativeLaunchEncounterDriver").get("_effects").native_payload_nodes():
@@ -270,7 +300,7 @@ func _route_to_encounter(suite: RefCounted, host: Node, event: bool) -> bool:
 	return false
 
 
-func _route_to_native_target(suite: RefCounted, host: Node, boss: bool) -> bool:
+func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id: String = "chrono_guard", require_elite: bool = false) -> bool:
 	for _step: int in range(140):
 		var state: Dictionary = host.runtime_snapshot()
 		var node: Dictionary = host.native_run_state().current_floor_node()
@@ -281,7 +311,7 @@ func _route_to_native_target(suite: RefCounted, host: Node, boss: bool) -> bool:
 			var waves: Array = definition.get("waves", [])
 			if not waves.is_empty():
 				for spawn: Dictionary in waves[0].spawns:
-					if spawn.enemy_id == "chrono_guard":
+					if spawn.enemy_id == enemy_id and (not require_elite or spawn.elite):
 						return true
 		if not state.open_offer.is_empty():
 			var offer: Dictionary = state.open_offer

@@ -7,8 +7,9 @@ const Registry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Damage := preload("res://scripts/combat/damage_info.gd")
 const Payloads := preload("res://scripts/enemies/launch/launch_hostile_payload_authority.gd")
 const Semantics := preload("res://scripts/enemies/launch/launch_semantic_effect_authority.gd")
+const Summons := preload("res://scripts/enemies/launch/launch_summon_authority.gd")
 const CONTEXT_FIELDS: Array[String] = ["run_id", "runtime_frame", "threat_registry", "actors", "targets"]
-const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "health_records", "source_batches", "actors", "targets", "threat_registry", "payload_ticket", "semantic_ticket"]
+const TICKET_FIELDS: Array[String] = ["ticket_id", "run_id", "runtime_frame", "before", "after", "registry_before", "registry_after", "registry_operations", "damage_records", "health_records", "source_batches", "actors", "targets", "threat_registry", "payload_ticket", "semantic_ticket", "summon_ticket"]
 const MAX_CLAIMS := 4096
 
 var _state: Dictionary = {}
@@ -19,12 +20,14 @@ var _publishing := false
 var _owned_signals: Array[Dictionary] = []
 var _payloads: RefCounted = Payloads.new()
 var _semantics: RefCounted = Semantics.new()
+var _summons: RefCounted = Summons.new()
+var _owned_void_resources: Array[Dictionary] = []
 
 
 func configure(run_id: String, runtime_frame: int = 0) -> bool:
-	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame) or not _semantics.configure(run_id, runtime_frame):
+	if not _pending.is_empty() or _publishing or not _stable_id(run_id) or runtime_frame < 0 or not _payloads.configure(run_id, runtime_frame) or not _semantics.configure(run_id, runtime_frame) or not _summons.configure(run_id, runtime_frame):
 		return false
-	_state = {"schema_version": 1, "run_id": run_id, "runtime_frame": runtime_frame, "claims": []}
+	_state = {"schema_version": 2, "run_id": run_id, "runtime_frame": runtime_frame, "claims": []}
 	return true
 
 
@@ -33,11 +36,32 @@ func snapshot() -> Dictionary:
 	if not result.is_empty():
 		result["payloads"] = _payloads.snapshot()
 		result["semantics"] = _semantics.snapshot()
+		result["summons"] = _summons.snapshot()
 	return result
 
 
 func configure_native_payloads(root: Node2D) -> bool:
-	return not _state.is_empty() and _pending.is_empty() and _payloads.configure_native_root(root) and _semantics.configure_native_root(root)
+	return not _state.is_empty() and _pending.is_empty() and _payloads.configure_native_root(root) and _semantics.configure_native_root(root) and _summons.configure_native_root(root)
+
+
+func summon_snapshot() -> Dictionary:
+	return _summons.snapshot()
+
+
+func native_summon_actors() -> Dictionary:
+	return _summons.native_actors()
+
+
+func configure_native_summon_room(room: Node2D, template: Dictionary) -> bool:
+	return not _state.is_empty() and _pending.is_empty() and _summons.configure_native_room(room, template)
+
+
+func restore_native_summon_snapshot(value: Dictionary) -> bool:
+	return not _state.is_empty() and _pending.is_empty() and not _publishing and _summons.restore_snapshot(value)
+
+
+func capture_native_terminal_split(owner: Node2D, receipt: String, targets: Dictionary) -> bool:
+	return not _state.is_empty() and _pending.is_empty() and not _publishing and _summons.capture_native_terminal_split(owner, receipt, targets)
 
 
 func payload_snapshot() -> Dictionary:
@@ -65,11 +89,11 @@ func native_semantic_nodes() -> Array[Node2D]:
 
 
 func bind_native_targets(actors: Dictionary, targets: Dictionary) -> bool:
-	return not _state.is_empty() and _pending.is_empty() and not _publishing and _semantics.bind_native_targets(actors, targets)
+	return not _state.is_empty() and _pending.is_empty() and not _publishing and _semantics.bind_native_targets(actors, targets) and _summons.bind_native_targets(actors)
 
 
 func dispose_native_effects() -> bool:
-	return not _state.is_empty() and _pending.is_empty() and not _publishing and _semantics.dispose_native_effects()
+	return not _state.is_empty() and _pending.is_empty() and not _publishing and _semantics.dispose_native_effects() and _summons.dispose_native_effects()
 
 
 func work_snapshot() -> Dictionary:
@@ -91,23 +115,42 @@ func launch_transaction_snapshot() -> Dictionary:
 
 
 func can_restore_launch_transaction_snapshot(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads", "semantics"]) or value.schema_version != 1 or value.run_id != _state.run_id or typeof(value.runtime_frame) != TYPE_INT or not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.payloads is Dictionary or not _payloads.can_restore_transaction_snapshot(value.payloads) or not value.semantics is Dictionary or not _semantics.can_restore_transaction_snapshot(value.semantics):
+	value = normalize_transaction_snapshot(value)
+	if value.is_empty() or not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads", "semantics", "summons"]) or value.schema_version != 2 or value.run_id != _state.run_id or typeof(value.runtime_frame) != TYPE_INT or not value.claims is Array or value.claims.size() > MAX_CLAIMS or not value.payloads is Dictionary or not _payloads.can_restore_transaction_snapshot(value.payloads) or not value.semantics is Dictionary or not _semantics.can_restore_transaction_snapshot(value.semantics) or not value.summons is Dictionary or not _summons.can_restore_snapshot(value.summons):
 		return false
 	var seen: Dictionary = {}
 	for claim: Variant in value.claims:
 		if typeof(claim) != TYPE_STRING or claim.length() != 64 or not claim.is_valid_hex_number(false) or seen.has(claim):
 			return false
 		seen[claim] = true
-	return value.runtime_frame == value.payloads.runtime_frame and value.runtime_frame == value.semantics.runtime_frame and _payload_active_zone_count(value.payloads) + _semantics.active_zone_count_for_snapshot(value.semantics, int(value.runtime_frame)) <= 12
+	return value.runtime_frame == value.payloads.runtime_frame and value.runtime_frame == value.semantics.runtime_frame and value.runtime_frame == value.summons.runtime_frame and _payload_active_zone_count(value.payloads) + _semantics.active_zone_count_for_snapshot(value.semantics, int(value.runtime_frame)) <= 12
+
+
+static func normalize_transaction_snapshot(value: Dictionary) -> Dictionary:
+	if typeof(value.get("schema_version")) != TYPE_INT:
+		return {}
+	if value.schema_version == 2:
+		return value.duplicate(true)
+	if value.schema_version != 1 or not Contract.exact_fields(value, ["schema_version", "run_id", "runtime_frame", "claims", "payloads", "semantics"]) or not value.semantics is Dictionary or not value.semantics.has("initial_frame"):
+		return {}
+	var migrated := value.duplicate(true)
+	migrated.schema_version = 2
+	migrated["summons"] = {"schema_version": 1, "run_id": value.run_id, "initial_frame": value.semantics.initial_frame, "runtime_frame": value.runtime_frame, "claims": [], "rows": []}
+	return migrated
 
 
 func restore_launch_transaction_snapshot(value: Dictionary) -> bool:
+	value = normalize_transaction_snapshot(value)
 	if not _pending.is_empty() or _publishing or not can_restore_launch_transaction_snapshot(value):
 		return false
 	var before := snapshot()
 	if not _payloads.restore_transaction_snapshot(value.payloads):
 		return false
 	if not _semantics.restore_transaction_snapshot(value.semantics):
+		_payloads.restore_transaction_snapshot(before.payloads)
+		return false
+	if not _summons.restore_snapshot(value.summons):
+		_semantics.restore_transaction_snapshot(before.semantics)
 		_payloads.restore_transaction_snapshot(before.payloads)
 		return false
 	_state = value.duplicate(true)
@@ -217,12 +260,23 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 				prepared.record["forge_slam"] = {"owner": actor, "hit": hit.duplicate(true)}
 			damages.append(prepared.record)
 		for request: Dictionary in batch.get("mechanism_requests", []):
-			if request.get("kind") != "forge_burn_tick":
+			if request.get("kind") == "void_shard_pickup":
+				if damages.any(func(row: Dictionary): return row.has("void_pickup") and row.void_pickup.target_id == request.target_id):
+					continue
+				var pickup := _prepare_void_pickup(request, actor, context, next)
+				if not pickup.ok:
+					return pickup
+				if not pickup.record.is_empty():
+					damages.append(pickup.record)
 				continue
-			if not actor.has_method("prepared_launch_forge_mechanism_allowed") or not actor.prepared_launch_forge_mechanism_allowed(request):
+			if request.get("kind") not in ["forge_burn_tick", "void_burn_tick"]:
+				continue
+			var sealed: bool = actor.has_method("prepared_launch_void_mechanism_allowed") and actor.prepared_launch_void_mechanism_allowed(request) if request.kind == "void_burn_tick" else actor.has_method("prepared_launch_forge_mechanism_allowed") and actor.prepared_launch_forge_mechanism_allowed(request)
+			if not sealed:
 				return _failure("forge_burn_seal")
-			var tick := request.duplicate(true)
-			tick.erase("kind")
+			var tick: Dictionary = request.request.duplicate(true) if request.kind == "void_burn_tick" else request.duplicate(true)
+			if tick.has("kind"):
+				tick.erase("kind")
 			var prepared := _prepare_payload_damage(tick, context, next)
 			if not prepared.ok:
 				return prepared
@@ -232,7 +286,8 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 			if not prepared.ok:
 				return prepared
 			damages.append(prepared.record)
-	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context, _semantics.active_zone_count_for_snapshot(next.semantics, int(context.runtime_frame)))
+	var retired_children: Array[String] = _summons.retired_owner_child_sources(context.actors)
+	var payload_prepared: Dictionary = _payloads.prepare_payloads(batches, context, _semantics.active_zone_count_for_snapshot(next.semantics, int(context.runtime_frame)), retired_children)
 	if not payload_prepared.ok:
 		return payload_prepared
 	for request: Dictionary in payload_prepared.damage_requests:
@@ -245,7 +300,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	if not _prepare_payload_registry(payload_prepared.ticket.before, payload_prepared.ticket.after, projected, operations):
 		_payloads.rollback(payload_prepared.ticket)
 		return _failure("payload_threat_registry")
-	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after))
+	var semantic_prepared: Dictionary = _semantics.prepare_effects(batches, context, _payload_active_zone_count(payload_prepared.ticket.after), retired_children)
 	if not semantic_prepared.ok:
 		_payloads.rollback(payload_prepared.ticket)
 		return semantic_prepared
@@ -305,7 +360,13 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 		return _failure("semantic_threat_registry")
 	while next.claims.size() > MAX_CLAIMS:
 		next.claims.pop_front()
-	var ticket := {"ticket_id": _next_ticket_id, "run_id": context.run_id, "runtime_frame": context.runtime_frame, "before": snapshot(), "after": next, "registry_before": registry_before, "registry_after": projected.snapshot(), "registry_operations": operations, "damage_records": damages, "health_records": health_records, "source_batches": batches.duplicate(true), "actors": context.actors.duplicate(), "targets": context.targets.duplicate(), "threat_registry": registry, "payload_ticket": payload_prepared.ticket, "semantic_ticket": semantic_prepared.ticket}
+	var summon_prepared: Dictionary = _summons.prepare(batches, context)
+	if not summon_prepared.ok:
+		_semantics.rollback(semantic_prepared.ticket)
+		_payloads.rollback(payload_prepared.ticket)
+		return summon_prepared
+	next.summons = summon_prepared.ticket.after.duplicate(true)
+	var ticket := {"ticket_id": _next_ticket_id, "run_id": context.run_id, "runtime_frame": context.runtime_frame, "before": snapshot(), "after": next, "registry_before": registry_before, "registry_after": projected.snapshot(), "registry_operations": operations, "damage_records": damages, "health_records": health_records, "source_batches": batches.duplicate(true), "actors": context.actors.duplicate(), "targets": context.targets.duplicate(), "threat_registry": registry, "payload_ticket": payload_prepared.ticket, "semantic_ticket": semantic_prepared.ticket, "summon_ticket": summon_prepared.ticket}
 	_next_ticket_id += 1
 	_pending = ticket.duplicate(true)
 	_committed = false
@@ -314,7 +375,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 
 
 func can_commit_effects(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or _committed or _publishing or snapshot() != ticket.before or ticket.threat_registry.snapshot() != ticket.registry_before or not _payloads.can_commit(ticket.payload_ticket) or not _semantics.can_commit(ticket.semantic_ticket):
+	if not _ticket_matches(ticket) or _committed or _publishing or snapshot() != ticket.before or ticket.threat_registry.snapshot() != ticket.registry_before or not _payloads.can_commit(ticket.payload_ticket) or not _semantics.can_commit(ticket.semantic_ticket) or not _summons.can_commit(ticket.summon_ticket):
 		return false
 	for wrapper: Dictionary in ticket.source_batches:
 		var actor: Node = ticket.actors[wrapper.hostile_source_id]
@@ -322,6 +383,8 @@ func can_commit_effects(ticket: Dictionary) -> bool:
 			return false
 	for record: Dictionary in ticket.damage_records + ticket.health_records:
 		if not is_instance_valid(record.target) or not is_instance_valid(record.health) or not _target_position_matches(record, ticket.runtime_frame) or _health_observation(record.health) != record.health_before:
+			return false
+		if record.has("void_pickup") and record.resource_manager.resource_state(&"time_energy") != record.resource_before:
 			return false
 	return true
 
@@ -347,8 +410,16 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 		return _failure("native_payload_commit")
 	if not _semantics.commit(ticket.semantic_ticket):
 		return _failure("native_semantic_commit")
+	if not _summons.commit(ticket.summon_ticket):
+		return _failure("native_summon_commit")
 	var resolutions: Array = []
 	for record: Dictionary in ticket.damage_records:
+		if record.has("void_pickup"):
+			var buffered: bool = not (record.resource_manager.get("_active_frame_signal_transaction") as Dictionary).is_empty()
+			if not record.void_owner.settle_native_void_pickup(self, record):
+				return _failure("void_pickup_receipt")
+			_owned_void_resources.append({"manager": record.resource_manager, "buffered": buffered, "before": record.resource_before, "after": record.resource_manager.resource_state(&"time_energy")})
+			continue
 		if record.has("consumption_amount"):
 			var consumed: float = record.health.lose_health(record.consumption_amount, record.target)
 			if not is_equal_approx(consumed, float(record.consumption_amount)) or not record.health.dead:
@@ -367,6 +438,8 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 			return _failure("forest_drain_receipt")
 		if record.has("forge_slam") and not record.forge_slam.owner.settle_native_forge_slam(record.forge_slam.hit, record.target, maxf(0.0, hp_before - float(record.health.current_hp))):
 			return _failure("forge_burn_receipt")
+		if record.has("void_damage") and not record.void_owner.settle_native_void_damage(self, record, maxf(0.0, hp_before - float(record.health.current_hp))):
+			return _failure("void_damage_receipt")
 	for record: Dictionary in ticket.health_records:
 		if record.get("forest_drain_reservation", false):
 			continue
@@ -405,6 +478,10 @@ func rollback_effects(ticket: Dictionary) -> bool:
 	if not _ticket_matches(ticket) or _publishing:
 		return false
 	var ok := true
+	for record: Dictionary in ticket.damage_records:
+		if record.has("void_pickup"):
+			ok = record.resource_manager.restore_resource_state(&"time_energy", record.resource_before, false) and ok
+	_owned_void_resources.clear()
 	for owned: Dictionary in _owned_signals:
 		if owned.publication.is_empty():
 			ok = bool(owned.health.rollback_frame_signal_transaction(owned.ticket)) and ok
@@ -414,6 +491,7 @@ func rollback_effects(ticket: Dictionary) -> bool:
 		ok = false
 	ok = _payloads.rollback(ticket.payload_ticket) and ok
 	ok = _semantics.rollback(ticket.semantic_ticket) and ok
+	ok = _summons.rollback(ticket.summon_ticket) and ok
 	_state = ticket.before.duplicate(true)
 	_pending.clear()
 	_owned_signals.clear()
@@ -422,10 +500,13 @@ func rollback_effects(ticket: Dictionary) -> bool:
 
 
 func can_publish_effects(ticket: Dictionary) -> bool:
-	if not _ticket_matches(ticket) or not _committed or _publishing or not _payloads.can_publish(ticket.payload_ticket) or not _semantics.can_publish(ticket.semantic_ticket):
+	if not _ticket_matches(ticket) or not _committed or _publishing or not _payloads.can_publish(ticket.payload_ticket) or not _semantics.can_publish(ticket.semantic_ticket) or not _summons.can_publish(ticket.summon_ticket):
 		return false
 	for owned: Dictionary in _owned_signals:
 		if not is_instance_valid(owned.health) or not bool(owned.health.call("_finalized_frame_signal_publication_matches", owned.publication)):
+			return false
+	for owned: Dictionary in _owned_void_resources:
+		if not is_instance_valid(owned.manager) or owned.manager.resource_state(&"time_energy") != owned.after:
 			return false
 	return true
 
@@ -434,14 +515,19 @@ func publish_effects(ticket: Dictionary) -> bool:
 	if not can_publish_effects(ticket):
 		return false
 	var publications := _owned_signals.duplicate(true)
-	if not _payloads.publish(ticket.payload_ticket) or not _semantics.publish(ticket.semantic_ticket):
+	var resources := _owned_void_resources.duplicate(true)
+	if not _payloads.publish(ticket.payload_ticket) or not _semantics.publish(ticket.semantic_ticket) or not _summons.publish(ticket.summon_ticket):
 		return false
 	_publishing = true
 	_pending.clear()
+	_owned_void_resources.clear()
 	_owned_signals.clear()
 	_committed = false
 	for owned: Dictionary in publications:
 		owned.health.publish_prepared_frame_signals()
+	for owned: Dictionary in resources:
+		if not owned.buffered and owned.before.current != owned.after.current:
+			owned.manager.energy_changed.emit(float(owned.after.current), float(owned.after.maximum))
 	_publishing = false
 	return true
 
@@ -463,7 +549,52 @@ func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dic
 	if info == null:
 		return _failure("payload_damage_plan")
 	record["info"] = info
+	if not str(request.payload_id).begins_with("void-burn:") and context.actors.has(request.hostile_source_id):
+		_attach_void_damage(record, context.actors[request.hostile_source_id], request, claim)
 	return {"ok": true, "record": record}
+
+
+func owns_void_damage_record(owner: Node2D, record: Dictionary) -> bool:
+	return not _pending.is_empty() and not _publishing and record.get("void_owner") == owner and _pending.damage_records.has(record) and record.has("void_damage")
+
+
+func owns_void_pickup_record(owner: Node2D, record: Dictionary) -> bool:
+	return not _pending.is_empty() and not _publishing and record.get("void_owner") == owner and _pending.damage_records.has(record) and record.has("void_pickup") and owner.prepared_launch_void_mechanism_allowed(record.void_pickup)
+
+
+func _prepare_void_pickup(request: Dictionary, actor: Node2D, context: Dictionary, next: Dictionary) -> Dictionary:
+	if not Contract.exact_fields(request, ["kind", "run_id", "hostile_source_id", "runtime_frame", "pickup_id", "target_id", "position", "amount"]) or not actor.has_method("prepared_launch_void_mechanism_allowed") or not actor.prepared_launch_void_mechanism_allowed(request) or not context.targets.has(request.target_id):
+		return _failure("void_pickup_seal")
+	var target: Node2D = context.targets[request.target_id]
+	var record := _target_record(target)
+	if record.is_empty() or not target is PlayerController:
+		return _failure("void_pickup_target")
+	if record.health_before.runtime.dead:
+		return {"ok": true, "record": {}}
+	var claim := _claim(context.run_id, request.target_id, "void-pickup:%s:%s" % [request.hostile_source_id, request.pickup_id], int(actor.get("_launch_identity").next_generation_floor), 0)
+	if next.claims.has(claim):
+		return _failure("void_pickup_duplicate")
+	next.claims.append(claim)
+	record["info"] = null
+	record["void_owner"] = actor
+	record["void_pickup"] = request.duplicate(true)
+	record["resource_manager"] = target.time_manager
+	record["resource_before"] = target.time_manager.resource_state(&"time_energy")
+	record["resource_fact_id"] = "void-energy:" + claim.substr(0, 40)
+	return {"ok": true, "record": record}
+
+
+func _attach_void_damage(record: Dictionary, actor: Node2D, request: Dictionary, claim: String) -> void:
+	if actor.get("_launch_definition").get("id") != "void_throne" or not record.target is PlayerController or not actor.has_method("native_void_auxiliary_snapshot"):
+		return
+	var action: String = actor.get("_launch_runtime").void_action_for_generation(int(request.attack_generation))
+	if action.is_empty() and not actor.get("_prepared_launch_frame").is_empty():
+		for cast: Dictionary in actor.get("_prepared_launch_frame").after.runtime.void_auxiliary.casts:
+			if cast.geometry.any(func(row: Dictionary): return row.attack_generation == request.attack_generation):
+				action = str(cast.action_id)
+	if action in ["voidking_scepter_strike", "voidking_void_bolt", "voidking_void_grasp", "voidking_devour"]:
+		record["void_owner"] = actor
+		record["void_damage"] = {"fact_id": "void-health:" + claim.substr(0, 40), "attack_generation": int(request.attack_generation), "hit_index": int(request.hit_index), "target_id": str(request.target_id), "runtime_frame": int(request.runtime_frame)}
 
 
 func _prepare_health_gain(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
@@ -625,6 +756,13 @@ func _work_snapshot(value: Dictionary) -> Dictionary:
 					phase = "ACTIVE"
 		if phase in ["ACTIVE", "PENDING"]:
 			records["debris_" + str(row.id).sha256_text().substr(0, 57)] = {"kind": "construct", "owner_source_id": row.event.source_id, "phase": phase}
+	var child_owners := {}
+	for row: Dictionary in value.summons.rows:
+		child_owners[row.id] = row.parent_source_id
+	for id: String in records:
+		if child_owners.has(records[id].owner_source_id):
+			records[id].owner_source_id = child_owners[records[id].owner_source_id]
+	records.merge(Summons.work_records(value.summons))
 	return {"run_id": value.run_id, "runtime_frame": value.runtime_frame, "records": records}
 
 
@@ -678,6 +816,7 @@ func _prepare_hit(value: Variant, source: String, actor: Node2D, context: Dictio
 		if info == null:
 			return _failure("damage_plan")
 	record["info"] = info
+	_attach_void_damage(record, actor, hit, claim)
 	return {"ok": true, "record": record}
 
 

@@ -16,7 +16,9 @@ const Debris := preload("res://scripts/enemies/launch/ruin_debris_runtime.gd")
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
 const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
 const EliteProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
-const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "threats", "run_seed", "last_flushed_frame"]
+const SummonRuntime := preload("res://scripts/enemies/launch/launch_summon_runtime.gd")
+const SummonAuthority := preload("res://scripts/enemies/launch/launch_summon_authority.gd")
+const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "summon_actors", "threats", "run_seed", "last_flushed_frame"]
 
 class ProductionBridge extends "res://scripts/enemies/launch/hostile_frame_bridge.gd":
 	var native_boundary_ready: Callable
@@ -102,7 +104,7 @@ func start(encounter: Dictionary, seed: int, generation: int) -> bool:
 	payload_root.name = "NativeLaunchHostilePayloads"
 	_controller.add_child(payload_root)
 	var effects := Effects.new()
-	if not effects.configure(identity.run_id, frame) or not effects.configure_native_payloads(payload_root):
+	if not effects.configure(identity.run_id, frame) or not effects.configure_native_payloads(payload_root) or not effects.configure_native_summon_room(_scene, _template):
 		payload_root.queue_free()
 		return _fail(&"NATIVE_LAUNCH_EFFECTS_INVALID")
 	var ledger := Ledger.new()
@@ -180,7 +182,10 @@ func snapshot() -> Dictionary:
 		if not is_instance_valid(actor):
 			return {}
 		actors[source] = actor.launch_runtime_snapshot()
-	return {"schema_version": 1, "definition": _definition.duplicate(true), "encounter": _encounter.snapshot(), "effects": _effects.snapshot(), "actors": actors, "failure": _failure.duplicate(true)}
+	var children := {}
+	for source: String in _effects.native_summon_actors():
+		children[source] = _effects.native_summon_actors()[source].launch_runtime_snapshot()
+	return {"schema_version": 2, "definition": _definition.duplicate(true), "encounter": _encounter.snapshot(), "effects": _effects.snapshot(), "actors": actors, "summon_actors": children, "failure": _failure.duplicate(true)}
 
 
 func legacy_snapshot() -> Dictionary:
@@ -288,7 +293,25 @@ func _on_actor_final_death(source: StringName, receipt: String) -> void:
 		_fail(&"BOSS_SETTLEMENT_SOURCE_INVALID")
 		return
 	var encounter_before: Dictionary = _encounter.snapshot()
+	var effects_before := {}
+	if not _bridge.frame_transaction_is_active() and actor.get("_launch_definition").actor_kind == "elite" and actor.get("_launch_definition").id in ["ruins_wraith", "void_spore"]:
+		effects_before = _effects.launch_transaction_snapshot()
+		if effects_before.is_empty() or not _effects.bind_native_targets(_actors, {"player:1": _player}) or not _effects.capture_native_terminal_split(actor, receipt, {"player:1": _player}):
+			_fail(&"NATIVE_TERMINAL_SPLIT_INVALID")
+			return
+		for id: String in _effects.work_snapshot().records:
+			var work: Dictionary = _effects.work_snapshot().records[id]
+			if encounter_before.pending_work.has(id):
+				continue
+			if not _encounter.reserve_pending_work(id, work.kind, work.owner_source_id, work.phase):
+				_encounter.restore_snapshot(encounter_before)
+				_effects.restore_launch_transaction_snapshot(effects_before)
+				_fail(&"NATIVE_TERMINAL_SPLIT_INVALID")
+				return
 	if not _encounter.notify_entity_defeated(str(source), receipt):
+		if not effects_before.is_empty():
+			_encounter.restore_snapshot(encounter_before)
+			_effects.restore_launch_transaction_snapshot(effects_before)
 		return
 	if not settlement.source.is_empty() and not _facade.native_run_state().append_meta_boss_source(settlement.source):
 		_encounter.restore_snapshot(encounter_before)
@@ -378,6 +401,17 @@ func _fail(code: StringName, context: Dictionary = {}) -> bool:
 	return false
 
 
+func owns_retired_native_actor(actor: Node) -> bool:
+	if _encounter == null or not is_instance_valid(actor) or not actor.has_method("launch_runtime_snapshot") or actor.get_parent() != _controller.get_node("Enemies"):
+		return false
+	var source := str(actor.get("hostile_source_id"))
+	var defeated: Dictionary = _encounter.snapshot().defeat_ledger.get(source, {})
+	var state: Dictionary = actor.launch_runtime_snapshot()
+	var health: Node = actor.get_node_or_null("HealthComponent")
+	var expected := "hostile_defeat:%s" % (str(_player.current_run_id()) + "|" + source).sha256_text().substr(0, 40)
+	return not _actors.has(source) and not defeated.is_empty() and not state.is_empty() and is_instance_valid(health) and health.dead and health.current_hp == 0.0 and state.runtime.terminal and state.runtime.identity.run_id == str(_player.current_run_id()) and state.runtime.identity.hostile_source_id == source and state.death_receipt == expected and defeated.receipt_id == expected and defeated.enemy_id == actor.get("_launch_definition").id
+
+
 func cold_snapshot() -> Dictionary:
 	if not is_active() or not _boundary_ready() or _bridge.frame_transaction_is_active() or not _retired_sources.is_empty() or _last_flushed_frame != int(_player.priority_arbitration_snapshot().frame):
 		return {}
@@ -390,12 +424,20 @@ func cold_snapshot() -> Dictionary:
 		if state.is_empty():
 			return {}
 		actors[source] = state
-	var value := {"schema_version": 1, "definition": _definition.duplicate(true), "encounter": _encounter.snapshot(), "effects": _effects.launch_transaction_snapshot(), "actors": actors, "threats": _controller.hostile_threat_registry().snapshot(), "run_seed": _run_seed, "last_flushed_frame": _last_flushed_frame}
+	var children := {}
+	for source: String in _effects.native_summon_actors():
+		var child: Node = _effects.native_summon_actors()[source]
+		var state: Dictionary = child.native_cold_snapshot(Callable(self, "_cold_source_binding"))
+		if state.is_empty():
+			return {}
+		children[source] = state
+	var value := {"schema_version": 2, "definition": _definition.duplicate(true), "encounter": _encounter.snapshot(), "effects": _effects.launch_transaction_snapshot(), "actors": actors, "summon_actors": children, "threats": _controller.hostile_threat_registry().snapshot(), "run_seed": _run_seed, "last_flushed_frame": _last_flushed_frame}
 	return value if validate_cold_snapshot(value, str(_player.current_run_id()), str(_encounter.snapshot().identity.room_id), _last_flushed_frame) else {}
 
 
 static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: String, frame: int) -> bool:
-	if not Contract.exact_fields(value, COLD_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or not value.definition is Dictionary or not value.encounter is Dictionary or not value.effects is Dictionary or not value.actors is Dictionary or not value.threats is Array or not Contract.integer_in_range(value.run_seed, -2147483648, 2147483647) or value.last_flushed_frame != frame or not Replay.replay_value_is_safe(value):
+	value = normalize_cold_snapshot(value)
+	if value.is_empty() or not Contract.exact_fields(value, COLD_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 2 or not value.definition is Dictionary or not value.encounter is Dictionary or not value.effects is Dictionary or not value.actors is Dictionary or not value.summon_actors is Dictionary or not value.threats is Array or not Contract.integer_in_range(value.run_seed, -2147483648, 2147483647) or value.last_flushed_frame != frame or not Replay.replay_value_is_safe(value):
 		return false
 	var state: Dictionary = value.encounter
 	if not state.get("identity") is Dictionary or state.identity.get("run_id") != run_id or state.identity.get("room_id") != room_id or state.get("last_runtime_frame") != frame or state.get("status") not in Encounter.LIVE_STATUSES or not state.get("roster") is Dictionary or state.roster.size() != value.actors.size() or not state.get("pending_spawns") is Dictionary or not state.pending_spawns.is_empty():
@@ -413,13 +455,30 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 			return false
 	var registry := Registry.new()
 	var sources: Dictionary = {}
+	var source_definitions := {}
+	var elite_sources := {}
 	var ruin_sources: Dictionary = {}
 	for wave: Dictionary in value.definition.waves:
 		for spawn: Dictionary in wave.spawns:
 			var source := str(Controller.hostile_source_id_for_spawn({"run_id": run_id}, StringName(room_id), StringName(value.definition.id), spawn, 0))
 			sources[source] = true
+			source_definitions[source] = str(spawn.enemy_id)
+			if spawn.elite:
+				elite_sources[source] = true
 			if spawn.enemy_id == "ruin_king":
 				ruin_sources[source] = true
+	var expected_children := {}
+	for row: Dictionary in value.effects.summons.rows:
+		if source_definitions.get(row.parent_source_id) != row.parent_definition_id or row.seed != value.run_seed or row.spawn_mode in ["DEATH", "MIRROR"] and not elite_sources.has(row.parent_source_id):
+			return false
+		sources[row.id] = true
+		if row.phase != "ACTIVE":
+			continue
+		if not value.summon_actors.has(row.id) or not _valid_cold_child(value.summon_actors[row.id], row, run_id, frame):
+			return false
+		expected_children[row.id] = true
+	if expected_children.size() != value.summon_actors.size():
+		return false
 	for debris: Dictionary in value.effects.payloads.get("arena_debris", {}).get("rows", []):
 		if not ruin_sources.has(debris.event.source_id):
 			return false
@@ -448,13 +507,20 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 	for fact: Dictionary in payload_facts.snapshot():
 		if registry.fact_snapshot(fact.hostile_source_id, fact.attack_generation) != fact:
 			return false
-	for source: Variant in value.actors:
-		var actor: Variant = value.actors[source]
-		if not source is String or not actor is Dictionary or not Contract.exact_fields(actor, ["schema_version", "definition_id", "identity", "actor", "health"]) or actor.schema_version != 1 or not actor.health is Dictionary or not state.roster.has(source) or not actor.get("identity") is Dictionary or not actor.get("actor") is Dictionary or not actor.actor.get("runtime") is Dictionary or not Contract.valid_point(actor.actor.get("position")):
+	var all_actors: Dictionary = value.actors.duplicate()
+	all_actors.merge(value.summon_actors)
+	for source: Variant in all_actors:
+		var actor: Variant = all_actors[source]
+		if not source is String or not actor is Dictionary or not Contract.exact_fields(actor, ["schema_version", "definition_id", "identity", "actor", "health"]) or actor.schema_version != 1 or not actor.health is Dictionary or not actor.get("identity") is Dictionary or not actor.get("actor") is Dictionary or not actor.actor.get("runtime") is Dictionary or not Contract.valid_point(actor.actor.get("position")):
 			return false
-		var spawn := _cold_spawn(value.definition, str(state.roster[source].spawn_id))
-		var expected := str(Controller.hostile_source_id_for_spawn({"run_id": run_id}, StringName(room_id), StringName(value.definition.id), spawn, 0))
-		if spawn.is_empty() or expected != source or actor.get("definition_id") != spawn.enemy_id or actor.identity.get("hostile_source_id") != source or actor.identity.get("run_id") != run_id or actor.identity.get("seed") != value.run_seed or actor.actor.runtime.get("identity") != actor.identity or actor.actor.runtime.get("runtime_frame") != frame or actor.actor.runtime.get("terminal") != false or actor.health.get("dead") != false:
+		if value.actors.has(source):
+			if not state.roster.has(source):
+				return false
+			var spawn := _cold_spawn(value.definition, str(state.roster[source].spawn_id))
+			var expected := str(Controller.hostile_source_id_for_spawn({"run_id": run_id}, StringName(room_id), StringName(value.definition.id), spawn, 0))
+			if spawn.is_empty() or expected != source or actor.get("definition_id") != spawn.enemy_id:
+				return false
+		if actor.identity.get("hostile_source_id") != source or actor.identity.get("run_id") != run_id or actor.identity.get("seed") != value.run_seed or actor.actor.runtime.get("identity") != actor.identity or actor.actor.runtime.get("runtime_frame") != frame or actor.actor.runtime.get("terminal") != false or actor.health.get("dead") != false:
 			return false
 		if not actor.actor.runtime.get("mechanism_state") is Dictionary:
 			return false
@@ -474,10 +540,38 @@ static func validate_cold_snapshot(value: Dictionary, run_id: String, room_id: S
 		for fact: Dictionary in registry.snapshot():
 			if str(fact.hostile_source_id) == source and int(fact.active_through_frame) >= frame and expected_facts.fact_snapshot(fact.hostile_source_id, fact.attack_generation).is_empty() and action.get("action_id") != "traitor_self_rewind":
 				return false
-	return registry.snapshot() == value.threats
+	return registry.snapshot() == value.threats and SummonAuthority.valid_mirroring_cold_bindings(value.effects.summons, value.actors)
+
+
+static func normalize_cold_snapshot(value: Dictionary) -> Dictionary:
+	if typeof(value.get("schema_version")) != TYPE_INT:
+		return {}
+	var migrated := value.duplicate(true)
+	if value.schema_version == 1:
+		var fields := COLD_FIELDS.duplicate()
+		fields.erase("summon_actors")
+		if not Contract.exact_fields(value, fields):
+			return {}
+		migrated.schema_version = 2
+		migrated["summon_actors"] = {}
+	elif value.schema_version != 2:
+		return {}
+	if not migrated.get("effects") is Dictionary:
+		return {}
+	migrated.effects = Effects.normalize_transaction_snapshot(migrated.effects)
+	return migrated if not migrated.effects.is_empty() else {}
+
+
+static func _valid_cold_child(saved: Variant, row: Dictionary, run_id: String, frame: int) -> bool:
+	if not saved is Dictionary or not Contract.exact_fields(saved, ["schema_version", "definition_id", "identity", "actor", "health"]) or saved.schema_version != 1 or saved.definition_id != row.projection.id or not saved.actor is Dictionary or not saved.actor.get("runtime") is Dictionary or not saved.health is Dictionary:
+		return false
+	var identity := {"run_id": run_id, "hostile_source_id": row.id, "next_generation_floor": 1, "runtime_frame": row.birth_frame, "seed": row.seed}
+	var runtime := SummonRuntime.new()
+	return saved.identity == identity and runtime.configure(row.projection, identity).ok and runtime.can_restore_snapshot(saved.actor.runtime) and saved.actor.runtime.runtime_frame == frame and not saved.actor.runtime.terminal and saved.health.get("max_hp") == row.projection.max_hp and saved.health.get("current_hp") == saved.actor.runtime.mechanism_state.hp_after and saved.health.get("dead") == false
 
 
 func restore_cold_snapshot(value: Dictionary) -> bool:
+	value = normalize_cold_snapshot(value)
 	if _encounter != null or _flushing or not is_instance_valid(_player) or _facade == null or not _scene_resolver.is_valid():
 		return false
 	var target: Dictionary = _facade.current_room_restore_target()
@@ -501,7 +595,7 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 	_payload_root.name = "NativeLaunchHostilePayloads"
 	_controller.add_child(_payload_root)
 	_effects = Effects.new()
-	if not _effects.configure(str(_player.current_run_id()), int(value.encounter.identity.runtime_frame)) or not _effects.configure_native_payloads(_payload_root):
+	if not _effects.configure(str(_player.current_run_id()), int(value.encounter.identity.runtime_frame)) or not _effects.configure_native_payloads(_payload_root) or not _effects.configure_native_summon_room(_scene, _template):
 		return _reject_cold_restore(original_threats)
 	for source: String in value.actors:
 		var saved: Dictionary = value.actors[source]
@@ -512,6 +606,8 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 		if actor == null:
 			return _reject_cold_restore(original_threats)
 		_actors[source] = actor
+	if not _effects.bind_native_targets(_actors, {"player:1": _player}) or not _effects.restore_native_summon_snapshot(value.effects.summons):
+		return _reject_cold_restore(original_threats)
 	var saved_registry := Registry.new()
 	for retained: Dictionary in value.threats:
 		saved_registry.register_fact(retained)
@@ -527,7 +623,12 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 			if str(fact.hostile_source_id) == source and int(fact.active_through_frame) >= frame and expected_registry.fact_snapshot(fact.hostile_source_id, fact.attack_generation) != fact:
 				return _reject_cold_restore(original_threats)
 		actor.hostile_final_death.connect(_on_actor_final_death)
-	if not _effects.bind_native_targets(_actors, {"player:1": _player}) or not _effects.restore_launch_transaction_snapshot(value.effects):
+	var all_actors: Dictionary = _actors.duplicate()
+	all_actors.merge(_effects.native_summon_actors())
+	for source: String in value.summon_actors:
+		if not all_actors[source].restore_native_cold_snapshot(value.summon_actors[source], Callable(self, "_resolve_cold_source")):
+			return _reject_cold_restore(original_threats)
+	if not _effects.bind_native_targets(all_actors, {"player:1": _player}) or not _effects.restore_launch_transaction_snapshot(value.effects):
 		return _reject_cold_restore(original_threats)
 	_ledger = Ledger.new()
 	_bridge = ProductionBridge.new()
@@ -541,6 +642,7 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 
 
 func matches_cold_snapshot(value: Dictionary) -> bool:
+	value = normalize_cold_snapshot(value)
 	if not value.get("actors") is Dictionary or value.actors.size() != _actors.size():
 		return false
 	var normalized := value.duplicate(true)
@@ -593,6 +695,10 @@ func _cold_source_binding(source: Node) -> Dictionary:
 	for id: String in _actors:
 		if _actors[id] == source:
 			return {"kind": "hostile", "id": id}
+	if _effects != null:
+		for id: String in _effects.native_summon_actors():
+			if _effects.native_summon_actors()[id] == source:
+				return {"kind": "hostile", "id": id}
 	if source == _player:
 		return {"kind": "player"}
 	if _player.is_ancestor_of(source):
@@ -606,7 +712,7 @@ func _resolve_cold_source(binding: Dictionary) -> Node:
 	if binding.get("kind") == "player" and binding.size() == 1:
 		return _player
 	if binding.get("kind") == "hostile" and binding.size() == 2 and binding.get("id") is String:
-		return _actors.get(binding.id)
+		return _actors.get(binding.id, _effects.native_summon_actors().get(binding.id) if _effects != null else null)
 	if binding.get("kind") == "player_path" and binding.size() == 2 and binding.get("path") is String and not binding.path.is_empty() and not binding.path.begins_with("/") and not binding.path.contains("..") and not binding.path.contains("@"):
 		return _player.get_node_or_null(binding.path)
 	return null

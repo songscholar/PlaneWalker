@@ -48,6 +48,10 @@ func native_cold_snapshot() -> Dictionary:
 	return _native_launch_driver.cold_snapshot() if _native_launch_driver != null else {}
 
 
+func owns_retired_native_actor(actor: Node) -> bool:
+	return _native_launch_driver != null and _native_launch_driver.owns_retired_native_actor(actor)
+
+
 func native_cold_snapshot_matches(value: Dictionary) -> bool:
 	return _native_launch_driver != null and _native_launch_driver.matches_cold_snapshot(value)
 

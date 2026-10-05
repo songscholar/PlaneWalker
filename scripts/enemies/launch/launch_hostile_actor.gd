@@ -805,6 +805,9 @@ func _on_died(_killer: Variant) -> void:
 	_hostile_identity_active = false
 	remove_from_group("enemies")
 	remove_from_group("time_stoppable")
+	collision_layer = 0
+	collision_mask = 0
+	get_node("Hurtbox").collision_layer = 0
 	_death_receipt = "hostile_defeat:%s" % (str(_launch_identity.get("run_id", "")) + "|" + str(hostile_source_id)).sha256_text().substr(0, 40)
 	_refresh_control_visual()
 	var retirement := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)

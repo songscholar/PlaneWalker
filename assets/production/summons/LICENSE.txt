@@ -1,0 +1,9 @@
+Plane Walker original support-unit pixel art
+
+These nine four-frame raster atlases were created for this project with the
+deterministic Pillow generator below. No third-party source art is included.
+The project owner dedicates the artwork to the public domain under CC0 1.0.
+The dedication applies to the artwork, not game code or project identity.
+
+Source: tools/production_art/generate_summon_atlases.py
+Reproduction: python3 tools/production_art/generate_summon_atlases.py

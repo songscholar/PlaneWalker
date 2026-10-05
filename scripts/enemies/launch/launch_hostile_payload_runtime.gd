@@ -80,6 +80,11 @@ func retire_arena_payloads(sources: Array[String]) -> void:
 			_state.zones.remove_at(index)
 
 
+func retire_payload_sources(sources: Array[String]) -> void:
+	_state.projectiles = _state.projectiles.filter(func(row: Dictionary): return not sources.has(str(row.definition.source_id)))
+	_state.zones = _state.zones.filter(func(row: Dictionary): return not sources.has(str(row.definition.source_id)))
+
+
 func motion_for_frame(frame: int) -> Dictionary:
 	if _state.is_empty() or frame != int(_state.runtime_frame) + 1 or not _frame(frame):
 		return {}

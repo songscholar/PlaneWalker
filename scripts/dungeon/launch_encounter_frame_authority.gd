@@ -163,7 +163,7 @@ func _matches(ticket: Dictionary) -> bool:
 static func _ledger_contains_work(state: Dictionary, payload: Dictionary) -> bool:
 	var expected: Dictionary = payload.records
 	for id: String in state.pending_work:
-		if (id.begins_with("payload-") or id.begins_with("semantic_") or id.begins_with("debris_")) and not expected.has(id):
+		if (id.begins_with("payload-") or id.begins_with("semantic_") or id.begins_with("debris_") or id.begins_with("summon_")) and not expected.has(id):
 			return false
 	for id: String in expected:
 		if state.pending_work.get(id, {}) != expected[id]:

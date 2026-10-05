@@ -100,7 +100,7 @@ func restore_transaction_snapshot(value: Dictionary) -> bool:
 	return _sync_native(value, true)
 
 
-func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones: int = 0) -> Dictionary:
+func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones: int = 0, retired_children: Array[String] = []) -> Dictionary:
 	if foreign_active_zones < 0 or foreign_active_zones > Runtime.MAX_ZONES or not _pending.is_empty() or context.runtime_frame != int(snapshot().runtime_frame) + 1 or context.run_id != snapshot().run_id or not _native_matches(snapshot()):
 		return _failure("unavailable_or_native_projection")
 	var before := snapshot()
@@ -134,7 +134,7 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 	preview.configure(before.run_id, before.initial_frame)
 	if not preview.restore_snapshot(before):
 		return _failure("checkpoint")
-	var retired_sources: Array[String] = []
+	var retired_sources: Array[String] = retired_children.duplicate()
 	for source: String in context.actors:
 		if bool(context.actors[source].launch_runtime_snapshot().runtime.terminal):
 			retired_sources.append(source)
@@ -143,6 +143,7 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 		if not retired_sources.has(str(wrapper.hostile_source_id)) and actor.has_method("prepared_launch_arena_payloads_retired") and actor.prepared_launch_arena_payloads_retired():
 			retired_sources.append(str(wrapper.hostile_source_id))
 	preview.retire_arena_payloads(retired_sources)
+	preview.retire_payload_sources(retired_children)
 	var zone_capacity := Runtime.MAX_ZONES - foreign_active_zones
 	var debris_context := _debris_context(before, context, contacts, motion)
 	var advanced: Dictionary = preview.advance_frame(context.runtime_frame, {"projectile_contacts": contacts, "targets": target_descriptors}, zone_capacity, debris_context)

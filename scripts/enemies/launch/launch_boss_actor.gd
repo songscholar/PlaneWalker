@@ -8,6 +8,7 @@ const ForgeFixture := preload("res://scripts/enemies/launch/launch_forge_arena_f
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const ForestRoot := preload("res://scripts/enemies/launch/launch_forest_root.gd")
 const VoidConstruct := preload("res://scripts/enemies/launch/launch_void_arena_construct.gd")
+const VoidPickup := preload("res://scripts/enemies/launch/launch_void_shard_pickup.gd")
 const ForestAuxiliaryConstruct := preload("res://scripts/enemies/launch/launch_forest_auxiliary_construct.gd")
 const RootTelegraph := preload("res://scripts/fx/combat_telegraph_2d.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
@@ -62,6 +63,13 @@ func _native_geometry_matches_definition() -> bool:
 		for index: int in range(rows.size()):
 			var construct := holder.get_child(index)
 			if not construct is VoidConstruct or not construct.native_geometry_matches(rows[index], _native_arena_origin(), bool(state.terminal)):
+				return false
+		var pickups := get_node_or_null("VoidAuxiliaryPickups")
+		var active := _active_void_pickups()
+		if pickups == null or pickups.get_child_count() != active.size():
+			return false
+		for index: int in range(active.size()):
+			if not pickups.get_child(index) is VoidPickup or not pickups.get_child(index).native_geometry_matches(active[index]):
 				return false
 	if _launch_definition.get("id", "") == "forest_heart":
 		var arena := get_node_or_null("ArenaConstructs")
@@ -119,11 +127,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if result.ok and _launch_definition.get("id", "") == "forest_heart":
 		return _prepare_native_forest_frame(result, observations)
 	if result.ok and _launch_definition.get("id", "") == "void_throne":
-		if result.ticket.after.runtime.void_arena_state.phase_index == 2 and result.ticket.after.runtime.void_arena_state.player_heal.is_empty() and not result.ticket.after.runtime.terminal:
-			result.ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
-		result.batch = result.ticket.batch.duplicate(true)
-		_prepared_launch_frame = result.ticket.duplicate(true)
-		return result
+		return _prepare_native_void_frame(result, observations)
 	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
 		return result
 	for request: Dictionary in result.ticket.batch.effect_requests:
@@ -322,6 +326,35 @@ func _refresh_native_void() -> void:
 		else:
 			construct = holder.get_child(index)
 		construct.present(rows[index], _native_arena_origin(), bool(state.terminal))
+	_refresh_native_void_pickups()
+
+
+func _active_void_pickups() -> Array:
+	var state := native_void_auxiliary_snapshot()
+	return [] if state.is_empty() or state.terminal else state.pickups.filter(func(row: Dictionary): return not row.used and not row.retired and int(state.runtime_frame) < int(row.through_frame))
+
+
+func _refresh_native_void_pickups() -> void:
+	var holder := get_node_or_null("VoidAuxiliaryPickups")
+	if holder == null:
+		holder = Node2D.new()
+		holder.name = "VoidAuxiliaryPickups"
+		add_child(holder)
+	var rows := _active_void_pickups()
+	while holder.get_child_count() > rows.size():
+		var old := holder.get_child(holder.get_child_count() - 1)
+		holder.remove_child(old)
+		old.queue_free()
+	for index: int in range(rows.size()):
+		var pickup: Node2D
+		if index >= holder.get_child_count():
+			pickup = VoidPickup.new()
+			pickup.name = "Shard%d" % index
+			pickup.configure(self)
+			holder.add_child(pickup)
+		else:
+			pickup = holder.get_child(index)
+		pickup.present(rows[index])
 
 
 func receive_native_void_construct_hit(id: String, damage_info: RefCounted) -> float:
@@ -363,6 +396,60 @@ func prepared_launch_void_heal_allowed(request: Dictionary) -> bool:
 
 func settle_native_void_heal(request: Dictionary, player: Node2D, amount: float) -> bool:
 	return prepared_launch_void_heal_allowed(request) and _prepared_frame_committed and player is PlayerController and player.current_run_id() == StringName(str(_launch_identity.run_id)) and (not player.health.dead or amount == 0.0) and _launch_runtime.accept_void_player_heal(str(_launch_identity.run_id), str(request.target_id), int(request.runtime_frame), float(player.health.max_hp), amount, not player.health.dead)
+
+
+func _prepare_native_void_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
+	var frame := int(result.ticket.runtime_frame)
+	var state: Dictionary = result.ticket.after.runtime
+	if state.void_arena_state.phase_index == 2 and state.void_arena_state.player_heal.is_empty() and not state.terminal:
+		result.ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
+	var preview := BossRuntime.new()
+	preview.configure(_launch_definition, _launch_identity)
+	preview.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
+	if not preview.restore_snapshot(state):
+		return _launch_failure("void_auxiliary_preview")
+	for request: Dictionary in preview.void_burn_damage_requests(frame):
+		result.ticket.batch.mechanism_requests.append({"kind": "void_burn_tick", "request": request.duplicate(true)})
+	for pickup: Dictionary in state.void_auxiliary.pickups:
+		if not pickup.used and not pickup.retired and frame < int(pickup.through_frame) and _vector(pickup.position).distance_to(_vector(observations.target_position)) <= float(pickup.radius_px) + 14.0:
+			result.ticket.batch.mechanism_requests.append({"kind": "void_shard_pickup", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "pickup_id": str(pickup.id), "target_id": str(observations.target_id), "position": pickup.position.duplicate(true), "amount": 5.0})
+	result.batch = result.ticket.batch.duplicate(true)
+	_prepared_launch_frame = result.ticket.duplicate(true)
+	return result
+
+
+func prepared_launch_void_mechanism_allowed(request: Dictionary) -> bool:
+	return not _prepared_launch_frame.is_empty() and _launch_definition.get("id") == "void_throne" and _prepared_launch_frame.batch.mechanism_requests.has(request) and not _prepared_launch_frame.after.runtime.terminal and request.get("kind") in ["void_burn_tick", "void_tear_final", "void_shard_pickup"]
+
+
+func native_void_auxiliary_snapshot() -> Dictionary:
+	return _launch_runtime.void_auxiliary_snapshot() if not _launch_definition.is_empty() else {}
+
+
+func sync_native_void_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
+	if not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)) or target.get_world_2d() != get_world_2d():
+		return false
+	var values: Dictionary = {} if clear else _launch_runtime.void_target_modifiers(target_id)
+	return target.apply_floor_rule_modifier(StringName("void_auxiliary:" + str(hostile_source_id)), &"status", &"remove" if values.is_empty() else &"apply", values)
+
+
+func settle_native_void_damage(authority: RefCounted, record: Dictionary, loss: float) -> bool:
+	if _arena_effects == null or _arena_effects.get_ref() != authority or not authority.owns_void_damage_record(self, record) or not _prepared_frame_committed or _prepared_launch_frame.is_empty() or not record.target is PlayerController or record.target.get_world_2d() != get_world_2d() or record.target.current_run_id() != StringName(str(_launch_identity.run_id)):
+		return false
+	var request: Dictionary = record.void_damage
+	if request.runtime_frame != _prepared_launch_frame.runtime_frame or not _launch_runtime.accept_void_damage_receipt({"fact_id": str(request.fact_id), "run_id": str(_launch_identity.run_id), "owner_source_id": str(hostile_source_id), "attack_generation": int(request.attack_generation), "hit_index": int(request.hit_index), "target_id": str(request.target_id), "runtime_frame": int(request.runtime_frame), "actual_loss": loss}).ok:
+		return false
+	return sync_native_void_modifier(record.target, str(request.target_id))
+
+
+func settle_native_void_pickup(authority: RefCounted, record: Dictionary) -> bool:
+	if _arena_effects == null or _arena_effects.get_ref() != authority or not _prepared_frame_committed or not prepared_launch_void_mechanism_allowed(record.get("void_pickup", {})) or not record.target is PlayerController:
+		return false
+	var receipt: Dictionary = record.target.accept_native_void_pickup(authority, self, record)
+	if receipt.is_empty() or not _launch_runtime.accept_void_pickup_receipt(receipt).ok:
+		return false
+	_refresh_native_void_pickups()
+	return true
 
 
 func _native_arena_origin() -> Vector2:

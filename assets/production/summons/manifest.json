@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "license": "CC0-1.0",
+  "source": "tools/production_art/generate_summon_atlases.py",
+  "atlases": [
+    {
+      "id": "mini_wraith",
+      "path": "mini_wraith.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "69bace263dd7520d6a888f5b58fbf03f8e36a4bb105744d1be1eda9addec2f2c"
+    },
+    {
+      "id": "small_void_spore",
+      "path": "small_void_spore.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "77cc18b27da5d53f1ffcd621621a446ae9e82f93887958c8eff2a8d6cf3b5793"
+    },
+    {
+      "id": "void_firefly",
+      "path": "void_firefly.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "f9022fc5307274c0656aa6e771f36bfa9bf81b8910a9bf44c329a1ab0b4f4565"
+    },
+    {
+      "id": "void_beetle",
+      "path": "void_beetle.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "07dc431d5fdd8367a2d7c08b2f26a2ea5b30e28e70a0dd17327667378f310035"
+    },
+    {
+      "id": "hunter_echo",
+      "path": "hunter_echo.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "59c41dc6fe793d5e09ea62b77810c01e3ca234eb7f3616c8b2065173cb96f5eb"
+    },
+    {
+      "id": "ranger_echo",
+      "path": "ranger_echo.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "af87436f6fb9a1ade76422e7da5034ec12531b130b8cdec12889e7fa0b307b62"
+    },
+    {
+      "id": "timeline_echo",
+      "path": "timeline_echo.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "a21a14640423148fd92bf0bb235fa938ecf6302e167a22b47c93ae4000554819"
+    },
+    {
+      "id": "void_sapling",
+      "path": "void_sapling.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "21e9617441f627898a1a048bb54178b6622c0fe5a241e6b368f3a20d2bd1db7e"
+    },
+    {
+      "id": "elite_mirror",
+      "path": "elite_mirror.png",
+      "frame_size": [
+        32,
+        32
+      ],
+      "frames": [
+        "idle",
+        "warning",
+        "active",
+        "recovery"
+      ],
+      "sha256": "71e7efa7931f6f69d34c9b9cfb6a60d905bc5c16fbc54958a358b7bd8b67a021"
+    }
+  ]
+}
