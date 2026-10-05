@@ -129,13 +129,23 @@ func active_pickups() -> Array:
 
 
 func burn_damage_requests(frame: int) -> Array[Dictionary]:
+	return _burn_damage_requests(_state, frame)
+
+
+func burn_damage_requests_for_snapshot(value: Dictionary, frame: int) -> Dictionary:
+	if not can_restore_snapshot(value):
+		return _failure("burn_snapshot")
+	return {"ok": true, "requests": _burn_damage_requests(value, frame)}
+
+
+func _burn_damage_requests(state: Dictionary, frame: int) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	if _state.is_empty() or _state.terminal or frame != int(_state.runtime_frame):
+	if state.is_empty() or state.terminal or frame != int(state.runtime_frame):
 		return result
-	for burn: Dictionary in _state.burns:
+	for burn: Dictionary in state.burns:
 		var age := frame - int(burn.start_frame)
 		if age > 0 and age % int(_definition.mechanisms.scepter_burn_tick_frames) == 0:
-			result.append({"payload_id": "void-burn:" + JSON.stringify([_state.identity.hostile_source_id, burn.target_id, burn.attack_generation]).sha256_text().substr(0, 40), "hostile_source_id": str(_state.identity.hostile_source_id), "attack_generation": int(burn.attack_generation), "hit_index": age / int(_definition.mechanisms.scepter_burn_tick_frames), "target_id": burn.target_id, "runtime_frame": frame, "damage": float(_definition.mechanisms.scepter_burn_damage), "damage_type": "void"})
+			result.append({"payload_id": "void-burn:" + JSON.stringify([state.identity.hostile_source_id, burn.target_id, burn.attack_generation]).sha256_text().substr(0, 40), "hostile_source_id": str(state.identity.hostile_source_id), "attack_generation": int(burn.attack_generation), "hit_index": age / int(_definition.mechanisms.scepter_burn_tick_frames), "target_id": burn.target_id, "runtime_frame": frame, "damage": float(_definition.mechanisms.scepter_burn_damage), "damage_type": "void"})
 	return result
 
 

@@ -452,10 +452,18 @@ func _prepare_native_void_frame(result: Dictionary, observations: Dictionary) ->
 	var state: Dictionary = result.ticket.after.runtime
 	if state.void_arena_state.phase_index == 2 and state.void_arena_state.player_heal.is_empty() and not state.terminal:
 		result.ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
-	var preview := _native_frame_preview(state, &"arena")
-	if preview == null:
-		return _launch_failure("void_auxiliary_preview")
-	for request: Dictionary in preview.void_burn_damage_requests(frame):
+	var burn_requests: Array
+	if _launch_runtime.has_method("native_void_burn_damage_requests_for_snapshot"):
+		var queried: Dictionary = _launch_runtime.native_void_burn_damage_requests_for_snapshot(state, frame)
+		if not queried.get("ok", false) or not queried.get("requests") is Array:
+			return _launch_failure("void_auxiliary_preview")
+		burn_requests = queried.requests
+	else:
+		var preview := _native_frame_preview(state, &"arena")
+		if preview == null:
+			return _launch_failure("void_auxiliary_preview")
+		burn_requests = preview.void_burn_damage_requests(frame)
+	for request: Dictionary in burn_requests:
 		result.ticket.batch.mechanism_requests.append({"kind": "void_burn_tick", "request": request.duplicate(true)})
 	for pickup: Dictionary in state.void_auxiliary.pickups:
 		if not pickup.used and not pickup.retired and frame < int(pickup.through_frame) and _vector(pickup.position).distance_to(_vector(observations.target_position)) <= float(pickup.radius_px) + 14.0:

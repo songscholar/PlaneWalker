@@ -696,6 +696,12 @@ func void_burn_damage_requests(frame: int) -> Array[Dictionary]:
 	return _void_auxiliary.burn_damage_requests(frame) if _void_auxiliary != null else []
 
 
+func native_void_burn_damage_requests_for_snapshot(value: Dictionary, frame: int) -> Dictionary:
+	if _void_auxiliary == null or not can_restore_snapshot(value):
+		return _failure("void_burn_snapshot")
+	return _void_auxiliary.burn_damage_requests_for_snapshot(value.void_auxiliary, frame)
+
+
 func void_target_modifiers(target_id: String) -> Dictionary:
 	return _void_auxiliary.target_modifiers(target_id) if _void_auxiliary != null else {}
 
