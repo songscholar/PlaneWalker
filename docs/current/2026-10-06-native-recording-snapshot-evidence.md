@@ -140,6 +140,55 @@ The failed archive remains unchanged while main-thread and background-codec
 diagnosis proceed separately. Increasing the recorder buffer is not a remedy
 for the measured throughput deficit.
 
+## Main-Thread Diagnostic
+
+The separate `54866d4` archive
+`build/retained-checkout/native-recording-hotpaths-54866d4-20261006` mechanically
+wraps main-thread methods, including the new Player snapshot/validation APIs and
+immutable journal. Production source is not instrumented, and the chunk codec
+and stream store are not modified in this diagnostic. Two imports and the
+independent two-worker nesting/retention-phase timer self-check pass strict logs.
+
+`build/floor4-phase2-diagnostic-120/report.json` reaches the same 2,501-frame
+phase admission, then measures 120 actual frames 2,502 through 2,621. Its
+instrumented runtime aggregate is
+`c8d88766408e4d4c5cddc0ffe3e77cd9c4e377568ff68ed9c602584effa9fa45`.
+Its first complete observation SHA-256 matches the uninstrumented failed run:
+`99ac84d00d33f0adcaa628441a2a97cbc9446ec9b31661db83cf60a4e798aca4`.
+The final SHA-256 is
+`28a6598b75adc82640b0a850c5c326a2b8558f971c84d8d296ca5f45c0c11f79`.
+Both fresh physical typed-byte readbacks pass, and the independent tape retains
+121 observations, status `INTERRUPTED`, and no recording failure. Stdout and
+Godot logs contain no runtime error or leak.
+
+The measured Player mean is 59.845 ms, p95 67.161 ms and maximum 89.777 ms.
+Native duration is 2 seconds, wall duration 8.264 seconds and retention takes
+15.418 seconds. Peak native static allocation is 592,243,456 bytes. This shorter
+phase interval and timing instrumentation differ from the failed 239-sample
+interval; the two means do not establish an instrumentation speedup or FPS.
+
+| Main-Thread Method | Calls | Inclusive ms / Frame | Exclusive ms / Frame |
+| --- | --- | --- | --- |
+| Player advance | 120 | 59.839 | 0.749 |
+| Hostile Bridge prepare | 120 | 34.770 | 1.362 |
+| Boss actor prepare | 120 | 16.112 | 1.089 |
+| Recorder observe | 120 | 12.397 | 0.089 |
+| Native cold snapshot | 120 | 6.101 | 4.307 |
+| Boss runtime snapshot | 3,559 | 4.792 | 4.792 |
+| Full Player validator | 120 | 4.496 | 4.317 |
+| Void auxiliary restore validation | 723 | 3.694 | 3.694 |
+| Boss restore validation | 1,080 | 10.375 | 2.860 |
+| Physical room-motion validation | 1,080 | 2.423 | 2.423 |
+| Boss validation context | 1,080 | 2.308 | 2.308 |
+| Native Player capture builder | 120 | 1.074 | 1.005 |
+| Replay journal refresh | 240 | 0.026 | 0.026 |
+| Replay journal reference authentication | 360 | 0.028 | 0.028 |
+
+Inclusive rows overlap and must not be added. Background-codec throughput is a
+separate investigation. This diagnostic identifies repeated hostile state
+preparation, native cold capture and remaining full Player validation as the
+next main-thread work; it is not the final performance gate.
+
 ## Remaining Measurement
 
 The immutable journal's frame-2741 warm-prefix microbenchmark is 0.011 ms, but
