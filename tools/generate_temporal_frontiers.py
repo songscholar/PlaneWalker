@@ -82,8 +82,8 @@ def build():
     write_json("assets/provenance.json", {"schema_version": 1, "license": "CC0-1.0", "author": "Plane Walker project", "source": "Authored pixel masks in tools/generate_temporal_frontiers.py", "assets": [enemy_id + ".png" for enemy_id in IDS]})
     locale_path = PACK / "localization/strings.csv"
     locale_path.parent.mkdir(parents=True, exist_ok=True)
-    with locale_path.open("w", newline="") as stream:
-        writer = csv.writer(stream)
+    with locale_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.writer(stream, lineterminator="\n")
         writer.writerow(["keys", "en", "zh_CN"])
         for index, enemy_id in enumerate(IDS):
             writer.writerow(["EXPANSION_" + enemy_id.upper() + "_NAME", NAMES[index], ZH_NAMES[index]])

@@ -19,6 +19,8 @@ class TemporalFrontiersPackTests(unittest.TestCase):
         for relative in files:
             self.assertNotIn("..", Path(relative).parts)
             self.assertIn(Path(relative).suffix, [".json", ".csv", ".png"])
+            if Path(relative).suffix == ".csv":
+                self.assertNotIn(b"\r", (PACK / relative).read_bytes(), "authenticated CSV bytes must survive Git LF normalization")
             self.assertEqual(hashlib.sha256((PACK / relative).read_bytes()).hexdigest(), descriptor["integrity_hashes"][relative])
         enemies = json.loads((PACK / "content/enemies.json").read_text())
         profiles = json.loads((PACK / "content/encounters.json").read_text())
