@@ -140,6 +140,7 @@ func _damage(player: Node, kind: int) -> RefCounted:
 
 func _spawn_player() -> Node:
 	var player := PlayerScene.instantiate()
+	player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 	player.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(player)
 	player.set_physics_process(false)

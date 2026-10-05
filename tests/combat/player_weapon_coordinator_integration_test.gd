@@ -597,9 +597,11 @@ func _disconnect_recorder(recorder: EventRecorder) -> void:
 
 func _spawn_player() -> Node:
 	var player := PlayerScene.instantiate()
+	player.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
 	player.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(player)
 	await get_tree().process_frame
+	_suite.assert_true(PhysicsServer2D.body_get_space(player.get_rid()).is_valid(), "manually advanced Player remains in its physical world")
 	return player
 
 
