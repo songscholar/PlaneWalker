@@ -37,6 +37,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func is_exposed() -> bool:
 	return not _state.is_empty() and not _state.terminal and int(_state.runtime_frame) <= int(_state.exposure_through_frame)
 

@@ -37,6 +37,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func cover_snapshot(id: String) -> Dictionary:
 	for cover: Dictionary in _state.get("covers", []):
 		if cover.id == id:

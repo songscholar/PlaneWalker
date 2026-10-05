@@ -113,6 +113,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func can_restore_snapshot(value: Dictionary) -> bool:
 	if _state.is_empty() or not Contract.exact_fields(value, FIELDS) or not Contract.integer_in_range(value.schema_version, 1, 1) or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), MAX_FRAME) or not Contract.integer_in_range(value.generation_floor, 0, MAX_FRAME) or not _valid_claims(value.claims, int(value.generation_floor)) or not Contract.number_in_range(value.poise, 0.0, 300.0) or not value.weapon_sources is Array or value.weapon_sources.size() > MAX_SOURCES:
 		return false

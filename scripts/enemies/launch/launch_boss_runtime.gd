@@ -608,6 +608,29 @@ func snapshot() -> Dictionary:
 	return value
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	if _state.is_empty():
+		return value.is_empty()
+	# Remove composed child fields before comparing the complete remaining state.
+	var current := _state.duplicate()
+	var remaining := value.duplicate()
+	for component: Array in [["action", _action], ["control", _control], ["conversion", _conversion], ["arena_state", _arena], ["forest_auxiliary", _forest_auxiliary], ["forge_arena_state", _forge_arena], ["void_arena_state", _void_arena], ["void_auxiliary", _void_auxiliary], ["time_response", _time_response], ["time_auxiliary", _time_auxiliary]]:
+		var authority: RefCounted = component[1]
+		if authority == null:
+			continue
+		var field: String = component[0]
+		if not remaining.has(field) or not remaining[field] is Dictionary:
+			return false
+		if authority.has_method("matches_snapshot"):
+			if not authority.call("matches_snapshot", remaining[field]):
+				return false
+		elif authority.snapshot() != remaining[field]:
+			return false
+		current.erase(field)
+		remaining.erase(field)
+	return current == remaining
+
+
 func native_runtime_frame() -> int:
 	return int(_state.get("runtime_frame", -1))
 

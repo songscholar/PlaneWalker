@@ -28,6 +28,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func advance_frame(frame: int) -> bool:
 	if _state.is_empty() or frame != int(_state.runtime_frame) + 1 or not Contract.integer_in_range(frame, 0, MAX_FRAME):
 		return false

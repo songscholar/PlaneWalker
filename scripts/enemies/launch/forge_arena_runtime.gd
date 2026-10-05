@@ -49,6 +49,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func advance_frame(frame: int) -> bool:
 	if _state.is_empty() or _state.terminal or frame != int(_state.runtime_frame) + 1:
 		return false

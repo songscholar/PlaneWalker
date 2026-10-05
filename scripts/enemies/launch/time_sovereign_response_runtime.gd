@@ -38,6 +38,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 static func receipt_id(value: Dictionary) -> String:
 	return JSON.stringify([value.run_id, value.owner_generation, value.action_generation, value.action_token]).sha256_text()
 

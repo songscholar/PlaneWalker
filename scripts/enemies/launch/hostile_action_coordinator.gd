@@ -221,6 +221,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func can_restore_snapshot(value: Dictionary) -> bool:
 	if _state.is_empty() or not Contract.exact_fields(value, SNAPSHOT_FIELDS):
 		return false

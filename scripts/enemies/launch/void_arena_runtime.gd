@@ -47,6 +47,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func matches_snapshot(value: Dictionary) -> bool:
+	return _state == value
+
+
 func native_geometry_snapshot() -> Dictionary:
 	return {} if _state.is_empty() else {"arena_origin": _state.arena_origin, "terminal": _state.terminal, "pillars": _state.pillars, "cores": _state.cores}.duplicate(true)
 
