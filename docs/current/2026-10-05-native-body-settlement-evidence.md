@@ -75,6 +75,7 @@ watch fixture now uses the Player's actual registered Sword Hitbox.
 - All five native Boss actors and bridges GREEN: `build/test-evidence/native-body-boss-fixture-position`, 1/1.
 - Hostile effect authority GREEN: `build/test-evidence/native-body-effects`, 1/1.
 - Shared semantic Router GREEN: `build/test-evidence/native-body-semantic-router`, 1/1.
+- Shared physical combat checkpoint GREEN: `build/test-evidence/native-body-checkpoint-retention`, 1/1, after the independent room artwork contract repair.
 
 Injected late failures intentionally log frame five and frame two settlement
 rejections. Successful retained logs have no script/parse errors, warnings,
@@ -92,5 +93,5 @@ be resolved before full P15 certification.
 
 Native Splitting/Mirroring, the legal-affix pair matrix, complete physical
 contacts, whole-room balance and full P15 certification remain separate. The
-shared room checkpoint rerun depends on the independently owned artwork
-contract repair; its earlier registration rejection occurred before damage.
+shared room checkpoint now passes after the independent artwork contract repair;
+its earlier registration rejection occurred before damage.

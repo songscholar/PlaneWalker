@@ -42,7 +42,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | P4 Single RunState / RoomRuntime | Completed / Certified | RunOrchestrator/RoomRuntime 是唯一运行与房间写入权威；GameState 运行镜像、LegacyRunAdapter 和旧运行 UI 已退休 |
 | P5 Single event publication | Completed / Certified | 14 个 typed gameplay facts exactly-once；generic EventBus 与所有运行域状态变更订阅已退休 |
 | P6 Controller/focus/accessibility | Completed / Certified | 14 动作双设备合同、可恢复 remap、纯手柄焦点链、15 项设置 UI、字幕/音频/视觉替代和本局助攻快照已通过 focused、整库及 detached gate |
-| P7/P9 Export and clean certification | Active / Validation repair | 官方模板已在项目工具链提供；最新干净检出暴露内容契约与 CI 编排不一致，正修复并重跑。真实行覆盖率与最终发行包认证仍待完成 |
+| P7/P9 Export and clean certification | Active / Validation repair | 官方模板已在项目工具链提供；内容契约和导入崩溃已修复，固定提交两阶段导入通过。完整验证、真实行覆盖率与最终发行包认证仍待完成 |
 | P8 Documentation governance | Completed / Certified | 离线验证、元数据/生命周期、零基线、ADR、Current 索引、证据状态和整库认证已完成 |
 | Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
 | Wave 4B | Completed | 回溯残影、Boss 全招前摇、精英主动机制和五房权威遭遇已实现并通过测试 |
@@ -53,7 +53,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
 | Full Product Content | Active / Phased program | P11、P12、P13 已认证；P14 六类原生面板、五层状态和 Save/Replay 专项通过；P15 正式原生遭遇、二十二敌人动作领域、五 Boss 基础及 Time Watch 专项通过，完整机制与场地构造物继续实施 |
-| Launch / Expansion Systems | Active / Phased program | Hub、成长、训练、叙事、多结局、活跃存档、原创资源/音乐、离线 Mod/DLC 管理和配装分享已专项验证。本地排行在实施；Boss Rush、挑战、无尽、回放产品化、外观和追加内容尚待完成 |
+| Launch / Expansion Systems | Active / Phased program | Hub、成长、训练、叙事、多结局、活跃存档、原创资源/音乐、离线 Mod/DLC 管理、配装分享、本地排行、Boss Rush、挑战、无尽、回放、免费外观和离线平台已有专项验证。完整原生战斗、追加内容和整合发行包认证仍待完成 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
 
@@ -130,11 +130,15 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Room Artwork Plan](superpowers/plans/2026-10-05-native-room-artwork.md) | 五层真实像素地面、边界、门洞和分类地标原生接入 | Completed / Historical |
 | [Native Room Artwork Evidence](current/2026-10-05-native-room-artwork-evidence.md) | 三十模板绑定、重置重绑、私有回放和三分辨率原生像素对照 | Focused Verified / Combined certification pending |
 | [Void Dead Player Heal Evidence](current/2026-10-05-void-dead-p3-heal-evidence.md) | 死亡玩家消耗第三阶段治疗、复活不补发、回滚和冷恢复 | Focused Verified / Current |
+| [Native Body Settlement Evidence](current/2026-10-05-native-body-settlement-evidence.md) | 扣血前鉴权、生产伤害去重、提交补偿、物理保存和五首领死亡 | Focused Verified / Extended Boss capacity active |
+| [Void Auxiliary Domain And Step Evidence](current/2026-10-05-void-auxiliary-domain-step-evidence.md) | 有限辅助状态、真实安全闪步、落点拒绝、帧回滚与冷恢复 | Focused Verified / Native auxiliary integration active |
+| [Serial Import Recovery Evidence](current/2026-10-05-serial-import-recovery-evidence.md) | 修复并行翻译导入崩溃、全新固定提交两阶段导入和依赖审计 | Focused Verified / Combined certification pending |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
 | [Native Shielded Elite Evidence](current/2026-10-05-native-elite-shielded-evidence.md) | 真实护盾、破盾暴露、再生、锚定组合与事务回滚 | Focused Verified / Remaining affixes active |
 | [Native Teleporting Elite Evidence](current/2026-10-05-native-elite-teleporting-evidence.md) | 房间安全落点、完整离场预警和到达恢复、碰撞再验证与真实玩家帧回滚 | Focused Verified / Remaining affixes active |
 | [Native Chaining Elite Evidence](current/2026-10-05-native-elite-chaining-evidence.md) | 实际承伤触发、有限友军增益、冷恢复和帧回滚 | Focused Verified / Remaining affixes active |
+| [Native Mirroring Elite Plan](superpowers/plans/2026-10-05-native-elite-mirroring.md) | 单位复制造成真实攻击、有限寿命、共享召唤预算、回滚和冷恢复 | Active / Current |
 | [Native Void Arena Evidence](current/2026-10-05-native-void-arena-evidence.md) | 原生柱体、有限核心轮次、实际治疗与帧补偿和冷恢复 | Focused Verified / Remaining auxiliary moves active |
 | [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
 | [Clean Certification Contract Repairs](current/2026-10-05-clean-certification-contract-repairs.md) | 完整内容计数、真实驱动接口夹具与清洁快照验证 | Focused Verified / Combined certification pending |

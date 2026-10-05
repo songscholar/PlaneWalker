@@ -1,10 +1,12 @@
 # Void Auxiliary Domain And Native Step
 
 - Status: Retained foundation milestone; auxiliary native integration remains Active
-- Document Role: Focused P15 implementation retention review
+- Document Role: Current focused P15 implementation retention review
 - Authority Level: Below approved P15 specification
+- Applies To: Finite Void auxiliary domain, native collision-admitted Step and strict cold reconstruction
 - Owner: Native Boss implementation lead
 - Last Verified: 2026-10-05
+- Depends On: `../../AGENTS.md`, `../superpowers/plans/2026-10-05-native-void-auxiliary.md`
 
 ## Retained Behavior
 
