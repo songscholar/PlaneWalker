@@ -7,6 +7,7 @@ const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.
 const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const AffixProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
+const AffixRuntime := preload("res://scripts/enemies/launch/launch_elite_affix_runtime.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -27,6 +28,7 @@ var _motion_room_transform := Transform2D.IDENTITY
 var _motion_room_local_bounds := Rect2()
 var _affix_projection: RefCounted
 var _affix_configuration: Dictionary = {}
+var _affix_runtime: RefCounted
 
 
 func _init() -> void:
@@ -55,11 +57,11 @@ func owns_actor_presentation() -> bool:
 	return true
 
 
-func configure_launch_affixes(definitions: Array, floor_index: int) -> Dictionary:
+func configure_launch_affixes(definitions: Array, floor_index: int, native_revision: int = 2) -> Dictionary:
 	if not _launch_definition.is_empty() or _affix_projection != null or not _prepared_launch_frame.is_empty():
 		return _launch_failure("affix_configuration_busy")
 	var candidate := AffixProjection.new()
-	var accepted := candidate.configure(definitions, floor_index)
+	var accepted := candidate.configure(definitions, floor_index, native_revision)
 	if not accepted.ok:
 		return _launch_failure("affix_configuration")
 	_affix_projection = candidate
@@ -68,6 +70,10 @@ func configure_launch_affixes(definitions: Array, floor_index: int) -> Dictionar
 
 func launch_affix_snapshot() -> Dictionary:
 	return _affix_configuration.duplicate(true)
+
+
+func launch_affix_runtime_snapshot() -> Dictionary:
+	return _affix_runtime.snapshot() if _affix_runtime != null else {}
 
 
 func configure_launch_definition(definition: Dictionary, context: Dictionary) -> Dictionary:
@@ -84,6 +90,11 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	var configured: Dictionary = candidate.configure(definition, context)
 	if not configured.ok:
 		return configured
+	var affix_runtime: RefCounted
+	if affix_configuration.get("native_revision") == 2:
+		affix_runtime = AffixRuntime.new()
+		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
+			return _launch_failure("affix_runtime")
 	var body := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	var hurt := get_node_or_null("Hurtbox/CollisionShape2D") as CollisionShape2D
 	if body == null or hurt == null or not body.shape is CircleShape2D or not hurt.shape is CircleShape2D:
@@ -92,6 +103,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 		return _launch_failure("health_run")
 	_launch_runtime = candidate
 	_affix_configuration = affix_configuration
+	_affix_runtime = affix_runtime
 	_launch_definition = definition.duplicate(true)
 	_launch_identity = context.duplicate(true)
 	configure_hostile_identity(StringName(context.hostile_source_id), int(context.next_generation_floor))
@@ -174,6 +186,17 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var motion: Dictionary = preview.motion_for_frame(frame, observations)
 	if not motion.ok:
 		return motion
+	var affix_after := {}
+	var affix_heal := {"healed_amount": 0.0, "hp_after": health.current_hp}
+	if _affix_runtime != null:
+		var affix_preview := AffixRuntime.new()
+		if not affix_preview.configure(_affix_configuration, _launch_identity, max_hp) or not affix_preview.restore_snapshot(before.affix_runtime):
+			return _launch_failure("affix_checkpoint")
+		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, externally_paused or bool(motion.action_paused), health.healing_multiplier)
+		if not advanced.ok:
+			return _launch_failure("affix_frame")
+		affix_after = affix_preview.snapshot()
+		affix_heal = {"healed_amount": advanced.healed_amount, "hp_after": advanced.hp_after}
 	var relocation: bool = bool(motion.get("relocation", false))
 	var displacement := _vector(motion.displacement) * (1.0 if relocation else float(status_preview.slow_multiplier()))
 	if lethal_pending or externally_paused or motion.action_paused:
@@ -236,13 +259,24 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 			status_preview.reset_runtime_state()
 			status_events.burn_ticks = []
 			next_credit = 0.0
+	if _affix_runtime != null and preview.snapshot().terminal:
+		var terminal_affix := AffixRuntime.new()
+		terminal_affix.configure(_affix_configuration, _launch_identity, max_hp)
+		terminal_affix.restore_snapshot(before.affix_runtime)
+		terminal_affix.advance_frame(frame, health.current_hp, true, false, health.healing_multiplier)
+		affix_after = terminal_affix.snapshot()
+		affix_heal = {"healed_amount": 0.0, "hp_after": health.current_hp}
 	batch["status_tick_requests"] = status_events.burn_ticks.duplicate(true)
+	if _affix_runtime != null:
+		batch["affix_heal"] = affix_heal
 	var after := before.duplicate(true)
 	after.runtime = preview.snapshot()
 	after.status = status_preview.transaction_snapshot()
 	after.position = _point(predicted)
 	after.knockback = _point(_knockback_velocity.move_toward(Vector2.ZERO, KNOCKBACK_DECAY * _knockback_velocity.length() / 60.0))
 	after.action_credit = next_credit
+	if _affix_runtime != null:
+		after.affix_runtime = affix_after
 	var ticket := {"ticket_id": _next_launch_ticket_id, "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "before": before, "after": after, "batch": batch, "health_before": health.runtime_state_snapshot(), "collision_target": collision_target}
 	_next_launch_ticket_id += 1
 	_prepared_launch_frame = ticket.duplicate(true)
@@ -435,6 +469,12 @@ func accept_launch_health_fact(fact: Dictionary) -> bool:
 	return is_instance_valid(health) and not health.dead and _launch_runtime.has_method("accept_health_fact") and fact.get("hp_after", -1.0) == health.current_hp and _launch_runtime.accept_health_fact(fact).ok
 
 
+func settle_launch_affix_heal(frame: int, planned: float, actual: float) -> bool:
+	if _affix_runtime == null or _prepared_launch_frame.is_empty() or not _prepared_frame_committed or frame != int(_prepared_launch_frame.runtime_frame) or planned != float(_prepared_launch_frame.batch.affix_heal.healed_amount) or _affix_runtime.snapshot() != _prepared_launch_frame.after.affix_runtime:
+		return false
+	return _affix_runtime.settle_regeneration_heal(frame, planned, actual, _prepared_launch_frame.before.affix_runtime)
+
+
 func commit_hostile_lethal_transition(damage_info: RefCounted, final_amount: float, decision: Dictionary) -> bool:
 	if not is_instance_valid(health) or not health.owns_hostile_lethal_commit(damage_info, final_amount, decision) or decision != prepare_hostile_lethal_transition(damage_info, final_amount):
 		return false
@@ -458,6 +498,8 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 		var identity := JSON.stringify([info.run_id, info.target_id, info.hostile_source_id, info.attack_generation, info.hit_index])
 		var result: Dictionary = _launch_runtime.accept_damage_fact({"fact_id": identity.sha256_text(), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": final_amount, "hp_after": health.current_hp})
 		staged = result.ok
+		if result.ok and _affix_runtime != null and damage_info.tags.has("attack:heavy"):
+			_affix_runtime.interrupt_regeneration(frame)
 		if result.ok and _hostile_threat_registry != null:
 			for generation: int in result.retired_generations:
 				_hostile_threat_registry.retire(hostile_source_id, generation)
@@ -484,6 +526,8 @@ func _on_died(_killer: Variant) -> void:
 		return
 	cancel_active_attack()
 	_launch_runtime.cancel(&"death")
+	if _affix_runtime != null:
+		_affix_runtime.cancel()
 	clear_weapon_hit_control_state(&"death")
 	reset_elemental_statuses()
 	_hostile_identity_active = false
@@ -524,12 +568,18 @@ func _actor_state() -> Dictionary:
 	var state := {"runtime": _launch_runtime.snapshot(), "status": elemental_status_runtime.transaction_snapshot(), "position": _point(global_position), "knockback": _point(_knockback_velocity), "weakpoint_sequence": _weakpoint_token, "stop_sequence": _time_stop_token_sequence, "weapon_claims": _weapon_hit_control_claims.duplicate(true), "weapon_claim_order": _weapon_hit_control_claim_order.duplicate(), "blind_sequence": _elemental_blind_action_sequence, "action_credit": _action_credit, "death_receipt": _death_receipt, "weapon_metadata": metadata, "room_motion": launch_room_motion_snapshot()}
 	if not _affix_configuration.is_empty():
 		state["affixes"] = launch_affix_snapshot()
+	if _affix_runtime != null:
+		state["affix_runtime"] = launch_affix_runtime_snapshot()
 	return state
 
 
 func _can_restore_actor_state(value: Dictionary) -> bool:
 	var fields: Array = ACTOR_STATE_FIELDS + ["affixes"] if not _affix_configuration.is_empty() else ACTOR_STATE_FIELDS
+	if _affix_runtime != null:
+		fields += ["affix_runtime"]
 	if not Contract.exact_fields(value, fields) or not _affix_configuration.is_empty() and value.affixes != _affix_configuration or not value.runtime is Dictionary or not _launch_runtime.can_restore_snapshot(value.runtime) or not value.status is Dictionary or not elemental_status_runtime.can_restore_transaction_snapshot(value.status):
+		return false
+	if _affix_runtime != null and (not value.affix_runtime is Dictionary or not _affix_runtime.can_restore_snapshot(value.affix_runtime) or value.affix_runtime.runtime_frame != value.runtime.runtime_frame or value.affix_runtime.terminal != value.runtime.terminal):
 		return false
 	if not Contract.valid_point(value.position) or not Contract.valid_point(value.knockback) or not Contract.number_in_range(value.action_credit, 0.0, 1.0) or typeof(value.death_receipt) != TYPE_STRING:
 		return false
@@ -564,6 +614,8 @@ func _restore_actor_state(value: Dictionary) -> bool:
 	if not _can_restore_actor_state(value):
 		return false
 	_launch_runtime.restore_snapshot(value.runtime)
+	if _affix_runtime != null:
+		_affix_runtime.restore_snapshot(value.affix_runtime)
 	elemental_status_runtime.restore_transaction_snapshot(value.status)
 	global_position = _vector(value.position)
 	_knockback_velocity = _vector(value.knockback)
@@ -643,7 +695,7 @@ static func _launch_failure(field: String) -> Dictionary:
 
 
 func native_cold_snapshot(source_binding: Callable) -> Dictionary:
-	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _prepared_frame_committed or health == null or not source_binding.is_valid():
+	if _launch_definition.is_empty() or not _prepared_launch_frame.is_empty() or _prepared_frame_committed or health == null or health.frame_signal_transaction_is_active() or not source_binding.is_valid():
 		return {}
 	var state := _actor_state()
 	for row: Dictionary in state.status.entries.values():

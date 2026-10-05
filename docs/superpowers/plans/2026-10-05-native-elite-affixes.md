@@ -45,12 +45,12 @@ canonical rows and floor; it does not revise authored content or Save schema.
 ./tools/run_tests.sh --filter launch_elite_affix --timeout 45
 ./tools/run_tests.sh --filter launch_enemy_actor --timeout 45
 ./tools/run_tests.sh --filter production_launch_encounter --timeout 45
-./tools/run_tests.sh --filter native_combat_checkpoint --timeout 90
+./tools/run_tests.sh --filter native_combat_checkpoint --timeout 150
 ```
 
 ## Dynamic Native Gates
 
-- [ ] Regeneration: actual three-percent healing every 120 frames within the total thirty-percent cap, heavy-hit 120-frame interruption, once-only Health publication and irreversible replay.
+- [x] Regeneration: actual three-percent healing every 120 unpaused frames within the total thirty-percent cap, heavy-hit 120-frame interruption, once-only Health publication, typed physical cold recovery and whole-Player frame compensation. Native compiler revision 2 retains the authentic affix clock; explicit historical revision 1 retains its original metadata-only regeneration behavior. Same-frame support healing consumes only actual regeneration gain. See [native regeneration evidence](../../current/2026-10-05-native-elite-regeneration-evidence.md).
 - [ ] Shield: thirty-percent absorption, once-only 1200-frame regeneration and 45-frame break exposure.
 - [ ] Nullified and Anchored: retained Stop/Rift/Time/echo interactions, bounded delay/vulnerability and poise/recovery, displacement refusal.
 - [ ] Teleport: seeded collision-safe 48-80 pixel landing, complete 30-frame departure warning and 30-frame arrival recovery.

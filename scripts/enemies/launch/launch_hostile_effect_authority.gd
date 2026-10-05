@@ -237,6 +237,21 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 			_payloads.rollback(payload_prepared.ticket)
 			return prepared
 		health_records.append(prepared.record)
+	for wrapper: Dictionary in batches:
+		var heal: Variant = wrapper.batch.get("affix_heal", {"healed_amount": 0.0, "hp_after": 0.0})
+		if not heal is Dictionary or not Contract.exact_fields(heal, ["healed_amount", "hp_after"]) or not Contract.number_in_range(heal.healed_amount, 0.0, 1000000.0) or not Contract.number_in_range(heal.hp_after, 0.0, 1000000.0):
+			_semantics.rollback(semantic_prepared.ticket)
+			_payloads.rollback(payload_prepared.ticket)
+			return _failure("affix_health_plan")
+		if float(heal.healed_amount) <= 0.0:
+			continue
+		var request := {"kind": "affix_regeneration", "hostile_source_id": wrapper.hostile_source_id, "attack_generation": int(context.runtime_frame), "hit_index": 0, "target_id": wrapper.hostile_source_id, "runtime_frame": int(context.runtime_frame), "amount": heal.healed_amount}
+		var prepared := _prepare_health_gain(request, context, next)
+		if not prepared.ok:
+			_semantics.rollback(semantic_prepared.ticket)
+			_payloads.rollback(payload_prepared.ticket)
+			return prepared
+		health_records.append(prepared.record)
 	next.semantics = semantic_prepared.ticket.after.duplicate(true)
 	if not _prepare_semantic_registry(semantic_prepared.ticket.before, semantic_prepared.ticket.after, projected, operations):
 		_semantics.rollback(semantic_prepared.ticket)
@@ -302,6 +317,8 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 	for record: Dictionary in ticket.health_records:
 		var amount: float = minf(record.health_amount, maxf(0.0, float(record.health.max_hp) - float(record.health.current_hp)))
 		if amount <= 0.0 or record.health.dead:
+			if record.get("affix_health_gain", false) and not record.target.settle_launch_affix_heal(int(ticket.runtime_frame), record.health_amount, 0.0):
+				return _failure("affix_health_settlement")
 			continue
 		var healed: float = record.health.heal(amount / float(record.health.healing_multiplier))
 		if not is_equal_approx(healed, amount):
@@ -309,6 +326,8 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 		var fact := {"fact_id": record.health_fact_id, "runtime_frame": int(ticket.runtime_frame), "target_source_id": record.target_id, "amount": healed, "hp_after": float(record.health.current_hp)}
 		if not bool(record.target.accept_launch_health_fact(fact)):
 			return _failure("health_gain_receipt")
+		if record.get("affix_health_gain", false) and not record.target.settle_launch_affix_heal(int(ticket.runtime_frame), record.health_amount, healed):
+			return _failure("affix_health_settlement")
 	for owned: Dictionary in _owned_signals:
 		var publication: Dictionary = owned.health.prepare_frame_signal_publication(owned.ticket)
 		if publication.is_empty() or not owned.health.finalize_frame_signal_publication(publication):
@@ -385,12 +404,14 @@ func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dic
 
 
 func _prepare_health_gain(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
-	if not Contract.exact_fields(request, ["kind", "hostile_source_id", "attack_generation", "hit_index", "target_id", "runtime_frame", "amount"]) or request.kind not in ["heal", "restore_hp"] or not context.actors.has(request.hostile_source_id) or not context.actors.has(request.target_id) or request.runtime_frame != context.runtime_frame or not Contract.integer_in_range(request.attack_generation, 1, 2147483646) or not Contract.integer_in_range(request.hit_index, 0, 63) or not Contract.number_in_range(request.amount, 0.000001, 1000000.0):
+	if not Contract.exact_fields(request, ["kind", "hostile_source_id", "attack_generation", "hit_index", "target_id", "runtime_frame", "amount"]) or request.kind not in ["heal", "restore_hp", "affix_regeneration"] or not context.actors.has(request.hostile_source_id) or not context.actors.has(request.target_id) or request.runtime_frame != context.runtime_frame or not Contract.integer_in_range(request.attack_generation, 1, 2147483646) or not Contract.integer_in_range(request.hit_index, 0, 63) or not Contract.number_in_range(request.amount, 0.000001, 1000000.0):
 		return _failure("health_gain_request")
 	var target: Node2D = context.actors[request.target_id]
 	var record := _target_record(target)
 	if record.is_empty() or not target.has_method("accept_launch_health_fact") or record.health_before.runtime.dead or not Contract.number_in_range(record.health.healing_multiplier, 0.000001, 1000000.0):
 		return _failure("health_gain_target")
+	if request.kind == "affix_regeneration" and not target.has_method("settle_launch_affix_heal"):
+		return _failure("affix_health_target")
 	var claim := _claim(context.run_id, request.target_id, "health:%s:%s" % [request.hostile_source_id, request.kind], request.attack_generation, request.hit_index)
 	if next.claims.has(claim):
 		return _failure("duplicate_health_gain")
@@ -399,6 +420,7 @@ func _prepare_health_gain(request: Dictionary, context: Dictionary, next: Dictio
 	record["target_id"] = request.target_id
 	record["health_amount"] = float(request.amount)
 	record["health_fact_id"] = "hostile-health:%s" % claim.substr(0, 40)
+	record["affix_health_gain"] = request.kind == "affix_regeneration"
 	return {"ok": true, "record": record}
 
 

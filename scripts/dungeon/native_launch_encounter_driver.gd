@@ -206,7 +206,7 @@ func spawn_actor(spawn: Dictionary) -> bool:
 	return true
 
 
-func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false) -> Node2D:
+func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false, affix_revision: int = 2) -> Node2D:
 	var definition: Dictionary = _facade.encounter_catalog().enemy_definition(str(spawn.enemy_id))
 	var resource: Resource = load(str(definition.get("scene", ""))) if ResourceLoader.exists(str(definition.get("scene", ""))) else null
 	var marker: Node2D = _scene.get_node_or_null("EncounterAnchors/" + str(spawn.spawn_slot_id)) as Node2D
@@ -241,7 +241,7 @@ func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vecto
 		var affixes: Array = []
 		for affix_id: String in spawn.affix_ids:
 			affixes.append(_facade.encounter_catalog().affix_definition(affix_id))
-		if not actor.has_method("configure_launch_affixes") or not actor.configure_launch_affixes(affixes, Ids.FLOOR_IDS.find(str(_definition.floor_id)) + 1).ok:
+		if not actor.has_method("configure_launch_affixes") or not actor.configure_launch_affixes(affixes, Ids.FLOOR_IDS.find(str(_definition.floor_id)) + 1, affix_revision).ok:
 			actor.free()
 			return null
 	if not actor.configure_launch_definition(projection, identity).ok or not actor.configure_launch_room_motion(_scene, _template).ok or not _controller._configure_character_boss_exposure_participant(actor):
@@ -447,7 +447,8 @@ func restore_cold_snapshot(value: Dictionary) -> bool:
 		var saved: Dictionary = value.actors[source]
 		var spawn := _cold_spawn(_definition, str(value.encounter.roster[source].spawn_id))
 		# Closed V1 actors carry no compiler binding; their original digest must still match.
-		var actor := _instantiate_actor(spawn, saved.identity, Vector2(float(saved.actor.position.x), float(saved.actor.position.y)), spawn.elite and not saved.actor.has("affixes"))
+		var affix_revision: int = saved.actor.get("affixes", {}).get("native_revision", 1)
+		var actor := _instantiate_actor(spawn, saved.identity, Vector2(float(saved.actor.position.x), float(saved.actor.position.y)), spawn.elite and not saved.actor.has("affixes"), affix_revision)
 		if actor == null:
 			return _reject_cold_restore(original_threats)
 		_actors[source] = actor
