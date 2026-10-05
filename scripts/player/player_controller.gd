@@ -4209,6 +4209,33 @@ func _capture_launch_replay_identity_baseline() -> bool:
 
 
 func full_player_replay_snapshot() -> Dictionary:
+	return _full_player_replay_snapshot(false)
+
+
+func native_replay_recording_snapshot() -> Dictionary:
+	return _full_player_replay_snapshot(true)
+
+
+func validate_native_replay_recording_snapshot(
+	snapshot: Dictionary,
+	expected_identity: Dictionary
+) -> Dictionary:
+	var events_value: Variant = snapshot.get("weapon_replay_events")
+	if (
+		events_value is Array
+		and (events_value as Array).is_same_typed(_weapon_replay_events)
+		and (events_value as Array).is_read_only()
+	):
+		var events: Array[Dictionary] = events_value
+		if _weapon_replay_event_journal.certifies(events):
+			# Only the safety walk over these exact sealed events is already proven.
+			var remaining := snapshot.duplicate(false)
+			remaining["weapon_replay_events"] = []
+			return ReplayRecorderScript.validate_full_player_snapshot(remaining, expected_identity)
+	return ReplayRecorderScript.validate_full_player_snapshot(snapshot, expected_identity)
+
+
+func _full_player_replay_snapshot(for_native_recording: bool) -> Dictionary:
 	var identity := full_player_replay_identity()
 	var rewind_state := _rewind_frame_transaction_snapshot()
 	if (
@@ -4280,7 +4307,10 @@ func full_player_replay_snapshot() -> Dictionary:
 			"next_token_floor": _next_weapon_action_token_floor,
 			"combo_timeout_frames": _weapon_combo_timeout_frames,
 		},
-		"weapon_replay_events": _weapon_replay_events.duplicate(true),
+		"weapon_replay_events": (
+			_native_recording_weapon_events() if for_native_recording
+			else _weapon_replay_events.duplicate(true)
+		),
 		"weapon_replay_capture_sequence": _weapon_replay_capture_sequence,
 		"weapon_replay_fact_baseline": _weapon_replay_fact_baseline.duplicate(true),
 		"weapon_replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
@@ -7974,6 +8004,15 @@ func _weapon_replay_transaction_events() -> Array[Dictionary]:
 	if _weapon_replay_event_journal.certifies(_weapon_replay_events):
 		return _weapon_replay_events.duplicate(false)
 	return _weapon_replay_events.duplicate(true)
+
+
+func _native_recording_weapon_events() -> Array[Dictionary]:
+	_weapon_replay_event_journal.refresh(_weapon_replay_events)
+	if not _weapon_replay_event_journal.certifies(_weapon_replay_events):
+		return _weapon_replay_events.duplicate(true)
+	var events: Array[Dictionary] = _weapon_replay_events.duplicate(false)
+	events.make_read_only()
+	return events
 
 
 func _valid_weapon_replay_event_prefix(snapshot: Dictionary, event_prefix: Array) -> bool:

@@ -5,7 +5,6 @@ signal rejected(code: StringName)
 
 const Host := preload("res://scripts/application/run_runtime_host.gd")
 const StreamStore := preload("res://scripts/replay/run_replay_stream_store.gd")
-const Replay := preload("res://scripts/replay/replay_recorder.gd")
 const Phase := preload("res://scripts/application/run_phase.gd")
 const MAX_COMBAT_FRAMES := 162000
 
@@ -153,8 +152,8 @@ func _observe(kind: String, frame: int = -1) -> Dictionary:
 	if bool(parts.get("busy", true)):
 		return _failure_result(&"RUN_REPLAY_RECORDER_BOUNDARY_PENDING")
 	var run: Dictionary = _host.runtime_snapshot()
-	var player: Dictionary = _player.full_player_replay_snapshot()
-	if str(run.get("run_id", "")) != _run_id or player.is_empty() or player.get("identity", {}).get("run_id") != _run_id or frame >= 0 and player.get("frame") != frame or not Replay.validate_full_player_snapshot(player, player.get("identity", {})).ok:
+	var player: Dictionary = _player.native_replay_recording_snapshot()
+	if str(run.get("run_id", "")) != _run_id or player.is_empty() or player.get("identity", {}).get("run_id") != _run_id or frame >= 0 and player.get("frame") != frame or not _player.validate_native_replay_recording_snapshot(player, player.get("identity", {})).ok:
 		return _failure_result(&"RUN_REPLAY_RECORDER_STATE_INVALID")
 	var runner: Node = parts.controller.encounter_runner()
 	var native: Dictionary = runner.native_cold_snapshot() if runner.is_active() else {}
@@ -168,7 +167,7 @@ func _observe(kind: String, frame: int = -1) -> Dictionary:
 		cosmetic_id = parts.profile.equipped_cosmetic(str(player.identity.character_id))
 	var observation := {"sequence": _sequence, "kind": kind, "player": player, "run": run, "native": native, "room": parts.runtime.snapshot(), "scene": scene, "publication": parts.publication, "cosmetic_id": cosmetic_id, "intents": _player.authoritative_frame_intents(int(player.frame)) if kind == "frame" else {}}
 	_buffer.append(observation)
-	_latest = observation.duplicate(true)
+	_latest = observation
 	_sequence += 1
 	if kind == "frame":
 		_combat_frames += 1

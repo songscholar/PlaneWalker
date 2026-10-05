@@ -95,7 +95,10 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Replay Prefix Cache Evidence](current/2026-10-06-replay-prefix-cache-evidence.md) | 精确缓存回归、真实历史微基准与剩余整帧性能阻断 | Focused Verified / Native performance pending |
 | [Immutable Replay Journal Plan](current/2026-10-06-immutable-replay-journal-plan.md) | 不可变事件认证、精确引用复用和完整回滚历史保留 | Approved / Current |
 | [Immutable Replay Journal Evidence](current/2026-10-06-immutable-replay-journal-evidence.md) | 原生回放回归、不可变所有权与后期历史前缀微基准 | Focused Verified / Native recording performance pending |
+| [Native Recording Snapshot Plan](current/2026-10-06-native-recording-snapshot-plan.md) | 认证历史的录制快照共享、完整校验保留与真实帧回滚验收 | Approved / Current |
+| [Native Recording Snapshot Evidence](current/2026-10-06-native-recording-snapshot-evidence.md) | 正式录制快照字节一致、外部修改隔离、拒绝回退与物理回读 | Focused Verified / Native performance pending |
 | [Void Phase Projectile Retirement](current/2026-10-06-void-phase-projectile-retirement-plan.md) | Void 阶段切换同步撤销辅助域弹体与原生弹体 | Focused Verified / Full matrix pending |
+| [Void Phase Projectile Retirement Evidence](current/2026-10-06-void-phase-projectile-retirement-evidence.md) | 失败组合 619 的三阶段原生击杀、精确存档继续与唯一死亡收据 | Focused Verified / Full matrix pending |
 | [Replay Codec Difference Plan](current/2026-10-06-replay-codec-difference-plan.md) | 真实长局块的冗余根比较消除、精确字节和递归校验验收 | Approved / Current |
 | [Replay Codec Difference Evidence](current/2026-10-06-replay-codec-difference-evidence.md) | 真实块字节一致、编码分段成本、历史共享与缓存微基准 | Focused Verified / Native performance pending |
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
