@@ -270,7 +270,7 @@ func _capture(actor: Node2D, room: Node2D, player: Node2D, pose: String) -> void
 
 
 func _damage(player: Node2D, token: int, amount: float) -> RefCounted:
-	return Damage.from_plan({"run_id": "run-void-arena", "target_id": "pending-void", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+	return Damage.from_plan({"run_id": "run-void-arena", "target_id": "pending_target", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
 
 
 func _publish(bridge: RefCounted, ticket: Dictionary) -> bool:

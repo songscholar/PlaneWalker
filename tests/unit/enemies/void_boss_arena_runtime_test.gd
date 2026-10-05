@@ -28,6 +28,7 @@ func _ready() -> void:
 	var historical := runtime.snapshot()
 	historical.schema_version = 1
 	historical.erase("void_arena_state")
+	historical.erase("void_auxiliary")
 	suite.assert_true(runtime.request_action("voidking_existence_denial", Actions.context(61)).ok, "actual denial owns a fully warned attackgeneration")
 	var result: Dictionary = runtime.accept_void_arena_damage({"fact_id": "break-core", "run_id": identity.run_id, "owner_source_id": identity.hostile_source_id, "construct_id": "void_plane_core:1:0", "runtime_frame": 62, "amount": 100.0})
 	suite.assert_true(result.ok and result.body_damage == 100.0 and not result.retired_generations.is_empty(), "accepted corebreak interrupts the actual denial generation")
