@@ -1,0 +1,12 @@
+keys,en,zh_CN
+UI_RUSH_LOCKED,Clear a standard run to unlock Boss Rush.,完成一次常规通关后解锁 Boss Rush。
+UI_RUSH_BUILD_FMT,"HP %.0f/%.0f | Gold %d | Items %d | Blessings %d","生命 %.0f/%.0f | 金币 %d | 道具 %d | 祝福 %d"
+UI_RUSH_CHOOSE_BLESSING,Blessing,祝福
+UI_RUSH_CHOOSE_ITEM,Item,道具
+UI_RUSH_FULL_RESTORE,Restore HP and Time Energy,恢复全部生命与时间能量
+UI_RUSH_HISTORY_FMT,"#%d | %.2fs | HP %.1f%% | %s","#%d | %.2f 秒 | 剩余生命 %.1f%% | %s"
+UI_RUSH_REWARD_WALKER_PROOF,Walker Proof,行者证明
+UI_RUSH_REWARD_WALKER_ENTRY,Walker Entry Skin,行者入场外观
+UI_RUSH_REWARD_ETERNAL_WALKER,Eternal Walker Skin,永恒行者外观
+UI_RUSH_REWARD_VOID_WALKER,Void Walker Skin,虚无行者外观
+UI_RUSH_REWARD_SPEEDWALKER_BOOTS,Speedwalker Boots,疾行者之靴

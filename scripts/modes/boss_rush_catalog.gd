@@ -12,7 +12,7 @@ var _definition: Dictionary = {}
 var _stages: Array = []
 
 
-func configure(registry: RefCounted) -> bool:
+func configure(registry: RefCounted, carried: bool = false) -> bool:
 	if not registry is Registry:
 		return false
 	var source: Variant = JSON.parse_string(FileAccess.get_file_as_string(SOURCE))
@@ -40,8 +40,17 @@ func configure(registry: RefCounted) -> bool:
 		template.erase("pack_version")
 		if not parsed.configure(definition).ok or template.get("room_type") != "boss" or not ResourceLoader.exists(str(template.get("scene_path", ""))) or not ResourceLoader.exists(str(bosses[row.boss_id].get("scene", ""))):
 			return false
-		stages.append({"boss_id": row.boss_id, "boss_scene": bosses[row.boss_id].scene, "runtime_definition": parsed.runtime_projection(), "template": template})
+		var projection := parsed.runtime_projection()
+		if carried:
+			var scaled := Definition.difficulty_projection(projection, 1.2, 1.1)
+			if not scaled.ok:
+				return false
+			projection = scaled.definition
+		stages.append({"boss_id": row.boss_id, "boss_scene": bosses[row.boss_id].scene, "runtime_definition": projection, "template": template})
 	_definition = source.duplicate(true)
+	if carried:
+		_definition.preset = "carried"
+		_definition["rules"] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/production/modes/boss_rush_carried.json"))
 	_stages = stages
 	return true
 

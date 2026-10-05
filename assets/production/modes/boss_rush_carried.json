@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "mode_id": "boss_rush_carried",
+  "hp_multiplier": 1.2,
+  "damage_multiplier": 1.1,
+  "starting_hp": 100,
+  "starting_gold": 100,
+  "stage_heal_ratio": 0.3,
+  "speed_clear_frames": 36000,
+  "history_limit": 100,
+  "rewards": ["walker_proof", "walker_entry", "eternal_walker", "void_walker", "speedwalker_boots"]
+}

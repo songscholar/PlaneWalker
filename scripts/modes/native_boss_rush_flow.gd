@@ -14,6 +14,8 @@ const Rules := preload("res://scripts/community/local_run_record_rules.gd")
 const Arena := preload("res://scripts/modes/native_boss_arena_builder.gd")
 const Content := preload("res://scripts/content/content_snapshot_provider.gd")
 const Replay := preload("res://scripts/replay/replay_recorder.gd")
+const Carried := preload("res://scripts/modes/boss_rush_carried_rules.gd")
+const RewardEffects := preload("res://scripts/items/player_reward_effect_runtime.gd")
 
 var _registry: RefCounted
 var _service: RefCounted
@@ -41,13 +43,23 @@ var _terminal: Dictionary = {}
 var _native_failure := ""
 var _paused := false
 var _stage_modes: Array[Dictionary] = []
+var _carried := false
+var _carry_rules: RefCounted
+var _stage_hp_loss := 0.0
+var _stage_signal_loss := 0.0
+var _root_path := ""
+var _domain := ""
 
 
-func configure(registry: RefCounted, service: RefCounted, root_path: String) -> Dictionary:
+func configure(registry: RefCounted, service: RefCounted, root_path: String, carried: bool = false) -> Dictionary:
 	if _registry != null or not is_inside_tree() or not registry is Registry or not service is Service:
 		return _failure(&"CHALLENGE_CONFIGURATION_INVALID")
 	var catalog := Catalog.new()
-	if not catalog.configure(registry):
+	if not catalog.configure(registry, carried):
+		return _failure(&"CHALLENGE_CONTENT_INVALID")
+	_carried = carried
+	_carry_rules = Carried.new()
+	if carried and not _carry_rules.configure(registry):
 		return _failure(&"CHALLENGE_CONTENT_INVALID")
 	var identity: Dictionary = service.local_record_storage_identity()
 	var storage := Save.new()
@@ -57,8 +69,8 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String) -> 
 	var loaded = storage.load_profile(id, "local")
 	if not loaded.ok and loaded.code != &"NOT_FOUND":
 		return _failure(loaded.code)
-	var session: Variant = loaded.payload.get("boss_rush_session", {}) if loaded.ok else Catalog.empty_session(catalog.fingerprint())
-	if not Catalog.valid_session(session, catalog.fingerprint(), identity.profile_id):
+	var session: Variant = loaded.payload.get("boss_rush_session", {}) if loaded.ok else _empty_session(catalog.fingerprint())
+	if not _valid_session(session, catalog.fingerprint(), identity.profile_id):
 		return _failure(&"CHALLENGE_SAVE_INVALID")
 	var primary = storage.inspect_profile(id, "local")
 	if not primary.ok and primary.code != &"NOT_FOUND":
@@ -69,6 +81,8 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String) -> 
 	_save = storage
 	_save_id = id
 	_profile_id = identity.profile_id
+	_root_path = root_path
+	_domain = identity.save_domain
 	_state = _normalized(session)
 	_durable = primary.payload.duplicate(true) if primary.ok else {}
 	_camera = Camera2D.new()
@@ -81,9 +95,13 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String) -> 
 
 
 func start(request: Dictionary) -> Dictionary:
-	if _registry == null or _busy or _active or not _pending.is_empty() or not Catalog.valid_request(request) or not _service.snapshot().active_launch_receipt.is_empty() or not _service.snapshot().unlocked_characters.has(request.character_id) or not _service.snapshot().unlocked_weapons.has(request.weapon_id) or _state.session_sequence >= Meta.MAX_VALUE:
+	if _registry == null or _busy or _active or not _pending.is_empty() or not is_unlocked() or not Catalog.valid_request(request) or not _service.snapshot().active_launch_receipt.is_empty() or not _service.snapshot().unlocked_characters.has(request.character_id) or not _service.snapshot().unlocked_weapons.has(request.weapon_id) or _state.session_sequence >= Meta.MAX_VALUE:
 		return _failure(&"CHALLENGE_LAUNCH_INVALID")
-	var candidate := Catalog.empty_session(_catalog.fingerprint())
+	var candidate := _empty_session(_catalog.fingerprint())
+	if _carried:
+		candidate.carried.history = _state.carried.history.duplicate(true)
+		candidate.carried.archived = _state.carried.archived.duplicate(true)
+		candidate.carried.reward_ids = _state.carried.reward_ids.duplicate()
 	candidate.session_sequence = int(_state.session_sequence) + 1
 	candidate.run_id = "boss-rush-%s-%d" % [_profile_id, candidate.session_sequence]
 	candidate.request = request.duplicate(true)
@@ -96,14 +114,15 @@ func continue_session() -> Dictionary:
 		return _failure(&"CHALLENGE_CONTINUE_INVALID")
 	var candidate := _state.duplicate(true)
 	candidate.continued = true
-	if candidate.status == "STAGE_CLEAR":
+	if candidate.status == "STAGE_CLEAR" and not _carried:
 		candidate.stage_index += 1
-	candidate.status = "ACTIVE"
+	if not _carried or candidate.status != "STAGE_CLEAR":
+		candidate.status = "ACTIVE"
 	return _persist(candidate, "stage")
 
 
 func next_stage() -> Dictionary:
-	if not _active or _busy or not _pending.is_empty() or _state.status != "STAGE_CLEAR":
+	if _carried or not _active or _busy or not _pending.is_empty() or _state.status != "STAGE_CLEAR":
 		return _failure(&"CHALLENGE_STAGE_INVALID")
 	var candidate := _state.duplicate(true)
 	candidate.stage_index += 1
@@ -115,7 +134,75 @@ func save_and_return() -> Dictionary:
 	if not _active or _busy or not _pending.is_empty():
 		return _failure(&"CHALLENGE_STAGE_INVALID")
 	_freeze_stage()
-	return _persist(_state.duplicate(true), "close")
+	var candidate := _state.duplicate(true)
+	if _carried and candidate.status == "ACTIVE":
+		_capture_carried(candidate)
+	return _persist(candidate, "close")
+
+
+func is_unlocked() -> bool:
+	return not _carried or _service != null and int(_service.snapshot().statistics.victories) > 0
+
+
+func uses_carried_rules() -> bool:
+	return _carried
+
+
+func choose_reward(index: int) -> Dictionary:
+	if not _carried or not _active or _busy or not _pending.is_empty() or _state.status != "STAGE_CLEAR" or index < 0 or index >= _state.carried.choices.size() or not is_instance_valid(_player):
+		return _failure(&"CHALLENGE_CHOICE_INVALID")
+	var candidate := _state.duplicate(true)
+	var choice: Dictionary = candidate.carried.choices[index]
+	var installed := Carried.hydrate(candidate.carried.portable, _player.reward_effect_snapshot())
+	if installed.is_empty() or not _player.restore_reward_effect_snapshot(installed):
+		return _failure(&"CHALLENGE_BUILD_INVALID")
+	var before: Dictionary = _player.reward_effect_snapshot()
+	if choice.kind == "restore":
+		var restored := before.duplicate(true)
+		restored.health.current_hp = float(restored.health.max_hp)
+		restored.health.dead = false
+		restored.time.energy = float(restored.time.max_energy)
+		if not _player.restore_reward_effect_snapshot(restored):
+			return _failure(&"CHALLENGE_BUILD_INVALID")
+	else:
+		var definition: Dictionary = _carry_rules.reward_definition(choice)
+		if choice.kind == "item" and definition.get("item_mode") == "active":
+			if not _player.equip_active_item(definition, true).ok:
+				return _failure(&"CHALLENGE_BUILD_INVALID")
+			candidate.carried.active_item_id = choice.id
+			candidate.carried.active_cooldown_frames = 0
+		else:
+			var effects := RewardEffects.new()
+			var prepared := effects.prepare(definition, before)
+			if not prepared.ok or not effects.commit(prepared.context.plan, _player).ok:
+				return _failure(&"CHALLENGE_BUILD_INVALID")
+		candidate.carried[choice.kind + "_ids"].append(choice.id)
+	candidate.carried.portable = Carried.portable(_player.reward_effect_snapshot())
+	candidate.carried.choice_receipts.append({"stage_index": int(candidate.stage_index), "kind": choice.kind, "id": choice.id})
+	candidate.carried.choices = []
+	candidate.stage_index += 1
+	candidate.status = "ACTIVE"
+	var result := _persist(candidate, "stage")
+	if not result.ok and is_instance_valid(_player):
+		_player.restore_reward_effect_snapshot(before, false)
+	return result
+
+
+func mode_reward_storage_scope() -> Dictionary:
+	return {"root_path": _root_path, "save_id": _save_id, "save_domain": "local", "source_owner_id": _profile_id, "source_save_domain": _domain, "content_snapshot": Content.snapshot(_registry), "mode_fingerprint": _catalog.fingerprint()} if _carried and _registry != null else {}
+
+
+func verified_reward_claims() -> Dictionary:
+	if not _carried or _save == null:
+		return _failure(&"CHALLENGE_CONFIGURATION_INVALID")
+	var loaded = _save.load_profile(_save_id, "local")
+	var session: Variant = loaded.payload.get("boss_rush_session", {}) if loaded.ok else {}
+	if not loaded.ok or not _valid_session(session, _catalog.fingerprint(), _profile_id):
+		return _failure(&"CHALLENGE_SAVE_INVALID")
+	var claims: Array[Dictionary] = []
+	for id: String in session.carried.reward_ids:
+		claims.append({"id": "boss_rush_carried:" + id, "kind": "entitlement", "amount": 1, "item_id": id})
+	return {"ok": true, "code": &"OK", "context": {"mode_id": "boss_rush_carried", "claims": claims}}
 
 
 func retry_save() -> Dictionary:
@@ -149,7 +236,7 @@ func reload_saved_session() -> Dictionary:
 		return _failure(loaded.code)
 	var session: Variant = loaded.payload.get("boss_rush_session", {})
 	var primary = _save.inspect_profile(_save_id, "local")
-	if not Catalog.valid_session(session, _catalog.fingerprint(), _profile_id) or not primary.ok:
+	if not _valid_session(session, _catalog.fingerprint(), _profile_id) or not primary.ok:
 		return _failure(&"CHALLENGE_SAVE_INVALID")
 	close()
 	_state = _normalized(session)
@@ -190,7 +277,7 @@ func close() -> void:
 
 
 func _persist(candidate: Dictionary, action: String) -> Dictionary:
-	if not Catalog.valid_session(candidate, _catalog.fingerprint(), _profile_id):
+	if not _valid_session(candidate, _catalog.fingerprint(), _profile_id):
 		return _failure(&"CHALLENGE_SAVE_INVALID")
 	_busy = true
 	var primary = _save.inspect_profile(_save_id, "local")
@@ -254,15 +341,46 @@ func _create_stage() -> bool:
 	_effects = built.effects
 	_bridge = built.bridge
 	_orchestrator = built.orchestrator
+	if _carried:
+		var fresh: Dictionary = _player.reward_effect_snapshot()
+		var portable: Dictionary = _state.carried.portable
+		var installed := Carried.hydrate(portable, fresh) if not portable.is_empty() else fresh.duplicate(true)
+		if portable.is_empty():
+			installed.stats.max_hp = 100.0
+			installed.health.max_hp = 100.0
+			installed.health.current_hp = 100.0
+			installed.health.dead = false
+		if installed.is_empty() or not _player.restore_reward_effect_snapshot(installed):
+			_native_failure = "carried_player_projection"
+			_clear_stage()
+			return false
+		_state.carried.portable = Carried.portable(_player.reward_effect_snapshot())
+		if not _state.carried.active_item_id.is_empty():
+			if not _player.equip_active_item(_registry.get_content(StringName(_state.carried.active_item_id)), true).ok:
+				_native_failure = "carried_active_item"
+				_clear_stage()
+				return false
+			var active: Dictionary = _player.active_item_snapshot()
+			active.cooldown_end_frame = int(_state.carried.active_cooldown_frames) - 1
+			if not _player.active_item_runtime.restore_snapshot(active):
+				_native_failure = "carried_active_cooldown"
+				_clear_stage()
+				return false
 	_stage_frames = 0
+	_stage_hp_loss = 0.0
+	_stage_signal_loss = 0.0
 	_paused = false
 	_terminal.clear()
 	_player.authoritative_frame_committed.connect(_on_frame)
 	_player.health.died.connect(_on_player_died)
+	if _carried:
+		_player.health.damaged.connect(_on_player_damaged)
 	_boss.hostile_final_death.connect(_on_boss_death)
 	_active = true
 	_camera.enabled = true
 	_camera.make_current()
+	if _state.status != "ACTIVE":
+		_freeze_stage()
 	return true
 
 
@@ -271,6 +389,8 @@ func _on_frame(_frame: int) -> void:
 		return
 	_stage_frames += 1
 	_state.elapsed_frames = mini(Meta.MAX_VALUE, int(_state.elapsed_frames) + 1)
+	if _carried:
+		_capture_damage(_state)
 	_orchestrator.advance_time(1.0 / 60.0)
 
 
@@ -301,16 +421,56 @@ func _apply_terminal() -> void:
 		return
 	_freeze_stage()
 	var candidate := _state.duplicate(true)
+	if _carried:
+		_capture_carried(candidate)
 	if _terminal.kind == "victory":
 		if not _orchestrator.boss_defeated({"result": "victory"}).ok:
 			return
 		candidate.completed_stages.append({"stage_index": int(candidate.stage_index), "boss_id": _catalog.stage(int(candidate.stage_index)).boss_id, "run_id": str(_player.current_run_id()), "hostile_source_id": _terminal.source, "death_receipt": _terminal.receipt, "frames": _stage_frames, "native_digest": _terminal.native_digest})
 		candidate.status = "VICTORY" if candidate.stage_index == 4 else "STAGE_CLEAR"
+		if _carried:
+			var health: Dictionary = candidate.carried.portable.health
+			health.current_hp = minf(float(health.max_hp), float(health.current_hp) + float(health.max_hp) * 0.3)
+			health.dead = false
+			if candidate.status == "STAGE_CLEAR":
+				candidate.carried.choices = _carry_rules.choices(candidate.request, int(candidate.stage_index), candidate.carried)
+			else:
+				_carry_rules.add_history(candidate)
 	else:
 		if not _orchestrator.player_died({"result": "death"}).ok:
 			return
 		candidate.status = "DEFEAT"
 	_persist(candidate, "summary")
+
+
+func _capture_damage(candidate: Dictionary) -> void:
+	var total := maxf(float(_player.health.hp_loss_state().irreversible_hp_loss_total), _stage_signal_loss)
+	candidate.carried.damage_taken = float(candidate.carried.damage_taken) + maxf(0.0, total - _stage_hp_loss)
+	_stage_hp_loss = total
+
+
+func _on_player_damaged(amount: float, _current_hp: float) -> void:
+	if _carried and _active and _state.status == "ACTIVE" and is_finite(amount) and amount > 0.0:
+		_stage_signal_loss += amount
+
+
+func _capture_carried(candidate: Dictionary) -> void:
+	_capture_damage(candidate)
+	candidate.carried.portable = Carried.portable(_player.reward_effect_snapshot())
+	if not candidate.carried.active_item_id.is_empty():
+		candidate.carried.active_cooldown_frames = int(_player.active_item_runtime.cooldown_remaining())
+
+
+func _empty_session(fingerprint: String) -> Dictionary:
+	var result := Catalog.empty_session(fingerprint)
+	if _carried:
+		result.schema_version = 2
+		result["carried"] = Carried.empty_state()
+	return result
+
+
+func _valid_session(value: Variant, fingerprint: String, owner: String) -> bool:
+	return _carry_rules.valid(value, fingerprint, owner) if _carried else Catalog.valid_session(value, fingerprint, owner)
 
 
 func _freeze_stage() -> void:

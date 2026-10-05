@@ -17,12 +17,12 @@ var _paused := false
 var _view_revision := 0
 
 
-func configure(registry: RefCounted, service: RefCounted, root_path: String) -> Dictionary:
+func configure(registry: RefCounted, service: RefCounted, root_path: String, carried: bool = false) -> Dictionary:
 	if _flow != null or not is_inside_tree():
 		return _failure(&"CHALLENGE_CONFIGURATION_INVALID")
 	var flow := Flow.new()
 	add_child(flow)
-	var result: Dictionary = flow.configure(registry, service, root_path)
+	var result: Dictionary = flow.configure(registry, service, root_path, carried)
 	if not result.ok:
 		flow.queue_free()
 		return result
@@ -150,7 +150,7 @@ func _action(id: String) -> void:
 			_paused = false
 			result = _flow.reload_saved_session()
 		_:
-			result = _failure(&"CHALLENGE_COMMAND_INVALID")
+			result = _flow.choose_reward(int(id.trim_prefix("choice_"))) if id in ["choice_0", "choice_1", "choice_2"] else _failure(&"CHALLENGE_COMMAND_INVALID")
 	_project()
 	if not result.ok:
 		_panel.show_rejection("UI_MODE_STALE" if result.code == &"CHALLENGE_STALE_PRIMARY" else ("UI_MODE_NATIVE_RETRY" if result.code == &"CHALLENGE_NATIVE_INVALID" else "UI_MODE_SAVE_PENDING"))
@@ -167,7 +167,7 @@ func _project() -> void:
 		get_viewport().gui_release_focus()
 		return
 	_view_revision += 1
-	_panel.render({"run_id": "boss-rush-menu", "revision": _view_revision, "request": _request, "session": session, "active": _flow.is_active(), "paused": _paused, "pending": _flow.has_pending_save(), "save_error": str(_flow.save_error())})
+	_panel.render({"run_id": "boss-rush-menu", "revision": _view_revision, "request": _request, "session": session, "active": _flow.is_active(), "paused": _paused, "pending": _flow.has_pending_save(), "save_error": str(_flow.save_error()), "unlocked": _flow.is_unlocked()})
 	_panel.back_button.text = tr("UI_MODE_RETURN")
 
 

@@ -902,10 +902,12 @@ const MECHANISM_RULES := {
 }
 
 var _snapshot: Dictionary = {}
+var _difficulty: Dictionary = {}
 
 
 func configure(source: Dictionary) -> Dictionary:
 	_snapshot.clear()
+	_difficulty.clear()
 	if not Action.exact_fields(source, FIELDS):
 		return Contract.failure("boss", "exact_fields_required")
 	var common := Contract.common(source, "boss_definition", Ids.BOSS_IDS)
@@ -997,11 +999,16 @@ func runtime_projection() -> Dictionary:
 	for field: String in RUNTIME_FIELDS.slice(1):
 		var value: Variant = _snapshot[field]
 		result[field] = value.duplicate(true) if value is Array or value is Dictionary else value
+	if not _difficulty.is_empty():
+		result["difficulty"] = _difficulty.duplicate(true)
 	return result
 
 
 func configure_runtime_projection(source: Dictionary) -> Dictionary:
 	_snapshot.clear()
+	_difficulty.clear()
+	if source.has("difficulty"):
+		return _configure_difficulty(source)
 	if not Action.exact_fields(source, RUNTIME_FIELDS) or source.actor_kind != "boss" or not Ids.BOSS_IDS.has(source.id) or not source.actions is Array:
 		return Contract.failure("runtime_projection", "exact_boss_fields_required")
 	var floor_id: String = Ids.FLOOR_IDS[Ids.BOSS_IDS.find(source.id)]
@@ -1018,6 +1025,56 @@ func configure_runtime_projection(source: Dictionary) -> Dictionary:
 	envelope.merge({"category": "boss_definition", "schema_version": 1, "name_key": "BOSS_RUNTIME_NAME", "description_key": "BOSS_RUNTIME_DESC", "availability": ["LAUNCH", "EXPANSION"], "tags": ["boss"], "compatibility": {"floor_ids": [floor_id], "actor_kinds": ["boss"]}, "references": references, "floor_id": floor_id})
 	var result := configure(envelope)
 	return {"ok": true, "definition": runtime_projection(), "context": {}} if result.ok else result
+
+
+static func difficulty_projection(base: Dictionary, hp_multiplier: float, damage_multiplier: float) -> Dictionary:
+	if base.has("difficulty") or not Action.number_in_range(hp_multiplier, 1.0, 3.0) or not Action.number_in_range(damage_multiplier, 1.0, 2.0):
+		return Contract.failure("difficulty", "canonical_base_and_bounded_multipliers_required")
+	var parser := BossDefinition.new()
+	var validated := parser.configure_runtime_projection(base)
+	if not validated.ok:
+		return validated
+	var canonical := parser.runtime_projection()
+	var projected := _scaled_projection(canonical, hp_multiplier, damage_multiplier)
+	projected["difficulty"] = {"schema_version": 1, "hp_multiplier": hp_multiplier, "damage_multiplier": damage_multiplier, "base": canonical}
+	return {"ok": true, "definition": projected, "context": {}}
+
+
+func _configure_difficulty(source: Dictionary) -> Dictionary:
+	var fields := RUNTIME_FIELDS.duplicate()
+	fields.append("difficulty")
+	if not Action.exact_fields(source, fields) or not source.difficulty is Dictionary or not Action.exact_fields(source.difficulty, ["schema_version", "hp_multiplier", "damage_multiplier", "base"]) or not Action.integer_in_range(source.difficulty.schema_version, 1, 1) or not source.difficulty.base is Dictionary:
+		return Contract.failure("difficulty", "exact_fields_required")
+	var projected := difficulty_projection(source.difficulty.base, float(source.difficulty.get("hp_multiplier", -1)), float(source.difficulty.get("damage_multiplier", -1))) if Action.number_in_range(source.difficulty.hp_multiplier, 1.0, 3.0) and Action.number_in_range(source.difficulty.damage_multiplier, 1.0, 2.0) else Contract.failure("difficulty", "invalid_multiplier")
+	if not projected.ok:
+		return projected
+	if JSON.parse_string(JSON.stringify(source)) != JSON.parse_string(JSON.stringify(projected.definition)):
+		return Contract.failure("difficulty", "scaled_projection_mismatch")
+	var canonical: Dictionary = projected.definition.difficulty.base
+	var validated := configure_runtime_projection(canonical)
+	if not validated.ok:
+		return validated
+	var scaled: Dictionary = projected.definition
+	for field: String in RUNTIME_FIELDS.slice(1):
+		_snapshot[field] = scaled[field].duplicate(true) if scaled[field] is Array or scaled[field] is Dictionary else scaled[field]
+	_difficulty = scaled.difficulty.duplicate(true)
+	return {"ok": true, "definition": runtime_projection(), "context": {}}
+
+
+static func _scaled_projection(base: Dictionary, hp_multiplier: float, damage_multiplier: float) -> Dictionary:
+	var result := base.duplicate(true)
+	result.max_hp = float(result.max_hp) * hp_multiplier
+	for action: Dictionary in result.actions + result.time_responses:
+		for hit: Dictionary in action.hit_schedule:
+			hit.damage = float(hit.damage) * damage_multiplier
+	for phase: String in result.mechanisms.phase_damage_overrides:
+		for action: String in result.mechanisms.phase_damage_overrides[phase]:
+			result.mechanisms.phase_damage_overrides[phase][action] = float(result.mechanisms.phase_damage_overrides[phase][action]) * damage_multiplier
+	# Only outgoing damage scales; weakpoint thresholds and self-damage stay authored.
+	for field: String in ["aftershock_damage", "wall_collapse_damage", "seed_pool_tick_damage", "cage_pulse_damage", "cage_collapse_damage", "echo_final_damage", "slam_pool_tick_damage", "slam_burn_damage", "lava_pool_tick_damage", "devour_inner_damage", "scepter_burn_damage", "tear_final_damage", "vortex_inner_damage"]:
+		if result.mechanisms.has(field):
+			result.mechanisms[field] = float(result.mechanisms[field]) * damage_multiplier
+	return result
 
 
 func _phases(value: Variant, id: String) -> Dictionary:

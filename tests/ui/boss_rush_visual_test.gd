@@ -2,6 +2,9 @@ extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
 const Main := preload("res://scenes/main.tscn")
+const Registry := preload("res://scripts/content/content_registry.gd")
+const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
+const Fixtures := preload("res://tests/support/p16_progression_fixtures.gd")
 const RESOLUTIONS := [Vector2i(640, 360), Vector2i(1280, 720)]
 
 
@@ -11,6 +14,16 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
+	var registry := Registry.new()
+	registry.load_packs([{"path": "res://data/content_packs/base/pack.json", "required": true}], "0.4.0-dev", &"LAUNCH")
+	suite.assert_true(GameState.activate_profile_content(registry).ok, "visual fixture activates actual Profile content")
+	var catalog: RefCounted = Factory.from_registry(registry).context.catalog
+	var fixture := Fixtures.profile(catalog)
+	fixture.statistics.finished_runs = 1
+	fixture.statistics.victories = 1
+	var save: RefCounted = GameState.get("_save_service")
+	suite.assert_true(save.save_profile("slot_1", "base", {"meta_profile_state": fixture}).ok and GameState.profile_runtime_service().configure(catalog, save, "slot_1", "base").ok, "visual fixture physically retains the first-victory unlock")
+	GameState.refresh_profile_state()
 	var screenshots := OS.get_cmdline_user_args().has("--boss-rush-screenshots")
 	for locale: String in ["en", "zh_CN"]:
 		for scale: float in [1.0, 1.5]:
@@ -51,7 +64,7 @@ func _run() -> void:
 					await get_tree().process_frame
 					await get_tree().process_frame
 					if index < 4:
-						_action(coordinator.panel(), "next").pressed.emit()
+						_action(coordinator.panel(), "choice_2").pressed.emit()
 				suite.assert_true(flow.snapshot().status == "VICTORY" and coordinator.panel().visible, "actual native five-stage victory projects mode summary")
 				await _capture(suite, coordinator, viewport, "victory", locale, scale, screenshots)
 				suite.assert_true(coordinator.return_to_hub().ok and hub.is_hub_visible(), "native result returns to usable Hub")
