@@ -42,6 +42,8 @@ make_fake_godot() {
 		'  log_failure) printf "SCRIPT ERROR: synthetic parse failure\\n" | tee "${log_file}" ;;' \
 		'  deferred_failure) printf "ERROR: Error calling deferred method: freed node argument\\n" | tee "${log_file}" ;;' \
 		'  engine_log_failure) printf "SCRIPT ERROR: engine-log-only parse failure\\n" >"${log_file}" ;;' \
+		'  generic_failure) printf "ERROR: synthetic native resource failure\\n" | tee "${log_file}" ;;' \
+		'  generic_engine_failure) printf "ERROR: synthetic engine-log-only resource failure\\n" >"${log_file}" ;;' \
 		'  leak_failure) printf "WARNING: ObjectDB instances leaked at exit\\n" | tee "${log_file}" ;;' \
 		'  hang) sleep 5; printf "PASS: too late\\n" | tee "${log_file}" ;;' \
 		'esac' >"${target}"
@@ -259,6 +261,15 @@ GODOT_BIN="${TEMP_DIR}/godot-engine-log-failure" TEST_LOG_DIR="${TEMP_DIR}/engin
 engine_log_failure_status=$?
 set -e
 [[ ${engine_log_failure_status} -ne 0 ]] || fail "an engine-log-only script error must fail the suite"
+
+for generic_mode in generic_failure generic_engine_failure; do
+	make_fake_godot "${TEMP_DIR}/godot-${generic_mode}" "${generic_mode}"
+	set +e
+	GODOT_BIN="${TEMP_DIR}/godot-${generic_mode}" TEST_LOG_DIR="${TEMP_DIR}/${generic_mode}-logs" tools/run_tests.sh --filter seed_service_test >/dev/null 2>&1
+	generic_failure_status=$?
+	set -e
+	[[ ${generic_failure_status} -ne 0 ]] || fail "a generic ${generic_mode} error must fail even with exit code zero"
+done
 
 make_fake_godot "${TEMP_DIR}/godot-leak-failure" leak_failure
 set +e

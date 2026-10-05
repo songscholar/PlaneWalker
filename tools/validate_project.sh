@@ -176,6 +176,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.contract.playtest.test_playt
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.playtest.test_weapon_simulation_report \
 	tests.contract.playtest.test_character_weapon_simulation_report
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+	tests.contract.playtest.test_native_boss_matrix_report \
+	tests.contract.playtest.test_synthetic_hostile_matrix_report \
+	tests.contract.performance.test_native_performance_probe \
+	tests.contract.test_runtime_log_validation
 
 printf '\n== Launch pool simulation contracts ==\n'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
@@ -226,6 +231,7 @@ if [[ -n "${GDSCRIPT_COVERAGE_PYTHON:-}" ]]; then
 		-m unittest tests.contract.coverage.test_instrumented_provider
 	PYTHONDONTWRITEBYTECODE=1 "${GDSCRIPT_COVERAGE_PYTHON}" -m tools.coverage.instrumented_provider \
 		--project-root "${PROJECT_ROOT}" --godot-bin "${godot_bin}" \
+		--timeout "${TEST_TIMEOUT_SECONDS:-300}" \
 		--output-dir "${validation_log_dir}/runtime-line-coverage"
 	PYTHONDONTWRITEBYTECODE=1 python3 tools/coverage/collect_gdscript_coverage.py \
 		--project-root "${PROJECT_ROOT}" --godot-bin "${godot_bin}" \

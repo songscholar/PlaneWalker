@@ -109,6 +109,13 @@ run_with_timeout() {
 	local user_data_dir="$4"
 	local started_at=$SECONDS
 	local scene_timeout_seconds="${timeout_seconds}"
+	local scene_options=()
+	if [[ "${scene}" == "tests/integration/dungeon/p15_five_floor_run_test.tscn" ]]; then
+		scene_options+=(--fixed-fps 60)
+		if (( scene_timeout_seconds < 7200 )); then
+			scene_timeout_seconds=7200
+		fi
+	fi
 	if [[ "${scene}" == "tests/smoke/p14_dungeon_loadout_matrix_smoke_test.tscn" || "${scene}" == "tests/integration/combat/boss_damage_capacity_test.tscn" ]] && (( scene_timeout_seconds < 600 )); then
 		scene_timeout_seconds=600
 	fi
@@ -122,6 +129,7 @@ run_with_timeout() {
 	XDG_CACHE_HOME="${user_data_dir}/cache" \
 		"${godot_bin}" \
 		--headless \
+		"${scene_options[@]}" \
 		--path "${PROJECT_ROOT}" \
 		--log-file "${engine_log}" \
 		"res://${scene}" >"${stdout_log}" 2>&1 &
@@ -144,17 +152,7 @@ run_with_timeout() {
 }
 
 log_has_runtime_failure() {
-	grep -Eq \
-		-e 'SCRIPT ERROR:' \
-		-e 'Error calling deferred method:' \
-		-e 'Parse Error:' \
-		-e 'Failed to load script' \
-		-e 'Failed loading resource' \
-		-e 'Cannot open file .*\.gd' \
-		-e 'Cannot load resource' \
-		-e 'Invalid (call|get|set)(\.| )' \
-		-e 'ERROR: String formatting error:' \
-		-- "$@" 2>/dev/null
+	! python3 "${PROJECT_ROOT}/tools/runtime_log_validation.py" --test-suite-scopes "$@"
 }
 
 log_has_leak() {

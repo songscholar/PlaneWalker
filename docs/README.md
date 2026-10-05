@@ -155,10 +155,16 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Boss Loadout Matrix Plan](superpowers/plans/2026-10-05-native-boss-loadout-matrix.md) | 五角色五武器六组时间技能对五首领的七百五十场真实组合 | Active / Current |
 | [Native Boss Matrix Evidence](current/2026-10-05-native-boss-matrix-evidence.md) | 原生组合执行器、真实伤害、时间凭据、物理续接与已通过部分案例 | Partial Verified / Current |
 | [Native Complete Gameplay Plan](superpowers/plans/2026-10-05-native-complete-gameplay-certification.md) | 完整五层真实战斗、七百五十组合、干净验证与本地发行包 | Active / Current |
-| [Synthetic Hostile Domain Matrix Plan](superpowers/plans/2026-10-05-p15-synthetic-domain-matrix.md) | 三十种子与七百五十组合的独立领域重放、恢复和边界验证 | Active / Current |
+| [Synthetic Hostile Domain Matrix Plan](superpowers/plans/2026-10-05-p15-synthetic-domain-matrix.md) | 三十种子、一百五十配装与五首领共 22,500 次领域重放、恢复和边界验证 | Completed / Historical |
+| [Synthetic Hostile Domain Matrix Evidence](current/2026-10-05-p15-synthetic-domain-matrix-evidence.md) | 固定提交的 22,500 次纯领域验证、52 种动作和独立报告复核 | Verified Locally / Synthetic domain only |
 | [Native Performance Probe Design](superpowers/specs/2026-10-05-native-performance-probe-design.md) | 正式录制并发、原生战斗负载与 Hub 性能观测边界 | Approved / Current |
 | [Native Performance Probe Plan](superpowers/plans/2026-10-05-native-performance-probe.md) | 真实唯一帧、分段耗时、物理回放落盘与内存测量 | Active / Current |
 | [Native Performance Probe Evidence](current/2026-10-05-native-performance-probe-evidence.md) | 正式 Main 自动录制、唯一帧、Hub 与真实 Boss 负载及物理回放恢复 | Focused Verified / Combined performance pending |
+| [Expected Engine Error Scope Plan](superpowers/plans/2026-10-05-expected-engine-error-scope.md) | 同步反向测试的精确错误计数、双日志一致性与严格失败检查 | Active / Current |
+| [Expected Engine Error Scope Evidence](current/2026-10-05-expected-engine-error-scope-evidence.md) | 四十二项精确预期诊断、严格双日志检查和二十八个原生专项场景 | Focused Verified / Combined certification pending |
+| [Native Test Physics Space Evidence](current/2026-10-05-native-test-physics-space-evidence.md) | 手动推进玩家保留真实物理空间、冲刺复现与三个专项双日志验证 | Focused Verified / Current |
+| [Native Boss Contact Refresh Evidence](current/2026-10-05-native-boss-contact-refresh-evidence.md) | 实际 Sword 命中回调的碰撞更新、Void 构件与严格回滚验证 | Focused Verified / Current |
+| [Linux Guest Startup Plan](superpowers/plans/2026-10-05-linux-guest-startup.md) | 固定发行包的隔离 Linux 虚拟环境启动与证据分类 | Active / Current |
 | [Native Forge Terminal Evidence](current/2026-10-05-native-forge-terminal-payload-evidence.md) | 首领终结清理真实弹体、规范死亡碰撞及事务恢复 | Focused Verified / Current |
 | [Native Summon Boundary Evidence](current/2026-10-05-native-summon-boundary-evidence.md) | 冻结召唤落点安全准入、合法边缘、静态阻挡及原帧重试 | Focused Verified / Current |
 | [Native Summon Prepublication Evidence](current/2026-10-05-native-summon-prepublication-evidence.md) | 自动选择拒绝未发布预警、合法威胁退役及精确重试 | Focused Verified / Current |
