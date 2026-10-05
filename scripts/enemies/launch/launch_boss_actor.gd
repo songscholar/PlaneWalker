@@ -470,7 +470,9 @@ func native_time_damage_multiplier(target_id: String) -> float:
 
 
 func sync_native_time_auxiliary_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
-	if not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)) or target.get_world_2d() != get_world_2d():
+	if not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)):
+		return false
+	if not clear and (not is_inside_tree() or not target.is_inside_tree() or target.get_world_2d() != get_world_2d()):
 		return false
 	var multiplier: float = 1.0 if clear else _launch_runtime.time_damage_multiplier(target_id)
 	return target.apply_floor_rule_modifier(StringName("time_auxiliary:" + str(hostile_source_id)), &"mark", &"remove" if multiplier == 1.0 else &"apply", {} if multiplier == 1.0 else {"time_damage_taken_multiplier": multiplier})
@@ -495,7 +497,9 @@ func settle_native_time_auxiliary_damage(authority: RefCounted, record: Dictiona
 
 
 func sync_native_void_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
-	if not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)) or target.get_world_2d() != get_world_2d():
+	if not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)):
+		return false
+	if not clear and (not is_inside_tree() or not target.is_inside_tree() or target.get_world_2d() != get_world_2d()):
 		return false
 	var values: Dictionary = {} if clear else _launch_runtime.void_target_modifiers(target_id)
 	return target.apply_floor_rule_modifier(StringName("void_auxiliary:" + str(hostile_source_id)), &"status", &"remove" if values.is_empty() else &"apply", values)
@@ -621,7 +625,9 @@ func prepared_launch_forge_mechanism_allowed(request: Dictionary) -> bool:
 
 func sync_native_forge_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
 	var state := native_forge_arena_snapshot()
-	if state.is_empty() or not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)) or target.get_world_2d() != get_world_2d():
+	if (not clear and state.is_empty()) or not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)):
+		return false
+	if not clear and (not is_inside_tree() or not target.is_inside_tree() or target.get_world_2d() != get_world_2d()):
 		return false
 	var burning: bool = not clear and not state.terminal and state.burns.any(func(row: Dictionary): return row.target_id == target_id)
 	return target.apply_floor_rule_modifier(StringName("forge_burn:" + str(hostile_source_id)), &"burn", &"apply" if burning else &"remove", {"movement_multiplier": 1.0} if burning else {})
