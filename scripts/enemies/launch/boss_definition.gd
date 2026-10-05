@@ -904,6 +904,9 @@ const MECHANISM_RULES := {
 var _snapshot: Dictionary = {}
 var _difficulty: Dictionary = {}
 var _daily_conditions: Dictionary = {}
+const MAX_RUNTIME_PROJECTION_CACHE := 4
+static var _runtime_projection_cache: Array[Dictionary] = []
+static var _runtime_projection_cache_mutex := Mutex.new()
 
 
 func configure(source: Dictionary) -> Dictionary:
@@ -1012,6 +1015,20 @@ func configure_runtime_projection(source: Dictionary) -> Dictionary:
 	_snapshot.clear()
 	_difficulty.clear()
 	_daily_conditions.clear()
+	var encoded := var_to_bytes(source)
+	var cached := _cached_runtime_projection(encoded)
+	if not cached.is_empty():
+		_snapshot = cached.snapshot
+		_difficulty = cached.difficulty
+		_daily_conditions = cached.daily_conditions
+		return {"ok": true, "definition": runtime_projection(), "context": {}}
+	var result := _configure_runtime_projection_uncached(source)
+	if result.ok:
+		_cache_runtime_projection(encoded, var_to_bytes({"snapshot": _snapshot, "difficulty": _difficulty, "daily_conditions": _daily_conditions}))
+	return result
+
+
+func _configure_runtime_projection_uncached(source: Dictionary) -> Dictionary:
 	if source.has("daily_conditions"):
 		return _configure_daily_conditions(source)
 	if source.has("difficulty"):
@@ -1032,6 +1049,29 @@ func configure_runtime_projection(source: Dictionary) -> Dictionary:
 	envelope.merge({"category": "boss_definition", "schema_version": 1, "name_key": "BOSS_RUNTIME_NAME", "description_key": "BOSS_RUNTIME_DESC", "availability": ["LAUNCH", "EXPANSION"], "tags": ["boss"], "compatibility": {"floor_ids": [floor_id], "actor_kinds": ["boss"]}, "references": references, "floor_id": floor_id})
 	var result := configure(envelope)
 	return {"ok": true, "definition": runtime_projection(), "context": {}} if result.ok else result
+
+
+static func _cached_runtime_projection(encoded: PackedByteArray) -> Dictionary:
+	_runtime_projection_cache_mutex.lock()
+	for row: Dictionary in _runtime_projection_cache:
+		if row.source == encoded:
+			var state: PackedByteArray = row.state
+			_runtime_projection_cache_mutex.unlock()
+			return bytes_to_var(state)
+	_runtime_projection_cache_mutex.unlock()
+	return {}
+
+
+static func _cache_runtime_projection(encoded: PackedByteArray, state: PackedByteArray) -> void:
+	_runtime_projection_cache_mutex.lock()
+	for row: Dictionary in _runtime_projection_cache:
+		if row.source == encoded:
+			_runtime_projection_cache_mutex.unlock()
+			return
+	if _runtime_projection_cache.size() == MAX_RUNTIME_PROJECTION_CACHE:
+		_runtime_projection_cache.pop_front()
+	_runtime_projection_cache.append({"source": encoded, "state": state})
+	_runtime_projection_cache_mutex.unlock()
 
 
 static func difficulty_projection(base: Dictionary, hp_multiplier: float, damage_multiplier: float) -> Dictionary:
