@@ -20,7 +20,7 @@ victory. No remote push or public release is part of this work.
 ## 1. Native Gameplay And Performance
 
 - [x] Inspect active processes, source state, current evidence and UI gaps.
-- [ ] Complete source-bound hostile catalog/action configuration caches with
+- [x] Complete source-bound hostile catalog/action configuration caches with
   typed mutation, identity, eviction and concurrency regressions.
 - [ ] Retain ordinary-input actual Main five-floor victory, all five authenticated
   Boss receipts, ending/credits and fresh physical settlement reload. Existing
@@ -69,7 +69,7 @@ workspace. Instrumented timings do not certify production performance.
 
 ## 3. Full UI And Presentation
 
-- [ ] Retain a complete UI specification and implementation plan based on actual
+- [x] Retain a complete UI specification and implementation plan based on actual
   rendered screens and the approved modern pixel ruins direction.
 - [ ] After gameplay milestone passage, implement the shared theme, licensed
   typography, original bitmap icons, states and reduced-motion behavior.

@@ -24,6 +24,7 @@ const HISTORY_FIELDS: Array[String] = ["runtime_frame", "position", "hp"]
 const REWIND_FIELDS: Array[String] = ["attack_generation", "commit_frame", "history_reference", "landing", "hp_at_commit", "heal_amount", "healing_spent_before", "weakpoint_damage", "consumed", "cancelled"]
 const MAX_CLAIMS := 512
 const MAX_DAMAGE_CLAIMS := 10000
+const MAX_SNAPSHOT_VALIDATION_CACHE := 4
 
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
@@ -41,9 +42,12 @@ var _legacy_void_action := false
 var _time_response: RefCounted
 var _time_auxiliary: RefCounted
 var _legacy_time_action := false
+var _snapshot_validation_cache: Array[Dictionary] = []
+var _snapshot_validation_cache_mutex := Mutex.new()
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
+	_clear_snapshot_validation_cache()
 	_definition.clear()
 	_state.clear()
 	_action = null
@@ -120,6 +124,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 
 
 func configure_arena_origin(origin: Dictionary, trunk_origin: Dictionary = {}) -> bool:
+	_clear_snapshot_validation_cache()
 	if not Contract.valid_point(origin) or not trunk_origin.is_empty() and not Contract.valid_point(trunk_origin):
 		return false
 	if _arena != null and _definition.id == "forest_heart" and not _arena.bind_origin(origin):
@@ -874,6 +879,64 @@ func can_restore_native_snapshot(value: Dictionary) -> bool:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
+	if _state.is_empty():
+		return false
+	var context := _snapshot_validation_context()
+	var encoded := var_to_bytes(value)
+	_snapshot_validation_cache_mutex.lock()
+	for entry: Dictionary in _snapshot_validation_cache:
+		if entry.context == context and entry.snapshot == encoded:
+			_snapshot_validation_cache_mutex.unlock()
+			return true
+	_snapshot_validation_cache_mutex.unlock()
+	if not _can_restore_snapshot_uncached(value):
+		return false
+	_snapshot_validation_cache_mutex.lock()
+	for entry: Dictionary in _snapshot_validation_cache:
+		if entry.context == context and entry.snapshot == encoded:
+			_snapshot_validation_cache_mutex.unlock()
+			return true
+	if _snapshot_validation_cache.size() == MAX_SNAPSHOT_VALIDATION_CACHE:
+		_snapshot_validation_cache.pop_front()
+	_snapshot_validation_cache.append({"context": context, "snapshot": encoded})
+	_snapshot_validation_cache_mutex.unlock()
+	return true
+
+
+func _clear_snapshot_validation_cache() -> void:
+	_snapshot_validation_cache_mutex.lock()
+	_snapshot_validation_cache.clear()
+	_snapshot_validation_cache_mutex.unlock()
+
+
+func _snapshot_validation_context() -> PackedByteArray:
+	# Historical validity depends on configured authority, not the current frame.
+	var context: Array = [_definition, _state.get("definition_digest"), _state.get("identity"), _arena_origin, _arena_trunk_origin]
+	for authority: RefCounted in [_control, _conversion, _time_response, _time_auxiliary]:
+		if authority == null:
+			context.append(null)
+		else:
+			var state: Dictionary = authority.get("_state")
+			context.append([state.is_empty(), state.get("identity"), state.get("definition_digest")])
+	if _time_response != null:
+		context.append(_time_response.get("_mechanisms"))
+	for arena: RefCounted in [_arena, _forest_auxiliary, _void_arena, _void_auxiliary, _forge_arena]:
+		if arena == null:
+			context.append(null)
+		else:
+			var state: Dictionary = arena.get("_state")
+			context.append([arena.get("_initial"), state.get("arena_origin")])
+			if arena in [_void_arena, _void_auxiliary, _forge_arena]:
+				context.append(arena.get("_definition"))
+			if arena == _arena and _definition.id == "ruin_king":
+				var ids: Array = []
+				for cover: Dictionary in state.get("covers", []):
+					ids.append(cover.get("id"))
+				context.append(ids)
+	return var_to_bytes(context)
+
+
+func _can_restore_snapshot_uncached(value: Dictionary) -> bool:
 	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary", "void_half_index"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else []) + (["time_response", "time_auxiliary"] if _time_response != null else [])
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (10 if _time_response != null else 6 if _forge_arena != null else 8 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
 		return false

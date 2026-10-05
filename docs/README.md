@@ -79,6 +79,13 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 
 | 文档 | 用途 | 状态 |
 |---|---|---|
+| [Gameplay Then UI Completion Plan](superpowers/plans/2026-10-06-gameplay-ui-product-completion.md) | 先完成真实玩法认证，再完成整套 UI 和最终本地产品验收 | Active / Current |
+| [Native Hostile Cache Evidence](current/2026-10-06-native-hostile-cache-retention-evidence.md) | 有界目录与动作缓存、原生回归及冻结前后性能对照 | Focused Verified / Performance certification pending |
+| [Boss Snapshot Cache Evidence](current/2026-10-06-boss-snapshot-cache-evidence.md) | 五 Boss 完整验证结果缓存、严格原生边界和完全相同录制的耗时对照 | Focused Verified / Full gameplay certification pending |
+| [Native Boss Modifier Teardown Evidence](current/2026-10-06-native-boss-modifier-teardown-evidence.md) | 场景退出时清理首领专属效果、保留其它来源且拒绝离树对象施加新效果 | Focused Verified / Combined certification pending |
+| [Registry Template Closure Evidence](current/2026-10-06-registry-template-closure-evidence.md) | 启用内容包时检查全部正式遭遇与扩展遭遇模板，拒绝缺失引用 | Focused Verified / Combined certification pending |
+| [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
+| [Native UI Finish Plan](superpowers/plans/2026-10-06-native-ui-finish.md) | 玩法认证之后实施 HUD、据点与全部外围界面打磨 | Active / Current |
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
 | [Dungeon Probe Encounter Design](superpowers/specs/2026-10-05-dungeon-probe-native-encounter-design.md) | 合成模拟复用正式遭遇状态机、固定帧与生成及死亡回执 | Approved / Current authority |
 | [Dungeon Probe Encounter Plan](superpowers/plans/2026-10-05-dungeon-probe-native-encounter.md) | 守卫事件回归、工具适配器和三十种子报告修复 | Active / Current |
@@ -159,6 +166,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Synthetic Hostile Domain Matrix Evidence](current/2026-10-05-p15-synthetic-domain-matrix-evidence.md) | 固定提交的 22,500 次纯领域验证、52 种动作和独立报告复核 | Verified Locally / Synthetic domain only |
 | [Native Performance Probe Design](superpowers/specs/2026-10-05-native-performance-probe-design.md) | 正式录制并发、原生战斗负载与 Hub 性能观测边界 | Approved / Current |
 | [Native Performance Probe Plan](superpowers/plans/2026-10-05-native-performance-probe.md) | 真实唯一帧、分段耗时、物理回放落盘与内存测量 | Active / Current |
+| [Native Hostile Catalog Cache Plan](superpowers/plans/2026-10-05-native-hostile-catalog-cache.md) | 精确来源目录缓存、冷校验、并发和原生帧性能比较 | Active / Current |
+| [Native Action Configuration Cache Plan](superpowers/plans/2026-10-06-native-action-configuration-cache.md) | 类型精确的动作定义缓存、恢复校验和实际帧耗时比较 | Active / Current |
 | [Native Performance Probe Evidence](current/2026-10-05-native-performance-probe-evidence.md) | 正式 Main 自动录制、唯一帧、Hub 与真实 Boss 负载及物理回放恢复 | Focused Verified / Combined performance pending |
 | [Expected Engine Error Scope Plan](superpowers/plans/2026-10-05-expected-engine-error-scope.md) | 同步反向测试的精确错误计数、双日志一致性与严格失败检查 | Active / Current |
 | [Expected Engine Error Scope Evidence](current/2026-10-05-expected-engine-error-scope-evidence.md) | 四十二项精确预期诊断、严格双日志检查和二十八个原生专项场景 | Focused Verified / Combined certification pending |
