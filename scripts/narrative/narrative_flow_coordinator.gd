@@ -197,7 +197,7 @@ func process_pending_contact() -> Dictionary:
 		return refresh_occurrences()
 	for record: Dictionary in _occurrences:
 		var token: Area2D = record.token.get_ref()
-		if not is_instance_valid(token) or not token.overlaps_body(_player):
+		if not is_instance_valid(token) or not token.overlaps_body(_player) or _player.global_position.distance_to(token.global_position) > Service.OCCURRENCE_RADIUS:
 			continue
 		_active_occurrence = record
 		if record.kind == "choice":
