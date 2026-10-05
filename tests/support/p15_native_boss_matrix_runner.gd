@@ -56,7 +56,7 @@ func run(host: Node, suite: RefCounted) -> Dictionary:
 	Engine.physics_ticks_per_second = old_ticks
 	Engine.max_fps = old_fps
 	Engine.time_scale = old_scale
-	var report := {"schema_version": 2, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "clock": clock, "content_snapshot": _binding, "expected_production_case_count": CASE_COUNT, "production_case_count": rows.size(), "range_start": start, "requested_case_count": count, "complete": start == 0 and rows.size() == CASE_COUNT and rows.all(func(row: Dictionary): return row.failures.is_empty()), "cases": rows}
+	var report := {"schema_version": 3, "report_kind": "actual_native_boss_loadout_matrix", "synthetic": false, "human_playtests": 0, "unassisted_victory": false, "survival_fixture": str(SURVIVAL_SOURCE), "difficulty": "normal", "clock": clock, "content_snapshot": _binding, "expected_production_case_count": CASE_COUNT, "production_case_count": rows.size(), "range_start": start, "requested_case_count": count, "complete": start == 0 and rows.size() == CASE_COUNT and rows.all(func(row: Dictionary): return row.failures.is_empty()), "cases": rows}
 	var output := OS.get_environment("PLANEWALKER_MATRIX_OUTPUT")
 	if output.is_empty():
 		output = "res://build/p15-native-boss-matrix.json"
@@ -130,7 +130,7 @@ func _run_case(identity: Dictionary) -> Dictionary:
 		var published_loss := float(row._published_losses.pop_front()) if not row._published_losses.is_empty() else 0.0
 		var loss := float(observation.hp_before) - float(observation.hp_after) if observation.has("hp_before") and observation.has("hp_after") else published_loss
 		row.phase_damage[phase] = float(row.phase_damage.get(phase, 0.0)) + loss
-		row.damage_trace.append({"run_id": str(player.current_run_id()), "target_id": str(boss.hostile_source_id), "raw_run_id": str(info.run_id), "raw_target_id": str(info.target_id), "native_authenticated": player.authenticates_native_damage_run(info, boss, player.current_run_id()), "frame": int(player.priority_arbitration_snapshot().frame), "phase_index": int(phase), "amount": amount, "actual_loss": loss, "source_id": str(info.hostile_source_id), "attack_generation": int(info.attack_generation), "hit_index": int(info.hit_index), "tags": info.tags.duplicate(), "accelerated": player.is_time_accelerated()})
+		row.damage_trace.append({"run_id": str(player.current_run_id()), "target_id": str(boss.hostile_source_id), "raw_run_id": str(info.run_id), "raw_target_id": str(info.target_id), "native_authenticated": player.authenticates_native_damage_run(info, boss, player.current_run_id()), "frame": int(player.priority_arbitration_snapshot().frame), "phase_index": int(phase), "amount": amount, "actual_loss": loss, "source_id": str(info.hostile_source_id), "attack_generation": int(info.attack_generation), "damage_type": int(info.damage_type), "hit_index": int(info.hit_index), "tags": info.tags.duplicate(), "accelerated": player.is_time_accelerated()})
 		if player.is_time_accelerated() and not row.positive_time.has("accelerated_physical_hit"):
 			row.positive_time.append("accelerated_physical_hit")
 	)

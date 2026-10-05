@@ -27,7 +27,7 @@ def valid_row(index: int) -> dict:
         "final_hp": 0,
         "checkpoint_digest": "a" * 64,
         "phase_damage": {str(phase): 10 for phase in range(3 if index % 5 in (3, 4) else 2)},
-        "damage_trace": [{"run_id": run_id, "target_id": source, "raw_run_id": run_id, "raw_target_id": source, "native_authenticated": True, "source_id": "player_sword_v2" if identity["weapon_id"] == "sword" else f"player:{identity['weapon_id']}:1:0", "frame": 100 + phase, "phase_index": phase, "hit_index": phase, "amount": 10, "actual_loss": 10, "attack_generation": 1, "accelerated": False, "tags": [f"weapon:{identity['weapon_id']}"]} for phase in range(3 if index % 5 in (3, 4) else 2)],
+        "damage_trace": [{"run_id": run_id, "target_id": source, "raw_run_id": run_id, "raw_target_id": source, "native_authenticated": True, "source_id": "player_sword_v2" if identity["weapon_id"] == "sword" else f"player:{identity['weapon_id']}:1:{1 if identity['weapon_id'] == 'gauntlets' else 0}", "frame": 100 + phase, "phase_index": phase, "hit_index": phase, "amount": 10, "actual_loss": 10, "attack_generation": 1, "damage_type": 0, "accelerated": False, "tags": [f"weapon:{identity['weapon_id']}"]} for phase in range(3 if index % 5 in (3, 4) else 2)],
         "time_casts": [{"ability_id": ability, "run_id": run_id, "owner_generation": 2, "action_generation": 3, "action_token": offset + 1, "runtime_frame": 20 + offset, "endpoint": {"x": 10, "y": 20}, "facing": {"x": 1, "y": 0}, "id": hashlib.sha256(f'["{run_id}",2,3,{offset + 1}]'.encode()).hexdigest()} for offset, ability in enumerate(identity["time_abilities"])],
         "positive_time": ["boss_stop_conversion"],
         "weapon_actions": [{"sword": "charged_slash", "bow": "precision_draw", "gun": "aimed_fire", "staff": "arcane_bolt", "gauntlets": "punch_1"}[identity["weapon_id"]]],
@@ -79,7 +79,7 @@ class NativeBossMatrixReportTest(unittest.TestCase):
     def test_damage_provenance_and_phase_totals_fail_closed(self) -> None:
         row = valid_row(0)
         self.assertEqual(matrix.validate_cases([row], 0, 1), [])
-        for field in ("run_id", "target_id", "raw_run_id", "raw_target_id", "native_authenticated", "source_id", "frame", "hit_index", "phase_index", "accelerated"):
+        for field in ("run_id", "target_id", "raw_run_id", "raw_target_id", "native_authenticated", "source_id", "frame", "hit_index", "phase_index", "damage_type", "accelerated"):
             changed = copy.deepcopy(row)
             changed["damage_trace"][0].pop(field)
             with self.subTest(missing=field):
@@ -143,6 +143,28 @@ class NativeBossMatrixReportTest(unittest.TestCase):
             changed["time_casts"][0][field] = value
             with self.subTest(field=field, value=value):
                 self.assertTrue(matrix.validate_cases([changed], 0, 1))
+
+    def test_distinct_damage_types_follow_the_native_body_claim(self) -> None:
+        for index in (214, 724):
+            row = valid_row(index)
+            for hit in row["damage_trace"]:
+                hit["damage_type"] = 0
+            if index == 724:
+                for hit in row["damage_trace"]:
+                    hit["source_id"] = "player:gauntlets:9:1"
+            extra = copy.deepcopy(row["damage_trace"][0])
+            extra["damage_type"] = 1
+            extra["tags"].append("non_recursive:time_damage" if index == 724 else "attack:gun_aimed_time_burst")
+            row["damage_trace"].insert(1, extra)
+            row["phase_damage"]["0"] += extra["actual_loss"]
+            self.assertEqual(matrix.validate_cases([row], index, 1), [])
+            for value in (True, -1, 6):
+                changed = copy.deepcopy(row)
+                changed["damage_trace"][1]["damage_type"] = value
+                with self.subTest(index=index, invalid_type=value):
+                    self.assertTrue(matrix.validate_cases([changed], index, 1))
+            row["damage_trace"][1]["damage_type"] = 0
+            self.assertTrue(matrix.validate_cases([row], index, 1))
 
 
 if __name__ == "__main__":

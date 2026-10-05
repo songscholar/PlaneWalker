@@ -44,27 +44,40 @@ python3 tools/run_p15_hostile_matrix.py \
   --jobs 5 --timeout 28800
 ```
 
-The version2 CLI validates identity coverage, all HP phases, finite actual
+The version3 CLI validates identity coverage, all HP phases, finite actual
 damage and exact per-phase trace totals, source/frame/hit identity, native
 authentication and explicit raw legacy aliases, legal content-defined actions,
 canonical time/death receipts and the closed authoritative Base Pack content
 fingerprint. It confines reports/logs to the workspace and scans both stdout
 and the independent engine log for errors/leaks. The strengthened checks
 first rejected23 previously accepted missing/forged evidence variants.
-All12 report-contract tests now pass. Source hashes are captured before the
+All13 report-contract tests now pass. Source hashes are captured before the
 run and compared afterward; a changed runtime/runner fails certification.
 Full certification runs use an immutable checkout snapshot.
+Actual damage type is mandatory and participates in the production native
+body claim identity. A PHYSICAL hit and its separately authenticated TIME bonus
+are distinct claims; another hit with the same type is still rejected. Actual
+Gauntlets source IDs retain action token and generation as separate fields.
 
 ## Retained Partial Results
 
-The canonical-clock Sword0--29 measuring run has completed24 actual cases so
-far, with53848frames, no native assertion failures and all completed rows
-accepted by the final strict version2 validator. Its initial CLI process
-loaded an earlier validator, and production source changed during execution;
-this measuring run is diagnostic evidence only. Its final aggregate must
-retain those original validation/source failures. Stable-source certification
-will rerun from a retained immutable Git archive including the current-target
-native shape-query repair.
+The canonical-clock Sword0--29 measuring run completed30 actual cases and
+66792frames with no native assertion failures, but every engine-log shard
+retains a physical query-flush error at Void P3 core creation. Its source also
+changed during execution. This measuring run is diagnostic evidence only;
+the final aggregate remains FAIL. The focused contact refresh repair and its
+physical RED/GREEN regression are retained in
+`docs/current/2026-10-05-native-boss-contact-refresh-evidence.md`.
+
+The immutable `f847852` version2 archive completed representative cases20,
+92,214,394,483 and724 with all native assertions and engine logs clean.
+Cases20/92/394/483 also passed the complete version2 CLI; cases214 and724
+exposed its missing damage-type distinction. Reports under
+`build/p15-native-f847852-source/build/representative-*.json` remain unchanged.
+Elapsed seconds/frames were18.56/671,180.38/4130,693.80/9198,746.79/8902,
+73.55/1979 and686.96/7665 respectively. These measurements cover all five
+Characters and weapons. Final version3 certification must rerun from the
+complete retained snapshot containing the native contact/roster repairs.
 
 The following earlier repaired cases passed their then-current harness with
 typed cold reconstruction, exact continuation and terminal cleanup. They are

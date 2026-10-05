@@ -25,8 +25,8 @@ WEAPONS = ("sword", "bow", "gun", "staff", "gauntlets")
 PAIRS = (("stop", "rewind"), ("stop", "rift"), ("stop", "accelerate"), ("rewind", "rift"), ("rewind", "accelerate"), ("rift", "accelerate"))
 BOSSES = ("ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne")
 CASE_COUNT = 750
-REPORT_VERSION = 2
-TRACE_FIELDS = {"run_id", "target_id", "raw_run_id", "raw_target_id", "native_authenticated", "source_id", "frame", "phase_index", "hit_index", "amount", "actual_loss", "attack_generation", "accelerated", "tags"}
+REPORT_VERSION = 3
+TRACE_FIELDS = {"run_id", "target_id", "raw_run_id", "raw_target_id", "native_authenticated", "source_id", "frame", "phase_index", "hit_index", "amount", "actual_loss", "attack_generation", "damage_type", "accelerated", "tags"}
 ERROR = re.compile(r"SCRIPT ERROR|Parse Error|(?:^|\n)ERROR:|ObjectDB instances leaked|RID.*leaked|Orphan (?:Node|StringName)", re.I)
 
 
@@ -61,7 +61,7 @@ def valid_damage_source(hit: dict, weapon: str) -> bool:
     if weapon == "sword":
         return source == "player_sword_v2"
     if re.fullmatch(rf"player:{weapon}:[1-9][0-9]{{0,9}}:[0-9]{{1,10}}", source):
-        return int(source.split(":")[2]) == hit["attack_generation"]
+        return int(source.split(":")[3 if weapon == "gauntlets" else 2]) == hit["attack_generation"]
     if weapon != "staff" or not re.fullmatch(r"status:[0-9a-f]{40}", source) or "status:burn" not in hit["tags"]:
         return False
     owners = [tag.removeprefix("status_source:") for tag in hit["tags"] if tag.startswith("status_source:")]
@@ -87,11 +87,11 @@ def validate_damage_trace(row: dict, run_id: str, source: str, required: int) ->
         raw_target = hit["raw_target_id"]
         if hit["native_authenticated"] is not True or hit["raw_run_id"] not in (run_id, "legacy_run", "runtime") or (raw_target not in (source, "pending_target") and (not isinstance(raw_target, str) or not re.fullmatch(r"target:[1-9][0-9]*", raw_target))):
             return False, sums
-        if not positive_number(hit["actual_loss"]) or not positive_number(hit["amount"]) or not bounded_integer(hit["attack_generation"], 1, 2147483646) or not bounded_integer(hit["frame"], last_frame, row["frames"]) or not bounded_integer(hit["hit_index"], 0, 2147483646) or not bounded_integer(hit["phase_index"], 0, required - 1) or type(hit["accelerated"]) is not bool:
+        if not positive_number(hit["actual_loss"]) or not positive_number(hit["amount"]) or not bounded_integer(hit["attack_generation"], 1, 2147483646) or not bounded_integer(hit["frame"], last_frame, row["frames"]) or not bounded_integer(hit["hit_index"], 0, 2147483646) or not bounded_integer(hit["phase_index"], 0, required - 1) or not bounded_integer(hit["damage_type"], 0, 5) or type(hit["accelerated"]) is not bool:
             return False, sums
         if not isinstance(hit["tags"], list) or any(not isinstance(tag, str) for tag in hit["tags"]) or f"weapon:{weapon}" not in hit["tags"] or not valid_damage_source(hit, weapon):
             return False, sums
-        claim = (hit["source_id"], hit["attack_generation"], hit["hit_index"])
+        claim = (hit["source_id"], hit["attack_generation"], hit["hit_index"], hit["damage_type"])
         if claim in claims:
             return False, sums
         claims.add(claim)
