@@ -9,6 +9,7 @@ const Mechanisms := preload("res://scripts/enemies/launch/enemy_mechanism_handle
 const Enemy := preload("res://scripts/enemies/launch/enemy_definition.gd")
 const DefinitionContract := preload("res://scripts/enemies/launch/hostile_definition_contract.gd")
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
+const PhaseShift := preload("res://scripts/enemies/launch/phase_ranger_shift_runtime.gd")
 const DEFINITION_FIELDS: Array[String] = ["id", "actor_kind", "runtime_kind", "max_hp", "defense", "move_speed", "collision_radius_px", "actions", "mechanisms"]
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control"]
@@ -18,6 +19,8 @@ var _definition: Dictionary = {}
 var _state: Dictionary = {}
 var _action: RefCounted = Action.new()
 var _control: RefCounted = Controls.new()
+var _phase_frame_observation := {}
+var _phase_frame_paused := false
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -87,7 +90,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	var stagger_bound := int(_definition.mechanisms.get("first_attack_stagger_frames", 60))
 	var rng := Seeds.make_rng(int(identity.seed), StringName("hostile_first_attack_v1:%s" % identity.hostile_source_id))
 	_state = {
-		"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(),
+		"schema_version": 2 if definition.runtime_kind == "phase_ranger" else 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(),
 		"identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false,
 		"mechanism_state": Mechanisms.make_state(definition.runtime_kind, int(identity.runtime_frame) + rng.randi_range(0, stagger_bound), float(_definition.max_hp), _definition.mechanisms),
 	}
@@ -180,6 +183,15 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	if not controls.ok:
 		return controls
 	controls.action_paused = controls.action_paused or external_action_paused
+	if _definition.runtime_kind == "phase_ranger":
+		var observation := _phase_frame_observation if not _phase_frame_observation.is_empty() else {"source_position": observations.source_position, "landing_position": {}, "arrival_allowed": false}
+		var shifted := phase_shift_for_frame(frame, _phase_frame_paused if not _phase_frame_observation.is_empty() else bool(controls.action_paused), observation)
+		if not shifted.ok:
+			return shifted
+		var action_busy: bool = _action.snapshot().phase != "IDLE"
+		controls.action_paused = controls.action_paused or PhaseShift.blocks_actions(_state.mechanism_state.phase_shift, _definition.mechanisms, action_busy) or PhaseShift.blocks_actions(shifted.state, _definition.mechanisms, action_busy)
+		_state.mechanism_state.phase_shift = shifted.state
+		_phase_frame_observation.clear()
 	var previous_action: Dictionary = _action.snapshot()
 	var result: Dictionary = _action.advance_frame(frame, observations, controls.action_paused)
 	if not result.ok:
@@ -206,7 +218,8 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 			request["attack_generation"] = _action.reserve_terminal_generation()
 			request["hit_index"] = 63
 			request["position"] = observations.source_position.duplicate(true)
-	if select_action and not _state.terminal and not controls.action_paused and frame >= int(_state.mechanism_state.first_attack_ready_frame) and result.phase == "IDLE":
+	var shift_waiting: bool = _definition.runtime_kind == "phase_ranger" and PhaseShift.reservation_due(_state.mechanism_state.phase_shift, _definition.mechanisms)
+	if select_action and not _state.terminal and not controls.action_paused and not shift_waiting and frame >= int(_state.mechanism_state.first_attack_ready_frame) and result.phase == "IDLE":
 		var selected := _select_action(frame, observations)
 		if not selected.is_empty():
 			var requested: Dictionary = request_action(selected, observations)
@@ -220,6 +233,22 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		for hit: Dictionary in result.hit_facts:
 			hit.damage *= attack_multiplier
 	return result
+
+
+func phase_shift_for_frame(frame: int, paused: bool, observation: Dictionary) -> Dictionary:
+	if _definition.get("runtime_kind") != "phase_ranger" or frame != int(_state.runtime_frame) + 1 or not PhaseShift.Pattern.valid_observation(observation):
+		return _failure("phase_shift_observation")
+	var result := PhaseShift.advance(_state.mechanism_state.phase_shift, frame, paused, _action.snapshot().phase != "IDLE", observation, _definition.mechanisms)
+	result["ok"] = true
+	return result
+
+
+func advance_phase_frame(frame: int, observations: Dictionary, select_action: bool, external_action_paused: bool, shift_paused: bool, shift_observation: Dictionary) -> Dictionary:
+	if _definition.get("runtime_kind") != "phase_ranger" or not PhaseShift.Pattern.valid_observation(shift_observation):
+		return _failure("phase_shift_observation")
+	_phase_frame_observation = shift_observation.duplicate(true)
+	_phase_frame_paused = shift_paused
+	return advance_frame(frame, observations, select_action, external_action_paused)
 
 
 func charge_contact_fact(frame: int, target_id: String) -> Dictionary:
@@ -359,7 +388,8 @@ func snapshot() -> Dictionary:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or value.schema_version != 1 or typeof(value.schema_version) != TYPE_INT or value.definition_digest != _state.definition_digest or value.identity != _state.identity:
+	value = _normalized_phase_snapshot(value)
+	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS) or value.schema_version != _state.schema_version or typeof(value.schema_version) != TYPE_INT or value.definition_digest != _state.definition_digest or value.identity != _state.identity:
 		return false
 	if typeof(value.runtime_frame) != TYPE_INT or value.runtime_frame < int(_state.identity.runtime_frame) or typeof(value.terminal) != TYPE_BOOL:
 		return false
@@ -367,6 +397,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	var mechanism: Dictionary = value.mechanism_state
 	if not Mechanisms.valid_state(_definition.runtime_kind, _definition.mechanisms, mechanism, _state.mechanism_state.first_attack_ready_frame, float(_definition.max_hp)):
+		return false
+	if _definition.runtime_kind == "phase_ranger" and not PhaseShift.can_restore(mechanism.phase_shift, _state.identity, int(value.runtime_frame), bool(value.terminal), _definition.mechanisms):
 		return false
 	if _definition.runtime_kind == "ruins_wraith" and mechanism.detonation_consumed and not value.terminal:
 		return false
@@ -384,6 +416,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 
 
 func restore_snapshot(value: Dictionary) -> bool:
+	value = _normalized_phase_snapshot(value)
 	if not can_restore_snapshot(value):
 		return false
 	_action.restore_snapshot(value.action)
@@ -392,6 +425,22 @@ func restore_snapshot(value: Dictionary) -> bool:
 	_state.erase("action")
 	_state.erase("control")
 	return true
+
+
+func _normalized_phase_snapshot(value: Dictionary) -> Dictionary:
+	if _definition.get("runtime_kind") != "phase_ranger" or value.get("schema_version") != 1:
+		return value
+	if typeof(value.schema_version) != TYPE_INT or not Contract.exact_fields(value, STATE_FIELDS) or not value.get("mechanism_state") is Dictionary or not Contract.exact_fields(value.mechanism_state, Mechanisms.COMMON_FIELDS):
+		return {}
+	var normalized := value.duplicate(true)
+	normalized.schema_version = 2
+	normalized.mechanism_state["phase_shift"] = PhaseShift.initial_state(false)
+	return normalized
+
+
+func normalize_native_snapshot(value: Dictionary) -> Dictionary:
+	var normalized := _normalized_phase_snapshot(value)
+	return normalized.duplicate(true) if can_restore_snapshot(normalized) else {}
 
 
 func cancel(reason: StringName = &"cancelled") -> Dictionary:
@@ -407,6 +456,8 @@ func cancel(reason: StringName = &"cancelled") -> Dictionary:
 			_state.mechanism_state[field] = 0.0 if field == "retreat_remaining_px" else 0
 	if _state.mechanism_state.has("sigil_hp"):
 		_state.mechanism_state.sigil_hp = 0.0
+	if _definition.runtime_kind == "phase_ranger":
+		PhaseShift.cancel(_state.mechanism_state.phase_shift)
 	return result
 
 

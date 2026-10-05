@@ -1,6 +1,6 @@
 # Native Hound And Phase Mechanisms
 
-- Status: In Progress
+- Status: Verified
 - Document Role: Current
 - Authority Level: Implementation plan below approved P15 specification
 - Applies To: Eternal Hound dormant sigil and Phase Ranger shift
@@ -32,6 +32,6 @@ strictly validate sealed reservation receipts.
 - [x] Hound RED: real Health lethal enters dormancy but initially had no physical sigil. Added authenticated hits, duplicate refusal, final parent death, 300-frame recovery, complete-frame rollback and typed cold recovery tests.
 - [x] Hound implementation: `launch_hound_sigil.gd`, narrow Actor hooks, normal five-weapon targeting and foreign construct accounting; content and pack fingerprints preserved.
 - [x] Hound GREEN: integration, physical checkpoint, complete enemy and native summon regressions; see [retained Hound evidence](../../current/2026-10-05-native-hound-sigil-evidence.md).
-- [ ] Phase RED: current native Ranger has no shift clock or relocation. Add deterministic reservation, safe/blocked landing, Stop/Rift, recovery vulnerability, rollback, cold and historical migration cases.
-- [ ] Phase implementation: independent shift state, Actor frame hooks, sealed migration and native raster cue. Do not alter frozen authored content.
-- [ ] Phase GREEN: focused shift and teleport regression, real weapon ingress and physical checkpoint. Retain evidence and focused commit.
+- [x] Phase RED: native Ranger initially lacked a shift clock and relocation. Added deterministic reservation, safe/blocked landing, Stop/Rift, full recovery, rollback, cold and strict historical migration cases.
+- [x] Phase implementation: independent species shift state, safe Actor frame hooks, exact historical normalization and native raster cue; frozen authored content unchanged.
+- [x] Phase GREEN: focused shift/Teleporting/complete enemy regressions, actual natural Host physical checkpoint, normal Sword ingress, paid Rewind and historical aggregate reconstruction. See [retained Phase evidence](../../current/2026-10-05-native-phase-ranger-evidence.md).

@@ -41,11 +41,11 @@ func receive_hit(info: RefCounted) -> float:
 
 
 func native_weapon_target_is_active() -> bool:
-	return is_instance_valid(_owner) and not _projection.is_empty() and not _projection.terminal and int(_projection.mechanism_state.dormancy_remaining_frames) > 0 and _hurtbox.collision_layer == 4
+	return is_instance_valid(_owner) and not _projection.is_empty() and not _projection.terminal and int(_projection.dormancy_remaining_frames) > 0 and _hurtbox.collision_layer == 4
 
 
 func present(state: Dictionary) -> void:
-	_projection = state.duplicate(true)
+	_projection = _visual_projection(state)
 	var live: bool = not state.terminal and int(state.mechanism_state.dormancy_remaining_frames) > 0
 	visible = live
 	_hurtbox.collision_layer = 4 if live else 0
@@ -55,4 +55,8 @@ func present(state: Dictionary) -> void:
 
 func native_geometry_matches(state: Dictionary) -> bool:
 	var live: bool = not state.terminal and int(state.mechanism_state.dormancy_remaining_frames) > 0
-	return is_inside_tree() and get_parent() == _owner and not is_queued_for_deletion() and get_child_count() == 2 and _projection == state and transform == Transform2D.IDENTITY and visible == live and _hurtbox.collision_layer == (4 if live else 0) and _hurtbox.collision_mask == 0 and not _hurtbox.monitoring and _hurtbox.transform == Transform2D.IDENTITY and _shape.transform == Transform2D.IDENTITY and not _shape.disabled and _shape.shape is CircleShape2D and _shape.shape.radius == 12.0 and _sprite.texture != null and _sprite.texture.resource_path == ARTWORK_PATH and _sprite.hframes == 4 and _sprite.frame == (int(state.runtime_frame) / 8) % 4 and _sprite.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST and _sprite.transform == Transform2D.IDENTITY
+	return is_inside_tree() and get_parent() == _owner and not is_queued_for_deletion() and get_child_count() == 2 and _projection == _visual_projection(state) and transform == Transform2D.IDENTITY and visible == live and _hurtbox.collision_layer == (4 if live else 0) and _hurtbox.collision_mask == 0 and not _hurtbox.monitoring and _hurtbox.transform == Transform2D.IDENTITY and _shape.transform == Transform2D.IDENTITY and not _shape.disabled and _shape.shape is CircleShape2D and _shape.shape.radius == 12.0 and _sprite.texture != null and _sprite.texture.resource_path == ARTWORK_PATH and _sprite.hframes == 4 and _sprite.frame == (int(state.runtime_frame) / 8) % 4 and _sprite.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST and _sprite.transform == Transform2D.IDENTITY
+
+
+func _visual_projection(state: Dictionary) -> Dictionary:
+	return {"runtime_frame": state.runtime_frame, "terminal": state.terminal, "dormancy_remaining_frames": state.mechanism_state.dormancy_remaining_frames, "sigil_hp": state.mechanism_state.sigil_hp}

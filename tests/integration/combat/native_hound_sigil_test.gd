@@ -23,6 +23,8 @@ func _run() -> void:
 	var forged: Dictionary = _sigil_hit(f, 99, 5.0).snapshot()
 	forged.attacker = null
 	suite.assert_close(sigil.get_node("Hurtbox").receive_hit(Damage.from_plan(forged)), 0.0, "unowned damage cannot mutate an authenticated native sigil")
+	actor.apply_time_rift(&"hound-sigil-rift", 0.4)
+	suite.assert_true(actor.is_time_rifted(), "ordinary Rift control can coexist with derived dormant sigil geometry")
 	await _capture_sigil(f)
 	suite.assert_close(actor.health.take_damage(_sigil_hit(f, 2, 1000.0)), 0.0, "dormant parent body cannot receive direct damage")
 	suite.assert_close(sigil.get_node("Hurtbox").receive_hit(_sigil_hit(f, 3, 5.0)), 5.0, "actual sigil Hurtbox forwards authenticated Player damage")

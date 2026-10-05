@@ -39,6 +39,8 @@ Hound child ownership remains intact.
 - `build/native-hound-summon-final`: native summon lifecycle, payload, actual weapon input and domain regressions, 4/4 passed.
 - `build/native-hound-sigil-visual-retained.log`: native Metal raster QA at 640x360 and 1280x720; screenshots retained in `build/visual-evidence/native-enemy-mechanisms/`.
 - Pinned production-art, developer and coverage requirements pass `pip-audit` with no known vulnerabilities.
+- `build/native-hound-retained-tests`: clean Git archive `1739afa` imports and passes both native sigil and physical checkpoint suites, 2/2.
+- `build/native-hound-rift-projection`: sigil geometry remains valid after ordinary Rift changes, with the five-weapon and dormancy regressions, 1/1.
 
 Godot logs are checked for script errors and leaked engine objects. The
 installed Godot 4.6.1 executable cannot collect GDScript line coverage; scene

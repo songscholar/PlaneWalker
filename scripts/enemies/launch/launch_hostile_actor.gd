@@ -16,6 +16,8 @@ const TelegraphProjection := preload("res://scripts/enemies/launch/launch_hostil
 const HoundSigil := preload("res://scripts/enemies/launch/launch_hound_sigil.gd")
 const SigilDamage := preload("res://scripts/combat/damage_info.gd")
 const SigilCalculator := preload("res://scripts/combat/damage_calculator.gd")
+const PhaseShift := preload("res://scripts/enemies/launch/phase_ranger_shift_runtime.gd")
+const PhaseArrival := preload("res://scripts/enemies/launch/phase_ranger_arrival_cue.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -203,6 +205,19 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var motion: Dictionary = preview.motion_for_frame(frame, observations)
 	if not motion.ok:
 		return motion
+	var phase_observation := {}
+	var phase_relocation := {}
+	var phase_paused := false
+	var phase_blocks := false
+	if _launch_definition.runtime_kind == "phase_ranger":
+		phase_paused = lethal_pending or externally_paused or bool(motion.action_paused)
+		phase_observation = _phase_frame_observation(before.runtime, phase_paused)
+		var shifted: Dictionary = preview.phase_shift_for_frame(frame, phase_paused, phase_observation)
+		if not shifted.ok:
+			return shifted
+		phase_relocation = shifted.relocation
+		var action_busy: bool = before.runtime.action.phase != "IDLE" or phase_paused
+		phase_blocks = PhaseShift.blocks_actions(before.runtime.mechanism_state.phase_shift, _launch_definition.mechanisms, action_busy) or PhaseShift.blocks_actions(shifted.state, _launch_definition.mechanisms, action_busy)
 	var affix_after := {}
 	var affix_heal := {"healed_amount": 0.0, "hp_after": health.current_hp}
 	var teleport_relocation := {}
@@ -210,7 +225,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		var affix_preview := AffixRuntime.new()
 		if not affix_preview.configure(_affix_configuration, _launch_identity, max_hp) or not affix_preview.restore_snapshot(before.affix_runtime):
 			return _launch_failure("affix_checkpoint")
-		var affix_paused: bool = status_preview.is_frozen() or (externally_paused and not anchored_recovery and not teleport_recovery) or nullified_delay or bool(motion.action_paused)
+		var affix_paused: bool = status_preview.is_frozen() or (externally_paused and not anchored_recovery and not teleport_recovery) or nullified_delay or bool(motion.action_paused) or phase_blocks
 		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, affix_paused, health.healing_multiplier, _teleport_frame_observation(affix_preview, affix_paused), _point(global_position))
 		if not advanced.ok:
 			return _launch_failure("affix_frame")
@@ -219,13 +234,16 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		teleport_relocation = advanced.teleport_relocation
 	var relocation: bool = bool(motion.get("relocation", false))
 	var displacement := _vector(motion.displacement) * (1.0 if relocation else float(status_preview.slow_multiplier()))
-	if lethal_pending or externally_paused or motion.action_paused:
+	if lethal_pending or externally_paused or motion.action_paused or phase_blocks:
 		displacement = Vector2.ZERO
 	else:
 		displacement += _knockback_velocity / 60.0
 	if not teleport_relocation.is_empty():
 		relocation = true
 		displacement = _vector(teleport_relocation) - global_position
+	if not phase_relocation.is_empty():
+		relocation = true
+		displacement = _vector(phase_relocation) - global_position
 	if not _room_motion.is_empty():
 		displacement = _constrain_to_room(global_position + displacement) - global_position
 	var predicted := global_position
@@ -248,7 +266,11 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		predicted = _constrain_to_room(predicted)
 	var committed_observations := observations.duplicate(true)
 	committed_observations.source_position = _point(predicted)
-	var batch: Dictionary = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
+	var batch: Dictionary
+	if _launch_definition.runtime_kind == "phase_ranger":
+		batch = preview.advance_phase_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending, phase_paused, phase_observation)
+	else:
+		batch = preview.advance_frame(frame, committed_observations, not lethal_pending, externally_paused or lethal_pending)
 	if not batch.ok:
 		return batch
 	if batch.phase == "WARNING" and not _native_summon_warning_safe(preview.snapshot().action):
@@ -387,8 +409,47 @@ func _teleport_candidate_remains_safe(ticket: Dictionary) -> bool:
 	return receipt.outcome != "LANDED" or int(receipt.arrival_runtime_frame) != int(ticket.runtime_frame) or _teleport_landing_safe(_vector(receipt.landing))
 
 
+func _phase_frame_observation(runtime: Dictionary, paused: bool) -> Dictionary:
+	var landing := {}
+	var allowed := false
+	var state: Dictionary = runtime.mechanism_state.phase_shift
+	if not paused and runtime.action.phase == "IDLE" and PhaseShift.reservation_due(state, _launch_definition.mechanisms):
+		for offset: Vector2 in PhaseShift.candidate_offsets(state, _launch_identity, _launch_definition.mechanisms):
+			var candidate := global_position + offset
+			if _phase_landing_safe(candidate):
+				landing = _point(candidate)
+				break
+	elif not paused and state.enabled and state.phase == "DEPARTURE" and int(state.remaining_frames) == 1:
+		var reservation: Dictionary = state.reservations.back()
+		allowed = _vector(reservation.origin).is_equal_approx(global_position) and _phase_landing_safe(_vector(reservation.landing))
+	return {"source_position": _point(global_position), "landing_position": landing, "arrival_allowed": allowed}
+
+
+func _phase_landing_safe(destination: Vector2) -> bool:
+	if not _teleport_landing_safe(destination):
+		return false
+	var shape := CircleShape2D.new()
+	shape.radius = float(_launch_definition.collision_radius_px)
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, destination)
+	query.collision_mask = 2 | 4
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	query.exclude = [get_rid()]
+	return get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty()
+
+
+func _phase_candidate_remains_safe(ticket: Dictionary) -> bool:
+	var state: Dictionary = ticket.get("after", {}).get("runtime", {}).get("mechanism_state", {}).get("phase_shift", {})
+	if state.is_empty() or not state.enabled or state.reservations.is_empty():
+		return true
+	var receipt: Dictionary = state.reservations.back()
+	return receipt.outcome != "LANDED" or int(receipt.arrival_runtime_frame) != int(ticket.runtime_frame) or _phase_landing_safe(_vector(receipt.landing))
+
+
 func can_commit_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after) and _teleport_candidate_remains_safe(ticket)
+	return _ticket_matches(ticket) and not _prepared_frame_committed and _actor_state() == ticket.before and health.runtime_state_snapshot() == ticket.health_before and _can_restore_actor_state(ticket.after) and _teleport_candidate_remains_safe(ticket) and _phase_candidate_remains_safe(ticket)
 
 
 func commit_launch_frame(ticket: Dictionary) -> bool:
@@ -410,7 +471,7 @@ func rollback_launch_frame(ticket: Dictionary) -> bool:
 
 
 func can_publish_launch_frame(ticket: Dictionary) -> bool:
-	return _ticket_matches(ticket) and _prepared_frame_committed and (_room_motion.is_empty() or (_room_motion_is_valid() and _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px)))) and _teleport_candidate_remains_safe(ticket)
+	return _ticket_matches(ticket) and _prepared_frame_committed and (_room_motion.is_empty() or (_room_motion_is_valid() and _within_bounds(global_position, _motion_bounds(), float(_launch_definition.collision_radius_px)))) and _teleport_candidate_remains_safe(ticket) and _phase_candidate_remains_safe(ticket)
 
 
 func publish_launch_frame(ticket: Dictionary) -> bool:
@@ -941,6 +1002,7 @@ func _on_died(_killer: Variant) -> void:
 
 func _refresh_control_visual() -> void:
 	_refresh_hound_sigil()
+	_refresh_phase_arrival()
 	_refresh_launch_telegraphs()
 	var sprite := get_node_or_null("Sprite2D") as Sprite2D
 	if sprite == null:
@@ -972,6 +1034,18 @@ func _refresh_hound_sigil() -> void:
 		sigil.configure(self)
 		add_child(sigil)
 	sigil.present(_launch_runtime.snapshot())
+
+
+func _refresh_phase_arrival() -> void:
+	if _launch_definition.get("id") != "phase_ranger":
+		return
+	var cue := get_node_or_null("PhaseArrival") as Sprite2D
+	if cue == null:
+		cue = PhaseArrival.new()
+		cue.name = "PhaseArrival"
+		cue.configure()
+		add_child(cue)
+	cue.present(_launch_runtime.snapshot(), global_position)
 
 
 func _refresh_launch_telegraphs() -> void:
@@ -1122,6 +1196,9 @@ func _can_restore_actor_state(value: Dictionary) -> bool:
 	for reservation: Dictionary in value.get("affix_runtime", {}).get("teleporting", {}).get("reservations", []):
 		if (_room_motion.is_empty() and not reservation.landing.is_empty()) or (not _room_motion.is_empty() and (not _within_bounds(_vector(reservation.origin), _motion_bounds(), float(_launch_definition.collision_radius_px)) or (not reservation.landing.is_empty() and not _within_bounds(_vector(reservation.landing), _motion_bounds(), float(_launch_definition.collision_radius_px))))):
 			return false
+	for reservation: Dictionary in value.runtime.mechanism_state.get("phase_shift", {}).get("reservations", []):
+		if (_room_motion.is_empty() and not reservation.landing.is_empty()) or (not _room_motion.is_empty() and (not _within_bounds(_vector(reservation.origin), _motion_bounds(), float(_launch_definition.collision_radius_px)) or (not reservation.landing.is_empty() and not _within_bounds(_vector(reservation.landing), _motion_bounds(), float(_launch_definition.collision_radius_px))))):
+			return false
 	if not value.weapon_metadata is Dictionary:
 		return false
 	for field: Variant in value.weapon_metadata:
@@ -1170,6 +1247,7 @@ func _restore_actor_state(value: Dictionary) -> bool:
 		elif has_meta(field):
 			remove_meta(field)
 	_refresh_hound_sigil()
+	_refresh_phase_arrival()
 	return true
 
 
@@ -1181,6 +1259,10 @@ func _native_geometry_matches_definition() -> bool:
 	if _launch_definition.get("id") == "eternal_hound":
 		var sigil := get_node_or_null("DormantSigil")
 		if sigil == null or not sigil.native_geometry_matches(_launch_runtime.snapshot()):
+			return false
+	if _launch_definition.get("id") == "phase_ranger":
+		var cue := get_node_or_null("PhaseArrival")
+		if cue == null or not cue.native_geometry_matches(_launch_runtime.snapshot(), global_position):
 			return false
 	var body := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	var hurt := get_node_or_null("Hurtbox/CollisionShape2D") as CollisionShape2D
@@ -1315,6 +1397,17 @@ func restore_native_cold_snapshot(value: Dictionary, source_resolver: Callable) 
 		remove_from_group("time_stoppable")
 	_refresh_control_visual()
 	return true
+
+
+func normalize_native_cold_snapshot(value: Dictionary) -> Dictionary:
+	if not value.get("actor") is Dictionary or not value.actor.get("runtime") is Dictionary:
+		return {}
+	var runtime: Dictionary = _launch_runtime.normalize_native_snapshot(value.actor.runtime) if _launch_runtime.has_method("normalize_native_snapshot") else value.actor.runtime
+	if runtime.is_empty() or not _launch_runtime.can_restore_snapshot(runtime):
+		return {}
+	var normalized := value.duplicate(true)
+	normalized.actor.runtime = runtime.duplicate(true)
+	return normalized
 
 
 func _cold_actor_state(value: Dictionary, source_resolver: Callable) -> Dictionary:

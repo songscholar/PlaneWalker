@@ -3,6 +3,7 @@ extends RefCounted
 
 const Contract := preload("res://scripts/enemies/launch/hostile_action_contract.gd")
 const Definition := preload("res://scripts/enemies/launch/enemy_definition.gd")
+const PhaseShift := preload("res://scripts/enemies/launch/phase_ranger_shift_runtime.gd")
 const MAX_DAMAGE_CLAIMS := 4096
 const ACTION_IDS := Definition.ACTION_IDS
 const COMMON_FIELDS := ["first_attack_ready_frame", "damage_claims", "hp_after", "last_action_id", "consecutive_actions"]
@@ -19,7 +20,7 @@ const STATE_FIELDS := {
 	"rift_weaver": [], "blink_striker": [], "rewind_priest": [], "chrono_storm_elemental": [],
 	"eternal_hound": ["dormancy_used", "dormancy_remaining_frames", "sigil_hp", "sigil_claims"],
 	"forge_titan": ["overheat_used", "overheat_remaining_frames", "explosion_reserved"],
-	"void_web_weaver": [], "phase_ranger": [],
+	"void_web_weaver": [], "phase_ranger": ["phase_shift"],
 	"chaos_amalgam": ["form_id", "form_elapsed_frames", "switch_remaining_frames"],
 	"plane_ripper": [],
 }
@@ -51,6 +52,7 @@ static func make_state(kind: String, first_attack_ready_frame: int, max_hp: floa
 		"chrono_guard": state.merge({"revival_used": false, "recovery_remaining_frames": 0})
 		"eternal_hound": state.merge({"dormancy_used": false, "dormancy_remaining_frames": 0, "sigil_hp": 0.0, "sigil_claims": []})
 		"forge_titan": state.merge({"overheat_used": false, "overheat_remaining_frames": 0, "explosion_reserved": false})
+		"phase_ranger": state["phase_shift"] = PhaseShift.initial_state()
 		"chaos_amalgam": state.merge({"form_id": "red", "form_elapsed_frames": 0, "switch_remaining_frames": 0})
 		_:
 			if not STATE_FIELDS.has(kind):
@@ -100,6 +102,7 @@ static func valid_state(kind: String, authored: Dictionary, state: Dictionary, i
 			return (state.dormancy_used or (state.dormancy_remaining_frames == 0 and state.sigil_hp == 0.0 and state.sigil_claims.is_empty())) and (state.dormancy_remaining_frames == 0 or (state.hp_after == 1.0 and state.sigil_hp > 0.0))
 		"forge_titan":
 			return typeof(state.overheat_used) == TYPE_BOOL and typeof(state.explosion_reserved) == TYPE_BOOL and _integer(state.overheat_remaining_frames, 0, authored.overheat_frames) and (state.overheat_used or (state.overheat_remaining_frames == 0 and not state.explosion_reserved)) and (not state.explosion_reserved or state.overheat_remaining_frames == 0)
+		"phase_ranger": return state.phase_shift is Dictionary
 		"chaos_amalgam":
 			return typeof(state.form_id) == TYPE_STRING and authored.form_ids.has(state.form_id) and _integer(state.form_elapsed_frames, 0, 2147483646) and _integer(state.switch_remaining_frames, 0, authored.switch_recovery_frames)
 	return true
