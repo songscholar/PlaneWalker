@@ -46,9 +46,9 @@ func _ready() -> void:
 
 func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 	var sources: Array = ledger.trusted_sources(_target, _catalog.fingerprint())
-	_suite.assert_equal(sources.size(), 6, "ledger contains only six audited actual-content sources")
+	_suite.assert_equal(sources.size(), 7, "ledger contains only seven audited actual-content sources")
 	_suite.assert_true(not ledger.audit_view().is_empty(), "ledger authenticates pinned metadata and full descriptor proof")
-	if sources.size() != 6:
+	if sources.size() != 7:
 		return
 	_suite.assert_equal(sources[0], original, "5bee/54bee shared source derives from the complete historical descriptor")
 	var middle: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p16_hub_before_narrative.json"))
@@ -61,6 +61,9 @@ func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 	_suite.assert_equal(sources[4].packs[0].fingerprint_sha256, Descriptor.canonical_digest(before_corpse), "corpse tuning source derives from the complete retained 2b25db3 descriptor")
 	var before_sharing: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p20_before_build_sharing.json"))
 	_suite.assert_equal(sources[5].packs[0].fingerprint_sha256, Descriptor.canonical_digest(before_sharing), "build sharing UI source derives from the complete retained f25c218 descriptor")
+	var before_cosmetics: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/save/compatibility/base_p23_before_cosmetics.json"))
+	_suite.assert_equal(sources[6].packs[0].fingerprint_sha256, Descriptor.canonical_digest(before_cosmetics), "cosmetic addition source derives from the complete retained 733c25a descriptor")
+	_test_cosmetic_boundary(ledger, before_cosmetics)
 	_suite.assert_true(ledger.trusted_sources(_target, "0".repeat(64)).is_empty(), "different Meta semantics cannot authorize rebinding")
 	_suite.assert_true(ledger.trusted_sources(sources[0], _catalog.fingerprint()).is_empty(), "unknown or reverse target has no implicit compatibility")
 	for mutation: String in ["pack", "version", "schema", "aggregate", "extra", "mod"]:
@@ -87,6 +90,28 @@ func _test_policy(ledger: RefCounted, original: Dictionary) -> void:
 			_test_fault("source-%d-%s" % [index, point], point)
 		_test_preimage_refusal("preimage-%d" % index)
 	_test_unknown_source(ledger)
+
+
+func _test_cosmetic_boundary(ledger: RefCounted, source: Dictionary) -> void:
+	var target: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/pack.json"))
+	var added: Array = ledger.audit_view().transitions[-1].allowed_added_files
+	_suite.assert_true(ledger._reviewed_changes_only(source, target, [], added), "only the exact declared cosmetic resources form an additive transition")
+	for mutation: String in ["existing_hash", "removed_resource", "new_resource", "wrong_manifest", "dependency", "changed_allowlist", "missing_allowlist"]:
+		var changed := target.duplicate(true)
+		var changed_allowlist := added.duplicate()
+		match mutation:
+			"existing_hash": changed.integrity_hashes["content/items.json"] = "f".repeat(64)
+			"removed_resource": changed.content_manifest.erase("content/items.json")
+			"new_resource":
+				changed.asset_manifest.append("assets/unreviewed.png")
+				changed.integrity_hashes["assets/unreviewed.png"] = "f".repeat(64)
+			"wrong_manifest":
+				changed.content_manifest.erase("content/cosmetics.json")
+				changed.asset_manifest.append("content/cosmetics.json")
+			"dependency": changed.dependencies.append({"pack_id": "other", "version_range": "*", "required": false})
+			"changed_allowlist": changed_allowlist.append("content/items.json")
+			"missing_allowlist": changed_allowlist.pop_back()
+		_suite.assert_true(not ledger._reviewed_changes_only(source, changed, [], changed_allowlist), "cosmetic transition refuses unrelated or incomplete descriptor changes: " + mutation)
 
 
 func _new_save(case_id: String, binding: Dictionary, inject: bool = false) -> RefCounted:

@@ -69,9 +69,13 @@ Both Chinese and English gallery rows fit at 640x360 and 1280x720.
 
 ## Remaining Certification
 
-Adding these sealed resources changes the actual Base pack fingerprint. The
-compatibility ledger requires an authentic committed descriptor proof and exact
-additive-resource transition before the broader production startup test passes.
+The actual Base pack fingerprint transition now retains eight authentic committed
+descriptor proofs and seven exact reviewed transitions. The new cosmetic edge
+admits only the twenty declared cosmetic files; existing Meta state and required
+Profile v4 rules remain unchanged. `node tools/save/validate_actual_content_compatibility.mjs`
+passes and the physical migration/fault suite passes in
+`build/test-evidence/cosmetic-ledger/`. The strict ledger remains closed to unknown
+targets, changed existing resources and unreviewed additions.
 The combined checkout still requires full validation, instrumented coverage,
 release export and packaged startup. This focused evidence certifies cosmetic
 behavior and does not claim those combined release gates or human playtesting.

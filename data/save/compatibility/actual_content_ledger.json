@@ -1,15 +1,13 @@
 {
   "schema_id": "planewalker.actual_content_compatibility",
-  "schema_version": 1,
-  "save_schema_version": 4,
+  "schema_version": 1.0,
+  "save_schema_version": 4.0,
   "meta_catalog_fingerprint": "cba6d5e7eb2e8b574d240ebb6f06b35f909e1b4e8e0f840f5f0f89309b36217d",
   "bindings": [
     {
       "id": "p16_actual",
       "descriptor_path": "res://data/save/compatibility/base_p16_actual_pre_hub.json",
       "source_commits": [
-        "5bee8eff0efce6661d670bab19e96469d8da3c53",
-        "54bee98b3b911cd6a3d8166f015eab0fceb177eb",
         "c48116a29ce8cd6752e49d0029d44b3aa528bc14"
       ],
       "snapshot": {
@@ -18,7 +16,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "5f71d5f2974f4b6927594397e593acb75bef7d9806d0fbf0d028f15dc2efc99e"
           }
         ]
@@ -36,7 +34,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "46e09bb02ab515c6ad2944b4c8d30f561fca7fcfe3e28b56afc38fc1154d2903"
           }
         ]
@@ -54,7 +52,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "35b38b70f84c80df5433475c385344b5206eb9922164f8a7aa82277baaca18f7"
           }
         ]
@@ -72,7 +70,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "5410744506218905c156ee9a1ca868a1baa6bf16130602875e8d29aa3d3bbe0a"
           }
         ]
@@ -90,7 +88,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "36a536ae3ea314ee324d2fc7326fc39d2bbdf87302fac9d7b6b04988f04d0175"
           }
         ]
@@ -108,7 +106,7 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "b758d96e29137ee904948483a186ef0df50b8348f8138217ed1b70d83f9b284f"
           }
         ]
@@ -116,9 +114,9 @@
     },
     {
       "id": "p20_build_sharing",
-      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "descriptor_path": "res://data/save/compatibility/base_p23_before_cosmetics.json",
       "source_commits": [
-        "f25c218239896791cc24328d90a71c9d3c64c27f"
+        "733c25a8efcc5a363aa3b3c988de9e89c91f02c6"
       ],
       "snapshot": {
         "aggregate_sha256": "cabe0979ad446caf8742ae8fb52aa46d704fb2d77207dc0bce13002be1c808ab",
@@ -126,8 +124,26 @@
           {
             "pack_id": "base",
             "pack_version": "0.4.0-dev",
-            "schema_version": 2,
+            "schema_version": 2.0,
             "fingerprint_sha256": "b14fc01a755799d8e546da96a6054397ae6b45ccf2d4f955b2975acbb367dc5d"
+          }
+        ]
+      }
+    },
+    {
+      "id": "p23_cosmetics",
+      "descriptor_path": "res://data/content_packs/base/pack.json",
+      "source_commits": [
+        "089b6d0895b3b0ccfa837ead3d52937af550b06d"
+      ],
+      "snapshot": {
+        "aggregate_sha256": "b460e167c9f3108e73b44896ba58868c9c2c48bab5b633f914ea4a296a43ca53",
+        "packs": [
+          {
+            "pack_id": "base",
+            "pack_version": "0.4.0-dev",
+            "schema_version": 2,
+            "fingerprint_sha256": "c416e3232ddbc0874e8de6dfa545915f34ae74466693e6f9c69b54e8be344291"
           }
         ]
       }
@@ -136,7 +152,7 @@
   "transitions": [
     {
       "source_id": "p16_actual",
-      "target_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -145,11 +161,33 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed UI localization, three event enemy anchors and independently tested elite TripleBlink timing and landing correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate."
+      "reason": "Reviewed UI localization, three event enemy anchors and independently tested elite TripleBlink timing and landing correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ]
     },
     {
       "source_id": "p16_hub",
-      "target_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -158,11 +196,33 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed Narrative and Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate."
+      "reason": "Reviewed Narrative and Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ]
     },
     {
       "source_id": "p16_narrative",
-      "target_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -171,11 +231,33 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate."
+      "reason": "Reviewed Training localization, event enemy anchors and independently tested elite TripleBlink correction. Meta progression definitions and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ]
     },
     {
       "source_id": "p16_training",
-      "target_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
       "allowed_changed_files": [
         "assets/rooms/launch/room_event_crossroads.tscn",
         "assets/rooms/launch/room_event_mirror_hall.tscn",
@@ -184,24 +266,118 @@
         "content/room_templates.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed enemy_wave_primary anchors in three event rooms and templates, and independently tested elite TripleBlink timing and landing correction. All other descriptor fields, localization, Meta progression and Profile v4 are unchanged. Native active runs require their own content migration gate."
+      "reason": "Reviewed enemy_wave_primary anchors in three event rooms and templates, and independently tested elite TripleBlink timing and landing correction. All other descriptor fields, localization, Meta progression and Profile v4 are unchanged. Native active runs require their own content migration gate. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ]
     },
     {
       "source_id": "p17_native_ambush",
-      "target_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
       "allowed_changed_files": [
         "content/enemies.json",
         "localization/translations.csv"
       ],
-      "reason": "Reviewed Titan corpse pool damage, tick interval and radius are now canonical data instead of runtime tuning constants. Meta definitions and Profile v4 are unchanged. Active native checkpoints require explicit reconstruction validation before content rebinding."
+      "reason": "Reviewed Titan corpse pool damage, tick interval and radius are now canonical data instead of runtime tuning constants. Meta definitions and Profile v4 are unchanged. Active native checkpoints require explicit reconstruction validation before content rebinding. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ]
     },
     {
       "source_id": "p19_corpse_tuning",
-      "target_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
       "allowed_changed_files": [
         "localization/translations.csv"
       ],
-      "reason": "Reviewed seven native build-sharing UI translation keys only. All gameplay definitions, Meta semantics and Profile v4 remain byte-identical. Active native checkpoints require reconstruction validation before atomic rebinding."
+      "reason": "Reviewed seven native build-sharing UI translation keys only. All gameplay definitions, Meta semantics and Profile v4 remain byte-identical. Active native checkpoints require reconstruction validation before atomic rebinding. The exact twenty cosmetic resources are additive and a missing collection preserves original appearance.",
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ]
+    },
+    {
+      "source_id": "p20_build_sharing",
+      "target_id": "p23_cosmetics",
+      "allowed_changed_files": [],
+      "allowed_added_files": [
+        "assets/cosmetics/LICENSE.txt",
+        "assets/cosmetics/contact_sheet.png",
+        "assets/cosmetics/manifest.json",
+        "assets/cosmetics/primordial_knight_default.png",
+        "assets/cosmetics/primordial_knight_return.png",
+        "assets/cosmetics/primordial_knight_victory.png",
+        "assets/cosmetics/time_guardian_default.png",
+        "assets/cosmetics/time_guardian_return.png",
+        "assets/cosmetics/time_guardian_victory.png",
+        "assets/cosmetics/time_lord_default.png",
+        "assets/cosmetics/time_lord_return.png",
+        "assets/cosmetics/time_lord_victory.png",
+        "assets/cosmetics/void_walker_default.png",
+        "assets/cosmetics/void_walker_return.png",
+        "assets/cosmetics/void_walker_victory.png",
+        "assets/cosmetics/wanderer_default.png",
+        "assets/cosmetics/wanderer_return.png",
+        "assets/cosmetics/wanderer_victory.png",
+        "content/cosmetics.json",
+        "localization/cosmetics.csv"
+      ],
+      "reason": "Reviewed fifteen free original raster appearances, their catalog, supplemental localization and provenance only. Existing authored content, Meta catalog and all required Profile v4 fields remain unchanged. Active native checkpoints retain their explicit reconstruction gate."
     }
   ]
 }

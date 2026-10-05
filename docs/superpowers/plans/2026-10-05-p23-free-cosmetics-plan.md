@@ -16,6 +16,7 @@
 5. Add native Hub cosmetic projection and gallery preview/control component while preserving discovered items.
 6. Integrate actual launch/resume appearance with the native presentation projection, then verify locales, input, pixels, cold recovery and failed writes.
 7. Run scoped regression/content/documentation checks, retain evidence and create a precise local commit.
+8. Retain the committed pre-cosmetic descriptor and verify an exact additive-resource compatibility transition. Preserve Meta semantics and the old Profile schema, reject unrelated descriptor mutations, and pass every physical migration fault and native startup regression.
 
 ## Exit Gate
 
