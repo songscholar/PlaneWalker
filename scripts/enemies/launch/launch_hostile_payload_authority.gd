@@ -132,7 +132,9 @@ func prepare_payloads(batches: Array, context: Dictionary, foreign_active_zones:
 				target_id = candidate
 				break
 		var position := node.global_position + collision.get_travel()
-		contacts[id] = {"kind": "world" if target_id.is_empty() else "target", "target_id": target_id, "position": {"x": position.x, "y": position.y}}
+		# Godot includes overlap recovery in travel; domain impacts stay on the frozen sweep.
+		var trajectory_position := Geometry2D.get_closest_point_to_segment(position, Vector2(motion[id].from.x, motion[id].from.y), Vector2(motion[id].to.x, motion[id].to.y))
+		contacts[id] = {"kind": "world" if target_id.is_empty() else "target", "target_id": target_id, "position": {"x": trajectory_position.x, "y": trajectory_position.y}}
 		native_contacts.append({"id": id, "node": node, "collider": collider, "position": position})
 	var preview := Runtime.new()
 	preview.configure(before.run_id, before.initial_frame)
