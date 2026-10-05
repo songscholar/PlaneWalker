@@ -205,3 +205,54 @@ Verified-primary preservation, explicit recovery/migration provenance and
 applied keyboard/controller bindings retain their existing assertions. These
 focused results repair the later source; the immutable failed baseline and
 full integrated validation/coverage boundary remain as recorded above.
+
+## Completed Frozen 5a7fb3e Baseline
+
+The detached `build/retained-checkout/certify-5a7fb3e` checkout completes the
+entire ordinary validator at revision
+`5a7fb3efc7a3ae448e341f15e4dd988207e2231a`, without source overlays or restart.
+Its final Git status is clean. The 410 runtime scripts retain aggregate SHA-256
+`1b12c8ca4d09490ba9aa58e692f4d0767531eedff87f74bd670daa74acf3dfe2`.
+
+All 310 Python tests, shell/CI and documentation governance, content and
+localization, export/coverage contracts, both Godot imports, native pack export
+contracts and the 30-seed dungeon simulation pass. All 499 discovered ordinary
+scene tests complete: 498 strict PASS, one strict failure, zero timeouts.
+The previous checkpoint audio, Orchestrator refusal and corrupted input repairs
+pass in this frozen complete run. No later optimization is overlaid into it.
+
+The only failure is `tests/time/time_loadout_runtime_test.tscn`. Its old
+fixture explicitly requires `PROCESS_MODE_PAUSABLE`, but the verified Main
+lifecycle repair intentionally makes Player inherit CombatRoom processing.
+Both paired logs retain exactly
+`Player scene defaults to pausable processing: expected 1, got 0`.
+Focused current-source RED, corrected actual suspension/resumption assertions,
+and four strict GREEN scenes are recorded in
+`2026-10-06-time-loadout-inheritance-evidence.md`; the reversible fixture-only
+repair is commit `58704b1`. Those later results do not replace the immutable
+failure.
+
+The actual five-floor Main run and all 150 P14 domain loadout combinations pass.
+The five-floor report retains 12,153 actual frames, 21 rooms, all five Bosses,
+ending `shattered_freedom`, and verified physical victory settlement. It uses
+the explicit survival fixture `p15_full_run_survival_fixture` and reports zero
+human playtests and `unassisted_victory=false`. Its report SHA-256 remains
+`a744f898fbf147a0f0a6b339175eafc539be6ab0ad68febe047c628d8f3e3b06`.
+The five-floor effective timeout is 7,200 seconds and the P14 domain matrix cap
+is at least 600 seconds; these execution caps are not measured FPS evidence.
+
+The completed top-level stdout is
+`build/certification-5a7fb3e-validation-attempt2.stdout.log`, SHA-256
+`b42d185dd2928009beb45a0453ac4a9c3422b243ec02bd2b9852afc4093f3c4a`.
+All original paired scene logs remain under the checkout's
+`build/clean-validation-attempt2/scene-tests/`. The first preflight attempt is
+also retained: its selected Homebrew Python lacked `jsonschema`, so it stopped
+before executing scene tests. Attempt 2 uses the existing project validation
+toolchain and configured coverage environment; no dependency check is skipped.
+
+The validator exits 1 after the complete ordinary suite and therefore never
+enters instrumented runtime line coverage. Its ordinary report has
+`status=unavailable`, `provider=null`, `line_rate=null`, and zero enumerated
+coverage files. This is unavailable measurement, not zero measured coverage.
+Full integrated certification and statement coverage require a fresh committed
+checkout containing the fixture correction and later combined changes.
