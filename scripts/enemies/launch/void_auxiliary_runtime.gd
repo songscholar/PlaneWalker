@@ -13,6 +13,9 @@ const PICKUP_FIELDS := ["fact_id", "run_id", "owner_source_id", "pickup_id", "ta
 const EVENT_FIELDS := {"cast": ["kind", "frame", "action_id", "generation", "geometry", "damage_multiplier"], "damage": ["kind", "frame", "fact_id", "generation", "hit_index", "target_id", "actual_loss"], "landing": ["kind", "frame", "generation", "position", "landed"], "followup": ["kind", "frame", "generation", "followup_generation"], "pickup": ["kind", "frame", "fact_id", "pickup_id", "target_id", "energy_before", "energy_after", "maximum", "revision_before", "revision_after"], "phase": ["kind", "frame", "phase_index"], "terminal": ["kind", "frame"]}
 const MAX_FRAME := 2147447646
 const MAX_EVENTS := 4096
+const MAX_VALIDATION_CACHE := 4
+static var _validation_cache: Array[Dictionary] = []
+static var _validation_cache_mutex := Mutex.new()
 var _definition: Dictionary = {}
 var _state: Dictionary = {}
 var _initial: Dictionary = {}
@@ -145,6 +148,11 @@ func step_followup_request(frame: int) -> Dictionary:
 func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) -> bool:
 	if _initial.is_empty() or not Contract.exact_fields(value, FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != 1 or value.identity != _initial.identity or value.definition_digest != _initial.definition_digest or value.arena_origin != _initial.arena_origin or not Contract.integer_in_range(value.runtime_frame, int(_initial.runtime_frame), MAX_FRAME) or not value.events is Array or value.events.size() > MAX_EVENTS:
 		return false
+	# Typed bytes distinguish integer event authority from numerically equal floats.
+	var context := var_to_bytes([_definition, _initial])
+	var encoded := var_to_bytes(value)
+	if _validation_cache_contains(context, encoded, accepted_boundary):
+		return true
 	var replay := _initial.duplicate(true)
 	var previous := int(_initial.runtime_frame)
 	for candidate: Variant in value.events:
@@ -158,7 +166,32 @@ func can_restore_snapshot(value: Dictionary, accepted_boundary: bool = false) ->
 		previous = int(candidate.frame)
 	replay.runtime_frame = int(value.runtime_frame)
 	_refresh(replay)
-	return JSON.parse_string(JSON.stringify(replay)) == JSON.parse_string(JSON.stringify(value))
+	var valid: bool = replay == value or JSON.parse_string(JSON.stringify(replay)) == JSON.parse_string(JSON.stringify(value))
+	if valid:
+		_cache_validated_snapshot(context, encoded, accepted_boundary)
+	return valid
+
+
+static func _validation_cache_contains(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> bool:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return true
+	_validation_cache_mutex.unlock()
+	return false
+
+
+static func _cache_validated_snapshot(context: PackedByteArray, encoded: PackedByteArray, accepted_boundary: bool) -> void:
+	_validation_cache_mutex.lock()
+	for row: Dictionary in _validation_cache:
+		if row.accepted_boundary == accepted_boundary and row.context == context and row.snapshot == encoded:
+			_validation_cache_mutex.unlock()
+			return
+	if _validation_cache.size() == MAX_VALIDATION_CACHE:
+		_validation_cache.pop_front()
+	_validation_cache.append({"context": context, "snapshot": encoded, "accepted_boundary": accepted_boundary})
+	_validation_cache_mutex.unlock()
 
 
 func restore_snapshot(value: Dictionary) -> bool:
