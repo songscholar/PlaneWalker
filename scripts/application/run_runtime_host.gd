@@ -650,7 +650,7 @@ func resume_run() -> Variant:
 func runtime_snapshot() -> Dictionary:
 	if _facade == null:
 		return {}
-	return (_facade.call("snapshot") as Dictionary).duplicate(true)
+	return _facade.call("snapshot") as Dictionary
 
 
 func dungeon_ui_context() -> Dictionary:

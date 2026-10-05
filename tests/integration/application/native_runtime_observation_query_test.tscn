@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/application/native_runtime_observation_query_test.gd" id="1_test"]
+
+[node name="NativeRuntimeObservationQueryTest" type="Node"]
+script = ExtResource("1_test")

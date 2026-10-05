@@ -6,6 +6,7 @@ const RunConfigScript := preload("res://scripts/application/run_config.gd")
 const RunPhaseScript := preload("res://scripts/application/run_phase.gd")
 const RunStateScript := preload("res://scripts/application/run_state.gd")
 const SelectionOfferScript := preload("res://scripts/application/selection_offer.gd")
+const EventModifierLifetimeScript := preload("res://scripts/events/event_modifier_lifetime.gd")
 
 var _state: RefCounted
 var _pending_route_transition: Dictionary = {}
@@ -17,7 +18,29 @@ func _init() -> void:
 
 
 func snapshot() -> Dictionary:
-	return _state.snapshot().duplicate(true)
+	return _state.snapshot()
+
+
+func event_health_snapshot() -> Dictionary:
+	var runtime: Dictionary = _state.dungeon_event_runtime
+	if runtime.is_empty():
+		return {}
+	return (runtime.consequence_runtime.participant_snapshots.health as Dictionary).duplicate(true)
+
+
+func dungeon_event_snapshot() -> Dictionary:
+	return (_state.dungeon_event_runtime as Dictionary).duplicate(true)
+
+
+func event_modifier_projection() -> Dictionary:
+	var runtime: Dictionary = _state.dungeon_event_runtime
+	if runtime.is_empty() or _state.is_terminal():
+		return {"ok": true, "code": &"OK", "context": {"modifiers": []}}
+	var parts: Dictionary = runtime.consequence_runtime.participant_snapshots
+	return EventModifierLifetimeScript.active_projection(
+		_state.events, parts.event_state.selected_event_by_node,
+		parts.modifier.temporary_modifiers
+	)
 
 
 func revision() -> int:

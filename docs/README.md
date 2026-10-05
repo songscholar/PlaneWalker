@@ -84,6 +84,13 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Boss Snapshot Cache Evidence](current/2026-10-06-boss-snapshot-cache-evidence.md) | 五 Boss 完整验证结果缓存、严格原生边界和完全相同录制的耗时对照 | Focused Verified / Full gameplay certification pending |
 | [Native Boss Modifier Teardown Evidence](current/2026-10-06-native-boss-modifier-teardown-evidence.md) | 场景退出时清理首领专属效果、保留其它来源且拒绝离树对象施加新效果 | Focused Verified / Combined certification pending |
 | [Registry Template Closure Evidence](current/2026-10-06-registry-template-closure-evidence.md) | 启用内容包时检查全部正式遭遇与扩展遭遇模板，拒绝缺失引用 | Focused Verified / Combined certification pending |
+| [Clean Validation Baseline Repairs](current/2026-10-06-clean-validation-baseline-repair-evidence.md) | 冻结基线的实际失败、原生目标身份和测试清理修复 | Focused Verified / Combined certification pending |
+| [Windows Wine Guest Startup](current/2026-10-06-windows-wine-guest-startup-evidence.md) | 项目隔离 Windows 包启动验证工具及实际执行边界 | Wine Guest Verified / Final package certification pending |
+| [Auxiliary Snapshot Cache Plan](current/2026-10-06-auxiliary-snapshot-cache-plan.md) | 森林、熔炉和虚空验证缓存的实现及测量门槛 | Active |
+| [Runtime Observation Query Plan](current/2026-10-06-runtime-observation-query-plan.md) | 每帧生命值与临时效果窄查询、存档隔离和真实录制对照 | Active |
+| [Runtime Observation Query Evidence](current/2026-10-06-runtime-observation-query-evidence.md) | 完整快照生成次数、真实伤害同步、回放状态和未达标性能记录 | Focused Verified / Full gameplay certification pending |
+| [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
+| [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |
 | [Native UI Finish Plan](superpowers/plans/2026-10-06-native-ui-finish.md) | 玩法认证之后实施 HUD、据点与全部外围界面打磨 | Active / Current |
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |

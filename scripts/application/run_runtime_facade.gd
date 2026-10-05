@@ -1886,16 +1886,7 @@ func _sync_player_event_modifiers() -> bool:
 		return true
 	if _orchestrator == null:
 		return false
-	var state: Dictionary = _orchestrator.snapshot()
-	var runtime := state.get("dungeon_event_runtime", {}) as Dictionary
-	if runtime.is_empty() or _orchestrator.is_terminal():
-		return bool(_merchant_player.call("sync_event_temporary_modifiers", []))
-	var parts := runtime["consequence_runtime"]["participant_snapshots"] as Dictionary
-	var event_state := parts["event_state"] as Dictionary
-	var projection := EventModifierLifetimeScript.active_projection(
-		state["events"], event_state["selected_event_by_node"],
-		(parts["modifier"] as Dictionary)["temporary_modifiers"]
-	)
+	var projection: Dictionary = _orchestrator.event_modifier_projection()
 	return bool(projection.get("ok", false)) and bool(_merchant_player.call(
 		"sync_event_temporary_modifiers", projection["context"]["modifiers"]
 	))
@@ -1911,11 +1902,14 @@ func _sync_player_health_observation() -> bool:
 		return false
 	var current := float(physical["current_hp"])
 	var maximum := float(physical.get("max_hp", 0.0))
-	var runtime_snapshot: Dictionary = _orchestrator.snapshot()["dungeon_event_runtime"].duplicate(true)
-	var participants := runtime_snapshot["consequence_runtime"]["participant_snapshots"] as Dictionary
-	var health := participants["health"] as Dictionary
+	var health: Dictionary = _orchestrator.event_health_snapshot()
+	if health.is_empty():
+		return false
 	if float(health["current"]) == current and float(health["maximum"]) == maximum:
 		return true
+	var runtime_snapshot: Dictionary = _orchestrator.dungeon_event_snapshot()
+	var participants := runtime_snapshot["consequence_runtime"]["participant_snapshots"] as Dictionary
+	health = participants["health"] as Dictionary
 	health["current"] = current
 	health["maximum"] = maximum
 	var candidate := _event_runtime_candidate(_orchestrator, _director, _economy_state, runtime_snapshot)
