@@ -1,7 +1,13 @@
 # Void Phase Projectile Retirement
 
-- Status: Implemented; fixed-source native case verification pending
-- Scope: Void Boss phase boundaries in native hostile payload preparation
+- Status: Approved
+- Document Role: Current focused implementation plan
+- Authority Level: Below approved full-product completion contract
+- Applies To: Void Boss phase boundaries in native hostile payload preparation
+- Owner: Project owner
+- Depends On: Approved full-product completion contract
+- Last Verified: 2026-10-06
+- Verification Status: Focused regressions passed; fixed-source native case 619 pending
 - Baseline reproduction: native matrix case 619, seed 20261624
 
 ## Confirmed Failure
