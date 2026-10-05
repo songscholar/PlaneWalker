@@ -342,7 +342,8 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	if not payload_prepared.ok:
 		return payload_prepared
 	for request: Dictionary in payload_prepared.damage_requests:
-		var prepared := _prepare_payload_damage(request, context, next)
+		var projectile_hit: bool = payload_prepared.ticket.before.projectiles.any(func(row: Dictionary): return row.id == request.payload_id)
+		var prepared := _prepare_payload_damage(request, context, next, projectile_hit)
 		if not prepared.ok:
 			_payloads.rollback(payload_prepared.ticket)
 			return prepared
@@ -593,7 +594,7 @@ func publish_effects(ticket: Dictionary) -> bool:
 	return true
 
 
-func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
+func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dictionary, authored_projectile: bool = false) -> Dictionary:
 	if not context.targets.has(request.target_id) and not context.actors.has(request.target_id):
 		return _failure("payload_damage_target")
 	var target: Node2D = context.targets.get(request.target_id, context.actors.get(request.target_id))
@@ -610,7 +611,8 @@ func _prepare_payload_damage(request: Dictionary, context: Dictionary, next: Dic
 	if info == null:
 		return _failure("payload_damage_plan")
 	record["info"] = info
-	if not str(request.payload_id).begins_with("void-burn:") and context.actors.has(request.hostile_source_id):
+	# Independent zones have their own generation namespace; only sealed projectiles inherit the owner's attack receipt.
+	if authored_projectile and context.actors.has(request.hostile_source_id):
 		_attach_void_damage(record, context.actors[request.hostile_source_id], request, claim)
 	return {"ok": true, "record": record}
 

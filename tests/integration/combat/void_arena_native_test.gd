@@ -107,7 +107,7 @@ func _heal_boundary(room: Node2D, health_case: String) -> void:
 	await get_tree().process_frame
 
 
-func _boss(room: Node2D) -> Node2D:
+func _boss(room: Node2D, next_generation_floor: int = 7) -> Node2D:
 	var actor := Boss.instantiate() as Node2D
 	actor.process_mode = Node.PROCESS_MODE_DISABLED
 	actor.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
@@ -115,7 +115,7 @@ func _boss(room: Node2D) -> Node2D:
 	actor.global_position = room.get_node("EncounterAnchors/boss_primary").global_position
 	var parser := Definition.new()
 	parser.configure(Content.boss("void_throne"))
-	actor.configure_launch_definition(parser.runtime_projection(), {"run_id": "run-void-arena", "hostile_source_id": "void-arena-owner", "next_generation_floor": 7, "runtime_frame": 0, "seed": 42})
+	actor.configure_launch_definition(parser.runtime_projection(), {"run_id": "run-void-arena", "hostile_source_id": "void-arena-owner", "next_generation_floor": next_generation_floor, "runtime_frame": 0, "seed": 42})
 	for template: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/room_templates.json")):
 		if template.id == "room_boss_void_throne":
 			suite.assert_true(actor.configure_launch_room_motion(room, template).ok, "actual Void constructs bind authored room geometry")
