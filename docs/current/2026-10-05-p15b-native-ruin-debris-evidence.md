@@ -1,9 +1,11 @@
 # P15B Native Ruin Debris Evidence
 
 - Status: Retained native integration; full Boss arena certification remains open
-- Document Role: Focused implementation and verification evidence
+- Document Role: Current focused implementation and verification evidence
 - Authority Level: Below the approved P15 specification and arena implementation plan
 - Applies To: Authored Ruin barrage landing, debris collision, shared construct budget, accepted frame compensation and cold continuation
+- Owner: Native Boss implementation lead
+- Depends On: `AGENTS.md`, `docs/superpowers/specs/2026-10-04-plane-walker-p15-enemies-bosses-design.md`, `docs/superpowers/plans/2026-10-05-native-boss-arena-constructs.md`
 - Last Verified: 2026-10-05
 
 ## Retained Behavior
