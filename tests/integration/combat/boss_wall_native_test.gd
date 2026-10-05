@@ -290,7 +290,7 @@ func _context(frame: int, actor: Node2D, player: Node2D) -> Dictionary:
 
 
 func _damage(player: Node2D, token: int, amount: float) -> RefCounted:
-	return Damage.from_plan({"run_id": "run-wall", "target_id": "pending_wall", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+	return Damage.from_plan({"run_id": "run-wall", "target_id": "hostile-wall", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
 
 
 func _publish(bridge: RefCounted, ticket: Dictionary) -> bool:

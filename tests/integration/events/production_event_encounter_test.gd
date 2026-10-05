@@ -114,7 +114,7 @@ func _dispose(main: Node, suite: RefCounted) -> void:
 	var director: Node = main.get_node_or_null("MusicDirector")
 	if director != null:
 		for deck: Node in director.get_children():
-			if deck is AudioStreamPlayer and deck.get_stream_playback() != null:
+			if deck is AudioStreamPlayer and deck.has_stream_playback():
 				playback_refs.append(weakref(deck.get_stream_playback()))
 	main.queue_free()
 	await get_tree().process_frame
