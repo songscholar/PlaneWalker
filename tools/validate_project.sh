@@ -200,7 +200,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.export.test_portable_runtime
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 	tests.contract.export.test_packaged_startup \
-	tests.contract.export.test_linux_guest_startup
+	tests.contract.export.test_linux_guest_startup \
+	tests.contract.export.test_windows_wine_guest_startup
 PYTHONDONTWRITEBYTECODE=1 python3 tools/export/preflight.py \
 	--mode contract \
 	--json-output "${validation_log_dir}/export-preflight.json"
