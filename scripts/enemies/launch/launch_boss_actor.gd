@@ -63,7 +63,7 @@ func _native_geometry_matches_definition() -> bool:
 				return false
 	if _launch_definition.get("id", "") == "void_throne":
 		var holder := get_node_or_null("VoidArenaConstructs")
-		var state := native_void_arena_snapshot()
+		var state := native_void_arena_geometry_snapshot()
 		if holder == null or state.is_empty() or state.arena_origin != _point(_native_arena_origin()) or holder.get_child_count() != state.pillars.size() + state.cores.size():
 			return false
 		var rows: Array = state.pillars + state.cores
@@ -333,8 +333,12 @@ func native_void_arena_snapshot() -> Dictionary:
 	return _launch_runtime.void_arena_snapshot()
 
 
+func native_void_arena_geometry_snapshot() -> Dictionary:
+	return _launch_runtime.native_void_arena_geometry_snapshot() if _launch_runtime.has_method("native_void_arena_geometry_snapshot") else native_void_arena_snapshot()
+
+
 func _refresh_native_void() -> void:
-	var state := native_void_arena_snapshot()
+	var state := native_void_arena_geometry_snapshot()
 	if state.is_empty():
 		return
 	var holder := get_node_or_null("VoidArenaConstructs")
@@ -365,6 +369,10 @@ func _refresh_native_void() -> void:
 
 
 func _active_void_pickups() -> Array:
+	if _launch_definition.is_empty():
+		return []
+	if _launch_runtime.has_method("native_void_active_pickups"):
+		return _launch_runtime.native_void_active_pickups()
 	var state := native_void_auxiliary_snapshot()
 	return [] if state.is_empty() or state.terminal else state.pickups.filter(func(row: Dictionary): return not row.used and not row.retired and int(state.runtime_frame) < int(row.through_frame))
 
@@ -393,7 +401,7 @@ func _refresh_native_void_pickups() -> void:
 
 
 func receive_native_void_construct_hit(id: String, damage_info: RefCounted) -> float:
-	if damage_info == null or health == null or health.dead or not _prepared_launch_frame.is_empty() or native_void_arena_snapshot().is_empty() or not _native_geometry_matches_definition():
+	if damage_info == null or health == null or health.dead or not _prepared_launch_frame.is_empty() or native_void_arena_geometry_snapshot().is_empty() or not _native_geometry_matches_definition():
 		return 0.0
 	var attacker: Node = damage_info.attacker
 	if not attacker is PlayerController or not attacker.authenticates_native_damage_run(damage_info, self, StringName(str(_launch_identity.run_id))):

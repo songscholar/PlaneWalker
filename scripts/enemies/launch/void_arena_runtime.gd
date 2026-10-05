@@ -47,6 +47,10 @@ func snapshot() -> Dictionary:
 	return _state.duplicate(true)
 
 
+func native_geometry_snapshot() -> Dictionary:
+	return {} if _state.is_empty() else {"arena_origin": _state.arena_origin, "terminal": _state.terminal, "pillars": _state.pillars, "cores": _state.cores}.duplicate(true)
+
+
 func bind_origin(origin: Dictionary) -> bool:
 	if _state.is_empty() or _state.terminal or not Contract.valid_point(origin) or origin != _state.arena_origin and (int(_state.runtime_frame) != int(_initial.runtime_frame) or not _state.events.is_empty()):
 		return false

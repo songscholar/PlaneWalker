@@ -58,9 +58,45 @@ errors, warnings, script/parse failures or object/RID leaks. Godot is
 `4.6.1.stable.official.14d19694e`; line coverage is unsupported. Documentation
 governance and diff whitespace checks pass.
 
-## Remaining Measurement
+## Isolated Complete-Frame Comparison
 
-The isolated uninstrumented complete-frame comparison against the previous
-query slice is pending. This focused contract result makes no performance,
-600-frame throughput, rendered FPS, 45-minute soak or human playtest claim.
-No content, gameplay value, admission budget or recorder capacity changes.
+The clean `54866d4` archive at
+`build/retained-checkout/native-hostile-boundary-overlay-54866d4-20261006`
+contains the previous `a7bddd0` Boss actor and exactly the three boundary
+production paths from `c17451f0a6f5aa9803223a52521f2d39aeda1391`. It retains the
+same original uninstrumented probe harness. Its second verified editor import
+passes strict paired logs. The 410-script aggregate SHA-256 is
+`652af5b567eaf95ea92afef84ea58015260fc22b6811ac3487f2288f0a53f8bd`.
+
+`build/floor4-phase2-boundary-query-after-120/report.json` passes with the
+identical 120-frame, 12-Hub-frame, floor-index-4, phase-index-2, fixed-60-Hz,
+unit-time-scale, headless arguments. Admission remains 2,501 real native Sword
+frames. All measured frames 2,502 through 2,621 pass; the physical tape has 121
+observations, is `INTERRUPTED`, has no recording failure, and freshly reads
+first/last exact typed bytes. Both observation hashes and all 24 physical
+compressed chunk filenames and SHA-256 bytes equal the previous query-slice
+archive. Authoritative content is identical. Runtime stdout and Godot logs are
+strictly clean.
+
+Mechanically generated `source-manifest.json` and `comparison.json` sit beside
+the report. The source comparison changes only `hostile_frame_bridge.gd`,
+`launch_boss_runtime.gd` and `launch_hostile_actor.gd`. The original harness
+checks that runtime source remains unchanged through execution.
+
+| Complete Player Advance | Mean | p95 | Maximum |
+| --- | --- | --- | --- |
+| Previous query/preview slice | 52.909 ms | 62.117 ms | 84.364 ms |
+| Boundary observation slice | 55.753 ms | 59.782 ms | 86.202 ms |
+
+Mean increases by 2.844 ms (5.37%); p95 decreases by 2.335 ms and maximum
+increases by 1.838 ms. Wall duration is 7.786 seconds, retention 15.866 seconds,
+and peak native static allocation 593,596,713 bytes. Native static allocation
+is not process RSS. Five frozen long-running smoke matrix processes and shorter
+focused regressions are concurrently active during this after run; the previous
+run had two long-running validation processes. Ambient load is not controlled.
+This single comparison establishes exact behavior retention and does not
+establish a mean or sustained speedup.
+
+The integrated source still requires a separate 600-frame throughput gate,
+rendered performance, 45-minute soak and human playtest. No content, gameplay
+value, admission budget or recorder capacity changes.

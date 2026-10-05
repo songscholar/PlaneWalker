@@ -640,6 +640,14 @@ func void_arena_snapshot() -> Dictionary:
 	return _void_arena.snapshot() if _void_arena != null else {}
 
 
+func native_void_arena_geometry_snapshot() -> Dictionary:
+	return _void_arena.native_geometry_snapshot() if _void_arena != null else {}
+
+
+func native_void_active_pickups() -> Array:
+	return _void_auxiliary.active_pickups() if _void_auxiliary != null else []
+
+
 func void_auxiliary_snapshot() -> Dictionary:
 	return _void_auxiliary.snapshot() if _void_auxiliary != null else {}
 
