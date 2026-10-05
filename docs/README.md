@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P11 five weapons, P12 five characters and P13 complete Launch pools are locally certified. P14 native dungeon panels and Save/Replay have focused verification. P15 production native encounters, five Boss foundations, Time Watch and live combat checkpoints are active; remaining species, affixes and Boss arena constructs continue. P16 native Hub/meta/training/tutorial, narrative/endings and trusted active-content migration have focused evidence. P17 actor/enemy raster assets and music, P18 local Mod/DLC management, and P20A native build sharing have focused evidence; P20B local records are in progress. Combined clean-checkout validation, line coverage, retained release exports and full-gameplay certification remain pending. Formal M1 remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P11 five weapons, P12 five characters and P13 complete Launch pools are locally certified. P14 native dungeon panels and Save/Replay have focused verification. P15 production native encounters, five Boss foundations, Time Watch and live combat checkpoints are active; remaining species, affixes and Boss arena constructs continue. P16 native Hub/meta/training/tutorial, narrative/endings and trusted active-content migration have focused evidence. P17 actor/enemy raster assets and music, P18 local Mod/DLC management, P20A native build sharing and P20B durable local records have focused evidence. P21 native modes and P22 replay productization are active. Combined clean-checkout validation, line coverage, retained release exports and full-gameplay certification remain pending. Formal M1 remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -80,6 +80,8 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | 文档 | 用途 | 状态 |
 |---|---|---|
 | [完整产品 Completion Spec](superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md) | 全产品范围、体系结构、数量和完成 Gate | Approved / Current authority |
+| [P22A Player Replay Archive Design](superpowers/specs/2026-10-05-p22a-player-replay-archive-design.md) | 玩家录制封装、物理回放库、兼容拒绝与隔离播放边界 | Approved / Current authority |
+| [P22A Player Replay Archive Plan](superpowers/plans/2026-10-05-p22a-player-replay-archive.md) | 实际 Player 录制、原子保存、导入导出和寻址播放实施 | Active / Current |
 | [ADR Index](adrs/README.md) | 已接受/已取代架构决策、权威顺序与 supersession 链 | Approved / Current authority |
 | [Document Governance v1](contracts/document-governance-v1.md) | 元数据、生命周期、Current 索引、ADR、相对链接和证据状态合同 | Approved / Current contract |
 | [SaveService v1 Contract](contracts/save-service-v1.md) | 原子存档、迁移、恢复和内容兼容边界 | Approved / Historical contract |
