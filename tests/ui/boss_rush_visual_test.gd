@@ -5,7 +5,7 @@ const Main := preload("res://scenes/main.tscn")
 const Registry := preload("res://scripts/content/content_registry.gd")
 const Factory := preload("res://scripts/progression/meta_catalog_factory.gd")
 const Fixtures := preload("res://tests/support/p16_progression_fixtures.gd")
-const RESOLUTIONS := [Vector2i(640, 360), Vector2i(1280, 720)]
+const RESOLUTIONS := [Vector2i(640, 360), Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(3440, 1440)]
 
 
 func _ready() -> void:
