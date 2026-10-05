@@ -144,6 +144,7 @@ func _build_scene(stage: Node2D, value: Dictionary, registry: RefCounted) -> boo
 				visual.rotation = Geometry._point(construct.direction).angle() if field == "walls" else 0.0
 				visual.visible = not arena.get("terminal", false)
 				stage.add_child(visual)
+		_project_auxiliary_arena(stage, saved.actor.runtime)
 	for payload: Dictionary in value.native.get("effects", {}).get("payloads", {}).get("projectiles", []) + value.native.get("effects", {}).get("payloads", {}).get("zones", []):
 		if payload.phase in ["PENDING", "DORMANT"]:
 			continue
@@ -172,6 +173,56 @@ func _build_scene(stage: Node2D, value: Dictionary, registry: RefCounted) -> boo
 			return false
 	stage.add_child(geometry)
 	return true
+
+
+func _project_auxiliary_arena(stage: Node2D, runtime: Dictionary) -> void:
+	var forest: Dictionary = runtime.get("forest_auxiliary", {})
+	var origin := Geometry._point(forest.get("arena_origin", {}))
+	for field: String in ["sacs", "flowers", "cages"]:
+		for row: Dictionary in forest.get(field, []):
+			var kind := "sac" if field == "sacs" else "flower" if field == "flowers" else "wall"
+			var spent: bool = row.get("broken", false) or row.get("expired", false) or row.get("used", false)
+			var marked: bool = field == "sacs" and forest.get("seeds", []).any(func(seed: Dictionary): return seed.sac_id == row.id and seed.burst_frame == -1 and seed.cancelled_frame == -1)
+			var damaged: bool = float(row.get("current_hp", 100.0)) <= float(row.get("max_hp", 100.0)) * 0.5
+			var visual := _arena_sprite(stage, "forest_" + kind, origin + Geometry._point(row.position), 2 if spent else 1 if marked or damaged else 0, bool(forest.terminal))
+			if field == "cages":
+				visual.rotation = float(row.rotation)
+				visual.scale = Vector2(float(row.length) / 48.0, float(row.thickness) / 12.0)
+	var inset := float(forest.get("erosion_steps", 0)) * 16.0
+	if inset > 0.0:
+		for slot: int in range(4):
+			var horizontal: bool = slot < 2
+			var position: Vector2 = [Vector2(320, inset * 0.5), Vector2(320, 360 - inset * 0.5), Vector2(inset * 0.5, 180), Vector2(640 - inset * 0.5, 180)][slot]
+			var visual := _arena_sprite(stage, "forest_wall", origin + position, 0, bool(forest.terminal))
+			visual.rotation = 0.0 if horizontal else PI * 0.5
+			visual.scale = Vector2((640.0 if horizontal else 360.0) / 48.0, inset / 12.0)
+	var void_arena: Dictionary = runtime.get("void_arena_state", {})
+	origin = Geometry._point(void_arena.get("arena_origin", {}))
+	for field: String in ["pillars", "cores"]:
+		for row: Dictionary in void_arena.get(field, []):
+			var spent: bool = row.broken or row.get("debris", false)
+			var damaged: bool = float(row.current_hp) <= float(row.max_hp) * 0.5
+			_arena_sprite(stage, "void_pillar" if field == "pillars" else "void_core", origin + Geometry._point(row.position) + Vector2(0, -8), 2 if spent else 1 if damaged else 0, bool(void_arena.terminal))
+	var forge: Dictionary = runtime.get("forge_arena_state", {})
+	origin = Geometry._point(forge.get("arena_origin", {}))
+	for field: String in ["covers", "vents", "cooling_pools"]:
+		for row: Dictionary in forge.get(field, []):
+			var cover: bool = field == "covers"
+			var damaged: bool = float(row.current_hp) <= float(row.max_hp) * 0.5
+			var asset := "forge_anvil" if cover else "forge_vent" if field == "vents" else "forge_cooling"
+			_arena_sprite(stage, asset, origin + Geometry._point(row.position) + (Vector2(0, -8) if cover else Vector2.ZERO), (2 if row.broken else 1 if damaged else 0) if cover else 0, bool(forge.terminal), 3 if cover else 1)
+
+
+func _arena_sprite(stage: Node2D, asset: String, position: Vector2, frame: int, terminal: bool, frames: int = 3) -> Sprite2D:
+	var visual := Sprite2D.new()
+	visual.texture = load("res://assets/production/constructs/%s.png" % asset)
+	visual.hframes = frames
+	visual.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	visual.frame = frame
+	visual.position = position
+	visual.visible = not terminal
+	stage.add_child(visual)
+	return visual
 
 
 static func _failure() -> Dictionary:

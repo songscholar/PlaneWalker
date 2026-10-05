@@ -35,6 +35,11 @@ func _run() -> void:
 	suite.assert_true(world._build_scene(stage, observation, registry), "translated Forest constructs and semantic zone project privately")
 	var roots := _sprites(stage, "forest_root.png")
 	suite.assert_equal(roots.size(), 6, "all six recorded roots use actual production raster")
+	suite.assert_equal(_sprites(stage, "forest_sac.png").size(), 4, "all four authoritative Forest sacs appear in replay")
+	var flowers := _sprites(stage, "forest_flower.png")
+	suite.assert_equal(flowers.size(), 3, "all three unspent Forest flowers appear in replay")
+	if not flowers.is_empty():
+		suite.assert_equal(flowers[0].position, Vector2(176, 220), "auxiliary replay art preserves translated arena origin")
 	if not roots.is_empty():
 		suite.assert_equal(roots[0].position, Vector2(192, 144), "root projection retains actual room origin")
 		suite.assert_true(roots[0].hframes == 3 and roots[0].frame == 0, "root projection retains living atlas state")
@@ -59,6 +64,44 @@ func _run() -> void:
 	if not covers.is_empty():
 		var row: Dictionary = runtime.snapshot().arena_state.covers[0]
 		suite.assert_equal(covers[0].position, Vector2(80 + row.position.x, 32 + row.position.y), "cover uses room motion origin and authored art offset")
+	stage.free()
+	runtime = Runtime.new()
+	runtime.configure_arena_origin(origin)
+	identity.hostile_source_id = "void_projection"
+	parsed.configure(_definition(registry, &"void_throne"))
+	suite.assert_true(runtime.configure(parsed.runtime_projection(), identity).ok, "Void replay fixture owns actual Boss arena domain")
+	suite.assert_true(runtime.accept_damage_fact({"fact_id": "projection-p3", "runtime_frame": 1, "target_source_id": identity.hostile_source_id, "amount": 2500.0, "hp_after": 500.0}).ok, "Void replay fixture creates authenticated P3 cores")
+	stage = Node2D.new()
+	world.add_child(stage)
+	actor = {"definition_id": "void_throne", "actor": {"runtime": runtime.snapshot(), "position": {"x": 400.0, "y": 184.0}, "room_motion": {"bounds": origin}}}
+	observation.native = {"actors": {"void_projection": actor}}
+	suite.assert_true(world._build_scene(stage, observation, registry), "recorded Void P3 arena projects privately")
+	var pillars := _sprites(stage, "void_pillar.png")
+	var cores := _sprites(stage, "void_core.png")
+	suite.assert_equal(pillars.size(), 4, "Void replay retains four debris pillars")
+	suite.assert_equal(cores.size(), 4, "Void replay retains four live plane cores")
+	if not pillars.is_empty():
+		suite.assert_true(pillars[0].frame == 2 and pillars[0].position == Vector2(240, 136), "Void replay retains debris frame and world offset")
+	if not cores.is_empty():
+		suite.assert_true(cores[0].frame == 0 and cores[0].position == Vector2(320, 144), "Void replay retains living core frame and world offset")
+	stage.free()
+	runtime = Runtime.new()
+	runtime.configure_arena_origin(origin)
+	identity.hostile_source_id = "forge_projection"
+	parsed.configure(_definition(registry, &"forge_colossus"))
+	suite.assert_true(runtime.configure(parsed.runtime_projection(), identity).ok, "Forge replay fixture owns actual arena domain")
+	stage = Node2D.new()
+	world.add_child(stage)
+	actor = {"definition_id": "forge_colossus", "actor": {"runtime": runtime.snapshot(), "position": {"x": 400.0, "y": 184.0}, "room_motion": {"bounds": origin}}}
+	observation.native = {"actors": {"forge_projection": actor}}
+	suite.assert_true(world._build_scene(stage, observation, registry), "recorded Forge anvils and fixtures project privately")
+	suite.assert_equal(_sprites(stage, "forge_anvil.png").size(), 4, "Forge replay retains all four breakable anvils")
+	suite.assert_equal(_sprites(stage, "forge_vent.png").size(), 4, "Forge replay retains all four passive native vent fixtures")
+	var cooling := _sprites(stage, "forge_cooling.png")
+	suite.assert_equal(cooling.size(), 4, "Forge replay retains all four usable cooling pools")
+	if not cooling.is_empty():
+		var row: Dictionary = runtime.snapshot().forge_arena_state.cooling_pools[0]
+		suite.assert_true(cooling[0].hframes == 1 and cooling[0].position == Vector2(80 + row.position.x, 40 + row.position.y), "Forge fixture art retains whole raster and translated arena origin")
 	world.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame

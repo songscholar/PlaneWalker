@@ -9,6 +9,9 @@ const Definition := preload("res://scripts/enemies/launch/boss_definition.gd")
 const Seeds := preload("res://scripts/core/seed_service.gd")
 const Arena := preload("res://scripts/enemies/launch/boss_arena_runtime.gd")
 const ForestArena := preload("res://scripts/enemies/launch/forest_arena_runtime.gd")
+const ForestAuxiliary := preload("res://scripts/enemies/launch/forest_auxiliary_runtime.gd")
+const VoidArena := preload("res://scripts/enemies/launch/void_arena_runtime.gd")
+const ForgeArena := preload("res://scripts/enemies/launch/forge_arena_runtime.gd")
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control", "conversion"]
 const MECHANISM_FIELDS: Array[String] = ["phase_index", "hp_current", "minimum_hp", "phase_transition_until_frame", "enraged", "action_phase_index", "action_enraged", "delay_remaining_frames", "exposure_through_frame", "last_action_id", "consecutive_actions", "damage_claims", "health_claims", "stop_claims", "history", "rewind", "rewind_healing_spent", "weakpoint_claims"]
@@ -25,6 +28,9 @@ var _conversion: RefCounted = Conversion.new()
 var _arena_origin := {"x": 0.0, "y": 0.0}
 var _arena_trunk_origin := {"x": 320.0, "y": 144.0}
 var _arena: RefCounted
+var _forest_auxiliary: RefCounted
+var _void_arena: RefCounted
+var _forge_arena: RefCounted
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -32,6 +38,9 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_state.clear()
 	_action = null
 	_arena = null
+	_forest_auxiliary = null
+	_void_arena = null
+	_forge_arena = null
 	if not Contract.exact_fields(identity, IDENTITY_FIELDS) or not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("identity")
 	var parsed := Definition.new().configure_runtime_projection(definition)
@@ -46,10 +55,21 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		_arena = ForestArena.new()
 		if not _arena.configure(_definition, identity).ok or not _arena.bind_origin(_arena_origin):
 			return _failure("forest_arena_configuration")
+		_forest_auxiliary = ForestAuxiliary.new()
+		if not _forest_auxiliary.configure(_definition, identity).ok or not _forest_auxiliary.bind_origin(_arena_origin):
+			return _failure("forest_auxiliary_configuration")
+	elif _definition.id == "void_throne":
+		_void_arena = VoidArena.new()
+		if not _void_arena.configure(_definition, identity).ok or not _void_arena.bind_origin(_arena_origin):
+			return _failure("void_arena_configuration")
+	elif _definition.id == "forge_colossus":
+		_forge_arena = ForgeArena.new()
+		if not _forge_arena.configure(_definition, identity).ok or not _forge_arena.bind_origin(_arena_origin):
+			return _failure("forge_arena_configuration")
 	var action_identity := identity.duplicate(true)
 	action_identity.erase("seed")
 	var initial_action := Action.new()
-	var action_result := initial_action.configure({"id": _definition.id, "actor_kind": "boss", "actions": _definition.actions + _definition.time_responses}, action_identity)
+	var action_result := initial_action.configure({"id": _definition.id, "actor_kind": "boss", "actions": _actions_for_regime(0, false)}, action_identity)
 	if not action_result.ok:
 		_definition.clear()
 		return action_result
@@ -63,7 +83,11 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_state = {"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false, "mechanism_state": {"phase_index": 0, "hp_current": float(_definition.max_hp), "minimum_hp": float(_definition.max_hp), "phase_transition_until_frame": int(identity.runtime_frame) - 1, "enraged": false, "action_phase_index": 0, "action_enraged": false, "delay_remaining_frames": 0, "exposure_through_frame": int(identity.runtime_frame) - 1, "last_action_id": "", "consecutive_actions": 0, "damage_claims": [], "health_claims": [], "stop_claims": [], "history": [], "rewind": {}, "rewind_healing_spent": 0.0, "weakpoint_claims": []}}
 	_action = initial_action
 	if _arena != null:
-		_state.schema_version = 3 if _definition.id == "forest_heart" else 2
+		_state.schema_version = 4 if _definition.id == "forest_heart" else 2
+	if _void_arena != null:
+		_state.schema_version = 5
+	if _forge_arena != null:
+		_state.schema_version = 6
 	return {"ok": true, "snapshot": snapshot()}
 
 
@@ -71,6 +95,12 @@ func configure_arena_origin(origin: Dictionary, trunk_origin: Dictionary = {}) -
 	if not Contract.valid_point(origin) or not trunk_origin.is_empty() and not Contract.valid_point(trunk_origin):
 		return false
 	if _arena != null and _definition.id == "forest_heart" and not _arena.bind_origin(origin):
+		return false
+	if _forest_auxiliary != null and not _forest_auxiliary.bind_origin(origin):
+		return false
+	if _void_arena != null and not _void_arena.bind_origin(origin):
+		return false
+	if _forge_arena != null and not _forge_arena.bind_origin(origin):
 		return false
 	_arena_origin = origin.duplicate(true)
 	_arena_trunk_origin = {"x": float(origin.x) + 320.0, "y": float(origin.y) + 144.0} if trunk_origin.is_empty() else trunk_origin.duplicate(true)
@@ -83,6 +113,17 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 	if not _sync_action_regime():
 		return _failure("action_regime")
 	var requested_context := context.duplicate(true)
+	var seed_sac := {}
+	if _forest_auxiliary != null and action_id == "matriarch_void_seed":
+		seed_sac = _forest_auxiliary.select_seed_sac(context.get("target_position", {}))
+		if seed_sac.is_empty():
+			return _failure("seed_sacs_exhausted")
+		requested_context.target_position = seed_sac.position.duplicate(true)
+	elif _forest_auxiliary != null and action_id == "matriarch_void_cage":
+		if not Contract.valid_point(context.get("target_position")):
+			return _failure("cage_context")
+		requested_context.source_position = context.target_position.duplicate(true)
+		requested_context.target_position = {"x": float(context.target_position.x) + 1.0, "y": float(context.target_position.y)}
 	var rooted: bool = _definition.id == "forest_heart" and action_id == "matriarch_root_sweep"
 	if rooted:
 		if not Contract.exact_fields(context, Action.CONTEXT_FIELDS) or not Contract.valid_point(context.target_position):
@@ -96,6 +137,9 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 	if result.ok and rooted and not _arena.accept_sweep_commit(_action.snapshot()):
 		restore_snapshot(before)
 		return _failure("root_sweep_commit")
+	if result.ok and not seed_sac.is_empty() and not _forest_auxiliary.reserve_seed(int(_action.snapshot().geometry_generations[0]), str(seed_sac.id), int(_state.runtime_frame)).ok:
+		restore_snapshot(before)
+		return _failure("seed_commit")
 	if result.ok:
 		var mechanism: Dictionary = _state.mechanism_state
 		mechanism.consecutive_actions = int(mechanism.consecutive_actions) + 1 if mechanism.last_action_id == action_id else 1
@@ -138,6 +182,8 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 			var target := _vector(observations.target_position)
 			var speed := float(_definition.phases[int(_state.mechanism_state.phase_index)].move_speed) * float(control.movement_multiplier) / 60.0
 			displacement = source.direction_to(target) * minf(maxf(0.0, source.distance_to(target) - 40.0), speed)
+		elif _definition.id == "forge_colossus" and action.action_id == "forge_forged_cyclone" and Action.action_phase(frame - int(action.commit_frame) - int(action.paused_frames), definition) == "ACTIVE":
+			displacement = _vector(action.committed_aim) * float(_definition.mechanisms.cyclone_move_speed) * float(control.movement_multiplier) / 60.0
 	return {"ok": true, "displacement": _point(displacement), "action_paused": paused, "relocation": relocation}
 
 
@@ -155,9 +201,18 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		_control.restore_snapshot(before.control)
 		return result
 	_state.runtime_frame = frame
+	if _forge_arena != null and not _forge_arena.advance_frame(frame):
+		restore_snapshot(before)
+		return _failure("forge_arena_frame")
 	if _arena != null and not _arena.advance_frame(frame):
 		restore_snapshot(before)
 		return _failure("arena_frame")
+	if _forest_auxiliary != null and not _forest_auxiliary.advance_frame(frame):
+		restore_snapshot(before)
+		return _failure("forest_auxiliary_frame")
+	if _void_arena != null and not _void_arena.advance_frame(frame):
+		restore_snapshot(before)
+		return _failure("void_arena_frame")
 	if int(_state.mechanism_state.delay_remaining_frames) > 0 and _action.snapshot().phase in ["WARNING", "RECOVERY"] and not external_action_paused:
 		_state.mechanism_state.delay_remaining_frames -= 1
 	_state.mechanism_state.enraged = frame - int(_state.identity.runtime_frame) >= int(_definition.enrage.threshold_frames)
@@ -166,6 +221,11 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		return _failure("conversion_frame")
 	result["mechanism_requests"] = []
 	result["threat_facts"] = []
+	if _forest_auxiliary != null:
+		for request: Dictionary in _forest_auxiliary.cage_requests(frame):
+			request.hostile_source_id = str(_state.identity.hostile_source_id)
+			request.run_id = str(_state.identity.run_id)
+			result.mechanism_requests.append(request)
 	if _arena != null and _definition.id == "ruin_king":
 		for wall: Dictionary in _arena.snapshot().walls:
 			if wall.broken or frame != int(wall.spawn_frame) + int(wall.lifetime_frames):
@@ -173,6 +233,15 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 			result.mechanism_requests.append({"kind": "boss_wall_collapse", "run_id": str(_state.identity.run_id), "hostile_source_id": str(_state.identity.hostile_source_id), "runtime_frame": frame, "attack_generation": int(wall.attack_generation) + int(wall.slot), "wall_id": str(wall.id), "position": wall.position.duplicate(true), "parameters": {"warning_frames": int(_definition.mechanisms.wall_collapse_warning_frames), "radius": float(_definition.mechanisms.wall_collapse_radius_px), "damage": float(_definition.mechanisms.wall_collapse_damage) * (float(_definition.enrage.damage_multiplier) if _state.mechanism_state.enraged else 1.0) * float(controls.get("attack_multiplier", 1.0))}})
 	for hit: Dictionary in result.hit_facts:
 		hit.damage = float(hit.damage) * float(controls.get("attack_multiplier", 1.0))
+		if _forest_auxiliary != null and hit.action_id == "matriarch_void_seed":
+			var burst: Dictionary = _forest_auxiliary.seed_burst(int(hit.attack_generation), frame)
+			if not burst.ok:
+				restore_snapshot(before)
+				return _failure("seed_burst")
+			result.mechanism_requests.append({"kind": "forest_seed_pool", "run_id": str(_state.identity.run_id), "hostile_source_id": str(_state.identity.hostile_source_id), "runtime_frame": frame, "attack_generation": int(hit.attack_generation), "position": burst.position.duplicate(true), "parameters": {"radius": float(_definition.mechanisms.seed_pool_radius_px), "lifetime_frames": int(_definition.mechanisms.seed_pool_lifetime_frames), "tick_frames": int(_definition.mechanisms.seed_pool_tick_frames), "damage": float(_definition.mechanisms.seed_pool_tick_damage) * (float(_definition.enrage.damage_multiplier) if _state.mechanism_state.action_enraged else 1.0) * float(controls.get("attack_multiplier", 1.0))}})
+		if _forest_auxiliary != null and hit.action_id == "matriarch_enrage_dissolution" and int(_forest_auxiliary.snapshot().erosion_steps) < 2 and not _forest_auxiliary.accept_erosion(int(hit.attack_generation), frame).ok:
+			restore_snapshot(before)
+			return _failure("forest_erosion")
 		if _definition.id == "ruin_king" and hit.action_id == "guardian_enrage_collapse":
 			for cover: Dictionary in _arena.snapshot().covers:
 				if cover.broken:
@@ -270,6 +339,7 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 	var retired: Array = []
 	if phase > int(mechanism.phase_index):
 		_cancel_pending_rewind()
+		_cancel_pending_forest_seed(int(value.runtime_frame))
 		retired = _action.cancel(&"phase_transition").retired_generations
 		mechanism.phase_index = phase
 		mechanism.phase_transition_until_frame = int(value.runtime_frame) + 59
@@ -277,6 +347,12 @@ func accept_damage_fact(value: Dictionary) -> Dictionary:
 		if _definition.id == "forest_heart" and not _arena.accept_phase_retirement(int(value.runtime_frame)).ok:
 			restore_snapshot(before)
 			return _failure("forest_phase_retirement")
+		if _forge_arena != null and not _forge_arena.accept_phase(phase, int(value.runtime_frame)).ok:
+			restore_snapshot(before)
+			return _failure("forge_phase_retirement")
+		if _void_arena != null and not _void_arena.accept_phase(phase, int(value.runtime_frame)).ok:
+			restore_snapshot(before)
+			return _failure("void_phase_retirement")
 		if not _sync_action_regime():
 			restore_snapshot(before)
 			return _failure("action_regime")
@@ -340,7 +416,7 @@ func species_damage_taken_multiplier() -> float:
 
 
 func is_exposed() -> bool:
-	return not _state.is_empty() and not _state.terminal and (int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _conversion.is_character_exposed() or _definition.id == "forest_heart" and _arena.is_exposed())
+	return not _state.is_empty() and not _state.terminal and (int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _conversion.is_character_exposed() or _definition.id == "forest_heart" and _arena.is_exposed() or _void_arena != null and _void_arena.is_exposed())
 
 
 func apply_weapon_control_conversion(source_id: String, recovery_frames: int, exposure_frames: int, poise_damage: float) -> bool:
@@ -384,14 +460,107 @@ func snapshot() -> Dictionary:
 	value["conversion"] = _conversion.snapshot()
 	if _arena != null:
 		value["arena_state"] = _arena.snapshot()
+	if _forest_auxiliary != null:
+		value["forest_auxiliary"] = _forest_auxiliary.snapshot()
+	if _forge_arena != null:
+		value["forge_arena_state"] = _forge_arena.snapshot()
+	if _void_arena != null:
+		value["void_arena_state"] = _void_arena.snapshot()
 	return value
 
 
+func void_arena_snapshot() -> Dictionary:
+	return _void_arena.snapshot() if _void_arena != null else {}
+
+
+func accept_void_arena_damage(fact: Dictionary) -> Dictionary:
+	if _void_arena == null or _state.terminal:
+		return _failure("void_arena_unavailable")
+	var result: Dictionary = _void_arena.accept_damage_fact(fact)
+	if not result.ok:
+		return result
+	result["retired_generations"] = []
+	if result.interrupt_denial and _action.snapshot().action_id in ["voidking_existence_denial", "voidking_enrage_zero"] and _action.snapshot().phase in ["WARNING", "ACTIVE"]:
+		result.retired_generations = _action.cancel(&"plane_core_interrupt").retired_generations
+		_state.mechanism_state.delay_remaining_frames = 0
+	_conversion.synchronize_tail(_character_tail_must_wait())
+	return result
+
+
+func void_player_heal_pending() -> bool:
+	return _void_arena != null and _void_arena.player_heal_pending()
+
+
+func accept_void_player_heal(run_id: String, player_source_id: String, frame: int, maximum_hp: float, amount: float, alive: bool) -> bool:
+	return _void_arena != null and _void_arena.accept_player_heal(run_id, player_source_id, frame, maximum_hp, amount, alive).ok
+
+
 func arena_snapshot() -> Dictionary:
-	return _arena.snapshot() if _arena != null else {}
+	return _arena.snapshot() if _arena != null else _forge_arena.snapshot() if _forge_arena != null else {}
+
+
+func forge_arena_snapshot() -> Dictionary:
+	return _forge_arena.snapshot() if _forge_arena != null else {}
+
+
+func observe_forge_target(target_id: String, position: Dictionary) -> Dictionary:
+	return _forge_arena.observe_target(target_id, position) if _forge_arena != null else _failure("forge_arena")
+
+
+func accept_forge_burn_fact(fact: Dictionary) -> Dictionary:
+	return _forge_arena.accept_burn_fact(fact) if _forge_arena != null else _failure("forge_arena")
+
+
+func forge_burn_damage_requests(frame: int) -> Array[Dictionary]:
+	return _forge_arena.burn_damage_requests(frame) if _forge_arena != null else []
+
+
+func forest_auxiliary_snapshot() -> Dictionary:
+	return _forest_auxiliary.snapshot() if _forest_auxiliary != null else {}
+
+
+func forest_cage_requests(frame: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = _forest_auxiliary.cage_requests(frame) if _forest_auxiliary != null else []
+	for request: Dictionary in result:
+		request.hostile_source_id = str(_state.identity.hostile_source_id)
+		request.run_id = str(_state.identity.run_id)
+	return result
+
+
+func accept_forest_auxiliary_damage(fact: Dictionary) -> Dictionary:
+	if _forest_auxiliary == null:
+		return _failure("forest_unavailable")
+	var result: Dictionary = _forest_auxiliary.accept_damage_fact(fact)
+	if result.ok and result.cancelled_seed_generations.has(_action.snapshot().geometry_generations[0] if not _action.snapshot().geometry_generations.is_empty() else 0):
+		result["retired_generations"] = cancel_action(&"marked_sac_destroyed").retired_generations
+	return result
+
+
+func accept_forest_flower(id: String, target_id: String, frame: int, amount: float) -> bool:
+	return _forest_auxiliary != null and _forest_auxiliary.consume_flower(id, target_id, frame, amount).ok
+
+
+func accept_forest_cage(request: Dictionary) -> bool:
+	if _forest_auxiliary == null or _state.terminal or request.get("action_id") != "matriarch_void_cage" or request.get("runtime_frame") != _state.runtime_frame or request.get("attack_generation") != _action.snapshot().geometry_generations[0] or request.get("geometry") != _action.snapshot().committed_geometry:
+		return false
+	var geometry: Array = []
+	for fact: Dictionary in request.geometry:
+		geometry.append({"origin": fact.origin.duplicate(true), "aim_direction": fact.aim_direction.duplicate(true), "length": float(fact.length), "radius": float(fact.radius)})
+	var difficulty: float = float(_definition.get("difficulty", {}).get("damage_multiplier", 1.0))
+	return _forest_auxiliary.spawn_cage(int(request.attack_generation), int(request.runtime_frame), geometry, difficulty * daily_outgoing_multiplier() * (float(_definition.enrage.damage_multiplier) if _state.mechanism_state.action_enraged else 1.0)).ok
+
+
+func forest_drain_allowance(generation: int, actual_loss: float) -> float:
+	return _forest_auxiliary.drain_allowance(generation, actual_loss) if _forest_auxiliary != null else 0.0
+
+
+func accept_forest_drain(id: String, generation: int, index: int, frame: int, loss: float, healed: float) -> bool:
+	return _forest_auxiliary != null and _forest_auxiliary.accept_drain_receipt(id, generation, index, frame, loss, healed).ok
 
 
 func accept_arena_damage_fact(value: Dictionary) -> Dictionary:
+	if _forge_arena != null:
+		return _forge_arena.accept_damage_fact(value) if not _state.terminal else _failure("arena_unavailable")
 	if _arena == null or _state.terminal:
 		return _failure("arena_unavailable")
 	var result: Dictionary = _arena.accept_damage_fact(value)
@@ -427,6 +596,24 @@ func accept_arena_charge_impact(construct_id: String) -> Dictionary:
 
 
 func normalize_native_snapshot(value: Dictionary) -> Dictionary:
+	if _forge_arena != null:
+		if value.get("schema_version") == 6:
+			return value.duplicate(true) if can_restore_snapshot(value) else {}
+		if value.get("schema_version") != 1 or not Contract.exact_fields(value, STATE_FIELDS) or not value.get("mechanism_state") is Dictionary or not Contract.integer_in_range(value.mechanism_state.get("phase_index"), 0, 2) or not Contract.integer_in_range(value.get("runtime_frame"), int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.get("terminal")) != TYPE_BOOL:
+			return {}
+		var upgraded := value.duplicate(true)
+		upgraded.schema_version = 6
+		upgraded["forge_arena_state"] = _forge_arena.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index))
+		return upgraded if can_restore_snapshot(upgraded) else {}
+	if _void_arena != null:
+		if value.get("schema_version") == 5:
+			return value.duplicate(true) if can_restore_snapshot(value) else {}
+		if value.get("schema_version") != 1 or not Contract.exact_fields(value, STATE_FIELDS) or not value.get("mechanism_state") is Dictionary or not Contract.integer_in_range(value.mechanism_state.get("phase_index"), 0, 2) or not Contract.integer_in_range(value.get("runtime_frame"), int(_state.identity.runtime_frame), VoidArena.MAX_FRAME) or typeof(value.get("terminal")) != TYPE_BOOL:
+			return {}
+		var upgraded := value.duplicate(true)
+		upgraded.schema_version = 5
+		upgraded["void_arena_state"] = _void_arena.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index))
+		return upgraded if can_restore_snapshot(upgraded) else {}
 	if _arena == null:
 		return value.duplicate(true) if can_restore_snapshot(value) else {}
 	if _definition.id == "forest_heart":
@@ -451,12 +638,20 @@ func normalize_native_snapshot(value: Dictionary) -> Dictionary:
 
 
 func _normalize_forest_native_snapshot(value: Dictionary) -> Dictionary:
-	if value.get("schema_version") == 3:
+	if value.get("schema_version") == 4:
 		return value.duplicate(true) if can_restore_snapshot(value) else {}
+	if value.get("schema_version") == 3 and Contract.exact_fields(value, STATE_FIELDS + ["arena_state"]):
+		var upgraded := value.duplicate(true)
+		upgraded.schema_version = 4
+		upgraded.action = _normalize_forest_action(upgraded)
+		upgraded["forest_auxiliary"] = _forest_auxiliary.initial_at_frame(int(value.runtime_frame), bool(value.terminal), upgraded.action)
+		return upgraded if can_restore_snapshot(upgraded) else {}
 	if typeof(value.get("schema_version")) != TYPE_INT or value.get("schema_version") not in [1, 2] or not Contract.exact_fields(value, STATE_FIELDS + (["arena_state"] if value.schema_version == 2 else [])) or not value.get("mechanism_state") is Dictionary or not value.mechanism_state.get("phase_index") is int or not value.get("action") is Dictionary or typeof(value.get("runtime_frame")) != TYPE_INT or typeof(value.get("terminal")) != TYPE_BOOL:
 		return {}
 	var normalized := value.duplicate(true)
-	normalized.schema_version = 3
+	normalized.schema_version = 4
+	normalized.action = _normalize_forest_action(normalized)
+	normalized["forest_auxiliary"] = _forest_auxiliary.initial_at_frame(int(value.runtime_frame), bool(value.terminal), normalized.action)
 	if value.schema_version == 2:
 		if not value.arena_state is Dictionary or value.arena_state.get("schema_version") != 1:
 			return {}
@@ -466,14 +661,43 @@ func _normalize_forest_native_snapshot(value: Dictionary) -> Dictionary:
 	return normalized if can_restore_snapshot(normalized) else {}
 
 
+func _normalize_forest_action(value: Dictionary) -> Dictionary:
+	if not value.get("mechanism_state") is Dictionary or not value.get("action") is Dictionary or not Contract.integer_in_range(value.mechanism_state.get("action_phase_index"), 0, _definition.phases.size() - 1) or typeof(value.mechanism_state.get("action_enraged")) != TYPE_BOOL:
+		return {}
+	var action := _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged))
+	if action.can_restore_snapshot(value.action):
+		return value.action.duplicate(true)
+	var historical_actions := _actions_for_regime(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged))
+	for row: Dictionary in historical_actions:
+		if row.id == "matriarch_void_cage":
+			for canonical: Dictionary in _definition.actions:
+				if canonical.id == row.id:
+					row.geometry = canonical.geometry.duplicate(true)
+	var identity: Dictionary = _state.identity.duplicate(true)
+	identity.erase("seed")
+	var historical := Action.new()
+	if not historical.configure({"id": _definition.id, "actor_kind": "boss", "actions": historical_actions}, identity).ok or not historical.can_restore_snapshot(value.action):
+		return {}
+	var result: Dictionary = value.action.duplicate(true)
+	result.definition_digest = action.snapshot().definition_digest
+	return result if action.can_restore_snapshot(result) else {}
+
+
 func can_restore_native_snapshot(value: Dictionary) -> bool:
-	return can_restore_snapshot(value) and (_arena == null or _arena.can_restore_snapshot(value.arena_state, true))
+	return can_restore_snapshot(value) and (_arena == null or _arena.can_restore_snapshot(value.arena_state, true)) and (_forest_auxiliary == null or _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary, true)) and (_void_arena == null or _void_arena.can_restore_snapshot(value.void_arena_state, true)) and (_forge_arena == null or _forge_arena.can_restore_snapshot(value.forge_arena_state, true))
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS + ["arena_state"] if _arena != null else STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (3 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else [])
+	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (6 if _forge_arena != null else 5 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+		return false
+	if _forest_auxiliary != null and (not value.forest_auxiliary is Dictionary or not _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary) or value.forest_auxiliary.runtime_frame != value.runtime_frame or value.forest_auxiliary.terminal != value.terminal):
 		return false
 	if _arena != null and (not value.arena_state is Dictionary or not _arena.can_restore_snapshot(value.arena_state) or value.arena_state.runtime_frame != value.runtime_frame or value.arena_state.terminal != value.terminal):
+		return false
+	if _void_arena != null and (not value.void_arena_state is Dictionary or not _void_arena.can_restore_snapshot(value.void_arena_state) or value.void_arena_state.runtime_frame != value.runtime_frame or value.void_arena_state.terminal != value.terminal):
+		return false
+	if _forge_arena != null and (not value.forge_arena_state is Dictionary or not _forge_arena.can_restore_snapshot(value.forge_arena_state) or value.forge_arena_state.runtime_frame != value.runtime_frame or value.forge_arena_state.terminal != value.terminal):
 		return false
 	if not value.mechanism_state is Dictionary or not Contract.exact_fields(value.mechanism_state, MECHANISM_FIELDS) or not value.action is Dictionary or not value.control is Dictionary or not value.conversion is Dictionary or not _conversion.can_restore_snapshot(value.conversion):
 		return false
@@ -482,6 +706,10 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 			if claim.attack_generation < int(_state.identity.next_generation_floor) or not Contract.integer_in_range(value.action.get("next_generation_floor"), 1, Controls.MAX_COUNTER) or claim.attack_generation + 1 >= int(value.action.next_generation_floor):
 				return false
 	var mechanism: Dictionary = value.mechanism_state
+	if _void_arena != null and value.void_arena_state.phase_index != mechanism.phase_index:
+		return false
+	if _forge_arena != null and value.forge_arena_state.phase_index != mechanism.phase_index:
+		return false
 	if _definition.id == "forest_heart" and (value.arena_state.phase_retirement.is_empty() != (mechanism.phase_index == 0)):
 		return false
 	if not Contract.integer_in_range(mechanism.phase_index, 0, _definition.phases.size() - 1) or not Contract.integer_in_range(mechanism.action_phase_index, 0, int(mechanism.phase_index)) or not Contract.number_in_range(mechanism.hp_current, 0.0, _definition.max_hp) or not Contract.number_in_range(mechanism.minimum_hp, 0.0, float(mechanism.hp_current)) or int(mechanism.phase_index) != _phase_for_hp(float(mechanism.minimum_hp)):
@@ -524,7 +752,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if not value.conversion.claims.is_empty():
 		var root_exposed: bool = _definition.id == "forest_heart" and not value.terminal and int(value.runtime_frame) <= int(value.arena_state.exposure_through_frame)
-		var must_wait: bool = value.action.phase == "RECOVERY" or int(value.runtime_frame) <= int(mechanism.exposure_through_frame) or root_exposed
+		var core_exposed: bool = _void_arena != null and not value.terminal and int(value.runtime_frame) <= int(value.void_arena_state.exposure_through_frame)
+		var must_wait: bool = value.action.phase == "RECOVERY" or int(value.runtime_frame) <= int(mechanism.exposure_through_frame) or root_exposed or core_exposed
 		if (value.conversion.claims[0].state == "pending") != must_wait:
 			return false
 	return not value.terminal or value.action.phase == "IDLE" and int(mechanism.delay_remaining_frames) == 0 and value.conversion.claims.is_empty() and value.conversion.weapon_sources.is_empty()
@@ -538,12 +767,21 @@ func restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if _arena != null and not _arena.restore_snapshot(value.arena_state):
 		return false
+	if _forest_auxiliary != null and not _forest_auxiliary.restore_snapshot(value.forest_auxiliary):
+		return false
+	if _void_arena != null and not _void_arena.restore_snapshot(value.void_arena_state):
+		return false
+	if _forge_arena != null and not _forge_arena.restore_snapshot(value.forge_arena_state):
+		return false
 	_action = action
 	_state = value.duplicate(true)
 	_state.erase("action")
 	_state.erase("control")
 	_state.erase("conversion")
 	_state.erase("arena_state")
+	_state.erase("forest_auxiliary")
+	_state.erase("void_arena_state")
+	_state.erase("forge_arena_state")
 	return true
 
 
@@ -557,6 +795,12 @@ func cancel(reason: StringName = &"cancelled") -> Dictionary:
 	_state.terminal = true
 	if _arena != null:
 		_arena.retire()
+	if _forest_auxiliary != null:
+		_forest_auxiliary.retire()
+	if _void_arena != null:
+		_void_arena.retire()
+	if _forge_arena != null:
+		_forge_arena.retire()
 	_state.mechanism_state.delay_remaining_frames = 0
 	return result
 
@@ -566,9 +810,20 @@ func cancel_action(reason: StringName = &"interrupted") -> Dictionary:
 		return _failure("action_unavailable")
 	_state.mechanism_state.delay_remaining_frames = 0
 	_cancel_pending_rewind()
+	_cancel_pending_forest_seed(int(_state.runtime_frame))
 	var result: Dictionary = _action.cancel(reason)
 	_conversion.synchronize_tail(_character_tail_must_wait())
 	return result
+
+
+func _cancel_pending_forest_seed(frame: int) -> void:
+	if _forest_auxiliary == null or _action.snapshot().action_id != "matriarch_void_seed" or _action.snapshot().geometry_generations.is_empty():
+		return
+	var generation := int(_action.snapshot().geometry_generations[0])
+	var state: Dictionary = _forest_auxiliary.snapshot()
+	for seed: Dictionary in state.seeds:
+		if seed.generation == generation and seed.burst_frame == -1 and seed.cancelled_frame == -1:
+			_forest_auxiliary.cancel_seed(generation, maxi(frame, int(state.events.back().frame)))
 
 
 func _valid_temporal_state(mechanism: Dictionary, value: Dictionary) -> bool:
@@ -639,6 +894,8 @@ func _actions_for_regime(phase_index: int, enraged: bool) -> Array:
 	var actions: Array = (_definition.actions + _definition.time_responses).duplicate(true)
 	var overrides: Dictionary = _definition.mechanisms.phase_damage_overrides.get(_definition.phases[phase_index].id, {})
 	for action: Dictionary in actions:
+		if action.id == "matriarch_void_cage":
+			action.geometry = [{"shape": "line", "origin_offset": {"x": -24.0, "y": -24.0}, "aim_offset_degrees": 90.0, "radius": 5.0, "length": 48.0}, {"shape": "line", "origin_offset": {"x": 24.0, "y": -24.0}, "aim_offset_degrees": 90.0, "radius": 5.0, "length": 48.0}, {"shape": "line", "origin_offset": {"x": -24.0, "y": 24.0}, "aim_offset_degrees": 0.0, "radius": 5.0, "length": 16.0}]
 		if enraged:
 			action.cooldown_frames = ceili(int(action.cooldown_frames) * float(_definition.enrage.cooldown_multiplier))
 		for hit: Dictionary in action.hit_schedule:
@@ -703,7 +960,7 @@ func _delays_action(frame: int) -> bool:
 
 
 func _character_tail_must_wait() -> bool:
-	return not _state.is_empty() and (_action.snapshot().phase == "RECOVERY" or int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _definition.id == "forest_heart" and _arena.is_exposed())
+	return not _state.is_empty() and (_action.snapshot().phase == "RECOVERY" or int(_state.runtime_frame) <= int(_state.mechanism_state.exposure_through_frame) or _definition.id == "forest_heart" and _arena.is_exposed() or _void_arena != null and _void_arena.is_exposed())
 
 
 func _controls_for_frame(frame: int) -> Dictionary:

@@ -150,6 +150,8 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 		if actor.prepared_launch_frame_batch() != wrapper.batch or wrapper.batch.get("runtime_frame", -1) != context.runtime_frame or not wrapper.batch.get("effect_requests") is Array or not wrapper.batch.get("hit_facts") is Array or not wrapper.batch.get("mechanism_requests", []) is Array:
 			return _failure("unsealed_batch")
 		var definition: Dictionary = actor.get("_launch_definition")
+		if definition.id == "forge_colossus" and actor.prepared_launch_arena_payloads_retired():
+			next.zones = next.zones.filter(func(row: Dictionary): return row.source_id != wrapper.hostile_source_id)
 		for request: Dictionary in wrapper.batch.effect_requests:
 			if request.handler_id in ["melee", "charge", "projectile_volley", "blink"]:
 				continue
@@ -171,7 +173,7 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 						return healing
 					if not healing.request.is_empty():
 						health_requests.append(healing.request)
-				"zone":
+				"zone", "pull_zone":
 					if not _reserve_zones(next, request, definition, action, zone_capacity, _zone_attack_multiplier(wrapper.batch, action), int(actor.get("_launch_identity").seed)):
 						return _failure("zone_reservation")
 				"wall":
@@ -179,6 +181,9 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 						return _failure("unsealed_native_wall")
 				_: return _failure("unimplemented_semantic_handler")
 		for hit: Dictionary in wrapper.batch.hit_facts:
+			if definition.id == "forge_colossus" and hit.hit_index == 0 and hit.action_id in ["forge_hammer_slam", "forge_furnace_spray", "forge_eruption", "forge_enrage_ultimate"]:
+				if not _reserve_forge_ground(next, hit, definition, zone_capacity):
+					return _failure("forge_ground_reservation")
 			if hit.handler_id != "blink":
 				continue
 			if not targets.has(hit.target_id) or hit.geometry.size() != 1:
@@ -187,7 +192,10 @@ func prepare_effects(batches: Array, context: Dictionary, foreign_active_zones: 
 				damages.append({"payload_id": _id([wrapper.hostile_source_id, hit.attack_generation, "blink"]), "hostile_source_id": wrapper.hostile_source_id, "attack_generation": int(hit.attack_generation), "hit_index": int(hit.hit_index), "target_id": hit.target_id, "runtime_frame": int(context.runtime_frame), "damage": float(hit.damage), "damage_type": hit.damage_type})
 		for request: Dictionary in wrapper.batch.get("mechanism_requests", []):
 			match request.get("kind", ""):
-				"consume_actor", "death_pool", "boss_aftershock": continue
+				"consume_actor", "death_pool", "boss_aftershock", "forest_flower", "void_p3_player_heal", "forge_burn_tick": continue
+				"forest_seed_pool", "forest_cage_pulse", "forest_cage_collapse":
+					if not actor.has_method("prepared_launch_forest_mechanism_allowed") or not actor.prepared_launch_forest_mechanism_allowed(request) or not _reserve_forest_effect(next, request, zone_capacity):
+						return _failure("forest_native_mechanism")
 				"restore_hp", "boss_self_rewind":
 					if not Contract.number_in_range(request.get("amount"), 0.0, 1000000.0) or request.hostile_source_id != wrapper.hostile_source_id or request.runtime_frame != context.runtime_frame:
 						return _failure("health_mechanism")
@@ -350,7 +358,9 @@ func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionar
 	for index: int in range(request.geometry.size()):
 		var fact: Dictionary = request.geometry[index]
 		var damaging: Dictionary = action.hit_schedule[mini(index, action.hit_schedule.size() - 1)] if not action.hit_schedule.is_empty() else {"damage": 0.0, "damage_type": "time"}
-		var row := _zone(request, fact, index, float(damaging.damage), str(damaging.damage_type), 0, int(request.parameters.lifetime_frames), int(request.parameters.tick_interval_frames), float(request.parameters.slow_multiplier), int(request.parameters.slow_duration_frames))
+		var row := _zone(request, fact, index, float(damaging.damage), str(damaging.damage_type), 0, int(request.parameters.lifetime_frames), int(request.parameters.tick_interval_frames), float(request.parameters.slow_multiplier), int(request.parameters.get("slow_duration_frames", 0)))
+		if request.action_id == "forge_furnace_devour":
+			row["pull_parameters"] = {"speed": float(request.parameters.pull_px_per_second), "inner_radius": float(definition.mechanisms.devour_inner_radius_px), "inner_damage": float(definition.mechanisms.devour_inner_damage)}
 		row.initial_damage *= attack_multiplier
 		if definition.actor_kind != "boss":
 			row.damage = 0.0
@@ -377,6 +387,30 @@ func _reserve_zones(next: Dictionary, request: Dictionary, definition: Dictionar
 	return true
 
 
+func _reserve_forge_ground(next: Dictionary, hit: Dictionary, definition: Dictionary, capacity: int) -> bool:
+	var mechanisms: Dictionary = definition.mechanisms
+	var lifetime := int(mechanisms.slam_pool_lifetime_frames)
+	match hit.action_id:
+		"forge_furnace_spray": lifetime = int(mechanisms.spray_pool_lifetime_frames)
+		"forge_eruption": lifetime = int(mechanisms.eruption_pool_lifetime_frames)
+		"forge_enrage_ultimate": lifetime = int(mechanisms.enrage_pool_lifetime_frames)
+	if next.zones.size() + hit.geometry.size() > MAX_RESERVATIONS:
+		return false
+	for index: int in range(hit.geometry.size()):
+		var geometry: Dictionary = hit.geometry[index].duplicate(true)
+		if hit.action_id == "forge_hammer_slam":
+			geometry.radius = float(mechanisms.slam_pool_radius_px)
+		var request := hit.duplicate(true)
+		request.action_id = hit.action_id + ".ground_pool"
+		var row := _zone(request, geometry, index, float(mechanisms.slam_pool_tick_damage), "fire", 0, lifetime, int(mechanisms.slam_pool_tick_frames), 1.0, 0)
+		row.initial_damage = 0.0
+		if _active_zone_count(next) >= capacity:
+			row.warning_frames = 30
+			_make_pending(row)
+		next.zones.append(row)
+	return true
+
+
 func _reserve_explosion(next: Dictionary, request: Dictionary, capacity: int, action_id: String = "forge_titan.overheat_explosion", damage_type: String = "fire") -> bool:
 	if next.zones.size() >= MAX_RESERVATIONS or not Contract.valid_point(request.get("position")) or not request.get("parameters") is Dictionary or not Contract.exact_fields(request.parameters, ["warning_frames", "damage", "radius"]) or not Contract.integer_in_range(request.parameters.warning_frames, 23, 600) or not Contract.number_in_range(request.parameters.damage, 0.0, 600.0) or not Contract.number_in_range(request.parameters.radius, 1.0, 320.0):
 		return false
@@ -387,6 +421,30 @@ func _reserve_explosion(next: Dictionary, request: Dictionary, capacity: int, ac
 	if _active_zone_count(next) >= capacity:
 		_make_pending(row)
 	next.zones.append(row)
+	return true
+
+
+func _reserve_forest_effect(next: Dictionary, request: Dictionary, capacity: int) -> bool:
+	var action_id := "forest_heart.%s.%s.%d" % [str(request.kind), str(request.get("construct_id", "pool")).sha256_text().substr(0, 16), int(request.get("hit_index", 0))]
+	var claim := JSON.stringify([request.hostile_source_id, request.attack_generation, action_id]).sha256_text()
+	if next.claims.has(claim) or next.claims.size() >= MAX_CLAIMS:
+		return false
+	if request.kind != "forest_seed_pool":
+		if not _reserve_explosion(next, request, capacity, action_id, "void"):
+			return false
+	else:
+		if next.zones.size() >= MAX_RESERVATIONS or not Contract.valid_point(request.get("position")) or not request.get("parameters") is Dictionary or not Contract.exact_fields(request.parameters, ["radius", "lifetime_frames", "tick_frames", "damage"]) or request.parameters.radius != 29.0 or request.parameters.lifetime_frames != 480 or request.parameters.tick_frames != 60 or not Contract.number_in_range(request.parameters.damage, 0.0, 600.0):
+			return false
+		var source := request.duplicate(true)
+		source["action_id"] = action_id
+		var fact := {"hostile_source_id": request.hostile_source_id, "attack_generation": request.attack_generation, "shape": "circle", "origin": request.position.duplicate(true), "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": request.position.duplicate(true), "summon_slots": [], "radius": 29.0, "length": 0.0, "active_from_frame": next.runtime_frame, "active_through_frame": int(next.runtime_frame) + 479}
+		var row := _zone(source, fact, 0, float(request.parameters.damage), "void", 0, 480, 60, 1.0, 0)
+		# A delayed pool must announce its new activation after capacity becomes free.
+		if _active_zone_count(next) >= capacity:
+			row.warning_frames = 40
+			_make_pending(row)
+		next.zones.append(row)
+	next.claims.append(claim)
 	return true
 
 
@@ -481,10 +539,17 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 					var ally_control: bool = row.enemy_only_freeze or row.action_id in ["chrono_storm_elemental.time_storm", "chrono_storm_elemental.death_pulse"]
 					if health.dead or (id == row.source_id and row.owner_immunity) or (actor_target and not row.ally_damage and not ally_control) or not _contains(row.geometry, _predicted_position(target, next.runtime_frame)):
 						continue
+					if row.action_id == "forge_enrage_ultimate.ground_pool" and actors.has(row.source_id) and actors[row.source_id].forge_cooling_corridor_contains(_predicted_position(target, next.runtime_frame)):
+						continue
 					var initial: bool = int(next.runtime_frame) == int(row.active_frame)
 					var damage: float = float(row.initial_damage) if initial else float(row.damage)
 					if tick and damage > 0.0 and (not actor_target or row.ally_damage) and (not row.enemy_only_freeze or not actor_target):
 						damages.append({"payload_id": row.id, "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": (int(next.runtime_frame) - int(row.active_frame)) / int(row.tick_frames), "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": damage, "damage_type": row.damage_type if initial else row.tick_damage_type})
+					if row.has("pull_parameters") and not actor_target and _vector(row.geometry.origin).distance_to(_predicted_position(target, next.runtime_frame)) <= float(row.pull_parameters.inner_radius):
+						var inner_claim := JSON.stringify([row.id, id, "inner"]).sha256_text()
+						if not next.claims.has(inner_claim) and next.claims.size() < MAX_CLAIMS:
+							next.claims.append(inner_claim)
+							damages.append({"payload_id": row.id + ":inner", "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": 63, "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": float(row.pull_parameters.inner_damage), "damage_type": "fire"})
 					if movement.slow_multiplier < 1.0 or movement.speed_multiplier > 1.0 or row.enemy_only_freeze:
 						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + (0 if row.has("storm_pattern") else maxi(0, int(row.slow_frames))), "slow_multiplier": float(movement.slow_multiplier), "speed_multiplier": float(movement.speed_multiplier), "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
 	next.zones = retained
@@ -514,6 +579,16 @@ func _apply_statuses(value: Dictionary, targets: Dictionary) -> bool:
 		if target.has_method("apply_floor_rule_modifier"):
 			if not target.apply_floor_rule_modifier(&"launch_semantic", &"movement", &"apply" if slow != 1.0 or speed != 1.0 else &"remove", {"movement_multiplier": maxf(0.4, slow * speed)} if slow != 1.0 or speed != 1.0 else {}):
 				return false
+			var pull := Vector2.ZERO
+			for zone: Dictionary in value.get("zones", []):
+				if zone.has("pull_parameters") and zone.phase == "ACTIVE" and _contains(zone.geometry, target.global_position):
+					pull += target.global_position.direction_to(_vector(zone.geometry.origin)) * float(zone.pull_parameters.speed)
+			pull = pull.limit_length(32.0)
+			if not target.apply_floor_rule_modifier(&"launch_forge_pull", &"pull", &"remove" if pull.is_zero_approx() else &"apply", {} if pull.is_zero_approx() else {"pull_x": pull.normalized().x, "pull_y": pull.normalized().y, "pull_speed": pull.length()}):
+				return false
+			for owner: Variant in targets.values():
+				if _native_actor(owner) and owner.get("_launch_definition").id == "forge_colossus" and not owner.sync_native_forge_modifier(target, id, not value.has("zones")):
+					return false
 		elif _native_actor(target):
 			var runtime: RefCounted = target.get("_launch_runtime")
 			for suffix: String in ["slow", "speed", "attack_buff", "attack_debuff", "freeze"]:
@@ -638,6 +713,10 @@ func _record_histories(next: Dictionary, actors: Dictionary) -> void:
 		next.histories[id] = history
 
 
+static func _vector(point: Dictionary) -> Vector2:
+	return Vector2(float(point.x), float(point.y))
+
+
 func _contains(fact: Dictionary, position: Vector2) -> bool:
 	var native := Actions.native_threat_fact(fact)
 	return not native.is_empty() and _geometry._distance_to_fact(position, native) <= 0.0
@@ -660,7 +739,9 @@ static func _upsert_status(next: Dictionary, value: Dictionary) -> void:
 
 
 static func _valid_zone(row: Dictionary, frame: int) -> bool:
-	var fields: Array = ZONE_FIELDS + ["storm_pattern"] if row.has("storm_pattern") else ZONE_FIELDS
+	var fields: Array = ZONE_FIELDS + (["storm_pattern"] if row.has("storm_pattern") else []) + (["pull_parameters"] if row.has("pull_parameters") else [])
+	if row.has("pull_parameters") and (row.action_id != "forge_furnace_devour" or not row.pull_parameters is Dictionary or not Contract.exact_fields(row.pull_parameters, ["speed", "inner_radius", "inner_damage"]) or row.pull_parameters.speed != 32.0 or row.pull_parameters.inner_radius != 16.0 or row.pull_parameters.inner_damage != 40.0):
+		return false
 	if not Contract.exact_fields(row, fields) or row.has("storm_pattern") and (row.action_id != "chrono_storm_elemental.time_storm" or not StormPattern.valid(row.storm_pattern)) or not _stable(row.id) or not _stable(row.source_id) or not Contract.valid_id(row.action_id) or not Contract.integer_in_range(row.generation, 1, MAX_FRAME) or not Contract.integer_in_range(row.hit_index, 0, 63) or not _frame(row.reserved_frame) or row.reserved_frame > frame or row.phase not in ["PENDING", "WARNING", "ACTIVE"] or not row.geometry is Dictionary or Actions.native_threat_fact(row.geometry).is_empty():
 		return false
 	if not Contract.number_in_range(row.initial_damage, 0.0, 600.0) or not Contract.number_in_range(row.damage, 0.0, 600.0) or row.damage_type not in Contract.DAMAGE_TYPES or row.tick_damage_type not in Contract.DAMAGE_TYPES or not Contract.integer_in_range(row.tick_frames, 1, 600) or not Contract.integer_in_range(row.warning_frames, 0, 600) or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.number_in_range(row.slow_multiplier, 0.4, 1.0) or not Contract.integer_in_range(row.slow_frames, 0, 600) or not Contract.integer_in_range(row.owner_zone_cap, 1, MAX_ZONES) or typeof(row.owner_immunity) != TYPE_BOOL or typeof(row.enemy_only_freeze) != TYPE_BOOL or typeof(row.ally_damage) != TYPE_BOOL:

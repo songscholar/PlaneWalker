@@ -193,7 +193,7 @@ func _test_weapons() -> void:
 		match weapon:
 			"sword":
 				payload = Hitbox.new()
-				add_child(payload)
+				player.get_node("SwordWeapon").add_child(payload)
 				payload.activate(_damage(player, 14))
 			"gun":
 				payload = GunScene.instantiate()

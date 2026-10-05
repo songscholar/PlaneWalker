@@ -4,8 +4,11 @@ extends "res://scripts/enemies/launch/launch_hostile_actor.gd"
 const BossRuntime := preload("res://scripts/enemies/launch/launch_boss_runtime.gd")
 const BossStatus := preload("res://scripts/enemies/launch/boss_elemental_status_runtime.gd")
 const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
+const ForgeFixture := preload("res://scripts/enemies/launch/launch_forge_arena_fixture.gd")
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const ForestRoot := preload("res://scripts/enemies/launch/launch_forest_root.gd")
+const VoidConstruct := preload("res://scripts/enemies/launch/launch_void_arena_construct.gd")
+const ForestAuxiliaryConstruct := preload("res://scripts/enemies/launch/launch_forest_auxiliary_construct.gd")
 const RootTelegraph := preload("res://scripts/fx/combat_telegraph_2d.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 var _exposure_replay_authority: RefCounted
@@ -33,6 +36,29 @@ func _ready() -> void:
 func _native_geometry_matches_definition() -> bool:
 	if not super._native_geometry_matches_definition():
 		return false
+	if _launch_definition.get("id", "") == "forge_colossus":
+		var state := native_forge_arena_snapshot()
+		var arena := get_node_or_null("ArenaConstructs")
+		var fixtures := get_node_or_null("ForgeFixtures")
+		if state.is_empty() or state.arena_origin != _point(_native_arena_origin()) or arena == null or fixtures == null or arena.get_child_count() != 4 or fixtures.get_child_count() != 8:
+			return false
+		for index: int in range(4):
+			if not arena.get_child(index) is Construct or not arena.get_child(index).native_geometry_matches(state.covers[index], _native_arena_origin(), bool(state.terminal)):
+				return false
+		var rows: Array = state.vents + state.cooling_pools
+		for index: int in range(8):
+			if not fixtures.get_child(index) is ForgeFixture or not fixtures.get_child(index).native_geometry_matches(rows[index], _native_arena_origin(), bool(state.terminal)):
+				return false
+	if _launch_definition.get("id", "") == "void_throne":
+		var holder := get_node_or_null("VoidArenaConstructs")
+		var state := native_void_arena_snapshot()
+		if holder == null or state.is_empty() or state.arena_origin != _point(_native_arena_origin()) or holder.get_child_count() != state.pillars.size() + state.cores.size():
+			return false
+		var rows: Array = state.pillars + state.cores
+		for index: int in range(rows.size()):
+			var construct := holder.get_child(index)
+			if not construct is VoidConstruct or not construct.native_geometry_matches(rows[index], _native_arena_origin(), bool(state.terminal)):
+				return false
 	if _launch_definition.get("id", "") == "forest_heart":
 		var arena := get_node_or_null("ArenaConstructs")
 		var state := native_arena_snapshot()
@@ -41,6 +67,13 @@ func _native_geometry_matches_definition() -> bool:
 		for index: int in range(6):
 			var root := arena.get_child(index)
 			if not root is ForestRoot or not root.native_geometry_matches(state.roots[index], _native_arena_origin(), bool(state.terminal)):
+				return false
+		var auxiliary := get_node_or_null("AuxiliaryConstructs")
+		var rows := _forest_construct_rows()
+		if auxiliary == null or auxiliary.get_child_count() != rows.size():
+			return false
+		for index: int in range(rows.size()):
+			if not auxiliary.get_child(index) is ForestAuxiliaryConstruct or not auxiliary.get_child(index).native_geometry_matches(rows[index].value, _native_arena_origin(), bool(state.terminal)):
 				return false
 	if _launch_definition.get("id", "") == "ruin_king":
 		var arena := get_node_or_null("ArenaConstructs")
@@ -74,9 +107,19 @@ func _restore_actor_state(value: Dictionary) -> bool:
 
 
 func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
-	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king", "forest_heart"] and not _native_geometry_matches_definition():
+	if _launch_definition.get("id", "") in ["time_sovereign", "ruin_king", "forest_heart", "void_throne", "forge_colossus"] and not _native_geometry_matches_definition():
 		return _launch_failure("boss_native_geometry")
 	var result := super.prepare_launch_frame(frame, observations)
+	if result.ok and _launch_definition.get("id", "") == "forge_colossus":
+		return _prepare_native_forge_frame(result, observations)
+	if result.ok and _launch_definition.get("id", "") == "forest_heart":
+		return _prepare_native_forest_frame(result, observations)
+	if result.ok and _launch_definition.get("id", "") == "void_throne":
+		if result.ticket.after.runtime.void_arena_state.phase_index == 2 and result.ticket.after.runtime.void_arena_state.player_heal.is_empty() and not result.ticket.after.runtime.terminal:
+			result.ticket.batch.mechanism_requests.append({"kind": "void_p3_player_heal", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": frame, "attack_generation": int(_launch_identity.next_generation_floor), "hit_index": 63, "target_id": str(observations.target_id), "fraction": 0.3})
+		result.batch = result.ticket.batch.duplicate(true)
+		_prepared_launch_frame = result.ticket.duplicate(true)
+		return result
 	if not result.ok or _launch_definition.get("id", "") != "ruin_king":
 		return result
 	for request: Dictionary in result.ticket.batch.effect_requests:
@@ -127,6 +170,16 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 
 
 func _native_action_activation_blocked(frame: int, observations: Dictionary) -> bool:
+	if _launch_definition.get("id", "") == "forest_heart":
+		var forest_action: Dictionary = _launch_runtime.snapshot().action
+		if forest_action.phase != "WARNING":
+			return false
+		if forest_action.action_id == "matriarch_void_cage" and frame - int(forest_action.commit_frame) - int(forest_action.paused_frames) >= 70:
+			return not _forest_cage_placement_valid(forest_action)
+		if forest_action.action_id == "matriarch_enrage_dissolution" and frame - int(forest_action.commit_frame) - int(forest_action.paused_frames) >= 80:
+			var inset := mini(2, int(_launch_runtime.forest_auxiliary_snapshot().erosion_steps) + 1) * 16.0
+			return not _motion_bounds().grow(-inset - 14.0).has_point(_vector(observations.target_position))
+		return false
 	if _launch_definition.get("id", "") != "ruin_king":
 		return false
 	var action: Dictionary = _launch_runtime.snapshot().action
@@ -189,6 +242,7 @@ func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Diction
 
 func _refresh_control_visual() -> void:
 	_refresh_native_arena()
+	_refresh_native_void()
 	var state: Dictionary = _launch_runtime.snapshot()
 	_refresh_root_sweep_telegraph(state)
 	var watch := get_node_or_null("WatchHurtbox") as Area2D
@@ -232,6 +286,81 @@ func native_arena_snapshot() -> Dictionary:
 	return _launch_runtime.arena_snapshot()
 
 
+func native_void_arena_snapshot() -> Dictionary:
+	return _launch_runtime.void_arena_snapshot()
+
+
+func _refresh_native_void() -> void:
+	var state := native_void_arena_snapshot()
+	if state.is_empty():
+		return
+	var holder := get_node_or_null("VoidArenaConstructs")
+	if holder == null:
+		holder = Node2D.new()
+		holder.name = "VoidArenaConstructs"
+		add_child(holder)
+	var rows: Array = state.pillars + state.cores
+	var replace := false
+	for index: int in range(mini(rows.size(), holder.get_child_count())):
+		if holder.get_child(index).native_construct_snapshot().get("id") != rows[index].id:
+			replace = true
+	while holder.get_child_count() > (0 if replace else rows.size()):
+		var surplus := holder.get_child(holder.get_child_count() - 1)
+		holder.remove_child(surplus)
+		surplus.queue_free()
+	for index: int in range(rows.size()):
+		var construct: Node2D
+		if index >= holder.get_child_count():
+			construct = VoidConstruct.new()
+			construct.name = "VoidConstruct%d" % index
+			construct.configure(self, str(rows[index].id))
+			holder.add_child(construct)
+		else:
+			construct = holder.get_child(index)
+		construct.present(rows[index], _native_arena_origin(), bool(state.terminal))
+
+
+func receive_native_void_construct_hit(id: String, damage_info: RefCounted) -> float:
+	if damage_info == null or health == null or health.dead or not _prepared_launch_frame.is_empty() or native_void_arena_snapshot().is_empty() or not _native_geometry_matches_definition():
+		return 0.0
+	var attacker: Node = damage_info.attacker
+	if not attacker is PlayerController or not attacker.authenticates_native_damage_run(damage_info, self, StringName(str(_launch_identity.run_id))):
+		return 0.0
+	var amount: float = Calculator.critical_amount(damage_info, float(damage_info.amount))
+	if not is_finite(amount) or amount <= 0.0:
+		return 0.0
+	var frame: int = health.frame_signal_transaction_runtime_frame()
+	if frame < 0:
+		frame = _hostile_runtime_frame()
+	var fact_id := (_damage_identity(damage_info) + ":" + id).sha256_text()
+	var preview: RefCounted = _create_launch_runtime()
+	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(_launch_runtime.snapshot()):
+		return 0.0
+	var result: Dictionary = preview.accept_void_arena_damage({"fact_id": fact_id, "run_id": str(_launch_identity.run_id), "owner_source_id": str(hostile_source_id), "construct_id": id, "runtime_frame": frame, "amount": amount})
+	if not result.ok:
+		return 0.0
+	var body_loss := minf(float(health.current_hp), float(result.body_damage))
+	if body_loss > 0.0 and not preview.accept_damage_fact({"fact_id": (fact_id + ":body").sha256_text(), "runtime_frame": frame, "target_source_id": str(hostile_source_id), "amount": body_loss, "hp_after": float(health.current_hp) - body_loss}).ok:
+		return 0.0
+	if not _launch_runtime.restore_snapshot(preview.snapshot()):
+		return 0.0
+	if body_loss > 0.0:
+		health.lose_health(body_loss, attacker)
+	if _hostile_threat_registry != null:
+		for generation: int in result.retired_generations:
+			_hostile_threat_registry.retire(hostile_source_id, generation)
+	_refresh_control_visual()
+	return float(result.amount)
+
+
+func prepared_launch_void_heal_allowed(request: Dictionary) -> bool:
+	return not _prepared_launch_frame.is_empty() and _launch_definition.get("id") == "void_throne" and _prepared_launch_frame.batch.mechanism_requests.has(request) and request.get("kind") == "void_p3_player_heal" and not _prepared_launch_frame.after.runtime.terminal and _prepared_launch_frame.after.runtime.void_arena_state.phase_index == 2 and _prepared_launch_frame.after.runtime.void_arena_state.player_heal.is_empty()
+
+
+func settle_native_void_heal(request: Dictionary, player: Node2D, amount: float) -> bool:
+	return prepared_launch_void_heal_allowed(request) and _prepared_frame_committed and player is PlayerController and player.current_run_id() == StringName(str(_launch_identity.run_id)) and not player.health.dead and _launch_runtime.accept_void_player_heal(str(_launch_identity.run_id), str(request.target_id), int(request.runtime_frame), float(player.health.max_hp), amount, true)
+
+
 func _native_arena_origin() -> Vector2:
 	return Vector2(float(_room_motion.bounds.x), float(_room_motion.bounds.y)) if not _room_motion.is_empty() else Vector2.ZERO
 
@@ -239,6 +368,9 @@ func _native_arena_origin() -> Vector2:
 func _refresh_native_arena() -> void:
 	var state := native_arena_snapshot()
 	if state.is_empty():
+		return
+	if _launch_definition.get("id", "") == "forge_colossus":
+		_refresh_native_forge(state)
 		return
 	if _launch_definition.get("id", "") == "forest_heart":
 		_refresh_native_forest(state)
@@ -275,6 +407,75 @@ func _refresh_native_arena() -> void:
 		wall.present(state.walls[index], _native_arena_origin(), bool(state.terminal))
 
 
+func native_forge_arena_snapshot() -> Dictionary:
+	return _launch_runtime.forge_arena_snapshot() if _launch_runtime != null else {}
+
+
+func _refresh_native_forge(state: Dictionary) -> void:
+	var arena := get_node_or_null("ArenaConstructs")
+	if arena == null:
+		arena = Node2D.new()
+		arena.name = "ArenaConstructs"
+		add_child(arena)
+		for row: Dictionary in state.covers:
+			var body := Construct.new()
+			body.name = "Anvil%d" % int(row.slot)
+			body.configure(self, str(row.id))
+			arena.add_child(body)
+	for index: int in range(4):
+		arena.get_child(index).present(state.covers[index], _native_arena_origin(), bool(state.terminal))
+	var holder := get_node_or_null("ForgeFixtures")
+	var rows: Array = state.vents + state.cooling_pools
+	if holder == null:
+		holder = Node2D.new()
+		holder.name = "ForgeFixtures"
+		add_child(holder)
+		for index: int in range(8):
+			var fixture := ForgeFixture.new()
+			fixture.name = "Vent%d" % index if index < 4 else "Cooling%d" % (index - 4)
+			fixture.configure(self, "vent" if index < 4 else "cooling")
+			holder.add_child(fixture)
+	for index: int in range(8):
+		holder.get_child(index).present(rows[index], _native_arena_origin(), bool(state.terminal))
+
+
+func _prepare_native_forge_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
+	var preview := BossRuntime.new()
+	preview.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
+	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(result.ticket.after.runtime):
+		return _launch_failure("forge_arena_candidate")
+	if not preview.snapshot().terminal:
+		if not preview.observe_forge_target(str(observations.target_id), observations.target_position).ok:
+			return _launch_failure("forge_cooling_candidate")
+		for request: Dictionary in preview.forge_burn_damage_requests(int(result.ticket.runtime_frame)):
+			request["kind"] = "forge_burn_tick"
+			result.ticket.batch.mechanism_requests.append(request)
+	result.ticket.after.runtime = preview.snapshot()
+	result.batch = result.ticket.batch.duplicate(true)
+	_prepared_launch_frame = result.ticket.duplicate(true)
+	return result
+
+
+func prepared_launch_forge_mechanism_allowed(request: Dictionary) -> bool:
+	return _launch_definition.get("id", "") == "forge_colossus" and not _prepared_launch_frame.is_empty() and _prepared_launch_frame.batch.mechanism_requests.has(request) and request.get("kind") == "forge_burn_tick"
+
+
+func sync_native_forge_modifier(target: Node2D, target_id: String, clear: bool = false) -> bool:
+	var state := native_forge_arena_snapshot()
+	if state.is_empty() or not target is PlayerController or target.current_run_id() != StringName(str(_launch_identity.run_id)) or target.get_world_2d() != get_world_2d():
+		return false
+	var burning: bool = not clear and not state.terminal and state.burns.any(func(row: Dictionary): return row.target_id == target_id)
+	return target.apply_floor_rule_modifier(StringName("forge_burn:" + str(hostile_source_id)), &"burn", &"apply" if burning else &"remove", {"movement_multiplier": 1.0} if burning else {})
+
+
+func settle_native_forge_slam(hit: Dictionary, target: Node2D, loss: float) -> bool:
+	if _launch_definition.get("id", "") != "forge_colossus" or not _prepared_frame_committed or _prepared_launch_frame.is_empty() or not _prepared_launch_frame.batch.hit_facts.has(hit) or hit.action_id != "forge_hammer_slam" or not target is PlayerController:
+		return false
+	if loss > 0.0 and not _launch_runtime.accept_forge_burn_fact({"run_id": str(_launch_identity.run_id), "owner_source_id": str(hostile_source_id), "target_id": str(hit.target_id), "attack_generation": int(hit.attack_generation), "runtime_frame": int(hit.runtime_frame)}).ok:
+		return false
+	return sync_native_forge_modifier(target, str(hit.target_id))
+
+
 func _refresh_native_forest(state: Dictionary) -> void:
 	var arena := get_node_or_null("ArenaConstructs")
 	if arena == null:
@@ -288,11 +489,167 @@ func _refresh_native_forest(state: Dictionary) -> void:
 			arena.add_child(root)
 	for index: int in range(6):
 		arena.get_child(index).present(state.roots[index], _native_arena_origin(), bool(state.terminal))
+	_refresh_native_forest_auxiliary(bool(state.terminal))
+
+
+func _forest_construct_rows() -> Array[Dictionary]:
+	var state: Dictionary = _launch_runtime.forest_auxiliary_snapshot()
+	var rows: Array[Dictionary] = []
+	if state.is_empty():
+		return rows
+	for sac: Dictionary in state.sacs:
+		var value := sac.duplicate(true)
+		value["marked"] = state.seeds.any(func(seed: Dictionary): return seed.sac_id == value.id and seed.burst_frame == -1 and seed.cancelled_frame == -1)
+		rows.append({"kind": "sac", "value": value})
+	for flower: Dictionary in state.flowers:
+		rows.append({"kind": "flower", "value": flower.duplicate(true)})
+	for wall: Dictionary in state.cages:
+		rows.append({"kind": "wall", "value": wall.duplicate(true)})
+	var inset := float(state.erosion_steps) * 16.0
+	if inset > 0.0:
+		for slot: int in range(4):
+			var horizontal := slot < 2
+			var position := Vector2(320, inset * 0.5 if slot == 0 else 360.0 - inset * 0.5) if horizontal else Vector2(inset * 0.5 if slot == 2 else 640.0 - inset * 0.5, 180)
+			rows.append({"kind": "erosion", "value": {"id": "forest_erosion:%d" % slot, "position": _point(position), "length": 640.0 if horizontal else 360.0, "thickness": inset, "rotation": 0.0 if horizontal else PI * 0.5}})
+	return rows
+
+
+func _refresh_native_forest_auxiliary(terminal: bool) -> void:
+	var holder := get_node_or_null("AuxiliaryConstructs")
+	if holder == null:
+		holder = Node2D.new()
+		holder.name = "AuxiliaryConstructs"
+		add_child(holder)
+	var rows := _forest_construct_rows()
+	var replace := false
+	for index: int in range(mini(holder.get_child_count(), rows.size())):
+		if holder.get_child(index).native_construct_snapshot().get("id") != rows[index].value.id:
+			replace = true
+	while holder.get_child_count() > (0 if replace else rows.size()):
+		var retired := holder.get_child(holder.get_child_count() - 1)
+		holder.remove_child(retired)
+		retired.queue_free()
+	for index: int in range(rows.size()):
+		var construct: Node2D
+		if index >= holder.get_child_count():
+			construct = ForestAuxiliaryConstruct.new()
+			construct.name = "ForestAuxiliary%d" % index
+			construct.configure(self, str(rows[index].kind))
+			holder.add_child(construct)
+		else:
+			construct = holder.get_child(index)
+		construct.present(rows[index].value, _native_arena_origin(), terminal)
+
+
+func _prepare_native_forest_frame(result: Dictionary, observations: Dictionary) -> Dictionary:
+	var preview := BossRuntime.new()
+	preview.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
+	if not preview.configure(_launch_definition, _launch_identity).ok or not preview.restore_snapshot(result.ticket.after.runtime):
+		return _launch_failure("forest_auxiliary_candidate")
+	for request: Dictionary in result.ticket.batch.effect_requests:
+		if request.get("action_id") == "matriarch_void_cage" and not preview.accept_forest_cage(request):
+			return _launch_failure("forest_cage_admission")
+	for request: Dictionary in preview.forest_cage_requests(int(result.ticket.runtime_frame)):
+		if not result.ticket.batch.mechanism_requests.has(request):
+			result.ticket.batch.mechanism_requests.append(request)
+	for flower: Dictionary in preview.forest_auxiliary_snapshot().flowers:
+		if not flower.used and (_native_arena_origin() + _vector(flower.position)).distance_to(_vector(observations.target_position)) <= float(flower.radius_px) + 14.0:
+			result.ticket.batch.mechanism_requests.append({"kind": "forest_flower", "run_id": str(_launch_identity.run_id), "hostile_source_id": str(hostile_source_id), "runtime_frame": int(result.ticket.runtime_frame), "attack_generation": int(result.ticket.runtime_frame), "hit_index": int(flower.slot), "construct_id": str(flower.id), "target_id": str(observations.target_id), "amount": 20.0})
+	for request: Dictionary in result.ticket.batch.mechanism_requests:
+		if request.kind in ["forest_seed_pool", "forest_cage_pulse", "forest_cage_collapse"]:
+			if _room_motion.is_empty():
+				return _launch_failure("forest_effect_bounds")
+			request["bounds"] = _room_motion.bounds.duplicate(true)
+	result.ticket.after.runtime = preview.snapshot()
+	result.batch = result.ticket.batch.duplicate(true)
+	_prepared_launch_frame = result.ticket.duplicate(true)
+	return result
+
+
+func can_commit_launch_frame(ticket: Dictionary) -> bool:
+	return super.can_commit_launch_frame(ticket) and _forest_cage_ticket_safe(ticket, false)
+
+
+func can_publish_launch_frame(ticket: Dictionary) -> bool:
+	return super.can_publish_launch_frame(ticket) and _forest_cage_ticket_safe(ticket, true)
+
+
+func _forest_cage_ticket_safe(ticket: Dictionary, committed: bool) -> bool:
+	if _launch_definition.get("id") != "forest_heart" or not ticket.batch.effect_requests.any(func(request: Dictionary): return request.action_id == "matriarch_void_cage"):
+		return true
+	return _forest_cage_placement_valid(ticket.after.runtime.action, committed)
+
+
+func _forest_cage_placement_valid(action: Dictionary, committed: bool = false) -> bool:
+	if _room_motion.is_empty():
+		return false
+	var owned: Array[RID] = []
+	if committed:
+		for construct: StaticBody2D in get_node("AuxiliaryConstructs").get_children():
+			if construct.native_construct_snapshot().get("attack_generation", -1) == action.geometry_generations[0]:
+				owned.append(construct.get_rid())
+	for fact: Dictionary in action.committed_geometry:
+		var start := _vector(fact.origin)
+		var direction := _vector(fact.aim_direction)
+		var end := start + direction * float(fact.length)
+		if not _within_bounds(start, _motion_bounds(), 6.0) or not _within_bounds(end, _motion_bounds(), 6.0):
+			return false
+		var query := PhysicsShapeQueryParameters2D.new()
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(float(fact.length), 10.0)
+		query.shape = shape
+		query.transform = Transform2D(direction.angle(), (start + end) * 0.5)
+		query.collision_mask = 7
+		query.exclude = owned
+		query.collide_with_areas = false
+		if not get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+			return false
+	return true
+
+
+func receive_native_forest_auxiliary_hit(id: String, info: RefCounted) -> float:
+	if info == null or _launch_definition.get("id", "") != "forest_heart" or not _native_geometry_matches_definition() or not is_instance_valid(info.attacker) or not info.attacker is PlayerController or not info.attacker.authenticates_native_damage_run(info, self, StringName(str(_launch_identity.run_id))):
+		return 0.0
+	var amount: float = Calculator.critical_amount(info, float(info.amount))
+	var frame: int = health.frame_signal_transaction_runtime_frame()
+	var accepted: Dictionary = _launch_runtime.accept_forest_auxiliary_damage({"fact_id": (_damage_identity(info) + ":" + id).sha256_text(), "run_id": str(_launch_identity.run_id), "owner_source_id": str(hostile_source_id), "construct_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "amount": amount})
+	if not accepted.ok:
+		return 0.0
+	if _hostile_threat_registry != null:
+		for generation: int in accepted.get("retired_generations", []):
+			_hostile_threat_registry.retire(hostile_source_id, generation)
+	_refresh_control_visual()
+	return float(accepted.amount)
+
+
+func prepared_launch_forest_mechanism_allowed(request: Dictionary) -> bool:
+	return _launch_definition.get("id", "") == "forest_heart" and not _prepared_launch_frame.is_empty() and _prepared_launch_frame.batch.mechanism_requests.has(request) and request.runtime_frame == _prepared_launch_frame.runtime_frame and not _prepared_launch_frame.after.runtime.terminal and (request.kind == "forest_flower" or not _room_motion.is_empty() and request.get("bounds") == _room_motion.bounds)
+
+
+func settle_native_forest_flower(request: Dictionary, actual_heal: float) -> bool:
+	if not prepared_launch_forest_mechanism_allowed(request) or request.kind != "forest_flower" or not _prepared_frame_committed:
+		return false
+	var accepted: bool = _launch_runtime.accept_forest_flower(str(request.construct_id), str(request.target_id), int(request.runtime_frame), actual_heal)
+	if accepted:
+		_refresh_control_visual()
+	return accepted
+
+
+func native_forest_drain_allowance(generation: int, actual_loss: float) -> float:
+	return _launch_runtime.forest_drain_allowance(generation, actual_loss)
+
+
+func settle_native_forest_drain(id: String, generation: int, index: int, frame: int, loss: float, healed: float) -> bool:
+	if not _prepared_frame_committed or _prepared_launch_frame.is_empty() or frame != int(_prepared_launch_frame.runtime_frame) or not _prepared_launch_frame.batch.hit_facts.any(func(hit: Dictionary): return hit.action_id == "matriarch_drain_roots" and hit.attack_generation == generation and hit.hit_index == index):
+		return false
+	return _launch_runtime.accept_forest_drain(id, generation, index, frame, loss, healed)
 
 
 func prepared_launch_wall_effect_allowed(request: Dictionary) -> bool:
 	if _prepared_launch_frame.is_empty() or request.get("handler_id") != "wall" or not _prepared_launch_frame.batch.effect_requests.has(request) or _room_motion.is_empty():
 		return false
+	if _launch_definition.get("id", "") == "forest_heart":
+		return request.action_id == "matriarch_void_cage" and _prepared_launch_frame.after.runtime.forest_auxiliary.cages.any(func(row: Dictionary): return row.attack_generation == request.attack_generation and row.spawn_frame == request.runtime_frame)
 	var state: Dictionary = _prepared_launch_frame.after.runtime.arena_state
 	for claim: Dictionary in state.wall_claims:
 		if claim.attack_generation == request.attack_generation and claim.runtime_frame == request.runtime_frame and claim.geometry == request.geometry and claim.bounds == _room_motion.bounds:
@@ -317,7 +674,7 @@ func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:
 		return 0.0
 	var attacker: Node = damage_info.attacker
 	var run := StringName(str(_launch_identity.run_id))
-	if not is_instance_valid(attacker) or not attacker is PlayerController or attacker.current_run_id() != run or damage_info.run_id not in [run, &"runtime"]:
+	if not is_instance_valid(attacker) or not attacker is PlayerController or not attacker.authenticates_native_damage_run(damage_info, self, run):
 		return 0.0
 	var amount: float = Calculator.critical_amount(damage_info, float(damage_info.amount))
 	if not is_finite(amount) or amount <= 0.0:
@@ -336,10 +693,16 @@ func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:
 func _can_restore_actor_state(value: Dictionary) -> bool:
 	if not super._can_restore_actor_state(value):
 		return false
+	if _launch_definition.get("id", "") == "void_throne":
+		return value.runtime.void_arena_state.arena_origin == _point(_native_arena_origin())
+	if _launch_definition.get("id", "") == "forge_colossus":
+		return value.runtime.forge_arena_state.arena_origin == _point(_native_arena_origin())
 	return _launch_definition.get("id", "") != "forest_heart" or value.runtime.arena_state.arena_origin == _point(_native_arena_origin())
 
 
 func prepared_launch_hit_blocked_by_cover(hit: Dictionary, target: Node2D) -> bool:
+	if _launch_definition.get("id", "") == "forge_colossus" and not _prepared_launch_frame.is_empty() and _prepared_launch_frame.batch.hit_facts.has(hit) and hit.action_id == "forge_enrage_ultimate":
+		return forge_cooling_corridor_contains(target.global_position)
 	if _launch_definition.get("id", "") != "ruin_king" or _prepared_launch_frame.is_empty() or not _prepared_launch_frame.batch.hit_facts.has(hit) or hit.action_id != "guardian_rift_beam" or not _native_geometry_matches_definition() or not is_instance_valid(target):
 		return false
 	var state: Dictionary = _prepared_launch_frame.after.runtime.arena_state
@@ -359,11 +722,26 @@ func prepared_launch_hit_blocked_by_cover(hit: Dictionary, target: Node2D) -> bo
 	return false
 
 
+func forge_cooling_corridor_contains(position: Vector2) -> bool:
+	var state := native_forge_arena_snapshot()
+	if state.is_empty() or state.terminal:
+		return false
+	var point := position - _native_arena_origin()
+	if absf(point.x - 320.0) <= 24.0 and point.y >= 48.0 and point.y <= 312.0:
+		return true
+	for pool: Dictionary in state.cooling_pools:
+		if point.distance_to(_vector(pool.position)) <= float(pool.radius_px):
+			return true
+	return false
+
+
 func prepared_launch_arena_payload_allowed(request: Dictionary) -> bool:
 	return not _prepared_launch_frame.is_empty() and _launch_definition.get("id", "") == "ruin_king" and request.get("kind", "") == "boss_aftershock" and _prepared_launch_frame.batch.mechanism_requests.has(request) and not _prepared_launch_frame.after.runtime.terminal and not _room_motion.is_empty() and request.get("bounds") == _room_motion.bounds
 
 
 func prepared_launch_payload_parameters() -> Dictionary:
+	if not _prepared_launch_frame.is_empty() and _launch_definition.get("id", "") == "forge_colossus":
+		return {"lava_pool_radius_px": _launch_definition.mechanisms.lava_pool_radius_px, "lava_pool_lifetime_frames": _launch_definition.mechanisms.lava_pool_lifetime_frames, "lava_pool_tick_damage": _launch_definition.mechanisms.lava_pool_tick_damage, "lava_pool_tick_frames": _launch_definition.mechanisms.lava_pool_tick_frames}
 	if _prepared_launch_frame.is_empty() or _launch_definition.get("id", "") != "ruin_king":
 		return {}
 	return {"debris_hp": _launch_definition.mechanisms.debris_hp, "debris_lifetime_frames": _launch_definition.mechanisms.debris_lifetime_frames, "debris_count_cap": _launch_definition.mechanisms.debris_count_cap}
@@ -423,7 +801,7 @@ func receive_native_watch_hit(damage_info: RefCounted) -> float:
 func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
 	var before: Dictionary = _launch_runtime.snapshot()
 	var accepted := super.apply_weapon_hit_control(damage_info, final_amount)
-	if accepted and _launch_definition.get("id", "") == "forest_heart":
+	if accepted and _launch_definition.get("id", "") in ["forest_heart", "void_throne"]:
 		_refresh_control_visual()
 	if damage_info == null or before.is_empty() or _launch_definition.get("id", "") != "time_sovereign":
 		return accepted

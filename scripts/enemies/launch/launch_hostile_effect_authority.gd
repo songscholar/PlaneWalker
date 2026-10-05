@@ -153,6 +153,7 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 	next.runtime_frame = context.runtime_frame
 	var operations: Array[Dictionary] = []
 	var damages: Array[Dictionary] = []
+	var forest_health: Array[Dictionary] = []
 	var previous_source := ""
 	for candidate: Variant in batches:
 		if not candidate is Dictionary or not Contract.exact_fields(candidate, ["hostile_source_id", "batch"]):
@@ -207,6 +208,24 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 			var prepared := _prepare_hit(hit, source, actor, context, next)
 			if not prepared.ok:
 				return prepared
+			if hit.action_id == "matriarch_drain_roots":
+				var drain := _prepare_forest_drain(hit, actor, prepared.record)
+				if not drain.ok:
+					return drain
+				forest_health.append(drain.record)
+			if hit.action_id == "forge_hammer_slam":
+				prepared.record["forge_slam"] = {"owner": actor, "hit": hit.duplicate(true)}
+			damages.append(prepared.record)
+		for request: Dictionary in batch.get("mechanism_requests", []):
+			if request.get("kind") != "forge_burn_tick":
+				continue
+			if not actor.has_method("prepared_launch_forge_mechanism_allowed") or not actor.prepared_launch_forge_mechanism_allowed(request):
+				return _failure("forge_burn_seal")
+			var tick := request.duplicate(true)
+			tick.erase("kind")
+			var prepared := _prepare_payload_damage(tick, context, next)
+			if not prepared.ok:
+				return prepared
 			damages.append(prepared.record)
 		for tick: Variant in batch.status_tick_requests:
 			var prepared := _prepare_status_tick(tick, source, actor, context, next)
@@ -237,7 +256,26 @@ func prepare_effects(batches: Array, context: Dictionary) -> Dictionary:
 			_payloads.rollback(payload_prepared.ticket)
 			return prepared
 		damages.append(prepared.record)
-	var health_records: Array[Dictionary] = []
+	var health_records: Array[Dictionary] = forest_health
+	for wrapper: Dictionary in batches:
+		for request: Dictionary in wrapper.batch.get("mechanism_requests", []):
+			if request.get("kind") == "void_p3_player_heal":
+				var void_heal := _prepare_void_player_heal(request, context, next)
+				if not void_heal.ok:
+					_semantics.rollback(semantic_prepared.ticket)
+					_payloads.rollback(payload_prepared.ticket)
+					return void_heal
+				if not void_heal.record.is_empty():
+					health_records.append(void_heal.record)
+				continue
+			if request.get("kind") != "forest_flower":
+				continue
+			var prepared := _prepare_forest_flower(request, context, next)
+			if not prepared.ok:
+				_semantics.rollback(semantic_prepared.ticket)
+				_payloads.rollback(payload_prepared.ticket)
+				return prepared
+			health_records.append(prepared.record)
 	for request: Dictionary in semantic_prepared.health_requests:
 		var prepared := _prepare_health_gain(request, context, next)
 		if not prepared.ok:
@@ -317,14 +355,25 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 				return _failure("health_consumption")
 			continue
 		if record.info == null:
+			if record.has("forest_drain") and not _settle_forest_drain(record, 0.0, int(ticket.runtime_frame)):
+				return _failure("forest_drain_receipt")
 			continue
+		var hp_before := float(record.health.current_hp)
 		var resolution: RefCounted = record.health.resolve_and_apply_damage(record.info)
 		if resolution == null:
 			return _failure("health_resolution")
 		resolutions.append(resolution.snapshot())
+		if record.has("forest_drain") and not _settle_forest_drain(record, maxf(0.0, hp_before - float(record.health.current_hp)), int(ticket.runtime_frame)):
+			return _failure("forest_drain_receipt")
+		if record.has("forge_slam") and not record.forge_slam.owner.settle_native_forge_slam(record.forge_slam.hit, record.target, maxf(0.0, hp_before - float(record.health.current_hp))):
+			return _failure("forge_burn_receipt")
 	for record: Dictionary in ticket.health_records:
+		if record.get("forest_drain_reservation", false):
+			continue
 		var amount: float = minf(record.health_amount, maxf(0.0, float(record.health.max_hp) - float(record.health.current_hp)))
 		if amount <= 0.0 or record.health.dead:
+			if record.has("void_player_heal") and not record.health.dead and not record.void_owner.settle_native_void_heal(record.void_player_heal, record.target, 0.0):
+				return _failure("void_player_heal_receipt")
 			if record.get("affix_health_gain", false) and not record.target.settle_launch_affix_heal(int(ticket.runtime_frame), record.health_amount, 0.0):
 				return _failure("affix_health_settlement")
 			continue
@@ -332,7 +381,13 @@ func commit_effects(ticket: Dictionary) -> Dictionary:
 		if not is_equal_approx(healed, amount):
 			return _failure("health_gain")
 		var fact := {"fact_id": record.health_fact_id, "runtime_frame": int(ticket.runtime_frame), "target_source_id": record.target_id, "amount": healed, "hp_after": float(record.health.current_hp)}
-		if not bool(record.target.accept_launch_health_fact(fact)):
+		if record.has("void_player_heal"):
+			if not record.void_owner.settle_native_void_heal(record.void_player_heal, record.target, healed):
+				return _failure("void_player_heal_receipt")
+		elif record.has("forest_flower"):
+			if not record.forest_owner.settle_native_forest_flower(record.forest_flower, healed):
+				return _failure("forest_flower_receipt")
+		elif not bool(record.target.accept_launch_health_fact(fact)):
 			return _failure("health_gain_receipt")
 		if record.get("affix_health_gain", false) and not record.target.settle_launch_affix_heal(int(ticket.runtime_frame), record.health_amount, healed):
 			return _failure("affix_health_settlement")
@@ -430,6 +485,77 @@ func _prepare_health_gain(request: Dictionary, context: Dictionary, next: Dictio
 	record["health_fact_id"] = "hostile-health:%s" % claim.substr(0, 40)
 	record["affix_health_gain"] = request.kind == "affix_regeneration"
 	return {"ok": true, "record": record}
+
+
+func _prepare_void_player_heal(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
+	if not Contract.exact_fields(request, ["kind", "run_id", "hostile_source_id", "runtime_frame", "attack_generation", "hit_index", "target_id", "fraction"]) or request.kind != "void_p3_player_heal" or request.run_id != context.run_id or request.runtime_frame != context.runtime_frame or request.fraction != 0.3 or request.hit_index != 63 or not context.actors.has(request.hostile_source_id) or not context.targets.has(request.target_id):
+		return _failure("void_player_heal_request")
+	var owner: Node2D = context.actors[request.hostile_source_id]
+	if not owner.has_method("prepared_launch_void_heal_allowed") or not owner.prepared_launch_void_heal_allowed(request):
+		return _failure("void_player_heal_seal")
+	var target: Node2D = context.targets[request.target_id]
+	var record := _target_record(target)
+	if record.is_empty() or not target is PlayerController or not Contract.number_in_range(record.health.healing_multiplier, 0.000001, 1000000.0):
+		return _failure("void_player_heal_target")
+	if record.health_before.runtime.dead:
+		return {"ok": true, "record": {}}
+	var claim := _claim(context.run_id, request.target_id, "void-p3-heal:%s" % request.hostile_source_id, int(request.attack_generation), int(request.hit_index))
+	if next.claims.has(claim):
+		return _failure("void_player_heal_duplicate")
+	next.claims.append(claim)
+	record["target_id"] = request.target_id
+	record["health_amount"] = float(record.health.max_hp) * 0.3
+	record["health_fact_id"] = "hostile-health:%s" % claim.substr(0, 40)
+	record["void_owner"] = owner
+	record["void_player_heal"] = request.duplicate(true)
+	return {"ok": true, "record": record}
+
+
+func _prepare_forest_flower(request: Dictionary, context: Dictionary, next: Dictionary) -> Dictionary:
+	if not Contract.exact_fields(request, ["kind", "run_id", "hostile_source_id", "runtime_frame", "attack_generation", "hit_index", "construct_id", "target_id", "amount"]) or request.run_id != context.run_id or request.runtime_frame != context.runtime_frame or request.amount != 20.0 or not context.actors.has(request.hostile_source_id) or not context.targets.has(request.target_id):
+		return _failure("forest_flower_request")
+	var owner: Node2D = context.actors[request.hostile_source_id]
+	if not owner.has_method("prepared_launch_forest_mechanism_allowed") or not owner.prepared_launch_forest_mechanism_allowed(request):
+		return _failure("forest_flower_seal")
+	var target: Node2D = context.targets[request.target_id]
+	var record := _target_record(target)
+	if record.is_empty() or not target is PlayerController or record.health_before.runtime.dead or not Contract.number_in_range(record.health.healing_multiplier, 0.000001, 1000000.0):
+		return _failure("forest_flower_target")
+	var claim := _claim(context.run_id, request.target_id, "flower:%s:%s" % [request.hostile_source_id, request.construct_id], int(request.attack_generation), int(request.hit_index))
+	if next.claims.has(claim):
+		return _failure("forest_flower_duplicate")
+	next.claims.append(claim)
+	record["target_id"] = request.target_id
+	record["health_amount"] = 20.0
+	record["health_fact_id"] = "hostile-health:%s" % claim.substr(0, 40)
+	record["forest_owner"] = owner
+	record["forest_flower"] = request.duplicate(true)
+	return {"ok": true, "record": record}
+
+
+func _prepare_forest_drain(hit: Dictionary, owner: Node2D, damage_record: Dictionary) -> Dictionary:
+	if not damage_record.target is PlayerController or not owner.has_method("native_forest_drain_allowance") or not owner.has_method("settle_native_forest_drain"):
+		return _failure("forest_drain_source")
+	var record := _target_record(owner)
+	if record.is_empty() or record.health_before.runtime.dead or not Contract.number_in_range(record.health.healing_multiplier, 0.000001, 1000000.0):
+		return _failure("forest_drain_health")
+	var id := "forest-drain:%s" % _claim(str(hit.run_id), str(hit.target_id), str(hit.hostile_source_id), int(hit.attack_generation), int(hit.hit_index)).substr(0, 40)
+	damage_record["forest_drain"] = {"owner": owner, "health": record.health, "id": id, "generation": int(hit.attack_generation), "index": int(hit.hit_index)}
+	record["target_position_after"] = owner.prepared_launch_frame_position()
+	record["health_amount"] = 0.0
+	record["forest_drain_reservation"] = true
+	return {"ok": true, "record": record}
+
+
+func _settle_forest_drain(record: Dictionary, loss: float, frame: int) -> bool:
+	var drain: Dictionary = record.forest_drain
+	var allowed: float = minf(float(drain.owner.native_forest_drain_allowance(drain.generation, loss)), maxf(0.0, float(drain.health.max_hp) - float(drain.health.current_hp)))
+	var healed := 0.0
+	if allowed > 0.0 and not drain.health.dead:
+		healed = float(drain.health.heal(allowed / float(drain.health.healing_multiplier)))
+		if not is_equal_approx(healed, allowed) or not drain.owner.accept_launch_health_fact({"fact_id": str(drain.id) + ":heal", "runtime_frame": frame, "target_source_id": str(drain.owner.hostile_source_id), "amount": healed, "hp_after": float(drain.health.current_hp)}):
+			return false
+	return drain.owner.settle_native_forest_drain(str(drain.id), int(drain.generation), int(drain.index), frame, loss, healed)
 
 
 func _prepare_semantic_registry(before: Dictionary, after: Dictionary, registry: RefCounted, operations: Array[Dictionary]) -> bool:

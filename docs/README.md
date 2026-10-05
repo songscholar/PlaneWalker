@@ -121,11 +121,17 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Forest Roots Evidence](current/2026-10-05-p15b-native-forest-roots-evidence.md) | 原生根须伤害、暴露、第二阶段重建、事务回滚与冷恢复 | Focused Verified / Current |
 | [Native Forest Root Sweep Plan](superpowers/plans/2026-10-05-native-forest-root-sweep.md) | 存活根须选择、真实原点扫击、取消和历史快照兼容 | Active / Current |
 | [Native Forest Root Sweep Evidence](current/2026-10-05-p15b-native-forest-root-sweep-evidence.md) | 根须原点预警、取消、回滚、位移场景和历史凭据验证 | Focused Verified / Current |
+| [Native Forest Auxiliary Plan](superpowers/plans/2026-10-05-native-forest-auxiliary.md) | 囊体、花朵、种子、牢笼、汲取和侵蚀原生实施 | Active / Current |
+| [Native Forest Auxiliary Evidence](current/2026-10-05-native-forest-auxiliary-evidence.md) | 原生构件、真实伤害与回血、五武器输入、事务回滚和历史冷恢复 | Focused Verified / Current |
+| [Native Arena Integration Evidence](current/2026-10-05-native-arena-integration-evidence.md) | Forest、Void、Forge 的共同帧事务、回放构件和真实 Ruin 武器输入接入 | Focused Verified / Combined certification pending |
+| [Native Forge Arena Evidence](current/2026-10-05-p15-forge-native-evidence.md) | 铁砧、喷口、冷却、真实伤害、五武器输入和物理冷恢复 | Focused Verified / Current |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |
 | [Native Shielded Elite Evidence](current/2026-10-05-native-elite-shielded-evidence.md) | 真实护盾、破盾暴露、再生、锚定组合与事务回滚 | Focused Verified / Remaining affixes active |
 | [Native Teleporting Elite Evidence](current/2026-10-05-native-elite-teleporting-evidence.md) | 房间安全落点、完整离场预警和到达恢复、碰撞再验证与真实玩家帧回滚 | Focused Verified / Remaining affixes active |
+| [Native Void Arena Evidence](current/2026-10-05-native-void-arena-evidence.md) | 原生柱体、有限核心轮次、实际治疗与帧补偿和冷恢复 | Focused Verified / Remaining auxiliary moves active |
 | [Native Verification Repairs](current/2026-10-05-native-verification-repairs-evidence.md) | 生命周期、已释放目标、暂停、音乐释放和耐久排行压力预算 | Focused Verified / Current |
+| [Clean Certification Contract Repairs](current/2026-10-05-clean-certification-contract-repairs.md) | 完整内容计数、真实驱动接口夹具与清洁快照验证 | Focused Verified / Combined certification pending |
 | [Native UI Certification Repairs](current/2026-10-05-native-ui-certification-repairs-evidence.md) | 原生菜单夹具、五层面板流程和奖励浮点精度修复 | Focused Verified / Current |
 | [Native Narrative Checkpoint Regression](current/2026-10-05-native-narrative-regression-evidence.md) | 正式路线、结局退休后的完整角色冷恢复和一次性交接 | Focused Verified / Current |
 | [Native Ruin Wall Evidence](current/2026-10-05-p15b-native-ruin-wall-evidence.md) | 原生墙体寿命、坍塌预警、真实伤害和安全占位 | Focused Verified / Current |
