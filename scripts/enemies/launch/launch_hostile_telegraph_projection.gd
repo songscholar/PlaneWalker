@@ -15,6 +15,7 @@ static func present(owner: Node2D, facts: Array, action_id: String, phase: Strin
 		holder.name = "LaunchTelegraphs"
 		holder.z_index = -1
 		owner.add_child(holder)
+	holder.z_index = 4 if action_id.begins_with("traitor.counter_") else -1
 	var motion: Dictionary = owner.get("_room_motion")
 	if not motion.is_empty():
 		var bounds: Dictionary = motion.bounds

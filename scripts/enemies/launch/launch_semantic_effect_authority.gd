@@ -769,9 +769,11 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 	var retained_responses: Array = []
 	for zone: Dictionary in next.zones:
 		var owner: Node2D = actors.get(zone.source_id)
-		if zone.action_id == "traitor.counter_accelerate" and is_instance_valid(owner) and owner.get("_launch_runtime").has_method("time_response_zone_alive") and not owner.get("_launch_runtime").time_response_zone_alive(int(zone.generation)):
+		if zone.action_id == "traitor.counter_accelerate":
 			for target_id: String in targets:
 				retired_statuses[_id([zone.id, target_id, "status"])] = true
+		if zone.action_id == "traitor.counter_accelerate" and is_instance_valid(owner) and owner.get("_launch_runtime").has_method("time_response_zone_alive") and not owner.get("_launch_runtime").time_response_zone_alive(int(zone.generation)):
+			continue
 		else:
 			retained_responses.append(zone)
 	next.zones = retained_responses
@@ -818,7 +820,8 @@ func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, d
 							next.claims.append(inner_claim)
 							damages.append({"payload_id": row.id + ":inner", "hostile_source_id": row.source_id, "attack_generation": 1, "hit_index": 63, "target_id": id, "runtime_frame": int(next.runtime_frame), "damage": float(row.pull_parameters.inner_damage), "damage_type": "void" if row.action_id == "voidking_vortex" else "fire"})
 					if movement.slow_multiplier < 1.0 or movement.speed_multiplier > 1.0 or row.enemy_only_freeze:
-						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + (0 if row.has("storm_pattern") else maxi(0, int(row.slow_frames))), "slow_multiplier": float(movement.slow_multiplier), "speed_multiplier": float(movement.speed_multiplier), "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
+						var field_membership_only: bool = row.has("storm_pattern") or row.action_id == "traitor.counter_accelerate"
+						_upsert_status(next, {"id": _id([row.id, id, "status"]), "target_id": id, "expires_frame": int(next.runtime_frame) + (0 if field_membership_only else maxi(0, int(row.slow_frames))), "slow_multiplier": float(movement.slow_multiplier), "speed_multiplier": float(movement.speed_multiplier), "attack_multiplier": 1.0, "freeze_actions": bool(row.enemy_only_freeze and actors.has(id))})
 	next.zones = retained
 
 

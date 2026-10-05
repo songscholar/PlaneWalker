@@ -129,8 +129,12 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Elite Mirroring Evidence](current/2026-10-05-native-elite-mirroring-evidence.md) | 原生镜像双时钟、普通母种数值、真实 Sword、八实体上限、存档续接和十二张 Metal 截图 | Focused Verified / Current |
 | [Native Elite Splitting Plan](superpowers/plans/2026-10-05-native-elite-splitting.md) | 死亡双复制体、普通数值契约、完整预警、孤儿生命周期和原生冷恢复 | Active / Current |
 | [Native Elite Splitting Evidence](current/2026-10-05-native-elite-splitting-evidence.md) | 十四合法母种的实体复制、共享八单位上限、精确寿命、完整回滚和二十张 Metal 截图 | Focused Verified / Natural recipes pending |
+| [Natural Elite Encounter Evidence](current/2026-10-05-natural-elite-encounter-evidence.md) | 自然终结词缀、九条历史指纹绑定、八条迁移边、生产启动、真实死亡与子单位结算 | Focused Verified / Current |
+| [Natural Elite Migration Plan](superpowers/plans/2026-10-05-natural-elite-encounter-migration.md) | 自然词缀内容修订、受信历史绑定及原生子单位结算 | Completed / Historical |
+| [Native Sword Identity Evidence](current/2026-10-05-native-sword-identity-evidence.md) | 真实 Sword 伤害身份、兼容活跃动作、原生去重与物理存档续接 | Focused Verified / Current |
 | [Native Summon Evidence](current/2026-10-05-native-summon-evidence.md) | 九种支持单位、原生生命周期、非递归约束和物理冷恢复 | Focused Verified / Current |
 | [Native Enemy Spatial Plan](superpowers/plans/2026-10-05-native-enemy-spatial.md) | 普通与精英敌人的可破坏笼墙、链接增益和安全传送门 | Active / Current |
+| [Native Enemy Spatial Evidence](current/2026-10-05-native-enemy-spatial-evidence.md) | 五种真实施法、五武器破坏、物理阻挡、增益、传送、回滚和保存恢复 | Focused Verified / Combined certification pending |
 | [Native Void Auxiliary Plan](superpowers/plans/2026-10-05-native-void-auxiliary.md) | 安全闪步、独立爆发预警、状态、能量拾取和半场机制 | Active / Current |
 | [Native Room Artwork Plan](superpowers/plans/2026-10-05-native-room-artwork.md) | 五层真实像素地面、边界、门洞和分类地标原生接入 | Completed / Historical |
 | [Native Room Artwork Evidence](current/2026-10-05-native-room-artwork-evidence.md) | 三十模板绑定、重置重绑、私有回放和三分辨率原生像素对照 | Focused Verified / Combined certification pending |
@@ -141,6 +145,11 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Void Native Auxiliary Evidence](current/2026-10-05-void-native-auxiliary-evidence.md) | 真实燃烧与减速、终爆与漩涡、能量拾取、资源补偿、物理恢复和三分辨率渲染 | Focused Verified / Half-arena integration active |
 | [Void Half Arena Plan](superpowers/plans/2026-10-05-void-half-arena.md) | 完整房间半场、交替狂暴、历史迁移和持续原生投影 | Completed / Historical |
 | [Void Half And Native Warning Evidence](current/2026-10-05-void-half-native-warning-evidence.md) | 实际半场伤害、安全通路、TTL300、回滚、物理冷恢复和全首领前摇投影 | Focused Verified / Combined certification pending |
+| [Native Time Response Plan](superpowers/plans/2026-10-05-native-time-responses.md) | 四能力付费凭据、互斥反制、时钟弱点转化与版本化恢复 | Completed / Historical |
+| [Native Time Response Evidence](current/2026-10-05-native-time-response-evidence.md) | 六组双阶段、五武器、回滚、四正式 Profile 恢复与二十一张 Metal 截图 | Focused Verified / Combined certification pending |
+| [Native Time Auxiliary Plan](superpowers/plans/2026-10-05-native-time-auxiliaries.md) | 时间标记、落地慢速场、冻结恢复率、能量塌缩和历史恢复 | Implementation active / Current |
+| [Native Hound And Phase Plan](superpowers/plans/2026-10-05-native-hound-phase-mechanisms.md) | 不死猎犬可破坏符文、相位射手安全闪步和物理存档续接 | Active / Current |
+| [Native Boss Loadout Matrix Plan](superpowers/plans/2026-10-05-native-boss-loadout-matrix.md) | 五角色五武器六组时间技能对五首领的七百五十场真实组合 | Active / Current |
 | [Serial Import Recovery Evidence](current/2026-10-05-serial-import-recovery-evidence.md) | 修复并行翻译导入崩溃、全新固定提交两阶段导入和依赖审计 | Focused Verified / Combined certification pending |
 | [Native Anchored Elite Evidence](current/2026-10-05-native-anchored-elite-evidence.md) | 真实控制恢复、回滚和历史冷存档边界 | Focused Verified / Current |
 | [Native Nullified Elite Evidence](current/2026-10-05-native-elite-nullified-evidence.md) | 真实延迟、暴露、裂隙速度下限、词缀组合和冷恢复 | Focused Verified / Remaining affixes active |

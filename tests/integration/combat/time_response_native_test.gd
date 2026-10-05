@@ -27,6 +27,8 @@ func _run() -> void:
 	var selected := OS.get_environment("PLANEWALKER_TIME_RESPONSE_CASE")
 	if not selected.is_empty():
 		await _native_response(selected)
+		if selected == "accelerate":
+			await _accelerate_expiry()
 		suite.finish(get_tree())
 		return
 	for phase: int in [0, 1]:
@@ -34,6 +36,7 @@ func _run() -> void:
 			await _pair(phase, pair)
 	for ability: String in ["stop", "rewind", "accelerate", "rift"]:
 		await _native_response(ability)
+	await _accelerate_expiry()
 	for weapon: String in ["sword", "bow", "gun", "staff", "gauntlets"]:
 		await _normal_weapon(weapon)
 	await _rewind_arrival("clear")
@@ -255,6 +258,38 @@ func _native_response(ability: String) -> void:
 	await _dispose(f)
 
 
+func _accelerate_expiry() -> void:
+	var f := await _fixture(["accelerate", "stop"])
+	if not await _cast(f, 1) or not await _wait_response(f, "accelerate"):
+		await _dispose(f)
+		return
+	while f.actor._launch_runtime.snapshot().time_response.active.activation_frame < 0:
+		if not await _frames(f, int(f.frame) + 1):
+			await _dispose(f)
+			return
+	var zones: Array = f.effects.semantic_snapshot().zones.filter(func(row: Dictionary): return row.action_id == "traitor.counter_accelerate")
+	suite.assert_equal(zones.size(), 1, "actual paid Accelerate creates one bounded native slowfield")
+	if zones.size() != 1:
+		await _dispose(f)
+		return
+	var zone: Dictionary = zones[0]
+	f.player.global_position = Vector2(float(zone.geometry.origin.x), float(zone.geometry.origin.y))
+	await _frames(f, int(f.frame) + 1)
+	suite.assert_close(f.player._floor_rule_movement_multiplier(), 0.7, "actual counterfield applies its authored Player slowdown")
+	f.player.global_position = Vector2(500, 260)
+	await _frames(f, int(f.frame) + 1)
+	suite.assert_close(f.player._floor_rule_movement_multiplier(), 1.0, "leaving the counterfield restores paid Accelerate's positive outside benefit")
+	f.player.global_position = Vector2(float(zone.geometry.origin.x), float(zone.geometry.origin.y))
+	await _frames(f, int(zone.expires_frame))
+	suite.assert_true(f.effects.semantic_snapshot().zones.any(func(row: Dictionary): return row.id == zone.id), "native counterfield stays live on its last120thframe")
+	await _cold(f, "accelerate-last-live")
+	await _frames(f, int(zone.expires_frame) + 1)
+	suite.assert_true(not f.effects.semantic_snapshot().zones.any(func(row: Dictionary): return row.id == zone.id), "native counterfield retires exactly after120frames")
+	suite.assert_close(f.player._floor_rule_movement_multiplier(), 1.0, "expired counterfield removes its actual Player modifier")
+	await _cold(f, "accelerate-expired")
+	await _dispose(f)
+
+
 func _normal_weapon(weapon: String) -> void:
 	var f := await _fixture(["accelerate", "stop"], 0, weapon)
 	if not await _cast(f, 1) or not await _wait_response(f, "accelerate"):
@@ -372,6 +407,29 @@ func _capture(f: Dictionary, label: String) -> void:
 		await get_tree().process_frame
 		await RenderingServer.frame_post_draw
 		var pixels := get_viewport().get_texture().get_image()
+		var holder := f.actor.get_node("LaunchTelegraphs") as Node2D
+		suite.assert_equal(holder.get_child_count(), f.actor._launch_runtime.snapshot().action.committed_geometry.size(), "native Time response renders every committed primitive " + label)
+		var cues: Array[Node2D] = [holder]
+		for node: Node2D in f.effects.native_semantic_nodes():
+			if node.get("_record").get("action_id", "") == "traitor.counter_accelerate":
+				cues.append(node)
+		for node: Node2D in cues:
+			node.hide()
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		var hidden := get_viewport().get_texture().get_image()
+		for node: Node2D in cues:
+			node.show()
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		pixels = get_viewport().get_texture().get_image()
+		var cue_pixels := 0
+		for y: int in range(80, 280):
+			for x: int in range(160, 520):
+				var sample := Vector2i(Vector2(x, y) * Vector2(pixels.get_size()) / Vector2(640, 360))
+				if pixels.get_pixelv(sample).to_rgba32() != hidden.get_pixelv(sample).to_rgba32():
+					cue_pixels += 1
+		suite.assert_true(cue_pixels >= 16, "native Time warning or active field changes actual raster at every resolution " + label)
 		var colors := {}
 		for y: int in range(150, 210):
 			for x: int in range(280, 420):
