@@ -14,6 +14,8 @@ const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinato
 const Semantics := preload("res://scripts/enemies/launch/launch_semantic_effect_authority.gd")
 const Debris := preload("res://scripts/enemies/launch/ruin_debris_runtime.gd")
 const Ids := preload("res://scripts/enemies/launch/launch_hostile_ids.gd")
+const Settlement := preload("res://scripts/progression/run_settlement_authority.gd")
+const EliteProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
 const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "threats", "run_seed", "last_flushed_frame"]
 
 class ProductionBridge extends "res://scripts/enemies/launch/hostile_frame_bridge.gd":
@@ -55,6 +57,11 @@ var _flushing := false
 var _cancel_pending := false
 var _run_seed := 0
 var _last_flushed_frame := -1
+var _profile_launch_resolver: Callable
+
+
+func configure_profile_launch_resolver(resolver: Callable) -> void:
+	_profile_launch_resolver = resolver
 
 
 func configure(runner: Node, controller: Node2D, facade: RefCounted, player: Node2D, scene_resolver: Callable) -> bool:
@@ -207,21 +214,15 @@ func spawn_actor(spawn: Dictionary) -> bool:
 	return true
 
 
-func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false, affix_revision: int = 3) -> Node2D:
+func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vector2, legacy_affixes: bool = false, affix_revision: int = EliteProjection.CURRENT_NATIVE_REVISION) -> Node2D:
 	var definition: Dictionary = _facade.encounter_catalog().enemy_definition(str(spawn.enemy_id))
 	var resource: Resource = load(str(definition.get("scene", ""))) if ResourceLoader.exists(str(definition.get("scene", ""))) else null
 	var marker: Node2D = _scene.get_node_or_null("EncounterAnchors/" + str(spawn.spawn_slot_id)) as Node2D
 	if not resource is PackedScene or marker == null:
 		return null
-	var parser: RefCounted = Boss.new() if definition.get("category") == "boss_definition" else Enemy.new()
-	var source: Dictionary = {}
-	for field: String in Boss.FIELDS if definition.get("category") == "boss_definition" else Enemy.FIELDS:
-		if not definition.has(field):
-			return null
-		source[field] = definition[field]
-	if not parser.configure(source).ok:
+	var projection := _actor_runtime_projection(definition, spawn)
+	if projection.is_empty():
 		return null
-	var projection: Dictionary = parser.runtime_projection() if definition.category == "boss_definition" else parser.runtime_projection("elite" if spawn.elite else "enemy")
 	var instance := (resource as PackedScene).instantiate()
 	if not instance is Node2D:
 		instance.free()
@@ -251,6 +252,19 @@ func _instantiate_actor(spawn: Dictionary, identity: Dictionary, position: Vecto
 	return actor
 
 
+func _actor_runtime_projection(definition: Dictionary, spawn: Dictionary) -> Dictionary:
+	var is_boss: bool = definition.get("category") == "boss_definition"
+	var parser: RefCounted = Boss.new() if is_boss else Enemy.new()
+	var source: Dictionary = {}
+	for field: String in Boss.FIELDS if is_boss else Enemy.FIELDS:
+		if not definition.has(field):
+			return {}
+		source[field] = definition[field]
+	if not parser.configure(source).ok:
+		return {}
+	return parser.runtime_projection() if is_boss else parser.runtime_projection("elite" if spawn.elite else "enemy")
+
+
 func reject_spawn(spawn: Dictionary, reason: StringName) -> bool:
 	if _encounter == null or not _encounter.reject_spawn(str(spawn.get("id", "")), reason):
 		return false
@@ -267,10 +281,40 @@ func _on_actor_final_death(source: StringName, receipt: String) -> void:
 	var state: Dictionary = actor.launch_runtime_snapshot()
 	var health: Node = actor.get_node_or_null("HealthComponent")
 	var expected := "hostile_defeat:%s" % (str(_player.current_run_id()) + "|" + str(source)).sha256_text().substr(0, 40)
-	if state.is_empty() or not is_instance_valid(health) or not health.dead or health.current_hp > 0.0 or not state.runtime.terminal or state.runtime.identity.run_id != str(_player.current_run_id()) or state.death_receipt != receipt or receipt != expected or state.runtime.runtime_frame != _encounter.snapshot().last_runtime_frame or not _encounter.notify_entity_defeated(str(source), receipt):
+	if state.is_empty() or not is_instance_valid(health) or not health.dead or health.current_hp > 0.0 or not state.runtime.terminal or state.runtime.identity.run_id != str(_player.current_run_id()) or state.death_receipt != receipt or receipt != expected or state.runtime.runtime_frame != _encounter.snapshot().last_runtime_frame:
+		return
+	var settlement := _boss_settlement_source(actor)
+	if not settlement.ok:
+		_fail(&"BOSS_SETTLEMENT_SOURCE_INVALID")
+		return
+	var encounter_before: Dictionary = _encounter.snapshot()
+	if not _encounter.notify_entity_defeated(str(source), receipt):
+		return
+	if not settlement.source.is_empty() and not _facade.native_run_state().append_meta_boss_source(settlement.source):
+		_encounter.restore_snapshot(encounter_before)
+		_fail(&"BOSS_SETTLEMENT_SOURCE_INVALID")
 		return
 	_actors.erase(str(source))
 	_retired_sources.append(str(source))
+
+
+func _boss_settlement_source(actor: Node) -> Dictionary:
+	var empty := {"ok": true, "source": {}}
+	if _definition.room_type != "boss" or not _profile_launch_resolver.is_valid():
+		return empty
+	var launch: Variant = _profile_launch_resolver.call()
+	if launch is Dictionary and launch.is_empty():
+		return empty
+	var run: RefCounted = _facade.native_run_state()
+	var state: Dictionary = run.snapshot()
+	if not launch is Dictionary or not Contract.exact_fields(launch, Settlement.LAUNCH_FIELDS) or launch.schema_id != "meta_launch_receipt_v1" or launch.run_id != state.run_id or launch.run_id != str(_player.current_run_id()) or launch.seed != state.run_seed or launch.projection_digest != state.resources.get("meta_run_projection", {}).get("projection_digest") or not Contract.integer_in_range(launch.sequence, 1, 2147483647):
+		return {"ok": false}
+	var boss_id := str(actor.get_meta("encounter_enemy_id", ""))
+	if state.current_floor_index < 0 or state.current_floor_index >= Ids.BOSS_IDS.size() or boss_id != Ids.BOSS_IDS[int(state.current_floor_index)] or _definition.recipe_id != boss_id or _definition.floor_id != state.floor_plan.floor_id:
+		return {"ok": false}
+	var source := {"schema_id": Settlement.SOURCE_TYPE, "run_id": launch.run_id, "launch_sequence": int(launch.sequence), "floor_id": _definition.floor_id, "node_id": _encounter.snapshot().identity.room_id, "kind": "boss", "payload": {"actor_role": "principal", "boss_id": boss_id}}
+	source["source_id"] = Settlement.source_id(source, boss_id)
+	return {"ok": run.can_append_meta_boss_source(source), "source": source}
 
 
 func _on_encounter_observed(result: Dictionary) -> void:

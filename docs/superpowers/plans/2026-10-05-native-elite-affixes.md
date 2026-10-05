@@ -52,8 +52,33 @@ canonical rows and floor; it does not revise authored content or Save schema.
 
 - [x] Regeneration: actual three-percent healing every 120 unpaused frames within the total thirty-percent cap, heavy-hit 120-frame interruption, once-only Health publication, typed physical cold recovery and whole-Player frame compensation. Native compiler revision 2 retains the authentic affix clock; explicit historical revision 1 retains its original metadata-only regeneration behavior. Same-frame support healing consumes only actual regeneration gain. See [native regeneration evidence](../../current/2026-10-05-native-elite-regeneration-evidence.md).
 - [ ] Shield: thirty-percent absorption, once-only 1200-frame regeneration and 45-frame break exposure.
-- [ ] Nullified and Anchored: retained Stop/Rift/Time/echo interactions, bounded delay/vulnerability and poise/recovery, displacement refusal.
+- [x] Anchored: native poise/recovery and displacement refusal, actual Stop/Rift, physical checkpoint and accepted-frame compensation.
+- [x] Nullified: retained Stop/Rift/Time/echo interactions, bounded delay/vulnerability, Anchor/Frenzy composition and accessible clock-fragment cue. See [native Nullified evidence](../../current/2026-10-05-native-elite-nullified-evidence.md).
 - [ ] Teleport: seeded collision-safe 48-80 pixel landing, complete 30-frame departure warning and 30-frame arrival recovery.
 - [ ] Chaining: accepted Player damage only, strongest two-ally 1.15 attack buff, 90-frame TTL and 120-frame source cooldown.
 - [ ] Splitting and Mirroring: independently warned finite nonreward ordinary children, no recursive abilities and owner-death retirement.
 - [ ] Whole legal-pair matrix, native presentation/accessibility, Save/Replay and full-room/whole-run certification.
+
+## Nullified Native Revision Four
+
+The existing approved P15 section 6 supplies thirty delay frames, thirty
+vulnerability frames, and a 0.70 Rift movement floor. Revision four retains
+source claims and absolute accepted-frame expiry in the affix domain snapshot.
+The Actor uses those facts to pause its existing warning/action clock, then
+applies a twenty-percent incoming damage bonus for the following thirty frames.
+The bonus is a reversible tuning choice because P15 does not specify a magnitude.
+The native time and echo damage pipelines remain active. Explicit revisions one
+through three retain their original metadata-only Nullified behavior.
+
+- [x] Add `tests/integration/combat/launch_elite_nullified_test.gd` and scene;
+  retain RED for the 0.70 Rift floor and missing bounded native Stop conversion.
+- [x] Compile `nullified` as native at revision four in
+  `launch_elite_affix_projection.gd`; retain the old definition signatures.
+- [x] Add bounded source receipt and thirty/thirty timing validation in
+  `launch_elite_affix_runtime.gd`; duplicate and forged expiry refuse.
+- [x] Connect Stop conversion, Rift clamp, action delay and damage exposure in
+  `launch_hostile_actor.gd` through existing frame transaction snapshots.
+- [x] Pass actual Health/time/echo, action warning extension, reject/retry,
+  typed cold restore, physical SaveService, and legacy revision checks.
+- [x] Run `tools/run_tests.sh --filter launch_elite` plus native Actor/physical
+  checkpoint regressions and record focused evidence before revision promotion.

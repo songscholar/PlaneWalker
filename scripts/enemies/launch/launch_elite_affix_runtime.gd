@@ -10,6 +10,12 @@ const FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_
 const ANCHORED_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored"]
 const ANCHORED_FIELDS := ["elapsed_frames", "control_count", "poise", "last_control_frame", "last_threshold_elapsed_frame", "recovery_remaining_frames"]
 const REGENERATION_FIELDS := ["elapsed_frames", "healed_total", "interrupted_through_frame", "last_heal_frame"]
+const NULLIFIED_RUNTIME_FIELDS := ["schema_version", "configuration_digest", "identity", "runtime_frame", "terminal", "regeneration", "anchored", "nullified"]
+const NULLIFIED_FIELDS := ["sources", "stop_claims"]
+const NULLIFIED_SOURCE_FIELDS := ["id", "applied_frame", "delay_through_frame", "vulnerability_through_frame"]
+const MAX_NULLIFIED_CLAIMS := 4096
+const MAX_NULLIFIED_SOURCES := 64
+const NULLIFIED_DAMAGE_BONUS := 0.20
 
 var _configuration: Dictionary = {}
 var _max_hp := 0.0
@@ -22,16 +28,19 @@ func configure(configuration: Dictionary, identity: Dictionary, max_hp: float) -
 	_configuration = configuration.duplicate(true)
 	_max_hp = max_hp
 	_state = {"schema_version": 1, "configuration_digest": JSON.stringify({"configuration": _configuration, "max_hp": _max_hp}, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": identity.runtime_frame, "terminal": false, "regeneration": {}}
-	if configuration.native_revision == 3:
+	if configuration.native_revision >= 3:
 		_state.schema_version = 2
 		_state["anchored"] = {"elapsed_frames": 0, "control_count": 0, "poise": 0, "last_control_frame": -1, "last_threshold_elapsed_frame": -1, "recovery_remaining_frames": 0} if configuration.ids.has("anchored") else {}
+	if configuration.native_revision >= 4:
+		_state.schema_version = 3
+		_state["nullified"] = {"sources": [], "stop_claims": []} if configuration.ids.has("nullified") else {}
 	if configuration.ids.has("regenerating"):
 		_state.regeneration = {"elapsed_frames": 0, "healed_total": 0.0, "interrupted_through_frame": int(identity.runtime_frame), "last_heal_frame": -1}
 	return true
 
 
 static func _valid_configuration(value: Dictionary) -> bool:
-	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 3) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
+	if not Contract.exact_fields(value, CONFIGURATION_FIELDS) or not Contract.integer_in_range(value.native_revision, 2, 4) or not Contract.integer_in_range(value.floor_index, 1, 5) or not value.ids is Array or value.ids.is_empty() or value.ids.size() > 2 or not value.pending_ids is Array:
 		return false
 	var seen: Array = []
 	var pending: Array = []
@@ -44,7 +53,7 @@ static func _valid_configuration(value: Dictionary) -> bool:
 				return false
 		seen.append(id)
 		previous = id
-		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision == 3 and id == "anchored"):
+		if id not in ["frenzy", "fortified", "regenerating"] and not (value.native_revision >= 3 and id == "anchored") and not (value.native_revision >= 4 and id == "nullified"):
 			pending.append(id)
 	return value.pending_ids == pending and Contract.number_in_range(value.damage_taken_multiplier, 1.2 if seen.has("frenzy") else 1.0, 1.2 if seen.has("frenzy") else 1.0) and Contract.number_in_range(value.knockback_resistance, 0.2 if seen.has("fortified") else 0.0, 0.2 if seen.has("fortified") else 0.0)
 
@@ -60,6 +69,8 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 	var healed := 0.0
 	if dead:
 		_state.terminal = true
+		if not _state.get("nullified", {}).is_empty():
+			_state.nullified.sources.clear()
 	elif not paused:
 		if not _state.get("anchored", {}).is_empty():
 			_state.anchored.elapsed_frames += 1
@@ -78,6 +89,8 @@ func advance_frame(frame: int, current_hp: float, dead: bool, paused: bool, heal
 				if is_equal_approx(float(regeneration.healed_total), _max_hp * float(parameters.total_heal_fraction_cap)):
 					regeneration.healed_total = _max_hp * float(parameters.total_heal_fraction_cap)
 				regeneration.last_heal_frame = frame
+	if not _state.get("nullified", {}).is_empty():
+		_state.nullified.sources = _state.nullified.sources.filter(func(source: Dictionary): return int(source.vulnerability_through_frame) >= frame)
 	return {"ok": true, "healed_amount": healed, "hp_after": current_hp + healed}
 
 
@@ -87,6 +100,58 @@ func displacement_multiplier() -> float:
 
 func is_anchor_recovering() -> bool:
 	return not _state.get("anchored", {}).is_empty() and not _state.terminal and int(_state.anchored.recovery_remaining_frames) > 0
+
+
+func is_nullified() -> bool:
+	return not _state.get("nullified", {}).is_empty()
+
+
+func accept_nullified_stop(source_id: String) -> bool:
+	if not is_nullified() or _state.terminal or not _stable_source(source_id) or _state.nullified.stop_claims.has(source_id) or _state.nullified.stop_claims.size() >= MAX_NULLIFIED_CLAIMS or _state.nullified.sources.size() >= MAX_NULLIFIED_SOURCES:
+		return false
+	var parameters: Dictionary = Definition.PARAMETERS.nullified
+	var delay_through: int = int(_state.runtime_frame) + int(parameters.stop_delay_frames)
+	var vulnerability_through: int = delay_through + int(parameters.stop_vulnerability_frames)
+	if vulnerability_through > Contract.MAX_FRAME:
+		return false
+	_state.nullified.stop_claims.append(source_id)
+	_state.nullified.stop_claims.sort()
+	_state.nullified.sources.append({"id": source_id, "applied_frame": int(_state.runtime_frame), "delay_through_frame": delay_through, "vulnerability_through_frame": vulnerability_through})
+	_state.nullified.sources.sort_custom(func(left: Dictionary, right: Dictionary): return left.id < right.id)
+	return true
+
+
+func clear_nullified_stop(source_id: String) -> bool:
+	if not is_nullified():
+		return false
+	for index: int in range(_state.nullified.sources.size()):
+		if _state.nullified.sources[index].id == source_id:
+			_state.nullified.sources.remove_at(index)
+			return true
+	return false
+
+
+func is_nullified_delayed(frame: int = -1) -> bool:
+	if not is_nullified() or _state.terminal:
+		return false
+	var accepted_frame: int = int(_state.runtime_frame) if frame < 0 else frame
+	for source: Dictionary in _state.nullified.sources:
+		if accepted_frame <= int(source.delay_through_frame):
+			return true
+	return false
+
+
+func nullified_damage_bonus() -> float:
+	if not is_nullified() or _state.terminal:
+		return 0.0
+	for source: Dictionary in _state.nullified.sources:
+		if int(_state.runtime_frame) > int(source.delay_through_frame) and int(_state.runtime_frame) <= int(source.vulnerability_through_frame):
+			return NULLIFIED_DAMAGE_BONUS
+	return 0.0
+
+
+func rift_movement_floor() -> float:
+	return float(Definition.PARAMETERS.nullified.rift_movement_floor) if is_nullified() else 0.40
 
 
 func accept_launch_control(frame: int) -> bool:
@@ -129,13 +194,18 @@ func snapshot() -> Dictionary:
 func cancel() -> void:
 	if not _state.is_empty():
 		_state.terminal = true
+		if is_nullified():
+			_state.nullified.sources.clear()
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	var fields: Array = ANCHORED_RUNTIME_FIELDS if _configuration.get("native_revision") == 3 else FIELDS
+	var revision: int = int(_configuration.get("native_revision", 0))
+	var fields: Array = NULLIFIED_RUNTIME_FIELDS if revision >= 4 else (ANCHORED_RUNTIME_FIELDS if revision >= 3 else FIELDS)
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or value.schema_version != _state.schema_version or typeof(value.schema_version) != TYPE_INT or value.configuration_digest != _state.configuration_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Contract.MAX_FRAME) or not value.terminal is bool or not value.regeneration is Dictionary:
 		return false
-	if _configuration.native_revision == 3 and not _can_restore_anchored(value):
+	if revision >= 3 and not _can_restore_anchored(value):
+		return false
+	if revision >= 4 and not _can_restore_nullified(value):
 		return false
 	if not _configuration.ids.has("regenerating"):
 		return value.regeneration.is_empty()
@@ -171,6 +241,34 @@ func _can_restore_anchored(value: Dictionary) -> bool:
 		return false
 	var remaining: int = maxi(0, int(parameters.recovery_extension_frames) - (int(anchored.elapsed_frames) - int(anchored.last_threshold_elapsed_frame))) if threshold_reached else 0
 	return anchored.recovery_remaining_frames == remaining
+
+
+func _can_restore_nullified(value: Dictionary) -> bool:
+	if not value.nullified is Dictionary:
+		return false
+	if not _configuration.ids.has("nullified"):
+		return value.nullified.is_empty()
+	var state: Dictionary = value.nullified
+	if not Contract.exact_fields(state, NULLIFIED_FIELDS) or not state.stop_claims is Array or state.stop_claims.size() > MAX_NULLIFIED_CLAIMS or not state.sources is Array or state.sources.size() > MAX_NULLIFIED_SOURCES or (value.terminal and not state.sources.is_empty()):
+		return false
+	var previous := ""
+	for claim: Variant in state.stop_claims:
+		if not claim is String or not _stable_source(claim) or claim <= previous:
+			return false
+		previous = claim
+	previous = ""
+	var parameters: Dictionary = Definition.PARAMETERS.nullified
+	for source: Variant in state.sources:
+		if not source is Dictionary or not Contract.exact_fields(source, NULLIFIED_SOURCE_FIELDS) or not _stable_source(source.id) or source.id <= previous or not state.stop_claims.has(source.id) or not Contract.integer_in_range(source.applied_frame, int(_state.identity.runtime_frame), int(value.runtime_frame)):
+			return false
+		if not Contract.integer_in_range(source.delay_through_frame, int(source.applied_frame) + int(parameters.stop_delay_frames), int(source.applied_frame) + int(parameters.stop_delay_frames)) or not Contract.integer_in_range(source.vulnerability_through_frame, int(source.delay_through_frame) + int(parameters.stop_vulnerability_frames), int(source.delay_through_frame) + int(parameters.stop_vulnerability_frames)) or int(source.vulnerability_through_frame) < int(value.runtime_frame) or int(source.vulnerability_through_frame) > Contract.MAX_FRAME:
+			return false
+		previous = source.id
+	return true
+
+
+static func _stable_source(value: Variant) -> bool:
+	return value is String and not value.is_empty() and value == value.strip_edges() and value.length() <= 64
 
 
 func restore_snapshot(value: Dictionary) -> bool:

@@ -8,6 +8,7 @@ const RoomContract := preload("res://scripts/dungeon/room_scene_contract.gd")
 const Actions := preload("res://scripts/enemies/launch/hostile_action_coordinator.gd")
 const AffixProjection := preload("res://scripts/enemies/launch/launch_elite_affix_projection.gd")
 const AffixRuntime := preload("res://scripts/enemies/launch/launch_elite_affix_runtime.gd")
+const AffixCue := preload("res://scripts/enemies/launch/launch_elite_affix_cue.gd")
 const FRAME_TICKET_FIELDS: Array[String] = ["ticket_id", "hostile_source_id", "runtime_frame", "before", "after", "batch", "health_before", "collision_target"]
 const ACTOR_STATE_FIELDS: Array[String] = ["runtime", "status", "position", "knockback", "weakpoint_sequence", "stop_sequence", "weapon_claims", "weapon_claim_order", "blind_sequence", "action_credit", "death_receipt", "weapon_metadata", "room_motion"]
 const WEAPON_METADATA_FIELDS: Array[String] = ["bow_time_erosion_sources", "elemental_status_seed_initialized", "elemental_status_seed_material", "planewalker_replay_external_fact_claims"]
@@ -57,7 +58,7 @@ func owns_actor_presentation() -> bool:
 	return true
 
 
-func configure_launch_affixes(definitions: Array, floor_index: int, native_revision: int = 3) -> Dictionary:
+func configure_launch_affixes(definitions: Array, floor_index: int, native_revision: int = AffixProjection.CURRENT_NATIVE_REVISION) -> Dictionary:
 	if not _launch_definition.is_empty() or _affix_projection != null or not _prepared_launch_frame.is_empty():
 		return _launch_failure("affix_configuration_busy")
 	var candidate := AffixProjection.new()
@@ -91,7 +92,7 @@ func configure_launch_definition(definition: Dictionary, context: Dictionary) ->
 	if not configured.ok:
 		return configured
 	var affix_runtime: RefCounted
-	if affix_configuration.get("native_revision") in [2, 3]:
+	if affix_configuration.get("native_revision") in [2, 3, 4]:
 		affix_runtime = AffixRuntime.new()
 		if not affix_runtime.configure(affix_configuration, context, float(definition.max_hp)):
 			return _launch_failure("affix_runtime")
@@ -177,7 +178,8 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		return _launch_failure("status_checkpoint")
 	var next_credit := _action_credit
 	var anchored_recovery: bool = _affix_runtime != null and _affix_runtime.is_anchor_recovering()
-	var externally_paused: bool = status_preview.is_frozen() or _native_action_activation_blocked(frame, observations) or anchored_recovery
+	var nullified_delay: bool = _affix_runtime != null and _affix_runtime.is_nullified_delayed(frame)
+	var externally_paused: bool = status_preview.is_frozen() or _native_action_activation_blocked(frame, observations) or anchored_recovery or nullified_delay
 	if not externally_paused and not preview.control_modifiers().action_paused:
 		next_credit += minf(1.0, float(status_preview.attack_speed_multiplier()))
 		externally_paused = next_credit < 1.0
@@ -193,7 +195,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 		var affix_preview := AffixRuntime.new()
 		if not affix_preview.configure(_affix_configuration, _launch_identity, max_hp) or not affix_preview.restore_snapshot(before.affix_runtime):
 			return _launch_failure("affix_checkpoint")
-		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, status_preview.is_frozen() or (externally_paused and not anchored_recovery) or bool(motion.action_paused), health.healing_multiplier)
+		var advanced: Dictionary = affix_preview.advance_frame(frame, health.current_hp, lethal_pending, status_preview.is_frozen() or (externally_paused and not anchored_recovery) or nullified_delay or bool(motion.action_paused), health.healing_multiplier)
 		if not advanced.ok:
 			return _launch_failure("affix_frame")
 		affix_after = affix_preview.snapshot()
@@ -393,20 +395,27 @@ func apply_time_stop(duration: float) -> void:
 func apply_time_stop_source(source_id: StringName, duration: float) -> void:
 	var frames := _seconds_to_frames(duration)
 	if frames > 0:
-		_launch_runtime.add_control_source(str(source_id), "stop", frames, 1.0)
+		if _affix_runtime != null and _affix_runtime.is_nullified():
+			_affix_runtime.accept_nullified_stop(str(source_id))
+		else:
+			_launch_runtime.add_control_source(str(source_id), "stop", frames, 1.0)
 	_refresh_control_visual()
 
 
 func clear_time_stop_source(source_id: StringName) -> void:
 	_launch_runtime.clear_control_source(str(source_id))
+	if _affix_runtime != null:
+		_affix_runtime.clear_nullified_stop(str(source_id))
 	_refresh_control_visual()
 
 
 func is_time_stopped() -> bool:
-	return _launch_runtime.control_modifiers().action_paused
+	return _launch_runtime.control_modifiers().action_paused or (_affix_runtime != null and _affix_runtime.is_nullified_delayed())
 
 
 func apply_time_rift(source_id: StringName, slow_multiplier: float) -> void:
+	if _affix_runtime != null and _affix_runtime.is_nullified() and Contract.number_in_range(slow_multiplier, 0.000001, 1.0):
+		slow_multiplier = maxf(slow_multiplier, _affix_runtime.rift_movement_floor())
 	_launch_runtime.add_control_source(str(source_id), "rift", Contract.MAX_FRAME, slow_multiplier)
 
 
@@ -441,7 +450,8 @@ func clear_damage_vulnerability_source(source_id: StringName) -> bool:
 
 
 func get_damage_taken_multiplier() -> float:
-	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus()) * _launch_runtime.species_damage_taken_multiplier() * float(_affix_configuration.get("damage_taken_multiplier", 1.0)))
+	var affix_bonus: float = _affix_runtime.nullified_damage_bonus() if _affix_runtime != null else 0.0
+	return minf(3.0, (float(_launch_runtime.control_modifiers().damage_taken_multiplier) + elemental_status_runtime.shock_damage_bonus() + affix_bonus) * _launch_runtime.species_damage_taken_multiplier() * float(_affix_configuration.get("damage_taken_multiplier", 1.0)))
 
 
 func apply_knockback(knockback: Vector2) -> void:
@@ -569,6 +579,29 @@ func _refresh_control_visual() -> void:
 	sprite.modulate = Color(0.55, 0.95, 1.0) if is_time_stopped() or is_elementally_frozen() else Color.WHITE
 	if state.terminal:
 		sprite.modulate = Color(0.45, 0.45, 0.45)
+	_refresh_affix_cue()
+
+
+func _refresh_affix_cue() -> void:
+	var cue := get_node_or_null("EliteAffixCue") as Node2D
+	if _affix_runtime == null or not _affix_runtime.is_nullified():
+		if cue != null:
+			cue.visible = false
+		return
+	if cue == null:
+		cue = AffixCue.new()
+		cue.name = "EliteAffixCue"
+		cue.position = Vector2(0, -32)
+		cue.z_index = 5
+		add_child(cue)
+	var phase := "READY"
+	if _affix_runtime.snapshot().terminal:
+		phase = "TERMINAL"
+	elif _affix_runtime.is_nullified_delayed():
+		phase = "DELAY"
+	elif _affix_runtime.nullified_damage_bonus() > 0.0:
+		phase = "EXPOSED"
+	cue.project_nullified(phase, bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
 
 
 func _actor_state() -> Dictionary:

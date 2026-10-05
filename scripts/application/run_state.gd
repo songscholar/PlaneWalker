@@ -208,6 +208,33 @@ func append_meta_material_source(source: Dictionary) -> bool:
 	return true
 
 
+func can_append_meta_boss_source(source: Dictionary) -> bool:
+	var node := current_floor_node()
+	if phase != RunPhaseScript.Value.BOSS_ACTIVE or suspended or node.is_empty() or not node.visited or node.cleared or node.room_type != "boss" or events.size() >= 4096 or revision >= MetaCatalog.MAX_VALUE:
+		return false
+	if not MetaCatalog.exact_fields(source, ["schema_id", "source_id", "run_id", "launch_sequence", "floor_id", "node_id", "kind", "payload"]) or source.schema_id != "meta_settlement_source_v1" or source.kind != "boss" or source.run_id != run_id or source.floor_id != floor_plan.floor_id or source.node_id != node.id or not MetaCatalog.bounded_int(source.launch_sequence, 1, MetaCatalog.MAX_VALUE):
+		return false
+	var payload: Variant = source.payload
+	const BOSS_IDS := ["ruin_king", "forest_heart", "time_sovereign", "forge_colossus", "void_throne"]
+	if current_floor_index < 0 or current_floor_index >= BOSS_IDS.size() or not MetaCatalog.exact_fields(payload, ["actor_role", "boss_id"]) or payload.actor_role != "principal" or payload.boss_id != BOSS_IDS[current_floor_index]:
+		return false
+	var identity := "meta_boss:%s" % ("%s|%d|%s|%s|%s" % [run_id, int(source.launch_sequence), source.floor_id, source.node_id, payload.boss_id]).sha256_text().substr(0, 40)
+	if source.source_id != identity:
+		return false
+	for event: Variant in events:
+		if event is Dictionary and event.get("type") == "meta_settlement_source_v1" and event.get("receipt") is Dictionary and event.receipt.get("kind") == "boss" and event.receipt.get("floor_id") == source.floor_id:
+			return false
+	return true
+
+
+func append_meta_boss_source(source: Dictionary) -> bool:
+	if not can_append_meta_boss_source(source):
+		return false
+	events.append({"type": "meta_settlement_source_v1", "receipt": source.duplicate(true)})
+	advance_revision()
+	return true
+
+
 func advance_time(delta_seconds: float) -> int:
 	var total_ms := _run_time_fraction_ms + maxf(0.0, delta_seconds) * 1000.0
 	var whole_ms := int(floor(total_ms + 0.000001))

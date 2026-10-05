@@ -2029,7 +2029,17 @@ func _rollback_room_runtime_entry() -> bool:
 func _configure_native_encounter_runner(runner: Node, facade: RefCounted) -> bool:
 	if not _is_floor_plan_snapshot(facade.snapshot()):
 		return true
-	return runner.configure_native_launch(_room_controller, facade, _player, Callable(self, "_native_launch_room_scene"))
+	if not runner.configure_native_launch(_room_controller, facade, _player, Callable(self, "_native_launch_room_scene")):
+		return false
+	var driver: Node = runner.get("_native_launch_driver")
+	if driver == null or not driver.has_method("configure_profile_launch_resolver"):
+		return false
+	driver.configure_profile_launch_resolver(Callable(self, "_native_launch_profile_receipt"))
+	return true
+
+
+func _native_launch_profile_receipt() -> Dictionary:
+	return _profile_service.snapshot().active_launch_receipt.duplicate(true) if _profile_service != null else {}
 
 
 func _native_launch_room_scene() -> Node2D:

@@ -301,6 +301,7 @@ func _physical_roundtrip(actor: Node2D, revision: int) -> void:
 	var storage := Save.new()
 	suite.assert_true(storage.configure(root, "test-elite-anchored", binding).ok, "physical Anchor checkpoint binds authenticated launch content")
 	var state := {"actor": actor.native_cold_snapshot(func(_source: Node): return {}), "effects": actor.get_meta("fixture_effects").launch_transaction_snapshot(), "threats": actor.get_meta("fixture_registry").snapshot()}
+	revision = int(state.actor.actor.affixes.native_revision)
 	var encoded := Replay.encode_replay_json(state)
 	var id := "elite_anchor_v%d" % revision
 	suite.assert_true(encoded.ok and storage.save_profile(id, "base", {"native_elite_actor_codec": encoded.json}).ok, "actual SaveService retains typed native Anchor aggregate")
