@@ -1150,7 +1150,10 @@ func _native_geometry_matches_definition() -> bool:
 
 
 func _room_motion_is_valid() -> bool:
-	return is_instance_valid(_motion_room) and _motion_room.is_inside_tree() and _motion_room.global_transform == _motion_room_transform and _physical_camera_bounds(_motion_room) == _motion_room_local_bounds and collision_layer == _room_motion.collision_layer and collision_mask == _room_motion.collision_mask and _native_geometry_matches_definition()
+	var terminal_projection: bool = health.dead and bool(_launch_runtime.snapshot().terminal) and not _death_receipt.is_empty()
+	var expected_layer: int = 0 if terminal_projection else int(_room_motion.collision_layer)
+	var expected_mask: int = 0 if terminal_projection else int(_room_motion.collision_mask)
+	return is_instance_valid(_motion_room) and _motion_room.is_inside_tree() and _motion_room.global_transform == _motion_room_transform and _physical_camera_bounds(_motion_room) == _motion_room_local_bounds and collision_layer == expected_layer and collision_mask == expected_mask and _native_geometry_matches_definition()
 
 
 static func _physical_camera_bounds(room: Node2D) -> Rect2:

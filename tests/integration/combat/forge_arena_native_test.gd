@@ -299,7 +299,7 @@ func _enrage() -> void:
 func _phase(f: Dictionary, amount: float) -> void:
 	var frame := int(f.runtime.snapshot().runtime_frame) + 1
 	var ticket: Dictionary = f.bridge.begin_frame(frame)
-	f.actor.get_node("Hurtbox").receive_hit(_damage(f.player, frame + 1000, amount))
+	suite.assert_true(f.actor.get_node("Hurtbox").receive_hit(_damage(f.player, frame + 1000, amount)) > 0.0, "phase fixture authenticates the actual Forge principal target")
 	suite.assert_true(f.bridge.prepare_frame(ticket) and _publish(f.bridge, ticket), "real Boss damage starts noheal formtransition")
 	var after_hp := float(f.actor.health.current_hp)
 	for clock: int in range(frame + 1, frame + 61):
@@ -412,7 +412,7 @@ func _dispose(f: Dictionary) -> void:
 
 
 func _damage(player: Node2D, token: int, amount: float) -> RefCounted:
-	return Damage.from_plan({"run_id": "legacy_run", "target_id": "forge-test-target", "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
+	return Damage.from_plan({"run_id": IDENTITY.run_id, "target_id": IDENTITY.hostile_source_id, "hostile_source_id": "player:sword", "attack_generation": token, "action_token": token, "amount": amount, "damage_type": Damage.DamageType.PHYSICAL, "tags": ["weapon:sword"], "can_crit": false, "source": player, "attacker": player})
 
 
 func _publish(bridge: RefCounted, ticket: Dictionary) -> bool:
