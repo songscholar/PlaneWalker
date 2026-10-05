@@ -24,7 +24,8 @@ static func encode(observations: Array[Dictionary]) -> Dictionary:
 		if index > 0:
 			var changes: Array[Dictionary] = []
 			var removed: Array[Array] = []
-			_difference(observations[index - 1], current, [], changes, removed)
+			# Admitted integer sequence fields already prove the root snapshots differ.
+			_difference(observations[index - 1], current, [], changes, removed, true)
 			if changes.size() + removed.size() > MAX_PATCHES:
 				return _failure(&"RUN_REPLAY_CHUNK_SIZE_INVALID")
 			deltas.append({"sequence": int(current.sequence), "removed": removed, "set": changes, "snapshot_sha256": byte_digest(var_to_bytes(current))})
@@ -71,8 +72,8 @@ static func byte_digest(bytes: PackedByteArray) -> String:
 	return context.finish().hex_encode()
 
 
-static func _difference(before: Variant, after: Variant, path: Array, changes: Array[Dictionary], removed: Array[Array]) -> void:
-	if var_to_bytes(before) == var_to_bytes(after):
+static func _difference(before: Variant, after: Variant, path: Array, changes: Array[Dictionary], removed: Array[Array], skip_equality: bool = false) -> void:
+	if not skip_equality and var_to_bytes(before) == var_to_bytes(after):
 		return
 	if before is Dictionary and after is Dictionary and _dictionary_types_match(before, after) and _ordered_keys_match(before, after):
 		for key: Variant in before:

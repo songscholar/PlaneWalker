@@ -150,6 +150,27 @@ weapon replay events; native state is 109,280 bytes and Run is 94,088 bytes. Thi
 explains the priority shift to historical replay work. It is a measured later
 state, not a synthetic load or a claim that history can be discarded.
 
-Rendered real-time samples and longer sustained recording remain pending. Every
-probe retains its explicit survival and prerequisite-route fixtures; none claims
-human playtesting, unassisted victory, FPS certification, or line coverage.
+## Rendered Real-Time Samples
+
+The same uninstrumented archive also passes its rendered real-time probe at
+`build/floor4-phase2-rendered-realtime-120/report.json`. Real input reaches the
+same third-phase boundary, then measures the 120 unique frames 2502 through 2621
+at time scale 1 and native 60 Hz. The physical tape has 121 observations, and its
+fresh first/last readback matches exact typed bytes. Strict stdout and engine
+error/leak checks pass.
+
+Player advance mean / p95 / max is 266.879 / 273.224 / 388.803 ms. Two seconds of
+native time take 33.150 seconds of measured wall time. Render wait averages
+2.359 ms, Host processing 1.399 ms, and the independent observer 5.506 ms. Peak
+native static memory is 1,228,728,011 bytes, not process RSS. Retention after the
+measurement takes 16.729 seconds.
+
+`rendered-final.png` is a nonempty 640 by 360 viewport capture taken outside the
+measurement. It shows the actual floor, player, Boss third-phase HUD and controls.
+Large HUD panels cover most gameplay space, so this is retained as a visual
+defect for the UI lane, not as polished UI acceptance. The scheduling and CPU
+results still fail the frame budget; this run cannot certify 60 FPS.
+
+Longer sustained recording remains pending. Every probe retains its explicit
+survival and prerequisite-route fixtures; none claims human playtesting,
+unassisted victory, FPS certification, or line coverage.
