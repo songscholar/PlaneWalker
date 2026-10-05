@@ -274,12 +274,18 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	if not batch.ok:
 		return batch
 	if batch.phase == "WARNING" and not _native_summon_warning_safe(preview.snapshot().action):
+		var unpublished_generations: Array[int] = []
+		for fact: Dictionary in batch.threat_facts:
+			unpublished_generations.append(int(fact.attack_generation))
 		var declined: Dictionary = preview.cancel_action(&"summon_frozen_slot_outside_safe_room")
 		if not declined.ok:
 			return _launch_failure("summon_warning_decline")
 		batch.threat_facts = []
 		batch.threat_extensions = []
-		batch.retired_generations.append_array(declined.retired_generations)
+		# Same-frame admission can cancel a warning before its facts reach the registry.
+		for generation: int in declined.retired_generations:
+			if not unpublished_generations.has(generation):
+				batch.retired_generations.append(generation)
 		batch.phase = "IDLE"
 	# A charge's frozen corridor warns its route; damage requires real body contact.
 	var contact_fact: Dictionary = preview.charge_contact_fact(frame, str(observations.target_id))
