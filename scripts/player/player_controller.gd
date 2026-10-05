@@ -41,6 +41,7 @@ const WeaponModifierStateScript := preload("res://scripts/combat/weapons/weapon_
 const WeaponResourceTransactionScript := preload("res://scripts/combat/weapons/weapon_resource_transaction.gd")
 const WeaponRuntimeProfileScript := preload("res://scripts/combat/weapons/weapon_runtime_profile.gd")
 const ReplayRecorderScript := preload("res://scripts/replay/replay_recorder.gd")
+const ImmutableReplayEventJournal := preload("res://scripts/replay/immutable_replay_event_journal.gd")
 const ReplaySafeValueScript := preload("res://scripts/replay/replay_safe_value.gd")
 
 const CHARACTER_WORLD_PAYLOAD_HANDLERS: Array[StringName] = [
@@ -318,6 +319,7 @@ var _weapon_resource_fact_state: Dictionary = {}
 var _weapon_resource_publication_enabled := true
 var _next_weapon_action_token_floor: int = 1
 var _weapon_replay_events: Array[Dictionary] = []
+var _weapon_replay_event_journal := ImmutableReplayEventJournal.new()
 var _weapon_replay_capture_sequence: int = 0
 var _applying_weapon_replay_event: bool = false
 var _weapon_replay_fact_baseline: Dictionary = {}
@@ -2943,7 +2945,7 @@ func _fixed_frame_transaction_snapshot() -> Dictionary:
 			"next_token_floor": _next_weapon_action_token_floor,
 			"combo_timeout_frames": _weapon_combo_timeout_frames,
 		},
-		"replay_events": _weapon_replay_events.duplicate(true),
+		"replay_events": _weapon_replay_transaction_events(),
 		"replay_capture_sequence": _weapon_replay_capture_sequence,
 		"replay_fact_baseline": _weapon_replay_fact_baseline.duplicate(true),
 		"replay_capture_invalid_reason": _weapon_replay_capture_invalid_reason,
@@ -4901,10 +4903,15 @@ func weapon_replay_snapshot() -> Dictionary:
 	var profile := profile_value as Dictionary
 	if coordinator.is_empty() or profile.is_empty():
 		return {}
-	var event_prefix_count := _weapon_replay_event_prefix_count()
-	var event_prefix_root := ReplayRecorderScript.event_prefix_root(
-		_weapon_replay_events,
-		event_prefix_count
+	var certified_prefix := _weapon_replay_event_journal.refresh(_weapon_replay_events)
+	var event_prefix_count := (
+		int(certified_prefix.event_prefix_count)
+		if not certified_prefix.is_empty() else _weapon_replay_event_prefix_count()
+	)
+	var event_prefix_root := (
+		str(certified_prefix.event_prefix_root)
+		if not certified_prefix.is_empty()
+		else ReplayRecorderScript.event_prefix_root(_weapon_replay_events, event_prefix_count)
 	)
 	if event_prefix_root.is_empty():
 		return {}
@@ -7961,6 +7968,12 @@ func _weapon_replay_event_prefix_count() -> int:
 	while captured.has(count + 1):
 		count += 1
 	return count
+
+
+func _weapon_replay_transaction_events() -> Array[Dictionary]:
+	if _weapon_replay_event_journal.certifies(_weapon_replay_events):
+		return _weapon_replay_events.duplicate(false)
+	return _weapon_replay_events.duplicate(true)
 
 
 func _valid_weapon_replay_event_prefix(snapshot: Dictionary, event_prefix: Array) -> bool:
