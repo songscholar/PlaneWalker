@@ -3,7 +3,7 @@
 - Status: Focused Verified / Complete validation pending
 - Document Role: Current focused implementation evidence
 - Authority Level: Below the approved full-product completion specification
-- Applies To: Native combat damage fixtures, event/checkpoint teardown and retained clean validation
+- Applies To: Native fixtures, refusal diagnostics, corrupted-input recovery and retained clean validation
 - Owner: Plane Walker integration team
 - Last Verified: 2026-10-06
 - Depends On: `docs/superpowers/specs/2026-09-28-plane-walker-full-product-completion-design.md`
@@ -34,7 +34,9 @@ The seventh non-OK record is `p15_five_floor_run_test`, exit 143 after the
 duplicate old-revision Main run was deliberately interrupted. This is not a
 product failure verdict. The final started scene, `main_content_management_test`,
 has no completion receipt because the whole baseline validator was stopped.
-Full Main certification remains pending on a repaired immutable revision.
+Full Main certification was pending at that interruption. Later native victory
+and settlement evidence is retained separately in
+`2026-10-06-native-five-floor-victory-evidence.md`.
 
 ## Repairs Preserve The Assertions
 
@@ -113,5 +115,64 @@ Three focused reruns passed strict stdout and independent engine-log checks:
 
 The adjacent scenes exercise the same inherited physical checkpoint fixture.
 These ordinary scene runs do not measure runtime line coverage or certify the
-complete product. The immutable `be58030` validator continues on its original
-source and may retain this pre-repair failure when it reaches the save suite.
+complete product. The immutable `be58030` validator retained this pre-repair
+failure on its original source; its completed result is recorded below.
+
+## Completed Frozen be58030 Baseline
+
+The detached `build/retained-checkout/certify-be58030` checkout completed its
+entire ordinary validator at revision
+`be580300a80888882d70dff5ac0863c3ed7359d6`, without source overlays. Its final
+Git status is clean. The 408 runtime scripts retain aggregate SHA-256
+`acf7d0096c540baf5bec4ed336b1ae03f9f0c0e4445515368fc84b73e921da30`.
+
+Python/CI, documentation, localization/content, export and coverage contracts,
+both Godot imports, native content-pack export contracts and the 30-seed dungeon
+simulation passed. All 485 discovered ordinary scenes completed: 481 strict
+PASS, four strict failures, zero timeouts. Each failed scene printed successful
+assertions but retained unexpected engine errors in both independent logs:
+
+| Scene | Retained strict failure | Current repair evidence |
+| --- | --- | --- |
+| `native_phase_shift_checkpoint_test` | Inactive audio playback query in teardown | `49e8101`, three focused GREEN scenes above |
+| `run_orchestrator_test` | Two unscoped intentional BuildState rollback errors | Exact test scopes, five focused GREEN scenes below |
+| `input_profile_store_test` | Corrupted-file `JSON.parse_string` engine diagnostics | Structured parser repair pending |
+| `input_remap_service_test` | The same corrupted-file parser diagnostic during legacy recovery | Structured parser repair pending |
+
+The actual five-floor Main scene and all 150 P14 domain loadout combinations
+passed. The effective Main timeout was 7,200 seconds; the P14 loadout matrix
+minimum was 600 seconds. These are execution caps, not measured gameplay or FPS
+results. Neither scene timed out. The runner's generic timeout text would print
+the configured 300-second value rather than a scene's raised cap.
+
+Top-level stdout remains at
+`build/certification-be58030-validation.stdout.log`, SHA-256
+`2e5deb9408bed0f8c1feb3073e2d834437de9bebce775dcb1671df877c8118e6`.
+All paired scene logs remain in the checkout's
+`build/clean-validation/scene-tests/`. The full validator exits 1 and never enters
+instrumented line coverage. Its ordinary coverage report has
+`status=unavailable`, no provider, and `line_rate=null`; it is not zero measured
+coverage or full-suite coverage evidence. This is a completed failed historical
+baseline, not certification of the later integrated source.
+
+## Orchestrator Integrity Refusal Scope
+
+Current-source RED at `build/test-evidence/orchestrator-refusal-scope-red/`
+reproduces both deliberate unrecoverable BuildState rollback diagnostics. Its
+assertions pass, but strict stdout and Godot-log validation correctly fails.
+
+Only the fixture changes. Each failing command now uses the existing exact
+`TestSuite.expect_engine_error` Callable with its original error message, one
+occurrence, and the command's actual `ok=false` response. Both original
+`INTEGRITY_FAILURE`, rollback-stage and consumed-offer assertions remain. The
+production Orchestrator and global log policy are unchanged.
+
+Focused GREEN under
+`build/test-evidence/orchestrator-refusal-scope-green/` passes both strict logs:
+
+- `orchestrator/`: 1/1 Orchestrator scene, including both rollback scopes
+- `facade/`: 1/1 RunRuntimeFacade scene
+- `state/`: 3/3 RunState, merchant state and dungeon-event state scenes
+
+The five successful scenes do not replace the four failures retained in the
+original frozen validator or establish runtime line coverage.

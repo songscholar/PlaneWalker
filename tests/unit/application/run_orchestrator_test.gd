@@ -223,12 +223,18 @@ func _test_selection_integrity_failure(suite) -> void:
 	var state: RefCounted = orchestrator.get("_state")
 	var original_build: RefCounted = state.get("build_state")
 	state.set("build_state", FailingBuildState.new(original_build))
-	var result = orchestrator.commit_selection_and_transition({
-		"id": "frozen_burst",
-		"category": "item",
-		"archetype": "freeze_burst",
-		"effects": {},
-	})
+	var response := {}
+	suite.assert_true(not suite.expect_engine_error(func() -> bool:
+		response.value = orchestrator.commit_selection_and_transition({
+			"id": "frozen_burst",
+			"category": "item",
+			"archetype": "freeze_burst",
+			"effects": {},
+		})
+		return response.value.ok,
+		"Selection commit rollback failed after BuildState rejection",
+		"RunOrchestrator.commit_selection_and_transition injected BuildState and rollback refusal"), "failed BuildState rollback reports commit command refusal")
+	var result = response.value
 	suite.assert_equal(result.code, &"INTEGRITY_FAILURE", "unrecoverable BuildState rejection is an integrity failure")
 	suite.assert_equal(result.context.get("stage"), "build_state_rollback", "integrity failure identifies the rollback stage")
 	suite.assert_true(orchestrator.has_consumed_offer("run-integrity:build"), "failed authority rollback is never reported as restored")
@@ -237,12 +243,18 @@ func _test_selection_integrity_failure(suite) -> void:
 	var legacy_state: RefCounted = legacy.get("_state")
 	var legacy_build: RefCounted = legacy_state.get("build_state")
 	legacy_state.set("build_state", FailingBuildState.new(legacy_build))
-	var legacy_result = legacy.selection_resolved({
-		"id": "frozen_burst",
-		"category": "item",
-		"archetype": "freeze_burst",
-		"effects": {},
-	})
+	var legacy_response := {}
+	suite.assert_true(not suite.expect_engine_error(func() -> bool:
+		legacy_response.value = legacy.selection_resolved({
+			"id": "frozen_burst",
+			"category": "item",
+			"archetype": "freeze_burst",
+			"effects": {},
+		})
+		return legacy_response.value.ok,
+		"Legacy selection rollback failed after BuildState rejection",
+		"RunOrchestrator.selection_resolved injected BuildState and rollback refusal"), "failed legacy BuildState rollback reports command refusal")
+	var legacy_result = legacy_response.value
 	suite.assert_equal(legacy_result.code, &"INTEGRITY_FAILURE", "legacy selection reports an unrecoverable rollback as an integrity failure")
 	suite.assert_equal(legacy_result.context.get("stage"), "build_state_rollback", "legacy integrity failure identifies the rollback stage")
 	suite.assert_true(legacy.has_consumed_offer("run-integrity:legacy"), "legacy failed rollback is never reported as restored")
