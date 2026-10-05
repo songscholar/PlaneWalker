@@ -106,7 +106,7 @@ class NativeBossMatrixReportTest(unittest.TestCase):
                 self.assertTrue(matrix.validate_cases([changed], 0, 1))
 
     def test_engine_log_errors_are_not_hidden_by_clean_stdout(self) -> None:
-        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
             logs = Path(directory)
             shard = logs / "native-000-001"
             shard.mkdir()
