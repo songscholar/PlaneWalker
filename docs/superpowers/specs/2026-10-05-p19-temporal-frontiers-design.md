@@ -1,7 +1,7 @@
 # P19 Temporal Frontiers Expansion Enemies
 
-- Status: Approved under standing project authorization
-- Document Role: Current P19 implementation specification
+- Status: Historical
+- Document Role: Historical P19 implementation specification
 - Authority Level: Milestone design
 - Applies To: Temporal Frontiers optional Expansion enemy pack
 - Owner: Project owner
@@ -9,6 +9,8 @@
 - Depends On: P15 native hostile frame authority; P18 local content management
 - Scope: Five authored Expansion enemies, playable native encounters, optional local pack
 - Base preservation: No Base pack bytes or canonical Launch counts change
+- Implementation Status: Implemented and verified locally
+- Completion Evidence: `docs/current/2026-10-05-p19-temporal-frontiers-evidence.md`
 
 Temporal Frontiers is a bundled, data-only, freely licensed optional pack. Players install and enable it through the retained local content manager; its exact assembly receives an isolated save domain. Disabling it retains that domain and returns to Base.
 
