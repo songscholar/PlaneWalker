@@ -1135,18 +1135,16 @@ func restore_snapshot(value: Dictionary) -> bool:
 	_action = action
 	_legacy_void_action = _void_arena != null and value.action.definition_digest != _action_validation_template(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, true, _snapshot_validation_context()).definition_digest
 	_legacy_time_action = _time_response != null and value.action.definition_digest != _action_validation_template(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, true, _snapshot_validation_context()).definition_digest
-	_state = value.duplicate(true)
-	_state.erase("action")
-	_state.erase("control")
-	_state.erase("conversion")
-	_state.erase("arena_state")
-	_state.erase("forest_auxiliary")
-	_state.erase("void_arena_state")
-	_state.erase("void_auxiliary")
-	_state.erase("forge_arena_state")
-	_state.erase("time_response")
-	_state.erase("time_auxiliary")
+	_state = _copy_restored_parent_state(value)
 	return true
+
+
+func _copy_restored_parent_state(value: Dictionary) -> Dictionary:
+	# Children already own restored state; only the remaining parent is retained.
+	var parent := value.duplicate()
+	for field: String in ["action", "control", "conversion", "arena_state", "forest_auxiliary", "void_arena_state", "void_auxiliary", "forge_arena_state", "time_response", "time_auxiliary"]:
+		parent.erase(field)
+	return parent.duplicate(true)
 
 
 func cancel(reason: StringName = &"cancelled") -> Dictionary:
