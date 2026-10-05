@@ -129,9 +129,21 @@ class AckFailingFacade:
 		return super._commit_event_runtime_state(command, expected_revision)
 
 
+class DriverFixture:
+	extends Node
+	var profile_resolver: Callable
+
+	func configure_profile_launch_resolver(value: Callable) -> void:
+		profile_resolver = value
+
+
 class RunnerFixture:
 	extends Node
 	var native_binding: Dictionary = {}
+	var _native_launch_driver := DriverFixture.new()
+
+	func _init() -> void:
+		add_child(_native_launch_driver)
 
 	signal spawn_warning_requested(spawn_definition: Dictionary, duration: float)
 	signal spawn_requested(spawn_definition: Dictionary)
@@ -428,8 +440,9 @@ func _test_launch_host_creates_connected_room_runtime(suite) -> void:
 	host.set("_room_controller", controller)
 	host.set("_player", player)
 	var started = host.start_run(_launch_config(SEED + 1))
-	suite.assert_true(started.ok, "Launch Host starts through the real Base Pack Facade")
+	suite.assert_true(started.ok, "Launch Host starts through the real Base Pack Facade: " + str(started.code) + " " + str(started.context))
 	if started.ok:
+		suite.assert_true(controller.runner._native_launch_driver.profile_resolver.is_valid(), "Host binds the profile receipt resolver to its native driver")
 		suite.assert_true(
 			controller.runner.native_binding.get("controller") == controller
 			and controller.runner.native_binding.get("player") == player

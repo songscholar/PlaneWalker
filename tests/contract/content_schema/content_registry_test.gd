@@ -34,6 +34,7 @@ const EXPECTED_BASE_CATEGORY_COUNTS := {
 	"narrative_definition": 57,
 	"narrative_source_definition": 13,
 	"tutorial_definition": 34,
+	"cosmetic_definition": 15,
 }
 const EXPECTED_FLOOR_IDS: Array[String] = [
 	"floor_ruins_of_remnant",
