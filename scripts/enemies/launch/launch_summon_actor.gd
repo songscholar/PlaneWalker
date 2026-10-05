@@ -2,16 +2,17 @@ class_name LaunchSummonActor
 extends "res://scripts/enemies/launch/launch_hostile_actor.gd"
 
 const SummonRuntime := preload("res://scripts/enemies/launch/launch_summon_runtime.gd")
-const Template := preload("res://data/content_packs/base/assets/enemies/launch/enemy_shattered_sentinel.tscn")
+const TEMPLATE_PATH := "res://data/content_packs/base/assets/enemies/launch/enemy_shattered_sentinel.tscn"
 var _summon_authority: RefCounted
 var _summon_lease: Dictionary = {}
 
 
 static func instantiate_summon(id: String) -> Node2D:
 	var texture := load("res://assets/production/summons/%s.png" % id) as Texture2D
-	if texture == null:
+	var template := load(TEMPLATE_PATH) as PackedScene
+	if texture == null or template == null:
 		return null
-	var actor := Template.instantiate() as Node2D
+	var actor := template.instantiate() as Node2D
 	actor.set_script(load("res://scripts/enemies/launch/launch_summon_actor.gd"))
 	actor.name = "Summon_" + id
 	actor.set_meta("summoned", true)
