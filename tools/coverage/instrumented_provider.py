@@ -173,7 +173,7 @@ def _run_logged(command: list[str], root: Path, output: Path, label: str, enviro
     logs = stdout_log.read_text(encoding="utf-8", errors="replace")
     if engine_log.is_file():
         logs += "\n" + engine_log.read_text(encoding="utf-8", errors="replace")
-    if result.returncode != 0 or re.search(r"SCRIPT ERROR:|Parse Error:|Failed to load script|ObjectDB instances leaked|RID allocations leaked", logs):
+    if result.returncode != 0 or re.search(r"SCRIPT ERROR:|Error calling deferred method:|Parse Error:|Failed to load script|ObjectDB instances leaked|RID allocations leaked", logs):
         raise ValueError(f"{label} failed; inspect {stdout_log}")
     errors = sorted(set(line for line in logs.splitlines() if line.startswith("ERROR:")))
     if import_phase:

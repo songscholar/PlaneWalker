@@ -52,6 +52,7 @@ validate_import_logs() {
 
 	if grep -Eq \
 		-e 'SCRIPT ERROR:' \
+		-e 'Error calling deferred method:' \
 		-e 'Parse Error:' \
 		-e 'Failed to load script' \
 		-- "${stdout_log}" "${engine_log}"; then

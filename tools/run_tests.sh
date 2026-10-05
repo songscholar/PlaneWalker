@@ -143,6 +143,7 @@ run_with_timeout() {
 log_has_runtime_failure() {
 	grep -Eq \
 		-e 'SCRIPT ERROR:' \
+		-e 'Error calling deferred method:' \
 		-e 'Parse Error:' \
 		-e 'Failed to load script' \
 		-e 'Failed loading resource' \

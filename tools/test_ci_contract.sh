@@ -40,6 +40,7 @@ make_fake_godot() {
 		'  pass) printf "PASS: all assertions succeeded\\n" | tee "${log_file}" ;;' \
 		'  exit_failure) printf "synthetic test failure\\n" | tee "${log_file}"; exit 7 ;;' \
 		'  log_failure) printf "SCRIPT ERROR: synthetic parse failure\\n" | tee "${log_file}" ;;' \
+		'  deferred_failure) printf "ERROR: Error calling deferred method: freed node argument\\n" | tee "${log_file}" ;;' \
 		'  engine_log_failure) printf "SCRIPT ERROR: engine-log-only parse failure\\n" >"${log_file}" ;;' \
 		'  leak_failure) printf "WARNING: ObjectDB instances leaked at exit\\n" | tee "${log_file}" ;;' \
 		'  hang) sleep 5; printf "PASS: too late\\n" | tee "${log_file}" ;;' \
@@ -128,6 +129,7 @@ run_fake_validation() {
 	mkdir -p "${fake_python_dir}"
 	make_fake_native_probe_python "${fake_python_dir}/python3" "$(command -v python3)"
 	SKIP_CI_CONTRACT=true \
+		GDSCRIPT_COVERAGE_PYTHON="" \
 		PATH="${fake_python_dir}:${PATH}" \
 		PLANEWALKER_CI_PROBE_TRACE="${TEMP_DIR}/native-probe-${mode}.trace" \
 		GODOT_BIN="${fake_godot}" \
@@ -243,6 +245,13 @@ GODOT_BIN="${TEMP_DIR}/godot-log-failure" TEST_LOG_DIR="${TEMP_DIR}/log-failure-
 log_failure_status=$?
 set -e
 [[ ${log_failure_status} -ne 0 ]] || fail "a script error in Godot logs must fail even with exit code zero"
+
+make_fake_godot "${TEMP_DIR}/godot-deferred-failure" deferred_failure
+set +e
+GODOT_BIN="${TEMP_DIR}/godot-deferred-failure" TEST_LOG_DIR="${TEMP_DIR}/deferred-failure-logs" tools/run_tests.sh --filter seed_service_test >/dev/null 2>&1
+deferred_failure_status=$?
+set -e
+[[ ${deferred_failure_status} -ne 0 ]] || fail "a deferred call error must fail even with exit code zero"
 
 make_fake_godot "${TEMP_DIR}/godot-engine-log-failure" engine_log_failure
 set +e
