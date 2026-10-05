@@ -63,7 +63,7 @@ func reserve_boss_aftershock(request: Dictionary, zone_capacity: int = MAX_ZONES
 	if not _valid_bounds(request.bounds) or not Contract.valid_point(request.position) or not _inside(request.position, request.bounds) or not request.parameters is Dictionary or not Contract.exact_fields(request.parameters, ["delay_frames", "warning_frames", "radius", "damage"]):
 		return _failure("aftershock_parameters")
 	var parameters: Dictionary = request.parameters
-	if not Contract.integer_in_range(parameters.delay_frames, 20, 20) or not Contract.integer_in_range(parameters.warning_frames, 40, 40) or not Contract.number_in_range(parameters.radius, 32.0, 32.0) or not Contract.number_in_range(parameters.damage, 12.0, 14.4):
+	if not Contract.integer_in_range(parameters.delay_frames, 20, 20) or not Contract.integer_in_range(parameters.warning_frames, 40, 40) or not Contract.number_in_range(parameters.radius, 32.0, 32.0) or not Contract.number_in_range(parameters.damage, 9.6, 18.0):
 		return _failure("aftershock_values")
 	var definition := {"kind": "boss_aftershock", "run_id": request.run_id, "source_id": request.hostile_source_id, "generation": int(request.attack_generation), "hit_index": 61, "reserved_frame": int(request.runtime_frame), "position": Contract.point(request.position), "radius": float(parameters.radius), "damage": float(parameters.damage), "damage_type": "physical", "warning_frames": int(parameters.warning_frames), "delay_frames": int(parameters.delay_frames), "lifetime_frames": 1, "tick_frames": 1, "bounds": request.bounds.duplicate(true), "visual_kind": "physical"}
 	return _reserve_zone(_state, definition, zone_capacity)
@@ -329,7 +329,7 @@ func _valid_zone_definition(row: Dictionary) -> bool:
 	if not Contract.exact_fields(row, _zone_fields(row)) or row.kind not in ["death_pool", "impact_pool", "boss_aftershock"] or not _valid_definition_identity(row) or not Contract.valid_point(row.position) or not _inside(row.position, row.bounds) or not Contract.number_in_range(row.radius, 1, 320) or not Contract.integer_in_range(row.warning_frames, 0, 600) or not Contract.integer_in_range(row.lifetime_frames, 1, 1200) or not Contract.integer_in_range(row.tick_frames, 1, 600):
 		return false
 	if row.kind == "boss_aftershock":
-		return typeof(row.delay_frames) == TYPE_INT and row.delay_frames == 20 and row.warning_frames == 40 and row.lifetime_frames == 1 and row.tick_frames == 1 and row.hit_index == 61 and row.radius == 32.0 and row.damage_type == "physical" and row.visual_kind == "physical" and Contract.number_in_range(row.damage, 12.0, 14.4)
+		return typeof(row.delay_frames) == TYPE_INT and row.delay_frames == 20 and row.warning_frames == 40 and row.lifetime_frames == 1 and row.tick_frames == 1 and row.hit_index == 61 and row.radius == 32.0 and row.damage_type == "physical" and row.visual_kind == "physical" and Contract.number_in_range(row.damage, 9.6, 18.0)
 	return (row.kind != "death_pool" or (row.warning_frames >= 23 and row.lifetime_frames == 1 and row.tick_frames == 1 and row.hit_index == 63)) and (row.kind != "impact_pool" or row.warning_frames == 0)
 
 

@@ -222,6 +222,19 @@ func _aftershock_request(source: String = "hostile-ruin") -> Dictionary:
 
 
 func _test_boss_aftershock(implementation: Script) -> void:
+	for amount: float in [9.6, 12.0, 14.4, 15.0, 18.0]:
+		var modified: RefCounted = implementation.new()
+		modified.configure("run-p15")
+		var request := _aftershock_request()
+		request.parameters.damage = amount
+		suite.assert_true(modified.reserve_boss_aftershock(request).ok, "aftershock admits bounded authenticated buff/debuff damage: " + str(amount))
+		suite.assert_true(modified.restore_snapshot(modified.snapshot()), "bounded modified aftershock cold snapshot remains exact")
+	for amount: float in [9.59, 18.01]:
+		var invalid: RefCounted = implementation.new()
+		invalid.configure("run-p15")
+		var request := _aftershock_request()
+		request.parameters.damage = amount
+		suite.assert_true(not invalid.reserve_boss_aftershock(request).ok, "aftershock refuses damage outside its complete derived control range")
 	var runtime: RefCounted = implementation.new()
 	runtime.configure("run-p15")
 	var reserved: Dictionary = runtime.reserve_boss_aftershock(_aftershock_request())

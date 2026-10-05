@@ -46,6 +46,9 @@ func _run() -> void:
 	await _test_aftershock()
 	await _test_aftershock("phase")
 	await _test_aftershock("death")
+	await _test_aftershock("impact", 1.25)
+	await _test_aftershock("impact", 0.8)
+	await _test_enrage_cover_retirement()
 	suite.finish(get_tree())
 
 
@@ -324,9 +327,11 @@ func _test_beam_cover() -> void:
 		await get_tree().process_frame
 
 
-func _test_aftershock(ending: String = "impact") -> void:
+func _test_aftershock(ending: String = "impact", attack_multiplier: float = 1.0) -> void:
 	var actor := _actor()
 	actor.global_position = Vector2(100.0, 120.0)
+	if attack_multiplier != 1.0:
+		suite.assert_true(actor.get("_launch_runtime").add_control_source("aftershock_attack_modifier", "attack_buff" if attack_multiplier > 1.0 else "attack_debuff", 300, attack_multiplier), "native aftershock accepts its actual bounded attack modifier")
 	var room := RoomScene.instantiate() as Node2D
 	room.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(room)
@@ -365,7 +370,7 @@ func _test_aftershock(ending: String = "impact") -> void:
 		suite.assert_true(_publish(bridge, ticket), "native aftershock publishes frame%d" % frame)
 		player.health.discard_transaction_snapshot(health_checkpoint)
 		if frame == 55:
-			suite.assert_equal(player.health.current_hp, player.health.max_hp - 25.0, "original slam deals exactly25 actual Player HP")
+			suite.assert_close(player.health.current_hp, player.health.max_hp - 25.0 * attack_multiplier, "original slam uses its actual authenticated attack modifier")
 			suite.assert_true(effects.payload_snapshot().zones.size() == 1 and effects.payload_snapshot().zones[0].phase == "DORMANT", "slam reserves one independently timed dormant aftershock")
 			if ending != "impact":
 				suite.assert_true(actor.get_node("Hurtbox").receive_hit(_damage(player, 79, 800.0 if ending == "death" else 400.0)) > 0.0, "actual Player damage commits the Boss " + ending + " before its secondary warning")
@@ -375,9 +380,9 @@ func _test_aftershock(ending: String = "impact") -> void:
 			suite.assert_true(effects.payload_snapshot().zones.size() == 1 and effects.payload_snapshot().zones[0].phase == "WARNING" and effects.native_payload_nodes().size() == 1, "aftershock displays its own40 complete native warning frames")
 			await _capture_aftershock(effects)
 		if frame in [74, 114]:
-			suite.assert_equal(player.health.current_hp, player.health.max_hp - 25.0, "secondary explosion cannot damage Player before its full60-frame delay")
+			suite.assert_close(player.health.current_hp, player.health.max_hp - 25.0 * attack_multiplier, "secondary explosion cannot damage Player before its full60-frame delay")
 		if frame == 115:
-			suite.assert_equal(player.health.current_hp, player.health.max_hp - (37.0 if ending == "impact" else 25.0), "delayed native explosion respects actual accepted impact or owner retirement")
+			suite.assert_close(player.health.current_hp, player.health.max_hp - (37.0 if ending == "impact" else 25.0) * attack_multiplier, "delayed native explosion respects actual attack modifiers and owner retirement")
 			suite.assert_true(effects.payload_snapshot().zones.is_empty(), "one-shot aftershock retires its actual native hazard after accepted impact")
 	actor.queue_free()
 	player.queue_free()
@@ -404,3 +409,71 @@ func _capture_aftershock(effects: RefCounted) -> void:
 		suite.assert_true(colors.size() >= 4, "native delayed aftershock renders nonblank original pixels at " + str(resolution))
 		var output := "res://build/visual-evidence/p15b-native-arena/ruin-aftershock-warning-%dx%d.png" % [resolution.x, resolution.y]
 		suite.assert_equal(pixels.save_png(output), OK, "native delayed aftershock screenshot is retained")
+
+
+func _test_enrage_cover_retirement() -> void:
+	var actor := _actor()
+	actor.global_position = Vector2(100.0, 120.0)
+	var player := _player()
+	player.global_position = Vector2(220.0, 120.0)
+	var cover0 := actor.get_node("ArenaConstructs/Cover0")
+	var cover1 := actor.get_node("ArenaConstructs/Cover1")
+	suite.assert_equal(cover0.get_node("Hurtbox").receive_hit(_damage(player, 301, 80.0)), 80.0, "enrage fixture retains one already broken physical cover")
+	suite.assert_equal(cover1.get_node("Hurtbox").receive_hit(_damage(player, 302, 16.0)), 16.0, "enrage fixture retains existing partial cover damage")
+	var runtime: RefCounted = actor.get("_launch_runtime")
+	# Only threshold warmup is a pure fixture; the warned impact uses real native transactions.
+	for frame: int in range(1, 18001):
+		var context := {"runtime_frame": frame, "source_position": {"x": 100.0, "y": 120.0}, "target_position": {"x": 220.0, "y": 120.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "player:1"}
+		if not runtime.advance_frame(frame, context, false).ok:
+			suite.assert_true(false, "enrage fixture advances every authored accepted threshold frame")
+			break
+	player.set("_runtime_frame", 18000)
+	actor._refresh_control_visual()
+	var registry := Registry.new()
+	var effects := Effects.new()
+	effects.configure("run-p15", 18000)
+	var bridge := Bridge.new()
+	suite.assert_true(bridge.configure(player, registry, [actor], effects), "enrage cover fixture binds actual native state after the accepted18000-frame threshold")
+	var started: Dictionary = runtime.request_action("guardian_enrage_collapse", {"runtime_frame": 18000, "source_position": {"x": 100.0, "y": 120.0}, "target_position": {"x": 220.0, "y": 120.0}, "facing_direction": {"x": 1.0, "y": 0.0}, "target_id": "player:1"})
+	suite.assert_true(started.ok, "actual native enrage commits its full75-frame warning: " + str(started))
+	if not started.ok:
+		actor.queue_free()
+		player.queue_free()
+		await get_tree().process_frame
+		return
+	for fact: Dictionary in started.threat_facts:
+		registry.register_fact(Actions.native_threat_fact(fact))
+	player.global_position = Vector2(550.0, 180.0)
+	var deaths: Array = []
+	actor.hostile_final_death.connect(func(source: StringName, receipt: String): deaths.append([source, receipt]))
+	for frame: int in range(18001, 18076):
+		var before: Dictionary = actor.launch_runtime_snapshot()
+		var ticket: Dictionary = bridge.begin_frame(frame)
+		if not bridge.prepare_frame(ticket):
+			suite.assert_true(false, "actual enrage prepares native frame%d" % frame)
+			break
+		if frame < 18075:
+			suite.assert_true(cover1.collision_layer == 1 and cover1.native_construct_snapshot().current_hp == 64.0, "enrage never removes physical cover during its full warning")
+		else:
+			for cover: Node in actor.get_node("ArenaConstructs").get_children():
+				suite.assert_true(cover.native_construct_snapshot().broken and cover.collision_layer == 0 and cover.get_node("Hurtbox").collision_layer == 0, "first actual enrage impact retires every surviving cover and both native collision layers")
+			suite.assert_equal(actor.native_arena_snapshot().damage_claims.size(), 5, "enrage spends only the remaining HP of three live covers without a duplicate claim for old debris")
+			suite.assert_true(bridge.rollback_frame(ticket), "enrage cover destruction compensates a refused whole native frame")
+			suite.assert_equal(actor.launch_runtime_snapshot(), before, "enrage rejection restores exact partial HP, broken covers and damage provenance")
+			suite.assert_true(cover1.collision_layer == 1 and cover1.native_construct_snapshot().current_hp == 64.0 and cover0.collision_layer == 0, "enrage rollback reconstructs actual original obstacle layers")
+			ticket = bridge.begin_frame(frame)
+			suite.assert_true(bridge.prepare_frame(ticket), "same native enrage impact retries after full compensation")
+		suite.assert_true(_publish(bridge, ticket), "actual enrage cover frame publishes")
+	suite.assert_equal(actor.health.current_hp, 800.0, "enrage cover retirement never damages its owner body")
+	suite.assert_equal(deaths, [], "enrage cover destruction creates no extra counted death or reward")
+	var cold: Dictionary = actor.native_cold_snapshot(func(_source: Node): return {})
+	var twin := _actor()
+	suite.assert_true(twin.restore_native_cold_snapshot(cold, func(_binding: Dictionary): return null), "fresh actual native Boss restores the current enrage cover checkpoint")
+	suite.assert_equal(twin.native_arena_snapshot(), actor.native_arena_snapshot(), "enrage cold reconstruction preserves exact cover destruction and accepted claims")
+	for cover: Node in twin.get_node("ArenaConstructs").get_children():
+		suite.assert_equal(cover.collision_layer, 0, "cold enrage cover checkpoint never resurrects a physical pillar")
+	await _capture_native(twin, "enrage")
+	twin.queue_free()
+	actor.queue_free()
+	player.queue_free()
+	await get_tree().process_frame

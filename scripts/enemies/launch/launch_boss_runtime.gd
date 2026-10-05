@@ -132,6 +132,14 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	result["threat_facts"] = []
 	for hit: Dictionary in result.hit_facts:
 		hit.damage = float(hit.damage) * float(controls.get("attack_multiplier", 1.0))
+		if _definition.id == "ruin_king" and hit.action_id == "guardian_enrage_collapse":
+			for cover: Dictionary in _arena.snapshot().covers:
+				if cover.broken:
+					continue
+				var fact_id := ("enrage_cover:%s:%d:%s" % [_state.identity.hostile_source_id, int(hit.attack_generation), cover.id]).sha256_text()
+				if not _arena.accept_damage_fact({"fact_id": fact_id, "run_id": str(_state.identity.run_id), "owner_source_id": str(_state.identity.hostile_source_id), "construct_id": cover.id, "runtime_frame": frame, "amount": float(cover.current_hp)}).ok:
+					restore_snapshot(before)
+					return _failure("enrage_cover_retirement")
 		if _definition.id == "ruin_king" and hit.action_id == "guardian_fist_slam":
 			var parameters: Dictionary = _definition.mechanisms
 			result.mechanism_requests.append({"kind": "boss_aftershock", "run_id": str(_state.identity.run_id), "hostile_source_id": str(_state.identity.hostile_source_id), "runtime_frame": frame, "attack_generation": int(hit.attack_generation), "position": hit.geometry[0].origin.duplicate(true), "parameters": {"delay_frames": int(parameters.aftershock_delay_frames) - int(parameters.aftershock_warning_frames), "warning_frames": int(parameters.aftershock_warning_frames), "radius": float(parameters.aftershock_radius_px), "damage": float(parameters.aftershock_damage) * (float(_definition.enrage.damage_multiplier) if _state.mechanism_state.action_enraged else 1.0) * float(controls.get("attack_multiplier", 1.0))}})
