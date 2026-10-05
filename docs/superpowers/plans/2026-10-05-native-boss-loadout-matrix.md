@@ -51,11 +51,14 @@ P15 Task12 requirements. Passing this focused matrix alone cannot close P15.
 
 ## Execution
 
-- [ ] Retain a semantic missing-native-runner RED without parser/runtime noise.
-- [ ] Implement production enumeration, actual scene/input/physical damage and bounded failure diagnostics.
-- [ ] Implement both authentic time casts and observed positive benefit coverage.
-- [ ] Implement typed physical native checkpoint, fresh reconstruction and exact next-frame comparison.
-- [ ] Implement authentic terminal receipt, pending/live work and native construct cleanup assertions.
+- [x] Retain a semantic missing-native-runner RED without parser/runtime noise.
+- [x] Implement production enumeration, actual scene/input/physical damage and bounded failure diagnostics.
+- [x] Implement both authentic time casts and observed positive benefit coverage.
+- [x] Implement typed physical native checkpoint, fresh reconstruction and exact next-frame comparison.
+- [x] Implement authentic terminal receipt, pending/live work and native construct cleanup assertions.
 - [ ] Run all750 production cases, scan Godot errors/leaks and retain exact report.
-- [ ] Add a CLI runner with validated canonical counts, isolated shard logs and truthful partial/full results.
-- [ ] Retain focused evidence, precise commits, full/native distinction and remaining P15 gates.
+- [x] Add a CLI runner with validated canonical counts, isolated shard logs and truthful partial/full results.
+- [x] Retain focused evidence, precise commits, full/native distinction and remaining P15 gates.
+
+Current partial evidence: [native Boss matrix](../../current/2026-10-05-native-boss-matrix-evidence.md).
+Full750 execution remains open; individual repaired cases are not a full report.
