@@ -133,7 +133,8 @@ def verify_linux_guest_startup(
             "--env", "XDG_DATA_HOME=/tmp/engine-data",
             "--env", "XDG_CONFIG_HOME=/tmp/engine-config",
             "--env", "XDG_CACHE_HOME=/tmp/engine-cache",
-            image, "/artifact/PlaneWalker.x86_64", "--headless", "--log-file",
+            "--entrypoint", "/artifact/PlaneWalker.x86_64",
+            image, "--headless", "--log-file",
             "/output/engine.log", "--", "--plane-walker-startup-check",
         ]
         report["command"] = command

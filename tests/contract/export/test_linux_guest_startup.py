@@ -100,6 +100,7 @@ class LinuxGuestStartupTest(unittest.TestCase):
         self.assertEqual(command[command.index('--network') + 1], 'none')
         self.assertIn('--read-only', command)
         self.assertIn('--pull=never', command)
+        self.assertEqual(command[command.index('--entrypoint') + 1], '/artifact/PlaneWalker.x86_64')
         self.assertEqual(command.count('--mount'), 2)
         self.assertNotIn('--path', command)
 
