@@ -51,6 +51,7 @@ does not alter live Player state, progression or global gameplay facts.
   package roundtrip and deletion/reclamation: `build/test-evidence/run-view-review-green`.
 - Full existing replay suite: `build/test-evidence/replay-final`, 24/24 scenes.
 - Background-worker whole replay suite: `build/test-evidence/replay-worker-suite`,27/27 scenes.
+- Deferred-reclamation replay suite: `build/test-evidence/replay-reclamation-suite`,28/28 scenes.
 - Actual Rewind followed by actual Health death and private backward restore:
   `run_replay_history_test` in that suite, including shared-world and enabled-Player refusal.
 - Domain-backed translated roots/covers, semantic raster zone, cone projection

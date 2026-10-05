@@ -25,6 +25,62 @@ class InstrumentedProviderTest(unittest.TestCase):
         self.assertIsNotNone(provider, "runtime AST instrumentation provider must exist")
         return provider
 
+    def test_parallel_runtime_hits_retain_every_worker_and_main_thread_line(self):
+        editor = shutil.which(os.environ.get("GODOT_BIN", "godot"))
+        self.assertIsNotNone(editor, "real Godot threads must exercise the coverage collector")
+        temporary_parent = ROOT / "build/coverage-fixtures"
+        temporary_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temporary_parent) as temporary:
+            root = Path(temporary)
+            probe = root / "tools/coverage/line_probe.gd"
+            probe.parent.mkdir(parents=True)
+            shutil.copy2(ROOT / "tools/coverage/line_probe.gd", probe)
+            (root / "project.godot").write_text(
+                'config_version=5\n[application]\nrun/main_scene="res://main.tscn"\n'
+                '[autoload]\nPWLineCoverageProbe="*res://tools/coverage/line_probe.gd"\n',
+                encoding="utf-8",
+            )
+            (root / "concurrent.gd").write_text(
+                'extends Node\n'
+                'const Probe = preload("res://tools/coverage/line_probe.gd")\n'
+                'func _ready() -> void:\n\tcall_deferred("_run")\n'
+                'func _run() -> void:\n'
+                '\tvar threads: Array[Thread] = []\n'
+                '\tfor worker: int in range(4):\n'
+                '\t\tvar thread := Thread.new()\n'
+                '\t\tthread.start(_mark.bind(worker))\n'
+                '\t\tthreads.append(thread)\n'
+                '\t_mark(4)\n'
+                '\tfor thread: Thread in threads:\n\t\tthread.wait_to_finish()\n'
+                '\tvar count: int = Probe._hits.get("scripts/parallel.gd", {}).size()\n'
+                '\tprint("PARALLEL_HIT_COUNT ", count)\n'
+                '\tget_tree().quit(0 if count == 20000 else 1)\n'
+                'func _mark(worker: int) -> void:\n'
+                '\tfor line: int in range(4000):\n'
+                '\t\tProbe.mark("scripts/parallel.gd", worker * 4000 + line + 1)\n',
+                encoding="utf-8",
+            )
+            (root / "main.tscn").write_text(
+                '[gd_scene load_steps=2 format=3]\n'
+                '[ext_resource type="Script" path="res://concurrent.gd" id="1"]\n'
+                '[node name="ConcurrentCoverage" type="Node"]\nscript = ExtResource("1")\n',
+                encoding="utf-8",
+            )
+            hits = root / "runtime-hits"
+            environment = dict(os.environ)
+            environment["PLANEWALKER_COVERAGE_HITS_DIR"] = str(hits)
+            result = subprocess.run(
+                [editor, "--headless", "--path", str(root), "--log-file", str(root / "engine.log")],
+                cwd=root, env=environment, text=True, capture_output=True, timeout=30, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for failure in ["ERROR:", "ObjectDB instances leaked", "RID allocations leaked"]:
+                self.assertNotIn(failure, result.stdout + result.stderr)
+            reports = list(hits.glob("*.json"))
+            self.assertEqual(len(reports), 1)
+            recorded = json.loads(reports[0].read_text())["hits"]["scripts/parallel.gd"]
+            self.assertEqual(recorded, list(range(1, 20001)))
+
     def test_real_runtime_covers_executed_lines_and_preserves_typed_initializers(self):
         api = self.require_provider()
         editor = shutil.which(os.environ.get("GODOT_BIN", "godot"))

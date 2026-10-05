@@ -94,6 +94,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P22C Run Replay Codec Evidence](current/2026-10-05-p22c-run-replay-codec-evidence.md) | 实际角色快照的类型精确保留、差量重建和有界压缩 | Focused Verified / Partial milestone |
 | [P22C Physical Run Replay Stream Evidence](current/2026-10-05-p22c-run-replay-stream-evidence.md) | 整局物理分块、精确读取、并发版本拒绝、故障恢复和空间预算 | Focused Verified / Partial milestone |
 | [P22C Native Run Replay Evidence](current/2026-10-05-p22c-native-run-replay-evidence.md) | 正式整局录制、隔离原生世界、历史寻址、物理导入导出和三种分辨率 | Focused Verified / Long gameplay certification pending |
+| [Threaded Coverage Evidence](current/2026-10-05-threaded-runtime-coverage-evidence.md) | 主线程与录制线程的真实行命中并发保护 | Focused Verified / Exact-source full measurement pending |
 | [P21D Native Endless Design](superpowers/specs/2026-10-05-p21d-native-endless-design.md) | 五层连续循环、跨循环构筑与资源、有界难度和独立冷恢复 | Approved / Current authority |
 | [P21D Native Endless Plan](superpowers/plans/2026-10-05-p21d-native-endless.md) | 正式五层循环、耐久服务、原生流程与据点入口实施 | Active / Current |
 | [P21D Native Endless Evidence](current/2026-10-05-p21d-native-endless-evidence.md) | 真实五层循环、构筑与资源继承、有界强度和物理冷恢复 | Focused Verified / Combined certification pending |
@@ -102,6 +103,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P21E Daily Rewards Evidence](current/2026-10-05-p21e-daily-rewards-evidence.md) | 每日参与与胜利、连续奖励、无伤认证、代币兑换和手柄重试 | Focused Verified / Remaining special rules active |
 | [P21F Daily Conditions Design](superpowers/specs/2026-10-05-p21f-daily-conditions-design.md) | 每日五种特殊条件的正式战斗规则 | Approved / Current authority |
 | [P21F Daily Conditions Plan](superpowers/plans/2026-10-05-p21f-daily-conditions.md) | 真实条件、冷恢复和历史会话迁移实施 | Active / Current |
+| [P21F Daily Conditions Evidence](current/2026-10-05-p21f-daily-conditions-evidence.md) | 原生条件伤害、行动、时间效果和旧会话物理迁移 | Focused Verified / Combined certification pending |
 | [P25 Carried Boss Rush Design](superpowers/specs/2026-10-05-p25-carried-boss-rush-design.md) | 连续 Boss 战、携带资源、统一难度与认证结算 | Approved / Current authority |
 | [P25 Carried Boss Rush Plan](superpowers/plans/2026-10-05-p25-carried-boss-rush-plan.md) | 连战构筑、场地强度、耐久奖励与原生入口实施 | Active / Current |
 | [P25 Carried Boss Rush Evidence](current/2026-10-05-p25-carried-boss-rush-evidence.md) | 连续五战、资源与物品继承、必选奖励、冷恢复和原生界面 | Focused Verified / Profile reward integration active |

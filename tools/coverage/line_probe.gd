@@ -2,13 +2,16 @@ extends Node
 
 static var _hits: Dictionary = {}
 static var _enabled := not OS.get_environment("PLANEWALKER_COVERAGE_HITS_DIR").is_empty()
+static var _mutex := Mutex.new()
 
 
 static func mark(path: String, line: int) -> bool:
 	if _enabled:
+		_mutex.lock()
 		if not _hits.has(path):
 			_hits[path] = {}
 		_hits[path][line] = true
+		_mutex.unlock()
 	return true
 
 
@@ -20,8 +23,11 @@ func _exit_tree() -> void:
 		push_error("Runtime line coverage cannot create its isolated report directory")
 		return
 	var recorded: Dictionary = {}
-	for path: String in _hits:
-		var lines: Array = _hits[path].keys()
+	_mutex.lock()
+	var retained := _hits.duplicate(true)
+	_mutex.unlock()
+	for path: String in retained:
+		var lines: Array = retained[path].keys()
 		lines.sort()
 		recorded[path] = lines
 	var scene_id := OS.get_environment("PLANEWALKER_COVERAGE_SCENE_ID")

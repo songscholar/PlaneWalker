@@ -1,6 +1,6 @@
 # P21F Daily Native Conditions Implementation
 
-- Status: Completed / Current
+- Status: Focused Verified / Current
 - Document Role: Current focused implementation plan
 - Authority Level: Below the approved Daily condition specification
 - Applies To: Native mode Player, Boss projections and catalog migration

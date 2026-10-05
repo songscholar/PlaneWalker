@@ -73,6 +73,12 @@ sources refuse measurement. Tests cover actual Godot execution, inheritance,
 inferred property types, branches, loops, lambdas, input-event configuration,
 autoload cleanup and intentionally unvisited code.
 
+The shared line set uses a Godot Mutex for native recording workers and the main
+thread. A real five-thread regression retains all 20,000 distinct line IDs; the
+unlocked collector lost IDs and aborted in the native dictionary implementation.
+Exit snapshots the protected set before serialization. Instrumentation affects
+timing, so its recording stress results do not certify uninstrumented throughput.
+
 Provision and run inside the repository:
 
 ```bash
