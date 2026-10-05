@@ -1109,7 +1109,7 @@ func restore_character_boss_exposure_replay_snapshot(value: Dictionary, authorit
 
 
 func get_boss_ui_snapshot() -> Dictionary:
-	var state: Dictionary = _launch_runtime.snapshot()
+	var state: Dictionary = _launch_runtime.native_ui_snapshot() if _launch_runtime.has_method("native_ui_snapshot") else _launch_runtime.snapshot()
 	if state.is_empty() or health == null:
 		return {}
 	var action: Dictionary = _launch_runtime._action_definition(str(state.action.action_id))

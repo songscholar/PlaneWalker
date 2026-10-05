@@ -624,6 +624,10 @@ func native_action_snapshot() -> Dictionary:
 	return _action.snapshot() if _action != null else {}
 
 
+func native_ui_snapshot() -> Dictionary:
+	return {} if _state.is_empty() else {"runtime_frame": _state.runtime_frame, "action": native_action_snapshot(), "mechanism_state": {"phase_index": _state.mechanism_state.phase_index, "delay_remaining_frames": _state.mechanism_state.delay_remaining_frames, "enraged": _state.mechanism_state.enraged}}
+
+
 func time_auxiliary_snapshot() -> Dictionary:
 	return _time_auxiliary.snapshot() if _time_auxiliary != null else {}
 
