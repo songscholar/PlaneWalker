@@ -6,13 +6,16 @@ const BossStatus := preload("res://scripts/enemies/launch/boss_elemental_status_
 const Construct := preload("res://scripts/enemies/launch/launch_boss_construct.gd")
 const Wall := preload("res://scripts/enemies/launch/launch_boss_wall.gd")
 const ForestRoot := preload("res://scripts/enemies/launch/launch_forest_root.gd")
+const RootTelegraph := preload("res://scripts/fx/combat_telegraph_2d.gd")
 const Calculator := preload("res://scripts/combat/damage_calculator.gd")
 var _exposure_replay_authority: RefCounted
 var _arena_effects: WeakRef
 
 
 func _create_launch_runtime() -> RefCounted:
-	return BossRuntime.new()
+	var runtime := BossRuntime.new()
+	runtime.configure_arena_origin(_point(_native_arena_origin()), _point(global_position))
+	return runtime
 
 
 func _create_launch_status_runtime() -> RefCounted:
@@ -33,7 +36,7 @@ func _native_geometry_matches_definition() -> bool:
 	if _launch_definition.get("id", "") == "forest_heart":
 		var arena := get_node_or_null("ArenaConstructs")
 		var state := native_arena_snapshot()
-		if arena == null or state.is_empty() or arena.get_child_count() != 6:
+		if arena == null or state.is_empty() or state.arena_origin != _point(_native_arena_origin()) or arena.get_child_count() != 6:
 			return false
 		for index: int in range(6):
 			var root := arena.get_child(index)
@@ -178,6 +181,8 @@ func _wall_static_placement_valid(action: Dictionary) -> bool:
 func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Dictionary:
 	var result := super.configure_launch_room_motion(room, template)
 	if result.ok:
+		if not _launch_runtime.configure_arena_origin(_point(_native_arena_origin()), _point(global_position)):
+			return _launch_failure("forest_arena_origin")
 		_refresh_native_arena()
 	return result
 
@@ -185,6 +190,7 @@ func configure_launch_room_motion(room: Node2D, template: Dictionary) -> Diction
 func _refresh_control_visual() -> void:
 	_refresh_native_arena()
 	var state: Dictionary = _launch_runtime.snapshot()
+	_refresh_root_sweep_telegraph(state)
 	var watch := get_node_or_null("WatchHurtbox") as Area2D
 	if watch != null and not state.is_empty():
 		watch.present(native_watch_snapshot())
@@ -203,6 +209,23 @@ func _refresh_control_visual() -> void:
 	var facing := Vector2.RIGHT if state.action.committed_aim.is_empty() else _vector(state.action.committed_aim)
 	sprite.present(pose, facing, float(state.runtime_frame) / 60.0, false, false)
 	sprite.modulate = Color(0.55, 0.95, 1.0) if _launch_runtime.is_exposed() else Color.WHITE
+
+
+func _refresh_root_sweep_telegraph(state: Dictionary) -> void:
+	if _launch_definition.get("id", "") != "forest_heart":
+		return
+	var telegraph := get_node_or_null("RootSweepTelegraph") as Node2D
+	if state.is_empty() or state.terminal or state.action.action_id != "matriarch_root_sweep" or state.action.phase not in ["WARNING", "ACTIVE"]:
+		if telegraph != null:
+			telegraph.clear_telegraph()
+		return
+	if telegraph == null:
+		telegraph = RootTelegraph.new()
+		telegraph.name = "RootSweepTelegraph"
+		telegraph.z_index = 1
+		add_child(telegraph)
+	telegraph.set_accessibility_options(bool(GameState.get_setting("high_contrast_danger", false)), float(GameState.get_setting("enemy_telegraph_scale", 1.0)))
+	telegraph.project_fact(Actions.native_threat_fact(state.action.committed_geometry[0]), str(state.action.action_id))
 
 
 func native_arena_snapshot() -> Dictionary:
@@ -303,8 +326,17 @@ func receive_native_construct_hit(id: String, damage_info: RefCounted) -> float:
 	var result: Dictionary = _launch_runtime.accept_arena_damage_fact({"fact_id": (_damage_identity(damage_info) + ":" + id).sha256_text(), "run_id": str(run), "owner_source_id": str(hostile_source_id), "construct_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "amount": amount})
 	if not result.ok:
 		return 0.0
+	if _hostile_threat_registry != null:
+		for generation: int in result.get("retired_generations", []):
+			_hostile_threat_registry.retire(hostile_source_id, generation)
 	_refresh_control_visual()
 	return float(result.amount)
+
+
+func _can_restore_actor_state(value: Dictionary) -> bool:
+	if not super._can_restore_actor_state(value):
+		return false
+	return _launch_definition.get("id", "") != "forest_heart" or value.runtime.arena_state.arena_origin == _point(_native_arena_origin())
 
 
 func prepared_launch_hit_blocked_by_cover(hit: Dictionary, target: Node2D) -> bool:

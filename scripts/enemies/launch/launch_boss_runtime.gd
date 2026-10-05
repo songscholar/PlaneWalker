@@ -22,6 +22,8 @@ var _state: Dictionary = {}
 var _action: RefCounted
 var _control: RefCounted = Controls.new()
 var _conversion: RefCounted = Conversion.new()
+var _arena_origin := {"x": 0.0, "y": 0.0}
+var _arena_trunk_origin := {"x": 320.0, "y": 144.0}
 var _arena: RefCounted
 
 
@@ -42,7 +44,7 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 			return _failure("arena_configuration")
 	elif _definition.id == "forest_heart":
 		_arena = ForestArena.new()
-		if not _arena.configure(_definition, identity).ok:
+		if not _arena.configure(_definition, identity).ok or not _arena.bind_origin(_arena_origin):
 			return _failure("forest_arena_configuration")
 	var action_identity := identity.duplicate(true)
 	action_identity.erase("seed")
@@ -61,8 +63,18 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_state = {"schema_version": 1, "definition_digest": JSON.stringify(_definition, "", true, true).sha256_text(), "identity": identity.duplicate(true), "runtime_frame": int(identity.runtime_frame), "terminal": false, "mechanism_state": {"phase_index": 0, "hp_current": float(_definition.max_hp), "minimum_hp": float(_definition.max_hp), "phase_transition_until_frame": int(identity.runtime_frame) - 1, "enraged": false, "action_phase_index": 0, "action_enraged": false, "delay_remaining_frames": 0, "exposure_through_frame": int(identity.runtime_frame) - 1, "last_action_id": "", "consecutive_actions": 0, "damage_claims": [], "health_claims": [], "stop_claims": [], "history": [], "rewind": {}, "rewind_healing_spent": 0.0, "weakpoint_claims": []}}
 	_action = initial_action
 	if _arena != null:
-		_state.schema_version = 2
+		_state.schema_version = 3 if _definition.id == "forest_heart" else 2
 	return {"ok": true, "snapshot": snapshot()}
+
+
+func configure_arena_origin(origin: Dictionary, trunk_origin: Dictionary = {}) -> bool:
+	if not Contract.valid_point(origin) or not trunk_origin.is_empty() and not Contract.valid_point(trunk_origin):
+		return false
+	if _arena != null and _definition.id == "forest_heart" and not _arena.bind_origin(origin):
+		return false
+	_arena_origin = origin.duplicate(true)
+	_arena_trunk_origin = {"x": float(origin.x) + 320.0, "y": float(origin.y) + 144.0} if trunk_origin.is_empty() else trunk_origin.duplicate(true)
+	return true
 
 
 func request_action(action_id: String, context: Dictionary) -> Dictionary:
@@ -70,7 +82,20 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 		return _failure("action_unavailable")
 	if not _sync_action_regime():
 		return _failure("action_regime")
-	var result: Dictionary = _action.request_action(action_id, context)
+	var requested_context := context.duplicate(true)
+	var rooted: bool = _definition.id == "forest_heart" and action_id == "matriarch_root_sweep"
+	if rooted:
+		if not Contract.exact_fields(context, Action.CONTEXT_FIELDS) or not Contract.valid_point(context.target_position):
+			return _failure("root_sweep_context")
+		var selected: Dictionary = _arena.select_sweep_root(context.target_position)
+		if selected.is_empty():
+			return _failure("root_sweep_unavailable")
+		requested_context.source_position = selected.position.duplicate(true)
+	var before := snapshot()
+	var result: Dictionary = _action.request_action(action_id, requested_context)
+	if result.ok and rooted and not _arena.accept_sweep_commit(_action.snapshot()):
+		restore_snapshot(before)
+		return _failure("root_sweep_commit")
 	if result.ok:
 		var mechanism: Dictionary = _state.mechanism_state
 		mechanism.consecutive_actions = int(mechanism.consecutive_actions) + 1 if mechanism.last_action_id == action_id else 1
@@ -364,6 +389,9 @@ func accept_arena_damage_fact(value: Dictionary) -> Dictionary:
 		return _failure("arena_unavailable")
 	var result: Dictionary = _arena.accept_damage_fact(value)
 	if result.ok:
+		if _definition.id == "forest_heart" and result.broken and _arena.sweep_root_id(_action.snapshot()) == value.construct_id:
+			result["retired_generations"] = _action.cancel(&"selected_root_destroyed").retired_generations
+			_state.mechanism_state.delay_remaining_frames = 0
 		_conversion.synchronize_tail(_character_tail_must_wait())
 	return result
 
@@ -394,6 +422,8 @@ func accept_arena_charge_impact(construct_id: String) -> Dictionary:
 func normalize_native_snapshot(value: Dictionary) -> Dictionary:
 	if _arena == null:
 		return value.duplicate(true) if can_restore_snapshot(value) else {}
+	if _definition.id == "forest_heart":
+		return _normalize_forest_native_snapshot(value)
 	if value.get("schema_version") == 2:
 		if not value.get("arena_state") is Dictionary:
 			return {}
@@ -413,12 +443,28 @@ func normalize_native_snapshot(value: Dictionary) -> Dictionary:
 	return normalized if can_restore_snapshot(normalized) else {}
 
 
+func _normalize_forest_native_snapshot(value: Dictionary) -> Dictionary:
+	if value.get("schema_version") == 3:
+		return value.duplicate(true) if can_restore_snapshot(value) else {}
+	if typeof(value.get("schema_version")) != TYPE_INT or value.get("schema_version") not in [1, 2] or not Contract.exact_fields(value, STATE_FIELDS + (["arena_state"] if value.schema_version == 2 else [])) or not value.get("mechanism_state") is Dictionary or not value.mechanism_state.get("phase_index") is int or not value.get("action") is Dictionary or typeof(value.get("runtime_frame")) != TYPE_INT or typeof(value.get("terminal")) != TYPE_BOOL:
+		return {}
+	var normalized := value.duplicate(true)
+	normalized.schema_version = 3
+	if value.schema_version == 2:
+		if not value.arena_state is Dictionary or value.arena_state.get("schema_version") != 1:
+			return {}
+		normalized.arena_state = _arena.normalize_snapshot(value.arena_state, value.action)
+	else:
+		normalized.arena_state = _arena.initial_at_frame(int(value.runtime_frame), bool(value.terminal), int(value.mechanism_state.phase_index), value.action)
+	return normalized if can_restore_snapshot(normalized) else {}
+
+
 func can_restore_native_snapshot(value: Dictionary) -> bool:
 	return can_restore_snapshot(value) and (_arena == null or _arena.can_restore_snapshot(value.arena_state, true))
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS + ["arena_state"] if _arena != null else STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+	if _state.is_empty() or not Contract.exact_fields(value, STATE_FIELDS + ["arena_state"] if _arena != null else STATE_FIELDS) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (3 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
 		return false
 	if _arena != null and (not value.arena_state is Dictionary or not _arena.can_restore_snapshot(value.arena_state) or value.arena_state.runtime_frame != value.runtime_frame or value.arena_state.terminal != value.terminal):
 		return false
@@ -452,6 +498,12 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	var action := _make_action(int(mechanism.action_phase_index), mechanism.action_enraged)
 	if action == null or not action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false
+	if _definition.id == "forest_heart":
+		if value.arena_state.historical_sweep_generation >= value.action.next_generation_floor or not _arena.can_restore_sweep_action(value.action, value.arena_state, _arena_trunk_origin):
+			return false
+		for claim: Dictionary in value.arena_state.sweep_claims:
+			if claim.attack_generation >= value.action.next_generation_floor:
+				return false
 	if not _valid_temporal_state(mechanism, value):
 		return false
 	for source: Dictionary in value.control.sources:
@@ -602,7 +654,13 @@ func _select_action(frame: int, observations: Dictionary) -> String:
 	var weight := 0
 	var distance := _vector(observations.source_position).distance_to(_vector(observations.target_position))
 	for action: Dictionary in _definition.actions:
-		if _action_available(action.id) and int(current.cooldowns.get(action.id, 0)) <= frame and distance >= float(action.distance_min_px) and distance <= float(action.distance_max_px):
+		var action_distance := distance
+		if _definition.id == "forest_heart" and action.id == "matriarch_root_sweep":
+			var selected: Dictionary = _arena.select_sweep_root(observations.target_position)
+			if selected.is_empty():
+				continue
+			action_distance = _vector(selected.position).distance_to(_vector(observations.target_position))
+		if _action_available(action.id) and int(current.cooldowns.get(action.id, 0)) <= frame and action_distance >= float(action.distance_min_px) and action_distance <= float(action.distance_max_px):
 			candidates.append(action)
 			weight += int(action.weight)
 	if candidates.is_empty():
