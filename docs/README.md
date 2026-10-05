@@ -4,7 +4,7 @@
 - Document Role: Current documentation index
 - Authority Level: Documentation index and execution-status source
 - Applies To: 全仓库设计、开发、测试、构建和发布准备
-- Implementation Status: P11 five weapons, P12 five characters, and P13 complete Launch pools are certified locally. P14 native dungeon panels, Save continuation, and Player Replay are implemented with focused verification. P15 native Sentinel and Moth/payload boundaries are verified; complete encounter and boss production integration remains pending. P16 actual-content Profile, reviewed history upgrades, Main durable launch/death settlement, native Hub/tutorial, and final fragment/ending/credits handoffs are verified separately. Combined product certification, full native resume, training, and Expansion remain active. P7/P9 retains coverage and formal export blockers; formal state remains `M1 Candidate — External Validation Pending`
+- Implementation Status: P11 five weapons, P12 five characters and P13 complete Launch pools are locally certified. P14 native dungeon panels and Save/Replay have focused verification. P15 production native encounters, five Boss foundations, Time Watch and live combat checkpoints are active; remaining species, affixes and Boss arena constructs continue. P16 native Hub/meta/training/tutorial, narrative/endings and trusted active-content migration have focused evidence. P17 actor/enemy raster assets and music, P18 local Mod/DLC management, and P20A native build sharing have focused evidence; P20B local records are in progress. Combined clean-checkout validation, line coverage, retained release exports and full-gameplay certification remain pending. Formal M1 remains `M1 Candidate — External Validation Pending`
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`
 - Supersedes: 以无状态旧文档或已完成 Wave 计划作为当前执行入口
@@ -13,7 +13,7 @@
 
 ## 当前执行结论
 
-P16 的档案服务现已激活到 Main：正式开局使用耐久收据，真实死亡结算可在保存失败后重试，返回据点后可用下一身份重新开局。三个原生据点区域接入成长、锻造、配装、档案与 NPC 对话面板，教学提示使用真实玩家成功帧。最终心脏、结局和字幕流程、完整局内恢复、训练与引导局、离线扩展模式及全产品构建认证继续实施。当前局部完成证据不能代替全产品认证。
+Main 已接入三个原生据点区域、成长/锻造/配装、真实教学和训练、剧情/结局/字幕，以及活跃战斗的物理冷恢复。P20A 配装分享和 P20B 本地排行已通过原生流程、持久保存及双语窗口专项验证。狂暴/坚固精英已接入真实生成与历史冷恢复，Ruin 掩体能阻挡激光。完整动态词缀、敌人效果、Boss 场地机制与挑战模式正在推进；回放产品化、外观及额外 Expansion 内容仍在后续队列。每项专项证据与最终整合认证分别记录。
 
 Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Current、Next、Launch 和 Expansion 作为可被删减的产品选项。范围通过实施顺序和质量 Gate 控制，不通过删除角色、武器、楼层、Boss、Hub、剧情、回放、排行、Mod 或 DLC 能力来降低范围。
 
@@ -42,7 +42,7 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | P4 Single RunState / RoomRuntime | Completed / Certified | RunOrchestrator/RoomRuntime 是唯一运行与房间写入权威；GameState 运行镜像、LegacyRunAdapter 和旧运行 UI 已退休 |
 | P5 Single event publication | Completed / Certified | 14 个 typed gameplay facts exactly-once；generic EventBus 与所有运行域状态变更订阅已退休 |
 | P6 Controller/focus/accessibility | Completed / Certified | 14 动作双设备合同、可恢复 remap、纯手柄焦点链、15 项设置 UI、字幕/音频/视觉替代和本局助攻快照已通过 focused、整库及 detached gate |
-| P7/P9 Export and clean certification | Active / Externally blocked | 工具链、fail-closed 执行器、detached clone 认证已提交；真实覆盖率、导出模板和 packaged startup 尚未通过 |
+| P7/P9 Export and clean certification | Active / Validation repair | 官方模板已在项目工具链提供；最新干净检出暴露内容契约与 CI 编排不一致，正修复并重跑。真实行覆盖率与最终发行包认证仍待完成 |
 | P8 Documentation governance | Completed / Certified | 离线验证、元数据/生命周期、零基线、ADR、Current 索引、证据状态和整库认证已完成 |
 | Wave 4A | Completed | 试玩会话、去标识、导入、汇总、证据 Gate 和合同测试已完成 |
 | Wave 4B | Completed | 回溯残影、Boss 全招前摇、精英主动机制和五房权威遭遇已实现并通过测试 |
@@ -52,8 +52,8 @@ Plane Walker 已进入“完整产品愿景全量完成”计划，不再把 Cur
 | Experience tuning | Not authorized by evidence | 真人体验数据为 `0 / 20`，不使用 synthetic 或 30 Seed 数据伪装手感调参依据 |
 | Post-M1 Promotion | Not started / Evidence-gated | 弓、时间裂隙、时间加速三选一尚未启动，等待真实 M1 人类证据 |
 | P10 Candidate Loadouts | Completed / Certified | 五角色、五武器、四能力目录、候选运行时、双槽 HUD、Candidate Lab 与六种时间组合已本地认证；Bow/Rift/Accelerate 未正式晋升 Current |
-| Full Product Content | Active / Phased program | P11、P12、P13 已认证；P14 18 个事件、原生地图/商店/事件等六面板、临时效果期限、Save 延续和 Player Replay 7 已专项通过，最终组合门禁待完成；P15 已有攻击/遭遇基础和未激活的原生 Sentinel，剩余敌人及五 Boss 继续实施 |
-| Launch / Expansion Systems | Active / Phased program | Hub、成长、叙事、多结局、Boss Rush、挑战、无尽、完整回放产品化、排行、Mod、外观和 DLC 仍未全部实现；本地 macOS 编辑器运行时包可启动，不代表正式三平台发布认证 |
+| Full Product Content | Active / Phased program | P11、P12、P13 已认证；P14 六类原生面板、五层状态和 Save/Replay 专项通过；P15 正式原生遭遇、二十二敌人动作领域、五 Boss 基础及 Time Watch 专项通过，完整机制与场地构造物继续实施 |
+| Launch / Expansion Systems | Active / Phased program | Hub、成长、训练、叙事、多结局、活跃存档、原创资源/音乐、离线 Mod/DLC 管理和配装分享已专项验证。本地排行在实施；Boss Rush、挑战、无尽、回放产品化、外观和追加内容尚待完成 |
 
 当前权威 M1 Candidate 是干净提交 `79a20fd183fb57b8bdf62019ab80ff3f6e430635`。30 Seed 矩阵的两轮权威执行使用同一 digest `ba174ad596f7f2babe0fe632554af6394dd18042597abc3d93332a1cf3cbe678`，仓库 Gate 为 `PASS`。真实外部玩家和匹配观察均为 `0 / 20`，因此状态不得升级为 `M1 Go`。
 
@@ -188,6 +188,11 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P15B Native Boss Temporal Evidence](current/2026-10-05-p15b-native-boss-temporal-evidence.md) | 时之首领真实生命恢复、固定落点、阻挡和整帧失败补偿 | Verified Locally / Arena constructs active |
 | [P15E Native Mixed Hazard Work Evidence](current/2026-10-05-p15e-native-mixed-hazard-work-evidence.md) | 语义危险区死亡后所有权、共享区域预算、完整预警与清场补偿 | Verified Locally / Constructs active |
 | [P15B Native Time Watch Evidence](current/2026-10-05-p15b-native-watch-evidence.md) | 真实武器弱点代理、80 伤害打断、55 帧恢复、致死补偿与冷重建 | Verified Locally / Remaining arena mechanics active |
+| [Native Boss Arena Constructs Plan](superpowers/plans/2026-10-05-native-boss-arena-constructs.md) | 可破坏原生掩体、场地构造物、接受帧补偿和版本化冷恢复 | Active / Current |
+| [P15B Native Ruin Cover Evidence](current/2026-10-05-p15b-native-ruin-cover-evidence.md) | 四个物理掩体、五武器命中、冲锋碰撞和当前/历史冷恢复 | Verified Locally / Remaining arena mechanics active |
+| [Native Elite Affixes Plan](superpowers/plans/2026-10-05-native-elite-affixes.md) | 十词缀的真实 Health、控制、动态效果和生产冷恢复 | Active / Current |
+| [Native Static Elite Affix Evidence](current/2026-10-05-native-static-elite-affix-evidence.md) | 狂暴和坚固真实伤害、Health、运动与生产历史冷恢复 | Verified Locally / Dynamic affixes active |
+| [Runtime Line Coverage Provider Plan](superpowers/plans/2026-10-05-runtime-line-coverage-provider.md) | 语法树插桩、隔离原生运行和原始源码行命中证据 | Active / Current |
 | [P17A Actor Atlases Design](superpowers/specs/2026-10-05-plane-walker-p17a-actor-atlases-design.md) | 五角色与五首领原始像素动画资源合同 | Approved / Current authority |
 | [P17A Actor Atlases Plan](superpowers/plans/2026-10-05-plane-walker-p17a-actor-atlases.md) | 确定性图集生产、许可、逐帧和原生加载验证 | Active / Current |
 | [P17A Actor Atlases Evidence](current/2026-10-05-p17a-actor-atlases-evidence.md) | 十套动画、240 帧、来源、哈希与真实 Godot 图集验证 | Verified Locally / Gameplay integration separate |
@@ -207,6 +212,11 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [P20A Build Sharing Design](superpowers/specs/2026-10-05-plane-walker-p20a-build-sharing-design.md) | 离线配装码、严格解码、档案解锁和原生冥想室合同 | Approved / Current authority |
 | [P20A Build Sharing Plan](superpowers/plans/2026-10-05-plane-walker-p20a-build-sharing.md) | 150 组合、原子导入导出和实际控制的实施记录 | Implemented / Current |
 | [P20A Native Build Sharing Evidence](current/2026-10-05-p20a-native-build-sharing-evidence.md) | 150 配装往返、实际导入导出、保存补偿、剪贴板和八种原生画面 | Verified Locally / Current |
+| [P20B Local Records Design](superpowers/specs/2026-10-05-plane-walker-p20b-local-records-design.md) | 可信终局收据、内容/存档域隔离和离线排行合同 | Approved / Current authority |
+| [P20B Local Records Plan](superpowers/plans/2026-10-05-plane-walker-p20b-local-records.md) | 本地排行原子保存、去重、重启、Main 和原生 Hub 实施 | Active / Current |
+| [P20B Local Records Evidence](current/2026-10-05-p20b-local-records-evidence.md) | 真实终局排行、持久队列、物理确认与原生战绩窗口 | Verified Locally / Modes and global providers pending |
+| [P21A Native Boss Rush Design](superpowers/specs/2026-10-05-p21a-native-boss-rush-design.md) | 独立挑战状态、真实五 Boss 序列、阶段保存与普通成长隔离 | Approved / Current authority |
+| [P21A Native Boss Rush Plan](superpowers/plans/2026-10-05-p21a-native-boss-rush.md) | 原生 Boss Rush、物理继续、失败重试和据点入口实施 | Active / Current |
 | [P16 Native Training Design](superpowers/specs/2026-10-05-plane-walker-p16p-native-training-design.md) | 隔离练习、真实动作认证与一次性档案奖励 | Approved / Current |
 | [P16 Native Training Plan](superpowers/plans/2026-10-05-plane-walker-p16p-native-training.md) | 实体训练、保存失败恢复与原生教学入口实施 | Active / Current |
 | [P16 Native Checkpoint Design](superpowers/specs/2026-10-05-plane-walker-p16q-native-checkpoint-design.md) | 真实安全快照、关闭重建与严格冷恢复 | Approved / Current |

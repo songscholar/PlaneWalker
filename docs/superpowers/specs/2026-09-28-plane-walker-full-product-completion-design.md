@@ -4,12 +4,12 @@
 - Document Role: Current specification
 - Authority Level: Full-product scope, architecture, and completion contract
 - Applies To: P0–P9 foundation, Wave 4A–4D, formal M1 release, and all Next/Launch/Expansion delivery
-- Implementation Status: Active; P11 five weapons, P12 five characters, and P13 complete Launch pools are locally certified. P14 events, native dungeon panels, physical Save continuation, event lifetime, and full Player Replay 7 have focused verification; combined certification is pending. P15 hostile foundations and native Sentinel remain inactive. P16 Hub/meta/narrative and later Expansion systems are incomplete. Formal line-coverage and three-platform export evidence remain unavailable; a local macOS editor-runtime package has verified startup.
+- Implementation Status: Active; P11 five weapons, P12 five characters and P13 complete Launch pools are locally certified. P14 native dungeon panels, events and physical Save/Replay have focused evidence. P15 production native encounters, five Boss foundations, Time Watch and live combat checkpoint/migration have focused evidence; remaining native species/affixes and Boss arena constructs continue. P16 Main Hub/meta/training/tutorial, narrative/endings and active native save recovery are integrated with focused verification. P17 raster assets/music, P18 local Mod/DLC management and P20A build sharing are verified locally; P20B local records are in progress. Expansion modes, replay productization, cosmetics and additional authored content remain. Full clean-checkout validation, real line coverage, retained platform exports and complete gameplay certification remain pending.
 - Owner: Project integration lead
 - Depends On: `AGENTS.md`, `docs/0_深度收敛与系统职责设计.md`
 - Supersedes: `docs/superpowers/specs/2026-09-28-plane-walker-staged-development-design.md` for execution order and terminal scope
 - Preserves: All verified Wave 0/1, Wave 2, Wave 3A, and Wave 3B contracts and regression evidence
-- Last Verified: 2026-10-01
+- Last Verified: 2026-10-05
 - Contract References: `AGENTS.md`, future approved ADRs, `docs/contracts/`, current implementation plans
 
 ## 1. Decision
@@ -288,7 +288,7 @@ The foundation is executed as hard-gated phases:
 
 P0–P9 are foundation gates for the same continuous product program. They do not replace gameplay/content work; they make later parallel delivery safe and reproducible.
 
-Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md), the [P12 five-character program](../../current/2026-09-30-p12-five-characters-evidence.md), [P13A Launch archetype authority](../../current/2026-10-01-p13a-launch-archetype-authority-evidence.md), and [P13B complete Launch pools](../../current/2026-10-01-p13b-launch-content-evidence.md) is recorded under `docs/current/`. P7/P9 tooling is implemented and fail-closed, but its real line-coverage, export-template, packaged-export, and packaged-startup evidence remains externally blocked. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
+Completion evidence for P2, P3, P4/P5, P6, P8, P10A candidate loadouts, the [P11 five-weapon program](../../current/2026-09-30-p11-five-weapons-evidence.md), the [P12 five-character program](../../current/2026-09-30-p12-five-characters-evidence.md), [P13A Launch archetype authority](../../current/2026-10-01-p13a-launch-archetype-authority-evidence.md), and [P13B complete Launch pools](../../current/2026-10-01-p13b-launch-content-evidence.md) is recorded under `docs/current/`. P7/P9 tooling rejects invalid evidence. Official project-local templates, three development release exports and actual host startup are now available. Supplemental first-import localization classification and real AST line instrumentation have focused tests; the combined immutable-checkout validation, full coverage suite and retained release/startup certification remain active. Later product work continues without weakening those evidence gates or reintroducing GameState run mirrors, generic event publication, or content-registry bypasses.
 
 ## 10. Delivery Sequence After Foundation
 
