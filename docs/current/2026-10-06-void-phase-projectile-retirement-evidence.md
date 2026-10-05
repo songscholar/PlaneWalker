@@ -3,7 +3,7 @@
 - Status: Implemented / Current
 - Document Role: Current focused implementation and verification evidence
 - Authority Level: Below approved full-product completion contract
-- Applies To: Void Boss phase boundaries in native hostile payload preparation and retained native cases 619/513
+- Applies To: Void Boss phase boundaries, original frozen native matrix failures, and focused recovery cases
 - Owner: Native matrix validation lane
 - Depends On: `docs/current/2026-10-06-void-phase-projectile-retirement-plan.md`
 - Last Verified: 2026-10-06
@@ -35,16 +35,28 @@ The original matrix remains in the untouched `git archive` extraction of
 `build/retained-checkout/p15-native-full-be58030-20261006`. Its runtime/runner
 aggregate SHA-256 is
 `4d105df812e13cfbc95209f6a95a4d13891932a4ebfb0e604385f8d33f2d2db7`,
-recomputed with the runner's exact source-snapshot algorithm. Its final combined
-report is still pending while shard 000 runs; the four other shards have already
-failed. Neither the archive nor any original report was overlaid with fixes.
+recomputed with the runner's exact source-snapshot algorithm and matched by its
+final combined report. Session 17949 finished with exit 1 after 6691.260 seconds.
+Neither the archive nor any original report was overlaid with fixes.
+
+The final `build/p15-native-full.json` retains 232 of 750 requested case records:
+227 have empty case failures, five failed, and 518 were not executed after their
+shards stopped. All five shards fail: their requested/observed counts are
+150/80, 150/29, 150/39, 150/64 and 150/20. The aggregate retains 16 runner errors
+(five engine-error diagnostics, five nonzero exits, five shard-count failures,
+and one combined-count failure), `source.instrumented=false`,
+`native_complete=false` and `p15_complete=false`. It contains no source-change
+error. This is a completed failed matrix run, not a passed 750-case certificate.
 
 | Original case | Last accepted frame / HP | Refused runtime frame | Refusal |
 | --- | --- | --- | --- |
+| 79, `wanderer\|gun\|rewind+rift\|void_throne`, seed 20261084 | 3143 / 1792.6499999999996 | 3144 | `effects_commit`, `HOSTILE_EFFECT_INVALID`, `void_damage_receipt` |
+| 178, `time_guardian\|sword\|rift+accelerate\|forge_colossus`, seed 20261183 | 2620 / 380.8000000000003 | 2621 | `effects_can_commit` |
+| 338, `void_walker\|bow\|stop+rift\|forge_colossus`, seed 20261343 | 1986 / 112.00000000000153 | 1987 | `effects_can_commit` |
 | 619, `time_lord\|sword\|rewind+rift\|void_throne`, seed 20261624 | 2555 / 1764.4799999999982 | 2556 | `effects_commit`, `HOSTILE_EFFECT_INVALID`, `void_damage_receipt` |
 | 513, `primordial_knight\|gun\|stop+rewind\|forge_colossus`, seed 20261518 | 4191 / 283.1875 | 4192 | `effects_can_commit`; actor can commit, payload effects cannot |
 
-The original case reports are, respectively:
+The original case 619 and case 513 reports are, respectively:
 
 - `build/retained-checkout/p15-native-full-be58030-20261006/build/test-evidence/p15-native-full/native-600-150/report.json`.
 - `build/retained-checkout/p15-native-full-be58030-20261006/build/test-evidence/p15-native-full/native-450-150/report.json`.
@@ -52,6 +64,11 @@ The original case reports are, respectively:
 Each directory retains separate `stdout.log` and `godot.log`. The original
 failures remain failures, including their missing terminal receipts. The
 distinction between last accepted frame and refused runtime frame is intentional.
+The final aggregate is
+`build/retained-checkout/p15-native-full-be58030-20261006/build/p15-native-full.json`.
+It retains all five original failure objects and their refused-frame diagnostics;
+case 79 is in shard `native-000-150`, 178 in `native-150-150`, and 338 in
+`native-300-150` below the same retained log directory.
 
 The separate pure `4735176` archive at
 `build/retained-checkout/p15-case338-scalar4735176-20261006` has aggregate
@@ -117,6 +134,35 @@ The old failure remains at
 `build/retained-checkout/p15-native-full-be58030-20261006/build/test-evidence/p15-native-full/native-600-150/report.json`.
 The independent pre-fix reproduction remains at
 `build/retained-checkout/p15-case338-scalar4735176-20261006/build/p15-case619-before.json`.
+
+## Companion Void Case 79 Recovery
+
+The same unchanged `cdea629` archive independently passes the other original
+Void failure, case 79 `wanderer|gun|rewind+rift|void_throne`, seed `20261084`:
+
+```sh
+python3 tools/run_p15_hostile_matrix.py \
+  --output build/p15-case079-after.json \
+  --logs build/test-evidence/p15-case079-after \
+  --start 79 --count 1 --jobs 1 --timeout 900
+```
+
+The retained aggregate is
+`build/retained-checkout/p15-case619-after-cdea629-20261006/build/p15-case079-after.json`.
+It has the same uninstrumented source aggregate as case 619, runner `errors=[]`,
+one requested/observed case and empty case failures. No original rejection or
+refused-frame diagnostic remains. Its strict stdout/engine pair at
+`build/test-evidence/p15-case079-after/native-079-001/` in that archive passes
+with no allowed negative-test scope.
+
+| Criterion | Observed Result |
+| --- | --- |
+| Completion | Frame 7635, final Boss HP 0 |
+| Three authored phase losses | 1207.3500000000004 / 1203.75 / 588.8999999999996 |
+| Equipped paid time casts | Rewind frame 61, Rift frame 123 |
+| Positive time interaction | `boss_rift_slow` |
+| Physical checkpoint and exact continuation | `563c839806049d5677d88f11accfda9b166fd02994dc0d9d87071137dffd5941` |
+| Canonical death receipt | Exactly one `hostile_defeat:c340dc66dbbb1a4999c45a978a753d2f47484820` |
 
 ## Companion Case 513 Scalar Recovery
 
