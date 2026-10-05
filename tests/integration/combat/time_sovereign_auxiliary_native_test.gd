@@ -54,7 +54,7 @@ func _open_case(phase_two: bool, position: Vector2) -> Dictionary:
 	return result
 
 
-func _boss(room: Node2D) -> Node2D:
+func _boss(room: Node2D, next_generation_floor: int = 7) -> Node2D:
 	for template: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/room_templates.json")):
 		if template.id == "room_boss_time_sovereign":
 			suite.assert_true(room.bind_room({"id": "time-auxiliary-fixture", "template_id": template.id, "room_type": "boss"}, template, {"floor_id": "floor_time_rift", "palette_id": "palette_time_rift", "environment_rule_id": "rule_temporal_distortion", "room_seed": 42}).ok, "native Time auxiliary fixture binds actual production room artwork")
@@ -65,7 +65,7 @@ func _boss(room: Node2D) -> Node2D:
 	actor.global_position = Vector2(320, 180)
 	var parser := Definition.new()
 	parser.configure(Content.boss("time_sovereign"))
-	suite.assert_true(actor.configure_launch_definition(parser.runtime_projection(), {"run_id": "run-void-arena", "hostile_source_id": "time-aux-owner", "next_generation_floor": 7, "runtime_frame": 0, "seed": 42}).ok, "actual Time auxiliary Boss uses canonical definition")
+	suite.assert_true(actor.configure_launch_definition(parser.runtime_projection(), {"run_id": "run-void-arena", "hostile_source_id": "time-aux-owner", "next_generation_floor": next_generation_floor, "runtime_frame": 0, "seed": 42}).ok, "actual Time auxiliary Boss uses canonical definition")
 	for template: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/content_packs/base/content/room_templates.json")):
 		if template.id == "room_boss_time_sovereign":
 			suite.assert_true(actor.configure_launch_room_motion(room, template).ok, "actual Time auxiliary owns canonical room bounds")
