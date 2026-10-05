@@ -1073,6 +1073,9 @@ func authenticates_native_damage_run(damage_info: RefCounted, target: Node, targ
 		return false
 	if source == self:
 		return true
+	var rewind_echo := get_node_or_null("RewindEchoRuntime")
+	if source == rewind_echo and rewind_echo.is_echo_active():
+		return true
 	for adapter_value: Variant in _weapon_adapters.values():
 		var adapter := adapter_value as Node
 		if is_instance_valid(adapter) and (source == adapter or adapter.is_ancestor_of(source)):

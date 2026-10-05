@@ -748,7 +748,34 @@ func _reserve_terminal_zone(next: Dictionary, source: String, species: String, s
 	return true
 
 
+func _reserve_time_bolt_impact(next: Dictionary, impact: Dictionary, context: Dictionary, capacity: int) -> bool:
+	if not Contract.exact_fields(impact, ["run_id", "hostile_source_id", "attack_generation", "hit_index", "runtime_frame", "position", "parameters"]) or impact.run_id != context.run_id or impact.runtime_frame != context.runtime_frame or not context.actors.has(impact.hostile_source_id) or context.actors[impact.hostile_source_id].get("_launch_definition").id != "time_sovereign" or not Contract.valid_point(impact.position) or impact.parameters != {"radius": 16.0, "lifetime_frames": 180, "damage": 0.0, "tick_frames": 60, "slow_multiplier": 0.7} or not Contract.integer_in_range(impact.attack_generation, 1, MAX_FRAME) or typeof(impact.hit_index) != TYPE_INT or impact.hit_index != 0 or next.zones.size() >= MAX_RESERVATIONS:
+		return false
+	var claim := JSON.stringify([impact.hostile_source_id, impact.attack_generation, "bolt_impact"]).sha256_text()
+	if next.claims.has(claim) or next.claims.size() >= MAX_CLAIMS:
+		return false
+	var request := {"hostile_source_id": impact.hostile_source_id, "attack_generation": impact.attack_generation, "action_id": "traitor_chrono_bolt.impact", "runtime_frame": impact.runtime_frame}
+	var geometry := {"hostile_source_id": impact.hostile_source_id, "attack_generation": impact.attack_generation, "shape": "circle", "origin": impact.position.duplicate(true), "aim_direction": {"x": 1.0, "y": 0.0}, "target_point": impact.position.duplicate(true), "summon_slots": [], "radius": 16.0, "length": 0.0, "active_from_frame": impact.runtime_frame, "active_through_frame": int(impact.runtime_frame) + 179}
+	var row := _zone(request, geometry, 0, 0.0, "time", 0, 180, 60, 0.7, 0)
+	if _active_zone_count(next) >= capacity:
+		_make_pending(row)
+	next.claims.append(claim)
+	next.zones.append(row)
+	return true
+
+
 func _advance_zones(next: Dictionary, targets: Dictionary, actors: Dictionary, damages: Array[Dictionary], capacity: int) -> void:
+	var retired_statuses := {}
+	var retained_responses: Array = []
+	for zone: Dictionary in next.zones:
+		var owner: Node2D = actors.get(zone.source_id)
+		if zone.action_id == "traitor.counter_accelerate" and is_instance_valid(owner) and owner.get("_launch_runtime").has_method("time_response_zone_alive") and not owner.get("_launch_runtime").time_response_zone_alive(int(zone.generation)):
+			for target_id: String in targets:
+				retired_statuses[_id([zone.id, target_id, "status"])] = true
+		else:
+			retained_responses.append(zone)
+	next.zones = retained_responses
+	next.statuses = next.statuses.filter(func(row: Dictionary): return not retired_statuses.has(row.id))
 	next.statuses = next.statuses.filter(func(row: Dictionary): return row.expires_frame >= next.runtime_frame)
 	var retained: Array = next.zones.filter(func(row: Dictionary): return row.phase == "PENDING" or int(next.runtime_frame) <= int(row.expires_frame))
 	var active := 0
@@ -1061,7 +1088,7 @@ static func _claims(value: Variant) -> bool:
 
 
 static func _action(definition: Dictionary, action_id: String) -> Dictionary:
-	for action: Dictionary in definition.get("actions", []):
+	for action: Dictionary in definition.get("actions", []) + definition.get("time_responses", []):
 		if action.id == action_id:
 			return action
 	return {}

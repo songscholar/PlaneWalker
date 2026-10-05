@@ -23,7 +23,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var suite := Suite.new()
-	var cases: Array[String] = ["warning", "fighting", "sword_active", "sword_legacy_active", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]
+	var cases: Array[String] = ["warning", "fighting", "sword_active", "sword_legacy_active", "actor_warning", "payload", "payload_zone", "burn", "semantic_zone", "summon", "orphan_summon", "boss", "boss_cover", "boss_legacy_arena", "boss_aftershock_dormant", "boss_aftershock_warning", "boss_time_stop", "boss_time_rewind", "boss_time_accelerate", "boss_time_rift", "elite", "elite_legacy_affixes", "event", "native_drift", "presentation_drift"]
 	if OS.get_environment("PLANEWALKER_CHECKPOINT_CASE") == "splitting":
 		cases.append("splitting")
 	for case_name: String in cases:
@@ -38,6 +38,7 @@ func _run() -> void:
 
 func _exercise(suite: RefCounted, case_name: String) -> void:
 	var boss_case := case_name.begins_with("boss")
+	var time_ability := case_name.trim_prefix("boss_time_") if case_name.begins_with("boss_time_") else ""
 	var main := Main.instantiate()
 	add_child(main)
 	await get_tree().process_frame
@@ -60,9 +61,14 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	var config := {"schema_version": 1, "milestone": "LAUNCH", "character_id": "wanderer", "weapon_id": "sword", "enabled_time_skills": ["stop", "rewind"], "difficulty": "normal", "seed": 4}
 	if case_name == "event":
 		config.seed = 6
+	if not time_ability.is_empty():
+		config.enabled_time_skills = ["stop", time_ability if time_ability != "stop" else "rewind"]
 	var started: Variant = host.start_profile_run(config, service, int(service.snapshot().revision))
 	suite.assert_true(started.ok, "actual Host accepts the seeded native combat launch: " + str(started.code) + " " + str(started.context))
-	var selected: bool = await _route_to_native_target(suite, host, false, "", true, "splitting") if case_name == "splitting" else await _route_to_native_target(suite, host, false, "void_hunter", true) if case_name == "orphan_summon" else await _route_to_native_target(suite, host, false, "forest_caller") if case_name == "summon" else await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
+	if not started.ok:
+		await _dispose(main)
+		return
+	var selected: bool = await _route_to_native_target(suite, host, true, "chrono_guard", false, "", "time_sovereign") if not time_ability.is_empty() else await _route_to_native_target(suite, host, false, "", true, "splitting") if case_name == "splitting" else await _route_to_native_target(suite, host, false, "void_hunter", true) if case_name == "orphan_summon" else await _route_to_native_target(suite, host, false, "forest_caller") if case_name == "summon" else await _route_to_elite(host) if case_name.begins_with("elite") else await _route_to_native_target(suite, host, boss_case) if boss_case or case_name == "semantic_zone" else await _route_to_encounter(suite, host, case_name == "event")
 	suite.assert_true(selected, "actual Host routes to the authored encounter for " + case_name)
 	if not selected:
 		await _dispose(main)
@@ -79,7 +85,12 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 	var ready := false
 	var requested_summon := false
 	var summon_owner := ""
+	var paid_time := false
 	for _frame: int in range(600):
+		var intents := {}
+		if not time_ability.is_empty() and not paid_time and _frame >= 60 and controller.get_node("Enemies").get_child_count() > 0:
+			intents = {"time_slot_1" if time_ability == "stop" else "time_slot_2": {"edge": &"pressed"}}
+			paid_time = true
 		if case_name in ["summon", "orphan_summon"] and not requested_summon:
 			for actor: Node2D in controller.get_node("Enemies").get_children():
 				var definition: Dictionary = actor.get("_launch_definition")
@@ -100,7 +111,7 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			for actor: Node in controller.get_node("Enemies").get_children():
 				if actor.get("_launch_definition").id == "chrono_guard":
 					player.global_position = actor.global_position + Vector2(32.0, 0.0)
-		if not player.advance_action_frame():
+		if not player.advance_action_frame(intents):
 			break
 		var native: Dictionary = runner.native_launch_snapshot()
 		if native.is_empty():
@@ -112,6 +123,9 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 		elif case_name.begins_with("boss_aftershock"):
 			for zone: Dictionary in native.effects.payloads.zones:
 				ready = ready or zone.definition.kind == "boss_aftershock" and zone.phase == ("DORMANT" if case_name.ends_with("dormant") else "WARNING")
+		elif not time_ability.is_empty():
+			for state: Dictionary in native.actors.values():
+				ready = ready or paid_time and state.runtime.action.action_id == "traitor.counter_" + time_ability and state.runtime.action.phase == "WARNING" and not state.runtime.time_response.active.is_empty()
 		elif case_name == "actor_warning" or boss_case:
 			for state: Dictionary in native.actors.values():
 				ready = ready or state.runtime.action.phase == ("RECOVERY" if boss_case else "WARNING")
@@ -197,7 +211,7 @@ func _exercise(suite: RefCounted, case_name: String) -> void:
 			await get_tree().physics_frame
 	if boss_case:
 		var boss: Node = controller.get_node("Enemies").get_child(0)
-		if case_name != "boss_aftershock_dormant":
+		if case_name != "boss_aftershock_dormant" and time_ability.is_empty():
 			suite.assert_true(boss.apply_weapon_control_conversion("cold_exposure", 0, 30, 0.0), "actual native Boss retains exposure conversion in its cold checkpoint")
 		if case_name == "boss_cover":
 			# Damage is an explicit native-collision fixture; route and cold owners are real.
@@ -352,11 +366,11 @@ func _route_to_encounter(suite: RefCounted, host: Node, event: bool) -> bool:
 	return false
 
 
-func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id: String = "chrono_guard", require_elite: bool = false, affix_id: String = "") -> bool:
+func _route_to_native_target(suite: RefCounted, host: Node, boss: bool, enemy_id: String = "chrono_guard", require_elite: bool = false, affix_id: String = "", boss_id: String = "") -> bool:
 	for _step: int in range(140):
 		var state: Dictionary = host.runtime_snapshot()
 		var node: Dictionary = host.native_run_state().current_floor_node()
-		if boss and node.room_type == "boss":
+		if boss and node.room_type == "boss" and (boss_id.is_empty() or Settlement.BOSS_ORDER[int(state.current_floor_index)] == boss_id):
 			return true
 		if not boss and node.room_type in ["combat", "elite"]:
 			var definition: Dictionary = host.native_checkpoint_participants().facade.current_encounter_definition()

@@ -229,7 +229,7 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 			var destination := global_position + displacement
 			var arrival_transform := global_transform
 			arrival_transform.origin = destination
-			if not test_move(arrival_transform, Vector2.ZERO, null, 0.08, true):
+			if _native_relocation_allowed(destination, observations) and not test_move(arrival_transform, Vector2.ZERO, null, 0.08, true):
 				predicted = destination
 		elif not _room_motion.is_empty() and bool(_launch_definition.mechanisms.get("internal_obstacle_passthrough", false)):
 			predicted += displacement
@@ -303,6 +303,10 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 
 func _native_action_activation_blocked(_frame: int, _observations: Dictionary) -> bool:
 	return false
+
+
+func _native_relocation_allowed(_destination: Vector2, _observations: Dictionary) -> bool:
+	return true
 
 
 func _teleport_frame_observation(affix: RefCounted, paused: bool) -> Dictionary:

@@ -85,7 +85,7 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 	if distance < float(action.distance_min_px) or distance > float(action.distance_max_px):
 		return _failure("distance", "outside_selection_range")
 	var aim := source.direction_to(target)
-	if aim.is_zero_approx():
+	if aim.is_zero_approx() or _locks_time_receipt_facing(action):
 		aim = _vector(context.facing_direction).normalized()
 	var count := maxi(1, action.geometry.size())
 	if int(_state.next_generation_floor) > MAX_COUNTER - count or int(_state.decision_index) == MAX_COUNTER:
@@ -223,7 +223,7 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	if not _is_quantized(value.committed_origin) or not _is_quantized(value.committed_target) or not is_equal_approx(_vector(value.committed_aim).length(), 1):
 		return false
 	var target_direction := _vector(value.committed_origin).direction_to(_vector(value.committed_target))
-	if not target_direction.is_zero_approx() and not _vector(value.committed_aim).is_equal_approx(target_direction):
+	if not _locks_time_receipt_facing(action) and not target_direction.is_zero_approx() and not _vector(value.committed_aim).is_equal_approx(target_direction):
 		return false
 	if value.geometry_generations.size() != maxi(1, action.geometry.size()):
 		return false
@@ -311,6 +311,10 @@ static func _committed_geometry(action: Dictionary, state: Dictionary, actor_kin
 			"active_from_frame": state.commit_frame, "active_through_frame": through,
 		})
 	return result
+
+
+static func _locks_time_receipt_facing(action: Dictionary) -> bool:
+	return action.id == "traitor.counter_rewind" and action.geometry.size() == 2 and action.geometry[0].shape == "target_circle" and action.geometry[1].shape == "target_circle"
 
 
 static func _hit_fact(hit: Dictionary, action: Dictionary, state: Dictionary) -> Dictionary:

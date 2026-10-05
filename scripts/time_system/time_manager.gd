@@ -103,6 +103,9 @@ const REWARD_EFFECT_SNAPSHOT_FIELDS: Array[String] = [
 signal energy_changed(current: float, maximum: float)
 signal cooldown_changed(skill_id: StringName, remaining: float)
 signal rewind_committed(transaction: Dictionary)
+signal native_ability_committed(receipt: Dictionary)
+
+var _native_ability_delivery := {}
 
 @export var max_energy: float = 100.0
 @export var energy_regen: float = 2.0
@@ -1023,6 +1026,7 @@ func commit_time_action(ticket: Dictionary) -> Dictionary:
 	var result := (result_value as Dictionary).duplicate(true)
 	if bool(result.get("ok", false)):
 		var committed_ticket := result.get("ticket", {}) as Dictionary
+		_deliver_native_ability_receipt(committed_ticket)
 		_publish_time_skill_committed(
 			StringName(str(committed_ticket.get("ability_id", ""))),
 			int(committed_ticket.get("token", 0)),
@@ -1038,6 +1042,25 @@ func commit_time_action(ticket: Dictionary) -> Dictionary:
 	):
 		_clear_prepared_time_action_settlement()
 	return result
+
+
+func owns_native_ability_receipt(receipt: Dictionary) -> bool:
+	return not _native_ability_delivery.is_empty() and receipt == _native_ability_delivery
+
+
+func _deliver_native_ability_receipt(ticket: Dictionary) -> void:
+	var owner := get_parent() as Node2D
+	if owner == null or not owner.has_method("current_run_id") or str(owner.current_run_id()) != str(ticket.run_id):
+		return
+	var facing: Vector2 = owner.get_rewind_facing() if owner.has_method("get_rewind_facing") else Vector2.RIGHT
+	if facing.is_zero_approx():
+		facing = Vector2.RIGHT
+	facing = facing.normalized()
+	var receipt := {"id": "", "run_id": str(ticket.run_id), "owner_generation": int(ticket.context.get("owner_character_generation", ticket.generation)), "action_generation": int(ticket.generation), "action_token": int(ticket.token), "ability_id": str(ticket.ability_id), "runtime_frame": int(ticket.frame), "endpoint": {"x": owner.global_position.x, "y": owner.global_position.y}, "facing": {"x": facing.x, "y": facing.y}}
+	receipt.id = JSON.stringify([receipt.run_id, receipt.owner_generation, receipt.action_generation, receipt.action_token]).sha256_text()
+	_native_ability_delivery = receipt
+	native_ability_committed.emit(receipt.duplicate(true))
+	_native_ability_delivery = {}
 
 
 func rollback_time_action(ticket: Dictionary) -> Dictionary:

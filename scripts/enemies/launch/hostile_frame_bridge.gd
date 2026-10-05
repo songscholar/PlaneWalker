@@ -61,6 +61,8 @@ func configure(player: Node2D, registry: RefCounted, actors: Array, effects: Ref
 		return false
 	_last_runtime_frame = int(player.get("_runtime_frame"))
 	for actor: Node2D in _actors.values():
+		if actor.has_method("bind_native_time_manager") and not actor.bind_native_time_manager(player.get("time_manager")):
+			return false
 		if actor.has_method("configure_hostile_threat_authority") and not bool(actor.call("configure_hostile_threat_authority", registry, Callable(self, "_current_runtime_frame"))):
 			return false
 		if actor.has_method("bind_native_construct_budget") and effects.has_method("arena_debris_active_count") and not actor.bind_native_construct_budget(effects):

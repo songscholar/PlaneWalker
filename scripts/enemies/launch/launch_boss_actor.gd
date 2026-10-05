@@ -177,6 +177,15 @@ func prepare_launch_frame(frame: int, observations: Dictionary) -> Dictionary:
 	return result
 
 
+func _native_relocation_allowed(destination: Vector2, observations: Dictionary) -> bool:
+	var action: Dictionary = _launch_runtime.snapshot().action
+	if action.action_id != "traitor.counter_rewind":
+		return true
+	if action.committed_geometry.is_empty() or not destination.is_equal_approx(_vector(action.committed_geometry[0].origin)):
+		return false
+	return destination.distance_to(_vector(observations.target_position)) >= float(_launch_definition.collision_radius_px) + 14.0 + 0.08
+
+
 func _native_action_activation_blocked(frame: int, observations: Dictionary) -> bool:
 	if _launch_definition.get("id", "") == "forest_heart":
 		var forest_action: Dictionary = _launch_runtime.snapshot().action
@@ -878,16 +887,36 @@ func native_watch_snapshot() -> Dictionary:
 func receive_native_watch_hit(damage_info: RefCounted) -> float:
 	if damage_info == null or _launch_definition.get("id", "") != "time_sovereign" or not native_watch_snapshot().hittable:
 		return 0.0
-	var run := StringName(str(_launch_identity.run_id))
-	if damage_info.run_id != run:
-		var attacker: Node = damage_info.attacker
-		if damage_info.run_id != &"runtime" or not is_instance_valid(attacker) or not attacker is PlayerController or attacker.current_run_id() != run:
-			return 0.0
+	if not _authenticates_native_body_damage(damage_info):
+		return 0.0
 	var state: Dictionary = _launch_runtime.snapshot()
 	var id := _native_body_fact_id(damage_info)
 	if state.mechanism_state.damage_claims.has(id):
 		return 0.0
 	return health.take_damage(damage_info)
+
+
+var _native_time_manager: WeakRef
+
+
+func bind_native_time_manager(manager: Node) -> bool:
+	if _launch_definition.get("id", "") != "time_sovereign":
+		return true
+	if not is_instance_valid(manager) or not manager.has_signal("native_ability_committed") or not manager.has_method("owns_native_ability_receipt"):
+		return false
+	if _native_time_manager != null and _native_time_manager.get_ref() != manager:
+		return false
+	_native_time_manager = weakref(manager)
+	if not manager.native_ability_committed.is_connected(_on_native_ability_committed):
+		manager.native_ability_committed.connect(_on_native_ability_committed)
+	return true
+
+
+func _on_native_ability_committed(receipt: Dictionary) -> void:
+	var manager: Node = _native_time_manager.get_ref() if _native_time_manager != null else null
+	if not is_inside_tree() or not is_instance_valid(manager) or not manager.owns_native_ability_receipt(receipt) or _launch_runtime.snapshot().terminal:
+		return
+	_launch_runtime.accept_time_ability_receipt(receipt)
 
 
 func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> bool:
@@ -907,6 +936,17 @@ func apply_weapon_hit_control(damage_info: RefCounted, final_amount: float) -> b
 		var result: Dictionary = _launch_runtime.accept_weakpoint_damage_fact({"fact_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "attack_generation": int(rewind.attack_generation), "amount": final_amount})
 		if result.ok and _hostile_threat_registry != null:
 			for generation: int in result.retired_generations:
+				_hostile_threat_registry.retire(hostile_source_id, generation)
+	if not before.mechanism_state.damage_claims.has(id) and after.mechanism_state.damage_claims.has(id):
+		var frame: int = health.frame_signal_transaction_runtime_frame()
+		var attacker: Node = damage_info.attacker
+		var accelerated: bool = is_instance_valid(attacker) and attacker is PlayerController and attacker.is_time_accelerated()
+		var echo := false
+		for tag: String in damage_info.tags:
+			echo = echo or tag.begins_with("time:rewind_echo")
+		var response: Dictionary = _launch_runtime.accept_time_response_watch_hit({"fact_id": id, "runtime_frame": _hostile_runtime_frame() if frame < 0 else frame, "amount": final_amount, "accelerated": accelerated, "rewind_echo": echo})
+		if response.ok and _hostile_threat_registry != null:
+			for generation: int in response.retired_generations:
 				_hostile_threat_registry.retire(hostile_source_id, generation)
 	_refresh_control_visual()
 	return accepted

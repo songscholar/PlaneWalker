@@ -14,6 +14,7 @@ const VoidArena := preload("res://scripts/enemies/launch/void_arena_runtime.gd")
 const VoidAuxiliary := preload("res://scripts/enemies/launch/void_auxiliary_runtime.gd")
 const ForgeArena := preload("res://scripts/enemies/launch/forge_arena_runtime.gd")
 const VoidHalf := preload("res://scripts/enemies/launch/void_half_arena_geometry.gd")
+const TimeResponses := preload("res://scripts/enemies/launch/time_sovereign_response_runtime.gd")
 const IDENTITY_FIELDS: Array[String] = ["run_id", "hostile_source_id", "next_generation_floor", "runtime_frame", "seed"]
 const STATE_FIELDS: Array[String] = ["schema_version", "definition_digest", "identity", "runtime_frame", "terminal", "mechanism_state", "action", "control", "conversion"]
 const MECHANISM_FIELDS: Array[String] = ["phase_index", "hp_current", "minimum_hp", "phase_transition_until_frame", "enraged", "action_phase_index", "action_enraged", "delay_remaining_frames", "exposure_through_frame", "last_action_id", "consecutive_actions", "damage_claims", "health_claims", "stop_claims", "history", "rewind", "rewind_healing_spent", "weakpoint_claims"]
@@ -36,6 +37,8 @@ var _void_arena: RefCounted
 var _void_auxiliary: RefCounted
 var _forge_arena: RefCounted
 var _legacy_void_action := false
+var _time_response: RefCounted
+var _legacy_time_action := false
 
 
 func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
@@ -48,6 +51,8 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 	_void_auxiliary = null
 	_forge_arena = null
 	_legacy_void_action = false
+	_time_response = null
+	_legacy_time_action = false
 	if not Contract.exact_fields(identity, IDENTITY_FIELDS) or not Contract.integer_in_range(identity.seed, -2147483648, 2147483647):
 		return _failure("identity")
 	var parsed := Definition.new().configure_runtime_projection(definition)
@@ -76,6 +81,10 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		_forge_arena = ForgeArena.new()
 		if not _forge_arena.configure(_definition, identity).ok or not _forge_arena.bind_origin(_arena_origin):
 			return _failure("forge_arena_configuration")
+	elif _definition.id == "time_sovereign":
+		_time_response = TimeResponses.new()
+		if not _time_response.configure(identity, _definition.mechanisms):
+			return _failure("time_response_configuration")
 	var action_identity := identity.duplicate(true)
 	action_identity.erase("seed")
 	var initial_action := Action.new()
@@ -99,6 +108,8 @@ func configure(definition: Dictionary, identity: Dictionary) -> Dictionary:
 		_state["void_half_index"] = 0
 	if _forge_arena != null:
 		_state.schema_version = 6
+	if _time_response != null:
+		_state.schema_version = 9
 	return {"ok": true, "snapshot": snapshot()}
 
 
@@ -126,6 +137,16 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 	if not _sync_action_regime():
 		return _failure("action_regime")
 	var requested_context := context.duplicate(true)
+	var response := {}
+	if _time_response != null and action_id in Definition.RESPONSE_IDS:
+		response = _time_response.pending_request(int(_state.runtime_frame))
+		if response.is_empty() or response.action_id != action_id or not Contract.exact_fields(context, Action.CONTEXT_FIELDS):
+			return _failure("response_requires_committed_ability")
+		if action_id == "traitor.counter_rewind":
+			requested_context.target_position = response.receipt.endpoint.duplicate(true)
+			requested_context.facing_direction = response.receipt.facing.duplicate(true)
+		else:
+			requested_context.target_position = context.source_position.duplicate(true)
 	if _void_arena != null and action_id in VoidHalf.ACTION_IDS:
 		if not Contract.exact_fields(context, Action.CONTEXT_FIELDS) or not Contract.valid_point(context.source_position) or not Contract.valid_point(context.target_position) or not Contract.valid_point(context.facing_direction, 1) or _vector(context.facing_direction).is_zero_approx():
 			return _failure("half_context")
@@ -151,6 +172,9 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 		requested_context.source_position = selected.position.duplicate(true)
 	var before := snapshot()
 	var result: Dictionary = _action.request_action(action_id, requested_context)
+	if result.ok and not response.is_empty() and not _time_response.commit_request(response, int(result.attack_generation), int(_state.runtime_frame), int(_state.mechanism_state.phase_index)):
+		restore_snapshot(before)
+		return _failure("time_response_commit")
 	if result.ok and rooted and not _arena.accept_sweep_commit(_action.snapshot()):
 		restore_snapshot(before)
 		return _failure("root_sweep_commit")
@@ -161,7 +185,7 @@ func request_action(action_id: String, context: Dictionary) -> Dictionary:
 		if action_id == "voidking_enrage_zero":
 			_state.void_half_index += 1
 		var mechanism: Dictionary = _state.mechanism_state
-		mechanism.consecutive_actions = int(mechanism.consecutive_actions) + 1 if mechanism.last_action_id == action_id else 1
+		mechanism.consecutive_actions = int(mechanism.consecutive_actions) + 1 if response.is_empty() and mechanism.last_action_id == action_id else 1
 		mechanism.last_action_id = action_id
 		if action_id == "traitor_self_rewind":
 			var reference: Dictionary = mechanism.history[0].duplicate(true) if not mechanism.history.is_empty() else {"runtime_frame": int(_state.runtime_frame), "position": context.source_position.duplicate(true), "hp": float(mechanism.hp_current)}
@@ -185,6 +209,9 @@ func motion_for_frame(frame: int, observations: Dictionary) -> Dictionary:
 	var definition := _action_definition(str(action.action_id))
 	if not paused:
 		if _void_auxiliary != null and action.action_id == "voidking_void_step" and frame - int(action.commit_frame) - int(action.paused_frames) == int(definition.warning_frames):
+			displacement = _vector(action.committed_geometry[0].origin) - _vector(observations.source_position)
+			relocation = true
+		elif action.action_id == "traitor.counter_rewind" and frame - int(action.commit_frame) - int(action.paused_frames) == int(definition.warning_frames):
 			displacement = _vector(action.committed_geometry[0].origin) - _vector(observations.source_position)
 			relocation = true
 		elif not definition.is_empty() and definition.handler_id == "self_rewind" and Action.action_phase(frame - int(action.commit_frame) - int(action.paused_frames), definition) == "ACTIVE" and not _state.mechanism_state.rewind.is_empty() and not _state.mechanism_state.rewind.consumed:
@@ -223,6 +250,9 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		_control.restore_snapshot(before.control)
 		return result
 	_state.runtime_frame = frame
+	if _time_response != null and not _time_response.advance_frame(frame):
+		restore_snapshot(before)
+		return _failure("time_response_frame")
 	if _forge_arena != null and not _forge_arena.advance_frame(frame):
 		restore_snapshot(before)
 		return _failure("forge_arena_frame")
@@ -238,7 +268,7 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 	if _void_auxiliary != null and not _void_auxiliary.advance_frame(frame):
 		restore_snapshot(before)
 		return _failure("void_auxiliary_frame")
-	if int(_state.mechanism_state.delay_remaining_frames) > 0 and _action.snapshot().phase in ["WARNING", "RECOVERY"] and not external_action_paused:
+	if delayed and int(_state.mechanism_state.delay_remaining_frames) > 0 and _action.snapshot().phase in ["WARNING", "RECOVERY"] and not external_action_paused:
 		_state.mechanism_state.delay_remaining_frames -= 1
 	_state.mechanism_state.enraged = frame - int(_state.identity.runtime_frame) >= int(_definition.enrage.threshold_frames)
 	if not _conversion.advance_frame(frame, _character_tail_must_wait()):
@@ -311,6 +341,10 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 			var parameters: Dictionary = _definition.mechanisms
 			result.mechanism_requests.append({"kind": "boss_aftershock", "run_id": str(_state.identity.run_id), "hostile_source_id": str(_state.identity.hostile_source_id), "runtime_frame": frame, "attack_generation": int(hit.attack_generation), "position": hit.geometry[0].origin.duplicate(true), "parameters": {"delay_frames": int(parameters.aftershock_delay_frames) - int(parameters.aftershock_warning_frames), "warning_frames": int(parameters.aftershock_warning_frames), "radius": float(parameters.aftershock_radius_px), "damage": float(parameters.aftershock_damage) * (float(_definition.enrage.damage_multiplier) if _state.mechanism_state.action_enraged else 1.0) * float(controls.get("attack_multiplier", 1.0))}})
 	if _definition.id == "time_sovereign":
+		_time_response.observe_action(_action.snapshot())
+		for hit: Dictionary in result.hit_facts:
+			if hit.action_id == "traitor.counter_rift" and _time_response.grant_rift_recovery(int(hit.attack_generation)):
+				_state.mechanism_state.delay_remaining_frames += int(_definition.mechanisms.counter_rift_recovery_extension_frames)
 		var mechanism: Dictionary = _state.mechanism_state
 		mechanism.history.append({"runtime_frame": frame, "position": observations.source_position.duplicate(true), "hp": float(mechanism.hp_current)})
 		while mechanism.history.size() > int(_definition.mechanisms.history_frames):
@@ -323,7 +357,8 @@ func advance_frame(frame: int, observations: Dictionary, select_action: bool = t
 		restore_snapshot(before)
 		return _failure("action_regime")
 	if select_action and not external_action_paused and not delayed and result.phase == "IDLE":
-		var selected := _select_action(frame, observations)
+		var response: Dictionary = _time_response.pending_request(frame) if _time_response != null else {}
+		var selected := str(response.action_id) if not response.is_empty() else _select_action(frame, observations)
 		if not selected.is_empty():
 			var requested := request_action(selected, observations)
 			if requested.ok:
@@ -454,6 +489,32 @@ func accept_weakpoint_damage_fact(value: Dictionary) -> Dictionary:
 	return {"ok": true, "cancelled": true, "retired_generations": result.retired_generations}
 
 
+func accept_time_ability_receipt(value: Dictionary) -> Dictionary:
+	return _time_response.accept_receipt(value) if _time_response != null else _failure("unsupported_time_response")
+
+
+func accept_time_response_watch_hit(value: Dictionary) -> Dictionary:
+	if _time_response == null:
+		return _failure("unsupported_time_response")
+	var result: Dictionary = _time_response.accept_watch_hit(value, _action.snapshot())
+	if not result.ok:
+		return result
+	result["retired_generations"] = []
+	if result.cancel_action:
+		result.retired_generations = _action.cancel(&"watch_time_response_counterplay").retired_generations
+		_state.mechanism_state.delay_remaining_frames = 0
+	if result.exposure_frames > 0:
+		_state.mechanism_state.exposure_through_frame = maxi(int(_state.mechanism_state.exposure_through_frame), int(value.runtime_frame) + int(result.exposure_frames) - 1)
+	if result.recovery_frames > 0:
+		_state.mechanism_state.phase_transition_until_frame = maxi(int(_state.mechanism_state.phase_transition_until_frame), int(value.runtime_frame) + int(result.recovery_frames) - 1)
+	_conversion.synchronize_tail(_character_tail_must_wait())
+	return result
+
+
+func time_response_zone_alive(generation: int) -> bool:
+	return _time_response != null and _time_response.zone_alive(generation)
+
+
 func _update_history_hp(frame: int, hp: float) -> void:
 	var history: Array = _state.mechanism_state.history
 	if not history.is_empty() and int(history.back().runtime_frame) == frame:
@@ -526,6 +587,8 @@ func snapshot() -> Dictionary:
 		value["void_arena_state"] = _void_arena.snapshot()
 	if _void_auxiliary != null:
 		value["void_auxiliary"] = _void_auxiliary.snapshot()
+	if _time_response != null:
+		value["time_response"] = _time_response.snapshot()
 	return value
 
 
@@ -680,6 +743,15 @@ func accept_arena_charge_impact(construct_id: String) -> Dictionary:
 
 
 func normalize_native_snapshot(value: Dictionary) -> Dictionary:
+	if _time_response != null:
+		if value.get("schema_version") == 9:
+			return value.duplicate(true) if can_restore_snapshot(value) else {}
+		if value.get("schema_version") != 1 or not Contract.exact_fields(value, STATE_FIELDS) or typeof(value.get("runtime_frame")) != TYPE_INT or typeof(value.get("terminal")) != TYPE_BOOL:
+			return {}
+		var upgraded := value.duplicate(true)
+		upgraded.schema_version = 9
+		upgraded["time_response"] = _time_response.initial_at_frame(int(value.runtime_frame), bool(value.terminal))
+		return upgraded if can_restore_snapshot(upgraded) else {}
 	if _forge_arena != null:
 		if value.get("schema_version") == 6:
 			return value.duplicate(true) if can_restore_snapshot(value) else {}
@@ -777,8 +849,10 @@ func can_restore_native_snapshot(value: Dictionary) -> bool:
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
-	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary", "void_half_index"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else [])
-	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (6 if _forge_arena != null else 8 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary", "void_half_index"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else []) + (["time_response"] if _time_response != null else [])
+	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (9 if _time_response != null else 6 if _forge_arena != null else 8 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
+		return false
+	if _time_response != null and (not value.time_response is Dictionary or not _time_response.can_restore_snapshot(value.time_response) or value.time_response.runtime_frame != value.runtime_frame or value.time_response.terminal != value.terminal):
 		return false
 	if _forest_auxiliary != null and (not value.forest_auxiliary is Dictionary or not _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary) or value.forest_auxiliary.runtime_frame != value.runtime_frame or value.forest_auxiliary.terminal != value.terminal):
 		return false
@@ -817,7 +891,8 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if typeof(mechanism.enraged) != TYPE_BOOL or mechanism.enraged != (int(value.runtime_frame) - int(value.identity.runtime_frame) >= int(_definition.enrage.threshold_frames)) or typeof(mechanism.action_enraged) != TYPE_BOOL or mechanism.action_enraged and not mechanism.enraged:
 		return false
-	if not Contract.integer_in_range(mechanism.phase_transition_until_frame, int(value.identity.runtime_frame) - 1, int(value.runtime_frame) + 60) or not Contract.integer_in_range(mechanism.exposure_through_frame, int(value.identity.runtime_frame) - 1, int(value.runtime_frame) + 120) or not Contract.integer_in_range(mechanism.delay_remaining_frames, 0, Contract.MAX_FRAME) or not Contract.integer_in_range(mechanism.consecutive_actions, 0, 3):
+	var recovery_bound := int(_definition.mechanisms.counter_accelerate_exposure_frames) if _time_response != null else 60
+	if not Contract.integer_in_range(mechanism.phase_transition_until_frame, int(value.identity.runtime_frame) - 1, int(value.runtime_frame) + recovery_bound) or not Contract.integer_in_range(mechanism.exposure_through_frame, int(value.identity.runtime_frame) - 1, int(value.runtime_frame) + 120) or not Contract.integer_in_range(mechanism.delay_remaining_frames, 0, Contract.MAX_FRAME) or not Contract.integer_in_range(mechanism.consecutive_actions, 0, 3):
 		return false
 	if typeof(mechanism.last_action_id) != TYPE_STRING or not mechanism.last_action_id.is_empty() and _action_definition(mechanism.last_action_id).is_empty() or (mechanism.last_action_id.is_empty() != (int(mechanism.consecutive_actions) == 0)):
 		return false
@@ -835,6 +910,16 @@ func can_restore_snapshot(value: Dictionary) -> bool:
 	var action := _action_for_snapshot(value)
 	if action == null or not action.can_restore_snapshot(value.action) or not _control.can_restore_snapshot(value.control):
 		return false
+	if _time_response != null and not value.time_response.active.is_empty() and value.time_response.active.attack_generation >= int(value.action.next_generation_floor):
+		return false
+	if _time_response != null and value.action.action_id in Definition.RESPONSE_IDS and value.action.definition_digest == _make_action(int(mechanism.action_phase_index), mechanism.action_enraged).snapshot().definition_digest:
+		var active: Dictionary = value.time_response.active
+		if active.is_empty() or value.action.action_id != "traitor.counter_" + str(active.receipt.ability_id) or value.action.commit_frame != active.start_frame or value.action.geometry_generations[0] != active.attack_generation or active.cancelled or active.shattered:
+			return false
+	if _time_response != null and value.action.action_id == "traitor.counter_rewind" and Action._locks_time_receipt_facing(_action_definition("traitor.counter_rewind")):
+		var active: Dictionary = value.time_response.active
+		if active.is_empty() or active.receipt.ability_id != "rewind" or value.action.commit_frame != active.start_frame or value.action.geometry_generations[0] != active.attack_generation or value.action.committed_target != Action._quantized_point(_vector(active.receipt.endpoint)) or not _vector(value.action.committed_aim).is_equal_approx(_vector(active.receipt.facing)):
+			return false
 	if _void_arena != null:
 		if not Contract.integer_in_range(value.void_half_index, 0, int(value.action.decision_index)):
 			return false
@@ -887,8 +972,11 @@ func restore_snapshot(value: Dictionary) -> bool:
 		return false
 	if _forge_arena != null and not _forge_arena.restore_snapshot(value.forge_arena_state):
 		return false
+	if _time_response != null and not _time_response.restore_snapshot(value.time_response):
+		return false
 	_action = action
 	_legacy_void_action = _void_arena != null and value.action.definition_digest != _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged)).snapshot().definition_digest
+	_legacy_time_action = _time_response != null and value.action.definition_digest != _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged)).snapshot().definition_digest
 	_state = value.duplicate(true)
 	_state.erase("action")
 	_state.erase("control")
@@ -898,6 +986,7 @@ func restore_snapshot(value: Dictionary) -> bool:
 	_state.erase("void_arena_state")
 	_state.erase("void_auxiliary")
 	_state.erase("forge_arena_state")
+	_state.erase("time_response")
 	return true
 
 
@@ -919,6 +1008,8 @@ func cancel(reason: StringName = &"cancelled") -> Dictionary:
 		_void_auxiliary.retire()
 	if _forge_arena != null:
 		_forge_arena.retire()
+	if _time_response != null:
+		_time_response.retire()
 	_state.mechanism_state.delay_remaining_frames = 0
 	return result
 
@@ -985,7 +1076,7 @@ func _valid_history_row(value: Variant) -> bool:
 
 func _sync_action_regime() -> bool:
 	var mechanism: Dictionary = _state.mechanism_state
-	if _action.snapshot().phase != "IDLE" or not _legacy_void_action and int(mechanism.action_phase_index) == int(mechanism.phase_index) and mechanism.action_enraged == mechanism.enraged:
+	if _action.snapshot().phase != "IDLE" or not _legacy_void_action and not _legacy_time_action and int(mechanism.action_phase_index) == int(mechanism.phase_index) and mechanism.action_enraged == mechanism.enraged:
 		return true
 	var next := _make_action(int(mechanism.phase_index), mechanism.enraged)
 	if next == null:
@@ -998,16 +1089,17 @@ func _sync_action_regime() -> bool:
 		return false
 	_action = next
 	_legacy_void_action = false
+	_legacy_time_action = false
 	mechanism.action_phase_index = mechanism.phase_index
 	mechanism.action_enraged = mechanism.enraged
 	return true
 
 
-func _make_action(phase_index: int, enraged: bool, room_half: bool = true) -> RefCounted:
+func _make_action(phase_index: int, enraged: bool, room_half: bool = true, current_time_responses: bool = true) -> RefCounted:
 	var identity: Dictionary = _state.identity.duplicate(true)
 	identity.erase("seed")
 	var result := Action.new()
-	var actions := _actions_for_regime(phase_index, enraged, room_half)
+	var actions := _actions_for_regime(phase_index, enraged, room_half, current_time_responses)
 	return result if result.configure({"id": _definition.id, "actor_kind": "boss", "actions": actions}, identity).ok else null
 
 
@@ -1019,13 +1111,22 @@ func _action_for_snapshot(value: Dictionary) -> RefCounted:
 		var historical := _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), false)
 		if historical != null and historical.can_restore_snapshot(value.action):
 			return historical
+	if _time_response != null:
+		var historical := _make_action(int(value.mechanism_state.action_phase_index), bool(value.mechanism_state.action_enraged), true, false)
+		if historical != null and historical.can_restore_snapshot(value.action):
+			return historical
 	return null
 
 
-func _actions_for_regime(phase_index: int, enraged: bool, room_half: bool = true) -> Array:
+func _actions_for_regime(phase_index: int, enraged: bool, room_half: bool = true, current_time_responses: bool = true) -> Array:
 	var actions: Array = (_definition.actions + _definition.time_responses).duplicate(true)
 	var overrides: Dictionary = _definition.mechanisms.phase_damage_overrides.get(_definition.phases[phase_index].id, {})
 	for action: Dictionary in actions:
+		if current_time_responses and _definition.id == "time_sovereign" and action.id in Definition.RESPONSE_IDS:
+			action.cooldown_frames = int(_definition.mechanisms.response_shared_cooldown_p1_frames if phase_index == 0 else _definition.mechanisms.response_shared_cooldown_p2_frames)
+			action.distance_max_px = 640.0
+			if action.id == "traitor.counter_rewind":
+				action.geometry = [{"shape": "target_circle", "origin_offset": {"x": -48.0, "y": 0.0}, "aim_offset_degrees": 0.0, "radius": 12.0, "length": 0.0}, {"shape": "target_circle", "origin_offset": {"x": 0.0, "y": 0.0}, "aim_offset_degrees": 0.0, "radius": 8.0, "length": 0.0}]
 		if room_half and _definition.id == "void_throne" and action.id in VoidHalf.ACTION_IDS:
 			action.geometry = VoidHalf.recipe(str(action.id))
 		if action.id == "matriarch_void_cage":
@@ -1039,6 +1140,9 @@ func _actions_for_regime(phase_index: int, enraged: bool, room_half: bool = true
 
 func _action_available(action_id: String) -> bool:
 	var action := _action_definition(action_id)
+	if _time_response != null and action_id in Definition.RESPONSE_IDS:
+		var response: Dictionary = _time_response.pending_request(int(_state.runtime_frame))
+		return not response.is_empty() and response.action_id == action_id
 	if action.is_empty() or action_id not in _definition.phases[int(_state.mechanism_state.phase_index)].action_ids and not (_state.mechanism_state.enraged and action_id == _definition.enrage.action_id):
 		return false
 	return _state.mechanism_state.last_action_id != action_id or int(_state.mechanism_state.consecutive_actions) < int(action.max_consecutive)
