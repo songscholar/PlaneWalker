@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/integration/combat/void_damage_output_modifier_test.gd" id="1"]
+
+[node name="VoidDamageOutputModifierTest" type="Node"]
+script = ExtResource("1")

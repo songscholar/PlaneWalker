@@ -2791,13 +2791,13 @@ func try_spend_resource(
 	}
 
 
-func restore_resource_state(resource_id: StringName, state: Dictionary) -> bool:
+func restore_resource_state(resource_id: StringName, state: Dictionary, publish_signal: bool = true) -> bool:
 	if not can_restore_resource_state(resource_id, state):
 		return false
 	var energy_before := energy
 	energy = float(state["current"])
 	_resource_revision = int(state["revision"])
-	if energy != energy_before and not _weapon_replay_restore_transaction_active:
+	if publish_signal and energy != energy_before and not _weapon_replay_restore_transaction_active:
 		_publish_energy_changed(energy, max_energy)
 	return true
 

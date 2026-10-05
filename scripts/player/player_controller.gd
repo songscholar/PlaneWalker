@@ -1031,7 +1031,7 @@ func event_temporary_modifier_snapshot() -> Array:
 
 
 func get_effective_attack() -> float:
-	return float(stats.attack) * float(_event_temporary_modifier_layer.call("attack_multiplier")) if stats != null else 0.0
+	return float(stats.attack) * float(_event_temporary_modifier_layer.call("attack_multiplier")) * _floor_rule_attack_multiplier() if stats != null else 0.0
 
 
 func get_damage_taken_multiplier() -> float:
@@ -3501,6 +3501,18 @@ func floor_rule_effect_snapshot() -> Dictionary:
 	}
 
 
+func accept_native_void_pickup(authority: RefCounted, owner: Node2D, record: Dictionary) -> Dictionary:
+	if authority == null or owner == null or not is_instance_valid(owner) or not authority.owns_void_pickup_record(owner, record) or record.get("target") != self or health.dead or owner.get_world_2d() != get_world_2d() or str(current_run_id()) != str(record.void_pickup.run_id) or not owner.prepared_launch_void_mechanism_allowed(record.void_pickup) or global_position.distance_to(Vector2(float(record.void_pickup.position.x), float(record.void_pickup.position.y))) > 22.0:
+		return {}
+	var before: Dictionary = time_manager.resource_state(&"time_energy")
+	if before != record.resource_before or record.void_pickup.amount != 5.0:
+		return {}
+	var buffered: bool = not (time_manager.get("_active_frame_signal_transaction") as Dictionary).is_empty()
+	time_manager.restore_energy(5.0, buffered)
+	var after: Dictionary = time_manager.resource_state(&"time_energy")
+	return {"fact_id": str(record.resource_fact_id), "run_id": str(current_run_id()), "owner_source_id": str(owner.hostile_source_id), "pickup_id": str(record.void_pickup.pickup_id), "target_id": str(record.void_pickup.target_id), "runtime_frame": int(record.void_pickup.runtime_frame), "energy_before": float(before.current), "energy_after": float(after.current), "maximum": float(after.maximum), "revision_before": int(before.revision), "revision_after": int(after.revision)}
+
+
 func restore_floor_rule_effect_snapshot(value: Dictionary) -> bool:
 	if not _valid_floor_rule_effect_snapshot(value):
 		return false
@@ -3582,6 +3594,7 @@ func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
 	for key_value: Variant in values.keys():
 		if str(key_value) not in [
 			"movement_multiplier",
+			"attack_multiplier",
 			"time_cost_multiplier",
 			"zone_locked",
 			"safe_area_required",
@@ -3606,6 +3619,10 @@ func _valid_floor_rule_modifier_values(values: Dictionary) -> bool:
 			or float(time_value) <= 0.0
 		):
 			return false
+	if values.has("attack_multiplier"):
+		var attack_value: Variant = values["attack_multiplier"]
+		if typeof(attack_value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(attack_value)) or float(attack_value) < 0.1 or float(attack_value) > 1.0:
+			return false
 	for field: String in ["zone_locked", "safe_area_required"]:
 		if values.has(field) and typeof(values[field]) != TYPE_BOOL:
 			return false
@@ -3628,13 +3645,28 @@ func _floor_rule_pull_velocity() -> Vector2:
 
 func _floor_rule_movement_multiplier() -> float:
 	var multiplier := 1.0
+	var hostile_slow := 1.0
+	var hostile_speed := 1.0
 	for entry_value: Variant in _floor_rule_modifiers.values():
 		if not entry_value is Dictionary:
 			continue
 		var values := (entry_value as Dictionary).get("values", {}) as Dictionary
 		if bool(values.get("zone_locked", false)):
 			return 0.0
-		multiplier *= float(values.get("movement_multiplier", 1.0))
+		var source := str(entry_value.get("source_id", ""))
+		var movement := float(values.get("movement_multiplier", 1.0))
+		if source == "launch_semantic" or source.begins_with("void_auxiliary:"):
+			hostile_slow = minf(hostile_slow, movement)
+			hostile_speed = maxf(hostile_speed, movement)
+		else:
+			multiplier *= movement
+	return multiplier * maxf(0.4, hostile_slow) * hostile_speed
+
+
+func _floor_rule_attack_multiplier() -> float:
+	var multiplier := 1.0
+	for entry: Dictionary in _floor_rule_modifiers.values():
+		multiplier = minf(multiplier, float(entry.values.get("attack_multiplier", 1.0)))
 	return multiplier
 
 
