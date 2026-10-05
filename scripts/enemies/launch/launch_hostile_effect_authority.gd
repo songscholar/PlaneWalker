@@ -34,7 +34,12 @@ func configure(run_id: String, runtime_frame: int = 0) -> bool:
 
 
 func snapshot() -> Dictionary:
-	var result := _state.duplicate(true)
+	var envelope := _state.duplicate()
+	# Preserve restored key positions while excluding children replaced below.
+	for key: String in ["payloads", "semantics", "summons"]:
+		if envelope.has(key):
+			envelope[key] = null
+	var result := envelope.duplicate(true)
 	if not result.is_empty():
 		result["payloads"] = _payloads.snapshot()
 		result["semantics"] = _semantics.snapshot()
