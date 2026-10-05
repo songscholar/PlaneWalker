@@ -8,6 +8,10 @@ const CharacterTalentStateScript := preload(
 const EventModifierLayerScript := preload("res://scripts/events/event_temporary_modifier_layer.gd")
 const ChallengeRewards := preload("res://scripts/progression/challenge_reward_catalog.gd")
 const ChallengeRules := preload("res://scripts/community/local_run_record_rules.gd")
+const ExactDigestCache := preload("res://scripts/replay/replay_exact_digest_cache.gd")
+
+static var _capture_digest_cache := ExactDigestCache.new(4096, 16 * 1024 * 1024)
+static var _prefix_digest_cache := ExactDigestCache.new(128, 16 * 1024 * 1024)
 
 const SCHEMA_ID := "planewalker.weapon_runtime_replay"
 const SCHEMA_VERSION := 6
@@ -1942,20 +1946,40 @@ static func capture_event_digest(event_entry: Dictionary) -> String:
 		or not replay_value_is_safe(event_entry.get("payload"))
 	):
 		return ""
-	return value_digest({
+	var captured := {
 		"schema_version": event_entry["schema_version"],
 		"frame": event_entry["frame"],
 		"capture_sequence": event_entry["capture_sequence"],
 		"event_type": event_entry["event_type"],
-		"payload": event_entry["payload"],
-	})
+		"payload": (event_entry["payload"] as Dictionary).duplicate(true),
+	}
+	if not replay_value_is_safe(captured):
+		return ""
+	var source := var_to_bytes(captured)
+	var cached := _capture_digest_cache.lookup(source)
+	if not cached.is_empty():
+		return cached
+	var digest := value_digest(captured)
+	if not digest.is_empty():
+		_capture_digest_cache.store(source, digest)
+	return digest
 
 
 static func event_prefix_root(events: Array, count: int = -1) -> String:
 	var prefix_count := events.size() if count < 0 else count
 	if prefix_count < 0 or prefix_count > events.size():
 		return ""
-	var ordered := _events_in_capture_order(events)
+	# The key and digest must describe the same privately owned history.
+	var captured := events.duplicate(true)
+	var cacheable := replay_value_is_safe(captured)
+	var source := var_to_bytes([captured, prefix_count]) if cacheable else PackedByteArray()
+	if cacheable:
+		var cached := _prefix_digest_cache.lookup(source)
+		if not cached.is_empty():
+			return cached
+	var ordered := _events_in_capture_order(captured)
+	if ordered.size() < prefix_count:
+		return ""
 	var capture_event_digests: Array[String] = []
 	for index: int in range(prefix_count):
 		var event := ordered[index]
@@ -1965,12 +1989,15 @@ static func event_prefix_root(events: Array, count: int = -1) -> String:
 		if not _is_sha256(digest):
 			return ""
 		capture_event_digests.append(digest)
-	return value_digest({
+	var root := value_digest({
 		"schema_id": EVENT_PREFIX_SCHEMA_ID,
 		"schema_version": EVENT_PREFIX_SCHEMA_VERSION,
 		"event_count": prefix_count,
 		"capture_event_digests": capture_event_digests,
 	})
+	if cacheable and not root.is_empty():
+		_prefix_digest_cache.store(source, root)
+	return root
 
 
 static func event_prefix_matches(snapshot: Dictionary, events: Array) -> bool:
