@@ -102,11 +102,57 @@ unexpected script/parse errors or object/RID leaks. Godot is
 root review of production, all private consumers and the fixture finds no
 actionable production issue.
 
-## Full Native Measurement Remains Required
+## Integrated Native Recording Measurement
 
-The integrated `0843272` 600-frame probe predates this Store change and samples
-2,242,150,400 bytes of complete-process RSS. FPS and memory gates still fail at
-that source. A new complete uninstrumented native recording and physical
-endpoint readback must measure this slice's actual integrated benefit. No
-isolated copy count, static peak or point RSS substitutes for that measurement,
-rendered acceptance, sustained recording, the 45-minute soak or human testing.
+A clean detached clone at
+`build/retained-checkout/native-unified-26a5d98-20261006/` freezes commit
+`26a5d98129461b19ed87e40fdb837224bcc47441`. Its 410 production runtime files
+retain aggregate SHA-256
+`122604a98b824db92cb5078616f1b231715a139cdd6758ac06a0a6ec9b4070cd`
+before and after the uninstrumented v2 probe. The report is retained at
+`build/floor4-phase2-ownership-late-600/report.json`, SHA-256
+`6362e6a60d8a7406939095244a9460bd1e1575074aaf60b633dcabaea49a6938`.
+The runtime exits zero, does not time out, passes report validation and strict
+paired log validation, and leaves the clone clean. Both stdout and Godot logs
+have SHA-256
+`8099b660d1fd97a405dff7e275d13fa8a0b433049d190737805cfae3bd0b8747`.
+
+The first clean-checkout import exits zero but fails strict log validation:
+configured generated `.translation` files do not exist before CSV import.
+Those bootstrap errors are retained in `build/import-first.*.log`. A second
+import exits zero and passes strict paired validation. Runtime log acceptance
+does not erase this first-import limitation.
+
+The actual twelve-frame Hub probe visits all nine functions. Sword reaches
+floor-four phase two after 2,501 actual frames. All 600 consecutive measured
+frames, 2,502-3,101, accept and retain 601 physical observations with honest
+`INTERRUPTED` status and no recorder failure. Fresh physical endpoint reads
+match the complete typed measured bytes. First SHA-256 is
+`8b7b8ab43674e54121d4568336b5ae14de29b4a9a522acc5c2743a64b83dfe11`;
+last SHA-256 is
+`fd46d302787af37d90f09747b52e8faa08395e00b0505fc087edbc6c45ec105a`.
+Both match `0843272` and `546779f`; this compares endpoints, not every
+intervening observation.
+
+| Actual v2 Measurement | Mean | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| Player advance | 55.982 ms | 84.495 ms | 120.002 ms |
+| Same-frame Player and Host work | 57.742 ms | 87.345 ms | 121.430 ms |
+| Same-frame wall interval, including waits and observer | 67.887 ms | 101.707 ms | 144.314 ms |
+
+The measured interval takes 40.733 wall seconds for ten native seconds;
+physical retention takes 8.645 seconds. Observed peaks remain one actor, six
+threats and three zones. Peak native static allocation is 705,691,240 bytes.
+The exact macOS Godot PID 94712 has 1,691 valid 100-ms RSS samples and one
+unavailable sample. Its sampled peak is 1,287,323,648 bytes across announced
+startup, admission, recording and physical retention. The unavailable sample
+is disclosed as `native process RSS sample is unavailable`.
+
+The earlier integrated `0843272` source samples 2,242,150,400 bytes; this
+combined frozen source samples 42.6% less and is below decimal 2 GB and binary
+2 GiB in this scenario. Boss Actor control observation optimization is also
+present, and existing matrix/certification workers remain concurrent, so this
+pair does not isolate the Store change's individual timing or memory benefit.
+The 16.667-ms frame budget still fails. Sampling does not prove an absolute
+memory maximum or certify rendered FPS, sustained recording, saturation,
+the 45-minute soak, complete UI or human testing.
