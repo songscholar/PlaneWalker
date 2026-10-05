@@ -144,3 +144,68 @@ certify neither an optimization speedup nor the frame, saturation, sustained,
 rendered, memory, UI or human gates. The independent uninstrumented 600-frame
 follow-up is retained in the linked [unified recording evidence](2026-10-06-native-unified-recording-600-evidence.md);
 its complete-frame budget still fails.
+
+## Parent Restore Integrated Attribution
+
+The detached source `9738bc5424d9659b3b6b1cbbe479908ea62542ad` is retained
+at `build/retained-checkout/native-unified-hotpaths-9738bc5-20261006/`.
+Its 410 uninstrumented runtime scripts have aggregate
+`6bbbc931c71813cb525b4151947315ecfcf3567fa1bc93b492e7894d8f273931`,
+recorded before transformation in `build/diagnostic-production-source-manifest.json`.
+The unchanged generator with SHA-256
+`d928073c8ec01c38be53409e71214ae31887543daa7362f148abc0318bda79da`
+wraps 191 methods. Its sole absent target remains Void auxiliary
+`_can_restore_snapshot_uncached`; validation is inline in the measured public
+method. The second import and two-worker nesting/retention self-check have
+strict clean paired logs. The first import's generated translation bootstrap
+diagnostics are retained separately.
+
+`build/floor4-phase2-parent-diagnostic-120/report.json` has SHA-256
+`7789344bc991edb64054a48d67e11c3425bb1b359bc83dd6ea8481361bd0093f`.
+Instrumented runtime aggregate is
+`595c919f0df98679a4e4c4a9c9b7f146537886541e0a77f3e521b9e2dd7ca24a`.
+After 2,501 actual Sword admission frames, all 120 measured frames from
+2,502 through 2,621 accept. Source is stable, logs are strict clean, exit
+is zero and no timeout occurs. The physical tape contains 121 observations,
+`INTERRUPTED` status, no recording failure and exact fresh typed endpoint
+reads. Both endpoint hashes match the preceding 120-frame diagnostic; this
+does not compare every intervening observation byte.
+
+All attribution below is milliseconds per measured main-thread frame.
+Inclusive times overlap and must not be added together.
+
+| Method | Calls | Inclusive | Exclusive |
+| --- | ---: | ---: | ---: |
+| Player advance | 120 | 41.205 | 0.721 |
+| Bridge prepare | 120 | 24.904 | 1.358 |
+| Boss Actor prepare | 120 | 9.155 | 0.016 |
+| Boss complete snapshot validation | 1,080 | 8.758 | 2.983 |
+| Boss complete restore | 240 | 4.730 | 0.714 |
+| Boss validation context | 1,320 | 2.901 | 2.901 |
+| Void auxiliary validation | 603 | 3.001 | 2.148 |
+| Void auxiliary full snapshot | 1,579 | 2.126 | 2.126 |
+| Actor private body preview | 120 | 3.090 | 0.124 |
+| Effects full snapshot | 1,920 | 1.392 | 1.392 |
+| Native cold snapshot validation | 120 | 2.632 | 0.309 |
+| Recorder observe | 120 | 6.241 | 0.079 |
+| Outer Replay safety | 1,562 | 2.933 | 2.933 |
+| Mutable Action construction | 249 | 0.568 | 0.155 |
+| Action configure | 257 | 0.426 | 0.426 |
+
+Player mean/p95/maximum are 41.211 / 52.606 / 69.635 ms; same-frame work
+is 42.564 / 54.687 / 71.317 ms and wall is 50.869 / 64.704 / 114.326 ms.
+Measured wall duration is 6.104 seconds for two native seconds. Physical
+retention takes 20.103 seconds. Real macOS PID 57528 has 1,389 valid RSS
+samples and one unavailable sample, with a sampled peak of 1,477,951,488
+bytes across admission and retention. Observed peaks are one actor, one
+threat and no zones; this does not represent saturated combat.
+
+Concurrent native matrix and clean validation workers remain active, and the
+timer/mutex instrumentation changes scheduling. These are diagnostic values,
+not an isolated speedup or performance certification. Action construction now
+accounts for less than one millisecond per frame in this measurement, so it is
+deprioritized pending stronger evidence. Repeated complete validation,
+configuration encoding, cold recording and composed state ownership remain
+the next investigation targets. The Effects and opaque Actor token slices
+are outside this source. Rendered/sustained performance, final gameplay,
+complete UI and authentic human testing remain open.
