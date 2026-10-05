@@ -105,6 +105,7 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Replay Codec Difference Plan](current/2026-10-06-replay-codec-difference-plan.md) | 真实长局块的冗余根比较消除、精确字节和递归校验验收 | Approved / Current |
 | [Replay Codec Difference Evidence](current/2026-10-06-replay-codec-difference-evidence.md) | 真实块字节一致、编码分段成本、历史共享与缓存微基准 | Focused Verified / Native performance pending |
 | [Replay Codec Immutable Reference Plan](current/2026-10-06-replay-codec-immutable-reference-plan.md) | 块内不可变引用认证、完整安全验证保留和编码吞吐修复 | Approved / Current |
+| [Replay Codec Immutable Reference Evidence](current/2026-10-06-replay-codec-immutable-reference-evidence.md) | 真实录像块的精确字节回归、不可变引用边界与编码耗时对照 | Focused Verified / Sustained recording pending |
 | [Native Terminal Fragment Traversal](current/2026-10-06-native-terminal-fragment-traversal-evidence.md) | 普通输入走到终局碎片、权威接触范围和持久收集回归 | Focused Verified / Full five-floor certification pending |
 | [Auxiliary Snapshot Cache Evidence](current/2026-10-06-auxiliary-snapshot-cache-evidence.md) | 三个场地域的冷重建缓存、严格边界和完整前后测量结果 | Focused Verified / Full gameplay certification pending |
 | [Native UI Finish Design](superpowers/specs/2026-10-06-native-ui-finish-design.md) | 完整原生界面的视觉系统、交互状态与验收矩阵 | Approved / Current authority |

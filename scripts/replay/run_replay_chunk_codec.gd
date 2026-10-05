@@ -7,6 +7,8 @@ const MAX_RAW_BYTES := 32 * 1024 * 1024
 const MAX_COMPRESSED_BYTES := 8 * 1024 * 1024
 const MAX_DEPTH := 32
 const MAX_PATCHES := 32768
+const MAX_CERTIFICATES_PER_KIND := 256
+const MAX_CERTIFICATE_DEPTH := 3
 const FIELDS := ["schema_id", "schema_version", "first_sequence", "last_sequence", "observation_count", "raw_size", "compressed_size", "raw_sha256", "compressed_sha256", "bytes"]
 
 
@@ -17,15 +19,16 @@ static func encode(observations: Array[Dictionary]) -> Dictionary:
 	if not _integer(first, 0, 2147483647 - observations.size() + 1):
 		return _failure(&"RUN_REPLAY_CHUNK_INVALID")
 	var deltas: Array[Dictionary] = []
+	var certificates: Dictionary = {}
 	for index: int in range(observations.size()):
 		var current: Dictionary = observations[index]
-		if current.get("sequence") != first + index or typeof(current.get("sequence")) != TYPE_INT or not _safe(current):
+		if current.get("sequence") != first + index or typeof(current.get("sequence")) != TYPE_INT or not _safe(current, 0, certificates):
 			return _failure(&"RUN_REPLAY_CHUNK_INVALID")
 		if index > 0:
 			var changes: Array[Dictionary] = []
 			var removed: Array[Array] = []
 			# Admitted integer sequence fields already prove the root snapshots differ.
-			_difference(observations[index - 1], current, [], changes, removed, true)
+			_difference(observations[index - 1], current, [], changes, removed, true, certificates)
 			if changes.size() + removed.size() > MAX_PATCHES:
 				return _failure(&"RUN_REPLAY_CHUNK_SIZE_INVALID")
 			deltas.append({"sequence": int(current.sequence), "removed": removed, "set": changes, "snapshot_sha256": byte_digest(var_to_bytes(current))})
@@ -72,9 +75,10 @@ static func byte_digest(bytes: PackedByteArray) -> String:
 	return context.finish().hex_encode()
 
 
-static func _difference(before: Variant, after: Variant, path: Array, changes: Array[Dictionary], removed: Array[Array], skip_equality: bool = false) -> void:
-	if not skip_equality and var_to_bytes(before) == var_to_bytes(after):
+static func _difference(before: Variant, after: Variant, path: Array, changes: Array[Dictionary], removed: Array[Array], skip_equality: bool = false, certificates: Variant = null) -> void:
+	if not skip_equality and _same_immutable_value(before, after, path.size(), certificates):
 		return
+	# Compatible children prove equality without serializing the entire parent.
 	if before is Dictionary and after is Dictionary and _dictionary_types_match(before, after) and _ordered_keys_match(before, after):
 		for key: Variant in before:
 			if not after.has(key):
@@ -85,11 +89,65 @@ static func _difference(before: Variant, after: Variant, path: Array, changes: A
 			var child_path := path.duplicate()
 			child_path.append(key)
 			if before.has(key):
-				_difference(before[key], after[key], child_path, changes, removed)
+				_difference(before[key], after[key], child_path, changes, removed, false, certificates)
 			else:
 				changes.append({"path": child_path, "value": _copy(after[key])})
 	else:
+		if not skip_equality and var_to_bytes(before) == var_to_bytes(after):
+			return
 		changes.append({"path": path.duplicate(), "value": _copy(after)})
+
+
+static func _same_immutable_value(before: Variant, after: Variant, depth: int, certificates: Variant) -> bool:
+	if certificates == null or depth > MAX_CERTIFICATE_DEPTH:
+		return false
+	if not (after is Dictionary or after is Array) or not after.is_read_only() or not _certified(after, depth, certificates):
+		return false
+	if is_same(before, after):
+		return true
+	if not before is Array or not after is Array or not before.is_read_only() or before.size() != after.size() or before.get_typed_builtin() != after.get_typed_builtin() or not _certified(before, depth, certificates):
+		return false
+	for index: int in range(after.size()):
+		if before[index] is Dictionary or before[index] is Array:
+			if not is_same(before[index], after[index]):
+				return false
+		elif var_to_bytes(before[index]) != var_to_bytes(after[index]):
+			return false
+	return true
+
+
+static func _certified(value: Variant, depth: int, certificates: Dictionary) -> bool:
+	for certificate: Dictionary in certificates.get(typeof(value), []):
+		if depth <= certificate.depth and is_same(value, certificate.value):
+			return true
+	return false
+
+
+static func _remember_immutable(value: Variant, depth: int, certificates: Variant) -> void:
+	if certificates == null or depth > MAX_CERTIFICATE_DEPTH or not value.is_read_only() or not _readonly_graph(value, depth, certificates):
+		return
+	var kind := typeof(value)
+	if not certificates.has(kind):
+		certificates[kind] = []
+	var entries: Array = certificates[kind]
+	if entries.size() >= MAX_CERTIFICATES_PER_KIND:
+		entries.pop_front()
+	entries.append({"value": value, "depth": depth})
+
+
+static func _readonly_graph(value: Variant, depth: int, certificates: Dictionary) -> bool:
+	if depth > MAX_DEPTH or typeof(value) >= TYPE_PACKED_BYTE_ARRAY or typeof(value) in [TYPE_OBJECT, TYPE_CALLABLE, TYPE_SIGNAL, TYPE_RID]:
+		return false
+	if value is Dictionary or value is Array:
+		if not value.is_read_only():
+			return false
+		if depth <= MAX_CERTIFICATE_DEPTH and _certified(value, depth, certificates):
+			return true
+		var children: Array = value.values() if value is Dictionary else value
+		for child: Variant in children:
+			if not _readonly_graph(child, depth + 1, certificates):
+				return false
+	return true
 
 
 static func _ordered_keys_match(before: Dictionary, after: Dictionary) -> bool:
@@ -177,22 +235,27 @@ static func _accepts_value(dictionary: Dictionary, value: Variant) -> bool:
 	return dictionary.get_typed_value_builtin() == TYPE_NIL or dictionary.get_typed_value_builtin() == typeof(value)
 
 
-static func _safe(value: Variant, depth: int = 0) -> bool:
+static func _safe(value: Variant, depth: int = 0, certificates: Variant = null) -> bool:
 	if depth > MAX_DEPTH:
 		return false
+	# Certificates retain exact immutable references, never serialization aliases.
+	if certificates != null and depth <= MAX_CERTIFICATE_DEPTH and (value is Dictionary or value is Array) and value.is_read_only() and _certified(value, depth, certificates):
+		return true
 	if value is Dictionary:
 		if value.get_typed_key_builtin() == TYPE_OBJECT or value.get_typed_value_builtin() == TYPE_OBJECT:
 			return false
 		for key: Variant in value:
-			if typeof(key) not in [TYPE_STRING, TYPE_STRING_NAME, TYPE_INT] or not _safe(value[key], depth + 1):
+			if typeof(key) not in [TYPE_STRING, TYPE_STRING_NAME, TYPE_INT] or not _safe(value[key], depth + 1, certificates):
 				return false
+		_remember_immutable(value, depth, certificates)
 		return true
 	if value is Array:
 		if value.get_typed_builtin() == TYPE_OBJECT:
 			return false
 		for child: Variant in value:
-			if not _safe(child, depth + 1):
+			if not _safe(child, depth + 1, certificates):
 				return false
+		_remember_immutable(value, depth, certificates)
 		return true
 	if value is Vector2:
 		return is_finite(value.x) and is_finite(value.y)
