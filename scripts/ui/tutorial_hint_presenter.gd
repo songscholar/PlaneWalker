@@ -4,6 +4,7 @@ extends Control
 const Contract := preload("res://scripts/ui/contracts/tutorial_view_state.gd")
 const Text := preload("res://scripts/ui/tutorial_presentation_text.gd")
 const Result := preload("res://scripts/application/command_result.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 var hint_panel: PanelContainer
 var title_label: Label
 var description_label: Label
@@ -14,6 +15,8 @@ var _remaining_frames := 0
 
 
 func _ready() -> void:
+	theme = load("res://assets/production/ui/plane_walker_theme.tres") as Theme
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var margin := MarginContainer.new()
@@ -34,27 +37,21 @@ func _ready() -> void:
 	hint_panel.name = "HintPanel"
 	hint_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	column.add_child(hint_panel)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("101c23")
-	style.border_color = Color("8ceaff")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(2)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	hint_panel.add_theme_stylebox_override("panel", style)
 	var contents := VBoxContainer.new()
 	contents.add_theme_constant_override("separation", 4)
 	hint_panel.add_child(contents)
 	var header := HBoxContainer.new()
 	contents.add_child(header)
+	header.add_child(Art.image(Art.icon(&"mode_art", &"training"), 24, "HintArtwork"))
 	title_label = _label("TitleLabel", 13)
 	header.add_child(title_label)
 	close_button = Button.new()
 	close_button.name = "CloseHint"
-	close_button.text = "x"
-	close_button.custom_minimum_size = Vector2(25, 25)
+	close_button.icon = Art.icon(&"controls", &"back")
+	close_button.expand_icon = true
+	close_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	close_button.add_theme_constant_override("icon_max_width", 16)
+	close_button.custom_minimum_size = Vector2(28, 28)
 	close_button.focus_mode = Control.FOCUS_NONE
 	close_button.pressed.connect(clear_context)
 	header.add_child(close_button)
@@ -114,7 +111,7 @@ func _label(node_name: String, font_size: int) -> Label:
 
 
 func _fit_width() -> void:
-	hint_panel.custom_minimum_size.x = minf(640.0, maxf(64.0, size.x - 32.0))
+	hint_panel.custom_minimum_size.x = minf(576.0, maxf(64.0, size.x - 32.0))
 
 
 func _render_text() -> void:

@@ -4,6 +4,8 @@ extends Control
 const KIND_SLIDER := "slider"
 const KIND_TOGGLE := "toggle"
 const KIND_OPTION := "option"
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
+const SECTION_KEYS := ["UI_ACCESSIBILITY_AUDIO", "UI_ACCESSIBILITY_VISUALS", "UI_ACCESSIBILITY_READABILITY", "UI_ACCESSIBILITY_CONTROLS", "UI_ACCESSIBILITY_ASSISTS"]
 
 const SETTING_DEFINITIONS := [
 	{
@@ -148,6 +150,7 @@ var _setting_controls: Dictionary = {}
 var _slider_value_labels: Dictionary = {}
 var _focus_controls: Array[Control] = []
 var _refreshing := false
+var _category_tabs: TabBar
 
 
 func configure(restore_focus: Control = null) -> void:
@@ -156,13 +159,28 @@ func configure(restore_focus: Control = null) -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	theme = load("res://assets/production/ui/plane_walker_theme.tres") as Theme
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var shell := $SafeArea/PanelRoot as PanelContainer
+	shell.remove_theme_stylebox_override("panel")
+	shell.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	shell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	scroll.custom_minimum_size = Vector2.ZERO
+	assist_explanation.custom_minimum_size = Vector2.ZERO
+	assist_explanation.add_theme_font_size_override("font_size", 11)
+	resized.connect(_fit_panel)
+	shell.minimum_size_changed.connect(_queue_fit)
+	_fit_panel()
 	visible = false
 	title_label.text = tr("UI_ACCESSIBILITY_SETTINGS")
+	title_label.add_theme_color_override("font_color", Color("edf0dc"))
 	assist_explanation.text = tr("UI_ACCESSIBILITY_ASSIST_EXPLANATION")
 	back_button.text = tr("UI_BACK")
 	back_button.focus_mode = Control.FOCUS_ALL
 	back_button.pressed.connect(close_panel)
 	_apply_button_style(back_button)
+	Art.button_icon(back_button, Art.icon(&"controls", &"back"))
+	_build_category_navigation()
 	_build_rows()
 	if not GameState.setting_changed.is_connected(_on_setting_changed):
 		GameState.setting_changed.connect(_on_setting_changed)
@@ -180,6 +198,7 @@ func open_panel(restore_focus: Control = null) -> void:
 		_restore_focus.grab_focus()
 	visible = true
 	_refresh_controls()
+	_fit_panel()
 	FocusCoordinator.link_ring(_focus_controls, false)
 	if not _focus_controls.is_empty():
 		FocusCoordinator.open_scope(self, _focus_controls[0])
@@ -218,8 +237,53 @@ func _build_rows() -> void:
 		var control := row.get_node("SettingControl") as Control
 		_setting_controls[setting_id] = control
 		_focus_controls.append(control)
+	_focus_controls.append(_category_tabs)
 	_focus_controls.append(back_button)
 	_refresh_controls()
+
+
+func _build_category_navigation() -> void:
+	_category_tabs = TabBar.new()
+	_category_tabs.name = "SettingsTabs"
+	_category_tabs.clip_tabs = true
+	_category_tabs.focus_mode = Control.FOCUS_ALL
+	_category_tabs.add_theme_font_size_override("font_size", 11)
+	_category_tabs.add_theme_stylebox_override("tab_unselected", get_theme_stylebox("normal", "Button"))
+	_category_tabs.add_theme_stylebox_override("tab_selected", get_theme_stylebox("pressed", "Button"))
+	_category_tabs.add_theme_stylebox_override("tab_hovered", get_theme_stylebox("hover", "Button"))
+	_category_tabs.add_theme_stylebox_override("focus", get_theme_stylebox("focus", "Button"))
+	_category_tabs.add_theme_color_override("font_selected_color", Color("e5bd69"))
+	_category_tabs.add_theme_color_override("font_unselected_color", Color("abb8ac"))
+	for key: String in SECTION_KEYS:
+		_category_tabs.add_tab(tr(key))
+	var layout := $SafeArea/PanelRoot/Layout as VBoxContainer
+	layout.add_child(_category_tabs)
+	layout.move_child(_category_tabs, assist_explanation.get_index())
+	_category_tabs.tab_changed.connect(_on_category_selected)
+	_category_tabs.gui_input.connect(_category_input)
+
+
+func _category_first_control(index: int) -> Control:
+	if index < 0 or index >= SECTION_KEYS.size():
+		return null
+	for definition: Dictionary in SETTING_DEFINITIONS:
+		if definition.section == SECTION_KEYS[index]:
+			return _setting_controls.get(definition.id) as Control
+	return null
+
+
+func _on_category_selected(index: int) -> void:
+	var target := _category_first_control(index)
+	if target != null:
+		scroll.call_deferred("ensure_control_visible", target)
+
+
+func _category_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_down"):
+		var target := _category_first_control(_category_tabs.current_tab)
+		if target != null:
+			target.grab_focus()
+			_category_tabs.accept_event()
 
 
 func _section_label(localization_key: String) -> Label:
@@ -227,7 +291,9 @@ func _section_label(localization_key: String) -> Label:
 	label.name = "Section_%s" % localization_key.trim_prefix("UI_ACCESSIBILITY_").to_pascal_case()
 	label.custom_minimum_size = Vector2(0.0, 19.0)
 	label.text = tr(localization_key)
-	label.add_theme_color_override("font_color", Color("8ceaff"))
+	label.set_meta("section_key", localization_key)
+	var colors := {"UI_ACCESSIBILITY_AUDIO": "e5bd69", "UI_ACCESSIBILITY_VISUALS": "79baa1", "UI_ACCESSIBILITY_READABILITY": "edf0dc", "UI_ACCESSIBILITY_CONTROLS": "61d5e7", "UI_ACCESSIBILITY_ASSISTS": "f07065"}
+	label.add_theme_color_override("font_color", Color(colors[localization_key]))
 	label.add_theme_font_size_override("font_size", 12)
 	return label
 
@@ -241,11 +307,12 @@ func _setting_row(definition: Dictionary) -> HBoxContainer:
 
 	var label := Label.new()
 	label.name = "SettingLabel"
-	label.custom_minimum_size = Vector2(248.0, 0.0)
+	label.custom_minimum_size = Vector2.ZERO
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.text = tr(str(definition["label"]))
-	label.add_theme_color_override("font_color", Color("c7d9e2"))
-	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", Color("edf0dc"))
+	label.add_theme_font_size_override("font_size", 12)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(label)
 
@@ -283,7 +350,7 @@ func _setting_row(definition: Dictionary) -> HBoxContainer:
 
 func _volume_slider(_setting_id: String) -> HSlider:
 	var slider := HSlider.new()
-	slider.custom_minimum_size = Vector2(224.0, 24.0)
+	slider.custom_minimum_size = Vector2(158.0, 28.0)
 	slider.focus_mode = Control.FOCUS_ALL
 	slider.min_value = 0.0
 	slider.max_value = 100.0
@@ -294,7 +361,7 @@ func _volume_slider(_setting_id: String) -> HSlider:
 
 func _toggle_control() -> CheckButton:
 	var toggle := CheckButton.new()
-	toggle.custom_minimum_size = Vector2(274.0, 24.0)
+	toggle.custom_minimum_size = Vector2(208.0, 28.0)
 	toggle.focus_mode = Control.FOCUS_ALL
 	toggle.alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_apply_button_style(toggle)
@@ -303,9 +370,10 @@ func _toggle_control() -> CheckButton:
 
 func _option_control(options: Array) -> OptionButton:
 	var option := OptionButton.new()
-	option.custom_minimum_size = Vector2(274.0, 24.0)
+	option.custom_minimum_size = Vector2(208.0, 28.0)
+	option.fit_to_longest_item = false
 	option.focus_mode = Control.FOCUS_ALL
-	option.add_theme_font_size_override("font_size", 10)
+	option.add_theme_font_size_override("font_size", 12)
 	_apply_button_style(option)
 	for entry: Array in options:
 		option.add_item(tr(str(entry[0])))
@@ -383,31 +451,47 @@ func _on_control_focused(control: Control) -> void:
 
 
 func _apply_button_style(button: BaseButton) -> void:
-	button.add_theme_stylebox_override("normal", _button_style(Color("07121a"), Color("246279")))
-	button.add_theme_stylebox_override("hover", _button_style(Color("092534"), Color("23b8e3")))
-	button.add_theme_stylebox_override("pressed", _button_style(Color("0b3446"), Color("8ceaff")))
-	button.add_theme_stylebox_override("focus", _focus_style())
-	button.add_theme_color_override("font_color", Color("bcefff"))
+	button.add_theme_color_override("font_color", Color("edf0dc"))
 	button.add_theme_color_override("font_hover_color", Color.WHITE)
 	button.add_theme_color_override("font_focus_color", Color.WHITE)
 
 
-func _focus_style() -> StyleBoxFlat:
-	return _button_style(Color("102c39"), Color("ffd166"), 3)
+func _focus_style() -> StyleBox:
+	return get_theme_stylebox("focus", "Button")
 
 
-func _button_style(background: Color, border: Color, width: int = 2) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.border_width_left = width
-	style.border_width_top = width
-	style.border_width_right = width
-	style.border_width_bottom = width
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
-	style.content_margin_left = 5.0
-	style.content_margin_right = 5.0
-	return style
+func _queue_fit() -> void:
+	_fit_panel.call_deferred()
+
+
+func _fit_panel() -> void:
+	if not is_instance_valid(scroll):
+		return
+	var available := Vector2(maxf(0, size.x - 32), maxf(0, size.y - 32))
+	($SafeArea/PanelRoot as Control).custom_minimum_size = Vector2(minf(616, available.x), minf(560, available.y))
+
+
+func apply_accessibility_settings(_settings: Dictionary) -> void:
+	_queue_fit()
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_TRANSLATION_CHANGED or not is_node_ready():
+		return
+	title_label.text = tr("UI_ACCESSIBILITY_SETTINGS")
+	assist_explanation.text = tr("UI_ACCESSIBILITY_ASSIST_EXPLANATION")
+	back_button.text = tr("UI_BACK")
+	for index: int in range(SECTION_KEYS.size()):
+		_category_tabs.set_tab_title(index, tr(SECTION_KEYS[index]))
+	for row: Node in rows_container.get_children():
+		if row is Label and row.has_meta("section_key"):
+			row.text = tr(str(row.get_meta("section_key")))
+	for definition: Dictionary in SETTING_DEFINITIONS:
+		var control := _setting_controls.get(definition.id) as Control
+		if control == null:
+			continue
+		(control.get_parent().get_node("SettingLabel") as Label).text = tr(str(definition.label))
+		if control is OptionButton:
+			for index in range(control.item_count):
+				control.set_item_text(index, tr(str(definition.options[index][0])))
+	_queue_fit()

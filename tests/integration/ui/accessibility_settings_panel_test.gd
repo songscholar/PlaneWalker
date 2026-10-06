@@ -97,7 +97,10 @@ func _run() -> void:
 		var back_button := panel.get_node("SafeArea/PanelRoot/Layout/Footer/BackButton") as Button
 		_suite.assert_equal(get_viewport().gui_get_focus_owner(), controls[0], "opening focuses the first setting")
 		_suite.assert_true(not controls[0].focus_neighbor_bottom.is_empty(), "controller focus ring links downward")
-		_suite.assert_equal(controls[-1].focus_neighbor_bottom, controls[-1].get_path_to(back_button), "controller focus ring reaches Back after the final setting")
+		var tabs := panel.find_child("SettingsTabs", true, false) as TabBar
+		_suite.assert_true(tabs != null and tabs.focus_mode == Control.FOCUS_ALL, "category navigation is reachable by controller")
+		_suite.assert_equal(controls[-1].focus_neighbor_bottom, controls[-1].get_path_to(tabs), "controller focus ring reaches categories after the final setting")
+		_suite.assert_equal(tabs.focus_neighbor_bottom, tabs.get_path_to(back_button), "category navigation retains a reachable Back command")
 		_suite.assert_equal(back_button.focus_neighbor_bottom, back_button.get_path_to(controls[0]), "controller focus ring wraps from Back to the first setting")
 
 	for setting_id: String in CHANGED_VALUES:

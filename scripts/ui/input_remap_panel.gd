@@ -4,6 +4,7 @@ extends Control
 signal capture_started(action: StringName, family: StringName)
 
 const InputRemapServiceScript := preload("res://scripts/input/input_remap_service.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 
 const FAMILY_KEYBOARD_MOUSE := &"keyboard_mouse"
 const FAMILY_CONTROLLER := &"controller"
@@ -37,8 +38,31 @@ func configure(remap_service: RefCounted, restore_focus: Control = null) -> void
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	theme = load("res://assets/production/ui/plane_walker_theme.tres") as Theme
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var shell := $SafeArea/PanelRoot as PanelContainer
+	shell.remove_theme_stylebox_override("panel")
+	shell.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	shell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	($SafeArea/PanelRoot/Layout/Scroll as ScrollContainer).custom_minimum_size = Vector2.ZERO
+	($SafeArea/PanelRoot/Layout/Scroll as ScrollContainer).follow_focus = true
+	for header: Label in [action_header, keyboard_header, controller_header]:
+		header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	action_header.custom_minimum_size.x = 0
+	keyboard_header.custom_minimum_size.x = 120
+	controller_header.custom_minimum_size.x = 112
+	($SafeArea/PanelRoot/Layout/ColumnHeaders/ResetHeader as Control).custom_minimum_size.x = 28
+	_device_header(keyboard_header, &"keyboard_mouse", "KeyboardMouseDeviceArtwork")
+	_device_header(controller_header, &"controller", "ControllerDeviceArtwork")
+	var capture_frame := $CaptureOverlay/Center/CapturePanel as PanelContainer
+	capture_frame.remove_theme_stylebox_override("panel")
+	capture_prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	resized.connect(_fit_panel)
+	shell.minimum_size_changed.connect(_queue_fit)
+	_fit_panel()
 	visible = false
 	title_label.text = tr("UI_INPUT_REMAP")
+	title_label.add_theme_color_override("font_color", Color("edf0dc"))
 	action_header.text = tr("UI_INPUT_ACTION")
 	keyboard_header.text = tr("UI_BINDING_KEYBOARD_MOUSE")
 	controller_header.text = tr("UI_BINDING_CONTROLLER")
@@ -49,6 +73,8 @@ func _ready() -> void:
 	back_button.pressed.connect(close_panel)
 	_apply_button_style(reset_all_button)
 	_apply_button_style(back_button)
+	Art.button_icon(back_button, Art.icon(&"controls", &"back"))
+	Art.button_icon(reset_all_button, Art.icon(&"controls", &"restart"))
 	if _service == null:
 		_service = InputRemapServiceScript.new()
 		_service.call("configure")
@@ -113,19 +139,20 @@ func _build_rows() -> void:
 
 		var action_label := Label.new()
 		action_label.name = "ActionLabel"
-		action_label.custom_minimum_size = Vector2(156.0, 0.0)
+		action_label.custom_minimum_size = Vector2.ZERO
 		action_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		action_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		action_label.text = tr(_action_key(action))
 		action_label.add_theme_font_size_override("font_size", 11)
 		row.add_child(action_label)
 
-		var keyboard_button := _binding_button("KeyboardMouseBinding", 142.0)
+		var keyboard_button := _binding_button("KeyboardMouseBinding", 120.0)
 		keyboard_button.set_meta("action", action)
 		keyboard_button.set_meta("family", FAMILY_KEYBOARD_MOUSE)
 		keyboard_button.pressed.connect(_start_capture.bind(action, FAMILY_KEYBOARD_MOUSE))
 		row.add_child(keyboard_button)
 
-		var controller_button := _binding_button("ControllerBinding", 118.0)
+		var controller_button := _binding_button("ControllerBinding", 112.0)
 		controller_button.set_meta("action", action)
 		controller_button.set_meta("family", FAMILY_CONTROLLER)
 		controller_button.pressed.connect(_start_capture.bind(action, FAMILY_CONTROLLER))
@@ -133,9 +160,13 @@ func _build_rows() -> void:
 
 		var reset_button := Button.new()
 		reset_button.name = "ResetActionButton"
-		reset_button.custom_minimum_size = Vector2(68.0, 24.0)
+		reset_button.custom_minimum_size = Vector2(28.0, 28.0)
 		reset_button.focus_mode = Control.FOCUS_ALL
-		reset_button.text = tr("UI_RESET_ACTION")
+		reset_button.tooltip_text = tr("UI_RESET_ACTION")
+		reset_button.icon = Art.icon(&"controls", &"restart")
+		reset_button.expand_icon = true
+		reset_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		reset_button.add_theme_constant_override("icon_max_width", 16)
 		reset_button.add_theme_font_size_override("font_size", 10)
 		_apply_button_style(reset_button)
 		reset_button.pressed.connect(_on_reset_action_pressed.bind(action))
@@ -158,54 +189,66 @@ func _build_rows() -> void:
 func _binding_button(button_name: String, width: float) -> Button:
 	var button := Button.new()
 	button.name = button_name
-	button.custom_minimum_size = Vector2(width, 24.0)
+	button.custom_minimum_size = Vector2(width, 28.0)
 	button.focus_mode = Control.FOCUS_ALL
-	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	button.add_theme_font_size_override("font_size", 10)
 	_apply_button_style(button)
 	return button
 
 
+func _device_header(header: Label, identity: StringName, image_name: String) -> void:
+	var spacing := StyleBoxEmpty.new()
+	spacing.content_margin_left = 20
+	header.add_theme_stylebox_override("normal", spacing)
+	var image := Art.image(Art.icon(&"controls", identity), 16, image_name)
+	header.add_child(image)
+	image.anchor_top = 0.5
+	image.anchor_bottom = 0.5
+	image.offset_top = -8
+	image.offset_bottom = 8
+	image.offset_right = 16
+
+
 func _apply_button_style(button: Button) -> void:
-	button.add_theme_stylebox_override("normal", _button_style(Color("07121a"), Color("246279")))
-	button.add_theme_stylebox_override("hover", _button_style(Color("092534"), Color("23b8e3")))
-	button.add_theme_stylebox_override("pressed", _button_style(Color("0b3446"), Color("8ceaff")))
-	button.add_theme_stylebox_override("focus", _button_style(Color("102c39"), Color("ffd166"), 3))
-	button.add_theme_color_override("font_color", Color("bcefff"))
+	button.add_theme_color_override("font_color", Color("edf0dc"))
 	button.add_theme_color_override("font_hover_color", Color.WHITE)
 	button.add_theme_color_override("font_focus_color", Color.WHITE)
 
 
-func _button_style(background: Color, border: Color, width: int = 2) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.border_width_left = width
-	style.border_width_top = width
-	style.border_width_right = width
-	style.border_width_bottom = width
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
-	style.content_margin_left = 5.0
-	style.content_margin_right = 5.0
-	return style
+func _queue_fit() -> void:
+	_fit_panel.call_deferred()
+
+
+func _fit_panel() -> void:
+	if not is_instance_valid(rows_container):
+		return
+	var available := Vector2(maxf(0, size.x - 32), maxf(0, size.y - 32))
+	($SafeArea/PanelRoot as Control).custom_minimum_size = Vector2(minf(616, available.x), minf(560, available.y))
+	($CaptureOverlay/Center/CapturePanel as Control).custom_minimum_size.x = minf(400, available.x)
+
+
+func apply_accessibility_settings(_settings: Dictionary) -> void:
+	_queue_fit()
 
 
 func _start_capture(action: StringName, family: StringName) -> void:
 	_capture_action = action
 	_capture_family = family
 	_capture_ready_frame = Engine.get_process_frames() + 1
-	var prompt_template := tr("UI_PRESS_INPUT")
-	capture_prompt.text = (
-		prompt_template % tr(_action_key(action))
-		if prompt_template.contains("%s")
-		else "%s: %s" % [prompt_template, tr(_action_key(action))]
-	)
+	_refresh_capture_prompt()
 	capture_overlay.visible = true
 	status_label.text = ""
 	capture_started.emit(action, family)
+
+
+func _refresh_capture_prompt() -> void:
+	var prompt_template := tr("UI_PRESS_INPUT")
+	capture_prompt.text = (
+		prompt_template % tr(_action_key(_capture_action))
+		if prompt_template.contains("%s")
+		else "%s: %s" % [prompt_template, tr(_action_key(_capture_action))]
+	)
 
 
 func _apply_capture(event: InputEvent) -> void:
@@ -303,3 +346,23 @@ func _capture_is_active() -> bool:
 
 func _action_key(action: StringName) -> String:
 	return "INPUT_ACTION_%s" % str(action).to_upper()
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_TRANSLATION_CHANGED or not is_node_ready():
+		return
+	title_label.text = tr("UI_INPUT_REMAP")
+	action_header.text = tr("UI_INPUT_ACTION")
+	keyboard_header.text = tr("UI_BINDING_KEYBOARD_MOUSE")
+	controller_header.text = tr("UI_BINDING_CONTROLLER")
+	reset_all_button.text = tr("UI_RESET_ALL")
+	back_button.text = tr("UI_BACK")
+	capture_cancel_label.text = tr("UI_CAPTURE_CANCEL")
+	for action: StringName in _remappable_actions():
+		var row := rows_container.get_node("Row_" + str(action))
+		(row.get_node("ActionLabel") as Label).text = tr(_action_key(action))
+		(row.get_node("ResetActionButton") as Button).tooltip_text = tr("UI_RESET_ACTION")
+	_refresh_all_rows()
+	if _capture_is_active():
+		_refresh_capture_prompt()
+	_queue_fit()

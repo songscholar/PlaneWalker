@@ -44,6 +44,8 @@ static func actor(actor_id: String) -> Texture2D:
 
 
 static func content(content_id: String, category: String = "") -> Texture2D:
+	if content_id.is_empty():
+		return null
 	var batches := {"item": "items", "blessing": "blessings", "curse": "curses", "contract": "curses", "talent": "talents"}
 	if batches.has(category):
 		var category_texture := icon(StringName(batches[category]), StringName(content_id))
@@ -53,7 +55,17 @@ static func content(content_id: String, category: String = "") -> Texture2D:
 		var texture := icon(StringName(batch), StringName(content_id))
 		if texture != null:
 			return texture
-	return null
+	# Data-only Mod content keeps its requested identity while using a neutral,
+	# authenticated package glyph instead of an empty or misleading known icon.
+	var generic := icon(&"controls", &"content") as AtlasTexture
+	if generic == null:
+		return null
+	var fallback := AtlasTexture.new()
+	fallback.atlas = generic.atlas
+	fallback.region = generic.region
+	fallback.set_meta("requested_content_id", content_id)
+	fallback.set_meta("requested_category", category)
+	return fallback
 
 
 static func landmark(room_type: String) -> Texture2D:

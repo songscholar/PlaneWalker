@@ -11,6 +11,7 @@ const PlayIcon := preload("res://data/content_packs/base/assets/training/play.pn
 const PauseIcon := preload("res://data/content_packs/base/assets/training/pause.png")
 const ResetIcon := preload("res://data/content_packs/base/assets/training/reset.png")
 const BackIcon := preload("res://data/content_packs/base/assets/training/back.png")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 
 var _selectors: Dictionary = {}
 var _play: Button
@@ -30,6 +31,7 @@ var _practicing := false
 
 
 func _ready() -> void:
+	theme = load("res://assets/production/ui/plane_walker_theme.tres") as Theme
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -188,6 +190,7 @@ func _build_layout() -> void:
 		option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		option.fit_to_longest_item = false
 		option.add_theme_font_size_override("font_size", 12)
+		option.add_theme_constant_override("icon_max_width", 32 if field == "time_abilities" else 16)
 		option.tooltip_text = tr({"task_id": "UI_TUTORIAL_TRAINING", "character_id": "UI_LAUNCH_CHARACTER_LABEL", "weapon_id": "UI_LAUNCH_WEAPON_LABEL", "time_abilities": "UI_LAUNCH_TIME_PAIR_LABEL"}[field])
 		option.item_selected.connect(_selection_changed)
 		option.gui_input.connect(_selector_input.bind(option))
@@ -265,6 +268,30 @@ func _add_item(field: String, label: String, metadata: Variant) -> void:
 	var option: OptionButton = _selectors[field]
 	option.add_item(label)
 	option.set_item_metadata(option.item_count - 1, metadata)
+	match field:
+		"character_id":
+			option.set_item_icon(option.item_count - 1, Art.actor(str(metadata)))
+		"weapon_id":
+			option.set_item_icon(option.item_count - 1, Art.icon(&"weapons", StringName(metadata)))
+		"time_abilities":
+			option.set_item_icon(option.item_count - 1, _time_pair_icon(metadata))
+
+
+func _time_pair_icon(pair: Array) -> Texture2D:
+	var combined := Image.create(64, 32, false, Image.FORMAT_RGBA8)
+	for index: int in range(2):
+		var source := Art.icon(&"time_abilities", StringName(pair[index])) as AtlasTexture
+		if source == null:
+			return null
+		var pixels := source.atlas.get_image()
+		if pixels == null:
+			return null
+		if pixels.is_compressed():
+			pixels.decompress()
+		pixels.convert(Image.FORMAT_RGBA8)
+		combined.blit_rect(pixels, Rect2i(source.region), Vector2i(index * 32, 0))
+	combined.resize(32, 16, Image.INTERPOLATE_NEAREST)
+	return ImageTexture.create_from_image(combined)
 
 
 func _selection_changed(_index: int) -> void:

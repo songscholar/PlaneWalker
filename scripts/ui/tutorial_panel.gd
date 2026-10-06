@@ -8,9 +8,15 @@ signal training_requested(task_id: StringName, expected_revision: int)
 
 const Contract := preload("res://scripts/ui/contracts/tutorial_view_state.gd")
 const Text := preload("res://scripts/ui/tutorial_presentation_text.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 var _selected_lesson := ""
 var _hint_toggle: CheckBox
 var _mode_selector: OptionButton
+
+
+func _ready() -> void:
+	super._ready()
+	Art.button_icon(back_button, Art.icon(&"controls", &"back"))
 
 
 func _validate(state: Dictionary):
@@ -58,21 +64,59 @@ func _render_state() -> void:
 		if lesson.lesson_id == _selected_lesson:
 			selected = lesson
 	_selected_lesson = selected.lesson_id
-	_add_text(tr(selected.name_key), "SelectedLessonName")
-	_add_text(tr(selected.text_key), "SelectedLessonText")
+	var selected_row := HBoxContainer.new()
+	selected_row.add_theme_constant_override("separation", 12)
+	rows_container.add_child(selected_row)
+	selected_row.add_child(Art.image(Art.icon(&"mode_art", &"training"), 48, "LessonArtwork"))
+	var detail := VBoxContainer.new()
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.add_theme_constant_override("separation", 4)
+	selected_row.add_child(detail)
+	var name_label := _label(tr(selected.name_key), "SelectedLessonName", 14)
+	name_label.add_theme_color_override("font_color", Color("e5bd69"))
+	detail.add_child(name_label)
+	detail.add_child(_label(tr(selected.text_key), "SelectedLessonText", 12))
 	_add_text(Text.progress_text(selected.requirements, selected.actions), "SelectedLessonProgress")
+	_add_meter(rows_container, selected.requirements, "SelectedLessonMeter")
 	var bindings := Text.bindings_text(selected.actions)
 	if not bindings.is_empty():
 		_add_text(bindings, "SelectedLessonBindings")
-	_add_action("skip:" + selected.lesson_id, tr("UI_TUTORIAL_SKIP"), "", selected.skip_available, "" if selected.skip_available else selected.status_key, _request_skip.bind(StringName(selected.lesson_id), int(_state.revision)))
+	var skip := _add_action("skip:" + selected.lesson_id, tr("UI_TUTORIAL_SKIP"), "", selected.skip_available, "" if selected.skip_available else selected.status_key, _request_skip.bind(StringName(selected.lesson_id), int(_state.revision)))
+	Art.button_icon(skip, Art.icon(&"controls", &"next"))
 	_add_text(tr("UI_TUTORIAL_LESSONS"), "LessonsHeading")
 	for lesson: Dictionary in _state.lessons:
-		_add_action("lesson:" + lesson.lesson_id, "%02d  %s" % [int(lesson.sequence), tr(lesson.name_key)], tr(lesson.status_key), true, "", _recall_lesson.bind(lesson.lesson_id))
+		var recall := _add_action("lesson:" + lesson.lesson_id, "%02d  %s" % [int(lesson.sequence), tr(lesson.name_key)], tr(lesson.status_key), true, "", _recall_lesson.bind(lesson.lesson_id))
+		Art.button_icon(recall, Art.icon(&"controls", &"play"))
+		if lesson.lesson_id == _selected_lesson:
+			recall.add_theme_color_override("font_color", Color("e5bd69"))
+		elif lesson.status_key == "UI_TUTORIAL_DONE":
+			recall.add_theme_color_override("font_color", Color("79baa1"))
 	_add_text(tr("UI_TUTORIAL_TRAINING"), "TrainingHeading")
 	for task: Dictionary in _state.training_tasks:
 		var reward := tr("UI_TUTORIAL_REWARD_CLAIMED") if task.claimed else tr("UI_TUTORIAL_REWARD") % int(task.reward_shards)
 		var description := tr(task.text_key) + "\n" + Text.progress_text(task.requirements, task.actions) + "\n" + reward
-		_add_action("training:" + task.task_id, tr(task.name_key), description, _state.training_available, "" if _state.training_available else "UI_TUTORIAL_ACTIVE_RUN", _request_training.bind(StringName(task.task_id), int(_state.revision)))
+		var training := _add_action("training:" + task.task_id, tr(task.name_key), description, _state.training_available, "" if _state.training_available else "UI_TUTORIAL_ACTIVE_RUN", _request_training.bind(StringName(task.task_id), int(_state.revision)))
+		Art.button_icon(training, Art.icon(&"mode_art", &"training"))
+		_add_meter(training.get_parent(), task.requirements, "TrainingMeter_" + str(task.task_id))
+
+
+func _add_meter(parent: Node, requirements: Array, meter_name: String) -> void:
+	var totals := Vector2.ZERO
+	for row: Dictionary in requirements:
+		totals += Vector2(row.current, row.count)
+	var meter := ProgressBar.new()
+	meter.name = meter_name
+	meter.custom_minimum_size = Vector2(0, 6)
+	meter.show_percentage = false
+	meter.max_value = maxf(1, totals.y)
+	meter.value = totals.x
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color("79baa1")
+	meter.add_theme_stylebox_override("fill", fill)
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color("242d2d")
+	meter.add_theme_stylebox_override("background", background)
+	parent.add_child(meter)
 
 
 func show_rejection(message_key: String) -> void:
