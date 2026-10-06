@@ -1,0 +1,38 @@
+{
+  "schema_id": "plane_walker_source_model_v1",
+  "schema_version": 1,
+  "palette": ["#111619", "#1b2224", "#374342", "#697771", "#61d5e7", "#2c8da0", "#edf0dc", "#e5bd69"],
+  "assets": [
+    {
+      "id": "wanderer",
+      "kind": "character",
+      "status": "awaiting_model",
+      "source": {
+        "provider": "tripo",
+        "file": "source_models/wanderer.glb",
+        "rights_status": "pending",
+        "terms_url": "https://www.tripo3d.com/terms",
+        "acquired_at": null,
+        "license": null,
+        "note": "No model has been acquired or generated. Record the actual account terms, acquisition date, file hash and commercial rights before changing status to ready."
+      },
+      "render": {
+        "frame_size": 48,
+        "resolution": 96,
+        "pivot": [24, 40],
+        "world_anchor": [0, 0, 0],
+        "camera_direction": [1, -4, 1],
+        "ortho_scale": 3,
+        "alpha_threshold": 128
+      },
+      "animations": {
+        "idle": {"frames": [1, 5, 9, 13], "fps": 5},
+        "move": {"frames": [1, 5, 9, 13], "fps": 8},
+        "attack": {"frames": [1, 5, 9, 13], "fps": 12},
+        "cast": {"frames": [1, 5, 9, 13], "fps": 10},
+        "hurt": {"frames": [1, 5, 9, 13], "fps": 12},
+        "death": {"frames": [1, 5, 9, 13], "fps": 8}
+      }
+    }
+  ]
+}
