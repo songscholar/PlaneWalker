@@ -21,25 +21,8 @@ const SummonRuntime := preload("res://scripts/enemies/launch/launch_summon_runti
 const CopyRuntime := preload("res://scripts/enemies/launch/launch_ordinary_copy_runtime.gd")
 const CopyProjection := preload("res://scripts/enemies/launch/launch_ordinary_copy_projection.gd")
 const SummonAuthority := preload("res://scripts/enemies/launch/launch_summon_authority.gd")
+const ProductionBridge := preload("res://scripts/enemies/launch/production_hostile_frame_bridge.gd")
 const COLD_FIELDS := ["schema_version", "definition", "encounter", "effects", "actors", "summon_actors", "threats", "run_seed", "last_flushed_frame"]
-
-class ProductionBridge extends "res://scripts/enemies/launch/hostile_frame_bridge.gd":
-	var native_boundary_ready: Callable
-	var _configuring_roster := false
-
-	func register_actor(actor: Node2D) -> bool:
-		_configuring_roster = true
-		var accepted := super.register_actor(actor)
-		_configuring_roster = false
-		return accepted
-
-	func is_ready_for_frame(frame: int) -> bool:
-		return (_configuring_roster or not native_boundary_ready.is_valid() or native_boundary_ready.call()) and super.is_ready_for_frame(frame)
-
-	func begin_frame(frame: int) -> Dictionary:
-		if native_boundary_ready.is_valid() and not native_boundary_ready.call():
-			return {}
-		return super.begin_frame(frame)
 
 var _runner: Node
 var _controller: Node2D

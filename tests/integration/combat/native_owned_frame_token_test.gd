@@ -7,6 +7,7 @@ const EnemyDefinition := preload("res://scripts/enemies/launch/enemy_definition.
 const BossDefinition := preload("res://scripts/enemies/launch/boss_definition.gd")
 const PlayerScene := preload("res://scenes/player/player.tscn")
 const Bridge := preload("res://scripts/enemies/launch/hostile_frame_bridge.gd")
+const ProductionBridge := preload("res://scripts/enemies/launch/production_hostile_frame_bridge.gd")
 const Effects := preload("res://scripts/enemies/launch/launch_hostile_effect_authority.gd")
 const Registry := preload("res://scripts/combat/hostile_threat_registry.gd")
 const Damage := preload("res://scripts/combat/damage_info.gd")
@@ -48,6 +49,10 @@ class ClaimingActor extends "res://scripts/enemies/launch/launch_hostile_actor.g
 		return {"ok": false}
 
 
+class UnknownProductionBridge extends "res://scripts/enemies/launch/production_hostile_frame_bridge.gd":
+	pass
+
+
 class InterceptingHealth extends "res://scripts/combat/health_component.gd":
 	var before_publication: Callable
 	var before_native_frame_snapshot: Callable
@@ -85,6 +90,8 @@ func _run() -> void:
 	suite = Suite.new()
 	await _test_actor("shattered_sentinel")
 	await _test_actor("eternal_hound")
+	await _test_actor("shattered_sentinel", false, true)
+	await _test_actor("forge_colossus", false, true)
 	for row: Dictionary in Content.read_catalog("bosses.json"):
 		await _test_actor(str(row.id))
 		if row.id in ["void_throne", "time_sovereign"]:
@@ -94,7 +101,7 @@ func _run() -> void:
 	suite.finish(get_tree())
 
 
-func _test_actor(id: String, historical: bool = false) -> void:
+func _test_actor(id: String, historical: bool = false, production: bool = false) -> void:
 	var boss := not Content.boss(id).is_empty()
 	var room_id := "room_boss_" + id if boss else "room_combat_open_field"
 	var room := (load("res://data/content_packs/base/assets/rooms/launch/%s.tscn" % room_id) as PackedScene).instantiate() as Node2D
@@ -143,7 +150,7 @@ func _test_actor(id: String, historical: bool = false) -> void:
 	for method: StringName in NATIVE_METHODS:
 		suite.assert_true(actor.has_method(method), "genuine native protocol exists: " + label + ":" + str(method))
 		protocol_ready = protocol_ready and actor.has_method(method)
-	var bridge := Bridge.new()
+	var bridge: RefCounted = ProductionBridge.new() if production else Bridge.new()
 	for method: StringName in [&"owns_native_actor_preparation_context", &"owns_native_actor_frame_context"]:
 		suite.assert_true(bridge.has_method(method), "genuine Bridge owns exact native context: " + label + ":" + str(method))
 		protocol_ready = protocol_ready and bridge.has_method(method)
@@ -165,6 +172,24 @@ func _test_actor(id: String, historical: bool = false) -> void:
 			suite.assert_true(not forgery.get("ok", false) and actor.get("_prepared_launch_frame").is_empty() and actor.get("_native_launch_frame_token") == null, "distinct same-path forged Bridge cannot authenticate its bound provider")
 			canonical_bridge_script.take_over_path("res://scripts/enemies/launch/hostile_frame_bridge.gd")
 			forged_script.take_over_path(original_path)
+			var canonical_production_script: Script = ProductionBridge
+			forged_script.take_over_path(canonical_production_script.resource_path)
+			forgery = actor.call("prepare_native_launch_frame", 1, context, forged)
+			suite.assert_true(not forgery.get("ok", false) and not Bridge.authenticates_native_bridge_script(forged) and actor.get("_prepared_launch_frame").is_empty() and actor.get("_native_launch_frame_token") == null, "distinct same-path Production spoof cannot issue any native candidate")
+			canonical_production_script.take_over_path("res://scripts/enemies/launch/production_hostile_frame_bridge.gd")
+			forged_script.take_over_path(original_path)
+			var unknown := UnknownProductionBridge.new()
+			var unknown_effects := Effects.new()
+			unknown_effects.configure("run-p15")
+			suite.assert_true(unknown.configure(player, registry, [actor], unknown_effects), "unknown Production subclass keeps valid public binding")
+			var unknown_script: Script = unknown.get_script()
+			var unknown_path := unknown_script.resource_path
+			unknown_script.take_over_path(canonical_production_script.resource_path)
+			var unknown_ticket: Dictionary = unknown.begin_frame(1)
+			suite.assert_true(unknown.prepare_frame(unknown_ticket) and not unknown.get("_active").records[0].native_actor_frame and not unknown.get("_active").records[0].actor_ticket.is_empty() and not Bridge.authenticates_native_bridge_script(unknown), "same-path unknown Production subclass retains complete public fallback")
+			suite.assert_true(unknown.rollback_frame(unknown_ticket), "unknown Production fallback preserves exact compensation")
+			canonical_production_script.take_over_path("res://scripts/enemies/launch/production_hostile_frame_bridge.gd")
+			unknown_script.take_over_path(unknown_path)
 	suite.assert_true(bridge.configure(player, registry, [actor], effects), "owned fixture binds actual Player, Actor, Registry and Effects")
 	if protocol_ready:
 		if id == "forge_colossus":

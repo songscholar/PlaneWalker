@@ -295,7 +295,11 @@ func owns_launch_chaining_context(actor: Node2D, actors: Dictionary, frame: int)
 
 
 func _uses_native_actor_frame(actor: Node2D) -> bool:
-	return get_script() == HostileFrameBridge and actor.get_script() in [LaunchHostileActor, LaunchBossActor] and actor.has_method("supports_native_launch_frame_protocol") and actor.supports_native_launch_frame_protocol()
+	return HostileFrameBridge.authenticates_native_bridge_script(self) and actor.get_script() in [LaunchHostileActor, LaunchBossActor] and actor.has_method("supports_native_launch_frame_protocol") and actor.supports_native_launch_frame_protocol()
+
+
+static func authenticates_native_bridge_script(authority: RefCounted) -> bool:
+	return authority != null and authority.get_script() in [HostileFrameBridge, ProductionHostileFrameBridge]
 
 
 func owns_native_actor_preparation_context(actor: Node2D, frame: int) -> bool:

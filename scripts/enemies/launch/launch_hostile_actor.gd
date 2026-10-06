@@ -448,7 +448,7 @@ func publish_native_launch_frame(token: RefCounted, authority: RefCounted) -> bo
 
 
 func _native_frame_bridge_binding(authority: RefCounted) -> bool:
-	return authority != null and authority.get_script() == HostileFrameBridge and _hostile_threat_registry != null and is_same(_hostile_threat_registry, authority.get("_registry")) and _hostile_runtime_frame_provider == Callable(authority, "_current_runtime_frame")
+	return HostileFrameBridge.authenticates_native_bridge_script(authority) and _hostile_threat_registry != null and is_same(_hostile_threat_registry, authority.get("_registry")) and _hostile_runtime_frame_provider == Callable(authority, "_current_runtime_frame")
 
 
 func _revoke_native_launch_frame_token() -> void:
