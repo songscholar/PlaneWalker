@@ -87,13 +87,24 @@ runtime source or mixed into a later source's certificate.
 
 ## Instrumented Preflight
 
-The original complete instrumented suite is still running, with its known
-failure result retained. Its log is
-`build/full-runtime-coverage-preflight/scene-suite.stdout.log`. It has already
-reported the unchanged Void fixture failure and 300-second timeouts in
-`local_run_records_test`, `native_combat_checkpoint_test`, and
-`native_content_migration_test`. It subsequently reports a fourth timeout in
-the complete five-floor `p14_controller_flow_test`.
+The original complete instrumented suite has finished against the authenticated
+frozen source. Its log is
+`build/full-runtime-coverage-preflight/scene-suite.stdout.log`. Strict aggregate
+validation reports **512 passed, 6 failed, 518 total**. The six failures are the
+unchanged Void fixture runtime error and five bounded 300-second timeouts:
+`local_run_records_test`, `native_combat_checkpoint_test`,
+`native_content_migration_test`, the five-floor `p14_controller_flow_test`, and
+the 150-case `p14_dungeon_loadout_matrix_smoke_test`. The failed run report is
+retained at `build/full-runtime-coverage-preflight/run.json` with status
+`failed`; no partial hit union is promoted to a coverage certificate.
+
+The Void failure is a fixture contract mismatch (`runtime_frame` and `ok` are
+read from the public wrapper instead of its prepared ticket). Its exact paired
+logs retain the two invalid-access errors. The five timeout pairs contain no
+script or engine runtime errors; their processes were terminated at the stated
+budget. The completed 512 scenes retain 513 physical runtime-hit reports, and
+the instrumented manifest remains authenticated at
+`5413dfd3367e8daeb207d3391e8cb84ca3f34dc3492ac9351c0794b329996b54`.
 
 Unchanged 900-second diagnostics reuse the exact same instrumented project and
 original-source manifest. All three save tests pass their complete assertions,
@@ -113,6 +124,14 @@ instrumented scene the same 900-second minimum while keeping its ordinary
 scene runner is active. The complete coverage contract suite with all four
 budgets passes 17/17, with a fresh dependency audit finding no known
 vulnerabilities. Exact artifacts are listed in the fixture evidence.
+
+The independent P14 dungeon matrix diagnosis reused the exact instrumented
+project and manifest with a 900-second budget. It reached 120/150 real
+character/weapon/time workflows before the watchdog terminated it, with no
+script or engine errors in either paired log and no physical report because the
+process did not exit normally. Its retained RED evidence is under
+`build/p14-dungeon-instrumented-rerun-20261006/`; it is a timing diagnostic,
+not a successful matrix or coverage result.
 
 These focused passes do not repair the original full run. A partial union of
 runtime reports is diagnostic evidence only; neither scene success counts nor
