@@ -64,5 +64,10 @@ static func freeze(main: Node) -> void:
 	player.set_physics_process(false)
 	player.get_node("TimeManager").set_process(false)
 	player.get_node("RewindRecorder").set_process(false)
-	main.get_node("TutorialFlow").set_process(false)
-	main.get_node("NarrativeFlow").set_physics_process(false)
+	# Domain fixtures may bind their own Profile without Main's optional flows.
+	var tutorial := main.get_node_or_null("TutorialFlow")
+	if tutorial != null:
+		tutorial.set_process(false)
+	var narrative := main.get_node_or_null("NarrativeFlow")
+	if narrative != null:
+		narrative.set_physics_process(false)

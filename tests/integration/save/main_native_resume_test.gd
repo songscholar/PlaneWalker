@@ -2,6 +2,7 @@ extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
 const Main := preload("res://scenes/main.tscn")
+const Route := preload("res://tests/support/native_launch_route_fixture.gd")
 var _fault := false
 
 
@@ -14,6 +15,10 @@ func _run() -> void:
 	var main := Main.instantiate()
 	add_child(main)
 	await get_tree().process_frame
+	if not _profile_ready(suite, main):
+		await _dispose(main)
+		suite.finish(get_tree())
+		return
 	suite.assert_true(main.has_method("checkpoint_current_run"), "Main provides durable native checkpoint commands")
 	if not main.has_method("checkpoint_current_run"):
 		await _dispose(main)
@@ -49,6 +54,10 @@ func _run() -> void:
 	main = Main.instantiate()
 	add_child(main)
 	await get_tree().process_frame
+	if not _profile_ready(suite, main):
+		await _dispose(main)
+		suite.finish(get_tree())
+		return
 	_freeze(main)
 	service = GameState.profile_runtime_service()
 	var hub: Node = main.get_node("HubFlowCoordinator")
@@ -79,13 +88,13 @@ func _run() -> void:
 
 
 func _freeze(main: Node) -> void:
-	main.get_node("RunRuntimeHost").set_process(false)
-	var player: Node = main.get_node("CombatRoom01/Player")
-	player.set_physics_process(false)
-	player.get_node("TimeManager").set_process(false)
-	player.get_node("RewindRecorder").set_process(false)
-	main.get_node("TutorialFlow").set_process(false)
-	main.get_node("NarrativeFlow").set_physics_process(false)
+	Route.freeze(main)
+
+
+func _profile_ready(suite: RefCounted, main: Node) -> bool:
+	var ready: bool = GameState.profile_runtime_service() != null and main.has_node("TutorialFlow") and main.has_node("HubFlowCoordinator")
+	suite.assert_true(ready, "Main resume requires an activated isolated Profile and tutorial/Hub flows: " + str(main.get("_profile_error")))
+	return ready
 
 
 func _dispose(main: Node) -> void:
