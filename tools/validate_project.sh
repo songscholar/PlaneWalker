@@ -233,7 +233,8 @@ if [[ -n "${GDSCRIPT_COVERAGE_PYTHON:-}" ]]; then
 	printf '\n== Instrumented runtime line coverage ==\n'
 	PYTHONDONTWRITEBYTECODE=1 GODOT_BIN="${godot_bin}" "${GDSCRIPT_COVERAGE_PYTHON}" \
 		-m unittest tests.contract.coverage.test_instrumented_provider \
-		tests.contract.performance.test_effect_snapshot_copy_probe
+		tests.contract.performance.test_effect_snapshot_copy_probe \
+		tests.contract.performance.test_replay_safety_walk_probe
 	PYTHONDONTWRITEBYTECODE=1 "${GDSCRIPT_COVERAGE_PYTHON}" -m tools.coverage.instrumented_provider \
 		--project-root "${PROJECT_ROOT}" --godot-bin "${godot_bin}" \
 		--timeout "${TEST_TIMEOUT_SECONDS:-300}" \

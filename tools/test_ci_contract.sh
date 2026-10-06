@@ -363,8 +363,10 @@ for rejected_mode in bootstrap_partial bootstrap_unexpected_resource clean_resou
 done
 
 editor_warning_output="${TEMP_DIR}/editor-warning.out"
-run_fake_validation editor_warning_only "${editor_warning_output}" \
-	|| fail "editor settings write failures must remain an environment warning"
+if ! run_fake_validation editor_warning_only "${editor_warning_output}"; then
+	cat "${editor_warning_output}" >&2 || true
+	fail "editor settings write failures must remain an environment warning"
+fi
 assert_contains "$(cat "${editor_warning_output}")" "cannot persist global Godot editor settings" "editor settings warning classification"
 assert_contains "$(cat "${editor_warning_output}")" "native dependency mocked after clean import" "editor warning fixture reaches the native probe after imports"
 assert_file_contains "${TEMP_DIR}/native-probe-editor_warning_only.trace" '^-m unittest tests\.contract\.simulation\.test_dungeon_simulation_report$' "editor warning fixture invokes the real native module command"
