@@ -3,7 +3,30 @@ extends "res://scripts/ui/dungeon_panel_view.gd"
 
 signal command_requested(operation: String, payload: Dictionary, revision: int)
 
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 var _directory: FileDialog
+var _commands: GridContainer
+
+
+func _build_layout() -> void:
+	super._build_layout()
+	_commands = GridContainer.new()
+	_commands.name = "ContentCommands"
+	_commands.columns = 2
+	_commands.add_theme_constant_override("h_separation", 6)
+	_commands.add_theme_constant_override("v_separation", 4)
+	var layout := scroll.get_parent()
+	layout.add_child(_commands)
+	layout.move_child(_commands, scroll.get_index())
+	Art.button_icon(back_button, Art.icon(&"controls", &"back"))
+
+
+func _clear_rows() -> void:
+	if is_instance_valid(_commands):
+		for child: Node in _commands.get_children():
+			_commands.remove_child(child)
+			child.queue_free()
+	super._clear_rows()
 
 
 func _ready() -> void:
@@ -51,12 +74,20 @@ func _render_state() -> void:
 	if _state.installed.is_empty():
 		_add_text(tr("UI_CONTENT_EMPTY"), "EmptyPackages")
 	for row: Dictionary in _state.installed:
+		var pack := HBoxContainer.new()
+		pack.name = "ContentPack_" + str(row.pack_id)
+		pack.add_theme_constant_override("separation", 8)
+		rows_container.add_child(pack)
+		var artwork := Art.image(Art.icon(&"room_types", &"treasure"), 32, "ContentPackArtwork")
+		artwork.modulate = Color.WHITE if row.enabled else Color("677d79")
+		pack.add_child(artwork)
 		var checkbox := CheckBox.new()
 		checkbox.text = "%s  %s" % [str(row.pack_id), str(row.pack_version)]
 		checkbox.button_pressed = bool(row.enabled)
 		checkbox.disabled = _state.locked or not row.owned
 		checkbox.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		checkbox.custom_minimum_size = Vector2(0, 29)
+		checkbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		checkbox.add_theme_font_size_override("font_size", 12)
 		for selected: bool in [false, true]:
 			var key := "checked" if selected else "unchecked"
@@ -71,13 +102,33 @@ func _render_state() -> void:
 		else:
 			selected.append(row.pack_id)
 		checkbox.pressed.connect(_activate_action.bind(checkbox, _send.bind("set_enabled", {"ids": selected}), _epoch))
-		rows_container.add_child(checkbox)
+		pack.add_child(checkbox)
 		_actions.append(checkbox)
 		if not row.owned:
 			_add_text(tr("UI_CONTENT_ENTITLEMENT_REQUIRED"), "Entitlement")
 		_add_action("remove:" + str(row.pack_id), tr("UI_CONTENT_REMOVE"), "", not _state.locked and not row.enabled, "", _send.bind("uninstall", {"id": row.pack_id}))
 	for row: Dictionary in _state.diagnostics:
-		_add_text(tr("UI_CONTENT_ISOLATED_FMT") % str(row.get("pack_id", "")), "Diagnostic")
+		var diagnostic := HBoxContainer.new()
+		diagnostic.name = "ContentDiagnostic"
+		diagnostic.add_theme_constant_override("separation", 8)
+		rows_container.add_child(diagnostic)
+		var artwork := Art.image(Art.icon(&"controls", &"decline_contract"), 24, "DiagnosticArtwork")
+		artwork.modulate = Color("f07065")
+		diagnostic.add_child(artwork)
+		var reason := _label(tr("UI_CONTENT_ISOLATED_FMT") % str(row.get("pack_id", "")), "Diagnostic", 11)
+		reason.add_theme_color_override("font_color", Color("e5bd69"))
+		reason.tooltip_text = str(row.get("code", ""))
+		diagnostic.add_child(reason)
+
+
+func _add_action(identifier: String, text: String, description: String, available: bool, disabled_reason_key: String, callback: Callable) -> Button:
+	var button := super._add_action(identifier, text, description, available, disabled_reason_key, callback)
+	if identifier in ["install", "refresh", "install:temporal_frontiers"]:
+		button.get_parent().reparent(_commands, false)
+		(button.get_parent() as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var icon_id := "delete" if identifier.begins_with("remove:") else "refresh" if identifier == "refresh" else "import"
+	Art.button_icon(button, Art.icon(&"controls", StringName(icon_id)))
+	return button
 
 
 func _choose_directory() -> void:

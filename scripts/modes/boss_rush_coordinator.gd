@@ -5,12 +5,14 @@ signal closed
 const Flow := preload("res://scripts/modes/native_boss_rush_flow.gd")
 const PanelScript := preload("res://scripts/modes/boss_rush_panel_view.gd")
 const Catalog := preload("res://scripts/modes/boss_rush_catalog.gd")
+const HudScene := preload("res://scenes/ui/modes/mode_combat_hud.tscn")
+const HudProjector := preload("res://scripts/ui/style/mode_combat_hud_projector.gd")
 
 var _flow: Node2D
 var _panel: Control
 var _hud: Control
-var _label: Label
-var _health: Label
+var _hud_projector := HudProjector.new()
+var _hud_revision := 0
 var _request: Dictionary = {}
 var _open := false
 var _paused := false
@@ -33,32 +35,9 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String, car
 	var layer := CanvasLayer.new()
 	layer.layer = 50
 	add_child(layer)
-	_hud = MarginContainer.new()
-	_hud.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	for side: String in ["left", "right", "top", "bottom"]:
-		_hud.add_theme_constant_override("margin_" + side, 12)
+	_hud = HudScene.instantiate()
 	layer.add_child(_hud)
-	var layout := VBoxContainer.new()
-	_hud.add_child(layout)
-	var row := HBoxContainer.new()
-	layout.add_child(row)
-	_label = Label.new()
-	_label.name = "ChallengeTimer"
-	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_label.add_theme_font_size_override("font_size", 12)
-	row.add_child(_label)
-	_health = Label.new()
-	_health.name = "ChallengeHealth"
-	_health.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_health.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_health.add_theme_font_size_override("font_size", 12)
-	layout.add_child(_health)
-	var pause := Button.new()
-	pause.name = "PauseButton"
-	pause.text = tr("UI_MODE_PAUSE")
-	pause.pressed.connect(_pause)
-	row.add_child(pause)
+	_hud.pause_requested.connect(_pause)
 	_hud.visible = false
 	_panel = PanelScript.new()
 	layer.add_child(_panel)
@@ -177,9 +156,17 @@ func _process(_delta: float) -> void:
 	var state: Dictionary = _flow.snapshot()
 	var player: Node = _flow.current_player()
 	var boss: Node = _flow.current_boss()
-	_label.text = "%s  %d/5  %.2fs" % [tr("UI_MODE_BOSS_RUSH"), int(state.stage_index) + 1, float(state.elapsed_frames) / 60.0]
-	if player != null and boss != null:
-		_health.text = "HP %d/%d  %s %d/%d" % [int(player.health.current_hp), int(player.health.max_hp), tr("BOSS_%s_NAME" % Catalog.BOSSES[int(state.stage_index)].to_upper()), int(boss.health.current_hp), int(boss.health.max_hp)]
+	if player == null:
+		return
+	var facts := {}
+	if boss != null:
+		var source: Dictionary = boss.get_boss_ui_snapshot()
+		var id: String = Catalog.BOSSES[int(state.stage_index)]
+		facts = {"boss_id": id, "name_key": "BOSS_%s_NAME" % id.to_upper(), "hp": source.current_hp, "max_hp": source.maximum_hp, "phase_index": source.boss_phase, "phase_total": source.phase_total}
+	_hud_revision += 1
+	var projected := _hud_projector.project("boss_rush", {"run_id": str(state.run_id), "revision": _hud_revision, "stage_index": int(state.stage_index), "stage_total": 5, "elapsed_frames": int(state.elapsed_frames), "suspended": _paused}, player.get_player_ui_snapshot(), facts)
+	if projected.ok:
+		_hud.render(projected.context.view_state)
 
 
 static func _success() -> Dictionary:

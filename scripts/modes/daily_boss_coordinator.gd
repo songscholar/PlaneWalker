@@ -4,13 +4,15 @@ signal closed
 
 const Flow := preload("res://scripts/modes/native_daily_boss_flow.gd")
 const PanelScript := preload("res://scripts/modes/daily_boss_panel_view.gd")
+const HudScene := preload("res://scenes/ui/modes/mode_combat_hud.tscn")
+const HudProjector := preload("res://scripts/ui/style/mode_combat_hud_projector.gd")
 
 var _flow: Node2D
 var _registry: RefCounted
 var _panel: Control
 var _hud: Control
-var _timer: Label
-var _health: Label
+var _hud_projector := HudProjector.new()
+var _hud_revision := 0
 var _open := false
 var _revision := 0
 
@@ -30,30 +32,9 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String, clo
 	var layer := CanvasLayer.new()
 	layer.layer = 50
 	add_child(layer)
-	_hud = MarginContainer.new()
-	_hud.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	for side: String in ["left", "right", "top", "bottom"]:
-		_hud.add_theme_constant_override("margin_" + side, 12)
+	_hud = HudScene.instantiate()
 	layer.add_child(_hud)
-	var layout := VBoxContainer.new()
-	_hud.add_child(layout)
-	var row := HBoxContainer.new()
-	layout.add_child(row)
-	_timer = Label.new()
-	_timer.name = "DailyTimer"
-	_timer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_timer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_timer.add_theme_font_size_override("font_size", 12)
-	row.add_child(_timer)
-	var pause := Button.new()
-	pause.text = tr("UI_MODE_PAUSE")
-	pause.pressed.connect(_pause)
-	row.add_child(pause)
-	_health = Label.new()
-	_health.name = "DailyHealth"
-	_health.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_health.add_theme_font_size_override("font_size", 12)
-	layout.add_child(_health)
+	_hud.pause_requested.connect(_pause)
 	_hud.visible = false
 	_panel = PanelScript.new()
 	layer.add_child(_panel)
@@ -174,9 +155,17 @@ func _process(_delta: float) -> void:
 		return
 	var player: Node = _flow.current_player()
 	var boss: Node = _flow.current_boss()
-	_timer.text = "%s / %d / %.2fs" % [tr("UI_DAILY_TITLE"), int(active.attempt), float(active.elapsed_frames) / 60.0]
-	if player != null and boss != null:
-		_health.text = "HP %d/%d / %s %d/%d" % [int(player.health.current_hp), int(player.health.max_hp), tr("BOSS_%s_NAME" % str(active.definition.boss_id).to_upper()), int(boss.health.current_hp), int(boss.health.max_hp)]
+	if player == null:
+		return
+	var facts := {}
+	if boss != null:
+		var source: Dictionary = boss.get_boss_ui_snapshot()
+		var id: String = active.definition.boss_id
+		facts = {"boss_id": id, "name_key": "BOSS_%s_NAME" % id.to_upper(), "hp": source.current_hp, "max_hp": source.maximum_hp, "phase_index": source.boss_phase, "phase_total": source.phase_total}
+	_hud_revision += 1
+	var projected := _hud_projector.project("daily", {"run_id": str(active.run_id), "revision": _hud_revision, "stage_index": 0, "stage_total": 1, "elapsed_frames": int(active.elapsed_frames), "suspended": _flow.is_paused()}, player.get_player_ui_snapshot(), facts)
+	if projected.ok:
+		_hud.render(projected.context.view_state)
 
 
 static func _success() -> Dictionary:

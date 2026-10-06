@@ -2,6 +2,7 @@ extends Node
 
 const Suite := preload("res://tests/support/test_suite.gd")
 const Main := preload("res://scenes/main.tscn")
+const ArtCatalog := preload("res://scripts/presentation/ui_art_catalog.gd")
 
 
 func _ready() -> void:
@@ -66,6 +67,9 @@ func _run() -> void:
 		suite.assert_true(not _action(panel, "reward:walker_proof").disabled, "duplicate reward synchronization restores usable equipment controls")
 		var equip := _action(panel, "reward:walker_proof")
 		suite.assert_true(equip is CheckBox and not equip.button_pressed, "owned proof exposes a persistent equipment toggle")
+		var proof_row := panel.find_child("ChallengeRewardRow_walker_proof", true, false)
+		var artwork: TextureRect = proof_row.find_child("ChallengeRewardArtwork", true, false) if proof_row != null else null
+		suite.assert_true(artwork != null and artwork.texture is AtlasTexture and artwork.texture.atlas.resource_path == ArtCatalog.texture_path(&"challenge_rewards", &"walker_proof"), "earned proof displays its authored canonical pixel atlas")
 		if equip != null:
 			var retired: Callable = equip.pressed.get_connections()[0].callable
 			save = service.get("_save")

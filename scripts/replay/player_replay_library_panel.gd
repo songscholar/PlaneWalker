@@ -1,5 +1,8 @@
 extends "res://scripts/ui/dungeon_panel_view.gd"
 
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
+var _transport: VBoxContainer
+var _picture: TextureRect
 var _library: Node
 var _selector: OptionButton
 var _speed: OptionButton
@@ -14,8 +17,29 @@ var _signature := ""
 var _revision := 0
 
 
+func _build_layout() -> void:
+	super._build_layout()
+	_transport = VBoxContainer.new()
+	_transport.name = "ReplayTransport"
+	_transport.add_theme_constant_override("separation", 3)
+	var layout := scroll.get_parent()
+	layout.add_child(_transport)
+	layout.move_child(_transport, footer.get_index())
+	Art.button_icon(back_button, Art.icon(&"controls", &"back"))
+
+
+func _clear_rows() -> void:
+	if is_instance_valid(_transport):
+		for child: Node in _transport.get_children():
+			_transport.remove_child(child)
+			child.queue_free()
+	_picture = null
+	super._clear_rows()
+
+
 func _ready() -> void:
 	super._ready()
+	panel_root.minimum_size_changed.connect(func(): _fit_panel.call_deferred())
 	_import = FileDialog.new()
 	_import.name = "ReplayImportDialog"
 	_import.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -89,7 +113,8 @@ func _render_state() -> void:
 	title_label.text = tr("UI_REPLAY_LIBRARY")
 	summary_label.text = tr("UI_REPLAY_COUNT_FMT") % [int(_state.entries.size()), 40 if _library.has_method("attach_stream_store") else 20]
 	if str(_state.selection.selected_id).is_empty():
-		_add_action("import", tr("UI_REPLAY_IMPORT"), "", true, "", _choose_import)
+		var import_tool := _tool(_transport, "import", "", "UI_REPLAY_IMPORT", _choose_import)
+		import_tool.text = tr("UI_REPLAY_IMPORT")
 	if _state.entries.is_empty():
 		_add_text(tr("UI_REPLAY_EMPTY"), "EmptyLibrary")
 		return
@@ -98,19 +123,34 @@ func _render_state() -> void:
 	_selector.custom_minimum_size = Vector2(0, 29)
 	_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_selector.add_theme_font_size_override("font_size", 12)
+	_selector.add_theme_constant_override("icon_max_width", 20)
+	_selector.expand_icon = true
+	_selector.fit_to_longest_item = false
 	_selector.add_item(tr("UI_REPLAY_SELECT"))
 	for row: Dictionary in _state.entries:
 		var status := " / " + tr("UI_REPLAY_STATUS_" + str(row.status)) if row.has("status") else ""
 		_selector.add_item("%s / %s / %.2fs / #%d%s" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper()), float(int(row.last_frame) - int(row.first_frame)) / 60.0, int(row.seed), status])
 		_selector.set_item_metadata(_selector.item_count - 1, row.id)
+		_selector.set_item_icon(_selector.item_count - 1, Art.actor(str(row.character_id)))
 		if row.id == _state.selection.selected_id:
 			_selector.select(_selector.item_count - 1)
 	_selector.item_selected.connect(_select_recording.bind(_epoch))
 	_selector.gui_input.connect(_selector_input.bind(_selector, _epoch))
-	rows_container.add_child(_selector)
+	var selection := HBoxContainer.new()
+	selection.name = "RecordingSelection"
+	selection.add_theme_constant_override("separation", 8)
+	rows_container.add_child(selection)
+	for row: Dictionary in _state.entries:
+		if row.id == _state.selection.selected_id:
+			selection.add_child(Art.image(Art.actor(str(row.character_id)), 32, "RecordingArtwork"))
+	selection.add_child(_selector)
 	if str(_state.selection.selected_id).is_empty():
+		for row: Dictionary in _state.entries:
+			_recording_row(row)
 		return
 	var world: SubViewport = _library.current_world()
+	if not is_instance_valid(world):
+		return
 	world.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	var view := TextureRect.new()
 	view.name = "ReplayPicture"
@@ -121,6 +161,8 @@ func _render_state() -> void:
 	view.custom_minimum_size = Vector2(0, 180)
 	view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows_container.add_child(view)
+	_picture = view
+	_fit_panel()
 	_timeline = HSlider.new()
 	_timeline.name = "ReplayTimeline"
 	_timeline.min_value = 0
@@ -129,10 +171,10 @@ func _render_state() -> void:
 	_timeline.custom_minimum_size = Vector2(0, 24)
 	_timeline.focus_mode = Control.FOCUS_ALL
 	_timeline.value_changed.connect(_seek.bind(_epoch))
-	rows_container.add_child(_timeline)
+	_transport.add_child(_timeline)
 	var tools := HBoxContainer.new()
 	tools.name = "ReplayControls"
-	rows_container.add_child(tools)
+	_transport.add_child(tools)
 	_play = _tool(tools, "play", ">", "UI_REPLAY_PLAY", _toggle_play)
 	_speed = OptionButton.new()
 	_speed.name = "PlaybackSpeed"
@@ -148,20 +190,23 @@ func _render_state() -> void:
 	_tool(tools, "export", tr("UI_REPLAY_EXPORT"), "UI_REPLAY_EXPORT", _export_recording)
 	_tool(tools, "remove", "x", "UI_REPLAY_REMOVE", _choose_remove)
 	_time_label = _label("", "ReplayTime", 11)
-	rows_container.add_child(_time_label)
+	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	tools.add_child(_time_label)
 	if _state.selection.has("bookmarks"):
 		var transitions := HBoxContainer.new()
-		rows_container.add_child(transitions)
+		_transport.add_child(transitions)
 		_tool(transitions, "previous_room", "<", "UI_REPLAY_PREVIOUS_ROOM", func(): _library.seek_transition(-1))
 		_tool(transitions, "next_room", ">", "UI_REPLAY_NEXT_ROOM", func(): _library.seek_transition(1))
 		_room_label = _label("", "ReplayRoom", 11)
-		rows_container.add_child(_room_label)
+		transitions.add_child(_room_label)
 	_update_timeline()
 
 
-func _tool(parent: Node, id: String, text: String, tooltip: String, callback: Callable) -> Button:
+func _tool(parent: Node, id: String, _text: String, tooltip: String, callback: Callable) -> Button:
 	var button := Button.new()
-	button.text = text
+	button.text = ""
+	var ids := {"play": "play", "import": "import", "export": "export", "remove": "delete", "previous_room": "back", "next_room": "next"}
+	Art.button_icon(button, Art.icon(&"controls", StringName(ids.get(id, "play"))))
 	button.tooltip_text = tr(tooltip)
 	button.custom_minimum_size = Vector2(32, 29)
 	button.add_theme_font_size_override("font_size", 12)
@@ -178,16 +223,47 @@ func _update_timeline() -> void:
 		return
 	var state: Dictionary = _library.snapshot()
 	_timeline.set_value_no_signal(float(state.cursor))
-	_play.text = "||" if state.playing else ">"
+	Art.button_icon(_play, Art.icon(&"controls", &"pause" if state.playing else &"play"))
 	_play.tooltip_text = tr("UI_REPLAY_PAUSE" if state.playing else "UI_REPLAY_PLAY")
 	for index: int in range(_speed.item_count):
 		if _speed.get_item_metadata(index) == state.speed:
 			_speed.select(index)
 	_time_label.text = "%.2fs / %.2fs" % [float(state.cursor) / 60.0, float(maxi(0, int(state.frame_count) - 1)) / 60.0]
 	if is_instance_valid(_room_label):
-		var observation: Dictionary = _library.current_world().observation()
+		var world: SubViewport = _library.current_world()
+		if not is_instance_valid(world):
+			return
+		var observation: Dictionary = world.observation()
 		var binding: Dictionary = observation.get("scene", {}).get("binding", {})
 		_room_label.text = tr("FLOOR_%s_NAME" % str(binding.get("floor_id", "")).trim_prefix("floor_").to_upper()) if not binding.is_empty() else ""
+
+
+func _recording_row(row: Dictionary, selectable: bool = true) -> void:
+	var line := HBoxContainer.new()
+	line.name = "RecordingRow"
+	line.add_theme_constant_override("separation", 8)
+	rows_container.add_child(line)
+	line.add_child(Art.image(Art.actor(str(row.character_id)), 32, "RecordingArtwork"))
+	line.add_child(Art.image(Art.icon(&"weapons", StringName(row.weapon_id)), 24, "RecordingWeapon"))
+	var details := "%s / %s\n%.2fs  /  #%d" % [tr("CHARACTER_%s_NAME" % str(row.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(row.weapon_id).to_upper()), float(int(row.last_frame) - int(row.first_frame)) / 60.0, int(row.seed)]
+	if row.has("status"):
+		details += "  /  " + tr("UI_REPLAY_STATUS_" + str(row.status))
+	line.add_child(_label(details, "RecordingFacts", 11))
+	if selectable:
+		_tool(line, "recording:" + str(row.id), "", "UI_REPLAY_PLAY", func():
+			var result: Dictionary = _library.select(str(row.id))
+			if not result.ok:
+				_show_failure(result.code))
+
+
+func _fit_panel() -> void:
+	super._fit_panel()
+	if is_instance_valid(_picture):
+		_picture.custom_minimum_size.y = 100 if panel_root.size.y < 400 else 220
+
+
+func apply_accessibility_settings(_settings: Dictionary) -> void:
+	_fit_panel.call_deferred()
 
 
 func _focus_controls() -> Array[Control]:

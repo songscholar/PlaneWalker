@@ -2,6 +2,7 @@ extends "res://scripts/ui/dungeon_panel_view.gd"
 
 const Service := preload("res://scripts/progression/profile_runtime_service.gd")
 const Rules := preload("res://scripts/community/local_run_record_rules.gd")
+const Art := preload("res://scripts/ui/style/ui_artwork.gd")
 var _service: RefCounted
 var _synchronize: Callable
 var _view_epoch := 0
@@ -39,8 +40,12 @@ func _render_state() -> void:
 		_add_text(tr("UI_HUB_EMPTY"))
 	for row: Dictionary in _state.model.rows:
 		var line := HBoxContainer.new()
+		line.name = "ChallengeRewardRow_" + str(row.id)
+		line.add_theme_constant_override("separation", 8)
 		line.custom_minimum_size = Vector2(0, 29)
 		rows_container.add_child(line)
+		var texture := Art.icon(&"challenge_rewards", StringName(row.id))
+		line.add_child(Art.image(texture, 32, "ChallengeRewardArtwork"))
 		if not row.tint.is_empty():
 			var swatch := ColorRect.new()
 			swatch.color = Color(row.tint[0], row.tint[1], row.tint[2], row.tint[3])
@@ -64,7 +69,8 @@ func _render_state() -> void:
 		_actions.append(toggle)
 		for field: String in row.effects:
 			_add_text(tr("UI_CHALLENGE_" + field.to_upper() + "_FMT") % roundi((float(row.effects[field]) - 1.0) * 100.0))
-	_add_action("synchronize", tr("UI_COMMUNITY_REFRESH"), "", true, "", open)
+	var synchronize := _add_action("synchronize", tr("UI_COMMUNITY_REFRESH"), "", true, "", open)
+	Art.button_icon(synchronize, Art.icon(&"controls", &"refresh"))
 
 
 func _equip(id: String, equipped: bool, revision: int) -> void:

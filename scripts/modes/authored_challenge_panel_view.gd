@@ -1,4 +1,4 @@
-extends "res://scripts/ui/dungeon_panel_view.gd"
+extends "res://scripts/ui/components/mode_panel_view.gd"
 
 signal action_requested(id: String)
 signal set_selected(id: String)
@@ -8,7 +8,7 @@ const Catalog := preload("res://scripts/modes/authored_challenge_catalog.gd")
 const Session := preload("res://scripts/modes/authored_challenge_session.gd")
 const Rush := preload("res://scripts/modes/boss_rush_catalog.gd")
 var selector: OptionButton
-var _commands: VBoxContainer
+var _commands: GridContainer
 
 
 func _build_layout() -> void:
@@ -25,11 +25,8 @@ func _build_layout() -> void:
 			set_selected.emit(str(selector.get_item_metadata(index))))
 	layout.add_child(selector)
 	layout.move_child(selector, scroll.get_index())
-	_commands = VBoxContainer.new()
+	_commands = _mode_commands
 	_commands.name = "AuthoredCommands"
-	_commands.add_theme_constant_override("separation", 3)
-	layout.add_child(_commands)
-	layout.move_child(_commands, scroll.get_index())
 
 
 func render(state: Dictionary):
@@ -105,6 +102,9 @@ func _render_state() -> void:
 			definition = row
 			selector.select(selector.item_count - 1)
 	selector.disabled = not preview.active.is_empty() or preview.pending
+	_mode_identity("authored_challenges")
+	_loadout_art(definition, _state.content_names)
+	_boss_track(definition.boss_ids, preview.active.stages.size() if not preview.active.is_empty() else 0, int(preview.active.stage_index) if not preview.active.is_empty() else 0)
 	var objective: Dictionary = definition.objective
 	var limit: float = float(objective.limit) / (60.0 if objective.kind in ["total_time", "stage_time"] else (1000.0 if objective.kind == "minimum_hp" else 1.0))
 	summary_label.text = tr(str(objective.name_key)) if objective.kind == "no_damage" else tr(str(objective.name_key)) % limit
@@ -148,7 +148,7 @@ func _render_state() -> void:
 	if not history.is_empty():
 		_add_text(tr("UI_AUTHORED_HISTORY"))
 		for index: int in range(history.size() - 1, -1, -1):
-			_add_text(_result_label(history[index]))
+			_record(_result_label(history[index]), Art.icon(&"weapons", StringName(definition.weapon_id)))
 	back_button.disabled = preview.pending
 
 
@@ -158,12 +158,6 @@ func _action(id: String, key: String) -> void:
 
 func _result_label(value: Dictionary) -> String:
 	return tr("UI_AUTHORED_RESULT_FMT") % [int(value.sequence), tr("UI_AUTHORED_RESULT_" + str(value.status)), float(value.elapsed_frames) / 60.0, int(value.damage_events), float(value.remaining_hp_milli) / 1000.0, tr("UI_AUTHORED_PRACTICE" if value.continued else "UI_AUTHORED_FRESH")]
-
-
-func _add_action(identifier: String, text: String, description: String, available: bool, disabled_reason_key: String, callback: Callable) -> Button:
-	var button := super._add_action(identifier, text, description, available, disabled_reason_key, callback)
-	button.get_parent().reparent(_commands, false)
-	return button
 
 
 func _clear_rows() -> void:

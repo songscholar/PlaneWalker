@@ -1,4 +1,4 @@
-extends "res://scripts/ui/dungeon_panel_view.gd"
+extends "res://scripts/ui/components/mode_panel_view.gd"
 
 signal action_requested(id: String)
 
@@ -22,19 +22,15 @@ func _build_layout() -> void:
 	if safe_area != null:
 		safe_area.add_theme_constant_override("margin_top", 12)
 		safe_area.add_theme_constant_override("margin_bottom", 12)
-	_commands = GridContainer.new()
+	_commands = _mode_commands
 	_commands.name = "DailyCommands"
 	_commands.columns = 2
 	_commands.add_theme_constant_override("h_separation", 6)
 	_commands.add_theme_constant_override("v_separation", 4)
-	var layout := scroll.get_parent()
-	layout.add_child(_commands)
-	layout.move_child(_commands, scroll.get_index())
 
 
 func _add_action(identifier: String, text: String, description: String, available: bool, disabled_reason_key: String, callback: Callable) -> Button:
 	var button := super._add_action(identifier, text, description, available, disabled_reason_key, callback)
-	button.get_parent().reparent(_commands, false)
 	(button.get_parent() as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return button
 
@@ -60,6 +56,9 @@ func _render_state() -> void:
 	if definition.is_empty():
 		summary_label.text = tr("UI_DAILY_CLOCK_INVALID")
 		return
+	_mode_identity("daily_boss")
+	_loadout_art(definition, _state.content_names)
+	_boss_track([definition.boss_id], 1 if not preview.best.is_empty() else 0, 0)
 	summary_label.text = "%s / %s" % [definition.day_key, tr("BOSS_%s_NAME" % str(definition.boss_id).to_upper())]
 	_countdown = _add_text("", "DailyCountdown")
 	update_countdown(int(preview.remaining_seconds))
@@ -76,7 +75,7 @@ func _render_state() -> void:
 	if not preview.best.is_empty():
 		_add_text(tr("UI_DAILY_BEST_FMT") % _result_label(preview.best))
 	for result: Dictionary in preview.results:
-		_add_text(tr("UI_DAILY_RESULT_FMT") % [int(result.attempt), _result_label(result)])
+		_record(tr("UI_DAILY_RESULT_FMT") % [int(result.attempt), _result_label(result)], Art.actor(str(definition.boss_id)))
 	if preview.has("rewards"):
 		var rewards: Dictionary = preview.rewards
 		_add_text(tr("UI_DAILY_WALLET_FMT") % [int(rewards.tokens), int(rewards.gold)])
@@ -113,7 +112,7 @@ func _render_state() -> void:
 		_add_action("start", tr("UI_MODE_START"), "", preview.available, "", func(): action_requested.emit("start"))
 	_add_text(tr("UI_DAILY_CALENDAR"))
 	for future: Dictionary in preview.calendar:
-		_add_text("%s / %s / %s" % [future.day_key, tr("BOSS_%s_NAME" % str(future.boss_id).to_upper()), tr("WEAPON_%s_NAME" % str(future.weapon_id).to_upper())])
+		_record("%s / %s / %s" % [future.day_key, tr("BOSS_%s_NAME" % str(future.boss_id).to_upper()), tr("WEAPON_%s_NAME" % str(future.weapon_id).to_upper())], Art.actor(str(future.boss_id)), "CalendarRecord")
 	back_button.disabled = preview.pending
 
 

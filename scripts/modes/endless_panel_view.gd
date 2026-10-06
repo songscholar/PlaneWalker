@@ -1,4 +1,4 @@
-extends "res://scripts/ui/dungeon_panel_view.gd"
+extends "res://scripts/ui/components/mode_panel_view.gd"
 
 signal action_requested(id: String)
 const Endless := preload("res://scripts/modes/endless_session.gd")
@@ -17,6 +17,9 @@ func _render_state() -> void:
 	var state: Dictionary = _state.session
 	var request: Dictionary = state.request if _state.active else _state.request
 	summary_label.text = "%s / %s" % [tr("CHARACTER_%s_NAME" % str(request.character_id).to_upper()), tr("WEAPON_%s_NAME" % str(request.weapon_id).to_upper())]
+	_mode_identity("endless")
+	_loadout_art(request)
+	_boss_track(Request.BOSSES, 5 if state.status == "CYCLE_CLEAR" else 0, 0)
 	if state.status != "IDLE":
 		_add_text(tr("UI_MODE_STATUS_" + str(state.status)))
 		_add_text(tr("UI_ENDLESS_PROGRESS_FMT") % [int(state.cycle_index) + 1, (int(state.cycle_index) + (1 if state.status == "CYCLE_CLEAR" else 0)) * 5, float(state.elapsed_frames) / 60.0])

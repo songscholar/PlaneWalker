@@ -1,8 +1,9 @@
-extends "res://scripts/ui/dungeon_panel_view.gd"
+extends "res://scripts/ui/components/mode_panel_view.gd"
 
 signal action_requested(id: String)
 
 const Catalog := preload("res://scripts/progression/meta_progression_catalog.gd")
+const Route := preload("res://scripts/modes/boss_rush_catalog.gd")
 
 
 func _validate(value: Dictionary):
@@ -19,6 +20,9 @@ func _render_state() -> void:
 	var session: Dictionary = _state.session
 	var request: Dictionary = _state.request
 	summary_label.text = _loadout_label(session.request if _state.active else request)
+	_mode_identity("boss_rush")
+	_loadout_art(session.request if _state.active else request)
+	_boss_track(Route.BOSSES, session.completed_stages.size(), int(session.stage_index))
 	if not _state.get("unlocked", true):
 		_add_text(tr("UI_RUSH_LOCKED"))
 	if session.status != "IDLE":
@@ -30,7 +34,7 @@ func _render_state() -> void:
 		if session.request.accessibility_assists.damage_received_multiplier != 1.0 or session.request.accessibility_assists.enemy_telegraph_scale != 1.0:
 			_add_text(tr("UI_MODE_ASSISTED"))
 	for row: Dictionary in session.completed_stages:
-		_add_text("%s / %.2fs" % [tr("BOSS_%s_NAME" % str(row.boss_id).to_upper()), float(row.frames) / 60.0])
+		_record("%s / %.2fs" % [tr("BOSS_%s_NAME" % str(row.boss_id).to_upper()), float(row.frames) / 60.0], Art.actor(str(row.boss_id)))
 	if session.has("carried"):
 		var carried: Dictionary = session.carried
 		if not carried.portable.is_empty():
@@ -55,7 +59,8 @@ func _render_state() -> void:
 				var row: Dictionary = session.carried.choices[index]
 				var label := tr("UI_RUSH_FULL_RESTORE") if row.kind == "restore" else tr("UI_RUSH_CHOOSE_" + str(row.kind).to_upper()) + ": " + tr(str(row.id).to_upper() + "_NAME")
 				var action_id := "choice_%d" % index
-				_add_action(action_id, label, "", true, "", func(): action_requested.emit(action_id))
+				var button := _add_action(action_id, label, "", true, "", func(): action_requested.emit(action_id))
+				Art.button_icon(button, Art.icon(&"room_types", &"rest") if row.kind == "restore" else Art.content(str(row.id), str(row.kind)))
 		else:
 			_action("next", "UI_MODE_NEXT_BOSS")
 	else:

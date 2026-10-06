@@ -37,7 +37,7 @@ func _run() -> void:
 		selector.select(1)
 		selector.item_selected.emit(1)
 		suite.assert_equal(library.snapshot().selected_id, stored.context.id, "native selection admits viewer")
-	var slider: HSlider = panel.rows_container.find_child("ReplayTimeline", true, false)
+	var slider: HSlider = panel.find_child("ReplayTimeline", true, false)
 	suite.assert_true(slider != null, "viewer exposes a seek control")
 	if slider != null:
 		slider.value = 3
@@ -45,7 +45,7 @@ func _run() -> void:
 	var selected_player := library.current_player()
 	retired_selector.call(1)
 	suite.assert_true(library.current_player() == selected_player and library.snapshot().cursor == 3, "retired selector callback cannot replace the current viewer")
-	var speed: OptionButton = panel.rows_container.find_child("PlaybackSpeed", true, false)
+	var speed: OptionButton = panel.find_child("PlaybackSpeed", true, false)
 	var retired_speed: Callable = speed.item_selected.get_connections()[0].callable
 	var retired_seek: Callable = slider.value_changed.get_connections()[0].callable
 	speed.select(2)
@@ -83,11 +83,11 @@ func _run() -> void:
 	retired_speed.call(0)
 	retired_seek.call(4.0)
 	suite.assert_true(library.snapshot().speed == 2.0 and library.snapshot().cursor == 0, "retired playback controls cannot mutate the reopened viewer")
-	speed = panel.rows_container.find_child("PlaybackSpeed", true, false)
+	speed = panel.find_child("PlaybackSpeed", true, false)
 	speed.grab_focus()
 	await _send_button(JOY_BUTTON_DPAD_LEFT)
 	suite.assert_equal(library.snapshot().speed, 1.0, "physical D-pad changes playback speed")
-	slider = panel.rows_container.find_child("ReplayTimeline", true, false)
+	slider = panel.find_child("ReplayTimeline", true, false)
 	slider.grab_focus()
 	await _send_button(JOY_BUTTON_DPAD_RIGHT)
 	suite.assert_equal(library.snapshot().cursor, 1, "physical D-pad seeks an archived frame")

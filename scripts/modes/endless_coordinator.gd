@@ -4,10 +4,13 @@ signal closed
 const Flow := preload("res://scripts/modes/native_endless_flow.gd")
 const PanelScript := preload("res://scripts/modes/endless_panel_view.gd")
 const Request := preload("res://scripts/modes/boss_rush_catalog.gd")
+const HudScene := preload("res://scenes/ui/modes/mode_combat_hud.tscn")
+const HudProjector := preload("res://scripts/ui/style/mode_combat_hud_projector.gd")
 var _flow: Node2D
 var _panel: Control
 var _hud: Control
-var _label: Label
+var _hud_projector := HudProjector.new()
+var _hud_revision := 0
 var _request: Dictionary = {}
 var _owner := ""
 var _open := false
@@ -27,31 +30,23 @@ func configure(registry: RefCounted, service: RefCounted, root_path: String) -> 
 	_owner = str(service.local_record_storage_identity().profile_id)
 	_flow.state_changed.connect(_project)
 	_flow.closed.connect(_finish_close)
+	var hud_layer := CanvasLayer.new()
+	hud_layer.name = "EndlessHudLayer"
+	hud_layer.layer = 10
+	add_child(hud_layer)
+	_hud = HudScene.instantiate()
+	hud_layer.add_child(_hud)
+	_hud.pause_requested.connect(_pause)
+	_hud.visible = false
 	var layer := CanvasLayer.new()
 	layer.layer = 51
 	add_child(layer)
-	_hud = MarginContainer.new()
-	_hud.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	for side: String in ["left", "right", "top", "bottom"]:
-		_hud.add_theme_constant_override("margin_" + side, 10)
-	layer.add_child(_hud)
-	var row := HBoxContainer.new()
-	_hud.add_child(row)
-	_label = Label.new()
-	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_label.add_theme_font_size_override("font_size", 11)
-	row.add_child(_label)
-	var pause := Button.new()
-	pause.name = "EndlessPause"
-	pause.text = tr("UI_MODE_PAUSE")
-	pause.pressed.connect(_pause)
-	row.add_child(pause)
-	_hud.visible = false
 	_panel = PanelScript.new()
 	layer.add_child(_panel)
 	_panel.action_requested.connect(_action)
 	_panel.close_requested.connect(func(_view_revision: int): return_to_hub())
+	for runtime: Node in get_tree().get_nodes_in_group("accessibility_runtime"):
+		runtime.apply_to_tree(_hud)
 	return _success()
 
 
@@ -144,6 +139,7 @@ func _project() -> void:
 	_hud.visible = playing
 	if playing:
 		_panel.close_panel()
+		_process(0.0)
 		return
 	_revision += 1
 	_panel.render({"run_id": "endless-menu", "revision": _revision, "owner": _owner, "request": _request, "session": state, "active": _flow.is_active(), "paused": _flow.is_paused(), "pending": _flow.has_pending_save(), "save_error": str(_flow.save_error())})
@@ -156,7 +152,23 @@ func _process(_delta: float) -> void:
 	var state: Dictionary = _flow.snapshot()
 	var host: Node = _flow.runtime_host()
 	var run: Dictionary = host.runtime_snapshot() if host != null else {}
-	_label.text = "%s  %d  %.2fs" % [tr("UI_MODE_ENDLESS"), int(state.cycle_index) * 5 + int(run.get("current_floor_index", 0)) + 1, float(state.elapsed_frames) / 60.0]
+	var dungeon_hud := host.get_node_or_null("HudLayer") as CanvasLayer if host != null else null
+	if dungeon_hud != null:
+		dungeon_hud.visible = false
+	var player: Node = _flow.current_player()
+	if player == null or run.is_empty():
+		return
+	var floor_index: int = int(run.get("current_floor_index", 0))
+	var boss: Variant = host._boss_ui_snapshot()
+	var facts: Dictionary = boss.duplicate(true) if boss is Dictionary else {}
+	if not facts.is_empty():
+		var id: String = Request.BOSSES[clampi(floor_index, 0, 4)]
+		facts.boss_id = id
+		facts.name_key = "BOSS_%s_NAME" % id.to_upper()
+	_hud_revision += 1
+	var projected := _hud_projector.project("endless", {"run_id": str(state.run_id), "revision": _hud_revision, "stage_index": int(state.cycle_index) * 5 + floor_index, "stage_total": (int(state.cycle_index) + 1) * 5, "elapsed_frames": int(state.elapsed_frames), "suspended": _flow.is_paused()}, player.get_player_ui_snapshot(), facts)
+	if projected.ok:
+		_hud.render(projected.context.view_state)
 
 
 static func _success() -> Dictionary:
