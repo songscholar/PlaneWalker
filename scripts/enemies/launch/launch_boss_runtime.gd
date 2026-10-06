@@ -937,30 +937,35 @@ func _normalize_forest_action(value: Dictionary) -> Dictionary:
 
 
 func can_restore_native_snapshot(value: Dictionary) -> bool:
-	return can_restore_snapshot(value) and (_arena == null or _arena.can_restore_snapshot(value.arena_state, true)) and (_forest_auxiliary == null or _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary, true)) and (_void_arena == null or _void_arena.can_restore_snapshot(value.void_arena_state, true)) and (_void_auxiliary == null or _void_auxiliary.can_restore_snapshot(value.void_auxiliary, true)) and (_forge_arena == null or _forge_arena.can_restore_snapshot(value.forge_arena_state, true))
+	return _can_restore_snapshot(value, true)
 
 
 func can_restore_snapshot(value: Dictionary) -> bool:
+	return _can_restore_snapshot(value, false)
+
+
+func _can_restore_snapshot(value: Dictionary, accepted_boundary: bool) -> bool:
 	if _state.is_empty():
 		return false
 	var context := _snapshot_validation_context()
 	var encoded := var_to_bytes(value)
 	_snapshot_validation_cache_mutex.lock()
 	for entry: Dictionary in _snapshot_validation_cache:
-		if entry.context == context and entry.snapshot == encoded:
+		if entry.accepted_boundary == accepted_boundary and entry.context == context and entry.snapshot == encoded:
 			_snapshot_validation_cache_mutex.unlock()
 			return true
 	_snapshot_validation_cache_mutex.unlock()
-	if not _can_restore_snapshot_uncached(value, context):
+	if not _can_restore_snapshot_uncached(value, context, accepted_boundary):
 		return false
 	_snapshot_validation_cache_mutex.lock()
 	for entry: Dictionary in _snapshot_validation_cache:
-		if entry.context == context and entry.snapshot == encoded:
+		if entry.accepted_boundary == accepted_boundary and entry.context == context and entry.snapshot == encoded:
 			_snapshot_validation_cache_mutex.unlock()
 			return true
 	if _snapshot_validation_cache.size() == MAX_SNAPSHOT_VALIDATION_CACHE:
 		_snapshot_validation_cache.pop_front()
-	_snapshot_validation_cache.append({"context": context, "snapshot": encoded})
+	# General restore permits staged next-frame events; native restore does not.
+	_snapshot_validation_cache.append({"context": context, "snapshot": encoded, "accepted_boundary": accepted_boundary})
 	_snapshot_validation_cache_mutex.unlock()
 	return true
 
@@ -1000,7 +1005,7 @@ func _snapshot_validation_context() -> PackedByteArray:
 	return var_to_bytes(context)
 
 
-func _can_restore_snapshot_uncached(value: Dictionary, context: PackedByteArray = PackedByteArray()) -> bool:
+func _can_restore_snapshot_uncached(value: Dictionary, context: PackedByteArray = PackedByteArray(), accepted_boundary: bool = false) -> bool:
 	var fields: Array = STATE_FIELDS + (["arena_state"] if _arena != null else []) + (["forest_auxiliary"] if _forest_auxiliary != null else []) + (["void_arena_state", "void_auxiliary", "void_half_index"] if _void_arena != null else []) + (["forge_arena_state"] if _forge_arena != null else []) + (["time_response", "time_auxiliary"] if _time_response != null else [])
 	if _state.is_empty() or not Contract.exact_fields(value, fields) or typeof(value.schema_version) != TYPE_INT or value.schema_version != (10 if _time_response != null else 6 if _forge_arena != null else 8 if _void_arena != null else 4 if _definition.id == "forest_heart" else 2 if _arena != null else 1) or value.definition_digest != _state.definition_digest or value.identity != _state.identity or not Contract.integer_in_range(value.runtime_frame, int(_state.identity.runtime_frame), Controls.MAX_COUNTER - Contract.MAX_FRAME) or typeof(value.terminal) != TYPE_BOOL:
 		return false
@@ -1008,15 +1013,15 @@ func _can_restore_snapshot_uncached(value: Dictionary, context: PackedByteArray 
 		return false
 	if _time_auxiliary != null and (not value.time_auxiliary is Dictionary or not _time_auxiliary.can_restore_snapshot(value.time_auxiliary) or value.time_auxiliary.runtime_frame != value.runtime_frame or value.time_auxiliary.terminal != value.terminal):
 		return false
-	if _forest_auxiliary != null and (not value.forest_auxiliary is Dictionary or not _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary) or value.forest_auxiliary.runtime_frame != value.runtime_frame or value.forest_auxiliary.terminal != value.terminal):
+	if _forest_auxiliary != null and (not value.forest_auxiliary is Dictionary or not _forest_auxiliary.can_restore_snapshot(value.forest_auxiliary, accepted_boundary) or value.forest_auxiliary.runtime_frame != value.runtime_frame or value.forest_auxiliary.terminal != value.terminal):
 		return false
-	if _arena != null and (not value.arena_state is Dictionary or not _arena.can_restore_snapshot(value.arena_state) or value.arena_state.runtime_frame != value.runtime_frame or value.arena_state.terminal != value.terminal):
+	if _arena != null and (not value.arena_state is Dictionary or not _arena.can_restore_snapshot(value.arena_state, accepted_boundary) or value.arena_state.runtime_frame != value.runtime_frame or value.arena_state.terminal != value.terminal):
 		return false
-	if _void_arena != null and (not value.void_arena_state is Dictionary or not _void_arena.can_restore_snapshot(value.void_arena_state) or value.void_arena_state.runtime_frame != value.runtime_frame or value.void_arena_state.terminal != value.terminal):
+	if _void_arena != null and (not value.void_arena_state is Dictionary or not _void_arena.can_restore_snapshot(value.void_arena_state, accepted_boundary) or value.void_arena_state.runtime_frame != value.runtime_frame or value.void_arena_state.terminal != value.terminal):
 		return false
-	if _void_auxiliary != null and (not value.void_auxiliary is Dictionary or not _void_auxiliary.can_restore_snapshot(value.void_auxiliary) or value.void_auxiliary.runtime_frame != value.runtime_frame or value.void_auxiliary.terminal != value.terminal):
+	if _void_auxiliary != null and (not value.void_auxiliary is Dictionary or not _void_auxiliary.can_restore_snapshot(value.void_auxiliary, accepted_boundary) or value.void_auxiliary.runtime_frame != value.runtime_frame or value.void_auxiliary.terminal != value.terminal):
 		return false
-	if _forge_arena != null and (not value.forge_arena_state is Dictionary or not _forge_arena.can_restore_snapshot(value.forge_arena_state) or value.forge_arena_state.runtime_frame != value.runtime_frame or value.forge_arena_state.terminal != value.terminal):
+	if _forge_arena != null and (not value.forge_arena_state is Dictionary or not _forge_arena.can_restore_snapshot(value.forge_arena_state, accepted_boundary) or value.forge_arena_state.runtime_frame != value.runtime_frame or value.forge_arena_state.terminal != value.terminal):
 		return false
 	if not value.mechanism_state is Dictionary or not Contract.exact_fields(value.mechanism_state, MECHANISM_FIELDS) or not value.action is Dictionary or not value.control is Dictionary or not value.conversion is Dictionary or not _conversion.can_restore_snapshot(value.conversion):
 		return false
