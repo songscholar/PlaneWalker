@@ -58,21 +58,38 @@ def frame(kind: str, phase: int) -> Image.Image:
         draw.ellipse((7, 7 + rise, 25, 27), fill=INK)
         draw.ellipse((9, 9 + rise, 23, 25), fill=color)
         draw.line(((16, 10 + rise), (16, 24)), fill=INK, width=2)
-    else:
-        draw.polygon(((16, 3 + rise), (25, 9 + rise), (24, 20), (28, 28), (18, 25), (13, 28), (5, 27), (8, 19), (7, 10 + rise)), fill=INK)
-        draw.polygon(((16, 5 + rise), (22, 10 + rise), (21, 20), (24, 25), (17, 22), (12, 25), (8, 24), (11, 18), (10, 11 + rise)), fill=color)
-        if kind == "ranger_echo":
-            draw.arc((21, 9, 30, 25), 80, 280, fill=accent, width=2)
-            draw.line(((26, 9), (26, 25)), fill=INK)
-        elif kind == "hunter_echo":
-            draw.line(((5, 18), (1, 22 + rise)), fill=accent, width=3)
-            draw.line(((25, 18), (30, 22 + rise)), fill=accent, width=3)
-        elif kind == "timeline_echo":
-            draw.rectangle((12, 18, 20, 25), fill=INK)
-            draw.line(((13, 19), (19, 24), (13, 24), (19, 19)), fill=accent)
-        elif kind == "elite_mirror":
-            draw.line(((6, 9), (3, 15), (5, 24)), fill=LIGHT)
-            draw.line(((26, 9), (29, 15), (27, 24)), fill=LIGHT)
+    elif kind == "hunter_echo":
+        draw.polygon(((16, 3 + rise), (25, 9 + rise), (23, 20), (28, 27), (18, 24), (16, 29), (13, 24), (4, 27), (9, 19), (7, 10 + rise)), fill=INK)
+        draw.polygon(((16, 6 + rise), (21, 10 + rise), (20, 19), (24, 24), (17, 21), (15, 26), (13, 21), (8, 24), (11, 18), (10, 11 + rise)), fill=color)
+        draw.line(((8, 18), (2, 23 + rise)), fill=accent, width=2)
+        draw.line(((24, 18), (30, 23 + rise)), fill=accent, width=2)
+        draw.rectangle((13, 12 + rise, 14, 14 + rise), fill=INK)
+        draw.rectangle((18, 12 + rise, 19, 14 + rise), fill=INK)
+    elif kind == "ranger_echo":
+        draw.polygon(((16, 4 + rise), (22, 10 + rise), (21, 20), (25, 27), (17, 24), (10, 27), (12, 19), (10, 10 + rise)), fill=INK)
+        draw.polygon(((16, 7 + rise), (19, 11 + rise), (19, 19), (22, 23), (17, 21), (13, 24), (14, 18), (13, 11 + rise)), fill=color)
+        draw.arc((21, 8, 31, 25), 80, 280, fill=accent, width=2)
+        draw.line(((26, 8), (26, 25)), fill=INK, width=1)
+        draw.line(((26, 14), (30, 10 + phase % 2)), fill=LIGHT, width=1)
+        draw.rectangle((13, 12 + rise, 14, 14 + rise), fill=INK)
+        draw.rectangle((18, 12 + rise, 19, 14 + rise), fill=INK)
+    elif kind == "timeline_echo":
+        draw.ellipse((4, 3 + rise, 28, 27 + rise), fill=INK)
+        draw.ellipse((7, 6 + rise, 25, 24 + rise), fill=color)
+        draw.arc((8, 7 + rise, 24, 23 + rise), 200, 350, fill=LIGHT, width=2)
+        draw.line(((16, 9 + rise), (16, 15 + rise), (21, 18 + rise)), fill=accent, width=2)
+        draw.rectangle((10, 27 + rise, 12, 29 + rise), fill=INK)
+        draw.rectangle((20, 27 + rise, 22, 29 + rise), fill=INK)
+        draw.rectangle((13, 12 + rise, 14, 14 + rise), fill=INK)
+        draw.rectangle((18, 12 + rise, 19, 14 + rise), fill=INK)
+    else:  # elite_mirror
+        draw.polygon(((16, 2 + rise), (28, 9), (25, 22), (16, 29), (7, 22), (4, 9)), fill=INK)
+        draw.polygon(((16, 5 + rise), (24, 10), (22, 21), (16, 26), (10, 21), (8, 10)), fill=color)
+        draw.line(((16, 6 + rise), (16, 25)), fill=LIGHT, width=2)
+        draw.line(((10, 11), (14, 15), (10, 19)), fill=accent, width=1)
+        draw.line(((22, 11), (18, 15), (22, 19)), fill=accent, width=1)
+        draw.rectangle((13, 12 + rise, 14, 14 + rise), fill=INK)
+        draw.rectangle((18, 12 + rise, 19, 14 + rise), fill=INK)
     draw.rectangle((12, 12 + rise, 14, 14 + rise), fill=INK)
     draw.rectangle((18, 12 + rise, 20, 14 + rise), fill=INK)
     draw.point((13, 12 + rise), fill=accent)

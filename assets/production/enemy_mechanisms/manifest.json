@@ -9,7 +9,7 @@
       "width": 128,
       "height": 32,
       "frame_width": 32,
-      "sha256": "d3bef638114c93d5e38315d1aaca477204f7a2ab3967771468d866b1bdeab8f1"
+      "sha256": "fc2080349e1ff8a5a3908d59a4794c57ad170f7d097b55153b77c7e880911a52"
     },
     {
       "id": "phase_arrival",
@@ -17,7 +17,7 @@
       "width": 128,
       "height": 32,
       "frame_width": 32,
-      "sha256": "ed75dacf0539410dc6cd522749df1d797558b706d0d19966748d810918a757b9"
+      "sha256": "b4da4e1daaf6c7fcc3cdf6138abf5b66269afc5c1344134dc6fb7db19f947848"
     }
   ]
 }

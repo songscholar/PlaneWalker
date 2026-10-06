@@ -16,7 +16,7 @@
         "active_2",
         "active_3"
       ],
-      "sha256": "b2f337d69e51a379dd87fbfe23de15177ac3a24e91296bd65a2d84781232af52"
+      "sha256": "477f56933697e69516fe704bdf978179b107af28ac9f6351aa4a6dc3832381cf"
     },
     {
       "id": "web_wall",
@@ -31,7 +31,7 @@
         "active_2",
         "active_3"
       ],
-      "sha256": "1a28f8ae0b2767b236104217b0279dcba946e3dee8339f852e659c4f1286f624"
+      "sha256": "8ea94ec1c11b3e2b512d6b7aa9042a8f2462442e56b63831feb646de9075b5d7"
     },
     {
       "id": "web_link",
@@ -46,7 +46,7 @@
         "active_2",
         "active_3"
       ],
-      "sha256": "a087d39c562d056c92a8d0eff60f4d3355ee9bbb744589e1260e6ad456c4f20e"
+      "sha256": "22497bf03bf2877eb0a47d2c16160f486f4260131cf501a6cc8cac20b854816f"
     },
     {
       "id": "portal_both",
@@ -61,7 +61,7 @@
         "active_2",
         "active_3"
       ],
-      "sha256": "509a1c669c5cd2f5b4bfdc64983bcf03e0ed1805cd419ee747b3d23db8800637"
+      "sha256": "873fe74023e76a7d311d6d202c9e5ee1921969b5d7951c59d18def001f9dbddc"
     },
     {
       "id": "portal_enemy",
@@ -76,7 +76,7 @@
         "active_2",
         "active_3"
       ],
-      "sha256": "714984e37ef3f4513f39f035c19b68f79b62a35a3f03bb35c53f388dcd626e6e"
+      "sha256": "1c315bc1cfb8924d413ffa40c25754972182eb7611fabedc1f3e76953cbd842e"
     }
   ]
 }
