@@ -1011,10 +1011,16 @@ func _observations_match(records: Dictionary, frame: int) -> bool:
 	for record: Dictionary in records.values():
 		if not is_instance_valid(record.target) or record.target.is_queued_for_deletion() or record.target.get_node("HealthComponent").runtime_state_snapshot() != record.health:
 			return false
-		var expected: Vector2 = record.prepared_position if _native_actor(record.target) and int(record.target.launch_runtime_snapshot().runtime.runtime_frame) == frame else record.position
+		var expected: Vector2 = record.prepared_position if _native_actor(record.target) and _native_observation_frame(record.target) == frame else record.position
 		if record.target.global_position != expected:
 			return false
 	return true
+
+
+static func _native_observation_frame(actor: Node2D) -> int:
+	if actor.has_method("native_frame_boundary"):
+		return int(actor.call("native_frame_boundary").get("runtime_frame", -1))
+	return int(actor.call("launch_runtime_snapshot").runtime.runtime_frame)
 
 
 func _record_histories(next: Dictionary, actors: Dictionary) -> void:
