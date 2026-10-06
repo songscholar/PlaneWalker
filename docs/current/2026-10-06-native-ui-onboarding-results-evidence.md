@@ -44,6 +44,12 @@ narrative, results, settings and onboarding. Captures were inspected at 1.5x
 English and Simplified Chinese for the compact panels; no blank or overlapping
 primary content was found.
 
+The added 240 PNGs retain true 640x360, 1280x720, 1920x1080 and 3440x1440
+images for narrative, settings and onboarding. The twelve requested 3440x1440
+run-results captures are physically 2560x1440 because the macOS display
+environment clamps the native window width; they are retained as an explicit
+environment boundary, not counted as true 3440x1440 output.
+
 Meaningful RED evidence is retained in `build/ui-onboarding-assertion-red` for
 the missing lesson meter/theme/art behavior and
 `build/ui-settings-navigation-assertion-red` for missing category/device art.
