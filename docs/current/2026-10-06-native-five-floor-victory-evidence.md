@@ -64,3 +64,57 @@ of the current combined revision. The complete 750-case native matrix, exact
 committed-source validation and line coverage, sustained/rendered performance,
 final exports and finished UI/input matrix remain outstanding. All must pass
 before only external human playtesting remains.
+
+## Current Source Revalidation And Audio Retirement Fix
+
+The imported frozen checkout `build/retained-checkout/native-matrix-resume-pilot-f5d6833`
+was re-run with fresh output and user-data directories at
+`build/five-floor-f5d6833-revalidation-20261006-v2/`. Its exact source revision
+was `f5d6833cec91114bb7909bcb59c93ac8450b3bb9`; all 412 `scripts/` and
+`autoload/` runtime files were unchanged, with sorted path/digest aggregate
+`1056f5c80d20c5b663f8f38f4f3372ab09398c5d3d906d22ecc5da2c44c0f5e4`.
+
+The frozen run reached the complete route and wrote the same report as the
+earlier gate: `complete: true`, 21 rooms, 12,153 accepted frames, all five
+Bosses in authored order, `shattered_freedom`, and
+`physical_settlement_verified: true`. Its report SHA-256 is
+`a744f898fbf147a0f0a6b339175eafc539be6ab0ad68febe047c628d8f3e3b06`.
+The settlement remains sequence 1, terminal reason `victory`, 235 shards,
+10 imprints, digest
+`5a0193f187c0b8662d8f414e481d1b9a8f746ce997dbc8edad17b52afbdd1686`.
+
+The frozen scene did not pass its final cleanup assertion. The report was
+complete, but `_dispose_main()` retained two active music playback WeakRefs
+after its 20 fixed-FPS `0.01` timers, so `TestSuite.finish()` emitted the
+failure `full actual Main run releases independent music playback before process
+exit`. Both fresh logs are byte-identical, SHA-256
+`56ae212d64858770d5f25c6f2fa19277d12a57b774b38c200a6b10fc02a25fe9`, and the
+strict paired validator rejects the run. This is a test-clock cleanup failure,
+not a successful current-source gate.
+
+Focused RED reproduced the same condition in
+`tests/presentation/music_playback_retirement_test.tscn`: fixed-FPS scene time
+advanced 4,035 microseconds while two playback objects remained live and the
+process leaked an ObjectDB instance. RED logs are retained under
+`build/music-retirement-red-20261006/` and fail strict paired validation.
+
+Commit `a4bdefd436456cfafa4773abffa80955183f7625` adds
+`tests/support/audio_playback_retirement.gd`, a bounded monotonic wall-time
+drain that yields `SceneTree.process_frame` and never blocks the audio mixer.
+The focused fixture also proves a still-owned reference times out at its real
+wall deadline. The original music lifecycle test and the five-floor cleanup
+assertion now use this helper; no runtime music source is changed.
+
+On the post-fix current worktree, the focused retirement fixture, the original
+music lifecycle scene and the five-floor scene all pass with strict paired logs.
+The five-floor result again records 21 rooms, 12,153 frames, five Bosses,
+`shattered_freedom` and physical settlement reload. Its stdout and engine logs
+are byte-identical with SHA-256
+`a432dc28452c60ef0a5e245c8545cddb3f39d3edfcc9926c60bdb78fc41ae42b`.
+The post-fix source runtime aggregate remains
+`6846893e8df57abdf8deb168fd001e2843668e4218d93698fea6c815d740808d`.
+
+This post-fix run is a focused current-worktree revalidation. A clean full
+five-floor gate must be rerun from the committed source after the remaining
+working-tree changes are frozen; it does not close the 750-case matrix,
+coverage, performance, UI, export or human-playtest gates.
