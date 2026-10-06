@@ -29,6 +29,15 @@ func _run() -> void:
 	suite = Suite.new()
 	report.debug_build = OS.is_debug_build()
 	report.native_process_id = OS.get_process_id()
+	var pid_path := OS.get_environment("PLANEWALKER_PERFORMANCE_PID_FILE")
+	if not pid_path.is_empty():
+		var pid_file := FileAccess.open(pid_path, FileAccess.WRITE)
+		_check(pid_file != null, "physical runtime bootstrap PID opens")
+		if pid_file != null:
+			pid_file.store_string(str(report.native_process_id) + "\n")
+			pid_file.flush()
+			_check(pid_file.get_error() == OK, "physical runtime bootstrap PID persists")
+			pid_file.close()
 	print("NATIVE_PERFORMANCE_PROCESS_PID ", report.native_process_id)
 	report.requested_frames = _option("FRAMES", 600)
 	report.rendered = OS.get_environment("PLANEWALKER_PERFORMANCE_RENDERED") == "true" and DisplayServer.get_name() != "headless"

@@ -43,7 +43,15 @@ def framed_report(version=2):
         value["debug_build"] = False
         value["peak_native_static_bytes"] = 0
         value["native_static_monitor"] = {"source": "Performance.MEMORY_STATIC", "available": False, "reason": "release_build"}
+        value["native_pid_binding"] = {"source": "runtime_bootstrap_file_and_final_stdout", "bootstrap_path": "/fixture/process.pid", "bootstrap_process_id": 321, "stdout_process_id": 321, "stdout_announcement_count": 1, "sampled_process_id": 321, "status": "pass", "failure": ""}
     return value
+
+
+def fixture_pid_announcement(output, native_report, stream):
+    process_id = native_report.get("native_process_id")
+    if process_id is not None:
+        output.with_name("process.pid").write_text(str(process_id) + "\n", encoding="ascii")
+        stream.write(f"NATIVE_PERFORMANCE_PROCESS_PID {process_id}\n")
 
 
 def fixture_executable(root):
@@ -132,7 +140,10 @@ class NativePerformanceProbeContract(unittest.TestCase):
             def run(command, **kwargs):
                 if command[0] == str(binary):
                     commands.append(command)
-                    output.write_text(json.dumps(framed_report(3)), encoding="utf-8")
+                    native_report = framed_report(3)
+                    output.write_text(json.dumps(native_report), encoding="utf-8")
+                    fixture_pid_announcement(output, native_report, kwargs["stdout"])
+                    self.assertEqual(kwargs["env"].get("PLANEWALKER_PERFORMANCE_PID_FILE"), str(output.with_name("process.pid")))
                 return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
             argv = [str(SOURCE), "--output", str(output), "--frames", "120", "--hub-frames", "12", "--packaged-binary", str(binary), "--packaged-resource", str(resource)]
@@ -155,9 +166,86 @@ class NativePerformanceProbeContract(unittest.TestCase):
             self.assertEqual(source["package_info_plist_sha256"], hashlib.sha256(plist.read_bytes()).hexdigest())
             self.assertTrue(source["package_info_plist_stable"])
             self.assertTrue(source["godot_binary_stable"] and source["packaged_resource_stable"])
+            self.assertEqual(retained["native_pid_binding"], {"source": "runtime_bootstrap_file_and_final_stdout", "bootstrap_path": str(output.with_name("process.pid")), "bootstrap_process_id": 321, "stdout_process_id": 321, "stdout_announcement_count": 1, "sampled_process_id": 321, "status": "pass", "failure": ""})
             manifest = json.loads(output.with_name("source-manifest.json").read_text())
             self.assertEqual(manifest["command"], commands[0])
             self.assertEqual(manifest["packaged_resource_sha256"], source["packaged_resource_sha256"])
+
+    def test_v3_pid_binding_requires_bootstrap_stdout_report_and_sample_identity(self):
+        validator = self.require_api().validate_report
+        for key, replacement in [("bootstrap_process_id", 322), ("bootstrap_process_id", True), ("stdout_process_id", 0), ("stdout_announcement_count", 2), ("stdout_announcement_count", True), ("sampled_process_id", 322), ("source", "stdout_only"), ("bootstrap_path", ""), ("status", "failed"), ("failure", "binding failed")]:
+            candidate = framed_report(3)
+            candidate["native_pid_binding"][key] = replacement
+            with self.subTest(field=key), self.assertRaises(ValueError):
+                validator(candidate)
+        candidate = framed_report(3)
+        del candidate["native_pid_binding"]
+        with self.assertRaises(ValueError):
+            validator(candidate)
+
+    def test_v3_cli_refuses_missing_conflicting_or_duplicate_runtime_pid_evidence(self):
+        probe = self.require_api()
+        for failure in ["bootstrap_missing", "bootstrap_invalid", "bootstrap_wrong", "stdout_missing", "stdout_duplicate", "stdout_wrong", "stdout_malformed", "sample_wrong", "report_wrong"]:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                binary, resource = fixture_package(root)
+                output = root / "build/binding/report.json"
+
+                def run(command, **kwargs):
+                    if command[0] == str(binary):
+                        native_report = framed_report(3)
+                        if failure == "report_wrong":
+                            native_report["native_process_id"] = 322
+                        output.write_text(json.dumps(native_report), encoding="utf-8")
+                        if failure != "bootstrap_missing":
+                            output.with_name("process.pid").write_text("invalid\n" if failure == "bootstrap_invalid" else "322\n" if failure == "bootstrap_wrong" else "321\n", encoding="ascii")
+                        if failure != "stdout_missing":
+                            kwargs["stdout"].write("NATIVE_PERFORMANCE_PROCESS_PID invalid\n" if failure == "stdout_malformed" else "NATIVE_PERFORMANCE_PROCESS_PID 322\n" if failure == "stdout_wrong" else "NATIVE_PERFORMANCE_PROCESS_PID 321\n")
+                        if failure == "stdout_duplicate":
+                            kwargs["stdout"].write("NATIVE_PERFORMANCE_PROCESS_PID 321\n")
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+                rss = rss_fixture()
+                if failure == "sample_wrong":
+                    rss["process_id"] = 322
+                argv = [str(SOURCE), "--output", str(output), "--frames", "120", "--hub-frames", "12", "--packaged-binary", str(binary), "--packaged-resource", str(resource)]
+                with patch.object(probe, "ROOT", root), patch.object(probe.subprocess, "run", side_effect=run), patch.object(probe._ProcessRssSampler, "snapshot", return_value=rss), patch.object(sys, "argv", argv), patch("builtins.print"):
+                    with self.assertRaises(ValueError):
+                        probe.main()
+                retained = json.loads(output.read_text())
+                self.assertEqual(retained["native_status"], "pass")
+                self.assertEqual(retained["status"], "failed")
+                self.assertEqual(retained["native_pid_binding"]["status"], "failed")
+
+    def test_preexisting_bootstrap_path_refuses_before_any_subprocess(self):
+        probe = self.require_api()
+        for case in ["regular", "symlink", "dangling_symlink", "directory"]:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                binary, resource = fixture_package(root)
+                output = root / "build/stale/report.json"
+                output.parent.mkdir(parents=True)
+                bootstrap = output.with_name("process.pid")
+                if case == "regular":
+                    bootstrap.write_text("321\n", encoding="ascii")
+                elif case == "directory":
+                    bootstrap.mkdir()
+                else:
+                    target = root / "old.pid"
+                    if case == "symlink":
+                        target.write_text("321\n", encoding="ascii")
+                    bootstrap.symlink_to(target)
+
+                def run(command, **kwargs):
+                    if command[0] == str(binary):
+                        output.write_text(json.dumps(framed_report(3)), encoding="utf-8")
+                    return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+                argv = [str(SOURCE), "--output", str(output), "--packaged-binary", str(binary), "--packaged-resource", str(resource)]
+                with patch.object(probe, "ROOT", root), patch.object(probe.subprocess, "run", side_effect=run) as launched, patch.object(probe._ProcessRssSampler, "snapshot", return_value=rss_fixture()), patch.object(sys, "argv", argv), patch("builtins.print"):
+                    with self.assertRaises(SystemExit):
+                        probe.main()
+                    self.assertEqual(launched.call_count, 0, "stale identity must refuse before any subprocess starts")
 
     def test_packaged_mutation_and_late_failures_cannot_retain_pass(self):
         probe = self.require_api()
@@ -172,7 +260,9 @@ class NativePerformanceProbeContract(unittest.TestCase):
 
                 def run(command, **kwargs):
                     if command[0] == str(binary):
-                        output.write_text(json.dumps(report() if failure == "legacy_report" else framed_report(3)), encoding="utf-8")
+                        native_report = report() if failure == "legacy_report" else framed_report(3)
+                        output.write_text(json.dumps(native_report), encoding="utf-8")
+                        fixture_pid_announcement(output, native_report, kwargs["stdout"])
                         if failure == "binary":
                             binary.write_bytes(b"changed binary\n")
                         if failure == "resource":
@@ -249,7 +339,9 @@ class NativePerformanceProbeContract(unittest.TestCase):
 
                 def run(command, **kwargs):
                     if command[0] == str(binary):
-                        output.write_text(json.dumps(framed_report(3)), encoding="utf-8")
+                        native_report = framed_report(3)
+                        output.write_text(json.dumps(native_report), encoding="utf-8")
+                        fixture_pid_announcement(output, native_report, kwargs["stdout"])
                         if case == "extra_pack":
                             resource.with_name("new.pck").write_bytes(b"new ambiguous pack\n")
                         else:

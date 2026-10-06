@@ -113,7 +113,50 @@ def validate_report(value):
             raise ValueError("runtime build and static monitor availability must be explicit")
         if monitor["available"] != (peak_static > 0) or monitor["reason"] != ("" if monitor["available"] else "release_build") or not monitor["available"] and value["debug_build"]:
             raise ValueError("only a release zero observation can declare the static monitor unavailable")
+        _validate_native_pid_binding(value)
     return value
+
+
+def _validate_native_pid_binding(value):
+    binding = value.get("native_pid_binding")
+    fields = {"source", "bootstrap_path", "bootstrap_process_id", "stdout_process_id", "stdout_announcement_count", "sampled_process_id", "status", "failure"}
+    if not isinstance(binding, dict) or set(binding) != fields or binding["source"] != "runtime_bootstrap_file_and_final_stdout" or type(binding["bootstrap_path"]) is not str or not binding["bootstrap_path"] or binding["status"] != "pass" or binding["failure"] != "":
+        raise ValueError("v3 requires a verified runtime bootstrap and final stdout PID binding")
+    if type(binding["stdout_announcement_count"]) is not int or binding["stdout_announcement_count"] != 1:
+        raise ValueError("exactly one final stdout native PID announcement is required")
+    process_id = value.get("native_process_id")
+    for field in ["bootstrap_process_id", "stdout_process_id", "sampled_process_id"]:
+        if type(binding[field]) is not int or not 1 <= binding[field] <= 4294967295 or binding[field] != process_id:
+            raise ValueError("bootstrap, stdout, report and sampled native process identities must agree")
+    if value.get("process_rss", {}).get("process_id") != binding["sampled_process_id"]:
+        raise ValueError("the retained PID binding must match actual process RSS samples")
+
+
+def _read_bootstrap_process_id(path):
+    if any(part.is_symlink() for part in [path, *path.parents]) or not path.is_file():
+        raise ValueError("runtime bootstrap PID must be a regular non-symlink file")
+    with path.open(encoding="ascii") as stream:
+        text = stream.read(64)
+    if not re.fullmatch(r"[1-9][0-9]{0,9}\n?", text) or int(text) > 4294967295:
+        raise ValueError("runtime bootstrap file must contain one positive native process id")
+    return int(text)
+
+
+def _collect_native_pid_binding(pid_path, stdout_path, value):
+    binding = {"source": "runtime_bootstrap_file_and_final_stdout", "bootstrap_path": str(pid_path), "bootstrap_process_id": 0, "stdout_process_id": 0, "stdout_announcement_count": 0, "sampled_process_id": value.get("process_rss", {}).get("process_id", 0), "status": "pass", "failure": ""}
+    value["native_pid_binding"] = binding
+    try:
+        binding["bootstrap_process_id"] = _read_bootstrap_process_id(pid_path)
+        announcements = [line for line in stdout_path.read_text(encoding="utf-8").splitlines() if line.startswith("NATIVE_PERFORMANCE_PROCESS_PID")]
+        binding["stdout_announcement_count"] = len(announcements)
+        if len(announcements) == 1:
+            match = re.fullmatch(r"NATIVE_PERFORMANCE_PROCESS_PID ([1-9][0-9]{0,9})", announcements[0])
+            if match is not None:
+                binding["stdout_process_id"] = int(match[1])
+        _validate_native_pid_binding(value)
+    except (OSError, UnicodeError, ValueError) as error:
+        binding["status"] = "failed"
+        binding["failure"] = str(error)[:300]
 
 
 def _validate_process_rss(value):
@@ -174,6 +217,7 @@ def _read_process_rss(process_id, platform):
 class _ProcessRssSampler:
     def __init__(self, stdout_path, platform=None):
         self.stdout_path = stdout_path
+        self.pid_path = stdout_path.with_name("process.pid")
         self.platform = sys.platform if platform is None else platform
         self.process_id = 0
         self.valid_samples = 0
@@ -199,12 +243,15 @@ class _ProcessRssSampler:
     def _sample(self):
         try:
             if not self.process_id:
-                with self.stdout_path.open(encoding="utf-8") as stream:
-                    text = stream.read(65536)
-                ids = re.findall(r"^NATIVE_PERFORMANCE_PROCESS_PID ([0-9]+)$", text, re.MULTILINE)
-                if len(ids) != 1 or int(ids[0]) < 1:
-                    return
-                self.process_id = int(ids[0])
+                if self.pid_path.exists() or self.pid_path.is_symlink():
+                    self.process_id = _read_bootstrap_process_id(self.pid_path)
+                else:
+                    with self.stdout_path.open(encoding="utf-8") as stream:
+                        text = stream.read(65536)
+                    ids = re.findall(r"^NATIVE_PERFORMANCE_PROCESS_PID ([0-9]+)$", text, re.MULTILINE)
+                    if len(ids) != 1 or not 1 <= int(ids[0]) <= 4294967295:
+                        return
+                    self.process_id = int(ids[0])
             resident = _read_process_rss(self.process_id, self.platform)
             self.peak_bytes = max(self.peak_bytes, resident)
             self.valid_samples += 1
@@ -307,7 +354,11 @@ def main():
         if not binary.is_file():
             parser.error("GODOT_BIN must identify an existing Godot executable")
     output.parent.mkdir(parents=True, exist_ok=True)
+    pid_path = output.with_name("process.pid")
+    if pid_path.exists() or pid_path.is_symlink():
+        parser.error("runtime bootstrap PID path must be new and must not be a symlink")
     environment = dict(os.environ)
+    environment["PLANEWALKER_PERFORMANCE_PID_FILE"] = str(pid_path)
     environment.update({"PLANEWALKER_PERFORMANCE_OUTPUT": str(output), "PLANEWALKER_PERFORMANCE_FRAMES": str(args.frames), "PLANEWALKER_PERFORMANCE_HUB_FRAMES": str(args.hub_frames), "PLANEWALKER_PERFORMANCE_BOSS_FLOOR": str(args.boss_floor), "PLANEWALKER_PERFORMANCE_PHASE": str(args.phase), "PLANEWALKER_PERFORMANCE_WALL_ACCELERATED": str(not args.real_time).lower(), "PLANEWALKER_PERFORMANCE_RENDERED": str(args.rendered).lower(), "PLANEWALKER_TEST_DATA_DIR": str(output.parent / "isolated-files"), "PLANEWALKER_USER_DATA_DIR": str(output.parent / "isolated-files"), "XDG_DATA_HOME": str(output.parent / "isolated-data")})
     for key in ["PLANEWALKER_COVERAGE_HITS_DIR", "PLANEWALKER_COVERAGE_MANIFEST_SHA256", "GDSCRIPT_COVERAGE_PROVIDER_REPORT"]:
         environment.pop(key, None)
@@ -365,6 +416,8 @@ def main():
             retained = json.loads(output.read_text())
             retained["native_status"] = retained.get("status")
             retained["process_rss"] = rss_sampler.snapshot()
+            if retained.get("measurement_schema_version") == 3:
+                _collect_native_pid_binding(pid_path, stdout_path, retained)
             if not execution_ok:
                 retained["status"] = "failed"
             elif retained.get("status") == "pass":

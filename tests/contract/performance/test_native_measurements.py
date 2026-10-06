@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tests.contract.performance.test_native_performance_probe import api, fixture_executable, report
+from tests.contract.performance.test_native_performance_probe import api, fixture_executable, fixture_pid_announcement, report
 
 
 def measured_report():
@@ -137,6 +137,47 @@ class NativeMeasurementContract(unittest.TestCase):
             self.assertEqual(read.call_args.args, (421, "linux"))
             json.dumps(captured, allow_nan=False)
 
+    def test_runtime_bootstrap_pid_is_sampled_before_delayed_stdout_flush(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stdout = Path(directory).resolve() / "stdout.log"
+            stdout.write_text("", encoding="utf-8")
+            stdout.with_name("process.pid").write_text("421\n", encoding="ascii")
+            sampler = api._ProcessRssSampler(stdout, "linux")
+            with patch.object(api, "_read_process_rss", return_value=4096) as read:
+                sampler._sample()
+            self.assertEqual(read.call_count, 1, "physical bootstrap identity must permit live sampling before stdout flush")
+            self.assertEqual(read.call_args.args, (421, "linux"))
+            captured = sampler.snapshot()
+            self.assertEqual(captured["process_id"], 421)
+            self.assertEqual(captured["valid_sample_count"], 1)
+            self.assertEqual(captured["peak_bytes"], 4096)
+            self.assertEqual(stdout.read_text(), "")
+
+    def test_invalid_bootstrap_file_cannot_fall_back_to_a_stdout_identity(self):
+        for contents in ["0\n", "4294967296\n", "421\n422\n", "invalid\n", ""]:
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as directory:
+                stdout = Path(directory).resolve() / "stdout.log"
+                stdout.write_text("NATIVE_PERFORMANCE_PROCESS_PID 421\n", encoding="utf-8")
+                stdout.with_name("process.pid").write_text(contents, encoding="ascii")
+                sampler = api._ProcessRssSampler(stdout, "linux")
+                with patch.object(api, "_read_process_rss", return_value=4096) as read:
+                    sampler._sample()
+                self.assertEqual(read.call_count, 0, "invalid bootstrap identity must never reach the RSS reader")
+                self.assertEqual(sampler.snapshot()["valid_sample_count"], 0)
+
+    def test_symlinked_bootstrap_file_cannot_reach_a_platform_reader(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stdout = Path(directory).resolve() / "stdout.log"
+            stdout.write_text("NATIVE_PERFORMANCE_PROCESS_PID 421\n", encoding="utf-8")
+            target = Path(directory).resolve() / "other.pid"
+            target.write_text("421\n", encoding="ascii")
+            stdout.with_name("process.pid").symlink_to(target)
+            sampler = api._ProcessRssSampler(stdout, "linux")
+            with patch.object(api, "_read_process_rss", return_value=4096) as read:
+                sampler._sample()
+            self.assertEqual(read.call_count, 0, "symlinked bootstrap identity must never reach the RSS reader")
+            self.assertEqual(sampler.snapshot()["valid_sample_count"], 0)
+
     def test_missing_or_conflicting_pid_cannot_invent_memory_samples(self):
         for log in ["no native PID\n", "NATIVE_PERFORMANCE_PROCESS_PID 0\n", "NATIVE_PERFORMANCE_PROCESS_PID 421\nNATIVE_PERFORMANCE_PROCESS_PID 422\n"]:
             with self.subTest(log=log), tempfile.TemporaryDirectory() as directory:
@@ -173,6 +214,7 @@ class NativeMeasurementContract(unittest.TestCase):
                     if command[0] != str(binary):
                         return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
                     output.write_text(json.dumps(native_report), encoding="utf-8")
+                    fixture_pid_announcement(output, native_report, kwargs["stdout"])
                     return subprocess.CompletedProcess(command, 0)
 
                 with patch.object(api, "ROOT", root), patch.object(api.shutil, "which", return_value=str(binary)), patch.object(api.subprocess, "run", side_effect=run), patch.object(api, "_ProcessRssSampler") as sampler, patch.object(sys, "argv", ["probe", "--output", str(output), "--frames", "120", "--hub-frames", "12"]), patch("builtins.print"):

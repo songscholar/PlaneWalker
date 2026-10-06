@@ -116,6 +116,9 @@ P0–P9、Wave 4A–4D、M1 放行、M1 后能力提升以及 Next/Launch/Expans
 | [Native Effects Snapshot Copy Plan](current/2026-10-06-native-effects-snapshot-copy-plan.md) | 保留快照字段位置和完整子状态，消除被覆盖分支的重复复制 | Active / Current |
 | [Native Effects Snapshot Copy Evidence](current/2026-10-06-native-effects-snapshot-copy-evidence.md) | 原生事务和历史快照保持逐字节一致，被覆盖子状态复制从 21 次降为 0 次 | Focused Verified / Integrated performance pending |
 | [Native Owned Frame Token Plan](current/2026-10-06-native-owned-frame-token-plan.md) | 原生 Actor 私有候选与精确身份令牌，保留公开票据和原有补偿边界 | Active / Current |
+| [Native Owned Frame Token Evidence](current/2026-10-06-native-owned-frame-token-evidence.md) | 原生令牌身份、公开票据兼容、回滚与发布回归，整合测量待完成 | Implemented / Current |
+| [Native Release Runtime Probe Plan](current/2026-10-06-native-release-probe-plan.md) | 官方发行运行时打包测量、真实内存可用性与执行身份 | Approved / Current |
+| [Native Release Runtime Probe Evidence](current/2026-10-06-native-release-probe-evidence.md) | 发行包真实 600 帧录制成功，RSS 采样入口与帧预算仍未通过 | Recording Verified / Monitoring and frame budget failed |
 | [Time Loadout Inheritance Evidence](current/2026-10-06-time-loadout-inheritance-evidence.md) | 实际暂停继承、选择冻结及恢复自动计时回归 | Focused Verified / Integrated clean validation pending |
 | [Native Action Validation Template Plan](current/2026-10-06-native-action-validation-template-plan.md) | 动作完整静态校验、有界不可变配置模板和独立可变恢复 | Approved / Current |
 | [Native Action Validation Template Evidence](current/2026-10-06-native-action-validation-template-evidence.md) | 完整动作校验、不可变模板容量和真实独立恢复回归 | Focused Verified / Full performance pending |
