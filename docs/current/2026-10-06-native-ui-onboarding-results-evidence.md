@@ -1,6 +1,6 @@
 # Native UI Onboarding And Results Evidence
 
-- Status: Implemented / Full matrix and native captures passed
+- Status: Implemented / Focused matrix and native captures passed
 - Document Role: Current
 - Authority Level: Evidence below AGENTS.md and the native UI finish specification
 - Applies To: Accessibility settings, input remapping, tutorial, hints, training, narrative and run results
